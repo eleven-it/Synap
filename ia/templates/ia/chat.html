@@ -162,7 +162,7 @@
             }
             const data = await response.json();
             appendMessage("assistant", data.assistant_message);
-            note.textContent = `Modelo usado: ${data.selected_model.model_name} · Provider: ${data.selected_model.provider_name || "sin provider"} · Memoria: ${data.memory_hits}`;
+            note.textContent = `Estado: ${data.execution_status} · Fase: ${data.phase || "n/a"} · Modelo: ${data.selected_model.model_name} · Provider: ${data.selected_model.provider_name || "sin provider"} · Memoria: ${data.memory_hits}`;
         } catch (error) {
             appendMessage("assistant", `Ocurrió un error al procesar la consulta. ${error.message}`);
             note.textContent = "La interacción falló.";

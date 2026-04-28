@@ -6,17 +6,31 @@ del pool al inicio del request, la guarda en request_mysql_conn_var (contextvars
 en request para liberarla en process_response o process_exception. Así context
 processors y vistas reutilizan la misma conexión vía core.mysql_pool.get_connection.
 
+Si MySQL rechaza la base (inexistente o sin permiso), se cierra la sesión y se
+redirige al login para que el usuario elija otra empresa.
+
 Especificación: docs/general/ESPEC_UNA_CONEXION_POR_REQUEST.md
 """
 import logging
-from typing import Callable, Optional
+from typing import Optional
 
+import MySQLdb
+from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
+from django.shortcuts import redirect
 from django.utils.deprecation import MiddlewareMixin
 
 from core.mysql_pool import get_mysql_pool, request_mysql_conn_var
 
 logger = logging.getLogger(__name__)
+
+# Sesión inconsistente con el servidor MySQL local: no tiene sentido seguir con la sesión actual.
+_MYSQL_SESSION_INVALID_ERRNOS = frozenset(
+    (
+        1049,  # Unknown database
+        1044,  # Access denied for user ... to database
+    )
+)
 
 # Paths que no usan MySQL de administraNET: no abrir conexión de request.
 REQUEST_MYSQL_EXCLUDED_PREFIXES = (
@@ -57,7 +71,26 @@ class RequestScopedMysqlMiddleware(MiddlewareMixin):
             return None
         pool = get_mysql_pool()
         conn_cm = pool.get_connection(base_empresa)
-        conn = conn_cm.__enter__()
+        try:
+            conn = conn_cm.__enter__()
+        except MySQLdb.OperationalError as exc:
+            errno = exc.args[0] if exc.args else None
+            if errno not in _MYSQL_SESSION_INVALID_ERRNOS:
+                raise
+            logger.warning(
+                "MySQL rechazó base_empresa=%s (errno=%s): %s. Cerrando sesión y redirigiendo a login.",
+                base_empresa,
+                errno,
+                exc,
+            )
+            request.session.flush()
+            messages.error(
+                request,
+                "La empresa seleccionada no está disponible en este servidor o no tenés acceso a su base de datos. "
+                "Iniciá sesión de nuevo y elegí otra empresa.",
+            )
+            return redirect("login:login")
+
         request._mysql_conn_ref = conn_cm
         request._mysql_base_empresa = base_empresa
         request_mysql_conn_var.set((base_empresa, conn))

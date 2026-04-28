@@ -1,0 +1,476 @@
+{% extends "base_app.html" %}
+{% load i18n crispy_forms_tags %}
+
+{% block title %}{% trans "Webhook Configurations" %}{% endblock %}
+
+{% block content %}
+<!-- Header Section -->
+<div class="mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div class="mb-4 sm:mb-0">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">
+                <span class="material-icons text-blue-600 dark:text-blue-400 mr-2 align-middle">webhook</span>
+                {% trans "Webhook Configurations" %}
+            </h1>
+            <p class="text-sm text-gray-600 dark:text-gray-400">
+                {% trans "Create, edit and manage webhook configurations for TiendaNube integration" %}
+            </p>
+        </div>
+        <div>
+            <a href="{% url 'tiendanube_administranet:webhook_config_create' %}" 
+               class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-medium rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-all duration-200 hover:scale-105 hover:shadow-lg">
+                <span class="material-icons text-sm mr-2">add</span>
+                {% trans "Create Webhook" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Filters Section -->
+<div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 mb-8">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+        <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">filter_list</span>
+        {% trans "Filters" %}
+    </h3>
+    <form method="get" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{% trans "Status" %}</label>
+            <select name="status" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">{% trans "All Statuses" %}</option>
+                <option value="active" {% if request.GET.status == 'active' %}selected{% endif %}>{% trans "Active" %}</option>
+                <option value="inactive" {% if request.GET.status == 'inactive' %}selected{% endif %}>{% trans "Inactive" %}</option>
+                <option value="error" {% if request.GET.status == 'error' %}selected{% endif %}>{% trans "Error" %}</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{% trans "Active" %}</label>
+            <select name="is_active" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">{% trans "All" %}</option>
+                <option value="true" {% if request.GET.is_active == 'true' %}selected{% endif %}>{% trans "Active Only" %}</option>
+                <option value="false" {% if request.GET.is_active == 'false' %}selected{% endif %}>{% trans "Inactive Only" %}</option>
+            </select>
+        </div>
+        <div class="flex items-end gap-2">
+            <button type="submit" 
+                    class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-medium rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-all duration-200">
+                <span class="material-icons text-sm mr-2">search</span>
+                {% trans "Filter" %}
+            </button>
+            <a href="{% url 'tiendanube_administranet:webhook_config_list' %}" 
+               class="flex-1 inline-flex items-center justify-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200">
+                <span class="material-icons text-sm mr-2">clear</span>
+                {% trans "Clear" %}
+            </a>
+        </div>
+    </form>
+</div>
+
+<!-- Webhook Configurations Table -->
+<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">settings</span>
+                {% trans "Webhook Configurations" %}
+            </h3>
+            <div class="flex items-center gap-3">
+            <a href="{% url 'tiendanube_administranet:webhook_status' %}" 
+               class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
+                <span class="material-icons text-sm mr-1">monitor</span>
+                {% trans "View Status" %}
+            </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="overflow-x-auto">
+        {% if webhook_configs %}
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-gray-900/50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {% trans "URL" %}
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {% trans "Events" %}
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {% trans "Status" %}
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {% trans "Last Triggered" %}
+                    </th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {% trans "Actions" %}
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {% for webhook in webhook_configs %}
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-200">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                <span class="material-icons text-blue-600 dark:text-blue-400 text-sm">link</span>
+                            </div>
+                            <div class="ml-3">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ webhook.webhook_url|truncatechars:50 }}</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">{{ webhook.tiendanube_config.name }}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex flex-wrap gap-1">
+                            {% for event in webhook.events|slice:":3" %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                {{ event|truncatechars:20 }}
+                            </span>
+                            {% endfor %}
+                            {% if webhook.events|length > 3 %}
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-400">
+                                +{{ webhook.events|length|add:"-3" }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if webhook.status == 'active' %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                            <span class="material-icons text-xs mr-1">check_circle</span>
+                            {% trans "Active" %}
+                        </span>
+                        {% elif webhook.status == 'inactive' %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                            <span class="material-icons text-xs mr-1">pause_circle</span>
+                            {% trans "Inactive" %}
+                        </span>
+                        {% else %}
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                            <span class="material-icons text-xs mr-1">error</span>
+                            {% trans "Error" %}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {% if webhook.last_triggered %}
+                        {{ webhook.last_triggered|date:"M d, Y H:i" }}
+                        {% else %}
+                        {% trans "Never" %}
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div class="flex items-center space-x-2">
+                            <a href="{% url 'tiendanube_administranet:webhook_config_detail' webhook.pk %}" 
+                               class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
+                                <span class="material-icons text-xs mr-1">visibility</span>
+                                {% trans "View" %}
+                            </a>
+                            <a href="{% url 'tiendanube_administranet:webhook_config_update' webhook.pk %}" 
+                               class="inline-flex items-center px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors duration-200">
+                                <span class="material-icons text-xs mr-1">edit</span>
+                                {% trans "Edit" %}
+                            </a>
+                            {% if webhook.webhook_id %}
+                            <button onclick="testWebhook({{ webhook.pk }})" 
+                                    class="inline-flex items-center px-2 py-1 text-xs font-medium text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 rounded hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors duration-200">
+                                <span class="material-icons text-xs mr-1">play_arrow</span>
+                                {% trans "Test" %}
+                            </button>
+                            <button onclick="toggleWebhook({{ webhook.pk }}, '{{ webhook.status }}')" 
+                                    class="inline-flex items-center px-2 py-1 text-xs font-medium {% if webhook.status == 'active' %}text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50{% else %}text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50{% endif %} rounded transition-colors duration-200">
+                                <span class="material-icons text-xs mr-1">{% if webhook.status == 'active' %}pause{% else %}play_arrow{% endif %}</span>
+                                {% if webhook.status == 'active' %}{% trans "Deactivate" %}{% else %}{% trans "Activate" %}{% endif %}
+                            </button>
+                            {% endif %}
+                            <a href="{% url 'tiendanube_administranet:webhook_config_delete' webhook.pk %}" 
+                               class="inline-flex items-center px-2 py-1 text-xs font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/30 rounded hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors duration-200">
+                                <span class="material-icons text-xs mr-1">delete</span>
+                                {% trans "Delete" %}
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+            <div class="flex items-center justify-between">
+                <div class="text-sm text-gray-700 dark:text-gray-300">
+                    {% trans "Showing" %} {{ page_obj.start_index }} {% trans "to" %} {{ page_obj.end_index }} {% trans "of" %} {{ page_obj.paginator.count }} {% trans "results" %}
+                </div>
+                <div class="flex space-x-2">
+                    {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
+                        <span class="material-icons text-sm mr-1">chevron_left</span>
+                        {% trans "Previous" %}
+                    </a>
+                    {% endif %}
+                    
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                       class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200">
+                        {% trans "Next" %}
+                        <span class="material-icons text-sm ml-1">chevron_right</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="text-center py-12">
+            <div class="mx-auto w-16 h-16 text-gray-400 dark:text-gray-500 mb-4">
+                <span class="material-icons text-6xl">webhook</span>
+            </div>
+            <h3 class="mt-2 text-lg font-medium text-gray-900 dark:text-white">{% trans "No webhook configurations" %}</h3>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{% trans "Get started by creating a new webhook configuration." %}</p>
+            <div class="mt-6">
+                <a href="{% url 'tiendanube_administranet:webhook_config_create' %}" 
+                   class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white text-sm font-medium rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-all duration-200 hover:scale-105 hover:shadow-lg">
+                    <span class="material-icons text-sm mr-2">add</span>
+                    {% trans "Create Webhook" %}
+                </a>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Función para mostrar/ocultar loading
+function setLoading(loading) {
+    if (loading) {
+        console.log('📋 Loading started');
+    } else {
+        console.log('📋 Loading finished');
+    }
+}
+
+// Función para mostrar toasts de notificación
+function showToast(type, message) {
+    console.log(`📋 Toast [${type.toUpperCase()}]: ${message}`);
+    
+    // Crear elemento de toast si no existe
+    let toastContainer = document.getElementById('toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.id = 'toast-container';
+        toastContainer.className = 'fixed top-4 right-4 z-50 space-y-2';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Crear toast
+    const toast = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+    const icon = type === 'success' ? 'check_circle' : type === 'error' ? 'error' : 'info';
+    
+    toast.className = `${bgColor} text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-pulse`;
+    toast.innerHTML = `
+        <span class="material-icons text-sm">${icon}</span>
+        <span class="text-sm font-medium">${message}</span>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    // Remover toast después de 3 segundos
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 3000);
+}
+
+function testWebhook(webhookId) {
+    if (!confirm('{% trans "Are you sure you want to test this webhook?" %}')) {
+        return;
+    }
+    
+    setLoading(true);
+    
+    fetch(`/tiendanube_administranet/api/webhooks/${webhookId}/test/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        setLoading(false);
+        if (data.success) {
+            showToast('success', data.message);
+        } else {
+            showToast('error', data.message);
+        }
+    })
+    .catch(error => {
+        setLoading(false);
+        showToast('error', '{% trans "Error testing webhook" %}');
+        console.error('Error:', error);
+    });
+}
+
+function syncWebhooks() {
+    if (!confirm('{% trans "Are you sure you want to sync webhooks with Tiendanube?" %}')) {
+        return;
+    }
+    
+    setLoading(true);
+    
+    fetch('/tiendanube_administranet/api/webhooks/sync/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        setLoading(false);
+        if (data.success) {
+            showToast('success', data.message);
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showToast('error', data.message);
+        }
+    })
+    .catch(error => {
+        setLoading(false);
+        showToast('error', '{% trans "Error syncing webhooks" %}');
+        console.error('Error:', error);
+    });
+}
+
+function toggleWebhook(webhookId, currentStatus) {
+    console.log('🔄 Toggle webhook:', webhookId, currentStatus);
+    
+    // Encontrar el botón específico y cambiarlo a estado de proceso
+    const button = document.querySelector(`button[onclick*="toggleWebhook(${webhookId}"]`);
+    let originalHTML = '';
+    if (button) {
+        originalHTML = button.innerHTML;
+        button.innerHTML = '<span class="material-icons text-xs mr-1 animate-spin">refresh</span>Processing...';
+        button.disabled = true;
+        button.classList.add('opacity-50', 'cursor-not-allowed');
+        console.log('📋 Button found and set to processing state');
+    } else {
+        console.error('❌ Button not found for webhookId:', webhookId);
+    }
+    
+    setLoading(true);
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfToken) {
+        console.error('❌ CSRF token not found');
+        showToast('error', 'CSRF token not found');
+        setLoading(false);
+        if (button) {
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+            button.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        return;
+    }
+    
+    console.log('📋 CSRF Token:', csrfToken.value.substring(0, 20) + '...');
+    console.log('📋 Making request to:', `/tiendanube_administranet/api/webhooks/${webhookId}/toggle/`);
+    
+    fetch(`/tiendanube_administranet/api/webhooks/${webhookId}/toggle/`, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken.value,
+            'Content-Type': 'application/json',
+        },
+    })
+    .then(response => {
+        console.log('📋 Response received:');
+        console.log('  - Status:', response.status);
+        console.log('  - OK:', response.ok);
+        console.log('  - Headers:', Object.fromEntries(response.headers.entries()));
+        
+        if (response.status === 302) {
+            console.log('📋 Redirect detected, assuming success');
+            setLoading(false);
+            showToast('success', 'Webhook status updated successfully');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+            return null; // Return null to prevent further processing
+        }
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        return response.json();
+    })
+    .then(data => {
+        console.log('📋 Response data:', data);
+        setLoading(false);
+        
+        if (data === null) {
+            console.log('📋 Redirect handled, skipping data processing');
+            return;
+        }
+        
+        if (data && data.success) {
+            console.log('📋 Success response received');
+            showToast('success', data.message);
+            
+            // Actualizar el botón inmediatamente
+            if (button) {
+                const newStatus = data.new_status;
+                console.log('📋 Updating button to status:', newStatus);
+                
+                if (newStatus === 'active') {
+                    button.innerHTML = '<span class="material-icons text-xs mr-1">pause</span>Deactivate';
+                    button.className = button.className.replace('text-green-', 'text-red-').replace('bg-green-', 'bg-red-');
+                } else {
+                    button.innerHTML = '<span class="material-icons text-xs mr-1">play_arrow</span>Activate';
+                    button.className = button.className.replace('text-red-', 'text-green-').replace('bg-red-', 'bg-green-');
+                }
+                button.disabled = false;
+                button.classList.remove('opacity-50', 'cursor-not-allowed');
+                // Actualizar el onclick con el nuevo estado
+                button.setAttribute('onclick', `toggleWebhook(${webhookId}, '${newStatus}')`);
+                console.log('📋 Button updated successfully');
+            }
+            
+            // Recargar después de un delay para confirmar
+            console.log('📋 Scheduling page reload in 2 seconds');
+            setTimeout(() => {
+                console.log('📋 Reloading page...');
+                window.location.reload();
+            }, 2000);
+        } else {
+            console.error('❌ Error response:', data);
+            showToast('error', data ? data.message : 'Unknown error');
+            if (button) {
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+                button.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+    })
+    .catch(error => {
+        console.error('❌ Error:', error);
+        setLoading(false);
+        showToast('error', '{% trans "Error toggling webhook" %}: ' + error.message);
+        if (button) {
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+            button.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    });
+}
+</script>
+{% endblock %}

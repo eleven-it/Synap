@@ -219,11 +219,11 @@ class ManifestViewTests(TestCase):
         self.assertEqual(data['short_name'], 'Synap')
 
     def test_manifest_campo_start_url(self):
-        """CA-MAN-01, CA-MAN-04: Contiene start_url apuntando a dashboard."""
+        """CA-MAN-01, CA-MAN-04: start_url en ruta permitida en móvil (login)."""
         response = self.client.get('/manifest.json')
         data = json.loads(response.content)
         self.assertIn('start_url', data)
-        self.assertEqual(data['start_url'], '/core/dashboard/')
+        self.assertEqual(data['start_url'], '/login/')
 
     def test_manifest_campo_display(self):
         """CA-MAN-01: display es standalone."""

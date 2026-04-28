@@ -1,0 +1,683 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Manual Synchronization" %} - {{ block.super }}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="mb-6">
+    <nav class="flex" aria-label="Breadcrumb">
+        <ol class="inline-flex items-center space-x-1 md:space-x-3">
+            <li class="inline-flex items-center">
+                <a href="{% url 'tiendanube_administranet:dashboard' %}" 
+                   class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                    <span class="material-icons text-sm mr-2">dashboard</span>
+                    {% trans "Dashboard" %}
+                </a>
+            </li>
+            <li>
+                <div class="flex items-center">
+                    <span class="material-icons text-gray-400 text-sm">chevron_right</span>
+                    <span class="ml-1 text-sm font-medium text-gray-500 md:ml-2 dark:text-gray-400">
+                        {% trans "Manual Sync" %}
+                    </span>
+                </div>
+            </li>
+        </ol>
+    </nav>
+</div>
+
+<!-- Header Section -->
+<div class="mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div class="mb-4 sm:mb-0">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                <span class="material-icons text-orange-600 dark:text-orange-400 mr-3 align-middle">sync</span>
+                {% trans "Manual Synchronization" %}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400">
+                {% trans "Manually trigger synchronization between Tiendanube and AdministraNET systems" %}
+            </p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-3">
+            <button id="refresh-stats" class="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200">
+                <span class="material-icons text-sm mr-2">refresh</span>
+                {% trans "Refresh Stats" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Customers Stats -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Customers" %}</p>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ total_customers|default:0 }}</p>
+                <p class="text-xs text-green-600 dark:text-green-400">
+                    {{ synced_customers|default:0 }} {% trans "synced" %}
+                </p>
+            </div>
+            <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
+                <span class="material-icons text-purple-600 dark:text-purple-400">people</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Products Stats -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Products" %}</p>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ total_products|default:0 }}</p>
+                <p class="text-xs text-green-600 dark:text-green-400">
+                    {{ synced_products|default:0 }} {% trans "synced" %}
+                </p>
+            </div>
+            <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                <span class="material-icons text-blue-600 dark:text-blue-400">inventory</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Orders Stats -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Orders" %}</p>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white">{{ total_orders|default:0 }}</p>
+                <p class="text-xs text-green-600 dark:text-green-400">
+                    {{ synced_orders|default:0 }} {% trans "synced" %}
+                </p>
+            </div>
+            <div class="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <span class="material-icons text-green-600 dark:text-green-400">receipt</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Stats -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Pending" %}</p>
+                <p class="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                    {{ pending_customers|default:0|add:pending_products|default:0|add:pending_orders|default:0 }}
+                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">
+                    {% trans "items to sync" %}
+                </p>
+            </div>
+            <div class="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                <span class="material-icons text-orange-600 dark:text-orange-400">schedule</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sync Actions -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- Tiendanube to AdministraNET -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-500 to-indigo-600 p-6">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                    <span class="material-icons text-white text-2xl">arrow_downward</span>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-white">{% trans "Tiendanube → AdministraNET" %}</h3>
+                    <p class="text-blue-100">{% trans "Import data from e-commerce to ERP" %}</p>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="space-y-3">
+                <button id="sync-customers-tn" class="w-full bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('customers', 'tiendanube')">
+                    <span class="material-icons text-gray-600 dark:text-gray-300">people</span>
+                    <span>{% trans "Sync Customers" %}</span>
+                </button>
+                
+                <!-- Product sync from Tiendanube is not allowed -->
+                <div class="w-full bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700 font-medium py-3 px-4 rounded-lg flex items-center justify-center space-x-2 cursor-not-allowed">
+                    <span class="material-icons">block</span>
+                    <span>{% trans "Product Sync Not Available" %}</span>
+                </div>
+                
+                <button id="sync-orders-tn" class="w-full bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('orders', 'tiendanube')">
+                    <span class="material-icons text-gray-600 dark:text-gray-300">receipt</span>
+                    <span>{% trans "Sync Orders" %}</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AdministraNET to Tiendanube -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="bg-gradient-to-r from-green-500 to-emerald-600 p-6">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                    <span class="material-icons text-white text-2xl">arrow_upward</span>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-white">{% trans "AdministraNET → Tiendanube" %}</h3>
+                    <p class="text-green-100">{% trans "Export data from ERP to e-commerce" %}</p>
+                </div>
+            </div>
+        </div>
+        <div class="p-6">
+            <div class="space-y-3">
+                <button id="sync-customers-an" class="w-full bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('customers', 'adminet')">
+                    <span class="material-icons text-gray-600 dark:text-gray-300">people</span>
+                    <span>{% trans "Sync Customers" %}</span>
+                </button>
+                
+                <button id="sync-products-an" class="w-full bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerSync('products', 'adminet')">
+                    <span class="material-icons text-gray-600 dark:text-gray-300">inventory</span>
+                    <span>{% trans "Sync Products" %}</span>
+                </button>
+                
+                <!-- Order sync from AdministraNET to Tiendanube is not allowed - orders are created by customers in Tiendanube -->
+                <div class="w-full bg-gray-50 dark:bg-gray-800 text-gray-400 dark:text-gray-500 border border-gray-200 dark:border-gray-700 font-medium py-3 px-4 rounded-lg flex items-center justify-center space-x-2 cursor-not-allowed">
+                    <span class="material-icons">block</span>
+                    <span>{% trans "Order Sync Not Available" %}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Advanced Sync Options -->
+<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-8">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+        <span class="material-icons text-orange-600 dark:text-orange-400 mr-2">settings</span>
+        {% trans "Advanced Sync Options" %}
+    </h3>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <button id="full-sync" class="bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="triggerFullSync()">
+            <span class="material-icons text-orange-600 dark:text-orange-400">sync</span>
+            <span>{% trans "Full Sync" %}</span>
+        </button>
+        
+        <button id="test-connections" class="bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 border border-gray-300 dark:border-gray-600 font-medium py-3 px-4 rounded-lg transition-all duration-200 flex items-center justify-center space-x-2" onclick="testConnections()">
+            <span class="material-icons text-gray-600 dark:text-gray-300">wifi</span>
+            <span>{% trans "Test Connections" %}</span>
+        </button>
+    </div>
+</div>
+
+<!-- Sync History -->
+<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+    <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+        <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">history</span>
+                {% trans "Recent Sync History" %}
+            </h3>
+            <button id="refresh-history" class="inline-flex items-center px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200" onclick="loadSyncHistory()">
+                <span class="material-icons text-sm mr-1">refresh</span>
+                {% trans "Refresh" %}
+            </button>
+        </div>
+    </div>
+    
+    <div class="overflow-x-auto">
+        <table class="w-full">
+            <thead class="bg-gray-50 dark:bg-gray-700">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans "Type" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans "Direction" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans "Status" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans "Items" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans "Duration" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans "Timestamp" %}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{% trans "Actions" %}</th>
+                </tr>
+            </thead>
+            <tbody id="sync-history-table" class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                <tr>
+                    <td colspan="7" class="px-6 py-12 text-center">
+                        <div class="flex items-center justify-center">
+                            <span class="material-icons text-gray-400 mr-3">hourglass_empty</span>
+                            <span class="text-gray-500">{% trans "Loading sync history..." %}</span>
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Sync Progress Modal -->
+<div id="sync-progress-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full mx-4 p-6">
+        <div class="text-center">
+            <div class="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg mx-auto mb-4">
+                <span class="material-icons text-white text-2xl animate-spin">sync</span>
+            </div>
+            <h4 id="sync-progress-title" class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                {% trans "Syncing..." %}
+            </h4>
+            <p id="sync-progress-description" class="text-gray-600 dark:text-gray-400 mb-4">
+                {% trans "Please wait while the synchronization is in progress" %}
+            </p>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-4">
+                <div id="sync-progress-bar" class="bg-gradient-to-r from-orange-500 to-orange-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <p id="sync-progress-text" class="text-sm text-gray-500 dark:text-gray-400">
+                0%
+            </p>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Notifications -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Load sync history on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSyncHistory();
+    });
+
+    // Trigger sync function
+    async function triggerSync(type, direction) {
+        // Validate restrictions
+        if (type === 'products' && direction === 'tiendanube') {
+            showToast('Product synchronization from Tiendanube to AdministraNET is not allowed', 'error');
+            return;
+        }
+        
+        const buttonId = `sync-${type}-${direction === 'tiendanube' ? 'tn' : 'an'}`;
+        const button = document.getElementById(buttonId);
+        
+        if (!button) return;
+        
+        // Show progress modal (sin animación simulada)
+        showSyncProgress(type, direction);
+        
+        // Disable button and show loading
+        setLoading(button, true);
+        
+        try {
+            const response = await fetch('{% url "tiendanube_administranet:trigger_sync_ajax" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                },
+                body: JSON.stringify({
+                    sync_type: type,
+                    direction: direction
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Mostrar resultado real de la sincronización
+                const progressBar = document.getElementById('sync-progress-bar');
+                const progressText = document.getElementById('sync-progress-text');
+                const description = document.getElementById('sync-progress-description');
+                
+                // Usar estructura real del backend (no "details")
+                const total = data.total_processed || data.total_items || 1;
+                const successful = data.successful || data.successful_items || 0;
+                const failed = data.failed || data.failed_items || 0;
+                const processed = successful + failed;
+                const progressPercent = processed > 0 ? Math.round((processed / total) * 100) : 100;
+                
+                progressBar.style.width = `${progressPercent}%`;
+                progressText.textContent = `${progressPercent}%`;
+                description.textContent = `Processed ${processed}/${total} items (${successful} successful, ${failed} failed)`;
+                
+                // Wait a moment to show results, then hide modal
+                setTimeout(() => {
+                    hideSyncProgress();
+                    
+                    // Mostrar mensaje con detalles
+                    showToast(data.message || 'Sync completed successfully', failed > 0 ? 'warning' : 'success');
+                    
+                    // Reload sync history
+                    loadSyncHistory();
+                    
+                    // Re-enable button
+                    setLoading(button, false);
+                }, 1500);
+            } else {
+                hideSyncProgress();
+                showToast(data.message || 'Sync failed', 'error');
+                setLoading(button, false);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            hideSyncProgress();
+            showToast('An error occurred during sync', 'error');
+            setLoading(button, false);
+        }
+    }
+
+    // Trigger full sync
+    async function triggerFullSync() {
+        const button = document.getElementById('full-sync');
+        
+        // Show progress modal (sin confirmación)
+        showSyncProgress('all data', 'bidirectional');
+        setLoading(button, true);
+        
+        try {
+            const response = await fetch('{% url "tiendanube_administranet:trigger_sync_ajax" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                },
+                body: JSON.stringify({
+                    sync_type: 'full',
+                    direction: 'both'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Mostrar resultado real
+                const progressBar = document.getElementById('sync-progress-bar');
+                const progressText = document.getElementById('sync-progress-text');
+                const description = document.getElementById('sync-progress-description');
+                
+                // Usar estructura real del backend
+                const total = data.total_processed || data.total_items || 1;
+                const successful = data.successful || data.successful_items || 0;
+                const failed = data.failed || data.failed_items || 0;
+                const processed = successful + failed;
+                const progressPercent = processed > 0 ? Math.round((processed / total) * 100) : 100;
+                
+                progressBar.style.width = `${progressPercent}%`;
+                progressText.textContent = `${progressPercent}%`;
+                description.textContent = `Full sync: ${processed}/${total} items (${successful} successful, ${failed} failed)`;
+                
+                setTimeout(() => {
+                    hideSyncProgress();
+                    showToast(data.message || 'Full sync completed successfully', failed > 0 ? 'warning' : 'success');
+                    loadSyncHistory();
+                    setLoading(button, false);
+                }, 1500);
+            } else {
+                hideSyncProgress();
+                showToast(data.message || 'Full sync failed', 'error');
+                setLoading(button, false);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            hideSyncProgress();
+            showToast('An error occurred during full sync', 'error');
+            setLoading(button, false);
+        }
+    }
+
+
+    // Test connections
+    async function testConnections() {
+        const button = document.getElementById('test-connections');
+        setLoading(button, true);
+        
+        try {
+            const response = await fetch('{% url "tiendanube_administranet:test_connections_ajax" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                // Ambas conexiones exitosas
+                showToast('✅ Tiendanube & AdministraNET: Connections OK', 'success');
+            } else {
+                // Mostrar detalles de cada conexión
+                const results = data.results || {};
+                const tnStatus = results.tiendanube?.success ? '✅' : '❌';
+                const anStatus = results.adminet?.success ? '✅' : '❌';
+                
+                const message = `${tnStatus} Tiendanube: ${results.tiendanube?.message || 'Error'}\n${anStatus} AdministraNET: ${results.adminet?.message || 'Error'}`;
+                showToast(message, 'warning');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('An error occurred while testing connections', 'error');
+        } finally {
+            setLoading(button, false);
+        }
+    }
+
+    // Show sync progress modal
+    function showSyncProgress(type, direction) {
+        const modal = document.getElementById('sync-progress-modal');
+        const title = document.getElementById('sync-progress-title');
+        const description = document.getElementById('sync-progress-description');
+        const progressBar = document.getElementById('sync-progress-bar');
+        const progressText = document.getElementById('sync-progress-text');
+        
+        title.textContent = `Syncing ${type} ${direction === 'tiendanube' ? 'from Tiendanube' : 'from AdministraNET'}`;
+        description.textContent = 'Please wait while the synchronization is in progress...';
+        
+        // Reset progress to 0%
+        progressBar.style.width = '0%';
+        progressText.textContent = '0%';
+        
+        modal.classList.remove('hidden');
+    }
+
+    // Hide sync progress modal
+    function hideSyncProgress() {
+        const modal = document.getElementById('sync-progress-modal');
+        modal.classList.add('hidden');
+        
+        // Reset progress bar when hiding
+        const progressBar = document.getElementById('sync-progress-bar');
+        const progressText = document.getElementById('sync-progress-text');
+        if (progressBar && progressText) {
+            progressBar.style.width = '0%';
+            progressText.textContent = '0%';
+        }
+    }
+
+    // Load sync history
+    async function loadSyncHistory() {
+        const tableBody = document.getElementById('sync-history-table');
+        
+        try {
+            const response = await fetch('{% url "tiendanube_administranet:get_sync_history_ajax" %}');
+            const data = await response.json();
+            
+            if (data.success) {
+                updateSyncHistoryTable(data.history);
+            } else {
+                showToast('Error loading sync history', 'error');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showToast('Error loading sync history', 'error');
+        }
+    }
+
+    // Update sync history table
+    function updateSyncHistoryTable(history) {
+        const tableBody = document.getElementById('sync-history-table');
+        
+        if (!history || history.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="px-6 py-12 text-center">
+                        <div class="flex items-center justify-center">
+                            <span class="material-icons text-gray-400 mr-3">inbox</span>
+                            <span class="text-gray-500">{% trans "No sync history available" %}</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tableBody.innerHTML = history.map(item => `
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 ${getTypeColor(item.sync_type)} rounded-lg flex items-center justify-center">
+                            ${getTypeIcon(item.sync_type)}
+                        </div>
+                        <span class="font-medium text-gray-900 dark:text-white">${item.sync_type}</span>
+                    </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.get_direction_display.includes('AdministraNET') && !item.get_direction_display.includes('From') ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}">
+                        ${item.get_direction_display}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(item.status)}">
+                        ${getStatusText(item.status)}
+                    </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                    ${item.processed_items || 0}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                    ${item.duration_seconds ? formatDuration(item.duration_seconds) : 'N/A'}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                    ${formatTimestamp(item.started_at)}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <a href="/tiendanube_administranet/logs/${item.id}/" class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
+                        <span class="material-icons text-sm">visibility</span>
+                    </a>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // Helper functions
+    function getTypeColor(type) {
+        const colors = {
+            'customers': 'bg-purple-100 dark:bg-purple-900/30',
+            'products': 'bg-blue-100 dark:bg-blue-900/30',
+            'orders': 'bg-green-100 dark:bg-green-900/30'
+        };
+        return colors[type] || 'bg-gray-100 dark:bg-gray-900/30';
+    }
+
+    function getTypeIcon(type) {
+        const icons = {
+            'customers': '<span class="material-icons text-purple-600 dark:text-purple-400 text-sm">people</span>',
+            'products': '<span class="material-icons text-blue-600 dark:text-blue-400 text-sm">inventory</span>',
+            'orders': '<span class="material-icons text-green-600 dark:text-green-400 text-sm">receipt</span>'
+        };
+        return icons[type] || '<span class="material-icons text-gray-600 dark:text-gray-400 text-sm">help</span>';
+    }
+
+    function getStatusBadge(status) {
+        const badges = {
+            'completed': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+            'failed': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+            'in_progress': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+            'pending': 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400'
+        };
+        return badges[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
+    }
+
+    function getStatusText(status) {
+        const texts = {
+            'completed': '{% trans "Success" %}',
+            'failed': '{% trans "Error" %}',
+            'in_progress': '{% trans "In Progress" %}',
+            'pending': '{% trans "Pending" %}'
+        };
+        return texts[status] || '{% trans "Unknown" %}';
+    }
+
+    function formatTimestamp(timestamp) {
+        if (!timestamp) return 'N/A';
+        const date = new Date(timestamp);
+        return date.toLocaleString();
+    }
+
+    function formatDuration(seconds) {
+        if (!seconds) return 'N/A';
+        
+        if (seconds < 60) {
+            return `${seconds}s`;
+        } else if (seconds < 3600) {
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}m ${remainingSeconds}s`;
+        } else {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${hours}h ${minutes}m`;
+        }
+    }
+
+    function setLoading(button, loading) {
+        if (loading) {
+            button.disabled = true;
+            button.classList.add('opacity-50', 'cursor-not-allowed');
+            const icon = button.querySelector('.material-icons');
+            if (icon) {
+                icon.textContent = 'hourglass_empty';
+                icon.classList.add('animate-spin');
+            }
+        } else {
+            button.disabled = false;
+            button.classList.remove('opacity-50', 'cursor-not-allowed');
+            const icon = button.querySelector('.material-icons');
+            if (icon) {
+                icon.textContent = icon.getAttribute('data-original-icon') || 'sync';
+                icon.classList.remove('animate-spin');
+            }
+        }
+    }
+
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        
+        const colors = {
+            'success': 'bg-green-500',
+            'error': 'bg-red-500',
+            'warning': 'bg-yellow-500',
+            'info': 'bg-blue-500'
+        };
+        
+        toast.className = `${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-x-full`;
+        toast.innerHTML = `
+            <div class="flex items-center">
+                <span class="material-icons text-sm mr-2">${type === 'success' ? 'check_circle' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : 'info'}</span>
+                <span>${message}</span>
+            </div>
+        `;
+        
+        container.appendChild(toast);
+        
+        // Animate in
+        setTimeout(() => {
+            toast.classList.remove('translate-x-full');
+        }, 100);
+        
+        // Auto remove
+        setTimeout(() => {
+            toast.classList.add('translate-x-full');
+            setTimeout(() => {
+                container.removeChild(toast);
+            }, 300);
+        }, 3000);
+    }
+</script>
+{% endblock %}

@@ -1,12 +1,75 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, List
+from typing import Iterable, List, Optional, Tuple
 
 from django.db.models import Q
 
 from core.utils.permissions import user_has_full_access
 from ..models import ReportDefinition, ReportCategory
+
+# Slugs con metadata inferida «comprobantes» / «listados» (orden + etiqueta «Informe legacy» en tarjetas).
+_LEGACY_COMPROBANTES_SLUGS = frozenset(
+    {
+        "pedidos-pendientes",
+        "remitos-no-facturados",
+        "remitos_no_facturados",
+        "uninvoiced_remitos",
+        "cash_flow_detailed_movements",
+        "cash_flow_by_account",
+        "mayoristapp-comprobantes-no-cancelados",
+        "comprobantes-rutas",
+    }
+)
+_LEGACY_LISTADOS_SLUGS = frozenset(
+    {
+        "ventas_netas",
+        "sales_summary",
+        "total-consolidado-operativo",
+        "inventario_rotacion_cobertura",
+        "clientes_churn_ltv",
+        "mayoristapp-devoluciones",
+        "mayoristapp-filtros-estadisticas",
+        "mayoristapp-presupuestos-vendedor",
+        "mayoristapp-estado-pedidos-preparacion",
+        "ventas-objetivos-vs-bo",
+        "stock-existencias",
+        "resumen-ejecutivo-ventas",
+    }
+)
+_LEGACY_ORDER_DEFAULT = 999
+
+
+def _infer_legacy_section(slug: str) -> Optional[str]:
+    s = (slug or "").strip().lower()
+    if s in _LEGACY_COMPROBANTES_SLUGS:
+        return "comprobantes"
+    if s in _LEGACY_LISTADOS_SLUGS:
+        return "listados"
+    return None
+
+
+def _legacy_order_from_metadata(metadata: dict, config: dict) -> int:
+    raw = metadata.get("catalog_legacy_order")
+    if raw is None:
+        raw = config.get("catalog_legacy_order")
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return _LEGACY_ORDER_DEFAULT
+
+
+def split_legacy_catalog(entries: List["CatalogEntry"]) -> Tuple[List["CatalogEntry"], List["CatalogEntry"]]:
+    """Ordena entradas por sección legacy (orden explícito + nombre)."""
+    comprobantes = sorted(
+        [e for e in entries if e.legacy_section == "comprobantes"],
+        key=lambda e: (e.legacy_order, e.name.lower()),
+    )
+    listados = sorted(
+        [e for e in entries if e.legacy_section == "listados"],
+        key=lambda e: (e.legacy_order, e.name.lower()),
+    )
+    return comprobantes, listados
 
 
 DISPLAY_LABELS = {
@@ -104,6 +167,9 @@ class CatalogEntry:
     dimensions: List[str]
     is_visible: bool = True
     is_declarative: bool = False
+    # Sección en catálogo «Informes Legacy» (comprobantes / listados); None = sin bloque dedicado.
+    legacy_section: Optional[str] = None
+    legacy_order: int = _LEGACY_ORDER_DEFAULT
 
 
 class CatalogService:
@@ -150,9 +216,15 @@ class CatalogService:
                 continue
 
             config = definition.config or {}
+            metadata = definition.metadata or {}
             metrics = _labelize(config.get("metrics", []))
             dimensions = _labelize(config.get("dimensions", []))
             is_declarative = config.get("version") == "declarative-v1"
+
+            legacy_section = metadata.get("catalog_legacy_section") or config.get("catalog_legacy_section")
+            if legacy_section not in ("comprobantes", "listados"):
+                legacy_section = _infer_legacy_section(definition.slug)
+            legacy_order = _legacy_order_from_metadata(metadata, config)
 
             catalog.append(
                 CatalogEntry(
@@ -167,8 +239,12 @@ class CatalogService:
                     dimensions=dimensions,
                     is_visible=definition.is_visible,
                     is_declarative=is_declarative,
+                    legacy_section=legacy_section,
+                    legacy_order=legacy_order,
                 )
             )
+        # Orden: categoría (gerencial antes que operativo), luego orden legacy, luego nombre.
+        catalog.sort(key=lambda e: (e.category, e.legacy_order, e.name.lower()))
         return catalog
 
     def user_has_permission(self, code: str) -> bool:

@@ -116,7 +116,7 @@
         <svg x-show="!mobileMenuOpen" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
         <svg x-show="mobileMenuOpen" x-cloak class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
       </button>
-      <a href="/" class="flex items-center flex-shrink-0">
+      <a href="{% if request.is_mobile %}{% if request.user.is_authenticated %}{% url 'self_checkout:index' %}{% else %}{% url 'login:login' %}{% endif %}{% else %}/{% endif %}" class="flex items-center flex-shrink-0">
         {% if logo_path %}
           <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="h-8 md:h-10 w-auto object-contain" />
         {% endif %}
@@ -205,9 +205,9 @@
             <p class="text-xs text-gray-500 truncate">{% if session_user.cod_usuario %}{{ session_user.cod_usuario }}{% else %}{{ request.user.email|default:"" }}{% endif %}</p>
           </div>
           <div class="py-1">
-            <a href="{% url 'core:perfil' %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"><span class="material-icons text-sm mr-3">account_circle</span>Mi perfil</a>
-            <a href="{% url 'core:historial' %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"><span class="material-icons text-sm mr-3">history</span>Historial</a>
-            {% if request.user.is_staff %}<a href="/admin/" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"><span class="material-icons text-sm mr-3">admin_panel_settings</span>Admin</a>{% endif %}
+            <a href="{% if request.is_mobile %}{% url 'login:perfil' %}{% else %}{% url 'core:perfil' %}{% endif %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"><span class="material-icons text-sm mr-3">account_circle</span>Mi perfil</a>
+            {% if not request.is_mobile %}<a href="{% url 'core:historial' %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"><span class="material-icons text-sm mr-3">history</span>Historial</a>{% endif %}
+            {% if request.user.is_staff and not request.is_mobile %}<a href="/admin/" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition"><span class="material-icons text-sm mr-3">admin_panel_settings</span>Admin</a>{% endif %}
           </div>
           <div class="border-t border-gray-200 py-1">
             <a href="{% url 'login:logout' %}" class="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition"><span class="material-icons text-sm mr-3">logout</span>Salir</a>
@@ -303,13 +303,10 @@
 
     <!-- Accesos rápidos mobile -->
     <div class="border-t border-gray-200 dark:border-gray-700 mt-2">
-      <a href="{% url 'core:perfil' %}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-800">
+      <a href="{% url 'login:perfil' %}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-800">
         <span class="material-icons text-base text-gray-400 dark:text-gray-500">account_circle</span>Mi perfil
       </a>
-      <a href="{% url 'core:historial' %}" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-800">
-        <span class="material-icons text-base text-gray-400 dark:text-gray-500">history</span>Historial
-      </a>
-      {% if request.user.is_staff %}
+      {% if request.user.is_staff and not request.is_mobile %}
       <a href="/admin/" @click="mobileMenuOpen = false" class="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-800">
         <span class="material-icons text-base text-gray-400 dark:text-gray-500">admin_panel_settings</span>Administración
       </a>

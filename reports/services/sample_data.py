@@ -98,6 +98,37 @@ SAMPLE_DATA: Dict[str, Dict[str, object]] = {
         ],
         "notes": ["OTIF objetivo >= 95%."],
     },
+    # Placeholders de catálogo hasta conectar motor legacy / relay en query_runner.
+    "mayoristapp-devoluciones": {
+        "data": [
+            {
+                "estado": "Vista previa",
+                "detalle": "El informe aparecerá en el catálogo; datos reales al conectar el relay de devoluciones.",
+                "lineas": 0,
+            },
+        ],
+        "notes": ["Estado: placeholder de catálogo (mayoristapp)."],
+    },
+    "mayoristapp-filtros-estadisticas": {
+        "data": [
+            {
+                "estado": "Vista previa",
+                "detalle": "Listados de filtros para estadísticas; datos reales al conectar el relay de filtros.",
+                "lineas": 0,
+            },
+        ],
+        "notes": ["Estado: placeholder de catálogo (mayoristapp)."],
+    },
+    "mayoristapp-comprobantes-no-cancelados": {
+        "data": [
+            {
+                "estado": "Vista previa",
+                "detalle": "Comprobantes no cancelados; datos reales al conectar el relay de listado.",
+                "lineas": 0,
+            },
+        ],
+        "notes": ["Estado: placeholder de catálogo (mayoristapp)."],
+    },
 }
 
 

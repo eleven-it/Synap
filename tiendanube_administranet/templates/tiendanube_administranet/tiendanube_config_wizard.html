@@ -1,0 +1,404 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Add New Store" %} - {% trans "Tiendanube Wizard" %}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+        <li class="inline-flex items-center">
+            <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                <span class="material-icons text-sm mr-2">dashboard</span>
+                {% trans "Dashboard" %}
+            </a>
+        </li>
+        <li>
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <a href="{% url 'tiendanube_administranet:tiendanube_config' %}" class="text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                    {% trans "Tiendanube Configuration" %}
+                </a>
+            </div>
+        </li>
+        <li>
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Add New Store" %}</span>
+            </div>
+        </li>
+    </ol>
+</nav>
+
+<div class="max-w-2xl mx-auto mt-12">
+    <!-- Progress Bar -->
+    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-6">
+        <div id="wizardProgress" class="bg-gradient-to-r from-orange-500 to-orange-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+    </div>
+    
+    <!-- Step Indicators -->
+    <div class="flex justify-between items-center mb-8">
+        {% for step_name in wizard_steps %}
+            {% with i=forloop.counter %}
+            <div class="flex flex-col items-center flex-1">
+                <div class="relative">
+                    <div class="w-8 h-8 flex items-center justify-center rounded-full border-2 transition-all duration-300
+                        {% if step > i %}bg-green-500 border-green-500 text-white{% elif step == i %}bg-gradient-to-r from-orange-500 to-orange-600 border-orange-500 text-white animate-bounce{% else %}bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-400{% endif %}">
+                        {% if step > i %}
+                            <span class="material-icons text-sm">check</span>
+                        {% else %}{{ i }}{% endif %}
+                    </div>
+                    {% if not forloop.last %}
+                        <div class="absolute top-1/2 left-full w-8 h-1 bg-gray-300 dark:bg-gray-600 -translate-y-1/2"></div>
+                    {% endif %}
+                </div>
+                <span class="mt-2 text-xs font-medium {% if step == i %}text-orange-700 dark:text-orange-400{% elif step > i %}text-green-600 dark:text-green-400{% else %}text-gray-400 dark:text-gray-500{% endif %}">{{ step_name }}</span>
+            </div>
+            {% endwith %}
+        {% endfor %}
+    </div>
+    
+    <!-- Mensajes del wizard -->
+    {% if wizard_message %}
+    <div class="mb-6 p-4 rounded-lg border {% if wizard_message_type == 'success' %}bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200{% elif wizard_message_type == 'error' %}bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200{% else %}bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200{% endif %} animate-fadeIn">
+        <div class="flex items-center">
+            <span class="material-icons text-sm mr-2">
+                {% if wizard_message_type == 'success' %}check_circle{% elif wizard_message_type == 'error' %}error{% else %}info{% endif %}
+            </span>
+            <span class="text-sm font-medium">{{ wizard_message }}</span>
+        </div>
+    </div>
+    {% endif %}
+    
+    <div id="wizardStepContent" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center animate-fadeIn">
+        {% if step == 1 %}
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+            <div class="animate-slideUp">
+                <label for="app_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "App ID" %} *</label>
+                <input type="text" id="app_id" name="app_id" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-white" required value="{{ app_id|default:'' }}">
+            </div>
+            <div class="animate-slideUp" style="animation-delay:0.1s;">
+                <label for="client_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{% trans "Client Secret" %} *</label>
+                <div class="relative">
+                    <input type="password" id="client_secret" name="client_secret" class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition pr-10 text-center bg-white dark:bg-gray-700 text-gray-900 dark:text-white" required value="{{ client_secret|default:'' }}">
+                    <button type="button" tabindex="-1" onclick="toggleSecretVisibility()" class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 focus:outline-none">
+                        <span id="eyeIcon" class="material-icons text-lg">visibility</span>
+                    </button>
+                </div>
+            </div>
+            <div class="mt-8 flex justify-center animate-fadeIn" style="animation-delay:0.2s;">
+                <button type="submit" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition hover:scale-105 hover:shadow-lg">
+                    <span class="material-icons text-sm mr-2">arrow_forward</span>
+                    {% trans "Next" %}
+                </button>
+            </div>
+        </form>
+        <p class="text-gray-500 dark:text-gray-400 mt-6 text-sm animate-fadeIn" style="animation-delay:0.3s;">
+            {% trans "This wizard will guide you step by step to connect and configure a new Tiendanube store in Synap." %}<br>
+            {% trans "You will need your" %} <b>{% trans "App ID" %}</b> {% trans "and" %} <b>{% trans "Client Secret" %}</b> {% trans "from Tiendanube." %}<br>
+            {% trans "You will be able to customize permissions and sync preferences." %}
+        </p>
+        
+        <!-- Help Section -->
+        <div class="mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-left animate-fadeIn" style="animation-delay:0.4s;">
+            <h3 class="text-blue-800 dark:text-blue-200 font-semibold mb-2 flex items-center">
+                <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">info</span>
+                {% trans "How to get your App ID and Client Secret" %}
+            </h3>
+            <ol class="text-blue-700 dark:text-blue-300 text-sm space-y-2">
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">1</span>
+                    <span>{% trans "Go to" %} <a href="https://www.tiendanube.com/apps/" target="_blank" class="underline font-semibold">{% trans "Tiendanube Apps" %}</a></span>
+                </li>
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">2</span>
+                    <span>{% trans "Click 'Create App' or 'New App'" %}</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">3</span>
+                    <span>{% trans "Fill in the app details (name, description, etc.)" %}</span>
+                </li>
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">4</span>
+                    <span>{% trans "Set the Redirect URI to:" %} 
+                        <code class="bg-blue-100 dark:bg-blue-800 px-1 rounded text-xs" id="redirectUriHelpText">{{ redirect_uri }}</code>
+                        <button type="button" onclick="copyRedirectUriHelp()" class="ml-1 px-2 py-1 rounded bg-blue-200 dark:bg-blue-700 hover:bg-blue-300 dark:hover:bg-blue-600 text-blue-700 dark:text-blue-200 text-xs font-semibold focus:outline-none">{% trans "Copy" %}</button>
+                    </span>
+                </li>
+                <li class="flex items-start">
+                    <span class="bg-blue-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold mr-2 mt-0.5">5</span>
+                    <span>{% trans "Save the app and copy the" %} <b>{% trans "App ID" %}</b> {% trans "and" %} <b>{% trans "Client Secret" %}</b></span>
+                </li>
+            </ol>
+            <div class="mt-3 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded text-yellow-800 dark:text-yellow-200 text-xs">
+                <span class="material-icons text-xs mr-1">warning</span>
+                <strong>{% trans "Important:" %}</strong> {% trans "Keep your Client Secret secure and never share it publicly." %}
+            </div>
+            <div id="redirectUriHelp" class="mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-green-800 dark:text-green-200 text-xs hidden">
+                <span class="material-icons text-xs mr-1">check_circle</span>
+                <strong>{% trans "Copied!" %}</strong> {% trans "Redirect URI copied to clipboard. Paste this URL in your Tiendanube app settings." %}
+            </div>
+        </div>
+        {% elif step == 3 %}
+        <div class="mb-6 animate-fadeIn">
+            <p class="text-gray-700 dark:text-gray-300 text-lg mb-2 font-semibold">{% trans "Authorize Synap to access your Tiendanube store" %}</p>
+            <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">{% trans "You will be redirected to Tiendanube to grant access. After authorizing, you will return here automatically." %}</p>
+        </div>
+        <a href="{{ auth_url }}" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition hover:scale-105 hover:shadow-lg animate-bounce" id="authorizeBtn">
+            <span class="material-icons text-sm mr-2">cloud</span>
+            {% trans "Authorize with Tiendanube" %}
+        </a>
+        <div class="mt-6 text-xs text-gray-400 dark:text-gray-500 animate-fadeIn flex flex-col items-center">
+            <div class="flex items-center space-x-2">
+                <b>{% trans "Redirect URI:" %}</b> <span id="redirectUriText" class="text-gray-700 dark:text-gray-300">{{ redirect_uri }}</span>
+                <button type="button" onclick="copyRedirectUri()" class="ml-2 px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-semibold focus:outline-none">{% trans "Copy" %}</button>
+            </div>
+            <div class="mt-1"><b>{% trans "State:" %}</b> {{ state }}</div>
+            <div id="redirectUriHelp" class="text-green-600 dark:text-green-400 text-xs mt-2 hidden">{% trans "Copied! Paste this URL in your Tiendanube app settings if you see a redirect_uri error." %}</div>
+        </div>
+        {% elif step == 4 %}
+        <div class="mb-6 animate-fadeIn">
+            <p class="text-gray-700 dark:text-gray-300 text-lg mb-2 font-semibold">{% trans "Authorization Code Received" %}</p>
+            <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">{% trans "You have authorized Synap. Now, obtain your access token to complete the connection." %}</p>
+        </div>
+        
+        <!-- Mostrar código de autorización si está disponible -->
+        {% if wizard_code %}
+        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-6 animate-fadeIn">
+            <div class="flex items-center mb-2">
+                <span class="material-icons text-green-600 dark:text-green-400 mr-2">check_circle</span>
+                <span class="text-green-700 dark:text-green-300 font-semibold">{% trans "Authorization code received successfully!" %}</span>
+            </div>
+            <div class="text-xs text-gray-700 dark:text-gray-300 break-all">
+                <b>{% trans "Code:" %}</b> <span class="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{{ wizard_code }}</span>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Mostrar mensajes de error o éxito -->
+        {% if wizard_message %}
+        <div class="mb-6 p-4 rounded-lg border {% if wizard_message_type == 'success' %}bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200{% elif wizard_message_type == 'error' %}bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200{% else %}bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200{% endif %} animate-fadeIn">
+            <div class="flex items-center">
+                <span class="material-icons text-sm mr-2">
+                    {% if wizard_message_type == 'success' %}check_circle{% elif wizard_message_type == 'error' %}error{% else %}info{% endif %}
+                </span>
+                <span class="text-sm font-medium">{{ wizard_message }}</span>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if not token_obtained %}
+        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4 animate-fadeIn">
+            <div class="text-blue-700 dark:text-blue-300 font-semibold mb-2">{% trans "Ready to Exchange Authorization Code" %}</div>
+            <div class="text-sm text-blue-600 dark:text-blue-400 mb-4">{% trans "Click the button below to exchange your authorization code for an access token." %}</div>
+        </div>
+        <form method="post" class="animate-fadeIn">
+            {% csrf_token %}
+            <button type="submit" name="get_token" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition hover:scale-105 hover:shadow-lg">
+                <span class="material-icons text-sm mr-2">key</span>
+                {% trans "Exchange Authorization Code for Token" %}
+            </button>
+        </form>
+        {% else %}
+        <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4 animate-fadeIn">
+            <div class="text-green-700 dark:text-green-300 font-semibold mb-2">{% trans "Access Token Obtained Successfully!" %}</div>
+            <div class="text-xs text-gray-700 dark:text-gray-300 break-all mb-2"><b>{% trans "Access Token:" %}</b> {{ access_token|truncatechars:30 }}</div>
+            <div class="text-xs text-gray-700 dark:text-gray-300"><b>{% trans "Store ID:" %}</b> {{ user_id }}</div>
+        </div>
+        <form method="post" class="animate-fadeIn">
+            {% csrf_token %}
+            <button type="submit" name="continue_prefs" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition hover:scale-105 hover:shadow-lg">
+                <span class="material-icons text-sm mr-2">arrow_forward</span>
+                {% trans "Continue to Preferences" %}
+            </button>
+        </form>
+        {% endif %}
+        {% elif step == 5 %}
+        <form method="post" class="space-y-6 animate-fadeIn">
+            {% csrf_token %}
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{% trans "Synchronization Preferences" %}</label>
+                <div class="flex items-center mb-2 animate-slideUp">
+                    <input type="checkbox" id="auto_sync" name="auto_sync" class="rounded border-gray-300 dark:border-gray-600 text-orange-600 focus:ring-orange-500" {% if auto_sync %}checked{% endif %}>
+                    <label for="auto_sync" class="ml-2 text-gray-700 dark:text-gray-300">{% trans "Enable automatic synchronization" %}</label>
+                </div>
+                <div class="mb-2 animate-slideUp">
+                    <label for="sync_interval" class="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{% trans "Sync Interval (minutes)" %}</label>
+                    <input type="number" id="sync_interval" name="sync_interval" min="5" max="1440" class="w-32 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500" value="{{ sync_interval|default:30 }}">
+                </div>
+                <div class="flex flex-wrap gap-4 mt-4">
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_products" class="rounded border-gray-300 dark:border-gray-600 text-orange-600 focus:ring-orange-500 mr-2" {% if sync_products %}checked{% endif %}><span class="text-gray-700 dark:text-gray-300">{% trans "Sync Products" %}</span></label>
+                    <label class="flex items-center animate-slideUp"><input type="checkbox" name="sync_stock" class="rounded border-gray-300 dark:border-gray-600 text-orange-600 focus:ring-orange-500 mr-2" {% if sync_stock %}checked{% endif %}><span class="text-gray-700 dark:text-gray-300">{% trans "Sync Stock" %}</span></label>
+                </div>
+            </div>
+            <div class="mt-8 flex justify-center animate-fadeIn">
+                <button type="submit" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition hover:scale-105 hover:shadow-lg">
+                    <span class="material-icons text-sm mr-2">check</span>
+                    {% trans "Finish" %}
+                </button>
+            </div>
+        </form>
+        {% elif step == 6 %}
+        <div class="mb-6 animate-fadeIn">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-2">{% trans "Configuration Summary" %}</h2>
+            <p class="text-gray-600 dark:text-gray-400 mb-4">{% trans "Review the details below and click 'Register Store in Synap' to finish the setup." %}</p>
+            {% if tienda_data %}
+            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 text-left text-sm animate-slideUp mb-4">
+                <div><b>{% trans "Store Name:" %}</b> {{ tienda_data.name }}</div>
+                <div><b>{% trans "Domain:" %}</b> {{ tienda_data.domains.0.domain }}</div>
+                <div><b>{% trans "Email:" %}</b> {{ tienda_data.email }}</div>
+                <div><b>{% trans "Phone:" %}</b> {{ tienda_data.phone }}</div>
+                <div><b>{% trans "Country:" %}</b> {{ tienda_data.country }}</div>
+                <div><b>{% trans "Currency:" %}</b> {{ tienda_data.currency }}</div>
+            </div>
+            {% endif %}
+            <div class="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-4 text-left text-sm animate-slideUp">
+                <div><b>{% trans "App ID:" %}</b> {{ summary.app_id }}</div>
+                <div><b>{% trans "Store ID:" %}</b> {{ summary.user_id }}</div>
+                <div><b>{% trans "Access Token:" %}</b> <span class="break-all">{{ summary.access_token }}</span></div>
+                <div><b>{% trans "Scopes:" %}</b> {{ summary.scopes|join:', ' }}</div>
+                <div><b>{% trans "Auto Sync:" %}</b> {{ summary.auto_sync|yesno:"Yes,No" }}</div>
+                <div><b>{% trans "Sync Interval:" %}</b> {{ summary.sync_interval }} {% trans "min" %}</div>
+                <div><b>{% trans "Sync Products:" %}</b> {{ summary.sync_products|yesno:"Yes,No" }}</div>
+                <div><b>{% trans "Sync Stock:" %}</b> {{ summary.sync_stock|yesno:"Yes,No" }}</div>
+            </div>
+        </div>
+        {% if wizard_error %}
+        <div class="bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg p-4 mb-4 animate-fadeIn">
+            <b>{{ wizard_error }}</b>
+        </div>
+        <a href="{% url 'tiendanube_administranet:tiendanube_config' %}" class="inline-flex items-center px-6 py-2 text-sm font-medium text-gray-700 bg-gray-200 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition font-semibold">
+            <span class="material-icons text-sm mr-2">list</span>
+            {% trans "Go to Store List" %}
+        </a>
+        {% else %}
+        <form method="post" class="animate-fadeIn">
+            {% csrf_token %}
+            <button type="submit" name="save_store" class="inline-flex items-center px-8 py-3 text-lg font-semibold text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition hover:scale-105 hover:shadow-lg">
+                <span class="material-icons text-sm mr-2">save</span>
+                {% trans "Register Store in Synap" %}
+            </button>
+        </form>
+        {% endif %}
+        {% endif %}
+    </div>
+    
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-6 right-6 z-50 hidden px-6 py-4 rounded-lg shadow-lg text-white font-semibold text-base transition-all duration-300"></div>
+    
+    <!-- Confetti Script -->
+    <canvas id="confettiCanvas" class="fixed inset-0 pointer-events-none z-50" style="display:none;"></canvas>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Animations
+const fadeIn = [
+    { opacity: 0, transform: 'translateY(20px)' },
+    { opacity: 1, transform: 'translateY(0)' }
+];
+const slideUp = [
+    { opacity: 0, transform: 'translateY(40px)' },
+    { opacity: 1, transform: 'translateY(0)' }
+];
+
+// Progress bar logic
+const step = {{ step|default:1 }};
+const progress = [0, 16, 32, 48, 64, 82, 100];
+document.getElementById('wizardProgress').style.width = progress[step] + '%';
+
+// Toast notification
+function showToast(msg, type='success') {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = `fixed top-6 right-6 z-50 px-6 py-4 rounded-lg shadow-lg text-white font-semibold text-base transition-all duration-300 ${type==='success' ? 'bg-green-600' : 'bg-red-600'}`;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3500);
+}
+
+// Confetti (simple, inline, no deps)
+function launchConfetti() {
+    const canvas = document.getElementById('confettiCanvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    canvas.style.display = 'block';
+    const ctx = canvas.getContext('2d');
+    const pieces = Array.from({length: 120}, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * -canvas.height,
+        r: 6 + Math.random() * 8,
+        d: Math.random() * 50,
+        color: `hsl(${Math.random()*360},70%,60%)`,
+        tilt: Math.random() * 10 - 10
+    }));
+    let angle = 0;
+    function draw() {
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        angle += 0.01;
+        for (let i=0; i<pieces.length; i++) {
+            let p = pieces[i];
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, 2 * Math.PI);
+            ctx.fillStyle = p.color;
+            ctx.fill();
+            p.y += Math.cos(angle + p.d) + 2 + p.r/8;
+            p.x += Math.sin(angle) * 2;
+            if (p.y > canvas.height) {
+                p.x = Math.random() * canvas.width;
+                p.y = Math.random() * -20;
+            }
+        }
+        requestAnimationFrame(draw);
+    }
+    draw();
+    setTimeout(() => { canvas.style.display = 'none'; }, 3500);
+}
+
+// Show confetti and toast on finish
+if (step === 6) {
+    setTimeout(() => {
+        launchConfetti();
+        showToast('{% trans "Store configuration completed!" %}');
+    }, 500);
+}
+
+function toggleSecretVisibility() {
+    const input = document.getElementById('client_secret');
+    const icon = document.getElementById('eyeIcon');
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.textContent = 'visibility_off';
+    } else {
+        input.type = 'password';
+        icon.textContent = 'visibility';
+    }
+}
+
+function copyRedirectUri() {
+    const text = document.getElementById('redirectUriText').textContent;
+    navigator.clipboard.writeText(text).then(function() {
+        const help = document.getElementById('redirectUriHelp');
+        help.classList.remove('hidden');
+        setTimeout(() => help.classList.add('hidden'), 2500);
+    });
+}
+
+function copyRedirectUriHelp() {
+    const text = document.getElementById('redirectUriHelpText').textContent;
+    navigator.clipboard.writeText(text).then(function() {
+        const help = document.getElementById('redirectUriHelp');
+        help.classList.remove('hidden');
+        setTimeout(() => help.classList.add('hidden'), 2500);
+    });
+}
+</script>
+<style>
+.animate-fadeIn { animation: fadeIn 0.7s cubic-bezier(.4,0,.2,1) both; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(20px);} to { opacity:1; transform:translateY(0);} }
+.animate-slideUp { animation: slideUp 0.7s cubic-bezier(.4,0,.2,1) both; }
+@keyframes slideUp { from { opacity:0; transform:translateY(40px);} to { opacity:1; transform:translateY(0);} }
+</style>
+{% endblock %} 

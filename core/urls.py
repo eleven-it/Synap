@@ -46,6 +46,11 @@ urlpatterns = [
         views.toggle_navbar_granular_view,
         name='toggle_navbar_granular',
     ),
+    path(
+        'herramientas/migracion-esquema-mysql/',
+        views.legacy_mysql_schema_tool,
+        name='legacy_mysql_schema',
+    ),
     path('permisos-sistema/puesto/<int:id_puesto>/', views.editar_permisos_puesto_view, name='editar_permisos_puesto'),
 
     # Permisos del Sistema (administraNET Gestión) - Solo lectura con toggle de valores

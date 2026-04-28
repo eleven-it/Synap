@@ -15,6 +15,7 @@ from .views_permisos_sistema import (
     toggle_navbar_menu_global_view,
     toggle_navbar_granular_view,
 )
+from .views_legacy_mysql_schema import legacy_mysql_schema_tool
 from .views_uom import UoMListView, UoMCreateView, UoMUpdateView, UoMDeleteView
 from .views_currency import (
     CurrencyListView, CurrencyCreateView, CurrencyUpdateView, CurrencyDeleteView,

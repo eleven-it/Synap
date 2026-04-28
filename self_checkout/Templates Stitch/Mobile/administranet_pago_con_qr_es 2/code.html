@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#7f13ec",
+                        "background-light": "#f7f6f8",
+                        "background-dark": "#191022",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<title>AdministraNET - Pago con QR</title>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen">
+<div class="relative flex h-full min-h-screen w-full flex-col max-w-[430px] mx-auto bg-background-light dark:bg-background-dark shadow-2xl overflow-x-hidden">
+<!-- Header -->
+<div class="flex items-center px-4 py-6 justify-between bg-white dark:bg-slate-900 shadow-sm">
+<div class="text-slate-900 dark:text-slate-100 flex size-10 shrink-0 items-center justify-start cursor-pointer">
+<span class="material-symbols-outlined text-2xl">arrow_back_ios</span>
+</div>
+<h2 class="text-slate-900 dark:text-slate-100 text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-10">Pago con QR</h2>
+</div>
+<!-- Main Content -->
+<div class="flex flex-col items-center px-6 py-8 flex-1">
+<!-- Branding/App Name -->
+<p class="text-primary font-semibold text-sm uppercase tracking-widest mb-2">AdministraNET</p>
+<!-- Amount Section -->
+<h1 class="text-primary tracking-tight text-[48px] font-bold leading-none mb-10">$45.50</h1>
+<!-- QR Code Card -->
+<div class="w-full @container">
+<div class="flex flex-col items-center justify-center rounded-xl bg-white dark:bg-slate-800 p-8 shadow-xl border border-slate-100 dark:border-slate-700">
+<div class="w-full aspect-square max-w-[280px] bg-slate-50 dark:bg-slate-900 rounded-lg flex items-center justify-center overflow-hidden relative border border-slate-100 dark:border-slate-700">
+<!-- Simulated QR Code -->
+<div class="w-64 h-64 bg-center bg-no-repeat bg-cover" data-alt="Modern QR code for digital payment processing" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuA5QWppFLZnmToCR5tBMRtOaXmUaUs3FKzCKwoHIcMwjhx3WwKHkskrwOkc9Mkene6fq506NkzcyBvqfusLMuVjrPxOKKsQdTjTArCU_hFeXEh76DOLgTtcllYJ8jLyUX9V8ZVxJI5TGLPyciHYze7FrGe6ZpLL3jfmTPF_UdsTkxB43PJU0Xew7AxL98AGFIFS4CRTcxlFKWUCXWLHZS2x326Zs0CDCr2T3NxnmfgWrpD4czYUDhV_mpnniv9LWe_4pEH5VdWW1oA');">
+</div>
+</div>
+<!-- Status Message -->
+<div class="mt-8 flex flex-col items-center gap-4 w-full">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary animate-spin">sync</span>
+<p class="text-slate-900 dark:text-slate-100 text-base font-medium leading-normal">Esperando escaneo...</p>
+</div>
+<!-- Progress Bar -->
+<div class="w-full max-w-[200px] h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+<div class="h-full bg-primary rounded-full" style="width: 65%;"></div>
+</div>
+<p class="text-slate-500 dark:text-slate-400 text-xs">El código expira en 01:45</p>
+</div>
+</div>
+</div>
+<!-- Hint text -->
+<p class="mt-8 text-center text-slate-500 dark:text-slate-400 text-sm px-4">
+                Pide al cliente que escanee el código desde su aplicación bancaria o billetera digital.
+            </p>
+</div>
+<!-- Bottom Actions -->
+<div class="flex flex-col gap-3 px-6 py-8 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-14 px-5 bg-primary text-white text-base font-bold leading-normal tracking-[0.015em] w-full shadow-lg shadow-primary/20 active:scale-[0.98] transition-transform">
+<span class="truncate">Confirmar Pago Manual</span>
+</button>
+<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-14 px-5 bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-base font-bold leading-normal tracking-[0.015em] w-full border border-slate-200 dark:border-slate-700 active:scale-[0.98] transition-transform">
+<span class="truncate">Cancelar</span>
+</button>
+<!-- Safe area spacer for iOS -->
+<div class="h-4"></div>
+</div>
+</div>
+</body></html>

@@ -79,7 +79,8 @@ class ReportQueryRequestSerializer(serializers.Serializer):
     # filters puede contener cualquier tipo de valor: strings, números, booleanos, listas, etc.
     filters = serializers.DictField(required=False, allow_empty=True)
     group_by = serializers.ListField(child=serializers.CharField(), required=False)
-    limit = serializers.IntegerField(default=5000, min_value=1, max_value=20000)
+    # Límite genérico del payload; varios runners ignoran este valor y devuelven el universo completo (p. ej. stock-existencias).
+    limit = serializers.IntegerField(default=5000, min_value=1, max_value=2_147_483_647)
 
 
 class ReportQueryResponseSerializer(serializers.Serializer):

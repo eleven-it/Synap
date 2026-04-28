@@ -697,12 +697,103 @@ class ReportFiltersAPIView(APIView):
                 cursor.close()
                 conn.close()
                 return Response({"depositos": results})
+
+            elif filter_type == "marcas":
+                cursor.execute("""
+                    SELECT CodMarca, NombreMarca
+                    FROM marca
+                    WHERE (anulado IS NULL OR anulado = 'No')
+                    ORDER BY NombreMarca
+                """)
+                columns = [desc[0] for desc in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    cod = row_dict.get("CodMarca")
+                    nombre = (row_dict.get("NombreMarca") or "").strip() or f"Marca {cod}"
+                    results.append({
+                        "id": cod,
+                        "label": nombre,
+                        "value": cod,
+                    })
+                cursor.close()
+                conn.close()
+                return Response({"marcas": results})
+
+            elif filter_type == "rubros":
+                cursor.execute("""
+                    SELECT CodigoRubro, NombreRubro
+                    FROM rubro
+                    WHERE (anulado IS NULL OR anulado = 'No')
+                    ORDER BY NombreRubro
+                """)
+                columns = [desc[0] for desc in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    cod = row_dict.get("CodigoRubro")
+                    nombre = (row_dict.get("NombreRubro") or "").strip() or f"Rubro {cod}"
+                    results.append({
+                        "id": cod,
+                        "label": nombre,
+                        "value": cod,
+                    })
+                cursor.close()
+                conn.close()
+                return Response({"rubros": results})
+
+            elif filter_type == "subrubros":
+                cursor.execute("""
+                    SELECT IDSubRubro, NombreSubRubro, CodigoRubro
+                    FROM subrubro
+                    WHERE (anulado IS NULL OR anulado = 'No')
+                    ORDER BY NombreSubRubro
+                """)
+                columns = [desc[0] for desc in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    cod = row_dict.get("IDSubRubro")
+                    nombre = (row_dict.get("NombreSubRubro") or "").strip() or f"Subrubro {cod}"
+                    results.append({
+                        "id": cod,
+                        "label": nombre,
+                        "value": cod,
+                    })
+                cursor.close()
+                conn.close()
+                return Response({"subrubros": results})
+            
+            elif filter_type == "viajantes":
+                cursor.execute("""
+                    SELECT CodViajante, Nombre
+                    FROM viajantes
+                    WHERE COALESCE(anulado, 'No') = 'No'
+                    ORDER BY Nombre
+                """)
+                columns = [desc[0] for desc in cursor.description]
+                results = []
+                for row in cursor.fetchall():
+                    row_dict = dict(zip(columns, row))
+                    cv = row_dict.get("CodViajante")
+                    nombre = (row_dict.get("Nombre") or "").strip() or f"Vendedor {cv}"
+                    results.append({
+                        "id": cv,
+                        "label": nombre,
+                        "value": cv,
+                    })
+                cursor.close()
+                conn.close()
+                return Response({"viajantes": results})
             
             else:
                 cursor.close()
                 conn.close()
                 return Response(
-                    {"detail": "Tipo de filtro no válido. Use 'puntos_venta', 'sucursales', 'cajas', 'clientes' o 'depositos'."},
+                    {
+                        "detail": "Tipo de filtro no válido. Use 'puntos_venta', 'sucursales', 'cajas', "
+                        "'clientes', 'depositos', 'marcas', 'rubros', 'subrubros' o 'viajantes'."
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
                 

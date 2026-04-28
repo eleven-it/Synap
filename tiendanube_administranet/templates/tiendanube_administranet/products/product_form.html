@@ -1,0 +1,321 @@
+{% extends 'base_app.html' %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ title }} - {% trans "Products" %}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<div class="breadcrumb">
+    <div class="breadcrumb-item">
+        <span class="material-icons text-sm">inventory</span>
+        <a href="{% url 'tiendanube_administranet:product_list' %}" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white">{% trans "Products" %}</a>
+    </div>
+    <div class="breadcrumb-item active">
+        <span>{{ title }}</span>
+    </div>
+</div>
+
+<!-- Header Section -->
+<div class="mb-8">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {{ title }}
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400">
+                {% trans "Configure product mapping between Tiendanube and AdministraNET" %}
+            </p>
+        </div>
+        <div class="flex items-center space-x-3">
+            <a href="{% url 'tiendanube_administranet:product_list' %}" 
+               class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
+                <span class="material-icons text-sm mr-2">arrow_back</span>
+                {% trans "Back to List" %}
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Form -->
+<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <form method="post" class="needs-validation" novalidate>
+        {% csrf_token %}
+        
+        <!-- Tiendanube Information -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <span class="material-icons text-blue-600 mr-2">cloud</span>
+                {% trans "Tiendanube Information" %}
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                    {{ form.tiendanube_name|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_handle|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_sku|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_price|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_compare_at_price|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_cost|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_stock|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_weight|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_width|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_height|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_depth|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_product_type|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_free_shipping|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_published|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_featured|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.tiendanube_seo_title|as_crispy_field }}
+                </div>
+            </div>
+            
+            <div class="mt-6">
+                {{ form.tiendanube_description|as_crispy_field }}
+            </div>
+            
+            <div class="mt-6">
+                {{ form.tiendanube_seo_description|as_crispy_field }}
+            </div>
+        </div>
+
+        <!-- AdministraNET Information -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <span class="material-icons text-green-600 mr-2">database</span>
+                {% trans "AdministraNET Information" %}
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                    {{ form.adminet_id|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_id_manual|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_codigo_articulo|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_nombre|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_precio_costo|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_precio_1v|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_precio_2v|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_precio_3v|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_precio_4v|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_precio_5v|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_stock|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_stock_max|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_stock_min|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_codigo_barra|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_codigo_barra_f|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_codigo_proveedor|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_codigo_marca|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_codigo_modelo|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_codigo_rubro|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_codigo_subrubro|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_alicuota|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_alicuota_ib|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_moneda|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_tipo_iva|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_tipo_ib|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_discontinuo|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_ecommerce|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_disponible_venta|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_disponible_compra|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_fecha_alta|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.adminet_fecha_mod|as_crispy_field }}
+                </div>
+            </div>
+            
+            <div class="mt-6">
+                {{ form.adminet_detalle|as_crispy_field }}
+            </div>
+            
+            <div class="mt-6">
+                {{ form.adminet_detalle_web|as_crispy_field }}
+            </div>
+        </div>
+
+        <!-- Sync Configuration -->
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <span class="material-icons text-purple-600 mr-2">sync</span>
+                {% trans "Synchronization Configuration" %}
+            </h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                    {{ form.sync_enabled|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.sync_price|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.sync_stock|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.sync_description|as_crispy_field }}
+                </div>
+                <div>
+                    {{ form.sync_images|as_crispy_field }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="p-6 bg-gray-50 dark:bg-gray-700/50">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <button type="submit" class="inline-flex items-center px-6 py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg shadow-lg transition-all duration-200">
+                        <span class="material-icons text-sm mr-2">save</span>
+                        {% if object %}
+                            {% trans "Update Product" %}
+                        {% else %}
+                            {% trans "Create Product" %}
+                        {% endif %}
+                    </button>
+                    
+                    <a href="{% url 'tiendanube_administranet:product_list' %}" 
+                       class="inline-flex items-center px-6 py-3 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
+                        <span class="material-icons text-sm mr-2">cancel</span>
+                        {% trans "Cancel" %}
+                    </a>
+                </div>
+                
+                {% if object %}
+                <div class="flex items-center space-x-3">
+                    <a href="{% url 'tiendanube_administranet:product_detail' object.id %}" 
+                       class="inline-flex items-center px-4 py-2 bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-400 rounded-lg transition-colors duration-200">
+                        <span class="material-icons text-sm mr-2">visibility</span>
+                        {% trans "View Details" %}
+                    </a>
+                    
+                    <a href="{% url 'tiendanube_administranet:product_delete' object.id %}" 
+                       class="inline-flex items-center px-4 py-2 bg-red-100 hover:bg-red-200 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-700 dark:text-red-400 rounded-lg transition-colors duration-200"
+                       onclick="return confirm('{% trans 'Are you sure you want to delete this product?' %}')">
+                        <span class="material-icons text-sm mr-2">delete</span>
+                        {% trans "Delete" %}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- Form Validation Script -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.querySelector('.needs-validation');
+    if (form) {
+        form.addEventListener('submit', function(event) {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        });
+    }
+    
+    // Auto-save draft functionality
+    let autoSaveTimer;
+    const formInputs = form.querySelectorAll('input, textarea, select');
+    
+    formInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                // Here you could implement auto-save functionality
+                console.log('Auto-saving form data...');
+            }, 2000);
+        });
+    });
+});
+</script>
+{% endblock %} 

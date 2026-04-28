@@ -111,6 +111,8 @@ class ModuleManager:
         """Verifica si se puede activar un módulo"""
         if module_name not in MODULE_CONFIGS:
             return False
+        if not self._django_app_installed(module_name):
+            return False
         
         config = MODULE_CONFIGS[module_name]
         dependencies = config.get('dependencies', [])
@@ -142,6 +144,11 @@ class ModuleManager:
     
     def activate_module(self, module_name, user=None):
         """Activa un módulo"""
+        if module_name in MODULE_CONFIGS and not self._django_app_installed(module_name):
+            return (
+                False,
+                f"No se puede activar el módulo {module_name}: la app no está en INSTALLED_APPS.",
+            )
         if not self.can_activate_module(module_name):
             return False, f"No se puede activar el módulo {module_name}"
         
@@ -346,7 +353,7 @@ class ModuleManager:
         """Obtiene un resumen de todos los módulos"""
         summary = {
             'total_modules': len(MODULE_CONFIGS),
-            'active_modules': len(self.active_modules),
+            'active_modules': len(self.get_active_modules()),
             'core_modules': 0,
             'required_modules': 0,
             'optional_modules': 0,

@@ -48,6 +48,7 @@ APPS_MENU = [
                     {"label": _("Permiso en menú"), "url": "core:listar_permisos", "icon": "menu_book", "permission": "usuarios.permisos.ver", "menu_item_id": "archivo_param_permiso_menu"},
                     {"label": _("Permiso en sistema"), "url": "core:permisos_sistema", "icon": "admin_panel_settings", "permission": "usuarios.permisos.ver", "menu_item_id": "archivo_param_permiso_sistema"},
                     {"label": _("Referencia de movimiento de stock"), "url": "stock:ref_movstock_list", "icon": "bookmark", "permission": "stock.ref_movstock", "menu_item_id": "archivo_param_ref_movstock"},
+                    {"label": _("Migración esquema MySQL (legacy)"), "url": "core:legacy_mysql_schema", "icon": "storage", "permission": "configuracion.sistema", "menu_item_id": "archivo_param_mysql_schema"},
                 ]
             },
         ]
@@ -88,6 +89,29 @@ APPS_MENU = [
                     {"label": _("Listado de proveedores"), "url": "compras:hub_comprobantes", "icon": "list", "permission": "stock.ver", "menu_item_id": "stock_cc_proveedores"},
                 ]
             }
+        ]
+    },
+    {
+        "id": "ventas",
+        "nombre": _("Ventas"),
+        "permiso": "ventas.ver",
+        "url": "ventas:objetivos_periodos_list",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z'/><path stroke-linecap='round' stroke-linejoin='round' d='M9 14h6'/></svg>""",
+        "orden": 3.5,
+        "color": "cyan",
+        "submenus": [
+            {
+                "seccion": _("Objetivos"),
+                "items": [
+                    {
+                        "label": _("Objetivos de venta"),
+                        "url": "ventas:objetivos_periodos_list",
+                        "icon": "flag",
+                        "permission": "ventas.ver",
+                        "menu_item_id": "ventas_obj_objetivos_venta",
+                    },
+                ]
+            },
         ]
     },
     {
@@ -138,6 +162,29 @@ APPS_MENU = [
                 "items": [
                     {"label": _("Config. Depósitos"), "url": "mpr:config_depositos", "icon": "warehouse", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_depositos"},
                     {"label": _("Operarios"), "url": "mpr:operarios_list", "icon": "engineering", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_operarios"},
+                ]
+            },
+        ]
+    },
+    {
+        "id": "logistica",
+        "nombre": _("Logística"),
+        "permiso": "logistica_editar_entregas",
+        "url": "logistica:entregas",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M9 17a2 2 0 11-4 0 2 2 0 014 0zm10 0a2 2 0 11-4 0 2 2 0 014 0z'/><path stroke-linecap='round' stroke-linejoin='round' d='M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0'/></svg>""",
+        "orden": 5,
+        "color": "amber",
+        "submenus": [
+            {
+                "seccion": _("Operación"),
+                "items": [
+                    {
+                        "label": _("Entregas"),
+                        "url": "logistica:entregas",
+                        "icon": "local_shipping",
+                        "permission": "logistica_editar_entregas",
+                        "menu_item_id": "logistica_op_entregas",
+                    },
                 ]
             },
         ]
@@ -616,7 +663,117 @@ APPS_MENU = [
                 ]
             }
         ]
-    }
+    },
+    {
+        "id": "tiendanube_administranet",
+        "nombre": _("Tienda Nube — AdministraNET"),
+        "permiso": "tiendanube_administranet.view_tiendanubeconfig",
+        "url": "tiendanube_administranet:dashboard",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z'/></svg>""",
+        "orden": 98,
+        "color": "sky",
+        "submenus": [
+            {
+                "seccion": _("Operación"),
+                "items": [
+                    {
+                        "label": _("Estado del sistema"),
+                        "url": "tiendanube_administranet:dashboard",
+                        "icon": "insights",
+                        "permission": "tiendanube_administranet.view_tiendanubeconfig",
+                        "menu_item_id": "tn_anet_op_estado",
+                    },
+                    {
+                        "label": _("Sincronización manual"),
+                        "url": "tiendanube_administranet:manual_sync",
+                        "icon": "sync",
+                        "permission": "tiendanube_administranet.run_sync",
+                        "menu_item_id": "tn_anet_op_manual",
+                    },
+                    {
+                        "label": _("Historial de sincronización"),
+                        "url": "tiendanube_administranet:sync_history",
+                        "icon": "history",
+                        "permission": "tiendanube_administranet.view_synclog",
+                        "menu_item_id": "tn_anet_op_historial",
+                    },
+                ],
+            },
+            {
+                "seccion": _("Mapeos"),
+                "items": [
+                    {
+                        "label": _("Clientes"),
+                        "url": "tiendanube_administranet:customer_mapping_list",
+                        "icon": "people",
+                        "permission": "tiendanube_administranet.view_customermapping",
+                        "menu_item_id": "tn_anet_map_clientes",
+                    },
+                    {
+                        "label": _("Productos"),
+                        "url": "tiendanube_administranet:product_list",
+                        "icon": "inventory_2",
+                        "permission": "tiendanube_administranet.view_productmapping",
+                        "menu_item_id": "tn_anet_map_productos",
+                    },
+                    {
+                        "label": _("Pedidos"),
+                        "url": "tiendanube_administranet:order_mapping_list",
+                        "icon": "shopping_cart",
+                        "permission": "tiendanube_administranet.view_ordermapping",
+                        "menu_item_id": "tn_anet_map_pedidos",
+                    },
+                    {
+                        "label": _("Categorías"),
+                        "url": "tiendanube_administranet:category_list",
+                        "icon": "category",
+                        "permission": "tiendanube_administranet.view_productcategorymapping",
+                        "menu_item_id": "tn_anet_map_categorias",
+                    },
+                ],
+            },
+            {
+                "seccion": _("Configuración"),
+                "items": [
+                    {
+                        "label": _("Tiendas Tienda Nube"),
+                        "url": "tiendanube_administranet:tiendanube_config_list",
+                        "icon": "store",
+                        "permission": "tiendanube_administranet.view_tiendanubeconfig",
+                        "menu_item_id": "tn_anet_cfg_tiendas",
+                    },
+                    {
+                        "label": _("AdministraNET"),
+                        "url": "tiendanube_administranet:adminet_config",
+                        "icon": "dns",
+                        "permission": "tiendanube_administranet.change_administranetconfig",
+                        "menu_item_id": "tn_anet_cfg_adminet",
+                    },
+                    {
+                        "label": _("Webhooks"),
+                        "url": "tiendanube_administranet:webhook_config_list",
+                        "icon": "webhook",
+                        "permission": "tiendanube_administranet.view_webhookconfig",
+                        "menu_item_id": "tn_anet_cfg_webhooks",
+                    },
+                    {
+                        "label": _("Eventos de webhook"),
+                        "url": "tiendanube_administranet:webhook_event_list",
+                        "icon": "notifications_active",
+                        "permission": "tiendanube_administranet.view_webhookevent",
+                        "menu_item_id": "tn_anet_cfg_webhook_eventos",
+                    },
+                    {
+                        "label": _("Sincronización automática"),
+                        "url": "tiendanube_administranet:auto_sync_config",
+                        "icon": "schedule",
+                        "permission": "tiendanube_administranet.change_tiendanubeconfig",
+                        "menu_item_id": "tn_anet_cfg_autosync",
+                    },
+                ],
+            },
+        ],
+    },
 ]
 
 
@@ -940,9 +1097,12 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
     if _navbar_menu_oculto_global():
         es_sup = hasattr(user, "cod_usuario") and (user.cod_usuario or "").lower() == "supervisor"
         if es_sup:
-            return [a for a in resultado if a.get("id") == "archivo"]
-        return []
-    return resultado
+            resultado = [a for a in resultado if a.get("id") == "archivo"]
+        else:
+            resultado = []
+    from core.pwa_nivel_a import filtrar_apps_menu_para_pwa_movil
+
+    return filtrar_apps_menu_para_pwa_movil(resultado, request)
 
 # ─────────────────────────────────────────────
 # COMPATIBILIDAD CON CÓDIGO EXISTENTE

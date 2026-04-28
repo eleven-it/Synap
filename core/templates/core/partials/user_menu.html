@@ -92,14 +92,16 @@
     <div class="border-t border-gray-200 dark:border-gray-600 my-4"></div>
     
     <!-- Perfil de Usuario -->
-    <a href="{% url 'core:perfil' %}" class="nav-link flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors duration-200">
+    <a href="{% if request.is_mobile %}{% url 'login:perfil' %}{% else %}{% url 'core:perfil' %}{% endif %}" class="nav-link flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors duration-200">
         <i class="fas fa-user mr-3 text-gray-500"></i>
         {% trans "Profile" %}
     </a>
     
     <!-- Historial -->
+    {% if not request.is_mobile %}
     <a href="{% url 'core:historial' %}" class="nav-link flex items-center px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md transition-colors duration-200">
         <i class="fas fa-history mr-3 text-gray-500"></i>
         {% trans "History" %}
     </a>
+    {% endif %}
 </div> 

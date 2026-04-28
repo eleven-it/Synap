@@ -112,6 +112,9 @@ def get_usuario_extendiendo_desde_sesion(request):
                         modulo = permiso[:-2]  # Remover ".*"
                         if codigo.startswith(modulo + "."):
                             return True
+                        # Claves planas tipo logistica_editar_entregas bajo comodín logistica.*
+                        if codigo.startswith(modulo + "_"):
+                            return True
                 
                 return False
                 

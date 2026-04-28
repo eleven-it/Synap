@@ -35,7 +35,9 @@ function detectReportType() {
     "pedidos-pendientes",
     "sales_summary",
     "total-consolidado-operativo",
-    "bo-stock-facturacion"
+    "bo-stock-facturacion",
+    "ventas-objetivos-vs-bo",
+    "comprobantes-rutas",
   ];
   
   const isLegacyBySlug = legacyReports.includes(reportSlug);
@@ -63,9 +65,241 @@ function isVentasNetasSlug(slug) {
   return slug === "ventas_netas" || slug === "ventas-netas";
 }
 
+/** Informes con doble período (facturación/remitos + backorder), mismos filtros que BO. */
+function isInformeBoDualPeriodo(slug) {
+  return slug === "bo-stock-facturacion" || slug === "ventas-objetivos-vs-bo";
+}
+
 /** Slug canónico del informe Pedidos pendientes (único en backend y catálogo). */
 function isPedidosPendientesSlug(slug) {
   return slug === "pedidos-pendientes";
+}
+
+/** Lista comprobantes en rutas (logística mayoristapp, legacy Reports). */
+function isLogisticaListaComprobantesRutasSlug(slug) {
+  return slug === "comprobantes-rutas" || slug === "mayoristapp-lista-comprobantes-rutas";
+}
+
+/** Filas devueltas por la API para agrupación / búsqueda local en la tabla del mismo informe. */
+const logisticaListaDataByWidget = new WeakMap();
+
+/**
+ * Orden de chips en el contenedor de agrupación (mismo criterio que BO).
+ * @returns {string[]}
+ */
+function getLogisticaListaGroupKeysFromChips() {
+  const wrap = document.getElementById("logistica-lista-group-by_tags_container");
+  const chips = wrap?.querySelector(".tags-chips");
+  if (!chips) return [];
+  return Array.from(chips.querySelectorAll("[data-value]"))
+    .map((el) => el.getAttribute("data-value"))
+    .filter(Boolean);
+}
+
+function filterLogisticaListaRowsBySearch(rows, query, keys) {
+  const q = (query && String(query).trim()) || "";
+  if (q.length < 2) return rows;
+  const ql = q.toLowerCase();
+  return rows.filter((row) =>
+    keys.some((k) => {
+      const v = row[k];
+      if (v == null) return false;
+      return String(v).toLowerCase().includes(ql);
+    }),
+  );
+}
+
+function sortLogisticaListaByGroupKeys(rows, groupKeys) {
+  if (!groupKeys || !groupKeys.length) return rows;
+  return [...rows].sort((a, b) => {
+    for (const k of groupKeys) {
+      const sa = String(a[k] ?? "").toLowerCase();
+      const sb = String(b[k] ?? "").toLowerCase();
+      const c = sa.localeCompare(sb, "es", { sensitivity: "base" });
+      if (c !== 0) return c;
+    }
+    return 0;
+  });
+}
+
+function escHtmlLogistica(s) {
+  if (s == null || s === undefined) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Orden de filas hoja (misma idea que sortByArticulo en BO). */
+function sortLogisticaLeafRows(items) {
+  if (!items || !items.length) return [];
+  return [...items].sort((a, b) => {
+    const fa = String(a.fecha_remito ?? "");
+    const fb = String(b.fecha_remito ?? "");
+    const c = fa.localeCompare(fb, "es");
+    if (c !== 0) return c;
+    return String(a.nro_remito ?? "").localeCompare(String(b.nro_remito ?? ""), "es", {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+}
+
+/**
+ * Árbol de grupos anidados (misma lógica que groupTableDataGeneric en BO).
+ * metricKeys: columnas numéricas/moneda para subtotales en cabeceras de grupo.
+ */
+function groupLogisticaListaData(data, groupByFields, metricKeys) {
+  if (!groupByFields || !groupByFields.length || !data || !data.length) return [];
+  function groupByLevels(items, fields, lev) {
+    if (lev >= fields.length) {
+      return sortLogisticaLeafRows(items).map((item) => ({
+        type: "item",
+        data: item,
+        children: [],
+      }));
+    }
+    const currentField = fields[lev];
+    const grouped = {};
+    items.forEach((row) => {
+      const groupKey =
+        row[currentField] !== undefined && row[currentField] !== null && row[currentField] !== ""
+          ? String(row[currentField])
+          : "Sin especificar";
+      if (!grouped[groupKey]) {
+        grouped[groupKey] = {
+          groupKey,
+          groupValue: groupKey,
+          groupField: currentField,
+          items: [],
+          totals: {},
+        };
+        metricKeys.forEach((k) => {
+          grouped[groupKey].totals[k] = 0;
+        });
+      }
+      grouped[groupKey].items.push(row);
+      metricKeys.forEach((k) => {
+        const v = parseFloat(row[k]);
+        if (!Number.isNaN(v)) grouped[groupKey].totals[k] += v;
+      });
+    });
+    const result = [];
+    Object.keys(grouped)
+      .sort((a, b) => a.localeCompare(b, "es", { sensitivity: "base" }))
+      .forEach((key) => {
+        const g = grouped[key];
+        const nested = groupByLevels(g.items, fields, lev + 1);
+        result.push({ type: "group", data: g, children: nested });
+      });
+    return result;
+  }
+  return groupByLevels(data, groupByFields, 0);
+}
+
+function countLogisticaGroupNodes(nodes) {
+  let n = 0;
+  (nodes || []).forEach((item) => {
+    if (item.type === "group") {
+      n += 1;
+      n += countLogisticaGroupNodes(item.children);
+    }
+  });
+  return n;
+}
+
+function logisticaListaDetailRowHtml(row, fieldKeys) {
+  let html = `<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30 logistica-detail-row">`;
+  fieldKeys.forEach((key) => {
+    const value = row[key];
+    const isCur = isCurrencyField(key);
+    const baseTd =
+      "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300";
+    const al = isCur ? " text-right font-mono text-slate-900 dark:text-white" : " text-left";
+    let inner = "";
+    if (value !== null && value !== undefined && value !== "") {
+      inner = isCur ? escHtmlLogistica(formatCurrency(value)) : escHtmlLogistica(String(formatNumber(value)));
+    }
+    html += `<td class="${baseTd}${al}">${inner}</td>`;
+  });
+  const codR = row.cod_mov_remito;
+  const codP = row.cod_mov_pedido;
+  html += `<td class="px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800 whitespace-nowrap align-middle"><div class="flex flex-wrap gap-1">`;
+  html += `<button type="button" class="text-[10px] font-semibold text-sky-600 hover:text-sky-500 dark:text-sky-400 underline-offset-2 hover:underline" data-logistica-detalle="${escHtmlLogistica(String(codR ?? ""))}">Detalle</button>`;
+  html += `<button type="button" class="text-[10px] font-semibold text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 underline-offset-2 hover:underline" data-logistica-entrega="${escHtmlLogistica(String(codR ?? ""))}" data-logistica-pedido="${escHtmlLogistica(String(codP ?? ""))}">Entrega</button>`;
+  html += "</div></td></tr>";
+  return html;
+}
+
+function renderLogisticaGroupedTreeHtml(
+  grouped,
+  fieldKeys,
+  headerTranslations,
+  metricKeys,
+  groupIdPrefix,
+  level,
+  collapsedDefault,
+) {
+  const td = "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800";
+  let rowsHTML = "";
+  (grouped || []).forEach((item, idx) => {
+    if (item.type === "group") {
+      const g = item.data;
+      const groupId = `${groupIdPrefix}${level}-${idx}`;
+      const dimLabel =
+        headerTranslations[g.groupField?.toLowerCase?.()] ||
+        (g.groupField ? g.groupField.replace(/_/g, " ") : "");
+      const bgClass =
+        level === 0
+          ? "bg-sky-50/80 dark:bg-sky-950/30"
+          : level === 1
+            ? "bg-slate-100 dark:bg-slate-800/90"
+            : "bg-slate-50/80 dark:bg-slate-900/50";
+      const padLeft = level * 20 + 8;
+      const expandIcon = `<svg class="w-4 h-4 inline-block mr-2 align-middle logistica-group-toggle-icon cursor-pointer" data-logistica-group-toggle="${groupId}" style="transform: ${collapsedDefault ? "rotate(0deg)" : "rotate(90deg)"};" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      rowsHTML += `<tr class="${bgClass} logistica-group-row" data-logistica-group-id="${groupId}">`;
+      rowsHTML += `<td class="${td}" style="padding-left:${padLeft}px">${expandIcon}<span class="font-medium text-slate-700 dark:text-slate-300">${escHtmlLogistica(dimLabel)}: ${escHtmlLogistica((g.groupValue || "").toString().substring(0, 120))}</span></td>`;
+      fieldKeys.slice(1).forEach((colKey) => {
+        if (metricKeys.includes(colKey) && g.totals && g.totals[colKey] !== undefined) {
+          rowsHTML += `<td class="${td} text-right font-semibold text-sky-600 dark:text-sky-400 font-mono">${escHtmlLogistica(formatCurrency(g.totals[colKey]))}</td>`;
+        } else {
+          rowsHTML += `<td class="${td}"></td>`;
+        }
+      });
+      rowsHTML += `<td class="${td}"></td></tr>`;
+      rowsHTML += `<tr class="logistica-group-children" data-logistica-group-parent="${groupId}" style="${collapsedDefault ? "display:none" : ""}"><td colspan="${fieldKeys.length + 1}" class="p-0 border-0"><table class="w-full border-collapse text-sm"><tbody>`;
+      rowsHTML += renderLogisticaGroupedTreeHtml(
+        item.children,
+        fieldKeys,
+        headerTranslations,
+        metricKeys,
+        groupIdPrefix,
+        level + 1,
+        collapsedDefault,
+      );
+      rowsHTML += "</tbody></table></td></tr>";
+    } else if (item.type === "item") {
+      rowsHTML += logisticaListaDetailRowHtml(item.data, fieldKeys);
+    }
+  });
+  return rowsHTML;
+}
+
+function attachLogisticaGroupToggleListeners(container) {
+  if (!container) return;
+  container.querySelectorAll("[data-logistica-group-toggle]").forEach((el) => {
+    if (el._logisticaToggleAttached) return;
+    el._logisticaToggleAttached = true;
+    el.addEventListener("click", function () {
+      const groupId = this.getAttribute("data-logistica-group-toggle");
+      const childrenRow = container.querySelector(`tr[data-logistica-group-parent="${groupId}"]`);
+      if (!childrenRow) return;
+      const isHidden = childrenRow.style.display === "none";
+      childrenRow.style.display = isHidden ? "table-row" : "none";
+      this.style.transform = isHidden ? "rotate(90deg)" : "rotate(0deg)";
+    });
+  });
 }
 
 /**
@@ -2826,6 +3060,18 @@ const renderWidgetChart = (widget, data, config, meta = {}) => {
 
 const renderTable = (widgetElement, data, options = {}) => {
   const show = options.show ?? false;
+  const tableReportSlugEarly =
+    widgetElement?.dataset?.reportSlug || dashboardRoot?.dataset?.reportSlug || "";
+
+  if (isLogisticaListaComprobantesRutasSlug(tableReportSlugEarly) && options.logisticaToolbarRefresh) {
+    const cached = logisticaListaDataByWidget.get(widgetElement);
+    if (cached) {
+      data = cached;
+    }
+  } else if (isLogisticaListaComprobantesRutasSlug(tableReportSlugEarly) && Array.isArray(data)) {
+    logisticaListaDataByWidget.set(widgetElement, data);
+  }
+
   const target = widgetElement.querySelector("[data-widget-table-wrapper]") || widgetElement;
 
   if (!show) {
@@ -2876,6 +3122,12 @@ const renderTable = (widgetElement, data, options = {}) => {
   if (!data || !data.length) {
     const emptyMessage = widgetElement.dataset.emptyLabel || "Sin datos disponibles.";
     target.innerHTML = `<p class="text-sm text-slate-500 dark:text-slate-400">${emptyMessage}</p>`;
+    if (show) {
+      target.classList.remove("hidden");
+    }
+    if (show && isLogisticaListaComprobantesRutasSlug(tableReportSlugEarly)) {
+      document.getElementById("logistica-lista-tabla-toolbar")?.classList.remove("hidden");
+    }
     return;
   }
   
@@ -2900,17 +3152,49 @@ const renderTable = (widgetElement, data, options = {}) => {
   if (isPedidosPendientesSlug(tableReportSlug)) {
     excludedColumns = excludedColumns.concat(["tipo_comprobante", "estado"]);
   }
+  if (isLogisticaListaComprobantesRutasSlug(tableReportSlug)) {
+    excludedColumns = excludedColumns.concat([
+      "cod_mov_remito",
+      "cod_mov_pedido",
+      "entregado",
+      "id_usuario_no_entrega",
+    ]);
+  }
   const allKeys = Object.keys(data[0]).filter((key) => !excludedColumns.includes(key));
 
   // Ventas Netas: orden de columnas y agrupación visual (MES, SUCURSAL, PUNTO DE VENTA, métricas)
   const isVentasNetasTable = data[0].mes_formato !== undefined && data[0].nombre_sucursal !== undefined && data[0].ventas_netas !== undefined;
   const ventasNetasColumnOrder = ["mes_formato", "nombre_sucursal", "nro_punto_venta", "ventas_netas", "notas_credito", "ventas_brutas"];
+  const logisticaListaCrOrder = [
+    "fecha_remito",
+    "nro_remito",
+    "nro_pedido",
+    "nro_factura",
+    "estado_entrega",
+    "cliente",
+    "nombre_chofer",
+    "nombre_usuario_entrega",
+    "desc_ruta",
+    "estado_ruta",
+    "orden_ruta",
+    "fecha_salida_ruta_fmt",
+    "ventana_horaria_ruta",
+    "fecha_hora_entrega_fmt",
+    "motivo_no_entrega",
+    "total_remito",
+  ];
+  const isLogisticaListaCrTable =
+    isLogisticaListaComprobantesRutasSlug(tableReportSlug) &&
+    data[0].fecha_remito !== undefined &&
+    data[0].nro_remito !== undefined;
   const fieldKeys = isVentasNetasTable
     ? ventasNetasColumnOrder.filter((k) => allKeys.includes(k))
-    : allKeys;
+    : isLogisticaListaCrTable
+      ? logisticaListaCrOrder.filter((k) => allKeys.includes(k))
+      : allKeys;
 
   // Ordenar datos para Ventas Netas: mes DESC, sucursal ASC, punto de venta ASC
-  const dataToRender = isVentasNetasTable
+  let dataToRender = isVentasNetasTable
     ? [...data].sort((a, b) => {
         const mesCmp = (b.mes || "").localeCompare(a.mes || "");
         if (mesCmp !== 0) return mesCmp;
@@ -2918,7 +3202,34 @@ const renderTable = (widgetElement, data, options = {}) => {
         if (sucCmp !== 0) return sucCmp;
         return String(a.nro_punto_venta || "").localeCompare(String(b.nro_punto_venta || ""));
       })
-    : data;
+    : isLogisticaListaCrTable
+      ? [...data]
+      : data;
+
+  /** Campos de agrupación (orden de chips) para lista comprobantes / rutas */
+  let logisticaGroupKeys = [];
+  if (isLogisticaListaCrTable) {
+    const searchInput = document.getElementById("logistica-lista-tabla-search");
+    const q = (searchInput && searchInput.value) || "";
+    logisticaGroupKeys = getLogisticaListaGroupKeysFromChips();
+    let rows = Array.isArray(dataToRender) ? [...dataToRender] : [];
+    rows = filterLogisticaListaRowsBySearch(rows, q, fieldKeys);
+    if (!logisticaGroupKeys.length) {
+      rows = sortLogisticaListaByGroupKeys(rows, logisticaGroupKeys);
+    }
+    dataToRender = rows;
+  }
+
+  /** Cabeceras de tabla alineadas al estilo BO (pestaña Backorder): compactas, mayúsculas. */
+  const logisticaThClass =
+    "px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50";
+
+  if (isLogisticaListaCrTable) {
+    table.className =
+      "w-full border-collapse bg-transparent text-sm text-slate-900 dark:text-slate-100 antialiased";
+    thead.className =
+      "sticky top-0 z-10 bg-slate-50 dark:bg-slate-900/50 shadow-[0_1px_0_0_rgb(226_232_240)] dark:shadow-[0_1px_0_0_rgb(51_65_85/0.45)]";
+  }
 
   // Mapeo de términos en inglés a español
   const headerTranslations = {
@@ -2937,28 +3248,56 @@ const renderTable = (widgetElement, data, options = {}) => {
     "cumulative": "ACUMULADO",
     "type": "TIPO",
     "operating_ingresos": "INGRESOS OPERATIVOS",
-    "operating_egresos": "EGRESOS OPERATIVOS"
+    "operating_egresos": "EGRESOS OPERATIVOS",
+    fecha_remito: "FECHA REMITO",
+    nro_remito: "Nº REMITO",
+    nro_pedido: "Nº PEDIDO",
+    nro_factura: "Nº FACTURA",
+    estado_entrega: "ESTADO ENTREGA",
+    cliente: "CLIENTE",
+    nombre_chofer: "CHOFER",
+    nombre_usuario_entrega: "USUARIO ENTREGA",
+    desc_ruta: "HOJA DE RUTA",
+    estado_ruta: "ESTADO RUTA",
+    orden_ruta: "ORDEN EN RUTA",
+    fecha_salida_ruta_fmt: "SALIDA PROGRAMADA (RUTA)",
+    ventana_horaria_ruta: "FRANJA HORARIA (RUTA)",
+    fecha_hora_entrega_fmt: "FECHA/HORA ENTREGA",
+    motivo_no_entrega: "MOTIVO NO ENTREGA",
+    total_remito: "TOTAL REMITO",
   };
   
   fieldKeys.forEach((key) => {
     const th = document.createElement("th");
     const isCurrency = isCurrencyField(key);
-    th.className = `px-4 py-3 ${isCurrency ? "text-right" : ""}`;
-    
+    if (isLogisticaListaCrTable) {
+      th.className = `${logisticaThClass} ${isCurrency ? "text-right" : "text-left"}`;
+    } else {
+      th.className = `px-4 py-3 ${isCurrency ? "text-right" : ""}`;
+    }
+
     // Usar traducción si existe, sino convertir a formato legible
     let headerText = headerTranslations[key.toLowerCase()];
     if (!headerText) {
       headerText = key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
     }
-    
+
     th.textContent = headerText;
     headerRow.appendChild(th);
   });
+  if (isLogisticaListaCrTable) {
+    const thAct = document.createElement("th");
+    thAct.className = `${logisticaThClass} text-left whitespace-nowrap`;
+    thAct.textContent = "ACCIONES";
+    headerRow.appendChild(thAct);
+  }
   thead.appendChild(headerRow);
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
-  tbody.className = "divide-y divide-slate-100 dark:divide-slate-800";
+  if (!isLogisticaListaCrTable) {
+    tbody.className = "divide-y divide-slate-100 dark:divide-slate-800";
+  }
 
   // Detectar si es cash_flow_waterfall (tiene filas con type: "starting" o "ending")
   const isCashFlowWaterfall = data.some(row => row.type === "starting" || row.type === "ending");
@@ -2986,13 +3325,42 @@ const renderTable = (widgetElement, data, options = {}) => {
   // Mostrar más registros para reportes de tabla (pivot-table)
   const maxRows = 1000;
   const rowsToRender = dataToRender.slice(0, maxRows);
+  const useLogisticaNestedGroups =
+    isLogisticaListaCrTable && logisticaGroupKeys.length > 0;
+  let logisticaGroupedTree = null;
+
   let prevMes = null;
   let prevSucursal = null;
 
+  let logisticaDataRowIndex = 0;
+
+  if (useLogisticaNestedGroups) {
+    const metricKeysLg = fieldKeys.filter((k) => isCurrencyField(k));
+    logisticaGroupedTree = groupLogisticaListaData(rowsToRender, logisticaGroupKeys, metricKeysLg);
+    const groupIdPrefix = `lg-${Math.random().toString(36).slice(2, 10)}-`;
+    tbody.innerHTML = renderLogisticaGroupedTreeHtml(
+      logisticaGroupedTree,
+      fieldKeys,
+      headerTranslations,
+      metricKeysLg,
+      groupIdPrefix,
+      0,
+      true,
+    );
+  } else {
   rowsToRender.forEach((row) => {
     const tr = document.createElement("tr");
-    tr.className =
-      "hover:bg-slate-50/70 dark:hover:bg-slate-900/60 transition-colors";
+    if (isLogisticaListaCrTable) {
+      const zebra =
+        logisticaDataRowIndex % 2 === 0
+          ? "bg-white dark:bg-slate-950"
+          : "bg-slate-50/90 dark:bg-slate-900/40";
+      logisticaDataRowIndex += 1;
+      tr.className = `hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors ${zebra}`;
+    } else {
+      tr.className =
+        "hover:bg-slate-50/70 dark:hover:bg-slate-900/60 transition-colors";
+    }
 
     // Agrupación visual para Ventas Netas: borde superior al cambiar mes o sucursal
     if (isVentasNetasTable) {
@@ -3017,8 +3385,16 @@ const renderTable = (widgetElement, data, options = {}) => {
       const value = row[key];
       const td = document.createElement("td");
       const isCurrency = isCurrencyField(key);
-      td.className = `px-4 py-3 text-slate-700 dark:text-slate-200 ${isCurrency ? "text-right font-medium" : ""}`;
-      
+      if (isLogisticaListaCrTable) {
+        const baseTd =
+          "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300";
+        td.className = isCurrency
+          ? `${baseTd} text-right font-mono text-slate-900 dark:text-white`
+          : `${baseTd} text-left`;
+      } else {
+        td.className = `px-4 py-3 text-slate-700 dark:text-slate-200 ${isCurrency ? "text-right font-medium" : ""}`;
+      }
+
       // Formatear valores
       if (value === null || value === undefined || value === "") {
         td.textContent = "";
@@ -3050,12 +3426,44 @@ const renderTable = (widgetElement, data, options = {}) => {
         }
       }
     });
+    if (isLogisticaListaCrTable) {
+      const tdAct = document.createElement("td");
+      tdAct.className =
+        "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800 whitespace-nowrap align-middle";
+      const wrap = document.createElement("div");
+      wrap.className = "flex flex-wrap gap-1";
+      const codR = row.cod_mov_remito;
+      const codP = row.cod_mov_pedido;
+      const btnDet = document.createElement("button");
+      btnDet.type = "button";
+      btnDet.className =
+        "text-[10px] font-semibold text-sky-600 hover:text-sky-500 dark:text-sky-400 underline-offset-2 hover:underline";
+      btnDet.textContent = "Detalle";
+      btnDet.setAttribute("data-logistica-detalle", String(codR ?? ""));
+      const btnEnt = document.createElement("button");
+      btnEnt.type = "button";
+      btnEnt.className =
+        "text-[10px] font-semibold text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 underline-offset-2 hover:underline";
+      btnEnt.textContent = "Entrega";
+      btnEnt.setAttribute("data-logistica-entrega", String(codR ?? ""));
+      btnEnt.setAttribute("data-logistica-pedido", String(codP ?? ""));
+      wrap.appendChild(btnDet);
+      wrap.appendChild(btnEnt);
+      tdAct.appendChild(wrap);
+      tr.appendChild(tdAct);
+    }
     tbody.appendChild(tr);
   });
+  }
 
   // Agregar fila de totales solo si hay columnas monetarias y no es cash_flow_waterfall ni sales_summary
   const currentReportSlug = dashboardRoot?.dataset?.reportSlug || widgetElement?.dataset?.reportSlug;
-  const shouldShowTotals = Object.keys(totals).length > 0 && !isCashFlowWaterfall && currentReportSlug !== "sales_summary" && currentReportSlug !== "total-consolidado-operativo";
+  const shouldShowTotals =
+    Object.keys(totals).length > 0 &&
+    !isCashFlowWaterfall &&
+    currentReportSlug !== "sales_summary" &&
+    currentReportSlug !== "total-consolidado-operativo" &&
+    !isLogisticaListaComprobantesRutasSlug(currentReportSlug);
   
   if (shouldShowTotals) {
     const totalsRow = document.createElement("tr");
@@ -3082,11 +3490,81 @@ const renderTable = (widgetElement, data, options = {}) => {
 
   table.appendChild(tbody);
   target.innerHTML = "";
-  target.appendChild(table);
+  if (isLogisticaListaCrTable) {
+    const scrollWrap = document.createElement("div");
+    scrollWrap.className =
+      "overflow-x-auto max-h-[500px] overflow-y-auto min-h-0 rounded-lg border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950";
+    scrollWrap.appendChild(table);
+    target.appendChild(scrollWrap);
+    if (useLogisticaNestedGroups) {
+      attachLogisticaGroupToggleListeners(scrollWrap);
+    }
+    const foot = document.createElement("p");
+    foot.className = "text-xs text-slate-400 dark:text-slate-500 mt-3";
+    const qTabla = (document.getElementById("logistica-lista-tabla-search")?.value || "").trim();
+    const totalOriginal =
+      logisticaListaDataByWidget.get(widgetElement)?.length ?? data.length;
+    let legendText;
+    if (useLogisticaNestedGroups && logisticaGroupedTree) {
+      const nGr = countLogisticaGroupNodes(logisticaGroupedTree);
+      const agrTxt = nGr === 1 ? "agrupación" : "agrupaciones";
+      legendText = `Lista comprobantes en rutas. Agrupado por: ${logisticaGroupKeys.join(" → ")}. ${nGr} ${agrTxt}. `;
+      if (qTabla.length >= 2) {
+        legendText += `Mostrando ${dataToRender.length} de ${totalOriginal} renglones.`;
+      } else if (dataToRender.length > maxRows) {
+        legendText += `Mostrando las primeras ${maxRows} de ${dataToRender.length} renglones.`;
+      } else {
+        legendText += `Mostrando ${dataToRender.length} renglones.`;
+      }
+    } else if (qTabla.length >= 2) {
+      legendText = `Mostrando ${dataToRender.length} de ${totalOriginal} renglones`;
+    } else if (dataToRender.length > maxRows) {
+      legendText = `Mostrando las primeras ${maxRows} de ${dataToRender.length} renglones`;
+    } else {
+      legendText = `Mostrando ${dataToRender.length} renglones`;
+    }
+    foot.textContent = legendText;
+    target.appendChild(foot);
+  } else {
+    target.appendChild(table);
+  }
 
   if (show) {
     target.classList.remove("hidden");
   }
+
+  if (show && isLogisticaListaComprobantesRutasSlug(tableReportSlugEarly)) {
+    document.getElementById("logistica-lista-tabla-toolbar")?.classList.remove("hidden");
+  }
+
+  if (show && isLogisticaListaCrTable && !widgetElement.dataset.logisticaActionDelegate) {
+    widgetElement.dataset.logisticaActionDelegate = "1";
+    widgetElement.addEventListener("click", (e) => {
+      const det = e.target.closest("[data-logistica-detalle]");
+      if (det && window.SynapLogisticaListaCR?.openDetalle) {
+        const v = det.getAttribute("data-logistica-detalle");
+        if (v !== null && v !== "") window.SynapLogisticaListaCR.openDetalle(v);
+        return;
+      }
+      const ent = e.target.closest("[data-logistica-entrega]");
+      if (ent && window.SynapLogisticaListaCR?.openEntrega) {
+        window.SynapLogisticaListaCR.openEntrega({
+          cod_mov_remito: ent.getAttribute("data-logistica-entrega"),
+          cod_mov_pedido: ent.getAttribute("data-logistica-pedido") || "",
+        });
+      }
+    });
+  }
+};
+
+/**
+ * Re-renderiza la tabla del informe lista comprobantes / rutas usando la caché de filas
+ * (agrupación y búsqueda sobre datos ya cargados; no vuelve a llamar a la API).
+ */
+window.refreshLogisticaListaComprobantesTabla = function refreshLogisticaListaComprobantesTabla() {
+  const widget = document.querySelector("[data-widget-id]");
+  if (!widget || !dashboardRoot) return;
+  renderTable(widget, null, { show: true, logisticaToolbarRefresh: true });
 };
 
 // Estado de paginación y filtros para movimientos detallados
@@ -4052,11 +4530,12 @@ const setupDetailedMovementsControls = () => {
 /** Debe estar en ámbito de módulo: renderSummary (también de módulo) la invoca al cargar datos BO. */
 function syncBoDualSummaryPeriod() {
   const slug = document.querySelector("#dashboard-root")?.dataset?.reportSlug;
-  if (slug !== "bo-stock-facturacion" || !document.getElementById("bo-period-filters-root")) {
+  if (!isInformeBoDualPeriodo(slug) || !document.getElementById("bo-period-filters-root")) {
     return;
   }
   const boPeriodEl = document.getElementById("bo-summary-period");
-  if (!boPeriodEl) return;
+  const voPeriodEl = document.getElementById("vo-summary-period");
+  if (!boPeriodEl && !voPeriodEl) return;
   const fmt = (s) => {
     if (!s) return "—";
     const p = String(s).split("-");
@@ -4066,7 +4545,9 @@ function syncBoDualSummaryPeriod() {
   const fff = document.getElementById("fecha_fin_facturacion")?.value;
   const bi = document.getElementById("fecha_inicio")?.value;
   const bf = document.getElementById("fecha_fin")?.value;
-  boPeriodEl.textContent = `Facturación y remitos: ${fmt(fif)} al ${fmt(fff)} · Backorder: ${fmt(bi)} al ${fmt(bf)}`;
+  const line = `Facturación y remitos: ${fmt(fif)} al ${fmt(fff)} · Backorder: ${fmt(bi)} al ${fmt(bf)}`;
+  if (boPeriodEl) boPeriodEl.textContent = line;
+  if (voPeriodEl) voPeriodEl.textContent = line;
 }
 
 const renderSummary = (meta, totals) => {
@@ -4079,7 +4560,7 @@ const renderSummary = (meta, totals) => {
   const reportSlug = dashboardRoot?.dataset?.reportSlug;
   const isSalesSummary = reportSlug === "sales_summary";
   const isTotalConsolidadoOperativo = reportSlug === "total-consolidado-operativo";
-  const isBoStockFacturacion = reportSlug === "bo-stock-facturacion";
+  const isBoStockFacturacion = isInformeBoDualPeriodo(reportSlug);
   const isMprReportSummary = reportSlug && reportSlug.startsWith("mpr-");
   const isCashFlowReport = reportSlug === "cash_flow_waterfall" || reportSlug === "cash_flow_by_account" || reportSlug === "cash_flow_detailed_movements";
 
@@ -4098,9 +4579,17 @@ const renderSummary = (meta, totals) => {
   const fechaFin = document.getElementById("fecha_fin")?.value;
   const periodText = fechaInicio && fechaFin ? `Periodo ${formatDateForPeriod(fechaInicio)} al ${formatDateForPeriod(fechaFin)}` : "";
 
-  // bo-stock-facturacion: doble rango (facturación/remitos vs backorder)
+  // bo-stock-facturacion y ventas-objetivos-vs-bo: doble rango (facturación/remitos vs backorder)
   if (isBoStockFacturacion) {
     syncBoDualSummaryPeriod();
+    if (summaryContainer) summaryContainer.classList.add("hidden");
+    updateLastUpdateTime();
+    return;
+  }
+
+  // stock-existencias: sin KPI en el resumen (búsqueda y orden en la tabla)
+  if (reportSlug === "stock-existencias") {
+    summaryGrid.innerHTML = "";
     if (summaryContainer) summaryContainer.classList.add("hidden");
     updateLastUpdateTime();
     return;
@@ -4115,6 +4604,13 @@ const renderSummary = (meta, totals) => {
   }
 
   summaryGrid.innerHTML = "";
+
+  // Lista comprobantes en rutas: sin KPI en el resumen (solo período + última actualización)
+  if (isLogisticaListaComprobantesRutasSlug(reportSlug)) {
+    updateLastUpdateTime();
+    summaryContainer.classList.remove("hidden");
+    return;
+  }
 
   // Para sales_summary y total-consolidado-operativo: solo header (Resumen + período + Última actualización), sin tarjetas en el resumen
   // Los KPIs de total-consolidado-operativo se muestran solo en el widget (renderCards), para no duplicar
@@ -4357,6 +4853,8 @@ const updateLastUpdateTime = () => {
     // BO tiene su propio contenedor en la misma línea (periodo | última actualización)
     const boLastUpdate = document.getElementById("bo-last-update-time");
     if (boLastUpdate) boLastUpdate.innerHTML = oneLineHtml;
+    const voLastUpdate = document.getElementById("vo-last-update-time");
+    if (voLastUpdate) voLastUpdate.innerHTML = oneLineHtml;
   }
 };
 
@@ -4376,6 +4874,30 @@ const renderWidgets = (payload) => {
     widgetDataCache.set(cacheKey, { data: payload.data, config, meta: payload.meta || {} });
 
     const widgetType = widget.dataset.widgetType;
+
+    // Lista comprobantes en rutas: una sola vista (tabla), sin gráfico ni alternancia «Ver tabla»
+    if (isLogisticaListaComprobantesRutasSlug(currentReportSlug)) {
+      const chartContainer = widget.querySelector("[data-widget-content]");
+      if (chartContainer) {
+        chartContainer.style.display = "none";
+      }
+      const toggleBtn = widget.querySelector("[data-toggle-table]");
+      if (toggleBtn?.parentElement) {
+        toggleBtn.parentElement.style.display = "none";
+      }
+      renderTable(widget, payload.data, { show: true, meta: payload.meta || {} });
+      widget.querySelectorAll("[data-widget-note]").forEach((note) => note.remove());
+      if (payload.notes && payload.notes.length) {
+        const info = document.createElement("div");
+        info.className =
+          "px-6 py-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400";
+        info.dataset.widgetNote = "true";
+        const noteLabel = widget.dataset.noteLabel || "Notas";
+        info.innerHTML = `<strong>${noteLabel}:</strong> ${payload.notes.join(" · ")}`;
+        widget.appendChild(info);
+      }
+      return;
+    }
 
     // HÍBRIDO: Para Ventas Netas, usar WidgetEngine para el gráfico de barras (tooltips, valores por serie, etc.)
     const isVentasNetasBarChart = isVentasNetasSlug(currentReportSlug) &&
@@ -5816,7 +6338,8 @@ const loadWorkspaceSlot = async (slot, index, isAutoRefresh = false) => {
           "uninvoiced_remitos",
           "pedidos-pendientes",
           "sales_summary",
-          "total-consolidado-operativo"
+          "total-consolidado-operativo",
+          "comprobantes-rutas",
         ];
         
         if (reportsWithDateFilters.includes(slot.slug)) {
@@ -6316,6 +6839,26 @@ if (dashboardRoot) {
       if (typeof saveFilters === "function") {
         saveFilters();
       }
+      // Agrupación local del informe stock-existencias: no vuelve a pedir datos al servidor
+      if (fieldId === "stock_existencias_group_by") {
+        if (typeof window.renderStockExistenciasTableFromState === "function") {
+          window.renderStockExistenciasTableFromState();
+        }
+        return;
+      }
+      // Reportes con dashboard.js (no bloque declarativo inline): recargar datos al cambiar tags
+      const slug = dashboardRoot?.dataset?.reportSlug;
+      if (
+        typeof window.fetchDashboardData === "function" &&
+        slug &&
+        (isInformeBoDualPeriodo(slug) ||
+          slug === "uninvoiced_remitos" ||
+          slug === "total-consolidado-operativo" ||
+          slug === "stock-existencias" ||
+          isVentasNetasSlug(slug))
+      ) {
+        window.fetchDashboardData();
+      }
     };
     
     // Mostrar dropdown
@@ -6490,7 +7033,9 @@ if (dashboardRoot) {
     // Cargar opciones iniciales
     loadOptions();
   };
-  
+
+  window.initializeTagsFilter = initializeTagsFilter;
+
 // Función para inicializar tiempo real en workspace (debe estar definida antes de usarse)
 const initializeWorkspaceRealtime = () => {
   const realtimeButton = document.querySelector("[data-realtime-toggle]");
@@ -6749,8 +7294,16 @@ if (dashboardRoot) {
   const loadFilterOptions = async () => {
     const apiUrl = dashboardRoot.dataset.dashboardUrl;
     const reportSlug = dashboardRoot.dataset.reportSlug;
+
+    if (isLogisticaListaComprobantesRutasSlug(reportSlug)) {
+      const savedFilters = loadFilters();
+      if (savedFilters) {
+        applyFilters(savedFilters);
+      }
+      return;
+    }
     
-    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && reportSlug !== "bo-stock-facturacion" && reportSlug !== "total-consolidado-operativo") {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && !isInformeBoDualPeriodo(reportSlug) && reportSlug !== "total-consolidado-operativo" && reportSlug !== "stock-existencias") {
       return;
     }
     
@@ -6758,39 +7311,36 @@ if (dashboardRoot) {
       // Cargar filtros guardados ANTES de cargar las opciones
       const savedFilters = loadFilters();
 
-      // BO es reporte consolidado: no cargar punto de venta ni sucursales
-      const isBoReport = reportSlug === "bo-stock-facturacion";
+      // BO / Objetivos vs BO: no hay filtro de punto de venta en el formulario; sí sucursales (mismo componente tags que otros informes).
+      const isBoReport = isInformeBoDualPeriodo(reportSlug);
       if (!isBoReport) {
-      // Cargar puntos de venta
-      const pvResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=puntos_venta`, {
-        headers: {
-          "X-Requested-With": "XMLHttpRequest",
-        },
-      });
-      
-      if (pvResponse.ok) {
-        const pvData = await pvResponse.json();
-        const pvSelect = document.getElementById("punto_venta");
-        if (pvSelect) {
-          pvSelect.innerHTML = "";
-          pvData.puntos_venta?.forEach((pv) => {
-            const option = document.createElement("option");
-            option.value = pv.value;
-            option.textContent = pv.label;
-            // Marcar como seleccionado si está en los filtros guardados
-            if (savedFilters && savedFilters.punto_venta && Array.isArray(savedFilters.punto_venta)) {
-              if (savedFilters.punto_venta.includes(pv.value)) {
-                option.selected = true;
+        const pvResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=puntos_venta`, {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+
+        if (pvResponse.ok) {
+          const pvData = await pvResponse.json();
+          const pvSelect = document.getElementById("punto_venta");
+          if (pvSelect) {
+            pvSelect.innerHTML = "";
+            pvData.puntos_venta?.forEach((pv) => {
+              const option = document.createElement("option");
+              option.value = pv.value;
+              option.textContent = pv.label;
+              if (savedFilters && savedFilters.punto_venta && Array.isArray(savedFilters.punto_venta)) {
+                if (savedFilters.punto_venta.includes(pv.value)) {
+                  option.selected = true;
+                }
               }
-            }
-            pvSelect.appendChild(option);
-          });
-          // Inicializar componente de tags (ya con las selecciones aplicadas)
-          initializeTagsFilter("punto_venta", "puntos_venta");
+              pvSelect.appendChild(option);
+            });
+            initializeTagsFilter("punto_venta", "puntos_venta");
+          }
         }
       }
-      
-      // Cargar sucursales
+
       const sucResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=sucursales`, {
         headers: {
           "X-Requested-With": "XMLHttpRequest",
@@ -6805,7 +7355,6 @@ if (dashboardRoot) {
             const option = document.createElement("option");
             option.value = suc.value;
             option.textContent = suc.label;
-            // Marcar como seleccionado si está en los filtros guardados
             if (savedFilters && savedFilters.sucursales && Array.isArray(savedFilters.sucursales)) {
               if (savedFilters.sucursales.includes(suc.value)) {
                 option.selected = true;
@@ -6813,14 +7362,12 @@ if (dashboardRoot) {
             }
             sucSelect.appendChild(option);
           });
-          // Inicializar componente de tags (ya con las selecciones aplicadas)
           initializeTagsFilter("sucursales", "sucursales");
         }
       }
-      }
       
       // Cargar clientes para "Clientes a excluir" (Ventas Netas, Remitos, Total Consolidado, BO Stock Facturación)
-      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion";
+      const reportShowsClientesExcluir = isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug);
       if (reportShowsClientesExcluir) {
         const clientesResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
           headers: {
@@ -6848,8 +7395,35 @@ if (dashboardRoot) {
         }
       }
 
-      // Cargar depósitos para "Depósitos a excluir" (solo BO Stock Facturación)
-      if (reportSlug === "bo-stock-facturacion") {
+      if (reportSlug === "ventas-objetivos-vs-bo") {
+        const viajResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=viajantes`, {
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+        if (viajResponse.ok) {
+          const viajData = await viajResponse.json();
+          const vendSelect = document.getElementById("vendedores_excluidos");
+          if (vendSelect) {
+            vendSelect.innerHTML = "";
+            (viajData.viajantes || []).forEach((v) => {
+              const option = document.createElement("option");
+              option.value = String(v.value);
+              option.textContent = v.label;
+              if (savedFilters && savedFilters.vendedores_excluidos && Array.isArray(savedFilters.vendedores_excluidos)) {
+                if (savedFilters.vendedores_excluidos.map(String).includes(String(v.value))) {
+                  option.selected = true;
+                }
+              }
+              vendSelect.appendChild(option);
+            });
+            initializeTagsFilter("vendedores_excluidos", "viajantes");
+          }
+        }
+      }
+
+      // Cargar depósitos incluidos (BO, Objetivos vs BO, stock existencias)
+      if (isInformeBoDualPeriodo(reportSlug) || reportSlug === "stock-existencias") {
         const depositosResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=depositos`, {
           headers: {
             "X-Requested-With": "XMLHttpRequest",
@@ -6873,6 +7447,53 @@ if (dashboardRoot) {
             });
             initializeTagsFilter("depositos_incluidos", "depositos");
           }
+        }
+      }
+
+      if (reportSlug === "stock-existencias") {
+        const filterBase = `${apiUrl.replace("/query/", "/filters/")}`;
+        const headers = { "X-Requested-With": "XMLHttpRequest" };
+        const loadTags = async (type, jsonKey, selectId, initLabel) => {
+          const resp = await fetch(`${filterBase}?type=${type}`, { headers });
+          if (!resp.ok) return;
+          const json = await resp.json();
+          const items = json[jsonKey] || [];
+          const sel = document.getElementById(selectId);
+          if (!sel) return;
+          sel.innerHTML = "";
+          const sfKey =
+            selectId === "marcas_incluidos"
+              ? "marcas_incluidos"
+              : selectId === "rubros_incluidos"
+                ? "rubros_incluidos"
+                : "subrubros_incluidos";
+          items.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = String(item.value);
+            option.textContent = item.label;
+            if (
+              savedFilters &&
+              savedFilters[sfKey] &&
+              Array.isArray(savedFilters[sfKey]) &&
+              savedFilters[sfKey].map(String).includes(String(item.value))
+            ) {
+              option.selected = true;
+            }
+            sel.appendChild(option);
+          });
+          initializeTagsFilter(selectId, initLabel);
+        };
+        try {
+          await loadTags("marcas", "marcas", "marcas_incluidos", "marcas");
+          await loadTags("rubros", "rubros", "rubros_incluidos", "rubros");
+          await loadTags("subrubros", "subrubros", "subrubros_incluidos", "subrubros");
+        } catch (e) {
+          console.error("Error cargando marcas/rubros/subrubros:", e);
+        }
+        const gbCtr = document.getElementById("stock_existencias_group_by_tags_container");
+        if (gbCtr && !gbCtr.dataset.tagsFilterReady) {
+          initializeTagsFilter("stock_existencias_group_by", "group_by");
+          gbCtr.dataset.tagsFilterReady = "1";
         }
       }
       
@@ -7063,7 +7684,7 @@ if (dashboardRoot) {
   const setupBoDualPeriodoTipo = () => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
     const root = document.getElementById("bo-period-filters-root");
-    if (reportSlug !== "bo-stock-facturacion" || !root) {
+    if (!isInformeBoDualPeriodo(reportSlug) || !root) {
       return;
     }
     if (root.getAttribute("data-bo-period-setup") === "true") {
@@ -7177,7 +7798,7 @@ if (dashboardRoot) {
 
   const setupPeriodoTipo = () => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
-    if (reportSlug === "bo-stock-facturacion" && document.getElementById("bo-period-filters-root")) {
+    if (isInformeBoDualPeriodo(reportSlug) && document.getElementById("bo-period-filters-root")) {
       return;
     }
     const buttons = document.querySelectorAll(".periodo-tipo-btn");
@@ -7186,7 +7807,7 @@ if (dashboardRoot) {
     const fechaFinInput = document.getElementById("fecha_fin");
     
     // Solo aplicar si existen estos elementos (ventas_netas, cash_flow_*, uninvoiced_remitos, pedidos-pendientes, sales_summary, bo-stock-facturacion)
-    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && !isPedidosPendientesSlug(reportSlug) && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && reportSlug !== "bo-stock-facturacion") {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && !isPedidosPendientesSlug(reportSlug) && !isLogisticaListaComprobantesRutasSlug(reportSlug) && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && !isInformeBoDualPeriodo(reportSlug)) {
       return;
     }
     if (!buttons.length || !periodoTipoSelect || !fechaInicioInput || !fechaFinInput) {
@@ -7263,7 +7884,12 @@ if (dashboardRoot) {
         : "";
       if (summaryPeriodElement) summaryPeriodElement.textContent = periodTextFromInputs;
       const boPeriodEl = document.getElementById("bo-summary-period");
-      if (boPeriodEl && dashboardRoot?.dataset?.reportSlug === "bo-stock-facturacion") boPeriodEl.textContent = periodTextFromInputs;
+      const voPeriodEl = document.getElementById("vo-summary-period");
+      const slugDual = dashboardRoot?.dataset?.reportSlug;
+      if (isInformeBoDualPeriodo(slugDual)) {
+        if (boPeriodEl) boPeriodEl.textContent = periodTextFromInputs;
+        if (voPeriodEl) voPeriodEl.textContent = periodTextFromInputs;
+      }
       const vnPeriodEl = document.getElementById("ventas-netas-summary-period");
       if (vnPeriodEl && isVentasNetasSlug(dashboardRoot?.dataset?.reportSlug)) vnPeriodEl.textContent = periodTextFromInputs;
       
@@ -7277,7 +7903,7 @@ if (dashboardRoot) {
         if (savedViewType === "por_caja") {
           fetchByAccountData();
         }
-      } else if (reportSlug === "cash_flow_by_account" || reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug)) {
+      } else if (reportSlug === "cash_flow_by_account" || reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug) || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug) || isLogisticaListaComprobantesRutasSlug(reportSlug)) {
         // Para estos reportes, recargar datos al cambiar período
         fetchDashboardData();
       }
@@ -7346,7 +7972,12 @@ if (dashboardRoot) {
       const summaryPeriodElement = document.getElementById("summary-period");
       if (summaryPeriodElement) summaryPeriodElement.textContent = text;
       const boPeriodEl = document.getElementById("bo-summary-period");
-      if (boPeriodEl && dashboardRoot?.dataset?.reportSlug === "bo-stock-facturacion") boPeriodEl.textContent = text;
+      const voPeriodElSync = document.getElementById("vo-summary-period");
+      const slugDual2 = dashboardRoot?.dataset?.reportSlug;
+      if (isInformeBoDualPeriodo(slugDual2)) {
+        if (boPeriodEl) boPeriodEl.textContent = text;
+        if (voPeriodElSync) voPeriodElSync.textContent = text;
+      }
       const vnPeriodEl = document.getElementById("ventas-netas-summary-period");
       if (vnPeriodEl && isVentasNetasSlug(dashboardRoot?.dataset?.reportSlug)) vnPeriodEl.textContent = text;
     };
@@ -7360,7 +7991,7 @@ if (dashboardRoot) {
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug)) {
+        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug) || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug) || isLogisticaListaComprobantesRutasSlug(reportSlug)) {
           fetchDashboardData();
         }
       }
@@ -7375,7 +8006,7 @@ if (dashboardRoot) {
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion" || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug)) {
+        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug) || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug) || isLogisticaListaComprobantesRutasSlug(reportSlug)) {
           fetchDashboardData();
         }
       }
@@ -7726,6 +8357,405 @@ if (dashboardRoot) {
     byAccountContent.innerHTML = tableHTML;
   };
 
+  const STOCK_EXISTENCIAS_SEARCH_KEYS = [
+    "nombre",
+    "codigo_articulo",
+    "id_manual",
+    "codigo_barras",
+    "deposito_nombre",
+    "marca_nombre",
+    "rubro_nombre",
+    "subrubro_nombre",
+  ];
+  const stockExistenciasDataset = { rows: [], notes: [] };
+  let stockExistenciasSort = { col: "nombre", dir: "asc" };
+
+  const filterStockExistenciasBySearch = (rows, query) => {
+    if (!Array.isArray(rows)) return [];
+    const q = (query && String(query).trim()) || "";
+    if (q.length < 2) return rows.slice();
+    const ql = q.toLowerCase();
+    return rows.filter((row) =>
+      STOCK_EXISTENCIAS_SEARCH_KEYS.some((k) => {
+        const val = row[k];
+        if (val == null) return false;
+        return String(val).toLowerCase().indexOf(ql) !== -1;
+      })
+    );
+  };
+
+  const sortStockExistenciasRows = (rows, col, dir) => {
+    const m = dir === "asc" ? 1 : -1;
+    const sorted = rows.slice();
+    sorted.sort((a, b) => {
+      const va = a[col];
+      const vb = b[col];
+      const sa = va == null ? "" : String(va).toLowerCase();
+      const sb = vb == null ? "" : String(vb).toLowerCase();
+      if (sa < sb) return -1 * m;
+      if (sa > sb) return 1 * m;
+      const ta = `${a.id_art ?? ""}-${a.id_deposito ?? ""}`;
+      const tb = `${b.id_art ?? ""}-${b.id_deposito ?? ""}`;
+      return ta < tb ? -1 : ta > tb ? 1 : 0;
+    });
+    return sorted;
+  };
+
+  const groupStockExistenciasKey = (row, mode) => {
+    switch (mode) {
+      case "deposito":
+        return row.deposito_nombre || "—";
+      case "articulo":
+        return row.nombre || "—";
+      case "marca":
+        return row.marca_nombre || "—";
+      case "rubro":
+        return row.rubro_nombre || "—";
+      case "subrubro":
+        return row.subrubro_nombre || "—";
+      default:
+        return "";
+    }
+  };
+
+  const STOCK_EXISTENCIAS_DIM_LABELS = {
+    deposito: "Depósito",
+    articulo: "Artículo",
+    marca: "Marca",
+    rubro: "Rubro",
+    subrubro: "Subrubro",
+  };
+
+  const sumStockExistenciasMetrics = (itemRows) => {
+    return itemRows.reduce(
+      (acc, row) => {
+        acc.stock += Number(row.stock) || 0;
+        acc.reservado += Number(row.reservado) || 0;
+        acc.disponible += Number(row.disponible) || 0;
+        return acc;
+      },
+      { stock: 0, reservado: 0, disponible: 0 }
+    );
+  };
+
+  /**
+   * Misma forma que groupTableDataGeneric (BO): árbol de grupos con totales por nivel.
+   */
+  const groupStockExistenciasToTree = (items, fields, lev) => {
+    if (lev >= fields.length) {
+      return items.map((row) => ({ type: "item", data: row, children: [] }));
+    }
+    const field = fields[lev];
+    const grouped = {};
+    items.forEach((row) => {
+      const gk = groupStockExistenciasKey(row, field);
+      const key = String(gk);
+      if (!grouped[key]) {
+        grouped[key] = {
+          groupKey: key,
+          groupValue: gk,
+          groupField: field,
+          items: [],
+          totals: { stock: 0, reservado: 0, disponible: 0 },
+        };
+      }
+      grouped[key].items.push(row);
+    });
+    Object.keys(grouped).forEach((k) => {
+      const g = grouped[k];
+      g.totals = sumStockExistenciasMetrics(g.items);
+    });
+    const keysSorted = Object.keys(grouped).sort((a, b) =>
+      String(grouped[a].groupValue)
+        .toLowerCase()
+        .localeCompare(String(grouped[b].groupValue).toLowerCase(), "es")
+    );
+    const result = [];
+    keysSorted.forEach((k) => {
+      const g = grouped[k];
+      const nested = groupStockExistenciasToTree(g.items, fields, lev + 1);
+      result.push({ type: "group", data: g, children: nested });
+    });
+    return result;
+  };
+
+  const attachStockExistenciasGroupToggles = (container) => {
+    if (!container) return;
+    container.querySelectorAll("[data-se-group-toggle]").forEach((el) => {
+      if (el._seStockToggleAttached) return;
+      el._seStockToggleAttached = true;
+      el.addEventListener("click", () => {
+        const groupId = el.getAttribute("data-se-group-toggle");
+        if (!groupId) return;
+        const childrenRow = container.querySelector(`tr[data-se-group-parent="${groupId}"]`);
+        if (!childrenRow) return;
+        const isHidden = childrenRow.style.display === "none";
+        childrenRow.style.display = isHidden ? "table-row" : "none";
+        el.style.transform = isHidden ? "rotate(90deg)" : "rotate(0deg)";
+      });
+    });
+  };
+
+  const escStockHtml = (v) => {
+    if (v == null) return "";
+    return String(v)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  };
+
+  const renderStockExistenciasTableFromState = () => {
+    const wrap = document.getElementById("stock-existencias-table-wrap");
+    if (!wrap) return;
+    const rows = stockExistenciasDataset.rows || [];
+    const notes = stockExistenciasDataset.notes || [];
+    const searchEl = document.getElementById("stock_existencias_busqueda");
+    const q = searchEl ? searchEl.value : "";
+    let filtered = filterStockExistenciasBySearch(rows, q);
+    filtered = sortStockExistenciasRows(filtered, stockExistenciasSort.col, stockExistenciasSort.dir);
+
+    const getGroupFieldsStock = () => {
+      const wrapGb = document.getElementById("stock_existencias_group_by_tags_container");
+      const chipsRoot = wrapGb?.querySelector(".tags-chips");
+      if (chipsRoot) {
+        const chipEls = chipsRoot.querySelectorAll("[data-value]");
+        if (chipEls.length) {
+          return Array.from(chipEls)
+            .map((el) => el.dataset.value)
+            .filter(Boolean);
+        }
+      }
+      const sel = document.getElementById("stock_existencias_group_by");
+      return sel ? Array.from(sel.selectedOptions).map((o) => o.value).filter(Boolean) : [];
+    };
+
+    const fmt = (v) => {
+      const n = Number(v);
+      if (Number.isFinite(n)) return n.toLocaleString("es-AR", { maximumFractionDigits: 4 });
+      return v ?? "";
+    };
+
+    const tdCell =
+      "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800";
+
+    const thHead =
+      "px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50";
+
+    const sortHeader = (col, label) => {
+      const active = stockExistenciasSort.col === col;
+      const arrow =
+        active && stockExistenciasSort.dir === "asc"
+          ? " ↑"
+          : active && stockExistenciasSort.dir === "desc"
+            ? " ↓"
+            : "";
+      return `<th scope="col" data-sort-col="${col}" class="${thHead} text-left cursor-pointer select-none hover:bg-slate-200/80 dark:hover:bg-slate-700/80">${escStockHtml(
+        label
+      )}${arrow}</th>`;
+    };
+
+    const stockRow = (r) => {
+      const titleNombre = escStockHtml(r.nombre || "");
+      return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30 bo-detail-row se-stock-detail-row">
+        <td class="${tdCell} text-slate-700 dark:text-slate-300">${escStockHtml(r.id_manual)}</td>
+        <td class="${tdCell} text-slate-600 dark:text-slate-400 font-mono">${escStockHtml(r.codigo_barras)}</td>
+        <td class="${tdCell}">${escStockHtml(r.deposito_nombre)}</td>
+        <td class="${tdCell} max-w-[200px] truncate" title="${titleNombre}">${escStockHtml(r.nombre)}</td>
+        <td class="${tdCell} max-w-[120px] truncate" title="${escStockHtml(r.marca_nombre)}">${escStockHtml(
+        r.marca_nombre
+      )}</td>
+        <td class="${tdCell} max-w-[120px] truncate" title="${escStockHtml(r.rubro_nombre)}">${escStockHtml(
+        r.rubro_nombre
+      )}</td>
+        <td class="${tdCell} max-w-[120px] truncate" title="${escStockHtml(r.subrubro_nombre)}">${escStockHtml(
+        r.subrubro_nombre
+      )}</td>
+        <td class="${tdCell} text-right tabular-nums font-mono text-slate-900 dark:text-white">${fmt(r.stock)}</td>
+        <td class="${tdCell} text-right tabular-nums font-mono text-slate-900 dark:text-white">${fmt(r.reservado)}</td>
+        <td class="${tdCell} text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-400">${fmt(
+          r.disponible
+        )}</td>
+      </tr>`;
+    };
+
+    const NUM_COL_STOCK = 10;
+
+    if (!rows.length) {
+      const msg = notes[0] || "Sin datos para los filtros seleccionados.";
+      wrap.innerHTML = `<p class="text-xs text-slate-500 dark:text-slate-400 py-4">${escStockHtml(msg)}</p>`;
+      return;
+    }
+
+    if (!filtered.length) {
+      wrap.innerHTML = `<p class="text-xs text-slate-500 dark:text-slate-400 py-4">Ninguna fila coincide con la búsqueda (mínimo 2 caracteres).</p>`;
+      return;
+    }
+
+    const groupFields = getGroupFieldsStock();
+    let bodyHtml = "";
+    let pieAgrupado = "";
+    const qTrim = (q && String(q).trim()) || "";
+    const leyendaBusqueda =
+      qTrim.length >= 2 && rows.length
+        ? ` · Mostrando ${filtered.length} de ${rows.length} filas`
+        : "";
+
+    if (groupFields.length) {
+      const grouped = groupStockExistenciasToTree(filtered, groupFields, 0);
+      const numAgrupaciones = grouped.length;
+      const collapsedDefault = true;
+      let gid = 0;
+      const nextGroupId = () => `se-stock-g-${++gid}`;
+
+      const renderGroupedRowsBOStyle = (groupedData, level) => {
+        let rowsHTML = "";
+        groupedData.forEach((item) => {
+          if (item.type === "group") {
+            const g = item.data;
+            const groupId = nextGroupId();
+            const dimLabel = STOCK_EXISTENCIAS_DIM_LABELS[g.groupField] || g.groupField;
+            const bgClass =
+              level === 0
+                ? "bg-slate-100 dark:bg-slate-800"
+                : level === 1
+                  ? "bg-slate-50 dark:bg-slate-900"
+                  : "bg-slate-50/50 dark:bg-slate-800/50";
+            const padLeft = level * 20 + 8;
+            const gv = (g.groupValue != null ? String(g.groupValue) : "").substring(0, 80);
+            const expandIcon = `<svg class="w-4 h-4 inline-block mr-2 align-middle cursor-pointer" data-se-group-toggle="${groupId}" style="transform: ${collapsedDefault ? "rotate(0deg)" : "rotate(90deg)"};" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+            rowsHTML += `<tr class="${bgClass} se-stock-group-row">`;
+            rowsHTML += `<td class="${tdCell}" style="padding-left: ${padLeft}px;">${expandIcon}<span class="font-medium text-slate-700 dark:text-slate-300">${escStockHtml(
+              dimLabel
+            )}: ${escStockHtml(gv)}</span></td>`;
+            for (let c = 1; c <= 6; c++) {
+              rowsHTML += `<td class="${tdCell}"></td>`;
+            }
+            rowsHTML += `<td class="${tdCell} text-right font-semibold text-sky-600 dark:text-sky-400">${fmt(g.totals.stock)}</td>`;
+            rowsHTML += `<td class="${tdCell} text-right font-semibold text-sky-600 dark:text-sky-400">${fmt(g.totals.reservado)}</td>`;
+            rowsHTML += `<td class="${tdCell} text-right font-semibold text-sky-600 dark:text-sky-400">${fmt(g.totals.disponible)}</td>`;
+            rowsHTML += "</tr>";
+            rowsHTML += `<tr class="se-stock-group-children" data-se-group-parent="${groupId}" style="${collapsedDefault ? "display:none" : ""}"><td colspan="${NUM_COL_STOCK}" class="p-0 border-0"><table class="w-full border-collapse text-sm"><tbody>`;
+            rowsHTML += renderGroupedRowsBOStyle(item.children, level + 1);
+            rowsHTML += "</tbody></table></td></tr>";
+          } else {
+            rowsHTML += stockRow(item.data);
+          }
+        });
+        return rowsHTML;
+      };
+
+      bodyHtml = renderGroupedRowsBOStyle(grouped, 0);
+      const labelsAgrupacion = groupFields
+        .map((f) => STOCK_EXISTENCIAS_DIM_LABELS[f] || f)
+        .join(" → ");
+      pieAgrupado = `<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Stock y existencias. Agrupado por: ${escStockHtml(
+        labelsAgrupacion
+      )}. ${numAgrupaciones} agrupación${numAgrupaciones !== 1 ? "es" : ""}${leyendaBusqueda}.</p>`;
+    } else {
+      filtered.forEach((r) => {
+        bodyHtml += stockRow(r);
+      });
+      pieAgrupado = `<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Mostrando ${filtered.length} fila(s)${leyendaBusqueda}.</p>`;
+    }
+
+    const theadRow = `
+            <tr>
+              <th class="${thHead} text-left">ID manual</th>
+              <th class="${thHead} text-left">Código barras</th>
+              <th class="${thHead} text-left">Depósito</th>
+              ${sortHeader("nombre", "Nombre artículo")}
+              ${sortHeader("marca_nombre", "Marca")}
+              ${sortHeader("rubro_nombre", "Rubro")}
+              ${sortHeader("subrubro_nombre", "Subrubro")}
+              <th class="${thHead} text-right">Stock</th>
+              <th class="${thHead} text-right">Reservado</th>
+              <th class="${thHead} text-right">Disponible</th>
+            </tr>`;
+
+    const tableScrollClass = groupFields.length
+      ? "overflow-x-auto max-h-[500px] overflow-y-auto rounded-xl border border-slate-100 dark:border-slate-800"
+      : "overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800";
+
+    let html = `
+      <div class="${tableScrollClass}">
+        <table id="stock-existencias-data-table" class="w-full text-left text-[11px] sm:text-xs border-collapse">
+          <thead class="sticky top-0 z-10">${theadRow}</thead>
+          <tbody>${bodyHtml}</tbody></table></div>`;
+    html += pieAgrupado;
+    if (notes.length) {
+      html += `<p class="text-[10px] text-amber-700 dark:text-amber-400 mt-2">${notes.map(escStockHtml).join(" ")}</p>`;
+    }
+    wrap.innerHTML = html;
+
+    if (groupFields.length) {
+      attachStockExistenciasGroupToggles(wrap);
+    }
+
+    wrap.querySelectorAll("th[data-sort-col]").forEach((th) => {
+      th.addEventListener("click", () => {
+        const col = th.getAttribute("data-sort-col");
+        if (!col) return;
+        if (stockExistenciasSort.col === col) {
+          stockExistenciasSort.dir = stockExistenciasSort.dir === "asc" ? "desc" : "asc";
+        } else {
+          stockExistenciasSort.col = col;
+          stockExistenciasSort.dir = "asc";
+        }
+        renderStockExistenciasTableFromState();
+      });
+    });
+  };
+
+  window.renderStockExistenciasTableFromState = renderStockExistenciasTableFromState;
+
+  /**
+   * Informe stock-existencias: detalle por depósito; búsqueda y orden en columnas de la tabla.
+   */
+  const renderStockExistenciasTable = (payload) => {
+    const wrap = document.getElementById("stock-existencias-table-wrap");
+    const summaryEl = document.getElementById("stock-existencias-filters-summary");
+    if (!wrap) return;
+    const rows = payload.data || [];
+    const meta = payload.meta || {};
+    const fa = meta.filters_applied || {};
+    stockExistenciasDataset.rows = rows;
+    stockExistenciasDataset.notes = payload.notes || [];
+    stockExistenciasSort = { col: "nombre", dir: "asc" };
+
+    if (summaryEl) {
+      const parts = [];
+      if (fa.depositos_incluidos && fa.depositos_incluidos.length) {
+        parts.push(`${fa.depositos_incluidos.length} depósito(s) en stock`);
+      } else {
+        parts.push("Stock: todos los depósitos");
+      }
+      if (fa.marcas_incluidos && fa.marcas_incluidos.length) parts.push(`${fa.marcas_incluidos.length} marca(s)`);
+      if (fa.rubros_incluidos && fa.rubros_incluidos.length) parts.push(`${fa.rubros_incluidos.length} rubro(s)`);
+      if (fa.subrubros_incluidos && fa.subrubros_incluidos.length) {
+        parts.push(`${fa.subrubros_incluidos.length} subrubro(s)`);
+      }
+      if (fa.incluir_stock_cero) parts.push("Incluye stock cero");
+      summaryEl.textContent = parts.length ? parts.join(" · ") : "";
+    }
+
+    if (!window.__stockExistenciasUiInit) {
+      window.__stockExistenciasUiInit = true;
+      const section = document.getElementById("stock-existencias-section");
+      let searchT = null;
+      if (section) {
+        section.addEventListener("input", (e) => {
+          if (e.target && e.target.id === "stock_existencias_busqueda") {
+            if (searchT) clearTimeout(searchT);
+            searchT = setTimeout(() => renderStockExistenciasTableFromState(), 400);
+          }
+        });
+      }
+    }
+
+    renderStockExistenciasTableFromState();
+  };
+
   const getStorageKey = () => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
     if (!reportSlug) return null;
@@ -7763,6 +8793,74 @@ if (dashboardRoot) {
     return null;
   };
 
+  /**
+   * Desde el CRUD de objetivos de venta el enlace incluye ?fecha_inicio_facturacion=&fecha_fin_facturacion=
+   * (intervalo del período editado). Solo se ajusta el rango de facturación/remitos; el de backorder
+   * sigue viniendo de localStorage (última configuración).
+   */
+  const applyVentasObjetivosFacturacionFromQueryParams = () => {
+    const reportSlug = dashboardRoot?.dataset?.reportSlug;
+    if (reportSlug !== "ventas-objetivos-vs-bo") return;
+
+    let params;
+    try {
+      params = new URLSearchParams(window.location.search);
+    } catch (e) {
+      return;
+    }
+    const fi = (params.get("fecha_inicio_facturacion") || "").trim();
+    const ff = (params.get("fecha_fin_facturacion") || "").trim();
+    if (!fi || !ff) return;
+
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    if (!iso.test(fi) || !iso.test(ff)) return;
+
+    const fifEl = document.getElementById("fecha_inicio_facturacion");
+    const fffEl = document.getElementById("fecha_fin_facturacion");
+    const facSel = document.getElementById("periodo_tipo_facturacion");
+    const root = document.getElementById("bo-period-filters-root");
+    const row = root?.querySelector('[data-bo-period-row="facturacion"]');
+    if (!fifEl || !fffEl || !facSel || !row) return;
+
+    fifEl.value = fi;
+    fffEl.value = ff;
+    facSel.value = "personalizado";
+
+    const buttons = row.querySelectorAll(".periodo-tipo-btn-bo");
+    const activeClasses = ["active", "border-sky-500", "bg-sky-50", "dark:bg-sky-900/20", "text-sky-700", "dark:text-sky-300", "shadow-md"];
+    const inactiveClasses = ["border-slate-300", "dark:border-slate-600", "bg-white", "dark:bg-slate-800", "text-slate-700", "dark:text-slate-300"];
+    buttons.forEach((btn) => {
+      const periodo = btn.dataset.periodo;
+      if (periodo === "personalizado") {
+        btn.classList.add(...activeClasses);
+        inactiveClasses.forEach((c) => btn.classList.remove(c));
+      } else {
+        activeClasses.forEach((c) => btn.classList.remove(c));
+        inactiveClasses.forEach((c) => btn.classList.add(c));
+      }
+    });
+
+    fifEl.disabled = false;
+    fffEl.disabled = false;
+
+    facSel.dispatchEvent(new Event("change", { bubbles: true }));
+
+    if (typeof syncBoDualSummaryPeriod === "function") {
+      syncBoDualSummaryPeriod();
+    }
+    saveFilters();
+
+    try {
+      params.delete("fecha_inicio_facturacion");
+      params.delete("fecha_fin_facturacion");
+      const q = params.toString();
+      const newUrl = window.location.pathname + (q ? `?${q}` : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
+    } catch (e) {
+      /* noop */
+    }
+  };
+
   const applyFilters = (filters) => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
     if (!filters || !reportSlug) return;
@@ -7772,9 +8870,11 @@ if (dashboardRoot) {
       reportSlug === "cash_flow_by_account" ||
       reportSlug === "uninvoiced_remitos" ||
       isPedidosPendientesSlug(reportSlug) ||
+      isLogisticaListaComprobantesRutasSlug(reportSlug) ||
       reportSlug === "sales_summary" ||
       reportSlug === "total-consolidado-operativo" ||
-      reportSlug === "bo-stock-facturacion";
+      reportSlug === "stock-existencias" ||
+      isInformeBoDualPeriodo(reportSlug);
     if (!allowed) return;
 
     // Aplicar tipo de período y fechas
@@ -7809,7 +8909,7 @@ if (dashboardRoot) {
     }
 
     const periodoTipoFacSelect = document.getElementById("periodo_tipo_facturacion");
-    if (reportSlug === "bo-stock-facturacion" && periodoTipoFacSelect) {
+    if (isInformeBoDualPeriodo(reportSlug) && periodoTipoFacSelect) {
       if (filters.dia_actual_facturacion) {
         periodoTipoFacSelect.value = "dia_actual";
       } else if (filters.mes_actual_facturacion) {
@@ -7860,7 +8960,7 @@ if (dashboardRoot) {
     }
 
     // Aplicar filtros específicos de ventas_netas, uninvoiced_remitos, bo-stock-facturacion (punto_venta, sucursales)
-    if (isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || reportSlug === "bo-stock-facturacion") {
+    if (isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug)) {
       if (filters.punto_venta && Array.isArray(filters.punto_venta)) {
         const pvSelect = document.getElementById("punto_venta");
         if (pvSelect) {
@@ -7896,7 +8996,7 @@ if (dashboardRoot) {
       }
 
       // Clientes a excluir (NOT IN) - Ventas Netas, Total Consolidado, Remitos, BO Stock Facturación
-      if ((isVentasNetasSlug(reportSlug) || reportSlug === "total-consolidado-operativo" || reportSlug === "uninvoiced_remitos" || reportSlug === "bo-stock-facturacion") && filters.clientes_excluidos && Array.isArray(filters.clientes_excluidos)) {
+      if ((isVentasNetasSlug(reportSlug) || reportSlug === "total-consolidado-operativo" || reportSlug === "uninvoiced_remitos" || isInformeBoDualPeriodo(reportSlug)) && filters.clientes_excluidos && Array.isArray(filters.clientes_excluidos)) {
         const clientesSelect = document.getElementById("clientes_excluidos");
         if (clientesSelect) {
           filters.clientes_excluidos.forEach((value) => {
@@ -7913,8 +9013,29 @@ if (dashboardRoot) {
         }
       }
 
-      // Depósitos a excluir (solo BO Stock Facturación)
-      if (reportSlug === "bo-stock-facturacion" && filters.depositos_incluidos && Array.isArray(filters.depositos_incluidos)) {
+      if (
+        reportSlug === "ventas-objetivos-vs-bo" &&
+        filters.vendedores_excluidos &&
+        Array.isArray(filters.vendedores_excluidos)
+      ) {
+        const vendSelect = document.getElementById("vendedores_excluidos");
+        if (vendSelect) {
+          filters.vendedores_excluidos.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = vendSelect.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) {
+              option.selected = true;
+            }
+          });
+          setTimeout(() => {
+            vendSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }, 150);
+        }
+      }
+
+      // Depósitos incluidos (BO y Objetivos vs BO)
+      if (isInformeBoDualPeriodo(reportSlug) && filters.depositos_incluidos && Array.isArray(filters.depositos_incluidos)) {
         const depositosSelect = document.getElementById("depositos_incluidos");
         if (depositosSelect) {
           filters.depositos_incluidos.forEach((value) => {
@@ -7931,8 +9052,8 @@ if (dashboardRoot) {
         }
       }
 
-      // Lista de precio (solo BO Stock Facturación)
-      if (reportSlug === "bo-stock-facturacion" && filters.lista_precio !== undefined && filters.lista_precio !== null) {
+      // Lista de precio (BO y Objetivos vs BO)
+      if (isInformeBoDualPeriodo(reportSlug) && filters.lista_precio !== undefined && filters.lista_precio !== null) {
         const listaPrecioSelect = document.getElementById("lista_precio");
         if (listaPrecioSelect) {
           const v = String(filters.lista_precio);
@@ -7940,6 +9061,91 @@ if (dashboardRoot) {
             listaPrecioSelect.value = v;
           }
         }
+      }
+    }
+
+    if (reportSlug === "stock-existencias") {
+      if (filters.depositos_incluidos && Array.isArray(filters.depositos_incluidos)) {
+        const depositosSelect = document.getElementById("depositos_incluidos");
+        if (depositosSelect) {
+          filters.depositos_incluidos.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = depositosSelect.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) {
+              option.selected = true;
+            }
+          });
+          setTimeout(() => {
+            depositosSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }, 150);
+        }
+      }
+      const tagRestoreStock = (arr, selectId) => {
+        if (!arr || !Array.isArray(arr)) return;
+        const sel = document.getElementById(selectId);
+        if (!sel) return;
+        arr.forEach((value) => {
+          const val = String(value ?? "").trim();
+          if (!val) return;
+          const option = sel.querySelector(`option[value="${val}"]`);
+          if (option && !option.selected) {
+            option.selected = true;
+          }
+        });
+        setTimeout(() => {
+          sel.dispatchEvent(new Event("change", { bubbles: true }));
+        }, 150);
+      };
+      tagRestoreStock(filters.marcas_incluidos, "marcas_incluidos");
+      tagRestoreStock(filters.rubros_incluidos, "rubros_incluidos");
+      tagRestoreStock(filters.subrubros_incluidos, "subrubros_incluidos");
+      if (filters.incluir_stock_cero) {
+        const isc = document.getElementById("incluir_stock_cero");
+        if (isc) {
+          isc.value = filters.incluir_stock_cero;
+        }
+      }
+    }
+
+    if (isLogisticaListaComprobantesRutasSlug(reportSlug)) {
+      const estEl = document.getElementById("logistica_estado_entrega");
+      if (estEl && filters.logistica_estado_entrega != null && filters.logistica_estado_entrega !== "") {
+        const vals = Array.isArray(filters.logistica_estado_entrega)
+          ? filters.logistica_estado_entrega.map((v) => String(v).trim()).filter(Boolean)
+          : [String(filters.logistica_estado_entrega).trim()].filter(Boolean);
+        Array.from(estEl.options).forEach((opt) => {
+          opt.selected = vals.includes(opt.value);
+        });
+        setTimeout(() => {
+          estEl.dispatchEvent(new Event("change", { bubbles: true }));
+        }, 50);
+      }
+      const idCliEl = document.getElementById("logistica_id_cliente");
+      if (idCliEl && filters.logistica_id_cliente != null && filters.logistica_id_cliente !== "") {
+        const raw = filters.logistica_id_cliente;
+        const codes = Array.isArray(raw) ? raw : [raw];
+        const etiquetas =
+          filters.logistica_cliente_etiquetas && typeof filters.logistica_cliente_etiquetas === "object"
+            ? filters.logistica_cliente_etiquetas
+            : {};
+        idCliEl.innerHTML = "";
+        codes.forEach((c) => {
+          const code = String(c).trim();
+          if (!code) return;
+          let lab = etiquetas[code];
+          if (lab == null || lab === "") {
+            lab = !Array.isArray(raw) && filters.logistica_cliente_label ? filters.logistica_cliente_label : code;
+          }
+          const o = document.createElement("option");
+          o.value = code;
+          o.textContent = lab;
+          o.selected = true;
+          idCliEl.appendChild(o);
+        });
+        setTimeout(() => {
+          idCliEl.dispatchEvent(new Event("change", { bubbles: true }));
+        }, 50);
       }
     }
 
@@ -8078,6 +9284,40 @@ if (dashboardRoot) {
       setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       const refreshIntervalSelect = document.getElementById("refresh_interval");
       if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
+    } else if (isLogisticaListaComprobantesRutasSlug(currentReportSlug)) {
+      const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
+      const fechaInicio = document.getElementById("fecha_inicio")?.value;
+      const fechaFin = document.getElementById("fecha_fin")?.value;
+      setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
+      const refreshIntervalSelect = document.getElementById("refresh_interval");
+      if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
+      const estSel = document.getElementById("logistica_estado_entrega");
+      if (estSel) {
+        const estVals = Array.from(estSel.selectedOptions)
+          .map((o) => String(o.value).trim())
+          .filter((v) => v === "Si" || v === "No");
+        if (estVals.length === 1) {
+          filters.logistica_estado_entrega = estVals[0];
+        }
+      }
+      const cliSel = document.getElementById("logistica_id_cliente");
+      if (cliSel) {
+        const opts = Array.from(cliSel.selectedOptions)
+          .map((o) => ({
+            id: String(o.value).trim(),
+            text: String(o.textContent || "").trim(),
+          }))
+          .filter((o) => o.id);
+        if (opts.length === 1) {
+          filters.logistica_id_cliente = opts[0].id;
+          filters.logistica_cliente_label = opts[0].text || opts[0].id;
+        } else if (opts.length > 1) {
+          filters.logistica_id_cliente = opts.map((o) => o.id);
+          filters.logistica_cliente_etiquetas = Object.fromEntries(
+            opts.map((o) => [o.id, o.text || o.id]),
+          );
+        }
+      }
     } else if (currentReportSlug === "sales_summary") {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
@@ -8085,7 +9325,7 @@ if (dashboardRoot) {
       setPeriodDatesFromForm(filters, periodoTipo, fechaInicio, fechaFin);
       const refreshIntervalSelect = document.getElementById("refresh_interval");
       if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
-    } else if (currentReportSlug === "bo-stock-facturacion") {
+    } else if (isInformeBoDualPeriodo(currentReportSlug)) {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const periodoTipoFac = document.getElementById("periodo_tipo_facturacion")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
@@ -8128,11 +9368,53 @@ if (dashboardRoot) {
         const selectedClientes = Array.from(clientesExcluidosSelect.selectedOptions).map((opt) => String(opt.value)).filter((v) => v);
         filters.clientes_excluidos = selectedClientes;
       }
+      const vendedoresExcluidosSelect = document.getElementById("vendedores_excluidos");
+      if (vendedoresExcluidosSelect && currentReportSlug === "ventas-objetivos-vs-bo") {
+        const selectedVend = Array.from(vendedoresExcluidosSelect.selectedOptions)
+          .map((opt) => String(opt.value))
+          .filter((v) => v);
+        if (selectedVend.length > 0) {
+          filters.vendedores_excluidos = selectedVend;
+        }
+      }
       const listaPrecioSelect = document.getElementById("lista_precio");
       if (listaPrecioSelect) {
         const v = listaPrecioSelect.value;
         if (v !== "" && v !== undefined) filters.lista_precio = parseInt(v, 10);
       }
+    } else if (currentReportSlug === "stock-existencias") {
+      const depositosIncluidosSelect = document.getElementById("depositos_incluidos");
+      const marcasSel = document.getElementById("marcas_incluidos");
+      const rubrosSel = document.getElementById("rubros_incluidos");
+      const subrubrosSel = document.getElementById("subrubros_incluidos");
+      const refreshIntervalSelect = document.getElementById("refresh_interval");
+      if (refreshIntervalSelect) filters.refresh_interval = refreshIntervalSelect.value;
+      if (depositosIncluidosSelect) {
+        const selectedDepositos = Array.from(depositosIncluidosSelect.selectedOptions)
+          .map((opt) => String(opt.value))
+          .filter((v) => v);
+        if (selectedDepositos.length > 0) filters.depositos_incluidos = selectedDepositos;
+      }
+      if (marcasSel) {
+        const sm = Array.from(marcasSel.selectedOptions)
+          .map((opt) => String(opt.value))
+          .filter((v) => v);
+        if (sm.length > 0) filters.marcas_incluidos = sm;
+      }
+      if (rubrosSel) {
+        const sr = Array.from(rubrosSel.selectedOptions)
+          .map((opt) => String(opt.value))
+          .filter((v) => v);
+        if (sr.length > 0) filters.rubros_incluidos = sr;
+      }
+      if (subrubrosSel) {
+        const ss = Array.from(subrubrosSel.selectedOptions)
+          .map((opt) => String(opt.value))
+          .filter((v) => v);
+        if (ss.length > 0) filters.subrubros_incluidos = ss;
+      }
+      const isc = document.getElementById("incluir_stock_cero");
+      if (isc) filters.incluir_stock_cero = isc.value;
     } else if (currentReportSlug === "cash_flow_waterfall" || currentReportSlug === "cash_flow_by_account") {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
@@ -8185,8 +9467,92 @@ if (dashboardRoot) {
     });
   };
 
+  /** Informes legacy que comparten el modal fullscreen de carga (dashboard_detail.html). */
+  const usesReportsQueryLoadingModal = (slug) => {
+    if (!slug) return false;
+    if (
+      slug === "stock-existencias" ||
+      slug === "bo-stock-facturacion" ||
+      slug === "ventas-objetivos-vs-bo"
+    ) {
+      return true;
+    }
+    if (isVentasNetasSlug(slug)) return true;
+    if (isLogisticaListaComprobantesRutasSlug(slug)) return true;
+    return false;
+  };
+
+  const REPORTS_QUERY_LOADING_LABELS = {
+    "stock-existencias": {
+      title: "Cargando stock y existencias",
+      subtitle: "Consultando la base y preparando la tabla con el resultado completo…",
+    },
+    "bo-stock-facturacion": {
+      title: "Cargando Backorder vs stock vs facturación",
+      subtitle: "Procesando datos del informe BO (puede tardar en bases grandes)…",
+    },
+    "ventas-objetivos-vs-bo": {
+      title: "Cargando objetivos de ventas vs BO",
+      subtitle: "Sincronizando facturación, remitos y backorder…",
+    },
+    ventas_netas: {
+      title: "Cargando ventas netas",
+      subtitle: "Procesando el dashboard de ventas…",
+    },
+    "ventas-netas": {
+      title: "Cargando ventas netas",
+      subtitle: "Procesando el dashboard de ventas…",
+    },
+    "comprobantes-rutas": {
+      title: "Cargando comprobantes en ruta",
+      subtitle: "Consultando remitos y preparando la tabla…",
+    },
+    "mayoristapp-lista-comprobantes-rutas": {
+      title: "Cargando comprobantes en ruta",
+      subtitle: "Consultando remitos y preparando la tabla…",
+    },
+  };
+
+  const showReportsQueryLoadingModal = (slug) => {
+    const el = document.getElementById("reports-legacy-query-loading-modal");
+    if (!el) return;
+    const labels = REPORTS_QUERY_LOADING_LABELS[slug] || {
+      title: "Cargando datos",
+      subtitle: "Espera un momento…",
+    };
+    const titleEl = document.getElementById("reports-query-loading-title");
+    const subEl = document.getElementById("reports-query-loading-subtitle");
+    if (titleEl) titleEl.textContent = labels.title;
+    if (subEl) subEl.textContent = labels.subtitle;
+    el.classList.remove("hidden");
+    el.classList.add("flex", "items-center", "justify-center");
+    el.setAttribute("aria-hidden", "false");
+    el.setAttribute("aria-busy", "true");
+  };
+
+  const hideReportsQueryLoadingModal = () => {
+    const el = document.getElementById("reports-legacy-query-loading-modal");
+    if (!el) return;
+    el.classList.remove("flex", "items-center", "justify-center");
+    el.classList.add("hidden");
+    el.setAttribute("aria-hidden", "true");
+    el.setAttribute("aria-busy", "false");
+  };
+
   let fetchDashboardDataInFlight = false;
+  /** Si llega otra petición mientras hay fetch en curso, se reprograma una al terminar (evita perder refetch tras cargar opciones async, p. ej. rutas en logística). */
+  let fetchDashboardDataPending = false;
   const FETCH_TIMEOUT_MS = 120000; // 2 min para reportes pesados (ej. BO con administranet89)
+  /** 5 min: stock sin LIMIT, informes BO (consultas pesadas). */
+  const EXTENDED_REPORT_FETCH_TIMEOUT_MS = 300000;
+  /** Valor enviado en `limit` del POST; el runner de stock-existencias no trunca por este campo. */
+  const STOCK_EXISTENCIAS_API_LIMIT = 2147483647;
+
+  const usesExtendedQueryTimeout = (slug) =>
+    slug === "stock-existencias" ||
+    slug === "bo-stock-facturacion" ||
+    slug === "ventas-objetivos-vs-bo" ||
+    isLogisticaListaComprobantesRutasSlug(slug);
 
   const fetchDashboardData = async (isAutoRefresh = false) => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
@@ -8195,20 +9561,27 @@ if (dashboardRoot) {
       return;
     }
     if (fetchDashboardDataInFlight) {
-      console.warn("[dashboard.js] fetchDashboardData ya en curso, omitiendo petición duplicada.");
+      fetchDashboardDataPending = true;
       return;
     }
     fetchDashboardDataInFlight = true;
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const fetchTimeoutMs = usesExtendedQueryTimeout(reportSlug)
+      ? EXTENDED_REPORT_FETCH_TIMEOUT_MS
+      : FETCH_TIMEOUT_MS;
+    const timeoutId = setTimeout(() => controller.abort(), fetchTimeoutMs);
     try {
+      if (usesReportsQueryLoadingModal(reportSlug)) {
+        showReportsQueryLoadingModal(reportSlug);
+      }
       // Solo mostrar animación de carga si no es una actualización automática
       if (!isAutoRefresh) {
         showLoadingAnimation();
       }
       
       const filters = getFilters();
-      
+      const queryLimit = reportSlug === "stock-existencias" ? STOCK_EXISTENCIAS_API_LIMIT : 200;
+
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
@@ -8218,7 +9591,7 @@ if (dashboardRoot) {
         },
         body: JSON.stringify({
           slug: reportSlug,
-          limit: 200,
+          limit: queryLimit,
           filters: filters,
         }),
         signal: controller.signal,
@@ -8262,47 +9635,127 @@ if (dashboardRoot) {
             renderByAccountTable(payload.data || [], payload.totals || {}, tableContent);
           }
         } else if (currentReportSlug === "bo-stock-facturacion") {
-          console.log("[dashboard.js] Procesando respuesta para bo-stock-facturacion:", payload);
-          const boResponse = {
-            data: payload.data || [],
-            totals: payload.totals || {},
-            meta: payload.meta || {},
-            notes: payload.notes || []
-          };
-          const filtersApplied = (payload.meta && payload.meta.filters_applied) ? payload.meta.filters_applied : {};
-          const boFiltersSummaryEl = document.getElementById("bo-filters-summary");
-          if (boFiltersSummaryEl) {
-            const parts = [];
-            if (filtersApplied.lista_precio_label) parts.push("Lista de precio: " + filtersApplied.lista_precio_label);
-            if (filtersApplied.depositos_incluidos && filtersApplied.depositos_incluidos.length) parts.push(filtersApplied.depositos_incluidos.length + " depósito(s) incluidos");
-            if (filtersApplied.clientes_excluidos && filtersApplied.clientes_excluidos.length) parts.push(filtersApplied.clientes_excluidos.length + " cliente(s) excluidos");
-            boFiltersSummaryEl.textContent = parts.length ? "Filtros: " + parts.join(" · ") : "";
+          try {
+            console.log("[dashboard.js] Procesando respuesta para bo-stock-facturacion:", payload);
+            const boResponse = {
+              data: payload.data || [],
+              totals: payload.totals || {},
+              meta: payload.meta || {},
+              notes: payload.notes || []
+            };
+            const filtersApplied = (payload.meta && payload.meta.filters_applied) ? payload.meta.filters_applied : {};
+            const boFiltersSummaryEl = document.getElementById("bo-filters-summary");
+            if (boFiltersSummaryEl) {
+              const parts = [];
+              if (filtersApplied.lista_precio_label) parts.push("Lista de precio: " + filtersApplied.lista_precio_label);
+              if (filtersApplied.sucursales && filtersApplied.sucursales.length) parts.push(filtersApplied.sucursales.length + " sucursal(es)");
+              if (filtersApplied.depositos_incluidos && filtersApplied.depositos_incluidos.length) parts.push(filtersApplied.depositos_incluidos.length + " depósito(s) incluidos");
+              if (filtersApplied.clientes_excluidos && filtersApplied.clientes_excluidos.length) parts.push(filtersApplied.clientes_excluidos.length + " cliente(s) excluidos");
+              boFiltersSummaryEl.textContent = parts.length ? "Filtros: " + parts.join(" · ") : "";
+            }
+            if (window.boStockFacturacionHandler && typeof window.boStockFacturacionHandler.processData === 'function') {
+              window.boStockFacturacionHandler.processData(boResponse);
+            }
+            document.dispatchEvent(new CustomEvent('reportDataLoaded', {
+              detail: { slug: 'bo-stock-facturacion', response: boResponse }
+            }));
+            const errNote = (payload.notes || []).find(n => /error|tiempo|timeout|interrupted|max_execution|superó/i.test(String(n)));
+            if (errNote) {
+              hasErrorNote = true;
+              if (!isAutoRefresh) toast(errNote, "error");
+            }
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
           }
-          if (window.boStockFacturacionHandler && typeof window.boStockFacturacionHandler.processData === 'function') {
-            window.boStockFacturacionHandler.processData(boResponse);
+        } else if (currentReportSlug === "ventas-objetivos-vs-bo") {
+          try {
+            const voResponse = {
+              data: payload.data || [],
+              totals: payload.totals || {},
+              meta: payload.meta || {},
+              notes: payload.notes || []
+            };
+            const filtersApplied = (payload.meta && payload.meta.filters_applied) ? payload.meta.filters_applied : {};
+            const voFiltersSummaryEl = document.getElementById("vo-filters-summary");
+            if (voFiltersSummaryEl) {
+              const parts = [];
+              if (filtersApplied.lista_precio_label) {
+                parts.push("Lista de precio: " + filtersApplied.lista_precio_label);
+              } else if (filtersApplied.lista_precio !== undefined && filtersApplied.lista_precio !== null) {
+                parts.push("Lista de precio: " + String(filtersApplied.lista_precio));
+              }
+              if (filtersApplied.sucursales && filtersApplied.sucursales.length) parts.push(filtersApplied.sucursales.length + " sucursal(es)");
+              if (filtersApplied.depositos_incluidos && filtersApplied.depositos_incluidos.length) parts.push(filtersApplied.depositos_incluidos.length + " depósito(s) incluidos");
+              if (filtersApplied.clientes_excluidos && filtersApplied.clientes_excluidos.length) parts.push(filtersApplied.clientes_excluidos.length + " cliente(s) excluidos");
+              if (filtersApplied.vendedores_excluidos && filtersApplied.vendedores_excluidos.length) {
+                parts.push(filtersApplied.vendedores_excluidos.length + " vendedor(es) excluidos");
+              }
+              voFiltersSummaryEl.textContent = parts.length ? "Filtros: " + parts.join(" · ") : "";
+            }
+            if (window.objetivosVentasBoHandler && typeof window.objetivosVentasBoHandler.processData === "function") {
+              window.objetivosVentasBoHandler.processData(voResponse);
+            }
+            document.dispatchEvent(new CustomEvent("reportDataLoaded", {
+              detail: { slug: "ventas-objetivos-vs-bo", response: voResponse }
+            }));
+            const errNoteVo = (payload.notes || []).find(n => /error|tiempo|timeout|interrupted|max_execution|superó/i.test(String(n)));
+            if (errNoteVo) {
+              hasErrorNote = true;
+              if (!isAutoRefresh) toast(errNoteVo, "error");
+            }
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
           }
-          document.dispatchEvent(new CustomEvent('reportDataLoaded', {
-            detail: { slug: 'bo-stock-facturacion', response: boResponse }
-          }));
-          const errNote = (payload.notes || []).find(n => /error|tiempo|timeout|interrupted|max_execution|superó/i.test(String(n)));
-          if (errNote) {
+        } else if (currentReportSlug === "stock-existencias") {
+          try {
+            renderStockExistenciasTable(payload);
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
+          }
+          const errNoteSe = (payload.notes || []).find(n => /error|tiempo|timeout|interrupted|max_execution|superó/i.test(String(n)));
+          if (errNoteSe) {
             hasErrorNote = true;
-            if (!isAutoRefresh) toast(errNote, "error");
+            if (!isAutoRefresh) toast(errNoteSe, "error");
           }
         } else {
-          renderWidgets(payload);
-          if (currentReportSlug === "cash_flow_waterfall") {
-            fetchDetailedMovements();
+          try {
+            renderWidgets(payload);
+            if (currentReportSlug === "cash_flow_waterfall") {
+              fetchDetailedMovements();
+            }
+          } finally {
+            if (usesReportsQueryLoadingModal(currentReportSlug)) {
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  hideReportsQueryLoadingModal();
+                });
+              });
+            }
           }
         }
         
-        if (!isAutoRefresh && !hasErrorNote) {
+        if (!isAutoRefresh && !hasErrorNote && !usesReportsQueryLoadingModal(currentReportSlug)) {
           toast("Datos del dashboard actualizados");
         }
       }, 100);
     } catch (error) {
       if (!isAutoRefresh) {
         hideLoadingAnimation();
+      }
+      if (usesReportsQueryLoadingModal(reportSlug)) {
+        hideReportsQueryLoadingModal();
       }
       console.error("Error en fetchDashboardData:", error);
       let errorMsg = error.message || "Error al sincronizar datos";
@@ -8315,6 +9768,10 @@ if (dashboardRoot) {
     } finally {
       clearTimeout(timeoutId);
       fetchDashboardDataInFlight = false;
+      if (fetchDashboardDataPending) {
+        fetchDashboardDataPending = false;
+        void fetchDashboardData(isAutoRefresh);
+      }
     }
   };
 
@@ -8543,7 +10000,7 @@ if (dashboardRoot) {
           }
           
           // Obtener otros filtros según el reporte
-          if (isVentasNetasSlug(reportSlug) || reportSlug === 'uninvoiced_remitos' || reportSlug === 'total-consolidado-operativo' || reportSlug === 'bo-stock-facturacion') {
+          if (isVentasNetasSlug(reportSlug) || reportSlug === 'uninvoiced_remitos' || reportSlug === 'total-consolidado-operativo' || isInformeBoDualPeriodo(reportSlug)) {
             const puntoVentaSelect = filtersContainer.querySelector('select[name="punto_venta"]');
             const sucursalesSelect = filtersContainer.querySelector('select[name="sucursales"]');
             
@@ -8553,14 +10010,63 @@ if (dashboardRoot) {
             if (sucursalesSelect && sucursalesSelect.value) {
               filters.sucursales = Array.from(sucursalesSelect.selectedOptions).map(opt => opt.value);
             }
-            if (reportSlug === 'bo-stock-facturacion') {
+            if (isInformeBoDualPeriodo(reportSlug)) {
               const depositosIncluidosSelect = filtersContainer.querySelector('select[name="depositos_incluidos"]');
               const clientesExcluidosSelect = filtersContainer.querySelector('select[name="clientes_excluidos"]');
+              const listaPrecioSelect = filtersContainer.querySelector('select[name="lista_precio"]');
+              const fif = filtersContainer.querySelector('input[name="fecha_inicio_facturacion"]');
+              const fff = filtersContainer.querySelector('input[name="fecha_fin_facturacion"]');
+              const ptf = filtersContainer.querySelector('#periodo_tipo_facturacion');
+              if (fif && fif.value) filters.fecha_inicio_facturacion = fif.value;
+              if (fff && fff.value) filters.fecha_fin_facturacion = fff.value;
+              if (ptf && ptf.value) filters.periodo_tipo_facturacion = ptf.value;
               if (depositosIncluidosSelect && depositosIncluidosSelect.selectedOptions.length) {
                 filters.depositos_incluidos = Array.from(depositosIncluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
               }
               if (clientesExcluidosSelect && clientesExcluidosSelect.selectedOptions.length) {
                 filters.clientes_excluidos = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
+              }
+              if (reportSlug === "ventas-objetivos-vs-bo") {
+                const vendedoresExcluidosSelect = filtersContainer.querySelector('select[name="vendedores_excluidos"]');
+                if (vendedoresExcluidosSelect && vendedoresExcluidosSelect.selectedOptions.length) {
+                  filters.vendedores_excluidos = Array.from(vendedoresExcluidosSelect.selectedOptions)
+                    .map((opt) => String(opt.value))
+                    .filter((v) => v);
+                }
+              }
+              if (listaPrecioSelect && listaPrecioSelect.value !== "" && listaPrecioSelect.value !== undefined) {
+                const lp = parseInt(listaPrecioSelect.value, 10);
+                if (!Number.isNaN(lp)) filters.lista_precio = lp;
+              }
+            }
+          }
+
+          if (reportSlug === 'comprobantes-rutas' || reportSlug === 'mayoristapp-lista-comprobantes-rutas') {
+            const est = filtersContainer.querySelector('#logistica_estado_entrega');
+            if (est) {
+              const estVals = Array.from(est.selectedOptions)
+                .map((o) => String(o.value).trim())
+                .filter((v) => v === 'Si' || v === 'No');
+              if (estVals.length === 1) {
+                filters.logistica_estado_entrega = estVals[0];
+              }
+            }
+            const cliSel = filtersContainer.querySelector('#logistica_id_cliente');
+            if (cliSel) {
+              const opts = Array.from(cliSel.selectedOptions)
+                .map((o) => ({
+                  id: String(o.value).trim(),
+                  text: String(o.textContent || "").trim(),
+                }))
+                .filter((o) => o.id);
+              if (opts.length === 1) {
+                filters.logistica_id_cliente = opts[0].id;
+                filters.logistica_cliente_label = opts[0].text || opts[0].id;
+              } else if (opts.length > 1) {
+                filters.logistica_id_cliente = opts.map((o) => o.id);
+                filters.logistica_cliente_etiquetas = Object.fromEntries(
+                  opts.map((o) => [o.id, o.text || o.id]),
+                );
               }
             }
           }
@@ -8647,8 +10153,21 @@ if (dashboardRoot) {
     loadFilterOptions().then(() => {
       setupPeriodoTipo();
       setupBoDualPeriodoTipo();
+      applyVentasObjetivosFacturacionFromQueryParams();
       setupRefreshIntervalButtons();
       setupCashFlowFilters();
+      const slugAfterFilters = dashboardRoot?.dataset?.reportSlug;
+      if (isInformeBoDualPeriodo(slugAfterFilters)) {
+        const lp = document.getElementById("lista_precio");
+        if (lp && !lp.dataset.boListaPrecioWired) {
+          lp.dataset.boListaPrecioWired = "1";
+          lp.addEventListener("change", () => {
+            if (typeof window.fetchDashboardData === "function") {
+              window.fetchDashboardData();
+            }
+          });
+        }
+      }
       fetchDashboardData();
     });
   }

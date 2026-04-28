@@ -6,9 +6,10 @@ from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.db.models import Q
 
-from ia.forms import AgentConversationStartForm, AgentDefinitionConfigForm, LlmProviderConfigForm
+from ia.forms import AgentConversationStartForm, AgentDefinitionConfigForm, AgentQuickSetupForm, LlmProviderConfigForm
 from ia.models import AgentConversation, AgentDefinition, LlmProviderConfig
 from ia.services.policy_gate import PolicyContext, PolicyGate
+from ia.services.provider_presets import get_provider_models, get_recommended_model
 
 
 def _get_empresa(request):
@@ -52,6 +53,50 @@ def _build_agent_forms(agents, *, override_key=None, override_form=None):
     if override_form is not None and override_key is not None:
         forms[str(override_key)] = override_form
     return forms
+
+
+def _build_quick_setup_forms(agents, *, override_key=None, override_form=None):
+    forms = {str(agent.id): AgentQuickSetupForm(agent=agent) for agent in agents}
+    if override_form is not None and override_key is not None:
+        forms[str(override_key)] = override_form
+    return forms
+
+
+def _agent_setup_status(agent):
+    provider = agent.default_provider
+    if not provider:
+        return {
+            "label": "Sin proveedor",
+            "tone": "slate",
+            "help": "Elegí un proveedor, cargá la API key y seleccioná un modelo.",
+        }
+    if not provider.is_configured:
+        return {
+            "label": "Falta API key",
+            "tone": "amber",
+            "help": "El proveedor está seleccionado, pero todavía no tiene una API key válida guardada.",
+        }
+    if not agent.default_model_name:
+        return {
+            "label": "Falta modelo",
+            "tone": "amber",
+            "help": "Seleccioná un modelo del dropdown para dejar operativo el asistente.",
+        }
+    return {
+        "label": "Listo para usar",
+        "tone": "emerald",
+        "help": "El agente ya tiene proveedor, API key y modelo principal configurados.",
+    }
+
+
+def _build_provider_models_map(providers):
+    provider_map = {}
+    for provider in providers:
+        provider_map[str(provider.id)] = {
+            "models": get_provider_models(provider),
+            "recommended": get_recommended_model(provider),
+        }
+    return provider_map
 
 
 def _conversation_belongs_to_request(conversation: AgentConversation, policy_context: PolicyContext) -> bool:
@@ -133,6 +178,31 @@ def ia_configuration(request):
 
     if request.method == "POST":
         action = request.POST.get("action")
+        if action == "save_agent_setup":
+            agent = get_object_or_404(AgentDefinition, pk=request.POST.get("agent_id"))
+            form = AgentQuickSetupForm(request.POST, agent=agent)
+            if form.is_valid():
+                form.save()
+                messages.success(request, "El asistente quedó configurado y operativo.")
+                return redirect("ia:configuration")
+            messages.error(request, "No se pudo completar la configuración rápida del asistente.")
+            provider_forms = _build_provider_forms(providers)
+            agent_forms = _build_agent_forms(agents)
+            quick_setup_forms = _build_quick_setup_forms(agents, override_key=agent.id, override_form=form)
+            return render(
+                request,
+                "ia/configuration.html",
+                {
+                    "providers": providers,
+                    "agents": agents,
+                    "provider_forms": provider_forms,
+                    "agent_forms": agent_forms,
+                    "quick_setup_forms": quick_setup_forms,
+                    "agent_status_map": {str(item.id): _agent_setup_status(item) for item in agents},
+                    "provider_models_map": _build_provider_models_map(providers),
+                },
+            )
+
         if action == "save_provider":
             provider_id = request.POST.get("provider_id")
             provider = get_object_or_404(LlmProviderConfig, pk=provider_id) if provider_id else None
@@ -148,10 +218,19 @@ def ia_configuration(request):
                 override_form=form,
             )
             agent_forms = _build_agent_forms(agents)
+            quick_setup_forms = _build_quick_setup_forms(agents)
             return render(
                 request,
                 "ia/configuration.html",
-                {"providers": providers, "agents": agents, "provider_forms": provider_forms, "agent_forms": agent_forms},
+                {
+                    "providers": providers,
+                    "agents": agents,
+                    "provider_forms": provider_forms,
+                    "agent_forms": agent_forms,
+                    "quick_setup_forms": quick_setup_forms,
+                    "agent_status_map": {str(item.id): _agent_setup_status(item) for item in agents},
+                    "provider_models_map": _build_provider_models_map(providers),
+                },
             )
 
         if action == "save_agent":
@@ -164,14 +243,24 @@ def ia_configuration(request):
             messages.error(request, "No se pudo guardar la configuración del agente.")
             provider_forms = _build_provider_forms(providers)
             agent_forms = _build_agent_forms(agents, override_key=agent.id, override_form=form)
+            quick_setup_forms = _build_quick_setup_forms(agents)
             return render(
                 request,
                 "ia/configuration.html",
-                {"providers": providers, "agents": agents, "provider_forms": provider_forms, "agent_forms": agent_forms},
+                {
+                    "providers": providers,
+                    "agents": agents,
+                    "provider_forms": provider_forms,
+                    "agent_forms": agent_forms,
+                    "quick_setup_forms": quick_setup_forms,
+                    "agent_status_map": {str(item.id): _agent_setup_status(item) for item in agents},
+                    "provider_models_map": _build_provider_models_map(providers),
+                },
             )
 
     provider_forms = _build_provider_forms(providers)
     agent_forms = _build_agent_forms(agents)
+    quick_setup_forms = _build_quick_setup_forms(agents)
     return render(
         request,
         "ia/configuration.html",
@@ -180,5 +269,8 @@ def ia_configuration(request):
             "agents": agents,
             "provider_forms": provider_forms,
             "agent_forms": agent_forms,
+            "quick_setup_forms": quick_setup_forms,
+            "agent_status_map": {str(agent.id): _agent_setup_status(agent) for agent in agents},
+            "provider_models_map": _build_provider_models_map(providers),
         },
     )

@@ -1,0 +1,249 @@
+{% extends "base_app.html" %}
+{% block title %}Objetivos de venta — períodos | Synap{% endblock %}
+{% block content %}
+<section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
+  <div class="mx-auto flex w-full min-w-0 max-w-[1920px] flex-col px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+
+    <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4" aria-label="Migas de pan">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Objetivos de venta</span></li>
+      </ol>
+    </nav>
+
+    <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 sm:mb-4 sm:p-4">
+      <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div class="min-w-0">
+          <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">Objetivos de venta</h1>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          {% if puede_editar %}
+          <button type="button" id="vo-btn-abrir-modal-nuevo"
+                  class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800"
+                  aria-haspopup="dialog" aria-controls="vo-dialog-nuevo-periodo">
+            <span class="material-icons text-base" aria-hidden="true">add</span>
+            Nuevo período
+          </button>
+          {% endif %}
+          <a href="{% url 'reports:dashboard_detail' 'ventas-objetivos-vs-bo' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+            <span class="material-icons text-base" aria-hidden="true">assessment</span>
+            Reporte
+          </a>
+        </div>
+      </header>
+    </div>
+
+    {% if error_carga %}
+    <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+      {{ error_carga }}
+    </div>
+    {% endif %}
+
+    <div class="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <div class="h-[min(28rem,60vh)] min-h-[12rem] overflow-auto" role="region" aria-label="Períodos de objetivos">
+        <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+          <thead class="sticky top-0 z-10 bg-slate-50 shadow-sm dark:bg-slate-800">
+            <tr>
+              <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Descripción</th>
+              <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Intervalo</th>
+              <th scope="col" class="px-4 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+            {% for p in periodos %}
+            <tr class="bg-white hover:bg-slate-50/90 dark:bg-slate-800 dark:hover:bg-slate-700/40">
+              <td class="px-4 py-2.5 text-xs font-medium text-slate-900 dark:text-slate-100">
+                {% if p.descripcion and p.descripcion != '-' %}
+                  {{ p.descripcion }}
+                {% else %}
+                  <span class="text-slate-400 dark:text-slate-500">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-2.5 text-xs text-slate-800 dark:text-slate-200 tabular-nums">
+                {% if p.fecha_desde and p.fecha_hasta %}
+                  {{ p.fecha_desde|date:"d/m/Y" }} — {{ p.fecha_hasta|date:"d/m/Y" }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td class="px-4 py-2.5 text-right">
+                <a href="{% url 'ventas:objetivos_periodo_detalle' p.id %}" class="mr-2 inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300">
+                  <span class="material-icons text-sm" aria-hidden="true">edit</span>
+                  Editar
+                </a>
+                {% if puede_editar %}
+                <form method="post" action="{% url 'ventas:objetivos_periodo_anular' p.id %}" class="inline" onsubmit="return confirm('¿Anular este período? Los objetivos dejarán de aplicarse en el informe.');">
+                  {% csrf_token %}
+                  <button type="submit" class="inline-flex items-center gap-0.5 rounded-md px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300">
+                    <span class="material-icons text-sm" aria-hidden="true">block</span>
+                    Anular
+                  </button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="3" class="px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+                {% if puede_editar %}
+                No hay períodos activos. Creá uno con <button type="button" class="font-semibold text-purple-600 underline decoration-purple-400/80 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300" id="vo-empty-abrir-modal">Nuevo período</button>.
+                {% else %}
+                No hay períodos para mostrar.
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% if puede_editar %}
+<div id="vo-modal-nuevo-periodo" class="fixed inset-0 z-[100] hidden items-center justify-center p-4 sm:p-6" aria-hidden="true">
+  <div id="vo-modal-nuevo-periodo-backdrop" class="absolute inset-0 bg-slate-900/55 backdrop-blur-[2px] transition-opacity dark:bg-black/65" aria-hidden="true"></div>
+  <div class="relative z-10 flex w-full max-w-md flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-600 dark:bg-slate-800"
+       role="dialog"
+       id="vo-dialog-nuevo-periodo"
+       aria-modal="true"
+       aria-labelledby="vo-modal-nuevo-titulo">
+    <div class="border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+      <h2 id="vo-modal-nuevo-titulo" class="text-lg font-bold text-slate-900 dark:text-white">Definir intervalo</h2>
+      <p class="mt-1 text-xs leading-snug text-slate-500 dark:text-slate-400">Las fechas quedarán fijas para este período; luego cargás los objetivos por cliente.</p>
+    </div>
+    <form id="vo-form-nuevo-periodo" class="flex flex-col gap-4 px-5 py-4">
+      {% csrf_token %}
+      <label class="flex flex-col gap-1">
+        <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Fecha desde</span>
+        <input type="date" name="fecha_desde" id="vo-modal-fecha-desde" value="{{ fecha_desde_default }}" required
+               class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/35 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Fecha hasta</span>
+        <input type="date" name="fecha_hasta" id="vo-modal-fecha-hasta" value="{{ fecha_hasta_default }}" required
+               class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/35 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+      </label>
+      <label class="flex flex-col gap-1">
+        <span class="text-xs font-medium text-slate-600 dark:text-slate-300">Descripción <span class="font-normal text-slate-400">(opcional)</span></span>
+        <input type="text" name="descripcion" id="vo-modal-descripcion" maxlength="120" autocomplete="off"
+               placeholder="Ej. Abril 2026"
+               class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/35 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:placeholder:text-slate-500" />
+      </label>
+      <p id="vo-modal-nuevo-error" class="hidden text-sm text-red-600 dark:text-red-400" role="alert"></p>
+      <div class="flex flex-wrap gap-2 border-t border-slate-100 pt-2 dark:border-slate-700">
+        <button type="submit" id="vo-modal-btn-crear"
+                class="inline-flex flex-1 min-w-[10rem] items-center justify-center gap-1 rounded-lg bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none">
+          <span class="material-icons text-base" aria-hidden="true">check</span>
+          Crear y cargar objetivos
+        </button>
+        <button type="button" id="vo-modal-btn-cancelar"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/60">
+          Cancelar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  function getCookie(name) {
+    var v = document.cookie.match("(^|;) ?" + name + "=([^;]*)(;|$)");
+    return v ? decodeURIComponent(v[2]) : null;
+  }
+  var csrftoken = getCookie("csrftoken");
+  var modal = document.getElementById("vo-modal-nuevo-periodo");
+  var backdrop = document.getElementById("vo-modal-nuevo-periodo-backdrop");
+  var btnAbrir = document.getElementById("vo-btn-abrir-modal-nuevo");
+  var btnEmpty = document.getElementById("vo-empty-abrir-modal");
+  var btnCerrar = document.getElementById("vo-modal-btn-cancelar");
+  var form = document.getElementById("vo-form-nuevo-periodo");
+  var errEl = document.getElementById("vo-modal-nuevo-error");
+  var btnCrear = document.getElementById("vo-modal-btn-crear");
+  var apiUrl = "{% url 'ventas:api_objetivos_periodo_crear' %}";
+
+  function setOpen(open) {
+    if (!modal) return;
+    if (open) {
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      var fd = document.getElementById("vo-modal-fecha-desde");
+      if (fd) { fd.focus(); }
+    } else {
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+      modal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+      if (errEl) { errEl.classList.add("hidden"); errEl.textContent = ""; }
+    }
+  }
+
+  function mostrarError(msg) {
+    if (!errEl) return;
+    errEl.textContent = msg || "Error.";
+    errEl.classList.remove("hidden");
+  }
+
+  if (form) {
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var fdIn = document.getElementById("vo-modal-fecha-desde");
+      var fhIn = document.getElementById("vo-modal-fecha-hasta");
+      if (!fdIn || !fhIn) return;
+      if (errEl) { errEl.classList.add("hidden"); errEl.textContent = ""; }
+      if (btnCrear) { btnCrear.disabled = true; }
+      fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken || ""
+        },
+        body: JSON.stringify({
+          fecha_desde: fdIn.value,
+          fecha_hasta: fhIn.value,
+          descripcion: (document.getElementById("vo-modal-descripcion") || {}).value || ""
+        })
+      })
+        .then(function (r) { return r.json().then(function (j) { return { okHttp: r.ok, j: j }; }); })
+        .then(function (x) {
+          if (btnCrear) { btnCrear.disabled = false; }
+          if (x.okHttp && x.j && x.j.ok && x.j.redirect) {
+            window.location.href = x.j.redirect;
+            return;
+          }
+          mostrarError((x.j && x.j.error) ? x.j.error : "No se pudo crear el período.");
+        })
+        .catch(function () {
+          if (btnCrear) { btnCrear.disabled = false; }
+          mostrarError("Error de red.");
+        });
+    });
+  }
+
+  if (btnAbrir) btnAbrir.addEventListener("click", function () { setOpen(true); });
+  if (btnEmpty) btnEmpty.addEventListener("click", function () { setOpen(true); });
+  if (btnCerrar) btnCerrar.addEventListener("click", function () { setOpen(false); });
+  if (backdrop) backdrop.addEventListener("click", function () { setOpen(false); });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && modal && !modal.classList.contains("hidden")) {
+      setOpen(false);
+    }
+  });
+
+  try {
+    var params = new URLSearchParams(window.location.search);
+    if (params.get("nuevo") === "1") {
+      setOpen(true);
+      params.delete("nuevo");
+      var qs = params.toString();
+      var path = window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+      window.history.replaceState({}, "", path);
+    }
+  } catch (ignore) {}
+})();
+</script>
+{% endif %}
+{% endblock %}

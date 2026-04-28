@@ -5,14 +5,18 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-8">
-    <section class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Administración IA</p>
-        <h1 class="mt-2 text-3xl font-semibold text-slate-900">Configuración de proveedores y agentes</h1>
-        <p class="mt-3 text-sm text-slate-600 max-w-4xl">
-            Las APIs de los LLMs y los modelos específicos usados por cada agente se gestionan desde esta pantalla.
-            Las credenciales se guardan cifradas y los agentes pueden seleccionar proveedor, modelo principal, modelo de tool use,
-            modelo de memoria y fallback por UI.
+    <section class="bg-gradient-to-br from-violet-600 via-fuchsia-600 to-blue-600 text-white rounded-3xl shadow-lg p-6 md:p-8">
+        <p class="text-xs uppercase tracking-[0.24em] text-violet-100">Configuración IA</p>
+        <h1 class="mt-2 text-3xl md:text-4xl font-semibold">Configurá cada asistente en tres pasos</h1>
+        <p class="mt-3 text-sm md:text-base text-violet-50 max-w-4xl">
+            Elegí un proveedor, cargá la API key y seleccioná un modelo desde el dropdown.
+            El resto de la configuración técnica se completa automáticamente para dejar el asistente 100% operativo.
         </p>
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <div class="rounded-2xl bg-white/10 border border-white/15 px-4 py-3">1. Elegí proveedor</div>
+            <div class="rounded-2xl bg-white/10 border border-white/15 px-4 py-3">2. Pegá la API key</div>
+            <div class="rounded-2xl bg-white/10 border border-white/15 px-4 py-3">3. Seleccioná modelo</div>
+        </div>
     </section>
 
     {% if messages %}
@@ -25,88 +29,231 @@
     </section>
     {% endif %}
 
-    <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div class="space-y-6">
-            <div class="flex items-center justify-between">
-                <h2 class="text-xl font-semibold text-slate-900">Proveedores LLM</h2>
-                <span class="text-sm text-slate-500">{{ providers|length }} configurado{{ providers|length|pluralize }}</span>
-            </div>
+    {{ provider_models_map|json_script:"provider-models-map" }}
 
-            {% for provider in providers %}
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                <div class="flex items-start justify-between gap-4 mb-5">
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-900">{{ provider.name }}</h3>
-                        <p class="text-sm text-slate-500">{{ provider.get_provider_kind_display }}</p>
-                    </div>
-                    <div class="text-right text-xs text-slate-500">
-                        <div>{% if provider.is_configured %}Clave: {{ provider.masked_api_key }}{% else %}Sin API key{% endif %}</div>
-                        <div>{% if provider.is_active %}Activo{% else %}Inactivo{% endif %}</div>
-                    </div>
-                </div>
-
-                <form method="post" class="space-y-4">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="save_provider">
-                    <input type="hidden" name="provider_id" value="{{ provider.id }}">
-                    {% with form=provider_forms|get_item:provider.id %}
-                        {% include "ia/includes/provider_form_fields.html" with form=form %}
-                    {% endwith %}
-                    <div class="pt-2">
-                        <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 text-white px-4 py-2.5 text-sm font-medium">
-                            Guardar proveedor
-                        </button>
-                    </div>
-                </form>
+    <section class="space-y-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-2xl font-semibold text-slate-900">Asistentes</h2>
+                <p class="text-sm text-slate-500 mt-1">Configuración guiada pensada para usuarios no técnicos.</p>
             </div>
-            {% endfor %}
-
-            <div class="bg-slate-50 rounded-3xl border border-dashed border-slate-300 p-6">
-                <h3 class="text-lg font-semibold text-slate-900">Nuevo proveedor</h3>
-                <form method="post" class="space-y-4 mt-4">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="save_provider">
-                    {% with form=provider_forms.new %}
-                        {% include "ia/includes/provider_form_fields.html" with form=form %}
-                    {% endwith %}
-                    <div class="pt-2">
-                        <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-violet-600 text-white px-4 py-2.5 text-sm font-medium">
-                            Crear proveedor
-                        </button>
-                    </div>
-                </form>
-            </div>
+            <span class="text-sm text-slate-500">{{ agents|length }} asistente{{ agents|length|pluralize }}</span>
         </div>
 
-        <div class="space-y-6">
-            <div class="flex items-center justify-between">
-                <h2 class="text-xl font-semibold text-slate-900">Agentes</h2>
-                <span class="text-sm text-slate-500">{{ agents|length }} agente{{ agents|length|pluralize }}</span>
-            </div>
-
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {% for agent in agents %}
-            <div class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                <div class="mb-5">
-                    <h3 class="text-lg font-semibold text-slate-900">{{ agent.name }}</h3>
-                    <p class="text-sm text-slate-500">{{ agent.slug }} · {{ agent.domain|title }}</p>
+            {% with status=agent_status_map|get_item:agent.id %}
+            <article class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-6 border-b border-slate-100">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-xs uppercase tracking-[0.2em] text-slate-400">{{ agent.domain|title }}</p>
+                            <h3 class="mt-2 text-xl font-semibold text-slate-900">{{ agent.name }}</h3>
+                            <p class="mt-2 text-sm text-slate-600">{{ agent.description|default:"Sin descripción." }}</p>
+                        </div>
+                        <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium
+                            {% if status.tone == 'emerald' %}bg-emerald-50 text-emerald-700
+                            {% elif status.tone == 'amber' %}bg-amber-50 text-amber-700
+                            {% else %}bg-slate-100 text-slate-700{% endif %}">
+                            {{ status.label }}
+                        </span>
+                    </div>
+                    <p class="mt-3 text-sm text-slate-500">{{ status.help }}</p>
                 </div>
 
-                <form method="post" class="space-y-4">
-                    {% csrf_token %}
-                    <input type="hidden" name="action" value="save_agent">
-                    <input type="hidden" name="agent_id" value="{{ agent.id }}">
-                    {% with form=agent_forms|get_item:agent.id %}
-                        {% include "ia/includes/agent_form_fields.html" with form=form agent=agent %}
-                    {% endwith %}
-                    <div class="pt-2">
-                        <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 text-white px-4 py-2.5 text-sm font-medium">
-                            Guardar agente
-                        </button>
+                <div class="p-6">
+                    <form method="post" class="space-y-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_agent_setup">
+                        <input type="hidden" name="agent_id" value="{{ agent.id }}">
+                        {% with form=quick_setup_forms|get_item:agent.id %}
+                        <div class="grid grid-cols-1 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.default_provider.label }}</label>
+                                {{ form.default_provider }}
+                                {% if form.default_provider.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.default_provider.errors|join:", " }}</p>{% endif %}
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.api_key_plain.label }}</label>
+                                {{ form.api_key_plain }}
+                                <p class="text-xs text-slate-500 mt-1">{{ form.api_key_plain.help_text }}</p>
+                                {% if form.api_key_plain.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.api_key_plain.errors|join:", " }}</p>{% endif %}
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">{{ form.selected_model_name.label }}</label>
+                                {{ form.selected_model_name }}
+                                {% if form.selected_model_name.errors %}<p class="text-xs text-rose-600 mt-1">{{ form.selected_model_name.errors|join:", " }}</p>{% endif %}
+                            </div>
+                        </div>
+                        {% endwith %}
+                        <div class="flex flex-wrap gap-3 pt-2">
+                            <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-violet-600 hover:bg-violet-700 text-white px-5 py-2.5 text-sm font-medium">
+                                Guardar y dejar operativo
+                            </button>
+                            <a href="{% url 'ia:chat' agent.slug %}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 text-slate-700 px-5 py-2.5 text-sm font-medium">
+                                Probar asistente
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <details class="border-t border-slate-100">
+                    <summary class="cursor-pointer list-none px-6 py-4 text-sm font-medium text-slate-700 flex items-center justify-between">
+                        <span>Opciones avanzadas</span>
+                        <span class="text-slate-400">Expandir</span>
+                    </summary>
+                    <div class="px-6 pb-6 space-y-6 bg-slate-50">
+                        <div class="pt-4">
+                            <h4 class="text-sm font-semibold text-slate-900 mb-3">Configuración avanzada del agente</h4>
+                            <form method="post" class="space-y-4">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="save_agent">
+                                <input type="hidden" name="agent_id" value="{{ agent.id }}">
+                                {% with form=agent_forms|get_item:agent.id %}
+                                    {% include "ia/includes/agent_form_fields.html" with form=form agent=agent %}
+                                {% endwith %}
+                                <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 text-white px-4 py-2.5 text-sm font-medium">
+                                    Guardar configuración avanzada
+                                </button>
+                            </form>
+                        </div>
+
+                        {% if agent.default_provider %}
+                        <div class="pt-2 border-t border-slate-200">
+                            <h4 class="text-sm font-semibold text-slate-900 mb-3">Proveedor principal asociado</h4>
+                            <form method="post" class="space-y-4">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="save_provider">
+                                <input type="hidden" name="provider_id" value="{{ agent.default_provider.id }}">
+                                {% with form=provider_forms|get_item:agent.default_provider.id %}
+                                    {% include "ia/includes/provider_form_fields.html" with form=form %}
+                                {% endwith %}
+                                <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 text-white px-4 py-2.5 text-sm font-medium">
+                                    Guardar proveedor
+                                </button>
+                            </form>
+                        </div>
+                        {% endif %}
                     </div>
-                </form>
-            </div>
+                </details>
+            </article>
+            {% endwith %}
             {% endfor %}
         </div>
     </section>
+
+    <section class="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+            <div>
+                <h2 class="text-xl font-semibold text-slate-900">Alta manual de proveedor</h2>
+                <p class="text-sm text-slate-500 mt-1">
+                    Solo usá esta sección si necesitás registrar un provider nuevo o cargar modelos personalizados.
+                </p>
+            </div>
+            <span class="text-sm text-slate-500">{{ providers|length }} proveedor{{ providers|length|pluralize }} registrado{{ providers|length|pluralize }}</span>
+        </div>
+        <details class="mt-5">
+            <summary class="cursor-pointer list-none inline-flex items-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
+                Ver formulario avanzado de proveedores
+            </summary>
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+                {% for provider in providers %}
+                <div class="bg-slate-50 rounded-3xl border border-slate-200 p-6">
+                    <div class="flex items-start justify-between gap-4 mb-5">
+                        <div>
+                            <h3 class="text-lg font-semibold text-slate-900">{{ provider.name }}</h3>
+                            <p class="text-sm text-slate-500">{{ provider.get_provider_kind_display }}</p>
+                        </div>
+                        <div class="text-right text-xs text-slate-500">
+                            <div>{% if provider.is_configured %}Clave: {{ provider.masked_api_key }}{% else %}Sin API key{% endif %}</div>
+                            <div>{% if provider.is_active %}Activo{% else %}Inactivo{% endif %}</div>
+                        </div>
+                    </div>
+
+                    <form method="post" class="space-y-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_provider">
+                        <input type="hidden" name="provider_id" value="{{ provider.id }}">
+                        {% with form=provider_forms|get_item:provider.id %}
+                            {% include "ia/includes/provider_form_fields.html" with form=form %}
+                        {% endwith %}
+                        <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-slate-900 text-white px-4 py-2.5 text-sm font-medium">
+                            Guardar proveedor
+                        </button>
+                    </form>
+                </div>
+                {% endfor %}
+
+                <div class="bg-slate-50 rounded-3xl border border-dashed border-slate-300 p-6">
+                    <h3 class="text-lg font-semibold text-slate-900">Nuevo proveedor</h3>
+                    <form method="post" class="space-y-4 mt-4">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="save_provider">
+                        {% with form=provider_forms.new %}
+                            {% include "ia/includes/provider_form_fields.html" with form=form %}
+                        {% endwith %}
+                        <button type="submit" class="inline-flex items-center justify-center rounded-xl bg-violet-600 text-white px-4 py-2.5 text-sm font-medium">
+                            Crear proveedor
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </details>
+    </section>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const providerMapEl = document.getElementById("provider-models-map");
+    if (!providerMapEl) return;
+
+    let providerModelsMap = {};
+    try {
+        providerModelsMap = JSON.parse(providerMapEl.textContent || "{}");
+    } catch (error) {
+        console.error("No se pudo parsear providerModelsMap", error);
+        return;
+    }
+
+    function buildOptions(selectEl, models, recommended, currentValue) {
+        const current = currentValue || "";
+        selectEl.innerHTML = "";
+
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Seleccionar modelo";
+        selectEl.appendChild(placeholder);
+
+        models.forEach((model) => {
+            const option = document.createElement("option");
+            option.value = model;
+            option.textContent = model === recommended ? `${model} (recomendado)` : model;
+            if ((current && current === model) || (!current && recommended === model)) {
+                option.selected = true;
+            }
+            selectEl.appendChild(option);
+        });
+    }
+
+    document.querySelectorAll("form input[name='action'][value='save_agent_setup']").forEach((actionInput) => {
+        const form = actionInput.closest("form");
+        if (!form) return;
+        const providerSelect = form.querySelector("select[name='default_provider']");
+        const modelSelect = form.querySelector("select[name='selected_model_name']");
+        if (!providerSelect || !modelSelect) return;
+
+        const syncModels = () => {
+            const providerId = providerSelect.value;
+            const providerConfig = providerModelsMap[providerId] || { models: [], recommended: "" };
+            const currentValue = modelSelect.value;
+            buildOptions(modelSelect, providerConfig.models || [], providerConfig.recommended || "", currentValue);
+        };
+
+        providerSelect.addEventListener("change", syncModels);
+        syncModels();
+    });
+})();
+</script>
 {% endblock %}

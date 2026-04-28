@@ -13,6 +13,16 @@ from core.utils.permissions import user_has_full_access
 from .domain import build_catalog_for_user
 from .models import ReportDefinition, ReportWorkspace
 from .permissions import OperationalReportsPermission, ManagerialReportsPermission, BuilderReportsPermission
+
+# Reportes con UI/dashboard propio (runner legacy por slug) que deben listarse también bajo «Declarativos»
+# en el Builder, sin marcar config como declarative-v1 (evita que QueryRunner delegue al motor declarativo).
+BUILDER_HYBRID_SLUGS = frozenset(
+    {
+        "ventas-objetivos-vs-bo",
+        "bo-stock-facturacion",
+        "stock-existencias",
+    }
+)
 class ReportsLoginRequiredMixin(LoginRequiredMixin):
     """
     Mixin personalizado para Reports que funciona con AdministraNETUser.
@@ -89,6 +99,7 @@ class ReportsCatalogView(ReportsLoginRequiredMixin, TemplateView):
         empresa = getattr(self.request.user, "empresa_activa", None)
         empresa_id = empresa.id if empresa else None
         catalog = build_catalog_for_user(self.request.user, empresa_id)
+
         is_supervisor_user = user_has_full_access(self.request.user)
 
         context.update(
@@ -111,6 +122,12 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
     """Detalle de un dashboard específico."""
 
     template_name = "reports/dashboard_detail.html"
+    EXECUTIVE_SLUG = "resumen-ejecutivo-ventas"
+
+    def get_template_names(self):
+        if self.kwargs.get("slug") == self.EXECUTIVE_SLUG:
+            return ["reports/executive_summary.html"]
+        return [self.template_name]
 
     def get_report(self) -> ReportDefinition:
         slug = self.kwargs.get("slug")
@@ -147,6 +164,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "report_config_for_script": config if isinstance(config, dict) else {},
             }
         )
+        if report.slug == self.EXECUTIVE_SLUG:
+            context["executive_summary_api_url"] = reverse("reports-api:reports-executive-summary")
+            context["pv_canal_api_url"] = reverse("reports-api:reports-pv-canal-ejecutivo")
         return context
 
 
@@ -212,13 +232,17 @@ class ReportBuilderListView(ReportsLoginRequiredMixin, TemplateView):
         # Separar declarativos y legacy
         declarative_reports = [r for r in all_reports if r.config and r.config.get("version") == "declarative-v1"]
         legacy_reports = [r for r in all_reports if not (r.config and r.config.get("version") == "declarative-v1")]
-        
+        builder_hybrid_count = sum(1 for r in all_reports if r.slug in BUILDER_HYBRID_SLUGS)
+        declarative_tab_count = len(declarative_reports) + builder_hybrid_count
+
         context.update(
             {
                 "page_title": _("Report Builder"),
                 "reports": all_reports,  # Todos los reportes para mostrar en la tabla
                 "declarative_reports": declarative_reports,
                 "legacy_reports": legacy_reports,
+                "builder_hybrid_slugs": BUILDER_HYBRID_SLUGS,
+                "declarative_tab_count": declarative_tab_count,
                 "builder_api_url": reverse("reports-api:reports-builder-config", kwargs={"slug": "placeholder"}).replace("placeholder", ""),
                 "builder_templates_api_url": reverse("reports-api:reports-builder-templates"),
             }

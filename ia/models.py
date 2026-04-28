@@ -519,3 +519,104 @@ class AgentMemoryFeedback(models.Model):
 
     def __str__(self) -> str:
         return f"{self.memory_item_id} - {self.feedback_value}"
+
+
+class LearningExampleSource(models.TextChoices):
+    """Origen del ejemplo para dataset de afinado / fine-tuning."""
+
+    AUTO_SUCCESS = "auto_success", _("Turno exitoso (automático)")
+    USER_POSITIVE = "user_positive", _("Valoración positiva del usuario")
+    USER_CORRECTION = "user_correction", _("Corrección del usuario")
+    ADMIN = "admin", _("Curado por administrador")
+
+
+class LearningExampleStatus(models.TextChoices):
+    """Estado en el flujo de revisión antes de exportar o entrenar."""
+
+    PENDING = "pending", _("Pendiente de revisión")
+    APPROVED = "approved", _("Aprobado para entrenamiento")
+    REJECTED = "rejected", _("Rechazado")
+    EXPORTED = "exported", _("Ya exportado a dataset externo")
+
+
+class AgentLearningExample(models.Model):
+    """
+    Ejemplo de conversación candidato para afinado del modelo (fine-tuning) o RAG.
+
+    No sustituye la memoria episódica: sirve para acumular pares supervisados
+    con revisión humana y exportación JSONL compatible con APIs de fine-tuning.
+    """
+
+    agent = models.ForeignKey(
+        AgentDefinition,
+        on_delete=models.CASCADE,
+        related_name="learning_examples",
+        verbose_name=_("Agente"),
+    )
+    conversation = models.ForeignKey(
+        AgentConversation,
+        on_delete=models.CASCADE,
+        related_name="learning_examples",
+        verbose_name=_("Conversación"),
+    )
+    execution = models.OneToOneField(
+        AgentExecution,
+        on_delete=models.CASCADE,
+        related_name="learning_example",
+        verbose_name=_("Ejecución origen"),
+    )
+    user_message = models.ForeignKey(
+        AgentMessage,
+        on_delete=models.CASCADE,
+        related_name="learning_examples_as_user",
+        verbose_name=_("Mensaje usuario"),
+    )
+    assistant_message = models.ForeignKey(
+        AgentMessage,
+        on_delete=models.CASCADE,
+        related_name="learning_examples_as_assistant",
+        verbose_name=_("Mensaje asistente"),
+    )
+    source = models.CharField(
+        max_length=32,
+        choices=LearningExampleSource.choices,
+        default=LearningExampleSource.AUTO_SUCCESS,
+        verbose_name=_("Origen"),
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=LearningExampleStatus.choices,
+        default=LearningExampleStatus.PENDING,
+        verbose_name=_("Estado"),
+    )
+    messages_payload = models.JSONField(
+        default=list,
+        verbose_name=_("Mensajes (formato chat)"),
+        help_text=_("Lista de {role, content} para export JSONL / fine-tuning."),
+    )
+    system_prompt_snapshot = models.TextField(blank=True, verbose_name=_("System prompt al capturar"))
+    review_notes = models.TextField(blank=True, verbose_name=_("Notas de revisión"))
+    reviewed_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Revisado el"))
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ia_learning_reviews",
+        verbose_name=_("Revisado por"),
+    )
+    metadata = models.JSONField(default=dict, blank=True, verbose_name=_("Metadata"))
+    created_at = models.DateTimeField(default=timezone.now, verbose_name=_("Creado"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Actualizado"))
+
+    class Meta:
+        verbose_name = _("Ejemplo de aprendizaje (IA)")
+        verbose_name_plural = _("Ejemplos de aprendizaje (IA)")
+        ordering = ("-created_at",)
+        indexes = [
+            models.Index(fields=["agent", "status"], name="ia_learn_agent_status_idx"),
+            models.Index(fields=["agent", "-created_at"], name="ia_learn_agent_created_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.agent.slug} — {self.get_status_display()} ({self.created_at:%Y-%m-%d})"

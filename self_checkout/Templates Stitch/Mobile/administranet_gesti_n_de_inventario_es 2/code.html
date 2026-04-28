@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AdministraNET - Gestión de Inventario</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#7f13ec",
+                        "background-light": "#f7f6f8",
+                        "background-dark": "#191022",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased">
+<div class="relative flex min-h-screen w-full flex-col max-w-[480px] mx-auto bg-white dark:bg-background-dark shadow-xl overflow-hidden">
+<!-- Header -->
+<header class="sticky top-0 z-20 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-primary/10">
+<div class="flex items-center p-4 justify-between">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary text-2xl">inventory_2</span>
+<h1 class="text-xl font-bold tracking-tight">Inventario</h1>
+</div>
+<button class="p-2 rounded-full hover:bg-primary/10 transition-colors">
+<span class="material-symbols-outlined text-slate-600 dark:text-slate-300">notifications</span>
+</button>
+</div>
+<!-- Search Bar -->
+<div class="px-4 pb-4">
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-slate-400">search</span>
+<input class="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-xl py-3 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-slate-400" placeholder="Buscar por nombre o SKU..." type="text"/>
+</div>
+</div>
+<!-- Categories -->
+<div class="flex gap-3 px-4 pb-4 overflow-x-auto hide-scrollbar">
+<button class="flex h-9 shrink-0 items-center justify-center rounded-xl bg-primary text-white px-5 text-sm font-semibold shadow-sm shadow-primary/30">
+                    Todos
+                </button>
+<button class="flex h-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-5 text-sm font-medium hover:bg-primary/10 hover:text-primary transition-colors">
+                    Café
+                </button>
+<button class="flex h-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-5 text-sm font-medium hover:bg-primary/10 hover:text-primary transition-colors">
+                    Pastelería
+                </button>
+<button class="flex h-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-5 text-sm font-medium hover:bg-primary/10 hover:text-primary transition-colors">
+                    Bebidas
+                </button>
+<button class="flex h-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary px-3 text-sm font-bold border border-primary/20">
+<span class="material-symbols-outlined text-lg">add</span>
+</button>
+</div>
+</header>
+<!-- Product List -->
+<main class="flex-1 overflow-y-auto px-4 py-4 space-y-3 pb-24">
+<!-- Product Card 1 -->
+<div class="flex items-center gap-4 bg-white dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 shadow-sm">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-lg size-16 flex-shrink-0" data-alt="Hot americano coffee in a white cup" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBcphbPhSVaAnRCrXqpswsmBF0iTjFcsEoiTJOG4saVIudl7GDCcyB-IiNtA6gX-FKMzhBpmqRGMmF7S_zCmz7qLeJgJ0MZjq0k6RGYYbBoSPOGztNu40R4HXYF3jLBDxpyT5FcWfPWwABRGt_Ifim0WutcMCsLVNpYR3ZhJg5P3vltwtzdq58jlx5-x0vUB-LyxDc-uuTlCne5OL60jtTD7G5Ads5WuBeFxWi8tMVsekyLPPIWxlLjJ0FwhWJ9GYiCRUIwZ-pecRM");'></div>
+<div class="flex flex-col flex-1 min-w-0">
+<div class="flex justify-between items-start">
+<h3 class="text-slate-900 dark:text-slate-100 text-base font-semibold leading-tight truncate">Café Americano</h3>
+<span class="material-symbols-outlined text-slate-400 text-xl cursor-pointer hover:text-primary">edit_note</span>
+</div>
+<p class="text-primary font-bold mt-1 text-sm">$3.50</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="size-2 rounded-full bg-emerald-500"></span>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-medium">Stock: 45 (Disponible)</p>
+</div>
+</div>
+</div>
+<!-- Product Card 2 -->
+<div class="flex items-center gap-4 bg-white dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 shadow-sm">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-lg size-16 flex-shrink-0" data-alt="Chocolate glazed cupcake on a plate" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA8yEp4Ajf-m_oSCgyi6sw7aOXRQ-ZwtIdXgIjHLB8PQxdXP-LxLyBvtgjwpKwGkux4KzbDDrv3kJC2n_Go_l6MGQ8Xzw1fFFjmsWF2zZjqmO3WiJW8lakIrkk1GwKerT4ATQDcmT-kj6NgicjISvqk_wFuE5ZgPWuPHY5WTXa7WijICyhCBSiNHsMmXUkcspOfuOWa9aNruFMue8CqIerqIcE7HStxskMwdE3ZqJoLBp1sFHG_jPwU-lgKhIBCYYtnoI3VyzwaVtY");'></div>
+<div class="flex flex-col flex-1 min-w-0">
+<div class="flex justify-between items-start">
+<h3 class="text-slate-900 dark:text-slate-100 text-base font-semibold leading-tight truncate">Cupcake Chocolate</h3>
+<span class="material-symbols-outlined text-slate-400 text-xl cursor-pointer hover:text-primary">edit_note</span>
+</div>
+<p class="text-primary font-bold mt-1 text-sm">$2.75</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="size-2 rounded-full bg-amber-500 animate-pulse"></span>
+<p class="text-amber-600 dark:text-amber-400 text-xs font-bold">Stock: 4 (Bajo)</p>
+</div>
+</div>
+</div>
+<!-- Product Card 3 -->
+<div class="flex items-center gap-4 bg-white dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 shadow-sm">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-lg size-16 flex-shrink-0" data-alt="Iced fruit tea in a tall glass" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCyxi7jV72nnwPw92kqkriJ25hPJAm-QbnZ0G3NPakx8X7bUuaRYiAo2pMwWEINzb9V2OPPv7-xGldW2NqRp5O-VBN5LojCRaI0gTkq5CxdXAXJGgVSViCpI-HwFnO7nafgIAbOkjN7UOhixES4ez9MfKnVEW-fyoNEbXpNFr05UWK1qkFRS7lJPRx_SnAfyyHz8rQ5oV1Ajxbmo2bDylTP9MdcVej_rCT7YrauOImqFZF2y8sy-ui24QPiybYxE7--txOBBbP1yxo");'></div>
+<div class="flex flex-col flex-1 min-w-0">
+<div class="flex justify-between items-start">
+<h3 class="text-slate-900 dark:text-slate-100 text-base font-semibold leading-tight truncate">Té Frío Frutos Rojos</h3>
+<span class="material-symbols-outlined text-slate-400 text-xl cursor-pointer hover:text-primary">edit_note</span>
+</div>
+<p class="text-primary font-bold mt-1 text-sm">$4.20</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="size-2 rounded-full bg-emerald-500"></span>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-medium">Stock: 22 (Disponible)</p>
+</div>
+</div>
+</div>
+<!-- Product Card 4 -->
+<div class="flex items-center gap-4 bg-white dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 shadow-sm">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-lg size-16 flex-shrink-0" data-alt="Doughnut with pink frosting and sprinkles" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCTm3zmVmekjwPXonKkPu0nzuSk5V4qziWVHKSoj-sNq092V-aW3A4e3ZUpbeOhhJo2BLiX_7B5Q02Em8PbTPD6IvQgka2v1OwpvZZbcONDO6T3cfuqcKi0n7JG8X9SwJ4-sNp59VZcP5jBreXC06sq4f4u65ijCnjVPEEmbQFvgvPiWyfqOC7qMZAOwF2_Z4Ore8Ja9pUu5ZDuPZXgmcE0Sx5b0cKmcnBw_i2zNPHkqJDFxJqMBvG7F9Qpb09cYkbStnuDvPPbgAs");'></div>
+<div class="flex flex-col flex-1 min-w-0">
+<div class="flex justify-between items-start">
+<h3 class="text-slate-900 dark:text-slate-100 text-base font-semibold leading-tight truncate">Dona Glaseada Rosa</h3>
+<span class="material-symbols-outlined text-slate-400 text-xl cursor-pointer hover:text-primary">edit_note</span>
+</div>
+<p class="text-primary font-bold mt-1 text-sm">$1.95</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="size-2 rounded-full bg-rose-500"></span>
+<p class="text-rose-600 dark:text-rose-400 text-xs font-bold">Sin Stock</p>
+</div>
+</div>
+</div>
+<!-- Product Card 5 -->
+<div class="flex items-center gap-4 bg-white dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700/50 shadow-sm opacity-80">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-lg size-16 flex-shrink-0" data-alt="Fresh orange juice in a glass" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAADhxU-74mStKeHMreoOZh7JKZbkdHc2ZAPwc2Pz43dTQK6DDNHES7Ub8PS94dQkc0fDefATBI1zLEMTA-MtzSahzgWAgUWmZZAY7IGwJZG6CSI1b1Ed638YK2qto_jwFbNDp4FANX9JD5QmuBL7inef2wg5m5QwYHCL2p_4bzDlNZRfhmRyOTbwPnYaW4H6Qa-aAMFTlFt8E19d3WyZrM4yieTVBYC5KlgWl2PQI7Y0yDbIv_mXOxfs93PA8pDdy6bMrpp2Tou-Y");'></div>
+<div class="flex flex-col flex-1 min-w-0">
+<div class="flex justify-between items-start">
+<h3 class="text-slate-900 dark:text-slate-100 text-base font-semibold leading-tight truncate">Jugo de Naranja Natural</h3>
+<span class="material-symbols-outlined text-slate-400 text-xl cursor-pointer hover:text-primary">edit_note</span>
+</div>
+<p class="text-primary font-bold mt-1 text-sm">$3.00</p>
+<div class="flex items-center gap-2 mt-1">
+<span class="size-2 rounded-full bg-emerald-500"></span>
+<p class="text-slate-500 dark:text-slate-400 text-xs font-medium">Stock: 15 (Disponible)</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed bottom-24 right-6 size-14 rounded-full bg-primary text-white shadow-lg shadow-primary/40 flex items-center justify-center hover:scale-110 active:scale-95 transition-transform z-30">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+<!-- Bottom Navigation Bar -->
+<nav class="fixed bottom-0 left-0 right-0 max-w-[480px] mx-auto border-t border-slate-100 dark:border-slate-800 bg-white/90 dark:bg-background-dark/90 backdrop-blur-lg px-4 pb-6 pt-3 flex justify-between items-center z-40">
+<a class="flex flex-col items-center gap-1 group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">point_of_sale</span>
+<span class="text-[10px] font-semibold text-slate-400 group-hover:text-primary">Ventas</span>
+</a>
+<a class="flex flex-col items-center gap-1" href="#">
+<span class="material-symbols-outlined text-primary">inventory_2</span>
+<span class="text-[10px] font-bold text-primary">Inventario</span>
+</a>
+<a class="flex flex-col items-center gap-1 group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">analytics</span>
+<span class="text-[10px] font-semibold text-slate-400 group-hover:text-primary">Reportes</span>
+</a>
+<a class="flex flex-col items-center gap-1 group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">group</span>
+<span class="text-[10px] font-semibold text-slate-400 group-hover:text-primary">Clientes</span>
+</a>
+<a class="flex flex-col items-center gap-1 group" href="#">
+<span class="material-symbols-outlined text-slate-400 group-hover:text-primary transition-colors">settings</span>
+<span class="text-[10px] font-semibold text-slate-400 group-hover:text-primary">Ajustes</span>
+</a>
+</nav>
+</div>
+</body></html>

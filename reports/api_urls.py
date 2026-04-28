@@ -1,5 +1,19 @@
 from django.urls import path
 
+from .ventas_netas_relay_views import (
+    VentasNetasGerenciaRelayAPIView,
+    VentasNetasRelayAPIView,
+)
+from .logistica_lista_comprobantes_rutas_views import (
+    LogisticaListaComprobantesClientesAutocompleteAPIView,
+    LogisticaListaComprobantesEntregaAPIView,
+    LogisticaListaComprobantesMotivosAPIView,
+    LogisticaListaComprobantesRemitoDetalleAPIView,
+)
+from .executive_summary_api_views import (
+    ExecutiveSummaryAPIView,
+    PuntoVentaCanalEjecutivoAPIView,
+)
 from .api_views import (
     ReconciliacionMovimientoDetalleAPIView,
     ReportCatalogAPIView,
@@ -36,7 +50,39 @@ from .api_views import (
 app_name = "reports-api"
 
 urlpatterns = [
+    path(
+        "ventas-netas/relay/",
+        VentasNetasRelayAPIView.as_view(),
+        name="reports-ventas-netas-relay",
+    ),
+    path(
+        "ventas-netas/relay/gerencia/",
+        VentasNetasGerenciaRelayAPIView.as_view(),
+        name="reports-ventas-netas-relay-gerencia",
+    ),
+    path(
+        "logistica/lista-comprobantes-rutas/clientes/autocomplete/",
+        LogisticaListaComprobantesClientesAutocompleteAPIView.as_view(),
+        name="reports-logistica-lista-cr-clientes-autocomplete",
+    ),
+    path(
+        "logistica/lista-comprobantes-rutas/remito/<int:cod_mov>/",
+        LogisticaListaComprobantesRemitoDetalleAPIView.as_view(),
+        name="reports-logistica-lista-cr-remito-detalle",
+    ),
+    path(
+        "logistica/lista-comprobantes-rutas/entrega/",
+        LogisticaListaComprobantesEntregaAPIView.as_view(),
+        name="reports-logistica-lista-cr-entrega",
+    ),
+    path(
+        "logistica/lista-comprobantes-rutas/motivos-no-entrega/",
+        LogisticaListaComprobantesMotivosAPIView.as_view(),
+        name="reports-logistica-lista-cr-motivos",
+    ),
     path("reconciliacion-movimiento-detalle/", ReconciliacionMovimientoDetalleAPIView.as_view(), name="reports-reconciliacion-movimiento-detalle"),
+    path("executive-summary/", ExecutiveSummaryAPIView.as_view(), name="reports-executive-summary"),
+    path("pv-canal-ejecutivo/", PuntoVentaCanalEjecutivoAPIView.as_view(), name="reports-pv-canal-ejecutivo"),
     path("catalog/", ReportCatalogAPIView.as_view(), name="reports-catalog"),
     path("query/", ReportQueryAPIView.as_view(), name="reports-query"),
     path("kpi/", KPIAPIView.as_view(), name="reports-kpi"),

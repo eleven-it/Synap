@@ -1,0 +1,444 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% trans "Automatic Synchronization Configuration" %}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+        <li class="inline-flex items-center">
+            <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                <span class="material-icons text-sm mr-2">dashboard</span>
+                {% trans "Dashboard" %}
+            </a>
+        </li>
+        <li>
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Auto Sync Configuration" %}</span>
+            </div>
+        </li>
+    </ol>
+</nav>
+
+<!-- Header Section -->
+<div class="mb-8">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white flex items-center">
+                <span class="material-icons text-3xl mr-3 text-green-600 dark:text-green-400">sync</span>
+                {% trans "Automatic Synchronization" %}
+            </h1>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                {% trans "Configure automatic synchronization intervals and preferences" %}
+            </p>
+        </div>
+        <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+            <span class="material-icons text-sm mr-2">arrow_back</span>
+            {% trans "Back to Dashboard" %}
+        </a>
+    </div>
+</div>
+
+<!-- Configuration Card -->
+<div class="max-w-4xl mx-auto">
+    <form method="post" id="auto-sync-form">
+        {% csrf_token %}
+        
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden mb-6">
+            <!-- Master Switch Section -->
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="bg-white dark:bg-gray-700 p-3 rounded-full">
+                            <span class="material-icons text-3xl text-green-600 dark:text-green-400" id="master-icon">sync</span>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Automatic Synchronization" %}</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">
+                                <span id="status-text">
+                                    {% if config.auto_sync %}
+                                        {% trans "Currently enabled - Active synchronization" %}
+                                    {% else %}
+                                        {% trans "Currently disabled - Manual synchronization only" %}
+                                    {% endif %}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Toggle Switch -->
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="auto_sync" id="auto-sync-toggle" class="sr-only peer" {% if config.auto_sync %}checked{% endif %}>
+                        <div class="w-14 h-7 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Sync Interval Section -->
+            <div class="p-6 border-b border-gray-200 dark:border-gray-700" id="interval-section">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                    <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">schedule</span>
+                    {% trans "Synchronization Interval" %}
+                </h3>
+                
+                <!-- Interval Selector -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    {% for value, label in interval_choices %}
+                    <div class="interval-option" data-minutes="{{ value }}">
+                        <input type="radio" name="sync_interval" id="interval-{{ value }}" value="{{ value }}" class="hidden peer" {% if config.sync_interval == value|add:0 %}checked{% endif %}>
+                        <label for="interval-{{ value }}" class="flex flex-col items-center justify-center p-4 text-center border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 peer-checked:border-green-600 peer-checked:bg-green-50 dark:border-gray-700 dark:hover:bg-gray-700 dark:peer-checked:border-green-500 dark:peer-checked:bg-green-900/20 transition-all duration-200">
+                            <span class="text-2xl font-bold text-gray-900 dark:text-white">{{ value }}</span>
+                            <span class="text-xs text-gray-600 dark:text-gray-400 mt-1">{{ label }}</span>
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Custom Interval -->
+                <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                    <label class="flex items-center space-x-3 cursor-pointer">
+                        <input type="checkbox" id="custom-interval-toggle" class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{% trans "Use custom interval" %}</span>
+                    </label>
+                    
+                    <div id="custom-interval-input" class="mt-3 hidden">
+                        <div class="flex items-center space-x-3">
+                            <input type="number" id="custom-sync-interval" name="custom_sync_interval" min="1" max="1440" class="w-32 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="60">
+                            <span class="text-sm text-gray-600 dark:text-gray-400">{% trans "minutes" %}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">({% trans "1-1440 minutes" %})</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Sync Info -->
+                <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <div class="flex items-center text-sm text-blue-800 dark:text-blue-300">
+                        <span class="material-icons text-sm mr-2">info</span>
+                        <div>
+                            <strong>{% trans "Last sync:" %}</strong> 
+                            <span id="last-sync-time">
+                                {% if config.last_sync %}
+                                    {{ config.last_sync|date:"d/m/Y H:i" }}
+                                {% else %}
+                                    {% trans "Never" %}
+                                {% endif %}
+                            </span>
+                            <span class="mx-2">|</span>
+                            <strong>{% trans "Next sync:" %}</strong> 
+                            <span id="next-sync-time">{% trans "Calculating..." %}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- What to Sync Section -->
+            <div class="p-6">
+                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                    <span class="material-icons text-purple-600 dark:text-purple-400 mr-2">checklist</span>
+                    {% trans "What to Synchronize" %}
+                </h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Products -->
+                    <label class="flex items-center p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 transition-all duration-200 has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50 dark:has-[:checked]:border-purple-500 dark:has-[:checked]:bg-purple-900/20">
+                        <input type="checkbox" name="sync_products" class="rounded border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500 mr-3" {% if config.sync_products %}checked{% endif %}>
+                        <div class="flex items-center flex-1">
+                            <span class="material-icons text-purple-600 dark:text-purple-400 mr-3">inventory_2</span>
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">{% trans "Products" %}</p>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">{% trans "Sync product data" %}</p>
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Customers -->
+                    <label class="flex items-center p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 transition-all duration-200 has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50 dark:has-[:checked]:border-purple-500 dark:has-[:checked]:bg-purple-900/20">
+                        <input type="checkbox" name="sync_customers" class="rounded border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500 mr-3" {% if config.sync_customers %}checked{% endif %}>
+                        <div class="flex items-center flex-1">
+                            <span class="material-icons text-purple-600 dark:text-purple-400 mr-3">people</span>
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">{% trans "Customers" %}</p>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">{% trans "Sync customer data" %}</p>
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Orders -->
+                    <label class="flex items-center p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 transition-all duration-200 has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50 dark:has-[:checked]:border-purple-500 dark:has-[:checked]:bg-purple-900/20">
+                        <input type="checkbox" name="sync_orders" class="rounded border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500 mr-3" {% if config.sync_orders %}checked{% endif %}>
+                        <div class="flex items-center flex-1">
+                            <span class="material-icons text-purple-600 dark:text-purple-400 mr-3">receipt_long</span>
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">{% trans "Orders" %}</p>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">{% trans "Sync order data" %}</p>
+                            </div>
+                        </div>
+                    </label>
+
+                    <!-- Stock -->
+                    <label class="flex items-center p-4 border-2 border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-700 transition-all duration-200 has-[:checked]:border-purple-600 has-[:checked]:bg-purple-50 dark:has-[:checked]:border-purple-500 dark:has-[:checked]:bg-purple-900/20">
+                        <input type="checkbox" name="sync_stock" class="rounded border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500 mr-3" {% if config.sync_stock %}checked{% endif %}>
+                        <div class="flex items-center flex-1">
+                            <span class="material-icons text-purple-600 dark:text-purple-400 mr-3">warehouse</span>
+                            <div>
+                                <p class="font-medium text-gray-900 dark:text-white">{% trans "Stock" %}</p>
+                                <p class="text-xs text-gray-600 dark:text-gray-400">{% trans "Sync stock levels" %}</p>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <div class="flex items-center justify-between">
+                    <button type="button" id="test-sync-btn" class="inline-flex items-center px-4 py-2 text-sm font-medium text-blue-700 bg-blue-100 border border-blue-300 rounded-lg hover:bg-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-600 dark:hover:bg-blue-900/40">
+                        <span class="material-icons text-sm mr-2">play_arrow</span>
+                        {% trans "Test Sync Now" %}
+                    </button>
+                    
+                    <div class="flex items-center space-x-3">
+                        <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">
+                            <span class="material-icons text-sm mr-2">close</span>
+                            {% trans "Cancel" %}
+                        </a>
+                        <button type="submit" class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-500 to-green-600 border border-transparent rounded-lg hover:from-green-600 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                            <span class="material-icons text-sm mr-2">save</span>
+                            {% trans "Save Configuration" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Statistics Card -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+            <span class="material-icons text-yellow-600 dark:text-yellow-400 mr-2">analytics</span>
+            {% trans "Synchronization Statistics" %}
+        </h3>
+        
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <div class="text-2xl font-bold text-green-600 dark:text-green-400">{{ stats.total_syncs }}</div>
+                <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">{% trans "Total Syncs" %}</div>
+            </div>
+            <div class="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ stats.successful_syncs }}</div>
+                <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">{% trans "Successful" %}</div>
+            </div>
+            <div class="text-center p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                <div class="text-2xl font-bold text-red-600 dark:text-red-400">{{ stats.failed_syncs }}</div>
+                <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">{% trans "Failed" %}</div>
+            </div>
+            <div class="text-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <div class="text-2xl font-bold text-purple-600 dark:text-purple-400">{{ stats.avg_duration }}s</div>
+                <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">{% trans "Avg Duration" %}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Toast utility
+    function showToast(message, type = 'info', duration = 5000) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        
+        let bgColor, borderColor, textColor, iconColor, icon;
+        switch(type) {
+            case 'success':
+                bgColor = 'bg-green-50 dark:bg-green-900/20';
+                borderColor = 'border-green-200 dark:border-green-700';
+                textColor = 'text-green-800 dark:text-green-200';
+                iconColor = 'text-green-600 dark:text-green-400';
+                icon = 'check_circle';
+                break;
+            case 'error':
+                bgColor = 'bg-red-50 dark:bg-red-900/20';
+                borderColor = 'border-red-200 dark:border-red-700';
+                textColor = 'text-red-800 dark:text-red-200';
+                iconColor = 'text-red-600 dark:text-red-400';
+                icon = 'error';
+                break;
+            default:
+                bgColor = 'bg-blue-50 dark:bg-blue-900/20';
+                borderColor = 'border-blue-200 dark:border-blue-700';
+                textColor = 'text-blue-800 dark:text-blue-200';
+                iconColor = 'text-blue-600 dark:text-blue-400';
+                icon = 'info';
+        }
+        
+        toast.className = `${bgColor} ${borderColor} ${textColor} border rounded-lg p-4 shadow-lg transform transition-all duration-300 translate-x-full`;
+        toast.innerHTML = `
+            <div class="flex items-start">
+                <span class="material-icons ${iconColor} mr-3 mt-0.5">${icon}</span>
+                <div class="flex-1">
+                    <p class="text-sm ${textColor}">${message}</p>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <span class="material-icons text-sm">close</span>
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(toast);
+        setTimeout(() => toast.classList.remove('translate-x-full'), 100);
+        setTimeout(() => {
+            toast.classList.add('translate-x-full');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    }
+
+    // Toggle master switch
+    const autoSyncToggle = document.getElementById('auto-sync-toggle');
+    const intervalSection = document.getElementById('interval-section');
+    const masterIcon = document.getElementById('master-icon');
+    const statusText = document.getElementById('status-text');
+
+    autoSyncToggle.addEventListener('change', function() {
+        if (this.checked) {
+            intervalSection.classList.remove('opacity-50', 'pointer-events-none');
+            masterIcon.textContent = 'sync';
+            masterIcon.classList.add('animate-spin');
+            statusText.textContent = '{% trans "Currently enabled - Active synchronization" %}';
+            showToast('{% trans "Automatic synchronization enabled" %}', 'success');
+        } else {
+            intervalSection.classList.add('opacity-50', 'pointer-events-none');
+            masterIcon.textContent = 'sync_disabled';
+            masterIcon.classList.remove('animate-spin');
+            statusText.textContent = '{% trans "Currently disabled - Manual synchronization only" %}';
+            showToast('{% trans "Automatic synchronization disabled" %}', 'info');
+        }
+    });
+
+    // Initialize state
+    if (!autoSyncToggle.checked) {
+        intervalSection.classList.add('opacity-50', 'pointer-events-none');
+        masterIcon.textContent = 'sync_disabled';
+    }
+
+    // Custom interval toggle
+    const customToggle = document.getElementById('custom-interval-toggle');
+    const customInput = document.getElementById('custom-interval-input');
+    const intervalOptions = document.querySelectorAll('.interval-option input');
+
+    customToggle.addEventListener('change', function() {
+        if (this.checked) {
+            customInput.classList.remove('hidden');
+            intervalOptions.forEach(opt => opt.disabled = true);
+        } else {
+            customInput.classList.add('hidden');
+            intervalOptions.forEach(opt => opt.disabled = false);
+        }
+    });
+
+    // Calculate next sync time
+    function updateNextSyncTime() {
+        const lastSyncText = document.getElementById('last-sync-time').textContent;
+        const selectedInterval = document.querySelector('input[name="sync_interval"]:checked');
+        
+        if (!selectedInterval || lastSyncText === '{% trans "Never" %}') {
+            document.getElementById('next-sync-time').textContent = '{% trans "After first sync" %}';
+            return;
+        }
+        
+        const minutes = parseInt(selectedInterval.value);
+        const now = new Date();
+        const nextSync = new Date(now.getTime() + minutes * 60000);
+        
+        const options = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+        document.getElementById('next-sync-time').textContent = nextSync.toLocaleString('es-AR', options);
+    }
+
+    // Update next sync time on interval change
+    document.querySelectorAll('input[name="sync_interval"]').forEach(radio => {
+        radio.addEventListener('change', updateNextSyncTime);
+    });
+
+    // Initial calculation
+    updateNextSyncTime();
+
+    // Test sync button
+    document.getElementById('test-sync-btn').addEventListener('click', function() {
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-icons text-sm mr-2 animate-spin">refresh</span>{% trans "Testing..." %}';
+        
+        showToast('{% trans "Starting test synchronization..." %}', 'info');
+        
+        fetch('{% url "tiendanube_administranet:trigger_sync_ajax" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                sync_type: 'full',
+                direction: 'tiendanube'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success', 8000);
+            } else {
+                showToast(data.message, 'error', 8000);
+            }
+        })
+        .catch(error => {
+            showToast('{% trans "Error during test sync" %}', 'error');
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-icons text-sm mr-2">play_arrow</span>{% trans "Test Sync Now" %}';
+        });
+    });
+
+    // Form submission
+    document.getElementById('auto-sync-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(this);
+        const submitBtn = this.querySelector('button[type="submit"]');
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="material-icons text-sm mr-2 animate-spin">refresh</span>{% trans "Saving..." %}';
+        
+        fetch('{% url "tiendanube_administranet:auto_sync_config" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                setTimeout(() => window.location.reload(), 2000);
+            } else {
+                showToast(data.message, 'error');
+            }
+        })
+        .catch(error => {
+            showToast('{% trans "Error saving configuration" %}', 'error');
+        })
+        .finally(() => {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<span class="material-icons text-sm mr-2">save</span>{% trans "Save Configuration" %}';
+        });
+    });
+</script>
+{% endblock %}
+

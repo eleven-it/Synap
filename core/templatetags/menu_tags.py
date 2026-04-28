@@ -34,6 +34,8 @@ def get_current_module(context):
     app_name = request.resolver_match.app_name
     if app_name == 'core':
         return 'settings'
+    elif app_name == 'self_checkout':
+        return 'self_checkout'
     elif app_name == 'factura_compra_captura_web':
         return 'compras'
     elif app_name == 'compras':

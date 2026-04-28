@@ -1,0 +1,337 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+{% load i18n %}
+
+{% block admin_content %}
+<div class="max-w-5xl mx-auto px-4 py-6">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">{% trans "Migración de esquema MySQL (legacy)" %}</h1>
+    <p class="mt-2 text-sm text-gray-600 dark:text-gray-400 max-w-3xl">
+      {% trans "Aplica ALTER en la base AdministraNET de la empresa activa (no sustituye a migrate de Django/PostgreSQL). Solo usuario supervisor." %}
+    </p>
+    {% if base_empresa %}
+    <p class="mt-2 text-sm">
+      <span class="font-medium text-gray-700 dark:text-gray-300">{% trans "Base empresa:" %}</span>
+      <code class="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">{{ base_empresa }}</code>
+    </p>
+    {% else %}
+    <p class="mt-2 text-sm text-amber-700 dark:text-amber-300">{% trans "Sin base_empresa en sesión." %}</p>
+    {% endif %}
+    {% if base_empresa %}
+    <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+      <p class="font-medium">{% trans "Si la página tarda mucho o parece colgada" %}</p>
+      <p class="mt-1 text-xs leading-relaxed">
+        {% trans "La ejecución puede tardar minutos en tablas grandes o si otra aplicación tiene abierta la misma tabla." %}
+        {% trans "Mientras tanto verás mensajes de avance en pantalla." %}
+        {% trans "En el servidor también quedan trazas en el log (p. ej. «legacy_mysql_schema»). Si el navegador cortara la conexión, puede usarse la CLI:" %}
+        <code class="block mt-1 whitespace-pre-wrap break-all bg-white/60 dark:bg-black/30 px-2 py-1 rounded text-[11px]">docker exec Synap_app python manage.py apply_alter_detalle_trazabilidad {{ base_empresa }}</code>
+      </p>
+      <p class="mt-3 text-xs leading-relaxed border-t border-amber-200/80 dark:border-amber-800/60 pt-2">
+        <span class="font-medium">{% trans "Bloqueo «metadata lock» (pocas filas y aun así no avanza)" %}:</span>
+        {% trans "MySQL puede poner en cola los cambios de estructura aunque la tabla tenga pocos registros, si otra sesión (VB6, HeidiSQL, otro Synap, informes) sigue conectada a esa base o dejó una transacción abierta." %}
+        {% trans "En SHOW PROCESSLIST suele verse «Waiting for table metadata lock»." %}
+        {% trans "Cierre otras pantallas que usen listas de producción, no ejecute varias migraciones a la vez y, si hace falta, identifique la sesión que retiene el bloqueo con la ayuda del DBA (p. ej. performance_schema.metadata_locks en MySQL 8)." %}
+      </p>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if messages %}
+  <ul class="mb-6 space-y-2">
+    {% for message in messages %}
+    <li class="text-sm px-3 py-2 rounded border {% if message.tags == 'success' %}border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-100{% elif message.tags == 'error' %}border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-900/30 dark:text-red-100{% else %}border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50{% endif %}">
+      {{ message }}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if last_result and last_result.migrations_applied %}
+  <div class="mb-4 text-sm text-gray-700 dark:text-gray-300">
+    <span class="font-medium">{% trans "Aplicado:" %}</span>
+    <ul class="list-disc list-inside mt-1">
+      {% for m in last_result.migrations_applied %}
+      <li>{{ m }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if last_result and last_result.migrations_failed %}
+  <div class="mb-4 text-sm text-red-800 dark:text-red-200">
+    <span class="font-medium">{% trans "Fallos:" %}</span>
+    <ul class="list-disc list-inside mt-1">
+      {% for m in last_result.migrations_failed %}
+      <li>{{ m }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <div class="bg-white dark:bg-gray-900 rounded-lg shadow border border-gray-100 dark:border-gray-800 overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-2">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{% trans "Proveedores" %}</h2>
+      {% if base_empresa %}
+      <form method="post"
+            action="{% url 'core:legacy_mysql_schema' %}"
+            class="inline mysql-schema-migrate-form"
+            data-schema-run="all"
+            data-modal-title="{% filter escapejs %}{% trans "Actualizamos la base de la empresa" %}{% endfilter %}"
+            data-confirm="{% filter escapejs %}{% trans "¿Ejecutar todos los pasos en orden? Se pueden modificar tablas en la base indicada." %}{% endfilter %}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="run_all">
+        <button type="submit" class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-60">
+          <span class="material-icons text-base">play_arrow</span>
+          <span class="mysql-schema-btn-label">{% trans "Ejecutar todos" %}</span>
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    <ul class="divide-y divide-gray-100 dark:divide-gray-800">
+      {% for p in providers %}
+      <li class="px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div class="font-medium text-gray-900 dark:text-gray-100">{{ p.title }}</div>
+          <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">{{ p.description }}</p>
+          <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded
+            {% if p.risk == 'bajo' %}bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-200
+            {% elif p.risk == 'medio' %}bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200
+            {% else %}bg-red-100 text-red-900 dark:bg-red-900/40 dark:text-red-200{% endif %}">
+            {% trans "Riesgo:" %} {{ p.risk }}
+          </span>
+        </div>
+        {% if base_empresa %}
+        <form method="post"
+              action="{% url 'core:legacy_mysql_schema' %}"
+              class="shrink-0 mysql-schema-migrate-form"
+              data-schema-run="one"
+              data-provider-id="{{ p.id }}"
+              data-modal-title="{% trans "Aplicando" %} — {{ p.title|escape }}"
+              data-confirm="{% filter escapejs %}{% trans "¿Ejecutar este paso sobre la base de la sesión?" %}{% endfilter %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="run_one">
+          <input type="hidden" name="provider" value="{{ p.id }}">
+          <button type="submit" class="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-800 dark:text-gray-200 disabled:opacity-60">
+            <span class="material-icons text-base">build</span>
+            <span class="mysql-schema-btn-label">{% trans "Ejecutar" %}</span>
+          </button>
+        </form>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <p class="mt-6 text-xs text-gray-500 dark:text-gray-400">
+    {% trans "Documentación:" %} <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">docs/general/HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md</code>
+  </p>
+</div>
+
+{# Modal de espera (mismo lenguaje visual que reports: backdrop + barra + spinner) #}
+<div id="mysql-schema-loading-modal"
+     class="hidden fixed inset-0 z-[9999] p-4 sm:p-8 bg-slate-950/60 backdrop-blur-sm pointer-events-auto transition-opacity duration-200"
+     aria-hidden="true"
+     aria-busy="false"
+     role="alertdialog"
+     aria-labelledby="mysql-schema-loading-title">
+  <div class="relative w-full max-w-md rounded-2xl border border-slate-200/80 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-2xl shadow-sky-900/10 overflow-hidden mx-auto">
+    <div class="absolute inset-x-0 top-0 h-1.5 overflow-hidden bg-slate-200/50 dark:bg-slate-700/50">
+      <div class="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-500 via-violet-500 to-emerald-400 animate-[mysql-schema-load-bar_1.4s_ease-in-out_infinite]"></div>
+    </div>
+    <div class="px-8 pt-10 pb-8 flex flex-col items-center text-center gap-5">
+      <div class="relative w-16 h-16">
+        <div class="absolute inset-0 rounded-full border-4 border-slate-200 dark:border-slate-600"></div>
+        <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-sky-500 border-r-violet-500 animate-spin" style="animation-duration: 0.9s;"></div>
+        <div class="absolute inset-2 rounded-full border-2 border-transparent border-b-emerald-400/80 animate-spin" style="animation-duration: 1.4s; animation-direction: reverse;"></div>
+      </div>
+      <div>
+        <p id="mysql-schema-loading-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100 tracking-tight">{% trans "Un momento…" %}</p>
+        <p id="mysql-schema-loading-subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed min-h-[2.75rem]">{% trans "Preparando la operación…" %}</p>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+  @keyframes mysql-schema-load-bar {
+    0%, 100% { transform: translateX(-100%); width: 40%; }
+    50% { transform: translateX(200%); width: 55%; }
+  }
+</style>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<script>
+(function () {
+  var modal = document.getElementById('mysql-schema-loading-modal');
+  var titleEl = document.getElementById('mysql-schema-loading-title');
+  var subEl = document.getElementById('mysql-schema-loading-subtitle');
+  var rotateTimer = null;
+  var procesando = '{% filter escapejs %}{% trans "Procesando…" %}{% endfilter %}';
+
+  var MSGS_ALL = [
+    '{% filter escapejs %}{% trans "Conectamos con la base de datos de la empresa." %}{% endfilter %}',
+    '{% filter escapejs %}{% trans "Vamos aplicando cada grupo de mejoras, con calma." %}{% endfilter %}',
+    '{% filter escapejs %}{% trans "Si tarda un poco, es porque hay bastante información que revisar." %}{% endfilter %}',
+    '{% filter escapejs %}{% trans "Seguimos; no cierres esta ventana hasta que termine." %}{% endfilter %}',
+    '{% filter escapejs %}{% trans "Ya vamos cerrando los últimos bloques." %}{% endfilter %}',
+    '{% filter escapejs %}{% trans "Casi listo; gracias por la paciencia." %}{% endfilter %}'
+  ];
+  var MSGS_ONE_DEFAULT = [
+    '{% filter escapejs %}{% trans "Preparamos el cambio pedido en tu base." %}{% endfilter %}',
+    '{% filter escapejs %}{% trans "Lo estamos aplicando con cuidado." %}{% endfilter %}',
+    '{% filter escapejs %}{% trans "Puede llevar unos minutos si la tabla es grande." %}{% endfilter %}',
+    '{% filter escapejs %}{% trans "Seguimos trabajando; no cierres esta ventana." %}{% endfilter %}',
+    '{% filter escapejs %}{% trans "Un poco más y mostramos el resultado." %}{% endfilter %}'
+  ];
+  var MSGS_BY_PROVIDER = {
+    tiendanube_integration: [
+      '{% filter escapejs %}{% trans "Dejamos listos los datos para que Tienda Nube y el sistema hablen bien entre sí." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Añadimos o revisamos lo necesario en clientes y artículos." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Seguimos; esto ayuda a que las sincronizaciones no fallen." %}{% endfilter %}'
+    ],
+    mpr_deposito_articulo: [
+      '{% filter escapejs %}{% trans "Ajustamos depósitos y artículos para el módulo de producción (MPR)." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Así el stock y la reserva se entienden igual en pantalla y en la base." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Un momento más y queda aplicado." %}{% endfilter %}'
+    ],
+    mpr_lista_produccion_agrupada: [
+      '{% filter escapejs %}{% trans "Preparamos la lista resumida de lo que hay que producir." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Creamos o completamos la tabla que agrupa la demanda por artículo." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Seguimos; es un paso importante para las órdenes de trabajo." %}{% endfilter %}'
+    ],
+    mpr_lista_produccion_detalle: [
+      '{% filter escapejs %}{% trans "Preparamos el detalle por pedido y artículo para producción." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Así el botón «Actualizar» y la ventana Pack tienen datos coherentes." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Puede tardar si hay muchos pedidos; es normal." %}{% endfilter %}'
+    ],
+    mpr_lista_produccion_trazabilidad: [
+      '{% filter escapejs %}{% trans "Unimos bien el detalle con la lista agrupada de producción." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Este paso es delicado: lo hacemos despacio para no perder vínculos." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Si tarda varios minutos, suele ser por el tamaño de la tabla o porque otra sesión la está usando." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Seguimos; no cierres esta ventana." %}{% endfilter %}'
+    ],
+    self_checkout_core_tables: [
+      '{% filter escapejs %}{% trans "Preparamos las tablas del autoservicio (kiosco y carrito)." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Así el checkout puede guardar sesiones y pedidos sin sorpresas." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Casi listo." %}{% endfilter %}'
+    ],
+    viajantes_objetivos_ventas: [
+      '{% filter escapejs %}{% trans "Preparamos las tablas de objetivos de venta por período." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Así los informes pueden leer metas y resultados juntos." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Un momento más." %}{% endfilter %}'
+    ]
+  };
+
+  function showLoadingModal(title, firstSubtitle) {
+    if (!modal || !titleEl || !subEl) return;
+    titleEl.textContent = title || '{% filter escapejs %}{% trans "Un momento…" %}{% endfilter %}';
+    subEl.textContent = firstSubtitle || '{% filter escapejs %}{% trans "Trabajando…" %}{% endfilter %}';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex', 'items-center', 'justify-center');
+    modal.setAttribute('aria-hidden', 'false');
+    modal.setAttribute('aria-busy', 'true');
+  }
+
+  function hideLoadingModal() {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.classList.remove('flex', 'items-center', 'justify-center');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.setAttribute('aria-busy', 'false');
+  }
+
+  function stopRotation() {
+    if (rotateTimer) {
+      clearInterval(rotateTimer);
+      rotateTimer = null;
+    }
+  }
+
+  function startRotation(messages) {
+    stopRotation();
+    if (!messages || !messages.length || !subEl) return;
+    var i = 0;
+    subEl.textContent = messages[0];
+    rotateTimer = setInterval(function () {
+      i = (i + 1) % messages.length;
+      subEl.textContent = messages[i];
+    }, 4500);
+  }
+
+  function messagesForForm(form) {
+    var run = form.getAttribute('data-schema-run') || '';
+    if (run === 'all') return MSGS_ALL;
+    var pid = form.getAttribute('data-provider-id') || '';
+    if (MSGS_BY_PROVIDER[pid]) return MSGS_BY_PROVIDER[pid];
+    return MSGS_ONE_DEFAULT;
+  }
+
+  function getCookie(name) {
+    var v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return v ? decodeURIComponent(v[2]) : null;
+  }
+
+  function setAllSubmitDisabled(disabled) {
+    document.querySelectorAll('form.mysql-schema-migrate-form button[type="submit"]').forEach(function (btn) {
+      btn.disabled = disabled;
+      var label = btn.querySelector('.mysql-schema-btn-label');
+      if (label) {
+        if (disabled) label.textContent = procesando;
+        else {
+          var form = btn.closest('form');
+          if (form && form.getAttribute('data-schema-run') === 'all') {
+            label.textContent = '{% filter escapejs %}{% trans "Ejecutar todos" %}{% endfilter %}';
+          } else {
+            label.textContent = '{% filter escapejs %}{% trans "Ejecutar" %}{% endfilter %}';
+          }
+        }
+      }
+    });
+  }
+
+  document.querySelectorAll('form.mysql-schema-migrate-form').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var confirmText = form.getAttribute('data-confirm') || '';
+      if (confirmText && !window.confirm(confirmText)) return;
+
+      var modalTitle = form.getAttribute('data-modal-title') || '{% filter escapejs %}{% trans "Actualizando la base de datos" %}{% endfilter %}';
+      var msgs = messagesForForm(form);
+      showLoadingModal(modalTitle, msgs[0]);
+      startRotation(msgs);
+      setAllSubmitDisabled(true);
+
+      var fd = new FormData(form);
+      var csrf = form.querySelector('[name=csrfmiddlewaretoken]');
+      var headers = { 'X-Requested-With': 'XMLHttpRequest' };
+      if (csrf && csrf.value) headers['X-CSRFToken'] = csrf.value;
+      else {
+        var c = getCookie('csrftoken');
+        if (c) headers['X-CSRFToken'] = c;
+      }
+
+      /* No usar form.action: un <input name="action"> sombrea la URL y devuelve el nodo (404 …/[object%20HTMLInputElement]). */
+      var postUrl = form.getAttribute('action') || window.location.pathname;
+      fetch(postUrl, {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin',
+        headers: headers
+      })
+        .then(function (res) { return res.text(); })
+        .then(function (html) {
+          stopRotation();
+          hideLoadingModal();
+          document.open();
+          document.write(html);
+          document.close();
+        })
+        .catch(function (err) {
+          stopRotation();
+          hideLoadingModal();
+          setAllSubmitDisabled(false);
+          window.alert('{% filter escapejs %}{% trans "No se pudo completar la operación. Compruebe la conexión e inténtelo de nuevo." %}{% endfilter %}');
+          if (window.console && console.error) console.error(err);
+        });
+    });
+  });
+})();
+</script>
+{% endblock admin_content %}

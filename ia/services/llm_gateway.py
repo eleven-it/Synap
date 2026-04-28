@@ -54,6 +54,19 @@ class LlmGatewayService:
             )
         raise LlmGatewayError(f"Tipo de proveedor no soportado: {provider_config.provider_kind}")
 
+    @staticmethod
+    def _openai_chat_completion_token_key(model_name: str) -> str:
+        """
+        Chat Completions: modelos recientes (p. ej. familia gpt-5) usan max_completion_tokens;
+        el resto suele aceptar max_tokens.
+        """
+        n = (model_name or "").strip().lower()
+        if n.startswith("gpt-5"):
+            return "max_completion_tokens"
+        if n.startswith(("o1", "o3", "o4")):
+            return "max_completion_tokens"
+        return "max_tokens"
+
     @classmethod
     def _call_openai_compatible(
         cls,
@@ -74,6 +87,7 @@ class LlmGatewayService:
         if memory_context:
             system_content = f"{system_content}\n\nContexto de memoria relevante:\n{memory_context}".strip()
 
+        token_key = cls._openai_chat_completion_token_key(model_name)
         payload = {
             "model": model_name,
             "messages": [
@@ -81,7 +95,7 @@ class LlmGatewayService:
                 {"role": "user", "content": user_message},
             ],
             "temperature": temperature,
-            "max_tokens": max_output_tokens,
+            token_key: max_output_tokens,
         }
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -96,6 +110,18 @@ class LlmGatewayService:
             headers=headers,
             timeout=cls.DEFAULT_TIMEOUT_SECONDS,
         )
+        # Algunos modelos (p. ej. gpt-5.x) no aceptan max_tokens y exigen max_completion_tokens.
+        if response.status_code == 400 and token_key == "max_tokens":
+            err_snippet = (response.text or "")[:800].lower()
+            if "max_completion_tokens" in err_snippet and "max_tokens" in err_snippet:
+                payload = {k: v for k, v in payload.items() if k not in ("max_tokens", "max_completion_tokens")}
+                payload["max_completion_tokens"] = max_output_tokens
+                response = requests.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    timeout=cls.DEFAULT_TIMEOUT_SECONDS,
+                )
         if response.status_code >= 400:
             raise LlmGatewayError(f"Error OpenAI/OpenAI-compatible: {response.status_code} {response.text[:400]}")
 

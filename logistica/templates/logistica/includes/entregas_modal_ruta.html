@@ -1,0 +1,35 @@
+{# Modal elegir ruta — pantallas táctiles #}
+<div
+  id="logistica-modal-ruta"
+  class="fixed inset-0 z-[200] hidden"
+  aria-modal="true"
+  role="dialog"
+  aria-labelledby="logistica-modal-ruta-titulo"
+  aria-hidden="true"
+>
+  <button
+    type="button"
+    class="absolute inset-0 w-full h-full bg-slate-900/50 dark:bg-black/60 backdrop-blur-[2px] border-0 cursor-default"
+    id="logistica-modal-ruta-backdrop"
+    aria-label="Cerrar"
+  ></button>
+  <div
+    class="absolute inset-x-0 bottom-0 max-h-[min(88vh,720px)] flex flex-col rounded-t-3xl border border-slate-200/90 dark:border-slate-600/80 bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-900/10 dark:ring-white/10 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:bottom-auto sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-lg sm:w-[calc(100%-2rem)] sm:rounded-3xl"
+  >
+    <div class="flex shrink-0 items-center justify-between gap-3 px-4 py-3 border-b border-slate-200/80 dark:border-slate-700/80">
+      <h2 id="logistica-modal-ruta-titulo" class="text-base font-semibold text-slate-900 dark:text-slate-50">Elegir ruta</h2>
+      <button
+        type="button"
+        id="logistica-modal-ruta-cerrar"
+        class="min-h-[44px] min-w-[44px] inline-flex items-center justify-center rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+        aria-label="Cerrar"
+      >
+        <span class="material-icons text-2xl" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <div
+      id="logistica-modal-ruta-lista"
+      class="overflow-y-auto overscroll-contain p-3 pb-6 sm:pb-4 flex-1 min-h-0 space-y-2"
+    ></div>
+  </div>
+</div>

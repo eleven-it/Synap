@@ -55,6 +55,19 @@ class ConversationMessageCreateSerializer(serializers.Serializer):
     message = serializers.CharField(max_length=5000)
 
 
+class LearningExampleReviewSerializer(serializers.Serializer):
+    """Revisión de un ejemplo capturado para el dataset de afinado."""
+
+    action = serializers.ChoiceField(choices=["approve", "reject", "mark_exported"])
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=4000)
+    corrected_assistant_text = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=50000,
+        help_text="Si se informa junto con approve, sustituye la respuesta del asistente en el payload exportable.",
+    )
+
+
 class AgentMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = AgentMessage

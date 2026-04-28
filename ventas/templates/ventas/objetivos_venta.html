@@ -1,0 +1,693 @@
+{% extends "base_app.html" %}
+{% load l10n %}
+{% block title %}Objetivos de venta | Synap{% endblock %}
+{% block content %}
+<section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
+  <div class="mx-auto flex w-full min-w-0 max-w-[1920px] flex-col px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
+
+    <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4" aria-label="Migas de pan">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <li><a href="{% url 'ventas:objetivos_periodos_list' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Objetivos de venta</a></li>
+        <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+        <li><span id="vo-migas-periodo" class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Período {{ id_periodo }}{% if periodo.descripcion and periodo.descripcion != '-' %} · {{ periodo.descripcion }}{% endif %}</span></li>
+      </ol>
+    </nav>
+
+    <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 sm:mb-4 sm:p-4">
+      <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div class="min-w-0 flex-1">
+          <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">Objetivos de venta</h1>
+          {% if puede_editar %}
+          <div class="mt-2 max-w-xl">
+            <label for="vo-desc-periodo" class="mb-1 block text-[10px] font-medium uppercase tracking-wide text-slate-400">Descripción del período</label>
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-stretch">
+              <input type="text" id="vo-desc-periodo" name="descripcion_periodo" maxlength="120" autocomplete="off"
+                     placeholder="Ej.: Objetivos marzo 2026"
+                     class="min-h-9 w-full min-w-0 flex-1 rounded-md border border-slate-600 bg-slate-900/50 px-2.5 py-1.5 text-sm text-white placeholder:text-slate-500 focus:border-purple-400 focus:outline-none focus:ring-1 focus:ring-purple-400"
+                     value="{% if periodo.descripcion and periodo.descripcion != '-' %}{{ periodo.descripcion }}{% endif %}" />
+              <button type="button" id="vo-btn-guardar-desc"
+                      class="inline-flex min-h-9 shrink-0 items-center justify-center gap-1 rounded-md border border-emerald-500/80 bg-emerald-700/90 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                <span class="material-icons text-base" aria-hidden="true">save</span>
+                Guardar descripción
+              </button>
+            </div>
+            <p id="vo-msg-desc" class="mt-1.5 min-h-[1.25rem] text-xs text-slate-400" role="status" aria-live="polite"></p>
+          </div>
+          {% elif periodo.descripcion and periodo.descripcion != '-' %}
+          <p id="vo-desc-solo-lectura" class="mt-1 text-sm font-medium text-slate-300">{{ periodo.descripcion }}</p>
+          {% endif %}
+        </div>
+        <div class="flex flex-wrap items-end gap-2 sm:gap-2.5">
+          <div class="flex flex-wrap items-end gap-3">
+            <div class="flex flex-col gap-0.5">
+              <span class="text-[10px] font-medium text-slate-400">Fecha desde</span>
+              <span class="rounded-md border border-slate-600 bg-slate-900/40 px-2 py-1 text-xs text-slate-200 tabular-nums">{{ fecha_desde|date:"d/m/Y" }}</span>
+            </div>
+            <div class="flex flex-col gap-0.5">
+              <span class="text-[10px] font-medium text-slate-400">Fecha hasta</span>
+              <span class="rounded-md border border-slate-600 bg-slate-900/40 px-2 py-1 text-xs text-slate-200 tabular-nums">{{ fecha_hasta|date:"d/m/Y" }}</span>
+            </div>
+          </div>
+          <a href="{% url 'ventas:objetivos_periodos_list' %}" class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+            <span class="material-icons text-base" aria-hidden="true">arrow_back</span>
+            Listado
+          </a>
+          <a href="{% if fecha_desde and fecha_hasta %}{% url 'reports:dashboard_detail' 'ventas-objetivos-vs-bo' %}?fecha_inicio_facturacion={{ fecha_desde|date:'Y-m-d' }}&amp;fecha_fin_facturacion={{ fecha_hasta|date:'Y-m-d' }}{% else %}{% url 'reports:dashboard_detail' 'ventas-objetivos-vs-bo' %}{% endif %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+            <span class="material-icons text-base" aria-hidden="true">assessment</span>
+            Reporte
+          </a>
+        </div>
+      </header>
+    </div>
+
+    {% if error_carga %}
+    <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+      {{ error_carga }}
+    </div>
+    {% endif %}
+    {% if periodo_anulado %}
+    <div class="mb-4 rounded-xl border border-slate-300 bg-slate-100 p-4 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-200">
+      Este período está <strong>anulado</strong>. Los objetivos no se usan en el informe y no pueden editarse.
+    </div>
+    {% endif %}
+
+    {% csrf_token %}
+
+    <div class="flex flex-col">
+      <div class="mb-3 flex min-w-0 flex-shrink-0 flex-wrap items-center gap-x-2 gap-y-2 border-b border-slate-200 pb-2 dark:border-slate-700 sm:mb-3 sm:gap-x-3 sm:pb-2.5">
+        <div class="flex flex-wrap items-center gap-1">
+          <button type="button" id="vo-tab-grupo" class="vo-tab inline-flex min-h-9 items-center justify-center rounded-t-lg px-3.5 py-2 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 bg-purple-600 text-white" data-panel="grupo">
+            Agrupado por vendedor
+          </button>
+          <button type="button" id="vo-tab-plano" class="vo-tab inline-flex min-h-9 items-center justify-center rounded-t-lg px-3.5 py-2 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600" data-panel="plano">
+            Listado completo
+          </button>
+        </div>
+        <div id="vo-toolbar-grupos" class="flex flex-wrap items-center gap-1.5 border-slate-200 pl-0 sm:border-l sm:pl-2.5 dark:border-slate-600">
+          <button type="button" id="vo-btn-expandir-todos" class="inline-flex min-h-8 items-center gap-0.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+            <span class="material-icons text-[15px]" aria-hidden="true">unfold_more</span>
+            Expandir todos
+          </button>
+          <button type="button" id="vo-btn-contraer-todos" class="inline-flex min-h-8 items-center gap-0.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+            <span class="material-icons text-[15px]" aria-hidden="true">unfold_less</span>
+            Contraer todos
+          </button>
+        </div>
+        <div class="min-w-0 w-full flex-[1_1_14rem] sm:max-w-md lg:max-w-lg">
+          <label for="vo-buscar-vendedor" class="sr-only">Buscar vendedor o cliente</label>
+          <input type="search" id="vo-buscar-vendedor" autocomplete="off" placeholder="Buscar vendedor o cliente…"
+                 class="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+        </div>
+        <div class="flex min-w-0 w-full flex-wrap items-baseline gap-x-1.5 gap-y-0.5 sm:ml-auto sm:w-auto sm:justify-end" role="status" aria-live="polite">
+          <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">Importe objetivo global:</span>
+          <span id="vo-importe-objetivo-global-val" class="text-base font-bold tabular-nums text-slate-500 dark:text-slate-400 md:text-lg">—</span>
+        </div>
+      </div>
+
+      {# Panel agrupado #}
+      <div id="vo-panel-grupo" class="vo-panel flex flex-col">
+        <div class="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 md:hidden">Deslizá horizontalmente</p>
+          <div class="h-[min(28rem,55vh)] min-h-[14rem] overflow-auto" role="region" aria-label="Objetivos por vendedor">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+              <thead class="sticky top-0 z-10 bg-slate-50 shadow-sm dark:bg-slate-800">
+                <tr class="align-bottom">
+                  <th colspan="2" class="border-b border-sky-400/80 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-sky-500/50 dark:bg-slate-800/90 dark:text-slate-100">Cliente</th>
+                  <th class="border-b-2 border-b-sky-500 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-sky-500 dark:bg-slate-800/90 dark:text-slate-100">Objetivo</th>
+                </tr>
+                <tr>
+                  <th scope="col" class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">ID cliente</th>
+                  <th scope="col" class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Nombre</th>
+                  <th scope="col" class="border-l border-slate-200 bg-slate-50 px-4 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200">Importe</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                {% for g in grupos %}
+                <tr class="vo-vendedor-header cursor-pointer select-none bg-slate-100/95 hover:bg-slate-200/90 dark:bg-slate-700/70 dark:hover:bg-slate-600/80"
+                    data-vo-search="{{ g.nombre_vendedor|escape }} {{ g.cod_viajante }}"
+                    data-grupo-id="{{ forloop.counter0 }}"
+                    data-grupo-expanded="0"
+                    role="button"
+                    tabindex="0"
+                    aria-expanded="false"
+                    aria-label="Expandir o contraer clientes de {{ g.nombre_vendedor|escape }}">
+                  <td colspan="3" class="px-2 py-2 sm:px-3">
+                    <div class="flex w-full flex-wrap items-center justify-between gap-2">
+                      <div class="flex min-w-0 flex-1 items-center gap-2">
+                        <span class="vo-chevron inline-flex w-7 flex-shrink-0 justify-center text-slate-500 dark:text-slate-400" aria-hidden="true">▸</span>
+                        <div class="min-w-0 flex-1">
+                          <span class="text-[13px] font-bold uppercase tracking-tight text-slate-900 dark:text-white">{{ g.nombre_vendedor }}</span>
+                          <span class="ml-1.5 text-[12px] font-medium text-slate-500 dark:text-slate-400">({{ g.clientes|length }})</span>
+                          <span class="ml-2 font-mono text-[10px] font-normal text-slate-400 dark:text-slate-500">#{{ g.cod_viajante }}</span>
+                        </div>
+                      </div>
+                      <span class="vo-subtotal-vendedor shrink-0 rounded-md px-2 py-1 text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-400" title="Suma de importes objetivo de los clientes de este vendedor" role="status">—</span>
+                    </div>
+                  </td>
+                </tr>
+                {% for c in g.clientes %}
+                <tr class="vo-fila-cliente vo-fila-grupo vo-grupo-child bg-white hover:bg-slate-50/90 dark:bg-slate-800 dark:hover:bg-slate-700/40 transition-colors"
+                    style="display: none;"
+                    data-parent-grupo="{{ forloop.parentloop.counter0 }}"
+                    data-vo-search="{{ g.nombre_vendedor|escape }} {{ c.codigo }} {{ c.nombre_cliente|escape }}">
+                  <td class="px-4 py-2 pl-10 font-mono text-[11px] text-slate-500 dark:text-slate-400 tabular-nums sm:pl-12">{{ c.codigo }}</td>
+                  <td class="px-4 py-2 text-[13px] text-slate-600 dark:text-slate-300">{{ c.nombre_cliente }}</td>
+                  <td class="border-l border-slate-100 bg-slate-50/90 px-4 py-2 text-right dark:border-slate-700 dark:bg-slate-800/35">
+                    {% if puede_editar %}
+                    <input type="text" inputmode="decimal" autocomplete="off" lang="es"
+                           class="vo-obj-input w-36 max-w-[min(100%,12rem)] rounded-md border border-slate-300 bg-white px-2 py-1 text-right font-mono text-sm tabular-nums text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                           data-codigo="{{ c.codigo }}" data-panel="grupo" data-obj-numeric="{{ c.objetivo }}" value="" />
+                    {% else %}
+                    <span class="font-mono text-sm tabular-nums text-slate-800 dark:text-slate-200" data-vo-obj-sum="{{ c.objetivo|unlocalize }}">{{ c.objetivo|stringformat:'.2f' }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+                {% empty %}
+                <tr>
+                  <td colspan="3" class="px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+                    No hay clientes con vendedor asignado o no se pudieron cargar datos.
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {# Panel listado plano #}
+      <div id="vo-panel-plano" class="vo-panel hidden flex flex-col">
+        <p class="mb-2 flex-shrink-0 text-xs leading-snug text-slate-600 dark:text-slate-400 sm:mb-3">
+          Misma información en una sola grilla; los cambios se sincronizan con la vista agrupada.
+        </p>
+        <div class="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div class="h-[min(28rem,55vh)] min-h-[14rem] overflow-auto" role="region" aria-label="Listado completo de objetivos">
+            <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+              <thead class="sticky top-0 z-10 bg-slate-50 shadow-sm dark:bg-slate-800">
+                <tr class="align-bottom">
+                  <th colspan="2" class="border-b border-purple-300/80 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-purple-500/40 dark:bg-slate-800/90 dark:text-slate-100">Vendedor</th>
+                  <th colspan="2" class="border-b border-sky-400/80 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-sky-500/50 dark:bg-slate-800/90 dark:text-slate-100">Cliente</th>
+                  <th class="border-b-2 border-b-emerald-500 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-emerald-500 dark:bg-slate-800/90 dark:text-slate-100">Objetivo</th>
+                </tr>
+                <tr>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Nombre</th>
+                  <th class="px-3 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Cód.</th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">ID</th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Nombre</th>
+                  <th class="border-l border-slate-200 bg-slate-50 px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200">Importe</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                {% for g in grupos %}
+                {% for c in g.clientes %}
+                <tr class="vo-fila-plano hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                    data-vo-search="{{ g.nombre_vendedor|escape }} {{ g.cod_viajante }} {{ c.codigo }} {{ c.nombre_cliente|escape }}">
+                  <td class="px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-200">{{ g.nombre_vendedor }}</td>
+                  <td class="px-3 py-2 text-right font-mono text-xs text-slate-600 dark:text-slate-400 tabular-nums">{{ g.cod_viajante }}</td>
+                  <td class="px-3 py-2 font-mono text-xs text-slate-700 dark:text-slate-300 tabular-nums">{{ c.codigo }}</td>
+                  <td class="px-3 py-2 text-sm text-slate-800 dark:text-slate-200">{{ c.nombre_cliente }}</td>
+                  <td class="border-l border-slate-100 bg-slate-50/90 px-3 py-2 text-right dark:border-slate-700 dark:bg-slate-800/35">
+                    {% if puede_editar %}
+                    <input type="text" inputmode="decimal" autocomplete="off" lang="es"
+                           class="vo-obj-input w-36 max-w-[min(100%,12rem)] rounded-md border border-slate-300 bg-white px-2 py-1 text-right font-mono text-sm tabular-nums dark:border-slate-600 dark:bg-slate-900"
+                           data-codigo="{{ c.codigo }}" data-panel="plano" data-obj-numeric="{{ c.objetivo }}" value="" />
+                    {% else %}
+                    <span class="font-mono text-sm tabular-nums" data-vo-obj-sum="{{ c.objetivo|unlocalize }}">{{ c.objetivo|stringformat:'.2f' }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+                {% empty %}
+                <tr>
+                  <td colspan="5" class="px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+                    No hay datos para mostrar.
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if grupos %}
+    <div class="mt-4 flex flex-shrink-0 flex-col gap-2 sm:mt-5 sm:flex-row sm:items-center {% if puede_editar %}sm:justify-between{% else %}justify-start{% endif %}">
+      <p class="text-xs text-slate-600 dark:text-slate-400">
+        Registros: <span class="font-semibold tabular-nums text-slate-800 dark:text-slate-200" id="vo-count-rows">—</span>
+      </p>
+      {% if puede_editar %}
+      <button type="button" id="vo-btn-guardar" class="inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 sm:w-auto">
+        <span class="material-icons text-lg" aria-hidden="true">save</span>
+        Guardar objetivos
+      </button>
+      {% endif %}
+    </div>
+    {% if puede_editar %}
+    <p id="vo-msg" class="mt-3 text-sm text-slate-600 dark:text-slate-400" role="status"></p>
+    {% endif %}
+    {% endif %}
+  </div>
+</section>
+
+{% if grupos %}
+<script>
+(function () {
+  function updateCount() {
+    var n = document.querySelectorAll('.vo-fila-cliente').length;
+    var el = document.getElementById('vo-count-rows');
+    if (el) el.textContent = n;
+  }
+  updateCount();
+
+  function setGrupoExpanded(hdr, expanded) {
+    var id = hdr.getAttribute('data-grupo-id');
+    if (id === null || id === undefined) return;
+    hdr.setAttribute('data-grupo-expanded', expanded ? '1' : '0');
+    hdr.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    var chev = hdr.querySelector('.vo-chevron');
+    if (chev) chev.textContent = expanded ? '▾' : '▸';
+    document.querySelectorAll('.vo-grupo-child[data-parent-grupo="' + id + '"]').forEach(function (tr) {
+      tr.style.display = expanded ? '' : 'none';
+    });
+  }
+
+  document.querySelectorAll('.vo-vendedor-header').forEach(function (hdr) {
+    function toggleGrupo() {
+      var exp = hdr.getAttribute('data-grupo-expanded') === '1';
+      setGrupoExpanded(hdr, !exp);
+    }
+    hdr.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('.vo-obj-input')) return;
+      toggleGrupo();
+    });
+    hdr.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggleGrupo();
+      }
+    });
+  });
+
+  var toolbarGrupos = document.getElementById('vo-toolbar-grupos');
+  function setToolbarGrupoVisible(show) {
+    if (!toolbarGrupos) return;
+    if (show) {
+      toolbarGrupos.classList.remove('hidden');
+      toolbarGrupos.classList.add('flex');
+    } else {
+      toolbarGrupos.classList.add('hidden');
+      toolbarGrupos.classList.remove('flex');
+    }
+  }
+
+  var btnExp = document.getElementById('vo-btn-expandir-todos');
+  var btnCont = document.getElementById('vo-btn-contraer-todos');
+  if (btnExp) {
+    btnExp.addEventListener('click', function () {
+      document.querySelectorAll('.vo-vendedor-header').forEach(function (hdr) {
+        setGrupoExpanded(hdr, true);
+      });
+    });
+  }
+  if (btnCont) {
+    btnCont.addEventListener('click', function () {
+      document.querySelectorAll('.vo-vendedor-header').forEach(function (hdr) {
+        setGrupoExpanded(hdr, false);
+      });
+    });
+  }
+
+  document.querySelectorAll('.vo-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var panel = tab.getAttribute('data-panel');
+      document.querySelectorAll('.vo-panel').forEach(function (p) { p.classList.add('hidden'); });
+      document.querySelectorAll('.vo-tab').forEach(function (b) {
+        b.classList.remove('bg-purple-600', 'text-white');
+        b.classList.add('bg-slate-200', 'dark:bg-slate-700', 'text-slate-700', 'dark:text-slate-300', 'hover:bg-slate-300', 'dark:hover:bg-slate-600');
+      });
+      var target = document.getElementById('vo-panel-' + panel);
+      if (target) target.classList.remove('hidden');
+      tab.classList.remove('bg-slate-200', 'dark:bg-slate-700', 'text-slate-700', 'dark:text-slate-300', 'hover:bg-slate-300', 'dark:hover:bg-slate-600');
+      tab.classList.add('bg-purple-600', 'text-white');
+      setToolbarGrupoVisible(panel === 'grupo');
+    });
+  });
+
+  function aplicarBusqueda() {
+    var buscar = document.getElementById("vo-buscar-vendedor");
+    var q = buscar ? (buscar.value || "").trim().toLowerCase() : "";
+    var plano = document.getElementById('vo-panel-plano');
+    var activePlano = plano && !plano.classList.contains('hidden');
+    if (activePlano) {
+      document.querySelectorAll('.vo-fila-plano').forEach(function (tr) {
+        var hay = (tr.getAttribute('data-vo-search') || '').toLowerCase();
+        var show = q.length < 2 || hay.indexOf(q) !== -1;
+        tr.style.display = show ? '' : 'none';
+      });
+    } else {
+      document.querySelectorAll('.vo-fila-cliente').forEach(function (tr) {
+        var hay = (tr.getAttribute('data-vo-search') || '').toLowerCase();
+        var show = q.length < 2 || hay.indexOf(q) !== -1;
+        tr.style.display = show ? '' : 'none';
+      });
+      document.querySelectorAll('.vo-vendedor-header').forEach(function (hdr) {
+        var gid = hdr.getAttribute('data-grupo-id');
+        var any = false;
+        document.querySelectorAll('.vo-grupo-child[data-parent-grupo="' + gid + '"]').forEach(function (tr) {
+          if (tr.style.display !== 'none') any = true;
+        });
+        var hdrText = (hdr.getAttribute('data-vo-search') || '').toLowerCase();
+        var hdrMatch = q.length >= 2 && hdrText.indexOf(q) !== -1;
+        hdr.style.display = (q.length < 2 || any || hdrMatch) ? '' : 'none';
+      });
+    }
+  }
+  var buscar = document.getElementById("vo-buscar-vendedor");
+  if (buscar) buscar.addEventListener("input", aplicarBusqueda);
+
+  var nfMoneyArs = new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  function voParseObjetivoTexto(s) {
+    if (s == null) return 0;
+    var t = String(s).trim();
+    if (t === "") return 0;
+    var norm = t.replace(/\./g, "").replace(",", ".");
+    var n = parseFloat(norm);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function voSumObjetivoFilaGrupo(tr) {
+    if (!tr) return 0;
+    var inp = tr.querySelector('.vo-obj-input[data-panel="grupo"]');
+    if (inp) return voParseObjetivoTexto(inp.value);
+    var sp = tr.querySelector("[data-vo-obj-sum]");
+    if (sp) {
+      var raw = sp.getAttribute("data-vo-obj-sum");
+      if (raw == null || raw === "") return 0;
+      var n = parseFloat(String(raw).replace(",", "."), 10);
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  }
+
+  function voClaseImportePorSigno(n) {
+    if (!Number.isFinite(n)) return "text-slate-500 dark:text-slate-400";
+    if (n > 0) return "text-emerald-600 dark:text-emerald-400";
+    if (n < 0) return "text-rose-600 dark:text-rose-400";
+    return "text-slate-600 dark:text-slate-300";
+  }
+
+  function voClaseChipVendedorPorSigno(n) {
+    if (!Number.isFinite(n)) {
+      return "rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+    }
+    if (n > 0) {
+      return "rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold tabular-nums text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300";
+    }
+    if (n < 0) {
+      return "rounded-md bg-rose-50 px-2 py-1 text-xs font-semibold tabular-nums text-rose-800 dark:bg-rose-950/40 dark:text-rose-300";
+    }
+    return "rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+  }
+
+  function voUpdateTotalImporte() {
+    var total = 0;
+    var inputsGrupo = document.querySelectorAll('.vo-obj-input[data-panel="grupo"]');
+    if (inputsGrupo.length) {
+      inputsGrupo.forEach(function (inp) {
+        total += voParseObjetivoTexto(inp.value);
+      });
+    } else {
+      document.querySelectorAll("#vo-panel-grupo .vo-fila-cliente [data-vo-obj-sum]").forEach(function (el) {
+        var raw = el.getAttribute("data-vo-obj-sum");
+        if (raw == null || raw === "") return;
+        var n = parseFloat(String(raw).replace(",", "."), 10);
+        if (Number.isFinite(n)) total += n;
+      });
+    }
+
+    var globalValEl = document.getElementById("vo-importe-objetivo-global-val");
+    if (globalValEl) {
+      globalValEl.textContent = nfMoneyArs.format(total);
+      globalValEl.className =
+        "text-base font-bold tabular-nums md:text-lg " + voClaseImportePorSigno(total);
+    }
+
+    document.querySelectorAll(".vo-vendedor-header").forEach(function (hdr) {
+      var gid = hdr.getAttribute("data-grupo-id");
+      if (gid === null || gid === undefined) return;
+      var sub = 0;
+      document.querySelectorAll('.vo-grupo-child[data-parent-grupo="' + gid + '"]').forEach(function (tr) {
+        sub += voSumObjetivoFilaGrupo(tr);
+      });
+      var badge = hdr.querySelector(".vo-subtotal-vendedor");
+      if (badge) {
+        badge.textContent = nfMoneyArs.format(sub);
+        badge.className = "vo-subtotal-vendedor shrink-0 " + voClaseChipVendedorPorSigno(sub);
+      }
+    });
+  }
+
+  window.voUpdateTotalImporte = voUpdateTotalImporte;
+  if (!document.querySelector(".vo-obj-input")) {
+    voUpdateTotalImporte();
+  }
+})();
+</script>
+{% endif %}
+
+{% if puede_editar and grupos %}
+<script>
+(function () {
+  function getCookie(name) {
+    var v = document.cookie.match("(^|;) ?" + name + "=([^;]*)(;|$)");
+    return v ? decodeURIComponent(v[2]) : null;
+  }
+  var csrftoken = getCookie("csrftoken");
+  var idPeriodo = {{ id_periodo }};
+
+  var nfDisplay = new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  var nfPlain = new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 8,
+    useGrouping: false,
+  });
+
+  function parseObjetivoText(s) {
+    if (s == null) return 0;
+    var t = String(s).trim();
+    if (t === "") return 0;
+    var norm = t.replace(/\./g, "").replace(",", ".");
+    var n = parseFloat(norm);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function formatDisplay(n) {
+    if (!Number.isFinite(n) || n === 0) return "";
+    return nfDisplay.format(n);
+  }
+
+  function formatPlainEdit(n) {
+    if (!Number.isFinite(n) || n === 0) return "";
+    return nfPlain.format(n);
+  }
+
+  function initInputsFromData() {
+    document.querySelectorAll(".vo-obj-input").forEach(function (el) {
+      var raw = el.getAttribute("data-obj-numeric");
+      var n = raw === null || raw === "" ? NaN : parseFloat(String(raw).replace(",", "."), 10);
+      if (!Number.isFinite(n) || n === 0) {
+        el.value = "";
+      } else {
+        el.value = formatDisplay(n);
+      }
+    });
+  }
+
+  function syncInputs(codigo, value, skipEl) {
+    document.querySelectorAll('.vo-obj-input[data-codigo="' + codigo + '"]').forEach(function (el) {
+      if (el !== skipEl) el.value = value;
+    });
+  }
+
+  function applyBlurFormat(el) {
+    var n = parseObjetivoText(el.value);
+    if (n < 0) n = 0;
+    var display = formatDisplay(n);
+    var c = el.getAttribute("data-codigo");
+    if (!c) return;
+    document.querySelectorAll('.vo-obj-input[data-codigo="' + c + '"]').forEach(function (inp) {
+      inp.value = display;
+    });
+  }
+
+  initInputsFromData();
+  if (typeof window.voUpdateTotalImporte === "function") {
+    window.voUpdateTotalImporte();
+  }
+
+  function getNavigableObjInputs() {
+    var plano = document.getElementById("vo-panel-plano");
+    var activePlano = plano && !plano.classList.contains("hidden");
+    var sel = activePlano ? '.vo-obj-input[data-panel="plano"]' : '.vo-obj-input[data-panel="grupo"]';
+    return Array.prototype.slice.call(document.querySelectorAll(sel)).filter(function (inp) {
+      var tr = inp.closest("tr");
+      if (!tr) return false;
+      return window.getComputedStyle(tr).display !== "none";
+    });
+  }
+
+  function moveObjetivoFocus(current, delta) {
+    var list = getNavigableObjInputs();
+    var i = list.indexOf(current);
+    if (i === -1) return;
+    var next = i + delta;
+    if (next < 0 || next >= list.length) return;
+    list[next].focus();
+  }
+
+  document.querySelectorAll(".vo-obj-input").forEach(function (inp) {
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === "ArrowDown") {
+        e.preventDefault();
+        moveObjetivoFocus(inp, 1);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        moveObjetivoFocus(inp, -1);
+      }
+    });
+    inp.addEventListener("focus", function () {
+      var n = parseObjetivoText(inp.value);
+      if (n < 0) n = 0;
+      var plain = formatPlainEdit(n);
+      var c = inp.getAttribute("data-codigo");
+      if (c) {
+        document.querySelectorAll('.vo-obj-input[data-codigo="' + c + '"]').forEach(function (el) {
+          el.value = plain;
+        });
+      }
+      requestAnimationFrame(function () {
+        try {
+          inp.select();
+        } catch (e) {}
+      });
+    });
+    inp.addEventListener("blur", function () {
+      applyBlurFormat(inp);
+      if (typeof window.voUpdateTotalImporte === "function") window.voUpdateTotalImporte();
+    });
+    inp.addEventListener("input", function () {
+      var c = inp.getAttribute("data-codigo");
+      if (c) syncInputs(c, inp.value, inp);
+      if (typeof window.voUpdateTotalImporte === "function") window.voUpdateTotalImporte();
+    });
+  });
+
+  var btn = document.getElementById("vo-btn-guardar");
+  if (btn) {
+    btn.addEventListener("click", function () {
+      var inputs = document.querySelectorAll('.vo-obj-input[data-panel="grupo"]');
+      var filas = [];
+      inputs.forEach(function (el) {
+        var c = el.getAttribute("data-codigo");
+        if (!c) return;
+        var n = parseObjetivoText(el.value);
+        if (n < 0) n = 0;
+        filas.push({ codigo: parseInt(c, 10), objetivo: Math.round(n * 100) / 100 });
+      });
+      var msg = document.getElementById("vo-msg");
+      msg.textContent = "Guardando…";
+      fetch("{% url 'ventas:api_objetivos_guardar' %}", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": csrftoken || ""
+        },
+        body: JSON.stringify({ id_periodo: idPeriodo, filas: filas })
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (x) {
+          if (x.ok && x.j.ok) {
+            msg.textContent = "Guardado correctamente.";
+            msg.className = "mt-3 text-sm text-emerald-600 dark:text-emerald-400";
+          } else {
+            msg.textContent = (x.j && x.j.error) ? x.j.error : "Error al guardar.";
+            msg.className = "mt-3 text-sm text-red-600 dark:text-red-400";
+          }
+        })
+        .catch(function () {
+          msg.textContent = "Error de red.";
+          msg.className = "mt-3 text-sm text-red-600";
+        });
+    });
+  }
+})();
+</script>
+{% endif %}
+
+{% if puede_editar %}
+<script>
+(function () {
+  function getCookie(name) {
+    var v = document.cookie.match("(^|;) ?" + name + "=([^;]*)(;|$)");
+    return v ? decodeURIComponent(v[2]) : null;
+  }
+  var csrftoken = getCookie("csrftoken");
+  var idPeriodo = {{ id_periodo }};
+  var btn = document.getElementById("vo-btn-guardar-desc");
+  var inp = document.getElementById("vo-desc-periodo");
+  var msg = document.getElementById("vo-msg-desc");
+  var migas = document.getElementById("vo-migas-periodo");
+  if (!btn || !inp) return;
+  btn.addEventListener("click", function () {
+    if (msg) {
+      msg.textContent = "Guardando…";
+      msg.className = "mt-1.5 min-h-[1.25rem] text-xs text-slate-400";
+    }
+    fetch("{% url 'ventas:api_objetivos_periodo_descripcion' %}", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-CSRFToken": csrftoken || ""
+      },
+      body: JSON.stringify({ id_periodo: idPeriodo, descripcion: (inp.value || "").trim() })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (x) {
+        if (x.ok && x.j.ok) {
+          var d = x.j.descripcion;
+          if (!d || d === "-") {
+            inp.value = "";
+            if (migas) migas.textContent = "Período " + idPeriodo;
+          } else {
+            inp.value = d;
+            if (migas) migas.textContent = "Período " + idPeriodo + " · " + d;
+          }
+          if (msg) {
+            msg.textContent = "Descripción guardada.";
+            msg.className = "mt-1.5 min-h-[1.25rem] text-xs text-emerald-400";
+          }
+        } else if (msg) {
+          msg.textContent = (x.j && x.j.error) ? x.j.error : "Error al guardar.";
+          msg.className = "mt-1.5 min-h-[1.25rem] text-xs text-red-400";
+        }
+      })
+      .catch(function () {
+        if (msg) {
+          msg.textContent = "Error de red.";
+          msg.className = "mt-1.5 min-h-[1.25rem] text-xs text-red-400";
+        }
+      });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

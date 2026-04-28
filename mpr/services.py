@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from core.mysql_pool import get_connection, mysql_cursor
 from core.services.administranet_stock import get_depositos as _get_depositos_core
+from core.services.legacy_mysql_schema.helpers import columna_existe, nombre_columna_ci
 from core.utils.administranet_types import to_int_or_none, str_or_default, to_date_or_none
 
 from mpr.exceptions import MprSchemaError, formatear_error_esquema
@@ -28,6 +29,10 @@ MOTIVO_OPP_TEXTO = "Parte producción"
 MOTIVO_ARMADO_CODIGO = 9
 MOTIVO_ARMADO_TEXTO = "Armado"
 MOTIVO_RECLASIFICACION_TEXTO = "Reclasificación"
+
+# lista_produccion_detalle: codigo_movimiento_pedido = 0 indica demanda sintética por reserva (no existe fila en comp_ped).
+COD_MOV_PEDIDO_DEMANDA_RESERVA = 0
+ORIGEN_DEMANDA_RESERVA = "RESERVA"
 
 # movimiento_stock.tipo_mov: OPT = liberación OPT, OPP = registrar OPP, OPA = armado. tipo_comprobante es el tipo de talonario (MSTOCK).
 TIPO_MOV_OPT = "OPT"
@@ -68,6 +73,91 @@ def _first_column_value(row) -> Optional[str]:
     if isinstance(row, dict):
         return next(iter(row.values()), None)
     return row[0] if len(row) > 0 else None
+
+
+def docenas_desde_unidades_opt(unidades: Any, cantidad_promedio_bulto: Any) -> float:
+    """
+    Equivalente «docenas» / bulto para OPT y ventana pack: unidades / articulo.cantidad_promedio_bulto.
+    Si el bulto no está definido o es <= 0, se usa 12 (mismo criterio que el cálculo previo por docena fija).
+    """
+    try:
+        u = float(unidades or 0)
+    except (TypeError, ValueError):
+        u = 0.0
+    try:
+        b = float(cantidad_promedio_bulto) if cantidad_promedio_bulto is not None else 0.0
+    except (TypeError, ValueError):
+        b = 0.0
+    divisor = b if b > 0 else 12.0
+    try:
+        return round(u / divisor, 2)
+    except ZeroDivisionError:
+        return 0.0
+
+
+def _fragmento_sql_cantidad_promedio_bulto(cursor, tbl_art: str) -> str:
+    """
+    Fragmento SQL para SELECT desde ``articulo``: lee la columna de bulto real
+    (nombre case-insensitive) o constante 0 si no existe.
+    """
+    col = nombre_columna_ci(cursor, tbl_art, "cantidad_promedio_bulto")
+    if not col:
+        return ", 0 AS cantidad_promedio_bulto"
+    c = col.replace("`", "``")
+    return f", COALESCE(`{c}`, 0) AS cantidad_promedio_bulto"
+
+
+def _explosion_demanda_componentes_pedido_reserva_pack(
+    filas_pack: List[Dict[str, Any]],
+    abm_map: Dict[int, int],
+    bom_map: Dict[int, Any],
+) -> Tuple[Dict[int, float], Dict[int, float]]:
+    """
+    Por cada pack con cantidad a fabricar CF, parte atribuible a pedido vs stock del pack
+    ``n_base_ped = max(0, P_ped - S_pack)`` y parte a colchón del terminado
+    ``n_res_tail = max(0, CF - n_base_ped)``; explota BOM y acumula por id componente.
+    """
+    dem_ped: Dict[int, float] = {}
+    dem_res: Dict[int, float] = {}
+    for r in filas_pack or []:
+        try:
+            cf = float(r.get("cantidad_a_fabricar") or 0)
+        except (TypeError, ValueError):
+            cf = 0.0
+        if cf <= 0:
+            continue
+        id_pack = to_int_or_none(r.get("id_articulo"))
+        if id_pack is None:
+            continue
+        try:
+            p_ped = float(r.get("cantidad_pedida_pedido") or 0)
+        except (TypeError, ValueError):
+            p_ped = 0.0
+        try:
+            st_pack = float(r.get("stock_terminado") or 0)
+        except (TypeError, ValueError):
+            st_pack = 0.0
+        n_base_ped = max(0.0, p_ped - st_pack)
+        n_res_tail = max(0.0, cf - n_base_ped)
+        id_en_abm = abm_map.get(id_pack)
+        if id_en_abm is None:
+            continue
+        bom = bom_map.get(id_en_abm)
+        if not bom or not bom.get("componentes"):
+            continue
+        for comp in bom["componentes"]:
+            id_comp = to_int_or_none(comp.get("id_articulo"))
+            if id_comp is None:
+                continue
+            try:
+                coef = float(comp.get("cantidad_articulo") or 0)
+            except (TypeError, ValueError):
+                coef = 0.0
+            if coef <= 0:
+                continue
+            dem_ped[id_comp] = dem_ped.get(id_comp, 0.0) + coef * n_base_ped
+            dem_res[id_comp] = dem_res.get(id_comp, 0.0) + coef * n_res_tail
+    return dem_ped, dem_res
 
 
 _tabla_cache: Dict[str, Dict[str, Optional[str]]] = {}
@@ -321,15 +411,21 @@ def listar_lista_produccion_agrupada(
     id_articulo: Optional[int] = None,
     estado_en_proceso: Optional[str] = None,
     solo_atrasadas: bool = False,
+    excluir_filas_opt_liberadas_mstock: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Lista producción agrupada por artículo (lista_produccion_agrupada + articulo).
 
     estado_en_proceso: None = todos, 'Si' = solo en proceso, 'No' = solo pendientes.
     solo_atrasadas: si True, solo filas con fecha_objetivo no nula y fecha_objetivo < hoy (requiere columna en tabla).
+    excluir_filas_opt_liberadas_mstock: si True y existe columna codigo_movimiento_opt, excluye filas con
+    codigo_movimiento_opt > 0 (OPT ya liberada: código real de movimiento_stock). Esas filas no son demanda
+    nueva; al cerrar la OPT deberían quedar con pendiente 0; si quedan datos inconsistentes, no deben
+    duplicar totales en ventana-pack / demanda.
     Devuelve filas con: id_lista_produccion, id_articulo, codigo_articulo, descripcion_articulo,
     cantidad_pedida, cantidad_pendiente_prod, en_proceso_produccion,
-    cantidad_fabricada_acumulada (0 si la columna no existe en la tabla). Si las tablas no existen, devuelve [].
+    cantidad_fabricada_acumulada (0 si la columna no existe en la tabla).
+    Si faltan ``lista_produccion_agrupada`` o ``articulo``, lanza ``MprSchemaError``.
     """
     if not (base_empresa or "").strip():
         return []
@@ -350,6 +446,10 @@ def listar_lista_produccion_agrupada(
                 if col_fab
                 else "0 AS cantidad_fabricada_acumulada"
             )
+            col_cod_mov_opt = opts.get("codigo_movimiento_opt")
+            sql_excl_opt_lib = ""
+            if excluir_filas_opt_liberadas_mstock and col_cod_mov_opt:
+                sql_excl_opt_lib = f" AND NOT (COALESCE(l.{col_cod_mov_opt}, 0) > 0)"
             sql = f"""
                 SELECT
                     l.id_lista_produccion,
@@ -364,7 +464,7 @@ def listar_lista_produccion_agrupada(
                     {fab_sel}
                 FROM {tbl_agrupada} l
                 INNER JOIN {tbl_articulo} a ON a.IDArt = l.id_articulo
-                WHERE COALESCE(l.cantidad_pendiente_prod, 0) > 0
+                WHERE COALESCE(l.cantidad_pendiente_prod, 0) > 0{sql_excl_opt_lib}
             """
             params = []
             if id_articulo is not None:
@@ -394,7 +494,7 @@ def listar_lista_produccion_agrupada(
                             {fab_sel}
                         FROM {tbl_agrupada} l
                         INNER JOIN {tbl_articulo} a ON a.IDArt = l.id_articulo
-                        WHERE COALESCE(l.cantidad_pendiente_prod, 0) > 0
+                        WHERE COALESCE(l.cantidad_pendiente_prod, 0) > 0{sql_excl_opt_lib}
                     """
                     if id_articulo is not None:
                         sql_fallback += " AND l.id_articulo = %s"
@@ -1029,7 +1129,11 @@ def cerrar_opt(base_empresa: str, id_lista_produccion: int) -> Tuple[bool, Optio
                         f"SELECT DISTINCT codigo_movimiento_pedido FROM {tbl_detalle} WHERE id_lista_produccion IN ({ph})",
                         ids_para_codigos,
                     )
-                    codigos = [to_int_or_none(r[0]) for r in cursor.fetchall() if to_int_or_none(r[0]) is not None]
+                    codigos = [
+                        c for c in (
+                            to_int_or_none(r[0]) for r in cursor.fetchall()
+                        ) if c is not None and c != COD_MOV_PEDIDO_DEMANDA_RESERVA
+                    ]
                 except Exception as e_col:
                     if "1054" in str(e_col) or "id_lista_produccion" in str(e_col).lower():
                         ids_art = [l["id_articulo"] for l in lineas if l.get("id_articulo") is not None]
@@ -1039,7 +1143,11 @@ def cerrar_opt(base_empresa: str, id_lista_produccion: int) -> Tuple[bool, Optio
                                 f"SELECT DISTINCT codigo_movimiento_pedido FROM {tbl_detalle} WHERE id_articulo IN ({ph_art})",
                                 ids_art,
                             )
-                            codigos = [to_int_or_none(r[0]) for r in cursor.fetchall() if to_int_or_none(r[0]) is not None]
+                            codigos = [
+                                c for c in (
+                                    to_int_or_none(r[0]) for r in cursor.fetchall()
+                                ) if c is not None and c != COD_MOV_PEDIDO_DEMANDA_RESERVA
+                            ]
                     else:
                         raise e_col
                 for cod in codigos:
@@ -1266,26 +1374,244 @@ def _demanda_desde_pedidos_pendientes(
         return {}, {}
 
 
+def _mpr_lista_detalle_tiene_columna_origen_demanda(cursor, tbl_detalle: str) -> bool:
+    tq = tbl_detalle.replace("`", "``")
+    try:
+        cursor.execute(f"SHOW COLUMNS FROM `{tq}` LIKE %s", ["origen_demanda"])
+        return cursor.fetchone() is not None
+    except Exception:
+        return False
+
+
+def _mpr_columna_pk_fila_lista_produccion_detalle(cursor, tbl_detalle: str) -> str:
+    """
+    Columna autonumérica que identifica la fila en ``lista_produccion_detalle``.
+    Tras la migración MPR de trazabilidad es ``id_lista_detalle``; en bases legacy
+    la misma columna puede seguir llamándose ``id_lista_produccion`` (ver
+    ``run_mpr_lista_produccion_detalle_trazabilidad_mysql``).
+    """
+    if columna_existe(cursor, tbl_detalle, "id_lista_detalle"):
+        return "id_lista_detalle"
+    if columna_existe(cursor, tbl_detalle, "id_lista_produccion"):
+        return "id_lista_produccion"
+    return "id_lista_detalle"
+
+
+def _sincronizar_demanda_reserva_lista_detalle(
+    cursor,
+    tbl_detalle: str,
+    tbl_articulo: str,
+    tbl_sd: Optional[str],
+    tbl_dep: Optional[str],
+    id_usuario_val: int,
+    hoy_str: str,
+) -> None:
+    """
+    Mantiene en lista_produccion_detalle una fila por artículo con codigo_movimiento_pedido = 0
+    (demanda por quiebre de reserva): cantidad objetivo max(0, R − S), con R = articulo.stock_reserva
+    y S = saldo terminado (mismo criterio que ventana OPT: depósitos suma_stock = 'Si').
+    Ajusta cantidad_pendiente_prod al cambiar la meta sin pisar avance OPP de forma brusca:
+    min(nueva_meta, pendiente_anterior + max(0, nueva_meta − pedida_anterior)).
+    """
+    tq = tbl_detalle.replace("`", "``")
+    ta = tbl_articulo.replace("`", "``")
+    pk_detalle = _mpr_columna_pk_fila_lista_produccion_detalle(cursor, tbl_detalle)
+    tiene_origen = _mpr_lista_detalle_tiene_columna_origen_demanda(cursor, tbl_detalle)
+    # Mismo criterio de fabricación que pedidos PED: solo artículos «terminados»; comparación sin distinguir mayúsculas
+    # por datos legacy (p. ej. 'TERMINADO', 'terminado').
+    cursor.execute(
+        f"""
+        SELECT a.IDArt, COALESCE(a.stock_reserva, 0) AS stock_reserva
+        FROM `{ta}` a
+        WHERE LOWER(COALESCE(TRIM(a.tipo_art_fab), '')) = 'terminado'
+          AND COALESCE(a.stock_reserva, 0) > 0
+        """
+    )
+    candidatos = cursor.fetchall() or []
+    stock_por_art: Dict[int, float] = {}
+    if tbl_sd and tbl_dep:
+        ts = tbl_sd.replace("`", "``")
+        td = tbl_dep.replace("`", "``")
+        try:
+            cursor.execute(
+                f"""
+                SELECT sd.id_articulo, COALESCE(SUM(sd.saldo), 0) AS stock_terminado
+                FROM `{ts}` sd
+                INNER JOIN `{td}` d ON d.CodDeposito = sd.id_deposito
+                  AND COALESCE(d.anulado, 'No') = 'No'
+                  AND COALESCE(d.suma_stock, 'Si') = 'Si'
+                GROUP BY sd.id_articulo
+                """
+            )
+            for row in cursor.fetchall() or []:
+                aid = to_int_or_none(row[0])
+                if aid is None:
+                    continue
+                try:
+                    stock_por_art[aid] = float(row[1] or 0)
+                except (TypeError, ValueError):
+                    stock_por_art[aid] = 0.0
+        except Exception:
+            stock_por_art = {}
+    for row in candidatos:
+        try:
+            id_art = to_int_or_none(row[0] if not isinstance(row, dict) else row.get("IDArt"))
+            if id_art is None:
+                continue
+            try:
+                reserva = float(
+                    (row[1] if not isinstance(row, dict) else row.get("stock_reserva")) or 0
+                )
+            except (TypeError, ValueError):
+                reserva = 0.0
+            st = float(stock_por_art.get(id_art, 0.0))
+            new_q = max(0.0, reserva - st)
+            cursor.execute(
+                f"""
+                SELECT `{pk_detalle}`,
+                       COALESCE(cantidad_pedida, 0),
+                       COALESCE(cantidad_pendiente_prod, 0)
+                FROM `{tq}` d
+                WHERE d.codigo_movimiento_pedido = %s
+                  AND d.id_articulo = %s
+                  AND COALESCE(TRIM(d.en_proceso_produccion), 'No') = 'No'
+                LIMIT 1
+                """,
+                [COD_MOV_PEDIDO_DEMANDA_RESERVA, id_art],
+            )
+            ex = cursor.fetchone()
+            if new_q <= 0:
+                if ex:
+                    id_det = ex[0]
+                    cursor.execute(f"DELETE FROM `{tq}` WHERE `{pk_detalle}` = %s", [id_det])
+                continue
+            if ex:
+                id_det = ex[0]
+                try:
+                    old_ped = float(ex[1] or 0)
+                    old_pend = float(ex[2] or 0)
+                except (TypeError, ValueError):
+                    old_ped, old_pend = 0.0, 0.0
+                new_pend = min(new_q, old_pend + max(0.0, new_q - old_ped))
+                new_pend = max(0.0, new_pend)
+                if tiene_origen:
+                    try:
+                        cursor.execute(
+                            f"UPDATE `{tq}` SET cantidad_pedida = %s, cantidad_pendiente_prod = %s, origen_demanda = %s WHERE `{pk_detalle}` = %s",
+                            [new_q, new_pend, ORIGEN_DEMANDA_RESERVA, id_det],
+                        )
+                    except Exception as upd_err:
+                        if "1054" in str(upd_err) or "unknown column" in str(upd_err).lower():
+                            cursor.execute(
+                                f"UPDATE `{tq}` SET cantidad_pedida = %s, cantidad_pendiente_prod = %s WHERE `{pk_detalle}` = %s",
+                                [new_q, new_pend, id_det],
+                            )
+                        else:
+                            raise upd_err
+                else:
+                    cursor.execute(
+                        f"UPDATE `{tq}` SET cantidad_pedida = %s, cantidad_pendiente_prod = %s WHERE `{pk_detalle}` = %s",
+                        [new_q, new_pend, id_det],
+                    )
+            else:
+                try:
+                    if tiene_origen:
+                        cursor.execute(
+                            f"""
+                            INSERT INTO `{tq}`
+                            (codigo_movimiento_pedido, id_articulo, cantidad_pedida, cantidad_pendiente_prod,
+                             id_usuario, en_proceso_produccion, Fecha, origen_demanda)
+                            VALUES (%s, %s, %s, %s, %s, 'No', %s, %s)
+                            """,
+                            [
+                                COD_MOV_PEDIDO_DEMANDA_RESERVA,
+                                id_art,
+                                new_q,
+                                new_q,
+                                id_usuario_val,
+                                hoy_str,
+                                ORIGEN_DEMANDA_RESERVA,
+                            ],
+                        )
+                    else:
+                        cursor.execute(
+                            f"""
+                            INSERT INTO `{tq}`
+                            (codigo_movimiento_pedido, id_articulo, cantidad_pedida, cantidad_pendiente_prod,
+                             id_usuario, en_proceso_produccion, Fecha)
+                            VALUES (%s, %s, %s, %s, %s, 'No', %s)
+                            """,
+                            [
+                                COD_MOV_PEDIDO_DEMANDA_RESERVA,
+                                id_art,
+                                new_q,
+                                new_q,
+                                id_usuario_val,
+                                hoy_str,
+                            ],
+                        )
+                except Exception as ins_err:
+                    if "1054" in str(ins_err) or "unknown column" in str(ins_err).lower():
+                        cursor.execute(
+                            f"""
+                            INSERT INTO `{tq}`
+                            (codigo_movimiento_pedido, id_articulo, cantidad_pedida, cantidad_pendiente_prod,
+                             en_proceso_produccion, Fecha)
+                            VALUES (%s, %s, %s, %s, 'No', %s)
+                            """,
+                            [COD_MOV_PEDIDO_DEMANDA_RESERVA, id_art, new_q, new_q, hoy_str],
+                        )
+                    else:
+                        raise ins_err
+        except Exception as e_art:
+            id_log = to_int_or_none(row[0] if not isinstance(row, dict) else row.get("IDArt"))
+            err_txt = str(e_art).lower()
+            if "1452" in str(e_art) or "1216" in str(e_art) or "foreign key" in err_txt:
+                logger.error(
+                    "MPR demanda reserva: fallo en artículo %s (posible FK codigo_movimiento_pedido → comp_ped; "
+                    "ejecute migración «MPR — tabla lista_produccion_detalle» o elimine esa FK). Detalle: %s",
+                    id_log,
+                    e_art,
+                )
+            else:
+                logger.warning(
+                    "MPR demanda reserva: no se pudo sincronizar artículo %s en %s: %s",
+                    id_log,
+                    tbl_detalle,
+                    e_art,
+                    exc_info=True,
+                )
+            continue
+
+
 def listar_ventana_pack(
     base_empresa: str,
     limit: int = 200,
 ) -> List[Dict[str, Any]]:
     """
     Orden de Producción de Trabajo (OPT): artículos con demanda de producción desde lista_produccion_agrupada
-    (cantidad_pendiente_prod > 0, en_proceso_produccion='No'), stock terminado (depósitos suma_stock='Si') y cantidad a fabricar.
+    (cantidad_pendiente_prod > 0, en_proceso_produccion='No'; excluye filas con codigo_movimiento_opt > 0 = OPT ya liberada),
+    stock terminado (depósitos suma_stock='Si') y cantidad a fabricar.
     La demanda depende de que se haya ejecutado actualizar_pedidos_produccion (o al crear la OPT).
-    pedidos_resumen se arma desde lista_produccion_detalle + comp_ped.
-    Devuelve: id_articulo, codigo_articulo, descripcion_articulo, cantidad_pedida, cantidad_pendiente_prod,
-    cantidad_parcial_fabricada (acumulado de armado en BD si existe columna cantidad_fabricada_acumulada;
-    si no, Cant. pedida − Pendiente), stock_terminado, cantidad_a_fabricar = max(0, pedida − saldo + reserva),
-    cantidad_urgente_abs, pedidos_resumen.
+    pedidos_resumen se arma desde lista_produccion_detalle + comp_ped (códigos de pedido distintos de 0);
+    la demanda por reserva (detalle con codigo_movimiento_pedido = 0) aparece como fila sintética en el tooltip.
+    P_ped = suma de cantidad_pedida en detalle con código de pedido ≠ 0; Q_res = fila código 0; R = articulo.stock_reserva;
+    cantidad_a_fabricar = max(0, P_ped + R − S); urgente = max(0, P_ped − S) (la reserva no suma a urgente).
+    Docenas (cantidad_a_fabricar_docenas / cantidad_urgente_docenas): unidades / articulo.cantidad_promedio_bulto
+    (si bulto ≤ 0 o ausente, divisor 12).
+    Devuelve: id_articulo, codigo_articulo, descripcion_articulo, cantidad_pedida (total agrupada), cantidad_pedida_pedido,
+    cantidad_demanda_reserva, cantidad_pendiente_prod, cantidad_parcial_fabricada, stock_terminado,
+    cantidad_a_fabricar, cantidad_urgente_abs, origen_demanda_etiqueta, pedidos_resumen.
     """
     if not (base_empresa or "").strip():
         return []
     try:
         # Demanda desde lista_produccion_agrupada (solo pendientes, en_proceso='No').
         agrupada_rows = listar_lista_produccion_agrupada(
-            base_empresa, limit=limit, estado_en_proceso="No"
+            base_empresa,
+            limit=limit,
+            estado_en_proceso="No",
+            excluir_filas_opt_liberadas_mstock=True,
         )
         if not agrupada_rows:
             return []
@@ -1330,13 +1656,46 @@ def listar_ventana_pack(
                 by_art[id_art]["id_listas"].add(id_lista)
 
         ids = list(by_art.keys())
-        # Pedidos y estado desde lista_produccion_detalle + comp_ped.
-        pedidos_por_articulo: Dict[int, List[Dict[str, str]]] = {aid: [] for aid in ids}
+        split_p_ped: Dict[int, float] = {}
+        split_q_res: Dict[int, float] = {}
+        # Pedidos y estado desde lista_produccion_detalle + comp_ped (excluye código 0 = demanda reserva).
+        pedidos_por_articulo: Dict[int, List[Dict[str, Any]]] = {aid: [] for aid in ids}
         pedidos_ya_vistos: Dict[int, Set[str]] = {aid: set() for aid in ids}
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
             tbl_cp = _nombre_tabla(cursor, "comp_ped")
             tbl_cli = _nombre_tabla(cursor, "cliente")
+            if tbl_detalle and ids:
+                ph = ",".join(["%s"] * len(ids))
+                try:
+                    cursor.execute(
+                        f"""
+                        SELECT d.id_articulo,
+                               COALESCE(SUM(CASE WHEN COALESCE(d.codigo_movimiento_pedido, 0) <> 0
+                                    THEN COALESCE(d.cantidad_pedida, 0) ELSE 0 END), 0) AS p_ped,
+                               COALESCE(SUM(CASE WHEN COALESCE(d.codigo_movimiento_pedido, 0) = 0
+                                    THEN COALESCE(d.cantidad_pedida, 0) ELSE 0 END), 0) AS q_res
+                        FROM {tbl_detalle} d
+                        WHERE d.id_articulo IN ({ph})
+                          AND COALESCE(TRIM(d.en_proceso_produccion), 'No') = 'No'
+                        GROUP BY d.id_articulo
+                        """,
+                        ids,
+                    )
+                    for r in cursor.fetchall() or []:
+                        aid = to_int_or_none(r.get("id_articulo"))
+                        if aid is None:
+                            continue
+                        try:
+                            split_p_ped[aid] = float(r.get("p_ped") or 0)
+                        except (TypeError, ValueError):
+                            split_p_ped[aid] = 0.0
+                        try:
+                            split_q_res[aid] = float(r.get("q_res") or 0)
+                        except (TypeError, ValueError):
+                            split_q_res[aid] = 0.0
+                except Exception as e_split:
+                    logger.debug("No se pudo cargar desglose P_ped/Q_res en ventana-pack: %s", e_split)
             if tbl_detalle and tbl_cp and ids:
                 ph = ",".join(["%s"] * len(ids))
                 join_cli = f"LEFT JOIN {tbl_cli} cli ON cli.codigo = cp.codigo" if tbl_cli else ""
@@ -1350,6 +1709,7 @@ def listar_ventana_pack(
                         INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
                         {join_cli}
                         WHERE d.id_articulo IN ({ph})
+                          AND COALESCE(d.codigo_movimiento_pedido, 0) <> 0
                         ORDER BY d.id_articulo,
                                  COALESCE(cp.NroComprobante, CAST(cp.NroCompBusq AS CHAR), '') DESC,
                                  cp.CodigoMovimiento DESC
@@ -1364,6 +1724,7 @@ def listar_ventana_pack(
                         FROM {tbl_detalle} d
                         INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
                         WHERE d.id_articulo IN ({ph})
+                          AND COALESCE(d.codigo_movimiento_pedido, 0) <> 0
                         ORDER BY d.id_articulo,
                                  COALESCE(cp.NroComprobante, CAST(cp.NroCompBusq AS CHAR), '') DESC,
                                  cp.CodigoMovimiento DESC
@@ -1406,6 +1767,16 @@ def listar_ventana_pack(
                         key=lambda p: str(p.get("nro_pedido") or ""),
                         reverse=True,
                     )
+            for aid in ids:
+                q_res = float(split_q_res.get(aid, 0.0))
+                if q_res > 0:
+                    pedidos_por_articulo[aid].append({
+                        "es_demanda_reserva": True,
+                        "nro_pedido": "—",
+                        "estado_pedido_opt": "Demanda reserva",
+                        "nombre_cliente": "",
+                        "cantidad_demanda_reserva": q_res,
+                    })
 
         for id_art, row in by_art.items():
             row["pedidos_resumen"] = pedidos_por_articulo.get(id_art) or []
@@ -1417,6 +1788,9 @@ def listar_ventana_pack(
 
             if not tbl_sd or not tbl_dep:
                 for v in by_art.values():
+                    id_a = to_int_or_none(v.get("id_articulo"))
+                    p_ped = float(split_p_ped.get(id_a, 0.0)) if id_a is not None else 0.0
+                    q_res = float(split_q_res.get(id_a, 0.0)) if id_a is not None else 0.0
                     cant_ped = float(v.get("cantidad_pedida") or 0)
                     cant_pend = float(v.get("cantidad_pendiente_prod") or 0)
                     fab_acum = float(v.get("cantidad_fabricada_acumulada") or 0)
@@ -1426,9 +1800,22 @@ def listar_ventana_pack(
                         v["cantidad_parcial_fabricada"] = max(0.0, cant_ped - cant_pend)
                     v["stock_terminado"] = 0
                     v["stock_reserva"] = 0.0
-                    v["cantidad_a_fabricar"] = max(0.0, cant_ped - 0 + v["stock_reserva"])
-                    v["cantidad_urgente_abs"] = max(0.0, cant_ped - 0)
+                    v["cantidad_pedida_pedido"] = p_ped
+                    v["cantidad_demanda_reserva"] = q_res
+                    v["cantidad_a_fabricar"] = max(0.0, p_ped + v["stock_reserva"] - 0.0)
+                    v["cantidad_urgente_abs"] = max(0.0, p_ped - 0.0)
                     v["cantidad_urgente"] = v["cantidad_urgente_abs"]
+                    v["cantidad_promedio_bulto"] = 0.0
+                    v["cantidad_a_fabricar_docenas"] = docenas_desde_unidades_opt(v["cantidad_a_fabricar"], 0.0)
+                    v["cantidad_urgente_docenas"] = docenas_desde_unidades_opt(v["cantidad_urgente_abs"], 0.0)
+                    if p_ped > 0 and q_res > 0:
+                        v["origen_demanda_etiqueta"] = "Pedido + reserva"
+                    elif q_res > 0:
+                        v["origen_demanda_etiqueta"] = "Reserva"
+                    elif p_ped > 0:
+                        v["origen_demanda_etiqueta"] = "Pedido"
+                    else:
+                        v["origen_demanda_etiqueta"] = "—"
                     v["stock"] = 0
                     v["brecha_reserva"] = 0
                     v["nombre_unimed"] = "-"
@@ -1492,16 +1879,17 @@ def listar_ventana_pack(
                     })
             except Exception:
                 detalle_por_art = {}
-            # articulo: stock_reserva, id_unimed, id_presentacionV, multiplicador_vta
+            # articulo: stock_reserva, id_unimed, id_presentacionV, multiplicador_vta, cantidad_promedio_bulto (docenas OPT)
             tbl_art = _nombre_tabla(cursor, "articulo")
             reserva_map = {}
-            art_um_pres_map = {}  # id_art -> {id_unimed, id_presentacionV, multiplicador_vta}
+            art_um_pres_map = {}  # id_art -> {id_unimed, id_presentacionV, multiplicador_vta, cantidad_promedio_bulto, id_en_abm}
             if tbl_art and ids:
                 try:
+                    bulto_sql = _fragmento_sql_cantidad_promedio_bulto(cursor, tbl_art)
                     cursor.execute(
                         f"""SELECT IDArt, COALESCE(stock_reserva, 0) AS stock_reserva,
                                    id_unimed, id_presentacionV, COALESCE(multiplicador_vta, 0) AS multiplicador_vta,
-                                   id_en_abm
+                                   id_en_abm{bulto_sql}
                             FROM {tbl_art} WHERE IDArt IN ({placeholders})""",
                         ids,
                     )
@@ -1516,11 +1904,16 @@ def listar_ventana_pack(
                                 mult = float(r.get("multiplicador_vta") or 0)
                             except (TypeError, ValueError):
                                 mult = 0
+                            try:
+                                bulto = float(r.get("cantidad_promedio_bulto") or 0)
+                            except (TypeError, ValueError):
+                                bulto = 0.0
                             art_um_pres_map[aid] = {
                                 "id_unimed": r.get("id_unimed"),
                                 "id_presentacionV": r.get("id_presentacionV"),
                                 "multiplicador_vta": mult,
                                 "id_en_abm": r.get("id_en_abm"),
+                                "cantidad_promedio_bulto": bulto,
                             }
                 except Exception:
                     pass
@@ -1570,16 +1963,27 @@ def listar_ventana_pack(
                 cant_pedida = float(row.get("cantidad_pedida") or 0)
                 cant_pend = float(row.get("cantidad_pendiente_prod") or 0)
                 fab_acum = float(row.get("cantidad_fabricada_acumulada") or 0)
+                p_ped = float(split_p_ped.get(id_art, 0.0))
+                q_res = float(split_q_res.get(id_art, 0.0))
+                row["cantidad_pedida_pedido"] = p_ped
+                row["cantidad_demanda_reserva"] = q_res
                 # Parcial fabricada: acumulado persistido por armado (OPA) si existe columna; si no, pedida − pendiente.
                 if has_fabricada_col:
                     row["cantidad_parcial_fabricada"] = max(0.0, fab_acum)
                 else:
                     row["cantidad_parcial_fabricada"] = max(0.0, cant_pedida - cant_pend)
-                # Fórmula: Cant. a fabricar = max(0, (Pedido − Saldo terminado) + Reserva).
-                row["cantidad_a_fabricar"] = max(0.0, cant_pedida - float(st) + float(reserva))
-                # Urgente = max(0, Cant. Pedida − Saldo); la reserva no interviene.
-                row["cantidad_urgente_abs"] = max(0.0, cant_pedida - float(st))
+                # Cant. a fabricar = max(0, P_ped + R − S); urgente solo pedidos: max(0, P_ped − S).
+                row["cantidad_a_fabricar"] = max(0.0, p_ped + float(reserva) - float(st))
+                row["cantidad_urgente_abs"] = max(0.0, p_ped - float(st))
                 row["cantidad_urgente"] = row["cantidad_urgente_abs"]
+                if p_ped > 0 and q_res > 0:
+                    row["origen_demanda_etiqueta"] = "Pedido + reserva"
+                elif q_res > 0:
+                    row["origen_demanda_etiqueta"] = "Reserva"
+                elif p_ped > 0:
+                    row["origen_demanda_etiqueta"] = "Pedido"
+                else:
+                    row["origen_demanda_etiqueta"] = "—"
                 row["stock_reserva"] = reserva
                 row["stock"] = st  # Solo suma de saldos; reserva no se usa para saldos
                 row["brecha_reserva"] = reserva_map.get(id_art, 0) - st
@@ -1597,6 +2001,13 @@ def listar_ventana_pack(
                         row["cantidad_presentacion"] = None
                 else:
                     row["cantidad_presentacion"] = None
+                try:
+                    bulto_pack = float(ap.get("cantidad_promedio_bulto") or 0)
+                except (TypeError, ValueError):
+                    bulto_pack = 0.0
+                row["cantidad_promedio_bulto"] = bulto_pack
+                row["cantidad_a_fabricar_docenas"] = docenas_desde_unidades_opt(row["cantidad_a_fabricar"], bulto_pack)
+                row["cantidad_urgente_docenas"] = docenas_desde_unidades_opt(row["cantidad_urgente_abs"], bulto_pack)
                 # Tooltip receta (BOM) en nombre del artículo
                 id_en_abm = ap.get("id_en_abm")
                 bom = bom_cache.get(to_int_or_none(id_en_abm)) if id_en_abm is not None else None
@@ -1633,17 +2044,30 @@ def listar_ventana_pack(
 
 def _listar_unidades_por_demanda(
     base_empresa: str,
-    demanda_por_componente: Dict[int, float],
+    demanda_pedido: Dict[int, float],
+    demanda_reserva_pack: Dict[int, float],
     limit: int = 200,
 ) -> List[Dict[str, Any]]:
     """
-    Desglose por unidades: dado demanda_por_componente (id_articulo -> cantidad),
-    devuelve filas con stock, cant a fabricar, urgente, etc. por componente.
+    Desglose por unidades (BOM): demanda en dos vectores (pedido vs reserva del pack terminado),
+    saldo **solo** del depósito configurado como ``tipo_mpr=SemiElaborado``.
+
+    No se usa ``articulo.stock_reserva`` del componente (colchón solo en pack terminado).
+    Docenas: unidades / ``cantidad_promedio_bulto`` (÷ 12 si bulto ≤ 0).
     """
-    if not demanda_por_componente:
+    all_ids = set(demanda_pedido.keys()) | set(demanda_reserva_pack.keys())
+    if not all_ids:
         return []
-    ids = list(demanda_por_componente.keys())
+
+    def _tot(i: int) -> float:
+        try:
+            return float(demanda_pedido.get(i, 0) or 0) + float(demanda_reserva_pack.get(i, 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    ids = sorted(all_ids, key=lambda i: -_tot(i))[:limit]
     placeholders = ",".join(["%s"] * len(ids))
+    id_semi = get_deposito_semi_elaborado_mpr(base_empresa)
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             tbl_sd = _nombre_tabla(cursor, "stock_deposito")
@@ -1651,76 +2075,93 @@ def _listar_unidades_por_demanda(
             tbl_art = _nombre_tabla(cursor, "articulo")
             if not tbl_sd or not tbl_dep or not tbl_art:
                 return []
-            cursor.execute(
-                f"""
-                SELECT sd.id_articulo, COALESCE(SUM(sd.saldo), 0) AS stock_terminado
-                FROM {tbl_sd} sd
-                INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
-                  AND COALESCE(d.anulado, 'No') = 'No'
-                  AND COALESCE(d.suma_stock, 'Si') = 'Si'
-                WHERE sd.id_articulo IN ({placeholders})
-                GROUP BY sd.id_articulo
-                """,
-                ids,
-            )
-            stock_map = {}
-            for row in cursor.fetchall():
-                id_art = to_int_or_none(row.get("id_articulo"))
-                if id_art is not None:
-                    try:
-                        st = float(row.get("stock_terminado") or 0)
-                    except (TypeError, ValueError):
-                        st = 0
-                    stock_map[id_art] = st  # valor real (puede ser negativo)
-            detalle_por_art = {}
-            try:
+            stock_map: Dict[int, float] = {}
+            detalle_por_art: Dict[int, List[Dict[str, Any]]] = {}
+            if id_semi is None:
+                for ia in ids:
+                    stock_map[ia] = 0.0
+                    detalle_por_art[ia] = [{
+                        "deposito": "(Sin depósito Semi elaborado — configurar en MPR)",
+                        "stock_terminado": 0.0,
+                    }]
+            else:
                 cursor.execute(
                     f"""
-                    SELECT sd.id_articulo,
-                           COALESCE(d.NombreDeposito, CAST(d.CodDeposito AS CHAR), '') AS deposito,
-                           COALESCE(sd.saldo, 0) AS stock_terminado
+                    SELECT sd.id_articulo, COALESCE(SUM(sd.saldo), 0) AS stock_terminado
                     FROM {tbl_sd} sd
                     INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
                       AND COALESCE(d.anulado, 'No') = 'No'
-                      AND COALESCE(d.suma_stock, 'Si') = 'Si'
                     WHERE sd.id_articulo IN ({placeholders})
-                    ORDER BY sd.id_articulo, d.NombreDeposito, d.CodDeposito
+                      AND sd.id_deposito = %s
+                    GROUP BY sd.id_articulo
                     """,
-                    ids,
+                    tuple(ids) + (id_semi,),
                 )
-                for row in cursor.fetchall():
+                for row in cursor.fetchall() or []:
                     id_art = to_int_or_none(row.get("id_articulo"))
-                    if id_art is None:
-                        continue
-                    if id_art not in detalle_por_art:
-                        detalle_por_art[id_art] = []
-                    try:
-                        saldo = float(row.get("stock_terminado") or 0)
-                    except (TypeError, ValueError):
-                        saldo = 0
-                    detalle_por_art[id_art].append({
-                        "deposito": str_or_default(row.get("deposito"), "-"),
-                        "stock_terminado": saldo,
-                    })
-            except Exception:
-                detalle_por_art = {}
+                    if id_art is not None:
+                        try:
+                            stock_map[id_art] = float(row.get("stock_terminado") or 0)
+                        except (TypeError, ValueError):
+                            stock_map[id_art] = 0.0
+                for ia in ids:
+                    stock_map.setdefault(ia, 0.0)
+                try:
+                    cursor.execute(
+                        f"""
+                        SELECT sd.id_articulo,
+                               COALESCE(d.NombreDeposito, CAST(d.CodDeposito AS CHAR), '') AS deposito,
+                               COALESCE(sd.saldo, 0) AS stock_terminado
+                        FROM {tbl_sd} sd
+                        INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
+                          AND COALESCE(d.anulado, 'No') = 'No'
+                        WHERE sd.id_articulo IN ({placeholders})
+                          AND sd.id_deposito = %s
+                        ORDER BY sd.id_articulo, d.NombreDeposito, d.CodDeposito
+                        """,
+                        tuple(ids) + (id_semi,),
+                    )
+                    for row in cursor.fetchall() or []:
+                        id_art = to_int_or_none(row.get("id_articulo"))
+                        if id_art is None:
+                            continue
+                        detalle_por_art.setdefault(id_art, [])
+                        try:
+                            saldo = float(row.get("stock_terminado") or 0)
+                        except (TypeError, ValueError):
+                            saldo = 0.0
+                        detalle_por_art[id_art].append({
+                            "deposito": str_or_default(row.get("deposito"), "-"),
+                            "stock_terminado": saldo,
+                        })
+                except Exception:
+                    for ia in ids:
+                        detalle_por_art.setdefault(ia, [])
+            bulto_sel_u = _fragmento_sql_cantidad_promedio_bulto(cursor, tbl_art)
             cursor.execute(
                 f"""SELECT IDArt, COALESCE(id_manual, '') AS id_manual, COALESCE(NombreArticulo, '') AS NombreArticulo,
                            COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS CodigoArticulo,
                            COALESCE(stock_reserva, 0) AS stock_reserva,
-                           id_unimed, id_presentacionV, COALESCE(multiplicador_vta, 0) AS multiplicador_vta
+                           id_unimed, id_presentacionV, COALESCE(multiplicador_vta, 0) AS multiplicador_vta{bulto_sel_u}
                     FROM {tbl_art} WHERE IDArt IN ({placeholders})""",
                 ids,
             )
-            art_rows = {to_int_or_none(r.get("IDArt")): r for r in cursor.fetchall() if to_int_or_none(r.get("IDArt")) is not None}
+            art_rows: Dict[int, Any] = {}
+            for r in cursor.fetchall() or []:
+                rid = to_int_or_none(r.get("IDArt") or r.get("idart"))
+                if rid is not None:
+                    art_rows[rid] = r
             tbl_um = _nombre_tabla(cursor, "unidmed")
-            unimed_map = {}
+            unimed_map: Dict[Any, str] = {}
             id_unimeds = list({to_int_or_none(r.get("id_unimed")) for r in art_rows.values() if r.get("id_unimed") is not None})
             id_unimeds = [x for x in id_unimeds if x is not None]
             if tbl_um and id_unimeds:
                 ph = ",".join(["%s"] * len(id_unimeds))
                 try:
-                    cursor.execute(f"SELECT id_unimed, COALESCE(nombre_unimed, '') AS nombre_unimed FROM {tbl_um} WHERE id_unimed IN ({ph})", id_unimeds)
+                    cursor.execute(
+                        f"SELECT id_unimed, COALESCE(nombre_unimed, '') AS nombre_unimed FROM {tbl_um} WHERE id_unimed IN ({ph})",
+                        id_unimeds,
+                    )
                     for r in cursor.fetchall():
                         uid = r.get("id_unimed")
                         if uid is not None:
@@ -1728,46 +2169,73 @@ def _listar_unidades_por_demanda(
                 except Exception:
                     pass
             tbl_pres = _nombre_tabla(cursor, "presentacion_abm")
-            pres_map = {}
+            pres_map: Dict[Any, str] = {}
             id_pres = list({r.get("id_presentacionV") for r in art_rows.values() if r.get("id_presentacionV") is not None})
             if tbl_pres and id_pres:
                 ph = ",".join(["%s"] * len(id_pres))
                 try:
-                    cursor.execute(f"SELECT id_presentacion, COALESCE(nombre_presentacion, '') AS nombre_presentacion FROM {tbl_pres} WHERE id_presentacion IN ({ph})", id_pres)
+                    cursor.execute(
+                        f"SELECT id_presentacion, COALESCE(nombre_presentacion, '') AS nombre_presentacion FROM {tbl_pres} WHERE id_presentacion IN ({ph})",
+                        id_pres,
+                    )
                     for r in cursor.fetchall():
                         pid = r.get("id_presentacion")
                         if pid is not None:
                             pres_map[pid] = str_or_default(r.get("nombre_presentacion"), "-")
                 except Exception:
                     pass
-            result = []
+            result: List[Dict[str, Any]] = []
             for id_art in ids:
-                demanda = demanda_por_componente.get(id_art, 0)
+                try:
+                    dem_ped = float(demanda_pedido.get(id_art, 0) or 0)
+                except (TypeError, ValueError):
+                    dem_ped = 0.0
+                try:
+                    dem_res = float(demanda_reserva_pack.get(id_art, 0) or 0)
+                except (TypeError, ValueError):
+                    dem_res = 0.0
+                dem_total = dem_ped + dem_res
+                if dem_ped > 0 and dem_res > 0:
+                    origen_u = "Pedido + reserva pack"
+                elif dem_res > 0:
+                    origen_u = "Reserva pack"
+                elif dem_ped > 0:
+                    origen_u = "Pedido"
+                else:
+                    origen_u = "—"
                 art = art_rows.get(id_art) or {}
-                st = stock_map.get(id_art, 0)  # valor real (puede ser negativo)
-                reserva = float(art.get("stock_reserva") or 0)
-                cant_a_fabricar = max(0, demanda - st + reserva)
-                # Urgente = max(0, cant pedida - saldo); la reserva no interviene
-                cant_urgente_abs = max(0, demanda - st)
+                st = float(stock_map.get(id_art, 0) or 0)
+                cant_a_fabricar = max(0.0, dem_total - st)
+                cant_urgente_abs = max(0.0, dem_ped - st)
                 cant_urgente = cant_urgente_abs
                 id_pres_v = art.get("id_presentacionV")
                 mult = float(art.get("multiplicador_vta") or 0)
                 cant_presentacion = round(cant_a_fabricar / mult, 2) if mult and mult > 0 else None
+                try:
+                    bulto_comp = float(art.get("cantidad_promedio_bulto") or 0)
+                except (TypeError, ValueError):
+                    bulto_comp = 0.0
                 detalle = detalle_por_art.get(id_art) or []
-                total_raw = sum(d.get("stock_terminado", 0) for d in detalle)
+                total_raw = sum(float(d.get("stock_terminado") or 0) for d in detalle)
                 result.append({
                     "id_articulo": id_art,
                     "codigo_articulo": str_or_default(art.get("CodigoArticulo"), "-"),
                     "codigo_manual": str_or_default(art.get("id_manual"), "-"),
                     "descripcion_articulo": str_or_default(art.get("NombreArticulo"), "-"),
-                    "cantidad_pedida": demanda,
-                    "cantidad_pendiente_prod": demanda,
+                    "cantidad_pedida": dem_total,
+                    "cantidad_demanda_pedido": dem_ped,
+                    "cantidad_demanda_reserva_pack": dem_res,
+                    "origen_demanda_unidades_etiqueta": origen_u,
+                    "cantidad_pendiente_prod": dem_total,
                     "stock_terminado": st,
-                    "stock_reserva": reserva,
+                    "stock_reserva": 0.0,
                     "stock": st,
+                    "cantidad_promedio_bulto": bulto_comp,
                     "cantidad_a_fabricar": cant_a_fabricar,
                     "cantidad_urgente": cant_urgente,
                     "cantidad_urgente_abs": cant_urgente_abs,
+                    "cantidad_a_fabricar_docenas": docenas_desde_unidades_opt(cant_a_fabricar, bulto_comp),
+                    "cantidad_urgente_docenas": docenas_desde_unidades_opt(cant_urgente_abs, bulto_comp),
                     "nombre_unimed": unimed_map.get(art.get("id_unimed"), "-"),
                     "nombre_presentacion": pres_map.get(id_pres_v, "-") if id_pres_v is not None else "-",
                     "cantidad_presentacion": cant_presentacion,
@@ -1775,10 +2243,11 @@ def _listar_unidades_por_demanda(
                         "filas": detalle,
                         "total": total_raw,
                         "disponible": total_raw,
-                        "reserva": reserva,
-                    }),
+                        "reserva": 0,
+                        "deposito_semi_configurado": id_semi is not None,
+                    }, ensure_ascii=False),
                 })
-            return sorted(result, key=lambda x: -x["cantidad_a_fabricar"])[:limit]
+            return sorted(result, key=lambda x: -float(x.get("cantidad_a_fabricar") or 0))[:limit]
     except Exception as e:
         logger.warning("Error al listar unidades por demanda en %s: %s", base_empresa, e, exc_info=True)
         return []
@@ -1792,8 +2261,8 @@ def listar_ventana_pack_unidades(
     """
     Desglose por unidades (componentes de las recetas de los packs). Toma los artículos
     de listar_ventana_pack con Cant a producir > 0, explota sus BOM (en_abm_formula),
-    agrega la demanda por id_articulo componente y devuelve filas con las mismas columnas
-    que la ventana pack. Solo lectura, sin checkbox.
+    particiona demanda por componente en **pedido** vs **reserva del pack terminado**,
+    saldo solo en depósito **Semi elaborado** (tipo MPR). Solo lectura, sin checkbox.
     Si se pasa filas_pack (resultado ya calculado de listar_ventana_pack), se reutiliza
     y no se vuelve a llamar a listar_ventana_pack (reduce conexiones MySQL).
     """
@@ -1805,24 +2274,8 @@ def listar_ventana_pack_unidades(
     art_ids = [a for a in art_ids if a is not None]
     abm_map = bulk_id_en_abm(base_empresa, art_ids) if art_ids else {}
     bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
-    demanda_por_componente: Dict[int, float] = {}
-    for r in filas_pack:
-        cant = r.get("cantidad_a_fabricar") or 0
-        if cant <= 0:
-            continue
-        id_en_abm = abm_map.get(to_int_or_none(r.get("id_articulo")))
-        if id_en_abm is None:
-            continue
-        bom = bom_map.get(id_en_abm)
-        if not bom or not bom.get("componentes"):
-            continue
-        for comp in bom["componentes"]:
-            id_comp = to_int_or_none(comp.get("id_articulo"))
-            if id_comp is None:
-                continue
-            qty = float(comp.get("cantidad_articulo") or 0) * float(cant)
-            demanda_por_componente[id_comp] = demanda_por_componente.get(id_comp, 0) + qty
-    return _listar_unidades_por_demanda(base_empresa, demanda_por_componente, limit)
+    dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(filas_pack, abm_map, bom_map)
+    return _listar_unidades_por_demanda(base_empresa, dem_ped, dem_res, limit)
 
 
 def listar_unidades_desde_seleccion(
@@ -1834,34 +2287,37 @@ def listar_unidades_desde_seleccion(
     Desglose por unidades a partir de la selección de la ventana Confirmar OPT.
     filas: lista de dicts con id_articulo y cantidad_a_fabricar (packs seleccionados).
     Devuelve componentes de las recetas (BOM) con cantidades agregadas.
+    Enriquece P_ped y stock del pack desde ``listar_ventana_pack`` si faltan en sesión.
     """
     if not (base_empresa or "").strip() or not filas:
         return []
-    art_ids = [to_int_or_none(f.get("id_articulo")) for f in filas if float(f.get("cantidad_a_fabricar") or 0) > 0]
+    ventana_ref = listar_ventana_pack(base_empresa, limit=max(limit * 2, 400))
+    by_pack = {
+        to_int_or_none(r.get("id_articulo")): r
+        for r in ventana_ref
+        if to_int_or_none(r.get("id_articulo")) is not None
+    }
+    filas_enriquecidas: List[Dict[str, Any]] = []
+    for f in filas:
+        ff = dict(f)
+        aid = to_int_or_none(ff.get("id_articulo"))
+        ref = by_pack.get(aid) if aid is not None else None
+        if ref:
+            ff["cantidad_pedida_pedido"] = ref.get("cantidad_pedida_pedido", ff.get("cantidad_pedida_pedido", 0))
+            ff["stock_terminado"] = ref.get("stock_terminado", ff.get("stock_terminado", 0))
+        else:
+            ff.setdefault(
+                "cantidad_pedida_pedido",
+                float(ff.get("cantidad_pedida_pedido") or ff.get("cantidad_pedida") or 0),
+            )
+            ff.setdefault("stock_terminado", float(ff.get("stock_terminado") or 0))
+        filas_enriquecidas.append(ff)
+    art_ids = [to_int_or_none(f.get("id_articulo")) for f in filas_enriquecidas if float(f.get("cantidad_a_fabricar") or 0) > 0]
     art_ids = [a for a in art_ids if a is not None]
     abm_map = bulk_id_en_abm(base_empresa, art_ids) if art_ids else {}
     bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
-    demanda_por_componente: Dict[int, float] = {}
-    for f in filas:
-        id_art = to_int_or_none(f.get("id_articulo"))
-        if id_art is None:
-            continue
-        cant = float(f.get("cantidad_a_fabricar") or 0)
-        if cant <= 0:
-            continue
-        id_en_abm = abm_map.get(id_art)
-        if id_en_abm is None:
-            continue
-        bom = bom_map.get(id_en_abm)
-        if not bom or not bom.get("componentes"):
-            continue
-        for comp in bom["componentes"]:
-            id_comp = to_int_or_none(comp.get("id_articulo"))
-            if id_comp is None:
-                continue
-            qty = float(comp.get("cantidad_articulo") or 0) * cant
-            demanda_por_componente[id_comp] = demanda_por_componente.get(id_comp, 0) + qty
-    return _listar_unidades_por_demanda(base_empresa, demanda_por_componente, limit)
+    dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(filas_enriquecidas, abm_map, bom_map)
+    return _listar_unidades_por_demanda(base_empresa, dem_ped, dem_res, limit)
 
 
 def lineas_opt_desde_formulario_unidades(
@@ -1934,6 +2390,8 @@ def actualizar_pedidos_produccion(
     Réplica del botón "Actualización" en Lista_Pedidos_OPT (VB6 Actualiza_Pedidos_Produccion).
     Carga lista_produccion_detalle y lista_produccion_agrupada desde pedidos PED (Anulado='No',
     estado_pedido_opt='Pendiente' si aplica), solo artículos con articulo.tipo_art_fab = 'Terminado'.
+    Además sincroniza la demanda por reserva (fila detalle con codigo_movimiento_pedido = 0).
+    Si no hay pedidos en el rango, la operación sigue siendo correcta y solo aplica la sincronización por reserva.
     Solo escribe en lista_produccion_detalle (INSERT) y lista_produccion_agrupada (INSERT/UPDATE).
     Nunca asigna en_proceso_produccion = 'Si' (eso solo ocurre al crear la OPT con crear_opt_multiples_articulos).
     Solo inserta/actualiza con en_proceso_produccion = 'No' y solo toca filas con en_proceso_produccion = 'No' en agrupada.
@@ -1988,17 +2446,10 @@ def actualizar_pedidos_produccion(
                 pct = "%" + busqueda.strip() + "%"
                 params_origin.extend([pct, pct])
             cursor.execute(sql_origin, params_origin)
-            filas_origen = cursor.fetchall()
-            if not filas_origen:
-                conn.rollback()
-                return False, (
-                    "No hay pedidos pendientes que se puedan incorporar a producción. "
-                    "Revise en «Orden de Producción de Trabajo (OPT)»: que el rango de fechas incluya sus pedidos, "
-                    "que los pedidos tengan ítems cargados y que los artículos estén dados de alta como terminados para fabricación."
-                )
+            filas_origen = cursor.fetchall() or []
             hoy = date.today().strftime("%Y-%m-%d")
             id_usuario_val = id_usuario if id_usuario is not None else 0
-            # 1) lista_produccion_detalle: INSERT si no existe (codigo_movimiento_pedido, id_articulo)
+            # 1) lista_produccion_detalle: INSERT si no existe (codigo_movimiento_pedido, id_articulo) desde pedidos PED
             for row in filas_origen:
                 cod_ped = to_int_or_none(row[0])
                 id_art = to_int_or_none(row[1])
@@ -2035,6 +2486,20 @@ def actualizar_pedidos_produccion(
                         )
                     else:
                         raise ins_err
+            tbl_sd_ap = _nombre_tabla(cursor, "stock_deposito")
+            tbl_dep_ap = _nombre_tabla(cursor, "deposito")
+            try:
+                _sincronizar_demanda_reserva_lista_detalle(
+                    cursor,
+                    tbl_detalle,
+                    tbl_articulo,
+                    tbl_sd_ap,
+                    tbl_dep_ap,
+                    id_usuario_val,
+                    hoy,
+                )
+            except Exception as e_res:
+                logger.warning("Sincronización demanda por reserva en actualizar_pedidos_produccion (%s): %s", base_empresa, e_res)
             # 2) lista_produccion_agrupada: cantidad_pedida = SUM(detalle.cantidad_pedida);
             #    cantidad_pendiente_prod = SUM(detalle.cantidad_pendiente_prod) (alineado con OPP, no forzar pendiente = pedida).
             cursor.execute(
@@ -2099,7 +2564,11 @@ def actualizar_pedidos_produccion(
                     if "1054" not in str(upd_det):
                         raise upd_det
             conn.commit()
-            return True, "Se actualizaron los nuevos pedidos a producir correctamente."
+            partes_msg: List[str] = []
+            if filas_origen:
+                partes_msg.append("Se incorporaron líneas desde pedidos a la lista de producción.")
+            partes_msg.append("Se sincronizó la demanda por reserva de stock.")
+            return True, " ".join(partes_msg)
     except MprSchemaError:
         raise
     except Exception as e:
@@ -5049,6 +5518,7 @@ def _columnas_opcionales_op_agrupada(cursor, tbl_agrupada: str) -> Dict[str, str
             ("fecha_objetivo", "fecha_objetivo"),
             ("fecha_entrega", "fecha_objetivo"),
             ("cantidad_fabricada_acumulada", "cantidad_fabricada_acumulada"),
+            ("codigo_movimiento_opt", "codigo_movimiento_opt"),
         ]:
             if nombre_estandar in out:
                 continue
@@ -6656,6 +7126,7 @@ def ejecutar_opp_por_componentes(
                             cursor.execute(f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)", [id_art, deposito_destino, saldo_dest_despues])
                         if tbl_historico:
                             try:
+                                # 13 placeholders en INSERT mínimo (sin id_operario*); no duplicar fecha/hora.
                                 base_hist_pc = [
                                     id_art_pack_opp,
                                     id_art,
@@ -6668,8 +7139,6 @@ def ejecutar_opp_por_componentes(
                                     nro_comprobante,
                                     id_usuario,
                                     id_lista_produccion,
-                                    fecha_mov,
-                                    hora_evento,
                                     fecha_mov,
                                     hora_evento,
                                 ]
@@ -6999,7 +7468,9 @@ def ejecutar_reclasificacion(
 
 def reporte_mpr_pendiente(base_empresa: str, limit: int = 200) -> List[Dict[str, Any]]:
     """Pendiente por artículo (lista_produccion_agrupada con cantidad_pendiente_prod > 0)."""
-    return listar_lista_produccion_agrupada(base_empresa, limit=limit)
+    return listar_lista_produccion_agrupada(
+        base_empresa, limit=limit, excluir_filas_opt_liberadas_mstock=True
+    )
 
 
 def reporte_mpr_wip(base_empresa: str, limit: int = 200) -> List[Dict[str, Any]]:

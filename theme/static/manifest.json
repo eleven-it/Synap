@@ -2,7 +2,7 @@
   "name": "Synap - Gestión Empresarial",
   "short_name": "Synap",
   "description": "Sistema de gestión empresarial integrado",
-  "start_url": "/core/dashboard/",
+  "start_url": "/login/",
   "scope": "/",
   "display": "standalone",
   "orientation": "any",

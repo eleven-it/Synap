@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from django.db import transaction
 from django.utils import timezone
 
-from ia.models import AgentExecution, AgentMessage, ExecutionStatus, MessageRole
+from ia.models import AgentExecution, AgentMessage, AgentLearningExample, ExecutionStatus, MessageRole
+from ia.services.learning_capture_service import LearningCaptureService
 from ia.services.llm_gateway import LlmGatewayError, LlmGatewayService
 from ia.services.memory_service import MemoryService
 from ia.services.model_selection_service import ModelSelectionService
@@ -21,6 +22,7 @@ class OrchestrationResult:
     assistant_message: AgentMessage
     memories_used: list
     selected_model: object
+    learning_example: AgentLearningExample | None = None
 
 
 class AgentOrchestrator:
@@ -55,10 +57,12 @@ class AgentOrchestrator:
                 metadata={},
             )
 
+            transcript_context = self._build_recent_transcript_context()
             response_text, response_payload, token_usage, execution_status = self._generate_response(
                 message_text,
                 memories,
                 selected_model,
+                transcript_context=transcript_context,
             )
 
             assistant_message = AgentMessage.objects.create(
@@ -102,6 +106,14 @@ class AgentOrchestrator:
                 self.conversation.title = message_text[:80]
             self.conversation.save(update_fields=["last_message_at", "title", "updated_at"])
 
+            learning_example = LearningCaptureService.record_turn_from_execution(
+                agent=self.agent,
+                conversation=self.conversation,
+                execution=execution,
+                user_message=user_message,
+                assistant_message=assistant_message,
+            )
+
         return OrchestrationResult(
             conversation=self.conversation,
             execution=execution,
@@ -109,15 +121,27 @@ class AgentOrchestrator:
             assistant_message=assistant_message,
             memories_used=memories,
             selected_model=selected_model,
+            learning_example=learning_example,
         )
 
-    def _generate_response(self, message_text: str, memories: list, selected_model):
+    def _build_recent_transcript_context(self) -> str:
+        """Últimos turnos de la conversación para enlazar aclaraciones sucesivas (mismo hilo)."""
+        rows = list(
+            AgentMessage.objects.filter(conversation=self.conversation).order_by("-id")[:14]
+        )
+        parts = []
+        for m in reversed(rows):
+            label = "Usuario" if m.role == MessageRole.USER else "Asistente"
+            parts.append(f"{label}: {(m.content or '')[:800]}")
+        return "\n".join(parts)
+
+    def _generate_response(self, message_text: str, memories: list, selected_model, *, transcript_context: str = ""):
         if self.agent.domain == "reportes" or self.agent.slug == "asistente-reportes":
             report_result = ReportAgentService(
                 agent=self.agent,
                 policy_context=self.policy_context,
                 selected_model=selected_model,
-            ).handle_query(message_text)
+            ).handle_query(message_text, conversation_snippet=transcript_context or None)
             return (
                 report_result.answer,
                 report_result.response_payload,

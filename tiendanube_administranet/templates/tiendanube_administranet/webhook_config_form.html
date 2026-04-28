@@ -1,0 +1,347 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if object %}{% trans "Edit" %}{% else %}{% trans "Create" %}{% endif %} {% trans "Webhook Configuration" %}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+        <li class="inline-flex items-center">
+            <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                <span class="material-icons text-sm mr-2">dashboard</span>
+                {% trans "Dashboard" %}
+            </a>
+        </li>
+        <li>
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <a href="{% url 'tiendanube_administranet:webhook_config_list' %}" class="text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                    {% trans "Webhook Configurations" %}
+                </a>
+            </div>
+        </li>
+        <li>
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    {% if object %}{% trans "Edit" %}{% else %}{% trans "Create" %}{% endif %}
+                </span>
+            </div>
+        </li>
+    </ol>
+</nav>
+
+<div class="max-w-4xl mx-auto">
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-gray-800 dark:text-white">
+            {% if object %}{% trans "Edit" %}{% else %}{% trans "Create" %}{% endif %} {% trans "Webhook Configuration" %}
+        </h1>
+        <p class="text-gray-600 dark:text-gray-400 mt-2">
+            {% if object %}
+                {% trans "Update your webhook configuration for real-time synchronization." %}
+            {% else %}
+                {% trans "Configure webhooks to enable real-time synchronization between TiendaNube and AdministraNET." %}
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <form method="post" id="webhookForm" class="p-6">
+            {% csrf_token %}
+            
+            <!-- Form Errors -->
+            {% if form.errors %}
+            <div class="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                <div class="flex items-start">
+                    <span class="material-icons text-red-600 dark:text-red-400 mr-2 mt-0.5">error</span>
+                    <div>
+                        <h4 class="text-sm font-semibold text-red-800 dark:text-red-200 mb-2">
+                            {% trans "Please correct the following errors:" %}
+                        </h4>
+                        <ul class="text-sm text-red-700 dark:text-red-300 list-disc list-inside">
+                            {% for field, errors in form.errors.items %}
+                                {% for error in errors %}
+                                    <li>{{ field }}: {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Tiendanube Config Selection -->
+            <div class="mb-8">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
+                    <span class="material-icons text-indigo-600 dark:text-indigo-400 mr-2">store</span>
+                    {% trans "Store Configuration" %}
+                </h3>
+                {{ form.tiendanube_config|as_crispy_field }}
+            </div>
+            
+            <!-- Webhook URL Section -->
+            <div class="mb-8">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
+                    <span class="material-icons text-blue-600 dark:text-blue-400 mr-2">link</span>
+                    {% trans "Webhook URL Configuration" %}
+                </h3>
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                    <div class="flex items-start">
+                        <span class="material-icons text-blue-600 dark:text-blue-400 mr-2 mt-0.5">info</span>
+                        <div>
+                            <p class="text-sm text-blue-800 dark:text-blue-200">
+                                {% trans "We'll automatically generate the webhook URL based on your site configuration. You can customize it if needed." %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="flex items-center">
+                        {{ form.webhook_url_auto|as_crispy_field }}
+                    </div>
+                    
+                    <div id="webhook-url-field" class="{% if form.webhook_url_auto.value %}hidden{% endif %}">
+                        {{ form.webhook_url|as_crispy_field }}
+                    </div>
+                    
+                    <div id="auto-generated-url" class="{% if not form.webhook_url_auto.value %}hidden{% endif %}">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {% trans "Generated Webhook URL" %}
+                        </label>
+                        <div class="flex items-center space-x-2">
+                            <input type="text" 
+                                   value="{{ form.webhook_url.value|default:'' }}" 
+                                   readonly 
+                                   class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white">
+                            <button type="button" 
+                                    onclick="copyToClipboard(this.previousElementSibling.value)"
+                                    class="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                                <span class="material-icons text-sm">content_copy</span>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {% trans "This URL will be automatically configured in Tiendanube" %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Events Configuration Section -->
+            <div class="mb-8">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
+                    <span class="material-icons text-green-600 dark:text-green-400 mr-2">event</span>
+                    {% trans "Subscribed Events" %}
+                </h3>
+                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 mb-4">
+                    <div class="flex items-start">
+                        <span class="material-icons text-green-600 dark:text-green-400 mr-2 mt-0.5">info</span>
+                        <div>
+                            <p class="text-sm text-green-800 dark:text-green-200">
+                                {% trans "Select the events you want to receive. These events will trigger synchronization between TiendaNube and AdministraNET." %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {{ form.events|as_crispy_field }}
+            </div>
+
+            <!-- Security Section -->
+            <div class="mb-8">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
+                    <span class="material-icons text-orange-600 dark:text-orange-400 mr-2">security</span>
+                    {% trans "Security Configuration" %}
+                </h3>
+                <div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 mb-4">
+                    <div class="flex items-start">
+                        <span class="material-icons text-orange-600 dark:text-orange-400 mr-2 mt-0.5">warning</span>
+                        <div>
+                            <p class="text-sm text-orange-800 dark:text-orange-200">
+                                {% trans "The webhook secret is used to verify that requests come from TiendaNube. Keep this secret secure." %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {{ form.webhook_secret|as_crispy_field }}
+            </div>
+
+            <!-- Retry Configuration Section -->
+            <div class="mb-8">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
+                    <span class="material-icons text-yellow-600 dark:text-yellow-400 mr-2">refresh</span>
+                    {% trans "Retry Configuration" %}
+                </h3>
+                <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+                    <div class="flex items-start">
+                        <span class="material-icons text-yellow-600 dark:text-yellow-400 mr-2 mt-0.5">info</span>
+                        <div>
+                            <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                                {% trans "Configure how many times to retry failed webhook deliveries and the delay between retries." %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.max_retries|as_crispy_field }}
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {% trans "Number of retry attempts (0-10)" %}
+                        </p>
+                    </div>
+                    <div>
+                        {{ form.retry_delay|as_crispy_field }}
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {% trans "Delay in seconds between retries (60-3600)" %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status Configuration Section -->
+            <div class="mb-8">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-white mb-4 flex items-center">
+                    <span class="material-icons text-purple-600 dark:text-purple-400 mr-2">settings</span>
+                    {% trans "Status Configuration" %}
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        {{ form.status|as_crispy_field }}
+                    </div>
+                    <div>
+                        {{ form.is_active|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex items-center justify-between pt-6 border-t border-gray-200 dark:border-gray-700">
+                <a href="{% url 'tiendanube_administranet:webhook_config_list' %}" 
+                   class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:ring-4 focus:outline-none focus:ring-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white dark:focus:ring-gray-700">
+                    <span class="material-icons text-sm mr-2">arrow_back</span>
+                    {% trans "Cancel" %}
+                </a>
+                
+                <div class="flex items-center space-x-3">
+                    <button type="submit" 
+                            class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:ring-4 focus:outline-none focus:ring-orange-200 dark:focus:ring-orange-800">
+                        <span class="material-icons text-sm mr-2">save</span>
+                        {% if object %}{% trans "Update Webhook" %}{% else %}{% trans "Create Webhook" %}{% endif %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- JavaScript for enhanced UX -->
+<script>
+// Toggle webhook URL field (global function)
+function toggleWebhookUrlField() {
+    const autoCheckbox = document.querySelector('#id_webhook_url_auto');
+    const urlField = document.getElementById('webhook-url-field');
+    const autoGenerated = document.getElementById('auto-generated-url');
+    
+    if (autoCheckbox && urlField && autoGenerated) {
+        if (autoCheckbox.checked) {
+            urlField.classList.add('hidden');
+            autoGenerated.classList.remove('hidden');
+        } else {
+            urlField.classList.remove('hidden');
+            autoGenerated.classList.add('hidden');
+        }
+    }
+}
+
+// Copy to clipboard function (global function)
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        // Show success message
+        const button = event.target.closest('button');
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<span class="material-icons text-sm">check</span>';
+        button.classList.add('bg-green-600', 'hover:bg-green-700');
+        button.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        
+        setTimeout(() => {
+            button.innerHTML = originalHTML;
+            button.classList.remove('bg-green-600', 'hover:bg-green-700');
+            button.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        }, 2000);
+    }).catch(err => {
+        console.error('Failed to copy: ', err);
+        alert('Failed to copy to clipboard');
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-generate webhook secret if empty
+    const secretField = document.querySelector('#id_webhook_secret');
+    if (secretField && !secretField.value) {
+        const generateSecret = () => {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            let result = '';
+            for (let i = 0; i < 32; i++) {
+                result += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return result;
+        };
+        
+        secretField.value = generateSecret();
+    }
+    
+    // Show/hide secret toggle
+    const secretToggle = document.createElement('button');
+    secretToggle.type = 'button';
+    secretToggle.className = 'absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600';
+    secretToggle.innerHTML = '<span class="material-icons text-sm">visibility</span>';
+    
+    if (secretField) {
+        secretField.parentElement.style.position = 'relative';
+        secretField.type = 'password';
+        secretToggle.onclick = () => {
+            secretField.type = secretField.type === 'password' ? 'text' : 'password';
+            secretToggle.innerHTML = secretField.type === 'password' ? 
+                '<span class="material-icons text-sm">visibility</span>' : 
+                '<span class="material-icons text-sm">visibility_off</span>';
+        };
+        secretField.parentElement.appendChild(secretToggle);
+    }
+    
+    // Form submission debugging
+    const form = document.getElementById('webhookForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            console.log('Form submitting...');
+            console.log('Form data:', new FormData(form));
+            
+            // Validate required fields
+            const config = document.querySelector('[name="tiendanube_config"]');
+            const url = document.querySelector('[name="webhook_url"]');
+            const events = document.querySelectorAll('[name="events"]:checked');
+            
+            if (!config || !config.value) {
+                e.preventDefault();
+                alert('Please select a Tiendanube configuration');
+                return false;
+            }
+            
+            if (!url || !url.value) {
+                e.preventDefault();
+                alert('Please provide a webhook URL');
+                return false;
+            }
+            
+            if (events.length === 0) {
+                e.preventDefault();
+                alert('Please select at least one event');
+                return false;
+            }
+            
+            console.log('Form validation passed');
+        });
+    }
+});
+</script>
+{% endblock %}

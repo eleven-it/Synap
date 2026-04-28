@@ -1,0 +1,96 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Delete Tiendanube Configuration" %}{% endblock %}
+
+{% block content %}
+<!-- Breadcrumb -->
+<nav class="flex mb-6" aria-label="Breadcrumb">
+    <ol class="inline-flex items-center space-x-1 md:space-x-3">
+        <li class="inline-flex items-center">
+            <a href="{% url 'tiendanube_administranet:dashboard' %}" class="inline-flex items-center text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                <span class="material-icons text-sm mr-2">dashboard</span>
+                {% trans "Dashboard" %}
+            </a>
+        </li>
+        <li>
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <a href="{% url 'tiendanube_administranet:tiendanube_config' %}" class="text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400 dark:hover:text-white">
+                    {% trans "Tiendanube Configuration" %}
+                </a>
+            </div>
+        </li>
+        <li>
+            <div class="flex items-center">
+                <span class="material-icons text-gray-400 mx-2">chevron_right</span>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{% trans "Delete Configuration" %}</span>
+            </div>
+        </li>
+    </ol>
+</nav>
+
+<div class="max-w-2xl mx-auto">
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div class="p-8 text-center">
+            <!-- Warning Icon -->
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 mb-4">
+                <span class="material-icons text-red-600 dark:text-red-400 text-xl">warning</span>
+            </div>
+
+            <!-- Title -->
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-4">{% trans "Delete Configuration" %}</h1>
+
+            <!-- Warning Message -->
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
+                <p class="text-red-800 dark:text-red-200 font-medium mb-2">⚠️ {% trans "This action cannot be undone" %}</p>
+                <p class="text-red-700 dark:text-red-300 text-sm">
+                    {% trans "Are you sure you want to delete the configuration for store" %} 
+                    <strong>"{{ object.store_id }}"</strong>? 
+                    {% trans "This will permanently remove all settings and stop any active synchronization." %}
+                </p>
+            </div>
+
+            <!-- Configuration Details -->
+            <div class="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 mb-6 text-left">
+                <h3 class="font-semibold text-gray-800 dark:text-gray-200 mb-2">{% trans "Configuration Details:" %}</h3>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">{% trans "Store ID:" %}</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ object.store_id }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">{% trans "API URL:" %}</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ object.api_url|default:"Default" }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">{% trans "Auto Sync:" %}</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ object.is_active|yesno:"Enabled,Disabled" }}</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-600 dark:text-gray-400">{% trans "Last Sync:" %}</span>
+                        <span class="font-medium text-gray-900 dark:text-white">{{ object.updated_at|default:"Never"|date:"M d, Y H:i" }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form -->
+            <form method="post">
+                {% csrf_token %}
+                <div class="flex justify-center space-x-4">
+                    <a href="{% url 'tiendanube_administranet:tiendanube_config' %}" 
+                       class="inline-flex items-center px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition">
+                        <span class="material-icons text-sm mr-2">close</span>
+                        {% trans "Cancel" %}
+                    </a>
+                    <button type="submit" 
+                            class="inline-flex items-center px-6 py-3 text-sm font-medium text-white bg-red-600 border border-transparent rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition">
+                        <span class="material-icons text-sm mr-2">delete</span>
+                        {% trans "Delete Configuration" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %} 
