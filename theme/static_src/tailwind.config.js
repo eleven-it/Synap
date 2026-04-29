@@ -30,7 +30,10 @@ module.exports = {
          */
         '../../**/templates/**/*.html',
 
-        "../**/*.py"               // Opcional: Detectar en archivos Python (Django)        
+        /* JS de apps (p. ej. informe objetivos vs BO: clases en strings dinámicos). */
+        '../../reports/static/**/*.js',
+
+        "../**/*.py",               // Opcional: Detectar en archivos Python (Django)
 
         /**
          * JS: If you use Tailwind CSS in JavaScript, uncomment the following lines and make sure

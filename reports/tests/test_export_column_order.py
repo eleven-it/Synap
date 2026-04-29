@@ -67,3 +67,42 @@ class ExportColumnOrderTest(SimpleTestCase):
         self.assertNotIn("estado", h)
         self.assertEqual(h[:3], ["fecha", "nro_comprobante", "subtotal_desc"])
         self.assertEqual(h[-1], "otro")
+
+    def test_ventas_objetivos_vs_bo_orden_alineado_tabla_web(self):
+        r = ReportDefinition(slug="ventas-objetivos-vs-bo", config={})
+        row = {
+            "cod_viajante": 1,
+            "nombre_vendedor": "A",
+            "codigo_cliente": 10,
+            "nombre_cliente": "C",
+            "objetivo": 100.0,
+            "falta": 0.0,
+            "cantidades_vendidas": 1.0,
+            "facturacion": 50.0,
+            "remitos": 0.0,
+            "total": 50.0,
+            "bo_con_stock": 1.0,
+            "bo_con_ingreso": 2.0,
+            "bo_sin_stock": 3.0,
+            "backorder_total": 6.0,
+        }
+        h = self.svc._resolve_export_headers(r, row)
+        self.assertEqual(
+            h,
+            [
+                "cod_viajante",
+                "nombre_vendedor",
+                "codigo_cliente",
+                "nombre_cliente",
+                "objetivo",
+                "falta",
+                "cantidades_vendidas",
+                "facturacion",
+                "remitos",
+                "total",
+                "bo_con_stock",
+                "bo_con_ingreso",
+                "bo_sin_stock",
+                "backorder_total",
+            ],
+        )

@@ -11,7 +11,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from django.conf import settings
 
@@ -44,8 +44,6 @@ _STOCK_TIPO_COMP_VENTAS = (
     "ND Anul NC",
 )
 
-FAC_LIMIT = 5000
-
 # Misma convención que `bo-stock-facturacion` / VB6 Info_Stock (0–6).
 _LISTA_PRECIO_LABELS = (
     "Costo",
@@ -74,6 +72,78 @@ def _norm_yyyy_mm_dd(s: str) -> str:
 def _parse_date_for_overlap(s: str):
     s2 = _norm_yyyy_mm_dd(s)
     return datetime.strptime(s2, "%Y-%m-%d").date()
+
+
+def _nest_venta_detalle_rubro_subrubro_articulo(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Construye rubro → subrubro → artículo con totales de facturación/unidades por nivel.
+    Cada nodo incluye solo métricas de venta (resto de columnas se rellenan en UI).
+    """
+    rubros: Dict[Tuple[int, str], Dict[str, Any]] = {}
+    sub_idx: Dict[Tuple[Tuple[int, str], Tuple[int, str]], Dict[str, Any]] = {}
+
+    for rw in filas:
+        cr = int(rw.get("codigo_rubro") or 0)
+        nr = (rw.get("nombre_rubro") or "").strip() or "Sin rubro"
+        isr = int(rw.get("id_subrubro") or 0)
+        nsr = (rw.get("nombre_subrubro") or "").strip() or "Sin subrubro"
+        iar = int(rw.get("id_art") or 0)
+        nar = (rw.get("nombre_articulo") or "").strip() or "Sin artículo"
+        fac = float(rw.get("facturacion") or 0)
+        uni = float(rw.get("cantidades_vendidas") or 0)
+
+        rk = (cr, nr)
+        if rk not in rubros:
+            rubros[rk] = {
+                "tipo": "rubro",
+                "codigo_rubro": cr,
+                "nombre_rubro": nr,
+                "facturacion": 0.0,
+                "cantidades_vendidas": 0.0,
+                "children": [],
+            }
+        rubros[rk]["facturacion"] += fac
+        rubros[rk]["cantidades_vendidas"] += uni
+
+        sk = (rk, (isr, nsr))
+        if sk not in sub_idx:
+            node = {
+                "tipo": "subrubro",
+                "id_subrubro": isr,
+                "nombre_subrubro": nsr,
+                "facturacion": 0.0,
+                "cantidades_vendidas": 0.0,
+                "children": [],
+            }
+            sub_idx[sk] = node
+            rubros[rk]["children"].append(node)
+        sub_idx[sk]["facturacion"] += fac
+        sub_idx[sk]["cantidades_vendidas"] += uni
+
+        sub_idx[sk]["children"].append(
+            {
+                "tipo": "articulo",
+                "id_art": iar,
+                "nombre_articulo": nar,
+                "facturacion": fac,
+                "cantidades_vendidas": uni,
+            }
+        )
+
+    def sort_key_rub(x: Dict[str, Any]) -> Tuple[str, int]:
+        return ((x.get("nombre_rubro") or "").upper(), int(x.get("codigo_rubro") or 0))
+
+    out = list(rubros.values())
+    out.sort(key=sort_key_rub)
+    for rb in out:
+        ch = rb.get("children") or []
+        ch.sort(key=lambda s: ((s.get("nombre_subrubro") or "").upper(), int(s.get("id_subrubro") or 0)))
+        for su in ch:
+            arts = su.get("children") or []
+            arts.sort(key=lambda a: ((a.get("nombre_articulo") or "").upper(), int(a.get("id_art") or 0)))
+            su["children"] = arts
+        rb["children"] = ch
+    return out
 
 
 def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) -> QueryResult:
@@ -211,7 +281,6 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 where_fac_cli.append(f"cl.CodViajante NOT IN ({phv})")
                 params_fac_cli.extend(vendedores_excluidos)
             where_fac_cli_s = " AND ".join(where_fac_cli)
-            params_fac_cli.append(FAC_LIMIT)
             sql_fac_cli = f"""
                 SELECT
                     cl.Codigo AS id_cliente,
@@ -225,8 +294,6 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 LEFT JOIN viajantes v ON v.CodViajante = cl.CodViajante
                 WHERE {where_fac_cli_s}
                 GROUP BY cl.Codigo
-                ORDER BY sub_total DESC
-                LIMIT %s
             """
             cursor.execute(sql_fac_cli, params_fac_cli)
             fac_rows = cursor.fetchall()
@@ -239,6 +306,38 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     "cod_viajante": int(r[3] or 0),
                     "nombre_vendedor": (r[4] or "").strip(),
                 }
+
+            # --- Clientes con histórico de ventas (sin filtro de fechas ni sucursal en facturas) ---
+            # Permite listar en el informe a quienes tienen movimiento en cuentacliente aunque en el
+            # período solicitado la facturación sea 0 (las columnas de período quedarán en 0).
+            where_hist_cli = [
+                "cc.Anulado = 'No'",
+                "cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')",
+            ]
+            params_hist_cli: List[Any] = []
+            if clientes_excluidos:
+                ph = ",".join(["%s"] * len(clientes_excluidos))
+                where_hist_cli.append(f"cl.Codigo NOT IN ({ph})")
+                params_hist_cli.extend(clientes_excluidos)
+            if vendedores_excluidos:
+                phv = ",".join(["%s"] * len(vendedores_excluidos))
+                where_hist_cli.append(f"cl.CodViajante NOT IN ({phv})")
+                params_hist_cli.extend(vendedores_excluidos)
+            where_hist_cli_s = " AND ".join(where_hist_cli)
+            sql_hist_cli = f"""
+                SELECT cl.Codigo
+                FROM cuentacliente cc
+                INNER JOIN cliente cl ON cl.Codigo = cc.Codigo
+                LEFT JOIN viajantes v ON v.CodViajante = cl.CodViajante
+                WHERE {where_hist_cli_s}
+                GROUP BY cl.Codigo
+                HAVING ABS(
+                    SUM(CASE WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM') THEN COALESCE(cc.SubtotalDesc, 0) ELSE 0 END)
+                    - SUM(CASE WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM') THEN COALESCE(cc.SubtotalDesc, 0) ELSE 0 END)
+                ) > 0.000001
+            """
+            cursor.execute(sql_hist_cli, params_hist_cli)
+            ids_con_historico_ventas = {int(r[0]) for r in cursor.fetchall() if r and r[0] is not None}
 
             # --- Remitos por cliente ---
             where_remitos = [
@@ -315,6 +414,59 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             uni_map: Dict[int, float] = {}
             for r in cursor.fetchall():
                 uni_map[int(r[0])] = float(r[1] or 0)
+
+            # --- Detalle venta por rubro / subrubro / artículo (mismo rango y filtros que unidades) ---
+            # Importe alineado a renglones stock.PrecioNetoxR (paridad ventas_netas / SPEC unidades).
+            where_uni_s = " AND ".join(where_uni)
+            sql_venta_por_art = f"""
+                SELECT
+                    cc.Codigo AS id_cliente,
+                    COALESCE(art.CodigoRubro, 0) AS codigo_rubro,
+                    COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
+                    COALESCE(art.IDSubRubro, 0) AS id_subrubro,
+                    COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
+                    COALESCE(art.IDArt, 0) AS id_art,
+                    COALESCE(MAX(art.NombreArticulo), '') AS nombre_articulo,
+                    SUM(CASE
+                        WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
+                            THEN COALESCE(st.PrecioNetoxR, 0)
+                        WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+                            THEN -COALESCE(st.PrecioNetoxR, 0)
+                        ELSE 0
+                    END) AS factu_linea,
+                    SUM(CASE
+                        WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
+                            THEN COALESCE(st.Cantidad, 0)
+                        WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+                            THEN -COALESCE(st.Cantidad, 0)
+                        ELSE 0
+                    END) AS unidades_linea
+                FROM stock st
+                INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+                INNER JOIN cliente cl_uni ON cl_uni.Codigo = cc.Codigo
+                LEFT JOIN articulo art ON art.IDArt = st.IDArt
+                LEFT JOIN rubro ru ON ru.CodigoRubro = art.CodigoRubro
+                LEFT JOIN subrubro sr ON sr.IDSubRubro = art.IDSubRubro
+                WHERE {where_uni_s}
+                GROUP BY cc.Codigo, art.CodigoRubro, art.IDSubRubro, art.IDArt
+                HAVING ABS(factu_linea) > 0.00001 OR ABS(unidades_linea) > 0.00001
+            """
+            cursor.execute(sql_venta_por_art, params_uni)
+            detalle_flat_por_cliente: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+            for r in cursor.fetchall():
+                cid = int(r[0])
+                detalle_flat_por_cliente[cid].append(
+                    {
+                        "codigo_rubro": int(r[1] or 0),
+                        "nombre_rubro": (r[2] or "").strip(),
+                        "id_subrubro": int(r[3] or 0),
+                        "nombre_subrubro": (r[4] or "").strip(),
+                        "id_art": int(r[5] or 0),
+                        "nombre_articulo": (r[6] or "").strip(),
+                        "facturacion": float(r[7] or 0),
+                        "cantidades_vendidas": float(r[8] or 0),
+                    }
+                )
 
             # --- Objetivos (solape con rango facturación) ---
             objetivos_map: Dict[int, Decimal] = {}
@@ -445,6 +597,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
 
             all_ids = sorted(
                 set(fact_map.keys())
+                | ids_con_historico_ventas
                 | set(rem_map.keys())
                 | set(uni_map.keys())
                 | set(bo_cli_agg.keys())
@@ -508,14 +661,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     }
                 )
 
-            rows_out.sort(
-                key=lambda r: (
-                    int(r.get("cod_viajante") or 0),
-                    int(r.get("codigo_cliente") or 0),
-                )
-            )
-
-            # Árbol vendedor → clientes
+            # Árbol vendedor → clientes (orden final: ver tras armar grupos)
             grupos: Dict[int, Dict[str, Any]] = {}
             for row in rows_out:
                 cv = row["cod_viajante"]
@@ -537,7 +683,9 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         "bo_sin_stock": 0.0,
                     }
                 g = grupos[cv]
-                ch = {**row, "tipo": "cliente"}
+                cid = int(row.get("codigo_cliente") or 0)
+                vd = _nest_venta_detalle_rubro_subrubro_articulo(detalle_flat_por_cliente.get(cid, []))
+                ch = {**row, "tipo": "cliente", "venta_detalle": vd}
                 g["children"].append(ch)
                 for k in (
                     "objetivo",
@@ -553,15 +701,30 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 ):
                     g[k] = float(g.get(k, 0) or 0) + float(row.get(k, 0) or 0)
 
+            # Clientes alfabéticos por nombre (nivel 1+); rubro/subrubro/artículo ya ordenados en _nest_venta_detalle_rubro_subrubro_articulo.
             for g in grupos.values():
                 g["children"].sort(
                     key=lambda x: (
-                        int(x.get("codigo_cliente") or 0),
                         (x.get("nombre_cliente") or "").upper(),
+                        int(x.get("codigo_cliente") or 0),
                     )
                 )
 
-            arbol = sorted(grupos.values(), key=lambda x: int(x.get("cod_viajante") or 0))
+            # Nivel 0 — vendedores: importe objetivo total descendente.
+            arbol = sorted(
+                grupos.values(),
+                key=lambda x: (
+                    -float(x.get("objetivo") or 0),
+                    (x.get("nombre_vendedor") or "").upper(),
+                    int(x.get("cod_viajante") or 0),
+                ),
+            )
+
+            rows_ordered: List[Dict[str, Any]] = []
+            for g in arbol:
+                for ch in g["children"]:
+                    rows_ordered.append({k: v for k, v in ch.items() if k not in ("tipo", "venta_detalle")})
+            rows_out = rows_ordered
 
             tot = {
                 "objetivo": sum(float(x["objetivo"]) for x in rows_out),
@@ -596,7 +759,11 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 0,
                 f"Facturación/remitos: {fi_fac_sql} a {ff_fac_sql}. Backorder: {fecha_inicio_bo} a {fecha_fin_bo}.",
             )
-            notes.append(f"Clientes en grilla: {len(rows_out)} (facturación top {FAC_LIMIT} + otros con movimiento/objetivo).")
+            notes.append(
+                f"Clientes en grilla: {len(rows_out)} "
+                "(unión de histórico de ventas en cuentacliente —sin acotar por ventana—, "
+                "movimiento en el período, objetivos vigentes, remitos/BO/unidades según filtros)."
+            )
 
             extra = {
                 "tabs": {

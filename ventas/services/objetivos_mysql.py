@@ -335,7 +335,9 @@ def listar_grupos_objetivos(
                            COALESCE(NULLIF(TRIM(cl.nombre_cliente), ''), CONCAT('Cliente ', cl.Codigo)) AS nombre_cliente,
                            cl.CodViajante,
                            COALESCE(NULLIF(TRIM(v.Nombre), ''), CONCAT('Vendedor ', cl.CodViajante)) AS nombre_vendedor,
-                           COALESCE(ov.objetivo, 0) AS objetivo
+                           COALESCE(ov.objetivo, 0) AS objetivo,
+                           COALESCE(hv.base_ventas, 0) AS base_ventas,
+                           COALESCE(NULLIF(TRIM(cl.id_manual_cli), ''), '-') AS id_manual_cli
                     FROM cliente cl
                     INNER JOIN viajantes v ON v.CodViajante = cl.CodViajante
                     LEFT JOIN (
@@ -348,6 +350,19 @@ def listar_grupos_objetivos(
                             GROUP BY Codigo
                         ) x ON x.Codigo = v1.Codigo AND x.max_id = v1.id
                     ) ov ON ov.Codigo = cl.Codigo
+                    LEFT JOIN (
+                        SELECT cc.Codigo,
+                               SUM(
+                                   CASE
+                                       WHEN cc.TipoComprobante IN ('FA','FB','FC','FE','FM') THEN COALESCE(cc.SubtotalDesc, 0)
+                                       WHEN cc.TipoComprobante IN ('NCA','NCB','NCC','NCE','NCM') THEN -COALESCE(cc.SubtotalDesc, 0)
+                                       ELSE 0
+                                   END
+                               ) AS base_ventas
+                        FROM cuentacliente cc
+                        WHERE cc.Anulado = 'No'
+                        GROUP BY cc.Codigo
+                    ) hv ON hv.Codigo = cl.Codigo
                     WHERE cl.CodViajante IS NOT NULL AND cl.CodViajante <> 0
                       AND cl.Estado = 'Activo'
                       AND COALESCE(v.anulado, 'No') = 'No'
@@ -355,14 +370,46 @@ def listar_grupos_objetivos(
                 """
                 cursor.execute(sql, [int(id_periodo)])
                 rows = []
+                totals_por_viajante: Dict[int, Decimal] = {}
+                objetivos_por_viajante: Dict[int, Decimal] = {}
+                raw_rows: List[Dict[str, Any]] = []
                 for r in cursor.fetchall():
-                    rows.append(
+                    cv = int(r[2] or 0)
+                    base = Decimal(str(r[5] or 0))
+                    obj = Decimal(str(r[4] or 0))
+                    id_manual_cli = str_or_default(r[6], "-")
+                    raw_rows.append(
                         {
                             "codigo": int(r[0]),
                             "nombre_cliente": (r[1] or "").strip(),
-                            "cod_viajante": int(r[2] or 0),
+                            "cod_viajante": cv,
                             "nombre_vendedor": (r[3] or "").strip(),
-                            "objetivo": float(r[4] or 0),
+                            "objetivo": obj,
+                            "base_ventas": base,
+                            "id_manual_cli": id_manual_cli,
+                        }
+                    )
+                    totals_por_viajante[cv] = totals_por_viajante.get(cv, Decimal("0")) + base
+                    objetivos_por_viajante[cv] = objetivos_por_viajante.get(cv, Decimal("0")) + obj
+                for item in raw_rows:
+                    cv = item["cod_viajante"]
+                    total_base = totals_por_viajante.get(cv, Decimal("0"))
+                    peso = (item["base_ventas"] / total_base) if total_base > 0 else Decimal("0")
+                    peso_f = float(peso)
+                    obj_f = float(item["objetivo"])
+                    rows.append(
+                        {
+                            "codigo": item["codigo"],
+                            "id_manual_cli": item["id_manual_cli"],
+                            "nombre_cliente": item["nombre_cliente"],
+                            "cod_viajante": cv,
+                            "nombre_vendedor": item["nombre_vendedor"],
+                            "objetivo": obj_f,
+                            "objetivo_entero": int(round(obj_f)),
+                            "base_ventas": float(item["base_ventas"]),
+                            "peso_prorrateo": peso_f,
+                            "peso_prorrateo_pct": round(peso_f * 100.0, 6),
+                            "objetivo_vendedor": float(objetivos_por_viajante.get(cv, Decimal("0"))),
                         }
                     )
                 return True, "", rows
