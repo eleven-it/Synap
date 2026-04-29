@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -16,6 +17,47 @@ from .query_runner import QueryRunnerService
 from ..models import ReportDefinition
 
 logger = logging.getLogger(__name__)
+
+
+def _vo_objetivos_vs_bo_sort_export_rows(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Misma lógica que la jerarquía web: vendedor por suma de objetivo descendente;
+    dentro de cada vendedor, clientes por nombre alfabético.
+    """
+    if not filas:
+        return []
+    by_cv: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+    for r in filas:
+        try:
+            cv = int(r.get("cod_viajante") or 0)
+        except (TypeError, ValueError):
+            cv = 0
+        if cv <= 0:
+            continue
+        by_cv[cv].append(r)
+
+    def _obj_total(cv: int) -> float:
+        return sum(float(x.get("objetivo") or 0) for x in by_cv[cv])
+
+    sorted_cvs = sorted(
+        by_cv.keys(),
+        key=lambda cv: (
+            -_obj_total(cv),
+            (by_cv[cv][0].get("nombre_vendedor") or "").strip().upper(),
+            cv,
+        ),
+    )
+    out: List[Dict[str, Any]] = []
+    for cv in sorted_cvs:
+        rows_v = sorted(
+            by_cv[cv],
+            key=lambda row: (
+                (row.get("nombre_cliente") or "").strip().upper(),
+                int(row.get("codigo_cliente") or 0),
+            ),
+        )
+        out.extend(rows_v)
+    return out
 
 
 @dataclass
@@ -203,15 +245,15 @@ class ExportService:
                 "codigo_cliente",
                 "nombre_cliente",
                 "objetivo",
+                "falta",
+                "cantidades_vendidas",
                 "facturacion",
                 "remitos",
                 "total",
-                "falta",
-                "cantidades_vendidas",
-                "backorder_total",
                 "bo_con_stock",
                 "bo_con_ingreso",
                 "bo_sin_stock",
+                "backorder_total",
             ]
             return [h for h in preferred if h in available]
 
@@ -417,17 +459,19 @@ class ExportService:
                     "remitos": "Remitos",
                     "total": "Total (fac.+rem.)",
                     "falta": "Falta",
-                    "cantidades_vendidas": "Unidades vendidas",
+                    "cantidades_vendidas": "Unidades",
                     "backorder_total": "BO total",
-                    "bo_con_stock": "BO con stock",
-                    "bo_con_ingreso": "BO con ingreso",
-                    "bo_sin_stock": "BO sin stock",
+                    "bo_con_stock": "BO c/stock",
+                    "bo_con_ingreso": "BO c/ingreso",
+                    "bo_sin_stock": "BO s/stock",
                 }
                 # Ventas Netas: etiqueta "Mes" para la primera columna (mes_formato)
                 if report.slug in ("ventas_netas", "ventas-netas"):
                     header_translations = {**header_translations, "mes_formato": "Mes"}
                 
                 translated_headers = [header_translations.get(h, h.replace("_", " ").title()) for h in headers]
+                if report.slug == "ventas-objetivos-vs-bo":
+                    translated_headers = [str(s).upper() for s in translated_headers]
                 
                 # Escribir headers
                 ws.append(translated_headers)
@@ -497,10 +541,7 @@ class ExportService:
                     ws.sheet_properties.outlinePr = Outline(summaryBelow=False, summaryRight=False)
                     vendor_fill = PatternFill(start_color="DCE6F2", end_color="DCE6F2", fill_type="solid")
                     vendor_title_font = Font(bold=True, size=11, color="1E3A5F")
-                    sorted_data = sorted(
-                        query_result.data,
-                        key=lambda r: (int(r.get("cod_viajante") or 0), int(r.get("codigo_cliente") or 0)),
-                    )
+                    sorted_data = _vo_objetivos_vs_bo_sort_export_rows(query_result.data)
                     last_cv = None
                     for data_row in sorted_data:
                         cv = int(data_row.get("cod_viajante") or 0)

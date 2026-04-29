@@ -9697,7 +9697,13 @@ if (dashboardRoot) {
               voFiltersSummaryEl.textContent = parts.length ? "Filtros: " + parts.join(" · ") : "";
             }
             if (window.objetivosVentasBoHandler && typeof window.objetivosVentasBoHandler.processData === "function") {
-              window.objetivosVentasBoHandler.processData(voResponse);
+              try {
+                window.objetivosVentasBoHandler.processData(voResponse);
+              } catch (e) {
+                console.error("[dashboard] ventas-objetivos-vs-bo processData:", e);
+              }
+            } else {
+              console.error("[dashboard] objetivosVentasBoHandler no está definido; ¿cargó objetivos_ventas_bo.js?");
             }
             document.dispatchEvent(new CustomEvent("reportDataLoaded", {
               detail: { slug: "ventas-objetivos-vs-bo", response: voResponse }

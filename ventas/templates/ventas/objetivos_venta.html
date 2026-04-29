@@ -1,4 +1,5 @@
 {% extends "base_app.html" %}
+{% load core_extras %}
 {% load l10n %}
 {% block title %}Objetivos de venta | Synap{% endblock %}
 {% block content %}
@@ -113,11 +114,12 @@
               <thead class="sticky top-0 z-10 bg-slate-50 shadow-sm dark:bg-slate-800">
                 <tr class="align-bottom">
                   <th colspan="2" class="border-b border-sky-400/80 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-sky-500/50 dark:bg-slate-800/90 dark:text-slate-100">Cliente</th>
-                  <th class="border-b-2 border-b-sky-500 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-sky-500 dark:bg-slate-800/90 dark:text-slate-100">Objetivo</th>
+                  <th colspan="2" class="border-b-2 border-b-sky-500 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-sky-500 dark:bg-slate-800/90 dark:text-slate-100">Objetivo</th>
                 </tr>
                 <tr>
-                  <th scope="col" class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">ID cliente</th>
-                  <th scope="col" class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Nombre</th>
+                  <th scope="col" class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Código manual</th>
+                  <th scope="col" id="vo-sort-nombre" class="cursor-pointer select-none px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Nombre</th>
+                  <th scope="col" id="vo-sort-ponderacion" class="cursor-pointer select-none border-l border-slate-200 bg-slate-50 px-4 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200">Ponderación</th>
                   <th scope="col" class="border-l border-slate-200 bg-slate-50 px-4 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200">Importe</th>
                 </tr>
               </thead>
@@ -131,17 +133,30 @@
                     tabindex="0"
                     aria-expanded="false"
                     aria-label="Expandir o contraer clientes de {{ g.nombre_vendedor|escape }}">
-                  <td colspan="3" class="px-2 py-2 sm:px-3">
+                  <td colspan="4" class="px-2 py-2 sm:px-3">
                     <div class="flex w-full flex-wrap items-center justify-between gap-2">
                       <div class="flex min-w-0 flex-1 items-center gap-2">
                         <span class="vo-chevron inline-flex w-7 flex-shrink-0 justify-center text-slate-500 dark:text-slate-400" aria-hidden="true">▸</span>
                         <div class="min-w-0 flex-1">
                           <span class="text-[13px] font-bold uppercase tracking-tight text-slate-900 dark:text-white">{{ g.nombre_vendedor }}</span>
-                          <span class="ml-1.5 text-[12px] font-medium text-slate-500 dark:text-slate-400">({{ g.clientes|length }})</span>
-                          <span class="ml-2 font-mono text-[10px] font-normal text-slate-400 dark:text-slate-500">#{{ g.cod_viajante }}</span>
                         </div>
                       </div>
-                      <span class="vo-subtotal-vendedor shrink-0 rounded-md px-2 py-1 text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-400" title="Suma de importes objetivo de los clientes de este vendedor" role="status">—</span>
+                      <div class="flex items-center gap-2">
+                        {% if puede_editar %}
+                        <input type="text" inputmode="decimal" autocomplete="off" lang="es"
+                               class="vo-obj-vendedor w-36 rounded-md border border-emerald-600 bg-slate-900/70 px-2 py-1 text-right font-mono text-xs tabular-nums text-emerald-200"
+                               data-cod-viajante="{{ g.cod_viajante }}"
+                               data-obj-vendedor="{{ g.clientes.0.objetivo_vendedor|default:0 }}"
+                               value="" />
+                        <button type="button"
+                                class="vo-btn-aplicar-vendedor hidden inline-flex h-7 w-7 items-center justify-center rounded-md border border-emerald-500/80 bg-emerald-700/90 text-white transition-colors hover:bg-emerald-600"
+                                data-cod-viajante="{{ g.cod_viajante }}"
+                                title="Grabar objetivo del vendedor"
+                                aria-label="Grabar objetivo del vendedor">
+                          <span class="material-icons text-[16px]" aria-hidden="true">save</span>
+                        </button>
+                        {% endif %}
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -149,23 +164,24 @@
                 <tr class="vo-fila-cliente vo-fila-grupo vo-grupo-child bg-white hover:bg-slate-50/90 dark:bg-slate-800 dark:hover:bg-slate-700/40 transition-colors"
                     style="display: none;"
                     data-parent-grupo="{{ forloop.parentloop.counter0 }}"
-                    data-vo-search="{{ g.nombre_vendedor|escape }} {{ c.codigo }} {{ c.nombre_cliente|escape }}">
-                  <td class="px-4 py-2 pl-10 font-mono text-[11px] text-slate-500 dark:text-slate-400 tabular-nums sm:pl-12">{{ c.codigo }}</td>
-                  <td class="px-4 py-2 text-[13px] text-slate-600 dark:text-slate-300">{{ c.nombre_cliente }}</td>
+                    data-cod-viajante="{{ c.cod_viajante }}"
+                    data-codigo="{{ c.codigo }}"
+                    data-vo-search="{{ g.nombre_vendedor|escape }} {{ c.id_manual_cli|escape }} {{ c.codigo }} {{ c.nombre_cliente|escape }}">
+                  <td class="px-4 py-2 pl-10 font-mono text-[11px] text-slate-500 dark:text-slate-400 tabular-nums sm:pl-12">{{ c.id_manual_cli }}</td>
+                  <td class="vo-col-nombre px-4 py-2 text-[13px] text-slate-600 dark:text-slate-300">{{ c.nombre_cliente }}</td>
                   <td class="border-l border-slate-100 bg-slate-50/90 px-4 py-2 text-right dark:border-slate-700 dark:bg-slate-800/35">
-                    {% if puede_editar %}
-                    <input type="text" inputmode="decimal" autocomplete="off" lang="es"
-                           class="vo-obj-input w-36 max-w-[min(100%,12rem)] rounded-md border border-slate-300 bg-white px-2 py-1 text-right font-mono text-sm tabular-nums text-slate-900 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                           data-codigo="{{ c.codigo }}" data-panel="grupo" data-obj-numeric="{{ c.objetivo }}" value="" />
-                    {% else %}
-                    <span class="font-mono text-sm tabular-nums text-slate-800 dark:text-slate-200" data-vo-obj-sum="{{ c.objetivo|unlocalize }}">{{ c.objetivo|stringformat:'.2f' }}</span>
-                    {% endif %}
+                    <span class="vo-ponderacion font-mono text-sm tabular-nums text-slate-800 dark:text-slate-200"
+                          data-base-ventas="{{ c.base_ventas|unlocalize }}"
+                          data-ponderacion="{{ c.peso_prorrateo|unlocalize }}">{{ c.peso_prorrateo_pct|floatformat:2 }}%</span>
+                  </td>
+                  <td class="border-l border-slate-100 bg-slate-50/90 px-4 py-2 text-right dark:border-slate-700 dark:bg-slate-800/35">
+                    <span class="vo-importe-cliente font-mono text-sm tabular-nums text-slate-800 dark:text-slate-200" data-vo-obj-sum="{{ c.objetivo_entero|unlocalize }}">{{ c.objetivo_entero|formato_entero_miles }}</span>
                   </td>
                 </tr>
                 {% endfor %}
                 {% empty %}
                 <tr>
-                  <td colspan="3" class="px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+                  <td colspan="4" class="px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
                     No hay clientes con vendedor asignado o no se pudieron cargar datos.
                   </td>
                 </tr>
@@ -188,13 +204,14 @@
                 <tr class="align-bottom">
                   <th colspan="2" class="border-b border-purple-300/80 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-purple-500/40 dark:bg-slate-800/90 dark:text-slate-100">Vendedor</th>
                   <th colspan="2" class="border-b border-sky-400/80 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-sky-500/50 dark:bg-slate-800/90 dark:text-slate-100">Cliente</th>
-                  <th class="border-b-2 border-b-emerald-500 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-emerald-500 dark:bg-slate-800/90 dark:text-slate-100">Objetivo</th>
+                  <th colspan="2" class="border-b-2 border-b-emerald-500 bg-slate-100 px-3 py-1.5 text-center text-xs font-semibold text-slate-800 dark:border-emerald-500 dark:bg-slate-800/90 dark:text-slate-100">Objetivo</th>
                 </tr>
                 <tr>
                   <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Nombre</th>
                   <th class="px-3 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Cód.</th>
-                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">ID</th>
+                  <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Cód. manual</th>
                   <th class="px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Nombre</th>
+                  <th class="border-l border-slate-200 bg-slate-50 px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200">Ponderación</th>
                   <th class="border-l border-slate-200 bg-slate-50 px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-600 dark:bg-slate-900/40 dark:text-slate-200">Importe</th>
                 </tr>
               </thead>
@@ -202,25 +219,26 @@
                 {% for g in grupos %}
                 {% for c in g.clientes %}
                 <tr class="vo-fila-plano hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                    data-vo-search="{{ g.nombre_vendedor|escape }} {{ g.cod_viajante }} {{ c.codigo }} {{ c.nombre_cliente|escape }}">
+                    data-cod-viajante="{{ c.cod_viajante }}"
+                    data-codigo="{{ c.codigo }}"
+                    data-vo-search="{{ g.nombre_vendedor|escape }} {{ g.cod_viajante }} {{ c.id_manual_cli|escape }} {{ c.codigo }} {{ c.nombre_cliente|escape }}">
                   <td class="px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-200">{{ g.nombre_vendedor }}</td>
                   <td class="px-3 py-2 text-right font-mono text-xs text-slate-600 dark:text-slate-400 tabular-nums">{{ g.cod_viajante }}</td>
-                  <td class="px-3 py-2 font-mono text-xs text-slate-700 dark:text-slate-300 tabular-nums">{{ c.codigo }}</td>
+                  <td class="px-3 py-2 font-mono text-xs text-slate-700 dark:text-slate-300 tabular-nums">{{ c.id_manual_cli }}</td>
                   <td class="px-3 py-2 text-sm text-slate-800 dark:text-slate-200">{{ c.nombre_cliente }}</td>
                   <td class="border-l border-slate-100 bg-slate-50/90 px-3 py-2 text-right dark:border-slate-700 dark:bg-slate-800/35">
-                    {% if puede_editar %}
-                    <input type="text" inputmode="decimal" autocomplete="off" lang="es"
-                           class="vo-obj-input w-36 max-w-[min(100%,12rem)] rounded-md border border-slate-300 bg-white px-2 py-1 text-right font-mono text-sm tabular-nums dark:border-slate-600 dark:bg-slate-900"
-                           data-codigo="{{ c.codigo }}" data-panel="plano" data-obj-numeric="{{ c.objetivo }}" value="" />
-                    {% else %}
-                    <span class="font-mono text-sm tabular-nums" data-vo-obj-sum="{{ c.objetivo|unlocalize }}">{{ c.objetivo|stringformat:'.2f' }}</span>
-                    {% endif %}
+                    <span class="vo-ponderacion font-mono text-sm tabular-nums"
+                          data-base-ventas="{{ c.base_ventas|unlocalize }}"
+                          data-ponderacion="{{ c.peso_prorrateo|unlocalize }}">{{ c.peso_prorrateo_pct|floatformat:2 }}%</span>
+                  </td>
+                  <td class="border-l border-slate-100 bg-slate-50/90 px-3 py-2 text-right dark:border-slate-700 dark:bg-slate-800/35">
+                    <span class="vo-importe-cliente font-mono text-sm tabular-nums" data-vo-obj-sum="{{ c.objetivo_entero|unlocalize }}">{{ c.objetivo_entero|formato_entero_miles }}</span>
                   </td>
                 </tr>
                 {% endfor %}
                 {% empty %}
                 <tr>
-                  <td colspan="5" class="px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
+                  <td colspan="6" class="px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">
                     No hay datos para mostrar.
                   </td>
                 </tr>
@@ -251,6 +269,38 @@
   </div>
 </section>
 
+{% if puede_editar and grupos %}
+<div id="vo-loading-modal"
+     class="hidden fixed inset-0 z-[9999] p-4 sm:p-8 bg-slate-950/60 backdrop-blur-sm pointer-events-auto transition-opacity duration-200"
+     aria-hidden="true"
+     aria-busy="false"
+     role="alertdialog"
+     aria-labelledby="vo-loading-title">
+  <div class="relative w-full max-w-md rounded-2xl border border-slate-200/80 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-2xl shadow-sky-900/10 overflow-hidden mx-auto">
+    <div class="absolute inset-x-0 top-0 h-1.5 overflow-hidden bg-slate-200/50 dark:bg-slate-700/50">
+      <div class="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-500 via-violet-500 to-emerald-400 animate-[reports-query-load-bar_1.4s_ease-in-out_infinite]"></div>
+    </div>
+    <div class="px-8 pt-10 pb-8 flex flex-col items-center text-center gap-5">
+      <div class="relative w-16 h-16">
+        <div class="absolute inset-0 rounded-full border-4 border-slate-200 dark:border-slate-600"></div>
+        <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-sky-500 border-r-violet-500 animate-spin" style="animation-duration: 0.9s;"></div>
+        <div class="absolute inset-2 rounded-full border-2 border-transparent border-b-emerald-400/80 animate-spin" style="animation-duration: 1.4s; animation-direction: reverse;"></div>
+      </div>
+      <div>
+        <p id="vo-loading-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100 tracking-tight">Guardando objetivos</p>
+        <p id="vo-loading-subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">Aplicando prorrateo y persistiendo datos…</p>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+  @keyframes reports-query-load-bar {
+    0%, 100% { transform: translateX(-100%); width: 40%; }
+    50% { transform: translateX(200%); width: 55%; }
+  }
+</style>
+{% endif %}
+
 {% if grupos %}
 <script>
 (function () {
@@ -279,7 +329,7 @@
       setGrupoExpanded(hdr, !exp);
     }
     hdr.addEventListener('click', function (e) {
-      if (e.target.closest && e.target.closest('.vo-obj-input')) return;
+      if (e.target.closest && e.target.closest('.vo-obj-vendedor')) return;
       toggleGrupo();
     });
     hdr.addEventListener('keydown', function (e) {
@@ -367,11 +417,13 @@
   var buscar = document.getElementById("vo-buscar-vendedor");
   if (buscar) buscar.addEventListener("input", aplicarBusqueda);
 
-  var nfMoneyArs = new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  var nfEnteroMiles = new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  var nfMontoInput = new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   });
 
   function voParseObjetivoTexto(s) {
@@ -383,18 +435,17 @@
     return Number.isFinite(n) ? n : 0;
   }
 
-  function voSumObjetivoFilaGrupo(tr) {
-    if (!tr) return 0;
-    var inp = tr.querySelector('.vo-obj-input[data-panel="grupo"]');
-    if (inp) return voParseObjetivoTexto(inp.value);
-    var sp = tr.querySelector("[data-vo-obj-sum]");
-    if (sp) {
-      var raw = sp.getAttribute("data-vo-obj-sum");
-      if (raw == null || raw === "") return 0;
-      var n = parseFloat(String(raw).replace(",", "."), 10);
-      return Number.isFinite(n) ? n : 0;
-    }
-    return 0;
+  function voFormatMontoInput(n) {
+    if (!Number.isFinite(n) || n <= 0) return "";
+    return nfMontoInput.format(n);
+  }
+
+  function voParseEnteroInput(s) {
+    if (s == null) return 0;
+    var onlyDigits = String(s).replace(/\D/g, "");
+    if (!onlyDigits) return 0;
+    var n = parseInt(onlyDigits, 10);
+    return Number.isFinite(n) ? n : 0;
   }
 
   function voClaseImportePorSigno(n) {
@@ -404,59 +455,175 @@
     return "text-slate-600 dark:text-slate-300";
   }
 
-  function voClaseChipVendedorPorSigno(n) {
-    if (!Number.isFinite(n)) {
-      return "rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+  function voRecalcularGrupo(codViajante, objetivoTotal) {
+    var rows = document.querySelectorAll('.vo-fila-cliente[data-cod-viajante="' + codViajante + '"]');
+    var totalBase = 0;
+    var data = [];
+    rows.forEach(function (tr) {
+      var codigo = tr.getAttribute("data-codigo");
+      if (!codigo) return;
+      var p = tr.querySelector(".vo-ponderacion");
+      var base = p ? parseFloat(String(p.getAttribute("data-base-ventas") || "0").replace(",", ".")) : 0;
+      base = Number.isFinite(base) && base > 0 ? base : 0;
+      totalBase += base;
+      data.push({ codigo: codigo, base: base, peso: 0, monto: 0 });
+    });
+    var suma = 0;
+    data.forEach(function (item) {
+      item.peso = totalBase > 0 ? (item.base / totalBase) : 0;
+      item.monto = Math.round(objetivoTotal * item.peso);
+      suma += item.monto;
+    });
+    var residual = Math.round(objetivoTotal - suma);
+    if (residual !== 0 && data.length) {
+      var best = 0;
+      for (var i = 1; i < data.length; i++) if (data[i].base > data[best].base) best = i;
+      data[best].monto = Math.round((data[best].monto + residual) * 100) / 100;
     }
-    if (n > 0) {
-      return "rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold tabular-nums text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300";
-    }
-    if (n < 0) {
-      return "rounded-md bg-rose-50 px-2 py-1 text-xs font-semibold tabular-nums text-rose-800 dark:bg-rose-950/40 dark:text-rose-300";
-    }
-    return "rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold tabular-nums text-slate-600 dark:bg-slate-800 dark:text-slate-400";
+    data.forEach(function (item) {
+      var selector = '.vo-fila-cliente[data-cod-viajante="' + codViajante + '"][data-codigo="' + item.codigo + '"], ' +
+                     '.vo-fila-plano[data-cod-viajante="' + codViajante + '"][data-codigo="' + item.codigo + '"]';
+      document.querySelectorAll(selector).forEach(function (row) {
+        var pEl = row.querySelector(".vo-ponderacion");
+        var iEl = row.querySelector(".vo-importe-cliente");
+        if (pEl) {
+          pEl.textContent = (item.peso * 100).toFixed(2).replace(".", ",") + "%";
+          pEl.setAttribute("data-ponderacion", String(item.peso));
+        }
+        if (iEl) {
+          iEl.textContent = nfEnteroMiles.format(item.monto);
+          iEl.setAttribute("data-vo-obj-sum", String(Math.round(item.monto)));
+        }
+      });
+    });
+  }
+
+  function voOrdenarTodos(criterio) {
+    var tbody = document.querySelector("#vo-panel-grupo tbody");
+    if (!tbody) return;
+    document.querySelectorAll(".vo-vendedor-header").forEach(function (hdr) {
+      var gid = hdr.getAttribute("data-grupo-id");
+      if (gid == null) return;
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll('.vo-fila-cliente[data-parent-grupo="' + gid + '"]'));
+      rows.sort(function (a, b) {
+        if (criterio === "ponderacion") {
+          var aPond = a.querySelector(".vo-ponderacion");
+          var bPond = b.querySelector(".vo-ponderacion");
+          var pa = parseFloat(String(aPond ? aPond.getAttribute("data-ponderacion") : "0"));
+          var pb = parseFloat(String(bPond ? bPond.getAttribute("data-ponderacion") : "0"));
+          pa = Number.isFinite(pa) ? pa : 0;
+          pb = Number.isFinite(pb) ? pb : 0;
+          return pb - pa;
+        }
+        var na = ((a.querySelector(".vo-col-nombre") || {}).textContent || "").trim().toUpperCase();
+        var nb = ((b.querySelector(".vo-col-nombre") || {}).textContent || "").trim().toUpperCase();
+        return na.localeCompare(nb);
+      });
+      var insertAfter = hdr;
+      rows.forEach(function (row) {
+        tbody.insertBefore(row, insertAfter.nextSibling);
+        insertAfter = row;
+      });
+    });
+  }
+
+  function voAplicarObjetivoVendedor(inputEl) {
+    if (!inputEl) return;
+    var codViajante = inputEl.getAttribute("data-cod-viajante");
+    if (!codViajante) return;
+    var n = voParseEnteroInput(inputEl.value);
+    if (!Number.isFinite(n) || n < 0) n = 0;
+    inputEl.value = voFormatMontoInput(n);
+    inputEl.setAttribute("data-obj-vendedor", String(n));
+    voRecalcularGrupo(codViajante, n);
+    voUpdateTotalImporte();
+    var btn = document.querySelector('.vo-btn-aplicar-vendedor[data-cod-viajante="' + codViajante + '"]');
+    if (btn) btn.classList.add("hidden");
   }
 
   function voUpdateTotalImporte() {
     var total = 0;
-    var inputsGrupo = document.querySelectorAll('.vo-obj-input[data-panel="grupo"]');
-    if (inputsGrupo.length) {
-      inputsGrupo.forEach(function (inp) {
-        total += voParseObjetivoTexto(inp.value);
+    var inputsVend = document.querySelectorAll(".vo-obj-vendedor");
+    if (inputsVend.length) {
+      inputsVend.forEach(function (inp) {
+        var n = voParseObjetivoTexto(inp.getAttribute("data-obj-vendedor"));
+        if (!Number.isFinite(n) || n < 0) n = 0;
+        total += n;
       });
     } else {
-      document.querySelectorAll("#vo-panel-grupo .vo-fila-cliente [data-vo-obj-sum]").forEach(function (el) {
+      document.querySelectorAll("#vo-panel-grupo .vo-fila-cliente .vo-importe-cliente").forEach(function (el) {
         var raw = el.getAttribute("data-vo-obj-sum");
-        if (raw == null || raw === "") return;
-        var n = parseFloat(String(raw).replace(",", "."), 10);
+        var n = raw == null || raw === "" ? 0 : parseFloat(String(raw).replace(",", "."));
         if (Number.isFinite(n)) total += n;
       });
     }
 
     var globalValEl = document.getElementById("vo-importe-objetivo-global-val");
     if (globalValEl) {
-      globalValEl.textContent = nfMoneyArs.format(total);
+      globalValEl.textContent = nfEnteroMiles.format(total);
       globalValEl.className =
         "text-base font-bold tabular-nums md:text-lg " + voClaseImportePorSigno(total);
     }
 
-    document.querySelectorAll(".vo-vendedor-header").forEach(function (hdr) {
-      var gid = hdr.getAttribute("data-grupo-id");
-      if (gid === null || gid === undefined) return;
-      var sub = 0;
-      document.querySelectorAll('.vo-grupo-child[data-parent-grupo="' + gid + '"]').forEach(function (tr) {
-        sub += voSumObjetivoFilaGrupo(tr);
-      });
-      var badge = hdr.querySelector(".vo-subtotal-vendedor");
-      if (badge) {
-        badge.textContent = nfMoneyArs.format(sub);
-        badge.className = "vo-subtotal-vendedor shrink-0 " + voClaseChipVendedorPorSigno(sub);
-      }
-    });
+    // No mostrar subtotal por vendedor para evitar etiquetas adicionales.
+    voOrdenarTodos("ponderacion");
   }
 
   window.voUpdateTotalImporte = voUpdateTotalImporte;
-  if (!document.querySelector(".vo-obj-input")) {
+  var sortNombre = document.getElementById("vo-sort-nombre");
+  var sortPond = document.getElementById("vo-sort-ponderacion");
+  if (sortNombre) sortNombre.addEventListener("click", function () { voOrdenarTodos("nombre"); });
+  if (sortPond) sortPond.addEventListener("click", function () { voOrdenarTodos("ponderacion"); });
+  voOrdenarTodos("ponderacion");
+
+  if (!document.querySelector(".vo-obj-vendedor")) {
+    voUpdateTotalImporte();
+  } else {
+    document.querySelectorAll(".vo-obj-vendedor").forEach(function (inp) {
+      var raw = inp.getAttribute("data-obj-vendedor");
+      var n = raw == null || raw === "" ? 0 : parseFloat(String(raw).replace(",", "."));
+      inp.value = voFormatMontoInput(n);
+      inp.addEventListener("focus", function () {
+        var v = voParseEnteroInput(inp.value);
+        inp.value = voFormatMontoInput(v);
+        requestAnimationFrame(function () { inp.setSelectionRange(inp.value.length, inp.value.length); });
+        var cv = inp.getAttribute("data-cod-viajante");
+        var btnFocus = document.querySelector('.vo-btn-aplicar-vendedor[data-cod-viajante="' + cv + '"]');
+        if (btnFocus) btnFocus.classList.remove("hidden");
+      });
+      inp.addEventListener("input", function () {
+        var v = voParseEnteroInput(inp.value);
+        inp.value = voFormatMontoInput(v);
+        requestAnimationFrame(function () { inp.setSelectionRange(inp.value.length, inp.value.length); });
+        var cv = inp.getAttribute("data-cod-viajante");
+        var btnInput = document.querySelector('.vo-btn-aplicar-vendedor[data-cod-viajante="' + cv + '"]');
+        if (btnInput) btnInput.classList.remove("hidden");
+      });
+      inp.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          voAplicarObjetivoVendedor(inp);
+        }
+      });
+      inp.addEventListener("blur", function () {
+        // Si todavía no grabó, mantener formato editable para continuar sin recalcular.
+        setTimeout(function () {
+          var cv = inp.getAttribute("data-cod-viajante");
+          var btnBlur = document.querySelector('.vo-btn-aplicar-vendedor[data-cod-viajante="' + cv + '"]');
+          if (btnBlur && btnBlur.classList.contains("hidden")) {
+            var v = voParseEnteroInput(inp.getAttribute("data-obj-vendedor"));
+            inp.value = voFormatMontoInput(v);
+          }
+        }, 120);
+      });
+    });
+    document.querySelectorAll(".vo-btn-aplicar-vendedor").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var cv = btn.getAttribute("data-cod-viajante");
+        var inp = document.querySelector('.vo-obj-vendedor[data-cod-viajante="' + cv + '"]');
+        voAplicarObjetivoVendedor(inp);
+      });
+    });
     voUpdateTotalImporte();
   }
 })();
@@ -472,17 +639,6 @@
   }
   var csrftoken = getCookie("csrftoken");
   var idPeriodo = {{ id_periodo }};
-
-  var nfDisplay = new Intl.NumberFormat("es-AR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  var nfPlain = new Intl.NumberFormat("es-AR", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 8,
-    useGrouping: false,
-  });
-
   function parseObjetivoText(s) {
     if (s == null) return 0;
     var t = String(s).trim();
@@ -492,121 +648,45 @@
     return Number.isFinite(n) ? n : 0;
   }
 
-  function formatDisplay(n) {
-    if (!Number.isFinite(n) || n === 0) return "";
-    return nfDisplay.format(n);
+  function voShowLoadingModal() {
+    var el = document.getElementById("vo-loading-modal");
+    if (!el) return;
+    el.classList.remove("hidden");
+    el.classList.add("flex", "items-center", "justify-center");
+    el.setAttribute("aria-hidden", "false");
+    el.setAttribute("aria-busy", "true");
   }
 
-  function formatPlainEdit(n) {
-    if (!Number.isFinite(n) || n === 0) return "";
-    return nfPlain.format(n);
+  function voHideLoadingModal() {
+    var el = document.getElementById("vo-loading-modal");
+    if (!el) return;
+    el.classList.remove("flex", "items-center", "justify-center");
+    el.classList.add("hidden");
+    el.setAttribute("aria-hidden", "true");
+    el.setAttribute("aria-busy", "false");
   }
-
-  function initInputsFromData() {
-    document.querySelectorAll(".vo-obj-input").forEach(function (el) {
-      var raw = el.getAttribute("data-obj-numeric");
-      var n = raw === null || raw === "" ? NaN : parseFloat(String(raw).replace(",", "."), 10);
-      if (!Number.isFinite(n) || n === 0) {
-        el.value = "";
-      } else {
-        el.value = formatDisplay(n);
-      }
-    });
-  }
-
-  function syncInputs(codigo, value, skipEl) {
-    document.querySelectorAll('.vo-obj-input[data-codigo="' + codigo + '"]').forEach(function (el) {
-      if (el !== skipEl) el.value = value;
-    });
-  }
-
-  function applyBlurFormat(el) {
-    var n = parseObjetivoText(el.value);
-    if (n < 0) n = 0;
-    var display = formatDisplay(n);
-    var c = el.getAttribute("data-codigo");
-    if (!c) return;
-    document.querySelectorAll('.vo-obj-input[data-codigo="' + c + '"]').forEach(function (inp) {
-      inp.value = display;
-    });
-  }
-
-  initInputsFromData();
-  if (typeof window.voUpdateTotalImporte === "function") {
-    window.voUpdateTotalImporte();
-  }
-
-  function getNavigableObjInputs() {
-    var plano = document.getElementById("vo-panel-plano");
-    var activePlano = plano && !plano.classList.contains("hidden");
-    var sel = activePlano ? '.vo-obj-input[data-panel="plano"]' : '.vo-obj-input[data-panel="grupo"]';
-    return Array.prototype.slice.call(document.querySelectorAll(sel)).filter(function (inp) {
-      var tr = inp.closest("tr");
-      if (!tr) return false;
-      return window.getComputedStyle(tr).display !== "none";
-    });
-  }
-
-  function moveObjetivoFocus(current, delta) {
-    var list = getNavigableObjInputs();
-    var i = list.indexOf(current);
-    if (i === -1) return;
-    var next = i + delta;
-    if (next < 0 || next >= list.length) return;
-    list[next].focus();
-  }
-
-  document.querySelectorAll(".vo-obj-input").forEach(function (inp) {
-    inp.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === "ArrowDown") {
-        e.preventDefault();
-        moveObjetivoFocus(inp, 1);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        moveObjetivoFocus(inp, -1);
-      }
-    });
-    inp.addEventListener("focus", function () {
-      var n = parseObjetivoText(inp.value);
-      if (n < 0) n = 0;
-      var plain = formatPlainEdit(n);
-      var c = inp.getAttribute("data-codigo");
-      if (c) {
-        document.querySelectorAll('.vo-obj-input[data-codigo="' + c + '"]').forEach(function (el) {
-          el.value = plain;
-        });
-      }
-      requestAnimationFrame(function () {
-        try {
-          inp.select();
-        } catch (e) {}
-      });
-    });
-    inp.addEventListener("blur", function () {
-      applyBlurFormat(inp);
-      if (typeof window.voUpdateTotalImporte === "function") window.voUpdateTotalImporte();
-    });
-    inp.addEventListener("input", function () {
-      var c = inp.getAttribute("data-codigo");
-      if (c) syncInputs(c, inp.value, inp);
-      if (typeof window.voUpdateTotalImporte === "function") window.voUpdateTotalImporte();
-    });
-  });
 
   var btn = document.getElementById("vo-btn-guardar");
   if (btn) {
     btn.addEventListener("click", function () {
-      var inputs = document.querySelectorAll('.vo-obj-input[data-panel="grupo"]');
+      document.querySelectorAll(".vo-btn-aplicar-vendedor").forEach(function (applyBtn) {
+        if (!applyBtn.classList.contains("hidden")) {
+          applyBtn.click();
+        }
+      });
+
       var filas = [];
-      inputs.forEach(function (el) {
-        var c = el.getAttribute("data-codigo");
-        if (!c) return;
-        var n = parseObjetivoText(el.value);
+      document.querySelectorAll("#vo-panel-grupo .vo-fila-cliente").forEach(function (tr) {
+        var c = tr.getAttribute("data-codigo");
+        var imp = tr.querySelector(".vo-importe-cliente");
+        if (!c || !imp) return;
+        var n = parseObjetivoText(imp.getAttribute("data-vo-obj-sum"));
         if (n < 0) n = 0;
-        filas.push({ codigo: parseInt(c, 10), objetivo: Math.round(n * 100) / 100 });
+        filas.push({ codigo: parseInt(c, 10), objetivo: Math.round(n) });
       });
       var msg = document.getElementById("vo-msg");
       msg.textContent = "Guardando…";
+      voShowLoadingModal();
       fetch("{% url 'ventas:api_objetivos_guardar' %}", {
         method: "POST",
         headers: {
@@ -627,6 +707,9 @@
         .catch(function () {
           msg.textContent = "Error de red.";
           msg.className = "mt-3 text-sm text-red-600";
+        })
+        .finally(function () {
+          voHideLoadingModal();
         });
     });
   }
