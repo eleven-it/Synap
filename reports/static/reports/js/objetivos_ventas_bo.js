@@ -96,7 +96,7 @@
           });
         }
         if (open && cid) {
-          applyClientDetalleVisibility(container, cid, isExpanded(st, "c-" + cid));
+          applyClientDetalleVisibility(container, cid, isExpanded(st, "c-" + cid), st);
         }
       });
       const chev = estRow.querySelector(`[data-vo-chev="${escSel(ek)}"]`);
@@ -401,7 +401,8 @@
       .toLowerCase();
     const rows = table.querySelectorAll("tbody tr");
     if (needle.length < 2) {
-      rows.forEach(function (r) {
+      const hiddenBySearch = table.querySelectorAll("tbody tr.vo-bo-search-hide");
+      hiddenBySearch.forEach(function (r) {
         r.classList.remove("vo-bo-search-hide");
       });
       return;
@@ -433,6 +434,27 @@
     const container = document.getElementById("vo-jerarquia-container");
     const inp = document.getElementById("vo-bo-buscar-jerarquia");
     if (!container) return;
+    applySearchFilter(container, inp ? inp.value : "");
+  }
+
+  /**
+   * Tras expandir/colapsar jerarquía: si no hay búsqueda activa (menos de 2 caracteres) y ninguna fila
+   * está oculta por búsqueda, no recorrer la tabla (antes se tocaban todas las filas en cada clic).
+   * Con búsqueda activa, recalcular cabeceras de vendedor según hijos visibles.
+   */
+  function applySearchFilterAfterHierarchyToggle(container) {
+    if (!container) return;
+    const inp = document.getElementById("vo-bo-buscar-jerarquia");
+    const needle = String(inp ? inp.value : "")
+      .trim()
+      .toLowerCase();
+    const table = container.querySelector(".vo-jerarquia-table");
+    if (!table) return;
+    if (needle.length >= 2) {
+      applySearchFilter(container, inp ? inp.value : "");
+      return;
+    }
+    if (!table.querySelector("tbody tr.vo-bo-search-hide")) return;
     applySearchFilter(container, inp ? inp.value : "");
   }
 
@@ -481,14 +503,12 @@
     });
     saveViewState(st);
     renderTable(_lastJerarquia, _lastTotals);
-    applySearchFilterFromInput();
   }
 
   function collapseAllBo() {
     if (!_lastJerarquia || !_lastJerarquia.length) return;
     saveViewState({ expandedVendors: {}, expandedNodes: {} });
     renderTable(_lastJerarquia, _lastTotals);
-    applySearchFilterFromInput();
   }
 
   function wireBoToolbarOnce() {
@@ -541,11 +561,12 @@
 
   /**
    * Visibilidad de rubro/subrubro/artículo bajo un cliente según localStorage.
+   * @param {object} [viewStateOpt] — estado ya cargado (evita JSON.parse repetido en bucles).
    */
-  function applyClientDetalleVisibility(container, clientId, clientExpanded) {
+  function applyClientDetalleVisibility(container, clientId, clientExpanded, viewStateOpt) {
     const cid = String(clientId);
     const cg = "c-" + cid;
-    const st = loadViewState();
+    const st = viewStateOpt || loadViewState();
     if (!clientExpanded) {
       container.querySelectorAll(`tr[data-vo-under-client="${escSel(cid)}"]`).forEach(function (r) {
         r.classList.add("hidden");
@@ -770,9 +791,9 @@
 
         if (String(gid).indexOf("ec-") === 0) {
           const wasOpen = isEstadoCompraExpanded(st, gid);
-          st.expandedNodes[gid] = !wasOpen;
+          const open = !wasOpen;
+          st.expandedNodes[gid] = open;
           saveViewState(st);
-          const open = isEstadoCompraExpanded(loadViewState(), gid);
           direct.forEach(function (r) {
             r.classList.toggle("hidden", !open);
             const cid = r.getAttribute("data-vo-client");
@@ -782,12 +803,12 @@
               });
             }
             if (open && cid) {
-              applyClientDetalleVisibility(container, cid, isExpanded(loadViewState(), "c-" + cid));
+              applyClientDetalleVisibility(container, cid, isExpanded(st, "c-" + cid), st);
             }
           });
           chev.textContent = open ? CHV.expandido : CHV.colapsado;
           chev.setAttribute("aria-expanded", open ? "true" : "false");
-          applySearchFilterFromInput();
+          applySearchFilterAfterHierarchyToggle(container);
           return;
         }
 
@@ -797,10 +818,10 @@
           st.expandedNodes[gid] = !was;
           saveViewState(st);
           const nowOpen = Boolean(st.expandedNodes[gid]);
-          applyClientDetalleVisibility(container, cid, nowOpen);
+          applyClientDetalleVisibility(container, cid, nowOpen, st);
           chev.textContent = nowOpen ? CHV.expandido : CHV.colapsado;
           chev.setAttribute("aria-expanded", nowOpen ? "true" : "false");
-          applySearchFilterFromInput();
+          applySearchFilterAfterHierarchyToggle(container);
           return;
         }
 
@@ -821,11 +842,10 @@
               });
             });
           } else {
-            const st2 = loadViewState();
             direct.forEach(function (r) {
               const sk = r.getAttribute("data-vo-sub-key");
               if (!sk) return;
-              const expS = isExpanded(st2, sk);
+              const expS = isExpanded(st, sk);
               container.querySelectorAll(`tr[data-parent="${escSel(sk)}"]`).forEach(function (a) {
                 a.classList.toggle("hidden", !expS);
               });
@@ -833,7 +853,7 @@
           }
           chev.textContent = rubOpen ? CHV.expandido : CHV.colapsado;
           chev.setAttribute("aria-expanded", rubOpen ? "true" : "false");
-          applySearchFilterFromInput();
+          applySearchFilterAfterHierarchyToggle(container);
           return;
         }
 
@@ -847,7 +867,7 @@
           });
           chev.textContent = subOpen ? CHV.expandido : CHV.colapsado;
           chev.setAttribute("aria-expanded", subOpen ? "true" : "false");
-          applySearchFilterFromInput();
+          applySearchFilterAfterHierarchyToggle(container);
         }
       }
       chev.addEventListener("click", function (e) {
@@ -1024,7 +1044,7 @@
       headerRow.setAttribute("aria-expanded", "false");
       st.expandedVendors[key] = false;
       saveViewState(st);
-      applySearchFilterFromInput();
+      applySearchFilterAfterHierarchyToggle(container);
       return;
     }
 
@@ -1036,14 +1056,13 @@
     if (chev) chev.textContent = CHV.expandido;
     headerRow.setAttribute("aria-expanded", "true");
 
-    const st2 = loadViewState();
     container.querySelectorAll(`tr[data-vo-vendor-group="${gEsc}"][data-vo-client]`).forEach(function (r) {
       const cid = r.getAttribute("data-vo-client");
       if (!cid) return;
-      applyClientDetalleVisibility(container, cid, isExpanded(st2, "c-" + cid));
+      applyClientDetalleVisibility(container, cid, isExpanded(st, "c-" + cid), st);
     });
     refreshEstadoChildrenVisibility(container, gEsc);
-    applySearchFilterFromInput();
+    applySearchFilterAfterHierarchyToggle(container);
   }
 
   function processData(payload) {
