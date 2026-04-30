@@ -1,7 +1,7 @@
 # Registro y rollback — REM / PED en armado por artículo (objetivos vs BO) y KPI ventas consolidado
 
 **Fecha de registro:** 30/04/2026  
-**Motivo:** implementación alineada con `ANALISIS_REMITOS_PED_ARMADO_LINEAS_VS_CABECERA_OBJETIVOS.md` y propuesta SDD en Engram (`sdd/objetivos-bo-rem-ped-art-y-ventas-kpi/propose`, exploración `.../explore`).
+**Motivo:** implementación alineada con `ANALISIS_REMITOS_PED_ARMADO_LINEAS_VS_CABECERA_OBJETIVOS.md` y planificación SDD en Engram. Índice de fases y observaciones: `SDD_OBJETIVOS_REM_PED_ART_FASE_PLANIFICACION.md`.
 
 ## Alcance previsto (resumen)
 
