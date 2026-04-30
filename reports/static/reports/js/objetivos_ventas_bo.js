@@ -141,7 +141,9 @@
   function faltaValorVisual(faltaRaw) {
     const n = Number(faltaRaw);
     if (!Number.isFinite(n)) return NaN;
-    return -n;
+    const inverted = -n;
+    /** `-0` formatea como moneda negativa; unificar a +0 cuando la magnitud es cero. */
+    return inverted === 0 ? 0 : inverted;
   }
 
   /** Colores según el valor mostrado: negativo = aún falta cumplir; positivo = superado el objetivo. */
