@@ -35,16 +35,42 @@ def _to_decimal(value: Number) -> Decimal:
 
 
 def calcular_total_facturacion_remitos(facturacion: Number, remitos: Number) -> Decimal:
-    """Total columna tipo Excel: Facturación + Remitos."""
+    """Solo facturación + remitos (sin pedidos en armado). Preferir `calcular_total_consolidado_objetivos` en el informe objetivos."""
     return _to_decimal(facturacion) + _to_decimal(remitos)
 
 
-def calcular_falta(objetivo: Number, facturacion: Number, remitos: Number) -> Decimal:
+def calcular_total_consolidado_objetivos(
+    facturacion: Number,
+    remitos: Number,
+    pedidos_en_armado: Number,
+) -> Decimal:
     """
-    Falta = Objetivo − Facturación − Remitos (regla acordada).
+    Columna **total** del informe objetivos vs BO: mismo criterio que total consolidado operativo por cliente:
+    Facturación (período) + Remitos (período) + Pedidos en armado (saldo PED En preparación/Preparado, sin filtro de fecha).
+    """
+    return (
+        _to_decimal(facturacion)
+        + _to_decimal(remitos)
+        + _to_decimal(pedidos_en_armado)
+    )
+
+
+def calcular_falta(
+    objetivo: Number,
+    facturacion: Number,
+    remitos: Number,
+    pedidos_en_armado: Number,
+) -> Decimal:
+    """
+    Falta = Objetivo − Facturación − Remitos − Pedidos en armado (coherente con columna total consolidado por fila).
     Sin objetivo en datos se pasa 0 desde la capa que arma el informe.
     """
-    return _to_decimal(objetivo) - _to_decimal(facturacion) - _to_decimal(remitos)
+    return (
+        _to_decimal(objetivo)
+        - _to_decimal(facturacion)
+        - _to_decimal(remitos)
+        - _to_decimal(pedidos_en_armado)
+    )
 
 
 def objetivo_para_informe(

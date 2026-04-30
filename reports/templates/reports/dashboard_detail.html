@@ -249,9 +249,6 @@
                             </div>
                             <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Excluidos de facturación, remitos y backorder</span>
                         </label>
-                        {% if report.slug == 'ventas-objetivos-vs-bo' %}
-                        {% include "reports/includes/filters_vendedores_excluidos_objetivos.html" %}
-                        {% endif %}
                         {% endif %}
                         {% elif report.slug == 'cash_flow_waterfall' or report.slug == 'cash_flow_by_account' %}
                         <!-- Fila 2: Caja -->
@@ -334,9 +331,6 @@
                         {% endif %}
                         {% if report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' %}
                         {% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" %}
-                        {% endif %}
-                        {% if report.slug == 'ventas-objetivos-vs-bo' %}
-                        {% include "reports/includes/filters_vendedores_excluidos_objetivos.html" %}
                         {% endif %}
                         {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
                         {% include "reports/includes/filters_sucursal_punto_venta.html" %}
@@ -782,7 +776,7 @@
                             <span class="animate-pulse text-slate-400">Cargando...</span>
                         </div>
                         <p id="vo-kpi-total-falta-estado" class="mt-2 hidden text-sm font-semibold leading-snug text-slate-700 dark:text-slate-300"></p>
-                        <p id="vo-kpi-falta-help" class="text-[10px] text-slate-400 dark:text-slate-500 mt-2">Importe en valor absoluto. La fila de estado indica si el total (objetivo − facturación − remitos) está pendiente, alcanzado o superado.</p>
+                        <p id="vo-kpi-falta-help" class="text-[10px] text-slate-400 dark:text-slate-500 mt-2">En pantalla: FALTA negativa = aún falta cumplir el objetivo; FALTA positiva = objetivo superado (el cálculo interno es objetivo − facturación − remitos − pedidos en armado; TOTAL = consolidado por fila como en total-consolidado-operativo; signo de FALTA invertido solo para lectura).</p>
                     </div>
                 </section>
                 <div id="vo-bo-toolbar" class="mb-3 flex min-w-0 flex-shrink-0 flex-wrap items-center gap-x-2 gap-y-2 border-b border-slate-200 pb-3 dark:border-slate-700 sm:gap-x-3 sm:pb-3">
@@ -800,6 +794,23 @@
                         <label for="vo-bo-buscar-jerarquia" class="sr-only">Buscar vendedor, cliente o artículo</label>
                         <input type="search" id="vo-bo-buscar-jerarquia" autocomplete="off" placeholder="Buscar vendedor, cliente o artículo… (mín. 2 caracteres)"
                                class="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-800 dark:text-white" />
+                    </div>
+                    <div class="flex w-full flex-wrap items-center gap-x-3 gap-y-2 sm:w-auto sm:flex-nowrap">
+                        <label class="flex min-w-0 flex-none items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                            <span class="shrink-0 whitespace-nowrap">Ordenar por</span>
+                            <select name="ordenar_por" id="ordenar_por" class="min-w-[11rem] max-w-[min(100%,14rem)] rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                                <option value="objetivo_meta">Objetivo Meta</option>
+                                <option value="objetivo_falta">Objetivo Falta</option>
+                                <option value="total_ventas_periodo">Total Ventas Período</option>
+                            </select>
+                        </label>
+                        <label class="flex min-w-0 flex-none items-center gap-2 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                            <span class="shrink-0 whitespace-nowrap">En forma</span>
+                            <select name="orden_forma" id="orden_forma" class="min-w-[8.5rem] rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-900 transition-all duration-300 focus:border-sky-400 focus:ring-2 focus:ring-sky-400 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                                <option value="asc">Creciente</option>
+                                <option value="desc" selected>Decreciente</option>
+                            </select>
+                        </label>
                     </div>
                 </div>
                 {# Misma envoltura que MPR ventana-pack: card + scroll interno; thead sticky en bloque único #}
@@ -5161,7 +5172,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% else %}
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=202604293"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=202604305"></script>
 {% if report.slug == 'comprobantes-rutas' %}
 <script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260413j" defer></script>
 {% endif %}
@@ -5169,7 +5180,7 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="{% static 'reports/js/bo_stock_facturacion.js' %}?v=20260211"></script>
 {% endif %}
 {% if report.slug == 'ventas-objetivos-vs-bo' %}
-<script src="{% static 'reports/js/objetivos_ventas_bo.js' %}?v=202604295"></script>
+<script src="{% static 'reports/js/objetivos_ventas_bo.js' %}?v=202604312"></script>
 {% endif %}
 {% endif %}
 {% endblock %}

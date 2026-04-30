@@ -19,7 +19,11 @@ from ..models import ReportDefinition
 logger = logging.getLogger(__name__)
 
 
-def _vo_objetivos_vs_bo_sort_export_rows(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _vo_objetivos_vs_bo_sort_export_rows(
+    filas: List[Dict[str, Any]],
+    ordenar_por: str = "objetivo_meta",
+    orden_forma: str = "desc",
+) -> List[Dict[str, Any]]:
     """
     Misma lógica que la jerarquía web: vendedor por suma de objetivo descendente;
     dentro de cada vendedor, clientes por nombre alfabético.
@@ -36,13 +40,20 @@ def _vo_objetivos_vs_bo_sort_export_rows(filas: List[Dict[str, Any]]) -> List[Di
             continue
         by_cv[cv].append(r)
 
-    def _obj_total(cv: int) -> float:
-        return sum(float(x.get("objetivo") or 0) for x in by_cv[cv])
+    metric_key = {
+        "objetivo_meta": "objetivo",
+        "objetivo_falta": "falta",
+        "total_ventas_periodo": "total",
+    }.get(ordenar_por, "objetivo")
+    direction = 1 if str(orden_forma).lower() == "asc" else -1
+
+    def _vendor_metric_total(cv: int) -> float:
+        return sum(float(x.get(metric_key) or 0) for x in by_cv[cv])
 
     sorted_cvs = sorted(
         by_cv.keys(),
         key=lambda cv: (
-            -_obj_total(cv),
+            direction * _vendor_metric_total(cv),
             (by_cv[cv][0].get("nombre_vendedor") or "").strip().upper(),
             cv,
         ),
@@ -52,6 +63,8 @@ def _vo_objetivos_vs_bo_sort_export_rows(filas: List[Dict[str, Any]]) -> List[Di
         rows_v = sorted(
             by_cv[cv],
             key=lambda row: (
+                direction * float(row.get(metric_key) or 0),
+                0 if (row.get("estado_compra") or "") == "con_compra" else 1,
                 (row.get("nombre_cliente") or "").strip().upper(),
                 int(row.get("codigo_cliente") or 0),
             ),
@@ -249,6 +262,7 @@ class ExportService:
                 "cantidades_vendidas",
                 "facturacion",
                 "remitos",
+                "pedidos_en_armado",
                 "total",
                 "bo_con_stock",
                 "bo_con_ingreso",
@@ -413,6 +427,7 @@ class ExportService:
                             "objetivo",
                             "facturacion",
                             "remitos",
+                            "pedidos_en_armado",
                             "total",
                             "falta",
                             "backorder_total",
@@ -457,7 +472,8 @@ class ExportService:
                     "objetivo": "Objetivo",
                     "facturacion": "Facturación",
                     "remitos": "Remitos",
-                    "total": "Total (fac.+rem.)",
+                    "pedidos_en_armado": "Pedidos en armado",
+                    "total": "Total consolidado",
                     "falta": "Falta",
                     "cantidades_vendidas": "Unidades",
                     "backorder_total": "BO total",
@@ -541,7 +557,12 @@ class ExportService:
                     ws.sheet_properties.outlinePr = Outline(summaryBelow=False, summaryRight=False)
                     vendor_fill = PatternFill(start_color="DCE6F2", end_color="DCE6F2", fill_type="solid")
                     vendor_title_font = Font(bold=True, size=11, color="1E3A5F")
-                    sorted_data = _vo_objetivos_vs_bo_sort_export_rows(query_result.data)
+                    filters_for_order = payload.get("filters", {}) if isinstance(payload, dict) else {}
+                    sorted_data = _vo_objetivos_vs_bo_sort_export_rows(
+                        query_result.data,
+                        ordenar_por=str(filters_for_order.get("ordenar_por") or "objetivo_meta"),
+                        orden_forma=str(filters_for_order.get("orden_forma") or "desc"),
+                    )
                     last_cv = None
                     for data_row in sorted_data:
                         cv = int(data_row.get("cod_viajante") or 0)
