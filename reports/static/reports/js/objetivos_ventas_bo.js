@@ -294,20 +294,31 @@
 
   /**
    * Rubro / subrubro / artículo: unidades, facturación y BO agregados.
-   * Remitos, pedidos en armado y total consolidado solo a nivel cliente; aquí se muestra —.
+   * Remitos y pedidos en armado por línea (remitos_lineas / pedidos_armado_lineas) si el backend los envía; si no, —.
+   * Total consolidado sigue solo a nivel cliente.
    */
   function metricCellsVentaJerarquiaSinRemitosCabecera(row) {
     const bt = Number(row.backorder_total);
     const bs = Number(row.bo_con_stock);
     const bi = Number(row.bo_con_ingreso);
     const bn = Number(row.bo_sin_stock);
+    const remL = Number(row.remitos_lineas);
+    const pedL = Number(row.pedidos_armado_lineas);
+    const remCell =
+      Number.isFinite(remL) && Math.abs(remL) > 1e-9
+        ? `<td class="${tdNum} ${tdGrpV}${negMoneyClass(remL)}">${fmtMoney(remL)}</td>`
+        : dashCell(tdGrpV);
+    const pedCell =
+      Number.isFinite(pedL) && Math.abs(pedL) > 1e-9
+        ? `<td class="${tdNum} ${tdGrpV}${negMoneyClass(pedL)}">${fmtMoney(pedL)}</td>`
+        : dashCell(tdGrpV);
     return (
       dashCell(tdObj) +
       dashCell(tdFaltaBody) +
       `<td class="${tdNum} ${tdGrpV}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
       `<td class="${tdNum} ${tdGrpV}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>` +
-      dashCell(tdGrpV) +
-      dashCell(tdGrpV) +
+      remCell +
+      pedCell +
       dashCell(tdGrpVStrong) +
       `<td class="${tdNum} ${tdBo}${negMoneyClass(bs)}">${fmtMoney(bs)}</td>` +
       `<td class="${tdNum} ${tdBoPlain}${negMoneyClass(bi)}">${fmtMoney(bi)}</td>` +

@@ -3083,7 +3083,7 @@ class QueryRunnerService:
         Consolida los totales de:
         - Ventas Netas (Facturas - Notas de Crédito)
         - Remitos no facturados
-        - Pedidos pendientes
+        - Pedidos en armado (PED sin filtrar por fechas del período, como total consolidado operativo)
         Reutiliza _get_ventas_netas_total, _get_remitos_no_facturados_total, _get_pedidos_pendientes_total.
         """
         started_at = timezone.now()
@@ -3149,10 +3149,12 @@ class QueryRunnerService:
                 sucursales_ints or None, puntos_venta_ints or None,
                 clientes_excluidos or None,
             )
+            # Paridad con total-consolidado-operativo: PED en armado sin recorte por fechas del período.
             pedidos_pendientes = self._get_pedidos_pendientes_total(
                 cursor, fecha_inicio, fecha_fin,
                 sucursales_ints or None, puntos_venta_ints or None,
                 clientes_excluidos or None,
+                filtrar_por_fecha=False,
             )
             total_consolidado = ventas_netas + remitos_no_facturados + pedidos_pendientes
 
@@ -3168,7 +3170,10 @@ class QueryRunnerService:
                 "pedidos_pendientes": pedidos_pendientes,
                 "total_consolidado": total_consolidado,
             }
-            notes = [f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}"]
+            notes = [
+                f"Período: {self._format_date(fecha_inicio)} a {self._format_date(fecha_fin)}",
+                "Pedidos en armado: importe operativo (sin filtrar por fechas del período), alineado al total consolidado operativo.",
+            ]
 
             logger.info(f"✅ Consulta Resumen de Ventas completada")
             logger.info(f"   Ventas Netas: ${ventas_netas:,.2f}")

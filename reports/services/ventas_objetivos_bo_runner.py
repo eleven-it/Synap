@@ -236,9 +236,10 @@ def _parse_date_for_overlap(s: str):
 def _nest_venta_detalle_rubro_subrubro_articulo(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Construye rubro → subrubro → artículo con facturación y unidades por línea (ventas netas del período).
-    Los **remitos** del cliente solo existen a nivel cabecera (`comp_ped` REM); no se reparten en el árbol.
-    El BO se fusiona después con `_merge_bo_en_detalle_arbol`; las agregaciones de venta se recalculan con
-    `_rollup_facturacion_unidades_detalle` tras incorporar artículos solo-BO.
+    Los importes de **remitos** y **pedidos en armado** por artículo (`remitos_lineas`, `pedidos_armado_lineas`)
+    se fusionan después con `_merge_rem_ped_lineas_en_detalle_arbol` (líneas `stockp`, ver verify del proyecto).
+    El BO se fusiona con `_merge_bo_en_detalle_arbol`; las agregaciones se recalculan con rollups y
+    `_rollup_facturacion_unidades_detalle` tras incorporar artículos solo-BO o solo-REM/PED.
     """
     rubros: Dict[Tuple[int, str], Dict[str, Any]] = {}
     sub_idx: Dict[Tuple[Tuple[int, str], Tuple[int, str]], Dict[str, Any]] = {}
@@ -327,7 +328,6 @@ def _rollup_facturacion_unidades_detalle(detalle_tree: List[Dict[str, Any]]) -> 
 
 _BO_DETAIL_KEYS = ("backorder_total", "bo_con_stock", "bo_con_ingreso", "bo_sin_stock")
 
-
 def _rubro_tuple(rb: Dict[str, Any]) -> Tuple[int, str]:
     return (int(rb.get("codigo_rubro") or 0), (rb.get("nombre_rubro") or "").strip())
 
@@ -351,6 +351,189 @@ def _rollup_bo_en_detalle(detalle_tree: List[Dict[str, Any]]) -> None:
                 rb_acc[k] += sub_acc[k]
         for k in _BO_DETAIL_KEYS:
             rb[k] = rb_acc[k]
+
+
+def _rollup_rem_ped_lineas_en_detalle(detalle_tree: List[Dict[str, Any]]) -> None:
+    """Suma remitos_lineas y pedidos_armado_lineas desde artículos hacia subrubro y rubro."""
+    for rb in detalle_tree:
+        rb_r = 0.0
+        rb_p = 0.0
+        for sub in rb.get("children") or []:
+            su_r = 0.0
+            su_p = 0.0
+            for art in sub.get("children") or []:
+                su_r += float(art.get("remitos_lineas") or 0)
+                su_p += float(art.get("pedidos_armado_lineas") or 0)
+            sub["remitos_lineas"] = su_r
+            sub["pedidos_armado_lineas"] = su_p
+            rb_r += su_r
+            rb_p += su_p
+        rb["remitos_lineas"] = rb_r
+        rb["pedidos_armado_lineas"] = rb_p
+
+
+def _append_articulo_solo_rem_ped_lineas(
+    detalle_tree: List[Dict[str, Any]],
+    id_art: int,
+    rem_v: float,
+    ped_v: float,
+    nombre_articulo: str,
+    cod_r: int,
+    nom_r: str,
+    id_sr: int,
+    nom_sr: str,
+) -> None:
+    """Artículo solo con importes REM/PED por líneas (sin facturación ni BO en el período)."""
+    if id_art <= 0:
+        return
+    cr = int(cod_r or 0)
+    nr = (nom_r or "").strip() or "Sin rubro"
+    isr = int(id_sr or 0)
+    nsr = (nom_sr or "").strip() or "Sin subrubro"
+    nar = (nombre_articulo or "").strip() or f"Artículo {id_art}"
+
+    rb = None
+    for r in detalle_tree:
+        if _rubro_tuple(r) == (cr, nr):
+            rb = r
+            break
+    if rb is None:
+        rb = {
+            "tipo": "rubro",
+            "codigo_rubro": cr,
+            "nombre_rubro": nr,
+            "facturacion": 0.0,
+            "cantidades_vendidas": 0.0,
+            "remitos_lineas": 0.0,
+            "pedidos_armado_lineas": 0.0,
+            "children": [],
+        }
+        detalle_tree.append(rb)
+
+    sub = None
+    for s in rb.get("children") or []:
+        if _subrubro_tuple(s) == (isr, nsr):
+            sub = s
+            break
+    if sub is None:
+        sub = {
+            "tipo": "subrubro",
+            "id_subrubro": isr,
+            "nombre_subrubro": nsr,
+            "facturacion": 0.0,
+            "cantidades_vendidas": 0.0,
+            "remitos_lineas": 0.0,
+            "pedidos_armado_lineas": 0.0,
+            "children": [],
+        }
+        rb["children"].append(sub)
+
+    art: Dict[str, Any] = {
+        "tipo": "articulo",
+        "id_art": id_art,
+        "nombre_articulo": nar,
+        "facturacion": 0.0,
+        "cantidades_vendidas": 0.0,
+        "remitos_lineas": float(rem_v or 0),
+        "pedidos_armado_lineas": float(ped_v or 0),
+    }
+    for k in _BO_DETAIL_KEYS:
+        art[k] = 0.0
+    sub["children"].append(art)
+
+
+def _merge_rem_ped_lineas_en_detalle_arbol(
+    detalle_tree: List[Dict[str, Any]],
+    rem_por_art: Dict[int, Dict[str, Any]],
+    ped_por_art: Dict[int, Dict[str, Any]],
+) -> None:
+    """
+    Asigna remitos_lineas / pedidos_armado_lineas por ID de artículo y agrega artículos solo-REM/PED.
+    rem_por_art / ped_por_art: id_art -> dict con importes y metadatos de rubro (como bo_art_detail).
+    """
+    combined: Dict[int, Dict[str, Any]] = {}
+    for iid, r in rem_por_art.items():
+        ii = int(iid or 0)
+        if ii <= 0:
+            continue
+        slot = combined.setdefault(
+            ii,
+            {
+                "remitos_lineas": 0.0,
+                "pedidos_armado_lineas": 0.0,
+                "nombre_articulo": "",
+                "codigo_rubro": 0,
+                "nombre_rubro": "",
+                "id_subrubro": 0,
+                "nombre_subrubro": "",
+            },
+        )
+        slot["remitos_lineas"] = float(r.get("remitos_lineas") or 0)
+        if (r.get("nombre_articulo") or "").strip():
+            slot["nombre_articulo"] = (r.get("nombre_articulo") or "").strip()
+        slot["codigo_rubro"] = int(r.get("codigo_rubro") or slot["codigo_rubro"] or 0)
+        slot["nombre_rubro"] = (r.get("nombre_rubro") or "").strip() or slot["nombre_rubro"]
+        slot["id_subrubro"] = int(r.get("id_subrubro") or slot["id_subrubro"] or 0)
+        slot["nombre_subrubro"] = (r.get("nombre_subrubro") or "").strip() or slot["nombre_subrubro"]
+    for iid, p in ped_por_art.items():
+        ii = int(iid or 0)
+        if ii <= 0:
+            continue
+        slot = combined.setdefault(
+            ii,
+            {
+                "remitos_lineas": 0.0,
+                "pedidos_armado_lineas": 0.0,
+                "nombre_articulo": "",
+                "codigo_rubro": 0,
+                "nombre_rubro": "",
+                "id_subrubro": 0,
+                "nombre_subrubro": "",
+            },
+        )
+        slot["pedidos_armado_lineas"] = float(p.get("pedidos_armado_lineas") or 0)
+        if (p.get("nombre_articulo") or "").strip() and not (slot.get("nombre_articulo") or "").strip():
+            slot["nombre_articulo"] = (p.get("nombre_articulo") or "").strip()
+        if int(p.get("codigo_rubro") or 0) and not slot.get("codigo_rubro"):
+            slot["codigo_rubro"] = int(p.get("codigo_rubro") or 0)
+        if (p.get("nombre_rubro") or "").strip() and not (slot.get("nombre_rubro") or "").strip():
+            slot["nombre_rubro"] = (p.get("nombre_rubro") or "").strip()
+        if int(p.get("id_subrubro") or 0) and not slot.get("id_subrubro"):
+            slot["id_subrubro"] = int(p.get("id_subrubro") or 0)
+        if (p.get("nombre_subrubro") or "").strip() and not (slot.get("nombre_subrubro") or "").strip():
+            slot["nombre_subrubro"] = (p.get("nombre_subrubro") or "").strip()
+
+    seen: Set[int] = set()
+    for rb in detalle_tree:
+        for sub in rb.get("children") or []:
+            for art in sub.get("children") or []:
+                iid = int(art.get("id_art") or 0)
+                if iid > 0:
+                    seen.add(iid)
+                c = combined.get(iid) if iid > 0 else None
+                if c:
+                    art["remitos_lineas"] = float(c.get("remitos_lineas") or 0)
+                    art["pedidos_armado_lineas"] = float(c.get("pedidos_armado_lineas") or 0)
+                else:
+                    art["remitos_lineas"] = float(art.get("remitos_lineas") or 0)
+                    art["pedidos_armado_lineas"] = float(art.get("pedidos_armado_lineas") or 0)
+
+    for iid, c in combined.items():
+        if iid <= 0 or iid in seen:
+            continue
+        if abs(float(c.get("remitos_lineas") or 0)) < 1e-9 and abs(float(c.get("pedidos_armado_lineas") or 0)) < 1e-9:
+            continue
+        _append_articulo_solo_rem_ped_lineas(
+            detalle_tree,
+            iid,
+            float(c.get("remitos_lineas") or 0),
+            float(c.get("pedidos_armado_lineas") or 0),
+            str(c.get("nombre_articulo") or ""),
+            int(c.get("codigo_rubro") or 0),
+            str(c.get("nombre_rubro") or ""),
+            int(c.get("id_subrubro") or 0),
+            str(c.get("nombre_subrubro") or ""),
+        )
 
 
 def _append_articulo_solo_bo(detalle_tree: List[Dict[str, Any]], id_art: int, b: Dict[str, Any]) -> None:
@@ -724,6 +907,89 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 ped_arm_map[int(r[0])] = float(r[1] or 0)
             _mark_phase("query_pedidos_en_armado")
 
+            # --- REM / PED en armado por artículo (líneas stockp.PrecioNetoxR; verify / total consolidado) ---
+            where_rem_w = " AND ".join(where_remitos)
+            where_ped_w = " AND ".join(where_ped_arm)
+            sql_rem_lineas_art = f"""
+                SELECT
+                    cp.Codigo AS cod_cliente,
+                    sp.IDArt AS id_art,
+                    COALESCE(MAX(a.CodigoRubro), 0) AS codigo_rubro,
+                    COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
+                    COALESCE(MAX(a.IDSubRubro), 0) AS id_subrubro,
+                    COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
+                    COALESCE(MAX(a.NombreArticulo), '') AS nombre_articulo,
+                    SUM(COALESCE(sp.PrecioNetoxR, 0)) AS remitos_lineas
+                FROM comp_ped cp
+                INNER JOIN cliente cl_rem ON cl_rem.Codigo = cp.Codigo
+                INNER JOIN stockp sp ON sp.CodigoMovimiento = cp.CodigoMovimiento
+                    AND (sp.anulado IS NULL OR sp.anulado = 'No')
+                    AND (sp.Comprobante = 'REM' OR sp.Comprobante IS NULL OR sp.Comprobante = '')
+                LEFT JOIN articulo a ON a.IDArt = sp.IDArt
+                LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
+                LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
+                WHERE {where_rem_w}
+                  AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+                GROUP BY cp.Codigo, sp.IDArt
+                HAVING sp.IDArt IS NOT NULL AND sp.IDArt > 0
+                    AND ABS(SUM(COALESCE(sp.PrecioNetoxR, 0))) > 0.00001
+            """
+            sql_ped_lineas_art = f"""
+                SELECT
+                    cp.Codigo AS cod_cliente,
+                    sp.IDArt AS id_art,
+                    COALESCE(MAX(a.CodigoRubro), 0) AS codigo_rubro,
+                    COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
+                    COALESCE(MAX(a.IDSubRubro), 0) AS id_subrubro,
+                    COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
+                    COALESCE(MAX(a.NombreArticulo), '') AS nombre_articulo,
+                    SUM(COALESCE(sp.PrecioNetoxR, 0)) AS pedidos_armado_lineas
+                FROM comp_ped cp
+                INNER JOIN cliente cl_ped ON cl_ped.Codigo = cp.Codigo
+                INNER JOIN stockp sp ON sp.CodigoMovimiento = cp.CodigoMovimiento
+                    AND (sp.anulado IS NULL OR sp.anulado = 'No')
+                    AND (sp.Comprobante = 'PED' OR sp.Comprobante IS NULL OR sp.Comprobante = '')
+                LEFT JOIN articulo a ON a.IDArt = sp.IDArt
+                LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
+                LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
+                WHERE {where_ped_w}
+                  AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+                GROUP BY cp.Codigo, sp.IDArt
+                HAVING sp.IDArt IS NOT NULL AND sp.IDArt > 0
+                    AND ABS(SUM(COALESCE(sp.PrecioNetoxR, 0))) > 0.00001
+            """
+            rem_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
+            cursor.execute(sql_rem_lineas_art, params_rem)
+            for r in cursor.fetchall():
+                cid = int(r[0])
+                ida = int(r[1] or 0)
+                if ida <= 0:
+                    continue
+                rem_art_detail[cid][ida] = {
+                    "remitos_lineas": float(r[7] or 0),
+                    "codigo_rubro": int(r[2] or 0),
+                    "nombre_rubro": (r[3] or "").strip(),
+                    "id_subrubro": int(r[4] or 0),
+                    "nombre_subrubro": (r[5] or "").strip(),
+                    "nombre_articulo": (r[6] or "").strip(),
+                }
+            ped_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
+            cursor.execute(sql_ped_lineas_art, params_ped)
+            for r in cursor.fetchall():
+                cid = int(r[0])
+                ida = int(r[1] or 0)
+                if ida <= 0:
+                    continue
+                ped_art_detail[cid][ida] = {
+                    "pedidos_armado_lineas": float(r[7] or 0),
+                    "codigo_rubro": int(r[2] or 0),
+                    "nombre_rubro": (r[3] or "").strip(),
+                    "id_subrubro": int(r[4] or 0),
+                    "nombre_subrubro": (r[5] or "").strip(),
+                    "nombre_articulo": (r[6] or "").strip(),
+                }
+            _mark_phase("query_rem_ped_lineas_art")
+
             # --- Unidades vendidas (stock + cuentacliente) ---
             ph_tc = ",".join(["%s"] * len(_TIPOS_FAC_NC))
             ph_st = ",".join(["%s"] * len(_STOCK_TIPO_COMP_VENTAS))
@@ -998,9 +1264,12 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 set(fact_map.keys())
                 | ids_con_historico_ventas
                 | set(rem_map.keys())
+                | set(ped_arm_map.keys())
                 | set(uni_map.keys())
                 | set(bo_cli_agg.keys())
                 | set(objetivos_map.keys())
+                | set(rem_art_detail.keys())
+                | set(ped_art_detail.keys())
             )
             if clientes_incluir:
                 all_ids = [cid for cid in all_ids if cid in set(clientes_incluir)]
@@ -1096,7 +1365,13 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 cid = int(row.get("codigo_cliente") or 0)
                 vd_tree = _nest_venta_detalle_rubro_subrubro_articulo(detalle_flat_por_cliente.get(cid, []))
                 _merge_bo_en_detalle_arbol(vd_tree, bo_art_detail.get(cid, {}))
+                _merge_rem_ped_lineas_en_detalle_arbol(
+                    vd_tree,
+                    rem_art_detail.get(cid, {}),
+                    ped_art_detail.get(cid, {}),
+                )
                 _rollup_bo_en_detalle(vd_tree)
+                _rollup_rem_ped_lineas_en_detalle(vd_tree)
                 _rollup_facturacion_unidades_detalle(vd_tree)
                 vd = _sort_nested_detalle(vd_tree, metric_key=metric_key, direction=orden_forma)
                 total_cli = float(row.get("total") or 0)
@@ -1229,6 +1504,10 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             notes.append(
                 "Pedidos en armado: importe de PED en estado En preparación/Preparado, sin filtro por fechas "
                 "(misma semántica que el KPI del reporte total-consolidado-operativo)."
+            )
+            notes.append(
+                "Detalle por artículo: columnas remitos_lineas y pedidos_armado_lineas suman stockp.PrecioNetoxR "
+                "(REM solo en ventana de facturación; PED en armado sin filtro de fechas; líneas excluyen tipo_art Gasto)."
             )
             if puntos_venta_ints:
                 notes.append(

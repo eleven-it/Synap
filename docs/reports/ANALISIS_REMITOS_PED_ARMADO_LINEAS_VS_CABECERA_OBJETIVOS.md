@@ -128,7 +128,9 @@ Interpretación antes de implementar:
 
 ## 8. Relación con este documento y siguiente paso
 
-Este análisis **no cambia código del informe**. El siguiente paso de producto/desarrollo es:
+**Actualización:** el informe `ventas-objetivos-vs-bo` incorpora en `venta_detalle` los campos **`remitos_lineas`** y **`pedidos_armado_lineas`** por artículo (misma base que este análisis y el comando de verificación).
+
+Este documento sigue siendo la referencia de riesgos y del comando `verify_*`. El siguiente paso operativo es:
 
 1. Ejecutar el comando en **staging/producción de datos** con períodos representativos.
 2. Archivar CSV o captura de divergencias grandes para auditoría.
