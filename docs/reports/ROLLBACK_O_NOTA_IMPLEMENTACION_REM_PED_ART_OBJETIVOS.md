@@ -23,9 +23,9 @@ Tests orientativos: `reports.tests.test_objetivos_ventas_*`, `test_export_column
 
 | Fase | Contenido | Commit (rellenar) |
 |------|-----------|-------------------|
-| A | Runner SQL + merge árbol + tests backend | |
-| B | UI / export / plantillas | |
-| C | `sales_summary` u otros KPI ventas (semántica PED armado) | |
+| A | Runner SQL + merge árbol + tests backend + `sales_summary` + UI jerarquía + docs | `029ff7c8` |
+| B | Export Excel / plantillas adicionales si se amplían columnas | |
+| C | (reservado) | |
 
 ## Rollback
 
