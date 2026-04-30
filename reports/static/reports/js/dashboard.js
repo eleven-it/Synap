@@ -6748,26 +6748,46 @@ if (dashboardRoot) {
 };
 
 // Función para inicializar componentes de tags (debe estar en scope global antes del bloque if)
-  const initializeTagsFilter = (fieldId, fieldType) => {
+  const initializeTagsFilter = (fieldId, fieldType, mutualExcludePeerId) => {
     console.log(`[initializeTagsFilter] Inicializando ${fieldId} (tipo: ${fieldType})`);
     const select = document.getElementById(fieldId);
     const container = document.getElementById(`${fieldId}_tags_container`);
     const chipsContainer = container?.querySelector(".tags-chips");
     const input = document.getElementById(`${fieldId}_search`);
     const dropdown = document.getElementById(`${fieldId}_dropdown`);
-    
+
     console.log(`[initializeTagsFilter] Elementos encontrados:`, {
       select: !!select,
       container: !!container,
       chipsContainer: !!chipsContainer,
       input: !!input,
-      dropdown: !!dropdown
+      dropdown: !!dropdown,
     });
-    
+
     if (!select || !container || !chipsContainer || !input || !dropdown) {
       return;
     }
-    
+
+    const peerSelect =
+      mutualExcludePeerId && typeof mutualExcludePeerId === "string"
+        ? document.getElementById(mutualExcludePeerId)
+        : null;
+
+    const getPeerExcludedValues = () => {
+      if (!peerSelect) return new Set();
+      return new Set(
+        Array.from(peerSelect.selectedOptions)
+          .map((o) => String(o.value || "").trim())
+          .filter(Boolean)
+      );
+    };
+
+    const filterPeerExcluded = (opts) => {
+      const excl = getPeerExcludedValues();
+      if (!excl.size) return opts;
+      return opts.filter((opt) => !excl.has(String(opt.value)));
+    };
+
     let allOptions = [];
     let selectedValues = new Set();
     let selectedIndex = -1;
@@ -6871,7 +6891,19 @@ if (dashboardRoot) {
       dropdown.classList.add("hidden");
       selectedIndex = -1;
     };
-    
+
+    const refreshDropdownIfPeerChanged = () => {
+      if (dropdown.classList.contains("hidden")) return;
+      const q = input.value.trim();
+      const base =
+        q.length === 0
+          ? allOptions.slice(0, 20)
+          : allOptions.filter((opt) =>
+              opt.label.toLowerCase().includes(q.toLowerCase())
+            );
+      renderDropdown(filterPeerExcluded(base), q);
+    };
+
     // Renderizar dropdown
     const renderDropdown = (results, query) => {
       dropdown.innerHTML = "";
@@ -6932,23 +6964,23 @@ if (dashboardRoot) {
         const filtered = allOptions.filter((opt) =>
           opt.label.toLowerCase().includes(query.toLowerCase())
         );
-        renderDropdown(filtered, query);
+        renderDropdown(filterPeerExcluded(filtered), query);
       }, 150);
     };
-    
+
     // Event listeners
     input.addEventListener("input", (e) => {
       const query = e.target.value.trim();
       if (query.length > 0) {
         searchOptions(query);
       } else {
-        renderDropdown(allOptions.slice(0, 20), "");
+        renderDropdown(filterPeerExcluded(allOptions.slice(0, 20)), "");
       }
     });
-    
+
     input.addEventListener("focus", () => {
       if (input.value.trim().length === 0) {
-        renderDropdown(allOptions.slice(0, 20), "");
+        renderDropdown(filterPeerExcluded(allOptions.slice(0, 20)), "");
       } else {
         searchOptions(input.value.trim());
       }
@@ -6962,8 +6994,10 @@ if (dashboardRoot) {
         selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
         items[selectedIndex]?.scrollIntoView({ block: "nearest" });
         renderDropdown(
-          allOptions.filter((opt) =>
-            opt.label.toLowerCase().includes(input.value.toLowerCase())
+          filterPeerExcluded(
+            allOptions.filter((opt) =>
+              opt.label.toLowerCase().includes(input.value.toLowerCase())
+            )
           ),
           input.value
         );
@@ -6974,8 +7008,10 @@ if (dashboardRoot) {
           items[selectedIndex]?.scrollIntoView({ block: "nearest" });
         }
         renderDropdown(
-          allOptions.filter((opt) =>
-            opt.label.toLowerCase().includes(input.value.toLowerCase())
+          filterPeerExcluded(
+            allOptions.filter((opt) =>
+              opt.label.toLowerCase().includes(input.value.toLowerCase())
+            )
           ),
           input.value
         );
@@ -7029,7 +7065,11 @@ if (dashboardRoot) {
     select.addEventListener("change", () => {
       loadOptions();
     });
-    
+
+    if (peerSelect) {
+      peerSelect.addEventListener("change", refreshDropdownIfPeerChanged);
+    }
+
     // Cargar opciones iniciales
     loadOptions();
   };
@@ -7390,7 +7430,37 @@ if (dashboardRoot) {
               }
               clientesSelect.appendChild(option);
             });
-            initializeTagsFilter("clientes_excluidos", "clientes");
+            initializeTagsFilter(
+              "clientes_excluidos",
+              "clientes",
+              reportSlug === "ventas-objetivos-vs-bo" ? "clientes_incluir" : undefined
+            );
+          }
+        }
+      }
+      if (reportSlug === "ventas-objetivos-vs-bo") {
+        const clientesIncludeSelect = document.getElementById("clientes_incluir");
+        if (clientesIncludeSelect) {
+          const clientesIncResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
+            headers: {
+              "X-Requested-With": "XMLHttpRequest",
+            },
+          });
+          if (clientesIncResponse.ok) {
+            const clientesIncData = await clientesIncResponse.json();
+            clientesIncludeSelect.innerHTML = "";
+            (clientesIncData.clientes || []).forEach((cli) => {
+              const option = document.createElement("option");
+              option.value = String(cli.value);
+              option.textContent = cli.label;
+              if (savedFilters && savedFilters.clientes_incluir && Array.isArray(savedFilters.clientes_incluir)) {
+                if (savedFilters.clientes_incluir.map(String).includes(String(cli.value))) {
+                  option.selected = true;
+                }
+              }
+              clientesIncludeSelect.appendChild(option);
+            });
+            initializeTagsFilter("clientes_incluir", "clientes", "clientes_excluidos");
           }
         }
       }
@@ -7404,20 +7474,37 @@ if (dashboardRoot) {
         if (viajResponse.ok) {
           const viajData = await viajResponse.json();
           const vendSelect = document.getElementById("vendedores_excluidos");
-          if (vendSelect) {
-            vendSelect.innerHTML = "";
+          const vendIncluirSelect = document.getElementById("vendedores_incluir");
+          if (vendSelect || vendIncluirSelect) {
+            if (vendSelect) vendSelect.innerHTML = "";
+            if (vendIncluirSelect) vendIncluirSelect.innerHTML = "";
             (viajData.viajantes || []).forEach((v) => {
-              const option = document.createElement("option");
-              option.value = String(v.value);
-              option.textContent = v.label;
-              if (savedFilters && savedFilters.vendedores_excluidos && Array.isArray(savedFilters.vendedores_excluidos)) {
-                if (savedFilters.vendedores_excluidos.map(String).includes(String(v.value))) {
-                  option.selected = true;
+              if (vendSelect) {
+                const option = document.createElement("option");
+                option.value = String(v.value);
+                option.textContent = v.label;
+                if (savedFilters && savedFilters.vendedores_excluidos && Array.isArray(savedFilters.vendedores_excluidos)) {
+                  if (savedFilters.vendedores_excluidos.map(String).includes(String(v.value))) {
+                    option.selected = true;
+                  }
                 }
+                vendSelect.appendChild(option);
               }
-              vendSelect.appendChild(option);
+              if (vendIncluirSelect) {
+                const optionInc = document.createElement("option");
+                optionInc.value = String(v.value);
+                optionInc.textContent = v.label;
+                if (savedFilters && savedFilters.vendedores_incluir && Array.isArray(savedFilters.vendedores_incluir)) {
+                  if (savedFilters.vendedores_incluir.map(String).includes(String(v.value))) {
+                    optionInc.selected = true;
+                  }
+                }
+                vendIncluirSelect.appendChild(optionInc);
+              }
             });
-            initializeTagsFilter("vendedores_excluidos", "viajantes");
+            if (vendSelect) initializeTagsFilter("vendedores_excluidos", "viajantes", "vendedores_incluir");
+            if (vendIncluirSelect)
+              initializeTagsFilter("vendedores_incluir", "viajantes", "vendedores_excluidos");
           }
         }
       }
@@ -7497,6 +7584,21 @@ if (dashboardRoot) {
         }
       }
       
+      if (reportSlug === "ventas-objetivos-vs-bo") {
+        const ci = document.getElementById("clientes_incluir");
+        const ce = document.getElementById("clientes_excluidos");
+        const vi = document.getElementById("vendedores_incluir");
+        const ve = document.getElementById("vendedores_excluidos");
+        if (ci && ce) {
+          ci.addEventListener("change", () => reconcileMutualExclusiveTags("clientes_incluir", "clientes_excluidos"));
+          ce.addEventListener("change", () => reconcileMutualExclusiveTags("clientes_excluidos", "clientes_incluir"));
+        }
+        if (vi && ve) {
+          vi.addEventListener("change", () => reconcileMutualExclusiveTags("vendedores_incluir", "vendedores_excluidos"));
+          ve.addEventListener("change", () => reconcileMutualExclusiveTags("vendedores_excluidos", "vendedores_incluir"));
+        }
+      }
+
       // Aplicar otros filtros guardados (fechas, mes actual)
       if (savedFilters) {
         applyFilters(savedFilters);
@@ -8762,6 +8864,25 @@ if (dashboardRoot) {
     return `report_filters_${reportSlug}`;
   };
 
+  const reconcileMutualExclusiveTags = (sourceId, targetId) => {
+    const source = document.getElementById(sourceId);
+    const target = document.getElementById(targetId);
+    if (!source || !target) return;
+    const sourceValues = new Set(Array.from(source.selectedOptions).map((opt) => String(opt.value)));
+    let changed = false;
+    Array.from(target.options).forEach((opt) => {
+      const val = String(opt.value || "");
+      if (!val) return;
+      if (opt.selected && sourceValues.has(val)) {
+        opt.selected = false;
+        changed = true;
+      }
+    });
+    if (changed) {
+      target.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  };
+
   const saveFilters = () => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
     if (!reportSlug) return;
@@ -9032,6 +9153,40 @@ if (dashboardRoot) {
             vendSelect.dispatchEvent(new Event("change", { bubbles: true }));
           }, 150);
         }
+      }
+      if (reportSlug === "ventas-objetivos-vs-bo" && filters.clientes_incluir && Array.isArray(filters.clientes_incluir)) {
+        const clientesIncluirSelect = document.getElementById("clientes_incluir");
+        if (clientesIncluirSelect) {
+          filters.clientes_incluir.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = clientesIncluirSelect.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) option.selected = true;
+          });
+          setTimeout(() => {
+            clientesIncluirSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }, 150);
+        }
+      }
+      if (reportSlug === "ventas-objetivos-vs-bo" && filters.vendedores_incluir && Array.isArray(filters.vendedores_incluir)) {
+        const vendedoresIncluirSelect = document.getElementById("vendedores_incluir");
+        if (vendedoresIncluirSelect) {
+          filters.vendedores_incluir.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = vendedoresIncluirSelect.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) option.selected = true;
+          });
+          setTimeout(() => {
+            vendedoresIncluirSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }, 150);
+        }
+      }
+      if (reportSlug === "ventas-objetivos-vs-bo") {
+        const ordenarPorSelect = document.getElementById("ordenar_por");
+        const ordenFormaSelect = document.getElementById("orden_forma");
+        if (ordenarPorSelect && filters.ordenar_por) ordenarPorSelect.value = String(filters.ordenar_por);
+        if (ordenFormaSelect && filters.orden_forma) ordenFormaSelect.value = String(filters.orden_forma);
       }
 
       // Depósitos incluidos (BO y Objetivos vs BO)
@@ -9369,6 +9524,8 @@ if (dashboardRoot) {
         filters.clientes_excluidos = selectedClientes;
       }
       const vendedoresExcluidosSelect = document.getElementById("vendedores_excluidos");
+      const vendedoresIncluirSelect = document.getElementById("vendedores_incluir");
+      const clientesIncluirSelect = document.getElementById("clientes_incluir");
       if (vendedoresExcluidosSelect && currentReportSlug === "ventas-objetivos-vs-bo") {
         const selectedVend = Array.from(vendedoresExcluidosSelect.selectedOptions)
           .map((opt) => String(opt.value))
@@ -9377,10 +9534,32 @@ if (dashboardRoot) {
           filters.vendedores_excluidos = selectedVend;
         }
       }
+      if (clientesIncluirSelect && currentReportSlug === "ventas-objetivos-vs-bo") {
+        const selectedCliInc = Array.from(clientesIncluirSelect.selectedOptions)
+          .map((opt) => String(opt.value))
+          .filter((v) => v);
+        if (selectedCliInc.length > 0) {
+          filters.clientes_incluir = selectedCliInc;
+        }
+      }
+      if (vendedoresIncluirSelect && currentReportSlug === "ventas-objetivos-vs-bo") {
+        const selectedVendInc = Array.from(vendedoresIncluirSelect.selectedOptions)
+          .map((opt) => String(opt.value))
+          .filter((v) => v);
+        if (selectedVendInc.length > 0) {
+          filters.vendedores_incluir = selectedVendInc;
+        }
+      }
       const listaPrecioSelect = document.getElementById("lista_precio");
       if (listaPrecioSelect) {
         const v = listaPrecioSelect.value;
         if (v !== "" && v !== undefined) filters.lista_precio = parseInt(v, 10);
+      }
+      if (currentReportSlug === "ventas-objetivos-vs-bo") {
+        const ordenarPorSelect = document.getElementById("ordenar_por");
+        const ordenFormaSelect = document.getElementById("orden_forma");
+        if (ordenarPorSelect && ordenarPorSelect.value) filters.ordenar_por = ordenarPorSelect.value;
+        if (ordenFormaSelect && ordenFormaSelect.value) filters.orden_forma = ordenFormaSelect.value;
       }
     } else if (currentReportSlug === "stock-existencias") {
       const depositosIncluidosSelect = document.getElementById("depositos_incluidos");
@@ -10168,6 +10347,30 @@ if (dashboardRoot) {
         if (lp && !lp.dataset.boListaPrecioWired) {
           lp.dataset.boListaPrecioWired = "1";
           lp.addEventListener("change", () => {
+            if (typeof window.fetchDashboardData === "function") {
+              window.fetchDashboardData();
+            }
+          });
+        }
+        const ordenarPor = document.getElementById("ordenar_por");
+        if (ordenarPor && !ordenarPor.dataset.boOrdenarPorWired) {
+          ordenarPor.dataset.boOrdenarPorWired = "1";
+          ordenarPor.addEventListener("change", () => {
+            if (typeof saveFilters === "function") {
+              saveFilters();
+            }
+            if (typeof window.fetchDashboardData === "function") {
+              window.fetchDashboardData();
+            }
+          });
+        }
+        const ordenForma = document.getElementById("orden_forma");
+        if (ordenForma && !ordenForma.dataset.boOrdenFormaWired) {
+          ordenForma.dataset.boOrdenFormaWired = "1";
+          ordenForma.addEventListener("change", () => {
+            if (typeof saveFilters === "function") {
+              saveFilters();
+            }
             if (typeof window.fetchDashboardData === "function") {
               window.fetchDashboardData();
             }

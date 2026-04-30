@@ -7,6 +7,7 @@ import unittest
 
 from reports.services.objetivos_ventas_contract import (
     calcular_falta,
+    calcular_total_consolidado_objetivos,
     calcular_total_facturacion_remitos,
     objetivo_para_informe,
     periodos_solapan,
@@ -57,22 +58,28 @@ class TestPeriodosSolapan(unittest.TestCase):
 
 
 class TestCalcularFaltaYTotal(unittest.TestCase):
-    def test_falta_regla_acordada(self):
+    def test_falta_regla_acordada_con_pedidos_armado(self):
         self.assertEqual(
-            calcular_falta(Decimal("1000"), Decimal("400"), Decimal("100")),
-            Decimal("500"),
+            calcular_falta(Decimal("1000"), Decimal("400"), Decimal("100"), Decimal("50")),
+            Decimal("450"),
         )
 
     def test_falta_con_cero_objetivo(self):
         self.assertEqual(
-            calcular_falta(0, 100, 50),
-            Decimal("-150"),
+            calcular_falta(0, 100, 50, 25),
+            Decimal("-175"),
         )
 
     def test_total_facturacion_remitos(self):
         self.assertEqual(
             calcular_total_facturacion_remitos(400, 100),
             Decimal("500"),
+        )
+
+    def test_total_consolidado_objetivos(self):
+        self.assertEqual(
+            calcular_total_consolidado_objetivos(400, 100, 50),
+            Decimal("550"),
         )
 
 

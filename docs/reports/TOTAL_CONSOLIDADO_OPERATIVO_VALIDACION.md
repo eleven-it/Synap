@@ -64,6 +64,8 @@
 1. **Consistencia con reportes individuales:**  
    Ventas netas y Remitos no facturados en total-consolidado-operativo usan el mismo período (y sucursales/PV) que los reportes ventas-netas y remitos-no-facturados. El indicador **Pedidos en armado** en total-consolidado-operativo no usa el rango de fechas (es saldo total), por lo que no coincidirá con un reporte de pedidos-pendientes filtrado por período. TOTAL CONSOLIDADO = VN(período) + Remitos(período) + Pedidos en armado (saldo total).
 
+- **Informe `ventas-objetivos-vs-bo`:** por cliente se expone **`pedidos_en_armado`** con el mismo criterio PED / estados / sin fecha que el KPI anterior; la columna **`total`** por fila es facturación + remitos + pedidos en armado (ver `DISENO_COLUMN_PEDIDOS_ARMADO_OBJETIVOS_VENTAS.md`). Facturación, remitos y pedidos en armado aplican **sucursales** y **`punto_venta`** como el consolidado. La suma de «ventas» del informe sigue basada en **`cuentacliente.SubtotalDesc`** neto FA/NC por cliente (no en el mismo agregado dimensional que ventas-netas por mes/PV); para comparar totales globales usar mismos filtros y tener en cuenta esa diferencia de granularidad si aplica.
+
 2. **Workspace:**  
    - Añadir dos instancias de Total Consolidado Operativo con filtros distintos (p. ej. períodos o sucursales diferentes).  
    - Comprobar que cada instancia muestra valores distintos y que al recargar se mantienen (filtros por `item_key` en `localStorage`).  

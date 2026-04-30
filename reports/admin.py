@@ -3,6 +3,14 @@ from django.contrib import admin
 from .models import ReportDefinition, ReportWidget, ReportDashboard, ReportExecutionLog, ReportWorkspace, ReportTemplate, LearnedRelationship
 
 
+def _solo_usuario_supervisor_cod(user) -> bool:
+    """Igual criterio que reportes/catalogo: solo cod_usuario 'supervisor', no puesto Supervisor."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    cod = getattr(user, "cod_usuario", None) or ""
+    return str(cod).strip().lower() == "supervisor"
+
+
 @admin.register(ReportDefinition)
 class ReportDefinitionAdmin(admin.ModelAdmin):
     """Admin de definiciones de reportes."""
@@ -35,12 +43,27 @@ class ReportDashboardAdmin(admin.ModelAdmin):
 
 @admin.register(ReportExecutionLog)
 class ReportExecutionLogAdmin(admin.ModelAdmin):
-    """Admin de logs de ejecución."""
+    """Admin de logs de ejecución (solo visible para usuario cod_usuario supervisor)."""
 
     list_display = ("report", "executed_by", "executed_at", "status", "duration_ms")
     list_filter = ("status", "executed_at")
     search_fields = ("report__name", "report__slug", "executed_by__email")
     ordering = ("-executed_at",)
+
+    def has_module_permission(self, request):
+        return _solo_usuario_supervisor_cod(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return _solo_usuario_supervisor_cod(request.user)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return _solo_usuario_supervisor_cod(request.user)
 
 
 @admin.register(ReportWorkspace)

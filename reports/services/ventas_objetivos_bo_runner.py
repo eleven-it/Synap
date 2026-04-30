@@ -8,22 +8,45 @@ Misma temporalidad dual que bo-stock-facturacion. Ver SPEC_INFORME_OBJETIVOS_VEN
 from __future__ import annotations
 
 import logging
+import time
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from django.conf import settings
+from django.utils import timezone
 
-from reports.models import ReportDefinition
+from core.models import UsuarioExtendido
+from reports.models import ReportDefinition, ReportExecutionLog
 from reports.services.connection_pool import get_mysql_pool
 from reports.services.objetivos_ventas_contract import (
     calcular_falta,
-    calcular_total_facturacion_remitos,
+    calcular_total_consolidado_objetivos,
 )
 from reports.services.query_runner import QueryResult, QueryRunnerService, parse_fecha_bo_yyyymmdd
 
 logger = logging.getLogger(__name__)
+
+
+def _usuario_es_supervisor_cod(user) -> bool:
+    """
+    Solo el usuario administraNET con cod_usuario 'supervisor' (minúsculas).
+    No equivale al puesto/rol «Supervisor» ni a superuser Django sin ese cod_usuario.
+    """
+    if not user:
+        return False
+    cod = getattr(user, "cod_usuario", None) or ""
+    return str(cod).strip().lower() == "supervisor"
+
+
+def _filters_applied_para_respuesta(filters_applied: Dict[str, Any], user) -> Dict[str, Any]:
+    """Quita métricas de performance del payload hacia el cliente si no es usuario supervisor."""
+    out = dict(filters_applied or {})
+    if not _usuario_es_supervisor_cod(user):
+        out.pop("performance_phase_ms", None)
+        out.pop("performance_total_ms", None)
+    return out
 
 _TIPOS_FAC_NC = (
     "FA",
@@ -62,6 +85,142 @@ def _label_lista_precio(cod: int) -> str:
     return f"Lista ({cod})"
 
 
+_METRIC_ORDER_MAP = {
+    "objetivo_meta": "objetivo",
+    "objetivo_falta": "falta",
+    "total_ventas_periodo": "total",
+}
+
+_ORDER_DIRECTION_MAP = {
+    "asc": 1,
+    "desc": -1,
+}
+
+
+def _parse_int_list(raw: Any) -> List[int]:
+    if isinstance(raw, str):
+        raw = [raw] if raw.strip() else []
+    elif not isinstance(raw, list):
+        raw = []
+    out: List[int] = []
+    for item in raw:
+        try:
+            out.append(int(str(item).strip()))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _parse_sorting(filters: Dict[str, Any]) -> Tuple[str, str]:
+    raw_field = str(filters.get("ordenar_por") or "objetivo_meta").strip().lower()
+    raw_dir = str(filters.get("orden_forma") or "desc").strip().lower()
+    field = raw_field if raw_field in _METRIC_ORDER_MAP else "objetivo_meta"
+    direction = raw_dir if raw_dir in _ORDER_DIRECTION_MAP else "desc"
+    return field, direction
+
+
+def _sort_scalar(value: Any, direction: str) -> float:
+    n = float(value or 0)
+    return n if direction == "asc" else -n
+
+
+def _alpha_id_key(item: Dict[str, Any], name_key: str, id_key: str) -> Tuple[str, int]:
+    return ((item.get(name_key) or "").strip().upper(), int(item.get(id_key) or 0))
+
+
+def _group_metric(node: Dict[str, Any], metric_key: str) -> float:
+    if metric_key == "falta":
+        return float(node.get("falta") or 0)
+    if metric_key == "total":
+        raw = node.get("total")
+        if raw is not None:
+            return float(raw or 0)
+        return float(node.get("facturacion") or 0)
+    if metric_key == "objetivo":
+        return float(node.get("objetivo") or 0)
+    return float(node.get(metric_key) or 0)
+
+
+def _sort_nested_detalle(detalle: List[Dict[str, Any]], metric_key: str, direction: str) -> List[Dict[str, Any]]:
+    def _sort_art(arts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return sorted(
+            arts,
+            key=lambda a: (
+                _sort_scalar(_group_metric(a, metric_key), direction),
+                (a.get("nombre_articulo") or "").strip().upper(),
+                int(a.get("id_art") or 0),
+            ),
+        )
+
+    out: List[Dict[str, Any]] = []
+    for rub in detalle or []:
+        rub_copy = dict(rub)
+        subrows = []
+        for sub in rub_copy.get("children") or []:
+            sub_copy = dict(sub)
+            sub_copy["children"] = _sort_art(sub_copy.get("children") or [])
+            subrows.append(sub_copy)
+        rub_copy["children"] = sorted(
+            subrows,
+            key=lambda s: (
+                _sort_scalar(_group_metric(s, metric_key), direction),
+                (s.get("nombre_subrubro") or "").strip().upper(),
+                int(s.get("id_subrubro") or 0),
+            ),
+        )
+        out.append(rub_copy)
+    return sorted(
+        out,
+        key=lambda r: (
+            _sort_scalar(_group_metric(r, metric_key), direction),
+            (r.get("nombre_rubro") or "").strip().upper(),
+            int(r.get("codigo_rubro") or 0),
+        ),
+    )
+
+
+def _persist_perf_log(
+    report: ReportDefinition,
+    user,
+    filters_snapshot: Dict[str, Any],
+    phase_ms: Dict[str, int],
+    total_ms: int,
+    status: str,
+    note: str = "",
+) -> None:
+    executed_by_user = None
+    if isinstance(user, UsuarioExtendido) and getattr(user, "is_authenticated", False):
+        executed_by_user = user
+
+    payload = dict(filters_snapshot or {})
+    payload["performance"] = {
+        "phase_ms": phase_ms,
+        "duration_total_ms": total_ms,
+        "status": status,
+    }
+    payload["request_context"] = {
+        "timestamp": timezone.now().isoformat(),
+        "report_slug": report.slug,
+        "username": getattr(executed_by_user, "username", None),
+    }
+
+    log = ReportExecutionLog.objects.create(
+        report=report,
+        executed_by=executed_by_user,
+        status=status,
+        filters_snapshot=payload,
+        duration_ms=max(int(total_ms), 0),
+        notes=note or "",
+    )
+    old_logs = (
+        ReportExecutionLog.objects.filter(report=report, executed_by=executed_by_user)
+        .order_by("-executed_at", "-id")
+        .values_list("id", flat=True)[10:]
+    )
+    if old_logs:
+        ReportExecutionLog.objects.filter(id__in=list(old_logs)).delete()
+
+
 def _norm_yyyy_mm_dd(s: str) -> str:
     s = (s or "").strip()
     if len(s) == 8 and s.isdigit():
@@ -76,8 +235,10 @@ def _parse_date_for_overlap(s: str):
 
 def _nest_venta_detalle_rubro_subrubro_articulo(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Construye rubro → subrubro → artículo con totales de facturación/unidades por nivel.
-    Cada nodo incluye solo métricas de venta (resto de columnas se rellenan en UI).
+    Construye rubro → subrubro → artículo con facturación y unidades por línea (ventas netas del período).
+    Los **remitos** del cliente solo existen a nivel cabecera (`comp_ped` REM); no se reparten en el árbol.
+    El BO se fusiona después con `_merge_bo_en_detalle_arbol`; las agregaciones de venta se recalculan con
+    `_rollup_facturacion_unidades_detalle` tras incorporar artículos solo-BO.
     """
     rubros: Dict[Tuple[int, str], Dict[str, Any]] = {}
     sub_idx: Dict[Tuple[Tuple[int, str], Tuple[int, str]], Dict[str, Any]] = {}
@@ -146,9 +307,148 @@ def _nest_venta_detalle_rubro_subrubro_articulo(filas: List[Dict[str, Any]]) -> 
     return out
 
 
+def _rollup_facturacion_unidades_detalle(detalle_tree: List[Dict[str, Any]]) -> None:
+    """Recalcula facturación y unidades agregadas en subrubro y rubro desde las hojas (sin remitos por línea)."""
+    for rb in detalle_tree:
+        rb_fac = 0.0
+        rb_uni = 0.0
+        for sub in rb.get("children") or []:
+            sf = su = 0.0
+            for art in sub.get("children") or []:
+                sf += float(art.get("facturacion") or 0)
+                su += float(art.get("cantidades_vendidas") or 0)
+            sub["facturacion"] = sf
+            sub["cantidades_vendidas"] = su
+            rb_fac += sf
+            rb_uni += su
+        rb["facturacion"] = rb_fac
+        rb["cantidades_vendidas"] = rb_uni
+
+
+_BO_DETAIL_KEYS = ("backorder_total", "bo_con_stock", "bo_con_ingreso", "bo_sin_stock")
+
+
+def _rubro_tuple(rb: Dict[str, Any]) -> Tuple[int, str]:
+    return (int(rb.get("codigo_rubro") or 0), (rb.get("nombre_rubro") or "").strip())
+
+
+def _subrubro_tuple(sub: Dict[str, Any]) -> Tuple[int, str]:
+    return (int(sub.get("id_subrubro") or 0), (sub.get("nombre_subrubro") or "").strip())
+
+
+def _rollup_bo_en_detalle(detalle_tree: List[Dict[str, Any]]) -> None:
+    """Suma métricas BO desde artículos hacia subrubro y rubro."""
+    z = {k: 0.0 for k in _BO_DETAIL_KEYS}
+    for rb in detalle_tree:
+        rb_acc = dict(z)
+        for sub in rb.get("children") or []:
+            sub_acc = dict(z)
+            for art in sub.get("children") or []:
+                for k in _BO_DETAIL_KEYS:
+                    sub_acc[k] += float(art.get(k) or 0)
+            for k in _BO_DETAIL_KEYS:
+                sub[k] = sub_acc[k]
+                rb_acc[k] += sub_acc[k]
+        for k in _BO_DETAIL_KEYS:
+            rb[k] = rb_acc[k]
+
+
+def _append_articulo_solo_bo(detalle_tree: List[Dict[str, Any]], id_art: int, b: Dict[str, Any]) -> None:
+    """Agrega un artículo con ventas cero pero con BO (pedidos pendientes sin facturación en el período)."""
+    if id_art <= 0:
+        return
+    cr = int(b.get("codigo_rubro") or 0)
+    nr = (b.get("nombre_rubro") or "").strip() or "Sin rubro"
+    isr = int(b.get("id_subrubro") or 0)
+    nsr = (b.get("nombre_subrubro") or "").strip() or "Sin subrubro"
+    nar = (b.get("nombre_articulo") or "").strip() or f"Artículo {id_art}"
+
+    rb = None
+    for r in detalle_tree:
+        if _rubro_tuple(r) == (cr, nr):
+            rb = r
+            break
+    if rb is None:
+        rb = {
+            "tipo": "rubro",
+            "codigo_rubro": cr,
+            "nombre_rubro": nr,
+            "facturacion": 0.0,
+            "cantidades_vendidas": 0.0,
+            "children": [],
+        }
+        detalle_tree.append(rb)
+
+    sub = None
+    for s in rb.get("children") or []:
+        if _subrubro_tuple(s) == (isr, nsr):
+            sub = s
+            break
+    if sub is None:
+        sub = {
+            "tipo": "subrubro",
+            "id_subrubro": isr,
+            "nombre_subrubro": nsr,
+            "facturacion": 0.0,
+            "cantidades_vendidas": 0.0,
+            "children": [],
+        }
+        rb["children"].append(sub)
+
+    art: Dict[str, Any] = {
+        "tipo": "articulo",
+        "id_art": id_art,
+        "nombre_articulo": nar,
+        "facturacion": 0.0,
+        "cantidades_vendidas": 0.0,
+    }
+    for k in _BO_DETAIL_KEYS:
+        art[k] = float(b.get(k) or 0)
+    sub["children"].append(art)
+
+
+def _merge_bo_en_detalle_arbol(
+    detalle_tree: List[Dict[str, Any]],
+    bo_por_articulo: Dict[int, Dict[str, Any]],
+) -> None:
+    """
+    Asigna BO por ID de artículo a cada fila de detalle y agrega artículos solo-BO.
+    bo_por_articulo: id_art -> métricas + datos de rubro/subrubro/nombre para altas nuevas.
+    """
+    seen: Set[int] = set()
+    for rb in detalle_tree:
+        for sub in rb.get("children") or []:
+            for art in sub.get("children") or []:
+                iid = int(art.get("id_art") or 0)
+                if iid > 0:
+                    seen.add(iid)
+                b = bo_por_articulo.get(iid) if iid > 0 else None
+                if b:
+                    for k in _BO_DETAIL_KEYS:
+                        art[k] = float(b.get(k) or 0)
+                else:
+                    for k in _BO_DETAIL_KEYS:
+                        art[k] = 0.0
+
+    for iid, b in bo_por_articulo.items():
+        if iid <= 0 or iid in seen:
+            continue
+        _append_articulo_solo_bo(detalle_tree, iid, b)
+
+
 def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) -> QueryResult:
     svc = QueryRunnerService(user)
     filters = payload.get("filters", {}) or {}
+    started_at = time.perf_counter()
+    phase_started = started_at
+    phase_ms: Dict[str, int] = {}
+
+    def _mark_phase(name: str) -> None:
+        nonlocal phase_started
+        now = time.perf_counter()
+        phase_ms[name] = int((now - phase_started) * 1000)
+        phase_started = now
+
     fecha_inicio, fecha_fin = svc._resolve_period_dates(filters)
     if not fecha_inicio or not fecha_fin:
         return QueryResult(
@@ -178,17 +478,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             notes=["No se pudo determinar la base de datos de la empresa."],
         )
 
-    sucursales = filters.get("sucursales", [])
-    if isinstance(sucursales, str):
-        sucursales = [sucursales] if sucursales else []
-    elif not isinstance(sucursales, list):
-        sucursales = []
-    sucursales_ints: List[int] = []
-    for s in sucursales:
-        try:
-            sucursales_ints.append(int(s))
-        except (TypeError, ValueError):
-            pass
+    sucursales_ints, puntos_venta_ints = svc._parse_sucursales_pv(filters)
 
     depositos_incluidos = filters.get("depositos_incluidos", [])
     if isinstance(depositos_incluidos, str):
@@ -201,6 +491,15 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
 
     clientes_excluidos = svc._parse_clientes_excluidos(filters)
     vendedores_excluidos = svc._parse_vendedores_excluidos(filters)
+    clientes_incluir = _parse_int_list(filters.get("clientes_incluir", []))
+    vendedores_incluir = _parse_int_list(filters.get("vendedores_incluir", []))
+    ordenar_por, orden_forma = _parse_sorting(filters)
+    metric_key = _METRIC_ORDER_MAP[ordenar_por]
+
+    # Reconciliación defensiva backend: si llega en ambos, prevalece "incluir".
+    clientes_excluidos = [c for c in clientes_excluidos if int(c) not in set(clientes_incluir)]
+    vendedores_excluidos = [v for v in vendedores_excluidos if int(v) not in set(vendedores_incluir)]
+    _mark_phase("parse_filtros")
 
     lista_precio = filters.get("lista_precio")
     if lista_precio is None:
@@ -232,9 +531,15 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
     suc_bo_ph = ""
     if sucursales_ints:
         suc_bo_ph = " AND cp.CodSucursal IN (" + ",".join(["%s"] * len(sucursales_ints)) + ")"
+    pv_bo_ph = ""
+    if puntos_venta_ints:
+        pv_bo_ph = " AND cp.id_pv IN (" + ",".join(["%s"] * len(puntos_venta_ints)) + ")"
     suc_res_inner = ""
     if sucursales_ints:
         suc_res_inner = " AND cp_res.CodSucursal IN (" + ",".join(str(x) for x in sucursales_ints) + ")"
+    pv_res_inner = ""
+    if puntos_venta_ints:
+        pv_res_inner = " AND cp_res.id_pv IN (" + ",".join(str(x) for x in puntos_venta_ints) + ")"
     bo_estados = "('Pendiente')"
 
     obj_viaj_extra = ""
@@ -272,6 +577,10 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 phs = ",".join(["%s"] * len(sucursales_ints))
                 where_fac_cli.append(f"cc.CodSucursal IN ({phs})")
                 params_fac_cli.extend(sucursales_ints)
+            if puntos_venta_ints:
+                phpv = ",".join(["%s"] * len(puntos_venta_ints))
+                where_fac_cli.append(f"cc.id_pv IN ({phpv})")
+                params_fac_cli.extend(puntos_venta_ints)
             if clientes_excluidos:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
                 where_fac_cli.append(f"cc.Codigo NOT IN ({ph})")
@@ -306,6 +615,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     "cod_viajante": int(r[3] or 0),
                     "nombre_vendedor": (r[4] or "").strip(),
                 }
+            _mark_phase("query_facturacion")
 
             # --- Clientes con histórico de ventas (sin filtro de fechas ni sucursal en facturas) ---
             # Permite listar en el informe a quienes tienen movimiento en cuentacliente aunque en el
@@ -338,6 +648,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             """
             cursor.execute(sql_hist_cli, params_hist_cli)
             ids_con_historico_ventas = {int(r[0]) for r in cursor.fetchall() if r and r[0] is not None}
+            _mark_phase("query_historico")
 
             # --- Remitos por cliente ---
             where_remitos = [
@@ -352,6 +663,10 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 phs = ",".join(["%s"] * len(sucursales_ints))
                 where_remitos.append(f"cp.CodSucursal IN ({phs})")
                 params_rem.extend(sucursales_ints)
+            if puntos_venta_ints:
+                phpv = ",".join(["%s"] * len(puntos_venta_ints))
+                where_remitos.append(f"cp.id_pv IN ({phpv})")
+                params_rem.extend(puntos_venta_ints)
             if clientes_excluidos:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
                 where_remitos.append(f"cp.Codigo NOT IN ({ph})")
@@ -371,6 +686,43 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             rem_map: Dict[int, float] = {}
             for r in cursor.fetchall():
                 rem_map[int(r[0])] = float(r[1] or 0)
+            _mark_phase("query_remitos")
+
+            # --- Pedidos en armado por cliente (comp_ped PED; igual criterio que total-consolidado-operativo: sin filtro fecha) ---
+            where_ped_arm = [
+                "cp.TipoComprobante = 'PED'",
+                "cp.Anulado = 'No'",
+                "cp.Estado IN ('En preparación', 'Preparado')",
+            ]
+            params_ped: List[Any] = []
+            if sucursales_ints:
+                phs = ",".join(["%s"] * len(sucursales_ints))
+                where_ped_arm.append(f"cp.CodSucursal IN ({phs})")
+                params_ped.extend(sucursales_ints)
+            if puntos_venta_ints:
+                phpv = ",".join(["%s"] * len(puntos_venta_ints))
+                where_ped_arm.append(f"cp.id_pv IN ({phpv})")
+                params_ped.extend(puntos_venta_ints)
+            if clientes_excluidos:
+                ph = ",".join(["%s"] * len(clientes_excluidos))
+                where_ped_arm.append(f"cp.Codigo NOT IN ({ph})")
+                params_ped.extend(clientes_excluidos)
+            if vendedores_excluidos:
+                phv = ",".join(["%s"] * len(vendedores_excluidos))
+                where_ped_arm.append(f"cl_ped.CodViajante NOT IN ({phv})")
+                params_ped.extend(vendedores_excluidos)
+            sql_ped_arm = f"""
+                SELECT cp.Codigo, SUM(COALESCE(cp.SubtotalDesc, 0))
+                FROM comp_ped cp
+                INNER JOIN cliente cl_ped ON cl_ped.Codigo = cp.Codigo
+                WHERE {" AND ".join(where_ped_arm)}
+                GROUP BY cp.Codigo
+            """
+            cursor.execute(sql_ped_arm, params_ped)
+            ped_arm_map: Dict[int, float] = {}
+            for r in cursor.fetchall():
+                ped_arm_map[int(r[0])] = float(r[1] or 0)
+            _mark_phase("query_pedidos_en_armado")
 
             # --- Unidades vendidas (stock + cuentacliente) ---
             ph_tc = ",".join(["%s"] * len(_TIPOS_FAC_NC))
@@ -389,6 +741,10 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 phs = ",".join(["%s"] * len(sucursales_ints))
                 where_uni.append(f"cc.CodSucursal IN ({phs})")
                 params_uni.extend(sucursales_ints)
+            if puntos_venta_ints:
+                phpv = ",".join(["%s"] * len(puntos_venta_ints))
+                where_uni.append(f"cc.id_pv IN ({phpv})")
+                params_uni.extend(puntos_venta_ints)
             if clientes_excluidos:
                 ph = ",".join(["%s"] * len(clientes_excluidos))
                 where_uni.append(f"cc.Codigo NOT IN ({ph})")
@@ -414,6 +770,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             uni_map: Dict[int, float] = {}
             for r in cursor.fetchall():
                 uni_map[int(r[0])] = float(r[1] or 0)
+            _mark_phase("query_unidades")
 
             # --- Detalle venta por rubro / subrubro / artículo (mismo rango y filtros que unidades) ---
             # Importe alineado a renglones stock.PrecioNetoxR (paridad ventas_netas / SPEC unidades).
@@ -467,6 +824,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         "cantidades_vendidas": float(r[8] or 0),
                     }
                 )
+            _mark_phase("query_detalle_ventas")
 
             # --- Objetivos (solape con rango facturación) ---
             objetivos_map: Dict[int, Decimal] = {}
@@ -498,12 +856,18 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             except Exception as ex:
                 logger.warning("Objetivos ventas: tabla o consulta no disponible: %s", ex)
                 notes.append("No se pudieron leer objetivos (¿tabla viajantes_objetivos_ventas creada?).")
+            _mark_phase("query_objetivos")
 
             # --- BO por cliente y artículo (misma lógica que BO agregado + prorrateo) ---
             sql_bo_by_client = f"""
                 SELECT
                     cp.Codigo AS cod_cliente,
                     sp.IDArt AS id_art,
+                    COALESCE(MAX(a.NombreArticulo), '') AS nombre_articulo,
+                    COALESCE(MAX(a.CodigoRubro), 0) AS codigo_rubro,
+                    COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
+                    COALESCE(MAX(a.IDSubRubro), 0) AS id_subrubro,
+                    COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
                     SUM(sp.Cantidad) AS bo_qty,
                     SUM(sp.PrecioNetoxR) AS bo_importe,
                     COALESCE(sd.stock_total, 0) AS stock_actual,
@@ -514,6 +878,8 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 INNER JOIN comp_ped cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
                 INNER JOIN cliente cl_bo ON cl_bo.Codigo = cp.Codigo
                 LEFT JOIN articulo a ON a.IDArt = sp.IDArt
+                LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
+                LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
                 LEFT JOIN (
                     SELECT id_articulo, SUM(saldo) AS stock_total
                     FROM stock_deposito{sd_where_excl}
@@ -543,7 +909,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         AND cp_res.Anulado = 'No'
                         AND (sp_res.anulado IS NULL OR sp_res.anulado = 'No')
                         AND cp_res.Estado IN ('En preparación', 'Preparado')
-                        AND (COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0){suc_res_inner}{reservado_excl_clause}{reservado_viaj_clause}
+                        AND (COALESCE(sp_res.cantidad_pendiente, sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0){suc_res_inner}{pv_res_inner}{reservado_excl_clause}{reservado_viaj_clause}
                     GROUP BY sp_res.IDArt
                 ) reservado_sub ON reservado_sub.id_articulo = sp.IDArt
                 WHERE cp.TipoComprobante = 'PED'
@@ -552,7 +918,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     AND (sp.anulado IS NULL OR sp.anulado = 'No')
                     AND cp.Estado IN {bo_estados}
                     AND sp.CodigoMovimiento IS NOT NULL
-                    {suc_bo_ph}{viaj_bo}
+                    {suc_bo_ph}{pv_bo_ph}{viaj_bo}
                     AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}
                     AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
                 GROUP BY cp.Codigo, sp.IDArt, sd.stock_total, oc_pendiente_sub.oc_pendiente, reservado_sub.reservado
@@ -561,6 +927,8 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             _bo_params: List[Any] = []
             if sucursales_ints:
                 _bo_params.extend(sucursales_ints)
+            if puntos_venta_ints:
+                _bo_params.extend(puntos_venta_ints)
             if vendedores_excluidos:
                 _bo_params.extend(vendedores_excluidos)
             _bo_params.extend([fecha_inicio_bo, fecha_fin_bo])
@@ -568,14 +936,21 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             bo_cli_agg: Dict[int, Dict[str, float]] = defaultdict(
                 lambda: {"bo_total": 0.0, "con_stock": 0.0, "con_ingreso": 0.0, "sin_stock": 0.0}
             )
+            bo_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
             for row in cursor.fetchall():
                 cod_c = int(row[0])
-                bo_qty = float(row[2] or 0)
-                bo_importe = float(row[3] or 0)
-                stock_actual = float(row[4] or 0)
-                stock_reservado = float(row[5] or 0)
-                disponible = float(row[6] or 0)
-                oc_pendiente = float(row[7] or 0)
+                id_art = int(row[1] or 0)
+                nombre_art = (row[2] or "").strip()
+                cod_r = int(row[3] or 0)
+                nom_r = (row[4] or "").strip() or "Sin rubro"
+                id_sr = int(row[5] or 0)
+                nom_sr = (row[6] or "").strip() or "Sin subrubro"
+                bo_qty = float(row[7] or 0)
+                bo_importe = float(row[8] or 0)
+                stock_actual = float(row[9] or 0)
+                stock_reservado = float(row[10] or 0)
+                disponible = float(row[11] or 0)
+                oc_pendiente = float(row[12] or 0)
                 faltante_reservado = max(0.0, stock_reservado - stock_actual)
                 oc_para_reservado = min(oc_pendiente, faltante_reservado)
                 oc_restante_bo = max(0.0, oc_pendiente - oc_para_reservado)
@@ -589,11 +964,35 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     ssi = bo_importe * (sin_stock_qty / bo_qty)
                 else:
                     csi = cii = ssi = 0.0
-                a = bo_cli_agg[cod_c]
-                a["bo_total"] += bo_importe
-                a["con_stock"] += csi
-                a["con_ingreso"] += cii
-                a["sin_stock"] += ssi
+                agg_c = bo_cli_agg[cod_c]
+                agg_c["bo_total"] += bo_importe
+                agg_c["con_stock"] += csi
+                agg_c["con_ingreso"] += cii
+                agg_c["sin_stock"] += ssi
+
+                if id_art <= 0:
+                    continue
+                slot = bo_art_detail[cod_c].setdefault(
+                    id_art,
+                    {
+                        "nombre_articulo": nombre_art,
+                        "codigo_rubro": cod_r,
+                        "nombre_rubro": nom_r,
+                        "id_subrubro": id_sr,
+                        "nombre_subrubro": nom_sr,
+                        "backorder_total": 0.0,
+                        "bo_con_stock": 0.0,
+                        "bo_con_ingreso": 0.0,
+                        "bo_sin_stock": 0.0,
+                    },
+                )
+                slot["backorder_total"] += bo_importe
+                slot["bo_con_stock"] += csi
+                slot["bo_con_ingreso"] += cii
+                slot["bo_sin_stock"] += ssi
+                if nombre_art:
+                    slot["nombre_articulo"] = nombre_art
+            _mark_phase("query_backorder")
 
             all_ids = sorted(
                 set(fact_map.keys())
@@ -603,6 +1002,8 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 | set(bo_cli_agg.keys())
                 | set(objetivos_map.keys())
             )
+            if clientes_incluir:
+                all_ids = [cid for cid in all_ids if cid in set(clientes_incluir)]
             master: Dict[int, Dict[str, Any]] = {}
             if all_ids:
                 ph = ",".join(["%s"] * len(all_ids))
@@ -621,6 +1022,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         "cod_viajante": int(r[2] or 0),
                         "nombre_vendedor": (r[3] or "").strip(),
                     }
+            _mark_phase("query_master_clientes")
 
             rows_out: List[Dict[str, Any]] = []
             for cid in all_ids:
@@ -629,6 +1031,8 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     continue
                 nom_c = m["nombre_cliente"]
                 cv = m["cod_viajante"]
+                if vendedores_incluir and cv not in set(vendedores_incluir):
+                    continue
                 if vendedores_excluidos and cv in vendedores_excluidos:
                     continue
                 nv = m["nombre_vendedor"]
@@ -636,11 +1040,12 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
 
                 fac = float(fm["facturacion"]) if fm else 0.0
                 rem = rem_map.get(cid, 0.0)
+                ped_arm = ped_arm_map.get(cid, 0.0)
                 uni = uni_map.get(cid, 0.0)
                 bo = bo_cli_agg.get(cid, {"bo_total": 0.0, "con_stock": 0.0, "con_ingreso": 0.0, "sin_stock": 0.0})
                 obj = float(objetivos_map.get(cid, Decimal("0")))
-                total_fr = float(calcular_total_facturacion_remitos(fac, rem))
-                falta = float(calcular_falta(obj, fac, rem))
+                total_fr = float(calcular_total_consolidado_objetivos(fac, rem, ped_arm))
+                falta = float(calcular_falta(obj, fac, rem, ped_arm))
 
                 rows_out.append(
                     {
@@ -651,6 +1056,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         "objetivo": obj,
                         "facturacion": fac,
                         "remitos": rem,
+                        "pedidos_en_armado": ped_arm,
                         "total": total_fr,
                         "falta": falta,
                         "cantidades_vendidas": uni,
@@ -661,7 +1067,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     }
                 )
 
-            # Árbol vendedor → clientes (orden final: ver tras armar grupos)
+            # Árbol vendedor -> estado_compra -> clientes
             grupos: Dict[int, Dict[str, Any]] = {}
             for row in rows_out:
                 cv = row["cod_viajante"]
@@ -674,6 +1080,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         "objetivo": 0.0,
                         "facturacion": 0.0,
                         "remitos": 0.0,
+                        "pedidos_en_armado": 0.0,
                         "total": 0.0,
                         "falta": 0.0,
                         "cantidades_vendidas": 0.0,
@@ -681,16 +1088,56 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         "bo_con_stock": 0.0,
                         "bo_con_ingreso": 0.0,
                         "bo_sin_stock": 0.0,
+                        "total_clientes": 0,
+                        "total_clientes_con_compra": 0,
+                        "total_clientes_sin_compra": 0,
                     }
                 g = grupos[cv]
                 cid = int(row.get("codigo_cliente") or 0)
-                vd = _nest_venta_detalle_rubro_subrubro_articulo(detalle_flat_por_cliente.get(cid, []))
-                ch = {**row, "tipo": "cliente", "venta_detalle": vd}
-                g["children"].append(ch)
+                vd_tree = _nest_venta_detalle_rubro_subrubro_articulo(detalle_flat_por_cliente.get(cid, []))
+                _merge_bo_en_detalle_arbol(vd_tree, bo_art_detail.get(cid, {}))
+                _rollup_bo_en_detalle(vd_tree)
+                _rollup_facturacion_unidades_detalle(vd_tree)
+                vd = _sort_nested_detalle(vd_tree, metric_key=metric_key, direction=orden_forma)
+                total_cli = float(row.get("total") or 0)
+                estado_compra = "con_compra" if abs(total_cli) > 0.000001 else "sin_compra"
+                if not any(ch.get("tipo") == "estado_compra" and ch.get("estado_compra") == estado_compra for ch in g["children"]):
+                    g["children"].append(
+                        {
+                            "tipo": "estado_compra",
+                            "estado_compra": estado_compra,
+                            "nombre": "Con compra" if estado_compra == "con_compra" else "Sin compra",
+                            "children": [],
+                            "objetivo": 0.0,
+                            "facturacion": 0.0,
+                            "remitos": 0.0,
+                            "pedidos_en_armado": 0.0,
+                            "total": 0.0,
+                            "falta": 0.0,
+                            "cantidades_vendidas": 0.0,
+                            "backorder_total": 0.0,
+                            "bo_con_stock": 0.0,
+                            "bo_con_ingreso": 0.0,
+                            "bo_sin_stock": 0.0,
+                            "total_clientes": 0,
+                        }
+                    )
+                estado_node = next(
+                    ch for ch in g["children"] if ch.get("tipo") == "estado_compra" and ch.get("estado_compra") == estado_compra
+                )
+                ch = {**row, "tipo": "cliente", "venta_detalle": vd, "estado_compra": estado_compra}
+                estado_node["children"].append(ch)
+                estado_node["total_clientes"] = int(estado_node.get("total_clientes") or 0) + 1
+                g["total_clientes"] = int(g.get("total_clientes") or 0) + 1
+                if estado_compra == "con_compra":
+                    g["total_clientes_con_compra"] = int(g.get("total_clientes_con_compra") or 0) + 1
+                else:
+                    g["total_clientes_sin_compra"] = int(g.get("total_clientes_sin_compra") or 0) + 1
                 for k in (
                     "objetivo",
                     "facturacion",
                     "remitos",
+                    "pedidos_en_armado",
                     "total",
                     "falta",
                     "cantidades_vendidas",
@@ -700,21 +1147,31 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     "bo_sin_stock",
                 ):
                     g[k] = float(g.get(k, 0) or 0) + float(row.get(k, 0) or 0)
+                    estado_node[k] = float(estado_node.get(k, 0) or 0) + float(row.get(k, 0) or 0)
 
-            # Clientes alfabéticos por nombre (nivel 1+); rubro/subrubro/artículo ya ordenados en _nest_venta_detalle_rubro_subrubro_articulo.
+            # Orden recursivo por métrica + desempate alfabético.
             for g in grupos.values():
                 g["children"].sort(
                     key=lambda x: (
-                        (x.get("nombre_cliente") or "").upper(),
-                        int(x.get("codigo_cliente") or 0),
+                        _sort_scalar(_group_metric(x, metric_key), orden_forma),
+                        (x.get("nombre") or "").upper(),
+                        0 if (x.get("estado_compra") or "") == "con_compra" else 1,
                     )
                 )
+                for estado in g["children"]:
+                    estado["children"].sort(
+                        key=lambda x: (
+                            _sort_scalar(_group_metric(x, metric_key), orden_forma),
+                            (x.get("nombre_cliente") or "").upper(),
+                            int(x.get("codigo_cliente") or 0),
+                        )
+                    )
 
-            # Nivel 0 — vendedores: importe objetivo total descendente.
+            # Nivel vendedor con el mismo criterio de ordenamiento.
             arbol = sorted(
                 grupos.values(),
                 key=lambda x: (
-                    -float(x.get("objetivo") or 0),
+                    _sort_scalar(_group_metric(x, metric_key), orden_forma),
                     (x.get("nombre_vendedor") or "").upper(),
                     int(x.get("cod_viajante") or 0),
                 ),
@@ -722,14 +1179,17 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
 
             rows_ordered: List[Dict[str, Any]] = []
             for g in arbol:
-                for ch in g["children"]:
-                    rows_ordered.append({k: v for k, v in ch.items() if k not in ("tipo", "venta_detalle")})
+                for estado in g["children"]:
+                    for ch in estado.get("children") or []:
+                        rows_ordered.append({k: v for k, v in ch.items() if k not in ("tipo", "venta_detalle")})
             rows_out = rows_ordered
+            _mark_phase("armado_jerarquia")
 
             tot = {
                 "objetivo": sum(float(x["objetivo"]) for x in rows_out),
                 "facturacion": sum(float(x["facturacion"]) for x in rows_out),
                 "remitos": sum(float(x["remitos"]) for x in rows_out),
+                "pedidos_en_armado": sum(float(x["pedidos_en_armado"]) for x in rows_out),
                 "total": sum(float(x["total"]) for x in rows_out),
                 "falta": sum(float(x["falta"]) for x in rows_out),
                 "cantidades_vendidas": sum(float(x["cantidades_vendidas"]) for x in rows_out),
@@ -749,16 +1209,32 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 "fecha_inicio_bo": fecha_inicio_bo,
                 "fecha_fin_bo": fecha_fin_bo,
                 "sucursales": sucursales_ints,
+                "punto_venta": puntos_venta_ints,
                 "depositos_incluidos": depositos_incluidos,
                 "clientes_excluidos": clientes_excluidos,
                 "vendedores_excluidos": vendedores_excluidos,
+                "clientes_incluir": clientes_incluir,
+                "vendedores_incluir": vendedores_incluir,
                 "lista_precio": lista_precio,
                 "lista_precio_label": _label_lista_precio(lista_precio),
+                "ordenar_por": ordenar_por,
+                "orden_forma": orden_forma,
             }
+            filters_applied["performance_phase_ms"] = phase_ms
+            filters_applied["performance_total_ms"] = int((time.perf_counter() - started_at) * 1000)
             notes.insert(
                 0,
                 f"Facturación/remitos: {fi_fac_sql} a {ff_fac_sql}. Backorder: {fecha_inicio_bo} a {fecha_fin_bo}.",
             )
+            notes.append(
+                "Pedidos en armado: importe de PED en estado En preparación/Preparado, sin filtro por fechas "
+                "(misma semántica que el KPI del reporte total-consolidado-operativo)."
+            )
+            if puntos_venta_ints:
+                notes.append(
+                    f"Puntos de venta filtrados ({len(puntos_venta_ints)}): facturación, remitos, pedidos en armado, "
+                    "unidades/detalle y cabeceras BO usan cc.id_pv / cp.id_pv como en total-consolidado-operativo."
+                )
             notes.append(
                 f"Clientes en grilla: {len(rows_out)} "
                 "(unión de histórico de ventas en cuentacliente —sin acotar por ventana—, "
@@ -773,6 +1249,15 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             }
             cursor.close()
 
+        _persist_perf_log(
+            report=report,
+            user=user,
+            filters_snapshot=filters_applied,
+            phase_ms=phase_ms,
+            total_ms=int((time.perf_counter() - started_at) * 1000),
+            status="success",
+            note=f"Ejecución OK para {report.slug}",
+        )
         return QueryResult(
             meta={
                 "slug": report.slug,
@@ -780,7 +1265,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 "category": report.category,
                 "version": report.version,
                 "extra": extra,
-                "filters_applied": filters_applied,
+                "filters_applied": _filters_applied_para_respuesta(filters_applied, user),
             },
             data=rows_out,
             totals=tot,
@@ -788,6 +1273,18 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
         )
     except Exception as e:
         logger.exception("ventas_objetivos_vs_bo: %s", e)
+        try:
+            _persist_perf_log(
+                report=report,
+                user=user,
+                filters_snapshot={"error": str(e), "filters": filters},
+                phase_ms=phase_ms,
+                total_ms=int((time.perf_counter() - started_at) * 1000),
+                status="error",
+                note=f"Error en ejecución: {e}",
+            )
+        except Exception:
+            logger.exception("No se pudo persistir log de error de performance")
         return QueryResult(
             meta={"slug": report.slug, "name": report.name, "category": report.category, "version": report.version},
             data=[],
