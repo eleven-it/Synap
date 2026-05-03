@@ -122,6 +122,21 @@
       .replace(/"/g, "&quot;");
   }
 
+  /**
+   * Nombre visible + contador (n) entre paréntesis: el número va en gris y tipografía ligeramente menor
+   * para diferenciarlo del nombre; contraste usable en modo claro y oscuro (WCAG orientativo).
+   */
+  function nombreJerarquiaConContadorHtml(nombreBase, count) {
+    const n = fmtNum(count != null && count !== "" ? count : 0);
+    const base = escHtml(String(nombreBase || "").trim() || "—");
+    return (
+      base +
+      '<span class="vo-jerarquia-contador ms-0.5 inline-block align-baseline text-[0.8125rem] leading-tight font-normal tabular-nums text-slate-600 dark:text-slate-400" translate="no">(' +
+      escHtml(n) +
+      ")</span>"
+    );
+  }
+
   function fmtMoney(v) {
     const n = Number(v);
     if (v == null || v === "" || Number.isNaN(n)) return ARS.format(0);
@@ -926,8 +941,9 @@
             treeIndentPx(0),
             treeToggleVendorHtml(gid, expanded),
             "text-xs font-bold uppercase tracking-tight text-slate-900 dark:text-white",
-            escHtml(
-              `${vend.nombre_vendedor || `Vendedor ${codViajante}`} (${fmtNum(vend.total_clientes || 0)})`
+            nombreJerarquiaConContadorHtml(
+              vend.nombre_vendedor || "Vendedor " + codViajante,
+              vend.total_clientes || 0
             )
           ) +
           metricCellsFull(vend) +
@@ -941,7 +957,10 @@
         .forEach((estado) => {
           const estadoKey = "ec-" + codViajante + "-" + String(estado.estado_compra || "sin_compra");
           const expEstado = isEstadoCompraExpanded(viewState, estadoKey);
-          const estadoNombre = `${estado.nombre || "Estado"} (${fmtNum(estado.total_clientes || 0)})`;
+          const estadoNombreHtml = nombreJerarquiaConContadorHtml(
+            estado.nombre || "Estado",
+            estado.total_clientes || 0
+          );
           const estadoSearch = [vend.nombre_vendedor, estado.nombre]
             .filter(function (x) {
               return x != null && String(x).trim() !== "";
@@ -956,7 +975,7 @@
                 treeIndentPx(1),
                 treeToggleHtml(estadoKey, expEstado),
                 "text-xs uppercase tracking-tight font-normal text-slate-800 dark:text-slate-200",
-                escHtml(estadoNombre)
+                estadoNombreHtml
               ) +
               metricCellsFull(estado) +
               "</tr>"
