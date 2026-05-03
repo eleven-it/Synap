@@ -71,10 +71,13 @@
     return Boolean(viewState?.expandedVendors?.[String(codViajante || "")]);
   }
 
-  /** Por defecto expandido (primera visita); si el usuario colapsó, respeta localStorage. */
+  /**
+   * Con compra / Sin compra bajo un vendedor: por defecto colapsados la primera vez (sin clave en localStorage);
+   * si el usuario ya abrió o cerró el bloque, respeta `expandedNodes[estadoKey]`.
+   */
   function isEstadoCompraExpanded(viewState, estadoKey) {
     const raw = viewState?.expandedNodes?.[estadoKey];
-    if (raw === undefined) return true;
+    if (raw === undefined) return false;
     return Boolean(raw);
   }
 
