@@ -363,7 +363,7 @@
                 {% with widget_id=widget.id|stringformat:"s" %}
                 {% with config_id="widget-config-"|add:widget_id %}
                 <div data-widget-wrapper class="flex flex-col gap-0">
-                    <section class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden transition-all duración-500 hover:-translate-y-1"
+                    <section class="{% if report.slug == 'comprobantes-rutas' %}flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800{% else %}rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden transition-all duración-500 hover:-translate-y-1{% endif %}"
                              data-widget-id="{{ widget.id }}"
                              data-widget-type="{{ widget.widget_type }}"
                              data-widget-name="{{ widget.name }}"
@@ -390,14 +390,21 @@
                         {% if report.slug == 'comprobantes-rutas' %}
                         {% include "reports/includes/logistica_lista_comprobantes_rutas_tabla_toolbar.html" %}
                         {% endif %}
-                        <div class="relative">
-                            <div class="w-full h-[400px] sm:h-[500px] bg-white dark:bg-slate-950 p-4 sm:p-6 {% if report.slug == 'comprobantes-rutas' %}hidden{% endif %}"
+                        <div class="relative{% if report.slug == 'comprobantes-rutas' %} flex min-h-0 flex-1 flex-col{% endif %}">
+                            <div class="w-full h-[400px] sm:h-[500px] bg-white dark:bg-slate-950 p-4 sm:p-6{% if report.slug == 'comprobantes-rutas' %} hidden{% endif %}"
                                  data-widget-content>
                                 <div class="h-full w-full grid place-content-center text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 tracking-[0.2em] uppercase">
                                     Cargando datos...
                                 </div>
                             </div>
-                            <div class="p-4 sm:p-6 {% if report.slug == 'comprobantes-rutas' %}{% else %}hidden{% endif %}" data-widget-table-wrapper></div>
+                            {% if report.slug == 'comprobantes-rutas' %}
+                            <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 md:hidden">Deslizá horizontalmente si no ves todas las columnas.</p>
+                            <div id="logistica-lista-cr-scroll" class="h-[min(75vh,56rem)] min-h-[14rem] overflow-auto overscroll-contain [scrollbar-gutter:stable]" role="region" aria-label="Lista comprobantes en rutas">
+                                <div data-widget-table-wrapper class="min-h-0 px-1 pb-2 sm:px-2"></div>
+                            </div>
+                            {% else %}
+                            <div class="p-4 sm:p-6 hidden" data-widget-table-wrapper></div>
+                            {% endif %}
                         </div>
                     </section>
                     {{ widget.configuration|json_script:config_id }}
@@ -426,8 +433,7 @@
                                 <div class="relative overflow-visible">
                                     <select id="stock_existencias_group_by" name="stock_existencias_group_by" multiple class="hidden" data-tags-field="group_by">
                                         <option value="deposito">Depósito</option>
-                                        <option value="articulo">Artículo (nombre)</option>
-                                        <option value="marca">Marca</option>
+                                        <option value="articulo">Nombre artículo</option>
                                         <option value="rubro">Rubro</option>
                                         <option value="subrubro">Subrubro</option>
                                     </select>
@@ -443,7 +449,7 @@
                                 <label for="stock_existencias_busqueda" class="text-xs font-semibold text-slate-500 dark:text-slate-400 block mb-2">Buscar</label>
                                 <input type="search" name="stock_existencias_busqueda" id="stock_existencias_busqueda" maxlength="120" autocomplete="off"
                                        class="w-full min-h-[2.5rem] py-2 px-3 text-xs border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
-                                       placeholder="Nombre, código, ID manual, barras, depósito, marca, rubro…">
+                                       placeholder="Nombre, código, ID manual, barras, depósito, rubro…">
                             </div>
                         </div>
                     </div>
@@ -5172,9 +5178,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% else %}
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=202604305"></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=202604334"></script>
 {% if report.slug == 'comprobantes-rutas' %}
-<script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260413j" defer></script>
+<script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260430b" defer></script>
 {% endif %}
 {% if report.slug == 'bo-stock-facturacion' %}
 <script src="{% static 'reports/js/bo_stock_facturacion.js' %}?v=20260211"></script>

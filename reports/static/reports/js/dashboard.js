@@ -80,6 +80,50 @@ function isLogisticaListaComprobantesRutasSlug(slug) {
   return slug === "comprobantes-rutas" || slug === "mayoristapp-lista-comprobantes-rutas";
 }
 
+/** Campos que no se muestran en la tabla pero sí entran en «Buscar en tabla» (≥2 caracteres). */
+const LOGISTICA_LISTA_CR_SEARCH_KEYS_EXTRA = [
+  "nro_pedido",
+  "orden_ruta",
+  "ventana_horaria_ruta",
+  "motivo_no_entrega",
+];
+
+/** Etiquetas de dimensión para leyenda «Agrupado por» (clave técnica → texto UI). */
+const LOGISTICA_LISTA_CR_GROUP_KEY_LABELS = {
+  mes_factura_ym: "Mes de factura",
+  estado_entrega: "Estado de entrega",
+  cliente: "Cliente",
+  nombre_chofer: "Chofer",
+  desc_ruta: "Hoja de ruta",
+  fecha_remito: "Fecha remito",
+};
+
+const _LOGISTICA_MESES_FACTURA_ES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
+/** Convierte ``YYYY-MM`` a «Mayo 2026» (español, título capitalizado). */
+function formatMesFacturaYmEs(ym) {
+  if (ym == null || ym === "" || String(ym) === "Sin especificar") return String(ym ?? "");
+  const m = /^(\d{4})-(\d{2})$/.exec(String(ym).trim());
+  if (!m) return String(ym);
+  const y = parseInt(m[1], 10);
+  const mo = parseInt(m[2], 10);
+  if (mo < 1 || mo > 12) return String(ym);
+  return `${_LOGISTICA_MESES_FACTURA_ES[mo - 1]} ${y}`;
+}
+
 /** Filas devueltas por la API para agrupación / búsqueda local en la tabla del mismo informe. */
 const logisticaListaDataByWidget = new WeakMap();
 
@@ -135,8 +179,8 @@ function escHtmlLogistica(s) {
 function sortLogisticaLeafRows(items) {
   if (!items || !items.length) return [];
   return [...items].sort((a, b) => {
-    const fa = String(a.fecha_remito ?? "");
-    const fb = String(b.fecha_remito ?? "");
+    const fa = String(a.fecha_factura ?? a.fecha_remito ?? "");
+    const fb = String(b.fecha_factura ?? b.fecha_remito ?? "");
     const c = fa.localeCompare(fb, "es");
     if (c !== 0) return c;
     return String(a.nro_remito ?? "").localeCompare(String(b.nro_remito ?? ""), "es", {
@@ -209,25 +253,270 @@ function countLogisticaGroupNodes(nodes) {
   return n;
 }
 
+/**
+ * Estilos de apoyo para la tabla «lista comprobantes en rutas»: el layout base carga además Tailwind CDN
+ * (`base_app.html`), que puede no generar utilidades para clases solo presentes en JS; además un `td`
+ * con hijo `inline-flex` shrink-to-fit puede quedar centrado en la celda y **simular** importes centrados
+ * en la columna vecina (TOTAL REMITO). Estas reglas son acotadas a `.synap-logistica-lista-cr-table`.
+ */
+function ensureSynapLogisticaListaCrTableStylesOnce() {
+  const styleId = "synap-lg-cr-table-style-v4";
+  document.getElementById("synap-lg-cr-table-style")?.remove();
+  document.getElementById("synap-lg-cr-table-style-v3")?.remove();
+  if (document.getElementById(styleId)) return;
+  const st = document.createElement("style");
+  st.id = styleId;
+  st.textContent = `
+.synap-logistica-lista-cr-table > thead > tr > th {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+}
+.synap-logistica-lista-cr-table th.synap-lc-col-money,
+.synap-logistica-lista-cr-table td.synap-lc-col-money {
+  text-align: right !important;
+  vertical-align: middle;
+}
+.synap-logistica-lista-cr-table th.synap-lc-col-money .synap-lc-money-inner,
+.synap-logistica-lista-cr-table td.synap-lc-col-money .synap-lc-money-inner {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: right !important;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+.synap-logistica-lista-cr-table th.synap-lc-col-actions,
+.synap-logistica-lista-cr-table td.synap-lc-col-actions {
+  text-align: right !important;
+  vertical-align: middle;
+}
+.synap-logistica-lista-cr-table td.synap-lc-col-actions .synap-lc-actions-inner {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.125rem;
+  row-gap: 0.25rem;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+/* Agrupación: cuerpo solo tenía filas con colspan; fila ancla + tabla anidada al 100% alinean rejilla con thead. */
+.synap-logistica-lista-cr-table tr.logistica-col-anchor {
+  height: 0;
+  max-height: 0;
+  font-size: 0;
+  line-height: 0;
+  border: none;
+}
+.synap-logistica-lista-cr-table tr.logistica-col-anchor td {
+  height: 0;
+  max-height: 0;
+  padding: 0 !important;
+  border: none !important;
+  line-height: 0;
+  font-size: 0;
+  overflow: hidden;
+  vertical-align: top;
+}
+.synap-logistica-lista-cr-table.logistica-group-nested {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+  border-width: 0 !important;
+}
+.synap-logistica-lista-cr-table.logistica-group-nested td:not(.synap-lc-col-money):not(.synap-lc-col-actions) {
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+`.trim();
+  document.head.appendChild(st);
+}
+
+function logisticaSetThMoneyContent(th, headerText) {
+  th.textContent = "";
+  const inner = document.createElement("span");
+  inner.className = "synap-lc-money-inner";
+  inner.textContent = headerText;
+  th.appendChild(inner);
+}
+
+function logisticaSetTdMoneyContent(td, displayText) {
+  td.textContent = "";
+  const inner = document.createElement("span");
+  inner.className = "synap-lc-money-inner";
+  inner.textContent = displayText;
+  td.appendChild(inner);
+}
+
+/** Celdas de texto — rejilla explícita; `min-w-0` + `break-words` para `table-layout:fixed` sin desborde. */
+const LOGISTICA_LISTA_CR_TD_BASE =
+  "min-w-0 max-w-full break-words px-2.5 py-2 text-xs text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600";
+/** Celdas monetarias — importe en `.synap-lc-money-inner` con `nowrap`; la celda puede encoger sin desbordar texto. */
+const LOGISTICA_LISTA_CR_TD_MONEY =
+  "min-w-0 max-w-full px-2.5 py-2 text-right text-xs tabular-nums synap-lc-col-money font-mono text-slate-900 dark:text-white border border-slate-200 dark:border-slate-600";
+
+/**
+ * Estilo por columna (lista comprobantes en rutas): cabecera y cuerpo alineados, franjas pastel tipo VO.
+ * No altera las reglas de alineación de `synap-lc-col-money` ni `synap-lc-col-actions` (solo fondos/bordes extra).
+ */
+function logisticaListaCrColumnStyle(fieldKey) {
+  const k = String(fieldKey || "").toLowerCase();
+  const doc = new Set(["fecha_factura", "nro_remito", "nro_factura"]);
+  const rutaFechas = new Set(["fecha_salida_ruta_fmt", "fecha_hora_entrega_fmt"]);
+  const personas = new Set(["cliente", "nombre_chofer", "nombre_usuario_entrega"]);
+  if (k === "total_remito") {
+    return {
+      headerBg:
+        "border-violet-300 bg-violet-200/90 text-violet-950 dark:border-violet-700 dark:bg-violet-900/55 dark:text-violet-50",
+      bodyBg:
+        "border-l-violet-300 bg-violet-50/85 dark:border-violet-700 dark:bg-violet-950/35",
+      thAlign: "",
+      tdAlign: "",
+    };
+  }
+  if (doc.has(k)) {
+    const nowrapNros = new Set(["nro_remito", "nro_factura"]);
+    return {
+      headerBg:
+        "bg-emerald-50 text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100",
+      bodyBg:
+        "border-l-emerald-200/90 bg-emerald-50/40 dark:border-emerald-800/60 dark:bg-emerald-950/18",
+      thAlign: "text-right tabular-nums whitespace-normal break-words leading-tight min-w-0",
+      tdAlign: nowrapNros.has(k)
+        ? "text-right tabular-nums whitespace-nowrap"
+        : "text-right tabular-nums whitespace-normal break-words",
+    };
+  }
+  if (k === "estado_entrega") {
+    return {
+      headerBg:
+        "bg-amber-50 text-amber-950 dark:bg-amber-950/30 dark:text-amber-100",
+      bodyBg:
+        "border-l-amber-200/80 bg-amber-50/35 dark:border-amber-800/50 dark:bg-amber-950/15",
+      thAlign: "text-center whitespace-normal break-words leading-tight min-w-0",
+      tdAlign: "text-center whitespace-normal break-words",
+    };
+  }
+  if (personas.has(k)) {
+    return {
+      headerBg:
+        "bg-slate-100 text-slate-800 dark:bg-slate-800/90 dark:text-slate-100",
+      bodyBg:
+        "border-l-slate-200 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-900/30",
+      thAlign: "text-left whitespace-normal break-words leading-tight min-w-0",
+      tdAlign: "text-left whitespace-normal break-words",
+    };
+  }
+  if (k === "estado_ruta") {
+    return {
+      headerBg:
+        "bg-violet-50 text-violet-950 dark:bg-violet-950/35 dark:text-violet-100",
+      bodyBg:
+        "border-l-violet-200/80 bg-violet-50/35 dark:border-violet-800/50 dark:bg-violet-950/18",
+      thAlign: "text-center whitespace-normal break-words leading-tight min-w-0",
+      tdAlign: "text-center whitespace-normal break-words",
+    };
+  }
+  if (k === "desc_ruta") {
+    return {
+      headerBg:
+        "bg-violet-50 text-violet-950 dark:bg-violet-950/35 dark:text-violet-100",
+      bodyBg:
+        "border-l-violet-200/80 bg-violet-50/35 dark:border-violet-800/50 dark:bg-violet-950/18",
+      thAlign: "text-left whitespace-normal break-words leading-tight min-w-0",
+      tdAlign: "text-left whitespace-normal break-words",
+    };
+  }
+  if (rutaFechas.has(k)) {
+    return {
+      headerBg:
+        "bg-violet-50 text-violet-950 dark:bg-violet-950/35 dark:text-violet-100",
+      bodyBg:
+        "border-l-violet-200/80 bg-violet-50/35 dark:border-violet-800/50 dark:bg-violet-950/18",
+      thAlign: "text-right tabular-nums whitespace-normal break-words leading-tight min-w-0",
+      tdAlign: "text-right tabular-nums whitespace-normal break-words",
+    };
+  }
+  return {
+    headerBg: "bg-slate-50 text-slate-700 dark:bg-slate-900/55 dark:text-slate-200",
+    bodyBg: "border-l-slate-200/90 bg-white dark:border-slate-700 dark:bg-slate-950/40",
+    thAlign: "text-left whitespace-normal break-words leading-tight min-w-0",
+    tdAlign: "text-left whitespace-normal break-words",
+  };
+}
+
+/** Cabeceras visibles al hacer scroll dentro de `#logistica-lista-cr-scroll` (cada `th` sticky; sin `overflow-hidden` en la tabla). */
+const LOGISTICA_LISTA_CR_TH_STICKY =
+  "sticky top-0 z-10 shadow-[0_1px_0_0_rgb(226_232_240)] dark:shadow-[0_1px_0_0_rgb(51_65_85)]";
+
+/** Cabecera «ACCIONES»: franja sky como columna BO TOTAL en VO (alineación existente sin cambios). */
+function logisticaListaCrThClassAcciones() {
+  return (
+    `${LOGISTICA_LISTA_CR_TH_STICKY} border border-slate-200 dark:border-slate-600 border-sky-300 bg-sky-200/90 min-w-0 max-w-full px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide align-middle text-sky-950 whitespace-normal break-words leading-tight synap-lc-col-actions dark:border-sky-700 dark:bg-sky-900/50 dark:text-sky-50`
+  );
+}
+
+function logisticaListaCrTdClassAcciones() {
+  return `${LOGISTICA_LISTA_CR_TD_BASE} align-middle synap-lc-col-actions border-sky-200 bg-sky-50/80 dark:border-sky-800 dark:bg-sky-950/35`;
+}
+
+/**
+ * Fila invisible con una celda por columna: cuando el cuerpo solo usa ``colspan`` completo, algunos motores
+ * no reparten igual el ancho que el ``thead``; esta fila fija la rejilla al ``colgroup``.
+ */
+function logisticaListaCrColAnchorRowHtml(fieldKeys) {
+  const n = fieldKeys.length + 1;
+  let tds = "";
+  for (let i = 0; i < n; i += 1) {
+    tds += '<td class="logistica-col-anchor-cell"></td>';
+  }
+  return `<tr class="logistica-col-anchor" aria-hidden="true">${tds}</tr>`;
+}
+
+/** ``colgroup`` con anchos iguales para alinear thead y cuerpo (evita desajuste con tablas anidadas). */
+function logisticaListaColgroupHtml(nCols) {
+  const n = Math.max(1, nCols);
+  const w = (100 / n).toFixed(4);
+  let s = "<colgroup>";
+  for (let i = 0; i < n; i += 1) {
+    s += `<col style="width:${w}%" />`;
+  }
+  s += "</colgroup>";
+  return s;
+}
+
 function logisticaListaDetailRowHtml(row, fieldKeys) {
-  let html = `<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30 logistica-detail-row">`;
+  let html = `<tr class="hover:bg-slate-50/90 dark:hover:bg-slate-900/35 transition-colors bg-white dark:bg-slate-950 logistica-detail-row">`;
   fieldKeys.forEach((key) => {
     const value = row[key];
     const isCur = isCurrencyField(key);
-    const baseTd =
-      "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300";
-    const al = isCur ? " text-right font-mono text-slate-900 dark:text-white" : " text-left";
+    const lcSty = logisticaListaCrColumnStyle(key);
+    const tdCls = isCur
+      ? `${LOGISTICA_LISTA_CR_TD_MONEY} ${lcSty.bodyBg}`
+      : `${LOGISTICA_LISTA_CR_TD_BASE} ${lcSty.tdAlign} ${lcSty.bodyBg}`;
     let inner = "";
     if (value !== null && value !== undefined && value !== "") {
-      inner = isCur ? escHtmlLogistica(formatCurrency(value)) : escHtmlLogistica(String(formatNumber(value)));
+      inner = isCur
+        ? `<span class="synap-lc-money-inner font-mono">${escHtmlLogistica(formatCurrency(value))}</span>`
+        : escHtmlLogistica(String(formatNumber(value)));
+    } else if (isCur) {
+      inner = '<span class="synap-lc-money-inner font-mono"></span>';
     }
-    html += `<td class="${baseTd}${al}">${inner}</td>`;
+    html += `<td class="${tdCls}">${inner}</td>`;
   });
   const codR = row.cod_mov_remito;
   const codP = row.cod_mov_pedido;
-  html += `<td class="px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800 whitespace-nowrap align-middle"><div class="flex flex-wrap gap-1">`;
-  html += `<button type="button" class="text-[10px] font-semibold text-sky-600 hover:text-sky-500 dark:text-sky-400 underline-offset-2 hover:underline" data-logistica-detalle="${escHtmlLogistica(String(codR ?? ""))}">Detalle</button>`;
-  html += `<button type="button" class="text-[10px] font-semibold text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 underline-offset-2 hover:underline" data-logistica-entrega="${escHtmlLogistica(String(codR ?? ""))}" data-logistica-pedido="${escHtmlLogistica(String(codP ?? ""))}">Entrega</button>`;
+  html += `<td class="${logisticaListaCrTdClassAcciones()}"><div class="synap-lc-actions-inner">`;
+  html += `<button type="button" class="text-[10px] font-semibold text-sky-600 hover:text-sky-500 dark:text-sky-400 underline-offset-2 hover:underline leading-tight" data-logistica-detalle="${escHtmlLogistica(String(codR ?? ""))}">Detalle</button>`;
+  html += `<button type="button" class="text-[10px] font-semibold text-emerald-600 hover:text-emerald-500 dark:text-emerald-400 underline-offset-2 hover:underline leading-tight" data-logistica-entrega="${escHtmlLogistica(String(codR ?? ""))}" data-logistica-pedido="${escHtmlLogistica(String(codP ?? ""))}">Entrega</button>`;
   html += "</div></td></tr>";
   return html;
 }
@@ -241,7 +530,6 @@ function renderLogisticaGroupedTreeHtml(
   level,
   collapsedDefault,
 ) {
-  const td = "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800";
   let rowsHTML = "";
   (grouped || []).forEach((item, idx) => {
     if (item.type === "group") {
@@ -250,6 +538,13 @@ function renderLogisticaGroupedTreeHtml(
       const dimLabel =
         headerTranslations[g.groupField?.toLowerCase?.()] ||
         (g.groupField ? g.groupField.replace(/_/g, " ") : "");
+      const groupValRaw = (g.groupValue || "").toString().substring(0, 120);
+      const groupValFormatted =
+        g.groupField === "mes_factura_ym" ? formatMesFacturaYmEs(groupValRaw) : groupValRaw;
+      const groupHeaderText =
+        g.groupField === "mes_factura_ym"
+          ? String(groupValFormatted).toUpperCase()
+          : `${dimLabel}: ${groupValFormatted}`;
       const bgClass =
         level === 0
           ? "bg-sky-50/80 dark:bg-sky-950/30"
@@ -257,18 +552,34 @@ function renderLogisticaGroupedTreeHtml(
             ? "bg-slate-100 dark:bg-slate-800/90"
             : "bg-slate-50/80 dark:bg-slate-900/50";
       const padLeft = level * 20 + 8;
-      const expandIcon = `<svg class="w-4 h-4 inline-block mr-2 align-middle logistica-group-toggle-icon cursor-pointer" data-logistica-group-toggle="${groupId}" style="transform: ${collapsedDefault ? "rotate(0deg)" : "rotate(90deg)"};" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-      rowsHTML += `<tr class="${bgClass} logistica-group-row" data-logistica-group-id="${groupId}">`;
-      rowsHTML += `<td class="${td}" style="padding-left:${padLeft}px">${expandIcon}<span class="font-medium text-slate-700 dark:text-slate-300">${escHtmlLogistica(dimLabel)}: ${escHtmlLogistica((g.groupValue || "").toString().substring(0, 120))}</span></td>`;
-      fieldKeys.slice(1).forEach((colKey) => {
-        if (metricKeys.includes(colKey) && g.totals && g.totals[colKey] !== undefined) {
-          rowsHTML += `<td class="${td} text-right font-semibold text-sky-600 dark:text-sky-400 font-mono">${escHtmlLogistica(formatCurrency(g.totals[colKey]))}</td>`;
-        } else {
-          rowsHTML += `<td class="${td}"></td>`;
-        }
-      });
-      rowsHTML += `<td class="${td}"></td></tr>`;
-      rowsHTML += `<tr class="logistica-group-children" data-logistica-group-parent="${groupId}" style="${collapsedDefault ? "display:none" : ""}"><td colspan="${fieldKeys.length + 1}" class="p-0 border-0"><table class="w-full border-collapse text-sm"><tbody>`;
+      const iconSvgClass =
+        g.groupField === "mes_factura_ym"
+          ? "w-4 h-4 shrink-0 inline-block align-middle logistica-group-toggle-icon cursor-pointer"
+          : "w-4 h-4 inline-block mr-2 align-middle logistica-group-toggle-icon cursor-pointer";
+      const expandIcon = `<svg class="${iconSvgClass}" data-logistica-group-toggle="${groupId}" style="transform: ${collapsedDefault ? "rotate(0deg)" : "rotate(90deg)"};" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      /** Una sola celda ancha: sin rejilla vertical interna (paridad pedida con barra de grupo continua). */
+      const colspan = fieldKeys.length + 1;
+      const metricKeysShow = fieldKeys.filter(
+        (colKey) => metricKeys.includes(colKey) && g.totals && g.totals[colKey] !== undefined,
+      );
+      let metricHtml = "";
+      if (metricKeysShow.length) {
+        metricHtml =
+          '<div class="flex shrink-0 flex-col items-end gap-0.5 text-right text-xs font-semibold tabular-nums text-sky-600 dark:text-sky-400 font-mono">';
+        metricKeysShow.forEach((colKey) => {
+          metricHtml += `<span class="synap-lc-money-inner font-mono">${escHtmlLogistica(
+            formatCurrency(g.totals[colKey]),
+          )}</span>`;
+        });
+        metricHtml += "</div>";
+      }
+      const leftInner =
+        g.groupField === "mes_factura_ym"
+          ? `<div class="flex min-w-0 flex-1 items-center gap-2" style="padding-left:${padLeft}px">${expandIcon}<span class="truncate font-medium uppercase leading-tight text-slate-800 dark:text-slate-200">${escHtmlLogistica(groupHeaderText)}</span></div>`
+          : `<div class="flex min-w-0 flex-1 items-center gap-2" style="padding-left:${padLeft}px">${expandIcon}<span class="font-medium text-slate-700 dark:text-slate-300">${escHtmlLogistica(groupHeaderText)}</span></div>`;
+      rowsHTML += `<tr class="logistica-group-row" data-logistica-group-id="${groupId}">`;
+      rowsHTML += `<td colspan="${colspan}" class="${bgClass} border border-slate-200 px-2 py-2 align-middle text-xs dark:border-slate-600"><div class="flex w-full min-w-0 items-center justify-between gap-3">${leftInner}${metricHtml}</div></td></tr>`;
+      rowsHTML += `<tr class="logistica-group-children" data-logistica-group-parent="${groupId}" style="${collapsedDefault ? "display:none" : ""}"><td colspan="${fieldKeys.length + 1}" class="p-0 border-0 align-top"><table dir="ltr" class="synap-logistica-lista-cr-table logistica-group-nested vo-jerarquia-table w-full max-w-full table-fixed border-collapse border-0 text-xs text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-950">${logisticaListaColgroupHtml(fieldKeys.length + 1)}<tbody>`;
       rowsHTML += renderLogisticaGroupedTreeHtml(
         item.children,
         fieldKeys,
@@ -584,7 +895,20 @@ const formatNumber = (value) => {
 };
 
 const formatCurrency = (value) => {
-  if (typeof value === "number") {
+  let n = value;
+  if (typeof n === "string") {
+    const t = n.replace(/\s/g, "").trim();
+    if (!t) return value;
+    let parsed = Number(t);
+    if (Number.isNaN(parsed)) {
+      const arLike = /^-?\d{1,3}(\.\d{3})*,\d+$/;
+      if (arLike.test(t)) {
+        parsed = Number.parseFloat(t.replace(/\./g, "").replace(",", "."));
+      }
+    }
+    if (!Number.isNaN(parsed)) n = parsed;
+  }
+  if (typeof n === "number" && !Number.isNaN(n)) {
     try {
       return new Intl.NumberFormat(
         "es-AR",
@@ -594,9 +918,9 @@ const formatCurrency = (value) => {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         }
-      ).format(value);
+      ).format(n);
     } catch (e) {
-      return `$${value.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ".").replace(".", ",")}`;
+      return `$${n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ".").replace(".", ",")}`;
     }
   }
   return value;
@@ -632,6 +956,7 @@ const isCurrencyField = (fieldName) => {
   // Contadores MPR: mostrar como número entero, no moneda
   const normalized = String(fieldName).toLowerCase().trim();
   if (normalized === "total_pedidos" || normalized === "total_opt_atrasadas" || normalized === "total_movimientos") return false;
+  if (normalized === "total_remito") return true;
 
   const currencyFields = [
     "ventas_brutas",
@@ -3160,15 +3485,28 @@ const renderTable = (widgetElement, data, options = {}) => {
       "id_usuario_no_entrega",
     ]);
   }
-  const allKeys = Object.keys(data[0]).filter((key) => !excludedColumns.includes(key));
+  /** Lista comprobantes en rutas: unir claves de todas las filas (evita que ``data[0]`` omita columnas y desalinee thead vs cuerpo). */
+  let allKeys;
+  if (isLogisticaListaComprobantesRutasSlug(tableReportSlug) && data?.length) {
+    const uni = new Set();
+    data.forEach((row) => {
+      if (row && typeof row === "object") {
+        Object.keys(row).forEach((k) => {
+          if (!excludedColumns.includes(k)) uni.add(k);
+        });
+      }
+    });
+    allKeys = Array.from(uni);
+  } else {
+    allKeys = Object.keys(data[0]).filter((key) => !excludedColumns.includes(key));
+  }
 
   // Ventas Netas: orden de columnas y agrupación visual (MES, SUCURSAL, PUNTO DE VENTA, métricas)
   const isVentasNetasTable = data[0].mes_formato !== undefined && data[0].nombre_sucursal !== undefined && data[0].ventas_netas !== undefined;
   const ventasNetasColumnOrder = ["mes_formato", "nombre_sucursal", "nro_punto_venta", "ventas_netas", "notas_credito", "ventas_brutas"];
   const logisticaListaCrOrder = [
-    "fecha_remito",
+    "fecha_factura",
     "nro_remito",
-    "nro_pedido",
     "nro_factura",
     "estado_entrega",
     "cliente",
@@ -3176,16 +3514,13 @@ const renderTable = (widgetElement, data, options = {}) => {
     "nombre_usuario_entrega",
     "desc_ruta",
     "estado_ruta",
-    "orden_ruta",
     "fecha_salida_ruta_fmt",
-    "ventana_horaria_ruta",
     "fecha_hora_entrega_fmt",
-    "motivo_no_entrega",
     "total_remito",
   ];
   const isLogisticaListaCrTable =
     isLogisticaListaComprobantesRutasSlug(tableReportSlug) &&
-    data[0].fecha_remito !== undefined &&
+    data[0].fecha_factura !== undefined &&
     data[0].nro_remito !== undefined;
   const fieldKeys = isVentasNetasTable
     ? ventasNetasColumnOrder.filter((k) => allKeys.includes(k))
@@ -3213,22 +3548,20 @@ const renderTable = (widgetElement, data, options = {}) => {
     const q = (searchInput && searchInput.value) || "";
     logisticaGroupKeys = getLogisticaListaGroupKeysFromChips();
     let rows = Array.isArray(dataToRender) ? [...dataToRender] : [];
-    rows = filterLogisticaListaRowsBySearch(rows, q, fieldKeys);
+    const searchKeys = [...fieldKeys, ...LOGISTICA_LISTA_CR_SEARCH_KEYS_EXTRA];
+    rows = filterLogisticaListaRowsBySearch(rows, q, searchKeys);
     if (!logisticaGroupKeys.length) {
       rows = sortLogisticaListaByGroupKeys(rows, logisticaGroupKeys);
     }
     dataToRender = rows;
   }
 
-  /** Cabeceras de tabla alineadas al estilo BO (pestaña Backorder): compactas, mayúsculas. */
-  const logisticaThClass =
-    "px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50";
-
   if (isLogisticaListaCrTable) {
+    ensureSynapLogisticaListaCrTableStylesOnce();
     table.className =
-      "w-full border-collapse bg-transparent text-sm text-slate-900 dark:text-slate-100 antialiased";
-    thead.className =
-      "sticky top-0 z-10 bg-slate-50 dark:bg-slate-900/50 shadow-[0_1px_0_0_rgb(226_232_240)] dark:shadow-[0_1px_0_0_rgb(51_65_85/0.45)]";
+      "synap-logistica-lista-cr-table vo-jerarquia-table min-w-full table-fixed border-collapse text-xs text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100 bg-white rounded-t-md border border-slate-200 dark:border-slate-600";
+    table.setAttribute("dir", "ltr");
+    thead.className = "";
   }
 
   // Mapeo de términos en inglés a español
@@ -3250,6 +3583,8 @@ const renderTable = (widgetElement, data, options = {}) => {
     "operating_ingresos": "INGRESOS OPERATIVOS",
     "operating_egresos": "EGRESOS OPERATIVOS",
     fecha_remito: "FECHA REMITO",
+    fecha_factura: "FECHA FACTURA",
+    mes_factura_ym: "MES DE FACTURA",
     nro_remito: "Nº REMITO",
     nro_pedido: "Nº PEDIDO",
     nro_factura: "Nº FACTURA",
@@ -3271,7 +3606,13 @@ const renderTable = (widgetElement, data, options = {}) => {
     const th = document.createElement("th");
     const isCurrency = isCurrencyField(key);
     if (isLogisticaListaCrTable) {
-      th.className = `${logisticaThClass} ${isCurrency ? "text-right" : "text-left"}`;
+      const lcSty = logisticaListaCrColumnStyle(key);
+      if (isCurrency) {
+        th.className = `${LOGISTICA_LISTA_CR_TH_STICKY} border border-slate-200 dark:border-slate-600 min-w-0 max-w-full px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide align-middle whitespace-nowrap synap-lc-col-money ${lcSty.headerBg}`;
+        th.style.setProperty("text-align", "right", "important");
+      } else {
+        th.className = `${LOGISTICA_LISTA_CR_TH_STICKY} border border-slate-200 dark:border-slate-600 min-w-0 max-w-full px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide align-middle ${lcSty.headerBg} ${lcSty.thAlign}`;
+      }
     } else {
       th.className = `px-4 py-3 ${isCurrency ? "text-right" : ""}`;
     }
@@ -3282,21 +3623,39 @@ const renderTable = (widgetElement, data, options = {}) => {
       headerText = key.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
     }
 
-    th.textContent = headerText;
+    if (isLogisticaListaCrTable && isCurrency) {
+      logisticaSetThMoneyContent(th, headerText);
+    } else {
+      th.textContent = headerText;
+    }
     headerRow.appendChild(th);
   });
   if (isLogisticaListaCrTable) {
     const thAct = document.createElement("th");
-    thAct.className = `${logisticaThClass} text-left whitespace-nowrap`;
+    thAct.className = logisticaListaCrThClassAcciones();
+    thAct.style.setProperty("text-align", "right", "important");
     thAct.textContent = "ACCIONES";
     headerRow.appendChild(thAct);
   }
   thead.appendChild(headerRow);
+  if (isLogisticaListaCrTable) {
+    const colgroup = document.createElement("colgroup");
+    const nCols = fieldKeys.length + 1;
+    const wPct = `${(100 / nCols).toFixed(4)}%`;
+    for (let i = 0; i < nCols; i += 1) {
+      const col = document.createElement("col");
+      col.style.width = wPct;
+      colgroup.appendChild(col);
+    }
+    table.appendChild(colgroup);
+  }
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
   if (!isLogisticaListaCrTable) {
     tbody.className = "divide-y divide-slate-100 dark:divide-slate-800";
+  } else {
+    tbody.className = "";
   }
 
   // Detectar si es cash_flow_waterfall (tiene filas con type: "starting" o "ending")
@@ -3332,31 +3691,27 @@ const renderTable = (widgetElement, data, options = {}) => {
   let prevMes = null;
   let prevSucursal = null;
 
-  let logisticaDataRowIndex = 0;
-
   if (useLogisticaNestedGroups) {
     const metricKeysLg = fieldKeys.filter((k) => isCurrencyField(k));
     logisticaGroupedTree = groupLogisticaListaData(rowsToRender, logisticaGroupKeys, metricKeysLg);
     const groupIdPrefix = `lg-${Math.random().toString(36).slice(2, 10)}-`;
-    tbody.innerHTML = renderLogisticaGroupedTreeHtml(
-      logisticaGroupedTree,
-      fieldKeys,
-      headerTranslations,
-      metricKeysLg,
-      groupIdPrefix,
-      0,
-      true,
-    );
+    tbody.innerHTML =
+      logisticaListaCrColAnchorRowHtml(fieldKeys) +
+      renderLogisticaGroupedTreeHtml(
+        logisticaGroupedTree,
+        fieldKeys,
+        headerTranslations,
+        metricKeysLg,
+        groupIdPrefix,
+        0,
+        true,
+      );
   } else {
   rowsToRender.forEach((row) => {
     const tr = document.createElement("tr");
     if (isLogisticaListaCrTable) {
-      const zebra =
-        logisticaDataRowIndex % 2 === 0
-          ? "bg-white dark:bg-slate-950"
-          : "bg-slate-50/90 dark:bg-slate-900/40";
-      logisticaDataRowIndex += 1;
-      tr.className = `hover:bg-slate-50 dark:hover:bg-slate-900/30 transition-colors ${zebra}`;
+      tr.className =
+        "hover:bg-slate-50/90 dark:hover:bg-slate-900/35 transition-colors bg-white dark:bg-slate-950";
     } else {
       tr.className =
         "hover:bg-slate-50/70 dark:hover:bg-slate-900/60 transition-colors";
@@ -3386,18 +3741,24 @@ const renderTable = (widgetElement, data, options = {}) => {
       const td = document.createElement("td");
       const isCurrency = isCurrencyField(key);
       if (isLogisticaListaCrTable) {
-        const baseTd =
-          "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800 text-slate-700 dark:text-slate-300";
-        td.className = isCurrency
-          ? `${baseTd} text-right font-mono text-slate-900 dark:text-white`
-          : `${baseTd} text-left`;
+        const lcSty = logisticaListaCrColumnStyle(key);
+        if (isCurrency) {
+          td.className = `${LOGISTICA_LISTA_CR_TD_MONEY} ${lcSty.bodyBg}`;
+          td.style.setProperty("text-align", "right", "important");
+        } else {
+          td.className = `${LOGISTICA_LISTA_CR_TD_BASE} ${lcSty.tdAlign} ${lcSty.bodyBg}`;
+        }
       } else {
         td.className = `px-4 py-3 text-slate-700 dark:text-slate-200 ${isCurrency ? "text-right font-medium" : ""}`;
       }
 
       // Formatear valores
       if (value === null || value === undefined || value === "") {
-        td.textContent = "";
+        if (isLogisticaListaCrTable && isCurrency) {
+          logisticaSetTdMoneyContent(td, "");
+        } else {
+          td.textContent = "";
+        }
       } else if (key.toLowerCase() === "type" || key.toLowerCase() === "tipo") {
         // Traducir valores de tipo al español
         const typeTranslations = {
@@ -3407,7 +3768,11 @@ const renderTable = (widgetElement, data, options = {}) => {
         };
         td.textContent = typeTranslations[value.toLowerCase()] || value;
       } else if (isCurrency) {
-        td.textContent = formatCurrency(value);
+        if (isLogisticaListaCrTable) {
+          logisticaSetTdMoneyContent(td, String(formatCurrency(value)));
+        } else {
+          td.textContent = formatCurrency(value);
+        }
       } else {
         td.textContent = formatNumber(value);
       }
@@ -3428,10 +3793,10 @@ const renderTable = (widgetElement, data, options = {}) => {
     });
     if (isLogisticaListaCrTable) {
       const tdAct = document.createElement("td");
-      tdAct.className =
-        "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800 whitespace-nowrap align-middle";
+      tdAct.className = logisticaListaCrTdClassAcciones();
+      tdAct.style.setProperty("text-align", "right", "important");
       const wrap = document.createElement("div");
-      wrap.className = "flex flex-wrap gap-1";
+      wrap.className = "synap-lc-actions-inner";
       const codR = row.cod_mov_remito;
       const codP = row.cod_mov_pedido;
       const btnDet = document.createElement("button");
@@ -3491,16 +3856,13 @@ const renderTable = (widgetElement, data, options = {}) => {
   table.appendChild(tbody);
   target.innerHTML = "";
   if (isLogisticaListaCrTable) {
-    const scrollWrap = document.createElement("div");
-    scrollWrap.className =
-      "overflow-x-auto max-h-[500px] overflow-y-auto min-h-0 rounded-lg border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950";
-    scrollWrap.appendChild(table);
-    target.appendChild(scrollWrap);
+    target.appendChild(table);
+    const logisticaScrollHost = document.getElementById("logistica-lista-cr-scroll");
     if (useLogisticaNestedGroups) {
-      attachLogisticaGroupToggleListeners(scrollWrap);
+      attachLogisticaGroupToggleListeners(logisticaScrollHost || target);
     }
     const foot = document.createElement("p");
-    foot.className = "text-xs text-slate-400 dark:text-slate-500 mt-3";
+    foot.className = "mt-2 px-2 text-xs text-slate-400 dark:text-slate-500 sm:px-2";
     const qTabla = (document.getElementById("logistica-lista-tabla-search")?.value || "").trim();
     const totalOriginal =
       logisticaListaDataByWidget.get(widgetElement)?.length ?? data.length;
@@ -3508,7 +3870,10 @@ const renderTable = (widgetElement, data, options = {}) => {
     if (useLogisticaNestedGroups && logisticaGroupedTree) {
       const nGr = countLogisticaGroupNodes(logisticaGroupedTree);
       const agrTxt = nGr === 1 ? "agrupación" : "agrupaciones";
-      legendText = `Lista comprobantes en rutas. Agrupado por: ${logisticaGroupKeys.join(" → ")}. ${nGr} ${agrTxt}. `;
+      const agrDims = logisticaGroupKeys.map(
+        (k) => LOGISTICA_LISTA_CR_GROUP_KEY_LABELS[k] || k.replace(/_/g, " "),
+      );
+      legendText = `Lista comprobantes en rutas. Agrupado por: ${agrDims.join(" → ")}. ${nGr} ${agrTxt}. `;
       if (qTabla.length >= 2) {
         legendText += `Mostrando ${dataToRender.length} de ${totalOriginal} renglones.`;
       } else if (dataToRender.length > maxRows) {
@@ -8465,7 +8830,6 @@ if (dashboardRoot) {
     "id_manual",
     "codigo_barras",
     "deposito_nombre",
-    "marca_nombre",
     "rubro_nombre",
     "subrubro_nombre",
   ];
@@ -8492,10 +8856,14 @@ if (dashboardRoot) {
     sorted.sort((a, b) => {
       const va = a[col];
       const vb = b[col];
-      const sa = va == null ? "" : String(va).toLowerCase();
-      const sb = vb == null ? "" : String(vb).toLowerCase();
-      if (sa < sb) return -1 * m;
-      if (sa > sb) return 1 * m;
+      const sa = va == null ? "" : String(va);
+      const sb = vb == null ? "" : String(vb);
+      const opts =
+        col === "id_manual" || col === "codigo_barras"
+          ? { numeric: true, sensitivity: "base" }
+          : { numeric: false, sensitivity: "base" };
+      const cmp = sa.localeCompare(sb, "es", opts);
+      if (cmp !== 0) return cmp * m;
       const ta = `${a.id_art ?? ""}-${a.id_deposito ?? ""}`;
       const tb = `${b.id_art ?? ""}-${b.id_deposito ?? ""}`;
       return ta < tb ? -1 : ta > tb ? 1 : 0;
@@ -8509,8 +8877,6 @@ if (dashboardRoot) {
         return row.deposito_nombre || "—";
       case "articulo":
         return row.nombre || "—";
-      case "marca":
-        return row.marca_nombre || "—";
       case "rubro":
         return row.rubro_nombre || "—";
       case "subrubro":
@@ -8522,8 +8888,7 @@ if (dashboardRoot) {
 
   const STOCK_EXISTENCIAS_DIM_LABELS = {
     deposito: "Depósito",
-    articulo: "Artículo",
-    marca: "Marca",
+    articulo: "Nombre artículo",
     rubro: "Rubro",
     subrubro: "Subrubro",
   };
@@ -8607,9 +8972,65 @@ if (dashboardRoot) {
       .replace(/"/g, "&quot;");
   };
 
+  /** Código de barras: nunca notación científica (JSON puede traer number si el backend no forzó str). */
+  const formatStockExistenciasBarras = (v) => {
+    if (v == null || v === "") return "";
+    if (typeof v === "string") return v.trim();
+    const n = Number(v);
+    if (!Number.isFinite(n)) return String(v);
+    const t = Math.trunc(n);
+    if (t === n && Number.isSafeInteger(t)) {
+      return String(t);
+    }
+    const s = n.toLocaleString("fullwide", { useGrouping: false, maximumFractionDigits: 20 });
+    return /[eE]/.test(s) ? String(v) : s;
+  };
+
+  function ensureStockExistenciasTableStylesOnce() {
+    const id = "synap-stock-existencias-style-v2";
+    document.getElementById("synap-stock-existencias-style-v1")?.remove();
+    if (document.getElementById(id)) return;
+    const st = document.createElement("style");
+    st.id = id;
+    st.textContent = `
+.se-vo-stock-table > thead > tr > th {
+  position: -webkit-sticky;
+  position: sticky;
+  top: 0;
+}
+.se-vo-stock-table td,
+.se-vo-stock-table th {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.se-vo-stock-table > thead > tr > th:nth-child(7),
+.se-vo-stock-table > thead > tr > th:nth-child(8),
+.se-vo-stock-table > thead > tr > th:nth-child(9),
+.se-vo-stock-table > tbody > tr > td:nth-child(7),
+.se-vo-stock-table > tbody > tr > td:nth-child(8),
+.se-vo-stock-table > tbody > tr > td:nth-child(9) {
+  text-align: right !important;
+}
+/* Solo filas de detalle: ID manual a la derecha (incluye tablas anidadas; filas de grupo sin esta clase). */
+.se-vo-stock-table tbody tr.se-stock-detail-row > td:first-child {
+  text-align: right !important;
+}
+.se-vo-stock-table.se-vo-stock-nested {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border-width: 0 !important;
+}
+`.trim();
+    document.head.appendChild(st);
+  }
+
   const renderStockExistenciasTableFromState = () => {
     const wrap = document.getElementById("stock-existencias-table-wrap");
     if (!wrap) return;
+    ensureStockExistenciasTableStylesOnce();
     const rows = stockExistenciasDataset.rows || [];
     const notes = stockExistenciasDataset.notes || [];
     const searchEl = document.getElementById("stock_existencias_busqueda");
@@ -8620,16 +9041,19 @@ if (dashboardRoot) {
     const getGroupFieldsStock = () => {
       const wrapGb = document.getElementById("stock_existencias_group_by_tags_container");
       const chipsRoot = wrapGb?.querySelector(".tags-chips");
+      const stripRetired = (arr) => arr.filter((v) => v && v !== "marca");
       if (chipsRoot) {
         const chipEls = chipsRoot.querySelectorAll("[data-value]");
         if (chipEls.length) {
-          return Array.from(chipEls)
-            .map((el) => el.dataset.value)
-            .filter(Boolean);
+          return stripRetired(
+            Array.from(chipEls)
+              .map((el) => el.dataset.value)
+              .filter(Boolean)
+          );
         }
       }
       const sel = document.getElementById("stock_existencias_group_by");
-      return sel ? Array.from(sel.selectedOptions).map((o) => o.value).filter(Boolean) : [];
+      return stripRetired(sel ? Array.from(sel.selectedOptions).map((o) => o.value).filter(Boolean) : []);
     };
 
     const fmt = (v) => {
@@ -8638,13 +9062,38 @@ if (dashboardRoot) {
       return v ?? "";
     };
 
-    const tdCell =
-      "px-3 py-2 text-xs border-b border-slate-100 dark:border-slate-800";
+    const thSticky =
+      "sticky top-0 z-10 shadow-[0_1px_0_0_rgb(226_232_240)] dark:shadow-[0_1px_0_0_rgb(51_65_85)]";
+    const thB =
+      "border border-slate-200 dark:border-slate-600 px-2.5 py-2 text-[10px] font-bold uppercase tracking-wide align-middle";
+    const thDoc = `${thB} ${thSticky} text-left bg-emerald-50 text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100`;
+    const thDocIdManual = `${thB} ${thSticky} text-right bg-emerald-50 text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100`;
+    const thTxt = `${thB} ${thSticky} text-left bg-violet-50 text-violet-950 dark:bg-violet-950/35 dark:text-violet-100`;
+    const thNum = `${thB} ${thSticky} text-right bg-sky-100 text-sky-950 dark:bg-sky-900/45 dark:text-sky-50`;
 
-    const thHead =
-      "px-3 py-2 text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50";
+    const tdB =
+      "border border-slate-200 dark:border-slate-600 px-2.5 py-2 text-xs align-top min-w-0 max-w-full break-words";
+    const tdDoc = `${tdB} bg-emerald-50/30 dark:bg-emerald-950/15 text-slate-800 dark:text-slate-200`;
+    const tdTxt = `${tdB} bg-violet-50/25 dark:bg-violet-950/15 text-slate-800 dark:text-slate-200`;
+    const tdNum = `${tdB} text-right tabular-nums font-mono text-slate-900 dark:text-white`;
+    const tdLow = `${tdB} border-red-300 bg-red-100 text-slate-900 dark:border-red-800 dark:bg-red-950/55 dark:text-red-50`;
+    const tdLowNum = `${tdB} border-red-300 bg-red-100 text-right tabular-nums font-mono text-slate-900 dark:border-red-800 dark:bg-red-950/55 dark:text-red-50`;
 
-    const sortHeader = (col, label) => {
+    /** Anchos: cols 1–3 y numéricas base 1/9; stock/reservado/disponible −20 %; el exceso repartido en nombre, rubro, subrubro. */
+    const STOCK_EXISTENCIAS_COLGROUP = `
+<colgroup>
+  <col style="width:11.111%" />
+  <col style="width:11.111%" />
+  <col style="width:11.111%" />
+  <col style="width:13.333%" />
+  <col style="width:13.333%" />
+  <col style="width:13.333%" />
+  <col style="width:8.889%" />
+  <col style="width:8.889%" />
+  <col style="width:8.889%" />
+</colgroup>`;
+
+    const sortHeader = (col, label, thClass) => {
       const active = stockExistenciasSort.col === col;
       const arrow =
         active && stockExistenciasSort.dir === "asc"
@@ -8652,36 +9101,34 @@ if (dashboardRoot) {
           : active && stockExistenciasSort.dir === "desc"
             ? " ↓"
             : "";
-      return `<th scope="col" data-sort-col="${col}" class="${thHead} text-left cursor-pointer select-none hover:bg-slate-200/80 dark:hover:bg-slate-700/80">${escStockHtml(
+      return `<th scope="col" data-sort-col="${col}" class="${thClass} cursor-pointer select-none hover:opacity-90">${escStockHtml(
         label
       )}${arrow}</th>`;
     };
 
     const stockRow = (r) => {
-      const titleNombre = escStockHtml(r.nombre || "");
-      return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-900/30 bo-detail-row se-stock-detail-row">
-        <td class="${tdCell} text-slate-700 dark:text-slate-300">${escStockHtml(r.id_manual)}</td>
-        <td class="${tdCell} text-slate-600 dark:text-slate-400 font-mono">${escStockHtml(r.codigo_barras)}</td>
-        <td class="${tdCell}">${escStockHtml(r.deposito_nombre)}</td>
-        <td class="${tdCell} max-w-[200px] truncate" title="${titleNombre}">${escStockHtml(r.nombre)}</td>
-        <td class="${tdCell} max-w-[120px] truncate" title="${escStockHtml(r.marca_nombre)}">${escStockHtml(
-        r.marca_nombre
-      )}</td>
-        <td class="${tdCell} max-w-[120px] truncate" title="${escStockHtml(r.rubro_nombre)}">${escStockHtml(
-        r.rubro_nombre
-      )}</td>
-        <td class="${tdCell} max-w-[120px] truncate" title="${escStockHtml(r.subrubro_nombre)}">${escStockHtml(
-        r.subrubro_nombre
-      )}</td>
-        <td class="${tdCell} text-right tabular-nums font-mono text-slate-900 dark:text-white">${fmt(r.stock)}</td>
-        <td class="${tdCell} text-right tabular-nums font-mono text-slate-900 dark:text-white">${fmt(r.reservado)}</td>
-        <td class="${tdCell} text-right tabular-nums font-medium text-emerald-700 dark:text-emerald-400">${fmt(
-          r.disponible
-        )}</td>
+      const stk = Number(r.stock);
+      const low = Number.isFinite(stk) && stk <= 0;
+      const d = low ? tdLow : tdDoc;
+      const t = low ? tdLow : tdTxt;
+      const n = low ? tdLowNum : tdNum;
+      const barras = escStockHtml(formatStockExistenciasBarras(r.codigo_barras));
+      return `<tr class="se-stock-detail-row transition-colors hover:opacity-95 ${
+        low ? "se-stock-row-low" : "hover:bg-slate-50/80 dark:hover:bg-slate-900/25"
+      }">
+        <td class="${d} text-right">${escStockHtml(r.id_manual)}</td>
+        <td class="${d} font-mono" translate="no">${barras}</td>
+        <td class="${d}">${escStockHtml(r.deposito_nombre)}</td>
+        <td class="${t}">${escStockHtml(r.nombre)}</td>
+        <td class="${t}">${escStockHtml(r.rubro_nombre)}</td>
+        <td class="${t}">${escStockHtml(r.subrubro_nombre)}</td>
+        <td class="${n}">${fmt(r.stock)}</td>
+        <td class="${n}">${fmt(r.reservado)}</td>
+        <td class="${n} font-medium text-emerald-700 dark:text-emerald-400">${fmt(r.disponible)}</td>
       </tr>`;
     };
 
-    const NUM_COL_STOCK = 10;
+    const NUM_COL_STOCK = 9;
 
     if (!rows.length) {
       const msg = notes[0] || "Sin datos para los filtros seleccionados.";
@@ -8727,17 +9174,17 @@ if (dashboardRoot) {
             const gv = (g.groupValue != null ? String(g.groupValue) : "").substring(0, 80);
             const expandIcon = `<svg class="w-4 h-4 inline-block mr-2 align-middle cursor-pointer" data-se-group-toggle="${groupId}" style="transform: ${collapsedDefault ? "rotate(0deg)" : "rotate(90deg)"};" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 18l6-6-6-6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
             rowsHTML += `<tr class="${bgClass} se-stock-group-row">`;
-            rowsHTML += `<td class="${tdCell}" style="padding-left: ${padLeft}px;">${expandIcon}<span class="font-medium text-slate-700 dark:text-slate-300">${escStockHtml(
+            rowsHTML += `<td class="${tdB} ${bgClass} border border-slate-200 dark:border-slate-600" style="padding-left: ${padLeft}px;">${expandIcon}<span class="font-medium text-slate-700 dark:text-slate-300">${escStockHtml(
               dimLabel
             )}: ${escStockHtml(gv)}</span></td>`;
-            for (let c = 1; c <= 6; c++) {
-              rowsHTML += `<td class="${tdCell}"></td>`;
+            for (let c = 1; c <= 5; c++) {
+              rowsHTML += `<td class="${tdB} ${bgClass} border border-slate-200 dark:border-slate-600"></td>`;
             }
-            rowsHTML += `<td class="${tdCell} text-right font-semibold text-sky-600 dark:text-sky-400">${fmt(g.totals.stock)}</td>`;
-            rowsHTML += `<td class="${tdCell} text-right font-semibold text-sky-600 dark:text-sky-400">${fmt(g.totals.reservado)}</td>`;
-            rowsHTML += `<td class="${tdCell} text-right font-semibold text-sky-600 dark:text-sky-400">${fmt(g.totals.disponible)}</td>`;
+            rowsHTML += `<td class="${tdB} ${bgClass} border border-slate-200 dark:border-slate-600 text-right tabular-nums font-mono font-semibold text-sky-600 dark:text-sky-400">${fmt(g.totals.stock)}</td>`;
+            rowsHTML += `<td class="${tdB} ${bgClass} border border-slate-200 dark:border-slate-600 text-right tabular-nums font-mono font-semibold text-sky-600 dark:text-sky-400">${fmt(g.totals.reservado)}</td>`;
+            rowsHTML += `<td class="${tdB} ${bgClass} border border-slate-200 dark:border-slate-600 text-right tabular-nums font-mono font-semibold text-sky-600 dark:text-sky-400">${fmt(g.totals.disponible)}</td>`;
             rowsHTML += "</tr>";
-            rowsHTML += `<tr class="se-stock-group-children" data-se-group-parent="${groupId}" style="${collapsedDefault ? "display:none" : ""}"><td colspan="${NUM_COL_STOCK}" class="p-0 border-0"><table class="w-full border-collapse text-sm"><tbody>`;
+            rowsHTML += `<tr class="se-stock-group-children" data-se-group-parent="${groupId}" style="${collapsedDefault ? "display:none" : ""}"><td colspan="${NUM_COL_STOCK}" class="p-0 border-0 align-top"><table class="se-vo-stock-table se-vo-stock-nested vo-jerarquia-table w-full max-w-full table-fixed border-collapse border-0 text-xs text-slate-900 dark:text-slate-100">${STOCK_EXISTENCIAS_COLGROUP}<tbody>`;
             rowsHTML += renderGroupedRowsBOStyle(item.children, level + 1);
             rowsHTML += "</tbody></table></td></tr>";
           } else {
@@ -8763,26 +9210,25 @@ if (dashboardRoot) {
 
     const theadRow = `
             <tr>
-              <th class="${thHead} text-left">ID manual</th>
-              <th class="${thHead} text-left">Código barras</th>
-              <th class="${thHead} text-left">Depósito</th>
-              ${sortHeader("nombre", "Nombre artículo")}
-              ${sortHeader("marca_nombre", "Marca")}
-              ${sortHeader("rubro_nombre", "Rubro")}
-              ${sortHeader("subrubro_nombre", "Subrubro")}
-              <th class="${thHead} text-right">Stock</th>
-              <th class="${thHead} text-right">Reservado</th>
-              <th class="${thHead} text-right">Disponible</th>
+              ${sortHeader("id_manual", "ID manual", thDocIdManual)}
+              ${sortHeader("codigo_barras", "Código barras", thDoc)}
+              <th class="${thDoc}">Depósito</th>
+              ${sortHeader("nombre", "Nombre artículo", thTxt)}
+              ${sortHeader("rubro_nombre", "Rubro", thTxt)}
+              ${sortHeader("subrubro_nombre", "Subrubro", thTxt)}
+              <th class="${thNum}">Stock</th>
+              <th class="${thNum}">Reservado</th>
+              <th class="${thNum}">Disponible</th>
             </tr>`;
 
-    const tableScrollClass = groupFields.length
-      ? "overflow-x-auto max-h-[500px] overflow-y-auto rounded-xl border border-slate-100 dark:border-slate-800"
-      : "overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800";
+    const tableScrollClass =
+      "overflow-x-auto overflow-y-auto max-h-[min(72vh,48rem)] min-h-[12rem] overscroll-contain rounded-xl border border-slate-200 dark:border-slate-700 [scrollbar-gutter:stable] bg-white dark:bg-slate-950";
 
     let html = `
       <div class="${tableScrollClass}">
-        <table id="stock-existencias-data-table" class="w-full text-left text-[11px] sm:text-xs border-collapse">
-          <thead class="sticky top-0 z-10">${theadRow}</thead>
+        <table id="stock-existencias-data-table" class="se-vo-stock-table vo-jerarquia-table w-full table-fixed border-collapse text-left text-[11px] sm:text-xs text-slate-900 dark:text-slate-100">
+          ${STOCK_EXISTENCIAS_COLGROUP}
+          <thead>${theadRow}</thead>
           <tbody>${bodyHtml}</tbody></table></div>`;
     html += pieAgrupado;
     if (notes.length) {
@@ -8804,7 +9250,19 @@ if (dashboardRoot) {
           stockExistenciasSort.col = col;
           stockExistenciasSort.dir = "asc";
         }
-        renderStockExistenciasTableFromState();
+        showReportsQueryLoadingModal("stock-existencias", {
+          title: "Ordenando tabla",
+          subtitle: "Aplicando el criterio de orden a todo el listado…",
+        });
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            try {
+              renderStockExistenciasTableFromState();
+            } finally {
+              hideReportsQueryLoadingModal();
+            }
+          });
+        });
       });
     });
   };
@@ -9692,13 +10150,18 @@ if (dashboardRoot) {
     },
   };
 
-  const showReportsQueryLoadingModal = (slug) => {
+  /** Muestra el modal fullscreen de carga. `labelsOverride` permite título/subtítulo distintos (p. ej. orden local en stock-existencias). */
+  const showReportsQueryLoadingModal = (slug, labelsOverride = null) => {
     const el = document.getElementById("reports-legacy-query-loading-modal");
     if (!el) return;
-    const labels = REPORTS_QUERY_LOADING_LABELS[slug] || {
-      title: "Cargando datos",
-      subtitle: "Espera un momento…",
-    };
+    const defaults = { title: "Cargando datos", subtitle: "Espera un momento…" };
+    const base = (slug && REPORTS_QUERY_LOADING_LABELS[slug]) || defaults;
+    const labels = labelsOverride
+      ? {
+          title: labelsOverride.title ?? base.title,
+          subtitle: labelsOverride.subtitle ?? base.subtitle,
+        }
+      : base;
     const titleEl = document.getElementById("reports-query-loading-title");
     const subEl = document.getElementById("reports-query-loading-subtitle");
     if (titleEl) titleEl.textContent = labels.title;

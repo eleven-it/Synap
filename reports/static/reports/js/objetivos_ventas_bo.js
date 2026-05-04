@@ -71,10 +71,13 @@
     return Boolean(viewState?.expandedVendors?.[String(codViajante || "")]);
   }
 
-  /** Por defecto expandido (primera visita); si el usuario colapsó, respeta localStorage. */
+  /**
+   * Con compra / Sin compra bajo un vendedor: por defecto colapsados la primera vez (sin clave en localStorage);
+   * si el usuario ya abrió o cerró el bloque, respeta `expandedNodes[estadoKey]`.
+   */
   function isEstadoCompraExpanded(viewState, estadoKey) {
     const raw = viewState?.expandedNodes?.[estadoKey];
-    if (raw === undefined) return true;
+    if (raw === undefined) return false;
     return Boolean(raw);
   }
 
@@ -120,6 +123,21 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  /**
+   * Nombre visible + contador (n) entre paréntesis: el número va en gris y tipografía ligeramente menor
+   * para diferenciarlo del nombre; contraste usable en modo claro y oscuro (WCAG orientativo).
+   */
+  function nombreJerarquiaConContadorHtml(nombreBase, count) {
+    const n = fmtNum(count != null && count !== "" ? count : 0);
+    const base = escHtml(String(nombreBase || "").trim() || "—");
+    return (
+      base +
+      '<span class="vo-jerarquia-contador ms-0.5 inline-block align-baseline text-[0.8125rem] leading-tight font-normal tabular-nums text-slate-600 dark:text-slate-400" translate="no">(' +
+      escHtml(n) +
+      ")</span>"
+    );
   }
 
   function fmtMoney(v) {
@@ -294,20 +312,31 @@
 
   /**
    * Rubro / subrubro / artículo: unidades, facturación y BO agregados.
-   * Remitos, pedidos en armado y total consolidado solo a nivel cliente; aquí se muestra —.
+   * Remitos y pedidos en armado por línea (remitos_lineas / pedidos_armado_lineas) si el backend los envía; si no, —.
+   * Total consolidado sigue solo a nivel cliente.
    */
   function metricCellsVentaJerarquiaSinRemitosCabecera(row) {
     const bt = Number(row.backorder_total);
     const bs = Number(row.bo_con_stock);
     const bi = Number(row.bo_con_ingreso);
     const bn = Number(row.bo_sin_stock);
+    const remL = Number(row.remitos_lineas);
+    const pedL = Number(row.pedidos_armado_lineas);
+    const remCell =
+      Number.isFinite(remL) && Math.abs(remL) > 1e-9
+        ? `<td class="${tdNum} ${tdGrpV}${negMoneyClass(remL)}">${fmtMoney(remL)}</td>`
+        : dashCell(tdGrpV);
+    const pedCell =
+      Number.isFinite(pedL) && Math.abs(pedL) > 1e-9
+        ? `<td class="${tdNum} ${tdGrpV}${negMoneyClass(pedL)}">${fmtMoney(pedL)}</td>`
+        : dashCell(tdGrpV);
     return (
       dashCell(tdObj) +
       dashCell(tdFaltaBody) +
       `<td class="${tdNum} ${tdGrpV}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
       `<td class="${tdNum} ${tdGrpV}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>` +
-      dashCell(tdGrpV) +
-      dashCell(tdGrpV) +
+      remCell +
+      pedCell +
       dashCell(tdGrpVStrong) +
       `<td class="${tdNum} ${tdBo}${negMoneyClass(bs)}">${fmtMoney(bs)}</td>` +
       `<td class="${tdNum} ${tdBoPlain}${negMoneyClass(bi)}">${fmtMoney(bi)}</td>` +
@@ -915,8 +944,9 @@
             treeIndentPx(0),
             treeToggleVendorHtml(gid, expanded),
             "text-xs font-bold uppercase tracking-tight text-slate-900 dark:text-white",
-            escHtml(
-              `${vend.nombre_vendedor || `Vendedor ${codViajante}`} (${fmtNum(vend.total_clientes || 0)})`
+            nombreJerarquiaConContadorHtml(
+              vend.nombre_vendedor || "Vendedor " + codViajante,
+              vend.total_clientes || 0
             )
           ) +
           metricCellsFull(vend) +
@@ -930,7 +960,10 @@
         .forEach((estado) => {
           const estadoKey = "ec-" + codViajante + "-" + String(estado.estado_compra || "sin_compra");
           const expEstado = isEstadoCompraExpanded(viewState, estadoKey);
-          const estadoNombre = `${estado.nombre || "Estado"} (${fmtNum(estado.total_clientes || 0)})`;
+          const estadoNombreHtml = nombreJerarquiaConContadorHtml(
+            estado.nombre || "Estado",
+            estado.total_clientes || 0
+          );
           const estadoSearch = [vend.nombre_vendedor, estado.nombre]
             .filter(function (x) {
               return x != null && String(x).trim() !== "";
@@ -945,7 +978,7 @@
                 treeIndentPx(1),
                 treeToggleHtml(estadoKey, expEstado),
                 "text-xs uppercase tracking-tight font-normal text-slate-800 dark:text-slate-200",
-                escHtml(estadoNombre)
+                estadoNombreHtml
               ) +
               metricCellsFull(estado) +
               "</tr>"

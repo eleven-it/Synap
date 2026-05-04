@@ -61,6 +61,8 @@ class TestBuildListadoSql(SimpleTestCase):
         }
         sql, params = build_listado_sql_and_params(filters, None, False)
         self.assertEqual(params, ["2026-01-01", "2026-01-31"])
+        self.assertIn("AS fecha_factura", sql)
+        self.assertIn("AS mes_factura_ym", sql)
 
     def test_filtro_un_cliente(self):
         filters = {
