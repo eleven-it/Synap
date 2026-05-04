@@ -589,6 +589,8 @@ def build_listado_sql_and_params(
     sql = f"""
         SELECT
             DATE_FORMAT(remito.Fecha,'%%d/%%m/%%Y') AS fecha_remito,
+            DATE_FORMAT(factura.Fecha,'%%d/%%m/%%Y') AS fecha_factura,
+            DATE_FORMAT(factura.Fecha,'%%Y-%%m') AS mes_factura_ym,
             remito.NroComprobante AS nro_remito,
             remito.CodigoMovimiento AS cod_mov_remito,
             pedido.NroComprobante AS nro_pedido,

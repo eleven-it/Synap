@@ -2748,7 +2748,11 @@ class QueryRunnerService:
                     a.IDArt AS id_art,
                     COALESCE(a.CodigoArticulo, 0) AS codigo_articulo,
                     a.id_manual AS id_manual,
-                    IFNULL(a.NroCodBarra, '') AS codigo_barras,
+                    COALESCE(
+                        NULLIF(TRIM(IFNULL(a.NroCodBarraF, '')), ''),
+                        NULLIF(TRIM(IFNULL(a.NroCodBarra, '')), ''),
+                        ''
+                    ) AS codigo_barras,
                     a.NombreArticulo AS nombre,
                     sd.id_deposito AS id_deposito,
                     IFNULL(dep.NombreDeposito, CONCAT('Depósito ', sd.id_deposito)) AS deposito_nombre,
@@ -2786,6 +2790,14 @@ class QueryRunnerService:
                         item[c] = float(v)
                     elif c in ("id_art", "codigo_articulo", "id_deposito") and v is not None:
                         item[c] = int(v) if str(v).replace("-", "").isdigit() else v
+                    elif c == "codigo_barras":
+                        # Siempre cadena en JSON (evita notación científica en el cliente por tipo number).
+                        if v is None or v == "":
+                            item[c] = ""
+                        elif isinstance(v, (bytes, bytearray)):
+                            item[c] = v.decode("latin1", errors="replace").strip()
+                        else:
+                            item[c] = str(v).strip()
                     else:
                         item[c] = v
                 data.append(item)

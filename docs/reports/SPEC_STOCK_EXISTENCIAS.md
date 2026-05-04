@@ -2,7 +2,7 @@
 
 **Slug:** `stock-existencias`  
 **Runner:** `reports/services/query_runner.py` → `_run_stock_existencias`  
-**Última actualización:** 2026-04-13
+**Última actualización:** 30/04/2026
 
 ## Objetivo
 
@@ -10,7 +10,7 @@ Listado por **artículo y depósito** (`stock_deposito`) de artículos activos p
 
 `GREATEST(0, stock − reservado)` — **no** se usa `stock_deposito.saldo_pedido_cliente`.
 
-La **búsqueda** (predictiva, mínimo 2 caracteres) y el **orden** por columnas (nombre artículo, marca, rubro, subrubro) se aplican **en el navegador** sobre **todo** el resultado devuelto por el servidor (sin tope artificial de filas en la consulta). La barra de resultados replica el patrón BO: **Agrupar por** (tags, varios niveles en orden de selección) a la izquierda (~70 %) y **Buscar** a la derecha (~30 %). Con agrupación activa, la tabla sigue el mismo modelo que el detalle **Backorder** del informe BO: filas de grupo con chevron (expandir/colapsar), subtotales de **Stock**, **Reservado** y **Disponible** alineados a las columnas numéricas, niveles anidados en tabla interna y pie de texto tipo «Agrupado por: … · N agrupaciones». En la tabla no se muestran columnas «ID sistema» ni «Código artículo» ni **Cliente**. El resumen superior **no** muestra KPI de cantidad de filas.
+La **búsqueda** (predictiva, mínimo 2 caracteres) y el **orden** por columnas (**ID manual**, **Código barras**, nombre artículo, rubro, subrubro) se aplican **en el navegador** sobre **todo** el resultado devuelto por el servidor (sin tope artificial de filas en la consulta). Al **pulsar una cabecera de orden**, se muestra el modal fullscreen de espera compartido (`#reports-legacy-query-loading-modal`) con mensaje de «Ordenando tabla» hasta finalizar el redibujado. La barra de resultados replica el patrón BO: **Agrupar por** (tags, varios niveles en orden de selección) a la izquierda (~70 %) y **Buscar** a la derecha (~30 %). Dimensiones de agrupación disponibles: depósito, nombre artículo, rubro, subrubro (**no** marca). Con agrupación activa, la tabla sigue el mismo modelo que el detalle **Backorder** del informe BO: filas de grupo con chevron (expandir/colapsar), subtotales de **Stock**, **Reservado** y **Disponible** alineados a las columnas numéricas, niveles anidados en tabla interna y pie de texto tipo «Agrupado por: … · N agrupaciones». En la tabla no se muestran columnas «ID sistema» ni «Código artículo» ni **Cliente** ni **Marca** (el filtro por marcas del formulario se mantiene; el API sigue devolviendo `marca_nombre` por si se reutiliza en otros contextos). El resumen superior **no** muestra KPI de cantidad de filas.
 
 En la sección **Filtros** del formulario, los controles van en **rejilla de dos columnas** desde breakpoint `md` (≈50 % de ancho cada uno en pantallas medianas/grandes).
 
@@ -33,6 +33,10 @@ Artículos incluidos: `Discontinuo = 'No'`, `disponible_vta = 'Si'`, `tipo_art =
 ## Columnas devueltas (detalle)
 
 Incluyen entre otras: `id_deposito`, `deposito_nombre`, `marca_nombre`, `rubro_nombre`, `subrubro_nombre`, `codigo_barras`, cantidades `stock`, `reservado`, `disponible`.
+
+**`codigo_barras`:** se arma en SQL priorizando **`articulo.NroCodBarraF`** (trim, no vacío); si no hay valor útil, se usa **`NroCodBarra`**. Así se evita mostrar códigos corruptos en notación científica cuando el EAN correcto está en el campo secundario (comportamiento alineado a búsqueda TPV por `NroCodBarra` / `NroCodBarraF`).
+
+**Tabla en cliente:** anchos relativos vía `colgroup` (columnas Stock / Reservado / Disponible ~20 % más estrechas que en un reparto 9× igual; el ancho liberado repartido entre nombre de artículo, rubro y subrubro). Ver `docs/reports/UI_STOCK_EXISTENCIAS_TABLA_VO.md`.
 
 ## API de opciones de filtro
 

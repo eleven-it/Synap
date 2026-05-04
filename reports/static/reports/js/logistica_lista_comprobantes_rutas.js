@@ -826,7 +826,7 @@
   /** Campos disponibles para “Agrupar por” en la tabla (mismo criterio visual que BO; datos ya cargados). */
   /** Solo estos campos pueden usarse en «Agrupar por» (alineado a producto). */
   const LOGISTICA_TABLA_GROUP_FIELDS = [
-    ["fecha_remito", "Fecha remito"],
+    ["mes_factura_ym", "Mes de factura"],
     ["estado_entrega", "Estado de entrega"],
     ["cliente", "Cliente"],
     ["nombre_chofer", "Chofer"],
@@ -846,11 +846,37 @@
   /**
    * Inicializa el bloque “Agrupar por + Buscar en tabla” (patrón BO) sobre la tabla del widget.
    */
+  function migrateLogisticaGroupByLocalStorage() {
+    for (const key of [FILTERS_LS_KEY, FILTERS_LS_KEY_LEGACY]) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const o = JSON.parse(raw);
+        if (!o || !Array.isArray(o.group_by)) continue;
+        let changed = false;
+        const next = o.group_by.map((v) => {
+          if (v === "fecha_remito") {
+            changed = true;
+            return "mes_factura_ym";
+          }
+          return v;
+        });
+        if (changed) {
+          o.group_by = next;
+          localStorage.setItem(key, JSON.stringify(o));
+        }
+      } catch (_) {
+        /* vacío */
+      }
+    }
+  }
+
   function setupTablaToolbar() {
     const toolbar = document.getElementById("logistica-lista-tabla-toolbar");
     const sel = document.getElementById("logistica-lista-group-by");
     if (!toolbar || !sel || toolbar.dataset.logisticaToolbarReady === "1") return;
     toolbar.dataset.logisticaToolbarReady = "1";
+    migrateLogisticaGroupByLocalStorage();
     sel.innerHTML = "";
     LOGISTICA_TABLA_GROUP_FIELDS.forEach(([value, label]) => {
       const opt = document.createElement("option");

@@ -57,8 +57,7 @@ Separar la **operación de reparto** (registrar entrega en terreno) del **inform
 
 1. **Hecho (Synap):** app Django **`logistica`**: listado **Hoy** / **Mi ruta**, filtros, tarjetas, detalle y **Registrar entrega**. APIs: **`/logistica/api/entregas/…`**. Dominio MySQL: `logistica.services.lista_comprobantes_rutas` (el informe Reports sigue pudiendo importar vía `reports.services.logistica_lista_comprobantes_rutas` como capa de compatibilidad). Permiso: `logistica_editar_entregas` (`logistica.permissions.LogisticaEntregasPermission`).
 2. **Deep link:** `GET /logistica/entregas/?cod_mov_remito=&cod_mov_pedido=&abrir=entrega` (válido también vía redirect desde `/ecom/logistica/entregas/…`).
-3. **Informe:** enlace «Abrir módulo Entregas» en la barra de tabla del dashboard `comprobantes-rutas`.
-4. Refactor opcional: más filtros alineados al informe (período arbitrario en Entregas).
+3. Refactor opcional: más filtros alineados al informe (período arbitrario en Entregas).
 
 ## Module Management (Synap)
 
