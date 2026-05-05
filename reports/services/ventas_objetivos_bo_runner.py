@@ -113,6 +113,102 @@ def _parse_int_list(raw: Any) -> List[int]:
     return out
 
 
+def _vo_sql_filtros_rubro_subrubro(
+    alias_art: str,
+    rubros_incluidos: List[int],
+    subrubros_incluidos: List[int],
+) -> Tuple[str, List[Any]]:
+    """Fragmento ``AND ...`` para limitar líneas VO por rubro/subrubro (solo cuando hay filtros)."""
+    parts: List[str] = []
+    params: List[Any] = []
+    if rubros_incluidos:
+        ph = ",".join(["%s"] * len(rubros_incluidos))
+        parts.append(f"{alias_art}.CodigoRubro IN ({ph})")
+        params.extend(rubros_incluidos)
+    if subrubros_incluidos:
+        ph = ",".join(["%s"] * len(subrubros_incluidos))
+        parts.append(f"{alias_art}.IDSubRubro IN ({ph})")
+        params.extend(subrubros_incluidos)
+    if not parts:
+        return "", []
+    return " AND " + " AND ".join(parts), params
+
+
+# Fila sintética en el árbol de detalle cuando la facturación de cabecera (cuentacliente)
+# no coincide con la suma de renglones stock+artículo en el período.
+_ID_ART_FACTURACION_SIN_DESGLOSE = -900000001
+
+
+def _sum_facturacion_unidades_hojas_detalle(detalle_tree: List[Dict[str, Any]]) -> Tuple[float, float]:
+    """Suma facturación y unidades solo en nodos hoja artículo (excluye la fila residual si existiera)."""
+    tf = 0.0
+    tu = 0.0
+    for rb in detalle_tree:
+        for sub in rb.get("children") or []:
+            for art in sub.get("children") or []:
+                if int(art.get("id_art") or 0) == _ID_ART_FACTURACION_SIN_DESGLOSE:
+                    continue
+                tf += float(art.get("facturacion") or 0)
+                tu += float(art.get("cantidades_vendidas") or 0)
+    return tf, tu
+
+
+def _append_articulo_residual_facturacion(
+    detalle_tree: List[Dict[str, Any]],
+    delta_fac: float,
+    delta_uni: float,
+) -> None:
+    """Agrupa la diferencia cabecera vs renglones bajo un rubro explícito para que el usuario pueda desplegar el árbol."""
+    if abs(delta_fac) < 0.02 and abs(delta_uni) < 0.02:
+        return
+    cr = 0
+    nr = "Facturación sin desglose por artículo"
+    isr = 0
+    nsr = "—"
+    rb = None
+    for r in detalle_tree:
+        if _rubro_tuple(r) == (cr, nr):
+            rb = r
+            break
+    if rb is None:
+        rb = {
+            "tipo": "rubro",
+            "codigo_rubro": cr,
+            "nombre_rubro": nr,
+            "facturacion": 0.0,
+            "cantidades_vendidas": 0.0,
+            "children": [],
+        }
+        detalle_tree.append(rb)
+    sub = None
+    for s in rb.get("children") or []:
+        if _subrubro_tuple(s) == (isr, nsr):
+            sub = s
+            break
+    if sub is None:
+        sub = {
+            "tipo": "subrubro",
+            "id_subrubro": isr,
+            "nombre_subrubro": nsr,
+            "facturacion": 0.0,
+            "cantidades_vendidas": 0.0,
+            "children": [],
+        }
+        rb["children"].append(sub)
+    art: Dict[str, Any] = {
+        "tipo": "articulo",
+        "id_art": _ID_ART_FACTURACION_SIN_DESGLOSE,
+        "nombre_articulo": "Importe en cabecera sin líneas de stock con artículo en el período",
+        "facturacion": float(delta_fac),
+        "cantidades_vendidas": float(delta_uni),
+    }
+    for k in _BO_DETAIL_KEYS:
+        art[k] = 0.0
+    art["remitos_lineas"] = 0.0
+    art["pedidos_armado_lineas"] = 0.0
+    sub["children"].append(art)
+
+
 def _parse_sorting(filters: Dict[str, Any]) -> Tuple[str, str]:
     raw_field = str(filters.get("ordenar_por") or "objetivo_meta").strip().lower()
     raw_dir = str(filters.get("orden_forma") or "desc").strip().lower()
@@ -715,6 +811,15 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
     vendedores_excluidos = svc._parse_vendedores_excluidos(filters)
     clientes_incluir = _parse_int_list(filters.get("clientes_incluir", []))
     vendedores_incluir = _parse_int_list(filters.get("vendedores_incluir", []))
+    rubros_incluidos = _parse_int_list(filters.get("rubros_incluidos", []))
+    subrubros_incluidos = _parse_int_list(filters.get("subrubros_incluidos", []))
+    vo_filtra_rubro = (not solo_ventas_periodo) and (
+        bool(rubros_incluidos) or bool(subrubros_incluidos)
+    )
+    rub_sub_sql_art, rub_sub_params_art = _vo_sql_filtros_rubro_subrubro(
+        "art", rubros_incluidos, subrubros_incluidos
+    )
+    rub_sub_sql_a, rub_sub_params_a = _vo_sql_filtros_rubro_subrubro("a", rubros_incluidos, subrubros_incluidos)
     ordenar_por, orden_forma = _parse_sorting(filters)
     if solo_ventas_periodo and ordenar_por in ("objetivo_meta", "objetivo_falta"):
         ordenar_por = "facturacion_periodo"
@@ -879,6 +984,14 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             rem_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
             ped_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
             if not solo_ventas_periodo:
+                filt_art_rp = (
+                    " AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')"
+                    if not vo_filtra_rubro
+                    else (
+                        " AND a.IDArt IS NOT NULL AND (a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')"
+                        + rub_sub_sql_a
+                    )
+                )
                 # --- Remitos por cliente ---
                 where_remitos = [
                     "cp.Fecha >= %s",
@@ -972,8 +1085,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     LEFT JOIN articulo a ON a.IDArt = sp.IDArt
                     LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
                     LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
-                    WHERE {where_rem_w}
-                      AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+                    WHERE {where_rem_w}{filt_art_rp}
                     GROUP BY cp.Codigo, sp.IDArt
                     HAVING sp.IDArt IS NOT NULL AND sp.IDArt > 0
                         AND ABS(SUM(COALESCE(sp.PrecioNetoxR, 0))) > 0.00001
@@ -996,13 +1108,17 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     LEFT JOIN articulo a ON a.IDArt = sp.IDArt
                     LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
                     LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
-                    WHERE {where_ped_w}
-                      AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+                    WHERE {where_ped_w}{filt_art_rp}
                     GROUP BY cp.Codigo, sp.IDArt
                     HAVING sp.IDArt IS NOT NULL AND sp.IDArt > 0
                         AND ABS(SUM(COALESCE(sp.PrecioNetoxR, 0))) > 0.00001
                 """
-                cursor.execute(sql_rem_lineas_art, params_rem)
+                params_rem_lineas = list(params_rem)
+                params_ped_lineas = list(params_ped)
+                if vo_filtra_rubro:
+                    params_rem_lineas.extend(rub_sub_params_a)
+                    params_ped_lineas.extend(rub_sub_params_a)
+                cursor.execute(sql_rem_lineas_art, params_rem_lineas)
                 for r in cursor.fetchall():
                     cid = int(r[0])
                     ida = int(r[1] or 0)
@@ -1016,7 +1132,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         "nombre_subrubro": (r[5] or "").strip(),
                         "nombre_articulo": (r[6] or "").strip(),
                     }
-                cursor.execute(sql_ped_lineas_art, params_ped)
+                cursor.execute(sql_ped_lineas_art, params_ped_lineas)
                 for r in cursor.fetchall():
                     cid = int(r[0])
                     ida = int(r[1] or 0)
@@ -1078,11 +1194,16 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             uni_map: Dict[int, float] = {}
             for r in cursor.fetchall():
                 uni_map[int(r[0])] = float(r[1] or 0)
-            _mark_phase("query_unidades")
+                _mark_phase("query_unidades")
 
             # --- Detalle venta por rubro / subrubro / artículo (mismo rango y filtros que unidades) ---
             # Importe alineado a renglones stock.PrecioNetoxR (paridad ventas_netas / SPEC unidades).
             where_uni_s = " AND ".join(where_uni)
+            filt_art_venta_det = ""
+            params_venta_art: List[Any] = list(params_uni)
+            if vo_filtra_rubro:
+                filt_art_venta_det = f" AND art.IDArt IS NOT NULL{rub_sub_sql_art}"
+                params_venta_art.extend(rub_sub_params_art)
             sql_venta_por_art = f"""
                 SELECT
                     cc.Codigo AS id_cliente,
@@ -1112,11 +1233,11 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 LEFT JOIN articulo art ON art.IDArt = st.IDArt
                 LEFT JOIN rubro ru ON ru.CodigoRubro = art.CodigoRubro
                 LEFT JOIN subrubro sr ON sr.IDSubRubro = art.IDSubRubro
-                WHERE {where_uni_s}
+                WHERE {where_uni_s}{filt_art_venta_det}
                 GROUP BY cc.Codigo, art.CodigoRubro, art.IDSubRubro, art.IDArt
                 HAVING ABS(factu_linea) > 0.00001 OR ABS(unidades_linea) > 0.00001
             """
-            cursor.execute(sql_venta_por_art, params_uni)
+            cursor.execute(sql_venta_por_art, params_venta_art)
             detalle_flat_por_cliente: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
             for r in cursor.fetchall():
                 cid = int(r[0])
@@ -1232,8 +1353,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     AND cp.Estado IN {bo_estados}
                     AND sp.CodigoMovimiento IS NOT NULL
                     {suc_bo_ph}{pv_bo_ph}{viaj_bo}
-                    AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}
-                    AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+                    AND sp.Fecha >= %s AND sp.Fecha <= %s{clientes_excl_bo}{filt_art_rp}
                 GROUP BY cp.Codigo, sp.IDArt, sd.stock_total, oc_pendiente_sub.oc_pendiente, reservado_sub.reservado
                 HAVING bo_qty > 0
             """
@@ -1245,6 +1365,8 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 if vendedores_excluidos:
                     _bo_params.extend(vendedores_excluidos)
                 _bo_params.extend([fecha_inicio_bo, fecha_fin_bo])
+                if vo_filtra_rubro:
+                    _bo_params.extend(rub_sub_params_a)
                 cursor.execute(sql_bo_by_client, _bo_params)
                 for row in cursor.fetchall():
                     cod_c = int(row[0])
@@ -1406,6 +1528,8 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     }
                 g = grupos[cv]
                 cid = int(row.get("codigo_cliente") or 0)
+                fac_cli = float(row.get("facturacion") or 0)
+                uni_cli = float(row.get("cantidades_vendidas") or 0)
                 vd_tree = _nest_venta_detalle_rubro_subrubro_articulo(detalle_flat_por_cliente.get(cid, []))
                 if not solo_ventas_periodo:
                     _merge_bo_en_detalle_arbol(vd_tree, bo_art_detail.get(cid, {}))
@@ -1417,9 +1541,11 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     _rollup_bo_en_detalle(vd_tree)
                     _rollup_rem_ped_lineas_en_detalle(vd_tree)
                 _rollup_facturacion_unidades_detalle(vd_tree)
+                if not solo_ventas_periodo and not vo_filtra_rubro:
+                    _sf, _su = _sum_facturacion_unidades_hojas_detalle(vd_tree)
+                    _append_articulo_residual_facturacion(vd_tree, fac_cli - _sf, uni_cli - _su)
+                    _rollup_facturacion_unidades_detalle(vd_tree)
                 vd = _sort_nested_detalle(vd_tree, metric_key=metric_key, direction=orden_forma)
-                fac_cli = float(row.get("facturacion") or 0)
-                uni_cli = float(row.get("cantidades_vendidas") or 0)
                 total_cli = float(row.get("total") or 0)
                 if solo_ventas_periodo:
                     estado_compra = "con_compra" if (abs(fac_cli) > 0.000001 or abs(uni_cli) > 0.000001) else "sin_compra"
@@ -1556,6 +1682,8 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 "vendedores_excluidos": vendedores_excluidos,
                 "clientes_incluir": clientes_incluir,
                 "vendedores_incluir": vendedores_incluir,
+                "rubros_incluidos": rubros_incluidos,
+                "subrubros_incluidos": subrubros_incluidos,
                 "lista_precio": lista_precio,
                 "lista_precio_label": _label_lista_precio(lista_precio),
                 "ordenar_por": ordenar_por,
@@ -1599,6 +1727,16 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     f"Clientes en grilla: {len(rows_out)} "
                     "(unión de histórico de ventas en cuentacliente —sin acotar por ventana—, "
                     "movimiento en el período, objetivos vigentes, remitos/BO/unidades según filtros)."
+                )
+                if vo_filtra_rubro:
+                    notes.append(
+                        "Rubro/subrubro a incluir: el árbol de detalle y el BO por ítem solo muestran artículos que cumplen el filtro; "
+                        "las columnas agregadas por cliente (facturación, unidades, remitos, pedidos, objetivos, total, falta) "
+                        "siguen calculadas sin limitar por rubro/subrubro."
+                    )
+                notes.append(
+                    "Si la suma del detalle por artículo (facturación y unidades del período) no iguala la cabecera del cliente, "
+                    "se muestra la fila «Facturación sin desglose por artículo» (solo sin filtro rubro/subrubro activo)."
                 )
 
             extra = {

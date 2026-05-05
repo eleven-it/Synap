@@ -7987,7 +7987,42 @@ if (dashboardRoot) {
           gbCtr.dataset.tagsFilterReady = "1";
         }
       }
-      
+
+      if (reportSlug === "ventas-objetivos-vs-bo") {
+        const filterBase = `${apiUrl.replace("/query/", "/filters/")}`;
+        const headers = { "X-Requested-With": "XMLHttpRequest" };
+        const loadVoRubroTags = async (type, jsonKey, selectId, savedKey) => {
+          const resp = await fetch(`${filterBase}?type=${type}`, { headers });
+          if (!resp.ok) return;
+          const json = await resp.json();
+          const items = json[jsonKey] || [];
+          const sel = document.getElementById(selectId);
+          if (!sel) return;
+          sel.innerHTML = "";
+          items.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = String(item.value);
+            option.textContent = item.label;
+            if (
+              savedFilters &&
+              savedFilters[savedKey] &&
+              Array.isArray(savedFilters[savedKey]) &&
+              savedFilters[savedKey].map(String).includes(String(item.value))
+            ) {
+              option.selected = true;
+            }
+            sel.appendChild(option);
+          });
+          initializeTagsFilter(selectId, jsonKey);
+        };
+        try {
+          await loadVoRubroTags("rubros", "rubros", "vo_rubros_incluidos", "rubros_incluidos");
+          await loadVoRubroTags("subrubros", "subrubros", "vo_subrubros_incluidos", "subrubros_incluidos");
+        } catch (e) {
+          console.error("Error cargando rubros/subrubros (objetivos vs BO):", e);
+        }
+      }
+
       if (isJerarquiaVentasVendedorSlug(reportSlug)) {
         const ci = document.getElementById("clientes_incluir");
         const ce = document.getElementById("clientes_excluidos");
@@ -9743,6 +9778,26 @@ if (dashboardRoot) {
           }
         }
       }
+      if (reportSlug === "ventas-objetivos-vs-bo") {
+        const tagRestoreVoRubro = (arr, selectId) => {
+          if (!arr || !Array.isArray(arr)) return;
+          const sel = document.getElementById(selectId);
+          if (!sel) return;
+          arr.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = sel.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) {
+              option.selected = true;
+            }
+          });
+          setTimeout(() => {
+            sel.dispatchEvent(new Event("change", { bubbles: true }));
+          }, 150);
+        };
+        tagRestoreVoRubro(filters.rubros_incluidos, "vo_rubros_incluidos");
+        tagRestoreVoRubro(filters.subrubros_incluidos, "vo_subrubros_incluidos");
+      }
     }
 
     if (reportSlug === "stock-existencias") {
@@ -10080,6 +10135,22 @@ if (dashboardRoot) {
       if (listaPrecioSelect) {
         const v = listaPrecioSelect.value;
         if (v !== "" && v !== undefined) filters.lista_precio = parseInt(v, 10);
+      }
+      if (currentReportSlug === "ventas-objetivos-vs-bo") {
+        const rubVo = document.getElementById("vo_rubros_incluidos");
+        const subVo = document.getElementById("vo_subrubros_incluidos");
+        if (rubVo) {
+          const sr = Array.from(rubVo.selectedOptions)
+            .map((opt) => String(opt.value))
+            .filter((v) => v);
+          if (sr.length > 0) filters.rubros_incluidos = sr;
+        }
+        if (subVo) {
+          const ss = Array.from(subVo.selectedOptions)
+            .map((opt) => String(opt.value))
+            .filter((v) => v);
+          if (ss.length > 0) filters.subrubros_incluidos = ss;
+        }
       }
       if (isJerarquiaVentasVendedorSlug(currentReportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
@@ -10829,6 +10900,20 @@ if (dashboardRoot) {
               if (listaPrecioSelect && listaPrecioSelect.value !== "" && listaPrecioSelect.value !== undefined) {
                 const lp = parseInt(listaPrecioSelect.value, 10);
                 if (!Number.isNaN(lp)) filters.lista_precio = lp;
+              }
+              if (reportSlug === "ventas-objetivos-vs-bo") {
+                const rubVo = filtersContainer.querySelector('select[name="rubros_incluidos"]');
+                const subVo = filtersContainer.querySelector('select[name="subrubros_incluidos"]');
+                if (rubVo && rubVo.selectedOptions.length) {
+                  filters.rubros_incluidos = Array.from(rubVo.selectedOptions)
+                    .map((opt) => String(opt.value))
+                    .filter((v) => v);
+                }
+                if (subVo && subVo.selectedOptions.length) {
+                  filters.subrubros_incluidos = Array.from(subVo.selectedOptions)
+                    .map((opt) => String(opt.value))
+                    .filter((v) => v);
+                }
               }
             }
           }
