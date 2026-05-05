@@ -4,9 +4,28 @@ Comando para verificar por qué podrían no aparecer pedidos en la pantalla **De
 
 ---
 
+## Fila en `lista_produccion_agrupada` que no aparece en ventana-pack
+
+La pantalla **siempre** ejecuta antes `actualizar_pedidos_produccion` y luego `listar_lista_produccion_agrupada` (solo `en_proceso_produccion` normalizado como pendiente, `cantidad_pendiente_prod > 0`, `INNER JOIN articulo`).
+
+Compruebe en la **misma base** que usa la sesión Synap (`base_empresa`):
+
+1. **Artículo existe:** `SELECT IDArt, tipo_art_fab FROM articulo WHERE IDArt = <id_articulo>;` — sin fila, el `INNER JOIN` excluye la agrupada aunque exista en la tabla.
+2. **Recálculo desde detalle:** `actualizar_pedidos_produccion` actualiza cada `id_articulo` presente en `lista_produccion_detalle` con `en_proceso_produccion` tratado como «No» (según `COALESCE(TRIM(...))`). La agrupada queda con `cantidad_pedida` / `cantidad_pendiente_prod` = **suma** del detalle. Si el detalle suma pendiente **0**, la agrupada pasa a pendiente **0** y **desaparece** de la ventana (aunque antes hubiera 100 solo en agrupada). Revise:
+   ```sql
+   SELECT * FROM lista_produccion_detalle
+   WHERE id_articulo = <id> AND COALESCE(TRIM(en_proceso_produccion), 'No') = 'No';
+   ```
+3. **OPT ya liberada:** si existe columna `codigo_movimiento_opt` y es **> 0**, la demanda se excluye de ventana-pack (no es demanda nueva).
+4. **Base distinta:** la consulta manual en MySQL puede ser sobre otra base que la configurada en Synap para esa empresa.
+
+---
+
 ## Comportamiento de la vista Demanda
 
 La vista **Demanda** (ventana pack) **lee lista_produccion_agrupada** mediante `listar_ventana_pack` → `listar_lista_produccion_agrupada`: filas con `cantidad_pendiente_prod > 0` y `en_proceso_produccion = 'No'`, y además **excluye** filas con `codigo_movimiento_opt > 0` (OPT ya liberada: código real de `movimiento_stock`). Esas filas pertenecen a un lote OPT liberado; no deben sumarse como demanda nueva aunque queden pendientes inconsistentes tras un cierre.
+
+Por eso puede ocurrir que el comando `diagnosticar_demanda_mpr` (sección 3) muestre **totales de detalle** para un artículo (p. ej. 127 o 130), pero en **ventana-pack no aparezca** ese artículo: si **toda** la demanda pendiente está en filas de `lista_produccion_agrupada` con `codigo_movimiento_opt > 0`, Synap las omite. El diagnóstico (sección 4) lista explícitamente esas filas como «Excluidas por codigo_movimiento_opt > 0».
 
 - Esa tabla se alimenta con **actualizar_pedidos_produccion**, que se ejecuta **al cargar la página** (con los filtros de sesión o por defecto: mes actual) o al pulsar el botón **Actualizar**.
 - El origen de Actualizar es la query de pedidos pendientes (comp_ped + stockp + articulo tipo_art_fab='Terminado', estado_pedido_opt en Pendiente/Parcial), con los **filtros de fecha y búsqueda** configurados en la pantalla.
@@ -65,6 +84,23 @@ FROM information_schema.KEY_COLUMN_USAGE
 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'lista_produccion_detalle'
   AND COLUMN_NAME = 'codigo_movimiento_pedido' AND REFERENCED_TABLE_NAME IS NOT NULL;
 ```
+
+---
+
+## Packs con demanda y pestaña Unidades vacía
+
+La pestaña **Unidades** arma el desglose BOM con `listar_ventana_pack_unidades`: solo considera packs con **Cant. a fabricar > 0** y explota `en_abm` / `en_abm_formula` vía `bulk_id_en_abm` + `bulk_bom_detalle`.
+
+- El **tooltip de receta** en la pestaña Packs usa `articulo.id_en_abm` para todos los artículos listados (sin exigir `ensamblado = 'Si'`).
+- Si en maestro el artículo tiene **receta** (`id_en_abm` y fórmulas) pero **`ensamblado` no está en «Sí»**, antes la pestaña Unidades podía quedar vacía aunque el tooltip mostrara componentes. Synap alinea la explosión de demanda con el mismo criterio que el tooltip: para demanda MPR se usa `bulk_id_en_abm(..., requiere_ensamblado_si=False)`. El flujo de **armado** de OPT (pantallas que liberan stock ensamblado) sigue usando el criterio estricto `ensamblado = 'Si'`.
+
+**Comprobación en datos:** para un pack que vea en Packs con cantidad a fabricar > 0 y receta visible:
+
+```sql
+SELECT IDArt, CodigoArticulo, ensamblado, id_en_abm FROM articulo WHERE IDArt = ?;
+```
+
+Si `id_en_abm` está informado y hay filas activas en `en_abm_formula`, deberían listarse componentes en Unidades tras el ajuste; si `id_en_abm` es NULL, hay que asociar receta en AdministraNET.
 
 ---
 

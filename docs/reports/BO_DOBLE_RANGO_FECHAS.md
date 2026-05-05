@@ -29,6 +29,10 @@ Separar el período del reporte `bo-stock-facturacion` en dos rangos:
   - **Periodo Backorder** (negrita): mismo patrón (`periodo_tipo`, `fecha_inicio`, `fecha_fin`).
 - `dashboard.js`: `setupBoDualPeriodoTipo`, `syncBoDualSummaryPeriod`, `getFilters` / `applyFilters` / `localStorage` con ambos rangos.
 
+## Recarga de datos (`bo-stock-facturacion` y `ventas-objetivos-vs-bo`)
+
+En ambos informes con doble período, al cambiar períodos, fechas personalizadas, sucursales, clientes (excluidos / incluidos según pantalla), vendedores (solo VO), depósitos, lista de precio u orden, **no** se dispara automáticamente la petición al servidor: los valores se guardan en `localStorage` y la grilla se actualiza al pulsar **«Actualizar»** o al vencer el intervalo si **«Tiempo real»** está activo (`fetchDashboardData` manual vs `fetchDashboardData(true)`). Implementación: `isInformeQuerySoloManualORealtime` en `reports/static/reports/js/dashboard.js`.
+
 ## Implementación técnica
 
 - Frontend envía filtros:

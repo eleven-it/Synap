@@ -128,6 +128,8 @@ Base: **administranet**
 | desc_comercial | DOUBLE | Sí |  |  |  |
 | id_tiendanube | BIGINT | Sí |  |  |  |
 
+**Synap (UI «código manual»):** el valor mostrado como código manual de usuario debe tomarse solo de `id_manual`. No usar `CodigoArticulo` ni `CodigoArticuloT` como sustituto si `id_manual` está vacío: varias variantes pueden compartir el mismo talón. Normalización: `str_codigo_manual_articulo` en `core.utils.administranet_types`.
+
 ### 1.2 Relaciones (FK del catálogo)
 
 *No hay claves foráneas definidas en el catálogo para esta tabla.*

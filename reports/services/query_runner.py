@@ -211,6 +211,7 @@ class QueryRunnerService:
             'pedidos-pendientes',
             'bo-stock-facturacion',
             'ventas-objetivos-vs-bo',
+            'ventas-por-vendedor',
             'stock-existencias',
             'comprobantes-rutas',
             'mayoristapp-lista-comprobantes-rutas',  # compat. clientes que aún envían slug antiguo
@@ -276,6 +277,8 @@ class QueryRunnerService:
             if report.slug == "bo-stock-facturacion"
             else f"{payload_hash}:vov_v2"
             if report.slug == "ventas-objetivos-vs-bo"
+            else f"{payload_hash}:vpv_v1"
+            if report.slug == "ventas-por-vendedor"
             else payload_hash
         )
 
@@ -309,7 +312,7 @@ class QueryRunnerService:
             result = self._run_total_consolidado_operativo(report, payload)
         elif report.slug == "bo-stock-facturacion":
             result = self._run_backorder_vs_stock_vs_facturacion(report, payload)
-        elif report.slug == "ventas-objetivos-vs-bo":
+        elif report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
             from .ventas_objetivos_bo_runner import run_ventas_objetivos_vs_bo
 
             result = run_ventas_objetivos_vs_bo(report, payload, self.user)

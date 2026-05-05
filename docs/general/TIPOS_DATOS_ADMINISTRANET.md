@@ -22,6 +22,7 @@ Las funciones de normalización están en **`core.utils.administranet_types`**:
 - `to_int_or_none(value)` → `Optional[int]`
 - `to_date_or_none(value)` → `Optional[str]` (formato 'YYYY-MM-DD')
 - `str_or_default(value, default='')` → `str`
+- `str_codigo_manual_articulo(id_manual)` → `str` (solo `articulo.id_manual` para UI; no sustituir por código de talón; ver docstring en el módulo)
 - `to_decimal_or_none(value, quantize=None)` → `Optional[Decimal]`
 
 **Uso:** en servicios que escriban o lean tablas administraNET (empresa, sucursales, usuarios, permisos, etc.), importar y usar estas funciones antes de armar los diccionarios para `cursor.execute` o al mapear filas a diccionarios.

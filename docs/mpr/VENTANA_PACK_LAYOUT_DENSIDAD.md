@@ -29,6 +29,12 @@
 | Filas | Mucho `py-3` | `py-2.5` en celdas editables y lectura |
 | CTAs | Ambos a la izquierda | `sm:justify-between`: **Volver** a la izquierda, **Generar OPT** a la derecha; en móvil **Generar** primero (orden flex) y ancho completo para tacto |
 
+## Datos en pestaña Unidades (código manual y nombre)
+
+En la tabla de **Unidades**, la columna combinada «Cod. Manual y nombre artículo» usa `codigo_manual` e `descripcion_articulo` devueltos por `_listar_unidades_por_demanda` en `mpr/services.py` (lectura desde `articulo.id_manual` y `articulo.NombreArticulo`, con alias SQL y filas normalizadas para lectura estable con `DictCursor`). El valor mostrado como código manual es **solo** `articulo.id_manual` (normalizado con `str_codigo_manual_articulo` en `core.utils.administranet_types`). **No** se sustituye por `CodigoArticulo` / `CodigoArticuloT`: varias variantes comparten el mismo código de talón (p. ej. 2402) y no equivale al código manual jerárquico. Si `id_manual` está vacío en la base, se muestra «-»; el talón sigue en la columna «Cod. sistema» / `codigo_articulo` cuando aplique la pantalla.
+
+En **Packs** y listas que lean `lista_produccion_agrupada` + `articulo`, el mismo criterio aplica a `codigo_manual` en `listar_lista_produccion_agrupada` y `listar_opt_listado`.
+
 ## Notas
 
 - No se modificaron vistas, URLs ni formularios; solo clases y estructura HTML del template.

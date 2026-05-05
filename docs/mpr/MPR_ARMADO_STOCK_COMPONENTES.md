@@ -12,7 +12,9 @@
 
 ## Por qué «Máx. armable» puede ser «Sin stock»
 
-En el paso **Armado** (paso 4 del asistente o pantalla Armado desde detalle OPT), el sistema calcula **Máx. armable** a partir del **stock de los componentes de la receta (BOM)** en el depósito configurado como **Semi elaborado** (`deposito.tipo_mpr = 'SemiElaborado'`).
+En el paso **Armado** (paso 4 del asistente o pantalla **Armado OPT** desde el detalle de la OPT), el sistema calcula **Máx. armable** a partir del **stock de los componentes de la receta (BOM)** en el depósito configurado como **Semi elaborado** (`deposito.tipo_mpr = 'SemiElaborado'`).
+
+**Operario por pack (OPA):** en el asistente (paso 4) y en **Armado OPT** (`mpr/armado_opt.html`), cada fila con **Cant. a armar** mayor a cero debe tener **Operario** seleccionado (`operario_armado_{id_articulo}`), igual que en OPT por línea (`id_operario_opt`) y en OPP por componente. Se persiste con `ejecutar_armado(..., id_operario=...)` en `movimiento_stock` / `lista_produccion_historico`.
 
 - Si los **componentes** no tienen saldo en ese depósito, **Máx. armable** será 0 y se mostrará «Sin stock».
 - El stock de componentes en Semi elaborado proviene sobre todo de los **OPP** que movieron componentes desde Producción a Semi Elaborado (y opcionalmente de compras o transferencias).

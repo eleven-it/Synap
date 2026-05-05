@@ -89,6 +89,8 @@ _METRIC_ORDER_MAP = {
     "objetivo_meta": "objetivo",
     "objetivo_falta": "falta",
     "total_ventas_periodo": "total",
+    "facturacion_periodo": "facturacion",
+    "unidades_periodo": "cantidades_vendidas",
 }
 
 _ORDER_DIRECTION_MAP = {
@@ -619,9 +621,46 @@ def _merge_bo_en_detalle_arbol(
         _append_articulo_solo_bo(detalle_tree, iid, b)
 
 
+def _stats_jerarquia_para_log(arbol: List[Dict[str, Any]]) -> Dict[str, int]:
+    """Conteos para diagnóstico (logs); no altera el payload."""
+    nv = len(arbol)
+    n_estado = 0
+    n_cli = 0
+    n_rub = 0
+    n_sub = 0
+    n_art = 0
+    for g in arbol:
+        for est in g.get("children") or []:
+            n_estado += 1
+            for cli in est.get("children") or []:
+                if cli.get("tipo") != "cliente":
+                    continue
+                n_cli += 1
+                for rub in cli.get("venta_detalle") or []:
+                    if not isinstance(rub, dict):
+                        continue
+                    n_rub += 1
+                    for sub in rub.get("children") or []:
+                        if not isinstance(sub, dict):
+                            continue
+                        n_sub += 1
+                        for art in sub.get("children") or []:
+                            if isinstance(art, dict):
+                                n_art += 1
+    return {
+        "vendedores": nv,
+        "bloques_estado": n_estado,
+        "clientes": n_cli,
+        "nodos_rubro": n_rub,
+        "nodos_subrubro": n_sub,
+        "nodos_articulo": n_art,
+    }
+
+
 def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) -> QueryResult:
     svc = QueryRunnerService(user)
     filters = payload.get("filters", {}) or {}
+    solo_ventas_periodo = getattr(report, "slug", None) == "ventas-por-vendedor"
     started_at = time.perf_counter()
     phase_started = started_at
     phase_ms: Dict[str, int] = {}
@@ -677,7 +716,9 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
     clientes_incluir = _parse_int_list(filters.get("clientes_incluir", []))
     vendedores_incluir = _parse_int_list(filters.get("vendedores_incluir", []))
     ordenar_por, orden_forma = _parse_sorting(filters)
-    metric_key = _METRIC_ORDER_MAP[ordenar_por]
+    if solo_ventas_periodo and ordenar_por in ("objetivo_meta", "objetivo_falta"):
+        ordenar_por = "facturacion_periodo"
+    metric_key = _METRIC_ORDER_MAP.get(ordenar_por) or "objetivo"
 
     # Reconciliación defensiva backend: si llega en ambos, prevalece "incluir".
     clientes_excluidos = [c for c in clientes_excluidos if int(c) not in set(clientes_incluir)]
@@ -833,162 +874,163 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             ids_con_historico_ventas = {int(r[0]) for r in cursor.fetchall() if r and r[0] is not None}
             _mark_phase("query_historico")
 
-            # --- Remitos por cliente ---
-            where_remitos = [
-                "cp.Fecha >= %s",
-                "cp.Fecha <= %s",
-                "cp.TipoComprobante = 'REM'",
-                "cp.Anulado = 'No'",
-                "cp.Estado = 'Pendiente'",
-            ]
-            params_rem: List[Any] = [fi_fac_sql, ff_fac_sql]
-            if sucursales_ints:
-                phs = ",".join(["%s"] * len(sucursales_ints))
-                where_remitos.append(f"cp.CodSucursal IN ({phs})")
-                params_rem.extend(sucursales_ints)
-            if puntos_venta_ints:
-                phpv = ",".join(["%s"] * len(puntos_venta_ints))
-                where_remitos.append(f"cp.id_pv IN ({phpv})")
-                params_rem.extend(puntos_venta_ints)
-            if clientes_excluidos:
-                ph = ",".join(["%s"] * len(clientes_excluidos))
-                where_remitos.append(f"cp.Codigo NOT IN ({ph})")
-                params_rem.extend(clientes_excluidos)
-            if vendedores_excluidos:
-                phv = ",".join(["%s"] * len(vendedores_excluidos))
-                where_remitos.append(f"cl_rem.CodViajante NOT IN ({phv})")
-                params_rem.extend(vendedores_excluidos)
-            sql_rem_cli = f"""
-                SELECT cp.Codigo, SUM(COALESCE(cp.SubtotalDesc, 0))
-                FROM comp_ped cp
-                INNER JOIN cliente cl_rem ON cl_rem.Codigo = cp.Codigo
-                WHERE {" AND ".join(where_remitos)}
-                GROUP BY cp.Codigo
-            """
-            cursor.execute(sql_rem_cli, params_rem)
             rem_map: Dict[int, float] = {}
-            for r in cursor.fetchall():
-                rem_map[int(r[0])] = float(r[1] or 0)
-            _mark_phase("query_remitos")
-
-            # --- Pedidos en armado por cliente (comp_ped PED; igual criterio que total-consolidado-operativo: sin filtro fecha) ---
-            where_ped_arm = [
-                "cp.TipoComprobante = 'PED'",
-                "cp.Anulado = 'No'",
-                "cp.Estado IN ('En preparación', 'Preparado')",
-            ]
-            params_ped: List[Any] = []
-            if sucursales_ints:
-                phs = ",".join(["%s"] * len(sucursales_ints))
-                where_ped_arm.append(f"cp.CodSucursal IN ({phs})")
-                params_ped.extend(sucursales_ints)
-            if puntos_venta_ints:
-                phpv = ",".join(["%s"] * len(puntos_venta_ints))
-                where_ped_arm.append(f"cp.id_pv IN ({phpv})")
-                params_ped.extend(puntos_venta_ints)
-            if clientes_excluidos:
-                ph = ",".join(["%s"] * len(clientes_excluidos))
-                where_ped_arm.append(f"cp.Codigo NOT IN ({ph})")
-                params_ped.extend(clientes_excluidos)
-            if vendedores_excluidos:
-                phv = ",".join(["%s"] * len(vendedores_excluidos))
-                where_ped_arm.append(f"cl_ped.CodViajante NOT IN ({phv})")
-                params_ped.extend(vendedores_excluidos)
-            sql_ped_arm = f"""
-                SELECT cp.Codigo, SUM(COALESCE(cp.SubtotalDesc, 0))
-                FROM comp_ped cp
-                INNER JOIN cliente cl_ped ON cl_ped.Codigo = cp.Codigo
-                WHERE {" AND ".join(where_ped_arm)}
-                GROUP BY cp.Codigo
-            """
-            cursor.execute(sql_ped_arm, params_ped)
             ped_arm_map: Dict[int, float] = {}
-            for r in cursor.fetchall():
-                ped_arm_map[int(r[0])] = float(r[1] or 0)
-            _mark_phase("query_pedidos_en_armado")
-
-            # --- REM / PED en armado por artículo (líneas stockp.PrecioNetoxR; verify / total consolidado) ---
-            where_rem_w = " AND ".join(where_remitos)
-            where_ped_w = " AND ".join(where_ped_arm)
-            sql_rem_lineas_art = f"""
-                SELECT
-                    cp.Codigo AS cod_cliente,
-                    sp.IDArt AS id_art,
-                    COALESCE(MAX(a.CodigoRubro), 0) AS codigo_rubro,
-                    COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
-                    COALESCE(MAX(a.IDSubRubro), 0) AS id_subrubro,
-                    COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
-                    COALESCE(MAX(a.NombreArticulo), '') AS nombre_articulo,
-                    SUM(COALESCE(sp.PrecioNetoxR, 0)) AS remitos_lineas
-                FROM comp_ped cp
-                INNER JOIN cliente cl_rem ON cl_rem.Codigo = cp.Codigo
-                INNER JOIN stockp sp ON sp.CodigoMovimiento = cp.CodigoMovimiento
-                    AND (sp.anulado IS NULL OR sp.anulado = 'No')
-                    AND (sp.Comprobante = 'REM' OR sp.Comprobante IS NULL OR sp.Comprobante = '')
-                LEFT JOIN articulo a ON a.IDArt = sp.IDArt
-                LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
-                LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
-                WHERE {where_rem_w}
-                  AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
-                GROUP BY cp.Codigo, sp.IDArt
-                HAVING sp.IDArt IS NOT NULL AND sp.IDArt > 0
-                    AND ABS(SUM(COALESCE(sp.PrecioNetoxR, 0))) > 0.00001
-            """
-            sql_ped_lineas_art = f"""
-                SELECT
-                    cp.Codigo AS cod_cliente,
-                    sp.IDArt AS id_art,
-                    COALESCE(MAX(a.CodigoRubro), 0) AS codigo_rubro,
-                    COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
-                    COALESCE(MAX(a.IDSubRubro), 0) AS id_subrubro,
-                    COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
-                    COALESCE(MAX(a.NombreArticulo), '') AS nombre_articulo,
-                    SUM(COALESCE(sp.PrecioNetoxR, 0)) AS pedidos_armado_lineas
-                FROM comp_ped cp
-                INNER JOIN cliente cl_ped ON cl_ped.Codigo = cp.Codigo
-                INNER JOIN stockp sp ON sp.CodigoMovimiento = cp.CodigoMovimiento
-                    AND (sp.anulado IS NULL OR sp.anulado = 'No')
-                    AND (sp.Comprobante = 'PED' OR sp.Comprobante IS NULL OR sp.Comprobante = '')
-                LEFT JOIN articulo a ON a.IDArt = sp.IDArt
-                LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
-                LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
-                WHERE {where_ped_w}
-                  AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
-                GROUP BY cp.Codigo, sp.IDArt
-                HAVING sp.IDArt IS NOT NULL AND sp.IDArt > 0
-                    AND ABS(SUM(COALESCE(sp.PrecioNetoxR, 0))) > 0.00001
-            """
             rem_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
-            cursor.execute(sql_rem_lineas_art, params_rem)
-            for r in cursor.fetchall():
-                cid = int(r[0])
-                ida = int(r[1] or 0)
-                if ida <= 0:
-                    continue
-                rem_art_detail[cid][ida] = {
-                    "remitos_lineas": float(r[7] or 0),
-                    "codigo_rubro": int(r[2] or 0),
-                    "nombre_rubro": (r[3] or "").strip(),
-                    "id_subrubro": int(r[4] or 0),
-                    "nombre_subrubro": (r[5] or "").strip(),
-                    "nombre_articulo": (r[6] or "").strip(),
-                }
             ped_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
-            cursor.execute(sql_ped_lineas_art, params_ped)
-            for r in cursor.fetchall():
-                cid = int(r[0])
-                ida = int(r[1] or 0)
-                if ida <= 0:
-                    continue
-                ped_art_detail[cid][ida] = {
-                    "pedidos_armado_lineas": float(r[7] or 0),
-                    "codigo_rubro": int(r[2] or 0),
-                    "nombre_rubro": (r[3] or "").strip(),
-                    "id_subrubro": int(r[4] or 0),
-                    "nombre_subrubro": (r[5] or "").strip(),
-                    "nombre_articulo": (r[6] or "").strip(),
-                }
-            _mark_phase("query_rem_ped_lineas_art")
+            if not solo_ventas_periodo:
+                # --- Remitos por cliente ---
+                where_remitos = [
+                    "cp.Fecha >= %s",
+                    "cp.Fecha <= %s",
+                    "cp.TipoComprobante = 'REM'",
+                    "cp.Anulado = 'No'",
+                    "cp.Estado = 'Pendiente'",
+                ]
+                params_rem: List[Any] = [fi_fac_sql, ff_fac_sql]
+                if sucursales_ints:
+                    phs = ",".join(["%s"] * len(sucursales_ints))
+                    where_remitos.append(f"cp.CodSucursal IN ({phs})")
+                    params_rem.extend(sucursales_ints)
+                if puntos_venta_ints:
+                    phpv = ",".join(["%s"] * len(puntos_venta_ints))
+                    where_remitos.append(f"cp.id_pv IN ({phpv})")
+                    params_rem.extend(puntos_venta_ints)
+                if clientes_excluidos:
+                    ph = ",".join(["%s"] * len(clientes_excluidos))
+                    where_remitos.append(f"cp.Codigo NOT IN ({ph})")
+                    params_rem.extend(clientes_excluidos)
+                if vendedores_excluidos:
+                    phv = ",".join(["%s"] * len(vendedores_excluidos))
+                    where_remitos.append(f"cl_rem.CodViajante NOT IN ({phv})")
+                    params_rem.extend(vendedores_excluidos)
+                sql_rem_cli = f"""
+                    SELECT cp.Codigo, SUM(COALESCE(cp.SubtotalDesc, 0))
+                    FROM comp_ped cp
+                    INNER JOIN cliente cl_rem ON cl_rem.Codigo = cp.Codigo
+                    WHERE {" AND ".join(where_remitos)}
+                    GROUP BY cp.Codigo
+                """
+                cursor.execute(sql_rem_cli, params_rem)
+                for r in cursor.fetchall():
+                    rem_map[int(r[0])] = float(r[1] or 0)
+                _mark_phase("query_remitos")
+
+                # --- Pedidos en armado por cliente (comp_ped PED; igual criterio que total-consolidado-operativo: sin filtro fecha) ---
+                where_ped_arm = [
+                    "cp.TipoComprobante = 'PED'",
+                    "cp.Anulado = 'No'",
+                    "cp.Estado IN ('En preparación', 'Preparado')",
+                ]
+                params_ped: List[Any] = []
+                if sucursales_ints:
+                    phs = ",".join(["%s"] * len(sucursales_ints))
+                    where_ped_arm.append(f"cp.CodSucursal IN ({phs})")
+                    params_ped.extend(sucursales_ints)
+                if puntos_venta_ints:
+                    phpv = ",".join(["%s"] * len(puntos_venta_ints))
+                    where_ped_arm.append(f"cp.id_pv IN ({phpv})")
+                    params_ped.extend(puntos_venta_ints)
+                if clientes_excluidos:
+                    ph = ",".join(["%s"] * len(clientes_excluidos))
+                    where_ped_arm.append(f"cp.Codigo NOT IN ({ph})")
+                    params_ped.extend(clientes_excluidos)
+                if vendedores_excluidos:
+                    phv = ",".join(["%s"] * len(vendedores_excluidos))
+                    where_ped_arm.append(f"cl_ped.CodViajante NOT IN ({phv})")
+                    params_ped.extend(vendedores_excluidos)
+                sql_ped_arm = f"""
+                    SELECT cp.Codigo, SUM(COALESCE(cp.SubtotalDesc, 0))
+                    FROM comp_ped cp
+                    INNER JOIN cliente cl_ped ON cl_ped.Codigo = cp.Codigo
+                    WHERE {" AND ".join(where_ped_arm)}
+                    GROUP BY cp.Codigo
+                """
+                cursor.execute(sql_ped_arm, params_ped)
+                for r in cursor.fetchall():
+                    ped_arm_map[int(r[0])] = float(r[1] or 0)
+                _mark_phase("query_pedidos_en_armado")
+
+                # --- REM / PED en armado por artículo (líneas stockp.PrecioNetoxR; verify / total consolidado) ---
+                where_rem_w = " AND ".join(where_remitos)
+                where_ped_w = " AND ".join(where_ped_arm)
+                sql_rem_lineas_art = f"""
+                    SELECT
+                        cp.Codigo AS cod_cliente,
+                        sp.IDArt AS id_art,
+                        COALESCE(MAX(a.CodigoRubro), 0) AS codigo_rubro,
+                        COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
+                        COALESCE(MAX(a.IDSubRubro), 0) AS id_subrubro,
+                        COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
+                        COALESCE(MAX(a.NombreArticulo), '') AS nombre_articulo,
+                        SUM(COALESCE(sp.PrecioNetoxR, 0)) AS remitos_lineas
+                    FROM comp_ped cp
+                    INNER JOIN cliente cl_rem ON cl_rem.Codigo = cp.Codigo
+                    INNER JOIN stockp sp ON sp.CodigoMovimiento = cp.CodigoMovimiento
+                        AND (sp.anulado IS NULL OR sp.anulado = 'No')
+                        AND (sp.Comprobante = 'REM' OR sp.Comprobante IS NULL OR sp.Comprobante = '')
+                    LEFT JOIN articulo a ON a.IDArt = sp.IDArt
+                    LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
+                    LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
+                    WHERE {where_rem_w}
+                      AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+                    GROUP BY cp.Codigo, sp.IDArt
+                    HAVING sp.IDArt IS NOT NULL AND sp.IDArt > 0
+                        AND ABS(SUM(COALESCE(sp.PrecioNetoxR, 0))) > 0.00001
+                """
+                sql_ped_lineas_art = f"""
+                    SELECT
+                        cp.Codigo AS cod_cliente,
+                        sp.IDArt AS id_art,
+                        COALESCE(MAX(a.CodigoRubro), 0) AS codigo_rubro,
+                        COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
+                        COALESCE(MAX(a.IDSubRubro), 0) AS id_subrubro,
+                        COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
+                        COALESCE(MAX(a.NombreArticulo), '') AS nombre_articulo,
+                        SUM(COALESCE(sp.PrecioNetoxR, 0)) AS pedidos_armado_lineas
+                    FROM comp_ped cp
+                    INNER JOIN cliente cl_ped ON cl_ped.Codigo = cp.Codigo
+                    INNER JOIN stockp sp ON sp.CodigoMovimiento = cp.CodigoMovimiento
+                        AND (sp.anulado IS NULL OR sp.anulado = 'No')
+                        AND (sp.Comprobante = 'PED' OR sp.Comprobante IS NULL OR sp.Comprobante = '')
+                    LEFT JOIN articulo a ON a.IDArt = sp.IDArt
+                    LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
+                    LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
+                    WHERE {where_ped_w}
+                      AND (a.IDArt IS NULL OR a.tipo_art IS NULL OR a.tipo_art <> 'Gasto')
+                    GROUP BY cp.Codigo, sp.IDArt
+                    HAVING sp.IDArt IS NOT NULL AND sp.IDArt > 0
+                        AND ABS(SUM(COALESCE(sp.PrecioNetoxR, 0))) > 0.00001
+                """
+                cursor.execute(sql_rem_lineas_art, params_rem)
+                for r in cursor.fetchall():
+                    cid = int(r[0])
+                    ida = int(r[1] or 0)
+                    if ida <= 0:
+                        continue
+                    rem_art_detail[cid][ida] = {
+                        "remitos_lineas": float(r[7] or 0),
+                        "codigo_rubro": int(r[2] or 0),
+                        "nombre_rubro": (r[3] or "").strip(),
+                        "id_subrubro": int(r[4] or 0),
+                        "nombre_subrubro": (r[5] or "").strip(),
+                        "nombre_articulo": (r[6] or "").strip(),
+                    }
+                cursor.execute(sql_ped_lineas_art, params_ped)
+                for r in cursor.fetchall():
+                    cid = int(r[0])
+                    ida = int(r[1] or 0)
+                    if ida <= 0:
+                        continue
+                    ped_art_detail[cid][ida] = {
+                        "pedidos_armado_lineas": float(r[7] or 0),
+                        "codigo_rubro": int(r[2] or 0),
+                        "nombre_rubro": (r[3] or "").strip(),
+                        "id_subrubro": int(r[4] or 0),
+                        "nombre_subrubro": (r[5] or "").strip(),
+                        "nombre_articulo": (r[6] or "").strip(),
+                    }
+                _mark_phase("query_rem_ped_lineas_art")
 
             # --- Unidades vendidas (stock + cuentacliente) ---
             ph_tc = ",".join(["%s"] * len(_TIPOS_FAC_NC))
@@ -1092,40 +1134,45 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 )
             _mark_phase("query_detalle_ventas")
 
-            # --- Objetivos (solape con rango facturación) ---
             objetivos_map: Dict[int, Decimal] = {}
-            try:
-                sql_obj = """
-                    SELECT v1.Codigo, v1.objetivo
-                    FROM viajantes_objetivos_ventas v1
-                    INNER JOIN (
-                        SELECT v.Codigo, MAX(v.id) AS max_id
-                        FROM viajantes_objetivos_ventas v
-                        LEFT JOIN viajantes_objetivos_periodo p ON p.id = v.id_periodo
-                        WHERE (
-                            (v.id_periodo IS NULL AND v.fecha_desde <= %s AND v.fecha_hasta >= %s)
-                            OR (
-                                v.id_periodo IS NOT NULL
-                                AND p.id IS NOT NULL
-                                AND COALESCE(p.anulado, 'No') = 'No'
-                                AND p.fecha_desde <= %s AND p.fecha_hasta >= %s
-                            )
-                        )""" + obj_viaj_extra + """
-                        GROUP BY v.Codigo
-                    ) x ON x.Codigo = v1.Codigo AND x.max_id = v1.id
-                """
-                ff = d_fac_fin.isoformat()
-                fi = d_fac_ini.isoformat()
-                cursor.execute(sql_obj, [ff, fi, ff, fi])
-                for r in cursor.fetchall():
-                    objetivos_map[int(r[0])] = Decimal(str(r[1] or 0))
-            except Exception as ex:
-                logger.warning("Objetivos ventas: tabla o consulta no disponible: %s", ex)
-                notes.append("No se pudieron leer objetivos (¿tabla viajantes_objetivos_ventas creada?).")
-            _mark_phase("query_objetivos")
+            bo_cli_agg: Dict[int, Dict[str, float]] = defaultdict(
+                lambda: {"bo_total": 0.0, "con_stock": 0.0, "con_ingreso": 0.0, "sin_stock": 0.0}
+            )
+            bo_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
+            if not solo_ventas_periodo:
+                # --- Objetivos (solape con rango facturación) ---
+                try:
+                    sql_obj = """
+                        SELECT v1.Codigo, v1.objetivo
+                        FROM viajantes_objetivos_ventas v1
+                        INNER JOIN (
+                            SELECT v.Codigo, MAX(v.id) AS max_id
+                            FROM viajantes_objetivos_ventas v
+                            LEFT JOIN viajantes_objetivos_periodo p ON p.id = v.id_periodo
+                            WHERE (
+                                (v.id_periodo IS NULL AND v.fecha_desde <= %s AND v.fecha_hasta >= %s)
+                                OR (
+                                    v.id_periodo IS NOT NULL
+                                    AND p.id IS NOT NULL
+                                    AND COALESCE(p.anulado, 'No') = 'No'
+                                    AND p.fecha_desde <= %s AND p.fecha_hasta >= %s
+                                )
+                            )""" + obj_viaj_extra + """
+                            GROUP BY v.Codigo
+                        ) x ON x.Codigo = v1.Codigo AND x.max_id = v1.id
+                    """
+                    ff = d_fac_fin.isoformat()
+                    fi = d_fac_ini.isoformat()
+                    cursor.execute(sql_obj, [ff, fi, ff, fi])
+                    for r in cursor.fetchall():
+                        objetivos_map[int(r[0])] = Decimal(str(r[1] or 0))
+                except Exception as ex:
+                    logger.warning("Objetivos ventas: tabla o consulta no disponible: %s", ex)
+                    notes.append("No se pudieron leer objetivos (¿tabla viajantes_objetivos_ventas creada?).")
+                _mark_phase("query_objetivos")
 
-            # --- BO por cliente y artículo (misma lógica que BO agregado + prorrateo) ---
-            sql_bo_by_client = f"""
+                # --- BO por cliente y artículo (misma lógica que BO agregado + prorrateo) ---
+                sql_bo_by_client = f"""
                 SELECT
                     cp.Codigo AS cod_cliente,
                     sp.IDArt AS id_art,
@@ -1190,75 +1237,71 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 GROUP BY cp.Codigo, sp.IDArt, sd.stock_total, oc_pendiente_sub.oc_pendiente, reservado_sub.reservado
                 HAVING bo_qty > 0
             """
-            _bo_params: List[Any] = []
-            if sucursales_ints:
-                _bo_params.extend(sucursales_ints)
-            if puntos_venta_ints:
-                _bo_params.extend(puntos_venta_ints)
-            if vendedores_excluidos:
-                _bo_params.extend(vendedores_excluidos)
-            _bo_params.extend([fecha_inicio_bo, fecha_fin_bo])
-            cursor.execute(sql_bo_by_client, _bo_params)
-            bo_cli_agg: Dict[int, Dict[str, float]] = defaultdict(
-                lambda: {"bo_total": 0.0, "con_stock": 0.0, "con_ingreso": 0.0, "sin_stock": 0.0}
-            )
-            bo_art_detail: Dict[int, Dict[int, Dict[str, Any]]] = defaultdict(dict)
-            for row in cursor.fetchall():
-                cod_c = int(row[0])
-                id_art = int(row[1] or 0)
-                nombre_art = (row[2] or "").strip()
-                cod_r = int(row[3] or 0)
-                nom_r = (row[4] or "").strip() or "Sin rubro"
-                id_sr = int(row[5] or 0)
-                nom_sr = (row[6] or "").strip() or "Sin subrubro"
-                bo_qty = float(row[7] or 0)
-                bo_importe = float(row[8] or 0)
-                stock_actual = float(row[9] or 0)
-                stock_reservado = float(row[10] or 0)
-                disponible = float(row[11] or 0)
-                oc_pendiente = float(row[12] or 0)
-                faltante_reservado = max(0.0, stock_reservado - stock_actual)
-                oc_para_reservado = min(oc_pendiente, faltante_reservado)
-                oc_restante_bo = max(0.0, oc_pendiente - oc_para_reservado)
-                con_stock_qty = min(bo_qty, disponible)
-                rest = bo_qty - con_stock_qty
-                con_ingreso_qty = min(rest, oc_restante_bo)
-                sin_stock_qty = rest - con_ingreso_qty
-                if bo_qty > 0:
-                    csi = bo_importe * (con_stock_qty / bo_qty)
-                    cii = bo_importe * (con_ingreso_qty / bo_qty)
-                    ssi = bo_importe * (sin_stock_qty / bo_qty)
-                else:
-                    csi = cii = ssi = 0.0
-                agg_c = bo_cli_agg[cod_c]
-                agg_c["bo_total"] += bo_importe
-                agg_c["con_stock"] += csi
-                agg_c["con_ingreso"] += cii
-                agg_c["sin_stock"] += ssi
+                _bo_params: List[Any] = []
+                if sucursales_ints:
+                    _bo_params.extend(sucursales_ints)
+                if puntos_venta_ints:
+                    _bo_params.extend(puntos_venta_ints)
+                if vendedores_excluidos:
+                    _bo_params.extend(vendedores_excluidos)
+                _bo_params.extend([fecha_inicio_bo, fecha_fin_bo])
+                cursor.execute(sql_bo_by_client, _bo_params)
+                for row in cursor.fetchall():
+                    cod_c = int(row[0])
+                    id_art = int(row[1] or 0)
+                    nombre_art = (row[2] or "").strip()
+                    cod_r = int(row[3] or 0)
+                    nom_r = (row[4] or "").strip() or "Sin rubro"
+                    id_sr = int(row[5] or 0)
+                    nom_sr = (row[6] or "").strip() or "Sin subrubro"
+                    bo_qty = float(row[7] or 0)
+                    bo_importe = float(row[8] or 0)
+                    stock_actual = float(row[9] or 0)
+                    stock_reservado = float(row[10] or 0)
+                    disponible = float(row[11] or 0)
+                    oc_pendiente = float(row[12] or 0)
+                    faltante_reservado = max(0.0, stock_reservado - stock_actual)
+                    oc_para_reservado = min(oc_pendiente, faltante_reservado)
+                    oc_restante_bo = max(0.0, oc_pendiente - oc_para_reservado)
+                    con_stock_qty = min(bo_qty, disponible)
+                    rest = bo_qty - con_stock_qty
+                    con_ingreso_qty = min(rest, oc_restante_bo)
+                    sin_stock_qty = rest - con_ingreso_qty
+                    if bo_qty > 0:
+                        csi = bo_importe * (con_stock_qty / bo_qty)
+                        cii = bo_importe * (con_ingreso_qty / bo_qty)
+                        ssi = bo_importe * (sin_stock_qty / bo_qty)
+                    else:
+                        csi = cii = ssi = 0.0
+                    agg_c = bo_cli_agg[cod_c]
+                    agg_c["bo_total"] += bo_importe
+                    agg_c["con_stock"] += csi
+                    agg_c["con_ingreso"] += cii
+                    agg_c["sin_stock"] += ssi
 
-                if id_art <= 0:
-                    continue
-                slot = bo_art_detail[cod_c].setdefault(
-                    id_art,
-                    {
-                        "nombre_articulo": nombre_art,
-                        "codigo_rubro": cod_r,
-                        "nombre_rubro": nom_r,
-                        "id_subrubro": id_sr,
-                        "nombre_subrubro": nom_sr,
-                        "backorder_total": 0.0,
-                        "bo_con_stock": 0.0,
-                        "bo_con_ingreso": 0.0,
-                        "bo_sin_stock": 0.0,
-                    },
-                )
-                slot["backorder_total"] += bo_importe
-                slot["bo_con_stock"] += csi
-                slot["bo_con_ingreso"] += cii
-                slot["bo_sin_stock"] += ssi
-                if nombre_art:
-                    slot["nombre_articulo"] = nombre_art
-            _mark_phase("query_backorder")
+                    if id_art <= 0:
+                        continue
+                    slot = bo_art_detail[cod_c].setdefault(
+                        id_art,
+                        {
+                            "nombre_articulo": nombre_art,
+                            "codigo_rubro": cod_r,
+                            "nombre_rubro": nom_r,
+                            "id_subrubro": id_sr,
+                            "nombre_subrubro": nom_sr,
+                            "backorder_total": 0.0,
+                            "bo_con_stock": 0.0,
+                            "bo_con_ingreso": 0.0,
+                            "bo_sin_stock": 0.0,
+                        },
+                    )
+                    slot["backorder_total"] += bo_importe
+                    slot["bo_con_stock"] += csi
+                    slot["bo_con_ingreso"] += cii
+                    slot["bo_sin_stock"] += ssi
+                    if nombre_art:
+                        slot["nombre_articulo"] = nombre_art
+                _mark_phase("query_backorder")
 
             all_ids = sorted(
                 set(fact_map.keys())
@@ -1364,18 +1407,24 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 g = grupos[cv]
                 cid = int(row.get("codigo_cliente") or 0)
                 vd_tree = _nest_venta_detalle_rubro_subrubro_articulo(detalle_flat_por_cliente.get(cid, []))
-                _merge_bo_en_detalle_arbol(vd_tree, bo_art_detail.get(cid, {}))
-                _merge_rem_ped_lineas_en_detalle_arbol(
-                    vd_tree,
-                    rem_art_detail.get(cid, {}),
-                    ped_art_detail.get(cid, {}),
-                )
-                _rollup_bo_en_detalle(vd_tree)
-                _rollup_rem_ped_lineas_en_detalle(vd_tree)
+                if not solo_ventas_periodo:
+                    _merge_bo_en_detalle_arbol(vd_tree, bo_art_detail.get(cid, {}))
+                    _merge_rem_ped_lineas_en_detalle_arbol(
+                        vd_tree,
+                        rem_art_detail.get(cid, {}),
+                        ped_art_detail.get(cid, {}),
+                    )
+                    _rollup_bo_en_detalle(vd_tree)
+                    _rollup_rem_ped_lineas_en_detalle(vd_tree)
                 _rollup_facturacion_unidades_detalle(vd_tree)
                 vd = _sort_nested_detalle(vd_tree, metric_key=metric_key, direction=orden_forma)
+                fac_cli = float(row.get("facturacion") or 0)
+                uni_cli = float(row.get("cantidades_vendidas") or 0)
                 total_cli = float(row.get("total") or 0)
-                estado_compra = "con_compra" if abs(total_cli) > 0.000001 else "sin_compra"
+                if solo_ventas_periodo:
+                    estado_compra = "con_compra" if (abs(fac_cli) > 0.000001 or abs(uni_cli) > 0.000001) else "sin_compra"
+                else:
+                    estado_compra = "con_compra" if abs(total_cli) > 0.000001 else "sin_compra"
                 if not any(ch.get("tipo") == "estado_compra" and ch.get("estado_compra") == estado_compra for ch in g["children"]):
                     g["children"].append(
                         {
@@ -1460,6 +1509,23 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             rows_out = rows_ordered
             _mark_phase("armado_jerarquia")
 
+            _jstats = _stats_jerarquia_para_log(arbol)
+            _total_ms = int((time.perf_counter() - started_at) * 1000)
+            logger.info(
+                "[ventas_objetivos_bo] informe listo slug=%s clientes_grilla=%d vendedores=%d "
+                "estados_jerarquia=%d nodos_detalle rubro=%d subrubro=%d articulo=%d "
+                "tiempo_total_ms=%d fases_ms=%s",
+                getattr(report, "slug", ""),
+                len(rows_out),
+                _jstats["vendedores"],
+                _jstats["bloques_estado"],
+                _jstats["nodos_rubro"],
+                _jstats["nodos_subrubro"],
+                _jstats["nodos_articulo"],
+                _total_ms,
+                phase_ms,
+            )
+
             tot = {
                 "objetivo": sum(float(x["objetivo"]) for x in rows_out),
                 "facturacion": sum(float(x["facturacion"]) for x in rows_out),
@@ -1497,34 +1563,50 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             }
             filters_applied["performance_phase_ms"] = phase_ms
             filters_applied["performance_total_ms"] = int((time.perf_counter() - started_at) * 1000)
-            notes.insert(
-                0,
-                f"Facturación/remitos: {fi_fac_sql} a {ff_fac_sql}. Backorder: {fecha_inicio_bo} a {fecha_fin_bo}.",
-            )
-            notes.append(
-                "Pedidos en armado: importe de PED en estado En preparación/Preparado, sin filtro por fechas "
-                "(misma semántica que el KPI del reporte total-consolidado-operativo)."
-            )
-            notes.append(
-                "Detalle por artículo: columnas remitos_lineas y pedidos_armado_lineas suman stockp.PrecioNetoxR "
-                "(REM solo en ventana de facturación; PED en armado sin filtro de fechas; líneas excluyen tipo_art Gasto)."
-            )
-            if puntos_venta_ints:
+            if solo_ventas_periodo:
+                notes.insert(0, f"Ventas del período (facturación y unidades): {fi_fac_sql} a {ff_fac_sql}.")
                 notes.append(
-                    f"Puntos de venta filtrados ({len(puntos_venta_ints)}): facturación, remitos, pedidos en armado, "
-                    "unidades/detalle y cabeceras BO usan cc.id_pv / cp.id_pv como en total-consolidado-operativo."
+                    "Informe ventas por vendedor: sin objetivos, remitos, pedidos en armado ni backorder; "
+                    "jerarquía con/sin compra según facturación o unidades en el período."
                 )
-            notes.append(
-                f"Clientes en grilla: {len(rows_out)} "
-                "(unión de histórico de ventas en cuentacliente —sin acotar por ventana—, "
-                "movimiento en el período, objetivos vigentes, remitos/BO/unidades según filtros)."
-            )
+                if puntos_venta_ints:
+                    notes.append(
+                        f"Puntos de venta filtrados ({len(puntos_venta_ints)}): facturación y unidades/detalle usan cc.id_pv."
+                    )
+                notes.append(
+                    f"Clientes en grilla: {len(rows_out)} "
+                    "(histórico de ventas en cuentacliente sin acotar por ventana, más movimiento en el período seleccionado)."
+                )
+            else:
+                notes.insert(
+                    0,
+                    f"Facturación/remitos: {fi_fac_sql} a {ff_fac_sql}. Backorder: {fecha_inicio_bo} a {fecha_fin_bo}.",
+                )
+                notes.append(
+                    "Pedidos en armado: importe de PED en estado En preparación/Preparado, sin filtro por fechas "
+                    "(misma semántica que el KPI del reporte total-consolidado-operativo)."
+                )
+                notes.append(
+                    "Detalle por artículo: columnas remitos_lineas y pedidos_armado_lineas suman stockp.PrecioNetoxR "
+                    "(REM solo en ventana de facturación; PED en armado sin filtro de fechas; líneas excluyen tipo_art Gasto)."
+                )
+                if puntos_venta_ints:
+                    notes.append(
+                        f"Puntos de venta filtrados ({len(puntos_venta_ints)}): facturación, remitos, pedidos en armado, "
+                        "unidades/detalle y cabeceras BO usan cc.id_pv / cp.id_pv como en total-consolidado-operativo."
+                    )
+                notes.append(
+                    f"Clientes en grilla: {len(rows_out)} "
+                    "(unión de histórico de ventas en cuentacliente —sin acotar por ventana—, "
+                    "movimiento en el período, objetivos vigentes, remitos/BO/unidades según filtros)."
+                )
 
             extra = {
                 "tabs": {
                     "objetivos_jerarquia": arbol,
                     "objetivos_filas": rows_out,
                 },
+                "jerarquia_stats": _jstats,
             }
             cursor.close()
 

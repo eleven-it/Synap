@@ -37,6 +37,7 @@ function detectReportType() {
     "total-consolidado-operativo",
     "bo-stock-facturacion",
     "ventas-objetivos-vs-bo",
+    "ventas-por-vendedor",
     "comprobantes-rutas",
   ];
   
@@ -67,7 +68,43 @@ function isVentasNetasSlug(slug) {
 
 /** Informes con doble período (facturación/remitos + backorder), mismos filtros que BO. */
 function isInformeBoDualPeriodo(slug) {
-  return slug === "bo-stock-facturacion" || slug === "ventas-objetivos-vs-bo";
+  return (
+    slug === "bo-stock-facturacion" ||
+    slug === "ventas-objetivos-vs-bo" ||
+    slug === "ventas-por-vendedor"
+  );
+}
+
+/**
+ * BO vs stock vs facturación y Objetivos vs BO: no recargar datos al cambiar filtros en pantalla.
+ * Solo «Actualizar», carga inicial o intervalo de tiempo real (`fetchDashboardData(true)`).
+ */
+function isInformeQuerySoloManualORealtime(slug) {
+  return (
+    slug === "bo-stock-facturacion" ||
+    slug === "ventas-objetivos-vs-bo" ||
+    slug === "ventas-por-vendedor"
+  );
+}
+
+/** Objetivos vs BO y Ventas por vendedor: mismos filtros BO y tabla jerárquica (`objetivos_ventas_bo.js`). */
+function isJerarquiaVentasVendedorSlug(slug) {
+  return slug === "ventas-objetivos-vs-bo" || slug === "ventas-por-vendedor";
+}
+
+function normalizeJerarquiaSortFilters(slug, ordenarPorRaw, ordenFormaRaw) {
+  const allowedOrdenarPor =
+    slug === "ventas-por-vendedor"
+      ? ["facturacion_periodo", "unidades_periodo"]
+      : ["objetivo_meta", "objetivo_falta", "total_ventas_periodo"];
+  const ordenarPor = String(ordenarPorRaw || "").trim();
+  const ordenForma = String(ordenFormaRaw || "").trim().toLowerCase();
+  const normalizedOrdenarPor = allowedOrdenarPor.includes(ordenarPor) ? ordenarPor : allowedOrdenarPor[0];
+  const normalizedOrdenForma = ordenForma === "asc" || ordenForma === "desc" ? ordenForma : "desc";
+  return {
+    ordenarPor: normalizedOrdenarPor,
+    ordenForma: normalizedOrdenForma,
+  };
 }
 
 /** Slug canónico del informe Pedidos pendientes (único en backend y catálogo). */
@@ -4910,7 +4947,10 @@ function syncBoDualSummaryPeriod() {
   const fff = document.getElementById("fecha_fin_facturacion")?.value;
   const bi = document.getElementById("fecha_inicio")?.value;
   const bf = document.getElementById("fecha_fin")?.value;
-  const line = `Facturación y remitos: ${fmt(fif)} al ${fmt(fff)} · Backorder: ${fmt(bi)} al ${fmt(bf)}`;
+  const line =
+    slug === "ventas-por-vendedor"
+      ? `Periodo facturación: ${fmt(fif)} al ${fmt(fff)}`
+      : `Facturación y remitos: ${fmt(fif)} al ${fmt(fff)} · Backorder: ${fmt(bi)} al ${fmt(bf)}`;
   if (boPeriodEl) boPeriodEl.textContent = line;
   if (voPeriodEl) voPeriodEl.textContent = line;
 }
@@ -7236,8 +7276,7 @@ if (dashboardRoot) {
       if (
         typeof window.fetchDashboardData === "function" &&
         slug &&
-        (isInformeBoDualPeriodo(slug) ||
-          slug === "uninvoiced_remitos" ||
+        (slug === "uninvoiced_remitos" ||
           slug === "total-consolidado-operativo" ||
           slug === "stock-existencias" ||
           isVentasNetasSlug(slug))
@@ -7798,12 +7837,12 @@ if (dashboardRoot) {
             initializeTagsFilter(
               "clientes_excluidos",
               "clientes",
-              reportSlug === "ventas-objetivos-vs-bo" ? "clientes_incluir" : undefined
+              isJerarquiaVentasVendedorSlug(reportSlug) ? "clientes_incluir" : undefined
             );
           }
         }
       }
-      if (reportSlug === "ventas-objetivos-vs-bo") {
+      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
         const clientesIncludeSelect = document.getElementById("clientes_incluir");
         if (clientesIncludeSelect) {
           const clientesIncResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
@@ -7830,7 +7869,7 @@ if (dashboardRoot) {
         }
       }
 
-      if (reportSlug === "ventas-objetivos-vs-bo") {
+      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
         const viajResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=viajantes`, {
           headers: {
             "X-Requested-With": "XMLHttpRequest",
@@ -7949,7 +7988,7 @@ if (dashboardRoot) {
         }
       }
       
-      if (reportSlug === "ventas-objetivos-vs-bo") {
+      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
         const ci = document.getElementById("clientes_incluir");
         const ce = document.getElementById("clientes_excluidos");
         const vi = document.getElementById("vendedores_incluir");
@@ -8224,7 +8263,9 @@ if (dashboardRoot) {
         applyTipo(tipo, fi, ff);
         syncBoDualSummaryPeriod();
         saveFilters();
-        fetchDashboardData();
+        if (!isInformeQuerySoloManualORealtime(dashboardRoot?.dataset?.reportSlug)) {
+          fetchDashboardData();
+        }
       };
 
       buttons.forEach((btn) => {
@@ -8243,7 +8284,9 @@ if (dashboardRoot) {
         if (sel.value === "personalizado") {
           syncBoDualSummaryPeriod();
           saveFilters();
-          fetchDashboardData();
+          if (!isInformeQuerySoloManualORealtime(dashboardRoot?.dataset?.reportSlug)) {
+            fetchDashboardData();
+          }
         }
       };
       fi.addEventListener("change", onDateChange);
@@ -8370,7 +8413,15 @@ if (dashboardRoot) {
         if (savedViewType === "por_caja") {
           fetchByAccountData();
         }
-      } else if (reportSlug === "cash_flow_by_account" || reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug) || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug) || isLogisticaListaComprobantesRutasSlug(reportSlug)) {
+      } else if (
+        reportSlug === "cash_flow_by_account" ||
+        reportSlug === "sales_summary" ||
+        reportSlug === "total-consolidado-operativo" ||
+        isVentasNetasSlug(reportSlug) ||
+        reportSlug === "uninvoiced_remitos" ||
+        isPedidosPendientesSlug(reportSlug) ||
+        isLogisticaListaComprobantesRutasSlug(reportSlug)
+      ) {
         // Para estos reportes, recargar datos al cambiar período
         fetchDashboardData();
       }
@@ -8458,7 +8509,14 @@ if (dashboardRoot) {
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug) || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug) || isLogisticaListaComprobantesRutasSlug(reportSlug)) {
+        } else if (
+          reportSlug === "sales_summary" ||
+          reportSlug === "total-consolidado-operativo" ||
+          isVentasNetasSlug(reportSlug) ||
+          reportSlug === "uninvoiced_remitos" ||
+          isPedidosPendientesSlug(reportSlug) ||
+          isLogisticaListaComprobantesRutasSlug(reportSlug)
+        ) {
           fetchDashboardData();
         }
       }
@@ -8473,7 +8531,14 @@ if (dashboardRoot) {
           if (savedViewType === "por_caja") {
             fetchByAccountData();
           }
-        } else if (reportSlug === "sales_summary" || reportSlug === "total-consolidado-operativo" || isInformeBoDualPeriodo(reportSlug) || isVentasNetasSlug(reportSlug) || reportSlug === "uninvoiced_remitos" || isPedidosPendientesSlug(reportSlug) || isLogisticaListaComprobantesRutasSlug(reportSlug)) {
+        } else if (
+          reportSlug === "sales_summary" ||
+          reportSlug === "total-consolidado-operativo" ||
+          isVentasNetasSlug(reportSlug) ||
+          reportSlug === "uninvoiced_remitos" ||
+          isPedidosPendientesSlug(reportSlug) ||
+          isLogisticaListaComprobantesRutasSlug(reportSlug)
+        ) {
           fetchDashboardData();
         }
       }
@@ -9379,7 +9444,7 @@ if (dashboardRoot) {
    */
   const applyVentasObjetivosFacturacionFromQueryParams = () => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
-    if (reportSlug !== "ventas-objetivos-vs-bo") return;
+    if (!isJerarquiaVentasVendedorSlug(reportSlug)) return;
 
     let params;
     try {
@@ -9593,7 +9658,7 @@ if (dashboardRoot) {
       }
 
       if (
-        reportSlug === "ventas-objetivos-vs-bo" &&
+        isJerarquiaVentasVendedorSlug(reportSlug) &&
         filters.vendedores_excluidos &&
         Array.isArray(filters.vendedores_excluidos)
       ) {
@@ -9612,7 +9677,7 @@ if (dashboardRoot) {
           }, 150);
         }
       }
-      if (reportSlug === "ventas-objetivos-vs-bo" && filters.clientes_incluir && Array.isArray(filters.clientes_incluir)) {
+      if (isJerarquiaVentasVendedorSlug(reportSlug) && filters.clientes_incluir && Array.isArray(filters.clientes_incluir)) {
         const clientesIncluirSelect = document.getElementById("clientes_incluir");
         if (clientesIncluirSelect) {
           filters.clientes_incluir.forEach((value) => {
@@ -9626,7 +9691,7 @@ if (dashboardRoot) {
           }, 150);
         }
       }
-      if (reportSlug === "ventas-objetivos-vs-bo" && filters.vendedores_incluir && Array.isArray(filters.vendedores_incluir)) {
+      if (isJerarquiaVentasVendedorSlug(reportSlug) && filters.vendedores_incluir && Array.isArray(filters.vendedores_incluir)) {
         const vendedoresIncluirSelect = document.getElementById("vendedores_incluir");
         if (vendedoresIncluirSelect) {
           filters.vendedores_incluir.forEach((value) => {
@@ -9640,11 +9705,14 @@ if (dashboardRoot) {
           }, 150);
         }
       }
-      if (reportSlug === "ventas-objetivos-vs-bo") {
+      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
         const ordenFormaSelect = document.getElementById("orden_forma");
-        if (ordenarPorSelect && filters.ordenar_por) ordenarPorSelect.value = String(filters.ordenar_por);
-        if (ordenFormaSelect && filters.orden_forma) ordenFormaSelect.value = String(filters.orden_forma);
+        const sortFilters = normalizeJerarquiaSortFilters(reportSlug, filters.ordenar_por, filters.orden_forma);
+        if (ordenarPorSelect) ordenarPorSelect.value = sortFilters.ordenarPor;
+        if (ordenFormaSelect) ordenFormaSelect.value = sortFilters.ordenForma;
+        filters.ordenar_por = sortFilters.ordenarPor;
+        filters.orden_forma = sortFilters.ordenForma;
       }
 
       // Depósitos incluidos (BO y Objetivos vs BO)
@@ -9984,7 +10052,7 @@ if (dashboardRoot) {
       const vendedoresExcluidosSelect = document.getElementById("vendedores_excluidos");
       const vendedoresIncluirSelect = document.getElementById("vendedores_incluir");
       const clientesIncluirSelect = document.getElementById("clientes_incluir");
-      if (vendedoresExcluidosSelect && currentReportSlug === "ventas-objetivos-vs-bo") {
+      if (vendedoresExcluidosSelect && isJerarquiaVentasVendedorSlug(currentReportSlug)) {
         const selectedVend = Array.from(vendedoresExcluidosSelect.selectedOptions)
           .map((opt) => String(opt.value))
           .filter((v) => v);
@@ -9992,7 +10060,7 @@ if (dashboardRoot) {
           filters.vendedores_excluidos = selectedVend;
         }
       }
-      if (clientesIncluirSelect && currentReportSlug === "ventas-objetivos-vs-bo") {
+      if (clientesIncluirSelect && isJerarquiaVentasVendedorSlug(currentReportSlug)) {
         const selectedCliInc = Array.from(clientesIncluirSelect.selectedOptions)
           .map((opt) => String(opt.value))
           .filter((v) => v);
@@ -10000,7 +10068,7 @@ if (dashboardRoot) {
           filters.clientes_incluir = selectedCliInc;
         }
       }
-      if (vendedoresIncluirSelect && currentReportSlug === "ventas-objetivos-vs-bo") {
+      if (vendedoresIncluirSelect && isJerarquiaVentasVendedorSlug(currentReportSlug)) {
         const selectedVendInc = Array.from(vendedoresIncluirSelect.selectedOptions)
           .map((opt) => String(opt.value))
           .filter((v) => v);
@@ -10013,11 +10081,16 @@ if (dashboardRoot) {
         const v = listaPrecioSelect.value;
         if (v !== "" && v !== undefined) filters.lista_precio = parseInt(v, 10);
       }
-      if (currentReportSlug === "ventas-objetivos-vs-bo") {
+      if (isJerarquiaVentasVendedorSlug(currentReportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
         const ordenFormaSelect = document.getElementById("orden_forma");
-        if (ordenarPorSelect && ordenarPorSelect.value) filters.ordenar_por = ordenarPorSelect.value;
-        if (ordenFormaSelect && ordenFormaSelect.value) filters.orden_forma = ordenFormaSelect.value;
+        const sortFilters = normalizeJerarquiaSortFilters(
+          currentReportSlug,
+          ordenarPorSelect?.value,
+          ordenFormaSelect?.value
+        );
+        filters.ordenar_por = sortFilters.ordenarPor;
+        filters.orden_forma = sortFilters.ordenForma;
       }
     } else if (currentReportSlug === "stock-existencias") {
       const depositosIncluidosSelect = document.getElementById("depositos_incluidos");
@@ -10110,7 +10183,8 @@ if (dashboardRoot) {
     if (
       slug === "stock-existencias" ||
       slug === "bo-stock-facturacion" ||
-      slug === "ventas-objetivos-vs-bo"
+      slug === "ventas-objetivos-vs-bo" ||
+      slug === "ventas-por-vendedor"
     ) {
       return true;
     }
@@ -10131,6 +10205,10 @@ if (dashboardRoot) {
     "ventas-objetivos-vs-bo": {
       title: "Cargando objetivos de ventas vs BO",
       subtitle: "Sincronizando facturación, remitos y backorder…",
+    },
+    "ventas-por-vendedor": {
+      title: "Cargando ventas por vendedor",
+      subtitle: "Consultando facturación y jerarquía (puede tardar en bases grandes)…",
     },
     ventas_netas: {
       title: "Cargando ventas netas",
@@ -10194,6 +10272,7 @@ if (dashboardRoot) {
     slug === "stock-existencias" ||
     slug === "bo-stock-facturacion" ||
     slug === "ventas-objetivos-vs-bo" ||
+    slug === "ventas-por-vendedor" ||
     isLogisticaListaComprobantesRutasSlug(slug);
 
   const fetchDashboardData = async (isAutoRefresh = false) => {
@@ -10313,7 +10392,7 @@ if (dashboardRoot) {
               });
             });
           }
-        } else if (currentReportSlug === "ventas-objetivos-vs-bo") {
+        } else if (isJerarquiaVentasVendedorSlug(currentReportSlug)) {
           try {
             const voResponse = {
               data: payload.data || [],
@@ -10342,13 +10421,13 @@ if (dashboardRoot) {
               try {
                 window.objetivosVentasBoHandler.processData(voResponse);
               } catch (e) {
-                console.error("[dashboard] ventas-objetivos-vs-bo processData:", e);
+                console.error("[dashboard] jerarquía ventas vendedor processData:", e);
               }
             } else {
               console.error("[dashboard] objetivosVentasBoHandler no está definido; ¿cargó objetivos_ventas_bo.js?");
             }
             document.dispatchEvent(new CustomEvent("reportDataLoaded", {
-              detail: { slug: "ventas-objetivos-vs-bo", response: voResponse }
+              detail: { slug: currentReportSlug, response: voResponse }
             }));
             const errNoteVo = (payload.notes || []).find(n => /error|tiempo|timeout|interrupted|max_execution|superó/i.test(String(n)));
             if (errNoteVo) {
@@ -10600,7 +10679,51 @@ if (dashboardRoot) {
   if (exportButton) {
     const newExportButton = exportButton.cloneNode(true);
     exportButton.parentNode.replaceChild(newExportButton, exportButton);
-    newExportButton.addEventListener("click", async () => {
+    const EXPORT_SCOPE_DROPDOWN_ID = "reports-export-scope-dropdown";
+
+    function closeExportScopeDropdown() {
+      const el = document.getElementById(EXPORT_SCOPE_DROPDOWN_ID);
+      if (el) el.remove();
+    }
+
+    function createExportScopeDropdown(onPick) {
+      closeExportScopeDropdown();
+      const rect = newExportButton.getBoundingClientRect();
+      const menu = document.createElement("div");
+      menu.id = EXPORT_SCOPE_DROPDOWN_ID;
+      menu.className =
+        "fixed z-[10000] min-w-[11rem] rounded-lg border border-slate-200 bg-white p-1 shadow-xl dark:border-slate-700 dark:bg-slate-800";
+      menu.style.top = `${Math.round(rect.bottom + 6)}px`;
+      menu.style.left = `${Math.round(rect.left)}px`;
+      menu.innerHTML = `
+        <button type="button" data-export-scope="resumen"
+          class="flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-700">
+          Resumen
+          <span class="text-[10px] text-slate-400 dark:text-slate-500">Hasta cliente</span>
+        </button>
+        <button type="button" data-export-scope="detallado"
+          class="mt-1 flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-700">
+          Detallado
+          <span class="text-[10px] text-slate-400 dark:text-slate-500">Árbol completo</span>
+        </button>
+      `;
+      menu.addEventListener("click", (ev) => {
+        const btn = ev.target && ev.target.closest ? ev.target.closest("[data-export-scope]") : null;
+        if (!btn) return;
+        const scope = btn.getAttribute("data-export-scope");
+        closeExportScopeDropdown();
+        onPick(scope === "detallado" ? "detallado" : "resumen");
+      });
+      document.body.appendChild(menu);
+      const onDocClick = (ev) => {
+        if (menu.contains(ev.target) || newExportButton.contains(ev.target)) return;
+        closeExportScopeDropdown();
+        document.removeEventListener("mousedown", onDocClick);
+      };
+      document.addEventListener("mousedown", onDocClick);
+    }
+
+    async function performExcelExport(excelScope) {
       try {
         // Mostrar indicador de carga
         const originalContent = newExportButton.innerHTML;
@@ -10611,29 +10734,29 @@ if (dashboardRoot) {
           </svg>
           <span class="hidden sm:inline">Exportando...</span>
         `;
-        
+
         // Obtener filtros actuales
         const reportSlug = dashboardRoot?.dataset.reportSlug;
         if (!reportSlug) {
           throw new Error("No se pudo determinar el reporte");
         }
-        
+
         // Construir filtros desde el DOM
         const filters = {};
         const filtersContainer = document.querySelector("[data-filters-container]");
-        
+
         if (filtersContainer) {
           // Obtener fechas
           const fechaInicioInput = filtersContainer.querySelector('input[name="fecha_inicio"]');
           const fechaFinInput = filtersContainer.querySelector('input[name="fecha_fin"]');
-          
+
           if (fechaInicioInput && fechaInicioInput.value) {
             filters.fecha_inicio = fechaInicioInput.value;
           }
           if (fechaFinInput && fechaFinInput.value) {
             filters.fecha_fin = fechaFinInput.value;
           }
-          
+
           // Obtener período tipo
           const periodoTipoBtn = filtersContainer.querySelector('.periodo-tipo-btn.active');
           if (periodoTipoBtn) {
@@ -10646,12 +10769,12 @@ if (dashboardRoot) {
               filters.año_actual = true;
             }
           }
-          
+
           // Obtener otros filtros según el reporte
           if (isVentasNetasSlug(reportSlug) || reportSlug === 'uninvoiced_remitos' || reportSlug === 'total-consolidado-operativo' || isInformeBoDualPeriodo(reportSlug)) {
             const puntoVentaSelect = filtersContainer.querySelector('select[name="punto_venta"]');
             const sucursalesSelect = filtersContainer.querySelector('select[name="sucursales"]');
-            
+
             if (puntoVentaSelect && puntoVentaSelect.value) {
               filters.punto_venta = Array.from(puntoVentaSelect.selectedOptions).map(opt => opt.value);
             }
@@ -10674,13 +10797,34 @@ if (dashboardRoot) {
               if (clientesExcluidosSelect && clientesExcluidosSelect.selectedOptions.length) {
                 filters.clientes_excluidos = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
               }
-              if (reportSlug === "ventas-objetivos-vs-bo") {
+              if (isJerarquiaVentasVendedorSlug(reportSlug)) {
                 const vendedoresExcluidosSelect = filtersContainer.querySelector('select[name="vendedores_excluidos"]');
                 if (vendedoresExcluidosSelect && vendedoresExcluidosSelect.selectedOptions.length) {
                   filters.vendedores_excluidos = Array.from(vendedoresExcluidosSelect.selectedOptions)
                     .map((opt) => String(opt.value))
                     .filter((v) => v);
                 }
+                const clientesIncluirSelect = filtersContainer.querySelector('select[name="clientes_incluir"]');
+                if (clientesIncluirSelect && clientesIncluirSelect.selectedOptions.length) {
+                  filters.clientes_incluir = Array.from(clientesIncluirSelect.selectedOptions)
+                    .map((opt) => String(opt.value))
+                    .filter((v) => v);
+                }
+                const vendedoresIncluirSelect = filtersContainer.querySelector('select[name="vendedores_incluir"]');
+                if (vendedoresIncluirSelect && vendedoresIncluirSelect.selectedOptions.length) {
+                  filters.vendedores_incluir = Array.from(vendedoresIncluirSelect.selectedOptions)
+                    .map((opt) => String(opt.value))
+                    .filter((v) => v);
+                }
+                const ordenarPorSelect = filtersContainer.querySelector("#ordenar_por");
+                const ordenFormaSelect = filtersContainer.querySelector("#orden_forma");
+                const sortFilters = normalizeJerarquiaSortFilters(
+                  reportSlug,
+                  ordenarPorSelect?.value,
+                  ordenFormaSelect?.value
+                );
+                filters.ordenar_por = sortFilters.ordenarPor;
+                filters.orden_forma = sortFilters.ordenForma;
               }
               if (listaPrecioSelect && listaPrecioSelect.value !== "" && listaPrecioSelect.value !== undefined) {
                 const lp = parseInt(listaPrecioSelect.value, 10);
@@ -10719,16 +10863,20 @@ if (dashboardRoot) {
             }
           }
         }
-        
+
+        if (excelScope && isJerarquiaVentasVendedorSlug(reportSlug)) {
+          filters.excel_scope = excelScope;
+        }
+
         const baseEmpresa = dashboardRoot?.dataset.baseEmpresa || null;
-        
+
         // Construir payload
         const payload = {
           slug: reportSlug,
           filters: filters,
           base_empresa: baseEmpresa,
         };
-        
+
         // Llamar a la API de exportación
         const apiUrl = `/api/reports/export/?type=xlsx`;
         const response = await fetch(apiUrl, {
@@ -10740,12 +10888,12 @@ if (dashboardRoot) {
           },
           body: JSON.stringify(payload),
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ detail: "Error al exportar el reporte" }));
           throw new Error(errorData.detail || "Error al exportar el reporte");
         }
-        
+
         // Descargar el archivo
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -10756,20 +10904,20 @@ if (dashboardRoot) {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        
+
         // Mostrar mensaje de éxito
-        toast("Reporte exportado exitosamente", "success");
-        
+        const lbl = excelScope === "detallado" ? " (Detallado)" : excelScope === "resumen" ? " (Resumen)" : "";
+        toast(`Reporte exportado exitosamente${lbl}`, "success");
+
         // Restaurar botón
         newExportButton.disabled = false;
         newExportButton.innerHTML = originalContent;
       } catch (error) {
         console.error("Error exportando reporte:", error);
         toast(`Error al exportar: ${error.message}`, "error");
-        
+
         // Restaurar botón
         newExportButton.disabled = false;
-        const originalContent = newExportButton.innerHTML;
         newExportButton.innerHTML = `
           <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -10777,6 +10925,17 @@ if (dashboardRoot) {
           <span class="hidden sm:inline">Exportar Excel</span>
         `;
       }
+    }
+
+    newExportButton.addEventListener("click", async () => {
+      const reportSlug = dashboardRoot?.dataset.reportSlug || "";
+      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
+        createExportScopeDropdown((scope) => {
+          performExcelExport(scope);
+        });
+        return;
+      }
+      performExcelExport(null);
     });
   }
   
@@ -10797,6 +10956,10 @@ if (dashboardRoot) {
   if (isWorkspaceMode) {
     fetchWorkspaceData();
   } else {
+    const initialSlug = dashboardRoot?.dataset?.reportSlug;
+    if (usesReportsQueryLoadingModal(initialSlug)) {
+      showReportsQueryLoadingModal(initialSlug);
+    }
     // Cargar opciones de filtros primero
     loadFilterOptions().then(() => {
       setupPeriodoTipo();
@@ -10806,10 +10969,15 @@ if (dashboardRoot) {
       setupCashFlowFilters();
       const slugAfterFilters = dashboardRoot?.dataset?.reportSlug;
       if (isInformeBoDualPeriodo(slugAfterFilters)) {
+        const sinRecargaAutoPorFiltros = isInformeQuerySoloManualORealtime(slugAfterFilters);
         const lp = document.getElementById("lista_precio");
         if (lp && !lp.dataset.boListaPrecioWired) {
           lp.dataset.boListaPrecioWired = "1";
           lp.addEventListener("change", () => {
+            if (sinRecargaAutoPorFiltros) {
+              if (typeof saveFilters === "function") saveFilters();
+              return;
+            }
             if (typeof window.fetchDashboardData === "function") {
               window.fetchDashboardData();
             }
@@ -10822,6 +10990,7 @@ if (dashboardRoot) {
             if (typeof saveFilters === "function") {
               saveFilters();
             }
+            if (sinRecargaAutoPorFiltros) return;
             if (typeof window.fetchDashboardData === "function") {
               window.fetchDashboardData();
             }
@@ -10834,6 +11003,7 @@ if (dashboardRoot) {
             if (typeof saveFilters === "function") {
               saveFilters();
             }
+            if (sinRecargaAutoPorFiltros) return;
             if (typeof window.fetchDashboardData === "function") {
               window.fetchDashboardData();
             }
@@ -10841,6 +11011,10 @@ if (dashboardRoot) {
         }
       }
       fetchDashboardData();
+    }).catch((err) => {
+      hideReportsQueryLoadingModal();
+      console.error("[dashboard] Error cargando filtros iniciales:", err);
+      toast("No se pudieron cargar filtros iniciales", "error");
     });
   }
 }

@@ -33,6 +33,7 @@ _LEGACY_LISTADOS_SLUGS = frozenset(
         "mayoristapp-presupuestos-vendedor",
         "mayoristapp-estado-pedidos-preparacion",
         "ventas-objetivos-vs-bo",
+        "ventas-por-vendedor",
         "stock-existencias",
         "resumen-ejecutivo-ventas",
     }

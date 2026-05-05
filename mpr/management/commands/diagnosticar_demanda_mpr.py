@@ -194,13 +194,19 @@ class Command(BaseCommand):
 
             # 3) Agregación desde detalle (Actualizar escribe en agrupada con esto; la vista lee agrupada)
             self.stdout.write("")
-            self.stdout.write("3) Agregación en detalle (en_proceso_produccion='No') — Actualizar escribe en agrupada con esto:")
+            self.stdout.write(
+                "3) Agregación en detalle (mismo criterio que actualizar_pedidos_produccion: "
+                "COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No') = 'No') — "
+                "Actualizar escribe en agrupada con SUM(pedida) y SUM(pendiente):"
+            )
             try:
                 cursor.execute(
                     f"""
-                    SELECT id_articulo, COALESCE(SUM(cantidad_pedida), 0) AS total_pedida
+                    SELECT id_articulo,
+                           COALESCE(SUM(cantidad_pedida), 0) AS total_pedida,
+                           COALESCE(SUM(cantidad_pendiente_prod), 0) AS total_pendiente
                     FROM {tbl_detalle}
-                    WHERE COALESCE(en_proceso_produccion, 'No') = 'No'
+                    WHERE COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No') = 'No'
                     GROUP BY id_articulo
                     """,
                 )
@@ -210,11 +216,17 @@ class Command(BaseCommand):
                 self.stdout.write("   Posible columna en_proceso_produccion con otro nombre (ej. En_Proceso_Produccion).")
                 sumas = []
 
-            id_art_totales = {to_int_or_none(_normalize_row(s).get("id_articulo")): float(_normalize_row(s).get("total_pedida") or 0) for s in sumas}
-            self.stdout.write(f"   Artículos con demanda en detalle (en_proceso_produccion='No'): {len(sumas)}")
+            id_art_totales = {
+                to_int_or_none(_normalize_row(s).get("id_articulo")): float(_normalize_row(s).get("total_pedida") or 0)
+                for s in sumas
+            }
+            self.stdout.write(f"   Artículos con líneas en detalle (pendiente / en proceso 'No'): {len(sumas)}")
             for s in sumas[:15]:
                 r = _normalize_row(s)
-                self.stdout.write(f"   id_articulo={r.get('id_articulo')} total_pedida={r.get('total_pedida')}")
+                self.stdout.write(
+                    f"   id_articulo={r.get('id_articulo')} total_pedida={r.get('total_pedida')} "
+                    f"total_pendiente={r.get('total_pendiente')}"
+                )
             if len(sumas) > 15:
                 self.stdout.write(f"   ... y {len(sumas) - 15} más.")
 
@@ -260,22 +272,44 @@ class Command(BaseCommand):
                         else:
                             self.stdout.write(f"   id_articulo={id_art}: en detalle con 'No'={con_no}, con 'Si'={con_si}. {detalle_str}")
 
-            # 4) Estado en lista_produccion_agrupada (la vista Demanda lee esta tabla para mostrar la lista)
+            # 4) Estado en lista_produccion_agrupada (la vista Demanda lee esta tabla; excluye codigo_movimiento_opt > 0)
             self.stdout.write("")
-            self.stdout.write("4) lista_produccion_agrupada (la vista Demanda muestra filas con pendiente > 0 y en_proceso='No'):")
+            self.stdout.write(
+                "4) lista_produccion_agrupada (la vista Demanda lista pendiente > 0, en_proceso='No' y "
+                "excluye filas con codigo_movimiento_opt > 0 = OPT ya liberada / MSTOCK real):"
+            )
             ids_relevantes = list({x for x in (list(id_art_totales.keys()) + [r[1] for r in filas_validas]) if x is not None})
             ph = ",".join(["%s"] * len(ids_relevantes))
+            tiene_cod_opt = False
             try:
-                cursor.execute(
-                    f"""
-                    SELECT id_articulo, id_lista_produccion, cantidad_pedida, cantidad_pendiente_prod,
-                           COALESCE(en_proceso_produccion, 'No') AS en_proceso_produccion
-                    FROM {tbl_agrupada}
-                    WHERE id_articulo IN ({ph})
-                    ORDER BY id_articulo
-                    """,
-                    ids_relevantes,
-                )
+                cursor.execute(f"SHOW COLUMNS FROM {tbl_agrupada} LIKE %s", ["codigo_movimiento_opt"])
+                tiene_cod_opt = bool(cursor.fetchone())
+            except Exception:
+                tiene_cod_opt = False
+            try:
+                if tiene_cod_opt:
+                    cursor.execute(
+                        f"""
+                        SELECT id_articulo, id_lista_produccion, cantidad_pedida, cantidad_pendiente_prod,
+                               COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No') AS en_proceso_produccion,
+                               COALESCE(codigo_movimiento_opt, 0) AS codigo_movimiento_opt
+                        FROM {tbl_agrupada}
+                        WHERE id_articulo IN ({ph})
+                        ORDER BY id_articulo, id_lista_produccion
+                        """,
+                        ids_relevantes,
+                    )
+                else:
+                    cursor.execute(
+                        f"""
+                        SELECT id_articulo, id_lista_produccion, cantidad_pedida, cantidad_pendiente_prod,
+                               COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No') AS en_proceso_produccion
+                        FROM {tbl_agrupada}
+                        WHERE id_articulo IN ({ph})
+                        ORDER BY id_articulo, id_lista_produccion
+                        """,
+                        ids_relevantes,
+                    )
                 filas_agrupada = cursor.fetchall()
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"   Error leyendo agrupada: {e}"))
@@ -283,18 +317,40 @@ class Command(BaseCommand):
 
             muestran_demanda = 0
             no_muestran = []
+            excluidas_por_opt = []
             for row in filas_agrupada:
                 r = _normalize_row(row)
                 id_art = to_int_or_none(r.get("id_articulo"))
                 pend = float(r.get("cantidad_pendiente_prod") or 0)
                 en_proc = (r.get("en_proceso_produccion") or "No").strip()
+                cod_opt = float(r.get("codigo_movimiento_opt") or 0) if tiene_cod_opt else 0.0
                 if pend > 0 and en_proc == "No":
-                    muestran_demanda += 1
+                    if tiene_cod_opt and cod_opt > 0:
+                        excluidas_por_opt.append(
+                            (id_art, r.get("id_lista_produccion"), pend, int(cod_opt))
+                        )
+                    else:
+                        muestran_demanda += 1
                 else:
                     no_muestran.append((id_art, pend, en_proc))
-            self.stdout.write(f"   Filas en agrupada para estos artículos: {len(filas_agrupada)}. Con pendiente > 0 y en_proceso='No': {muestran_demanda}")
+            self.stdout.write(f"   Filas en agrupada para estos artículos: {len(filas_agrupada)}.")
+            self.stdout.write(
+                f"   Que la vista Demanda SÍ agrega (pendiente > 0, en_proceso 'No', sin OPT liberada): {muestran_demanda}"
+            )
+            if excluidas_por_opt:
+                self.stdout.write(
+                    self.style.WARNING(
+                        "   Excluidas por codigo_movimiento_opt > 0 (no aparecen en ventana-pack aunque tengan pendiente):"
+                    )
+                )
+                for (id_art, id_lista, pend, cod) in excluidas_por_opt[:20]:
+                    self.stdout.write(
+                        f"      id_lista={id_lista} id_articulo={id_art} pendiente={pend} codigo_movimiento_opt={cod}"
+                    )
+                if len(excluidas_por_opt) > 20:
+                    self.stdout.write(f"      ... y {len(excluidas_por_opt) - 20} más.")
             if no_muestran:
-                self.stdout.write("   Filas en agrupada con cantidad_pendiente_prod=0 o en_proceso_produccion!='No':")
+                self.stdout.write("   Filas en agrupada con cantidad_pendiente_prod=0 o en_proceso distinto de 'No':")
                 for (id_art, pend, en_proc) in no_muestran[:15]:
                     self.stdout.write(f"      id_articulo={id_art} cantidad_pendiente_prod={pend} en_proceso_produccion='{en_proc}'")
                 if len(no_muestran) > 15:
@@ -328,8 +384,10 @@ class Command(BaseCommand):
                 self.stdout.write(
                     self.style.SUCCESS(
                         f"Hay {len(articulos_origen)} artículo(s) en pedidos pendientes con cantidad > 0. "
-                        "Tras cargar la página (o pulsar Actualizar) con el mismo rango de fechas/búsqueda, deberían aparecer en agrupada y en la vista Demanda. "
-                        "Si no se ven: revise que los filtros en pantalla coincidan con las fechas de los pedidos (sección 1) y que base_empresa en sesión sea correcta."
+                        "Tras Actualizar, la agrupada refleja el detalle; la vista Demanda además **excluye** filas con "
+                        "`lista_produccion_agrupada.codigo_movimiento_opt > 0` (OPT ya liberada). "
+                        "Si un artículo tiene pendiente solo en filas excluidas, **no** saldrá en ventana-pack. "
+                        "Revise la sección 4 y filtros de fecha en pantalla (sección 1)."
                     )
                 )
             self.stdout.write("")

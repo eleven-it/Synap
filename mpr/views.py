@@ -1468,11 +1468,11 @@ class ArmadoOptView(MprLoginRequiredMixin, TemplateView):
                     })
                     data_by_art[str(id_art)] = comps
         context["lineas_armado_json"] = json.dumps(data_by_art)
+        context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
         return context
 
     def post(self, request, *args, **kwargs):
         from django.contrib import messages
-        from core.utils.administranet_types import to_int_or_none
         base_empresa = _get_base_empresa(request)
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
@@ -1507,13 +1507,20 @@ class ArmadoOptView(MprLoginRequiredMixin, TemplateView):
                 qty = 0
             qty = max(0, qty)
             if qty > 0:
-                cantidades.append((linea, qty))
+                id_operario_linea = to_int_or_none(request.POST.get(f"operario_armado_{id_art}"))
+                if id_operario_linea is None:
+                    messages.error(
+                        request,
+                        f"Seleccione operario para el pack {linea.get('codigo_articulo') or id_art}.",
+                    )
+                    return redirect("mpr:armado_opt", id_lista=id_lista)
+                cantidades.append((linea, qty, id_operario_linea))
         if not cantidades:
             messages.error(request, "Indique al menos una cantidad mayor a 0 en algún pack para ejecutar el armado.")
             return redirect("mpr:armado_opt", id_lista=id_lista)
         consumo_por_componente = {}
         saldo_por_componente = {}
-        for linea, qty in cantidades:
+        for linea, qty, _id_operario_linea in cantidades:
             for comp in linea.get("bom", {}).get("componentes") or []:
                 cid = to_int_or_none(comp.get("id_articulo"))
                 if cid is None:
@@ -1526,7 +1533,7 @@ class ArmadoOptView(MprLoginRequiredMixin, TemplateView):
             saldo = saldo_por_componente.get(cid, 0)
             if necesario > saldo:
                 codigo_comp = None
-                for linea, _ in cantidades:
+                for linea, _qty, _id_operario_linea in cantidades:
                     for comp in linea.get("bom", {}).get("componentes") or []:
                         if to_int_or_none(comp.get("id_articulo")) == cid:
                             codigo_comp = comp.get("codigo_articulo") or cid
@@ -1538,7 +1545,7 @@ class ArmadoOptView(MprLoginRequiredMixin, TemplateView):
                     f"Stock insuficiente del componente {codigo_comp or cid} en Semi Elaborado: se necesitan {int(necesario)}, hay {int(saldo)}.",
                 )
                 return redirect("mpr:armado_opt", id_lista=id_lista)
-        for linea, qty in cantidades:
+        for linea, qty, id_operario_linea in cantidades:
             id_en_abm = linea.get("id_en_abm")
             articulo_armado = linea.get("articulo_armado") or {}
             id_art_armado = articulo_armado.get("id_articulo")
@@ -1552,6 +1559,7 @@ class ArmadoOptView(MprLoginRequiredMixin, TemplateView):
                     deposito_terminado,
                     id_lista_produccion=id_lista,
                     id_articulo_armado=id_art_armado,
+                    id_operario=id_operario_linea,
                 )
             except MprSchemaError as e:
                 return _mpr_schema_error_redirect(request, e)
