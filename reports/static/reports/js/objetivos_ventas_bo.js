@@ -1324,26 +1324,31 @@
   }
 
   function wireNestedToggles(container) {
-    container.querySelectorAll("[data-vo-chev]").forEach(function (chev) {
+    /** Un solo listener: el detalle bajo cliente se inserta después (lazy) y esos chevrons no existían al primer wire. */
+    if (container.dataset.voJerarquiaNestedBound === "1") {
+      return;
+    }
+    container.dataset.voJerarquiaNestedBound = "1";
+
+    function toggleFromChev(chev) {
       const gid = chev.getAttribute("data-vo-chev");
       if (!gid) return;
-      function toggleFromChev() {
-        const st = loadViewState();
-        st.expandedNodes = st.expandedNodes || {};
-        const direct = container.querySelectorAll(`tr[data-parent="${escSel(gid)}"]`);
-        if (!direct.length && String(gid).indexOf("c-") !== 0 && String(gid).indexOf("ec-") !== 0) return;
+      const st = loadViewState();
+      st.expandedNodes = st.expandedNodes || {};
+      const direct = container.querySelectorAll(`tr[data-parent="${escSel(gid)}"]`);
+      if (!direct.length && String(gid).indexOf("c-") !== 0 && String(gid).indexOf("ec-") !== 0) return;
 
-        const nestedRows = voVendorSubtreeTrCount(container, chev);
-        const maybeBusy =
-          nestedRows >= VO_JERARQUIA_BUSY_NESTED_MIN_ROWS
-            ? function (fn) {
-                runVoJerarquiaBusyThen("Actualizando jerarquía…", "Reorganizando filas visibles…", fn);
-              }
-            : function (fn) {
-                fn();
-              };
+      const nestedRows = voVendorSubtreeTrCount(container, chev);
+      const maybeBusy =
+        nestedRows >= VO_JERARQUIA_BUSY_NESTED_MIN_ROWS
+          ? function (fn) {
+              runVoJerarquiaBusyThen("Actualizando jerarquía…", "Reorganizando filas visibles…", fn);
+            }
+          : function (fn) {
+              fn();
+            };
 
-        maybeBusy(function () {
+      maybeBusy(function () {
         if (String(gid).indexOf("ec-") === 0) {
           const vVendorGid =
             (direct.length && direct[0].getAttribute("data-vo-vendor-group")) ||
@@ -1435,19 +1440,28 @@
           chev.setAttribute("aria-expanded", subOpen ? "true" : "false");
           applySearchFilterAfterHierarchyToggle(container, { vendorGid: vendorGidUnescapedFromNode(chev) });
         }
-        });
-      }
-      chev.addEventListener("click", function (e) {
-        e.stopPropagation();
-        toggleFromChev();
       });
-      chev.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          e.stopPropagation();
-          toggleFromChev();
-        }
-      });
+    }
+
+    container.addEventListener("click", function (e) {
+      const t = e.target;
+      if (!t || typeof t.closest !== "function") return;
+      const chev = t.closest("[data-vo-chev]");
+      if (!chev || !container.contains(chev)) return;
+      e.stopPropagation();
+      toggleFromChev(chev);
+    });
+
+    container.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const t = e.target;
+      if (!t || typeof t.closest !== "function") return;
+      const chev = t.closest("[data-vo-chev]");
+      if (!chev || !container.contains(chev)) return;
+      if (document.activeElement !== chev) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleFromChev(chev);
     });
   }
 
