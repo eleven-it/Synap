@@ -50,6 +50,15 @@ urlpatterns = [
         ),
         name="dashboard_logistica_lista_comprobantes_rutas_legacy_redirect",
     ),
+    # Atajo: /reports/ventas-por-vendedor/ → vista canónica del dashboard (misma convención que otros informes).
+    path(
+        "ventas-por-vendedor/",
+        RedirectView.as_view(
+            url=reverse_lazy("reports:dashboard_detail", kwargs={"slug": "ventas-por-vendedor"}),
+            permanent=False,
+        ),
+        name="reports_ventas_por_vendedor_short_redirect",
+    ),
     path("dashboard/<slug:slug>/", DashboardDetailView.as_view(), name="dashboard_detail"),
     path("builder/", ReportBuilderListView.as_view(), name="builder_list"),
     path("builder/data-map/", DataMapView.as_view(), name="data_map"),  # Ruta específica debe ir ANTES de la genérica

@@ -19,6 +19,7 @@ from .permissions import OperationalReportsPermission, ManagerialReportsPermissi
 BUILDER_HYBRID_SLUGS = frozenset(
     {
         "ventas-objetivos-vs-bo",
+        "ventas-por-vendedor",
         "bo-stock-facturacion",
         "stock-existencias",
     }

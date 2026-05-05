@@ -64,6 +64,8 @@ class TestObjetivosVentasInformeQueryRunner(TestCase):
         self.assertIsInstance(tabs["objetivos_jerarquia"], list)
         self.assertIn("objetivos_filas", tabs)
         self.assertIsInstance(tabs["objetivos_filas"], list)
+        self.assertIn("jerarquia_stats", extra)
+        self.assertIsInstance(extra["jerarquia_stats"], dict)
 
         fa = (result.meta or {}).get("filters_applied") or {}
         self.assertEqual(fa.get("lista_precio_label"), "Lista 1")

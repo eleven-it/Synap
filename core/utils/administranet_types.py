@@ -11,7 +11,7 @@ Referencia: schema en docs (reports/docs/tablas/*.md, docs/general/tablas/*.md) 
 de formularios VB6 (Ej. Empresa.frm → DatosEmpresa).
 
 Uso:
-    from core.utils.administranet_types import to_int_or_none, to_date_or_none, str_or_default
+    from core.utils.administranet_types import to_int_or_none, to_date_or_none, str_or_default, str_codigo_manual_articulo
 
     cod_prov = to_int_or_none(datos.get('CodProvincia'))
     inicio_act = to_date_or_none(datos.get('InicioAct'))
@@ -73,6 +73,20 @@ def str_or_default(value: Any, default: str = '') -> str:
         return s if s else default
     s = str(value).strip()
     return s if s else default
+
+
+def str_codigo_manual_articulo(id_manual: Any) -> str:
+    """
+    Valor de ``articulo.id_manual`` para etiquetas en Synap (código manual de usuario).
+
+    No usar ``CodigoArticulo`` ni ``CodigoArticuloT`` como sustituto cuando ``id_manual``
+    esté vacío: muchas variantes comparten el mismo código de talón (p. ej. 2402) y se
+    confunde con el código jerárquico manual. Para el código de sistema/talón, exponer
+    el campo ``codigo_articulo`` por separado.
+
+    Vacío o solo espacios → ``'-'`` (mismo criterio que ``str_or_default``).
+    """
+    return str_or_default(id_manual, "-")
 
 
 def to_decimal_or_none(value: Any, quantize: Optional[str] = None) -> Optional[Decimal]:

@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from core.mysql_pool import get_connection, mysql_cursor
 from core.services.administranet_stock import get_depositos as _get_depositos_core
 from core.services.legacy_mysql_schema.helpers import columna_existe, nombre_columna_ci
-from core.utils.administranet_types import to_int_or_none, str_or_default, to_date_or_none
+from core.utils.administranet_types import to_int_or_none, str_or_default, str_codigo_manual_articulo, to_date_or_none
 
 from mpr.exceptions import MprSchemaError, formatear_error_esquema
 
@@ -73,6 +73,13 @@ def _first_column_value(row) -> Optional[str]:
     if isinstance(row, dict):
         return next(iter(row.values()), None)
     return row[0] if len(row) > 0 else None
+
+
+def _row_dict_lower_keys(row: Any) -> Dict[str, Any]:
+    """Claves en minúsculas para lectura estable con DictCursor MySQL (alias/columnas mixtos)."""
+    if not isinstance(row, dict):
+        return {}
+    return {str(k).lower(): v for k, v in row.items()}
 
 
 def docenas_desde_unidades_opt(unidades: Any, cantidad_promedio_bulto: Any) -> float:
@@ -268,10 +275,30 @@ def _incrementar_cantidad_fabricada_acumulada_agrupada(
 # Helpers bulk: evitar N+1 al consultar BOM, artículos armados, id_en_abm
 # ---------------------------------------------------------------------------
 
-def bulk_id_en_abm(base_empresa: str, id_articulos: List[int]) -> Dict[int, int]:
-    """Dado un lote de IDArt, devuelve {id_articulo: id_en_abm} para los que son ensamblados."""
+def bulk_id_en_abm(
+    base_empresa: str,
+    id_articulos: List[int],
+    *,
+    requiere_ensamblado_si: bool = True,
+) -> Dict[int, int]:
+    """
+    Dado un lote de IDArt, devuelve {id_articulo: id_en_abm}.
+
+    Con ``requiere_ensamblado_si=True`` (por defecto) solo incluye artículos con
+    ``ensamblado = 'Si'`` (criterio de armado OPT / liberación).
+
+    Con ``requiere_ensamblado_si=False`` incluye cualquier artículo con ``id_en_abm``
+    no nulo, alineado con el tooltip de receta en ventana-pack y con la explosión BOM
+    de la pestaña Unidades (demanda MPR): en AdministraNET un terminado puede tener
+    receta configurada sin marcar ensamblado.
+    """
     if not id_articulos:
         return {}
+    filtro_ens = (
+        " AND COALESCE(ensamblado, 'No') = 'Si'"
+        if requiere_ensamblado_si
+        else ""
+    )
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             tbl = _nombre_tabla(cursor, "articulo")
@@ -280,7 +307,7 @@ def bulk_id_en_abm(base_empresa: str, id_articulos: List[int]) -> Dict[int, int]
             ph = ",".join(["%s"] * len(id_articulos))
             cursor.execute(
                 f"SELECT IDArt, id_en_abm FROM {tbl} WHERE IDArt IN ({ph}) "
-                f"AND id_en_abm IS NOT NULL AND COALESCE(ensamblado, 'No') = 'Si'",
+                f"AND id_en_abm IS NOT NULL{filtro_ens}",
                 list(id_articulos),
             )
             return {to_int_or_none(r["IDArt"]): to_int_or_none(r["id_en_abm"])
@@ -460,7 +487,7 @@ def listar_lista_produccion_agrupada(
                     COALESCE(l.cantidad_pedida, 0) AS cantidad_pedida,
                     COALESCE(l.cantidad_pendiente_prod, 0) AS cantidad_pendiente_prod,
                     l.cantidad_asignada_opt,
-                    COALESCE(l.en_proceso_produccion, 'No') AS en_proceso_produccion,
+                    COALESCE(NULLIF(TRIM(l.en_proceso_produccion), ''), 'No') AS en_proceso_produccion,
                     {fab_sel}
                 FROM {tbl_agrupada} l
                 INNER JOIN {tbl_articulo} a ON a.IDArt = l.id_articulo
@@ -471,7 +498,8 @@ def listar_lista_produccion_agrupada(
                 sql += " AND l.id_articulo = %s"
                 params.append(id_articulo)
             if estado_en_proceso in ("Si", "No"):
-                sql += " AND COALESCE(l.en_proceso_produccion, 'No') = %s"
+                # Mismo criterio que actualizar_pedidos_produccion (TRIM) para no excluir filas legacy con espacios
+                sql += " AND COALESCE(NULLIF(TRIM(l.en_proceso_produccion), ''), 'No') = %s"
                 params.append(estado_en_proceso)
             if solo_atrasadas and col_fecha:
                 sql += f" AND l.{col_fecha} IS NOT NULL AND l.{col_fecha} < CURDATE()"
@@ -487,10 +515,11 @@ def listar_lista_produccion_agrupada(
                             l.id_articulo,
                             COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                             COALESCE(a.NombreArticulo, '') AS descripcion_articulo,
+                            '' AS codigo_manual,
                             COALESCE(l.cantidad_pedida, 0) AS cantidad_pedida,
                             COALESCE(l.cantidad_pendiente_prod, 0) AS cantidad_pendiente_prod,
                             l.cantidad_asignada_opt,
-                            COALESCE(l.en_proceso_produccion, 'No') AS en_proceso_produccion,
+                            COALESCE(NULLIF(TRIM(l.en_proceso_produccion), ''), 'No') AS en_proceso_produccion,
                             {fab_sel}
                         FROM {tbl_agrupada} l
                         INNER JOIN {tbl_articulo} a ON a.IDArt = l.id_articulo
@@ -499,7 +528,7 @@ def listar_lista_produccion_agrupada(
                     if id_articulo is not None:
                         sql_fallback += " AND l.id_articulo = %s"
                     if estado_en_proceso in ("Si", "No"):
-                        sql_fallback += " AND COALESCE(l.en_proceso_produccion, 'No') = %s"
+                        sql_fallback += " AND COALESCE(NULLIF(TRIM(l.en_proceso_produccion), ''), 'No') = %s"
                     if solo_atrasadas and col_fecha:
                         sql_fallback += f" AND l.{col_fecha} IS NOT NULL AND l.{col_fecha} < CURDATE()"
                     sql_fallback += " ORDER BY l.id_lista_produccion, l.id_articulo LIMIT %s"
@@ -509,15 +538,12 @@ def listar_lista_produccion_agrupada(
             rows = cursor.fetchall()
         result = []
         for r in rows:
-            codigo_manual = r.get("codigo_manual")
-            if codigo_manual is None:
-                codigo_manual = r.get("codigo_articulo") or "-"
             result.append({
                 "id_lista_produccion": to_int_or_none(r.get("id_lista_produccion")),
                 "id_articulo": to_int_or_none(r.get("id_articulo")),
                 "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
                 "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
-                "codigo_manual": str_or_default(codigo_manual, "-"),
+                "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
                 "cantidad_pedida": to_int_or_none(r.get("cantidad_pedida")) or 0,
                 "cantidad_pendiente_prod": to_int_or_none(r.get("cantidad_pendiente_prod")) or 0,
                 "cantidad_asignada_opt": to_int_or_none(r.get("cantidad_asignada_opt")),
@@ -619,9 +645,6 @@ def listar_opt_listado(
             rows = cursor.fetchall()
         result = []
         for r in rows:
-            codigo_manual = r.get("codigo_manual")
-            if codigo_manual is None:
-                codigo_manual = r.get("codigo_articulo") or "-"
             codigo_mov_opt = to_int_or_none(r.get("codigo_movimiento_opt")) if has_codigo_mov_opt else None
             en_proceso = str_or_default(r.get("en_proceso_produccion"), "No").strip()
             es_opt_creada = (
@@ -632,7 +655,7 @@ def listar_opt_listado(
                 "id_articulo": to_int_or_none(r.get("id_articulo")),
                 "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
                 "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
-                "codigo_manual": str_or_default(codigo_manual, "-"),
+                "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
                 "cantidad_pedida": to_int_or_none(r.get("cantidad_pedida")) or 0,
                 "cantidad_pendiente_prod": to_int_or_none(r.get("cantidad_pendiente_prod")) or 0,
                 "cantidad_asignada_opt": to_int_or_none(r.get("cantidad_asignada_opt")),
@@ -1352,7 +1375,7 @@ def _demanda_desde_pedidos_pendientes(
                 by_art[id_art] = {
                     "id_articulo": id_art,
                     "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
-                    "codigo_manual": str_or_default(r.get("codigo_manual"), "-"),
+                    "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
                     "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
                     "cantidad_pedida": 0,
                     "cantidad_pendiente_prod": 0,
@@ -1636,7 +1659,7 @@ def listar_ventana_pack(
                 by_art[id_art] = {
                     "id_articulo": id_art,
                     "codigo_articulo": str_or_default(row.get("codigo_articulo"), "-"),
-                    "codigo_manual": str_or_default(row.get("codigo_manual"), "-"),
+                    "codigo_manual": str_codigo_manual_articulo(row.get("codigo_manual")),
                     "descripcion_articulo": str_or_default(row.get("descripcion_articulo"), "-"),
                     "cantidad_pedida": 0,
                     "cantidad_pendiente_prod": 0,
@@ -2139,21 +2162,27 @@ def _listar_unidades_por_demanda(
                         detalle_por_art.setdefault(ia, [])
             bulto_sel_u = _fragmento_sql_cantidad_promedio_bulto(cursor, tbl_art)
             cursor.execute(
-                f"""SELECT IDArt, COALESCE(id_manual, '') AS id_manual, COALESCE(NombreArticulo, '') AS NombreArticulo,
-                           COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS CodigoArticulo,
+                f"""SELECT IDArt AS id_articulo,
+                           COALESCE(id_manual, '') AS codigo_manual,
+                           COALESCE(NombreArticulo, '') AS descripcion_articulo,
+                           COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo_articulo,
                            COALESCE(stock_reserva, 0) AS stock_reserva,
-                           id_unimed, id_presentacionV, COALESCE(multiplicador_vta, 0) AS multiplicador_vta{bulto_sel_u}
+                           id_unimed, id_presentacionV AS id_presentacionv,
+                           COALESCE(multiplicador_vta, 0) AS multiplicador_vta{bulto_sel_u}
                     FROM {tbl_art} WHERE IDArt IN ({placeholders})""",
                 ids,
             )
-            art_rows: Dict[int, Any] = {}
+            art_rows: Dict[int, Dict[str, Any]] = {}
             for r in cursor.fetchall() or []:
-                rid = to_int_or_none(r.get("IDArt") or r.get("idart"))
+                d = _row_dict_lower_keys(r)
+                rid = to_int_or_none(d.get("id_articulo"))
                 if rid is not None:
-                    art_rows[rid] = r
+                    art_rows[rid] = d
             tbl_um = _nombre_tabla(cursor, "unidmed")
             unimed_map: Dict[Any, str] = {}
-            id_unimeds = list({to_int_or_none(r.get("id_unimed")) for r in art_rows.values() if r.get("id_unimed") is not None})
+            id_unimeds = list(
+                {to_int_or_none(r.get("id_unimed")) for r in art_rows.values() if r.get("id_unimed") is not None}
+            )
             id_unimeds = [x for x in id_unimeds if x is not None]
             if tbl_um and id_unimeds:
                 ph = ",".join(["%s"] * len(id_unimeds))
@@ -2170,7 +2199,9 @@ def _listar_unidades_por_demanda(
                     pass
             tbl_pres = _nombre_tabla(cursor, "presentacion_abm")
             pres_map: Dict[Any, str] = {}
-            id_pres = list({r.get("id_presentacionV") for r in art_rows.values() if r.get("id_presentacionV") is not None})
+            id_pres = list(
+                {r.get("id_presentacionv") for r in art_rows.values() if r.get("id_presentacionv") is not None}
+            )
             if tbl_pres and id_pres:
                 ph = ",".join(["%s"] * len(id_pres))
                 try:
@@ -2208,7 +2239,7 @@ def _listar_unidades_por_demanda(
                 cant_a_fabricar = max(0.0, dem_total - st)
                 cant_urgente_abs = max(0.0, dem_ped - st)
                 cant_urgente = cant_urgente_abs
-                id_pres_v = art.get("id_presentacionV")
+                id_pres_v = art.get("id_presentacionv")
                 mult = float(art.get("multiplicador_vta") or 0)
                 cant_presentacion = round(cant_a_fabricar / mult, 2) if mult and mult > 0 else None
                 try:
@@ -2219,9 +2250,9 @@ def _listar_unidades_por_demanda(
                 total_raw = sum(float(d.get("stock_terminado") or 0) for d in detalle)
                 result.append({
                     "id_articulo": id_art,
-                    "codigo_articulo": str_or_default(art.get("CodigoArticulo"), "-"),
-                    "codigo_manual": str_or_default(art.get("id_manual"), "-"),
-                    "descripcion_articulo": str_or_default(art.get("NombreArticulo"), "-"),
+                    "codigo_articulo": str_or_default(art.get("codigo_articulo"), "-"),
+                    "codigo_manual": str_codigo_manual_articulo(art.get("codigo_manual")),
+                    "descripcion_articulo": str_or_default(art.get("descripcion_articulo"), "-"),
                     "cantidad_pedida": dem_total,
                     "cantidad_demanda_pedido": dem_ped,
                     "cantidad_demanda_reserva_pack": dem_res,
@@ -2272,7 +2303,7 @@ def listar_ventana_pack_unidades(
         filas_pack = listar_ventana_pack(base_empresa, limit=limit * 2)
     art_ids = [to_int_or_none(r.get("id_articulo")) for r in filas_pack if (r.get("cantidad_a_fabricar") or 0) > 0]
     art_ids = [a for a in art_ids if a is not None]
-    abm_map = bulk_id_en_abm(base_empresa, art_ids) if art_ids else {}
+    abm_map = bulk_id_en_abm(base_empresa, art_ids, requiere_ensamblado_si=False) if art_ids else {}
     bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
     dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(filas_pack, abm_map, bom_map)
     return _listar_unidades_por_demanda(base_empresa, dem_ped, dem_res, limit)
@@ -2314,7 +2345,7 @@ def listar_unidades_desde_seleccion(
         filas_enriquecidas.append(ff)
     art_ids = [to_int_or_none(f.get("id_articulo")) for f in filas_enriquecidas if float(f.get("cantidad_a_fabricar") or 0) > 0]
     art_ids = [a for a in art_ids if a is not None]
-    abm_map = bulk_id_en_abm(base_empresa, art_ids) if art_ids else {}
+    abm_map = bulk_id_en_abm(base_empresa, art_ids, requiere_ensamblado_si=False) if art_ids else {}
     bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
     dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(filas_enriquecidas, abm_map, bom_map)
     return _listar_unidades_por_demanda(base_empresa, dem_ped, dem_res, limit)
@@ -2337,7 +2368,7 @@ def lineas_opt_desde_formulario_unidades(
         return []
     pack_ids = [to_int_or_none(f.get("id_articulo")) for f in filas_pack]
     pack_ids = [a for a in pack_ids if a is not None]
-    abm_map = bulk_id_en_abm(base_empresa, pack_ids) if pack_ids else {}
+    abm_map = bulk_id_en_abm(base_empresa, pack_ids, requiere_ensamblado_si=False) if pack_ids else {}
     bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
     lineas: List[Tuple[int, int, Optional[int]]] = []
     for f in filas_pack:
@@ -2508,7 +2539,7 @@ def actualizar_pedidos_produccion(
                        COALESCE(SUM(cantidad_pedida), 0) AS total_pedida,
                        COALESCE(SUM(cantidad_pendiente_prod), 0) AS total_pendiente
                 FROM {tbl_detalle}
-                WHERE COALESCE(en_proceso_produccion, 'No') = 'No'
+                WHERE COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No') = 'No'
                 GROUP BY id_articulo
                 """,
             )
@@ -3691,7 +3722,7 @@ def listar_bom_conjuntos(
             }
             id_art = to_int_or_none(r.get("id_articulo"))
             item["id_articulo"] = id_art
-            item["codigo_manual"] = str_or_default(r.get("codigo_manual"), "-") if id_art else "-"
+            item["codigo_manual"] = str_codigo_manual_articulo(r.get("codigo_manual")) if id_art else "-"
             result.append(item)
         return result
     except MprSchemaError:
@@ -5813,7 +5844,7 @@ def _explode_packs_to_components(
         return {}
     agregado: Dict[int, float] = {}
     pack_ids = list({to_int_or_none(l.get("id_articulo")) for l, q in distribucion if to_int_or_none(l.get("id_articulo")) and q > 0})
-    abm_map = bulk_id_en_abm(base_empresa, pack_ids) if pack_ids else {}
+    abm_map = bulk_id_en_abm(base_empresa, pack_ids, requiere_ensamblado_si=False) if pack_ids else {}
     bom_cache = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
 
     for linea, qty_pack in distribucion:

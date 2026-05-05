@@ -108,3 +108,35 @@ class ExportColumnOrderTest(SimpleTestCase):
                 "backorder_total",
             ],
         )
+
+    def test_ventas_por_vendedor_export_solo_unidades_y_facturacion(self):
+        r = ReportDefinition(slug="ventas-por-vendedor", config={})
+        row = {
+            "cod_viajante": 1,
+            "nombre_vendedor": "A",
+            "codigo_cliente": 10,
+            "nombre_cliente": "C",
+            "objetivo": 0.0,
+            "falta": 0.0,
+            "cantidades_vendidas": 2.0,
+            "facturacion": 99.0,
+            "remitos": 1.0,
+            "pedidos_en_armado": 0.0,
+            "total": 100.0,
+            "bo_con_stock": 0.0,
+            "bo_con_ingreso": 0.0,
+            "bo_sin_stock": 0.0,
+            "backorder_total": 0.0,
+        }
+        h = self.svc._resolve_export_headers(r, row)
+        self.assertEqual(
+            h,
+            [
+                "cod_viajante",
+                "nombre_vendedor",
+                "codigo_cliente",
+                "nombre_cliente",
+                "cantidades_vendidas",
+                "facturacion",
+            ],
+        )

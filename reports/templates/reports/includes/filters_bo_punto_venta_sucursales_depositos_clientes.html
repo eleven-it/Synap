@@ -74,6 +74,8 @@ Filtros BO/Objetivos BO con layout específico solicitado.
         </div>
         {% if report.slug == 'ventas-objetivos-vs-bo' %}
         <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Excluye del informe a los clientes asignados a estos vendedores (facturación, remitos, pedidos en armado, BO, objetivos y unidades).</span>
+        {% elif report.slug == 'ventas-por-vendedor' %}
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Excluye del informe a los clientes asignados a estos vendedores (ventas e importes del período de facturación).</span>
         {% endif %}
     </label>
 

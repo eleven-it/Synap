@@ -6,8 +6,9 @@
 
   const dashboardRoot = document.querySelector("#dashboard-root");
   const reportSlug = dashboardRoot?.dataset?.reportSlug || "";
+  const isVentasPorVendedor = reportSlug === "ventas-por-vendedor";
 
-  if (reportSlug !== "ventas-objetivos-vs-bo") {
+  if (reportSlug !== "ventas-objetivos-vs-bo" && reportSlug !== "ventas-por-vendedor") {
     return;
   }
 
@@ -15,6 +16,12 @@
   let _lastJerarquia = null;
   let _lastTotals = null;
   let _searchDebounceTimer = null;
+  /**
+   * En VO y VPV, el detalle rubro/sub/art se materializa por cliente al abrirlo
+   * para evitar layout masivo al expandir vendedor.
+   */
+  const VO_LAZY_CLIENT_DETAIL = true;
+  let _lazyDetalleByClient = new Map();
 
   const ARS = new Intl.NumberFormat("es-AR", {
     style: "currency",
@@ -82,32 +89,253 @@
   }
 
   /**
-   * Tras expandir un vendedor, reaplica visibilidad de filas bajo Con compra / Sin compra.
+   * Visibilidad rubro/sub/artículo bajo un cliente, solo recorriendo filas del vendedor (evita N× querySelectorAll globales).
    */
-  function refreshEstadoChildrenVisibility(container, vendorGroupEsc) {
-    const st = loadViewState();
-    container.querySelectorAll(`tr[data-vo-estado-head="1"][data-vo-vendor-group="${vendorGroupEsc}"]`).forEach(function (estRow) {
+  function applyClientDetalleVisibilityForRows(vendorRows, clientId, clientExpanded, st) {
+    const cid = String(clientId);
+    const cg = "c-" + cid;
+    const n = vendorRows.length;
+    if (!clientExpanded) {
+      for (let i = 0; i < n; i++) {
+        const r = vendorRows[i];
+        if (r.getAttribute("data-vo-under-client") === cid) r.classList.add("hidden");
+      }
+      return;
+    }
+    for (let i = 0; i < n; i++) {
+      const r = vendorRows[i];
+      if (r.getAttribute("data-parent") === cg) r.classList.remove("hidden");
+    }
+    for (let i = 0; i < n; i++) {
+      const r = vendorRows[i];
+      if (r.getAttribute("data-vo-under-client") !== cid) continue;
+      if (!r.hasAttribute("data-vo-under-rubro")) continue;
+      const rk = r.getAttribute("data-vo-under-rubro");
+      if (!rk) continue;
+      if (!isExpanded(st, rk)) {
+        r.classList.add("hidden");
+        continue;
+      }
+      const sk = r.getAttribute("data-vo-sub-key");
+      if (sk) {
+        r.classList.toggle("hidden", !isExpanded(st, sk));
+        continue;
+      }
+      const par = r.getAttribute("data-parent");
+      if (par && String(par).indexOf("s-") === 0) {
+        r.classList.toggle("hidden", !isExpanded(st, par));
+      }
+    }
+  }
+
+  /**
+   * Solo ruta legacy (tabla sin `<tbody data-vo-vendor-details>`): sincroniza `hidden` en filas tras abrir vendedor.
+   * Con tbody por vendedor, el colapso es solo `tbody.hidden` y las clases internas ya vienen del render
+   * según estado/cliente/rubro — no recorrer miles de TR en cada clic.
+   */
+  function applyVendorGroupVisibilityAfterExpand(vendorRows, st) {
+    const n = vendorRows.length;
+    const byParent = new Map();
+    const clientToEstado = new Map();
+    for (let i = 0; i < n; i++) {
+      const r = vendorRows[i];
+      const p = r.getAttribute("data-parent");
+      if (p) {
+        let arr = byParent.get(p);
+        if (!arr) {
+          arr = [];
+          byParent.set(p, arr);
+        }
+        arr.push(r);
+      }
+      const cidHead = r.getAttribute("data-vo-client");
+      if (cidHead && p) {
+        clientToEstado.set(cidHead, p);
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      const estRow = vendorRows[i];
+      if (estRow.getAttribute("data-vo-estado-head") !== "1") continue;
       const ek = estRow.getAttribute("data-vo-estado-key");
-      if (!ek) return;
+      if (!ek) continue;
       const open = isEstadoCompraExpanded(st, ek);
-      container.querySelectorAll(`tr[data-parent="${escSel(ek)}"]`).forEach(function (childRow) {
-        childRow.classList.toggle("hidden", !open);
-        const cid = childRow.getAttribute("data-vo-client");
-        if (!open && cid) {
-          container.querySelectorAll(`tr[data-vo-under-client="${escSel(cid)}"]`).forEach(function (sub) {
-            sub.classList.add("hidden");
-          });
+      const children = byParent.get(ek);
+      if (children) {
+        for (let j = 0; j < children.length; j++) {
+          children[j].classList.toggle("hidden", !open);
         }
-        if (open && cid) {
-          applyClientDetalleVisibility(container, cid, isExpanded(st, "c-" + cid), st);
-        }
-      });
+      }
       const chev = estRow.querySelector(`[data-vo-chev="${escSel(ek)}"]`);
       if (chev) {
         chev.textContent = open ? CHV.expandido : CHV.colapsado;
         chev.setAttribute("aria-expanded", open ? "true" : "false");
       }
+    }
+    for (let i = 0; i < n; i++) {
+      const r = vendorRows[i];
+      const cid = r.getAttribute("data-vo-under-client");
+      if (!cid) continue;
+      const estadoKey = clientToEstado.get(cid);
+      if (!estadoKey || !isEstadoCompraExpanded(st, estadoKey)) {
+        r.classList.add("hidden");
+        continue;
+      }
+      const cg = "c-" + cid;
+      if (!isExpanded(st, cg)) {
+        r.classList.add("hidden");
+        continue;
+      }
+      if (!r.hasAttribute("data-vo-under-rubro")) {
+        if (r.getAttribute("data-parent") === cg) {
+          r.classList.remove("hidden");
+        }
+        continue;
+      }
+      const rk = r.getAttribute("data-vo-under-rubro");
+      if (!rk || !isExpanded(st, rk)) {
+        r.classList.add("hidden");
+        continue;
+      }
+      const sk = r.getAttribute("data-vo-sub-key");
+      if (sk) {
+        r.classList.toggle("hidden", !isExpanded(st, sk));
+        continue;
+      }
+      const par = r.getAttribute("data-parent");
+      if (par && String(par).indexOf("s-") === 0) {
+        r.classList.toggle("hidden", !isExpanded(st, par));
+      } else {
+        r.classList.remove("hidden");
+      }
+    }
+  }
+
+  function vendorGidUnescapedFromNode(node) {
+    const tr = node && node.closest && node.closest("tr");
+    return tr ? tr.getAttribute("data-vo-vendor-group") : null;
+  }
+
+  /**
+   * Filas del subárbol de un vendedor: preferir el `<tbody data-vo-vendor-details>` si existe (HTML nuevo).
+   * Usa `tbody.rows` (hijos `tr` directos) en lugar de `querySelectorAll("tr")`: el selector recorría todo el
+   * subárbol y podía bloquear el hilo varios segundos antes de cualquier feedback (p. ej. overlay de espera).
+   */
+  function queryVendorSubtreeRows(container, vendorGid) {
+    const vg = String(vendorGid || "");
+    if (!vg) return [];
+    const tb = container.querySelector(`tbody[data-vo-vendor-details="${escSel(vg)}"]`);
+    if (tb && tb.rows) {
+      return tb.rows;
+    }
+    return container.querySelectorAll(`tr[data-vo-vendor-group="${escSel(vg)}"]`);
+  }
+
+  /** Diagnóstico: consola del navegador (F12). El clic en vendedor no llega al servidor; `docker logs` muestra el armado en Python. */
+  const VO_DIAG_PREFIX = "[vo-jerarquia]";
+
+  function voDiagLog() {
+    if (typeof console === "undefined" || typeof console.info !== "function") return;
+    const args = Array.prototype.slice.call(arguments);
+    args.unshift(VO_DIAG_PREFIX);
+    console.info.apply(console, args);
+  }
+
+  function countJerarquiaStats(jerarquia) {
+    const out = {
+      vendedores: 0,
+      bloques_estado: 0,
+      clientes: 0,
+      nodos_rubro: 0,
+      nodos_subrubro: 0,
+      nodos_articulo: 0,
+    };
+    if (!jerarquia || !jerarquia.length) return out;
+    out.vendedores = jerarquia.length;
+    jerarquia.forEach(function (g) {
+      if (!g || typeof g !== "object") return;
+      (g.children || []).forEach(function (est) {
+        if (!est || typeof est !== "object") return;
+        out.bloques_estado += 1;
+        (est.children || []).forEach(function (cli) {
+          if (!cli || cli.tipo !== "cliente") return;
+          out.clientes += 1;
+          (cli.venta_detalle || []).forEach(function (rub) {
+            if (!rub || typeof rub !== "object") return;
+            out.nodos_rubro += 1;
+            (rub.children || []).forEach(function (sub) {
+              if (!sub || typeof sub !== "object") return;
+              out.nodos_subrubro += 1;
+              out.nodos_articulo += (sub.children || []).filter(function (a) {
+                return a && typeof a === "object";
+              }).length;
+            });
+          });
+        });
+      });
     });
+    return out;
+  }
+
+  const VO_JERARQUIA_BUSY_OVERLAY = "vo-jerarquia-busy-overlay";
+  const VO_JERARQUIA_BUSY_TITLE = "vo-jerarquia-busy-title";
+  const VO_JERARQUIA_BUSY_SUB = "vo-jerarquia-busy-subtitle";
+  /** Desactivado por UX: ya no mostrar modal de espera en toggles de jerarquía. */
+  const VO_BUSY_OVERLAY_ENABLED = false;
+  /** Con al menos esta cantidad de filas en el subárbol del vendedor, mostrar overlay en toggles anidados (estado / cliente / rubro / subrubro). */
+  const VO_JERARQUIA_BUSY_NESTED_MIN_ROWS = 280;
+
+  function showVoJerarquiaBusy(title, subtitle) {
+    if (!VO_BUSY_OVERLAY_ENABLED) return;
+    const el = document.getElementById(VO_JERARQUIA_BUSY_OVERLAY);
+    if (!el) return;
+    const t = document.getElementById(VO_JERARQUIA_BUSY_TITLE);
+    const s = document.getElementById(VO_JERARQUIA_BUSY_SUB);
+    if (t && title) t.textContent = title;
+    if (s) s.textContent = subtitle || "Esperá un momento…";
+    el.classList.remove("hidden");
+    el.classList.add("flex");
+    el.setAttribute("aria-hidden", "false");
+    el.setAttribute("aria-busy", "true");
+  }
+
+  function hideVoJerarquiaBusy() {
+    if (!VO_BUSY_OVERLAY_ENABLED) return;
+    const el = document.getElementById(VO_JERARQUIA_BUSY_OVERLAY);
+    if (!el) return;
+    el.classList.add("hidden");
+    el.classList.remove("flex");
+    el.setAttribute("aria-hidden", "true");
+    el.setAttribute("aria-busy", "false");
+  }
+
+  /**
+   * Muestra el overlay y, tras pintar un frame, ejecuta trabajo síncrono y lo oculta al terminar.
+   * Así el usuario ve feedback antes de layout/pintura pesados.
+   */
+  function runVoJerarquiaBusyThen(title, subtitle, fn) {
+    if (!VO_BUSY_OVERLAY_ENABLED) {
+      fn();
+      return;
+    }
+    showVoJerarquiaBusy(title, subtitle);
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        try {
+          fn();
+        } finally {
+          hideVoJerarquiaBusy();
+        }
+      });
+    });
+  }
+
+  /** Conteo barato para umbral del overlay: no usar `querySelectorAll("tr")` en tbody enorme (bloquea el hilo). */
+  function voVendorSubtreeTrCount(container, chev) {
+    const vg = vendorGidUnescapedFromNode(chev);
+    if (!vg) return 0;
+    const tb = container.querySelector(`tbody[data-vo-vendor-details="${escSel(vg)}"]`);
+    if (tb && tb.rows) return tb.rows.length;
+    return container.querySelectorAll(`tr[data-vo-vendor-group="${escSel(vg)}"]`).length;
   }
 
   function escSel(s) {
@@ -195,13 +423,7 @@
   const thSubBoTotal =
     "border-b border-sky-200 bg-sky-200/90 px-2 py-1.5 text-right text-[10px] font-bold uppercase tracking-wide text-sky-950 dark:bg-sky-950 dark:text-sky-50 align-bottom";
 
-  const tdObj = "bg-emerald-50/90 dark:bg-emerald-950/25";
-  const tdFaltaBody = "bg-rose-50/90 dark:bg-rose-950/25";
-  const tdGrpV = "border-l border-violet-200 bg-violet-50/75 dark:border-violet-800/50 dark:bg-violet-950/20";
-  const tdGrpVStrong = "border-l border-violet-200 bg-violet-100/80 dark:border-violet-800 dark:bg-violet-950/35";
-  const tdBo = "border-l border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/45";
-  const tdBoPlain = "bg-sky-50 dark:bg-sky-950/45";
-  const tdBoTotal = "bg-sky-100/90 dark:bg-sky-950/65";
+  /** Fondos por grupo (violeta / cielo / etc.) solo en `<thead>`; en filas de datos se usa `tdNum` plano para menos capas de pintura (pruebas de rendimiento). */
 
   /** ▸ colapsado, ▾ expandido (mismo criterio que tree / categoría en referencia de diseño). */
   const CHV = { colapsado: "▸", expandido: "▾" };
@@ -265,6 +487,13 @@
   }
 
   const tdNum = "px-2 py-2 text-right text-xs tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-300";
+  /** Fondos de columnas en filas de datos (VO): objetivo/falta, ventas y backorder. */
+  const tdBgObj = "bg-emerald-50/70 dark:bg-emerald-950/18";
+  const tdBgFalta = "bg-rose-50/70 dark:bg-rose-950/18";
+  const tdBgVentas = "bg-violet-50/60 dark:bg-violet-950/14";
+  const tdBgVentasTotal = "bg-violet-100/70 dark:bg-violet-900/22";
+  const tdBgBo = "bg-sky-50/60 dark:bg-sky-950/14";
+  const tdBgBoTotal = "bg-sky-100/70 dark:bg-sky-900/22";
 
   function negMoneyClass(v) {
     const n = Number(v);
@@ -279,34 +508,34 @@
   /** Fila con todas las métricas (vendedor / cliente / totales). Orden: … Remitos, Pedidos en armado, Total consolidado, BO … */
   function metricCellsFull(row) {
     return (
-      `<td class="${tdNum} vo-td-obj ${tdObj}${negMoneyClass(row.objetivo)}">${fmtMoney(row.objetivo)}</td>` +
-      `<td class="${tdNum} vo-td-falta ${tdFaltaBody}${faltaClassVisual(faltaValorVisual(row.falta))}">${fmtMoney(faltaValorVisual(row.falta))}</td>` +
-      `<td class="${tdNum} ${tdGrpV}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
-      `<td class="${tdNum} ${tdGrpV}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>` +
-      `<td class="${tdNum} ${tdGrpV}${negMoneyClass(row.remitos)}">${fmtMoney(row.remitos)}</td>` +
-      `<td class="${tdNum} ${tdGrpV}${negMoneyClass(row.pedidos_en_armado)}">${fmtMoney(row.pedidos_en_armado)}</td>` +
-      `<td class="${tdNum} ${tdGrpVStrong}${negMoneyClass(row.total)}">${fmtMoney(row.total)}</td>` +
-      `<td class="${tdNum} ${tdBo}${negMoneyClass(row.bo_con_stock)}">${fmtMoney(row.bo_con_stock)}</td>` +
-      `<td class="${tdNum} ${tdBoPlain}${negMoneyClass(row.bo_con_ingreso)}">${fmtMoney(row.bo_con_ingreso)}</td>` +
-      `<td class="${tdNum} ${tdBoPlain}${negMoneyClass(row.bo_sin_stock)}">${fmtMoney(row.bo_sin_stock)}</td>` +
-      `<td class="${tdNum} ${tdBoTotal}${negMoneyClass(row.backorder_total)}">${fmtMoney(row.backorder_total)}</td>`
+      `<td class="${tdNum} ${tdBgObj} vo-td-obj${negMoneyClass(row.objetivo)}">${fmtMoney(row.objetivo)}</td>` +
+      `<td class="${tdNum} ${tdBgFalta} vo-td-falta${faltaClassVisual(faltaValorVisual(row.falta))}">${fmtMoney(faltaValorVisual(row.falta))}</td>` +
+      `<td class="${tdNum} ${tdBgVentas}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
+      `<td class="${tdNum} ${tdBgVentas}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>` +
+      `<td class="${tdNum} ${tdBgVentas}${negMoneyClass(row.remitos)}">${fmtMoney(row.remitos)}</td>` +
+      `<td class="${tdNum} ${tdBgVentas}${negMoneyClass(row.pedidos_en_armado)}">${fmtMoney(row.pedidos_en_armado)}</td>` +
+      `<td class="${tdNum} ${tdBgVentasTotal}${negMoneyClass(row.total)}">${fmtMoney(row.total)}</td>` +
+      `<td class="${tdNum} ${tdBgBo}${negMoneyClass(row.bo_con_stock)}">${fmtMoney(row.bo_con_stock)}</td>` +
+      `<td class="${tdNum} ${tdBgBo}${negMoneyClass(row.bo_con_ingreso)}">${fmtMoney(row.bo_con_ingreso)}</td>` +
+      `<td class="${tdNum} ${tdBgBo}${negMoneyClass(row.bo_sin_stock)}">${fmtMoney(row.bo_sin_stock)}</td>` +
+      `<td class="${tdNum} ${tdBgBoTotal}${negMoneyClass(row.backorder_total)}">${fmtMoney(row.backorder_total)}</td>`
     );
   }
 
   /** Solo venta: unidades + facturación; resto en — */
   function metricCellsVentaSolo(row) {
     return (
-      dashCell(tdObj) +
-      dashCell(tdFaltaBody) +
-      `<td class="${tdNum} ${tdGrpV}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
-      `<td class="${tdNum} ${tdGrpV}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>` +
-      dashCell(tdGrpV) +
-      dashCell(tdGrpV) +
-      dashCell(tdGrpVStrong) +
-      dashCell(tdBo) +
-      dashCell(tdBoPlain) +
-      dashCell(tdBoPlain) +
-      dashCell(tdBoTotal)
+      dashCell(tdBgObj) +
+      dashCell(tdBgFalta) +
+      `<td class="${tdNum} ${tdBgVentas}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
+      `<td class="${tdNum} ${tdBgVentas}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>` +
+      dashCell(tdBgVentas) +
+      dashCell(tdBgVentas) +
+      dashCell(tdBgVentasTotal) +
+      dashCell(tdBgBo) +
+      dashCell(tdBgBo) +
+      dashCell(tdBgBo) +
+      dashCell(tdBgBoTotal)
     );
   }
 
@@ -315,6 +544,29 @@
    * Remitos y pedidos en armado por línea (remitos_lineas / pedidos_armado_lineas) si el backend los envía; si no, —.
    * Total consolidado sigue solo a nivel cliente.
    */
+  /** Informe ventas por vendedor: solo unidades y facturación del período (sin BO ni remitos en detalle). */
+  function metricCellsVpv(row) {
+    return (
+      `<td class="${tdNum} ${tdBgVentas}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
+      `<td class="${tdNum} ${tdBgVentas}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>`
+    );
+  }
+
+  function metricCellsVpvDetalle(row) {
+    return (
+      `<td class="${tdNum} ${tdBgVentas}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
+      `<td class="${tdNum} ${tdBgVentas}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>`
+    );
+  }
+
+  function metricRowCells(row) {
+    return isVentasPorVendedor ? metricCellsVpv(row) : metricCellsFull(row);
+  }
+
+  function metricDetalleCells(row) {
+    return isVentasPorVendedor ? metricCellsVpvDetalle(row) : metricCellsVentaJerarquiaSinRemitosCabecera(row);
+  }
+
   function metricCellsVentaJerarquiaSinRemitosCabecera(row) {
     const bt = Number(row.backorder_total);
     const bs = Number(row.bo_con_stock);
@@ -324,24 +576,24 @@
     const pedL = Number(row.pedidos_armado_lineas);
     const remCell =
       Number.isFinite(remL) && Math.abs(remL) > 1e-9
-        ? `<td class="${tdNum} ${tdGrpV}${negMoneyClass(remL)}">${fmtMoney(remL)}</td>`
-        : dashCell(tdGrpV);
+        ? `<td class="${tdNum} ${tdBgVentas}${negMoneyClass(remL)}">${fmtMoney(remL)}</td>`
+        : dashCell(tdBgVentas);
     const pedCell =
       Number.isFinite(pedL) && Math.abs(pedL) > 1e-9
-        ? `<td class="${tdNum} ${tdGrpV}${negMoneyClass(pedL)}">${fmtMoney(pedL)}</td>`
-        : dashCell(tdGrpV);
+        ? `<td class="${tdNum} ${tdBgVentas}${negMoneyClass(pedL)}">${fmtMoney(pedL)}</td>`
+        : dashCell(tdBgVentas);
     return (
-      dashCell(tdObj) +
-      dashCell(tdFaltaBody) +
-      `<td class="${tdNum} ${tdGrpV}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
-      `<td class="${tdNum} ${tdGrpV}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>` +
+      dashCell(tdBgObj) +
+      dashCell(tdBgFalta) +
+      `<td class="${tdNum} ${tdBgVentas}${negNumClass(row.cantidades_vendidas)}">${fmtNum(row.cantidades_vendidas)}</td>` +
+      `<td class="${tdNum} ${tdBgVentas}${negMoneyClass(row.facturacion)}">${fmtMoney(row.facturacion)}</td>` +
       remCell +
       pedCell +
-      dashCell(tdGrpVStrong) +
-      `<td class="${tdNum} ${tdBo}${negMoneyClass(bs)}">${fmtMoney(bs)}</td>` +
-      `<td class="${tdNum} ${tdBoPlain}${negMoneyClass(bi)}">${fmtMoney(bi)}</td>` +
-      `<td class="${tdNum} ${tdBoPlain}${negMoneyClass(bn)}">${fmtMoney(bn)}</td>` +
-      `<td class="${tdNum} ${tdBoTotal}${negMoneyClass(bt)}">${fmtMoney(bt)}</td>`
+      dashCell(tdBgVentasTotal) +
+      `<td class="${tdNum} ${tdBgBo}${negMoneyClass(bs)}">${fmtMoney(bs)}</td>` +
+      `<td class="${tdNum} ${tdBgBo}${negMoneyClass(bi)}">${fmtMoney(bi)}</td>` +
+      `<td class="${tdNum} ${tdBgBo}${negMoneyClass(bn)}">${fmtMoney(bn)}</td>` +
+      `<td class="${tdNum} ${tdBgBoTotal}${negMoneyClass(bt)}">${fmtMoney(bt)}</td>`
     );
   }
 
@@ -428,6 +680,9 @@
     const needle = String(rawQ || "")
       .trim()
       .toLowerCase();
+    if (needle.length >= 2 && VO_LAZY_CLIENT_DETAIL) {
+      materializeAllLazyDetalles(container);
+    }
     const rows = table.querySelectorAll("tbody tr");
     if (needle.length < 2) {
       const hiddenBySearch = table.querySelectorAll("tbody tr.vo-bo-search-hide");
@@ -459,6 +714,37 @@
     });
   }
 
+  /**
+   * Reaplica el filtro de búsqueda solo al subárbol de un vendedor y actualiza su fila cabecera (tras expandir/colapsar).
+   */
+  function applySearchFilterVendorSubtree(container, rawQ, vendorGid) {
+    const needle = String(rawQ || "")
+      .trim()
+      .toLowerCase();
+    if (needle.length < 2) return;
+    const table = container.querySelector(".vo-jerarquia-table");
+    if (!table) return;
+    if (VO_LAZY_CLIENT_DETAIL) {
+      materializeLazyDetallesForVendor(container, vendorGid);
+    }
+    const gEsc = escSel(vendorGid);
+    const subtreeRows = table.querySelectorAll(`tbody tr[data-vo-vendor-group="${gEsc}"]`);
+    subtreeRows.forEach(function (r) {
+      if (r.getAttribute("data-vo-totales") === "1") return;
+      const hay = (r.getAttribute("data-vo-search") || "").toLowerCase();
+      r.classList.toggle("vo-bo-search-hide", hay.indexOf(needle) === -1);
+    });
+    const vTr = container.querySelector(`tr[data-vo-toggle="${escSel(vendorGid)}"]`);
+    if (!vTr) return;
+    const selfHay = (vTr.getAttribute("data-vo-search") || "").toLowerCase();
+    const selfMatch = selfHay.indexOf(needle) !== -1;
+    let anyChild = false;
+    subtreeRows.forEach(function (ch) {
+      if (!ch.classList.contains("vo-bo-search-hide")) anyChild = true;
+    });
+    vTr.classList.toggle("vo-bo-search-hide", !selfMatch && !anyChild);
+  }
+
   function applySearchFilterFromInput() {
     const container = document.getElementById("vo-jerarquia-container");
     const inp = document.getElementById("vo-bo-buscar-jerarquia");
@@ -470,8 +756,10 @@
    * Tras expandir/colapsar jerarquía: si no hay búsqueda activa (menos de 2 caracteres) y ninguna fila
    * está oculta por búsqueda, no recorrer la tabla (antes se tocaban todas las filas en cada clic).
    * Con búsqueda activa, recalcular cabeceras de vendedor según hijos visibles.
+   * @param {object} [opts] — si `opts.vendorGid` está definido y hay búsqueda ≥ 2 caracteres, solo se recalcula ese vendedor.
    */
-  function applySearchFilterAfterHierarchyToggle(container) {
+  function applySearchFilterAfterHierarchyToggle(container, opts) {
+    opts = opts || {};
     if (!container) return;
     const inp = document.getElementById("vo-bo-buscar-jerarquia");
     const needle = String(inp ? inp.value : "")
@@ -480,6 +768,10 @@
     const table = container.querySelector(".vo-jerarquia-table");
     if (!table) return;
     if (needle.length >= 2) {
+      if (opts.vendorGid) {
+        applySearchFilterVendorSubtree(container, inp ? inp.value : "", opts.vendorGid);
+        return;
+      }
       applySearchFilter(container, inp ? inp.value : "");
       return;
     }
@@ -497,47 +789,59 @@
 
   function expandAllBo() {
     if (!_lastJerarquia || !_lastJerarquia.length) return;
-    const st = { expandedVendors: {}, expandedNodes: {} };
-    _lastJerarquia.forEach(function (vend) {
-      if (!vend || typeof vend !== "object") return;
-      const cv = String(vend.cod_viajante || "");
-      st.expandedVendors[cv] = true;
-      (vend.children || [])
-        .filter(function (estado) {
-          return estado != null && typeof estado === "object";
-        })
-        .forEach(function (estado) {
-          const ek = "ec-" + cv + "-" + String(estado.estado_compra || "sin_compra");
-          st.expandedNodes[ek] = true;
-          (estado.children || [])
-            .filter(function (cli) {
-              return cli != null && typeof cli === "object";
+    runVoJerarquiaBusyThen(
+      "Expandiendo todo…",
+      "Regenerando la grilla; puede tardar unos segundos si hay muchos datos…",
+      function () {
+        const st = { expandedVendors: {}, expandedNodes: {} };
+        _lastJerarquia.forEach(function (vend) {
+          if (!vend || typeof vend !== "object") return;
+          const cv = String(vend.cod_viajante || "");
+          st.expandedVendors[cv] = true;
+          (vend.children || [])
+            .filter(function (estado) {
+              return estado != null && typeof estado === "object";
             })
-            .forEach(function (cli) {
-              const cid = String(cli.codigo_cliente || "");
-              st.expandedNodes["c-" + cid] = true;
-              (cli.venta_detalle || []).forEach(function (rub) {
-                if (!rub || typeof rub !== "object") return;
-                st.expandedNodes["r-" + cid + "-" + String(rub.codigo_rubro)] = true;
-                (rub.children || [])
-                  .filter(function (sub) {
-                    return sub != null && typeof sub === "object";
-                  })
-                  .forEach(function (sub) {
-                    st.expandedNodes["s-" + cid + "-" + String(rub.codigo_rubro) + "-" + String(sub.id_subrubro)] = true;
+            .forEach(function (estado) {
+              const ek = "ec-" + cv + "-" + String(estado.estado_compra || "sin_compra");
+              st.expandedNodes[ek] = true;
+              (estado.children || [])
+                .filter(function (cli) {
+                  return cli != null && typeof cli === "object";
+                })
+                .forEach(function (cli) {
+                  const cid = String(cli.codigo_cliente || "");
+                  st.expandedNodes["c-" + cid] = true;
+                  (cli.venta_detalle || []).forEach(function (rub) {
+                    if (!rub || typeof rub !== "object") return;
+                    st.expandedNodes["r-" + cid + "-" + String(rub.codigo_rubro)] = true;
+                    (rub.children || [])
+                      .filter(function (sub) {
+                        return sub != null && typeof sub === "object";
+                      })
+                      .forEach(function (sub) {
+                        st.expandedNodes["s-" + cid + "-" + String(rub.codigo_rubro) + "-" + String(sub.id_subrubro)] = true;
+                      });
                   });
-              });
-          });
+                });
+            });
         });
-    });
-    saveViewState(st);
-    renderTable(_lastJerarquia, _lastTotals);
+        saveViewState(st);
+        renderTable(_lastJerarquia, _lastTotals);
+      }
+    );
   }
 
   function collapseAllBo() {
     if (!_lastJerarquia || !_lastJerarquia.length) return;
-    saveViewState({ expandedVendors: {}, expandedNodes: {} });
-    renderTable(_lastJerarquia, _lastTotals);
+    runVoJerarquiaBusyThen(
+      "Contrayendo todo…",
+      "Regenerando la grilla; puede tardar unos segundos si hay muchos datos…",
+      function () {
+        saveViewState({ expandedVendors: {}, expandedNodes: {} });
+        renderTable(_lastJerarquia, _lastTotals);
+      }
+    );
   }
 
   function wireBoToolbarOnce() {
@@ -556,13 +860,39 @@
       inp.dataset.voBoWired = "1";
       inp.addEventListener("input", scheduleSearchFilter);
     }
+    const ordenarPor = document.getElementById("ordenar_por");
+    if (ordenarPor && !ordenarPor.dataset.voBoSortWired) {
+      ordenarPor.dataset.voBoSortWired = "1";
+      ordenarPor.addEventListener("change", function () {
+        reSortCurrentJerarquiaAndRender();
+      });
+    }
+    const ordenForma = document.getElementById("orden_forma");
+    if (ordenForma && !ordenForma.dataset.voBoSortWired) {
+      ordenForma.dataset.voBoSortWired = "1";
+      ordenForma.addEventListener("change", function () {
+        reSortCurrentJerarquiaAndRender();
+      });
+    }
   }
 
   function buildThead() {
     const thTree =
       "min-w-[14rem] border-b border-slate-200 px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-slate-600 align-middle dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300";
-    const thRs2Base =
-      "border-b border-slate-200 px-2 py-2 text-[10px] font-bold uppercase tracking-wide align-middle dark:border-slate-600";
+    if (isVentasPorVendedor) {
+      return (
+        '<thead class="sticky top-0 z-10 bg-slate-50 shadow-sm dark:bg-slate-800">' +
+        '<tr class="align-bottom">' +
+        `<th rowspan="2" scope="col" class="${thTree}">VENDEDOR / CLIENTE / RUBRO</th>` +
+        `<th colspan="2" class="${thGrpVentas} px-2 py-1.5 text-center align-bottom">VENTAS PERÍODO</th>` +
+        "</tr>" +
+        "<tr>" +
+        `<th class="${thGrpVentasSub} border-l border-violet-200 px-2 py-1.5 text-right align-bottom">UNIDADES</th>` +
+        `<th class="${thGrpVentasSub} px-2 py-1.5 text-right align-bottom">FACTURACIÓN</th>` +
+        "</tr>" +
+        "</thead>"
+      );
+    }
     return (
       '<thead class="sticky top-0 z-10 bg-slate-50 shadow-sm dark:bg-slate-800">' +
       '<tr class="align-bottom">' +
@@ -590,38 +920,21 @@
 
   /**
    * Visibilidad de rubro/subrubro/artículo bajo un cliente según localStorage.
+   * Solo recorre filas del vendedor del cliente (una consulta de cabecera + una del grupo).
    * @param {object} [viewStateOpt] — estado ya cargado (evita JSON.parse repetido en bucles).
    */
   function applyClientDetalleVisibility(container, clientId, clientExpanded, viewStateOpt) {
     const cid = String(clientId);
-    const cg = "c-" + cid;
     const st = viewStateOpt || loadViewState();
-    if (!clientExpanded) {
-      container.querySelectorAll(`tr[data-vo-under-client="${escSel(cid)}"]`).forEach(function (r) {
-        r.classList.add("hidden");
-      });
-      return;
+    if (clientExpanded) {
+      ensureLazyClientDetalleRows(container, cid, st);
     }
-    container.querySelectorAll(`tr[data-parent="${escSel(cg)}"]`).forEach(function (r) {
-      r.classList.remove("hidden");
-    });
-    container.querySelectorAll(`tr[data-vo-under-client="${escSel(cid)}"][data-vo-under-rubro]`).forEach(function (r) {
-      const rk = r.getAttribute("data-vo-under-rubro");
-      if (!rk) return;
-      if (!isExpanded(st, rk)) {
-        r.classList.add("hidden");
-        return;
-      }
-      const sk = r.getAttribute("data-vo-sub-key");
-      if (sk) {
-        r.classList.toggle("hidden", !isExpanded(st, sk));
-        return;
-      }
-      const par = r.getAttribute("data-parent");
-      if (par && String(par).indexOf("s-") === 0) {
-        r.classList.toggle("hidden", !isExpanded(st, par));
-      }
-    });
+    const clientHeader = container.querySelector(`tr[data-vo-client="${escSel(cid)}"]`);
+    if (!clientHeader) return;
+    const vg = clientHeader.getAttribute("data-vo-vendor-group");
+    if (!vg) return;
+    const vendorRows = queryVendorSubtreeRows(container, vg);
+    applyClientDetalleVisibilityForRows(vendorRows, cid, clientExpanded, st);
   }
 
   /** Evita forEach sobre string JSON u otro tipo; intenta parsear si viene serializado. */
@@ -653,6 +966,128 @@
     "bo_sin_stock",
   ];
 
+  const _SORT_FIELD_TO_METRIC_KEY = {
+    facturacion_periodo: "facturacion",
+    unidades_periodo: "cantidades_vendidas",
+    objetivo_meta: "objetivo",
+    objetivo_falta: "falta",
+    total_ventas_periodo: "total",
+  };
+
+  function normalizeSortDirection(raw) {
+    return String(raw || "").toLowerCase() === "asc" ? "asc" : "desc";
+  }
+
+  function getCurrentSortConfig() {
+    const ordenarPor = document.getElementById("ordenar_por");
+    const ordenForma = document.getElementById("orden_forma");
+    const ordenarKey = String(ordenarPor?.value || "");
+    const direction = normalizeSortDirection(ordenForma?.value);
+    const fallbackMetric = isVentasPorVendedor ? "facturacion" : "objetivo";
+    return {
+      metricKey: _SORT_FIELD_TO_METRIC_KEY[ordenarKey] || fallbackMetric,
+      direction: direction,
+    };
+  }
+
+  function metricNumber(node, metricKey) {
+    const n = Number(node && node[metricKey]);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function normalizeText(value) {
+    return String(value || "").toUpperCase();
+  }
+
+  function compareMetricNumber(a, b, metricKey, direction) {
+    const na = metricNumber(a, metricKey);
+    const nb = metricNumber(b, metricKey);
+    return direction === "asc" ? na - nb : nb - na;
+  }
+
+  function sortDetalleNodesInPlace(nodes, metricKey, direction, level) {
+    if (!Array.isArray(nodes) || !nodes.length) return;
+    nodes.sort(function (a, b) {
+      const metricDiff = compareMetricNumber(a, b, metricKey, direction);
+      if (metricDiff) return metricDiff;
+      let nameA = "";
+      let nameB = "";
+      if (level === 0) {
+        nameA = normalizeText(a?.nombre_rubro || a?.nombre);
+        nameB = normalizeText(b?.nombre_rubro || b?.nombre);
+      } else if (level === 1) {
+        nameA = normalizeText(a?.nombre_subrubro || a?.nombre);
+        nameB = normalizeText(b?.nombre_subrubro || b?.nombre);
+      } else {
+        nameA = normalizeText(a?.nombre_articulo || a?.nombre);
+        nameB = normalizeText(b?.nombre_articulo || b?.nombre);
+      }
+      if (nameA !== nameB) return nameA.localeCompare(nameB);
+      const idA =
+        Number(level === 0 ? a?.codigo_rubro : level === 1 ? a?.id_subrubro : a?.id_articulo) || 0;
+      const idB =
+        Number(level === 0 ? b?.codigo_rubro : level === 1 ? b?.id_subrubro : b?.id_articulo) || 0;
+      return idA - idB;
+    });
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      if (node && Array.isArray(node.children) && node.children.length) {
+        sortDetalleNodesInPlace(node.children, metricKey, direction, level + 1);
+      }
+    }
+  }
+
+  function sortJerarquiaInPlace(jerarquia, metricKey, direction) {
+    if (!Array.isArray(jerarquia) || !jerarquia.length) return;
+    for (let i = 0; i < jerarquia.length; i++) {
+      const vend = jerarquia[i];
+      if (!vend || !Array.isArray(vend.children)) continue;
+      vend.children.sort(function (a, b) {
+        const metricDiff = compareMetricNumber(a, b, metricKey, direction);
+        if (metricDiff) return metricDiff;
+        const ea = String(a?.estado_compra || "");
+        const eb = String(b?.estado_compra || "");
+        if (ea !== eb) return ea === "con_compra" ? -1 : 1;
+        const na = normalizeText(a?.nombre);
+        const nb = normalizeText(b?.nombre);
+        return na.localeCompare(nb);
+      });
+      for (let j = 0; j < vend.children.length; j++) {
+        const estado = vend.children[j];
+        if (!estado || !Array.isArray(estado.children)) continue;
+        estado.children.sort(function (a, b) {
+          const metricDiff = compareMetricNumber(a, b, metricKey, direction);
+          if (metricDiff) return metricDiff;
+          const na = normalizeText(a?.nombre_cliente);
+          const nb = normalizeText(b?.nombre_cliente);
+          if (na !== nb) return na.localeCompare(nb);
+          return (Number(a?.codigo_cliente) || 0) - (Number(b?.codigo_cliente) || 0);
+        });
+        for (let k = 0; k < estado.children.length; k++) {
+          const cli = estado.children[k];
+          if (cli && Array.isArray(cli.venta_detalle) && cli.venta_detalle.length) {
+            sortDetalleNodesInPlace(cli.venta_detalle, metricKey, direction, 0);
+          }
+        }
+      }
+    }
+    jerarquia.sort(function (a, b) {
+      const metricDiff = compareMetricNumber(a, b, metricKey, direction);
+      if (metricDiff) return metricDiff;
+      const na = normalizeText(a?.nombre_vendedor);
+      const nb = normalizeText(b?.nombre_vendedor);
+      if (na !== nb) return na.localeCompare(nb);
+      return (Number(a?.cod_viajante) || 0) - (Number(b?.cod_viajante) || 0);
+    });
+  }
+
+  function reSortCurrentJerarquiaAndRender() {
+    if (!_lastJerarquia || !_lastJerarquia.length) return;
+    const sortCfg = getCurrentSortConfig();
+    sortJerarquiaInPlace(_lastJerarquia, sortCfg.metricKey, sortCfg.direction);
+    renderTable(_lastJerarquia, _lastTotals);
+  }
+
   /** Si `meta.extra.tabs` no trae árbol, reagrupa por vendedor desde `data` plano (sin detalle rubro/subrubro). */
   function buildJerarquiaDesdeFilas(filas) {
     if (!filas || !filas.length) return [];
@@ -683,7 +1118,14 @@
         map.set(cv, g);
       }
       const child = Object.assign({}, row, { tipo: "cliente", venta_detalle: row.venta_detalle || [] });
-      const estadoKey = Number(row.total || 0) > 0 ? "con_compra" : "sin_compra";
+      let estadoKey;
+      if (isVentasPorVendedor) {
+        const fac = Number(row.facturacion) || 0;
+        const uni = Number(row.cantidades_vendidas) || 0;
+        estadoKey = Math.abs(fac) > 0.000001 || Math.abs(uni) > 0.000001 ? "con_compra" : "sin_compra";
+      } else {
+        estadoKey = Number(row.total || 0) > 0 ? "con_compra" : "sin_compra";
+      }
       let estadoNode = (g.children || []).find((n) => n && n.tipo === "estado_compra" && n.estado_compra === estadoKey);
       if (!estadoNode) {
         estadoNode = {
@@ -727,9 +1169,15 @@
       });
     });
     return Array.from(map.values()).sort(function (a, b) {
-      const oa = Number(a.objetivo) || 0;
-      const ob = Number(b.objetivo) || 0;
-      if (oa !== ob) return ob - oa;
+      if (isVentasPorVendedor) {
+        const fa = Number(a.facturacion) || 0;
+        const fb = Number(b.facturacion) || 0;
+        if (fa !== fb) return fb - fa;
+      } else {
+        const oa = Number(a.objetivo) || 0;
+        const ob = Number(b.objetivo) || 0;
+        if (oa !== ob) return ob - oa;
+      }
       const sa = (a.nombre_vendedor || "").toString().toUpperCase();
       const sb = (b.nombre_vendedor || "").toString().toUpperCase();
       if (sa !== sb) return sa.localeCompare(sb);
@@ -737,11 +1185,12 @@
     });
   }
 
-  function appendVentaDetalle(parts, detalle, vendorGid, parentClientGid, clientId, viewState, vendorExpanded, clientExpanded, searchBase) {
+  function appendVentaDetalle(parts, detalle, vendorGid, parentClientGid, clientId, viewState, estadoExpanded, clientExpanded, searchBase) {
     if (!detalle || !detalle.length) return;
     const cid = String(clientId);
     const vg = escHtml(vendorGid);
-    const hideTree = !vendorExpanded || !clientExpanded;
+    /** Visibilidad del árbol rubro/sub/art: solo estado + cliente (el `<tbody hidden>` del vendedor oculta todo el bloque sin mezclar `expanded` del vendedor aquí). */
+    const hideTree = !estadoExpanded || !clientExpanded;
     const rowHover = "vo-child-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors";
     const base = String(searchBase || "")
       .toLowerCase()
@@ -762,7 +1211,7 @@
             "text-xs uppercase font-normal tracking-tight",
             `${etiquetaJerarquia(2)}${escHtml(rub.nombre_rubro)}`
           ) +
-          metricCellsVentaJerarquiaSinRemitosCabecera(rub) +
+          metricDetalleCells(rub) +
           "</tr>"
       );
       (rub.children || [])
@@ -782,7 +1231,7 @@
               "text-xs uppercase font-normal tracking-tight text-slate-800 dark:text-slate-200",
               `${etiquetaJerarquia(3)}${escHtml(sub.nombre_subrubro)}`
             ) +
-            metricCellsVentaJerarquiaSinRemitosCabecera(sub) +
+            metricDetalleCells(sub) +
             "</tr>"
         );
         (sub.children || [])
@@ -793,19 +1242,85 @@
           const hideArt = hideSub;
           const sa = (ss + " " + String(art.nombre_articulo || "")).trim().toLowerCase();
           parts.push(
-            `<tr class="${rowHover} ${hideArt ? "hidden" : ""} bg-white dark:bg-slate-900/10"${voSearchDataAttr(sa)} data-vo-vendor-group="${vg}" data-parent="${escHtml(sg)}" data-vo-under-client="${escHtml(cid)}" data-vo-under-rubro="${escHtml(rg)}">` +
+            `<tr class="${rowHover} ${hideArt ? "hidden" : ""} bg-white dark:bg-slate-900/10 vo-jerarquia-cv-art"${voSearchDataAttr(sa)} data-vo-vendor-group="${vg}" data-parent="${escHtml(sg)}" data-vo-under-client="${escHtml(cid)}" data-vo-under-rubro="${escHtml(rg)}">` +
               treeNombreCell(
                 treeIndentPx(5),
                 treeSpacerHtml(),
                 "text-xs font-normal text-slate-700 dark:text-slate-300",
                 `${etiquetaJerarquia(4)}${escHtml(art.nombre_articulo)}`
               ) +
-              metricCellsVentaJerarquiaSinRemitosCabecera(art) +
+              metricDetalleCells(art) +
               "</tr>"
           );
         });
       });
     });
+  }
+
+  function ensureLazyClientDetalleRows(container, clientId, viewStateOpt) {
+    if (!VO_LAZY_CLIENT_DETAIL) return false;
+    const cid = String(clientId || "");
+    if (!cid) return false;
+    const key = "c-" + cid;
+    const lazyMeta = _lazyDetalleByClient.get(key);
+    if (!lazyMeta || lazyMeta.rendered) return false;
+    const clientHeader = container.querySelector(`tr[data-vo-client="${escSel(cid)}"]`);
+    if (!clientHeader) return false;
+    const st = viewStateOpt || loadViewState();
+    const parts = [];
+    const estadoExpanded = isEstadoCompraExpanded(st, lazyMeta.estadoKey);
+    const clientExpanded = isExpanded(st, key);
+    appendVentaDetalle(
+      parts,
+      lazyMeta.detalle || [],
+      lazyMeta.vendorGid,
+      key,
+      cid,
+      st,
+      estadoExpanded,
+      clientExpanded,
+      lazyMeta.searchBase
+    );
+    if (!parts.length) {
+      lazyMeta.rendered = true;
+      return false;
+    }
+    clientHeader.insertAdjacentHTML("afterend", parts.join(""));
+    lazyMeta.rendered = true;
+    return true;
+  }
+
+  function materializeLazyDetallesForVendor(container, vendorGid, viewStateOpt) {
+    if (!VO_LAZY_CLIENT_DETAIL || !_lazyDetalleByClient.size) return 0;
+    const vg = String(vendorGid || "");
+    if (!vg) return 0;
+    const st = viewStateOpt || loadViewState();
+    let rendered = 0;
+    _lazyDetalleByClient.forEach(function (meta, key) {
+      if (!meta || meta.rendered) return;
+      if (String(meta.vendorGid || "") !== vg) return;
+      const cid = String(key || "").replace(/^c-/, "");
+      if (ensureLazyClientDetalleRows(container, cid, st)) rendered += 1;
+    });
+    if (rendered > 0) {
+      voDiagLog("lazy_detalle_vendor", "vendor_gid=" + vg, "clientes_materializados=" + rendered);
+    }
+    return rendered;
+  }
+
+  function materializeAllLazyDetalles(container, viewStateOpt) {
+    if (!VO_LAZY_CLIENT_DETAIL || !_lazyDetalleByClient.size) return 0;
+    const st = viewStateOpt || loadViewState();
+    let rendered = 0;
+    _lazyDetalleByClient.forEach(function (meta, key) {
+      if (!meta || meta.rendered) return;
+      const cid = String(key || "").replace(/^c-/, "");
+      if (ensureLazyClientDetalleRows(container, cid, st)) rendered += 1;
+    });
+    if (rendered > 0) {
+      voDiagLog("lazy_detalle_global", "clientes_materializados=" + rendered);
+    }
+    return rendered;
   }
 
   function wireNestedToggles(container) {
@@ -818,7 +1333,22 @@
         const direct = container.querySelectorAll(`tr[data-parent="${escSel(gid)}"]`);
         if (!direct.length && String(gid).indexOf("c-") !== 0 && String(gid).indexOf("ec-") !== 0) return;
 
+        const nestedRows = voVendorSubtreeTrCount(container, chev);
+        const maybeBusy =
+          nestedRows >= VO_JERARQUIA_BUSY_NESTED_MIN_ROWS
+            ? function (fn) {
+                runVoJerarquiaBusyThen("Actualizando jerarquía…", "Reorganizando filas visibles…", fn);
+              }
+            : function (fn) {
+                fn();
+              };
+
+        maybeBusy(function () {
         if (String(gid).indexOf("ec-") === 0) {
+          const vVendorGid =
+            (direct.length && direct[0].getAttribute("data-vo-vendor-group")) ||
+            vendorGidUnescapedFromNode(chev);
+          const vendorRowsAll = vVendorGid ? queryVendorSubtreeRows(container, vVendorGid) : null;
           const wasOpen = isEstadoCompraExpanded(st, gid);
           const open = !wasOpen;
           st.expandedNodes[gid] = open;
@@ -827,9 +1357,16 @@
             r.classList.toggle("hidden", !open);
             const cid = r.getAttribute("data-vo-client");
             if (!open && cid) {
-              container.querySelectorAll(`tr[data-vo-under-client="${escSel(cid)}"]`).forEach(function (sub) {
-                sub.classList.add("hidden");
-              });
+              if (vendorRowsAll && vendorRowsAll.length) {
+                for (let vi = 0; vi < vendorRowsAll.length; vi++) {
+                  const sub = vendorRowsAll[vi];
+                  if (sub.getAttribute("data-vo-under-client") === cid) sub.classList.add("hidden");
+                }
+              } else {
+                container.querySelectorAll(`tr[data-vo-under-client="${escSel(cid)}"]`).forEach(function (sub) {
+                  sub.classList.add("hidden");
+                });
+              }
             }
             if (open && cid) {
               applyClientDetalleVisibility(container, cid, isExpanded(st, "c-" + cid), st);
@@ -837,7 +1374,7 @@
           });
           chev.textContent = open ? CHV.expandido : CHV.colapsado;
           chev.setAttribute("aria-expanded", open ? "true" : "false");
-          applySearchFilterAfterHierarchyToggle(container);
+          applySearchFilterAfterHierarchyToggle(container, { vendorGid: vVendorGid });
           return;
         }
 
@@ -850,7 +1387,7 @@
           applyClientDetalleVisibility(container, cid, nowOpen, st);
           chev.textContent = nowOpen ? CHV.expandido : CHV.colapsado;
           chev.setAttribute("aria-expanded", nowOpen ? "true" : "false");
-          applySearchFilterAfterHierarchyToggle(container);
+          applySearchFilterAfterHierarchyToggle(container, { vendorGid: vendorGidUnescapedFromNode(chev) });
           return;
         }
 
@@ -882,7 +1419,7 @@
           }
           chev.textContent = rubOpen ? CHV.expandido : CHV.colapsado;
           chev.setAttribute("aria-expanded", rubOpen ? "true" : "false");
-          applySearchFilterAfterHierarchyToggle(container);
+          applySearchFilterAfterHierarchyToggle(container, { vendorGid: vendorGidUnescapedFromNode(chev) });
           return;
         }
 
@@ -896,8 +1433,9 @@
           });
           chev.textContent = subOpen ? CHV.expandido : CHV.colapsado;
           chev.setAttribute("aria-expanded", subOpen ? "true" : "false");
-          applySearchFilterAfterHierarchyToggle(container);
+          applySearchFilterAfterHierarchyToggle(container, { vendorGid: vendorGidUnescapedFromNode(chev) });
         }
+        });
       }
       chev.addEventListener("click", function (e) {
         e.stopPropagation();
@@ -917,6 +1455,7 @@
     const container = document.getElementById("vo-jerarquia-container");
     if (!container) return;
     const viewState = loadViewState();
+    _lazyDetalleByClient = new Map();
 
     if (!jerarquia || !jerarquia.length) {
       container.innerHTML =
@@ -924,7 +1463,9 @@
       return;
     }
 
-    const parts = ['<tbody class="divide-y divide-slate-200 dark:divide-slate-700">'];
+    /** Un `<tbody>` solo con la fila cabecera del vendedor y otro con todo el subárbol: `hidden` en el segundo evita layout de miles de filas al colapsar (un solo nodo vs N× classList). */
+    const tbClass = "divide-y divide-slate-200 dark:divide-slate-700";
+    const parts = [];
     jerarquia.forEach((vend) => {
       if (!vend || typeof vend !== "object") return;
       const codViajante = String(vend.cod_viajante || "");
@@ -938,6 +1479,7 @@
         .toLowerCase()
         .replace(/\s+/g, " ")
         .trim();
+      parts.push(`<tbody class="${tbClass}">`);
       parts.push(
         `<tr class="bg-slate-100 dark:bg-slate-800/90 cursor-pointer select-none hover:bg-slate-200/90 dark:hover:bg-slate-800"${voSearchDataAttr(vendSearch)} data-vo-toggle="${gid}" data-vo-vendor="${escHtml(codViajante)}" role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}">` +
           treeNombreCell(
@@ -949,8 +1491,12 @@
               vend.total_clientes || 0
             )
           ) +
-          metricCellsFull(vend) +
+          metricRowCells(vend) +
           "</tr>"
+      );
+      parts.push("</tbody>");
+      parts.push(
+        `<tbody class="${tbClass}" data-vo-vendor-details="${escHtml(gid)}"${expanded ? "" : ' hidden="hidden"'}>`
       );
 
       (vend.children || [])
@@ -973,14 +1519,14 @@
             .replace(/\s+/g, " ")
             .trim();
           parts.push(
-            `<tr class="vo-child-row ${expanded ? "" : "hidden"} bg-slate-50 dark:bg-slate-900/30"${voSearchDataAttr(estadoSearch)} data-parent="${escHtml(gid)}" data-vo-vendor-group="${escHtml(gid)}" data-vo-estado-head="1" data-vo-estado-key="${escHtml(estadoKey)}">` +
+            `<tr class="vo-child-row bg-slate-50 dark:bg-slate-900/30"${voSearchDataAttr(estadoSearch)} data-parent="${escHtml(gid)}" data-vo-vendor-group="${escHtml(gid)}" data-vo-estado-head="1" data-vo-estado-key="${escHtml(estadoKey)}">` +
               treeNombreCell(
                 treeIndentPx(1),
                 treeToggleHtml(estadoKey, expEstado),
                 "text-xs uppercase tracking-tight font-normal text-slate-800 dark:text-slate-200",
                 estadoNombreHtml
               ) +
-              metricCellsFull(estado) +
+              metricRowCells(estado) +
               "</tr>"
           );
 
@@ -1002,35 +1548,50 @@
                 .toLowerCase()
                 .replace(/\s+/g, " ")
                 .trim();
-              const cliHidden = !expanded || !expEstado;
+              const cliHidden = !expEstado;
               parts.push(
-                `<tr class="vo-child-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors ${cliHidden ? "hidden" : ""} bg-white dark:bg-slate-900/30"${voSearchDataAttr(cliSearch)} data-parent="${escHtml(estadoKey)}" data-vo-vendor-group="${escHtml(gid)}" data-vo-client="${escHtml(cid)}">` +
+                `<tr class="vo-child-row hover:bg-slate-50 dark:hover:bg-slate-700/50 ${cliHidden ? "hidden" : ""} bg-white dark:bg-slate-900/30"${voSearchDataAttr(cliSearch)} data-parent="${escHtml(estadoKey)}" data-vo-vendor-group="${escHtml(gid)}" data-vo-client="${escHtml(cid)}">` +
                   treeNombreCell(
                     treeIndentPx(2),
                     chevC,
                     "text-xs font-normal uppercase tracking-tight text-slate-800 dark:text-slate-200",
                     `${etiquetaJerarquia(1)}${escHtml(cli.nombre_cliente)}`
                   ) +
-                  metricCellsFull(cli) +
+                  metricRowCells(cli) +
                   "</tr>"
               );
               if (hasDet) {
-                appendVentaDetalle(parts, cli.venta_detalle, gid, cg, cid, viewState, expanded && expEstado, expC, cliSearch);
+                if (VO_LAZY_CLIENT_DETAIL) {
+                  const deferDetalle = !expEstado || !expC;
+                  _lazyDetalleByClient.set(cg, {
+                    vendorGid: gid,
+                    estadoKey: estadoKey,
+                    detalle: cli.venta_detalle || [],
+                    searchBase: cliSearch,
+                    rendered: !deferDetalle,
+                  });
+                  if (!deferDetalle) {
+                    appendVentaDetalle(parts, cli.venta_detalle, gid, cg, cid, viewState, expEstado, expC, cliSearch);
+                  }
+                } else {
+                  appendVentaDetalle(parts, cli.venta_detalle, gid, cg, cid, viewState, expEstado, expC, cliSearch);
+                }
               }
             });
         });
+      parts.push("</tbody>");
     });
 
     if (totals && typeof totals === "object") {
+      parts.push(`<tbody class="${tbClass}">`);
       parts.push(
         '<tr data-vo-totales="1" class="border-t-[3px] border-violet-500 dark:border-violet-400 bg-gradient-to-r from-slate-200 via-slate-100 to-slate-200 dark:from-slate-700 dark:via-slate-800 dark:to-slate-700 font-bold text-slate-900 dark:text-white">' +
           treeNombreCell(treeIndentPx(0), null, "py-2.5 text-xs uppercase tracking-wide", "Totales") +
-          metricCellsFull(totals) +
+          metricRowCells(totals) +
           "</tr>"
       );
+      parts.push("</tbody>");
     }
-
-    parts.push("</tbody>");
     container.innerHTML =
       '<table class="vo-jerarquia-table min-w-full divide-y divide-slate-200 text-xs dark:divide-slate-700">' +
       buildThead() +
@@ -1059,49 +1620,99 @@
   function toggleVendor(container, headerRow) {
     const gid = headerRow?.getAttribute("data-vo-toggle");
     if (!gid) return;
-    const gEsc = escSel(gid);
     const codViajante = headerRow.getAttribute("data-vo-vendor");
-    const rows = container.querySelectorAll(`tr[data-vo-vendor-group="${gEsc}"]`);
+    const detailBody = container.querySelector(`tbody[data-vo-vendor-details="${escSel(gid)}"]`);
     const chev = headerRow.querySelector("[data-chev]");
     const st = loadViewState();
     st.expandedVendors = st.expandedVendors || {};
     const key = String(codViajante || "");
     const currentlyExpanded = Boolean(st.expandedVendors[key]);
+    const titleBusy = currentlyExpanded ? "Cerrando vendedor…" : "Abriendo vendedor…";
+    const subBusy = currentlyExpanded
+      ? "Aplicando cambios en la vista…"
+      : "Preparando filas y filtros visibles…";
 
-    if (currentlyExpanded) {
-      /** Colapsar: ocultar todas las filas del grupo (no usar toggle: filas ya hidden por rubro/sub se invertirían y quedarían visibles). */
-      rows.forEach(function (r) {
-        r.classList.add("hidden");
-      });
-      if (chev) chev.textContent = CHV.colapsado;
-      headerRow.setAttribute("aria-expanded", "false");
-      st.expandedVendors[key] = false;
-      saveViewState(st);
-      applySearchFilterAfterHierarchyToggle(container);
-      return;
-    }
+    const tClick =
+      typeof performance !== "undefined" && typeof performance.now === "function"
+        ? performance.now()
+        : Date.now();
 
-    rows.forEach(function (r) {
-      r.classList.remove("hidden");
+    runVoJerarquiaBusyThen(titleBusy, subBusy, function () {
+      const t0 =
+        typeof performance !== "undefined" && typeof performance.now === "function"
+          ? performance.now()
+          : Date.now();
+      let rows = null;
+      try {
+        rows = detailBody ? null : queryVendorSubtreeRows(container, gid);
+        if (currentlyExpanded) {
+          if (detailBody) {
+            detailBody.hidden = true;
+          } else if (rows) {
+            const n = rows.length;
+            for (let ri = 0; ri < n; ri++) {
+              rows[ri].classList.add("hidden");
+            }
+          }
+          if (chev) chev.textContent = CHV.colapsado;
+          headerRow.setAttribute("aria-expanded", "false");
+          st.expandedVendors[key] = false;
+          applySearchFilterAfterHierarchyToggle(container, { vendorGid: gid });
+          saveViewState(st);
+          return;
+        }
+
+        st.expandedVendors[key] = true;
+        if (chev) chev.textContent = CHV.expandido;
+        headerRow.setAttribute("aria-expanded", "true");
+
+        if (detailBody) {
+          detailBody.hidden = false;
+        } else if (rows) {
+          for (let ri = 0; ri < rows.length; ri++) {
+            const r = rows[ri];
+            if (r.getAttribute("data-parent") === gid) {
+              r.classList.remove("hidden");
+            }
+          }
+          applyVendorGroupVisibilityAfterExpand(rows, st);
+        }
+        applySearchFilterAfterHierarchyToggle(container, { vendorGid: gid });
+        saveViewState(st);
+      } finally {
+        const t1 =
+          typeof performance !== "undefined" && typeof performance.now === "function"
+            ? performance.now()
+            : Date.now();
+        const nSub =
+          detailBody && detailBody.rows
+            ? detailBody.rows.length
+            : rows && rows.length !== undefined
+              ? rows.length
+              : 0;
+        voDiagLog(
+          currentlyExpanded ? "colapsar_vendedor" : "expandir_vendedor",
+          "cod_viajante=" + key,
+          "gid=" + gid,
+          "tbody_detalle=" + (detailBody ? "si" : "no"),
+          "filas_en_subarbol_dom=" + nSub,
+          "callback_sync_ms=" + Math.round(t1 - t0),
+          "desde_evento_click_ms=" + Math.round(t1 - tClick)
+        );
+      }
     });
-    st.expandedVendors[key] = true;
-    saveViewState(st);
-    if (chev) chev.textContent = CHV.expandido;
-    headerRow.setAttribute("aria-expanded", "true");
-
-    container.querySelectorAll(`tr[data-vo-vendor-group="${gEsc}"][data-vo-client]`).forEach(function (r) {
-      const cid = r.getAttribute("data-vo-client");
-      if (!cid) return;
-      applyClientDetalleVisibility(container, cid, isExpanded(st, "c-" + cid), st);
-    });
-    refreshEstadoChildrenVisibility(container, gEsc);
-    applySearchFilterAfterHierarchyToggle(container);
   }
 
   function processData(payload) {
     try {
+      const t0 =
+        typeof performance !== "undefined" && typeof performance.now === "function"
+          ? performance.now()
+          : Date.now();
       const totals = payload.totals || {};
-      renderKpis(totals);
+      if (!isVentasPorVendedor) {
+        renderKpis(totals);
+      }
 
       const meta = payload.meta || {};
       const extra = meta.extra || {};
@@ -1110,9 +1721,30 @@
       if (!jerarquia.length && Array.isArray(payload.data) && payload.data.length) {
         jerarquia = buildJerarquiaDesdeFilas(payload.data);
       }
+      if (jerarquia.length) {
+        const sortCfg = getCurrentSortConfig();
+        sortJerarquiaInPlace(jerarquia, sortCfg.metricKey, sortCfg.direction);
+      }
       _lastJerarquia = jerarquia && jerarquia.length ? jerarquia : null;
       _lastTotals = totals && typeof totals === "object" ? totals : null;
       renderTable(jerarquia, totals);
+      const t1 =
+        typeof performance !== "undefined" && typeof performance.now === "function"
+          ? performance.now()
+          : Date.now();
+      const fa = meta.filters_applied || {};
+      const stats = extra.jerarquia_stats && typeof extra.jerarquia_stats === "object"
+        ? extra.jerarquia_stats
+        : countJerarquiaStats(jerarquia);
+      voDiagLog(
+        "carga_grilla_completa",
+        "slug=" + reportSlug,
+        "render_dom_ms=" + Math.round(t1 - t0),
+        "filas_planas_payload=" + (Array.isArray(payload.data) ? payload.data.length : 0),
+        "stats_jerarquia=" + JSON.stringify(stats),
+        "server_total_ms=" + (fa.performance_total_ms != null ? fa.performance_total_ms : "—"),
+        "server_fases_ms=" + (fa.performance_phase_ms ? JSON.stringify(fa.performance_phase_ms) : "—")
+      );
     } catch (err) {
       console.error("[objetivos_ventas_bo] processData", err);
       const container = document.getElementById("vo-jerarquia-container");

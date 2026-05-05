@@ -141,7 +141,7 @@ class ExportService:
         Nombre del .xlsx en disco y en Content-Disposition.
         Objetivos vs BO: Ventas_objetivo_vendedores_{fecha_inicio_fact}_{fecha_fin_fact}.xlsx
         """
-        if report_slug != "ventas-objetivos-vs-bo":
+        if report_slug not in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
             return f"{report_slug}_{timestamp}.xlsx"
 
         filters = payload.get("filters") or {}
@@ -161,6 +161,8 @@ class ExportService:
 
         a = _segmento_fecha(fi)
         b = _segmento_fecha(ff)
+        if report_slug == "ventas-por-vendedor":
+            return f"Ventas_por_vendedor_{a}_{b}.xlsx"
         return f"Ventas_objetivo_vendedores_{a}_{b}.xlsx"
 
     def _declarative_export_headers(self, report: ReportDefinition, sample_row: Dict[str, Any]) -> Optional[List[str]]:
@@ -248,6 +250,17 @@ class ExportService:
                 "ventas_netas",
                 "notas_credito",
                 "ventas_brutas",
+            ]
+            return [h for h in preferred if h in available]
+
+        if slug == "ventas-por-vendedor":
+            preferred = [
+                "cod_viajante",
+                "nombre_vendedor",
+                "codigo_cliente",
+                "nombre_cliente",
+                "cantidades_vendidas",
+                "facturacion",
             ]
             return [h for h in preferred if h in available]
 
@@ -421,7 +434,7 @@ class ExportService:
                     "ventas_netas",
                     "subtotal_desc",
                 }
-                if report.slug == "ventas-objetivos-vs-bo":
+                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
                     currency_headers_data.update(
                         {
                             "objetivo",
@@ -486,7 +499,7 @@ class ExportService:
                     header_translations = {**header_translations, "mes_formato": "Mes"}
                 
                 translated_headers = [header_translations.get(h, h.replace("_", " ").title()) for h in headers]
-                if report.slug == "ventas-objetivos-vs-bo":
+                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
                     translated_headers = [str(s).upper() for s in translated_headers]
                 
                 # Escribir headers
@@ -509,11 +522,11 @@ class ExportService:
                         if h in currency_headers_data:
                             try:
                                 if value == "" or value is None:
-                                    row_values.append(0.0)
+                                    row_values.append("")
                                 else:
                                     row_values.append(float(value))
                             except (ValueError, TypeError):
-                                row_values.append(0.0)
+                                row_values.append("")
                         elif h == "cantidades_vendidas":
                             try:
                                 if value == "" or value is None:
@@ -542,33 +555,133 @@ class ExportService:
                         else:
                             cell.alignment = Alignment(horizontal="left", vertical="center")
 
-                def _vo_append_data_row(data_row: Dict[str, Any], outline_lvl: int = 0) -> None:
+                name_col_idx = headers.index("nombre_cliente") + 1 if "nombre_cliente" in headers else None
+
+                def _vo_append_data_row(data_row: Dict[str, Any], outline_lvl: int = 0, name_indent: int = 0) -> None:
                     vals = _vo_build_row_values(data_row)
                     ws.append(vals)
                     ridx = ws.max_row
                     if outline_lvl > 0:
                         ws.row_dimensions[ridx].outline_level = outline_lvl
                     _vo_format_data_row(ridx, vals)
+                    if name_col_idx:
+                        ncell = ws.cell(row=ridx, column=name_col_idx)
+                        ncell.alignment = Alignment(horizontal="left", vertical="center", indent=max(0, int(name_indent)))
 
                 # Escribir datos (objetivos vs BO: orden por cód. vendedor + cód. cliente, agrupación Excel)
-                if report.slug == "ventas-objetivos-vs-bo":
+                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
                     from openpyxl.worksheet.properties import Outline
 
                     ws.sheet_properties.outlinePr = Outline(summaryBelow=False, summaryRight=False)
                     vendor_fill = PatternFill(start_color="DCE6F2", end_color="DCE6F2", fill_type="solid")
                     vendor_title_font = Font(bold=True, size=11, color="1E3A5F")
                     filters_for_order = payload.get("filters", {}) if isinstance(payload, dict) else {}
-                    sorted_data = _vo_objetivos_vs_bo_sort_export_rows(
-                        query_result.data,
-                        ordenar_por=str(filters_for_order.get("ordenar_por") or "objetivo_meta"),
-                        orden_forma=str(filters_for_order.get("orden_forma") or "desc"),
-                    )
-                    last_cv = None
-                    for data_row in sorted_data:
-                        cv = int(data_row.get("cod_viajante") or 0)
-                        if last_cv is None or cv != last_cv:
-                            last_cv = cv
-                            nv = (data_row.get("nombre_vendedor") or "").strip() or f"Cód. {cv}"
+                    excel_scope = str(filters_for_order.get("excel_scope") or "resumen").strip().lower()
+                    use_detailed_tree = excel_scope == "detallado"
+                    tabs = (((query_result.meta or {}).get("extra") or {}).get("tabs") or {})
+                    jerarquia = tabs.get("objetivos_jerarquia")
+                    if not isinstance(jerarquia, list):
+                        jerarquia = []
+
+                    def _vo_row_from_node(
+                        node: Dict[str, Any],
+                        cod_viajante: int,
+                        nombre_vendedor: str,
+                        nombre_cliente_label: str,
+                        include_codigo_cliente: Any = "",
+                        use_detalle_rem_ped: bool = False,
+                    ) -> Dict[str, Any]:
+                        row_dict = {
+                            "cod_viajante": cod_viajante,
+                            "nombre_vendedor": nombre_vendedor,
+                            "codigo_cliente": include_codigo_cliente,
+                            "nombre_cliente": nombre_cliente_label,
+                            "objetivo": node.get("objetivo"),
+                            "falta": node.get("falta"),
+                            "cantidades_vendidas": node.get("cantidades_vendidas"),
+                            "facturacion": node.get("facturacion"),
+                            "remitos": node.get("remitos"),
+                            "pedidos_en_armado": node.get("pedidos_en_armado"),
+                            "total": node.get("total"),
+                            "bo_con_stock": node.get("bo_con_stock"),
+                            "bo_con_ingreso": node.get("bo_con_ingreso"),
+                            "bo_sin_stock": node.get("bo_sin_stock"),
+                            "backorder_total": node.get("backorder_total"),
+                        }
+                        if use_detalle_rem_ped:
+                            row_dict["remitos"] = node.get("remitos_lineas")
+                            row_dict["pedidos_en_armado"] = node.get("pedidos_armado_lineas")
+                            row_dict["objetivo"] = ""
+                            row_dict["falta"] = ""
+                            row_dict["total"] = ""
+                        return row_dict
+
+                    def _append_detalle_rows(
+                        detalle_nodes: List[Dict[str, Any]],
+                        cod_viajante: int,
+                        nombre_vendedor: str,
+                        outline_lvl: int,
+                        name_indent: int,
+                    ) -> None:
+                        for rub in detalle_nodes or []:
+                            if not isinstance(rub, dict):
+                                continue
+                            rub_name = str(rub.get("nombre_rubro") or "").strip() or "Rubro"
+                            rub_label = f"RUBRO  {rub_name}"
+                            _vo_append_data_row(
+                                _vo_row_from_node(
+                                    rub,
+                                    cod_viajante,
+                                    nombre_vendedor,
+                                    rub_label,
+                                    include_codigo_cliente="",
+                                    use_detalle_rem_ped=True,
+                                ),
+                                outline_lvl=outline_lvl,
+                                name_indent=name_indent,
+                            )
+
+                            for sub in rub.get("children") or []:
+                                if not isinstance(sub, dict):
+                                    continue
+                                sub_name = str(sub.get("nombre_subrubro") or "").strip() or "Subrubro"
+                                sub_label = f"SUBRUBRO  {sub_name}"
+                                _vo_append_data_row(
+                                    _vo_row_from_node(
+                                        sub,
+                                        cod_viajante,
+                                        nombre_vendedor,
+                                        sub_label,
+                                        include_codigo_cliente="",
+                                        use_detalle_rem_ped=True,
+                                    ),
+                                    outline_lvl=outline_lvl + 1,
+                                    name_indent=name_indent + 1,
+                                )
+
+                                for art in sub.get("children") or []:
+                                    if not isinstance(art, dict):
+                                        continue
+                                    art_name = str(art.get("nombre_articulo") or "").strip() or "Artículo"
+                                    _vo_append_data_row(
+                                        _vo_row_from_node(
+                                            art,
+                                            cod_viajante,
+                                            nombre_vendedor,
+                                            art_name,
+                                            include_codigo_cliente="",
+                                            use_detalle_rem_ped=True,
+                                        ),
+                                        outline_lvl=outline_lvl + 2,
+                                        name_indent=name_indent + 2,
+                                    )
+
+                    if use_detailed_tree and jerarquia:
+                        for vend in jerarquia:
+                            if not isinstance(vend, dict):
+                                continue
+                            cv = int(vend.get("cod_viajante") or 0)
+                            nv = (vend.get("nombre_vendedor") or "").strip() or f"Cód. {cv}"
                             label = f"Vendedor {cv} — {nv}"
                             ws.append([label] + [""] * (len(headers) - 1))
                             vr = ws.max_row
@@ -587,7 +700,78 @@ class ExportService:
                             for cx in range(1, len(headers) + 1):
                                 ws.cell(row=vr, column=cx).border = border
                             ws.row_dimensions[vr].outline_level = 0
-                        _vo_append_data_row(data_row, outline_lvl=1)
+
+                            for estado in vend.get("children") or []:
+                                if not isinstance(estado, dict):
+                                    continue
+                                estado_nombre = str(estado.get("nombre") or "").strip() or "Estado"
+                                _vo_append_data_row(
+                                    _vo_row_from_node(
+                                        estado,
+                                        cv,
+                                        nv,
+                                        estado_nombre,
+                                        include_codigo_cliente="",
+                                        use_detalle_rem_ped=False,
+                                    ),
+                                    outline_lvl=1,
+                                    name_indent=1,
+                                )
+                                for cli in estado.get("children") or []:
+                                    if not isinstance(cli, dict):
+                                        continue
+                                    cli_nombre = str(cli.get("nombre_cliente") or "").strip() or "Cliente"
+                                    cli_codigo = cli.get("codigo_cliente") or ""
+                                    _vo_append_data_row(
+                                        _vo_row_from_node(
+                                            cli,
+                                            cv,
+                                            nv,
+                                            cli_nombre,
+                                            include_codigo_cliente=cli_codigo,
+                                            use_detalle_rem_ped=False,
+                                        ),
+                                        outline_lvl=2,
+                                        name_indent=2,
+                                    )
+                                    _append_detalle_rows(
+                                        cli.get("venta_detalle") or [],
+                                        cv,
+                                        nv,
+                                        outline_lvl=3,
+                                        name_indent=3,
+                                    )
+                    else:
+                        sorted_data = _vo_objetivos_vs_bo_sort_export_rows(
+                            query_result.data,
+                            ordenar_por=str(filters_for_order.get("ordenar_por") or "objetivo_meta"),
+                            orden_forma=str(filters_for_order.get("orden_forma") or "desc"),
+                        )
+                        last_cv = None
+                        for data_row in sorted_data:
+                            cv = int(data_row.get("cod_viajante") or 0)
+                            if last_cv is None or cv != last_cv:
+                                last_cv = cv
+                                nv = (data_row.get("nombre_vendedor") or "").strip() or f"Cód. {cv}"
+                                label = f"Vendedor {cv} — {nv}"
+                                ws.append([label] + [""] * (len(headers) - 1))
+                                vr = ws.max_row
+                                if len(headers) > 1:
+                                    ws.merge_cells(
+                                        start_row=vr,
+                                        start_column=1,
+                                        end_row=vr,
+                                        end_column=len(headers),
+                                    )
+                                top = ws.cell(row=vr, column=1)
+                                top.value = label
+                                top.font = vendor_title_font
+                                top.fill = vendor_fill
+                                top.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+                                for cx in range(1, len(headers) + 1):
+                                    ws.cell(row=vr, column=cx).border = border
+                                ws.row_dimensions[vr].outline_level = 0
+                            _vo_append_data_row(data_row, outline_lvl=1, name_indent=1)
                 else:
                     for data_row in query_result.data:
                         _vo_append_data_row(data_row, outline_lvl=0)
