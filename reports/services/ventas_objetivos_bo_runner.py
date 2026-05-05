@@ -137,6 +137,8 @@ def _vo_sql_filtros_rubro_subrubro(
 # Fila sintética en el árbol de detalle cuando la facturación de cabecera (cuentacliente)
 # no coincide con la suma de renglones stock+artículo en el período.
 _ID_ART_FACTURACION_SIN_DESGLOSE = -900000001
+# Rubro sintético: código negativo reservado (evita colisión con rubro real CodigoRubro=0 en la UI VO).
+_CODIGO_RUBRO_RESIDUAL_FACTURACION = -900000000
 
 
 def _sum_facturacion_unidades_hojas_detalle(detalle_tree: List[Dict[str, Any]]) -> Tuple[float, float]:
@@ -161,7 +163,7 @@ def _append_articulo_residual_facturacion(
     """Agrupa la diferencia cabecera vs renglones bajo un rubro explícito para que el usuario pueda desplegar el árbol."""
     if abs(delta_fac) < 0.02 and abs(delta_uni) < 0.02:
         return
-    cr = 0
+    cr = _CODIGO_RUBRO_RESIDUAL_FACTURACION
     nr = "Facturación sin desglose por artículo"
     isr = 0
     nsr = "—"
