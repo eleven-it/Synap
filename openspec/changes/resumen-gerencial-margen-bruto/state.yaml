@@ -1,0 +1,14 @@
+change: resumen-gerencial-margen-bruto
+status: ready-for-implementation
+updated: "2026-05-11"
+artifact_store: hybrid
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+notes: >
+  Artefactos locales en openspec/changes/resumen-gerencial-margen-bruto/;
+  spec consolidada y docs actualizadas en el mismo commit lógico de planificación.
+  Implementación: /sdd-apply o checklist en tasks.md.
