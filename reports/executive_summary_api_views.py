@@ -42,6 +42,29 @@ def _parse_fecha(qp) -> date:
     return timezone.localdate()
 
 
+def _parse_cod_sucursal(qp) -> int | None:
+    """Query ``sucursal``: id numérico o vacío / ``todas`` = sin filtro."""
+    if not qp:
+        return None
+    raw = qp.get("sucursal")
+    if raw in (None, "", "todas", "all", "*"):
+        return None
+    sid = to_int_or_none(raw)
+    if sid is None or sid < 0:
+        return None
+    return int(sid)
+
+
+def _parse_top_orden(qp) -> str | None:
+    """Query ``top_orden``: ``importe_neto`` o ``unidades`` (normaliza el servicio)."""
+    if not qp:
+        return None
+    raw = qp.get("top_orden")
+    if raw is None or str(raw).strip() == "":
+        return None
+    return str(raw).strip()
+
+
 def _ids_por_canal(empresa_id: int) -> tuple[list[int], list[int]]:
     qs = PuntoVentaCanalEjecutivo.objects.filter(empresa_id=empresa_id)
     may = list(qs.filter(canal=PuntoVentaCanalEjecutivo.Canal.MAYORISTA).values_list("id_pv", flat=True))
@@ -63,6 +86,8 @@ class ExecutiveSummaryAPIView(APIView):
             )
         empresa = get_empresa_django_from_request(request)
         fecha_ref = _parse_fecha(request.query_params)
+        cod_sucursal = _parse_cod_sucursal(request.query_params)
+        top_orden = _parse_top_orden(request.query_params)
         may_ids, min_ids = _ids_por_canal(empresa.id) if empresa else ([], [])
 
         pool = get_mysql_pool()
@@ -70,7 +95,14 @@ class ExecutiveSummaryAPIView(APIView):
             with pool.get_connection(base) as conn:
                 cursor = conn.cursor()
                 try:
-                    payload = run_executive_summary(cursor, fecha_ref, may_ids, min_ids)
+                    payload = run_executive_summary(
+                        cursor,
+                        fecha_ref,
+                        may_ids,
+                        min_ids,
+                        cod_sucursal=cod_sucursal,
+                        top_productos_orden=top_orden,
+                    )
                 finally:
                     cursor.close()
         except Exception as exc:

@@ -116,6 +116,14 @@
       </div>`;
   }
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   function pctValueHtml(v) {
     if (v === null || v === undefined || Number.isNaN(v)) {
       return `<span class="text-slate-400">N/D</span>`;
@@ -134,6 +142,29 @@
         <span class="inline-flex items-center gap-0.5 rounded-lg px-2 py-0.5 text-xs font-semibold ${badgeCls}">
           <span class="material-icons text-sm leading-none" aria-hidden="true">${ic}</span>
         </span>
+      </div>`;
+  }
+
+  /** KPI «Vs ayer»: porcentaje existente + diferencia en moneda (``gap_vs_ayer_monto``). */
+  function vsAyerValueHtml(k) {
+    const pctBlock = pctValueHtml(k.pct_vs_ayer);
+    const gap = k.gap_vs_ayer_monto;
+    if (gap === null || gap === undefined || Number.isNaN(Number(gap))) {
+      return pctBlock;
+    }
+    const gapNum = Number(gap);
+    const up = gapNum > 0;
+    const down = gapNum < 0;
+    const subCls = up
+      ? "text-emerald-700 dark:text-emerald-300"
+      : down
+        ? "text-red-700 dark:text-red-300"
+        : "text-slate-600 dark:text-slate-400";
+    const gapTxt = fmtMoney.format(gapNum);
+    return `
+      <div class="flex flex-col gap-1.5">
+        ${pctBlock}
+        <div class="text-sm font-semibold tabular-nums ${subCls}">${gapTxt} <span class="font-normal text-slate-500 dark:text-slate-400">vs ayer</span></div>
       </div>`;
   }
 
@@ -162,7 +193,7 @@
         span: "sm:col-span-2 xl:col-span-2",
         valueClass: "text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl",
       }),
-      kpiCard("Vs ayer", pctValueHtml(k.pct_vs_ayer), { icon: "compare_arrows", accent: "indigo" }),
+      kpiCard("Vs ayer", vsAyerValueHtml(k), { icon: "compare_arrows", accent: "indigo" }),
       kpiCard("Vs mismo día sem. ant.", pctValueHtml(k.pct_vs_misma_semana_anterior), {
         icon: "date_range",
         accent: "purple",
@@ -395,6 +426,99 @@
       .style("filter", "drop-shadow(0 1px 2px rgb(0 0 0 / 0.12))");
   }
 
+  function fillSucursalesSelect(list, selectedValue) {
+    const sel = el("exec-sucursal-select");
+    if (!sel) return;
+    const cur =
+      selectedValue !== undefined && selectedValue !== null && String(selectedValue).trim() !== ""
+        ? String(selectedValue).trim()
+        : sel.value || "";
+    sel.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "";
+    optAll.textContent = "Todas las sucursales";
+    sel.appendChild(optAll);
+    (list || []).forEach((s) => {
+      const o = document.createElement("option");
+      o.value = String(s.id_sucursal);
+      o.textContent = s.nombre_sucursal || `Sucursal ${s.id_sucursal}`;
+      sel.appendChild(o);
+    });
+    const match = [...sel.options].some((op) => op.value === cur);
+    sel.value = match ? cur : "";
+  }
+
+  function updateTopOrdenBadge(meta) {
+    const badge = el("exec-top-orden-badge");
+    if (!badge) return;
+    const orden = meta && meta.top_productos_orden === "unidades" ? "unidades" : "importe_neto";
+    if (orden === "unidades") {
+      badge.textContent = "Por unidades";
+      badge.title = "Orden por cantidad neta vendida (renglón factura − NC)";
+    } else {
+      badge.textContent = "Venta neta";
+      badge.title = "Orden por suma de PrecioNetoxR por renglón (FA − NC)";
+    }
+  }
+
+  function renderTopProductos(data) {
+    const wrap = el("exec-top-productos");
+    if (!wrap) return;
+    const rows = data.top_productos || [];
+    if (rows.length === 0) {
+      const topOrd = el("exec-top-orden")?.value || "importe_neto";
+      const emptyMsg =
+        topOrd === "unidades"
+          ? "Sin artículos con unidades o importe en el día seleccionado."
+          : "Sin artículos con importe en el día seleccionado.";
+      wrap.innerHTML = `<p class="px-2 py-6 text-center text-sm text-slate-500 dark:text-slate-400">${escapeHtml(emptyMsg)}</p>`;
+      return;
+    }
+    const head = `
+      <div class="hidden overflow-x-auto lg:block">
+        <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
+              <th scope="col" class="pb-2 pl-1 font-medium">Código</th>
+              <th scope="col" class="pb-2 font-medium">Descripción</th>
+              <th scope="col" class="pb-2 text-right font-medium">Unidades</th>
+              <th scope="col" class="pb-2 pr-1 text-right font-medium">Importe neto</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map(
+                (r) => `
+              <tr class="border-b border-slate-100 dark:border-slate-800">
+                <td class="py-2.5 pl-1 font-mono text-xs text-slate-700 dark:text-slate-300">${escapeHtml(r.codigo_articulo || "—")}</td>
+                <td class="py-2.5 pr-2 text-slate-800 dark:text-slate-100">${escapeHtml(r.descripcion || "—")}</td>
+                <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${Number(r.unidades ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</td>
+                <td class="py-2.5 pr-1 text-right font-medium tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.importe_neto ?? 0))}</td>
+              </tr>`,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>`;
+    const cards = `
+      <div class="space-y-2 lg:hidden">
+        ${rows
+          .map(
+            (r) => `
+          <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
+            <div class="flex items-start justify-between gap-2">
+              <span class="font-mono text-xs font-semibold text-sky-700 dark:text-sky-300">${escapeHtml(r.codigo_articulo || "—")}</span>
+              <span class="text-sm font-bold tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.importe_neto ?? 0))}</span>
+            </div>
+            <p class="mt-1 text-sm leading-snug text-slate-700 dark:text-slate-200">${escapeHtml(r.descripcion || "—")}</p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400"><span class="font-medium">Unidades</span> ${Number(r.unidades ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</p>
+          </div>`,
+          )
+          .join("")}
+      </div>`;
+    wrap.innerHTML = head + cards;
+  }
+
   function renderCharts(data) {
     cachedChartData = data;
     ensureChartResizeObserver();
@@ -424,8 +548,13 @@
 
   async function loadSummary() {
     const fin = el("exec-fecha-input");
+    const suc = el("exec-sucursal-select");
+    const topO = el("exec-top-orden");
     const qs = new URLSearchParams();
     if (fin && fin.value) qs.set("fecha", fin.value);
+    if (suc && suc.value) qs.set("sucursal", suc.value);
+    if (topO && topO.value) qs.set("top_orden", topO.value);
+    const wantedSuc = suc && suc.value ? suc.value : "";
     showError("");
     setLoading(true);
     try {
@@ -435,8 +564,14 @@
         throw new Error(err.detail || res.statusText);
       }
       const data = await res.json();
+      fillSucursalesSelect(data.sucursales_disponibles, wantedSuc || (data.meta && data.meta.cod_sucursal_filtro));
+      if (topO && data.meta && data.meta.top_productos_orden) {
+        topO.value = data.meta.top_productos_orden === "unidades" ? "unidades" : "importe_neto";
+      }
+      updateTopOrdenBadge(data.meta || {});
       renderKpis(data);
       renderCharts(data);
+      renderTopProductos(data);
     } catch (e) {
       showError(e.message || "Error al cargar el resumen.");
     } finally {
@@ -569,6 +704,8 @@
       fin.value = t.toISOString().slice(0, 10);
     }
     el("exec-refresh-btn")?.addEventListener("click", loadSummary);
+    el("exec-sucursal-select")?.addEventListener("change", loadSummary);
+    el("exec-top-orden")?.addEventListener("change", loadSummary);
     el("exec-modal-close")?.addEventListener("click", closePvModal);
     el("exec-modal-cancel")?.addEventListener("click", closePvModal);
     el("exec-modal-save")?.addEventListener("click", savePvModal);
