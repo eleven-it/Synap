@@ -105,10 +105,13 @@ class Command(BaseCommand):
                     self.style.ERROR(
                         "Django no encuentra la migración en disco: falta "
                         "`reports/migrations/0031_add_puntoventacanalejecutivo.py`. "
-                        "Suele ocurrir si una versión anterior de `fix_reports_migrations` borró los 0031 "
-                        "al iniciar el contenedor. Actualice el código desde Git (rama Desarrollo), "
-                        "verifique que el archivo exista en la imagen/volumen y reinicie; "
-                        "luego `migrate reports` o este comando con `--fix`."
+                        "Si el contenedor monta el repo con `.:/app` y una versión antigua de "
+                        "`fix_reports_migrations` borró ese archivo, `git pull` **no** lo restaura "
+                        "solo (no entra en los commits nuevos). En el servidor, desde la carpeta del repo:\n"
+                        "  git restore reports/migrations/0031_add_puntoventacanalejecutivo.py\n"
+                        "  # comprobar: ls reports/migrations/0031_*.py\n"
+                        "Luego reinicie el contenedor si hace falta y ejecute de nuevo `--fix` o "
+                        "`migrate reports 0031_add_puntoventacanalejecutivo`."
                     )
                 )
                 raise SystemExit(1) from exc
