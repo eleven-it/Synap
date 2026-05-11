@@ -23,7 +23,7 @@ Ejemplos::
 from __future__ import annotations
 
 from django.core.management import call_command
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import connections
 from django.db.utils import ProgrammingError
 
@@ -98,6 +98,20 @@ class Command(BaseCommand):
                     verbosity=1,
                 )
                 self.stdout.write(self.style.SUCCESS("migrate completado."))
+            except CommandError as exc:
+                if "Cannot find a migration" not in str(exc) and "migration matching" not in str(exc).lower():
+                    raise
+                self.stdout.write(
+                    self.style.ERROR(
+                        "Django no encuentra la migración en disco: falta "
+                        "`reports/migrations/0031_add_puntoventacanalejecutivo.py`. "
+                        "Suele ocurrir si una versión anterior de `fix_reports_migrations` borró los 0031 "
+                        "al iniciar el contenedor. Actualice el código desde Git (rama Desarrollo), "
+                        "verifique que el archivo exista en la imagen/volumen y reinicie; "
+                        "luego `migrate reports` o este comando con `--fix`."
+                    )
+                )
+                raise SystemExit(1) from exc
             except ProgrammingError as exc:
                 err = str(exc).lower()
                 if "already exists" not in err and "duplicate" not in err:
