@@ -82,6 +82,6 @@ Incorpora el delta del cambio archivado `executive-dashboard-top10-gap-usd` y ex
 6. **Dado** artículos sin rubro o subrubro enlazado, **cuando** se agrupa rentabilidad, **entonces** la API responde sin error y etiqueta «Sin clasificar» donde corresponda.
 7. **Dado** filtro `sucursal`, **cuando** se comparan rentabilidad y Top 10, **entonces** ambos usan el mismo subconjunto de comprobantes del día.
 
-## Planificación (cambio activo)
+## Planificación / implementación
 
-Delta y tareas: **`openspec/changes/resumen-gerencial-margen-bruto/`** (modo híbrido OpenSpec + Engram hasta implementación y archivo).
+Cambio **`resumen-gerencial-margen-bruto`**: carpeta `openspec/changes/resumen-gerencial-margen-bruto/` (híbrido). Implementación en código al **11/05/2026** (`executive_sales_summary`, `executive_summary` HTML/JS, tests de contrato).

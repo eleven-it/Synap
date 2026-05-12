@@ -1,5 +1,6 @@
 """
-Agregados del panel «Resumen ejecutivo (ventas)»: solo facturación en ``cuentacliente``.
+Agregados del panel «Resumen ejecutivo (ventas)»: facturación en ``cuentacliente``
+y rentabilidad por renglón en ``stock`` (PrecioNetoxR / PrecioCostoxR), con desglose por rubro/subrubro.
 """
 from __future__ import annotations
 
@@ -21,6 +22,30 @@ _STOCK_TIPO_COMP = (
 )
 
 _TOP_PRODUCTOS_LIMIT = 10
+
+_SIN_CLASIFICAR = "Sin clasificar"
+
+
+def _signed_precio_netoxr_sql() -> str:
+    """Importe neto por renglón con signo FA / NC (paridad Top 10 / unidades)."""
+    return """CASE
+        WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
+            THEN COALESCE(st.PrecioNetoxR, 0)
+        WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+            THEN -COALESCE(st.PrecioNetoxR, 0)
+        ELSE 0
+    END"""
+
+
+def _signed_precio_costoxr_sql() -> str:
+    """Costo neto por renglón con signo FA / NC (paridad Top 10 / unidades)."""
+    return """CASE
+        WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
+            THEN COALESCE(st.PrecioCostoxR, 0)
+        WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+            THEN -COALESCE(st.PrecioCostoxR, 0)
+        ELSE 0
+    END"""
 
 
 def _net_line_sql(alias: str = "cc") -> str:
@@ -173,15 +198,8 @@ def _top_productos_ventas_dia(
             ELSE 0
         END)
     """
-    imp_expr = """
-        SUM(CASE
-            WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
-                THEN COALESCE(st.PrecioNetoxR, 0)
-            WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
-                THEN -COALESCE(st.PrecioNetoxR, 0)
-            ELSE 0
-        END)
-    """
+    neto_signed = _signed_precio_netoxr_sql()
+    imp_expr = f"SUM({neto_signed})"
     lim = max(1, min(int(limit), 50))
     orden_rank = (orden_rank or "importe_neto").strip().lower()
     if orden_rank not in ("unidades", "importe_neto"):
@@ -240,6 +258,208 @@ def _top_productos_ventas_dia(
                 "descripcion": des,
                 "unidades": round(float(d.get("unidades") or 0), 4),
                 "importe_neto": round(float(d.get("importe_neto") or 0), 2),
+            }
+        )
+    return out
+
+
+def _margen_bruto_totales_dia(
+    cursor,
+    dia: date,
+    cod_sucursal: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Totales de rentabilidad por renglón ``stock`` (misma ventana que unidades del día).
+    """
+    base_w, base_p = _base_cc_where("cc")
+    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
+    neto = _signed_precio_netoxr_sql()
+    costo = _signed_precio_costoxr_sql()
+    sql = f"""
+        SELECT
+            SUM({neto}) AS venta_neta_lineas,
+            SUM({costo}) AS costo_neto_lineas
+        FROM stock st
+        INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+        WHERE cc.Fecha = %s
+          AND {base_w}{suc_sql}
+          AND st.Anulado = 'No'
+          AND st.TipoComp IN ({ph_tc})
+    """
+    params: List[Any] = [dia] + base_p + suc_p + list(_STOCK_TIPO_COMP)
+    cursor.execute(sql, params)
+    row = cursor.fetchone()
+    v_lineas = float(row[0] or 0) if row else 0.0
+    c_lineas = float(row[1] or 0) if row else 0.0
+    margen = v_lineas - c_lineas
+    pct: Optional[float]
+    if abs(v_lineas) < 1e-9:
+        pct = None
+    else:
+        pct = round(margen / v_lineas * 100.0, 2)
+    return {
+        "venta_neta_lineas": round(v_lineas, 2),
+        "costo_neto_lineas": round(c_lineas, 2),
+        "margen_absoluto": round(margen, 2),
+        "pct_sobre_venta_lineas": pct,
+    }
+
+
+def _margen_por_rubro_dia(
+    cursor,
+    dia: date,
+    cod_sucursal: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    base_w, base_p = _base_cc_where("cc")
+    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
+    neto = _signed_precio_netoxr_sql()
+    costo = _signed_precio_costoxr_sql()
+    sql = f"""
+        SELECT
+            z.codigo_rubro,
+            MAX(z.nombre_rubro) AS nombre_rubro,
+            SUM(z.venta_neta) AS venta_neta,
+            SUM(z.costo_neto) AS costo_neto
+        FROM (
+            SELECT
+                COALESCE(a.CodigoRubro, -1) AS codigo_rubro,
+                CASE
+                    WHEN COALESCE(a.CodigoRubro, -1) = -1 THEN %s
+                    ELSE COALESCE(r.NombreRubro, %s)
+                END AS nombre_rubro,
+                {neto} AS venta_neta,
+                {costo} AS costo_neto
+            FROM stock st
+            INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+            LEFT JOIN articulo a ON a.IDArt = st.IDArt
+            LEFT JOIN rubro r ON r.CodigoRubro = a.CodigoRubro
+            WHERE cc.Fecha = %s
+              AND {base_w}{suc_sql}
+              AND st.Anulado = 'No'
+              AND st.TipoComp IN ({ph_tc})
+        ) z
+        GROUP BY z.codigo_rubro
+        HAVING ABS(SUM(z.venta_neta)) > 0.000001 OR ABS(SUM(z.costo_neto)) > 0.000001
+        ORDER BY SUM(z.venta_neta) DESC, MAX(z.nombre_rubro) ASC
+    """
+    params: List[Any] = [_SIN_CLASIFICAR, _SIN_CLASIFICAR, dia] + base_p + suc_p + list(_STOCK_TIPO_COMP)
+    cursor.execute(sql, params)
+    desc = cursor.description
+    if not desc or not isinstance(desc, (list, tuple)):
+        return []
+    cols = [d[0] for d in desc]
+    out: List[Dict[str, Any]] = []
+    for row in cursor.fetchall():
+        d = dict(zip(cols, row))
+        try:
+            cr = int(d.get("codigo_rubro"))
+        except (TypeError, ValueError):
+            cr = -1
+        vn = float(d.get("venta_neta") or 0)
+        cn = float(d.get("costo_neto") or 0)
+        ma = vn - cn
+        pct: Optional[float] = None if abs(vn) < 1e-9 else round(ma / vn * 100.0, 2)
+        nombre = str(d.get("nombre_rubro") or _SIN_CLASIFICAR).strip() or _SIN_CLASIFICAR
+        out.append(
+            {
+                "codigo_rubro": cr,
+                "nombre_rubro": nombre,
+                "venta_neta": round(vn, 2),
+                "costo_neto": round(cn, 2),
+                "margen_absoluto": round(ma, 2),
+                "pct_sobre_venta": pct,
+            }
+        )
+    return out
+
+
+def _margen_por_subrubro_dia(
+    cursor,
+    dia: date,
+    cod_sucursal: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    base_w, base_p = _base_cc_where("cc")
+    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
+    neto = _signed_precio_netoxr_sql()
+    costo = _signed_precio_costoxr_sql()
+    sql = f"""
+        SELECT
+            z.id_subrubro,
+            MAX(z.codigo_rubro) AS codigo_rubro,
+            MAX(z.nombre_rubro) AS nombre_rubro,
+            MAX(z.nombre_subrubro) AS nombre_subrubro,
+            SUM(z.venta_neta) AS venta_neta,
+            SUM(z.costo_neto) AS costo_neto
+        FROM (
+            SELECT
+                COALESCE(sr.IDSubRubro, -1) AS id_subrubro,
+                COALESCE(a.CodigoRubro, -1) AS codigo_rubro,
+                CASE
+                    WHEN COALESCE(a.CodigoRubro, -1) = -1 THEN %s
+                    ELSE COALESCE(r.NombreRubro, %s)
+                END AS nombre_rubro,
+                CASE
+                    WHEN COALESCE(sr.IDSubRubro, -1) = -1 THEN %s
+                    ELSE COALESCE(sr.NombreSubRubro, %s)
+                END AS nombre_subrubro,
+                {neto} AS venta_neta,
+                {costo} AS costo_neto
+            FROM stock st
+            INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+            LEFT JOIN articulo a ON a.IDArt = st.IDArt
+            LEFT JOIN rubro r ON r.CodigoRubro = a.CodigoRubro
+            LEFT JOIN subrubro sr ON sr.IDSubRubro = a.IDSubRubro
+            WHERE cc.Fecha = %s
+              AND {base_w}{suc_sql}
+              AND st.Anulado = 'No'
+              AND st.TipoComp IN ({ph_tc})
+        ) z
+        GROUP BY z.id_subrubro
+        HAVING ABS(SUM(z.venta_neta)) > 0.000001 OR ABS(SUM(z.costo_neto)) > 0.000001
+        ORDER BY SUM(z.venta_neta) DESC, MAX(z.nombre_subrubro) ASC
+    """
+    params: List[Any] = [
+        _SIN_CLASIFICAR,
+        _SIN_CLASIFICAR,
+        _SIN_CLASIFICAR,
+        _SIN_CLASIFICAR,
+        dia,
+    ] + base_p + suc_p + list(_STOCK_TIPO_COMP)
+    cursor.execute(sql, params)
+    desc = cursor.description
+    if not desc or not isinstance(desc, (list, tuple)):
+        return []
+    cols = [d[0] for d in desc]
+    out: List[Dict[str, Any]] = []
+    for row in cursor.fetchall():
+        d = dict(zip(cols, row))
+        try:
+            isr = int(d.get("id_subrubro"))
+        except (TypeError, ValueError):
+            isr = -1
+        try:
+            cr = int(d.get("codigo_rubro"))
+        except (TypeError, ValueError):
+            cr = -1
+        vn = float(d.get("venta_neta") or 0)
+        cn = float(d.get("costo_neto") or 0)
+        ma = vn - cn
+        pct: Optional[float] = None if abs(vn) < 1e-9 else round(ma / vn * 100.0, 2)
+        nr = str(d.get("nombre_rubro") or _SIN_CLASIFICAR).strip() or _SIN_CLASIFICAR
+        ns = str(d.get("nombre_subrubro") or _SIN_CLASIFICAR).strip() or _SIN_CLASIFICAR
+        out.append(
+            {
+                "id_subrubro": isr,
+                "codigo_rubro": cr,
+                "nombre_rubro": nr,
+                "nombre_subrubro": ns,
+                "venta_neta": round(vn, 2),
+                "costo_neto": round(cn, 2),
+                "margen_absoluto": round(ma, 2),
+                "pct_sobre_venta": pct,
             }
         )
     return out
@@ -357,6 +577,10 @@ def run_executive_summary(
     split = _split_canal(cursor, hoy, mayorista_ids, minorista_ids, cod_sucursal)
     gap_vs_ayer = round(v_hoy - v_ayer, 2)
 
+    margen_bruto = _margen_bruto_totales_dia(cursor, hoy, cod_sucursal)
+    margen_por_rubro = _margen_por_rubro_dia(cursor, hoy, cod_sucursal)
+    margen_por_subrubro = _margen_por_subrubro_dia(cursor, hoy, cod_sucursal)
+
     return {
         "fecha_referencia": hoy.isoformat(),
         "kpis": {
@@ -370,6 +594,9 @@ def run_executive_summary(
             "ventas_ayer_monto": round(v_ayer, 2),
             "ventas_misma_semana_anterior_monto": round(v_sem, 2),
         },
+        "margen_bruto": margen_bruto,
+        "margen_por_rubro": margen_por_rubro,
+        "margen_por_subrubro": margen_por_subrubro,
         "split_mayorista_minorista": split,
         "serie_horaria": _serie_horaria(cursor, hoy, cod_sucursal),
         "serie_7_dias": _serie_7_dias(cursor, hoy, cod_sucursal),
@@ -381,10 +608,16 @@ def run_executive_summary(
         ),
         "sucursales_disponibles": fetch_sucursales_ejecutivo(cursor),
         "meta": {
-            "definicion": "executive-sales-v1",
+            "definicion": "executive-sales-v2",
             "hora_eje": "FechaControl",
             "dia_contable": "Fecha",
             "top_productos_criterio": "importe_neto_linea",
+            "margen_costo_criterio": "precio_costoxr_linea",
+            "margen_venta_criterio": "precio_netoxr_linea",
+            "nota_venta_neta_lineas_vs_comprobante": (
+                "El KPI «Ventas del día» suma SubtotalDesc por comprobante; la rentabilidad usa "
+                "PrecioNetoxR por renglón de stock (mismo universo que Top 10 / unidades). Los totales pueden diferir."
+            ),
             "cod_sucursal_filtro": cod_sucursal,
             "top_productos_orden": orden_tp,
         },

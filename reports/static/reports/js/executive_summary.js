@@ -25,6 +25,12 @@
     return `${sign}${v.toFixed(2)} %`;
   }
 
+  /** Porcentaje de margen sobre venta (sin signo forzado salvo el numérico). */
+  function fmtMargenSobreVentaPct(v) {
+    if (v === null || v === undefined || Number.isNaN(v)) return "N/D";
+    return `${Number(v).toFixed(2)} %`;
+  }
+
   const el = (id) => document.getElementById(id);
 
   /** Última carga de la API para redibujar gráficos al cambiar viewport. */
@@ -90,6 +96,10 @@
     slate: {
       bar: "from-slate-500 to-slate-600",
       icon: "bg-slate-500/15 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400",
+    },
+    teal: {
+      bar: "from-teal-500 to-emerald-500",
+      icon: "bg-teal-500/15 text-teal-600 dark:bg-teal-500/20 dark:text-teal-400",
     },
   };
 
@@ -238,6 +248,161 @@
     const btn = el("exec-open-pv-modal");
     if (btn) btn.addEventListener("click", openPvModal);
     staggerKpiGrid();
+  }
+
+  function renderRentabilidad(data) {
+    const notaEl = el("exec-rentabilidad-nota");
+    const kGrid = el("exec-margen-kpis");
+    const tablas = el("exec-margen-tablas");
+    if (!kGrid || !tablas) return;
+
+    const meta = data.meta || {};
+    if (notaEl) {
+      notaEl.textContent =
+        meta.nota_venta_neta_lineas_vs_comprobante ||
+        "Rentabilidad por renglón de facturación (PrecioNetoxR / PrecioCostoxR).";
+    }
+
+    const mb = data.margen_bruto || {};
+    const vn = Number(mb.venta_neta_lineas ?? 0);
+    const cn = Number(mb.costo_neto_lineas ?? 0);
+    const ma = Number(mb.margen_absoluto ?? vn - cn);
+    const pct = mb.pct_sobre_venta_lineas;
+
+    kGrid.innerHTML = [
+      kpiCard("Venta neta (líneas)", fmtMoney.format(vn), {
+        icon: "receipt_long",
+        accent: "teal",
+        span: "",
+        valueClass: "text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl",
+      }),
+      kpiCard("Costo neto (líneas)", fmtMoney.format(cn), {
+        icon: "inventory",
+        accent: "slate",
+        valueClass: "text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl",
+      }),
+      kpiCard("Margen bruto", `${fmtMoney.format(ma)} · ${fmtMargenSobreVentaPct(pct)}`, {
+        icon: "savings",
+        accent: "emerald",
+        valueClass: "text-lg font-bold tracking-tight text-slate-900 dark:text-white sm:text-xl",
+      }),
+    ].join("");
+
+    const rubros = data.margen_por_rubro || [];
+    const subrub = data.margen_por_subrubro || [];
+
+    function tablaMargenRubros(rows) {
+      if (!rows.length) {
+        return `<p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en rubros para el día.</p>`;
+      }
+      const head = `
+        <div class="mb-4 hidden overflow-x-auto lg:block">
+          <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por rubro</h3>
+          <table class="w-full min-w-[32rem] border-collapse text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
+                <th class="pb-2 pl-1 font-medium">Rubro</th>
+                <th class="pb-2 text-right font-medium">Venta neta</th>
+                <th class="pb-2 text-right font-medium">Costo</th>
+                <th class="pb-2 text-right font-medium">Margen</th>
+                <th class="pb-2 pr-1 text-right font-medium">% s/ venta</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows
+                .map(
+                  (r) => `
+                <tr class="border-b border-slate-100 dark:border-slate-800">
+                  <td class="py-2.5 pl-1 text-slate-800 dark:text-slate-100">${escapeHtml(r.nombre_rubro || "—")}</td>
+                  <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${fmtMoney.format(Number(r.venta_neta ?? 0))}</td>
+                  <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${fmtMoney.format(Number(r.costo_neto ?? 0))}</td>
+                  <td class="py-2.5 text-right font-medium tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</td>
+                  <td class="py-2.5 pr-1 text-right tabular-nums text-slate-600 dark:text-slate-300">${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</td>
+                </tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>`;
+      const cards = `
+        <div class="mb-4 space-y-2 lg:hidden">
+          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por rubro</h3>
+          ${rows
+            .map(
+              (r) => `
+            <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">${escapeHtml(r.nombre_rubro || "—")}</p>
+              <div class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+                <div><span class="font-medium">Venta</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.venta_neta ?? 0))}</span></div>
+                <div><span class="font-medium">Costo</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.costo_neto ?? 0))}</span></div>
+                <div><span class="font-medium">Margen</span><br/><span class="tabular-nums font-semibold text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</span></div>
+                <div><span class="font-medium">% s/ venta</span><br/>${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</div>
+              </div>
+            </div>`,
+            )
+            .join("")}
+        </div>`;
+      return head + cards;
+    }
+
+    function tablaMargenSubrubros(rows) {
+      if (!rows.length) {
+        return `<p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en subrubros para el día.</p>`;
+      }
+      const head = `
+        <div class="hidden overflow-x-auto lg:block">
+          <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por subrubro</h3>
+          <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
+                <th class="pb-2 pl-1 font-medium">Subrubro</th>
+                <th class="pb-2 font-medium">Rubro</th>
+                <th class="pb-2 text-right font-medium">Venta neta</th>
+                <th class="pb-2 text-right font-medium">Costo</th>
+                <th class="pb-2 text-right font-medium">Margen</th>
+                <th class="pb-2 pr-1 text-right font-medium">% s/ venta</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows
+                .map(
+                  (r) => `
+                <tr class="border-b border-slate-100 dark:border-slate-800">
+                  <td class="py-2.5 pl-1 text-slate-800 dark:text-slate-100">${escapeHtml(r.nombre_subrubro || "—")}</td>
+                  <td class="py-2.5 text-slate-600 dark:text-slate-400">${escapeHtml(r.nombre_rubro || "—")}</td>
+                  <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${fmtMoney.format(Number(r.venta_neta ?? 0))}</td>
+                  <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${fmtMoney.format(Number(r.costo_neto ?? 0))}</td>
+                  <td class="py-2.5 text-right font-medium tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</td>
+                  <td class="py-2.5 pr-1 text-right tabular-nums text-slate-600 dark:text-slate-300">${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</td>
+                </tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>`;
+      const cards = `
+        <div class="space-y-2 lg:hidden">
+          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por subrubro</h3>
+          ${rows
+            .map(
+              (r) => `
+            <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">${escapeHtml(r.nombre_subrubro || "—")}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(r.nombre_rubro || "—")}</p>
+              <div class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+                <div><span class="font-medium">Venta</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.venta_neta ?? 0))}</span></div>
+                <div><span class="font-medium">Costo</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.costo_neto ?? 0))}</span></div>
+                <div><span class="font-medium">Margen</span><br/><span class="tabular-nums font-semibold text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</span></div>
+                <div><span class="font-medium">% s/ venta</span><br/>${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</div>
+              </div>
+            </div>`,
+            )
+            .join("")}
+        </div>`;
+      return head + cards;
+    }
+
+    tablas.innerHTML = `<div class="max-w-full">${tablaMargenRubros(rubros)}${tablaMargenSubrubros(subrub)}</div>`;
   }
 
   /**
@@ -571,6 +736,7 @@
       updateTopOrdenBadge(data.meta || {});
       renderKpis(data);
       renderCharts(data);
+      renderRentabilidad(data);
       renderTopProductos(data);
     } catch (e) {
       showError(e.message || "Error al cargar el resumen.");

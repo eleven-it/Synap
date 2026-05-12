@@ -1,5 +1,5 @@
 change: resumen-gerencial-margen-bruto
-status: ready-for-implementation
+status: implemented
 updated: "2026-05-11"
 artifact_store: hybrid
 phases:
@@ -8,7 +8,6 @@ phases:
   spec: complete
   design: complete
   tasks: complete
+  apply: complete
 notes: >
-  Artefactos locales en openspec/changes/resumen-gerencial-margen-bruto/;
-  spec consolidada y docs actualizadas en el mismo commit lógico de planificación.
-  Implementación: /sdd-apply o checklist en tasks.md.
+  Backend + front + tests + docs. Pendiente verificación manual en entorno con MySQL empresa (§6 tasks).
