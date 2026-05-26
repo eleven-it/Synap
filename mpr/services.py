@@ -818,7 +818,17 @@ def estado_acciones_opt(
             lineas = get_op_detalle(base_empresa, id_lista_produccion)
         total_pendiente_opp = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
         out["total_pendiente_opp"] = total_pendiente_opp
-        out["puede_crear_opp"] = total_pendiente_opp > 0
+        deposito_origen = get_deposito_produccion_mpr(base_empresa)
+        componentes_opp = get_opp_componentes_disponibles(
+            base_empresa,
+            id_lista_produccion,
+            deposito_origen,
+        )
+        hay_disponible_opp = any(
+            float(c.get("max_distribuible_unidades") or 0) > 0
+            for c in (componentes_opp or [])
+        )
+        out["puede_crear_opp"] = hay_disponible_opp
 
         lineas_armado = get_lineas_armado_opt(base_empresa, id_lista_produccion)
         cantidades_armadas = get_cantidades_armadas_por_opt(base_empresa, id_lista_produccion)
@@ -1615,6 +1625,8 @@ def listar_ventana_pack(
     Orden de Producción de Trabajo (OPT): artículos con demanda de producción desde lista_produccion_agrupada
     (cantidad_pendiente_prod > 0, en_proceso_produccion='No'; excluye filas con codigo_movimiento_opt > 0 = OPT ya liberada),
     stock terminado (depósitos suma_stock='Si') y cantidad a fabricar.
+    Solo devuelve filas con cantidad_a_fabricar > 0: si el saldo cubre pedido + reserva maestra, la demanda
+    para producir está satisfecha y el artículo no se muestra en ventana-pack.
     La demanda depende de que se haya ejecutado actualizar_pedidos_produccion (o al crear la OPT).
     pedidos_resumen se arma desde lista_produccion_detalle + comp_ped (códigos de pedido distintos de 0);
     la demanda por reserva (detalle con codigo_movimiento_pedido = 0) aparece como fila sintética en el tooltip.
@@ -1845,7 +1857,10 @@ def listar_ventana_pack(
                     v["nombre_presentacion"] = "-"
                     v["cantidad_presentacion"] = None
                     v["detalle_stock_depositos_json"] = json.dumps({"filas": [], "total": 0, "disponible": 0, "reserva": 0})
-                return sorted(by_art.values(), key=lambda x: -x["cantidad_a_fabricar"])[:limit]
+                con_brecha_degradado = [
+                    r for r in by_art.values() if float(r.get("cantidad_a_fabricar") or 0) > 0
+                ]
+                return sorted(con_brecha_degradado, key=lambda x: -x["cantidad_a_fabricar"])[:limit]
             # COALESCE(d.suma_stock,'Si') por si la columna no existe aún
             placeholders = ",".join(["%s"] * len(ids))
             cursor.execute(
@@ -2057,7 +2072,11 @@ def listar_ventana_pack(
                     "disponible": total_raw,
                     "reserva": reserva,
                 })
-        return sorted(by_art.values(), key=lambda x: -x["cantidad_a_fabricar"])[:limit]
+        # Ventana-pack: no listar artículos cuya brecha de producción es cero (stock cubre P_ped + reserva).
+        con_brecha = [
+            r for r in by_art.values() if float(r.get("cantidad_a_fabricar") or 0) > 0
+        ]
+        return sorted(con_brecha, key=lambda x: -x["cantidad_a_fabricar"])[:limit]
     except MprSchemaError:
         raise
     except Exception as e:
@@ -2070,6 +2089,8 @@ def _listar_unidades_por_demanda(
     demanda_pedido: Dict[int, float],
     demanda_reserva_pack: Dict[int, float],
     limit: int = 200,
+    *,
+    restar_saldo_semi_en_cant_fabricar: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     Desglose por unidades (BOM): demanda en dos vectores (pedido vs reserva del pack terminado),
@@ -2077,6 +2098,11 @@ def _listar_unidades_por_demanda(
 
     No se usa ``articulo.stock_reserva`` del componente (colchón solo en pack terminado).
     Docenas: unidades / ``cantidad_promedio_bulto`` (÷ 12 si bulto ≤ 0).
+
+    Si ``restar_saldo_semi_en_cant_fabricar`` es False (pantalla Confirmar OPT tras Continuar),
+    ``cantidad_a_fabricar`` por fila es la demanda bruta ``dem_ped + dem_res`` (sin restar saldo Semi),
+    para que los valores editables reflejen lo elegido en ventana-pack/BOM; la columna Urgente sigue
+    usando la brecha frente al saldo en Semi elaborado.
     """
     all_ids = set(demanda_pedido.keys()) | set(demanda_reserva_pack.keys())
     if not all_ids:
@@ -2236,7 +2262,10 @@ def _listar_unidades_por_demanda(
                     origen_u = "—"
                 art = art_rows.get(id_art) or {}
                 st = float(stock_map.get(id_art, 0) or 0)
-                cant_a_fabricar = max(0.0, dem_total - st)
+                if restar_saldo_semi_en_cant_fabricar:
+                    cant_a_fabricar = max(0.0, dem_total - st)
+                else:
+                    cant_a_fabricar = max(0.0, dem_total)
                 cant_urgente_abs = max(0.0, dem_ped - st)
                 cant_urgente = cant_urgente_abs
                 id_pres_v = art.get("id_presentacionv")
@@ -2348,7 +2377,13 @@ def listar_unidades_desde_seleccion(
     abm_map = bulk_id_en_abm(base_empresa, art_ids, requiere_ensamblado_si=False) if art_ids else {}
     bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
     dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(filas_enriquecidas, abm_map, bom_map)
-    return _listar_unidades_por_demanda(base_empresa, dem_ped, dem_res, limit)
+    return _listar_unidades_por_demanda(
+        base_empresa,
+        dem_ped,
+        dem_res,
+        limit,
+        restar_saldo_semi_en_cant_fabricar=False,
+    )
 
 
 def lineas_opt_desde_formulario_unidades(
@@ -2410,6 +2445,12 @@ def lineas_opt_desde_formulario_unidades(
     return lineas
 
 
+def _mpr_en_proceso_detalle_es_si(val: Any) -> bool:
+    """True si la línea de lista_produccion_detalle está en producción (no debe pisarse desde Actualizar)."""
+    s = str_or_default(val, "No").strip().lower()
+    return s in ("si", "sí", "yes")
+
+
 def actualizar_pedidos_produccion(
     base_empresa: str,
     id_usuario: Optional[int],
@@ -2423,9 +2464,18 @@ def actualizar_pedidos_produccion(
     estado_pedido_opt='Pendiente' si aplica), solo artículos con articulo.tipo_art_fab = 'Terminado'.
     Además sincroniza la demanda por reserva (fila detalle con codigo_movimiento_pedido = 0).
     Si no hay pedidos en el rango, la operación sigue siendo correcta y solo aplica la sincronización por reserva.
-    Solo escribe en lista_produccion_detalle (INSERT) y lista_produccion_agrupada (INSERT/UPDATE).
+
+    Reconciliación (demanda vs pedido modificado antes de crear OPT):
+    - Para cada par (pedido, artículo) del origen con cantidad > 0: INSERT si no existe detalle; si existe y
+      en_proceso_produccion es pendiente, UPDATE cantidad_pedida / cantidad_pendiente_prod (preserva fabricado
+      parcial: pendiente_nuevo = max(0, cantidad_pedido - max(0, pedida_old - pendiente_old))).
+    - Elimina líneas de detalle pendientes (en_proceso No, cod_ped <> 0) cuyo pedido está en el alcance del
+      SELECT origen pero el par (cod_ped, id_art) ya no aparece con cantidad > 0 (línea borrada o qty 0).
+    - No modifica codigo_movimiento_pedido = 0 (demanda por reserva) ni líneas en_proceso Si.
+    - Tras SUM por artículo, pone a cero filas de lista_produccion_agrupada pendientes sin filas en detalle.
+
+    Solo escribe en lista_produccion_detalle (INSERT/UPDATE/DELETE selectivo) y lista_produccion_agrupada (INSERT/UPDATE).
     Nunca asigna en_proceso_produccion = 'Si' (eso solo ocurre al crear la OPT con crear_opt_multiples_articulos).
-    Solo inserta/actualiza con en_proceso_produccion = 'No' y solo toca filas con en_proceso_produccion = 'No' en agrupada.
     Devuelve (éxito, mensaje).
     """
     if not (base_empresa or "").strip():
@@ -2480,7 +2530,21 @@ def actualizar_pedidos_produccion(
             filas_origen = cursor.fetchall() or []
             hoy = date.today().strftime("%Y-%m-%d")
             id_usuario_val = id_usuario if id_usuario is not None else 0
-            # 1) lista_produccion_detalle: INSERT si no existe (codigo_movimiento_pedido, id_articulo) desde pedidos PED
+            # Alcance del SELECT origen: pedidos que entraron en el filtro (fecha/búsqueda). Solo reconciliar huérfanos ahí.
+            codigos_scope: Set[int] = set()
+            pares_origen: Set[Tuple[int, int]] = set()
+            for row in filas_origen:
+                cod_ped = to_int_or_none(row[0])
+                id_art = to_int_or_none(row[1])
+                try:
+                    qty_scan = int(float(row[2] or 0))
+                except (TypeError, ValueError):
+                    qty_scan = 0
+                if cod_ped is not None:
+                    codigos_scope.add(cod_ped)
+                if cod_ped is not None and id_art is not None and qty_scan > 0:
+                    pares_origen.add((cod_ped, id_art))
+            # 1) lista_produccion_detalle: INSERT o UPDATE desde PED; no modifica cod_ped=0 ni líneas en_proceso Si
             for row in filas_origen:
                 cod_ped = to_int_or_none(row[0])
                 id_art = to_int_or_none(row[1])
@@ -2490,33 +2554,107 @@ def actualizar_pedidos_produccion(
                     qty = 0
                 if cod_ped is None or id_art is None or qty <= 0:
                     continue
-                cursor.execute(
-                    f"SELECT 1 FROM {tbl_detalle} WHERE codigo_movimiento_pedido = %s AND id_articulo = %s LIMIT 1",
-                    [cod_ped, id_art],
-                )
-                if cursor.fetchone():
-                    continue
+                ep_val = "No"
+                ex = None
                 try:
                     cursor.execute(
                         f"""
-                        INSERT INTO {tbl_detalle}
-                        (codigo_movimiento_pedido, id_articulo, cantidad_pedida, cantidad_pendiente_prod, id_usuario, en_proceso_produccion, Fecha)
-                        VALUES (%s, %s, %s, %s, %s, 'No', %s)
+                        SELECT cantidad_pedida, cantidad_pendiente_prod,
+                               COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No')
+                        FROM {tbl_detalle}
+                        WHERE codigo_movimiento_pedido = %s AND id_articulo = %s
+                        LIMIT 1
                         """,
-                        [cod_ped, id_art, qty, qty, id_usuario_val, hoy],
+                        [cod_ped, id_art],
                     )
-                except Exception as ins_err:
-                    if "1054" in str(ins_err):
+                    ex = cursor.fetchone()
+                    if ex is not None and len(ex) > 2:
+                        ep_val = ex[2]
+                except Exception as sel_err:
+                    if "1054" not in str(sel_err):
+                        raise sel_err
+                    cursor.execute(
+                        f"""
+                        SELECT cantidad_pedida, cantidad_pendiente_prod
+                        FROM {tbl_detalle}
+                        WHERE codigo_movimiento_pedido = %s AND id_articulo = %s
+                        LIMIT 1
+                        """,
+                        [cod_ped, id_art],
+                    )
+                    ex = cursor.fetchone()
+                if not ex:
+                    try:
                         cursor.execute(
                             f"""
                             INSERT INTO {tbl_detalle}
-                            (codigo_movimiento_pedido, id_articulo, cantidad_pedida, cantidad_pendiente_prod, en_proceso_produccion, Fecha)
-                            VALUES (%s, %s, %s, %s, 'No', %s)
+                            (codigo_movimiento_pedido, id_articulo, cantidad_pedida, cantidad_pendiente_prod, id_usuario, en_proceso_produccion, Fecha)
+                            VALUES (%s, %s, %s, %s, %s, 'No', %s)
                             """,
-                            [cod_ped, id_art, qty, qty, hoy],
+                            [cod_ped, id_art, qty, qty, id_usuario_val, hoy],
                         )
-                    else:
-                        raise ins_err
+                    except Exception as ins_err:
+                        if "1054" in str(ins_err):
+                            cursor.execute(
+                                f"""
+                                INSERT INTO {tbl_detalle}
+                                (codigo_movimiento_pedido, id_articulo, cantidad_pedida, cantidad_pendiente_prod, en_proceso_produccion, Fecha)
+                                VALUES (%s, %s, %s, %s, 'No', %s)
+                                """,
+                                [cod_ped, id_art, qty, qty, hoy],
+                            )
+                        else:
+                            raise ins_err
+                    continue
+                try:
+                    ped_old = int(float(ex[0] or 0))
+                    pend_old = int(float(ex[1] or 0))
+                except (TypeError, ValueError):
+                    ped_old, pend_old = 0, 0
+                if _mpr_en_proceso_detalle_es_si(ep_val):
+                    continue
+                fab = max(0, ped_old - pend_old)
+                ped_new = qty
+                pend_new = max(0, ped_new - fab)
+                cursor.execute(
+                    f"""
+                    UPDATE {tbl_detalle}
+                    SET cantidad_pedida = %s, cantidad_pendiente_prod = %s
+                    WHERE codigo_movimiento_pedido = %s AND id_articulo = %s
+                      AND COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No') = 'No'
+                    """,
+                    [ped_new, pend_new, cod_ped, id_art],
+                )
+            # 1b) Quitar líneas PED pendientes que ya no están en el origen (mismo alcance de pedidos del SELECT)
+            if codigos_scope:
+                cod_list = sorted(codigos_scope)
+                ph_cod = ",".join(["%s"] * len(cod_list))
+                if pares_origen:
+                    plist = list(pares_origen)
+                    ph_pairs = ",".join(["(%s,%s)"] * len(plist))
+                    flat_pairs: List[Any] = []
+                    for c_p, a_p in plist:
+                        flat_pairs.extend([c_p, a_p])
+                    cursor.execute(
+                        f"""
+                        DELETE FROM {tbl_detalle}
+                        WHERE COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No') = 'No'
+                          AND codigo_movimiento_pedido <> 0
+                          AND codigo_movimiento_pedido IN ({ph_cod})
+                          AND (codigo_movimiento_pedido, id_articulo) NOT IN ({ph_pairs})
+                        """,
+                        cod_list + flat_pairs,
+                    )
+                else:
+                    cursor.execute(
+                        f"""
+                        DELETE FROM {tbl_detalle}
+                        WHERE COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No') = 'No'
+                          AND codigo_movimiento_pedido <> 0
+                          AND codigo_movimiento_pedido IN ({ph_cod})
+                        """,
+                        cod_list,
+                    )
             tbl_sd_ap = _nombre_tabla(cursor, "stock_deposito")
             tbl_dep_ap = _nombre_tabla(cursor, "deposito")
             try:
@@ -2544,6 +2682,7 @@ def actualizar_pedidos_produccion(
                 """,
             )
             sumas = cursor.fetchall()
+            ids_in_sum: Set[int] = set()
             for row in sumas:
                 id_art = to_int_or_none(row[0])
                 try:
@@ -2556,6 +2695,7 @@ def actualizar_pedidos_produccion(
                     total_pendiente = 0
                 if id_art is None:
                     continue
+                ids_in_sum.add(id_art)
                 # Solo considerar filas aún no en OPT (en_proceso_produccion = 'No'); no tocar filas ya en producción
                 cursor.execute(
                     f"SELECT id_lista_produccion, cantidad_pendiente_prod FROM {tbl_agrupada} WHERE id_articulo = %s AND COALESCE(TRIM(en_proceso_produccion), 'No') = 'No' LIMIT 1",
@@ -2594,10 +2734,33 @@ def actualizar_pedidos_produccion(
                 except Exception as upd_det:
                     if "1054" not in str(upd_det):
                         raise upd_det
+            # 3) Agrupada pendiente sin líneas en detalle (p. ej. solo había demanda PED eliminada en reconciliación)
+            cursor.execute(
+                f"""
+                SELECT id_lista_produccion, id_articulo FROM {tbl_agrupada}
+                WHERE COALESCE(TRIM(en_proceso_produccion), 'No') = 'No'
+                """,
+            )
+            for zrow in cursor.fetchall() or []:
+                id_lista_z = zrow[0]
+                id_art_z = to_int_or_none(zrow[1])
+                if id_art_z is None or id_art_z in ids_in_sum:
+                    continue
+                cursor.execute(
+                    f"""
+                    UPDATE {tbl_agrupada}
+                    SET cantidad_pedida = 0, cantidad_pendiente_prod = 0
+                    WHERE id_lista_produccion = %s
+                      AND COALESCE(TRIM(en_proceso_produccion), 'No') = 'No'
+                    """,
+                    [id_lista_z],
+                )
             conn.commit()
             partes_msg: List[str] = []
             if filas_origen:
-                partes_msg.append("Se incorporaron líneas desde pedidos a la lista de producción.")
+                partes_msg.append(
+                    "Se sincronizaron pedidos pendientes con la lista de producción (cantidades, líneas y agrupada)."
+                )
             partes_msg.append("Se sincronizó la demanda por reserva de stock.")
             return True, " ".join(partes_msg)
     except MprSchemaError:
@@ -5871,13 +6034,18 @@ def _explode_packs_to_components(
 def get_opp_componentes_disponibles(
     base_empresa: str,
     id_lista_produccion: int,
+    id_deposito_origen: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
     Devuelve la lista de componentes con unidades disponibles para distribuir en OPP.
 
     Explota los packs de la OPT (get_opt_detalle) × cantidad_pendiente_prod vía BOM;
-    agrega por id_articulo componente y devuelve id_articulo, codigo_articulo,
-    descripcion_articulo, disponible_unidades. Orden estable por id_articulo.
+    agrega por id_articulo componente y devuelve:
+      - pendiente_unidades: demanda pendiente por componente en la OPT
+      - stock_produccion_unidades: saldo actual en depósito de Producción (si se informa)
+      - max_distribuible_unidades: mínimo entre pendiente y stock origen (si se informa)
+      - disponible_unidades: alias retrocompatible de pendiente_unidades
+    Orden estable por id_articulo.
     """
     if not (base_empresa or "").strip() or id_lista_produccion is None:
         return []
@@ -5926,13 +6094,40 @@ def get_opp_componentes_disponibles(
                         str_or_default(r.get("codigo"), str(aid)),
                         str_or_default(r.get("descripcion"), "-"),
                     )
+            stock_prod_por_id: Dict[int, float] = {}
+            dep_origen = to_int_or_none(id_deposito_origen)
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            if dep_origen and tbl_sd:
+                cursor.execute(
+                    f"""
+                    SELECT id_articulo, COALESCE(saldo, 0) AS saldo
+                    FROM {tbl_sd}
+                    WHERE id_deposito = %s
+                      AND id_articulo IN ({placeholders})
+                    """,
+                    [dep_origen, *ids],
+                )
+                for rs in cursor.fetchall() or []:
+                    aid = to_int_or_none(rs.get("id_articulo"))
+                    if aid is None:
+                        continue
+                    try:
+                        stock_prod_por_id[aid] = float(rs.get("saldo") or 0)
+                    except (TypeError, ValueError):
+                        stock_prod_por_id[aid] = 0.0
             for id_art in ids:
                 codigo, descripcion = art_por_id.get(id_art, (str(id_art), "-"))
+                pendiente = float(agregado[id_art] or 0)
+                stock_prod = float(stock_prod_por_id.get(id_art, 0.0))
+                max_distrib = min(pendiente, stock_prod) if dep_origen else pendiente
                 resultado.append({
                     "id_articulo": id_art,
                     "codigo_articulo": codigo,
                     "descripcion_articulo": descripcion,
-                    "disponible_unidades": agregado[id_art],
+                    "pendiente_unidades": pendiente,
+                    "stock_produccion_unidades": stock_prod,
+                    "max_distribuible_unidades": max_distrib,
+                    "disponible_unidades": pendiente,
                 })
     except Exception as e:
         logger.warning(

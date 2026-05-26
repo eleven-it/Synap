@@ -34,8 +34,10 @@ _LEGACY_LISTADOS_SLUGS = frozenset(
         "mayoristapp-estado-pedidos-preparacion",
         "ventas-objetivos-vs-bo",
         "ventas-por-vendedor",
+        "ventas-por-articulo",
         "stock-existencias",
         "resumen-ejecutivo-ventas",
+        "command-center-gerencial",
     }
 )
 _LEGACY_ORDER_DEFAULT = 999

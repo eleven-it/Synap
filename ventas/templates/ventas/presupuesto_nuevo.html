@@ -1,0 +1,1574 @@
+{% extends "base_app.html" %}
+{% load static %}
+{% block extra_meta %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+{% endblock %}
+{% block title %}{% if solo_lectura %}Presupuesto {{ cab.nro_comprobante }} | Synap{% else %}Nuevo presupuesto | Synap{% endif %}{% endblock %}
+{% block content %}
+<style>
+  .pre-doc { font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif; }
+  .pre-mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+  .pre-doc input::placeholder { opacity: 0.45; }
+  .pre-lineas-scroll { scrollbar-width: thin; }
+  /* Misma base que reportes (dashboard_detail) para tags-filter */
+  .pre-doc .tags-filter-container { position: relative; }
+  .pre-doc .tags-chips { min-height: 1.5rem; }
+  .pre-doc .tags-input:focus { outline: none; }
+  .pre-doc .tags-dropdown {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+  .pre-doc .tags-dropdown [data-value]:hover { background-color: rgb(241 245 249); }
+  .dark .pre-doc .tags-dropdown [data-value]:hover { background-color: rgb(51 65 85); }
+  /* Hoja única: textura muy sutil (no ruido visual fuerte) */
+  .pre-sheet {
+    background-color: rgb(255 255 255 / 0.92);
+    background-image:
+      radial-gradient(ellipse 120% 80% at 100% 0%, rgb(6 182 212 / 0.06), transparent 55%),
+      radial-gradient(ellipse 80% 50% at 0% 100%, rgb(100 116 139 / 0.05), transparent 50%);
+  }
+  .dark .pre-sheet {
+    background-color: rgb(15 23 42 / 0.85);
+    background-image:
+      radial-gradient(ellipse 100% 60% at 100% 0%, rgb(6 182 212 / 0.09), transparent 50%),
+      radial-gradient(ellipse 90% 40% at 0% 100%, rgb(51 65 85 / 0.35), transparent 55%);
+  }
+  /* Campos discretos (Tailwind CDN no compila @apply en bloques sueltos) */
+  .pre-doc .pre-field {
+    width: 100%;
+    border-radius: 0.375rem;
+    border: 0;
+    background-color: rgb(248 250 252 / 0.92);
+    box-shadow: inset 0 0 0 1px rgb(226 232 240 / 0.85);
+    color: rgb(15 23 42);
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .pre-doc .pre-field::placeholder { color: rgb(148 163 184); }
+  .pre-doc .pre-field:focus {
+    outline: none;
+    background-color: rgb(255 255 255);
+    box-shadow: inset 0 0 0 2px rgb(6 182 212 / 0.45);
+  }
+  .pre-doc .pre-field:disabled { opacity: 0.5; }
+  .pre-doc select.pre-field {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    cursor: pointer;
+    background-image: linear-gradient(45deg, transparent 50%, rgb(100 116 139 / 0.55) 50%), linear-gradient(135deg, rgb(100 116 139 / 0.55) 50%, transparent 50%);
+    background-position: calc(100% - 14px) calc(50% + 2px), calc(100% - 9px) calc(50% + 2px);
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 1.75rem;
+    appearance: none;
+  }
+  .dark .pre-doc select.pre-field {
+    background-image: linear-gradient(45deg, transparent 50%, rgb(148 163 184 / 0.65) 50%), linear-gradient(135deg, rgb(148 163 184 / 0.65) 50%, transparent 50%);
+  }
+  .pre-doc textarea.pre-field {
+    resize: vertical;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    line-height: 1.45;
+  }
+  .pre-footer-obs {
+    min-height: 7.5rem;
+  }
+  .dark .pre-doc .pre-field {
+    background-color: rgb(30 41 59 / 0.65);
+    color: rgb(241 245 249);
+    box-shadow: inset 0 0 0 1px rgb(71 85 105 / 0.75);
+  }
+  .dark .pre-doc .pre-field::placeholder { color: rgb(100 116 139); }
+  .dark .pre-doc .pre-field:focus {
+    background-color: rgb(15 23 42);
+    box-shadow: inset 0 0 0 2px rgb(34 211 238 / 0.35);
+  }
+  /* Descuento: grupo único (toggle %|$ + input), mismo aspecto que .pre-field */
+  .pre-doc .pre-dto-group {
+    display: flex;
+    width: 100%;
+    align-items: stretch;
+    min-height: 2.25rem;
+    border-radius: 0.375rem;
+    background-color: rgb(248 250 252 / 0.92);
+    box-shadow: inset 0 0 0 1px rgb(226 232 240 / 0.85);
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  /* Renglones: misma altura visual que inputs .pre-field (py-1.5 + text-sm ≈ 2rem) */
+  .pre-doc table tbody .pre-dto-group {
+    min-height: 2rem;
+  }
+  .dark .pre-doc .pre-dto-group {
+    background-color: rgb(30 41 59 / 0.65);
+    box-shadow: inset 0 0 0 1px rgb(71 85 105 / 0.75);
+  }
+  .pre-doc .pre-dto-group:focus-within {
+    background-color: rgb(255 255 255);
+    box-shadow: inset 0 0 0 2px rgb(6 182 212 / 0.45);
+  }
+  .dark .pre-doc .pre-dto-group:focus-within {
+    background-color: rgb(15 23 42);
+    box-shadow: inset 0 0 0 2px rgb(34 211 238 / 0.35);
+  }
+  .pre-doc .pre-dto-group input.pre-dto-group-input {
+    flex: 1 1 0%;
+    min-width: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: rgb(15 23 42);
+    outline: none;
+  }
+  .pre-doc .pre-dto-group input.pre-dto-group-input:focus {
+    outline: none;
+  }
+  .pre-doc .pre-dto-group input.pre-dto-group-input::placeholder {
+    color: rgb(148 163 184);
+  }
+  .pre-doc .pre-dto-group input.pre-dto-group-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .dark .pre-doc .pre-dto-group input.pre-dto-group-input {
+    color: rgb(241 245 249);
+  }
+  .pre-doc .pre-dto-seg-btn:focus-visible {
+    outline: 2px solid rgb(6 182 212 / 0.55);
+    outline-offset: -1px;
+    z-index: 1;
+  }
+  .pre-doc .pre-dto-seg-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  #pre-busy-modal:not(.hidden) { pointer-events: auto; }
+  @keyframes pre-spin { to { transform: rotate(360deg); } }
+</style>
+<section class="pre-doc min-h-[calc(100vh-5rem)] w-full bg-slate-200/60 py-6 dark:bg-slate-950 sm:py-8">
+  <div class="mx-auto w-full max-w-none px-3 sm:px-5 lg:px-8 xl:px-10 2xl:px-12">
+
+    <div class="mb-5 flex flex-wrap items-center gap-3 text-sm">
+      <a href="{{ volver_url }}" class="text-slate-500 transition hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-400">← Presupuestos</a>
+      <span class="hidden text-slate-300 sm:inline dark:text-slate-600" aria-hidden="true">/</span>
+      <span class="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Ventas</span>
+    </div>
+
+    {% if not puede_emitir and not solo_lectura %}
+    <p class="mb-4 rounded-lg border border-amber-300/60 bg-amber-50/90 px-4 py-2.5 text-sm text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
+      Sin permiso de carga (<code class="rounded bg-amber-100/80 px-1 text-xs dark:bg-amber-900/60">carga_comp_ped</code>). El usuario <strong>supervisor</strong> puede emitir.
+    </p>
+    {% endif %}
+
+    <article class="pre-sheet overflow-hidden rounded-xl shadow-[0_1px_3px_rgb(0_0_0_/0.06),0_12px_40px_-12px_rgb(15_23_42_/0.12)] ring-1 ring-slate-900/[0.04] dark:shadow-[0_1px_3px_rgb(0_0_0_/0.4),0_20px_50px_-20px_rgb(0_0_0_/0.5)] dark:ring-white/[0.06]">
+
+      <form method="post" action="" id="pre-form-nuevo" class="flex flex-col" novalidate {% if solo_lectura %}aria-readonly="true"{% endif %}>
+        {% csrf_token %}
+        <div id="pre-app-flags" hidden
+             data-solo-lectura="{% if solo_lectura %}true{% else %}false{% endif %}"
+             {% if not solo_lectura %}
+             data-default-cod-viajante="{% if default_cod_viajante %}{{ default_cod_viajante }}{% endif %}"
+             data-default-id-condventa="{{ default_id_condventa }}"
+             data-default-lista-precio="2"
+             {% endif %}></div>
+        <input type="hidden" name="codigo_cliente" id="pre-cli-cod" value="{% if solo_lectura and cab.codigo_cliente %}{{ cab.codigo_cliente }}{% endif %}" autocomplete="off" {% if solo_lectura %}disabled{% endif %} />
+
+        {# Cabecera del documento: título + estado + acciones (franja compacta) #}
+        <header class="flex flex-col gap-2 border-b border-slate-200/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-slate-700/80">
+          <div class="min-w-0">
+            {% if solo_lectura %}
+            <h1 class="text-lg font-semibold tracking-tight text-slate-900 dark:text-white sm:text-xl">Presupuesto {{ cab.nro_comprobante }}</h1>
+            <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+              <abbr title="Presupuesto de venta" class="cursor-help border-b border-dotted border-slate-400">PRE</abbr>
+              · Movimiento <span class="font-mono text-slate-700 dark:text-slate-300">{{ cab.codigo_movimiento }}</span>
+              {% if cab.importe_venta is not none %}· Importe cabecera {{ importe_cab_fmt }}{% endif %}
+            </p>
+            {% else %}
+            <h1 class="text-lg font-semibold tracking-tight text-slate-900 dark:text-white sm:text-xl">Nuevo presupuesto</h1>
+            <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
+              Tipo <abbr title="Presupuesto de venta" class="cursor-help border-b border-dotted border-slate-400">PRE</abbr>
+              · Numeración en modo <span class="font-medium text-slate-700 dark:text-slate-300">sistema</span>
+            </p>
+            {% endif %}
+          </div>
+          <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+            {% if solo_lectura %}
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-600">Estado: {{ cab.estado }}</span>
+            {% if cab.anulado and cab.anulado != 'No' %}
+            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-900 ring-1 ring-amber-200/80 dark:bg-amber-950/50 dark:text-amber-200 dark:ring-amber-800">Anulado</span>
+            {% endif %}
+            {% else %}
+            <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-600">Borrador</span>
+            {% endif %}
+            <div class="flex flex-wrap items-center gap-2">
+              {% if solo_lectura %}
+              <a href="{{ export_presupuesto_url }}" class="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                Descargar Excel
+              </a>
+              {% endif %}
+              <a href="{{ volver_url }}" class="rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 dark:text-slate-300 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-900">{% if solo_lectura %}Volver{% else %}Cancelar{% endif %}</a>
+              {% if not solo_lectura %}
+              <button type="submit" name="action" value="guardar"
+                      {% if not puede_emitir %}disabled{% endif %}
+                      class="hidden items-center gap-1.5 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 lg:inline-flex dark:focus-visible:ring-offset-slate-900">
+                <span class="material-icons text-[18px]" aria-hidden="true">save</span>
+                Guardar
+              </button>
+              {% endif %}
+            </div>
+          </div>
+        </header>
+
+        {# Cabecera 3×2: fechas como VO + filtros tags idénticos a reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes (initializeTagsFilter) #}
+        <div class="border-b border-slate-200/80 px-4 py-3 sm:px-6 dark:border-slate-700/70">
+          <div class="grid grid-cols-1 gap-x-3 gap-y-3 sm:grid-cols-3">
+            {# Fila 1: Fecha | Cliente | Vendedor #}
+            <label class="flex flex-col gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <span>Fecha</span>
+              <input type="date" name="fecha" id="pre-fecha" {% if not solo_lectura %}required{% endif %}
+                     value="{% if solo_lectura %}{{ fecha_presupuesto_iso }}{% endif %}"
+                     {% if solo_lectura or not puede_emitir %}disabled{% endif %}
+                     class="bo-date-input synap-input w-auto min-w-[148px] h-9 min-h-[2.25rem] px-3 py-0 text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300" />
+            </label>
+
+            <label class="flex min-w-0 flex-col gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <span>Cliente</span>
+              {% if solo_lectura %}
+              <div id="pre-cli-ver" class="pre-field px-2.5 py-1.5 text-sm text-slate-800 dark:text-slate-100">
+                {{ cab.nombre_cliente }}{% if cab.codigo_cliente %} <span class="text-slate-500 dark:text-slate-400">(#{{ cab.codigo_cliente }})</span>{% endif %}
+              </div>
+              <p id="pre-cli-sel" class="hidden" role="status" aria-live="polite"></p>
+              {% else %}
+              <div class="relative">
+                <select id="pre_cliente" multiple class="hidden" data-tags-field="pre_cliente" {% if not puede_emitir %}disabled{% endif %}></select>
+                <div id="pre_cliente_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                  <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                  <input type="text" id="pre_cliente_search" name="q_lookup" autocomplete="off" {% if not puede_emitir %}disabled{% endif %}
+                         class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                         placeholder="Buscar cliente..." />
+                  <div id="pre_cliente_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                </div>
+              </div>
+              <p id="pre-cli-sel" class="mt-0.5 min-h-[1rem] text-[10px] font-normal italic text-slate-400 dark:text-slate-500" role="status" aria-live="polite"></p>
+              {% endif %}
+            </label>
+
+            <label class="flex min-w-0 flex-col gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <span>Vendedor</span>
+              {% if solo_lectura %}
+              <div id="pre-viajante-ver" class="pre-field px-2.5 py-1.5 text-sm text-slate-800 dark:text-slate-100">
+                {% if cab.nombre_viajante %}{{ cab.nombre_viajante }}{% elif cab.cod_viajante %}Código {{ cab.cod_viajante }}{% else %}—{% endif %}
+              </div>
+              {% else %}
+              <input type="hidden" name="cod_viajante" id="pre_viajante_hid" value="" autocomplete="off" />
+              <div class="relative">
+                <select id="pre_viajante" multiple class="hidden" data-tags-field="pre_viajante" {% if not puede_emitir %}disabled{% endif %}>
+                  <option value="" {% if not default_cod_viajante %}selected{% endif %}>Predeterminado (sesión)</option>
+                  {% for v in viajantes %}
+                  <option value="{{ v.CodViajante }}" {% if default_cod_viajante and v.CodViajante == default_cod_viajante %}selected{% endif %}>{{ v.Nombre|default:v.CodViajante }}</option>
+                  {% endfor %}
+                </select>
+                <div id="pre_viajante_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                  <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                  <input type="text" id="pre_viajante_search" autocomplete="off" {% if not puede_emitir %}disabled{% endif %}
+                         class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                         placeholder="Buscar vendedor..." />
+                  <div id="pre_viajante_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                </div>
+              </div>
+              {% endif %}
+            </label>
+
+            {# Fila 2: Vencimiento | Lista de precio | Cond. venta #}
+            <label class="flex flex-col gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400" title="Vacío: fecha del documento + 30 días">
+              <span>Vencimiento</span>
+              {% if solo_lectura %}
+              <div class="pre-field px-2.5 py-1.5 text-sm text-slate-800 dark:text-slate-100">{{ cab.vencimiento_fmt|default:"—" }}</div>
+              {% else %}
+              <input type="date" name="vencimiento" id="pre-vencimiento" autocomplete="off"
+                     title="Opcional: vacío = fecha documento + 30 días"
+                     {% if not puede_emitir %}disabled{% endif %}
+                     class="bo-date-input synap-input w-auto min-w-[148px] h-9 min-h-[2.25rem] px-3 py-0 text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300" />
+              {% endif %}
+            </label>
+
+            <label class="flex min-w-0 flex-col gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400" title="Precio sugerido al buscar artículos (no se guarda en cabecera)">
+              <span>Lista de precio</span>
+              {% if solo_lectura %}
+              <div id="pre-lista-precio-ver" class="pre-field px-2.5 py-1.5 text-sm text-slate-600 dark:text-slate-300">—</div>
+              {% else %}
+              <input type="hidden" name="lista_precio_ui" id="pre_lista_hid" value="2" autocomplete="off" />
+              <div class="relative">
+                <select id="pre_lista_precio" multiple class="hidden" data-tags-field="pre_lista_precio" {% if not puede_emitir %}disabled{% endif %}>
+                  <option value="0">Costo</option>
+                  <option value="1">Lista Oficial</option>
+                  <option value="2" selected>Lista 1</option>
+                  <option value="3">Lista 2</option>
+                  <option value="4">Lista 3</option>
+                  <option value="5">Lista 4</option>
+                  <option value="6">Lista 5</option>
+                </select>
+                <div id="pre_lista_precio_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                  <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                  <input type="text" id="pre_lista_precio_search" autocomplete="off" {% if not puede_emitir %}disabled{% endif %}
+                         class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                         placeholder="Buscar lista de precios..." />
+                  <div id="pre_lista_precio_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                </div>
+              </div>
+              {% endif %}
+            </label>
+
+            <label class="flex min-w-0 flex-col gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              <span>Cond. venta</span>
+              {% if solo_lectura %}
+              <div id="pre-cond-venta" class="pre-field px-2.5 py-1.5 text-sm text-slate-800 dark:text-slate-100">
+                {{ cab.cond_venta|default:"—" }}{% if cab.id_condventa %} <span class="text-slate-400 dark:text-slate-500">({{ cab.id_condventa }})</span>{% endif %}
+              </div>
+              {% else %}
+              <input type="hidden" name="id_condventa" id="pre_cond_hid" value="{{ default_id_condventa }}" autocomplete="off" />
+              <div class="relative">
+                <select id="pre_condventa" multiple class="hidden" data-tags-field="pre_condventa" {% if not puede_emitir %}disabled{% endif %}>
+                  {% for cv in condiciones_venta %}
+                  <option value="{{ cv.codigo }}" {% if cv.codigo == default_id_condventa %}selected{% endif %}>{{ cv.descripcion }}</option>
+                  {% empty %}
+                  <option value="1" selected>Contado</option>
+                  {% endfor %}
+                </select>
+                <div id="pre_condventa_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                  <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                  <input type="text" id="pre_condventa_search" autocomplete="off" {% if not puede_emitir %}disabled{% endif %}
+                         class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                         placeholder="Buscar condición..." />
+                  <div id="pre_condventa_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                </div>
+              </div>
+              {% endif %}
+            </label>
+          </div>
+        </div>
+
+        {# Líneas #}
+        <div class="px-4 py-5 sm:px-6">
+          <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-white sm:text-base">Líneas del presupuesto</h2>
+            </div>
+            {% if not solo_lectura %}
+            <div class="flex flex-wrap items-center gap-4 text-sm">
+              <button type="button" id="pre-linea-add"
+                      {% if not puede_emitir %}disabled{% endif %}
+                      class="font-medium text-cyan-600 underline-offset-4 transition hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:text-cyan-400 dark:focus-visible:ring-offset-slate-900">
+                + Añadir renglón
+              </button>
+              <button type="button" id="pre-linea-dup"
+                      {% if not puede_emitir %}disabled{% endif %}
+                      class="font-medium text-slate-600 underline-offset-4 transition hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:focus-visible:ring-offset-slate-900">
+                Duplicar último
+              </button>
+            </div>
+            {% endif %}
+          </div>
+
+          {% if solo_lectura and error_lineas %}
+          <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
+            No se pudieron cargar todos los datos de renglones: {{ error_lineas }}
+          </div>
+          {% endif %}
+
+          <div class="pre-lineas-scroll w-full overflow-x-auto pb-1">
+            {# Anchos table-fixed: código corto/medio, descripción ocupa el flexible mayor, cantidades/importes acotados, acción fija #}
+            <table class="w-full min-w-[48rem] table-fixed border-collapse text-left text-sm">
+              <colgroup>
+                <col style="width:11%" />
+                <col style="width:33%" />
+                <col style="width:6%" />
+                <col style="width:9%" />
+                <col style="width:14%" />
+                <col style="width:5%" />
+                <col style="width:8%" />
+                <col style="width:10%" />
+                <col style="width:4%" />
+              </colgroup>
+              <thead>
+                <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
+                  <th scope="col" class="pb-3 pl-1 font-medium">CODIGO</th>
+                  <th scope="col" class="pb-3 font-medium">DESCRIPCION</th>
+                  <th scope="col" class="whitespace-nowrap pb-3 text-right font-medium">CANTIDAD</th>
+                  <th scope="col" class="whitespace-nowrap pb-3 text-right font-medium">PRECIO UNITARIO</th>
+                  <th scope="col" class="whitespace-nowrap pb-3 text-right font-medium">DESCUENTO</th>
+                  <th scope="col" class="whitespace-nowrap pb-3 text-right font-medium">IVA %</th>
+                  <th scope="col" class="whitespace-nowrap pb-3 text-right font-medium">IVA</th>
+                  <th scope="col" class="whitespace-nowrap pb-3 pr-1 text-right font-medium">SUBTOTAL</th>
+                  <th scope="col" class="pb-3 pr-1 text-center"><span class="sr-only">Eliminar</span></th>
+                </tr>
+              </thead>
+              <tbody id="pre-lineas">
+                {% if solo_lectura %}
+                  {% for ln in lineas_ui %}
+                <tr class="pre-linea-row border-b border-slate-100 transition-colors hover:bg-slate-50/90 dark:border-slate-800 dark:hover:bg-slate-800/40">
+                  <td class="align-top py-2.5 pl-1">
+                    <input type="hidden" value="{{ ln.cod_deposito }}" class="pre-linea-dep-hidden" autocomplete="off" disabled />
+                    <input type="text" value="{{ ln.codigo_articulo }}" readonly disabled
+                           class="pre-linea-cod pre-field w-full min-w-0 px-2 py-1.5 text-sm opacity-90" />
+                  </td>
+                  <td class="align-top py-2.5 min-w-0">
+                    <input type="text" value="{{ ln.descripcion }}" readonly disabled class="pre-field w-full min-w-0 max-w-full px-2 py-1.5 text-sm opacity-90" />
+                  </td>
+                  <td class="align-top py-2.5">
+                    <input type="text" value="{{ ln.cantidad_str }}" readonly disabled class="pre-linea-qty pre-field w-full px-2 py-1.5 text-right tabular-nums text-sm opacity-90" />
+                  </td>
+                  <td class="align-top py-2.5">
+                    <input type="text" value="{{ ln.pu_str }}" readonly disabled class="pre-linea-pu pre-field w-full px-2 py-1.5 text-right tabular-nums text-sm opacity-90" />
+                  </td>
+                  <td class="align-top py-2.5 pr-1">
+                    <div class="pre-dto-group flex w-full items-stretch opacity-90">
+                      <div class="flex shrink-0 divide-x divide-slate-200/80 dark:divide-slate-600 border-r border-slate-200/80 dark:border-slate-600" role="group" aria-label="Unidad del descuento del renglón (solo lectura)">
+                        <button type="button" class="pre-linea-dto-mod-pct pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition bg-cyan-600 text-white dark:bg-cyan-500" disabled aria-pressed="true">%</button>
+                        <button type="button" class="pre-linea-dto-mod-imp pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition text-slate-700 dark:text-slate-200" disabled aria-pressed="false">$</button>
+                      </div>
+                      <input type="text" value="{{ ln.dto_pct_str }}" readonly disabled class="pre-linea-dto-val pre-dto-group-input" />
+                    </div>
+                    <span class="pre-linea-imp-int hidden" aria-hidden="true">0</span>
+                  </td>
+                  <td class="align-top py-2.5 pr-1">
+                    <span class="pre-linea-iva-pct block py-1.5 text-right text-sm tabular-nums text-slate-500 dark:text-slate-400">{{ ln.iva_pct_txt }}</span>
+                  </td>
+                  <td class="align-top py-2.5 pr-1">
+                    <span class="pre-linea-iva-importe pre-mono block py-1.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-200">{{ ln.iva_importe_txt }}</span>
+                  </td>
+                  <td class="align-top py-2.5 pr-1">
+                    <span class="pre-linea-subtotal-renglon pre-mono block py-1.5 text-right text-sm font-medium tabular-nums text-slate-900 dark:text-slate-50">{{ ln.subtotal_txt }}</span>
+                  </td>
+                  <td class="align-top py-2 pr-1 text-center"></td>
+                </tr>
+                  {% empty %}
+                <tr>
+                  <td colspan="9" class="px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400">No hay renglones asociados a este presupuesto en la base actual.</td>
+                </tr>
+                  {% endfor %}
+                {% else %}
+                <tr class="pre-linea-row border-b border-slate-100 transition-colors hover:bg-slate-50/90 dark:border-slate-800 dark:hover:bg-slate-800/40">
+                  <td class="align-top py-2.5 pl-1">
+                    <input type="hidden" name="linea_cod_deposito" value="1" class="pre-linea-dep-hidden" autocomplete="off" />
+                    <div class="pre-art-cell relative min-w-0 max-w-full">
+                      <label class="sr-only">Código artículo (búsqueda predictiva)</label>
+                      <input type="text" name="linea_codigo_articulo" autocomplete="off"
+                             {% if not puede_emitir %}disabled{% endif %}
+                             class="pre-linea-cod pre-field w-full min-w-0 px-2 py-1.5 text-sm" />
+                    </div>
+                  </td>
+                  <td class="align-top py-2.5 min-w-0">
+                    <label class="sr-only">Descripción</label>
+                    <input type="text" name="linea_descripcion" autocomplete="off"
+                           {% if not puede_emitir %}disabled{% endif %}
+                           class="pre-field w-full min-w-0 max-w-full px-2 py-1.5 text-sm" />
+                  </td>
+                  <td class="align-top py-2.5">
+                    <label class="sr-only">Cantidad</label>
+                    <input type="text" name="linea_cantidad" inputmode="decimal" autocomplete="off"
+                           {% if not puede_emitir %}disabled{% endif %}
+                           class="pre-linea-qty pre-field w-full px-2 py-1.5 text-right tabular-nums text-sm" placeholder="0" />
+                  </td>
+                  <td class="align-top py-2.5">
+                    <label class="sr-only">Precio unitario</label>
+                    <input type="text" name="linea_precio_unitario" inputmode="decimal" autocomplete="off"
+                           {% if not puede_emitir %}disabled{% endif %}
+                           class="pre-linea-pu pre-field w-full px-2 py-1.5 text-right tabular-nums text-sm" placeholder="0,00" />
+                  </td>
+                  <td class="align-top py-2.5 pr-1">
+                    <div class="pre-dto-group flex w-full items-stretch">
+                      <div class="flex shrink-0 divide-x divide-slate-200/80 dark:divide-slate-600 border-r border-slate-200/80 dark:border-slate-600" role="group" aria-label="Unidad del descuento del renglón">
+                        <button type="button" class="pre-linea-dto-mod-pct pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition bg-cyan-600 text-white dark:bg-cyan-500" aria-pressed="true" {% if not puede_emitir %}disabled{% endif %}>%</button>
+                        <button type="button" class="pre-linea-dto-mod-imp pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition text-slate-700 hover:bg-slate-100/90 dark:text-slate-200 dark:hover:bg-slate-800/90" aria-pressed="false" {% if not puede_emitir %}disabled{% endif %}>$</button>
+                      </div>
+                      <label class="sr-only">Valor del descuento del renglón</label>
+                      <input type="text" inputmode="decimal" autocomplete="off" value=""
+                             {% if not puede_emitir %}disabled{% endif %}
+                             class="pre-linea-dto-val pre-dto-group-input" placeholder="0" />
+                    </div>
+                    <input type="hidden" name="linea_desc_porciento" class="pre-linea-dto-pct-hidden" value="" autocomplete="off" />
+                    <span class="pre-linea-imp-int hidden" aria-hidden="true">0</span>
+                  </td>
+                  <td class="align-top py-2.5 pr-1">
+                    <span class="pre-linea-iva-pct block py-1.5 text-right text-sm tabular-nums text-slate-500 dark:text-slate-400">—</span>
+                  </td>
+                  <td class="align-top py-2.5 pr-1">
+                    <span class="pre-linea-iva-importe pre-mono block py-1.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-200">—</span>
+                  </td>
+                  <td class="align-top py-2.5 pr-1">
+                    <span class="pre-linea-subtotal-renglon pre-mono block py-1.5 text-right text-sm font-medium tabular-nums text-slate-900 dark:text-slate-50" aria-live="polite" title="Neto + IVA + impuesto interno del renglón">—</span>
+                  </td>
+                  <td class="align-top py-2 pr-1 text-center">
+                    <button type="button" class="pre-linea-del hidden rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40 dark:hover:text-red-400" aria-label="Quitar renglón">
+                      <span class="material-icons text-[20px]" aria-hidden="true">delete_outline</span>
+                    </button>
+                  </td>
+                </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+
+          {# Lista global flotante (evita recorte por overflow-x en la tabla) #}
+          <ul id="pre-art-global" class="pre-lineas-scroll fixed z-[100] hidden max-h-56 min-w-[280px] max-w-[min(100vw-1.5rem,420px)] overflow-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-xl dark:border-slate-600 dark:bg-slate-900" role="listbox" hidden aria-label="Sugerencias de artículos"></ul>
+
+          <p id="pre-lineas-error" class="mt-3 hidden rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200" role="alert"></p>
+          {% if not solo_lectura %}
+          <p class="mt-3 text-xs text-slate-400 dark:text-slate-500">
+            «Duplicar último» copia valores; revise antes de guardar.
+          </p>
+          {% endif %}
+        </div>
+
+        <div id="pre-lineas-detalle-sync" class="hidden" aria-hidden="true"></div>
+
+        {# Pie: observaciones (izquierda) + resumen de importes (derecha) #}
+        <footer class="border-t border-slate-200/90 bg-slate-50/50 px-4 py-3 sm:px-6 dark:border-slate-700/80 dark:bg-slate-900/40">
+          {% if solo_lectura %}
+          <div class="flex w-full flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-6">
+            <div class="flex min-h-[9rem] min-w-0 flex-1 flex-col">
+              <p class="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Observaciones</p>
+              <div id="pre-detalle" class="pre-field flex-1 whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed text-slate-800 dark:text-slate-100" role="region" aria-label="Observaciones del presupuesto">{% if cab.detalle %}{{ cab.detalle }}{% else %}—{% endif %}</div>
+            </div>
+            <div class="flex shrink-0 justify-end lg:items-start">
+              <div class="pre-resumen-card w-full max-w-[17.5rem] rounded-lg border border-slate-200/90 bg-white/90 px-3 py-2.5 shadow-sm ring-1 ring-slate-900/[0.04] dark:border-slate-600/85 dark:bg-slate-900/55 dark:ring-white/[0.05]" role="region" aria-label="Resumen de importes">
+              <p class="mb-2 border-b border-slate-200/80 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:border-slate-600 dark:text-slate-500">Resumen</p>
+              <dl class="space-y-1 text-[11px] leading-tight text-slate-700 dark:text-slate-200">
+                <div class="flex justify-between gap-2">
+                  <dt class="text-slate-600 dark:text-slate-300">Importe base (netos)</dt>
+                  <dd class="pre-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ sum_neto_fmt }}</dd>
+                </div>
+                <div class="flex justify-between gap-2 border-t border-dashed border-slate-200/90 pt-1 text-slate-500 dark:text-slate-400 dark:border-slate-600">
+                  <dt>Descuento global</dt>
+                  <dd class="pre-mono tabular-nums text-[10px]">—</dd>
+                </div>
+              </dl>
+              <dl class="mt-1 space-y-1 border-t border-dashed border-slate-200/90 pt-1 text-[11px] dark:border-slate-600">
+                <div class="flex justify-between gap-2 border-t border-slate-200/80 pt-1 dark:border-slate-600">
+                  <dt class="text-xs font-semibold text-slate-800 dark:text-slate-100">Total (cabecera)</dt>
+                  <dd class="pre-mono text-base font-bold tabular-nums text-cyan-700 dark:text-cyan-300">{{ importe_cab_fmt }}</dd>
+                </div>
+              </dl>
+              <p class="mt-2 text-[9px] leading-snug text-slate-400 dark:text-slate-500">El total coincide con <code class="rounded bg-slate-100 px-0.5 dark:bg-slate-800">ImporteVenta</code> en cabecera; desglose dinámico de tributos al emitir.</p>
+              </div>
+            </div>
+          </div>
+          {% else %}
+          <input type="hidden" name="desc_global_pct_2" value="" autocomplete="off" />
+          <input type="hidden" name="desc_global_pct_1" id="pre-dg-pct-hidden" value="" autocomplete="off" />
+          <div class="flex w-full flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-6">
+            <div class="flex min-h-[9rem] min-w-0 flex-1 flex-col">
+              <label for="pre-detalle" class="mb-1 block text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Observaciones</label>
+              <textarea name="detalle" id="pre-detalle" maxlength="500" rows="5" autocomplete="off"
+                        {% if not puede_emitir %}disabled{% endif %}
+                        class="pre-field pre-footer-obs w-full flex-1 px-3 py-2 text-sm"
+                        placeholder="Notas de cabecera (opcional). Visibles en el documento."></textarea>
+            </div>
+            <div class="flex shrink-0 justify-end lg:items-start">
+            <div class="pre-resumen-card w-full max-w-[17.5rem] rounded-lg border border-slate-200/90 bg-white/90 px-3 py-2.5 shadow-sm ring-1 ring-slate-900/[0.04] dark:border-slate-600/85 dark:bg-slate-900/55 dark:ring-white/[0.05]" role="region" aria-label="Resumen de importes">
+              <p class="mb-2 border-b border-slate-200/80 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-400 dark:border-slate-600 dark:text-slate-500">Resumen</p>
+              <dl class="space-y-1 text-[11px] leading-tight text-slate-700 dark:text-slate-200">
+                <div class="flex justify-between gap-2">
+                  <dt class="text-slate-600 dark:text-slate-300">Importe base</dt>
+                  <dd id="pre-res-importe-base" class="pre-mono tabular-nums font-medium text-slate-900 dark:text-white">0,00</dd>
+                </div>
+                <div class="flex flex-col gap-1.5 border-t border-dashed border-slate-200/90 pt-1 dark:border-slate-600">
+                  <div class="flex flex-col gap-1.5">
+                    <dt class="text-slate-600 dark:text-slate-300">Descuento global</dt>
+                    <dd class="m-0 w-full min-w-0">
+                      <div class="pre-dto-group flex w-full items-stretch">
+                        <div class="flex shrink-0 divide-x divide-slate-200/80 dark:divide-slate-600 border-r border-slate-200/80 dark:border-slate-600" role="group" aria-label="Unidad del descuento global">
+                          <button type="button" id="pre-dg-mod-pct" class="pre-dg-mod-btn pre-dg-mod-pct pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition bg-cyan-600 text-white dark:bg-cyan-500" aria-pressed="true" {% if not puede_emitir %}disabled{% endif %}>%</button>
+                          <button type="button" id="pre-dg-mod-imp" class="pre-dg-mod-btn pre-dg-mod-imp pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition text-slate-700 hover:bg-slate-100/90 dark:text-slate-200 dark:hover:bg-slate-800/90" aria-pressed="false" {% if not puede_emitir %}disabled{% endif %}>$</button>
+                        </div>
+                        <label for="pre-dg-global-val" class="sr-only">Valor del descuento global</label>
+                        <input type="text" id="pre-dg-global-val" inputmode="decimal" autocomplete="off" {% if not puede_emitir %}disabled{% endif %}
+                               class="pre-dto-group-input min-w-0 flex-1" placeholder="0" />
+                      </div>
+                      <span id="pre-dg-global-equiv" class="pre-mono mt-1 block truncate text-right text-[9px] tabular-nums text-slate-500 dark:text-slate-400" aria-live="polite"></span>
+                    </dd>
+                  </div>
+                </div>
+              </dl>
+              <div id="pre-res-iva-block" class="hidden mt-1 border-t border-slate-100 pt-1 dark:border-slate-700">
+                <div id="pre-res-iva-rows" class="space-y-0.5 text-[11px]"></div>
+              </div>
+              <div id="pre-res-ii-block" class="hidden mt-1 border-t border-slate-100 pt-1 dark:border-slate-700">
+                <div id="pre-res-ii-rows" class="space-y-0.5 text-[11px]"></div>
+              </div>
+              <div id="pre-res-perc-block" class="hidden mt-1 border-t border-slate-100 pt-1 dark:border-slate-700">
+                <div id="pre-res-perc-rows" class="space-y-0.5 text-[11px]"></div>
+              </div>
+              <dl class="mt-1 space-y-1 border-t border-dashed border-slate-200/90 pt-1 text-[11px] dark:border-slate-600">
+                <div class="flex justify-between gap-2">
+                  <dt class="text-slate-600 dark:text-slate-300">Descuentos totales</dt>
+                  <dd id="pre-res-dto-total" class="pre-mono tabular-nums text-amber-800 dark:text-amber-200/95">0,00</dd>
+                </div>
+                <div class="flex justify-between gap-2 border-t border-slate-200/80 pt-1 dark:border-slate-600">
+                  <dt class="text-xs font-semibold text-slate-800 dark:text-slate-100">Total</dt>
+                  <dd id="pre-total" class="pre-mono text-base font-bold tabular-nums text-cyan-700 dark:text-cyan-300">0,00</dd>
+                </div>
+              </dl>
+            </div>
+            </div>
+          </div>
+          {% endif %}
+        </footer>
+      </form>
+    </article>
+
+    <div class="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200/90 bg-white/90 px-4 py-3 shadow-[0_-4px_24px_rgb(0_0_0_/0.06)] backdrop-blur-md lg:hidden dark:border-slate-700 dark:bg-slate-900/92">
+      <div class="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-1 sm:px-3">
+        <div>
+          <p class="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Total (IVA incl.)</p>
+          <p id="pre-total-mobile" class="pre-mono text-lg font-bold tabular-nums text-cyan-700 dark:text-cyan-300">{% if solo_lectura %}{{ importe_cab_fmt }}{% else %}0,00{% endif %}</p>
+        </div>
+        {% if not solo_lectura %}
+        <button type="submit" form="pre-form-nuevo" name="action" value="guardar"
+                {% if not puede_emitir %}disabled{% endif %}
+                class="inline-flex shrink-0 items-center gap-2 rounded-lg bg-cyan-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 dark:focus-visible:ring-offset-slate-900">
+          Guardar
+        </button>
+        {% endif %}
+      </div>
+    </div>
+    <div class="h-16 lg:hidden" aria-hidden="true"></div>
+  </div>
+
+  {# Modal de espera: búsquedas y guardado (solo se muestra desde JS en modo edición) #}
+  <div id="pre-busy-modal" class="pointer-events-none fixed inset-0 z-[200] hidden" role="alertdialog" aria-live="assertive" aria-modal="true" aria-hidden="true" aria-labelledby="pre-busy-msg">
+    <div class="absolute inset-0 bg-slate-900/55 backdrop-blur-[2px] dark:bg-black/60"></div>
+    <div class="relative flex min-h-full items-center justify-center p-6">
+      <div class="flex max-w-sm flex-col items-center gap-4 rounded-xl border border-slate-200/90 bg-white px-8 py-7 shadow-2xl ring-1 ring-slate-900/[0.06] dark:border-slate-600 dark:bg-slate-900 dark:ring-white/[0.08]">
+        <span class="pre-busy-spinner h-10 w-10 rounded-full border-[3px] border-cyan-200 border-t-cyan-600 dark:border-slate-600 dark:border-t-cyan-400" style="animation: pre-spin 0.7s linear infinite;"></span>
+        <p id="pre-busy-msg" class="text-center text-sm font-medium text-slate-800 dark:text-slate-100">Por favor espere…</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function () {
+  const flagsEl = document.getElementById('pre-app-flags');
+  const soloLectura = !!(flagsEl && flagsEl.dataset && flagsEl.dataset.soloLectura === 'true');
+  if (soloLectura) {
+    return;
+  }
+
+  const busyModal = document.getElementById('pre-busy-modal');
+  const busyMsg = document.getElementById('pre-busy-msg');
+  let busyDepth = 0;
+
+  function pushBusy(message) {
+    if (busyMsg && message) busyMsg.textContent = message;
+    busyDepth += 1;
+    if (busyModal) {
+      busyModal.classList.remove('hidden', 'pointer-events-none');
+      busyModal.classList.add('pointer-events-auto');
+      busyModal.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  function popBusy() {
+    busyDepth = Math.max(0, busyDepth - 1);
+    if (busyDepth === 0 && busyModal) {
+      busyModal.classList.add('hidden', 'pointer-events-none');
+      busyModal.classList.remove('pointer-events-auto');
+      busyModal.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  const MAX_LINEAS = 40;
+  const inputClienteSearch = document.getElementById('pre_cliente_search');
+  const sel = document.getElementById('pre-cli-sel');
+  const hid = document.getElementById('pre-cli-cod');
+  const fecha = document.getElementById('pre-fecha');
+  const apiUrl = "{{ api_clientes_url|escapejs }}";
+  const articuloSearchUrl = "{% url 'core_api:articulo_search' %}";
+  const listaPrecioHid = document.getElementById('pre_lista_hid');
+  function listaPrecioParam() {
+    if (!listaPrecioHid) return '2';
+    const v = parseInt(String(listaPrecioHid.value || '2'), 10);
+    if (Number.isFinite(v) && v >= 0 && v <= 6) return String(v);
+    return '2';
+  }
+  if (listaPrecioHid) {
+    listaPrecioHid.addEventListener('change', function () {
+      hideArtDropdown();
+    });
+  }
+
+  const tagsFilterUrl = "{% static 'reports/js/tags_filter.mjs' %}";
+  import(tagsFilterUrl).then(function (mod) {
+    const init = mod.initializeTagsFilter;
+    init('pre_cliente', 'presupuesto', null, {
+      maxSelections: 1,
+      hiddenSyncSelector: '#pre-cli-cod',
+      remoteSearch: {
+        minChars: 2,
+        fetchFn: function (q) {
+          return fetch(apiUrl + '?q=' + encodeURIComponent(q), {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+          })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              return (data.results || []).map(function (r) {
+                return { value: r.id, label: r.text + ' (#' + r.id + ')' };
+              });
+            });
+        },
+      },
+    });
+    init('pre_viajante', 'viajantes', null, {
+      maxSelections: 1,
+      hiddenSyncSelector: '#pre_viajante_hid',
+      allowEmptyOption: true,
+    });
+    init('pre_lista_precio', 'lista_precio', null, {
+      maxSelections: 1,
+      hiddenSyncSelector: '#pre_lista_hid',
+    });
+    init('pre_condventa', 'condventa', null, {
+      maxSelections: 1,
+      hiddenSyncSelector: '#pre_cond_hid',
+    });
+  }).catch(function () {});
+
+  const artDropdown = document.getElementById('pre-art-global');
+  const cont = document.getElementById('pre-lineas');
+  const btnAdd = document.getElementById('pre-linea-add');
+  const btnDup = document.getElementById('pre-linea-dup');
+  const form = document.getElementById('pre-form-nuevo');
+  const elImporteBase = document.getElementById('pre-res-importe-base');
+  const elResIvaRows = document.getElementById('pre-res-iva-rows');
+  const elResIvaBlock = document.getElementById('pre-res-iva-block');
+  const elResIiRows = document.getElementById('pre-res-ii-rows');
+  const elResIiBlock = document.getElementById('pre-res-ii-block');
+  const elResPercRows = document.getElementById('pre-res-perc-rows');
+  const elResPercBlock = document.getElementById('pre-res-perc-block');
+  const elDtoTotal = document.getElementById('pre-res-dto-total');
+  const elDgGlobVal = document.getElementById('pre-dg-global-val');
+  const elDgGlobEquiv = document.getElementById('pre-dg-global-equiv');
+  const elDgPctHidden = document.getElementById('pre-dg-pct-hidden');
+  const btnDgModPct = document.getElementById('pre-dg-mod-pct');
+  const btnDgModImp = document.getElementById('pre-dg-mod-imp');
+  const elTot = document.getElementById('pre-total');
+  /** Modo descuento global: porcentaje o importe monetario (envío al servidor como % equivalente). */
+  let dgGlobalModo = 'pct';
+  const elTotMob = document.getElementById('pre-total-mobile');
+  const syncDet = document.getElementById('pre-lineas-detalle-sync');
+  const lineasErr = document.getElementById('pre-lineas-error');
+  let artTimer = null;
+  let artReqId = 0;
+  let artActiveInput = null;
+  let artItems = [];
+  let artHighlight = -1;
+
+  function hideLineasError() {
+    if (!lineasErr) return;
+    lineasErr.textContent = '';
+    lineasErr.classList.add('hidden');
+  }
+
+  function hideArtDropdown() {
+    artActiveInput = null;
+    artItems = [];
+    artHighlight = -1;
+    if (artDropdown) {
+      artDropdown.innerHTML = '';
+      artDropdown.hidden = true;
+      artDropdown.classList.add('hidden');
+    }
+  }
+
+  function positionArtDropdown(anchor, el) {
+    if (!anchor || !el) return;
+    const r = anchor.getBoundingClientRect();
+    const pad = 10;
+    let w = Math.max(r.width, 280);
+    let left = r.left;
+    if (left + w > window.innerWidth - pad) {
+      left = Math.max(pad, window.innerWidth - w - pad);
+    }
+    let top = r.bottom + 4;
+    const estH = Math.min(224, el.scrollHeight || 224);
+    if (top + estH > window.innerHeight - pad) {
+      top = Math.max(pad, r.top - 6 - estH);
+    }
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+    el.style.width = w + 'px';
+  }
+
+  function repositionArtDropdown() {
+    if (!artActiveInput || !artDropdown || artDropdown.classList.contains('hidden')) return;
+    positionArtDropdown(artActiveInput, artDropdown);
+  }
+
+  function pickPrecioVenta(a) {
+    if (!a) return null;
+    if (a.PrecioLista != null && a.PrecioLista !== '') {
+      const pl = Number(a.PrecioLista);
+      if (Number.isFinite(pl)) return pl;
+    }
+    if (a.Precio1V != null && a.Precio1V !== '') {
+      const n = Number(a.Precio1V);
+      if (Number.isFinite(n)) return n;
+    }
+    if (a.PNOficial != null && a.PNOficial !== '') {
+      const n2 = Number(a.PNOficial);
+      if (Number.isFinite(n2)) return n2;
+    }
+    return null;
+  }
+
+  function formatPrecioUnitarioEs(n) {
+    try {
+      return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(n);
+    } catch (e) {
+      return String(n);
+    }
+  }
+
+  function pickAlicuotaPct(a) {
+    if (!a || a.Alicuota == null || a.Alicuota === '') return null;
+    const n = Number(a.Alicuota);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  /** Porcentaje articulo.impuesto_interno (legacy AdministraNET). */
+  function pickImpInternoPct(a) {
+    if (!a || a.ImpuestoInterno == null || a.ImpuestoInterno === '') return null;
+    const n = Number(a.ImpuestoInterno);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  function formatAlicuotaLabel(pct) {
+    if (pct == null || !Number.isFinite(pct)) return '—';
+    try {
+      return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 }).format(pct) + ' %';
+    } catch (e) {
+      return String(pct) + ' %';
+    }
+  }
+
+  function getAlicuotaFromRow(tr) {
+    const raw = tr.dataset.alicuotaPct;
+    if (raw === undefined || raw === '') return null;
+    const n = parseFloat(raw);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+
+  function getImpInternoPctFromRow(tr) {
+    const raw = tr.dataset.impInternoPct;
+    if (raw === undefined || raw === '') return 0;
+    const n = parseFloat(raw);
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  }
+
+  function applyArticuloToRow(tr, a) {
+    const codInp = tr.querySelector('.pre-linea-cod');
+    const desc = tr.querySelector('input[name="linea_descripcion"]');
+    const pu = tr.querySelector('.pre-linea-pu');
+    const qty = tr.querySelector('.pre-linea-qty');
+    if (codInp) {
+      const c = (a.CodigoArticulo != null && String(a.CodigoArticulo) !== '-') ? String(a.CodigoArticulo).trim() : '';
+      codInp.value = c;
+    }
+    if (desc) {
+      let d = (a.Descripcion || '').trim();
+      if (d.length > 500) d = d.substring(0, 500);
+      desc.value = d;
+    }
+    const pv = pickPrecioVenta(a);
+    if (pu && pv != null && Number.isFinite(pv)) {
+      pu.value = formatPrecioUnitarioEs(pv);
+    }
+    if (qty && !(String(qty.value || '').trim())) {
+      qty.value = '1';
+    }
+    const al = pickAlicuotaPct(a);
+    if (al != null) {
+      tr.dataset.alicuotaPct = String(al);
+    } else {
+      delete tr.dataset.alicuotaPct;
+    }
+    const iiPct = pickImpInternoPct(a);
+    if (iiPct != null && iiPct > 0) {
+      tr.dataset.impInternoPct = String(iiPct);
+    } else {
+      delete tr.dataset.impInternoPct;
+    }
+    hideArtDropdown();
+    hideLineasError();
+    updateTotals();
+  }
+
+  function updateArtHighlight() {
+    if (!artDropdown) return;
+    const lis = artDropdown.querySelectorAll('li');
+    lis.forEach(function (li, i) {
+      if (i === artHighlight) {
+        li.classList.add('bg-cyan-50', 'dark:bg-cyan-950/50');
+      } else {
+        li.classList.remove('bg-cyan-50', 'dark:bg-cyan-950/50');
+      }
+    });
+  }
+
+  function showArtDropdown(anchor, items) {
+    if (!artDropdown || !anchor) return;
+    artActiveInput = anchor;
+    artItems = items || [];
+    artHighlight = artItems.length ? 0 : -1;
+    artDropdown.innerHTML = '';
+    artItems.forEach(function (a) {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'option');
+      li.className = 'cursor-pointer border-b border-slate-100 px-3 py-2 text-left transition-colors last:border-0 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800';
+      const c1 = document.createElement('span');
+      c1.className = 'block font-medium text-slate-900 dark:text-slate-100';
+      c1.textContent = a.CodigoArticulo || '—';
+      const c2 = document.createElement('span');
+      c2.className = 'mt-0.5 block text-xs leading-snug text-slate-500 dark:text-slate-400';
+      c2.textContent = (a.Descripcion || '').substring(0, 160);
+      li.appendChild(c1);
+      li.appendChild(c2);
+      const alq = pickAlicuotaPct(a);
+      if (alq != null) {
+        const c3 = document.createElement('span');
+        c3.className = 'mt-0.5 block text-[10px] text-cyan-700/90 dark:text-cyan-400/90';
+        c3.textContent = 'IVA ' + formatAlicuotaLabel(alq);
+        li.appendChild(c3);
+      }
+      li.addEventListener('mousedown', function (ev) {
+        ev.preventDefault();
+        const tr = anchor.closest('.pre-linea-row');
+        if (tr) applyArticuloToRow(tr, a);
+      });
+      artDropdown.appendChild(li);
+    });
+    artDropdown.hidden = false;
+    artDropdown.classList.remove('hidden');
+    positionArtDropdown(anchor, artDropdown);
+    updateArtHighlight();
+  }
+
+  async function fetchArticulosForInput(inp, q) {
+    const myId = ++artReqId;
+    pushBusy('Buscando artículos…');
+    try {
+      const res = await fetch(
+        articuloSearchUrl + '?q=' + encodeURIComponent(q) + '&limit=25&lista_precio=' + listaPrecioParam(),
+        { credentials: 'same-origin', headers: { Accept: 'application/json' } },
+      );
+      if (myId !== artReqId) return;
+      if (!res.ok) throw new Error('Error de red');
+      const data = await res.json();
+      const items = data.results || [];
+      if (myId !== artReqId) return;
+      if (document.activeElement !== inp) {
+        return;
+      }
+      if (items.length === 0) {
+        hideArtDropdown();
+        return;
+      }
+      showArtDropdown(inp, items);
+    } catch (e) {
+      if (myId === artReqId) hideArtDropdown();
+    } finally {
+      popBusy();
+    }
+  }
+
+  function scheduleArticuloSearch(inp) {
+    clearTimeout(artTimer);
+    const q = (inp.value || '').trim();
+    if (q.length < 2) {
+      if (artActiveInput === inp) hideArtDropdown();
+      return;
+    }
+    artTimer = setTimeout(function () {
+      fetchArticulosForInput(inp, q);
+    }, 280);
+  }
+
+  function parseDecimal(val) {
+    if (val == null || String(val).trim() === '') return NaN;
+    const s = String(val).trim().replace(/\s/g, '').replace(',', '.');
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : NaN;
+  }
+
+  /** Porcentaje 0–100 (paridad con servidor). */
+  function parseDtoPct(val) {
+    const n = parseDecimal(val);
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(100, n));
+  }
+
+  function lineBrutoFromRow(tr) {
+    const qty = parseDecimal(tr.querySelector('.pre-linea-qty') && tr.querySelector('.pre-linea-qty').value);
+    const pu = parseDecimal(tr.querySelector('.pre-linea-pu') && tr.querySelector('.pre-linea-pu').value);
+    if (!Number.isFinite(qty) || !Number.isFinite(pu) || qty <= 0 || pu < 0) return NaN;
+    return Math.round(qty * pu * 100) / 100;
+  }
+
+  function getLineDtoModo(tr) {
+    return tr.dataset.dtoModo === 'imp' ? 'imp' : 'pct';
+  }
+
+  /** Porcentaje efectivo enviado en `linea_desc_porciento` (dto. en % o importe sobre bruto). */
+  function getEffectiveDtoPct(tr) {
+    const modo = getLineDtoModo(tr);
+    const vis = tr.querySelector('.pre-linea-dto-val');
+    const raw = vis ? vis.value : '';
+    const bruto = lineBrutoFromRow(tr);
+    if (!Number.isFinite(bruto) || bruto <= 0) return 0;
+    if (modo === 'pct') return parseDtoPct(raw);
+    const imp = parseDecimal(raw);
+    if (!Number.isFinite(imp) || imp <= 0) return 0;
+    const clamped = Math.min(imp, bruto);
+    return Math.round(Math.min(100, (clamped / bruto) * 100) * 1e6) / 1e6;
+  }
+
+  function syncLineDtoHidden(tr) {
+    const hid = tr.querySelector('.pre-linea-dto-pct-hidden');
+    if (!hid) return;
+    const pct = getEffectiveDtoPct(tr);
+    if (pct <= 0) hid.value = '';
+    else {
+      const r = Math.round(pct * 1e6) / 1e6;
+      hid.value = String(r);
+    }
+  }
+
+  function syncLineDtoButtons(tr) {
+    const modo = getLineDtoModo(tr);
+    const active = 'bg-cyan-600 text-white dark:bg-cyan-500';
+    const idle = 'text-slate-700 hover:bg-slate-100/90 dark:text-slate-200 dark:hover:bg-slate-800/90';
+    const basePct = 'pre-linea-dto-mod-pct pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition ';
+    const baseImp = 'pre-linea-dto-mod-imp pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition ';
+    const bPct = tr.querySelector('.pre-linea-dto-mod-pct');
+    const bImp = tr.querySelector('.pre-linea-dto-mod-imp');
+    if (bPct) {
+      bPct.className = basePct + (modo === 'pct' ? active : idle);
+      bPct.setAttribute('aria-pressed', modo === 'pct' ? 'true' : 'false');
+    }
+    if (bImp) {
+      bImp.className = baseImp + (modo === 'imp' ? active : idle);
+      bImp.setAttribute('aria-pressed', modo === 'imp' ? 'true' : 'false');
+    }
+  }
+
+  function setLineDtoMode(tr, mode) {
+    if (mode !== 'pct' && mode !== 'imp') return;
+    if (getLineDtoModo(tr) === mode) return;
+    const bruto = lineBrutoFromRow(tr);
+    const inp = tr.querySelector('.pre-linea-dto-val');
+    const cur = getLineDtoModo(tr);
+    if (inp) {
+      if (cur === 'pct' && mode === 'imp') {
+        const g = parseDtoPct(inp.value);
+        inp.value = Number.isFinite(bruto) && bruto > 0 && g > 0 ? formatMoneyEs(Math.round(bruto * g / 100 * 100) / 100) : '';
+      } else if (cur === 'imp' && mode === 'pct') {
+        const imp = parseDecimal(inp.value);
+        if (Number.isFinite(bruto) && bruto > 0 && Number.isFinite(imp) && imp > 0) {
+          const pct = Math.min(100, (Math.min(imp, bruto) / bruto) * 100);
+          inp.value = formatTasaEtiqueta(Math.round(pct * 100) / 100);
+        } else {
+          inp.value = '';
+        }
+      }
+    }
+    tr.dataset.dtoModo = mode;
+    syncLineDtoButtons(tr);
+    updateTotals();
+  }
+
+  function syncAllLineDtoHidden() {
+    if (!cont) return;
+    cont.querySelectorAll('.pre-linea-row').forEach(syncLineDtoHidden);
+  }
+
+  function formatMoneyEs(n) {
+    if (!Number.isFinite(n)) return '—';
+    try {
+      return new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+    } catch (e) {
+      return n.toFixed(2).replace('.', ',');
+    }
+  }
+
+  /** Etiqueta de tasa para IVA / interno (ej. 21 o 10,5). */
+  function formatTasaEtiqueta(rate) {
+    if (!Number.isFinite(rate)) return '0';
+    const x = Math.round(rate * 100) / 100;
+    if (Math.abs(x - Math.round(x)) < 0.001) return String(Math.round(x));
+    return String(x).replace('.', ',');
+  }
+
+  function aggregateLineas() {
+    let sumNetItems = 0;
+    let sumDtoLine = 0;
+    const bucketsIva = {};
+    const bucketsIi = {};
+    cont.querySelectorAll('.pre-linea-row').forEach(function (tr) {
+      updateLineAmounts(tr);
+      const qty = parseDecimal(tr.querySelector('.pre-linea-qty') && tr.querySelector('.pre-linea-qty').value);
+      const pu = parseDecimal(tr.querySelector('.pre-linea-pu') && tr.querySelector('.pre-linea-pu').value);
+      const dtoPct = getEffectiveDtoPct(tr);
+      if (!Number.isFinite(qty) || !Number.isFinite(pu) || qty <= 0 || pu < 0) return;
+      const bruto = Math.round(qty * pu * 100) / 100;
+      const neto = Math.round(bruto * ((100 - dtoPct) / 100) * 100) / 100;
+      sumNetItems += neto;
+      sumDtoLine += Math.round((bruto - neto) * 100) / 100;
+      const al = getAlicuotaFromRow(tr);
+      const rateIva = al != null && Number.isFinite(al) ? al : 0;
+      const keyIva = String(Math.round(rateIva * 10000) / 10000);
+      const ivaLin = Math.round(neto * (rateIva / 100) * 100) / 100;
+      if (!bucketsIva[keyIva]) bucketsIva[keyIva] = { rate: rateIva, sum: 0 };
+      bucketsIva[keyIva].sum += ivaLin;
+      const iiPct = getImpInternoPctFromRow(tr);
+      const keyIi = String(Math.round(iiPct * 10000) / 10000);
+      const iiLin = Math.round(neto * (iiPct / 100) * 100) / 100;
+      if (!bucketsIi[keyIi]) bucketsIi[keyIi] = { rate: iiPct, sum: 0 };
+      bucketsIi[keyIi].sum += iiLin;
+    });
+    Object.keys(bucketsIva).forEach(function (k) {
+      bucketsIva[k].sum = Math.round(bucketsIva[k].sum * 100) / 100;
+    });
+    Object.keys(bucketsIi).forEach(function (k) {
+      bucketsIi[k].sum = Math.round(bucketsIi[k].sum * 100) / 100;
+    });
+    return { sumNetItems: sumNetItems, sumDtoLine: sumDtoLine, bucketsIva: bucketsIva, bucketsIi: bucketsIi };
+  }
+
+  function computeGlobalFromInput(sumNetItems) {
+    const raw = elDgGlobVal ? elDgGlobVal.value : '';
+    if (dgGlobalModo === 'pct') {
+      const g1 = parseDtoPct(raw);
+      const impGlobal = sumNetItems > 0 ? Math.round(sumNetItems * (g1 / 100) * 100) / 100 : 0;
+      return { g1: g1, impGlobal: impGlobal };
+    }
+    const imp = parseDecimal(raw);
+    if (!Number.isFinite(imp) || imp <= 0 || sumNetItems <= 0) return { g1: 0, impGlobal: 0 };
+    const impClamped = Math.min(imp, sumNetItems);
+    const g1raw = (impClamped / sumNetItems) * 100;
+    return { g1: Math.round(Math.min(100, g1raw) * 10000) / 10000, impGlobal: Math.round(impClamped * 100) / 100 };
+  }
+
+  function syncDgModButtons() {
+    const active = 'bg-cyan-600 text-white dark:bg-cyan-500';
+    const idle = 'text-slate-700 hover:bg-slate-100/90 dark:text-slate-200 dark:hover:bg-slate-800/90';
+    const basePct = 'pre-dg-mod-btn pre-dg-mod-pct pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition ';
+    const baseImp = 'pre-dg-mod-btn pre-dg-mod-imp pre-dto-seg-btn flex min-w-[2.25rem] shrink-0 items-center justify-center px-2 py-1.5 text-sm font-semibold transition ';
+    if (btnDgModPct) {
+      btnDgModPct.className = basePct + (dgGlobalModo === 'pct' ? active : idle);
+      btnDgModPct.setAttribute('aria-pressed', dgGlobalModo === 'pct' ? 'true' : 'false');
+    }
+    if (btnDgModImp) {
+      btnDgModImp.className = baseImp + (dgGlobalModo === 'imp' ? active : idle);
+      btnDgModImp.setAttribute('aria-pressed', dgGlobalModo === 'imp' ? 'true' : 'false');
+    }
+  }
+
+  function updateDgEquiv(sumNetItems, g1, impGlobal) {
+    if (!elDgGlobEquiv) return;
+    if (dgGlobalModo === 'pct') {
+      elDgGlobEquiv.textContent = g1 > 0 && sumNetItems > 0 ? '≈ ' + formatMoneyEs(impGlobal) : '';
+    } else {
+      elDgGlobEquiv.textContent = impGlobal > 0 && sumNetItems > 0 ? '≈ ' + formatTasaEtiqueta(g1) + ' %' : '';
+    }
+  }
+
+  function setDgMode(mode) {
+    if (mode !== 'pct' && mode !== 'imp') return;
+    if (mode === dgGlobalModo) return;
+    const agg = aggregateLineas();
+    const sumNet = agg.sumNetItems;
+    const inp = elDgGlobVal;
+    if (inp) {
+      if (dgGlobalModo === 'pct' && mode === 'imp') {
+        const g = parseDtoPct(inp.value);
+        inp.value = sumNet > 0 && g > 0 ? formatMoneyEs(Math.round(sumNet * g / 100 * 100) / 100) : '';
+      } else if (dgGlobalModo === 'imp' && mode === 'pct') {
+        const imp = parseDecimal(inp.value);
+        if (sumNet > 0 && Number.isFinite(imp) && imp > 0) {
+          const pct = Math.min(100, (Math.min(imp, sumNet) / sumNet) * 100);
+          inp.value = formatTasaEtiqueta(Math.round(pct * 100) / 100);
+        } else {
+          inp.value = '';
+        }
+      }
+    }
+    dgGlobalModo = mode;
+    syncDgModButtons();
+    updateTotals();
+  }
+
+  function updateLineAmounts(tr) {
+    const qtyInp = tr.querySelector('.pre-linea-qty');
+    const puInp = tr.querySelector('.pre-linea-pu');
+    const impIntEl = tr.querySelector('.pre-linea-imp-int');
+    const totRenEl = tr.querySelector('.pre-linea-subtotal-renglon');
+    const pctEl = tr.querySelector('.pre-linea-iva-pct');
+    const ivaEl = tr.querySelector('.pre-linea-iva-importe');
+    const qty = parseDecimal(qtyInp && qtyInp.value);
+    const pu = parseDecimal(puInp && puInp.value);
+    const dtoPct = getEffectiveDtoPct(tr);
+    if (!totRenEl) return;
+    if (!Number.isFinite(qty) || !Number.isFinite(pu) || qty <= 0 || pu < 0) {
+      if (impIntEl) impIntEl.textContent = formatMoneyEs(0);
+      totRenEl.textContent = '—';
+      if (pctEl) pctEl.textContent = '—';
+      if (ivaEl) ivaEl.textContent = '—';
+      return;
+    }
+    const bruto = Math.round(qty * pu * 100) / 100;
+    const neto = Math.round(bruto * ((100 - dtoPct) / 100) * 100) / 100;
+    const iiPct = getImpInternoPctFromRow(tr);
+    const iiLin = Math.round(neto * (iiPct / 100) * 100) / 100;
+    if (impIntEl) impIntEl.textContent = formatMoneyEs(iiLin);
+    const al = getAlicuotaFromRow(tr);
+    let ivaLin = 0;
+    if (pctEl) pctEl.textContent = al != null ? formatAlicuotaLabel(al) : '—';
+    if (ivaEl) {
+      if (al != null && al > 0) {
+        ivaLin = Math.round(neto * (al / 100) * 100) / 100;
+        ivaEl.textContent = formatMoneyEs(ivaLin);
+      } else if (al != null && al === 0) {
+        ivaEl.textContent = formatMoneyEs(0);
+      } else {
+        ivaEl.textContent = '—';
+      }
+    }
+    const subRen = Math.round((neto + ivaLin + iiLin) * 100) / 100;
+    totRenEl.textContent = formatMoneyEs(subRen);
+  }
+
+  /** Filas dinámicas IVA / imp. interno; oculta el bloque si no hay importe. */
+  function renderFilasTributo(rowsEl, wrapEl, buckets, tipo) {
+    if (!rowsEl || !wrapEl) return;
+    rowsEl.innerHTML = '';
+    const keys = Object.keys(buckets).sort(function (a, b) {
+      return buckets[b].rate - buckets[a].rate;
+    });
+    let mostró = false;
+    keys.forEach(function (k) {
+      const b = buckets[k];
+      if (Math.abs(b.sum) < 0.0005) return;
+      mostró = true;
+      const row = document.createElement('div');
+      row.className = 'flex justify-between gap-2 gap-y-0.5';
+      const dt = document.createElement('dt');
+      dt.className = 'text-left text-slate-500 dark:text-slate-400';
+      const rl = formatTasaEtiqueta(b.rate);
+      dt.textContent = tipo === 'iva' ? 'IVA ' + rl + ' %' : 'Impuesto interno ' + rl + ' %';
+      const dd = document.createElement('dd');
+      dd.className = 'pre-mono shrink-0 tabular-nums text-slate-800 dark:text-slate-100';
+      dd.textContent = formatMoneyEs(b.sum);
+      row.appendChild(dt);
+      row.appendChild(dd);
+      rowsEl.appendChild(row);
+    });
+    wrapEl.classList.toggle('hidden', !mostró);
+  }
+
+  function updateTotals() {
+    syncAllLineDtoHidden();
+    const agg = aggregateLineas();
+    const sumNetItems = agg.sumNetItems;
+    const sumDtoLine = agg.sumDtoLine;
+    let bucketsIva = agg.bucketsIva;
+    let bucketsIi = agg.bucketsIi;
+
+    const cg = computeGlobalFromInput(sumNetItems);
+    const g1 = cg.g1;
+    const impGlobal = cg.impGlobal;
+    const g2 = 0;
+    const n1 = Math.round(sumNetItems * (100 - g1) / 100 * 100) / 100;
+    const netDoc = Math.round(n1 * (100 - g2) / 100 * 100) / 100;
+
+    const factorGlobal = sumNetItems > 0.0005 ? netDoc / sumNetItems : 0;
+    const bucketsIvaScaled = {};
+    Object.keys(bucketsIva).forEach(function (k) {
+      const b = bucketsIva[k];
+      bucketsIvaScaled[k] = { rate: b.rate, sum: Math.round(b.sum * factorGlobal * 100) / 100 };
+    });
+    const bucketsIiScaled = {};
+    Object.keys(bucketsIi).forEach(function (k) {
+      const b = bucketsIi[k];
+      bucketsIiScaled[k] = { rate: b.rate, sum: Math.round(b.sum * factorGlobal * 100) / 100 };
+    });
+    bucketsIva = bucketsIvaScaled;
+    bucketsIi = bucketsIiScaled;
+    let sumIvaScaled = 0;
+    Object.keys(bucketsIva).forEach(function (k) {
+      sumIvaScaled += bucketsIva[k].sum;
+    });
+    sumIvaScaled = Math.round(sumIvaScaled * 100) / 100;
+    let sumIiScaled = 0;
+    Object.keys(bucketsIi).forEach(function (k) {
+      sumIiScaled += bucketsIi[k].sum;
+    });
+    sumIiScaled = Math.round(sumIiScaled * 100) / 100;
+    const sumPercScaled = 0;
+
+    const total = Math.round((netDoc + sumIvaScaled + sumIiScaled + sumPercScaled) * 100) / 100;
+    const descuentosTotales = Math.round((sumDtoLine + impGlobal) * 100) / 100;
+
+    if (elImporteBase) elImporteBase.textContent = formatMoneyEs(sumNetItems);
+    updateDgEquiv(sumNetItems, g1, impGlobal);
+    if (elDgPctHidden) {
+      if (g1 <= 0) elDgPctHidden.value = '';
+      else {
+        const r = Math.round(g1 * 1e6) / 1e6;
+        elDgPctHidden.value = String(r);
+      }
+    }
+    renderFilasTributo(elResIvaRows, elResIvaBlock, bucketsIva, 'iva');
+    renderFilasTributo(elResIiRows, elResIiBlock, bucketsIi, 'ii');
+    if (elResPercBlock) {
+      elResPercBlock.classList.add('hidden');
+      if (elResPercRows) elResPercRows.innerHTML = '';
+    }
+    if (elDtoTotal) elDtoTotal.textContent = formatMoneyEs(descuentosTotales);
+
+    const txtTot = formatMoneyEs(total);
+    if (elTot) elTot.textContent = txtTot;
+    if (elTotMob) elTotMob.textContent = txtTot;
+  }
+
+  function syncDetalleHiddenInputs() {
+    if (!syncDet) return;
+    syncDet.innerHTML = '';
+    cont.querySelectorAll('.pre-linea-row').forEach(function (tr) {
+      const inp = document.createElement('input');
+      inp.type = 'hidden';
+      inp.name = 'linea_detalle';
+      inp.value = '-';
+      syncDet.appendChild(inp);
+    });
+  }
+
+  function refreshLineaNumeros() {
+    const rows = cont.querySelectorAll('.pre-linea-row');
+    rows.forEach(function (row) {
+      const delBtn = row.querySelector('.pre-linea-del');
+      if (delBtn) delBtn.classList.toggle('hidden', rows.length <= 1);
+    });
+    if (btnAdd) btnAdd.disabled = rows.length >= MAX_LINEAS;
+    if (btnDup) btnDup.disabled = rows.length >= MAX_LINEAS || rows.length === 0;
+    syncDetalleHiddenInputs();
+    updateTotals();
+  }
+
+  function bindRow(tr) {
+    syncLineDtoButtons(tr);
+    const delBtn = tr.querySelector('.pre-linea-del');
+    const bDtoPct = tr.querySelector('.pre-linea-dto-mod-pct');
+    const bDtoImp = tr.querySelector('.pre-linea-dto-mod-imp');
+    if (bDtoPct) {
+      bDtoPct.addEventListener('click', function () {
+        setLineDtoMode(tr, 'pct');
+      });
+    }
+    if (bDtoImp) {
+      bDtoImp.addEventListener('click', function () {
+        setLineDtoMode(tr, 'imp');
+      });
+    }
+    if (delBtn) {
+      delBtn.addEventListener('click', function () {
+        if (cont.querySelectorAll('.pre-linea-row').length <= 1) return;
+        tr.remove();
+        refreshLineaNumeros();
+      });
+    }
+    ['input', 'change'].forEach(function (ev) {
+      tr.addEventListener(ev, function (e) {
+        if (e.target.classList && (e.target.classList.contains('pre-linea-qty') || e.target.classList.contains('pre-linea-pu') || e.target.classList.contains('pre-linea-dto-val'))) {
+          updateTotals();
+        }
+      });
+    });
+  }
+
+  if (fecha && !fecha.value) {
+    const t = new Date();
+    fecha.value = t.toISOString().slice(0, 10);
+  }
+
+  if (cont) {
+    cont.querySelectorAll('.pre-linea-row').forEach(bindRow);
+    syncDgModButtons();
+    refreshLineaNumeros();
+  }
+
+  ['input', 'change'].forEach(function (ev) {
+    if (elDgGlobVal) elDgGlobVal.addEventListener(ev, updateTotals);
+  });
+  if (btnDgModPct) btnDgModPct.addEventListener('click', function () { setDgMode('pct'); });
+  if (btnDgModImp) btnDgModImp.addEventListener('click', function () { setDgMode('imp'); });
+
+  if (cont) {
+    cont.addEventListener('input', function (e) {
+      hideLineasError();
+      updateTotals();
+      if (e.target.classList && e.target.classList.contains('pre-linea-cod')) {
+        scheduleArticuloSearch(e.target);
+      }
+    });
+    cont.addEventListener('keydown', function (e) {
+      if (!e.target.classList || !e.target.classList.contains('pre-linea-cod')) return;
+      if (!artDropdown || artDropdown.classList.contains('hidden') || artItems.length === 0) {
+        if (e.key === 'Escape') hideArtDropdown();
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        artHighlight = Math.min(artHighlight + 1, artItems.length - 1);
+        updateArtHighlight();
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        artHighlight = Math.max(artHighlight - 1, 0);
+        updateArtHighlight();
+        return;
+      }
+      if (e.key === 'Enter' && artHighlight >= 0 && artItems[artHighlight]) {
+        e.preventDefault();
+        const tr = e.target.closest('.pre-linea-row');
+        if (tr) applyArticuloToRow(tr, artItems[artHighlight]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        hideArtDropdown();
+      }
+    });
+  }
+
+  window.addEventListener('scroll', repositionArtDropdown, true);
+  window.addEventListener('resize', repositionArtDropdown);
+
+  function cloneTemplateRow() {
+    const first = cont.querySelector('.pre-linea-row');
+    if (!first) return null;
+    return first.cloneNode(true);
+  }
+
+  function clearRowValues(tr, keepValues) {
+    tr.querySelectorAll('input[name="linea_codigo_articulo"], input[name="linea_descripcion"], input[name="linea_cantidad"], input[name="linea_precio_unitario"]').forEach(function (inp) {
+      if (!keepValues) inp.value = '';
+    });
+    const dep = tr.querySelector('.pre-linea-dep-hidden');
+    if (dep && !keepValues) dep.value = '1';
+    if (!keepValues) {
+      const dtoVal = tr.querySelector('.pre-linea-dto-val');
+      const dtoHid = tr.querySelector('.pre-linea-dto-pct-hidden');
+      if (dtoVal) dtoVal.value = '';
+      if (dtoHid) dtoHid.value = '';
+      delete tr.dataset.dtoModo;
+      syncLineDtoButtons(tr);
+      delete tr.dataset.alicuotaPct;
+      delete tr.dataset.impInternoPct;
+      const ii = tr.querySelector('.pre-linea-imp-int');
+      const tot = tr.querySelector('.pre-linea-subtotal-renglon');
+      const pct = tr.querySelector('.pre-linea-iva-pct');
+      const iva = tr.querySelector('.pre-linea-iva-importe');
+      if (ii) ii.textContent = formatMoneyEs(0);
+      if (tot) tot.textContent = '—';
+      if (pct) pct.textContent = '—';
+      if (iva) iva.textContent = '—';
+    }
+  }
+
+  if (btnAdd && cont) {
+    btnAdd.addEventListener('click', function () {
+      if (cont.querySelectorAll('.pre-linea-row').length >= MAX_LINEAS) return;
+      const clone = cloneTemplateRow();
+      if (!clone) return;
+      clearRowValues(clone, false);
+      bindRow(clone);
+      cont.appendChild(clone);
+      const focusCod = clone.querySelector('.pre-linea-cod');
+      if (focusCod) focusCod.focus();
+      refreshLineaNumeros();
+    });
+  }
+
+  if (btnDup && cont) {
+    btnDup.addEventListener('click', function () {
+      if (cont.querySelectorAll('.pre-linea-row').length >= MAX_LINEAS) return;
+      const rows = cont.querySelectorAll('.pre-linea-row');
+      const last = rows[rows.length - 1];
+      if (!last) return;
+      const clone = last.cloneNode(true);
+      bindRow(clone);
+      cont.appendChild(clone);
+      const focusCod = clone.querySelector('.pre-linea-cod');
+      if (focusCod) focusCod.focus();
+      refreshLineaNumeros();
+    });
+  }
+
+  if (cont) {
+    cont.addEventListener('focusin', function (e) {
+      if (e.target.classList && e.target.classList.contains('pre-linea-cod')) {
+        const q = (e.target.value || '').trim();
+        if (q.length >= 2) scheduleArticuloSearch(e.target);
+      }
+    });
+  }
+
+  document.addEventListener('click', function (ev) {
+    const inArtAnchor = ev.target.closest && ev.target.closest('.pre-art-cell');
+    const inArtDropdown = artDropdown && (ev.target === artDropdown || artDropdown.contains(ev.target));
+    if (!inArtAnchor && !inArtDropdown) hideArtDropdown();
+  });
+
+  if (form) {
+    form.addEventListener('submit', function (ev) {
+      hideLineasError();
+      syncAllLineDtoHidden();
+      if (!hid.value) {
+        ev.preventDefault();
+        sel.textContent = 'Seleccione un cliente de la lista antes de guardar.';
+        sel.classList.add('text-red-600');
+        if (inputClienteSearch) inputClienteSearch.focus();
+        return;
+      }
+      let hayCodigo = false;
+      cont.querySelectorAll('.pre-linea-row').forEach(function (tr) {
+        const c = tr.querySelector('input[name="linea_codigo_articulo"]');
+        if (c && c.value.trim()) hayCodigo = true;
+      });
+      if (!hayCodigo) {
+        ev.preventDefault();
+        sel.textContent = '';
+        if (lineasErr) {
+          lineasErr.textContent = 'Indique al menos un código de artículo en los renglones.';
+          lineasErr.classList.remove('hidden');
+        }
+        const firstCod = cont.querySelector('input[name="linea_codigo_articulo"]');
+        if (firstCod) firstCod.focus();
+        return;
+      }
+      pushBusy('Guardando presupuesto…');
+    });
+  }
+})();
+</script>
+{% endblock %}

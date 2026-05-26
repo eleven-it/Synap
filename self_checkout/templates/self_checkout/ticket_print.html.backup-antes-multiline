@@ -1,0 +1,464 @@
+{% load self_checkout_filters %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ tipo_comprobante }} {{ nro_comprobante_formateado }}</title>
+  <style>
+    /* Reset y base para impresión en papel térmico 80mm (~58mm área imprimible) */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    @page {
+      size: 80mm auto;
+      margin: 2mm;
+    }
+    
+    body {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 11px;
+      line-height: 1.3;
+      width: 76mm;
+      max-width: 76mm;
+      margin: 0 auto;
+      padding: 2mm;
+      background: #fff;
+      color: #000;
+      overflow-x: hidden;
+    }
+    
+    /* Secciones */
+    .header, .cliente, .detalle, .totales, .fe-info, .footer {
+      border-bottom: 1px dashed #000;
+      padding: 3mm 0;
+    }
+    
+    .footer { border-bottom: none; }
+    
+    /* Cabecera emisor */
+    .header {
+      text-align: center;
+    }
+    
+    .empresa-nombre {
+      font-size: 14px;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin-bottom: 2mm;
+    }
+    
+    .empresa-datos {
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    
+    /* Tipo de comprobante destacado */
+    .comprobante-tipo {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 3mm 0;
+    }
+    
+    .letra-comprobante {
+      display: inline-flex;
+      width: 20mm;
+      height: 20mm;
+      border: 2px solid #000;
+      border-radius: 2mm;
+      font-size: 24px;
+      font-weight: bold;
+      justify-content: center;
+      align-items: center;
+    }
+    
+    .comprobante-info {
+      text-align: right;
+      margin-left: 4mm;
+      font-size: 10px;
+    }
+    
+    .comprobante-info .nro {
+      font-size: 12px;
+      font-weight: bold;
+    }
+    
+    /* Datos cliente */
+    .cliente {
+      font-size: 10px;
+    }
+    
+    .cliente-label {
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    
+    .consumidor-final {
+      font-size: 12px;
+      font-weight: bold;
+      text-align: center;
+      padding: 2mm;
+      border: 1px solid #000;
+      margin: 2mm 0;
+    }
+    
+    /* Detalle: tabla con anchos % para que la vista previa no desborde el ticket */
+    .detalle {
+      overflow: hidden;
+      max-width: 100%;
+    }
+    .detalle-items {
+      font-size: 9px;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .items-table {
+      width: 100%;
+      max-width: 100%;
+      table-layout: fixed;
+      border-collapse: collapse;
+      font-size: 8px;
+    }
+    .items-table thead th {
+      border-bottom: 1px solid #000;
+      padding: 1mm 0 1mm 0;
+      font-weight: bold;
+      vertical-align: bottom;
+      word-break: break-word;
+    }
+    .items-table .th-desc { width: 38%; text-align: left; padding-right: 1mm; }
+    .items-table .th-c { width: 14%; text-align: center; }
+    .items-table .th-p { width: 24%; text-align: right; padding-right: 0.5mm; }
+    .items-table .th-t { width: 24%; text-align: right; }
+    .items-table .td-desc {
+      padding: 2mm 0 0.5mm 0;
+      word-wrap: break-word;
+      overflow-wrap: anywhere;
+      line-height: 1.25;
+      vertical-align: top;
+    }
+    .items-table .td-spacer {
+      width: 38%;
+      padding: 0;
+      border: none;
+    }
+    .items-table .td-c {
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      padding: 0 0 2mm 0;
+      vertical-align: top;
+    }
+    .items-table .td-pu,
+    .items-table .td-tot {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      padding: 0 0 2mm 0;
+      vertical-align: top;
+      word-break: break-all;
+      font-size: 8px;
+    }
+    .items-table .td-tot { font-weight: bold; }
+    .items-table .tr-nums td { border-bottom: 1px dotted #aaa; }
+    
+    /* Totales */
+    .totales {
+      font-size: 11px;
+    }
+    
+    .totales table {
+      width: 100%;
+    }
+    
+    .totales td {
+      padding: 1mm 0;
+    }
+    
+    .totales td:last-child {
+      text-align: right;
+      font-weight: bold;
+    }
+    
+    .total-final {
+      font-size: 14px;
+      font-weight: bold;
+      border-top: 2px solid #000;
+      padding-top: 2mm;
+      margin-top: 2mm;
+    }
+    
+    .iva-discriminado {
+      font-size: 9px;
+      color: #333;
+    }
+    
+    /* Info Factura Electrónica */
+    .fe-info {
+      font-size: 9px;
+      text-align: center;
+    }
+    
+    .cae-info {
+      font-weight: bold;
+      font-size: 10px;
+      margin: 2mm 0;
+    }
+    
+    .qr-container {
+      text-align: center;
+      margin: 3mm 0;
+    }
+    
+    .qr-container img {
+      width: 30mm;
+      height: 30mm;
+    }
+    
+    .qr-label {
+      font-size: 8px;
+      margin-top: 1mm;
+    }
+    
+    /* Footer */
+    .footer {
+      text-align: center;
+      font-size: 9px;
+      padding-top: 3mm;
+    }
+    
+    .footer .gracias {
+      font-size: 11px;
+      font-weight: bold;
+      margin-bottom: 2mm;
+    }
+    
+    /* Utilidades */
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .bold { font-weight: bold; }
+    .small { font-size: 9px; }
+    .mt-2 { margin-top: 2mm; }
+    .mb-2 { margin-bottom: 2mm; }
+    
+    /* Ocultar en pantalla, mostrar al imprimir */
+    @media screen {
+      body {
+        background: #f0f0f0;
+        padding: 10mm;
+      }
+      .ticket-container {
+        background: #fff;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        padding: 4mm;
+        overflow-x: hidden;
+        max-width: min(76mm, 100%);
+      }
+    }
+    
+    @media print {
+      body {
+        width: 76mm;
+        padding: 0;
+      }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="ticket-container">
+    
+    <!-- ==================== CABECERA EMISOR ==================== -->
+    <div class="header">
+      <div class="empresa-nombre">{{ empresa.razon_social }}</div>
+      <div class="empresa-datos">
+        {{ empresa.domicilio }}<br>
+        CUIT: {{ empresa.cuit_formateado }}<br>
+        {{ empresa.condicion_iva }}<br>
+        {% if empresa.nro_iibb %}IIBB: {{ empresa.nro_iibb }}{% else %}No contribuyente IIBB{% endif %}<br>
+        Inicio Act.: {{ empresa.inicio_actividades }}
+      </div>
+    </div>
+    
+    <!-- ==================== TIPO Y NÚMERO COMPROBANTE ==================== -->
+    <div class="comprobante-tipo">
+      <div class="letra-comprobante">{{ tipo_comprobante_letra }}</div>
+      <div class="comprobante-info">
+        <div>{{ tipo_comprobante_nombre }}</div>
+        <div class="nro">{{ nro_comprobante_formateado }}</div>
+        <div>Fecha: {{ fecha_emision }}</div>
+      </div>
+    </div>
+    
+    <!-- ==================== DATOS CLIENTE ==================== -->
+    <div class="cliente">
+      {% if tipo_comprobante == 'FB' or tipo_comprobante == 'FC' %}
+        <!-- FACTURA B / FACTURA C - Consumidor final o receptor sin discriminación IVA -->
+        <div class="consumidor-final">{% if tipo_comprobante == 'FC' %}FACTURA C{% else %}A CONSUMIDOR FINAL{% endif %}</div>
+        {% if cliente.documento %}
+        <div class="mt-2">
+          <span class="cliente-label">{{ cliente.tipo_documento }}:</span> {{ cliente.documento }}
+        </div>
+        {% endif %}
+        {% if cliente.nombre %}
+        <div><span class="cliente-label">Nombre:</span> {{ cliente.nombre }}</div>
+        {% endif %}
+        {% if cliente.razon_social %}
+        <div><span class="cliente-label">Razón Social:</span> {{ cliente.razon_social }}</div>
+        {% endif %}
+        {% if cliente.domicilio %}
+        <div><span class="cliente-label">Domicilio:</span> {{ cliente.domicilio }}</div>
+        {% endif %}
+      {% else %}
+        <!-- FACTURA A - Cliente identificado -->
+        <div class="mb-2">
+          <span class="cliente-label">Razón Social:</span><br>
+          {{ cliente.razon_social }}
+        </div>
+        <div>
+          <span class="cliente-label">Domicilio:</span><br>
+          {{ cliente.domicilio }}
+        </div>
+        <div class="mt-2">
+          <span class="cliente-label">CUIT:</span> {{ cliente.cuit_formateado }}
+        </div>
+        <div>
+          <span class="cliente-label">Condición IVA:</span> {{ cliente.condicion_iva }}
+        </div>
+      {% endif %}
+    </div>
+    
+    <!-- ==================== DETALLE DE ÍTEMS ==================== -->
+    <div class="detalle">
+      <div class="detalle-items">
+        <table class="items-table" role="presentation">
+          <thead>
+            <tr>
+              <th class="th-desc">Descripción</th>
+              <th class="th-c">Cant</th>
+              <th class="th-p">P.Unit</th>
+              <th class="th-t">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr class="tr-desc">
+              <td colspan="4" class="td-desc">{{ item.descripcion|truncatechars:42 }}</td>
+            </tr>
+            <tr class="tr-nums">
+              <td class="td-spacer"></td>
+              <td class="td-c">{{ item.cantidad }}</td>
+              <td class="td-pu">${{ item.precio_unitario_ticket|formato_moneda }}</td>
+              <td class="td-tot">${{ item.importe_total|formato_moneda }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    
+    <!-- ==================== TOTALES ==================== -->
+    <div class="totales">
+      <table>
+        {% if tipo_comprobante == 'FA' %}
+        <!-- Factura A: IVA discriminado -->
+        <tr>
+          <td>Subtotal (Neto Gravado):</td>
+          <td>${{ subtotal|formato_moneda }}</td>
+        </tr>
+        {% for iva in ivas %}
+        <tr class="iva-discriminado">
+          <td>IVA {{ iva.alicuota }}%:</td>
+          <td>${{ iva.importe|formato_moneda }}</td>
+        </tr>
+        {% endfor %}
+        {% if otros_impuestos %}
+        <tr class="iva-discriminado">
+          <td>Otros impuestos:</td>
+          <td>${{ otros_impuestos|formato_moneda }}</td>
+        </tr>
+        {% endif %}
+        {% else %}
+        <!-- Factura B / Factura C: neto en líneas + impuestos hasta el total fiscal -->
+        <tr>
+          <td>Subtotal neto:</td>
+          <td>${{ subtotal|formato_moneda }}</td>
+        </tr>
+        {% if diferencia_impuestos %}
+        <tr class="iva-discriminado">
+          <td>IVA / impuestos:</td>
+          <td>${{ diferencia_impuestos|formato_moneda }}</td>
+        </tr>
+        {% endif %}
+        {% endif %}
+        <tr class="total-final">
+          <td>TOTAL:</td>
+          <td>${{ total|formato_moneda }}</td>
+        </tr>
+      </table>
+      {% if importe_letras %}
+      <div class="small text-center mt-2">
+        Son: {{ importe_letras }}
+      </div>
+      {% endif %}
+    </div>
+    
+    <!-- ==================== INFO FACTURA ELECTRÓNICA ==================== -->
+    {% if cae %}
+    <div class="fe-info">
+      <div class="cae-info">
+        CAE: {{ cae }}<br>
+        Vto. CAE: {{ vto_cae }}
+      </div>
+      
+      {% if qr_data %}
+      <div class="qr-container">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data={{ qr_data|urlencode }}" alt="QR Verificación AFIP">
+        <div class="qr-label">Escanee para verificar en AFIP</div>
+      </div>
+      {% endif %}
+      
+      <div class="small">
+        Comprobante autorizado por AFIP<br>
+        Verifique en: www.afip.gob.ar/fe/
+      </div>
+    </div>
+    {% endif %}
+    
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer">
+      <div class="gracias">¡Gracias por su compra!</div>
+      <div>{{ empresa.razon_social }}</div>
+      {% if empresa.telefono %}
+      <div>Tel: {{ empresa.telefono }}</div>
+      {% endif %}
+      {% if empresa.email %}
+      <div>{{ empresa.email }}</div>
+      {% endif %}
+      {% if empresa.web %}
+      <div>{{ empresa.web }}</div>
+      {% endif %}
+    </div>
+    
+  </div>
+  
+  <!-- Botones para pantalla (no imprimen) -->
+  <div class="no-print" style="text-align: center; margin-top: 20px; font-family: sans-serif;">
+    <button onclick="window.print()" style="padding: 10px 30px; font-size: 16px; cursor: pointer; background: #0066cc; color: white; border: none; border-radius: 5px; margin-right: 10px;">
+      🖨️ Imprimir
+    </button>
+    <button onclick="window.close()" style="padding: 10px 30px; font-size: 16px; cursor: pointer; background: #666; color: white; border: none; border-radius: 5px;">
+      ✕ Cerrar
+    </button>
+  </div>
+  
+  <script>
+    // Auto-print si viene con parámetro ?print=1
+    if (window.location.search.includes('print=1')) {
+      window.onload = function() {
+        setTimeout(function() { window.print(); }, 500);
+      };
+    }
+  </script>
+</body>
+</html>

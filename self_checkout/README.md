@@ -350,7 +350,7 @@ La carpeta **`pyafipws/`** en la **raíz del repo Synap** no se versiona (`.giti
 
 ### Configuración por UI (recomendado)
 
-La configuración FE se realiza desde **Facturación AFIP** en el menú (Self Checkout → Facturación AFIP): certificado, clave privada, CUIT y **modo Homologación/Producción**. Homologación usa entornos de prueba AFIP (todas las pruebas); Producción solo cuando esté validado. La config se guarda por base empresa (administraNET).
+La configuración FE se realiza desde **Facturación AFIP** en el menú (Self Checkout → Facturación AFIP): certificado, clave privada, CUIT y **modo Homologación/Producción**. Homologación usa entornos de prueba AFIP (todas las pruebas); Producción solo cuando esté validado. La config se guarda por base empresa (administraNET). Al guardar rutas manuales, Synap **copia** cert y clave a un almacén persistente (`SYNAP_AFIP_STORAGE`, volumen Docker `synap_afip_secrets`) para evitar fallos de lectura con pyafipws bajo bind mount; ver **`docs/general/AFIP_CERTIFICADOS_ALMACENAMIENTO_SEGURO.md`**.
 
 ### Configuración por variables de entorno (fallback)
 

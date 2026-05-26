@@ -32,7 +32,7 @@
   .fade-in-up-delay-3 { animation-delay: 0.3s; opacity: 0; }
   .fade-in-up-delay-4 { animation-delay: 0.4s; opacity: 0; }
 
-  /* Hero Card - Reports */
+  /* Hero Card - Command Center */
   .hero-card {
     background: linear-gradient(135deg, #ea580c 0%, #f97316 50%, #fb923c 100%);
     position: relative;
@@ -51,9 +51,34 @@
     pointer-events: none;
   }
 
-  .hero-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 25px 50px -12px rgba(234, 88, 12, 0.4);
+  @media (hover: hover) {
+    .hero-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 25px 50px -12px rgba(234, 88, 12, 0.4);
+    }
+    .action-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.15);
+      border-color: transparent;
+    }
+    .action-card:hover::before {
+      opacity: 1;
+    }
+    .dark .action-card:hover {
+      box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.4);
+    }
+    .cta-button:hover {
+      transform: translateX(4px);
+    }
+    .cta-button:hover svg {
+      transform: translateX(2px);
+    }
+    .action-card:hover .icon-container {
+      transform: scale(1.1);
+    }
+    .hero-card:hover .icon-container {
+      transform: scale(1.1) rotate(3deg);
+    }
   }
 
   /* Action Cards */
@@ -77,26 +102,13 @@
     transition: opacity 0.3s ease;
   }
 
-  .action-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.15);
-    border-color: transparent;
-  }
-
-  .action-card:hover::before {
-    opacity: 1;
-  }
-
   .dark .action-card {
     background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
     border-color: rgba(148, 163, 184, 0.2);
   }
 
-  .dark .action-card:hover {
-    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.4);
-  }
-
   /* Card accent colors */
+  .card-reports { --card-accent: #ea580c; --card-accent-end: #fb923c; }
   .card-workspace { --card-accent: #6366f1; --card-accent-end: #818cf8; }
   .card-settings { --card-accent: #64748b; --card-accent-end: #94a3b8; }
   .card-modules { --card-accent: #8b5cf6; --card-accent-end: #a78bfa; }
@@ -106,16 +118,8 @@
     transition: all 0.2s ease;
   }
 
-  .cta-button:hover {
-    transform: translateX(4px);
-  }
-
   .cta-button svg {
     transition: transform 0.2s ease;
-  }
-
-  .cta-button:hover svg {
-    transform: translateX(2px);
   }
 
   /* Live dot */
@@ -128,25 +132,21 @@
     transition: transform 0.3s ease;
   }
 
-  .action-card:hover .icon-container {
-    transform: scale(1.1);
-  }
-
-  .hero-card:hover .icon-container {
-    transform: scale(1.1) rotate(3deg);
+  .dashboard-shell {
+    min-width: 0;
   }
 </style>
 {% endblock %}
 
 {% block admin_content %}
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+<div class="dashboard-shell max-w-6xl mx-auto min-w-0 px-3 py-6 sm:px-6 sm:py-8 lg:px-8 md:py-12">
   
   <!-- Header Section -->
-  <header class="mb-10 fade-in-up">
+  <header class="mb-6 sm:mb-10 fade-in-up">
     <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
       <!-- Saludo y contexto -->
       <div>
-        <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-3">
+        <h1 class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-3 leading-tight">
           {% blocktrans with name=user.nombre_completo|default:session_user.nombre_completo|default:"Usuario" %}Hola, {{ name }}{% endblocktrans %} 👋
         </h1>
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-gray-400">
@@ -178,11 +178,11 @@
     </div>
   </header>
 
-  <!-- Hero Card: Reports -->
-  <section class="mb-8 fade-in-up fade-in-up-delay-1">
-    <a href="{% url 'reports:catalog' %}" class="block hero-card rounded-3xl p-8 md:p-10 shadow-xl group">
-      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-        <div class="flex-1">
+  <!-- Hero Card: Command Center -->
+  <section class="mb-6 sm:mb-8 fade-in-up fade-in-up-delay-1">
+    <a href="{% url 'reports:dashboard_detail' slug='command-center-gerencial' %}" class="block hero-card rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 shadow-xl group">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-5 sm:gap-6">
+        <div class="flex-1 min-w-0">
           <div class="flex items-center gap-3 mb-4">
             <div class="icon-container w-14 h-14 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
               <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -195,17 +195,17 @@
             </div>
           </div>
           
-          <h2 class="text-2xl md:text-3xl font-bold text-white mb-2">
-            {% trans "Reports" %}
+          <h2 class="text-xl sm:text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
+            {% trans "Command Center" %}
           </h2>
-          <p class="text-white/80 text-base md:text-lg max-w-xl">
-            {% trans "Explora dashboards interactivos, KPIs en tiempo real y métricas de negocio para tomar decisiones informadas." %}
+          <p class="text-white/80 text-sm sm:text-base md:text-lg max-w-xl leading-relaxed">
+            {% trans "Vista consolidada gerencial: ventas, inventario, compras, manufactura y demanda pendiente en un solo panel." %}
           </p>
         </div>
-        
-        <div class="flex-shrink-0">
-          <span class="cta-button inline-flex items-center gap-2 px-6 py-3 bg-white/20 hover:bg-white/30 backdrop-blur rounded-full text-white font-semibold text-sm transition-all">
-            {% trans "Ver reportes" %}
+
+        <div class="w-full md:w-auto md:flex-shrink-0">
+          <span class="cta-button inline-flex w-full md:w-auto items-center justify-center gap-2 min-h-11 px-6 py-3 bg-white/20 hover:bg-white/30 backdrop-blur rounded-full text-white font-semibold text-sm transition-all">
+            {% trans "Abrir Command Center" %}
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
             </svg>
@@ -216,10 +216,35 @@
   </section>
 
   <!-- Secondary Cards Grid -->
-  <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-    
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+
+    <!-- Reports Card -->
+    <a href="{% url 'reports:catalog' %}" class="action-card card-reports rounded-2xl p-5 sm:p-6 group fade-in-up fade-in-up-delay-2 min-h-[44px]">
+      <div class="flex items-start gap-4">
+        <div class="icon-container flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/30">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-1">
+            {% trans "Reports" %}
+          </h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400 mb-3 leading-snug">
+            {% trans "Explora dashboards interactivos, KPIs en tiempo real y métricas de negocio para tomar decisiones informadas." %}
+          </p>
+          <span class="cta-button inline-flex items-center gap-1.5 text-orange-600 dark:text-orange-400 font-semibold text-sm">
+            {% trans "Ver reportes" %}
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+    </a>
+
     <!-- Workspace Card -->
-    <a href="{% url 'reports:workspace' %}" class="action-card card-workspace rounded-2xl p-6 group fade-in-up fade-in-up-delay-2">
+    <a href="{% url 'reports:workspace' %}" class="action-card card-workspace rounded-2xl p-5 sm:p-6 group fade-in-up fade-in-up-delay-3 min-h-[44px]">
       <div class="flex items-start gap-4">
         <div class="icon-container flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
           <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -246,7 +271,7 @@
     {% for app in apps_menu %}
       {% if app.id == "settings" %}
       <!-- Settings Card -->
-      <a href="{{ app.url }}" class="action-card card-settings rounded-2xl p-6 group fade-in-up fade-in-up-delay-3">
+      <a href="{{ app.url }}" class="action-card card-settings rounded-2xl p-5 sm:p-6 group fade-in-up fade-in-up-delay-4 min-h-[44px]">
         <div class="flex items-start gap-4">
           <div class="icon-container flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-slate-500 to-slate-600 flex items-center justify-center shadow-lg shadow-slate-500/30">
             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -274,7 +299,7 @@
 
       {% if app.id == "module_management" %}
       <!-- Module Management Card -->
-      <a href="{{ app.url }}" class="action-card card-modules rounded-2xl p-6 group fade-in-up fade-in-up-delay-4">
+      <a href="{{ app.url }}" class="action-card card-modules rounded-2xl p-5 sm:p-6 group fade-in-up fade-in-up-delay-4 min-h-[44px]">
         <div class="flex items-start gap-4">
           <div class="icon-container flex-shrink-0 w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-violet-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
             <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

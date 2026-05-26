@@ -1,0 +1,138 @@
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2b6cee",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+<title>AdministraNET - Selección de Vendedor</title>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased">
+<!-- Modal Overlay Backdrop -->
+<div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+<!-- Modal Container -->
+<div class="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden">
+<!-- Header Section -->
+<header class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-8 py-6">
+<div class="flex items-center gap-3 text-primary">
+<span class="material-symbols-outlined text-3xl font-bold">point_of_sale</span>
+<h2 class="text-slate-900 dark:text-white text-xl font-extrabold tracking-tight">AdministraNET</h2>
+</div>
+<button class="flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 p-2 transition-colors">
+<span class="material-symbols-outlined text-slate-500">close</span>
+</button>
+</header>
+<!-- Content Area -->
+<div class="flex-1 overflow-y-auto p-8">
+<div class="mb-8">
+<h1 class="text-3xl font-bold text-slate-900 dark:text-white mb-2">Seleccionar Vendedor</h1>
+<p class="text-slate-500 dark:text-slate-400">Seleccione un vendedor para continuar con la transacción de venta.</p>
+</div>
+<!-- Search Bar -->
+<div class="mb-8">
+<div class="relative group">
+<div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-primary transition-colors">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="block w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 transition-all text-lg" placeholder="Buscar vendedor por nombre o código" type="text"/>
+</div>
+</div>
+<!-- Grid of Salespeople -->
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+<!-- Seller Card 1 -->
+<button class="flex flex-col items-center p-6 rounded-xl border-2 border-transparent bg-slate-50 dark:bg-slate-800 hover:border-primary/40 hover:bg-primary/5 transition-all group">
+<div class="w-24 h-24 rounded-full mb-4 ring-4 ring-white dark:ring-slate-700 shadow-sm overflow-hidden bg-slate-200 dark:bg-slate-700">
+<img alt="Alejandro García" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Profile photo of Alejandro García, salesman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPDMo0eb4Mke3nHmoApCEvWSyzL4YxoIT7xzruOzOrmZCDuavNEQqLsT-4w_LLsRmVn_je_ypGS2ncnM3puN0MtYUFKlp0tEvx4ZW7pLBIGeFb4Ehxp8hJKsDMT3NR01YSHBQvDlBwuApbZ6-HXTpg-vyMxis9xJjik861AMcDdAUTCbOOTESyTbpFbS6ripDwqxPqSDg0if2ZF5B_35dds9luCeZD8UEiiDArStd4Ix1PG6d9DDaJAwXDKeKnblYyV2TN7ekD--A"/>
+</div>
+<p class="text-slate-900 dark:text-white font-bold text-center leading-tight">Alejandro García</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm mt-1">ID: 001</p>
+</button>
+<!-- Seller Card 2 (Active/Selected State Example) -->
+<button class="flex flex-col items-center p-6 rounded-xl border-2 border-primary bg-primary/5 dark:bg-primary/10 transition-all">
+<div class="w-24 h-24 rounded-full mb-4 ring-4 ring-primary shadow-md overflow-hidden bg-slate-200 dark:bg-slate-700">
+<img alt="María López" class="w-full h-full object-cover" data-alt="Profile photo of María López, saleswoman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBcT9OaUYZykS6U1jv1XMPxqd0hsxytnfP60rWcmAywBrp4RbdwBrAcKTK2pAYzLPfo-b-xiS3o0-P500FWAhyU0uinO1whzGJyr6uA0e9trC-hyXgUzOLI9ZdqVIH-h-WpgJR8cgn8eFIiGddISDYdvq5A3wBmRivzeLRQeZui2bLnLtEwzLLqJSzNriMxs4oOo_gKiEor7SjF7Csp9a9lqyS8hBnaFFgVY74wXavuDX0e_wcmKnA2_m5pUe5Tu92WuD5bmQYQHmQ"/>
+</div>
+<p class="text-primary font-bold text-center leading-tight">María López</p>
+<p class="text-primary/70 dark:text-primary/60 text-sm mt-1">ID: 002</p>
+</button>
+<!-- Seller Card 3 -->
+<button class="flex flex-col items-center p-6 rounded-xl border-2 border-transparent bg-slate-50 dark:bg-slate-800 hover:border-primary/40 hover:bg-primary/5 transition-all group">
+<div class="w-24 h-24 rounded-full mb-4 ring-4 ring-white dark:ring-slate-700 shadow-sm overflow-hidden bg-slate-200 dark:bg-slate-700">
+<img alt="Carlos Ruiz" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Profile photo of Carlos Ruiz, salesman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA1RjkJYQLUX8x3xFwsrjN3CbGLJFqx725rhxafcxs45XElbIvGjgyxS9YZBHsFH_pWTRhvzLXxIjQyjlB8OFHB4UossJ_OUkPkHIknEOZYVwmCsSR-zy7Ljo6gK6-b8ZD7kBJ2mOQ6Qy5dn801GHU7lNbusQjZfMruiTwaXdRHKBTr21Oa0m_YkMcNYtUJEsqGGj6DQby_CpLK9wVVhvblwTBwDIR82tqvlKBjZmTurdeo8Y-9laVwno9hEbyPTGHfrpkdNV4idPg"/>
+</div>
+<p class="text-slate-900 dark:text-white font-bold text-center leading-tight">Carlos Ruiz</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm mt-1">ID: 003</p>
+</button>
+<!-- Seller Card 4 -->
+<button class="flex flex-col items-center p-6 rounded-xl border-2 border-transparent bg-slate-50 dark:bg-slate-800 hover:border-primary/40 hover:bg-primary/5 transition-all group">
+<div class="w-24 h-24 rounded-full mb-4 ring-4 ring-white dark:ring-slate-700 shadow-sm overflow-hidden bg-slate-200 dark:bg-slate-700">
+<img alt="Ana Martínez" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Profile photo of Ana Martínez, saleswoman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuALttmtnuT7OBPkJQdPvFwxiYApl0o_wmzqOtJJjtteH57IDuH3_Gan6OQrWoUZChMFL8Z5rPpXhxYm5uVV_dXabCibhwp-c3gYMJEBQGfjYP-fVEOqNBWYNz2eDnDy74t-5razYa1CNXq6iEg-NXvY4bwB5zlFz0QHU3Db4zBkoHZ8Oo525moXewrHMXXeYqgFtwn19kEO_jlnyGW6G18UlWseIMFjwuHfQ-6noGhwgei7ljRZGaIpLZ4mtRJNOdkYaau9CgtbQTo"/>
+</div>
+<p class="text-slate-900 dark:text-white font-bold text-center leading-tight">Ana Martínez</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm mt-1">ID: 004</p>
+</button>
+<!-- Seller Card 5 -->
+<button class="flex flex-col items-center p-6 rounded-xl border-2 border-transparent bg-slate-50 dark:bg-slate-800 hover:border-primary/40 hover:bg-primary/5 transition-all group">
+<div class="w-24 h-24 rounded-full mb-4 ring-4 ring-white dark:ring-slate-700 shadow-sm overflow-hidden bg-slate-200 dark:bg-slate-700">
+<img alt="José Hernández" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Profile photo of José Hernández, salesman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuADnSKvzNoRiZ4RfuOQIs-lhUZ8Ze-WwHDaR1zlg5BHEaJ4IjDuVdpB3IsTRuyfkAsK42sRtR1PBmqUhprK8UVZZPTNT-qP6btwnfeq2P0kb-VemyeA0W13Iq-7aGbdMRNPZZ0A7XsjEXbdu04KKoQmbqb2Fmfd1Q5w3NNuweYEs4kIWsXWGFzzm5WS3Jku4ed0A-fkFTNAIShFUlv39xxHvoI-OtWZlWPEJLPoEGfAtpvay0zCOeB4nDh8fuW6k_I8M-ifgDX_TwQ"/>
+</div>
+<p class="text-slate-900 dark:text-white font-bold text-center leading-tight">José Hernández</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm mt-1">ID: 005</p>
+</button>
+<!-- Seller Card 6 -->
+<button class="flex flex-col items-center p-6 rounded-xl border-2 border-transparent bg-slate-50 dark:bg-slate-800 hover:border-primary/40 hover:bg-primary/5 transition-all group">
+<div class="w-24 h-24 rounded-full mb-4 ring-4 ring-white dark:ring-slate-700 shadow-sm overflow-hidden bg-slate-200 dark:bg-slate-700">
+<img alt="Lucía Fernández" class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" data-alt="Profile photo of Lucía Fernández, saleswoman" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6uKItf-a23jRs5bZI9fqB32pgah12PxN4zq5RqqvSFULDO2PQTC3qsDozepi3Kds3jgaMEi_7tnwdxRMxOhoD2y92vMd9kKh9R7grPlFzhlBbe1KtWXtRfbzkcNbrwipSsbicbGJFicgF6CB7mIVCitvIdeZufAY6_R9e992e5HhKKvguCly3D1DFlHxFhoSZ6i9b-m8JeU0aI2Iix9-7MFF8J4N2yOvimB24slhg8copNTvgdwCW1Q6WzMo9FZoif5ASKSMNjG4"/>
+</div>
+<p class="text-slate-900 dark:text-white font-bold text-center leading-tight">Lucía Fernández</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm mt-1">ID: 006</p>
+</button>
+<!-- Generic Avatar Placeholder -->
+<button class="flex flex-col items-center p-6 rounded-xl border-2 border-transparent bg-slate-50 dark:bg-slate-800 hover:border-primary/40 hover:bg-primary/5 transition-all group">
+<div class="w-24 h-24 rounded-full mb-4 ring-4 ring-white dark:ring-slate-700 shadow-sm flex items-center justify-center bg-slate-200 dark:bg-slate-700">
+<span class="material-symbols-outlined text-4xl text-slate-400 group-hover:text-primary transition-colors">person</span>
+</div>
+<p class="text-slate-900 dark:text-white font-bold text-center leading-tight">Roberto Sosa</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm mt-1">ID: 007</p>
+</button>
+<!-- Generic Avatar Placeholder -->
+<button class="flex flex-col items-center p-6 rounded-xl border-2 border-transparent bg-slate-50 dark:bg-slate-800 hover:border-primary/40 hover:bg-primary/5 transition-all group">
+<div class="w-24 h-24 rounded-full mb-4 ring-4 ring-white dark:ring-slate-700 shadow-sm flex items-center justify-center bg-slate-200 dark:bg-slate-700">
+<span class="material-symbols-outlined text-4xl text-slate-400 group-hover:text-primary transition-colors">person</span>
+</div>
+<p class="text-slate-900 dark:text-white font-bold text-center leading-tight">Carmen Vega</p>
+<p class="text-slate-500 dark:text-slate-400 text-sm mt-1">ID: 008</p>
+</button>
+</div>
+</div>
+<!-- Footer Actions -->
+<footer class="border-t border-slate-100 dark:border-slate-800 px-8 py-6 flex justify-end gap-4 bg-slate-50/50 dark:bg-slate-800/50">
+<button class="px-8 py-3 rounded-lg text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                    Cerrar
+                </button>
+<button class="px-10 py-3 bg-primary text-white font-bold rounded-lg shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-95 transition-all">
+                    Confirmar selección
+                </button>
+</footer>
+</div>
+</div>
+
+```</body></html>

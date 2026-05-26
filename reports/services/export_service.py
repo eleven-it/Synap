@@ -141,7 +141,12 @@ class ExportService:
         Nombre del .xlsx en disco y en Content-Disposition.
         Objetivos vs BO: Ventas_objetivo_vendedores_{fecha_inicio_fact}_{fecha_fin_fact}.xlsx
         """
-        if report_slug not in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
+        if report_slug == "documento-presupuesto-ventas":
+            filters = payload.get("filters") or {}
+            nro = (filters.get("nro_comprobante_archivo") or "PRE").strip() or "PRE"
+            return f"Presupuesto_{nro}_{timestamp}.xlsx"
+
+        if report_slug not in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
             return f"{report_slug}_{timestamp}.xlsx"
 
         filters = payload.get("filters") or {}
@@ -163,6 +168,8 @@ class ExportService:
         b = _segmento_fecha(ff)
         if report_slug == "ventas-por-vendedor":
             return f"Ventas_por_vendedor_{a}_{b}.xlsx"
+        if report_slug == "ventas-por-articulo":
+            return f"Ventas_por_articulo_{a}_{b}.xlsx"
         return f"Ventas_objetivo_vendedores_{a}_{b}.xlsx"
 
     def _declarative_export_headers(self, report: ReportDefinition, sample_row: Dict[str, Any]) -> Optional[List[str]]:
@@ -264,6 +271,19 @@ class ExportService:
             ]
             return [h for h in preferred if h in available]
 
+        if slug == "ventas-por-articulo":
+            preferred = [
+                "id_art",
+                "nombre_articulo",
+                "codigo_proveedor",
+                "nombre_proveedor",
+                "codigo_cliente",
+                "nombre_cliente",
+                "cantidades_vendidas",
+                "facturacion",
+            ]
+            return [h for h in preferred if h in available]
+
         if slug == "ventas-objetivos-vs-bo":
             preferred = [
                 "cod_viajante",
@@ -318,6 +338,20 @@ class ExportService:
                 seen.add(k)
             return headers
 
+        if slug == "documento-presupuesto-ventas":
+            preferred = [
+                "orden",
+                "codigo_articulo",
+                "descripcion",
+                "cantidad",
+                "precio_unitario",
+                "precio_neto_renglon",
+                "precio_venta_renglon",
+                "cod_deposito",
+                "detalle_renglon",
+            ]
+            return [h for h in preferred if h in available]
+
         if cfg.get("version") == "declarative-v1":
             decl = self._declarative_export_headers(report, sample_row)
             if decl:
@@ -340,6 +374,9 @@ class ExportService:
             query_result: Resultado de la consulta (QueryResult)
             payload: Payload con filtros
         """
+        if report.slug == "documento-presupuesto-ventas":
+            self._generate_excel_documento_presupuesto_ventas(file_path, report, query_result, payload)
+            return
         if report.slug == "bo-stock-facturacion":
             self._generate_excel_bo(file_path, report, query_result)
             return
@@ -434,7 +471,7 @@ class ExportService:
                     "ventas_netas",
                     "subtotal_desc",
                 }
-                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
+                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
                     currency_headers_data.update(
                         {
                             "objetivo",
@@ -482,6 +519,10 @@ class ExportService:
                     "cod_viajante": "Cód. vendedor",
                     "nombre_vendedor": "Vendedor",
                     "codigo_cliente": "Cód. cliente",
+                    "id_art": "ID artículo",
+                    "nombre_articulo": "Artículo",
+                    "codigo_proveedor": "Cód. proveedor",
+                    "nombre_proveedor": "Proveedor",
                     "objetivo": "Objetivo",
                     "facturacion": "Facturación",
                     "remitos": "Remitos",
@@ -499,7 +540,7 @@ class ExportService:
                     header_translations = {**header_translations, "mes_formato": "Mes"}
                 
                 translated_headers = [header_translations.get(h, h.replace("_", " ").title()) for h in headers]
-                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
+                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
                     translated_headers = [str(s).upper() for s in translated_headers]
                 
                 # Escribir headers
@@ -568,8 +609,12 @@ class ExportService:
                         ncell = ws.cell(row=ridx, column=name_col_idx)
                         ncell.alignment = Alignment(horizontal="left", vertical="center", indent=max(0, int(name_indent)))
 
+                # Ventas por artículo: export plano (filas ya vienen artículo/proveedor/cliente).
+                if report.slug == "ventas-por-articulo":
+                    for data_row in query_result.data:
+                        _vo_append_data_row(data_row, outline_lvl=0)
                 # Escribir datos (objetivos vs BO: orden por cód. vendedor + cód. cliente, agrupación Excel)
-                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
+                elif report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
                     from openpyxl.worksheet.properties import Outline
 
                     ws.sheet_properties.outlinePr = Outline(summaryBelow=False, summaryRight=False)
@@ -1047,6 +1092,160 @@ class ExportService:
 
         wb.save(file_path)
         logger.info(f"✅ Archivo Excel BO generado con {len(sheets_config)} hojas: {file_path}")
+
+    def _generate_excel_documento_presupuesto_ventas(
+        self, file_path: Path, report: ReportDefinition, query_result, payload: Dict
+    ):
+        """Excel con bloque de cabecera PRE y tabla de renglones (`stockp`)."""
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Presupuesto"[:31]
+
+        title_font = Font(bold=True, size=14, color="1E40AF")
+        label_font = Font(bold=True, size=10)
+        header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        border = Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        )
+
+        meta = query_result.meta or {}
+        cab = meta.get("cabecera") or {}
+        row = 1
+
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
+        c = ws.cell(row=row, column=1)
+        c.value = report.name
+        c.font = title_font
+        c.alignment = Alignment(horizontal="left", vertical="center")
+        row += 1
+
+        if query_result.notes:
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=6)
+            c = ws.cell(row=row, column=1)
+            c.value = query_result.notes[0]
+            c.font = Font(size=10, italic=True)
+            row += 1
+
+        row += 1
+
+        def escribe_kv(etiqueta: str, valor):
+            nonlocal row
+            ws.cell(row=row, column=1, value=etiqueta).font = label_font
+            vcell = ws.cell(row=row, column=2, value=valor)
+            vcell.alignment = Alignment(horizontal="left", vertical="center")
+            row += 1
+
+        if cab:
+            escribe_kv("N° comprobante", cab.get("nro_comprobante") or "—")
+            escribe_kv("Código movimiento", cab.get("codigo_movimiento") or meta.get("codigo_movimiento") or "—")
+            escribe_kv("Tipo", cab.get("tipo_comprobante") or "PRE")
+            escribe_kv("Fecha", cab.get("fecha_fmt") or "—")
+            escribe_kv("Vencimiento", cab.get("vencimiento_fmt") or "—")
+            escribe_kv("Cliente", cab.get("nombre_cliente") or "—")
+            escribe_kv("Cód. cliente", cab.get("codigo_cliente") if cab.get("codigo_cliente") is not None else "—")
+            escribe_kv("Cond. venta", cab.get("cond_venta") or "—")
+            escribe_kv("Estado", cab.get("estado") or "—")
+            escribe_kv("Anulado", cab.get("anulado") or "No")
+            escribe_kv("Sucursal", cab.get("cod_sucursal") if cab.get("cod_sucursal") is not None else "—")
+            escribe_kv("Vendedor (cód.)", cab.get("cod_viajante") if cab.get("cod_viajante") is not None else "—")
+            iv = cab.get("importe_venta")
+            escribe_kv("Importe cabecera", iv if iv is not None else "—")
+            det = (cab.get("detalle") or "").strip()
+            if det:
+                ws.cell(row=row, column=1, value="Observaciones").font = label_font
+                ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=6)
+                ws.cell(row=row, column=2, value=det).alignment = Alignment(
+                    horizontal="left", vertical="top", wrap_text=True
+                )
+                row += 1
+        else:
+            ws.cell(row=row, column=1, value="No hay datos de cabecera para mostrar.")
+            row += 1
+
+        row += 1
+        ws.cell(row=row, column=1, value="Renglones").font = Font(bold=True, size=12)
+        row += 1
+
+        if not query_result.data:
+            ws.cell(row=row, column=1, value="Sin renglones en stockp para este movimiento.")
+            row += 1
+        else:
+            headers = self._resolve_export_headers(report, query_result.data[0])
+            labels = {
+                "orden": "Orden",
+                "codigo_articulo": "Código artículo",
+                "descripcion": "Descripción",
+                "cantidad": "Cantidad",
+                "precio_unitario": "P. unitario",
+                "precio_neto_renglon": "Neto renglón",
+                "precio_venta_renglon": "Importe venta renglón",
+                "cod_deposito": "Depósito",
+                "detalle_renglon": "Detalle",
+            }
+            translated = [labels.get(h, h.replace("_", " ").title()) for h in headers]
+            for col_num, txt in enumerate(translated, 1):
+                cell = ws.cell(row=row, column=col_num, value=txt)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.border = border
+            row += 1
+
+            currency_headers = {
+                "precio_unitario",
+                "precio_neto_renglon",
+                "precio_venta_renglon",
+            }
+            qty_headers = {"cantidad"}
+
+            for data_row in query_result.data:
+                vals = [data_row.get(h) for h in headers]
+                for col_num, (header, value) in enumerate(zip(headers, vals), 1):
+                    cell = ws.cell(row=row, column=col_num, value=value)
+                    cell.border = border
+                    if header in currency_headers and value is not None:
+                        cell.number_format = '"$"#,##0.00'
+                        cell.alignment = Alignment(horizontal="right", vertical="center")
+                    elif header in qty_headers and value is not None:
+                        cell.number_format = "#,##0.00"
+                        cell.alignment = Alignment(horizontal="right", vertical="center")
+                    else:
+                        cell.alignment = Alignment(horizontal="left", vertical="center")
+                row += 1
+
+        totals = query_result.totals or {}
+        row += 1
+        ws.cell(row=row, column=1, value="Totales").font = Font(bold=True, size=11)
+        row += 1
+        ws.cell(row=row, column=1, value="Suma neto renglones")
+        v = totals.get("suma_precio_neto_renglon")
+        c = ws.cell(row=row, column=2, value=v if v is not None else 0)
+        c.number_format = '"$"#,##0.00'
+        row += 1
+        ws.cell(row=row, column=1, value="Suma importe venta renglones")
+        v = totals.get("suma_precio_venta_renglon")
+        c = ws.cell(row=row, column=2, value=v if v is not None else 0)
+        c.number_format = '"$"#,##0.00'
+        row += 1
+        ws.cell(row=row, column=1, value="Importe cabecera comp_ped")
+        v = totals.get("importe_cabecera_comp_ped")
+        c = ws.cell(row=row, column=2, value=v if v is not None else 0)
+        c.number_format = '"$"#,##0.00'
+
+        ws.column_dimensions["A"].width = 28
+        ws.column_dimensions["B"].width = 22
+        for col_letter in ("C", "D", "E", "F"):
+            ws.column_dimensions[col_letter].width = 16
+
+        wb.save(file_path)
+        logger.info("Excel documento presupuesto ventas generado: %s", file_path)
 
     def get_file_response(self, export_result: ExportResult) -> HttpResponse:
         """

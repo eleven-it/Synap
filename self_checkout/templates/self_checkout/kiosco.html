@@ -361,7 +361,7 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
 
   <!-- Modal pago: elegir método; en modo TPV se muestran Efectivo, Tarjeta y Mercado Pago -->
   <div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" x-show="modalPago" x-cloak x-transition
-       x-init="$watch('modalPago', v => { if (v) { pagoModo = 'elegir'; pagoTipoCobro = ''; pagoImporteEfectivo = '0.00'; pagoImporteCobradoEfectivo = ''; pagoImporteTarjeta = '0.00'; pagoCuotas = 1; pagoTarjetaNombre = ''; pagoPlanNombre = ''; pagoNroTarjeta = ''; pagoNroCupon = ''; pagoNroLote = ''; pagoIntereses = '0.00'; pagoValorCuota = '0.00'; pagoImporteParcial = '0.00'; pagoRedondeo = '0.00'; pagoRedondeoTipo = 'Arriba'; pagoMediosError = ''; pagoQrUrl = ''; pagoOrderId = null; pagoMpError = ''; cargarMediosDePago(); enfocarPrimerCampoEnModal($el); } detenerPollingPago(); })">
+       x-init="$watch('modalPago', v => { if (v) { pagoEstado = 'pendiente'; pagoModo = 'elegir'; pagoTipoCobro = ''; pagoImporteEfectivo = '0.00'; pagoImporteCobradoEfectivo = ''; pagoImporteTarjeta = '0.00'; pagoCuotas = 1; pagoTarjetaNombre = ''; pagoPlanNombre = ''; pagoNroTarjeta = ''; pagoNroCupon = ''; pagoNroLote = ''; pagoIntereses = '0.00'; pagoValorCuota = '0.00'; pagoImporteParcial = '0.00'; pagoRedondeo = '0.00'; pagoRedondeoTipo = 'Arriba'; pagoMediosError = ''; pagoQrUrl = ''; pagoOrderId = null; pagoMpError = ''; cargarMediosDePago(); enfocarPrimerCampoEnModal($el); } detenerPollingPago(); })">
     <div class="w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
       <h3 class="text-lg font-bold text-slate-900 dark:text-white">Elegí cómo pagar</h3>
       <div class="mt-3 text-center">
@@ -640,8 +640,10 @@ body.kiosk-fullscreen .kiosk-col-right { max-height: none !important; }
       </div>
 
       <div class="mt-4 flex gap-2" x-show="pagoEstado === 'aprobado'" x-cloak>
-        <button type="button" class="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200" x-on:click="confirmarVenta(); modalPago = false">Confirmar compra</button>
-        <button type="button" class="rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 px-4 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-on:click="modalPago = false">Cerrar</button>
+        <button type="button" class="flex-1 rounded-xl py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg focus:outline-none focus:ring-2 focus:ring-sky-400 transition-all duration-200 disabled:opacity-60 disabled:cursor-wait"
+                x-bind:disabled="estado === 'confirming'"
+                x-on:click="await confirmarVenta()">Confirmar compra</button>
+        <button type="button" class="rounded-xl border border-slate-200 dark:border-slate-600 py-2.5 px-4 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all duration-200" x-bind:disabled="estado === 'confirming'" x-on:click="modalPago = false">Cerrar</button>
       </div>
     </div>
   </div>
@@ -1537,6 +1539,7 @@ document.addEventListener('alpine:init', () => {
 
     irAPago() {
       if (this.items.length === 0 || this.stockBlocked) return;
+      if (!this.asegurarSeriesCompletasTpv()) return;
       this.emailError = '';
       this.cuit = '';
       this.cuitConsulta = {};
@@ -1620,6 +1623,7 @@ document.addEventListener('alpine:init', () => {
         this.emailError = 'Si ingresás email, debe ser válido';
         return;
       }
+      if (!this.asegurarSeriesCompletasTpv()) return;
       // TPV o Consumidor Final sin email: usar placeholder para que confirm no devuelva 400 (email obligatorio)
       const emailValido = (this.email && this.email.trim() && this.email.includes('@'));
       const emailParaEnviar = emailValido ? this.email.trim() : (this.modoTpv || this.tipoFactura === 'CF' ? 'noreply@consumidorfinal.local' : (this.email || ''));
@@ -1797,6 +1801,19 @@ document.addEventListener('alpine:init', () => {
     simularPagoAprobado() {
       this.pagoEstado = 'aprobado';
       this.confirmarVenta();
+    },
+
+    /** Tras una venta confirmada o al iniciar nueva compra: vacía TPV (search + tabla) y escáner autoservicio. */
+    limpiarBuscadorArticulos() {
+      if (this.articulosBusquedaAbort) {
+        try { this.articulosBusquedaAbort.abort(); } catch (e) {}
+        this.articulosBusquedaAbort = null;
+      }
+      this.searchProductos = '';
+      this.articulosGrid = [];
+      this.articulosGridLoading = false;
+      this.selectedSearchIndex = -1;
+      this.scanInput = '';
     },
 
     onBusquedaProductosInput() {
@@ -2171,7 +2188,18 @@ document.addEventListener('alpine:init', () => {
       const totalNum = this.round2(this.total);
       const impEf = this.round2(this.pagoImporteEfectivo);
       const impTar = this.round2(this.pagoImporteTarjeta);
-      if (Math.abs(impEf + impTar - totalNum) > 0.02) {
+      const impInt = this.round2(this.pagoIntereses || 0);
+      if (this.modoTpv) {
+        const suma = impEf + impTar + impInt;
+        if (suma <= 0.005) {
+          this.pagoMediosError = 'Debe ingresar por lo menos un medio de cobro disponible.';
+          return;
+        }
+        if (Math.abs(suma - totalNum) > 0.02) {
+          this.pagoMediosError = 'La suma de medios debe coincidir con el total.';
+          return;
+        }
+      } else if (Math.abs(impEf + impTar - totalNum) > 0.02) {
         this.pagoMediosError = 'La suma de medios debe coincidir con el total.';
         return;
       }
@@ -2199,6 +2227,10 @@ document.addEventListener('alpine:init', () => {
     },
     async confirmarVentaConMetodo(paymentMethod, mediosOverride) {
       this.estado = 'confirming';
+      if (!this.asegurarSeriesCompletasTpv()) {
+        this.estado = 'idle';
+        return;
+      }
       if (this.pagoMediosError) this.pagoMediosError = '';
       const idCliente = this.modoTpv ? (this.tpvCliente && this.tpvCliente.id_cliente) : (this.tipoFactura === 'FA' && this.cuitConsulta && this.cuitConsulta.id_cliente ? this.cuitConsulta.id_cliente : 1);
       const cuitVal = this.modoTpv ? (this.tpvCliente && this.tpvCliente.cuit) : (this.tipoFactura === 'FA' ? (this.cuit || '').trim() : '');
@@ -2239,23 +2271,50 @@ document.addEventListener('alpine:init', () => {
         this.confirmedCartId = this.cartId;
         this.comprobanteTexto = `${data.resultado?.tipo_comprobante || ''} ${data.resultado?.nro_comprobante || ''}`.trim() || 'Comprobante generado';
         this.estado = 'success';
-        this.modalPago = false;
+        this.cerrarModalPagoExitoso();
         this.cartId = null;
         this.items = [];
         this.total = 0;
         await this.crearObtenerCarrito();
       } else {
-        if (data && data.code === 'E_MEDIOS_COBRO' && data.error && this.pagoModo === 'medio_multi') {
-          this.pagoMediosError = data.error;
+        const codigo = data && data.code;
+        const esErrorMedios = codigo === 'E_MEDIOS_COBRO' || codigo === 'E_TPV_MEDIOS_TOTAL' || codigo === 'E_TPV_MEDIOS_VACIOS';
+        const esSeriesInv = codigo === 'SERIES_INVALID';
+        const esPrecheckTpv = ['E_TPV_OBLIGA_PV', 'E_TPV_OBLIGA_VENDEDOR', 'E_TPV_CREDITO_EXCEDIDO', 'E_TPV_LIMITE_EFECTIVO_CAJA'].includes(codigo);
+        if ((esErrorMedios || esSeriesInv || esPrecheckTpv) && data.error) {
+          if (esErrorMedios && this.pagoModo === 'medio_multi') {
+            this.pagoMediosError = data.error;
+          } else {
+            this.toastMsg = data.error;
+            this.toastOk = false;
+            setTimeout(() => { this.toastMsg = ''; }, 4000);
+          }
         } else {
           this.modalFueraDeServicio = true;
           this.modalPago = false;
         }
+        this.estado = 'idle';
       }
-      this.estado = 'idle';
+    },
+    /** Solo modo TPV: bloquea cobro si hay líneas seriadas sin números asignados (cart_item.serie ≠ 'Si'). */
+    asegurarSeriesCompletasTpv() {
+      if (!this.modoTpv) return true;
+      const pend = (this.items || []).filter(it => it.requiere_series && (String(it.serie || '').toLowerCase() !== 'si'));
+      if (!pend.length) return true;
+      const primero = pend[0].descripcion || pend[0].codigo_articulo || 'Artículo';
+      this.toastMsg = pend.length > 1
+        ? ('Completá los números de serie antes de cobrar (' + pend.length + ' ítems).')
+        : ('Completá los números de serie antes de cobrar: ' + primero);
+      this.toastOk = false;
+      setTimeout(() => { this.toastMsg = ''; }, 4500);
+      return false;
     },
     async confirmarVenta() {
       this.estado = 'confirming';
+      if (!this.asegurarSeriesCompletasTpv()) {
+        this.estado = 'idle';
+        return;
+      }
       const idCliente = this.modoTpv ? (this.tpvCliente && this.tpvCliente.id_cliente) : (this.tipoFactura === 'FA' && this.cuitConsulta && this.cuitConsulta.id_cliente ? this.cuitConsulta.id_cliente : 1);
       const cuitVal = this.modoTpv ? (this.tpvCliente && this.tpvCliente.cuit) : (this.tipoFactura === 'FA' ? (this.cuit || '').trim() : '');
       const body = {
@@ -2273,17 +2332,34 @@ document.addEventListener('alpine:init', () => {
         this.confirmedCartId = this.cartId;
         this.comprobanteTexto = `${data.resultado?.tipo_comprobante || ''} ${data.resultado?.nro_comprobante || ''}`.trim() || 'Comprobante generado';
         this.estado = 'success';
-        this.modalPago = false;
+        this.cerrarModalPagoExitoso();
         this.cartId = null;
         this.items = [];
         this.total = 0;
         await this.crearObtenerCarrito();
       } else {
-        // Cualquier error de confirmación → fuera de servicio (sin detalles para el cliente)
-        this.modalFueraDeServicio = true;
-        this.modalPago = false;
+        const codigo = data && data.code;
+        const recuperable = codigo === 'SERIES_INVALID' || codigo === 'E_MEDIOS_COBRO'
+          || codigo === 'E_TPV_MEDIOS_TOTAL' || codigo === 'E_TPV_MEDIOS_VACIOS'
+          || ['E_TPV_OBLIGA_PV', 'E_TPV_OBLIGA_VENDEDOR', 'E_TPV_CREDITO_EXCEDIDO', 'E_TPV_LIMITE_EFECTIVO_CAJA'].includes(codigo);
+        if (recuperable && data.error) {
+          this.toastMsg = data.error;
+          this.toastOk = false;
+          setTimeout(() => { this.toastMsg = ''; }, 4500);
+        } else {
+          this.modalFueraDeServicio = true;
+          this.modalPago = false;
+        }
+        this.estado = 'idle';
       }
-      this.estado = 'idle';
+    },
+
+    cerrarModalPagoExitoso() {
+      this.limpiarBuscadorArticulos();
+      this.modalPago = false;
+      this.pagoEstado = 'pendiente';
+      this.pagoModo = 'elegir';
+      this.detenerPollingPago();
     },
 
     simularRfid() {
@@ -2323,6 +2399,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     nuevaCompra() {
+      this.limpiarBuscadorArticulos();
       this.estado = 'idle';
       this.mostrarReceipt = false;
       this.comprobanteTexto = '';

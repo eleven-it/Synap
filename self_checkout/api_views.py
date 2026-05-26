@@ -21,8 +21,13 @@ from .constants import (
     E_AFIP_UNAVAILABLE,
     E_SERVICE_UNAVAILABLE,
     E_KIOSK_IN_USE,
+    E_TPV_MEDIOS_TOTAL,
+    E_TPV_MEDIOS_VACIOS,
 )
 from .services import CartService, KioskSessionService, ConfirmationService, InvoiceService
+from .services.tpv_payment_validation import evaluar_suma_medios_pago, kiosk_es_modo_tpv
+from .services.tpv_paridad_precheck import evaluar_precheck_tpv_paridad
+from .services.audit_log_service import registrar_evento_carrito
 from .services.promotion_service import (
     obtener_promocion_articulo,
     promocion_desde_fila_articulo,
@@ -56,6 +61,16 @@ def _tables_missing_response(base: str):
         'error': 'Faltan las tablas de self-checkout en la base de datos. Ejecutá en el servidor: python manage.py create_self_checkout_tables --base-empresa ' + (base or 'administranet'),
         'code': E_SERVICE_UNAVAILABLE,
     }, status=503)
+
+
+def _auditar_rechazo_tpv(base_empresa: str, cart_id: int, codigo_error: str) -> None:
+    """Registra rechazo de validación TPV (medios); sin datos sensibles."""
+    registrar_evento_carrito(
+        base_empresa,
+        cart_id,
+        "tpv_rechazo_validacion",
+        {"code": codigo_error, "cart_id": cart_id},
+    )
 
 
 def _marcar_cart_error_confirmacion(base_empresa: str, cart_id: int, error_msg: str) -> None:
@@ -320,6 +335,10 @@ def cart_detail(request, cart_id):
         return _error_response(E_CART_NOT_FOUND, 'Carrito no encontrado', 404)
     cart_svc = CartService(base)
     items = cart_svc.obtener_items(cart_id)
+    from .services.serie_service import articulos_requieren_serie_map
+
+    ids_art = [int(i["id_articulo"]) for i in items if i.get("id_articulo") is not None]
+    mapa_serie = articulos_requieren_serie_map(base, ids_art)
     # Normalizar ítems para grilla extendida (TPV): codigo_barras, alicuota_porcentaje, subtotal, precio con IVA incluido.
     items_normalized = []
     for i in items:
@@ -333,6 +352,8 @@ def cart_detail(request, cart_id):
         row['precio_unitario_bruto'] = round(pu_neto * (1 + alic / 100.0), 2)  # precio unitario con IVA incluido
         row['promocion'] = row.get('promocion') or ''
         row['detalle'] = row.get('detalle') or ''
+        ia = int(row['id_articulo']) if row.get('id_articulo') is not None else None
+        row['requiere_series'] = bool(ia is not None and mapa_serie.get(ia, False))
         items_normalized.append(row)
     return JsonResponse({
         'cart': dict(cart),
@@ -1340,11 +1361,18 @@ def cart_confirm(request, cart_id):
 
     from self_checkout.db import mysql_cursor
     with mysql_cursor(base, dict_cursor=True) as c:
-        c.execute("SELECT estado, email FROM self_checkout_cart WHERE id = %s", [cart_id])
+        c.execute(
+            """
+            SELECT estado, email, kiosk_id, total, id_punto_venta
+            FROM self_checkout_cart WHERE id = %s
+            """,
+            [cart_id],
+        )
         row = c.fetchone()
     if not row:
         return _error_response(E_CART_NOT_FOUND, 'Carrito no encontrado', 404)
     estado, email_actual = row['estado'], row['email']
+    es_modo_tpv_flag = kiosk_es_modo_tpv(base, row.get('kiosk_id'))
     email_final = (email_actual or '').strip() or (email or '').strip()
     if not email_final or '@' not in email_final:
         return _error_response(E_EMAIL_REQUIRED, 'Email obligatorio antes de confirmar', 400)
@@ -1434,6 +1462,32 @@ def cart_confirm(request, cart_id):
         except (TypeError, ValueError):
             pass
 
+    if es_modo_tpv_flag:
+        total_carrito = float(row.get('total') or 0)
+        ok_medios, err_medios = evaluar_suma_medios_pago(
+            total_carrito,
+            tpv_importe_efectivo,
+            tpv_importe_tarjeta,
+            tpv_intereses,
+        )
+        if not ok_medios:
+            vacios = err_medios and 'por lo menos un medio' in err_medios.lower()
+            code = E_TPV_MEDIOS_VACIOS if vacios else E_TPV_MEDIOS_TOTAL
+            _auditar_rechazo_tpv(base, cart_id, code)
+            return _error_response(code, err_medios or 'Error en medios de cobro', 400)
+        ok_pre, code_pre, msg_pre = evaluar_precheck_tpv_paridad(
+            base,
+            cart_row=dict(row),
+            id_cliente=id_cliente,
+            total_venta=total_carrito,
+            tpv_importe_efectivo=tpv_importe_efectivo,
+            cod_viajante_en_post=cod_viajante_req,
+            id_puesto=session_user.get('id_puesto'),
+        )
+        if not ok_pre:
+            _auditar_rechazo_tpv(base, cart_id, code_pre or '')
+            return _error_response(code_pre or 'E_TPV_VALIDACION', msg_pre or 'Validación TPV', 400)
+
     conf_svc = ConfirmationService(base)
     ok, error_msg, result = conf_svc.confirmar(
         cart_id=cart_id,
@@ -1477,9 +1531,15 @@ def cart_confirm(request, cart_id):
         # Caja: se registra dentro de confirmar (transacción atómica, paridad administraNET)
         logger.info("cart_confirm: carrito %s confirmado ok, cod_mov=%s nro_comp=%s", cart_id, result.get('codigo_movimiento'), result.get('nro_comprobante'))
         return JsonResponse({'ok': True, 'resultado': result, 'fe_estado': estado_fe})
-    # Validación de medios de cobro (suma ≠ total): devolver mensaje claro al cliente
+    # Validación de medios de cobro (suma ≠ total): mensaje claro; códigos TPV solo si modo_tpv
     if error_msg and ('no coincide con el total' in error_msg or 'medios de cobro' in error_msg.lower()):
-        return _error_response('E_MEDIOS_COBRO', error_msg, 400)
+        vacios = error_msg and 'por lo menos un medio' in error_msg.lower()
+        if es_modo_tpv_flag:
+            code = E_TPV_MEDIOS_VACIOS if vacios else E_TPV_MEDIOS_TOTAL
+            _auditar_rechazo_tpv(base, cart_id, code)
+        else:
+            code = 'E_MEDIOS_COBRO'
+        return _error_response(code, error_msg, 400)
     # Marcar carrito para recuperación por supervisor
     _marcar_cart_error_confirmacion(base, cart_id, error_msg)
     # Kiosco: cualquier otro error → "Fuera de servicio" (sin detalles para el cliente)
@@ -1775,10 +1835,14 @@ def cart_ticket(request, cart_id):
     # Serializar items correctamente
     items_json = []
     for item in ticket_data.get('items', []):
+        pu_t = item.get('precio_unitario_ticket')
+        if pu_t is None:
+            pu_t = item.get('precio_unitario')
         items_json.append({
             'descripcion': item.get('descripcion', ''),
             'cantidad': float(item.get('cantidad') or 0),
             'precio_unitario': float(item.get('precio_unitario') or 0),
+            'precio_unitario_ticket': float(pu_t or 0),
             'importe_total': float(item.get('importe_total') or 0),
             'alicuota_iva': float(item.get('alicuota_iva') or 0),
             'importe_iva': float(item.get('importe_iva') or 0),
@@ -1795,6 +1859,7 @@ def cart_ticket(request, cart_id):
         'items': items_json,
         'subtotal': float(ticket_data.get('subtotal') or 0),
         'total': float(ticket_data.get('total') or 0),
+        'diferencia_impuestos': float(ticket_data.get('diferencia_impuestos') or 0),
         'ivas': ticket_data.get('ivas', []),
         'cae': ticket_data.get('cae'),
         'vto_cae': ticket_data.get('vto_cae'),

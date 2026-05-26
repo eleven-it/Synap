@@ -76,12 +76,18 @@
                             <td class="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-5">{{ op.id_sue_abm_empleado }}</td>
                             <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">{{ op.nombre_empleado|default:"—" }}</td>
                             <td class="px-4 py-3.5 text-center align-middle sm:px-5">
-                                <form id="form-anular-operario-{{ op.id_sue_abm_empleado }}" method="post" action="{% url 'mpr:operario_anular' id_operario=op.id_sue_abm_empleado %}" hidden>
+                                <form id="form-anular-operario-{{ op.id_sue_abm_empleado }}" method="post" action="{% url 'mpr:operario_anular' id_operario=op.id_sue_abm_empleado %}" hidden
+                                      class="mpr-post-loading"
+                                      data-mpr-loading-title="Actualizando operario"
+                                      data-mpr-loading-subtitle="Guardando el estado en la base de datos…">
                                     {% csrf_token %}
                                     <input type="hidden" name="ret_q" value="{{ q|default:'' }}"/>
                                     <input type="hidden" name="ret_anulados" value="{% if incluir_anulados %}1{% else %}0{% endif %}"/>
                                 </form>
-                                <form id="form-reactivar-operario-{{ op.id_sue_abm_empleado }}" method="post" action="{% url 'mpr:operario_reactivar' id_operario=op.id_sue_abm_empleado %}" hidden>
+                                <form id="form-reactivar-operario-{{ op.id_sue_abm_empleado }}" method="post" action="{% url 'mpr:operario_reactivar' id_operario=op.id_sue_abm_empleado %}" hidden
+                                      class="mpr-post-loading"
+                                      data-mpr-loading-title="Actualizando operario"
+                                      data-mpr-loading-subtitle="Guardando el estado en la base de datos…">
                                     {% csrf_token %}
                                     <input type="hidden" name="ret_q" value="{{ q|default:'' }}"/>
                                     <input type="hidden" name="ret_anulados" value="{% if incluir_anulados %}1{% else %}0{% endif %}"/>

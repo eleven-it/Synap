@@ -162,7 +162,9 @@
         {% if id_lista and total_pendiente == 0 %}
         <div class="mb-8 rounded-2xl border border-green-600/40 bg-green-50/90 p-5 dark:border-green-500/30 dark:bg-green-900/20">
             <p class="mb-4 text-sm font-medium text-green-900 dark:text-green-200">Pendiente en cero. Puede cerrar esta OPT.</p>
-            <form method="post" action="{% url 'mpr:op_cerrar' id_lista %}">
+            <form method="post" action="{% url 'mpr:op_cerrar' id_lista %}" class="mpr-post-loading"
+                  data-mpr-loading-title="Cerrando orden"
+                  data-mpr-loading-subtitle="Actualizando estado de la OPT… No cierres esta ventana.">
                 {% csrf_token %}
                 <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-lg" aria-hidden="true">task_alt</span>

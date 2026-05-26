@@ -5,7 +5,24 @@ from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 
-from mpr.services import actualizar_pedidos_produccion
+from mpr.services import (
+    _mpr_en_proceso_detalle_es_si,
+    actualizar_pedidos_produccion,
+)
+
+
+class MprEnProcesoDetalleSiTest(TestCase):
+    """Normalización en_proceso para reconciliar demanda (no pisar líneas en OPT)."""
+
+    def test_si_y_variantes(self):
+        self.assertTrue(_mpr_en_proceso_detalle_es_si("Si"))
+        self.assertTrue(_mpr_en_proceso_detalle_es_si("SI"))
+        self.assertTrue(_mpr_en_proceso_detalle_es_si("sí"))
+
+    def test_no_es_pendiente(self):
+        self.assertFalse(_mpr_en_proceso_detalle_es_si("No"))
+        self.assertFalse(_mpr_en_proceso_detalle_es_si(None))
+        self.assertFalse(_mpr_en_proceso_detalle_es_si(""))
 
 
 class ActualizarPedidosProduccionFiltroEstadoTest(TestCase):

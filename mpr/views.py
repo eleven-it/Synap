@@ -135,6 +135,43 @@ def _get_base_empresa(request):
     return session_user.get("base_empresa") or None
 
 
+# En formularios OPP (wizard y registrar), una docena son siempre 12 unidades (no cantidad_promedio_bulto).
+UNIDADES_POR_DOCENA_OPP = 12
+
+
+def _opp_cantidad_unidades_desde_post(post, id_comp: int, cod_dep: int) -> int:
+    """Cantidad en unidades por celda componente × depósito: docenas × 12 + unidades sueltas."""
+    doc_key = f"opp_comp_{id_comp}_dep_{cod_dep}_docenas"
+    uni_key = f"opp_comp_{id_comp}_dep_{cod_dep}_unidades"
+    try:
+        docenas = int((post.get(doc_key) or "0").strip())
+    except (ValueError, TypeError):
+        docenas = 0
+    try:
+        unidades_sueltas = int((post.get(uni_key) or "0").strip())
+    except (ValueError, TypeError):
+        unidades_sueltas = 0
+    docenas = max(0, docenas)
+    unidades_sueltas = max(0, unidades_sueltas)
+    return docenas * UNIDADES_POR_DOCENA_OPP + unidades_sueltas
+
+
+def _opp_max_distribuible_unidades(comp: dict) -> float:
+    """
+    Devuelve el máximo distribuible para OPP sin caer en fallback por falsy.
+    Si max_distribuible_unidades existe y vale 0, debe respetarse 0.
+    """
+    if not isinstance(comp, dict):
+        return 0.0
+    raw = comp.get("max_distribuible_unidades")
+    if raw is None:
+        raw = comp.get("disponible_unidades")
+    try:
+        return float(raw or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _get_id_puesto(request):
     """Obtiene id_puesto desde la sesión. Devuelve None si no está definido."""
     session_user = request.session.get("user", {})
@@ -606,7 +643,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             return redirect("mpr:wizard")
         try:
             depositos_opp = get_depositos_opp(base_empresa)
-            componentes_opp = get_opp_componentes_disponibles(base_empresa, id_lista)
+            componentes_opp = get_opp_componentes_disponibles(base_empresa, id_lista, deposito_origen)
         except MprSchemaError as e:
             _log_mpr_schema_error(e)
             request.session["mpr_schema_error_modal"] = str(e)
@@ -615,7 +652,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             messages.error(request, "No hay componentes para distribuir en esta OPT.")
             return redirect("mpr:wizard")
         cods_dep = [to_int_or_none(d.get("CodDeposito")) for d in depositos_opp if to_int_or_none(d.get("CodDeposito")) is not None]
-        # Leer matriz: opp_comp_<id_componente>_dep_<cod_deposito> (unidades)
+        # Leer matriz: por celda docenas + unidades sueltas (docena = 12 unidades); se registra solo unidades.
         por_deposito = {}  # cod_dep -> [(id_componente, qty), ...]
         for cod_dep in cods_dep:
             if cod_dep == deposito_origen:
@@ -626,17 +663,12 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         for id_comp, comp in comp_por_id.items():
             if id_comp is None:
                 continue
-            disponible = int(comp.get("disponible_unidades") or 0)
+            disponible = int(_opp_max_distribuible_unidades(comp))
             suma_comp = 0
             for cod_dep in cods_dep:
                 if cod_dep == deposito_origen:
                     continue
-                key = f"opp_comp_{id_comp}_dep_{cod_dep}"
-                try:
-                    qty = int((request.POST.get(key) or "0").strip())
-                except (ValueError, TypeError):
-                    qty = 0
-                qty = max(0, qty)
+                qty = _opp_cantidad_unidades_desde_post(request.POST, id_comp, cod_dep)
                 if qty > 0:
                     por_deposito[cod_dep].append((id_comp, qty))
                 suma_comp += qty
@@ -677,10 +709,33 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         if not ok:
             messages.error(request, error or "Error al registrar la parte de producción (OPP).")
             return redirect("mpr:wizard")
-        wizard["paso"] = 4
+        queda_disponible = False
+        try:
+            componentes_despues = get_opp_componentes_disponibles(base_empresa, id_lista, deposito_origen)
+            queda_disponible = any(
+                int(_opp_max_distribuible_unidades(c)) > 0
+                for c in (componentes_despues or [])
+            )
+        except Exception as e:
+            logger.warning(
+                "MPR OPP wizard: no se pudo recalcular disponible tras OPP base_empresa=%s id_lista=%s: %s",
+                base_empresa,
+                id_lista,
+                e,
+                exc_info=True,
+            )
+            queda_disponible = False
+        if queda_disponible:
+            wizard["paso"] = 3
+            messages.success(
+                request,
+                "Parte de producción (OPP) registrada. Aún hay unidades disponibles para distribuir; puede registrar otra OPP con otro operario.",
+            )
+        else:
+            wizard["paso"] = 4
+            messages.success(request, "Parte de producción (OPP) registrada por depósito.")
         request.session[WIZARD_SESSION_KEY] = wizard
         request.session.modified = True
-        messages.success(request, "Parte de producción (OPP) registrada por depósito.")
         return redirect("mpr:wizard")
 
     def _post_paso4(self, request, base_empresa, wizard):
@@ -825,7 +880,11 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                 if id_lista and not lineas:
                     lineas = get_lineas_opt_directo(base_empresa, id_lista)
                 depositos_opp = get_depositos_opp(base_empresa)
-                componentes_opp = get_opp_componentes_disponibles(base_empresa, id_lista) if id_lista else []
+                id_deposito_produccion = get_deposito_produccion_mpr(base_empresa)
+                componentes_opp = (
+                    get_opp_componentes_disponibles(base_empresa, id_lista, id_deposito_produccion)
+                    if id_lista else []
+                )
             except MprSchemaError as e:
                 _log_mpr_schema_error(e)
                 context["mpr_schema_error_modal"] = str(e)
@@ -840,7 +899,10 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
             context["componentes_opp"] = componentes_opp
             context["depositos_opp"] = depositos_opp
             context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
-            context["total_pendiente"] = sum(c.get("disponible_unidades") or 0 for c in componentes_opp) if componentes_opp else sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
+            context["total_pendiente"] = (
+                sum(_opp_max_distribuible_unidades(c) for c in componentes_opp)
+                if componentes_opp else sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
+            )
             try:
                 opp_registradas = listar_opp_por_opt(base_empresa, id_lista) if id_lista else []
                 context["cantidad_opp_registradas"] = len(opp_registradas)
@@ -1076,6 +1138,16 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
 
         total_pedida = sum(l["cantidad_pedida"] for l in lineas)
         total_pendiente = sum(l["cantidad_pendiente_prod"] for l in lineas)
+        hay_disponible_opp = False
+        if id_lista and id_lista != 0:
+            try:
+                deposito_origen = get_deposito_produccion_mpr(base_empresa)
+                componentes_opp = get_opp_componentes_disponibles(base_empresa, id_lista, deposito_origen)
+                hay_disponible_opp = any(
+                    _opp_max_distribuible_unidades(c) > 0 for c in (componentes_opp or [])
+                )
+            except Exception:
+                hay_disponible_opp = False
         # Estado del flujo: Pedida → En producción → Producida (OPP) → Pendiente 0 → Armado → Cerrado
         en_proceso = (lineas[0].get("en_proceso_produccion") or "No").strip().lower() == "si"
         paso_pedida = True
@@ -1087,9 +1159,9 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
             paso_pendiente_cero = True
             paso_armado = True
         else:
-            paso_liberada_opt = en_proceso or (total_pendiente == 0)
-            paso_producida_opp = total_pendiente == 0
-            paso_pendiente_cero = total_pendiente == 0
+            paso_liberada_opt = en_proceso or (not hay_disponible_opp)
+            paso_producida_opp = not hay_disponible_opp
+            paso_pendiente_cero = not hay_disponible_opp
             paso_armado = None  # se calcula más abajo
 
         # Cantidades ya armadas por artículo (solo si OPT con id_lista)
@@ -1198,9 +1270,9 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
 
         if paso_cerrado:
             estado_actual_texto = "OPT cerrada."
-        elif total_pendiente == 0 and en_proceso:
+        elif (not hay_disponible_opp) and en_proceso:
             estado_actual_texto = "Completada (pendiente OPP 0). Puede cerrar la OPT."
-        elif total_pendiente == 0:
+        elif not hay_disponible_opp:
             estado_actual_texto = "Producida (OPP). Pendiente OPP: 0 Packs."
         elif en_proceso:
             estado_actual_texto = "En producción. Pendiente OPP (por producir en esta OPT): {} Packs.".format(total_pendiente)
@@ -1217,6 +1289,7 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         context["lineas"] = lineas
         context["total_pedida"] = total_pedida
         context["total_pendiente"] = total_pendiente
+        context["hay_disponible_opp"] = hay_disponible_opp
         context["total_en_esta_opt"] = total_en_esta_opt
         context["pendiente_del_pedido"] = pendiente_del_pedido
         context["porcentaje_completado"] = porcentaje_estado
@@ -1288,7 +1361,8 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
         try:
             lineas = get_opt_detalle(base_empresa, id_lista)
             depositos_opp = get_depositos_opp(base_empresa)
-            componentes_opp = get_opp_componentes_disponibles(base_empresa, id_lista)
+            id_deposito_produccion = get_deposito_produccion_mpr(base_empresa)
+            componentes_opp = get_opp_componentes_disponibles(base_empresa, id_lista, id_deposito_produccion)
         except MprSchemaError as e:
             _log_mpr_schema_error(e)
             context["mpr_schema_error_modal"] = str(e)
@@ -1301,7 +1375,10 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
             context["lineas"] = lineas
             context["componentes_opp"] = componentes_opp
             context["depositos_opp"] = depositos_opp
-            context["total_pendiente"] = sum(c.get("disponible_unidades") or 0 for c in componentes_opp) if componentes_opp else sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
+            context["total_pendiente"] = (
+                sum(_opp_max_distribuible_unidades(c) for c in componentes_opp)
+                if componentes_opp else sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas)
+            )
             try:
                 opp_registradas = listar_opp_por_opt(base_empresa, id_lista)
                 context["cantidad_opp_registradas"] = len(opp_registradas)
@@ -1338,7 +1415,7 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
             return redirect("mpr:registrar_opp", id_lista=id_lista)
         try:
             depositos_opp = get_depositos_opp(base_empresa)
-            componentes_opp = get_opp_componentes_disponibles(base_empresa, id_lista)
+            componentes_opp = get_opp_componentes_disponibles(base_empresa, id_lista, deposito_origen)
         except MprSchemaError as e:
             _log_mpr_schema_error(e)
             request.session["mpr_schema_error_modal"] = str(e)
@@ -1355,19 +1432,14 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
             for cod_dep in cods_dep:
                 if cod_dep == deposito_origen:
                     continue
-                key = f"opp_comp_{id_comp}_dep_{cod_dep}"
-                try:
-                    qty = int((request.POST.get(key) or "0").strip())
-                except (ValueError, TypeError):
-                    qty = 0
-                qty = max(0, qty)
+                qty = _opp_cantidad_unidades_desde_post(request.POST, id_comp, cod_dep)
                 if qty > 0:
                     por_deposito[cod_dep].append((id_comp, qty))
         id_operario_por_componente = {}
         for id_comp, comp in comp_por_id.items():
             if id_comp is None:
                 continue
-            disponible = int(comp.get("disponible_unidades") or 0)
+            disponible = int(_opp_max_distribuible_unidades(comp))
             suma_comp = sum(
                 q for cod_dep in por_deposito
                 for (cid, q) in por_deposito[cod_dep]
@@ -2840,18 +2912,24 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
             f = lookup.get(id_art)
             if not f:
                 continue
-            qty_str = request.POST.get("cant_" + str(id_art), "0").strip()
+            qty_str = (request.POST.get("cant_" + str(id_art), "0") or "").strip().replace(",", ".")
             try:
-                qty = int(qty_str) if qty_str else 0
-            except ValueError:
+                qty = int(round(float(qty_str))) if qty_str else 0
+            except (ValueError, TypeError):
                 qty = 0
+            qty = max(0, qty)
             if qty > 0:
+                try:
+                    p_ped = float(f.get("cantidad_pedida_pedido") or 0)
+                except (TypeError, ValueError):
+                    p_ped = 0.0
                 filas_sesion.append({
                     "id_articulo": id_art,
                     "codigo_articulo": f.get("codigo_articulo", "-"),
                     "codigo_manual": f.get("codigo_manual", "-"),
                     "descripcion_articulo": f.get("descripcion_articulo", "-"),
                     "stock_terminado": f.get("stock_terminado", 0),
+                    "cantidad_pedida_pedido": p_ped,
                     "cantidad_urgente": f.get("cantidad_urgente", 0),
                     "cantidad_a_fabricar": qty,
                     "cantidad_promedio_bulto": f.get("cantidad_promedio_bulto", 0),

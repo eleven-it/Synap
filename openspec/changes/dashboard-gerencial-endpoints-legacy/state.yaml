@@ -1,0 +1,14 @@
+change: dashboard-gerencial-endpoints-legacy
+status: applied_p0_p1_ui
+updated: "2026-05-11"
+artifact_store: hybrid
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete_p0_p1
+notes: >
+  Solo endpoints GET lectura legacy. Sin UI. Metodología adminnet-module-migration.
+  Auditoría: docs/audits/dashboard-administranet-gap-analysis.md

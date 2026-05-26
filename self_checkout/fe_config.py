@@ -85,6 +85,39 @@ def is_fe_configured(base_empresa: Optional[str] = None) -> bool:
     return bool(cfg["cert"] and cfg["key"] and cfg["cuit"])
 
 
+def validate_fe_certificates_readable(cfg: dict) -> Tuple[bool, str]:
+    """
+    Comprueba que pyafipws pueda leer cert y clave desde disco.
+    En Docker Desktop (Mac), rutas bajo el bind mount /app suelen fallar con Errno 35.
+    Returns: (ok, mensaje_error). Si ok es False, mensaje_error está listo para UI/logs.
+    """
+    cert = (cfg.get("cert") or "").strip()
+    key = (cfg.get("key") or "").strip()
+    if not cert or not key:
+        return False, "AFIP no configurado (certificado o clave ausente)."
+    for label, path in (("Certificado", cert), ("Clave privada", key)):
+        try:
+            with open(path, "rb") as f:
+                chunk = f.read(1)
+                if not chunk:
+                    return False, f"No se pudo leer {label.lower()}: archivo vacío."
+        except OSError as e:
+            errno = getattr(e, "errno", None)
+            hint = (
+                "Si usás Docker en Mac, guardá los archivos en el volumen dedicado "
+                "(SYNAP_AFIP_STORAGE) y actualizá rutas en Facturación AFIP, o ejecutá "
+                "`fe_afip_migrate_certs_to_secure_storage` con archivos en /tmp (ver "
+                "docs/general/AFIP_CERTIFICADOS_ALMACENAMIENTO_SEGURO.md)."
+            )
+            if errno == 35:
+                hint = (
+                    "Error 35 (lectura bloqueada): las rutas no deben apuntar a la carpeta del proyecto "
+                    "montada en Docker. " + hint
+                )
+            return False, f"No se puede leer {label.lower()} para AFIP: {e}. {hint}"
+    return True, ""
+
+
 def check_afip_connectivity(base_empresa: Optional[str] = None) -> Tuple[bool, str]:
     """
     Comprueba conectividad con AFIP (WSAA). Para healthcheck del autoservicio.
@@ -94,6 +127,9 @@ def check_afip_connectivity(base_empresa: Optional[str] = None) -> Tuple[bool, s
     if not is_fe_configured(base_empresa):
         return True, ""
     cfg = get_fe_config(base_empresa)
+    ok_read, err_read = validate_fe_certificates_readable(cfg)
+    if not ok_read:
+        return False, err_read[:200]
     try:
         from pyafipws.wsaa import WSAA
         wsaa = WSAA()

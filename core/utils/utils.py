@@ -101,6 +101,18 @@ APPS_MENU = [
         "color": "cyan",
         "submenus": [
             {
+                "seccion": _("Comprobantes"),
+                "items": [
+                    {
+                        "label": _("Presupuestos"),
+                        "url": "ventas:presupuesto_list",
+                        "icon": "description",
+                        "permission": "ventas.presupuesto.ver",
+                        "menu_item_id": "ventas_cb_presupuestos",
+                    },
+                ]
+            },
+            {
                 "seccion": _("Objetivos"),
                 "items": [
                     {
@@ -343,7 +355,14 @@ APPS_MENU = [
                     {"label": _("Selector de kiosco"), "url": "self_checkout:index", "icon": "storefront", "permission": "self_checkout.ver", "menu_item_id": "sc_tpv_selector"},
                     {"label": _("Configuración autoservicios"), "url": "self_checkout:config_list", "icon": "settings", "permission": "self_checkout.admin", "menu_item_id": "sc_tpv_config"},
                     {"label": _("Carritos pendientes"), "url": "self_checkout:carritos_pendientes", "icon": "shopping_cart", "permission": "self_checkout.ver", "menu_item_id": "sc_tpv_carritos"},
-                    {"label": _("Talonarios"), "url": "self_checkout:talonarios_list", "icon": "receipt", "permission": "self_checkout.admin", "menu_item_id": "sc_tpv_talonarios"}
+                    {"label": _("Talonarios"), "url": "self_checkout:talonarios_list", "icon": "receipt", "permission": "self_checkout.admin", "menu_item_id": "sc_tpv_talonarios"},
+                    {
+                        "label": _("Facturación AFIP"),
+                        "url": "fe_afip:config_list",
+                        "icon": "verified_user",
+                        "permission": "fe_afip.view_afipconfig",
+                        "menu_item_id": "sc_tpv_fe_afip",
+                    },
                 ]
             }
         ]

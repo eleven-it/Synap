@@ -1,0 +1,217 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} - Synap{% endblock %}
+
+{% block extra_css %}
+<style>
+  @keyframes cc-fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .cc-card-animate { animation: cc-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards; opacity: 0; }
+  @keyframes cc-wait-bar {
+    0%, 100% { transform: translateX(-100%); width: 40%; }
+    50% { transform: translateX(200%); width: 55%; }
+  }
+  .cc-shell { overflow-x: clip; }
+  .cc-hero {
+    position: relative;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 48%, #1e1b4b 100%);
+  }
+  .cc-hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 100% 0%, rgba(56, 189, 248, 0.12), transparent 55%);
+    pointer-events: none;
+  }
+  .cc-hero-toolbar {
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(71, 85, 105, 0.45);
+    backdrop-filter: blur(8px);
+  }
+  .cc-filter-field input,
+  .cc-filter-field select {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .cc-detail-scroll {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="cc-shell flex min-h-screen w-full min-w-0 flex-col bg-slate-50 py-2 dark:bg-slate-950 sm:py-6">
+  <div class="mx-auto flex w-full min-w-0 max-w-[1920px] flex-col px-1 sm:px-6 lg:px-8 xl:px-10">
+
+    <nav class="mb-3 px-1 text-xs text-slate-500 dark:text-slate-400 sm:px-0" aria-label="Migas de pan">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <li><a href="{% url 'reports:catalog' %}" class="font-medium text-sky-600 hover:text-sky-500 dark:text-sky-400">Reportes</a></li>
+        <li aria-hidden="true" class="text-slate-400">/</li>
+        <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Command Center</span></li>
+      </ol>
+    </nav>
+
+    <header class="cc-hero relative mb-4 overflow-hidden rounded-2xl border border-slate-700/90 p-4 shadow-lg shadow-slate-900/25 sm:mb-5 sm:p-5">
+      <div class="relative z-[1] flex flex-col gap-4">
+        <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6">
+          <div class="min-w-0 flex-1 md:max-w-2xl">
+            <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-300/90">Gerencial · Operaciones</p>
+            <h1 class="mt-1 text-xl font-bold tracking-tight text-white sm:text-2xl lg:text-[1.65rem]">{{ page_title }}</h1>
+            <p class="mt-1.5 max-w-2xl text-xs leading-relaxed text-slate-400 sm:text-sm">
+              Vista consolidada por área. Datos legacy AdministraNET en tiempo de consulta.
+            </p>
+          </div>
+          <nav class="flex shrink-0 flex-wrap gap-2 md:justify-end" aria-label="Accesos relacionados">
+            <a href="{{ executive_sales_page_url }}" class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:border-sky-500/40 hover:bg-slate-800/80">
+              <span class="material-icons text-[1.125rem]" aria-hidden="true">insights</span>
+              Ventas del día
+            </a>
+            <a href="{{ mpr_tablero_url }}" class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:border-violet-500/40 hover:bg-slate-800/80">
+              <span class="material-icons text-[1.125rem]" aria-hidden="true">precision_manufacturing</span>
+              Tablero MPR
+            </a>
+          </nav>
+        </div>
+
+        <div class="cc-hero-toolbar rounded-xl p-3 sm:p-3.5">
+          <p class="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Filtros del período</p>
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
+            <fieldset class="grid min-w-0 flex-1 grid-cols-1 gap-3 border-0 p-0 sm:grid-cols-3 lg:max-w-[28rem]">
+              <legend class="sr-only">Fechas</legend>
+              <div class="cc-filter-field flex flex-col gap-1">
+                <label for="cc-fecha" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Fecha ref.</label>
+                <input type="date" id="cc-fecha" class="min-h-10 w-full rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35" />
+              </div>
+              <div class="cc-filter-field flex flex-col gap-1">
+                <label for="cc-fecha-inicio" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Desde</label>
+                <input type="date" id="cc-fecha-inicio" class="min-h-10 w-full rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35" />
+              </div>
+              <div class="cc-filter-field flex flex-col gap-1">
+                <label for="cc-fecha-fin" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Hasta</label>
+                <input type="date" id="cc-fecha-fin" class="min-h-10 w-full rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35" />
+              </div>
+            </fieldset>
+
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-3 lg:shrink-0">
+              <div class="cc-filter-field flex min-w-0 flex-1 flex-col gap-1 sm:min-w-[11rem] sm:max-w-[14rem]">
+                <label for="cc-sucursal" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Sucursal</label>
+                <select id="cc-sucursal" class="min-h-10 w-full rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35">
+                  <option value="">Todas</option>
+                </select>
+              </div>
+              <button type="button" id="cc-refresh" class="inline-flex min-h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-sky-950/40 transition hover:from-sky-400 hover:to-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[9.5rem]">
+                <span class="material-icons text-lg" aria-hidden="true">refresh</span>
+                Actualizar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="relative z-[1] mt-4 h-1 overflow-hidden rounded-full bg-slate-700/60" aria-hidden="true">
+        <div class="h-full w-full bg-gradient-to-r from-sky-400 via-indigo-500 to-violet-500 opacity-90"></div>
+      </div>
+    </header>
+
+
+    <div id="cc-error" class="mb-4 hidden break-words rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200 sm:px-4" role="alert"></div>
+
+    <p id="cc-periodo-label" class="mb-3 break-words px-1 text-xs font-medium text-slate-500 dark:text-slate-400 sm:px-0"></p>
+
+    <div id="cc-global-kpis" class="mb-6 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"></div>
+
+    <div id="cc-areas-grid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"></div>
+  </div>
+</section>
+
+<div id="cc-wait-modal"
+     class="hidden fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm pointer-events-auto transition-opacity duration-200 sm:p-8"
+     aria-hidden="true"
+     aria-busy="false"
+     role="alertdialog"
+     aria-labelledby="cc-wait-title">
+  <div class="relative mx-auto w-full max-w-md overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl shadow-sky-900/10 dark:border-slate-600 dark:bg-slate-900">
+    <div class="absolute inset-x-0 top-0 h-1.5 overflow-hidden bg-slate-200/50 dark:bg-slate-700/50">
+      <div class="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-500 via-violet-500 to-emerald-400 animate-[cc-wait-bar_1.4s_ease-in-out_infinite]"></div>
+    </div>
+    <div class="flex flex-col items-center gap-5 px-6 pb-8 pt-10 text-center sm:px-8">
+      <div class="relative h-16 w-16">
+        <div class="absolute inset-0 rounded-full border-4 border-slate-200 dark:border-slate-600"></div>
+        <div class="absolute inset-0 animate-spin rounded-full border-4 border-transparent border-t-sky-500 border-r-violet-500" style="animation-duration: 0.9s;"></div>
+        <div class="absolute inset-2 animate-spin rounded-full border-2 border-transparent border-b-emerald-400/80" style="animation-duration: 1.4s; animation-direction: reverse;"></div>
+      </div>
+      <div class="min-w-0">
+        <p id="cc-wait-title" class="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-100">Cargando Command Center</p>
+        <p id="cc-wait-subtitle" class="mt-1.5 text-xs leading-relaxed text-slate-500 dark:text-slate-400">Consultando datos legacy…</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="cc-detail-modal"
+     class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm sm:items-center sm:justify-center sm:p-4"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="cc-detail-title">
+  <div class="flex h-[100dvh] max-h-[100dvh] w-full min-w-0 flex-col overflow-hidden border-0 bg-white shadow-2xl dark:bg-slate-900 sm:h-auto sm:max-h-[min(90vh,100dvh)] sm:max-w-5xl sm:rounded-2xl sm:border sm:border-slate-200 dark:sm:border-slate-700">
+    <div class="sticky top-0 z-10 flex shrink-0 items-center gap-2 border-b border-slate-100 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-900 sm:px-4">
+      <h2 id="cc-detail-title" class="min-w-0 flex-1 truncate text-base font-bold text-slate-900 dark:text-white">Detalle</h2>
+      <button type="button" id="cc-detail-close" class="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Cerrar">
+        <span class="material-icons" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <div id="cc-detail-error" class="hidden shrink-0 break-words px-3 py-3 text-sm text-red-600 dark:text-red-400 sm:px-4" role="alert"></div>
+    <div id="cc-detail-search-wrap" class="hidden shrink-0 border-b border-slate-100 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900 sm:px-4">
+      <label for="cc-detail-search" class="sr-only">Buscar en existencias</label>
+      <div class="relative flex items-center">
+        <span class="material-icons pointer-events-none absolute left-3 text-lg text-slate-400" aria-hidden="true">search</span>
+        <input type="search"
+               id="cc-detail-search"
+               name="cc_detail_search"
+               maxlength="120"
+               autocomplete="off"
+               enterkeyhint="search"
+               inputmode="search"
+               placeholder="Artículo, código, depósito, marca…"
+               class="cc-detail-search-input w-full min-h-11 rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-11 text-base text-slate-900 placeholder:text-slate-400 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-400/30 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder:text-slate-500 sm:text-sm" />
+        <button type="button"
+                id="cc-detail-search-clear"
+                class="absolute right-1 hidden inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-200/80 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                aria-label="Limpiar búsqueda">
+          <span class="material-icons text-lg" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <p id="cc-detail-search-hint" class="mt-1.5 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+        Escribí al menos 2 caracteres. La búsqueda filtra en el servidor entre todas las líneas con stock.
+      </p>
+    </div>
+    <div class="cc-detail-scroll min-h-0 flex-1 overflow-auto px-3 py-3 sm:px-4">
+      <div id="cc-detail-summary" class="mb-3 break-words text-sm text-slate-600 dark:text-slate-300"></div>
+      <div id="cc-detail-cards" class="hidden space-y-2"></div>
+      <div id="cc-detail-table-wrap" class="cc-detail-scroll -mx-3 overflow-x-auto px-3 sm:-mx-4 sm:px-4">
+        <table class="min-w-full text-left text-xs text-slate-700 dark:text-slate-200">
+          <thead id="cc-detail-thead" class="border-b border-slate-200 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"></thead>
+          <tbody id="cc-detail-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{ detail_urls|json_script:"cc-detail-urls" }}
+<script>
+  window.CC_CONFIG = {
+    dashboardUrl: "{{ command_center_api_url|escapejs }}",
+    executiveSummaryUrl: "{{ executive_summary_api_url|escapejs }}",
+    executiveSalesPageUrl: "{{ executive_sales_page_url|escapejs }}",
+    mprTableroUrl: "{{ mpr_tablero_url|escapejs }}",
+    detailUrls: JSON.parse(document.getElementById("cc-detail-urls").textContent),
+  };
+</script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20260519d" defer></script>
+{% endblock %}

@@ -10,6 +10,10 @@ from django.test import SimpleTestCase
 from self_checkout.services.stock_service import StockService
 from self_checkout.services.kiosk_service import KioskSessionService
 from self_checkout.services.cart_service import CartService
+from self_checkout.services.tpv_payment_validation import evaluar_suma_medios_pago, TOLERANCIA_MEDIOS_TPV
+from self_checkout.services.serie_service import articulos_requieren_serie_map
+from self_checkout.services.tpv_paridad_precheck import evaluar_precheck_tpv_paridad
+from self_checkout.constants import E_TPV_OBLIGA_PV, E_TPV_OBLIGA_VENDEDOR
 
 
 class StockServiceTests(SimpleTestCase):
@@ -181,7 +185,12 @@ class CartServiceTests(SimpleTestCase):
         mock_stock_cls.return_value = mock_stock
 
         mock_cur = MagicMock()
-        mock_cur.fetchone.side_effect = [{'id_deposito': 1}, (0,)]
+        # Primer with: deposito; segundo with: sin línea existente, luego max_orden
+        mock_cur.fetchone.side_effect = [
+            {'id_deposito': 1},
+            None,
+            {'max_orden': 0},
+        ]
         mock_cur.fetchall.return_value = []
         mock_cur.lastrowid = 100
         mock_cursor.return_value.__enter__.return_value = mock_cur
@@ -199,3 +208,102 @@ class CartServiceTests(SimpleTestCase):
         )
         self.assertEqual(item_id, 100)
         self.assertIsNone(err)
+
+
+class TpvParidadPrecheckTests(SimpleTestCase):
+    """Precheck TPV: obliga PV / obliga vendedor con permisos simulados."""
+
+    @patch('self_checkout.services.tpv_paridad_precheck.cargar_permisos_puesto')
+    def test_obliga_pv_rechaza_sin_id_pv(self, mock_perm):
+        mock_perm.return_value = {'obliga_selecpv': 'Si'}
+        ok, code, msg = evaluar_precheck_tpv_paridad(
+            'base_x',
+            cart_row={'id_punto_venta': None, 'kiosk_id': 'k1'},
+            id_cliente=5,
+            total_venta=100.0,
+            tpv_importe_efectivo=None,
+            cod_viajante_en_post=1,
+            id_puesto=2,
+        )
+        self.assertFalse(ok)
+        self.assertEqual(code, E_TPV_OBLIGA_PV)
+
+    @patch('self_checkout.services.tpv_paridad_precheck.cargar_permisos_puesto')
+    def test_obliga_vendedor_sin_cod_viajante(self, mock_perm):
+        mock_perm.return_value = {'obliga_cambvendedor': 'Si'}
+        ok, code, msg = evaluar_precheck_tpv_paridad(
+            'base_x',
+            cart_row={'id_punto_venta': 3, 'kiosk_id': 'k1'},
+            id_cliente=5,
+            total_venta=50.0,
+            tpv_importe_efectivo=None,
+            cod_viajante_en_post=None,
+            id_puesto=2,
+        )
+        self.assertFalse(ok)
+        self.assertEqual(code, E_TPV_OBLIGA_VENDEDOR)
+
+    @patch('self_checkout.services.tpv_paridad_precheck.cargar_permisos_puesto')
+    @patch('self_checkout.services.tpv_paridad_precheck._credito_cliente_ok')
+    @patch('self_checkout.services.tpv_paridad_precheck._limite_efectivo_caja_y_supera')
+    def test_sin_flags_permiso_ok(self, mock_lim, mock_cred, mock_perm):
+        mock_perm.return_value = {}
+        mock_cred.return_value = (True, None)
+        mock_lim.return_value = (True, None)
+        ok, code, msg = evaluar_precheck_tpv_paridad(
+            'base_x',
+            cart_row={'id_punto_venta': 1, 'kiosk_id': 'k1'},
+            id_cliente=1,
+            total_venta=10.0,
+            tpv_importe_efectivo=None,
+            cod_viajante_en_post=None,
+            id_puesto=None,
+        )
+        self.assertTrue(ok)
+        self.assertIsNone(code)
+
+
+class ArticulosSerieMapTests(SimpleTestCase):
+    @patch('self_checkout.services.serie_service.mysql_cursor')
+    def test_mapa_marca_seriados(self, mock_cursor):
+        mock_cursor.return_value.__enter__.return_value.fetchall.return_value = [
+            {'IDArt': 10, 'serie': 'Si'},
+            {'IDArt': 20, 'serie': 'No'},
+        ]
+        m = articulos_requieren_serie_map('base_x', [10, 20])
+        self.assertTrue(m.get(10))
+        self.assertFalse(m.get(20))
+
+
+class TpvPaymentValidationTests(SimpleTestCase):
+    """evaluar_suma_medios_pago: paridad TPV.frm (efectivo + tarjeta + intereses ≈ total)."""
+
+    def test_ambos_none_sin_validacion_aqui(self):
+        ok, err = evaluar_suma_medios_pago(100.0, None, None, None)
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+    def test_mixto_sin_intereses_ok(self):
+        ok, err = evaluar_suma_medios_pago(100.0, 40.0, 60.0, None)
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+    def test_mixto_con_intereses_ok(self):
+        ok, err = evaluar_suma_medios_pago(110.0, 40.0, 60.0, 10.0)
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+
+    def test_rechaza_suma_cero(self):
+        ok, err = evaluar_suma_medios_pago(100.0, 0.0, 0.0, 0.0)
+        self.assertFalse(ok)
+        self.assertIn('medio de cobro', err or '')
+
+    def test_rechaza_mismatch_total(self):
+        ok, err = evaluar_suma_medios_pago(100.0, 10.0, 20.0, None)
+        self.assertFalse(ok)
+        self.assertIn('no coincide', err or '')
+
+    def test_tolerancia_redondeo(self):
+        total = 99.99
+        ok, err = evaluar_suma_medios_pago(total, 50.0, 50.0 - TOLERANCIA_MEDIOS_TPV, None)
+        self.assertTrue(ok)

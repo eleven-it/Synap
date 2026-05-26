@@ -35,7 +35,10 @@
             <p class="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">Máx. armable se calcula con el stock de los <strong>componentes de la receta</strong> en el depósito Semi elaborado. OPT y OPP solo mueven los artículos pack; el stock de componentes debe cargarse por compras, transferencias o producción previa.</p>
         </header>
 
-        <form method="post" action="{% url 'mpr:armado_opt' id_lista %}" id="form-armado-opt" class="space-y-6">
+        <form method="post" action="{% url 'mpr:armado_opt' id_lista %}" id="form-armado-opt"
+              class="mpr-post-loading space-y-6"
+              data-mpr-loading-title="Ejecutando armado"
+              data-mpr-loading-subtitle="Registrando movimientos de stock… No cierres esta ventana.">
             {% csrf_token %}
             <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden">Deslizá horizontalmente</p>
@@ -165,7 +168,14 @@
                 });
             }
             var form = document.getElementById('form-armado-opt');
-            if (form) setupArmadoTooltips(form);
+            if (form) {
+                setupArmadoTooltips(form);
+                form.addEventListener('submit', function() {
+                    if (typeof window.mprShowPostLoading === 'function') {
+                        window.mprShowPostLoading(form);
+                    }
+                });
+            }
         })();
         </script>
     </div>

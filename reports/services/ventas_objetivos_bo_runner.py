@@ -719,6 +719,182 @@ def _merge_bo_en_detalle_arbol(
         _append_articulo_solo_bo(detalle_tree, iid, b)
 
 
+_NOMBRE_SIN_PROVEEDOR = "Sin proveedor"
+
+
+def _nombre_proveedor_display(codigo_proveedor: int, nombre_proveedor: str) -> str:
+    cod = int(codigo_proveedor or 0)
+    if cod <= 0:
+        return _NOMBRE_SIN_PROVEEDOR
+    nombre = (nombre_proveedor or "").strip()
+    return nombre or f"Proveedor {cod}"
+
+
+def _nest_articulo_proveedor_cliente(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Agrupa filas planas en árbol artículo → proveedor → cliente."""
+    articulos: Dict[int, Dict[str, Any]] = {}
+    for rw in filas:
+        id_art = int(rw.get("id_art") or 0)
+        if id_art <= 0:
+            continue
+        nombre_art = (rw.get("nombre_articulo") or "").strip() or "Sin artículo"
+        cod_prov = int(rw.get("codigo_proveedor") or 0)
+        nombre_prov = _nombre_proveedor_display(cod_prov, rw.get("nombre_proveedor") or "")
+        cod_cli = int(rw.get("codigo_cliente") or 0)
+        nombre_cli = (rw.get("nombre_cliente") or "").strip() or f"Cliente {cod_cli}"
+        fac = float(rw.get("facturacion") or 0)
+        uni = float(rw.get("cantidades_vendidas") or 0)
+
+        art = articulos.get(id_art)
+        if not art:
+            art = {
+                "tipo": "articulo",
+                "id_art": id_art,
+                "nombre_articulo": nombre_art,
+                "children": [],
+                "cantidades_vendidas": 0.0,
+                "facturacion": 0.0,
+                "_prov": {},
+            }
+            articulos[id_art] = art
+        art["cantidades_vendidas"] += uni
+        art["facturacion"] += fac
+
+        pk = (cod_prov, nombre_prov)
+        prov_map: Dict[Tuple[int, str], Dict[str, Any]] = art["_prov"]
+        prov = prov_map.get(pk)
+        if not prov:
+            prov = {
+                "tipo": "proveedor",
+                "codigo_proveedor": cod_prov,
+                "nombre_proveedor": nombre_prov,
+                "children": [],
+                "cantidades_vendidas": 0.0,
+                "facturacion": 0.0,
+                "_cli": {},
+            }
+            prov_map[pk] = prov
+        prov["cantidades_vendidas"] += uni
+        prov["facturacion"] += fac
+
+        cli_map: Dict[int, Dict[str, Any]] = prov["_cli"]
+        cli = cli_map.get(cod_cli)
+        if not cli:
+            cli = {
+                "tipo": "cliente",
+                "codigo_cliente": cod_cli,
+                "nombre_cliente": nombre_cli,
+                "cantidades_vendidas": 0.0,
+                "facturacion": 0.0,
+            }
+            cli_map[cod_cli] = cli
+        cli["cantidades_vendidas"] += uni
+        cli["facturacion"] += fac
+
+    out: List[Dict[str, Any]] = []
+    for art in articulos.values():
+        prov_map = art.pop("_prov", {})
+        provs: List[Dict[str, Any]] = []
+        for prov in prov_map.values():
+            cli_map = prov.pop("_cli", {})
+            prov["children"] = sorted(
+                cli_map.values(),
+                key=lambda x: (
+                    (x.get("nombre_cliente") or "").upper(),
+                    int(x.get("codigo_cliente") or 0),
+                ),
+            )
+            provs.append(prov)
+        art["children"] = sorted(
+            provs,
+            key=lambda x: (
+                (x.get("nombre_proveedor") or "").upper(),
+                int(x.get("codigo_proveedor") or 0),
+            ),
+        )
+        out.append(art)
+    out.sort(key=lambda x: ((x.get("nombre_articulo") or "").upper(), int(x.get("id_art") or 0)))
+    return out
+
+
+def _group_metric_articulo(node: Dict[str, Any], metric_key: str) -> float:
+    return float(node.get(metric_key) or 0)
+
+
+def _sort_scalar_articulo(value: float, direction: str) -> float:
+    mult = _ORDER_DIRECTION_MAP.get(direction, -1)
+    return float(value) * float(mult)
+
+
+def _sort_arbol_ventas_por_articulo(
+    arbol: List[Dict[str, Any]], metric_key: str, direction: str
+) -> List[Dict[str, Any]]:
+    for art in arbol:
+        for prov in art.get("children") or []:
+            prov["children"].sort(
+                key=lambda x: (
+                    _sort_scalar_articulo(_group_metric_articulo(x, metric_key), direction),
+                    (x.get("nombre_cliente") or "").upper(),
+                    int(x.get("codigo_cliente") or 0),
+                )
+            )
+        art["children"].sort(
+            key=lambda x: (
+                _sort_scalar_articulo(_group_metric_articulo(x, metric_key), direction),
+                (x.get("nombre_proveedor") or "").upper(),
+                int(x.get("codigo_proveedor") or 0),
+            )
+        )
+    arbol.sort(
+        key=lambda x: (
+            _sort_scalar_articulo(_group_metric_articulo(x, metric_key), direction),
+            (x.get("nombre_articulo") or "").upper(),
+            int(x.get("id_art") or 0),
+        )
+    )
+    return arbol
+
+
+def _flatten_filas_ventas_por_articulo(arbol: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for art in arbol:
+        for prov in art.get("children") or []:
+            for cli in prov.get("children") or []:
+                rows.append(
+                    {
+                        "id_art": art.get("id_art"),
+                        "nombre_articulo": art.get("nombre_articulo"),
+                        "codigo_proveedor": prov.get("codigo_proveedor"),
+                        "nombre_proveedor": prov.get("nombre_proveedor"),
+                        "codigo_cliente": cli.get("codigo_cliente"),
+                        "nombre_cliente": cli.get("nombre_cliente"),
+                        "cantidades_vendidas": cli.get("cantidades_vendidas"),
+                        "facturacion": cli.get("facturacion"),
+                    }
+                )
+    return rows
+
+
+def _stats_jerarquia_articulo_para_log(arbol: List[Dict[str, Any]]) -> Dict[str, int]:
+    n_art = len(arbol)
+    n_prov = 0
+    n_cli = 0
+    for art in arbol:
+        for prov in art.get("children") or []:
+            n_prov += 1
+            n_cli += len(prov.get("children") or [])
+    return {
+        "articulos": n_art,
+        "proveedores": n_prov,
+        "clientes": n_cli,
+        "vendedores": 0,
+        "bloques_estado": 0,
+        "nodos_rubro": 0,
+        "nodos_subrubro": 0,
+        "nodos_articulo": n_art,
+    }
+
+
 def _stats_jerarquia_para_log(arbol: List[Dict[str, Any]]) -> Dict[str, int]:
     """Conteos para diagnóstico (logs); no altera el payload."""
     nv = len(arbol)
@@ -758,7 +934,9 @@ def _stats_jerarquia_para_log(arbol: List[Dict[str, Any]]) -> Dict[str, int]:
 def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) -> QueryResult:
     svc = QueryRunnerService(user)
     filters = payload.get("filters", {}) or {}
-    solo_ventas_periodo = getattr(report, "slug", None) == "ventas-por-vendedor"
+    report_slug = getattr(report, "slug", None)
+    solo_ventas_articulo = report_slug == "ventas-por-articulo"
+    solo_ventas_periodo = report_slug in ("ventas-por-vendedor", "ventas-por-articulo")
     started_at = time.perf_counter()
     phase_started = started_at
     phase_ms: Dict[str, int] = {}
@@ -815,9 +993,9 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
     vendedores_incluir = _parse_int_list(filters.get("vendedores_incluir", []))
     rubros_incluidos = _parse_int_list(filters.get("rubros_incluidos", []))
     subrubros_incluidos = _parse_int_list(filters.get("subrubros_incluidos", []))
-    vo_filtra_rubro = (not solo_ventas_periodo) and (
-        bool(rubros_incluidos) or bool(subrubros_incluidos)
-    )
+    vo_filtra_rubro = bool(rubros_incluidos) or bool(subrubros_incluidos)
+    if solo_ventas_periodo and not solo_ventas_articulo:
+        vo_filtra_rubro = False
     rub_sub_sql_art, rub_sub_params_art = _vo_sql_filtros_rubro_subrubro(
         "art", rubros_incluidos, subrubros_incluidos
     )
@@ -1198,63 +1376,123 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 uni_map[int(r[0])] = float(r[1] or 0)
                 _mark_phase("query_unidades")
 
-            # --- Detalle venta por rubro / subrubro / artículo (mismo rango y filtros que unidades) ---
-            # Importe alineado a renglones stock.PrecioNetoxR (paridad ventas_netas / SPEC unidades).
+            # --- Detalle venta por línea (mismo rango y filtros que unidades) ---
             where_uni_s = " AND ".join(where_uni)
             filt_art_venta_det = ""
             params_venta_art: List[Any] = list(params_uni)
             if vo_filtra_rubro:
                 filt_art_venta_det = f" AND art.IDArt IS NOT NULL{rub_sub_sql_art}"
                 params_venta_art.extend(rub_sub_params_art)
-            sql_venta_por_art = f"""
-                SELECT
-                    cc.Codigo AS id_cliente,
-                    COALESCE(art.CodigoRubro, 0) AS codigo_rubro,
-                    COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
-                    COALESCE(art.IDSubRubro, 0) AS id_subrubro,
-                    COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
-                    COALESCE(art.IDArt, 0) AS id_art,
-                    COALESCE(MAX(art.NombreArticulo), '') AS nombre_articulo,
-                    SUM(CASE
-                        WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
-                            THEN COALESCE(st.PrecioNetoxR, 0)
-                        WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
-                            THEN -COALESCE(st.PrecioNetoxR, 0)
-                        ELSE 0
-                    END) AS factu_linea,
-                    SUM(CASE
-                        WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
-                            THEN COALESCE(st.Cantidad, 0)
-                        WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
-                            THEN -COALESCE(st.Cantidad, 0)
-                        ELSE 0
-                    END) AS unidades_linea
-                FROM stock st
-                INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
-                INNER JOIN cliente cl_uni ON cl_uni.Codigo = cc.Codigo
-                LEFT JOIN articulo art ON art.IDArt = st.IDArt
-                LEFT JOIN rubro ru ON ru.CodigoRubro = art.CodigoRubro
-                LEFT JOIN subrubro sr ON sr.IDSubRubro = art.IDSubRubro
-                WHERE {where_uni_s}{filt_art_venta_det}
-                GROUP BY cc.Codigo, art.CodigoRubro, art.IDSubRubro, art.IDArt
-                HAVING ABS(factu_linea) > 0.00001 OR ABS(unidades_linea) > 0.00001
-            """
-            cursor.execute(sql_venta_por_art, params_venta_art)
             detalle_flat_por_cliente: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
-            for r in cursor.fetchall():
-                cid = int(r[0])
-                detalle_flat_por_cliente[cid].append(
-                    {
-                        "codigo_rubro": int(r[1] or 0),
-                        "nombre_rubro": (r[2] or "").strip(),
-                        "id_subrubro": int(r[3] or 0),
-                        "nombre_subrubro": (r[4] or "").strip(),
-                        "id_art": int(r[5] or 0),
-                        "nombre_articulo": (r[6] or "").strip(),
-                        "facturacion": float(r[7] or 0),
-                        "cantidades_vendidas": float(r[8] or 0),
-                    }
-                )
+            detalle_filas_articulo: List[Dict[str, Any]] = []
+            if solo_ventas_articulo:
+                where_art = list(where_uni)
+                params_art: List[Any] = list(params_uni)
+                if clientes_incluir:
+                    phc = ",".join(["%s"] * len(clientes_incluir))
+                    where_art.append(f"cc.Codigo IN ({phc})")
+                    params_art.extend(clientes_incluir)
+                if vendedores_incluir:
+                    phv = ",".join(["%s"] * len(vendedores_incluir))
+                    where_art.append(f"cl_uni.CodViajante IN ({phv})")
+                    params_art.extend(vendedores_incluir)
+                where_art_s = " AND ".join(where_art)
+                sql_venta_art_prov_cli = f"""
+                    SELECT
+                        COALESCE(art.IDArt, 0) AS id_art,
+                        COALESCE(MAX(art.NombreArticulo), '') AS nombre_articulo,
+                        COALESCE(art.CodigoProveedor, 0) AS codigo_proveedor,
+                        COALESCE(MAX(prov.Nombre), '') AS nombre_proveedor,
+                        cc.Codigo AS codigo_cliente,
+                        COALESCE(MAX(cl_uni.nombre_cliente), '') AS nombre_cliente,
+                        SUM(CASE
+                            WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
+                                THEN COALESCE(st.PrecioNetoxR, 0)
+                            WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+                                THEN -COALESCE(st.PrecioNetoxR, 0)
+                            ELSE 0
+                        END) AS factu_linea,
+                        SUM(CASE
+                            WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
+                                THEN COALESCE(st.Cantidad, 0)
+                            WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+                                THEN -COALESCE(st.Cantidad, 0)
+                            ELSE 0
+                        END) AS unidades_linea
+                    FROM stock st
+                    INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+                    INNER JOIN cliente cl_uni ON cl_uni.Codigo = cc.Codigo
+                    LEFT JOIN articulo art ON art.IDArt = st.IDArt
+                    LEFT JOIN proveedor prov ON prov.Codigo = art.CodigoProveedor
+                    WHERE {where_art_s}{filt_art_venta_det}
+                    GROUP BY art.IDArt, art.CodigoProveedor, cc.Codigo
+                    HAVING art.IDArt IS NOT NULL AND art.IDArt > 0
+                        AND (ABS(factu_linea) > 0.00001 OR ABS(unidades_linea) > 0.00001)
+                """
+                cursor.execute(sql_venta_art_prov_cli, params_art)
+                for r in cursor.fetchall():
+                    cod_prov = int(r[2] or 0)
+                    detalle_filas_articulo.append(
+                        {
+                            "id_art": int(r[0] or 0),
+                            "nombre_articulo": (r[1] or "").strip(),
+                            "codigo_proveedor": cod_prov,
+                            "nombre_proveedor": _nombre_proveedor_display(cod_prov, (r[3] or "").strip()),
+                            "codigo_cliente": int(r[4] or 0),
+                            "nombre_cliente": (r[5] or "").strip(),
+                            "facturacion": float(r[6] or 0),
+                            "cantidades_vendidas": float(r[7] or 0),
+                        }
+                    )
+            else:
+                sql_venta_por_art = f"""
+                    SELECT
+                        cc.Codigo AS id_cliente,
+                        COALESCE(art.CodigoRubro, 0) AS codigo_rubro,
+                        COALESCE(MAX(ru.NombreRubro), '') AS nombre_rubro,
+                        COALESCE(art.IDSubRubro, 0) AS id_subrubro,
+                        COALESCE(MAX(sr.NombreSubRubro), '') AS nombre_subrubro,
+                        COALESCE(art.IDArt, 0) AS id_art,
+                        COALESCE(MAX(art.NombreArticulo), '') AS nombre_articulo,
+                        SUM(CASE
+                            WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
+                                THEN COALESCE(st.PrecioNetoxR, 0)
+                            WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+                                THEN -COALESCE(st.PrecioNetoxR, 0)
+                            ELSE 0
+                        END) AS factu_linea,
+                        SUM(CASE
+                            WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM')
+                                THEN COALESCE(st.Cantidad, 0)
+                            WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM')
+                                THEN -COALESCE(st.Cantidad, 0)
+                            ELSE 0
+                        END) AS unidades_linea
+                    FROM stock st
+                    INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
+                    INNER JOIN cliente cl_uni ON cl_uni.Codigo = cc.Codigo
+                    LEFT JOIN articulo art ON art.IDArt = st.IDArt
+                    LEFT JOIN rubro ru ON ru.CodigoRubro = art.CodigoRubro
+                    LEFT JOIN subrubro sr ON sr.IDSubRubro = art.IDSubRubro
+                    WHERE {where_uni_s}{filt_art_venta_det}
+                    GROUP BY cc.Codigo, art.CodigoRubro, art.IDSubRubro, art.IDArt
+                    HAVING ABS(factu_linea) > 0.00001 OR ABS(unidades_linea) > 0.00001
+                """
+                cursor.execute(sql_venta_por_art, params_venta_art)
+                for r in cursor.fetchall():
+                    cid = int(r[0])
+                    detalle_flat_por_cliente[cid].append(
+                        {
+                            "codigo_rubro": int(r[1] or 0),
+                            "nombre_rubro": (r[2] or "").strip(),
+                            "id_subrubro": int(r[3] or 0),
+                            "nombre_subrubro": (r[4] or "").strip(),
+                            "id_art": int(r[5] or 0),
+                            "nombre_articulo": (r[6] or "").strip(),
+                            "facturacion": float(r[7] or 0),
+                            "cantidades_vendidas": float(r[8] or 0),
+                        }
+                    )
             _mark_phase("query_detalle_ventas")
 
             objetivos_map: Dict[int, Decimal] = {}
@@ -1427,7 +1665,38 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         slot["nombre_articulo"] = nombre_art
                 _mark_phase("query_backorder")
 
-            all_ids = sorted(
+            arbol: List[Dict[str, Any]] = []
+            rows_out: List[Dict[str, Any]] = []
+
+            if solo_ventas_articulo:
+                arbol = _sort_arbol_ventas_por_articulo(
+                    _nest_articulo_proveedor_cliente(detalle_filas_articulo),
+                    metric_key,
+                    orden_forma,
+                )
+                rows_out = _flatten_filas_ventas_por_articulo(arbol)
+                _mark_phase("armado_jerarquia")
+                _jstats = _stats_jerarquia_articulo_para_log(arbol)
+                _total_ms = int((time.perf_counter() - started_at) * 1000)
+                logger.info(
+                    "[ventas_objetivos_bo] informe listo slug=%s filas_planas=%d articulos=%d "
+                    "proveedores=%d clientes=%d tiempo_total_ms=%d fases_ms=%s",
+                    report_slug,
+                    len(rows_out),
+                    _jstats["articulos"],
+                    _jstats["proveedores"],
+                    _jstats["clientes"],
+                    _total_ms,
+                    phase_ms,
+                )
+                tot = {
+                    "facturacion": sum(float(x.get("facturacion") or 0) for x in rows_out),
+                    "cantidades_vendidas": sum(float(x.get("cantidades_vendidas") or 0) for x in rows_out),
+                    "total_articulos": len(arbol),
+                    "total_clientes": len(rows_out),
+                }
+            else:
+                all_ids = sorted(
                 set(fact_map.keys())
                 | ids_con_historico_ventas
                 | set(rem_map.keys())
@@ -1438,127 +1707,79 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 | set(rem_art_detail.keys())
                 | set(ped_art_detail.keys())
             )
-            if clientes_incluir:
-                all_ids = [cid for cid in all_ids if cid in set(clientes_incluir)]
-            master: Dict[int, Dict[str, Any]] = {}
-            if all_ids:
-                ph = ",".join(["%s"] * len(all_ids))
-                cursor.execute(
-                    f"""
-                    SELECT cl.Codigo, COALESCE(cl.nombre_cliente, ''), COALESCE(cl.CodViajante, 0), COALESCE(v.Nombre, '')
-                    FROM cliente cl
-                    LEFT JOIN viajantes v ON v.CodViajante = cl.CodViajante
-                    WHERE cl.Codigo IN ({ph})
-                    """,
-                    all_ids,
-                )
-                for r in cursor.fetchall():
-                    master[int(r[0])] = {
-                        "nombre_cliente": (r[1] or "").strip(),
-                        "cod_viajante": int(r[2] or 0),
-                        "nombre_vendedor": (r[3] or "").strip(),
-                    }
-            _mark_phase("query_master_clientes")
-
-            rows_out: List[Dict[str, Any]] = []
-            for cid in all_ids:
-                m = master.get(cid)
-                if not m or m["cod_viajante"] == 0:
-                    continue
-                nom_c = m["nombre_cliente"]
-                cv = m["cod_viajante"]
-                if vendedores_incluir and cv not in set(vendedores_incluir):
-                    continue
-                if vendedores_excluidos and cv in vendedores_excluidos:
-                    continue
-                nv = m["nombre_vendedor"]
-                fm = fact_map.get(cid)
-
-                fac = float(fm["facturacion"]) if fm else 0.0
-                rem = rem_map.get(cid, 0.0)
-                ped_arm = ped_arm_map.get(cid, 0.0)
-                uni = uni_map.get(cid, 0.0)
-                bo = bo_cli_agg.get(cid, {"bo_total": 0.0, "con_stock": 0.0, "con_ingreso": 0.0, "sin_stock": 0.0})
-                obj = float(objetivos_map.get(cid, Decimal("0")))
-                total_fr = float(calcular_total_consolidado_objetivos(fac, rem, ped_arm))
-                falta = float(calcular_falta(obj, fac, rem, ped_arm))
-
-                rows_out.append(
-                    {
-                        "codigo_cliente": cid,
-                        "nombre_cliente": nom_c,
-                        "cod_viajante": cv,
-                        "nombre_vendedor": nv,
-                        "objetivo": obj,
-                        "facturacion": fac,
-                        "remitos": rem,
-                        "pedidos_en_armado": ped_arm,
-                        "total": total_fr,
-                        "falta": falta,
-                        "cantidades_vendidas": uni,
-                        "backorder_total": bo["bo_total"],
-                        "bo_con_stock": bo["con_stock"],
-                        "bo_con_ingreso": bo["con_ingreso"],
-                        "bo_sin_stock": bo["sin_stock"],
-                    }
-                )
-
-            # Árbol vendedor -> estado_compra -> clientes
-            grupos: Dict[int, Dict[str, Any]] = {}
-            for row in rows_out:
-                cv = row["cod_viajante"]
-                if cv not in grupos:
-                    grupos[cv] = {
-                        "tipo": "vendedor",
-                        "cod_viajante": cv,
-                        "nombre_vendedor": row["nombre_vendedor"] or f"Vendedor {cv}",
-                        "children": [],
-                        "objetivo": 0.0,
-                        "facturacion": 0.0,
-                        "remitos": 0.0,
-                        "pedidos_en_armado": 0.0,
-                        "total": 0.0,
-                        "falta": 0.0,
-                        "cantidades_vendidas": 0.0,
-                        "backorder_total": 0.0,
-                        "bo_con_stock": 0.0,
-                        "bo_con_ingreso": 0.0,
-                        "bo_sin_stock": 0.0,
-                        "total_clientes": 0,
-                        "total_clientes_con_compra": 0,
-                        "total_clientes_sin_compra": 0,
-                    }
-                g = grupos[cv]
-                cid = int(row.get("codigo_cliente") or 0)
-                fac_cli = float(row.get("facturacion") or 0)
-                uni_cli = float(row.get("cantidades_vendidas") or 0)
-                vd_tree = _nest_venta_detalle_rubro_subrubro_articulo(detalle_flat_por_cliente.get(cid, []))
-                if not solo_ventas_periodo:
-                    _merge_bo_en_detalle_arbol(vd_tree, bo_art_detail.get(cid, {}))
-                    _merge_rem_ped_lineas_en_detalle_arbol(
-                        vd_tree,
-                        rem_art_detail.get(cid, {}),
-                        ped_art_detail.get(cid, {}),
+                if clientes_incluir:
+                    all_ids = [cid for cid in all_ids if cid in set(clientes_incluir)]
+                master: Dict[int, Dict[str, Any]] = {}
+                if all_ids:
+                    ph = ",".join(["%s"] * len(all_ids))
+                    cursor.execute(
+                        f"""
+                        SELECT cl.Codigo, COALESCE(cl.nombre_cliente, ''), COALESCE(cl.CodViajante, 0), COALESCE(v.Nombre, '')
+                        FROM cliente cl
+                        LEFT JOIN viajantes v ON v.CodViajante = cl.CodViajante
+                        WHERE cl.Codigo IN ({ph})
+                        """,
+                        all_ids,
                     )
-                    _rollup_bo_en_detalle(vd_tree)
-                    _rollup_rem_ped_lineas_en_detalle(vd_tree)
-                _rollup_facturacion_unidades_detalle(vd_tree)
-                if not solo_ventas_periodo and not vo_filtra_rubro:
-                    _sf, _su = _sum_facturacion_unidades_hojas_detalle(vd_tree)
-                    _append_articulo_residual_facturacion(vd_tree, fac_cli - _sf, uni_cli - _su)
-                    _rollup_facturacion_unidades_detalle(vd_tree)
-                vd = _sort_nested_detalle(vd_tree, metric_key=metric_key, direction=orden_forma)
-                total_cli = float(row.get("total") or 0)
-                if solo_ventas_periodo:
-                    estado_compra = "con_compra" if (abs(fac_cli) > 0.000001 or abs(uni_cli) > 0.000001) else "sin_compra"
-                else:
-                    estado_compra = "con_compra" if abs(total_cli) > 0.000001 else "sin_compra"
-                if not any(ch.get("tipo") == "estado_compra" and ch.get("estado_compra") == estado_compra for ch in g["children"]):
-                    g["children"].append(
+                    for r in cursor.fetchall():
+                        master[int(r[0])] = {
+                            "nombre_cliente": (r[1] or "").strip(),
+                            "cod_viajante": int(r[2] or 0),
+                            "nombre_vendedor": (r[3] or "").strip(),
+                        }
+                _mark_phase("query_master_clientes")
+
+                for cid in all_ids:
+                    m = master.get(cid)
+                    if not m or m["cod_viajante"] == 0:
+                        continue
+                    nom_c = m["nombre_cliente"]
+                    cv = m["cod_viajante"]
+                    if vendedores_incluir and cv not in set(vendedores_incluir):
+                        continue
+                    if vendedores_excluidos and cv in vendedores_excluidos:
+                        continue
+                    nv = m["nombre_vendedor"]
+                    fm = fact_map.get(cid)
+
+                    fac = float(fm["facturacion"]) if fm else 0.0
+                    rem = rem_map.get(cid, 0.0)
+                    ped_arm = ped_arm_map.get(cid, 0.0)
+                    uni = uni_map.get(cid, 0.0)
+                    bo = bo_cli_agg.get(cid, {"bo_total": 0.0, "con_stock": 0.0, "con_ingreso": 0.0, "sin_stock": 0.0})
+                    obj = float(objetivos_map.get(cid, Decimal("0")))
+                    total_fr = float(calcular_total_consolidado_objetivos(fac, rem, ped_arm))
+                    falta = float(calcular_falta(obj, fac, rem, ped_arm))
+
+                    rows_out.append(
                         {
-                            "tipo": "estado_compra",
-                            "estado_compra": estado_compra,
-                            "nombre": "Con compra" if estado_compra == "con_compra" else "Sin compra",
+                            "codigo_cliente": cid,
+                            "nombre_cliente": nom_c,
+                            "cod_viajante": cv,
+                            "nombre_vendedor": nv,
+                            "objetivo": obj,
+                            "facturacion": fac,
+                            "remitos": rem,
+                            "pedidos_en_armado": ped_arm,
+                            "total": total_fr,
+                            "falta": falta,
+                            "cantidades_vendidas": uni,
+                            "backorder_total": bo["bo_total"],
+                            "bo_con_stock": bo["con_stock"],
+                            "bo_con_ingreso": bo["con_ingreso"],
+                            "bo_sin_stock": bo["sin_stock"],
+                        }
+                    )
+
+                # Árbol vendedor -> estado_compra -> clientes
+                grupos: Dict[int, Dict[str, Any]] = {}
+                for row in rows_out:
+                    cv = row["cod_viajante"]
+                    if cv not in grupos:
+                        grupos[cv] = {
+                            "tipo": "vendedor",
+                            "cod_viajante": cv,
+                            "nombre_vendedor": row["nombre_vendedor"] or f"Vendedor {cv}",
                             "children": [],
                             "objetivo": 0.0,
                             "facturacion": 0.0,
@@ -1572,103 +1793,150 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                             "bo_con_ingreso": 0.0,
                             "bo_sin_stock": 0.0,
                             "total_clientes": 0,
+                            "total_clientes_con_compra": 0,
+                            "total_clientes_sin_compra": 0,
                         }
+                    g = grupos[cv]
+                    cid = int(row.get("codigo_cliente") or 0)
+                    fac_cli = float(row.get("facturacion") or 0)
+                    uni_cli = float(row.get("cantidades_vendidas") or 0)
+                    vd_tree = _nest_venta_detalle_rubro_subrubro_articulo(detalle_flat_por_cliente.get(cid, []))
+                    if not solo_ventas_periodo:
+                        _merge_bo_en_detalle_arbol(vd_tree, bo_art_detail.get(cid, {}))
+                        _merge_rem_ped_lineas_en_detalle_arbol(
+                            vd_tree,
+                            rem_art_detail.get(cid, {}),
+                            ped_art_detail.get(cid, {}),
+                        )
+                        _rollup_bo_en_detalle(vd_tree)
+                        _rollup_rem_ped_lineas_en_detalle(vd_tree)
+                    _rollup_facturacion_unidades_detalle(vd_tree)
+                    if not solo_ventas_periodo and not vo_filtra_rubro:
+                        _sf, _su = _sum_facturacion_unidades_hojas_detalle(vd_tree)
+                        _append_articulo_residual_facturacion(vd_tree, fac_cli - _sf, uni_cli - _su)
+                        _rollup_facturacion_unidades_detalle(vd_tree)
+                    vd = _sort_nested_detalle(vd_tree, metric_key=metric_key, direction=orden_forma)
+                    total_cli = float(row.get("total") or 0)
+                    if solo_ventas_periodo:
+                        estado_compra = "con_compra" if (abs(fac_cli) > 0.000001 or abs(uni_cli) > 0.000001) else "sin_compra"
+                    else:
+                        estado_compra = "con_compra" if abs(total_cli) > 0.000001 else "sin_compra"
+                    if not any(ch.get("tipo") == "estado_compra" and ch.get("estado_compra") == estado_compra for ch in g["children"]):
+                        g["children"].append(
+                            {
+                                "tipo": "estado_compra",
+                                "estado_compra": estado_compra,
+                                "nombre": "Con compra" if estado_compra == "con_compra" else "Sin compra",
+                                "children": [],
+                                "objetivo": 0.0,
+                                "facturacion": 0.0,
+                                "remitos": 0.0,
+                                "pedidos_en_armado": 0.0,
+                                "total": 0.0,
+                                "falta": 0.0,
+                                "cantidades_vendidas": 0.0,
+                                "backorder_total": 0.0,
+                                "bo_con_stock": 0.0,
+                                "bo_con_ingreso": 0.0,
+                                "bo_sin_stock": 0.0,
+                                "total_clientes": 0,
+                            }
+                        )
+                    estado_node = next(
+                        ch for ch in g["children"] if ch.get("tipo") == "estado_compra" and ch.get("estado_compra") == estado_compra
                     )
-                estado_node = next(
-                    ch for ch in g["children"] if ch.get("tipo") == "estado_compra" and ch.get("estado_compra") == estado_compra
-                )
-                ch = {**row, "tipo": "cliente", "venta_detalle": vd, "estado_compra": estado_compra}
-                estado_node["children"].append(ch)
-                estado_node["total_clientes"] = int(estado_node.get("total_clientes") or 0) + 1
-                g["total_clientes"] = int(g.get("total_clientes") or 0) + 1
-                if estado_compra == "con_compra":
-                    g["total_clientes_con_compra"] = int(g.get("total_clientes_con_compra") or 0) + 1
-                else:
-                    g["total_clientes_sin_compra"] = int(g.get("total_clientes_sin_compra") or 0) + 1
-                for k in (
-                    "objetivo",
-                    "facturacion",
-                    "remitos",
-                    "pedidos_en_armado",
-                    "total",
-                    "falta",
-                    "cantidades_vendidas",
-                    "backorder_total",
-                    "bo_con_stock",
-                    "bo_con_ingreso",
-                    "bo_sin_stock",
-                ):
-                    g[k] = float(g.get(k, 0) or 0) + float(row.get(k, 0) or 0)
-                    estado_node[k] = float(estado_node.get(k, 0) or 0) + float(row.get(k, 0) or 0)
+                    ch = {**row, "tipo": "cliente", "venta_detalle": vd, "estado_compra": estado_compra}
+                    estado_node["children"].append(ch)
+                    estado_node["total_clientes"] = int(estado_node.get("total_clientes") or 0) + 1
+                    g["total_clientes"] = int(g.get("total_clientes") or 0) + 1
+                    if estado_compra == "con_compra":
+                        g["total_clientes_con_compra"] = int(g.get("total_clientes_con_compra") or 0) + 1
+                    else:
+                        g["total_clientes_sin_compra"] = int(g.get("total_clientes_sin_compra") or 0) + 1
+                    for k in (
+                        "objetivo",
+                        "facturacion",
+                        "remitos",
+                        "pedidos_en_armado",
+                        "total",
+                        "falta",
+                        "cantidades_vendidas",
+                        "backorder_total",
+                        "bo_con_stock",
+                        "bo_con_ingreso",
+                        "bo_sin_stock",
+                    ):
+                        g[k] = float(g.get(k, 0) or 0) + float(row.get(k, 0) or 0)
+                        estado_node[k] = float(estado_node.get(k, 0) or 0) + float(row.get(k, 0) or 0)
 
-            # Orden recursivo por métrica + desempate alfabético.
-            for g in grupos.values():
-                g["children"].sort(
-                    key=lambda x: (
-                        _sort_scalar(_group_metric(x, metric_key), orden_forma),
-                        (x.get("nombre") or "").upper(),
-                        0 if (x.get("estado_compra") or "") == "con_compra" else 1,
-                    )
-                )
-                for estado in g["children"]:
-                    estado["children"].sort(
+                # Orden recursivo por métrica + desempate alfabético.
+                for g in grupos.values():
+                    g["children"].sort(
                         key=lambda x: (
                             _sort_scalar(_group_metric(x, metric_key), orden_forma),
-                            (x.get("nombre_cliente") or "").upper(),
-                            int(x.get("codigo_cliente") or 0),
+                            (x.get("nombre") or "").upper(),
+                            0 if (x.get("estado_compra") or "") == "con_compra" else 1,
                         )
                     )
+                    for estado in g["children"]:
+                        estado["children"].sort(
+                            key=lambda x: (
+                                _sort_scalar(_group_metric(x, metric_key), orden_forma),
+                                (x.get("nombre_cliente") or "").upper(),
+                                int(x.get("codigo_cliente") or 0),
+                            )
+                        )
 
-            # Nivel vendedor con el mismo criterio de ordenamiento.
-            arbol = sorted(
-                grupos.values(),
-                key=lambda x: (
-                    _sort_scalar(_group_metric(x, metric_key), orden_forma),
-                    (x.get("nombre_vendedor") or "").upper(),
-                    int(x.get("cod_viajante") or 0),
-                ),
-            )
+                # Nivel vendedor con el mismo criterio de ordenamiento.
+                arbol = sorted(
+                    grupos.values(),
+                    key=lambda x: (
+                        _sort_scalar(_group_metric(x, metric_key), orden_forma),
+                        (x.get("nombre_vendedor") or "").upper(),
+                        int(x.get("cod_viajante") or 0),
+                    ),
+                )
 
-            rows_ordered: List[Dict[str, Any]] = []
-            for g in arbol:
-                for estado in g["children"]:
-                    for ch in estado.get("children") or []:
-                        rows_ordered.append({k: v for k, v in ch.items() if k not in ("tipo", "venta_detalle")})
-            rows_out = rows_ordered
-            _mark_phase("armado_jerarquia")
+                rows_ordered: List[Dict[str, Any]] = []
+                for g in arbol:
+                    for estado in g["children"]:
+                        for ch in estado.get("children") or []:
+                            rows_ordered.append({k: v for k, v in ch.items() if k not in ("tipo", "venta_detalle")})
+                rows_out = rows_ordered
+                _mark_phase("armado_jerarquia")
 
-            _jstats = _stats_jerarquia_para_log(arbol)
-            _total_ms = int((time.perf_counter() - started_at) * 1000)
-            logger.info(
-                "[ventas_objetivos_bo] informe listo slug=%s clientes_grilla=%d vendedores=%d "
-                "estados_jerarquia=%d nodos_detalle rubro=%d subrubro=%d articulo=%d "
-                "tiempo_total_ms=%d fases_ms=%s",
-                getattr(report, "slug", ""),
-                len(rows_out),
-                _jstats["vendedores"],
-                _jstats["bloques_estado"],
-                _jstats["nodos_rubro"],
-                _jstats["nodos_subrubro"],
-                _jstats["nodos_articulo"],
-                _total_ms,
-                phase_ms,
-            )
+                _jstats = _stats_jerarquia_para_log(arbol)
+                _total_ms = int((time.perf_counter() - started_at) * 1000)
+                logger.info(
+                    "[ventas_objetivos_bo] informe listo slug=%s clientes_grilla=%d vendedores=%d "
+                    "estados_jerarquia=%d nodos_detalle rubro=%d subrubro=%d articulo=%d "
+                    "tiempo_total_ms=%d fases_ms=%s",
+                    report_slug,
+                    len(rows_out),
+                    _jstats["vendedores"],
+                    _jstats["bloques_estado"],
+                    _jstats["nodos_rubro"],
+                    _jstats["nodos_subrubro"],
+                    _jstats["nodos_articulo"],
+                    _total_ms,
+                    phase_ms,
+                )
 
-            tot = {
-                "objetivo": sum(float(x["objetivo"]) for x in rows_out),
-                "facturacion": sum(float(x["facturacion"]) for x in rows_out),
-                "remitos": sum(float(x["remitos"]) for x in rows_out),
-                "pedidos_en_armado": sum(float(x["pedidos_en_armado"]) for x in rows_out),
-                "total": sum(float(x["total"]) for x in rows_out),
-                "falta": sum(float(x["falta"]) for x in rows_out),
-                "cantidades_vendidas": sum(float(x["cantidades_vendidas"]) for x in rows_out),
-                "backorder_total": sum(float(x["backorder_total"]) for x in rows_out),
-                "bo_con_stock": sum(float(x["bo_con_stock"]) for x in rows_out),
-                "bo_con_ingreso": sum(float(x["bo_con_ingreso"]) for x in rows_out),
-                "bo_sin_stock": sum(float(x["bo_sin_stock"]) for x in rows_out),
-                "total_clientes": len(rows_out),
-                "total_vendedores": len(arbol),
-            }
+                tot = {
+                    "objetivo": sum(float(x["objetivo"]) for x in rows_out),
+                    "facturacion": sum(float(x["facturacion"]) for x in rows_out),
+                    "remitos": sum(float(x["remitos"]) for x in rows_out),
+                    "pedidos_en_armado": sum(float(x["pedidos_en_armado"]) for x in rows_out),
+                    "total": sum(float(x["total"]) for x in rows_out),
+                    "falta": sum(float(x["falta"]) for x in rows_out),
+                    "cantidades_vendidas": sum(float(x["cantidades_vendidas"]) for x in rows_out),
+                    "backorder_total": sum(float(x["backorder_total"]) for x in rows_out),
+                    "bo_con_stock": sum(float(x["bo_con_stock"]) for x in rows_out),
+                    "bo_con_ingreso": sum(float(x["bo_con_ingreso"]) for x in rows_out),
+                    "bo_sin_stock": sum(float(x["bo_sin_stock"]) for x in rows_out),
+                    "total_clientes": len(rows_out),
+                    "total_vendedores": len(arbol),
+                }
 
             filters_applied = {
                 "fecha_inicio": fecha_inicio,
@@ -1695,10 +1963,16 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             filters_applied["performance_total_ms"] = int((time.perf_counter() - started_at) * 1000)
             if solo_ventas_periodo:
                 notes.insert(0, f"Ventas del período (facturación y unidades): {fi_fac_sql} a {ff_fac_sql}.")
-                notes.append(
-                    "Informe ventas por vendedor: sin objetivos, remitos, pedidos en armado ni backorder; "
-                    "jerarquía con/sin compra según facturación o unidades en el período."
-                )
+                if solo_ventas_articulo:
+                    notes.append(
+                        "Informe ventas por artículo: jerarquía artículo → proveedor → cliente; "
+                        "sin objetivos, remitos, pedidos en armado ni backorder."
+                    )
+                else:
+                    notes.append(
+                        "Informe ventas por vendedor: sin objetivos, remitos, pedidos en armado ni backorder; "
+                        "jerarquía con/sin compra según facturación o unidades en el período."
+                    )
                 if puntos_venta_ints:
                     notes.append(
                         f"Puntos de venta filtrados ({len(puntos_venta_ints)}): facturación y unidades/detalle usan cc.id_pv."

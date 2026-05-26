@@ -8,6 +8,8 @@ MAPEO_MENU_A_PERMISO = {
     "keyConsultaStock": "stock.consultas",
     "keyConsultaStockRap": "stock.consultas",
     "keyInformesStock": "stock.informes",
+    # Ventas → Presupuesto (Principal.frm / keyPre)
+    "keyPre": "ventas.presupuesto.ver",
 }
 
 PERMISOS_POR_MODULO = {
@@ -68,6 +70,8 @@ PERMISOS_POR_MODULO = {
     ],
     "Ventas": [
         ("ventas.ver", "Ver ventas"),
+        ("ventas.presupuesto.ver", "Ver presupuestos de venta"),
+        ("ventas.presupuesto.editar", "Crear y editar presupuestos de venta"),
         ("ventas.crear", "Crear ventas"),
         ("ventas.editar", "Editar ventas"),
         ("ventas.eliminar", "Eliminar ventas"),
@@ -143,6 +147,12 @@ PERMISOS_POR_MODULO = {
         ("self_checkout.kiosk", "Operar kiosco / TPV"),
         ("self_checkout.supervisor", "Supervisar autoservicios"),
         ("self_checkout.admin", "Configurar autoservicios y talonarios"),
+    ],
+    "Facturación AFIP": [
+        ("fe_afip.view_afipconfig", "Ver configuración AFIP (factura electrónica)"),
+        ("fe_afip.add_afipconfig", "Crear configuración AFIP"),
+        ("fe_afip.change_afipconfig", "Editar configuración AFIP y certificados"),
+        ("fe_afip.delete_afipconfig", "Eliminar configuración AFIP"),
     ],
     "Logística": [
         (

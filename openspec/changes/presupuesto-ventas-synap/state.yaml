@@ -1,0 +1,9 @@
+change: presupuesto-ventas-synap
+status: ready-for-implementation
+updated: "2026-05-06"
+phases:
+  propose: skipped-bootstrap
+  spec: complete
+  design: complete-decisions-integrated
+  tasks: checklist-in-tasks-md
+notes: "tasks.md generado. Diseño puntos 8,10,13 cerrados. Implementación PRE sigue checklist §1–§7; licencias §8 repo aparte."

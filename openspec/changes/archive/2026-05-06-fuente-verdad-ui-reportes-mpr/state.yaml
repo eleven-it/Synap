@@ -1,0 +1,15 @@
+change: fuente-verdad-ui-reportes-mpr
+status: archived
+archived_at: "2026-05-06"
+updated: "06/05/2026"
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: checklist-in-tasks-md
+  verify: complete
+notes: >
+  Canon visual operativo: /reports/dashboard/<slug>/ y flujos MPR /mpr/wizard/, /mpr/opt/....
+  La UI de Presupuestos y Objetivos de venta en /ventas/ no es referencia hasta rediseño acordado.
+  Doc general: docs/general/FUENTE_VERDAD_UI_REPORTES_MPR.md. Modo auto: spec + design + tasks generados.

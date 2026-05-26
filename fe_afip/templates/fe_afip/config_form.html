@@ -18,7 +18,7 @@
     </header>
 
     <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-6 md:p-8" x-data="feAfipBrowser()">
-      <form method="post" class="space-y-6">
+      <form method="post" enctype="multipart/form-data" class="space-y-6">
         {% csrf_token %}
         {% if messages %}
         <div class="space-y-2">
@@ -65,31 +65,62 @@
         </div>
         {% endif %}
 
+        <div class="rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50/80 dark:bg-sky-950/30 p-5 space-y-4">
+          <div>
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Importar desde tu equipo</h2>
+            <p class="text-xs text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+              Elegí los archivos que ya descargaste de AFIP/ARCA en tu computadora. Se envían de forma cifrada (HTTPS en producción) al servidor y se guardan en el almacén seguro de Synap; no hace falta conocer rutas dentro del contenedor.
+            </p>
+          </div>
+          <div>
+            <label for="cert_file" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Certificado digital <span class="text-sky-600 dark:text-sky-400">(.crt, .pem o .cer)</span></label>
+            <input type="file" name="cert_file" id="cert_file" accept=".crt,.pem,.cer,application/x-x509-ca-cert,application/pkix-cert"
+                   class="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:rounded-xl file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-sky-700">
+          </div>
+          <div>
+            <label for="key_file" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Clave privada <span class="text-sky-600 dark:text-sky-400">(.key o .pem)</span></label>
+            <input type="file" name="key_file" id="key_file" accept=".key,.pem,application/x-pem-file"
+                   class="block w-full text-sm text-slate-600 dark:text-slate-300 file:mr-4 file:rounded-xl file:border-0 file:bg-sky-600 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-sky-700">
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400">
+            Si ya cargaste certificados antes, al volver a subir archivos se reemplazan en el servidor. Para solo cambiar homologación o caché, dejá estos campos vacíos y usá «Guardar» (se mantienen los archivos actuales).
+          </p>
+        </div>
+
+        <details class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 p-4 group">
+          <summary class="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer list-none flex items-center gap-2">
+            <span class="text-slate-400 group-open:rotate-90 transition-transform">▸</span>
+            Opción avanzada: rutas en el servidor (Docker / Linux)
+          </summary>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-4 leading-relaxed">
+            Solo para administración técnica: indicá rutas absolutas dentro del contenedor o volumen. «Examinar» lista el sistema de archivos del servidor, no tu carpeta personal.
+          </p>
+          <div class="space-y-4 pt-1">
         <div>
-          <label for="cert_path" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ruta certificado <span class="text-red-500">*</span></label>
+          <label for="cert_path" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ruta certificado</label>
           <div class="flex gap-2 mt-1">
-            <input type="text" name="cert_path" id="cert_path" maxlength="512"
+            <input type="text" name="cert_path" id="cert_path" maxlength="512" autocomplete="off"
                    value="{% if cert_path %}{{ cert_path }}{% elif config %}{{ config.cert_path }}{% endif %}"
                    placeholder="/ruta/al/certificado.crt"
                    class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm">
             <button type="button" class="rounded-xl px-4 py-2.5 text-sm font-medium text-sky-700 dark:text-sky-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 focus:ring-2 focus:ring-sky-500 transition-colors"
                     x-on:click="openBrowser('cert_path', 'file')">Examinar</button>
           </div>
-          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ruta absoluta al archivo .crt o .pem del certificado AFIP en el servidor.</p>
         </div>
 
         <div>
-          <label for="key_path" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ruta clave privada <span class="text-red-500">*</span></label>
+          <label for="key_path" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ruta clave privada</label>
           <div class="flex gap-2 mt-1">
-            <input type="text" name="key_path" id="key_path" maxlength="512"
+            <input type="text" name="key_path" id="key_path" maxlength="512" autocomplete="off"
                    value="{% if key_path %}{{ key_path }}{% elif config %}{{ config.key_path }}{% endif %}"
                    placeholder="/ruta/a/clave.key"
                    class="flex-1 rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-2.5 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 font-mono text-sm">
             <button type="button" class="rounded-xl px-4 py-2.5 text-sm font-medium text-sky-700 dark:text-sky-300 border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 focus:ring-2 focus:ring-sky-500 transition-colors"
                     x-on:click="openBrowser('key_path', 'file')">Examinar</button>
           </div>
-          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Ruta absoluta al archivo .key o .pem de la clave privada en el servidor.</p>
         </div>
+          </div>
+        </details>
 
         <div>
           <label class="flex items-center gap-2 cursor-pointer">

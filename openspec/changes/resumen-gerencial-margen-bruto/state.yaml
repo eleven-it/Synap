@@ -1,0 +1,13 @@
+change: resumen-gerencial-margen-bruto
+status: implemented
+updated: "2026-05-11"
+artifact_store: hybrid
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+notes: >
+  Backend + front + tests + docs. Pendiente verificación manual en entorno con MySQL empresa (§6 tasks).

@@ -22,8 +22,74 @@ from self_checkout.fe_config import is_fe_configured
 from self_checkout.fe_sync import get_ultimo_autorizado_afip
 from .stock_service import StockService
 from .invoice_service import InvoiceService
+from .tpv_payment_validation import evaluar_suma_medios_pago
 
 logger = logging.getLogger(__name__)
+
+
+def _lookup_tarjeta_ids_tc_comprobante(cursor, nombre_tarjeta: str, nombre_plan: str) -> Tuple[int, Optional[Decimal]]:
+    """
+    AdministraNET exige id_tc (FK lógica a tarjetas_credito.idTC) e id_tc_plan (tc_plan.Id_tc_plan)
+    en INSERT tc_comprobante; el TPV los copia desde tc_temp/data_tarjeta_temp.
+    Self-checkout arma la fila desde strings → resolvemos por nombre con fallback seguro.
+    """
+    nom_tc = (nombre_tarjeta or '').strip() or 'Mercado Pago'
+    nom_plan = (nombre_plan or '').strip() or nom_tc
+
+    def _fetch_scalar(sql: str, params: tuple) -> Optional[float]:
+        cursor.execute(sql, params)
+        row = cursor.fetchone()
+        if not row or row[0] is None:
+            return None
+        return float(row[0])
+
+    id_tc = _fetch_scalar(
+        """
+        SELECT idTC FROM tarjetas_credito
+        WHERE Anulado = 'No' AND LOWER(TRIM(nombre)) = LOWER(TRIM(%s))
+        LIMIT 1
+        """,
+        (nom_tc,),
+    )
+    if id_tc is None and 'mercado' in nom_tc.lower():
+        id_tc = _fetch_scalar(
+            """
+            SELECT idTC FROM tarjetas_credito
+            WHERE Anulado = 'No' AND LOWER(TRIM(nombre)) LIKE %s
+            ORDER BY idTC LIMIT 1
+            """,
+            ('%mercado%',),
+        )
+    if id_tc is None:
+        id_tc = _fetch_scalar(
+            "SELECT MIN(idTC) FROM tarjetas_credito WHERE Anulado = 'No'",
+            (),
+        )
+    if id_tc is None:
+        id_tc = 1.0
+
+    id_tc_i = int(id_tc)
+
+    id_tc_plan = _fetch_scalar(
+        """
+        SELECT Id_tc_plan FROM tc_plan
+        WHERE idTC = %s AND anulado = 'No'
+          AND LOWER(TRIM(nombre_tc_plan)) = LOWER(TRIM(%s))
+        ORDER BY Id_tc_plan LIMIT 1
+        """,
+        (id_tc_i, nom_plan),
+    )
+    if id_tc_plan is None:
+        id_tc_plan = _fetch_scalar(
+            """
+            SELECT MIN(Id_tc_plan) FROM tc_plan
+            WHERE idTC = %s AND anulado = 'No'
+            """,
+            (id_tc_i,),
+        )
+
+    plan_dec = Decimal(str(id_tc_plan)).quantize(Decimal('1')) if id_tc_plan is not None else None
+    return id_tc_i, plan_dec
 
 
 class ConfirmationService:
@@ -299,18 +365,19 @@ class ConfirmationService:
                 subtotaldesc2_f = 0.0
 
                 # 6. INSERT cuentacliente — todos los campos que graba TPV VB6 (TPV.frm ~8985-9454)
-                # Medios de cobro TPV: soporta pago único o mixto (efectivo + tarjeta). Si no envía ninguno, default MP = tarjeta.
-                tpv_imp_efectivo = float(tpv_importe_efectivo) if tpv_importe_efectivo is not None else 0.0
-                tpv_imp_tarjeta = float(tpv_importe_tarjeta) if tpv_importe_tarjeta is not None else 0.0
+                # Medios de cobro TPV: soporta pago único o mixto (efectivo + tarjeta + intereses). Si no envía ninguno, default = tarjeta = total.
                 if tpv_importe_efectivo is None and tpv_importe_tarjeta is None:
                     tpv_imp_efectivo = 0.0
                     tpv_imp_tarjeta = total_f
                 else:
-                    # Pago mixto o único: validar que la suma cubra el total (tolerancia 0.02 por redondeo)
-                    suma_medios = tpv_imp_efectivo + tpv_imp_tarjeta
-                    if abs(suma_medios - total_f) > 0.02:
+                    ok_sum, err_sum = evaluar_suma_medios_pago(
+                        total_f, tpv_importe_efectivo, tpv_importe_tarjeta, tpv_intereses
+                    )
+                    if not ok_sum:
                         conn.rollback()
-                        return False, f'La suma de medios de cobro ($ {suma_medios:.2f}) no coincide con el total ($ {total_f:.2f})', None
+                        return False, err_sum, None
+                    tpv_imp_efectivo = float(tpv_importe_efectivo) if tpv_importe_efectivo is not None else 0.0
+                    tpv_imp_tarjeta = float(tpv_importe_tarjeta) if tpv_importe_tarjeta is not None else 0.0
                 tpv_imp_cheque = 0.0
                 tpv_imp_ctacte = 0.0
                 tpv_pago_ef = float(tpv_pago_efectivo) if tpv_pago_efectivo is not None else None
@@ -602,6 +669,7 @@ class ConfirmationService:
                     try:
                         nom_tc = (tpv_tarjeta_nombre or 'Tarjeta').strip() or 'Mercado Pago'
                         nom_plan = (tpv_plan_nombre or 'Plan').strip() or 'Mercado Pago'
+                        id_tc_ins, id_tc_plan_ins = _lookup_tarjeta_ids_tc_comprobante(cursor, nom_tc, nom_plan)
                         cuotas_val = int(tpv_cuotas) if tpv_cuotas is not None else 1
                         interes_val = float(tpv_intereses) if tpv_intereses is not None else 0.0
                         imp_con_interes = tpv_imp_tarjeta + interes_val
@@ -614,14 +682,16 @@ class ConfirmationService:
                             """
                             INSERT INTO tc_comprobante (
                                 nombre_tc_comprobante, nombre_plan_tc_comprobante,
+                                id_tc, id_tc_plan,
                                 cuotas_tc_comprobante, interes_tc_comprobante, descuento_tc_comprobante,
                                 nro_tarjeta_tc_comprobante, nro_cupon_tc_comprobante, nro_lote_tc,
                                 importe_tc_comprobante, importe_cuota, importe_con_interes,
                                 codigo_movimiento
-                            ) VALUES (%s, %s, %s, %s, 0, %s, %s, %s, %s, %s, %s, %s)
+                            ) VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, %s, %s)
                             """,
                             [
-                                nom_tc, nom_plan, cuotas_val, round(interes_val, 2),
+                                nom_tc, nom_plan, id_tc_ins, id_tc_plan_ins,
+                                cuotas_val, round(interes_val, 2),
                                 nro_tarjeta_val, nro_cupon_val, nro_lote_val,
                                 round(tpv_imp_tarjeta, 2), round(valor_cuota_val, 2), round(imp_con_interes, 2),
                                 contador,
@@ -631,17 +701,20 @@ class ConfirmationService:
                         if "doesn't exist" in str(e_tc) or "Unknown column" in str(e_tc):
                             # Fallback: schema puede no tener todas las columnas
                             try:
+                                nom_fb = (tpv_tarjeta_nombre or 'Mercado Pago').strip() or 'Mercado Pago'
+                                nom_plan_fb = (tpv_plan_nombre or 'Mercado Pago').strip() or 'Mercado Pago'
+                                id_tc_fb, id_tc_plan_fb = _lookup_tarjeta_ids_tc_comprobante(cursor, nom_fb, nom_plan_fb)
                                 cursor.execute(
                                     """
                                     INSERT INTO tc_comprobante (
                                         nombre_tc_comprobante, nombre_plan_tc_comprobante,
+                                        id_tc, id_tc_plan,
                                         importe_tc_comprobante, importe_cuota, importe_con_interes,
                                         codigo_movimiento
-                                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                                     """,
                                     [
-                                        (tpv_tarjeta_nombre or 'Mercado Pago').strip() or 'Mercado Pago',
-                                        (tpv_plan_nombre or 'Mercado Pago').strip() or 'Mercado Pago',
+                                        nom_fb, nom_plan_fb, id_tc_fb, id_tc_plan_fb,
                                         round(tpv_imp_tarjeta, 2), round(tpv_imp_tarjeta, 2), round(tpv_imp_tarjeta, 2),
                                         contador,
                                     ],

@@ -1,0 +1,221 @@
+"""
+API dashboard gerencial — solo lectura legacy AdministraNET.
+"""
+from __future__ import annotations
+
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .permissions import ManagerialReportsPermission
+from .services.executive_dashboard.base import (
+    base_empresa_from_request,
+    legacy_cursor,
+    resolve_filters_from_query_params,
+)
+from .services.executive_dashboard.command_center import run_command_center
+from .services.executive_dashboard.cross_metrics import (
+    fetch_cruzados_resumen,
+    list_backorder_detalle,
+)
+from .services.executive_dashboard.exceptions import InvalidDashboardFilters, LegacyReadError
+from .services.executive_dashboard.inventory_metrics import (
+    fetch_inventario_resumen,
+    list_existencias,
+)
+from .services.executive_dashboard.manufacturing_metrics import fetch_manufactura_resumen
+from .services.executive_dashboard.purchase_metrics import fetch_compras_resumen
+from .services.executive_dashboard.tesoreria_metrics import fetch_tesoreria_resumen
+from .services.executive_dashboard.ventas_cobros_metrics import fetch_ventas_cobros_resumen
+from .services.executive_dashboard.ventas_metrics import (
+    fetch_ventas_resumen,
+    list_pedidos_pendientes,
+    list_remitos_no_facturados,
+)
+
+
+class ExecutiveDashboardMixin:
+    permission_classes = [ManagerialReportsPermission]
+
+    def _filters_or_error(self, request):
+        base = base_empresa_from_request(request)
+        if not base:
+            return None, Response(
+                {
+                    "detail": "No se pudo determinar la base de datos de la empresa.",
+                    "error_type": "invalid_data",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            filters = resolve_filters_from_query_params(
+                request.query_params, base_empresa=base
+            )
+        except InvalidDashboardFilters as exc:
+            return None, Response(
+                {"detail": str(exc), "error_type": "invalid_data"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return filters, None
+
+    def _legacy_error_response(self, exc: Exception) -> Response:
+        return Response(
+            {
+                "detail": f"Error al consultar datos legacy: {exc}",
+                "error_type": "legacy_transient_failure",
+            },
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+
+class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
+    """GET orquestador command center."""
+
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            payload = run_command_center(filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardVentasResumenAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_ventas_resumen(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardInventarioResumenAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_inventario_resumen(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardComprasResumenAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_compras_resumen(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardManufacturaResumenAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        payload = fetch_manufactura_resumen(filters.base_empresa, filters)
+        return Response(payload)
+
+
+class ExecutiveDashboardCruzadosResumenAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_cruzados_resumen(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardVentasPedidosPendientesAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_pedidos_pendientes(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardVentasRemitosNoFacturadosAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_remitos_no_facturados(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardCruzadosBackorderAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_backorder_detalle(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardInventarioExistenciasAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_existencias(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardTesoreriaResumenAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_tesoreria_resumen(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardVentasCobrosResumenAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_ventas_cobros_resumen(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)

@@ -19,3 +19,11 @@ E_CONFIRM_FAILED = 'CONFIRM_FAILED'
 E_AFIP_UNAVAILABLE = 'AFIP_UNAVAILABLE'  # No se pudo obtener CAE/CAEA; operación interrumpida sin afectar stock
 E_SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE'  # Autoservicio fuera de servicio (talonario, AFIP, stock, etc.)
 E_KIOSK_IN_USE = 'KIOSK_IN_USE'  # Kiosco ya abierto en otra máquina
+# Validación medios TPV (solo kiosco con modo_tpv; ver tpv_payment_validation)
+E_TPV_MEDIOS_TOTAL = 'E_TPV_MEDIOS_TOTAL'
+E_TPV_MEDIOS_VACIOS = 'E_TPV_MEDIOS_VACIOS'
+# Precheck paridad TPV (permisos_sistema / cliente / caja_abm); ver tpv_paridad_precheck
+E_TPV_OBLIGA_PV = 'E_TPV_OBLIGA_PV'
+E_TPV_OBLIGA_VENDEDOR = 'E_TPV_OBLIGA_VENDEDOR'
+E_TPV_CREDITO_EXCEDIDO = 'E_TPV_CREDITO_EXCEDIDO'
+E_TPV_LIMITE_EFECTIVO_CAJA = 'E_TPV_LIMITE_EFECTIVO_CAJA'

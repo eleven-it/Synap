@@ -1,5 +1,6 @@
 {% extends "mpr/base_mpr.html" %}
 {% load static %}
+{% load math_filters %}
 
 {% block title %}Asistente de producción - MPR - Synap{% endblock %}
 
@@ -70,7 +71,9 @@
 
         {# Paso 1 – Crear orden de producción (OPT): artículo + cantidad #}
         {% if wizard_paso == 1 %}
-        <form method="post" action="" class="space-y-6">
+        <form method="post" action="" class="mpr-post-loading space-y-6"
+              data-mpr-loading-title="Creando borrador de OPT"
+              data-mpr-loading-subtitle="Avanzando en el asistente… No cierres esta ventana.">
             {% csrf_token %}
             <div class="rounded-2xl border border-gray-200/90 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-8">
                 <div class="mb-6 flex items-center gap-4">
@@ -149,7 +152,9 @@
             </ul>
             <p class="mt-4 text-xs text-slate-400">Al confirmar se creará la OPT y se liberará a producción en ese depósito.</p>
         </div>
-        <form method="post" action="" class="space-y-6">
+        <form method="post" action="" class="mpr-post-loading space-y-6"
+              data-mpr-loading-title="Creando y liberando OPT"
+              data-mpr-loading-subtitle="Registrando la orden y movimientos de stock… No cierres esta ventana.">
             {% csrf_token %}
             <div class="flex flex-wrap gap-3">
                 <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
@@ -165,7 +170,10 @@
 
         {# Paso 3 – Crear OPP (cantidades por depósito destino; mismo look que Creación OPT, colores por depósito) #}
         {% if wizard_paso == 3 %}
-        <form method="post" action="" id="form-opp-wizard" data-empleados-url="{% url 'mpr:api_empleados' %}" class="space-y-6">
+        <form method="post" action="" id="form-opp-wizard" data-empleados-url="{% url 'mpr:api_empleados' %}"
+              class="mpr-post-loading space-y-6"
+              data-mpr-loading-title="Registrando OPP"
+              data-mpr-loading-subtitle="Guardando distribución de componentes… No cierres esta ventana.">
             {% csrf_token %}
             <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="flex items-center gap-4 border-b border-gray-200 p-4 dark:border-gray-700 sm:p-6">
@@ -174,7 +182,7 @@
                     </div>
                     <div>
                         <h2 class="text-lg font-bold text-gray-900 dark:text-white">Crear OPP (parte de producción)</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Componentes × depósitos destino. Cantidades en <strong class="font-semibold text-gray-700 dark:text-gray-300">unidades enteras</strong>; por fila la suma no puede superar el disponible.</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Componentes × depósitos destino. Por celda: <strong class="font-semibold text-gray-700 dark:text-gray-300">docenas</strong> (1 docena = 12 unidades) y <strong class="font-semibold text-gray-700 dark:text-gray-300">unidades sueltas</strong>; el sistema registra el total en unidades. Por fila la suma no puede superar el <strong class="font-semibold text-gray-700 dark:text-gray-300">pendiente a distribuir</strong>.</p>
                     </div>
                 </div>
                 {% if not depositos_opp %}
@@ -186,31 +194,48 @@
                     <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead class="bg-gray-50 dark:bg-gray-800/50">
                             <tr class="align-bottom">
-                                <th scope="col" class="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 align-bottom sm:px-4 sm:py-3 dark:text-gray-300">Cod. sist.</th>
-                                <th scope="col" class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 align-bottom sm:px-4 sm:py-3 dark:text-gray-300">Componente</th>
-                                <th scope="col" class="bg-amber-50 px-3 py-2.5 text-right text-xs font-semibold text-amber-900 align-bottom sm:px-4 sm:py-3 dark:bg-amber-900/30 dark:text-amber-200">Disponible (unid.)</th>
+                                <th scope="col" rowspan="2" class="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 align-middle sm:px-4 sm:py-3 dark:text-gray-300">Cod. sist.</th>
+                                <th scope="col" rowspan="2" class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 align-middle sm:px-4 sm:py-3 dark:text-gray-300">Componente</th>
+                                <th scope="col" rowspan="2" class="bg-amber-50 px-3 py-2.5 text-right text-xs font-semibold text-amber-900 align-middle sm:px-4 sm:py-3 dark:bg-amber-900/30 dark:text-amber-200">Pendiente a distribuir (unid.)</th>
                                 {% for dep in depositos_opp %}
-                                <th scope="col" class="px-3 py-2.5 text-right text-xs font-semibold align-bottom whitespace-nowrap sm:px-4 sm:py-3
+                                <th scope="colgroup" colspan="2" class="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide border-b border-gray-200/80 dark:border-gray-600
                                     {% if forloop.counter0 == 0 %}bg-rose-200 dark:bg-rose-800/50 text-rose-800 dark:text-rose-200
                                     {% elif forloop.counter0 == 1 %}bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-200
                                     {% elif forloop.counter0 == 2 %}bg-emerald-200 dark:bg-emerald-800/50 text-emerald-800 dark:text-emerald-200
                                     {% else %}bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200{% endif %}">{{ dep.NombreDeposito|default:dep.CodDeposito }}</th>
                                 {% endfor %}
-                                <th scope="col" class="min-w-[160px] px-3 py-2.5 text-left text-xs font-semibold text-gray-600 align-bottom sm:min-w-[180px] sm:px-4 sm:py-3 dark:text-gray-300">Operario</th>
+                                <th scope="col" rowspan="2" class="min-w-[160px] px-3 py-2.5 text-left text-xs font-semibold text-gray-600 align-middle sm:min-w-[180px] sm:px-4 sm:py-3 dark:text-gray-300">Operario</th>
+                            </tr>
+                            <tr>
+                                {% for dep in depositos_opp %}
+                                <th scope="col" class="px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200
+                                    {% if forloop.counter0 == 0 %}bg-rose-100 dark:bg-rose-900/35
+                                    {% elif forloop.counter0 == 1 %}bg-amber-100 dark:bg-amber-900/35
+                                    {% elif forloop.counter0 == 2 %}bg-emerald-100 dark:bg-emerald-900/35
+                                    {% else %}bg-slate-100 dark:bg-slate-800/80{% endif %}">Docenas</th>
+                                <th scope="col" class="px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-700 dark:text-gray-200
+                                    {% if forloop.counter0 == 0 %}bg-rose-100 dark:bg-rose-900/35
+                                    {% elif forloop.counter0 == 1 %}bg-amber-100 dark:bg-amber-900/35
+                                    {% elif forloop.counter0 == 2 %}bg-emerald-100 dark:bg-emerald-900/35
+                                    {% else %}bg-slate-100 dark:bg-slate-800/80{% endif %}">Unidades</th>
+                                {% endfor %}
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white dark:divide-gray-700 dark:bg-gray-800">
                             {% for comp in componentes_opp %}
-                            <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50" data-id-art="{{ comp.id_articulo }}" data-pendiente="{{ comp.disponible_unidades|default:0 }}">
+                            <tr class="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50" data-id-art="{{ comp.id_articulo }}" data-pendiente="{{ comp.max_distribuible_unidades|default:0 }}">
                                 <td class="px-3 py-2.5 text-right text-sm tabular-nums text-gray-700 sm:px-4 sm:py-3 dark:text-gray-300">{{ comp.id_articulo }}</td>
                                 <td class="px-3 py-2.5 sm:px-4 sm:py-3">
                                     <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ comp.codigo_articulo|default:"" }}</span>
                                     <span class="block text-xs text-gray-500 dark:text-gray-400">{{ comp.descripcion_articulo|truncatewords:12|default:"" }}</span>
                                 </td>
-                                <td class="bg-amber-50 px-3 py-2.5 text-right text-sm font-medium tabular-nums text-amber-600 sm:px-4 sm:py-3 dark:bg-amber-900/20 dark:text-amber-400"><span class="opp-pendiente-display" data-pendiente-inicial="{{ comp.disponible_unidades|default:0 }}">{{ comp.disponible_unidades|default:0 }}</span></td>
+                                <td class="bg-amber-50 px-3 py-2.5 text-right text-sm font-medium tabular-nums text-amber-600 sm:px-4 sm:py-3 dark:bg-amber-900/20 dark:text-amber-400"><span class="opp-pendiente-display" data-pendiente-inicial="{{ comp.max_distribuible_unidades|default:0 }}">{{ comp.max_distribuible_unidades|default:0 }}</span></td>
                                 {% for dep in depositos_opp %}
-                                <td class="px-3 py-2.5 text-right sm:px-4 sm:py-3 {% if forloop.counter0 == 0 %}bg-rose-50 dark:bg-rose-900/20{% elif forloop.counter0 == 1 %}bg-amber-50 dark:bg-amber-900/20{% elif forloop.counter0 == 2 %}bg-emerald-50 dark:bg-emerald-900/20{% else %}bg-slate-50 dark:bg-slate-800/50{% endif %}">
-                                    <input type="number" name="opp_comp_{{ comp.id_articulo }}_dep_{{ dep.CodDeposito }}" value="0" min="0" max="{{ comp.disponible_unidades|default:0 }}" step="1" data-opp-matrix="1" data-id-art="{{ comp.id_articulo }}" aria-label="Unidades del componente {{ comp.codigo_articulo|default:comp.id_articulo }} hacia depósito {{ dep.NombreDeposito|default:dep.CodDeposito }}" class="w-20 max-w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:w-24"/>
+                                <td class="px-2 py-2 text-right sm:px-2.5 sm:py-2.5 {% if forloop.counter0 == 0 %}bg-rose-50 dark:bg-rose-900/20{% elif forloop.counter0 == 1 %}bg-amber-50 dark:bg-amber-900/20{% elif forloop.counter0 == 2 %}bg-emerald-50 dark:bg-emerald-900/20{% else %}bg-slate-50 dark:bg-slate-800/50{% endif %}">
+                                    <input type="number" name="opp_comp_{{ comp.id_articulo }}_dep_{{ dep.CodDeposito }}_docenas" value="0" min="0" step="1" inputmode="numeric" data-opp-part="docenas" data-id-art="{{ comp.id_articulo }}" data-opp-matriz-par="{{ comp.id_articulo }}_{{ dep.CodDeposito }}" aria-label="Docenas del componente {{ comp.codigo_articulo|default:comp.id_articulo }} hacia depósito {{ dep.NombreDeposito|default:dep.CodDeposito }}" class="w-full min-w-[3.5rem] max-w-[5rem] rounded border border-gray-300 bg-white px-1.5 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white ml-auto block"/>
+                                </td>
+                                <td class="px-2 py-2 text-right sm:px-2.5 sm:py-2.5 {% if forloop.counter0 == 0 %}bg-rose-50 dark:bg-rose-900/20{% elif forloop.counter0 == 1 %}bg-amber-50 dark:bg-amber-900/20{% elif forloop.counter0 == 2 %}bg-emerald-50 dark:bg-emerald-900/20{% else %}bg-slate-50 dark:bg-slate-800/50{% endif %}">
+                                    <input type="number" name="opp_comp_{{ comp.id_articulo }}_dep_{{ dep.CodDeposito }}_unidades" value="0" min="0" step="1" inputmode="numeric" data-opp-part="unidades" data-id-art="{{ comp.id_articulo }}" data-opp-matriz-par="{{ comp.id_articulo }}_{{ dep.CodDeposito }}" aria-label="Unidades sueltas del componente {{ comp.codigo_articulo|default:comp.id_articulo }} hacia depósito {{ dep.NombreDeposito|default:dep.CodDeposito }}" class="w-full min-w-[3.5rem] max-w-[5rem] rounded border border-gray-300 bg-white px-1.5 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white ml-auto block"/>
                                 </td>
                                 {% endfor %}
                                 <td class="min-w-[140px] px-3 py-2.5 sm:min-w-[180px] sm:px-4 sm:py-3">
@@ -228,7 +253,7 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="{{ depositos_opp|length|add:4 }}" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay componentes para distribuir en esta OPT.</td></tr>
+                            <tr><td colspan="{{ depositos_opp|length|mul:2|add:4 }}" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay componentes para distribuir en esta OPT.</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -279,13 +304,18 @@
             var modalClose = document.getElementById('modal-opp-close');
             var modalBackdrop = document.getElementById('modal-opp-backdrop');
 
+            var UNIDADES_POR_DOCENA_OPP = 12;
             function getSumaPorArticulo(idArt) {
                 if (!form) return 0;
-                var inputs = form.querySelectorAll('input[data-opp-matrix="1"][data-id-art="' + idArt + '"]');
+                var docInputs = form.querySelectorAll('input[data-opp-part="docenas"][data-id-art="' + idArt + '"]');
                 var sum = 0;
-                for (var i = 0; i < inputs.length; i++) {
-                    var v = parseInt(inputs[i].value, 10);
-                    sum += isNaN(v) ? 0 : v;
+                for (var i = 0; i < docInputs.length; i++) {
+                    var par = docInputs[i].getAttribute('data-opp-matriz-par');
+                    if (!par) continue;
+                    var uniInp = form.querySelector('input[data-opp-part="unidades"][data-opp-matriz-par="' + par + '"]');
+                    var d = parseInt(docInputs[i].value, 10);
+                    var u = uniInp ? parseInt(uniInp.value, 10) : 0;
+                    sum += (isNaN(d) ? 0 : d) * UNIDADES_POR_DOCENA_OPP + (isNaN(u) ? 0 : u);
                 }
                 return sum;
             }
@@ -366,7 +396,14 @@
                 btn.addEventListener('click', function() {
                     var err = validarMatriz();
                     if (err) { showModal(err); return; }
-                    form.submit();
+                    if (typeof form.requestSubmit === 'function') {
+                        form.requestSubmit();
+                        return;
+                    }
+                    var ev = new Event('submit', { bubbles: true, cancelable: true });
+                    if (form.dispatchEvent(ev)) {
+                        form.submit();
+                    }
                 });
             }
 
@@ -505,7 +542,9 @@
 
         {# Paso 4 – Armado multi-artículo (Semi Elaborado → Terminado, depósitos fijos) #}
         {% if wizard_paso == 4 and mostrar_armado %}
-        <form method="post" action="" id="form-armado-wizard" class="space-y-6">
+        <form method="post" action="" id="form-armado-wizard" class="mpr-post-loading space-y-6"
+              data-mpr-loading-title="Ejecutando armado"
+              data-mpr-loading-subtitle="Registrando movimientos de stock… No cierres esta ventana.">
             {% csrf_token %}
             <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
                 <div class="flex items-center gap-4 border-b border-gray-200 p-4 dark:border-gray-700 sm:p-6">
@@ -646,7 +685,14 @@
                 });
             }
             var form = document.getElementById('form-armado-wizard');
-            if (form) setupArmadoTooltips(form);
+            if (form) {
+                setupArmadoTooltips(form);
+                form.addEventListener('submit', function() {
+                    if (typeof window.mprShowPostLoading === 'function') {
+                        window.mprShowPostLoading(form);
+                    }
+                });
+            }
         })();
         </script>
         {% endif %}
@@ -684,7 +730,9 @@
                     Ver detalle de la OPT
                 </a>
                 {% if total_pendiente == 0 and id_lista and opt_en_proceso %}
-                <form method="post" action="" class="inline">
+                <form method="post" action="" class="mpr-post-loading inline"
+                      data-mpr-loading-title="Cerrando OPT"
+                      data-mpr-loading-subtitle="Finalizando la orden… No cierres esta ventana.">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="cerrar_opt">
                     <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
@@ -698,7 +746,9 @@
                     OPT cerrada
                 </span>
                 {% endif %}
-                <form method="post" action="" class="inline">
+                <form method="post" action="" class="mpr-post-loading inline"
+                      data-mpr-loading-title="Finalizando asistente"
+                      data-mpr-loading-subtitle="Guardando y cerrando el flujo…">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="finalizar">
                     <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">

@@ -41,10 +41,164 @@ def _get_cert_storage_root():
     """Raíz donde guardar certificado y clave por empresa."""
     from django.conf import settings
     custom = getattr(settings, "FE_AFIP_CERT_STORAGE_DIR", None)
-    if custom and os.path.isabs(custom):
-        return custom
+    if custom and os.path.isabs(str(custom)):
+        return str(custom)
     base = getattr(settings, "MEDIA_ROOT", None) or "/tmp"
-    return os.path.join(base, "fe_afip", "certs")
+    return os.path.join(str(base), "fe_afip", "certs")
+
+
+def _canonical_cert_paths(base_empresa: str) -> Tuple[str, str, str]:
+    """final_dir, cert_path, key_path dentro del almacén interno."""
+    root = _get_cert_storage_root()
+    subdir = _sanitize_base_empresa(base_empresa)
+    final_dir = os.path.join(root, subdir)
+    cert_dst = os.path.join(final_dir, "certificado.crt")
+    key_dst = os.path.join(final_dir, "clave.key")
+    return final_dir, cert_dst, key_dst
+
+
+def ingest_external_cert_pair(
+    base_empresa: str,
+    cert_src: str,
+    key_src: str,
+) -> Tuple[str, str]:
+    """
+    Copia certificado y clave desde rutas elegidas en el explorador hacia el almacén
+    configurado (FE_AFIP_CERT_STORAGE_DIR). Así pyafipws lee desde un volumen Linux
+    estable y no desde bind mounts del código bajo /app.
+
+    Si las rutas ya son las canónicas del almacén, no reescribe.
+    """
+    if not base_empresa or not cert_src or not key_src:
+        raise ValueError("Faltan base_empresa, ruta de certificado o de clave.")
+
+    try:
+        cert_real = os.path.realpath(cert_src)
+        key_real = os.path.realpath(key_src)
+    except OSError as e:
+        logger.warning("ingest_external_cert_pair: realpath falló: %s", e)
+        raise ValueError("No se pudo resolver la ruta del certificado o la clave.") from e
+
+    final_dir, cert_dst, key_dst = _canonical_cert_paths(base_empresa)
+    try:
+        dst_cert_real = os.path.realpath(cert_dst)
+        dst_key_real = os.path.realpath(key_dst)
+    except OSError:
+        dst_cert_real = cert_dst
+        dst_key_real = key_dst
+
+    if cert_real == dst_cert_real and key_real == dst_key_real:
+        return cert_dst, key_dst
+
+    _ensure_dir(final_dir)
+    try:
+        with open(cert_real, "rb") as f:
+            cert_bytes = f.read()
+        with open(key_real, "rb") as f:
+            key_bytes = f.read()
+    except OSError as e:
+        logger.warning("ingest_external_cert_pair: lectura origen: %s", e)
+        raise ValueError(
+            "No se pudo leer el certificado o la clave desde la ubicación indicada. "
+            "Si usás Docker en Mac y los archivos están bajo la carpeta del proyecto, "
+            "configurá SYNAP_AFIP_STORAGE en un volumen dedicado y volvé a guardar, "
+            "o ejecutá: python manage.py fe_afip_migrate_certs_to_secure_storage"
+        ) from e
+
+    if not cert_bytes.strip() or not key_bytes.strip():
+        raise ValueError("El certificado o la clave están vacíos.")
+
+    cert_tmp = cert_dst + ".tmp"
+    key_tmp = key_dst + ".tmp"
+    try:
+        with open(cert_tmp, "wb") as f:
+            f.write(cert_bytes)
+        with open(key_tmp, "wb") as f:
+            f.write(key_bytes)
+        os.replace(cert_tmp, cert_dst)
+        os.replace(key_tmp, key_dst)
+    except OSError:
+        for p in (cert_tmp, key_tmp):
+            try:
+                if os.path.isfile(p):
+                    os.remove(p)
+            except OSError:
+                pass
+        raise
+    try:
+        os.chmod(cert_dst, 0o644)
+        os.chmod(key_dst, 0o600)
+    except OSError:
+        pass
+    return cert_dst, key_dst
+
+
+def save_uploaded_cert_key_pair(
+    base_empresa: str,
+    cert_bytes: bytes,
+    key_bytes: bytes,
+) -> Tuple[str, str]:
+    """
+    Guarda certificado y clave subidos por el navegador (PC del usuario) en el almacén
+    configurado (FE_AFIP_CERT_STORAGE_DIR). No usa rutas del bind mount del proyecto.
+    """
+    if not base_empresa or not cert_bytes or not key_bytes:
+        raise ValueError("Faltan empresa o archivos vacíos.")
+    if len(cert_bytes) > 512 * 1024 or len(key_bytes) > 512 * 1024:
+        raise ValueError("Los archivos superan el tamaño máximo permitido.")
+
+    cert_bytes = cert_bytes.strip()
+    key_bytes = key_bytes.strip()
+    if not cert_bytes or not key_bytes:
+        raise ValueError("Los archivos están vacíos.")
+
+    try:
+        cert = x509.load_pem_x509_certificate(cert_bytes, default_backend())
+    except Exception:
+        try:
+            cert = x509.load_der_x509_certificate(cert_bytes, default_backend())
+        except Exception as e:
+            logger.warning("cert_arca: certificado subido inválido: %s", e)
+            raise ValueError("El certificado no es un archivo PEM o DER válido.") from e
+
+    kb = key_bytes
+    if b"BEGIN" not in kb or b"PRIVATE KEY" not in kb:
+        raise ValueError(
+            "La clave privada debe ser un archivo PEM (texto que comienza con -----BEGIN ... PRIVATE KEY-----)."
+        )
+
+    root = _get_cert_storage_root()
+    subdir = _sanitize_base_empresa(base_empresa)
+    final_dir = os.path.join(root, subdir)
+    _ensure_dir(final_dir)
+
+    cert_path = os.path.join(final_dir, "certificado.crt")
+    key_path = os.path.join(final_dir, "clave.key")
+
+    cert_tmp = cert_path + ".tmp"
+    key_tmp = key_path + ".tmp"
+    try:
+        with open(cert_tmp, "wb") as f:
+            f.write(cert_bytes)
+        with open(key_tmp, "wb") as f:
+            f.write(key_bytes)
+        os.replace(cert_tmp, cert_path)
+        os.replace(key_tmp, key_path)
+    except OSError:
+        for p in (cert_tmp, key_tmp):
+            try:
+                if os.path.isfile(p):
+                    os.remove(p)
+            except OSError:
+                pass
+        raise
+    try:
+        os.chmod(cert_path, 0o644)
+        os.chmod(key_path, 0o600)
+    except OSError:
+        pass
+
+    return cert_path, key_path
 
 
 def _ensure_dir(path: str) -> None:
@@ -176,9 +330,30 @@ def get_pending_key_path(token: str) -> Optional[str]:
     return path if os.path.isfile(path) else None
 
 
+def _collect_cuits_from_x509_name(name: x509.Name) -> set:
+    """
+    Extrae posibles CUIT (11 dígitos) del subject del certificado.
+    AFIP suele poner el CUIT en CN; en algunos certificados el CN es un alias y el CUIT
+    aparece en serialNumber u otro campo del subject.
+    """
+    found = set()
+    try:
+        for attr in name:
+            raw = attr.value or ""
+            compact = re.sub(r"\D", "", raw)
+            if len(compact) == 11 and compact.isdigit():
+                found.add(compact)
+            for chunk in re.findall(r"\d{11}", compact):
+                found.add(chunk)
+    except Exception:
+        pass
+    return found
+
+
 def validate_cert_cuit(cert_path: str, expected_cuit: str) -> Tuple[bool, Optional[str]]:
     """
-    Valida que el certificado en cert_path corresponda al CUIT esperado (subject CN).
+    Valida que el certificado en cert_path corresponda al CUIT esperado (subject).
+    Busca el CUIT en CN, serialNumber y demás campos del subject (no solo CN).
     expected_cuit: 11 dígitos (con o sin guiones, se normaliza).
     Returns: (True, None) si coincide, (False, "mensaje") si no coincide o hay error.
     """
@@ -201,14 +376,22 @@ def validate_cert_cuit(cert_path: str, expected_cuit: str) -> Tuple[bool, Option
         except Exception:
             return False, "El archivo no es un certificado PEM o DER válido."
     try:
-        cn_attrs = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-        if not cn_attrs:
-            return False, "El certificado no tiene Common Name (CN). No se puede validar el CUIT."
-        cn_value = (cn_attrs[0].value or "").strip().replace("-", "").replace(" ", "")
-        if len(cn_value) != 11 or not cn_value.isdigit():
-            return False, "El certificado tiene un CN que no es un CUIT de 11 dígitos."
-        if cn_value != cuit_clean:
-            return False, "El certificado no corresponde al CUIT de la empresa. El CN del certificado no coincide con el CUIT de administraNET. Verificá que el archivo sea el correcto."
+        found = _collect_cuits_from_x509_name(cert.subject)
+        if not found:
+            return (
+                False,
+                "No se encontró un CUIT de 11 dígitos en el certificado (subject). "
+                "Verificá que sea el certificado de Factura Electrónica emitido por AFIP/ARCA para este contribuyente; "
+                "si el CN es solo un alias, el archivo podría no ser el correcto para esta empresa.",
+            )
+        if cuit_clean not in found:
+            otros = ", ".join(sorted(found))
+            return (
+                False,
+                "El certificado no corresponde al CUIT de la empresa en administraNET. "
+                f"En el certificado figura el/los CUIT: {otros}; la empresa tiene CUIT {cuit_clean}. "
+                "Descargá de ARCA el certificado asociado a este CUIT o revisá Datos de empresa en administraNET.",
+            )
         return True, None
     except Exception as e:
         logger.warning("validate_cert_cuit: %s", e)

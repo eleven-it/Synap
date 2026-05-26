@@ -72,9 +72,9 @@ class Command(BaseCommand):
                     existing_migration_files.add(mig_name)
                     all_migration_files_in_fs.append((mig_name, filename))
         
-        # Lista de migraciones válidas que deberían existir (0001 a 0029)
-        # Actualizado para incluir todas las migraciones hasta 0029
-        valid_migration_numbers = set([f'{i:04d}' for i in range(1, 30)])
+        # Prefijos numéricos reconocidos como migraciones oficiales del repo (no temporales del servidor).
+        # Debe incluir la última migración publicada en reports (p. ej. 0031 PuntoVentaCanalEjecutivo).
+        valid_migration_numbers = set([f"{i:04d}" for i in range(1, 32)])  # 0001 … 0031
         valid_migration_files = set()
         for mig_name, filename in all_migration_files_in_fs:
             mig_num = mig_name.split('_')[0]
@@ -246,19 +246,17 @@ class Command(BaseCommand):
                             except Exception as e:
                                 self.stdout.write(self.style.WARNING(f"   ⚠️  No se pudo eliminar {filename}: {e}"))
         
-        # También buscar y eliminar archivos de migración que no deberían existir
-        # Solo eliminar migraciones con número muy alto (mayor a 0030) que claramente son temporales
+        # Archivos .py bajo reports/migrations/ con número > LAST_OFFICIAL_REPORTS_MIGRATION se consideran
+        # basura autogenerada en servidor (makemigrations accidental). NO borrar 0030 ni 0031 oficiales.
+        LAST_OFFICIAL_REPORTS_MIGRATION = 31
         orphan_files = []
         for mig_name, filename in all_migration_files_in_fs:
-            mig_num = mig_name.split('_')[0]
-            # Solo considerar huérfanas las migraciones con número mayor a 0030
-            # Las migraciones 0017-0029 son válidas y no deben eliminarse
+            mig_num = mig_name.split("_")[0]
             try:
                 mig_num_int = int(mig_num)
-                if mig_num_int > 30:
+                if mig_num_int > LAST_OFFICIAL_REPORTS_MIGRATION:
                     orphan_files.append((mig_name, filename))
             except ValueError:
-                # Si no es un número válido, no es una migración estándar
                 pass
         
         if orphan_files:

@@ -39,7 +39,9 @@
             {# —— Cabecera —— #}
             <div class="bom-edit-section px-6 pb-8 pt-6 sm:px-8">
                 <p class="mb-4 text-sm font-semibold text-gray-700 dark:text-gray-200">Datos del conjunto</p>
-                <form method="post" action="">
+                <form method="post" action="" class="mpr-post-loading"
+                      data-mpr-loading-title="Guardando receta"
+                      data-mpr-loading-subtitle="Actualizando cabecera del conjunto…">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="guardar_cabecera"/>
                     <div class="grid gap-5 sm:grid-cols-2">
@@ -78,7 +80,9 @@
                 {% else %}
                 <p class="mb-4 text-sm font-medium text-amber-800 dark:text-amber-200">Ningún artículo asignado. Asigne uno para poder ejecutar armados desde esta lista.</p>
                 {% endif %}
-                <form method="post" action="" class="flex flex-wrap items-end gap-3">
+                <form method="post" action="" class="mpr-post-loading flex flex-wrap items-end gap-3"
+                      data-mpr-loading-title="Asignando artículo armado"
+                      data-mpr-loading-subtitle="Actualizando la receta…">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="set_articulo_armado"/>
                     <div class="min-w-0 flex-1 sm:min-w-[220px]">
@@ -121,7 +125,9 @@
                                 <td class="px-4 py-3.5 text-right text-sm tabular-nums text-gray-800 dark:text-gray-200 sm:px-6">{{ comp.cantidad_articulo }}</td>
                                 <td class="px-4 py-3.5 text-sm text-gray-500 dark:text-gray-400 sm:px-6">{{ comp.tipo_unidad|default:"—" }}</td>
                                 <td class="px-4 py-3.5 sm:px-6">
-                                    <form method="post" action="" class="inline" onsubmit="return confirm('¿Anular este componente?');">
+                                    <form method="post" action="" class="mpr-post-loading inline" onsubmit="return confirm('¿Anular este componente?');"
+                                          data-mpr-loading-title="Anulando componente"
+                                          data-mpr-loading-subtitle="Actualizando la lista de materiales…">
                                         {% csrf_token %}
                                         <input type="hidden" name="accion" value="anular_componente"/>
                                         <input type="hidden" name="id_en_abm_formula" value="{{ comp.id_en_abm_formula }}"/>
@@ -139,7 +145,9 @@
                 </div>
                 <div class="border-t border-gray-100 bg-gray-50/50 px-6 py-5 dark:border-gray-700/80 dark:bg-gray-800/30 sm:px-8">
                     <p class="mb-3 text-sm font-semibold text-gray-700 dark:text-gray-200">Añadir componente</p>
-                    <form method="post" action="" class="flex flex-wrap items-end gap-3">
+                    <form method="post" action="" class="mpr-post-loading flex flex-wrap items-end gap-3"
+                          data-mpr-loading-title="Añadiendo componente"
+                          data-mpr-loading-subtitle="Guardando en la receta…">
                         {% csrf_token %}
                         <input type="hidden" name="accion" value="agregar_componente"/>
                         <div class="min-w-0 flex-1 sm:min-w-[200px]">

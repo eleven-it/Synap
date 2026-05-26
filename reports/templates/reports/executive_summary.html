@@ -58,6 +58,21 @@
             <input type="date" id="exec-fecha-input"
                    class="min-h-10 rounded-xl border border-slate-600/80 bg-slate-900/50 px-3 py-2 text-sm text-white shadow-inner backdrop-blur-sm transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40" />
           </div>
+          <div class="flex flex-col gap-1 min-w-[12rem]">
+            <label for="exec-sucursal-select" class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Sucursal</label>
+            <select id="exec-sucursal-select"
+                    class="min-h-10 w-full max-w-[16rem] rounded-xl border border-slate-600/80 bg-slate-900/50 px-3 py-2 text-sm text-white shadow-inner backdrop-blur-sm transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40">
+              <option value="">Todas las sucursales</option>
+            </select>
+          </div>
+          <div class="flex flex-col gap-1 min-w-[11rem]">
+            <label for="exec-top-orden" class="text-[11px] font-medium uppercase tracking-wide text-slate-400">Orden Top 10</label>
+            <select id="exec-top-orden"
+                    class="min-h-10 w-full rounded-xl border border-slate-600/80 bg-slate-900/50 px-3 py-2 text-sm text-white shadow-inner backdrop-blur-sm transition focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40">
+              <option value="importe_neto">Venta neta (importe)</option>
+              <option value="unidades">Unidades</option>
+            </select>
+          </div>
           <button type="button" id="exec-refresh-btn"
                   class="inline-flex min-h-10 items-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-md shadow-sky-900/30 transition hover:from-sky-400 hover:to-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
             <span class="material-icons text-lg" aria-hidden="true">refresh</span>
@@ -98,6 +113,27 @@
         </div>
         <div id="exec-chart-7d" class="exec-chart-wrap w-full min-h-[200px] flex-1 overflow-x-hidden bg-slate-50/50 p-1 sm:min-h-[260px] sm:p-2 lg:min-h-[280px] dark:bg-slate-950/30"></div>
       </div>
+    </div>
+
+    <div id="exec-rentabilidad-section" class="mb-8 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30">
+      <div class="flex flex-shrink-0 flex-col gap-1 border-b border-slate-100 bg-gradient-to-r from-teal-50/90 to-transparent px-4 py-3 dark:border-slate-700 dark:from-teal-950/40 sm:flex-row sm:items-center sm:gap-3">
+        <div class="flex items-center gap-2">
+          <span class="material-icons text-xl text-teal-600 dark:text-teal-400" aria-hidden="true">account_balance_wallet</span>
+          <h2 class="text-sm font-bold text-slate-900 dark:text-white sm:text-base">Rentabilidad del día</h2>
+        </div>
+        <p id="exec-rentabilidad-nota" class="text-xs leading-snug text-slate-500 dark:text-slate-400 sm:ml-auto sm:max-w-xl sm:text-right"></p>
+      </div>
+      <div id="exec-margen-kpis" class="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:gap-4 sm:p-4 lg:grid-cols-3"></div>
+      <div id="exec-margen-tablas" class="border-t border-slate-100 bg-slate-50/50 p-2 sm:p-4 dark:border-slate-700 dark:bg-slate-950/30"></div>
+    </div>
+
+    <div id="exec-top-productos-section" class="mb-8 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30">
+      <div class="flex flex-shrink-0 items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-cyan-50/90 to-transparent px-4 py-3 dark:border-slate-700 dark:from-cyan-950/40">
+        <span class="material-icons text-xl text-cyan-600 dark:text-cyan-400" aria-hidden="true">emoji_events</span>
+        <h2 class="text-sm font-bold text-slate-900 dark:text-white sm:text-base">Top 10 productos</h2>
+        <span id="exec-top-orden-badge" class="ml-auto rounded-md bg-cyan-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-900 dark:bg-cyan-900/50 dark:text-cyan-100" title="Criterio de ranking del Top 10">Venta neta</span>
+      </div>
+      <div id="exec-top-productos" class="min-h-[4rem] w-full bg-slate-50/50 p-2 sm:p-4 dark:bg-slate-950/30" role="region" aria-label="Ranking de artículos del día"></div>
     </div>
   </div>
 </section>
@@ -164,5 +200,5 @@
         pvCanalUrl: "{{ pv_canal_api_url|escapejs }}",
     };
 </script>
-<script src="{% static 'reports/js/executive_summary.js' %}?v=20260413c" defer></script>
+<script src="{% static 'reports/js/executive_summary.js' %}?v=20260511c" defer></script>
 {% endblock %}

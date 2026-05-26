@@ -11,7 +11,13 @@ from django.http import JsonResponse
 from core.decorators import administranet_login_required, tiene_permiso
 from core.services.administranet_empresas import AdministraNETEmpresaService
 from fe_afip.models import AFIPConfig
-from fe_afip.services.cert_arca import generate_csr, save_certificate_and_apply, validate_cert_cuit
+from fe_afip.services.cert_arca import (
+    generate_csr,
+    ingest_external_cert_pair,
+    save_certificate_and_apply,
+    save_uploaded_cert_key_pair,
+    validate_cert_cuit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -122,28 +128,134 @@ def config_form(request, pk=None):
             })
             return render(request, "fe_afip/config_form.html", ctx)
         name = (request.POST.get("name") or "Default").strip()
-        cert_path = (request.POST.get("cert_path") or "").strip()
-        key_path = (request.POST.get("key_path") or "").strip()
         modo_homologacion = request.POST.get("modo_homologacion") == "on"
         cache_dir = (request.POST.get("cache_dir") or "/tmp/pyafipws_cache").strip()
         if not cache_dir:
             cache_dir = "/tmp/pyafipws_cache"
-        if not cert_path or not key_path:
-            messages.error(request, "Certificado y clave privada son obligatorios.")
-            return render(request, "fe_afip/config_form.html", _config_form_context(base_empresa, config))
-        if cert_path:
-            ok, err = validate_cert_cuit(cert_path, cuit_empresa)
-            if not ok:
-                messages.error(request, err)
+
+        cert_file = request.FILES.get("cert_file")
+        key_file = request.FILES.get("key_file")
+
+        cert_path = ""
+        key_path = ""
+
+        if cert_file and key_file:
+            try:
+                cert_bytes = cert_file.read()
+                key_bytes = key_file.read()
+                cert_path, key_path = save_uploaded_cert_key_pair(
+                    base_empresa, cert_bytes, key_bytes
+                )
+                ok_cuit, err_cuit = validate_cert_cuit(cert_path, cuit_empresa)
+                if not ok_cuit:
+                    messages.error(request, err_cuit)
+                    ctx = _config_form_context(base_empresa, config)
+                    ctx.update({
+                        "cert_path": (config.cert_path if config else "") or "",
+                        "key_path": (config.key_path if config else "") or "",
+                        "cache_dir": cache_dir,
+                        "modo_homologacion": modo_homologacion,
+                        "name": name,
+                    })
+                    return render(request, "fe_afip/config_form.html", ctx)
+            except ValueError as e:
+                messages.error(request, str(e))
                 ctx = _config_form_context(base_empresa, config)
                 ctx.update({
-                    "cert_path": cert_path,
-                    "key_path": key_path,
+                    "cert_path": (request.POST.get("cert_path") or "").strip(),
+                    "key_path": (request.POST.get("key_path") or "").strip(),
                     "cache_dir": cache_dir,
                     "modo_homologacion": modo_homologacion,
                     "name": name,
                 })
                 return render(request, "fe_afip/config_form.html", ctx)
+        elif cert_file or key_file:
+            messages.error(
+                request,
+                "Seleccioná ambos archivos: certificado (.crt o .pem) y clave privada (.key).",
+            )
+            ctx = _config_form_context(base_empresa, config)
+            ctx.update({
+                "cert_path": (request.POST.get("cert_path") or "").strip(),
+                "key_path": (request.POST.get("key_path") or "").strip(),
+                "cache_dir": cache_dir,
+                "modo_homologacion": modo_homologacion,
+                "name": name,
+            })
+            return render(request, "fe_afip/config_form.html", ctx)
+        else:
+            post_cert = (request.POST.get("cert_path") or "").strip()
+            post_key = (request.POST.get("key_path") or "").strip()
+            solo_actualizar_modo_o_cache = False
+            cfg_cert = (config.cert_path or "").strip() if config else ""
+            cfg_key = (config.key_path or "").strip() if config else ""
+
+            if post_cert and post_key:
+                cert_path = post_cert
+                key_path = post_key
+                if (
+                    config
+                    and post_cert == cfg_cert
+                    and post_key == cfg_key
+                ):
+                    solo_actualizar_modo_o_cache = True
+            elif (
+                not post_cert
+                and not post_key
+                and cfg_cert
+                and cfg_key
+            ):
+                cert_path = cfg_cert
+                key_path = cfg_key
+                solo_actualizar_modo_o_cache = True
+            elif post_cert or post_key:
+                messages.error(
+                    request,
+                    "Indicá ambas rutas en «Opción avanzada» o dejá ambas vacías para mantener los archivos ya guardados.",
+                )
+                ctx = _config_form_context(base_empresa, config)
+                ctx.update({
+                    "cert_path": post_cert,
+                    "key_path": post_key,
+                    "cache_dir": cache_dir,
+                    "modo_homologacion": modo_homologacion,
+                    "name": name,
+                })
+                return render(request, "fe_afip/config_form.html", ctx)
+            else:
+                messages.error(
+                    request,
+                    "Subí el certificado y la clave desde tu equipo, o indicá ambas rutas en «Opción avanzada».",
+                )
+                return render(request, "fe_afip/config_form.html", _config_form_context(base_empresa, config))
+
+            if not solo_actualizar_modo_o_cache:
+                ok, err = validate_cert_cuit(cert_path, cuit_empresa)
+                if not ok:
+                    messages.error(request, err)
+                    ctx = _config_form_context(base_empresa, config)
+                    ctx.update({
+                        "cert_path": cert_path,
+                        "key_path": key_path,
+                        "cache_dir": cache_dir,
+                        "modo_homologacion": modo_homologacion,
+                        "name": name,
+                    })
+                    return render(request, "fe_afip/config_form.html", ctx)
+                try:
+                    cert_path, key_path = ingest_external_cert_pair(base_empresa, cert_path, key_path)
+                except ValueError as e:
+                    messages.error(request, str(e))
+                    ctx = _config_form_context(base_empresa, config)
+                    ctx.update({
+                        "cert_path": request.POST.get("cert_path", "").strip(),
+                        "key_path": request.POST.get("key_path", "").strip(),
+                        "cache_dir": cache_dir,
+                        "modo_homologacion": modo_homologacion,
+                        "name": name,
+                    })
+                    return render(request, "fe_afip/config_form.html", ctx)
+
         if config:
             config.name = name
             config.cert_path = cert_path

@@ -1,0 +1,30 @@
+{# Modal de espera para POST pesados del MPR. Activar con clase mpr-post-loading en el <form> y opcionalmente data-mpr-loading-title / data-mpr-loading-subtitle. #}
+<div id="mpr-post-loading-modal"
+     class="hidden fixed inset-0 z-[10050] p-4 sm:p-8 bg-slate-950/65 backdrop-blur-sm pointer-events-auto transition-opacity duration-200"
+     aria-hidden="true"
+     aria-busy="false"
+     role="alertdialog"
+     aria-labelledby="mpr-post-loading-title">
+    <div class="relative w-full max-w-md rounded-2xl border border-slate-200/80 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-2xl shadow-purple-900/15 overflow-hidden mx-auto">
+        <div class="absolute inset-x-0 top-0 h-1.5 overflow-hidden bg-slate-200/50 dark:bg-slate-700/50">
+            <div class="h-full w-1/3 rounded-full bg-gradient-to-r from-purple-500 via-violet-500 to-fuchsia-400 animate-[mpr-post-loading-bar_1.4s_ease-in-out_infinite]"></div>
+        </div>
+        <div class="px-8 pt-10 pb-8 flex flex-col items-center text-center gap-5">
+            <div class="relative w-16 h-16">
+                <div class="absolute inset-0 rounded-full border-4 border-slate-200 dark:border-slate-600"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-500 border-r-violet-500 animate-spin" style="animation-duration: 0.9s;"></div>
+                <div class="absolute inset-2 rounded-full border-2 border-transparent border-b-fuchsia-400/80 animate-spin" style="animation-duration: 1.4s; animation-direction: reverse;"></div>
+            </div>
+            <div>
+                <p id="mpr-post-loading-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100 tracking-tight">Procesando solicitud</p>
+                <p id="mpr-post-loading-subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">Esperá un momento. No cierres esta ventana.</p>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    @keyframes mpr-post-loading-bar {
+        0%, 100% { transform: translateX(-100%); width: 40%; }
+        50% { transform: translateX(200%); width: 55%; }
+    }
+</style>

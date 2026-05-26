@@ -35,7 +35,10 @@
                     </h1>
                 </div>
                 <div class="flex flex-wrap items-end gap-2 sm:gap-2.5">
-                    <form method="post" action="{% url 'mpr:ventana_pack_actualizar' %}" class="flex flex-wrap items-end gap-2">
+                    <form id="form-ventana-pack-actualizar" method="post" action="{% url 'mpr:ventana_pack_actualizar' %}"
+                          class="mpr-post-loading flex flex-wrap items-end gap-2"
+                          data-mpr-loading-title="Actualizando demanda"
+                          data-mpr-loading-subtitle="Sincronizando pedidos con la lista de producción… No cierres esta ventana.">
                         {% csrf_token %}
                         <label class="flex flex-col gap-0.5">
                             <span class="text-[10px] font-medium text-slate-400">Fecha desde</span>
@@ -83,10 +86,14 @@
             </div>
         </div>
 
+        {# Un solo formulario envuelve Packs + Unidades + Continuar (si Continuar quedara solo dentro de panel-packs, al cambiar de pestaña quedaría oculto y el usuario no puede confirmar desde Unidades). #}
+        <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-crear-opt"
+              class="mpr-post-loading flex flex-col"
+              data-mpr-loading-title="Preparando confirmación"
+              data-mpr-loading-subtitle="Enviando la selección para confirmar la OPT… No cierres esta ventana.">
+            {% csrf_token %}
         {# Panel Packs #}
         <div id="panel-packs" class="ventana-pack-panel flex flex-col">
-        <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-crear-opt" class="flex flex-col">
-            {% csrf_token %}
             <div class="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                 <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 md:hidden">Deslizá horizontalmente</p>
                 <div class="h-[min(26rem,52vh)] min-h-[14rem] overflow-auto" role="region" aria-label="Demanda packs">
@@ -171,11 +178,14 @@
                                         <span class="text-slate-300 dark:text-slate-500 inline-flex items-center justify-center w-8 h-8" aria-hidden="true">—</span>
                                     {% endif %}
                                 </td>
-                                <td class="border-l border-slate-100 bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums text-slate-700 dark:border-slate-700 dark:bg-slate-800/35 dark:text-slate-300">
-                                    {{ f.cantidad_a_fabricar|floatformat:0 }}
-                                    <input type="hidden" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar|floatformat:0 }}"/>
+                                <td class="border-l border-slate-100 bg-slate-50/90 px-4 py-3 text-right dark:border-slate-700 dark:bg-slate-800/35">
+                                    <input type="number" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar|floatformat:0 }}" min="0" step="1" data-docenas-id="doc_pack_{{ f.id_articulo }}" data-bulto="{{ f.cantidad_promedio_bulto|default_if_none:0 }}"
+                                           class="cant-unidades w-24 rounded border border-slate-300 bg-white px-2 py-1.5 text-right text-xs tabular-nums text-slate-900 focus:ring-2 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"/>
                                 </td>
-                                <td class="bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums text-slate-700 dark:bg-slate-800/35 dark:text-slate-300">{{ f.cantidad_a_fabricar_docenas|floatformat:2 }}</td>
+                                <td class="bg-slate-50/90 px-4 py-3 text-right dark:bg-slate-800/35">
+                                    <input type="number" id="doc_pack_{{ f.id_articulo }}" data-unidades-id="cant_{{ f.id_articulo }}" data-bulto="{{ f.cantidad_promedio_bulto|default_if_none:0 }}" value="{{ f.cantidad_a_fabricar_docenas|floatformat:2 }}" min="0" step="0.01"
+                                           class="cant-docenas w-24 rounded border border-slate-300 bg-white px-2 py-1.5 text-right text-xs tabular-nums text-slate-900 focus:ring-2 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"/>
+                                </td>
                                 <td class="border-l-2 border-l-rose-200/80 bg-slate-50/90 px-4 py-3 text-right text-xs tabular-nums dark:border-l-rose-900/50 dark:bg-slate-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-slate-600 dark:text-slate-400{% endif %}" title="Urgente = max(0, Cant. pedido − Saldo); la reserva de artículo y la Dem. reserva no suman aquí.">
                                     {{ f.cantidad_urgente_abs|floatformat:0 }}
                                 </td>
@@ -195,17 +205,8 @@
                 </div>
             </div>
             {% if filas %}
-            <div class="mt-3 flex flex-shrink-0 flex-col gap-2 sm:mt-3 sm:flex-row sm:items-center sm:justify-between">
-                <p class="text-xs text-slate-600 dark:text-slate-400">Cantidad de artículos: <span class="font-semibold tabular-nums text-slate-800 dark:text-slate-200">{{ filas|length }}</span></p>
-                <div class="flex justify-end sm:shrink-0">
-                    <button type="submit" class="inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 sm:w-auto">
-                        <span class="material-icons text-lg" aria-hidden="true">arrow_forward</span>
-                        Continuar
-                    </button>
-                </div>
-            </div>
+            <p class="mt-3 flex-shrink-0 text-xs text-slate-600 dark:text-slate-400">Cantidad de artículos (packs): <span class="font-semibold tabular-nums text-slate-800 dark:text-slate-200">{{ filas|length }}</span></p>
             {% endif %}
-        </form>
         </div>{# fin panel-packs #}
 
         {# Panel Unidades (solo lectura, desglose por componentes de recetas) #}
@@ -302,6 +303,22 @@
             </div>
         </div>
         </div>{# fin panel-unidades #}
+
+            {% if filas %}
+            <p class="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-600 dark:border-slate-600 dark:bg-slate-800/60 dark:text-slate-400">
+                La cantidad que se envía al pulsar <strong class="text-slate-800 dark:text-slate-200">Continuar</strong> es la de la pestaña <strong class="text-slate-800 dark:text-slate-200">Packs</strong> (columna Cantidad a fabricar). En <strong class="text-slate-800 dark:text-slate-200">Unidades</strong> el desglose por componente puede diferir del pack (saldo Semi elaborado, BOM).
+            </p>
+            <div class="mt-3 flex flex-shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span class="text-xs text-slate-500 dark:text-slate-500 sm:invisible sm:pointer-events-none" aria-hidden="true">&nbsp;</span>
+                <div class="flex w-full justify-end sm:shrink-0">
+                    <button type="submit" class="inline-flex min-h-9 w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 sm:w-auto">
+                        <span class="material-icons text-lg" aria-hidden="true">arrow_forward</span>
+                        Continuar
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </form>
 
         </div>{# fin x-data query (búsqueda predictiva) #}
         </div>{# fin zona central #}
@@ -527,6 +544,44 @@
                     el.addEventListener('mouseleave', hidePedidosTip);
                 });
             })();
+        })();
+        </script>
+        <script>
+        (function() {
+            function unidadesPorBultoDesdeInput(inp) {
+                if (!inp) return 12;
+                var b = parseFloat(inp.getAttribute('data-bulto'));
+                if (!b || b <= 0 || isNaN(b)) return 12;
+                return b;
+            }
+            var form = document.getElementById('form-crear-opt');
+            if (!form) return;
+            form.querySelectorAll('.cant-unidades').forEach(function(inp) {
+                inp.addEventListener('input', function() {
+                    var val = parseFloat(this.value) || 0;
+                    var docenasId = this.getAttribute('data-docenas-id');
+                    var docInp = docenasId ? document.getElementById(docenasId) : null;
+                    if (docInp) {
+                        var div = unidadesPorBultoDesdeInput(this);
+                        docInp.value = (val / div).toFixed(2);
+                    }
+                });
+            });
+            form.querySelectorAll('.cant-docenas').forEach(function(inp) {
+                inp.addEventListener('input', function() {
+                    var val = parseFloat(this.value) || 0;
+                    var unidadesName = this.getAttribute('data-unidades-id');
+                    var unidInp = unidadesName ? form.querySelector('input[name="' + unidadesName + '"]') : null;
+                    if (unidInp) {
+                        var div = unidadesPorBultoDesdeInput(unidInp);
+                        var u = Math.round(val * div);
+                        unidInp.value = u < 1 ? 1 : u;
+                    }
+                });
+            });
+            form.querySelectorAll('.cant-unidades').forEach(function(inp) {
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+            });
         })();
         </script>
     </div>

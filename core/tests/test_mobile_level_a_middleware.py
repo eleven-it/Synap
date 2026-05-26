@@ -88,8 +88,30 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
     def test_api_self_checkout_prefijo(self):
         self.assertTrue(mobile_path_allowed_for_level_a('/api/self-checkout/health/'))
 
-    def test_core_dashboard_no_en_lista(self):
-        self.assertFalse(mobile_path_allowed_for_level_a('/core/dashboard/'))
+    def test_core_dashboard_permitido(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/core/dashboard/'))
+
+    def test_reports_catalog_y_workspace_permitidos(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/reports/'))
+        self.assertTrue(mobile_path_allowed_for_level_a('/reports/workspace/'))
+
+    def test_command_center_gerencial_permitido(self):
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/reports/dashboard/command-center-gerencial/')
+        )
+
+    def test_api_executive_dashboard_permitido(self):
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/api/reports/executive-dashboard/')
+        )
+        self.assertTrue(
+            mobile_path_allowed_for_level_a(
+                '/api/reports/executive-dashboard/ventas/resumen/'
+            )
+        )
+
+    def test_api_executive_summary_permitido(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/api/reports/executive-summary/'))
 
 
 @override_settings(
@@ -107,11 +129,10 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
     def setUp(self):
         self.mw = MobileLevelAOnlyMiddleware(lambda r: None)
 
-    def test_movil_autenticado_dashboard_403(self):
+    def test_movil_autenticado_dashboard_sin_bloqueo(self):
         req = _build_request('GET', '/core/dashboard/', MOBILE_UA, _minimal_session_user())
         resp = self.mw.process_request(req)
-        self.assertIsNotNone(resp)
-        self.assertEqual(resp.status_code, 403)
+        self.assertIsNone(resp)
 
     def test_movil_anonimo_dashboard_sin_bloqueo_middleware(self):
         req = _build_request('GET', '/core/dashboard/', MOBILE_UA, None)
@@ -140,6 +161,27 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
         self.assertIsNotNone(resp)
         self.assertEqual(resp.status_code, 403)
         self.assertIn(b'error', resp.content.lower())
+
+    def test_movil_autenticado_command_center_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/reports/dashboard/command-center-gerencial/',
+            MOBILE_UA,
+            _minimal_session_user(),
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_autenticado_executive_dashboard_api_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/api/reports/executive-dashboard/',
+            MOBILE_UA,
+            _minimal_session_user(),
+            accept_json=True,
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
 
     def test_movil_admin_siempre_403_aunque_anonimo(self):
         req = _build_request('GET', '/admin/login/', MOBILE_UA, None)

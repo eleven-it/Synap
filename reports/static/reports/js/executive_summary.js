@@ -25,6 +25,12 @@
     return `${sign}${v.toFixed(2)} %`;
   }
 
+  /** Porcentaje de margen sobre venta (sin signo forzado salvo el numérico). */
+  function fmtMargenSobreVentaPct(v) {
+    if (v === null || v === undefined || Number.isNaN(v)) return "N/D";
+    return `${Number(v).toFixed(2)} %`;
+  }
+
   const el = (id) => document.getElementById(id);
 
   /** Última carga de la API para redibujar gráficos al cambiar viewport. */
@@ -91,6 +97,10 @@
       bar: "from-slate-500 to-slate-600",
       icon: "bg-slate-500/15 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400",
     },
+    teal: {
+      bar: "from-teal-500 to-emerald-500",
+      icon: "bg-teal-500/15 text-teal-600 dark:bg-teal-500/20 dark:text-teal-400",
+    },
   };
 
   /**
@@ -116,6 +126,14 @@
       </div>`;
   }
 
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
   function pctValueHtml(v) {
     if (v === null || v === undefined || Number.isNaN(v)) {
       return `<span class="text-slate-400">N/D</span>`;
@@ -134,6 +152,29 @@
         <span class="inline-flex items-center gap-0.5 rounded-lg px-2 py-0.5 text-xs font-semibold ${badgeCls}">
           <span class="material-icons text-sm leading-none" aria-hidden="true">${ic}</span>
         </span>
+      </div>`;
+  }
+
+  /** KPI «Vs ayer»: porcentaje existente + diferencia en moneda (``gap_vs_ayer_monto``). */
+  function vsAyerValueHtml(k) {
+    const pctBlock = pctValueHtml(k.pct_vs_ayer);
+    const gap = k.gap_vs_ayer_monto;
+    if (gap === null || gap === undefined || Number.isNaN(Number(gap))) {
+      return pctBlock;
+    }
+    const gapNum = Number(gap);
+    const up = gapNum > 0;
+    const down = gapNum < 0;
+    const subCls = up
+      ? "text-emerald-700 dark:text-emerald-300"
+      : down
+        ? "text-red-700 dark:text-red-300"
+        : "text-slate-600 dark:text-slate-400";
+    const gapTxt = fmtMoney.format(gapNum);
+    return `
+      <div class="flex flex-col gap-1.5">
+        ${pctBlock}
+        <div class="text-sm font-semibold tabular-nums ${subCls}">${gapTxt} <span class="font-normal text-slate-500 dark:text-slate-400">vs ayer</span></div>
       </div>`;
   }
 
@@ -162,7 +203,7 @@
         span: "sm:col-span-2 xl:col-span-2",
         valueClass: "text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl",
       }),
-      kpiCard("Vs ayer", pctValueHtml(k.pct_vs_ayer), { icon: "compare_arrows", accent: "indigo" }),
+      kpiCard("Vs ayer", vsAyerValueHtml(k), { icon: "compare_arrows", accent: "indigo" }),
       kpiCard("Vs mismo día sem. ant.", pctValueHtml(k.pct_vs_misma_semana_anterior), {
         icon: "date_range",
         accent: "purple",
@@ -207,6 +248,161 @@
     const btn = el("exec-open-pv-modal");
     if (btn) btn.addEventListener("click", openPvModal);
     staggerKpiGrid();
+  }
+
+  function renderRentabilidad(data) {
+    const notaEl = el("exec-rentabilidad-nota");
+    const kGrid = el("exec-margen-kpis");
+    const tablas = el("exec-margen-tablas");
+    if (!kGrid || !tablas) return;
+
+    const meta = data.meta || {};
+    if (notaEl) {
+      notaEl.textContent =
+        meta.nota_venta_neta_lineas_vs_comprobante ||
+        "Rentabilidad por renglón de facturación (PrecioNetoxR / PrecioCostoxR).";
+    }
+
+    const mb = data.margen_bruto || {};
+    const vn = Number(mb.venta_neta_lineas ?? 0);
+    const cn = Number(mb.costo_neto_lineas ?? 0);
+    const ma = Number(mb.margen_absoluto ?? vn - cn);
+    const pct = mb.pct_sobre_venta_lineas;
+
+    kGrid.innerHTML = [
+      kpiCard("Venta neta (líneas)", fmtMoney.format(vn), {
+        icon: "receipt_long",
+        accent: "teal",
+        span: "",
+        valueClass: "text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl",
+      }),
+      kpiCard("Costo neto (líneas)", fmtMoney.format(cn), {
+        icon: "inventory",
+        accent: "slate",
+        valueClass: "text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl",
+      }),
+      kpiCard("Margen bruto", `${fmtMoney.format(ma)} · ${fmtMargenSobreVentaPct(pct)}`, {
+        icon: "savings",
+        accent: "emerald",
+        valueClass: "text-lg font-bold tracking-tight text-slate-900 dark:text-white sm:text-xl",
+      }),
+    ].join("");
+
+    const rubros = data.margen_por_rubro || [];
+    const subrub = data.margen_por_subrubro || [];
+
+    function tablaMargenRubros(rows) {
+      if (!rows.length) {
+        return `<p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en rubros para el día.</p>`;
+      }
+      const head = `
+        <div class="mb-4 hidden overflow-x-auto lg:block">
+          <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por rubro</h3>
+          <table class="w-full min-w-[32rem] border-collapse text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
+                <th class="pb-2 pl-1 font-medium">Rubro</th>
+                <th class="pb-2 text-right font-medium">Venta neta</th>
+                <th class="pb-2 text-right font-medium">Costo</th>
+                <th class="pb-2 text-right font-medium">Margen</th>
+                <th class="pb-2 pr-1 text-right font-medium">% s/ venta</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows
+                .map(
+                  (r) => `
+                <tr class="border-b border-slate-100 dark:border-slate-800">
+                  <td class="py-2.5 pl-1 text-slate-800 dark:text-slate-100">${escapeHtml(r.nombre_rubro || "—")}</td>
+                  <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${fmtMoney.format(Number(r.venta_neta ?? 0))}</td>
+                  <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${fmtMoney.format(Number(r.costo_neto ?? 0))}</td>
+                  <td class="py-2.5 text-right font-medium tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</td>
+                  <td class="py-2.5 pr-1 text-right tabular-nums text-slate-600 dark:text-slate-300">${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</td>
+                </tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>`;
+      const cards = `
+        <div class="mb-4 space-y-2 lg:hidden">
+          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por rubro</h3>
+          ${rows
+            .map(
+              (r) => `
+            <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">${escapeHtml(r.nombre_rubro || "—")}</p>
+              <div class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+                <div><span class="font-medium">Venta</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.venta_neta ?? 0))}</span></div>
+                <div><span class="font-medium">Costo</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.costo_neto ?? 0))}</span></div>
+                <div><span class="font-medium">Margen</span><br/><span class="tabular-nums font-semibold text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</span></div>
+                <div><span class="font-medium">% s/ venta</span><br/>${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</div>
+              </div>
+            </div>`,
+            )
+            .join("")}
+        </div>`;
+      return head + cards;
+    }
+
+    function tablaMargenSubrubros(rows) {
+      if (!rows.length) {
+        return `<p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en subrubros para el día.</p>`;
+      }
+      const head = `
+        <div class="hidden overflow-x-auto lg:block">
+          <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por subrubro</h3>
+          <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
+                <th class="pb-2 pl-1 font-medium">Subrubro</th>
+                <th class="pb-2 font-medium">Rubro</th>
+                <th class="pb-2 text-right font-medium">Venta neta</th>
+                <th class="pb-2 text-right font-medium">Costo</th>
+                <th class="pb-2 text-right font-medium">Margen</th>
+                <th class="pb-2 pr-1 text-right font-medium">% s/ venta</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows
+                .map(
+                  (r) => `
+                <tr class="border-b border-slate-100 dark:border-slate-800">
+                  <td class="py-2.5 pl-1 text-slate-800 dark:text-slate-100">${escapeHtml(r.nombre_subrubro || "—")}</td>
+                  <td class="py-2.5 text-slate-600 dark:text-slate-400">${escapeHtml(r.nombre_rubro || "—")}</td>
+                  <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${fmtMoney.format(Number(r.venta_neta ?? 0))}</td>
+                  <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${fmtMoney.format(Number(r.costo_neto ?? 0))}</td>
+                  <td class="py-2.5 text-right font-medium tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</td>
+                  <td class="py-2.5 pr-1 text-right tabular-nums text-slate-600 dark:text-slate-300">${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</td>
+                </tr>`,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>`;
+      const cards = `
+        <div class="space-y-2 lg:hidden">
+          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por subrubro</h3>
+          ${rows
+            .map(
+              (r) => `
+            <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">${escapeHtml(r.nombre_subrubro || "—")}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(r.nombre_rubro || "—")}</p>
+              <div class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+                <div><span class="font-medium">Venta</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.venta_neta ?? 0))}</span></div>
+                <div><span class="font-medium">Costo</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.costo_neto ?? 0))}</span></div>
+                <div><span class="font-medium">Margen</span><br/><span class="tabular-nums font-semibold text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</span></div>
+                <div><span class="font-medium">% s/ venta</span><br/>${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</div>
+              </div>
+            </div>`,
+            )
+            .join("")}
+        </div>`;
+      return head + cards;
+    }
+
+    tablas.innerHTML = `<div class="max-w-full">${tablaMargenRubros(rubros)}${tablaMargenSubrubros(subrub)}</div>`;
   }
 
   /**
@@ -395,6 +591,99 @@
       .style("filter", "drop-shadow(0 1px 2px rgb(0 0 0 / 0.12))");
   }
 
+  function fillSucursalesSelect(list, selectedValue) {
+    const sel = el("exec-sucursal-select");
+    if (!sel) return;
+    const cur =
+      selectedValue !== undefined && selectedValue !== null && String(selectedValue).trim() !== ""
+        ? String(selectedValue).trim()
+        : sel.value || "";
+    sel.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "";
+    optAll.textContent = "Todas las sucursales";
+    sel.appendChild(optAll);
+    (list || []).forEach((s) => {
+      const o = document.createElement("option");
+      o.value = String(s.id_sucursal);
+      o.textContent = s.nombre_sucursal || `Sucursal ${s.id_sucursal}`;
+      sel.appendChild(o);
+    });
+    const match = [...sel.options].some((op) => op.value === cur);
+    sel.value = match ? cur : "";
+  }
+
+  function updateTopOrdenBadge(meta) {
+    const badge = el("exec-top-orden-badge");
+    if (!badge) return;
+    const orden = meta && meta.top_productos_orden === "unidades" ? "unidades" : "importe_neto";
+    if (orden === "unidades") {
+      badge.textContent = "Por unidades";
+      badge.title = "Orden por cantidad neta vendida (renglón factura − NC)";
+    } else {
+      badge.textContent = "Venta neta";
+      badge.title = "Orden por suma de PrecioNetoxR por renglón (FA − NC)";
+    }
+  }
+
+  function renderTopProductos(data) {
+    const wrap = el("exec-top-productos");
+    if (!wrap) return;
+    const rows = data.top_productos || [];
+    if (rows.length === 0) {
+      const topOrd = el("exec-top-orden")?.value || "importe_neto";
+      const emptyMsg =
+        topOrd === "unidades"
+          ? "Sin artículos con unidades o importe en el día seleccionado."
+          : "Sin artículos con importe en el día seleccionado.";
+      wrap.innerHTML = `<p class="px-2 py-6 text-center text-sm text-slate-500 dark:text-slate-400">${escapeHtml(emptyMsg)}</p>`;
+      return;
+    }
+    const head = `
+      <div class="hidden overflow-x-auto lg:block">
+        <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
+              <th scope="col" class="pb-2 pl-1 font-medium">Código</th>
+              <th scope="col" class="pb-2 font-medium">Descripción</th>
+              <th scope="col" class="pb-2 text-right font-medium">Unidades</th>
+              <th scope="col" class="pb-2 pr-1 text-right font-medium">Importe neto</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map(
+                (r) => `
+              <tr class="border-b border-slate-100 dark:border-slate-800">
+                <td class="py-2.5 pl-1 font-mono text-xs text-slate-700 dark:text-slate-300">${escapeHtml(r.codigo_articulo || "—")}</td>
+                <td class="py-2.5 pr-2 text-slate-800 dark:text-slate-100">${escapeHtml(r.descripcion || "—")}</td>
+                <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${Number(r.unidades ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</td>
+                <td class="py-2.5 pr-1 text-right font-medium tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.importe_neto ?? 0))}</td>
+              </tr>`,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>`;
+    const cards = `
+      <div class="space-y-2 lg:hidden">
+        ${rows
+          .map(
+            (r) => `
+          <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
+            <div class="flex items-start justify-between gap-2">
+              <span class="font-mono text-xs font-semibold text-sky-700 dark:text-sky-300">${escapeHtml(r.codigo_articulo || "—")}</span>
+              <span class="text-sm font-bold tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.importe_neto ?? 0))}</span>
+            </div>
+            <p class="mt-1 text-sm leading-snug text-slate-700 dark:text-slate-200">${escapeHtml(r.descripcion || "—")}</p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400"><span class="font-medium">Unidades</span> ${Number(r.unidades ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</p>
+          </div>`,
+          )
+          .join("")}
+      </div>`;
+    wrap.innerHTML = head + cards;
+  }
+
   function renderCharts(data) {
     cachedChartData = data;
     ensureChartResizeObserver();
@@ -424,8 +713,13 @@
 
   async function loadSummary() {
     const fin = el("exec-fecha-input");
+    const suc = el("exec-sucursal-select");
+    const topO = el("exec-top-orden");
     const qs = new URLSearchParams();
     if (fin && fin.value) qs.set("fecha", fin.value);
+    if (suc && suc.value) qs.set("sucursal", suc.value);
+    if (topO && topO.value) qs.set("top_orden", topO.value);
+    const wantedSuc = suc && suc.value ? suc.value : "";
     showError("");
     setLoading(true);
     try {
@@ -435,8 +729,15 @@
         throw new Error(err.detail || res.statusText);
       }
       const data = await res.json();
+      fillSucursalesSelect(data.sucursales_disponibles, wantedSuc || (data.meta && data.meta.cod_sucursal_filtro));
+      if (topO && data.meta && data.meta.top_productos_orden) {
+        topO.value = data.meta.top_productos_orden === "unidades" ? "unidades" : "importe_neto";
+      }
+      updateTopOrdenBadge(data.meta || {});
       renderKpis(data);
       renderCharts(data);
+      renderRentabilidad(data);
+      renderTopProductos(data);
     } catch (e) {
       showError(e.message || "Error al cargar el resumen.");
     } finally {
@@ -569,6 +870,8 @@
       fin.value = t.toISOString().slice(0, 10);
     }
     el("exec-refresh-btn")?.addEventListener("click", loadSummary);
+    el("exec-sucursal-select")?.addEventListener("change", loadSummary);
+    el("exec-top-orden")?.addEventListener("change", loadSummary);
     el("exec-modal-close")?.addEventListener("click", closePvModal);
     el("exec-modal-cancel")?.addEventListener("click", closePvModal);
     el("exec-modal-save")?.addEventListener("click", savePvModal);
