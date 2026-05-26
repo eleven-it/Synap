@@ -7,6 +7,9 @@
 !**/.env.example
 firebase_credentials.json
 
+# Certificados AFIP en desarrollo local (sin volumen Docker; no versionar)
+private/afip/
+
 # Código VB6 (AdministraNET legacy)
 administranet_vb6/
 *.bas

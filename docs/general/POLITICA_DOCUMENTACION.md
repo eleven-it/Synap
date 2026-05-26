@@ -18,6 +18,7 @@ A partir de este momento, **todo cambio de desarrollo (features, refactors, corr
 - **APIs o contratos:** endpoints, parámetros, respuestas (en `docs/reports/`, `docs/self_checkout/`, etc., según módulo).
 - **Configuración o despliegue:** en `docs/general/` (ej. Docker, instalación mínima) o en el módulo correspondiente.
 - **Seguridad (endurecimientos globales):** actualizar o referenciar [SEGURIDAD_CAMBIOS_SYNAP.md](SEGURIDAD_CAMBIOS_SYNAP.md) cuando se modifiquen CSRF, JWT/RAG, rate limits, media, filtros XSS o secretos en `settings`.
+- **Referencia canónica de UX/UI (migraciones y agentes):** mantener alineación con [FUENTE_VERDAD_UI_REPORTES_MPR.md](FUENTE_VERDAD_UI_REPORTES_MPR.md); no usar como patrón las pantallas de Objetivos de venta ni Presupuestos en `ventas/` hasta rediseño explícito.
 
 ### Dónde documentar
 

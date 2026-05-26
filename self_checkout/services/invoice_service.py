@@ -200,6 +200,12 @@ class InvoiceService:
             return "failed", None, None, {"msg": "Sin items para FE"}
 
         cfg = get_fe_config(self.base_empresa)
+        from self_checkout.fe_config import validate_fe_certificates_readable
+
+        ok_read, err_read = validate_fe_certificates_readable(cfg)
+        if not ok_read:
+            logger.warning("FE: certificado/clave no legible: %s", sanitize_for_log(err_read))
+            return "failed", None, None, {"msg": err_read}
         try:
             from pyafipws.wsaa import WSAA
             from pyafipws.wsfev1 import WSFEv1

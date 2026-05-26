@@ -95,4 +95,10 @@ Formularios y procedimientos que referencian esta tabla (lectura/escritura). Bas
 
 *No se encontraron referencias en el módulo reports.*
 
+---
+
+## 5. Uso en Synap (self-checkout)
+
+Al confirmar venta con importe de tarjeta (`tpv_importe_tarjeta > 0`), Synap inserta una fila en `tc_comprobante`. La columna **`id_tc` es obligatoria** (sin valor por defecto en MySQL): debe coincidir con **`tarjetas_credito.idTC`**, e **`id_tc_plan`** con **`tc_plan.Id_tc_plan`** cuando exista plan para esa tarjeta. La función `_lookup_tarjeta_ids_tc_comprobante` en `self_checkout/services/confirmation_service.py` resuelve ambos IDs a partir de los nombres de tarjeta/plan (misma semántica que el TPV, que los copia desde `tc_temp`).
+
 [← Índice de tablas](../DB_INDICE_TABLAS.md)

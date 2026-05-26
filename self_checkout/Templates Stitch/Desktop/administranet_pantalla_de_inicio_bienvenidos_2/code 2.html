@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#136dec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101822",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<title>AdministraNET - Pantalla de Inicio</title>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100">
+<div class="relative flex h-screen w-full flex-col overflow-hidden">
+<div class="absolute inset-0 z-0">
+<div class="h-full w-full bg-cover bg-center bg-no-repeat blur-sm brightness-75 scale-105" data-alt="Modern bright retail store interior blurred background" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCT3hY55QE7IcSDHeKcd8MYbNW0ueeoKU8Hoqj8JQyKjlcAmrS6yvJtCEX2Tdyq5sk7gnBaKTB8OKyaYe8-v4OCAKHrEdr6ZBPC_WtafbOQpnOSzmKaZaTxLe9JiX6iPWSpUucH4xU1cqVFBeCoyXlz0ec_qcwb_G2XH5fFP1Y_vP4GTbgCyWR4iHyFBZhGSnV6XtYEOfgGCxZ0BmjgAxhnHkBJ9JDllUuJPvMcwlXkHw2PL-kMa9qzl-NV1Gmjc5b3Mh_B9uQClWM')">
+</div>
+<div class="absolute inset-0 bg-gradient-to-b from-black/20 to-black/40"></div>
+</div>
+<div class="relative z-10 flex h-full w-full flex-col items-center justify-center p-6">
+<div class="flex w-full max-w-2xl flex-col items-center justify-center rounded-xl bg-white/90 dark:bg-slate-900/90 p-12 shadow-2xl backdrop-blur-md text-center">
+<div class="mb-8 flex items-center gap-4 text-primary">
+<div class="size-16 flex items-center justify-center rounded-xl bg-primary/10">
+<span class="material-symbols-outlined !text-5xl">point_of_sale</span>
+</div>
+<h2 class="text-4xl font-black tracking-tight text-slate-900 dark:text-white">AdministraNET</h2>
+</div>
+<div class="mb-12 space-y-4">
+<h1 class="text-5xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white">
+                        ¡Bienvenido!
+                    </h1>
+<p class="text-xl font-medium text-slate-600 dark:text-slate-300">
+                        Estamos listos para atenderte
+                    </p>
+</div>
+<div class="flex w-full justify-center">
+<button class="group relative flex h-32 w-full max-w-md items-center justify-center gap-4 overflow-hidden rounded-xl bg-primary px-8 text-2xl font-bold text-white shadow-xl transition-all hover:scale-105 hover:bg-primary/90 active:scale-95">
+<span class="material-symbols-outlined !text-4xl group-hover:animate-bounce">touch_app</span>
+<span class="truncate">Toca aquí para comenzar</span>
+<div class="absolute inset-0 flex h-full w-full items-center justify-center">
+<div class="h-full w-full bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+</button>
+</div>
+<div class="mt-16 flex items-center justify-center gap-6 border-t border-slate-200 dark:border-slate-700 pt-8 w-full">
+<button class="flex items-center gap-2 rounded-full bg-slate-100 dark:bg-slate-800 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-200 hover:bg-primary/10 hover:text-primary transition-colors">
+<span class="material-symbols-outlined !text-lg">language</span>
+                        Español
+                    </button>
+<button class="flex items-center gap-2 rounded-full bg-transparent px-4 py-2 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-primary/10 hover:text-primary transition-colors">
+<span class="material-symbols-outlined !text-lg">language</span>
+                        English
+                    </button>
+</div>
+</div>
+</div>
+<div class="absolute bottom-8 left-0 right-0 z-10 flex justify-center">
+<div class="flex items-center gap-2 rounded-full bg-black/30 px-4 py-2 text-xs font-semibold text-white/80 backdrop-blur-sm">
+<span class="material-symbols-outlined !text-sm">verified_user</span>
+                Sistema de Autocobro Seguro v2.4
+            </div>
+</div>
+</div>
+</body></html>

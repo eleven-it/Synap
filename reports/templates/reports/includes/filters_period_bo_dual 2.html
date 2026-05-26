@@ -1,0 +1,104 @@
+{% comment %}
+Doble período para bo-stock-facturacion: Facturación+Remitos vs Backorder (docs/reports/BO_DOBLE_RANGO_FECHAS.md).
+Inputs de fecha con misma altura y bordes redondeados tipo píldora que los botones de período.
+{% endcomment %}
+{% with date_class="bo-date-input synap-input w-auto min-w-[148px] h-9 min-h-[2.25rem] px-3 py-0 text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300" %}
+{% with btn_class="periodo-tipo-btn-bo px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium rounded-full border transition-all duration-200 hover:scale-105 hover:shadow-md" %}
+<div id="bo-period-filters-root" class="flex flex-col gap-6 lg:col-span-6 w-full">
+    <div data-bo-period-row="facturacion" class="flex flex-col gap-2 w-full">
+        <p class="text-xs font-bold text-slate-800 dark:text-slate-100 tracking-wide">Periodo Facturación</p>
+        <div class="flex flex-row flex-wrap items-end gap-4">
+            <div class="flex flex-col gap-2 flex-shrink-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" data-periodo="dia_actual" class="{{ btn_class }} border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                        <span class="flex items-center gap-1 sm:gap-1.5">
+                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-green-500"></span>
+                            <span>Día</span>
+                        </span>
+                    </button>
+                    <button type="button" data-periodo="mes_actual" class="{{ btn_class }} border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                        <span class="flex items-center gap-1 sm:gap-1.5">
+                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-500"></span>
+                            <span>Mes</span>
+                        </span>
+                    </button>
+                    <button type="button" data-periodo="año_actual" class="{{ btn_class }} border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                        <span class="flex items-center gap-1 sm:gap-1.5">
+                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-purple-500"></span>
+                            <span>Año</span>
+                        </span>
+                    </button>
+                    <button type="button" data-periodo="personalizado" class="{{ btn_class }} border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-md active">
+                        <span class="flex items-center gap-1 sm:gap-1.5">
+                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-orange-500"></span>
+                            <span>Personalizado</span>
+                        </span>
+                    </button>
+                </div>
+                <select name="periodo_tipo_facturacion" id="periodo_tipo_facturacion" class="hidden">
+                    <option value="dia_actual">Día en curso</option>
+                    <option value="mes_actual">Mes en curso</option>
+                    <option value="año_actual">Año en curso</option>
+                    <option value="personalizado" selected>Personalizado</option>
+                </select>
+            </div>
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0">
+                Fecha desde
+                <input type="date" name="fecha_inicio_facturacion" id="fecha_inicio_facturacion" class="{{ date_class }}">
+            </label>
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0">
+                Fecha hasta
+                <input type="date" name="fecha_fin_facturacion" id="fecha_fin_facturacion" class="{{ date_class }}">
+            </label>
+        </div>
+    </div>
+    <div data-bo-period-row="backorder" class="flex flex-col gap-2 w-full">
+        <p class="text-xs font-bold text-slate-800 dark:text-slate-100 tracking-wide">Periodo Backorder</p>
+        <div class="flex flex-row flex-wrap items-end gap-4">
+            <div class="flex flex-col gap-2 flex-shrink-0">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" data-periodo="dia_actual" class="{{ btn_class }} border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                        <span class="flex items-center gap-1 sm:gap-1.5">
+                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-green-500"></span>
+                            <span>Día</span>
+                        </span>
+                    </button>
+                    <button type="button" data-periodo="mes_actual" class="{{ btn_class }} border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                        <span class="flex items-center gap-1 sm:gap-1.5">
+                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-blue-500"></span>
+                            <span>Mes</span>
+                        </span>
+                    </button>
+                    <button type="button" data-periodo="año_actual" class="{{ btn_class }} border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                        <span class="flex items-center gap-1 sm:gap-1.5">
+                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-purple-500"></span>
+                            <span>Año</span>
+                        </span>
+                    </button>
+                    <button type="button" data-periodo="personalizado" class="{{ btn_class }} border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-md active">
+                        <span class="flex items-center gap-1 sm:gap-1.5">
+                            <span class="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-orange-500"></span>
+                            <span>Personalizado</span>
+                        </span>
+                    </button>
+                </div>
+                <select name="periodo_tipo" id="periodo_tipo" class="hidden">
+                    <option value="dia_actual">Día en curso</option>
+                    <option value="mes_actual">Mes en curso</option>
+                    <option value="año_actual">Año en curso</option>
+                    <option value="personalizado" selected>Personalizado</option>
+                </select>
+            </div>
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0">
+                Fecha desde
+                <input type="date" name="fecha_inicio" id="fecha_inicio" class="{{ date_class }}">
+            </label>
+            <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0">
+                Fecha hasta
+                <input type="date" name="fecha_fin" id="fecha_fin" class="{{ date_class }}">
+            </label>
+        </div>
+    </div>
+</div>
+{% endwith %}
+{% endwith %}

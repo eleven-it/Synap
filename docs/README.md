@@ -17,6 +17,7 @@ Toda la documentación del proyecto está en **`docs/`** en la raíz del reposit
 | **support/** | Módulo Support: RAG con LangChain/PGVector, implementación del refactor ([RAG_LANGCHAIN_IMPLEMENTACION.md](support/RAG_LANGCHAIN_IMPLEMENTACION.md)), uso y configuración (ver también [support/docs/RAG_Y_SYNAP.md](../support/docs/RAG_Y_SYNAP.md)). |
 | **login/** | Reservado para documentación de login, sesión y autenticación. |
 | **compras/** | **Factura de compra:** auditoría VB6 (`Guardar` PFactura), origen Manual/Remito/OC/Vale, especificación PWA captura + workflow, posting legacy MySQL, contrato `LegacyPostingCommand`, SQL y tests. Índice: [compras/README.md](compras/README.md). |
+| **mpr/** | Producción (MPR): manual de usuario ([mpr/MANUAL_USUARIO_MPR.md](mpr/MANUAL_USUARIO_MPR.md)), trazabilidad SDD de cambios cerrados ([SDD_OPP_ENTRADA_DOCENAS_UNIDADES.md](mpr/SDD_OPP_ENTRADA_DOCENAS_UNIDADES.md), [SDD_CONFIRMAR_OPT_VENTANA_PACK.md](mpr/SDD_CONFIRMAR_OPT_VENTANA_PACK.md)). |
 
 Los README de proyecto (`README_REPORTS.md`, `README_INSTALLATION.md`) permanecen en la raíz del repo como punto de entrada.
 
@@ -26,6 +27,12 @@ Los README de proyecto (`README_REPORTS.md`, `README_INSTALLATION.md`) permanece
 
 - **Desarrollo:** La carpeta `docs/` se versiona y se sube a la rama **Desarrollo**.
 - **Staging y Produccion:** Al promover código de Desarrollo a Staging (o de Staging a Produccion), la carpeta `docs/` **no** debe formar parte del release. Al hacer merge a Staging, ejecutar en esa rama: `git rm -r docs` y commit, de modo que Staging y Produccion no incluyan documentación. Ver [general/FLUJO_RAMAS_Y_PLAN.md](general/FLUJO_RAMAS_Y_PLAN.md).
+
+## OpenSpec (especificaciones)
+
+- Especificaciones vigentes en el repo: carpeta **`openspec/specs/`** (p. ej. normativa de fuente de verdad UI en [openspec/specs/ui-fuente-verdad-reportes-mpr/spec.md](../openspec/specs/ui-fuente-verdad-reportes-mpr/spec.md)).
+- Cambios cerrados y auditoría SDD: **`openspec/changes/archive/`**.
+- Documento legible asociado (UX/UI canónica Reportes + MPR): [general/FUENTE_VERDAD_UI_REPORTES_MPR.md](general/FUENTE_VERDAD_UI_REPORTES_MPR.md).
 
 ## Referencia del plan
 

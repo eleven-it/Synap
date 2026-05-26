@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>AdministraNET - Selección Método de Pago</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#2b2bee",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101022",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex flex-col">
+<!-- Main Container -->
+<div class="flex-1 flex flex-col max-w-[1280px] mx-auto w-full px-6 py-8">
+<!-- Header Section -->
+<header class="flex items-center justify-between mb-10">
+<div class="flex items-center gap-3">
+<div class="bg-primary p-2 rounded-lg text-white">
+<span class="material-symbols-outlined text-3xl">rocket_launch</span>
+</div>
+<div>
+<h1 class="text-2xl font-800 tracking-tight text-slate-900 dark:text-white leading-none">AdministraNET</h1>
+<p class="text-sm font-medium text-slate-500 dark:text-slate-400">Punto de Venta Inteligente</p>
+</div>
+</div>
+<div class="flex gap-4">
+<button class="flex items-center justify-center p-3 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-slate-600 dark:text-slate-300">help_outline</span>
+</button>
+<button class="flex items-center justify-center p-3 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-slate-600 dark:text-slate-300">language</span>
+</button>
+</div>
+</header>
+<!-- Main Layout Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+<!-- Payment Methods Selection (Left/Center) -->
+<div class="lg:col-span-8 flex flex-col gap-6">
+<div>
+<h2 class="text-4xl font-800 text-slate-900 dark:text-white mb-2">Seleccione su método de pago</h2>
+<p class="text-lg text-slate-500 dark:text-slate-400">Elija la opción que prefiera para completar su transacción de forma segura.</p>
+</div>
+<!-- Grid of Payment Options -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mt-4">
+<!-- Option 1: Credit/Debit -->
+<button class="group relative flex flex-col items-center justify-center p-8 rounded-xl bg-white dark:bg-slate-800 border-2 border-transparent hover:border-primary shadow-sm hover:shadow-md transition-all">
+<div class="size-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-4xl">credit_card</span>
+</div>
+<span class="text-lg font-bold text-center">Tarjeta Crédito/Débito</span>
+<div class="flex gap-2 mt-3 opacity-60">
+<img class="h-4" data-alt="Visa Logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEQkVX5Rk_8ilA_MIOmkoWeI-4DRIM4XDPXda4opLz9oCipWiifTVyixNwPkNvBU9mOgqS-poxvfTzC2EhKqPBFqO5P_ivJfIr3CJEZ1aGjtK2E0QhbqTxel1cC9yy-Qpc3LzMoClTib8aMr7h430P4cVDWvwq-JsBhgoNoumbcy3QzHh8CCXzW89_LgsAVJOTEwOux_3-zSUBMjkhh60IyZTfC2U7AuyxZn1uEO6Zb4Ke_uzNU836yVHLIfk5To1T1-AjS3iJiY4"/>
+<img class="h-4" data-alt="Mastercard Logo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzR3qaRm06TsBVNgqCVMiLdLFwdcfBOfk3Sfqh-Wc9rxVTpyUw_1SX7M-Gxvv7PYyf6L0RwZiVcz37ZjVLwBi9t-ZFUiSOH28RhnNOzH6U6SVqKcGcBrjZWpmKrzkwGStX0IJE_HyDmQjgkjjGZyZfEIuVhYgVhMy1q9V6jgjzKJFPeXtVioUZ4QWsB6fxfyVibHvgpHtCnXgHgdNF6r6UbqcDXmAhehlyZ_CUM_ctAYQxugQasIxi16cu0S68I8_nJXm143f5fmU"/>
+</div>
+</button>
+<!-- Option 2: Cash -->
+<button class="group relative flex flex-col items-center justify-center p-8 rounded-xl bg-white dark:bg-slate-800 border-2 border-transparent hover:border-primary shadow-sm hover:shadow-md transition-all">
+<div class="size-16 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-4xl">payments</span>
+</div>
+<span class="text-lg font-bold text-center">Efectivo (Cash)</span>
+<span class="text-xs text-slate-400 mt-2">Disponible en caja</span>
+</button>
+<!-- Option 3: Bank Transfer -->
+<button class="group relative flex flex-col items-center justify-center p-8 rounded-xl bg-white dark:bg-slate-800 border-2 border-transparent hover:border-primary shadow-sm hover:shadow-md transition-all">
+<div class="size-16 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-4xl">account_balance</span>
+</div>
+<span class="text-lg font-bold text-center">Transferencia Bancaria</span>
+<span class="text-xs text-slate-400 mt-2">Banca Móvil / Web</span>
+</button>
+<!-- Option 4: Digital Wallet -->
+<button class="group relative flex flex-col items-center justify-center p-8 rounded-xl bg-white dark:bg-slate-800 border-2 border-transparent hover:border-primary shadow-sm hover:shadow-md transition-all">
+<div class="size-16 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-4xl">qr_code_scanner</span>
+</div>
+<span class="text-lg font-bold text-center">Billetera Digital</span>
+<span class="text-xs text-slate-400 mt-2">Yape, Plin, Mercado Pago</span>
+</button>
+<!-- Option 5: Points -->
+<button class="group relative flex flex-col items-center justify-center p-8 rounded-xl bg-white dark:bg-slate-800 border-2 border-transparent hover:border-primary shadow-sm hover:shadow-md transition-all">
+<div class="size-16 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-4xl">stars</span>
+</div>
+<span class="text-lg font-bold text-center">Puntos AdministraNET</span>
+<span class="text-xs text-slate-400 mt-2">Canjea tus beneficios</span>
+</button>
+</div>
+</div>
+<!-- Summary Sidebar (Right) -->
+<div class="lg:col-span-4 sticky top-8">
+<div class="bg-white dark:bg-slate-800 rounded-xl shadow-xl overflow-hidden border border-slate-100 dark:border-slate-700">
+<div class="p-6 bg-primary text-white">
+<h3 class="text-xl font-bold mb-1">Resumen de Compra</h3>
+<p class="text-primary-200 text-sm opacity-80">Orden #29481-A</p>
+</div>
+<div class="p-6 flex flex-col gap-4">
+<div class="flex justify-between items-center text-slate-600 dark:text-slate-400">
+<span>Subtotal (5 productos)</span>
+<span class="font-medium">S/ 215.50</span>
+</div>
+<div class="flex justify-between items-center text-slate-600 dark:text-slate-400">
+<span>Impuestos (IGV 18%)</span>
+<span class="font-medium">S/ 29.50</span>
+</div>
+<div class="flex justify-between items-center text-green-600 dark:text-green-400">
+<span>Descuento aplicado</span>
+<span class="font-medium">- S/ 0.00</span>
+</div>
+<div class="h-px bg-slate-100 dark:bg-slate-700 my-2"></div>
+<div class="flex justify-between items-end">
+<div>
+<p class="text-xs text-slate-400 uppercase tracking-wider font-bold">Total a pagar</p>
+<p class="text-4xl font-800 text-slate-900 dark:text-white">S/ 245.00</p>
+</div>
+<div class="bg-slate-100 dark:bg-slate-700 p-2 rounded-lg">
+<span class="material-symbols-outlined text-slate-500">receipt_long</span>
+</div>
+</div>
+<div class="mt-6">
+<div class="relative w-full aspect-video rounded-lg overflow-hidden mb-4 shadow-inner">
+<div class="absolute inset-0 bg-gradient-to-br from-primary/20 to-purple-500/20"></div>
+<div class="flex flex-col items-center justify-center h-full gap-2">
+<span class="material-symbols-outlined text-4xl text-slate-300">shopping_bag</span>
+<span class="text-xs font-semibold text-slate-400">PREVISUALIZACIÓN DE COMPRA</span>
+</div>
+<img class="absolute inset-0 object-cover opacity-10" data-alt="Resumen visual de los productos comprados" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCilrrkWfCBKzoiRQKvTDaPlNllltu1fCj6rOYH-BnhIAZINe3K_9zI0YIxpoIZHmOQaKeYwSx9i61nePChas0kC7MbS43OUVfGG4gx_N59Phl5Af-SfzUzqgiKn-3Q8EiNhOSHo6pdAx9QCGWDA3A8r3XkoXxUPZkLAyBukRYmXsjR5AngQ2RJjgvUFGjnxq2Re61rJd07s2XR4qInFhZec7KBMvgv97fmQRr6vbVA0rpJYQlP7iLMhwCo1X4IO8fQjtCiJ-r-zPY"/>
+</div>
+<button class="w-full py-3 px-4 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-200 transition-colors flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-sm">visibility</span>
+                                Ver detalles del carrito
+                            </button>
+</div>
+</div>
+</div>
+<!-- Assistance Note -->
+<div class="mt-6 p-4 rounded-xl bg-primary/5 border border-primary/10 flex gap-3">
+<span class="material-symbols-outlined text-primary">info</span>
+<p class="text-sm text-slate-600 dark:text-slate-400 leading-snug">
+                        ¿Necesita ayuda? Solicite asistencia del personal pulsando el botón de ayuda en la esquina superior.
+                    </p>
+</div>
+</div>
+</div>
+<!-- Footer Navigation -->
+<footer class="mt-auto pt-10 pb-4">
+<div class="flex items-center justify-between">
+<button class="flex items-center gap-3 py-3 px-6 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all group">
+<span class="material-symbols-outlined transition-transform group-hover:-translate-x-1">arrow_back</span>
+                    Volver al carrito
+                </button>
+<div class="flex items-center gap-2 text-slate-400 text-sm">
+<span class="material-symbols-outlined text-sm">verified_user</span>
+                    Pago seguro procesado por AdministraNET Cloud
+                </div>
+</div>
+</footer>
+</div>
+</body></html>

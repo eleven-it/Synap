@@ -7,3 +7,6 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         import core.signals
+        from core.pyafipws_errno_compat import apply_pyafipws_errno_compat
+
+        apply_pyafipws_errno_compat()

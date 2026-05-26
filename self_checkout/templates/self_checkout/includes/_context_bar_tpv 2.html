@@ -1,0 +1,66 @@
+{% comment %}
+  Barra TPV: Cliente, Lista precio, Vendedor, Descuentos, Cta. corriente. Estilo Stitch (kiosk_active_cart_1).
+  Contrato JS: ninguno.
+{% endcomment %}
+<section x-show="modoTpv" x-cloak class="rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 p-2 sm:p-3 shadow-sm" aria-label="Selección venta TPV">
+  <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+    <button type="button"
+            class="flex items-center gap-2 min-h-[3rem] sm:min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 hover:border-sky-500 hover:bg-sky-500/5 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.98] transition-all touch-manipulation group"
+            x-on:click="tpvClienteBusqueda = ''; tpvClienteResultados = []; tpvClienteError = ''; modalTpvCliente = true"
+            aria-label="Cambiar cliente">
+      <span class="material-symbols-outlined text-slate-400 group-hover:text-sky-500 shrink-0 text-lg">person</span>
+      <div class="flex flex-col min-w-0 flex-1 text-left">
+        <span class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Cliente</span>
+        <span class="text-sm font-bold text-slate-900 dark:text-white truncate" x-text="tpvCliente.nombre_cliente || '—'"></span>
+      </div>
+      <span class="material-symbols-outlined text-slate-400 text-sm shrink-0">expand_more</span>
+    </button>
+    <button type="button"
+            class="flex items-center gap-2 min-h-[3rem] sm:min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 hover:border-sky-500 hover:bg-sky-500/5 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.98] transition-all touch-manipulation group"
+            x-on:click="abrirModalListaPrecio()"
+            aria-label="Cambiar lista de precio">
+      <span class="material-symbols-outlined text-slate-400 group-hover:text-sky-500 shrink-0 text-lg">sell</span>
+      <div class="flex flex-col min-w-0 flex-1 text-left">
+        <span class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Lista precio</span>
+        <span class="text-sm font-bold text-slate-900 dark:text-white truncate" x-text="tpvListaPrecio.nombre || '—'"></span>
+      </div>
+      <span class="material-symbols-outlined text-slate-400 text-sm shrink-0">expand_more</span>
+    </button>
+    <button type="button"
+            class="flex items-center gap-2 min-h-[3rem] sm:min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 hover:border-sky-500 hover:bg-sky-500/5 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.98] transition-all touch-manipulation group"
+            x-on:click="abrirModalVendedor()"
+            aria-label="Cambiar vendedor">
+      <span class="material-symbols-outlined text-slate-400 group-hover:text-sky-500 shrink-0 text-lg">badge</span>
+      <div class="flex flex-col min-w-0 flex-1 text-left">
+        <span class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Vendedor</span>
+        <span class="text-sm font-bold text-slate-900 dark:text-white truncate" x-text="tpvVendedor.nombre || '—'"></span>
+      </div>
+      <span class="material-symbols-outlined text-slate-400 text-sm shrink-0">expand_more</span>
+    </button>
+    <button type="button"
+            class="flex items-center gap-2 min-h-[3rem] sm:min-h-[3.5rem] rounded-xl border-2 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.98] transition-all touch-manipulation group text-left"
+            :class="cartVoucherPct ? 'border-amber-400 dark:border-amber-500 bg-amber-50/80 dark:bg-amber-900/20' : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-sky-500 hover:bg-sky-500/5'"
+            x-on:click="abrirModalVouchers()"
+            aria-label="Descuentos y voucher"
+            title="Lista de programa de descuentos y voucher">
+      <span class="material-symbols-outlined shrink-0 text-lg" :class="cartVoucherPct ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400 group-hover:text-sky-500'">local_offer</span>
+      <div class="flex flex-col min-w-0 flex-1">
+        <span class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Descuentos y voucher</span>
+        <span class="text-sm font-bold truncate" :class="cartVoucherPct ? 'text-amber-700 dark:text-amber-300' : 'text-slate-900 dark:text-white'" x-text="cartVoucherPct ? (cartVoucherPct + '% desc.') : '—'"></span>
+      </div>
+      <span class="material-symbols-outlined text-slate-400 text-sm shrink-0">expand_more</span>
+    </button>
+    <button type="button" x-show="tpvCliente.id_cliente != 1" x-cloak
+            class="flex items-center gap-2 min-h-[3rem] sm:min-h-[3.5rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 hover:border-sky-500 hover:bg-sky-500/5 focus:outline-none focus:ring-2 focus:ring-sky-500 active:scale-[0.98] transition-all touch-manipulation group"
+            x-on:click="abrirCuentaCorriente()"
+            aria-label="Ver cuenta corriente"
+            title="Ver cuenta corriente del cliente">
+      <span class="material-symbols-outlined text-slate-400 group-hover:text-sky-500 shrink-0 text-lg">account_balance</span>
+      <div class="flex flex-col min-w-0 flex-1 text-left">
+        <span class="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400">Cta. corriente</span>
+        <span class="text-sm font-bold text-slate-900 dark:text-white truncate">Ver</span>
+      </div>
+      <span class="material-symbols-outlined text-slate-400 text-sm shrink-0">expand_more</span>
+    </button>
+  </div>
+</section>

@@ -1,0 +1,217 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} - Synap{% endblock %}
+
+{% block extra_css %}
+<style>
+    .oc-card { @apply rounded-2xl bg-white border border-slate-200 shadow-lg overflow-hidden transition-all duration-300; }
+    .oc-card:hover { @apply shadow-xl shadow-slate-900/5; }
+    .oc-card-header { @apply px-6 sm:px-8 py-5 border-b border-slate-100 transition-colors duration-300; }
+    .oc-table { @apply w-full text-sm; }
+    .oc-table th { @apply text-left py-3.5 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 bg-slate-50 transition-colors duration-300; }
+    .oc-table td { @apply py-3 px-4 border-t border-slate-100 text-slate-800 transition-colors duration-300; }
+    .oc-table tbody tr { @apply hover:bg-slate-50 transition-colors duration-200; }
+    .oc-kpi-value { @apply text-2xl font-bold tracking-tight; }
+    .oc-kpi-label { @apply text-xs font-medium text-slate-500 mt-1 transition-colors duration-300; }
+
+    /* Modo oscuro: estilos explícitos para contraste legible */
+    .dark .oc-card { background-color: #0f172a; border-color: #334155; box-shadow: 0 10px 15px -3px rgba(0,0,0,.3); }
+    .dark .oc-card:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,.4); }
+    .dark .oc-card-header { border-color: #334155; }
+    .dark .oc-table th { color: #cbd5e1 !important; background-color: rgba(30,41,59,.9) !important; border-color: #334155; }
+    .dark .oc-table td { color: #e2e8f0 !important; border-color: #334155; }
+    .dark .oc-table tbody tr:hover { background-color: rgba(51,65,85,.5) !important; }
+    .dark .oc-kpi-label { color: #94a3b8 !important; }
+    .dark .oc-kpi-value.text-slate-900 { color: #f1f5f9 !important; }
+    .dark .rounded-xl.p-5 .oc-kpi-value { color: #f1f5f9 !important; }
+    .dark .oc-card .text-slate-500 { color: #94a3b8 !important; }
+    .dark .oc-card .text-slate-900 { color: #f1f5f9 !important; }
+    .dark .oc-card .text-slate-600 { color: #94a3b8 !important; }
+    .dark .oc-card .text-slate-400 { color: #94a3b8 !important; }
+    .dark .oc-card .font-mono { color: #cbd5e1 !important; }
+    .dark .oc-card .text-emerald-600 { color: #34d399 !important; }
+    .dark .oc-card .text-amber-600 { color: #fbbf24 !important; }
+    .dark .oc-card .text-red-600 { color: #f87171 !important; }
+    .dark section.bg-slate-50 { background-color: #020617 !important; }
+    .dark .border-slate-200 { border-color: #334155 !important; }
+    .dark .border-emerald-200 { border-color: #065f46 !important; }
+    .dark .border-amber-200 { border-color: #78350f !important; }
+    .dark .bg-emerald-50 { background-color: rgba(6,95,70,.2) !important; }
+    .dark .bg-amber-50 { background-color: rgba(120,53,15,.2) !important; }
+    .dark .text-emerald-600 { color: #34d399 !important; }
+    .dark .text-amber-600 { color: #fbbf24 !important; }
+
+    [x-cloak] { display: none !important; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 transition-colors duration-500">
+    <div class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900 opacity-95 transition-all duration-500"></div>
+        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-10">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 dark:text-slate-400 font-semibold mb-2">Análisis</p>
+                    <h1 class="text-3xl md:text-4xl font-semibold text-white dark:text-slate-100 tracking-tight">
+                        Reconciliación Saldo de Stock
+                    </h1>
+                    <p class="text-slate-300 dark:text-slate-400 mt-2 text-sm max-w-2xl">
+                        Comparación entre stock_deposito.Saldo y saldo según movimientos stock (sin doble cuenta REM+FA). Base: <span class="font-medium text-white/90">{{ base_empresa }}</span>
+                    </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <a href="{% url 'reports:catalog' %}"
+                       class="inline-flex items-center gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-slate-200 hover:text-white hover:bg-white/10 transition-all duration-300">
+                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                        </svg>
+                        <span class="hidden sm:inline">Catálogo</span>
+                    </a>
+                    <a href="{% url 'reports:validacion_saldo_stock' %}"
+                       class="inline-flex items-center gap-2 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold text-sky-500 hover:text-sky-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 transition-all duration-300">
+                        <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span class="hidden sm:inline">Actualizar</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8 -mt-6 relative z-10">
+        {% if reconciliation.error %}
+        <div class="oc-card p-6 border-l-4 border-red-500 bg-red-50/50 dark:bg-red-900/10">
+            <p class="font-semibold text-red-800 dark:text-red-200">Error al ejecutar la reconciliación</p>
+            <p class="text-sm text-red-700 dark:text-red-300 mt-1">{{ reconciliation.error }}</p>
+        </div>
+        {% else %}
+
+        {# Validación A vs B #}
+        <div class="oc-card mb-10">
+            <div class="oc-card-header">
+                <div class="flex items-center gap-3">
+                    <span class="flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </span>
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Reconciliación Saldo vs saldo según movimientos stock</h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">A: stock_deposito.Saldo · B: saldo según movimientos (REM o FA/FB/FC sin remito; entradas sin REM Anul Remito)</p>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6 sm:p-8 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                <div class="rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+                    <p class="oc-kpi-value text-slate-900 dark:text-white">{{ reconciliation.total_articulos }}</p>
+                    <p class="oc-kpi-label">Artículos</p>
+                </div>
+                <div class="rounded-xl p-5 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50">
+                    <p class="oc-kpi-value text-emerald-600 dark:text-emerald-400">{{ reconciliation.total_coincidencias }}</p>
+                    <p class="oc-kpi-label">Coincidencias (A = B)</p>
+                </div>
+                <div class="rounded-xl p-5 {% if reconciliation.total_diferencias > 0 %}bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50{% else %}border border-slate-200 dark:border-slate-700{% endif %}">
+                    <p class="oc-kpi-value {% if reconciliation.total_diferencias > 0 %}text-amber-600 dark:text-amber-400{% else %}text-slate-900 dark:text-white{% endif %}">{{ reconciliation.total_diferencias }}</p>
+                    <p class="oc-kpi-label">Diferencias (A ≠ B)</p>
+                </div>
+                <div class="rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+                    <p class="oc-kpi-value text-slate-900 dark:text-white">
+                        {% if reconciliation.total_articulos > 0 %}
+                        {% widthratio reconciliation.total_coincidencias reconciliation.total_articulos 100 %}%
+                        {% else %}—{% endif %}
+                    </p>
+                    <p class="oc-kpi-label">Coincidencias / Total</p>
+                </div>
+            </div>
+        </div>
+
+        {% if reconciliation.diferencias %}
+        <div class="oc-card mb-10">
+            <div class="oc-card-header flex items-center gap-2">
+                <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </span>
+                <div>
+                    <h2 class="text-base font-semibold text-amber-700 dark:text-amber-400">Diferencias ({{ reconciliation.total_diferencias }})</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Saldo ≠ saldo según movimientos stock</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="oc-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Código</th>
+                            <th>Artículo</th>
+                            <th class="text-right">Saldo (A)</th>
+                            <th class="text-right">Según mov. (B)</th>
+                            <th class="text-right">A − B</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in reconciliation.diferencias %}
+                        <tr>
+                            <td class="font-mono text-xs text-slate-600 dark:text-slate-400">{{ r.id_art }}</td>
+                            <td class="font-mono text-xs">{{ r.codigo }}</td>
+                            <td><span class="font-mono text-slate-400 dark:text-slate-500">{{ r.id_art }}</span> {{ r.articulo|truncatewords:8 }}</td>
+                            <td class="text-right tabular-nums">{{ r.saldo_actual|floatformat:2 }}</td>
+                            <td class="text-right tabular-nums">{{ r.teorico_stock|floatformat:2 }}</td>
+                            <td class="text-right font-semibold tabular-nums {% if r.diferencia > 0 %}text-emerald-600 dark:text-emerald-400{% else %}text-red-600 dark:text-red-400{% endif %}">{{ r.diferencia|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if reconciliation.coincidencias %}
+        <div class="oc-card">
+            <div class="oc-card-header flex items-center gap-2">
+                <span class="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </span>
+                <div>
+                    <h2 class="text-base font-semibold text-emerald-700 dark:text-emerald-400">Coincidencias ({{ reconciliation.total_coincidencias }})</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Saldo = saldo según movimientos stock</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                <table class="oc-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Código</th>
+                            <th>Artículo</th>
+                            <th class="text-right">Saldo (A)</th>
+                            <th class="text-right">Según mov. (B)</th>
+                            <th class="text-right">Diff</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in reconciliation.coincidencias %}
+                        <tr>
+                            <td class="font-mono text-xs text-slate-600 dark:text-slate-400">{{ r.id_art }}</td>
+                            <td class="font-mono text-xs">{{ r.codigo }}</td>
+                            <td><span class="font-mono text-slate-400 dark:text-slate-500">{{ r.id_art }}</span> {{ r.articulo|truncatewords:8 }}</td>
+                            <td class="text-right tabular-nums">{{ r.saldo_actual|floatformat:2 }}</td>
+                            <td class="text-right tabular-nums">{{ r.teorico_stock|floatformat:2 }}</td>
+                            <td class="text-right tabular-nums text-slate-400">{{ r.diferencia|floatformat:2 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

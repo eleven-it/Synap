@@ -10,6 +10,7 @@
 - **CTA «Ver demanda»:** estilo **secundario** (borde morado, fondo claro) para no competir visualmente con el título; tamaño `min-h-9` y tipografía más compacta.
 - **KPIs:** cards `rounded-xl`, menos padding (`p-3.5`/`sm:p-4`), iconos `text-2xl`, filas `items-center`, valores `text-xl` en viewport chico y `sm:text-2xl` en mayores; menos gap en la grilla.
 - **Columnas «OPTs en proceso» y «Top urgencias»:** eliminado `min-h-[546px]`; añadido `max-h-[min(52vh,26rem)]` y `lg:max-h-[min(58vh,32rem)]` con scroll interno para listado y tabla. Así no queda un bloque alto vacío cuando hay pocas filas.
+- **Búsqueda predictiva (OPTs en proceso):** en la misma fila del encabezado del panel (título + badge «En curso» + campo a la derecha), filtrado en cliente con Alpine (`data-search-text` + `x-show`), mismo criterio que en listados MPR (`mpr/ventana_pack.html`, `mpr/opt_list.html`). Si hay filas cargadas pero ninguna coincide, se muestra el mensaje «Ninguna OPT coincide con la búsqueda.».
 - **Crear OPP:** `bg-purple-600` (antes azul) para alinear con el acento MPR; **Crear OPA** sigue en esmeralda y **Cerrar** en ámbar por semántica de acción.
 
 ## Notas

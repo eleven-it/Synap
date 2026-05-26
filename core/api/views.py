@@ -265,8 +265,9 @@ def proveedor_search_api(request):
 def articulo_search_api(request):
     """
     GET /core/api/articulos/search/?q=...
+    Query opcional: lista_precio (0–6) para elegir el precio devuelto en PrecioLista (costo, oficial, listas 1–5).
     Búsqueda predictiva de artículos por código, nombre o código de barras.
-    Requiere sesión con base_empresa. Devuelve { results: [ { IDArt, CodigoArticulo, Descripcion, id_manual, PrecioCosto, ... }, ... ] }.
+    Requiere sesión con base_empresa. Devuelve { results: [ { IDArt, CodigoArticulo, Descripcion, Alicuota, ImpuestoInterno, PrecioLista, ... }, ... ] }.
     Usado en Factura de Compra (tab Líneas) y otros formularios que necesiten autocompletado de artículo.
     """
     if request.method != 'GET':
@@ -277,9 +278,16 @@ def articulo_search_api(request):
         return JsonResponse({'error': 'Sin empresa activa.', 'results': []}, status=400)
     q = (request.GET.get('q') or '').strip()
     limit = min(int(request.GET.get('limit', 20)), 30)
+    try:
+        lista_precio = int(request.GET.get('lista_precio', '2'))
+    except (TypeError, ValueError):
+        lista_precio = 2
+    lista_precio = max(0, min(6, lista_precio))
     from core.services.administranet_stock import _buscar_articulos_con_precios
     try:
-        items = _buscar_articulos_con_precios(base_empresa, q, limit=limit)
+        items = _buscar_articulos_con_precios(
+            base_empresa, q, limit=limit, lista_precio=lista_precio,
+        )
     except Exception:
         items = []
     return JsonResponse({'results': items})

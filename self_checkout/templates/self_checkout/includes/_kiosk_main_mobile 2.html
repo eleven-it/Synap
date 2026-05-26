@@ -1,0 +1,44 @@
+{% comment %}
+  Main TPV 100% mobile: una columna, búsqueda arriba, barra fija abajo con total y Pagar, sheet para carrito.
+  Contrato Alpine: mismo kioscoApp(), incluye search (x-ref scanInput, id tpv-busqueda-producto), cart list/totals/keypad.
+{% endcomment %}
+<main class="tpv-mobile-main flex flex-col flex-1 min-h-0 bg-slate-50 dark:bg-slate-950 overflow-hidden" x-show="estado !== 'success'" x-cloak>
+  <div class="flex-1 overflow-y-auto px-3 py-4 space-y-4 -webkit-overflow-scrolling-touch">
+    {% include "self_checkout/includes/_search_scan.html" %}
+  </div>
+
+  <!-- Barra fija inferior: resumen + Pagar ahora -->
+  <div class="tpv-mobile-bottom-bar flex-shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 safe-area-pad-bottom flex items-center gap-3">
+    <button type="button" class="flex-1 min-h-[3.25rem] flex items-center justify-between gap-2 rounded-2xl bg-slate-100 dark:bg-slate-800 px-4 touch-manipulation active:scale-[0.98] transition-transform" x-on:click="toggleCartSheet()" x-bind:disabled="estado === 'paying' || estado === 'confirming'">
+      <span class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-2xl">shopping_cart</span>
+        <span class="text-left">
+          <span class="block text-sm font-bold text-slate-900 dark:text-white" x-text="(items && items.length) ? (items.length + ' producto' + (items.length !== 1 ? 's' : '')) : 'Carrito vacío'"></span>
+          <span class="block text-lg font-black text-primary leading-none" x-text="'$' + formatoMoneda(total || 0)"></span>
+        </span>
+      </span>
+      <span class="material-symbols-outlined text-slate-400" x-text="cartSheetOpen ? 'expand_less' : 'expand_more'"></span>
+    </button>
+    <button type="button" class="min-h-[3.25rem] px-6 rounded-2xl bg-primary text-white font-bold text-base shadow-lg shadow-primary/30 flex items-center justify-center gap-2 touch-manipulation active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all" x-on:click="irAPago()" x-bind:disabled="estado === 'paying' || !items || items.length === 0 || !!stockBlocked">
+      <span class="material-symbols-outlined text-2xl">payments</span>
+      Pagar
+    </button>
+  </div>
+
+  <!-- Sheet carrito (slide up) -->
+  <div x-show="cartSheetOpen" x-cloak x-transition:enter="transition ease-out duration-300" x-transition:enter-start="translate-y-full opacity-80" x-transition:enter-end="translate-y-0 opacity-100" x-transition:leave="transition ease-in duration-200" x-transition:leave-start="translate-y-0" x-transition:leave-end="translate-y-full" class="fixed inset-x-0 bottom-0 z-40 bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl border-t border-slate-200 dark:border-slate-700 flex flex-col max-h-[85dvh] safe-area-pad-bottom" @click.self="cartSheetOpen = false">
+    <div class="flex-shrink-0 pt-3 pb-2 px-4 flex items-center justify-center" x-on:click="cartSheetOpen = false">
+      <span class="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+    </div>
+    <div class="flex-1 overflow-y-auto min-h-0 px-4 pb-4 -webkit-overflow-scrolling-touch">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col overflow-hidden">
+        {% include "self_checkout/includes/_cart_list.html" %}
+        {% include "self_checkout/includes/_cart_totals.html" %}
+        <div class="p-4 shrink-0">
+          {% include "self_checkout/includes/_payment_keypad.html" %}
+        </div>
+      </div>
+    </div>
+  </div>
+  <div x-show="cartSheetOpen" x-cloak x-transition class="fixed inset-0 z-30 bg-black/40" @click="cartSheetOpen = false" aria-hidden="true"></div>
+</main>

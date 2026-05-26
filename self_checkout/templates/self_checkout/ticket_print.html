@@ -1,4 +1,5 @@
 {% load self_checkout_filters %}
+{# Plantilla activa del ticket. Copia de recuperación: ticket_print.html.backup-antes-multiline (misma carpeta). #}
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -24,6 +25,7 @@
       padding: 2mm;
       background: #fff;
       color: #000;
+      overflow-x: hidden;
     }
     
     /* Secciones */
@@ -101,43 +103,74 @@
       margin: 2mm 0;
     }
     
-    /* Detalle de ítems */
-    .detalle table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 10px;
+    /* Detalle: bloques apilados (estilo ticket térmico AR: cant×PU en una línea, descripción suelta, importe alineado a la derecha) */
+    .detalle {
+      overflow: hidden;
+      max-width: 100%;
     }
-    
-    .detalle th {
-      text-align: left;
-      border-bottom: 1px solid #000;
-      padding: 1mm 0;
+    .detalle-items {
       font-size: 9px;
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      overflow: hidden;
     }
-    
-    .detalle th:last-child,
-    .detalle td:last-child {
-      text-align: right;
+    .items-separador {
+      border: none;
+      border-top: 1px dashed #000;
+      margin: 2mm 0;
     }
-    
-    .detalle td {
-      padding: 1mm 0;
-      vertical-align: top;
+    .items-leyenda {
+      font-size: 8px;
+      font-weight: bold;
+      margin-bottom: 2mm;
+      padding-bottom: 1mm;
+      border-bottom: 1px solid #000;
     }
-    
+    .item-bloque {
+      width: 100%;
+      max-width: 100%;
+      padding: 2mm 0;
+      border-bottom: 1px dotted #888;
+      overflow: hidden;
+    }
+    .item-linea-qty-pu {
+      font-size: 9px;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 1mm;
+      word-break: break-word;
+    }
     .item-desc {
-      max-width: 35mm;
+      font-size: 9px;
+      line-height: 1.35;
       word-wrap: break-word;
+      overflow-wrap: anywhere;
+      max-width: 100%;
+      hyphens: manual;
     }
-    
-    .item-cant {
-      text-align: center;
-      width: 10mm;
+    .item-linea-pie {
+      display: flex;
+      flex-direction: row;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 3mm;
+      margin-top: 1.5mm;
+      width: 100%;
+      max-width: 100%;
     }
-    
-    .item-precio {
+    .item-alicuota {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 8px;
+      color: #222;
+    }
+    .item-importe {
+      flex: 0 0 auto;
+      font-weight: bold;
+      font-variant-numeric: tabular-nums;
+      font-size: 9px;
       text-align: right;
-      width: 18mm;
+      white-space: nowrap;
     }
     
     /* Totales */
@@ -229,6 +262,8 @@
         background: #fff;
         box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         padding: 4mm;
+        overflow-x: hidden;
+        max-width: min(76mm, 100%);
       }
     }
     
@@ -304,28 +339,22 @@
       {% endif %}
     </div>
     
-    <!-- ==================== DETALLE DE ÍTEMS ==================== -->
+    <!-- ==================== DETALLE DE ÍTEMS (multilínea por ítem; sin tabla de columnas) ==================== -->
     <div class="detalle">
-      <table>
-        <thead>
-          <tr>
-            <th>Descripción</th>
-            <th class="text-center">Cant</th>
-            <th class="text-right">P.Unit</th>
-            <th class="text-right">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in items %}
-          <tr>
-            <td class="item-desc">{{ item.descripcion|truncatechars:30 }}</td>
-            <td class="item-cant">{{ item.cantidad }}</td>
-            <td class="item-precio">${{ item.precio_unitario|formato_moneda }}</td>
-            <td class="item-precio">${{ item.importe_total|formato_moneda }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="detalle-items">
+        <hr class="items-separador">
+        <div class="items-leyenda">Cantidad x P. unit. · Descripción · Importe</div>
+        {% for item in items %}
+        <div class="item-bloque">
+          <div class="item-linea-qty-pu">{{ item.cantidad }} x ${{ item.precio_unitario_ticket|formato_moneda }}</div>
+          <div class="item-desc">{{ item.descripcion }}</div>
+          <div class="item-linea-pie">
+            <span class="item-alicuota">{% if item.alicuota_iva != None %}({{ item.alicuota_iva|floatformat:2 }}% IVA){% endif %}</span>
+            <span class="item-importe">${{ item.importe_total|formato_moneda }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
     </div>
     
     <!-- ==================== TOTALES ==================== -->
@@ -350,11 +379,17 @@
         </tr>
         {% endif %}
         {% else %}
-        <!-- Factura B / Factura C: IVA incluido -->
+        <!-- Factura B / Factura C: neto en líneas + impuestos hasta el total fiscal -->
         <tr>
-          <td>Subtotal:</td>
+          <td>Subtotal neto:</td>
           <td>${{ subtotal|formato_moneda }}</td>
         </tr>
+        {% if diferencia_impuestos %}
+        <tr class="iva-discriminado">
+          <td>IVA / impuestos:</td>
+          <td>${{ diferencia_impuestos|formato_moneda }}</td>
+        </tr>
+        {% endif %}
         {% endif %}
         <tr class="total-final">
           <td>TOTAL:</td>

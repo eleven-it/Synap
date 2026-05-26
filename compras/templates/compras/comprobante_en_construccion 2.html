@@ -1,0 +1,18 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+{% block title %}{{ titulo }} | Synap{% endblock %}
+{% block content %}
+<div class="max-w-2xl mx-auto text-center py-12">
+  <div class="p-6 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200">
+    <span class="material-icons text-5xl mb-4">construction</span>
+    <h1 class="text-xl font-semibold mb-2">{{ titulo }}</h1>
+    <p class="text-sm mb-4">Proveedor: <strong>{{ codigo_proveedor }}</strong>. Este formulario está en construcción; la persistencia se implementará con la misma lógica que en AdministraNET (legacy_db).</p>
+  </div>
+  <div class="mt-6">
+    <a href="{% url url_hub %}" class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition">
+      <span class="material-icons">arrow_back</span>
+      <span>Volver al listado de proveedores</span>
+    </a>
+  </div>
+</div>
+{% endblock %}

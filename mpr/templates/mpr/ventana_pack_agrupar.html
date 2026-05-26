@@ -64,7 +64,10 @@
             No hay depósito <strong>Semi elaborado</strong> configurado. El saldo de componentes se muestra en 0 hasta asignar <code class="text-[11px]">tipo_mpr=SemiElaborado</code> en Config. depósitos MPR.
         </p>
         {% endif %}
-        <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-generar-opt" data-empleados-url="{% url 'mpr:api_empleados' %}">
+        <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-generar-opt"
+              class="mpr-post-loading"
+              data-mpr-loading-title="Generando orden de producción"
+              data-mpr-loading-subtitle="Creando y liberando la OPT… No cierres esta ventana.">
             {% csrf_token %}
             <input type="hidden" name="accion" value="generar_opt"/>
             <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -84,7 +87,6 @@
                                 <th scope="col" class="px-2 py-2 text-center text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Origen</th>
                                 <th scope="colgroup" colspan="2" class="border-l border-gray-200 bg-gray-100 px-3 py-1.5 text-center text-xs font-semibold text-gray-800 align-bottom dark:border-gray-600 dark:bg-gray-800/90 dark:text-gray-100">Cantidad a fabricar</th>
                                 <th scope="colgroup" colspan="2" class="border-l-2 border-l-rose-400/70 bg-gray-100 px-3 py-1.5 text-center text-xs font-semibold text-rose-800 align-bottom dark:border-l-rose-500/60 dark:bg-gray-800/90 dark:text-rose-200">Urgente</th>
-                                <th scope="col" class="min-w-[180px] px-3 py-2 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300 sm:px-4">Operario</th>
                             </tr>
                             <tr class="align-bottom">
                                 <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
@@ -99,7 +101,6 @@
                                 <th class="bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:bg-gray-900/40 dark:text-gray-200 sm:px-4" title="Unidades ÷ articulo.cantidad_promedio_bulto por fila (si bulto ≤ 0, ÷ 12).">Docenas</th>
                                 <th class="border-l-2 border-l-rose-400/50 bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:border-l-rose-500/40 dark:bg-gray-900/40 dark:text-gray-200 sm:px-4">Unidades</th>
                                 <th class="bg-white px-3 py-1.5 text-right text-xs font-semibold text-gray-700 align-bottom dark:bg-gray-900/40 dark:text-gray-200 sm:px-4" title="Unidades ÷ articulo.cantidad_promedio_bulto por fila (si bulto ≤ 0, ÷ 12).">Docenas</th>
-                                <th class="px-3 py-1.5 align-bottom sm:px-4"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -131,7 +132,7 @@
                                     {% endwith %}
                                 </td>
                                 <td class="border-l border-gray-100 bg-gray-50/90 px-4 py-2.5 text-right dark:border-gray-700 dark:bg-gray-800/35">
-                                    <input type="number" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar }}" min="1" step="1" data-id-art="{{ f.id_articulo }}" data-docenas-id="doc_{{ f.id_articulo }}" data-bulto="{{ f.cantidad_promedio_bulto|default_if_none:0 }}"
+                                    <input type="number" name="cant_{{ f.id_articulo }}" value="{{ f.cantidad_a_fabricar|default_if_none:0|floatformat:0 }}" min="0" step="1" data-id-art="{{ f.id_articulo }}" data-docenas-id="doc_{{ f.id_articulo }}" data-bulto="{{ f.cantidad_promedio_bulto|default_if_none:0 }}"
                                            class="cant-unidades w-24 rounded border border-gray-300 bg-white px-2 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"/>
                                 </td>
                                 <td class="bg-gray-50/90 px-4 py-2.5 text-right dark:bg-gray-800/35">
@@ -140,21 +141,10 @@
                                 </td>
                                 <td class="border-l-2 border-l-rose-200/80 bg-gray-50/90 px-4 py-2.5 text-right text-sm tabular-nums dark:border-l-rose-900/50 dark:bg-gray-800/35 {% if f.cantidad_urgente_abs > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-600 dark:text-gray-400{% endif %}">{{ f.cantidad_urgente_abs|floatformat:0 }}</td>
                                 <td class="bg-gray-50/90 px-4 py-2.5 text-right text-sm tabular-nums dark:bg-gray-800/35 {% if f.cantidad_urgente_docenas > 0 %}text-red-600 dark:text-red-400{% else %}text-gray-600 dark:text-gray-400{% endif %}">{{ f.cantidad_urgente_docenas|floatformat:2 }}</td>
-                                <td class="min-w-[180px] px-4 py-2.5">
-                                    <input type="hidden" name="operario_{{ f.id_articulo }}" value="{{ f.id_operario_opt|default:'' }}" class="operario-hidden" data-id-art="{{ f.id_articulo }}"/>
-                                    <div class="operario-cell relative" data-id-art="{{ f.id_articulo }}">
-                                        <div class="operario-chip hidden flex items-center gap-2 flex-wrap">
-                                            <span class="operario-chip-label text-xs text-gray-700 dark:text-gray-300 truncate max-w-[140px]"></span>
-                                            <button type="button" class="operario-chip-clear inline-flex items-center justify-center w-7 h-7 rounded-md text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 hover:text-purple-700 dark:hover:text-purple-300 transition-colors" title="Quitar o cambiar operario" aria-label="Quitar o cambiar operario"><span class="material-icons text-lg">sync</span></button>
-                                        </div>
-                                        <input type="text" class="operario-search w-full min-w-[160px] px-2 py-1.5 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:ring-2 focus:ring-purple-500" placeholder="Buscar operario..." autocomplete="off"/>
-                                        <div class="operario-dropdown absolute top-full left-0 right-0 z-[9999] mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-xl overflow-y-auto hidden" style="max-height: 14rem;" data-operario-dropdown role="listbox"></div>
-                                    </div>
-                                </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="13" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
+                                <td colspan="12" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
                                     No hay componentes. Los packs seleccionados no tienen receta (BOM) o no se encontraron componentes.
                                 </td>
                             </tr>
@@ -272,187 +262,22 @@
                 }
             });
         });
+        form.querySelectorAll('.cant-unidades').forEach(function(inp) {
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+        });
     }
 
-    // Posicionar dropdown de operario en fixed para que no quede recortado por overflow de la tabla
-    function positionOperarioDropdown(dropdown, input) {
-        var rect = input.getBoundingClientRect();
-        var spaceBelow = window.innerHeight - rect.bottom - 12;
-        var maxH = Math.min(224, Math.max(120, spaceBelow));
-        dropdown.style.position = 'fixed';
-        dropdown.style.left = rect.left + 'px';
-        dropdown.style.width = Math.max(rect.width, 220) + 'px';
-        dropdown.style.maxHeight = maxH + 'px';
-        if (spaceBelow >= 140) {
-            dropdown.style.top = (rect.bottom + 4) + 'px';
-            dropdown.style.bottom = 'auto';
-        } else {
-            dropdown.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
-            dropdown.style.top = 'auto';
-        }
-        dropdown.style.zIndex = '9999';
-    }
-    // Operario: búsqueda predictiva y selección única (como en filtros de reportes)
-    var empleadosUrl = form ? (form.getAttribute('data-empleados-url') || '/mpr/api/empleados/') : '/mpr/api/empleados/';
-    var debounceTimer;
-    document.querySelectorAll('.operario-cell').forEach(function(cell) {
-        var td = cell.closest('td');
-        var hidden = td ? td.querySelector('input.operario-hidden') : null;
-        var chip = cell.querySelector('.operario-chip');
-        var searchInp = cell.querySelector('.operario-search');
-        var dropdown = cell.querySelector('.operario-dropdown');
-        if (!searchInp || !dropdown || !hidden) return;
-        var chipLabel = cell.querySelector('.operario-chip-label');
-        var chipClear = cell.querySelector('.operario-chip-clear');
-        var highlightedIndex = -1;
-        function getSelectableItems() {
-            return Array.prototype.slice.call(dropdown.querySelectorAll('[data-id]'));
-        }
-        function setHighlight(index) {
-            var items = getSelectableItems();
-            items.forEach(function(el, i) {
-                el.classList.toggle('bg-purple-200', i === index);
-                el.classList.toggle('dark:bg-purple-800', i === index);
-                el.classList.toggle('bg-purple-100', false);
-                el.classList.toggle('dark:bg-gray-600', false);
-                el.setAttribute('aria-selected', i === index ? 'true' : 'false');
-            });
-            highlightedIndex = index;
-            if (index >= 0 && items[index]) {
-                items[index].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            }
-        }
-        function selectHighlighted() {
-            var items = getSelectableItems();
-            if (highlightedIndex >= 0 && highlightedIndex < items.length) {
-                var el = items[highlightedIndex];
-                selectEmpleado(el.getAttribute('data-id'), el.textContent.trim());
-            }
-        }
-        function showChip(label) {
-            if (label) {
-                if (chipLabel) chipLabel.textContent = label;
-                chip.classList.remove('hidden');
-                searchInp.classList.add('hidden');
-            } else {
-                chip.classList.add('hidden');
-                if (chipLabel) chipLabel.textContent = '';
-                searchInp.classList.remove('hidden');
-            }
-        }
-        function clearOperario() {
-            hidden.value = '';
-            showChip('');
-            dropdown.classList.add('hidden');
-            dropdown.innerHTML = '';
-            searchInp.value = '';
-        }
-        function selectEmpleado(id, label) {
-            hidden.value = id || '';
-            showChip(label || '');
-            dropdown.classList.add('hidden');
-            dropdown.innerHTML = '';
-            searchInp.value = '';
-        }
-        function showDropdown() {
-            dropdown.classList.remove('hidden');
-            positionOperarioDropdown(dropdown, searchInp);
-        }
-        if (chipClear) {
-            chipClear.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearOperario();
-                searchInp.focus();
-            });
-        }
-        function bindDropdownItems() {
-            var items = getSelectableItems();
-            items.forEach(function(el, i) {
-                el.setAttribute('role', 'option');
-                el.addEventListener('click', function() { selectEmpleado(el.getAttribute('data-id'), el.textContent.trim()); });
-                el.addEventListener('mouseenter', function() { setHighlight(i); });
-            });
-            setHighlight(items.length > 0 ? 0 : -1);
-        }
-        searchInp.addEventListener('focus', function() {
-            if (searchInp.value.trim().length >= 1) return;
-            fetch(empleadosUrl + '?q=' + encodeURIComponent('')).then(function(r) { return r.json(); }).then(function(data) {
-                var list = data.empleados || [];
-                dropdown.innerHTML = list.slice(0, 15).map(function(e) {
-                    return '<div class="px-3 py-2 cursor-pointer text-gray-900 dark:text-gray-100 hover:bg-purple-100 dark:hover:bg-gray-600 text-sm" data-id="' + (e.id || '') + '">' + (e.label || '').replace(/</g, '&lt;') + '</div>';
-                }).join('') || '<div class="px-3 py-2 text-gray-500 dark:text-gray-400 text-sm">Escriba para buscar</div>';
-                showDropdown();
-                bindDropdownItems();
-            }).catch(function() { dropdown.innerHTML = '<div class="px-3 py-2 text-gray-500 dark:text-gray-400 text-sm">Error al cargar</div>'; showDropdown(); setHighlight(-1); });
-        });
-        searchInp.addEventListener('input', function() {
-            clearTimeout(debounceTimer);
-            var q = searchInp.value.trim();
-            debounceTimer = setTimeout(function() {
-                fetch(empleadosUrl + '?q=' + encodeURIComponent(q)).then(function(r) { return r.json(); }).then(function(data) {
-                    var list = data.empleados || [];
-                    dropdown.innerHTML = list.slice(0, 15).map(function(e) {
-                        return '<div class="px-3 py-2 cursor-pointer text-gray-900 dark:text-gray-100 hover:bg-purple-100 dark:hover:bg-gray-600 text-sm" data-id="' + (e.id || '') + '">' + (e.label || '').replace(/</g, '&lt;') + '</div>';
-                    }).join('') || '<div class="px-3 py-2 text-gray-500 dark:text-gray-400 text-sm">Sin resultados</div>';
-                    showDropdown();
-                    bindDropdownItems();
-                });
-            }, 200);
-        });
-        searchInp.addEventListener('keydown', function(e) {
-            if (dropdown.classList.contains('hidden')) return;
-            var items = getSelectableItems();
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setHighlight(highlightedIndex < items.length - 1 ? highlightedIndex + 1 : 0);
-                return;
-            }
-            if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setHighlight(highlightedIndex <= 0 ? (items.length > 0 ? items.length - 1 : -1) : highlightedIndex - 1);
-                return;
-            }
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                selectHighlighted();
-                return;
-            }
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                dropdown.classList.add('hidden');
-                setHighlight(-1);
-            }
-        });
-        document.addEventListener('click', function(ev) {
-            if (!cell.contains(ev.target) && !dropdown.contains(ev.target)) dropdown.classList.add('hidden');
-        });
-    });
-
-    // Generar OPT: validar solo unidades y docenas > 0. Operario en esta pantalla es opcional.
+    // Generar OPT: al menos una fila con unidades a fabricar > 0 (operario no se pide en esta pantalla).
     if (form && form.id === 'form-generar-opt') {
         form.addEventListener('submit', function(ev) {
             var filasConCantidad = 0;
-            var unidadesDocenasInvalidas = false;
-            form.querySelectorAll('input.operario-hidden').forEach(function(hidden) {
-                var idArt = hidden.getAttribute('data-id-art');
-                if (!idArt) return;
-                var cantInp = form.querySelector('input[name="cant_' + idArt + '"]');
-                var docInp = document.getElementById('doc_' + idArt);
-                var cant = cantInp ? (parseInt(cantInp.value, 10) || 0) : 0;
-                var doc = docInp ? (parseFloat(docInp.value) || 0) : 0;
-                if (cant > 0 || doc > 0) {
-                    filasConCantidad++;
-                    if (cant <= 0 || doc <= 0) unidadesDocenasInvalidas = true;
-                }
+            form.querySelectorAll('.cant-unidades').forEach(function(cantInp) {
+                var cant = parseInt(cantInp.value, 10) || 0;
+                if (cant > 0) filasConCantidad++;
             });
             if (filasConCantidad === 0) {
                 ev.preventDefault();
-                alert('Indique al menos un artículo con cantidad a fabricar (unidades y docenas mayor a 0).');
-                return false;
-            }
-            if (unidadesDocenasInvalidas) {
-                ev.preventDefault();
-                alert('Las cantidades a fabricar deben ser mayor a 0 tanto en Unidades como en Docenas.');
+                alert('Indique al menos un componente con cantidad a fabricar mayor a 0.');
                 return false;
             }
         });

@@ -65,15 +65,35 @@
         </div>
 
         <div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
-            <div class="flex max-h-[min(52vh,26rem)] flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:max-h-[min(58vh,32rem)]">
-                <div class="flex flex-shrink-0 items-center gap-2 border-b border-gray-200 px-4 py-2.5 dark:border-gray-700 sm:px-5 sm:py-3">
-                    <span class="material-icons text-xl text-purple-500 dark:text-purple-400" aria-hidden="true">pending_actions</span>
-                    <h2 class="text-sm font-bold text-gray-900 dark:text-white sm:text-base">OPTs en proceso de producción</h2>
-                    <span class="rounded-md bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium text-purple-800 dark:bg-purple-900/40 dark:text-purple-200 sm:text-xs">En curso</span>
+            <div x-data="{ queryOptProceso: '' }" class="flex max-h-[min(52vh,26rem)] flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:max-h-[min(58vh,32rem)]">
+                <div class="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-4 py-2.5 dark:border-gray-700 sm:px-5 sm:py-3">
+                    <div class="flex min-w-0 flex-wrap items-center gap-2">
+                        <span class="material-icons shrink-0 text-xl text-purple-500 dark:text-purple-400" aria-hidden="true">pending_actions</span>
+                        <h2 class="min-w-0 text-sm font-bold text-gray-900 dark:text-white sm:text-base">OPTs en proceso de producción</h2>
+                        <span class="shrink-0 rounded-md bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium text-purple-800 dark:bg-purple-900/40 dark:text-purple-200 sm:text-xs">En curso</span>
+                    </div>
+                    <div class="flex w-full min-w-0 items-center sm:w-auto sm:max-w-[16rem] sm:flex-1 sm:justify-end">
+                        <label for="tablero-opt-proceso-busqueda" class="sr-only">Buscar OPT</label>
+                        <div class="relative w-full sm:max-w-[16rem]">
+                            <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-gray-400 dark:text-gray-500" aria-hidden="true">search</span>
+                            <input type="search"
+                                   id="tablero-opt-proceso-busqueda"
+                                   x-model="queryOptProceso"
+                                   autocomplete="off"
+                                   placeholder="Buscar por n.º o texto…"
+                                   class="w-full min-w-0 rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-xs text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500 sm:text-sm"/>
+                        </div>
+                    </div>
                 </div>
-                <div class="min-h-0 flex-1 divide-y divide-gray-200 overflow-y-auto dark:divide-gray-700">
+                <div class="min-h-0 flex-1 divide-y divide-gray-200 overflow-y-auto dark:divide-gray-700"
+                     x-ref="tableroOptProcesoRows"
+                     role="region"
+                     aria-label="OPTs en proceso de producción">
                     {% for op in ops_en_proceso %}
-                    <div class="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-gray-50/90 dark:hover:bg-gray-700/40 sm:px-5">
+                    <div class="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-gray-50/90 dark:hover:bg-gray-700/40 sm:px-5"
+                         data-opt-proceso-row
+                         data-search-text="{{ op.numero }} opt orden {{ op.descripcion|default:''|escape }} {{ op.unidades }} unidades"
+                         x-show="!queryOptProceso || $el.dataset.searchText.toLowerCase().includes(queryOptProceso.toLowerCase().trim())">
                         <div class="min-w-0 flex-1">
                             <a href="{{ op.detail_url }}" class="text-sm font-semibold text-gray-900 hover:text-purple-600 dark:text-white dark:hover:text-purple-400">OPT {{ op.numero }}</a>
                             <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ op.descripcion }}</p>
@@ -86,7 +106,9 @@
                             {% elif op.accion_principal == 'crear_opa' %}
                             <a href="{{ op.crear_opa_url }}" class="inline-flex min-h-9 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800">Crear OPA</a>
                             {% elif op.accion_principal == 'cerrar' %}
-                            <form method="post" action="{{ op.cerrar_url }}" class="inline">
+                            <form method="post" action="{{ op.cerrar_url }}" class="mpr-post-loading inline"
+                                  data-mpr-loading-title="Cerrando orden"
+                                  data-mpr-loading-subtitle="Actualizando estado de la OPT… No cierres esta ventana.">
                                 {% csrf_token %}
                                 <button type="submit" class="inline-flex min-h-9 items-center justify-center rounded-lg bg-amber-500 px-3 text-xs font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800">Cerrar</button>
                             </form>
@@ -96,6 +118,12 @@
                     {% empty %}
                     <div class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">No hay OPTs en proceso de producción</div>
                     {% endfor %}
+                    {% if ops_en_proceso %}
+                    <div class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5"
+                         x-show="queryOptProceso.trim() !== '' && $refs.tableroOptProcesoRows && Array.from($refs.tableroOptProcesoRows.querySelectorAll('[data-opt-proceso-row]')).every(function (el) { return !el.offsetParent; })">
+                        Ninguna OPT coincide con la búsqueda.
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 

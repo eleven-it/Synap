@@ -27,7 +27,9 @@
             </p>
         </header>
 
-        <form method="post" action="" class="space-y-8">
+        <form method="post" action="" class="mpr-post-loading space-y-8"
+              data-mpr-loading-title="Ejecutando armado"
+              data-mpr-loading-subtitle="Registrando movimientos de stock… No cierres esta ventana.">
             {% csrf_token %}
             {% if id_lista %}<input type="hidden" name="id_lista" value="{{ id_lista }}">{% endif %}
 

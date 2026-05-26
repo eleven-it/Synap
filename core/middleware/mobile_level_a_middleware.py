@@ -40,6 +40,9 @@ _MOBILE_ALLOWED_EXACT = frozenset(
 _MOBILE_ALLOWED_API_PREFIXES = (
     '/api/self-checkout/',
     '/api/mercadopago/',
+    # Command Center gerencial (HTML + fetch JSON; UI responsive).
+    '/api/reports/executive-dashboard/',
+    '/api/reports/executive-summary/',
 )
 
 # Pantallas HTML self_checkout Nivel A + ticket post-venta (ventana de impresión usada por kiosco.html).
@@ -55,6 +58,24 @@ _SELF_CHECKOUT_PAGE_PATTERNS = tuple(
     )
 )
 
+# Reportes gerenciales con UI móvil (Command Center, catálogo, workspace).
+_REPORTS_MOBILE_PAGE_PATTERNS = tuple(
+    re.compile(p)
+    for p in (
+        r'^/reports/dashboard/command-center-gerencial/?$',
+        r'^/reports/?$',
+        r'^/reports/workspace/?$',
+    )
+)
+
+# Dashboard principal Synap (tarjetas Command Center / Reports / Workspace).
+_CORE_MOBILE_PAGE_PATTERNS = tuple(
+    re.compile(p)
+    for p in (
+        r'^/core/dashboard/?$',
+    )
+)
+
 
 def mobile_path_allowed_for_level_a(path: str) -> bool:
     """True si la ruta puede atenderse en dispositivo móvil."""
@@ -67,6 +88,12 @@ def mobile_path_allowed_for_level_a(path: str) -> bool:
         if path.startswith(prefix):
             return True
     for rx in _SELF_CHECKOUT_PAGE_PATTERNS:
+        if rx.match(path):
+            return True
+    for rx in _REPORTS_MOBILE_PAGE_PATTERNS:
+        if rx.match(path):
+            return True
+    for rx in _CORE_MOBILE_PAGE_PATTERNS:
         if rx.match(path):
             return True
     return False

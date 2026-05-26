@@ -55,7 +55,7 @@ Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Wa
 
 **Vista Pack / Unidades:** Toggle para alternar entre demanda por **pack** y desglose por **componentes** (receta/BOM).
 
-- **Docenas:** en las columnas «Docenas» de esta pantalla y en **Confirmar OPT**, el valor mostrado es **unidades ÷ `articulo.cantidad_promedio_bulto`**. Si el bulto es ≤ 0 o no está definido, se usa **12** como divisor (docena clásica). Al editar cantidades en Confirmar OPT, la sincronización unidades ↔ docenas sigue el mismo criterio por fila.
+- **Docenas:** en las columnas «Docenas» de esta pantalla y en **Confirmar OPT**, el valor mostrado es **unidades ÷ `articulo.cantidad_promedio_bulto`**. Si el bulto es ≤ 0 o no está definido, se usa **12** como divisor (docena clásica). Al editar cantidades **en la pestaña Packs** o en **Confirmar OPT**, la sincronización unidades ↔ docenas sigue el mismo criterio por fila.
 - **Pestaña Unidades (BOM):** el **Saldo** del componente es **solo** el de `stock_deposito` en el depósito configurado como **Semi elaborado** (`deposito.tipo_mpr = 'SemiElaborado'`). No se suman otros depósitos aunque tengan `suma_stock = 'Si'`. Si no hay depósito Semi elaborado asignado, el saldo se muestra en **0** y se muestra un aviso.
 - **Pestaña Unidades — reserva y trazabilidad:** la política de colchón (`articulo.stock_reserva`) aplica **solo al pack terminado**; en la tabla de componentes la columna **Reserva** se muestra en **0** (no se usa maestro de receta para R). La necesidad se desglosa en **Dem. pedido** (atribuible a `max(0, P_ped − S)` del pack, explotado por BOM) y **Dem. reserva pack** (resto de la cantidad a fabricar del pack atribuible al colchón del terminado), con badge **Origen** (Pedido / Reserva pack / Ped.+res.). **Cant. a fabricar** (componente) = `max(0, Dem. pedido + Dem. reserva pack − saldo en Semi elaborado)`; **Urgente** = `max(0, Dem. pedido − saldo en Semi elaborado)`.
 
@@ -75,8 +75,8 @@ Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Wa
 
 **Acciones:**
 
-- **Checkbox por fila:** Marque los artículos a incluir. **Cant. a fabricar** es editable por fila.
-- **Continuar:** Envía la selección a la pantalla **Confirmar OPT** (desglose por unidades/componentes de recetas).
+- **Checkbox por fila:** Marque los artículos a incluir. **Cant. a fabricar** es editable por fila en la pestaña **Packs** (esa es la cantidad que se envía al pulsar Continuar).
+- **Continuar:** Visible debajo de ambas pestañas; envía la selección y las cantidades de **Packs** a la pantalla **Confirmar OPT**. La pestaña **Unidades** muestra solo el desglose por componente (puede diferir del pack).
 - **Crear OPT (una fila):** Enlace “Crear OPT” que abre Nueva OPT con el artículo preseleccionado.
 - **Nueva OPT (header):** Crear una orden nueva sin preselección.
 
@@ -84,7 +84,7 @@ Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Wa
 
 **Ruta:** Tras marcar artículos y pulsar **Continuar** en Pedido producción trabajo (OPT) (`/mpr/demanda/ventana-pack/agrupar/`).
 
-Se muestra una **única tabla Unidades**: componentes de las recetas (BOM) de los packs seleccionados, con columnas Cod. Sist, Artículo, Saldo (solo Semi elaborado), Reserva (0 en componentes), Cant. pedida, **Dem. pedido**, **Dem. reserva pack**, **Origen**, **Cant. a fabricar** (editable), Urgente, Operario. Si la base tiene la columna `fecha_objetivo` en lista_produccion_agrupada, se muestra además el campo **Fecha objetivo** (opcional): una sola fecha para toda la orden. Esa fecha se usa para el KPI **OPT atrasadas** en el tablero (OPTs con fecha objetivo vencida y pendiente &gt; 0) y para priorizar OPTs **vencidas** en rojo en Top urgencias (informativo; uso en estadísticas queda para más adelante). El usuario puede ajustar las cantidades, indicar la fecha objetivo si aplica, y pulsar **Generar OPT** para **crear** la OPT. Tras generarla, se redirige al **Detalle de la OP**. La **ejecución** del movimiento de stock (liberar a producción) se hace automáticamente si hay un depósito con tipo «Producción» en Config. Depósitos (véase 4.4 y sección 8).
+Se muestra una **única tabla Unidades**: componentes de las recetas (BOM) de los packs seleccionados, con columnas Cod. Sist, Artículo, Saldo (solo Semi elaborado), Reserva (0 en componentes), Cant. pedida, **Dem. pedido**, **Dem. reserva pack**, **Origen**, **Cant. a fabricar** (editable: unidades y docenas, precargadas según la cantidad a fabricar elegida en la pantalla anterior y la explosión BOM), Urgente. **No** se solicita operario en esta pantalla (el operario se asigna en OPP y en Armado). Si la base tiene la columna `fecha_objetivo` en lista_produccion_agrupada, se muestra además el campo **Fecha objetivo** (opcional): una sola fecha para toda la orden. Esa fecha se usa para el KPI **OPT atrasadas** en el tablero (OPTs con fecha objetivo vencida y pendiente &gt; 0) y para priorizar OPTs **vencidas** en rojo en Top urgencias (informativo; uso en estadísticas queda para más adelante). El usuario puede ajustar las cantidades, indicar la fecha objetivo si aplica, y pulsar **Generar OPT** para **crear** la OPT. Tras generarla, se redirige al **Detalle de la OP**. La **ejecución** del movimiento de stock (liberar a producción) se hace automáticamente si hay un depósito con tipo «Producción» en Config. Depósitos (véase 4.4 y sección 8).
 
 ### 3.2 Pedidos a fábrica
 
@@ -99,7 +99,7 @@ Listado de pedidos de venta (PED) con estado de producción (Pendiente, Producci
 ### 4.0 Asistente de producción (wizard)
 
 **Asignación de operarios (trazabilidad por fase):**
-- En **Generar OPT** el operario es opcional (compatibilidad).
+- En **Generar OPT** (Confirmar OPT / agrupar) **no** se muestra columna operario; la OPT se crea sin pedir operario en ese paso.
 - En **OPP** el operario es obligatorio por componente con cantidad > 0.
 - En **Armado** el operario es obligatorio por línea/pack con cantidad > 0.
 
@@ -111,8 +111,8 @@ Flujo guiado: **1. Crear orden (OPT)** → **2. Confirmar** (crear OPT y liberar
 
 1. **Paso 1 – Crear orden de producción (OPT):** Artículo, cantidad pedida y opcionales (depósito de producción opcional, prioridad, fecha objetivo). Al continuar no se guarda aún en base de datos.
 2. **Paso 2 – Confirmar orden:** Resumen (artículo, cantidad; el depósito de entrada es el marcado como **Producción** en Config. Depósitos). Al pulsar **Confirmar y liberar a producción** se crea la OPT en base de datos y se ejecuta la liberación (movimiento OPT) hacia ese depósito. No se elige depósito en pantalla.
-3. **Paso 3 – Crear OPP:** Tabla por componente x depósito destino (excepto producción). Solo cantidades > 0 generan movimiento (Producción → Semi Elaborado / Scrap / 2da Selección). **Cada componente con cantidad > 0 requiere operario**. La suma por componente no puede superar el disponible.
-4. **Paso 4 – Armado (condicional):** Solo si el artículo tiene lista de materiales. Ejecutar armado por línea/pack (cantidad, depósitos) y **operario por línea**, u omitir y continuar.
+3. **Paso 3 – Crear OPP:** Tabla por componente × depósito destino (excepto producción). En cada celda se cargan **docenas** y **unidades sueltas**: el sistema convierte a unidades totales con **1 docena = 12 unidades** (fijo en OPP; no usa el bulto del artículo). Solo cantidades totales > 0 generan movimiento (Producción → Semi Elaborado / Scrap / 2da Selección). **Cada componente con cantidad > 0 requiere operario**. La suma por componente en unidades no puede superar el **pendiente a distribuir**. **Si tras registrar una OPP la columna Pendiente a distribuir sigue siendo mayor que cero** en algún componente, el asistente **permanece en este paso** para poder registrar **otra OPP** (p. ej. otro operario); cuando ya no queda nada por distribuir, pasa al paso 4 (Armado). Al confirmar **Registrar OPP** se muestra modal de espera.
+4. **Paso 4 – Armado (condicional):** Solo si el artículo tiene lista de materiales. Ejecutar armado por línea/pack (cantidad, depósitos) y **operario por línea**, u omitir y continuar. Al confirmar **Ejecutar armado** también se muestra modal de espera.
 5. **Paso 5 – Cierre:** Resumen, enlaces a **Registrar OPP**, **Ver detalle de la OPT** y **Cerrar OPT** (si pendiente = 0). **Finalizar asistente** limpia el wizard y lleva al detalle o al tablero.
 
 En cualquier paso puede **Salir del asistente**; se limpia el estado sin modificar lo ya guardado.
@@ -183,14 +183,16 @@ Al confirmar se genera un movimiento de stock tipo **OPT** (Pedido producción),
 
 ### 4.5 Registrar parte de producción (OPP)
 
-**Ruta:** Desde Detalle de OP → “Registrar OPP” (`/mpr/ordenes/<id_lista>/registrar-opp/`).
+**Ruta:** Desde Detalle de OP → “Registrar OPP” (`/mpr/ordenes/<id_lista>/registrar-opp/`), o paso 3 del asistente de producción.
 
-**Pasos:**
+**Formulario (matriz componente × depósito destino):**
 
-1. **Cantidad** a registrar (producto terminado).
-2. **Depósito origen:** Donde sale el producto (ej. producción).
-3. **Depósito destino:** Donde entra el producto terminado (terminados, 2da selección o scrap).
-4. **Clasificación / calidad (opcional):** Primera (terminado), 2da selección o Scrap. Debe coincidir con el depósito destino elegido.
+- Por cada combinación componente y depósito (Semi Elaborado, Scrap, 2da Selección, etc., según configuración) se indican **docenas** y **unidades sueltas**. En OPP **una docena son siempre 12 unidades**; el sistema calcula el total en unidades por celda y registra el movimiento en unidades.
+- Origen del stock: depósito de **Producción** (configuración MPR).
+- **Operario obligatorio** por cada componente que tenga cantidad total > 0 en algún depósito.
+- La suma por fila (componente) en unidades no puede superar el **pendiente a distribuir** mostrado.
+- Al pulsar **Registrar OPP** se muestra un **modal de espera específico del flujo OPP** mientras se valida y envía el POST. No cierre la ventana hasta finalizar.
+- El botón **Registrar OPP** en el detalle OPT y en el wizard se muestra solo cuando hay cantidad **registrable** (> 0) en Producción; si no hay stock origen para continuar OPP, puede pasar a **Armado** con lo ya ingresado a Semi elaborado.
 
 Al confirmar se genera un movimiento tipo **OPP** (Parte producción), se descuenta el pendiente de la OP y se actualizan saldos. La trazabilidad guarda operario por componente en histórico. Si el pendiente total llega a 0, se puede **Cerrar OPT** desde el detalle o el tablero.
 
@@ -328,7 +330,7 @@ Pestañas de solo lectura:
 2. **Crear OPT:** (a) **Asistente de producción:** Paso 1 Crear orden (artículo + cantidad) → Paso 2 Confirmar (crea OPT y libera si hay depósito tipo Producción) → Paso 3 Crear OPP (cantidades por depósito) → Armado (opcional) → Cierre; o (b) Desde Pedido producción trabajo (OPT): marcar artículos, **Continuar** → Confirmar OPT (tabla Unidades) → **Generar OPT** (crea la OPT y lleva al detalle); o (c) **Nueva OPT** por artículo y cantidad.
 3. **Liberar (OPT):** En el asistente va incluido en “Confirmar”. Fuera del asistente, desde el detalle de la OPT con “Liberar (OPT)” (cantidad y depósito destino).
 4. **Armado (si aplica):** Ejecutar armado eligiendo conjunto, cantidad y depósitos origen/destino.
-5. **Registrar OPP:** En el detalle de la OPT, “Registrar OPP” (cantidad y depósitos). En el asistente, paso 3 permite cargar cantidades por cada depósito destino (solo >0 generan movimiento).
+5. **Registrar OPP:** En el detalle de la OPT, “Registrar OPP” (docenas y unidades sueltas por celda; docena = 12 unidades). En el asistente, paso 3 usa la misma matriz (solo totales > 0 generan movimiento).
 6. **Cerrar OPT:** Cuando el pendiente total sea 0, “Cerrar OPT” desde el detalle o desde el tablero (OPT a cerrar).
 
 Para mantener las listas de materiales actualizadas: usar **Lista de materiales** → listado, nuevo conjunto, editar (cabecera, **artículo armado**, componentes). Luego ejecutar armado desde **Armado** o desde el detalle de una OP con “Armado desde esta OP”.

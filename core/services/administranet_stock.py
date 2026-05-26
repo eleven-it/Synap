@@ -293,6 +293,26 @@ def get_viajantes(base_empresa: str) -> List[Dict[str, Any]]:
         return []
 
 
+def get_condiciones_venta(base_empresa: str) -> List[Dict[str, Any]]:
+    """
+    Condiciones de venta (`cond_venta`) para desplegables de facturación/pedidos.
+    """
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                """
+                SELECT Codigo, COALESCE(Descripcion, '') AS Descripcion
+                FROM cond_venta
+                ORDER BY Codigo
+                """
+            )
+            rows = cursor.fetchall()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        logger.warning("Error al listar condiciones de venta en %s: %s", base_empresa, e)
+        return []
+
+
 def get_clientes(
     base_empresa: str,
     q: Optional[str] = None,
@@ -711,14 +731,35 @@ def buscar_articulos(
         return []
 
 
+def _precio_articulo_segun_lista(row: Dict[str, Any], lista_precio: int) -> Any:
+    """
+    Índice de lista alineado con UI presupuesto / informes:
+    0 costo, 1 lista oficial, 2–6 listas de venta 1–5 (articulo.Precio1V…Precio5V).
+    """
+    lp = int(lista_precio) if lista_precio is not None else 2
+    if lp < 0:
+        lp = 0
+    if lp > 6:
+        lp = 6
+    if lp == 0:
+        return row.get("PrecioCosto")
+    if lp == 1:
+        return row.get("PNOficial")
+    key = {2: "Precio1V", 3: "Precio2V", 4: "Precio3V", 5: "Precio4V", 6: "Precio5V"}.get(lp, "Precio1V")
+    return row.get(key)
+
+
 def _buscar_articulos_con_precios(
     base_empresa: str,
     q: str,
     limit: int = 15,
+    lista_precio: int = 2,
 ) -> List[Dict[str, Any]]:
     """
     Búsqueda de artículos con campos de precios (paridad con ABMArticulo_seleccion grid).
-    Devuelve IDArt, CodigoArticulo, Descripcion, id_manual, PrecioCosto, Precio1V, PNOficial, Alicuota (porcentaje desde iva), Moneda.
+    Devuelve IDArt, CodigoArticulo, Descripcion, id_manual, PrecioCosto, Precio1V, PNOficial,
+    PrecioLista (precio efectivo según lista_precio),
+    Alicuota (porcentaje desde iva), ImpuestoInterno (articulo.impuesto_interno %), Moneda.
     articulo.Alicuota es FK a iva.id; el porcentaje para mostrar está en iva.Alicuota (igual que reportes y TPV).
     """
     if not (q or "").strip():
@@ -734,8 +775,13 @@ def _buscar_articulos_con_precios(
                        a.id_manual,
                        a.PrecioCosto,
                        a.Precio1V,
+                       a.Precio2V,
+                       a.Precio3V,
+                       a.Precio4V,
+                       a.Precio5V,
                        a.PNOficial,
                        COALESCE(iva.Alicuota, a.Alicuota, 0) AS Alicuota,
+                       COALESCE(a.impuesto_interno, 0) AS impuesto_interno,
                        a.Moneda
                 FROM articulo a
                 LEFT JOIN iva ON iva.id = a.Alicuota
@@ -753,6 +799,7 @@ def _buscar_articulos_con_precios(
             rows = cursor.fetchall()
         result = []
         for r in rows:
+            precio_lista = to_decimal_or_none(_precio_articulo_segun_lista(r, lista_precio))
             result.append({
                 "IDArt": to_int_or_none(r.get("IDArt")),
                 "CodigoArticulo": str_or_default(r.get("CodigoArticulo"), "-"),
@@ -760,8 +807,14 @@ def _buscar_articulos_con_precios(
                 "id_manual": str_or_default(r.get("id_manual"), "-"),
                 "PrecioCosto": to_decimal_or_none(r.get("PrecioCosto")),
                 "Precio1V": to_decimal_or_none(r.get("Precio1V")),
+                "Precio2V": to_decimal_or_none(r.get("Precio2V")),
+                "Precio3V": to_decimal_or_none(r.get("Precio3V")),
+                "Precio4V": to_decimal_or_none(r.get("Precio4V")),
+                "Precio5V": to_decimal_or_none(r.get("Precio5V")),
                 "PNOficial": to_decimal_or_none(r.get("PNOficial")),
+                "PrecioLista": precio_lista,
                 "Alicuota": to_decimal_or_none(r.get("Alicuota")),
+                "ImpuestoInterno": to_decimal_or_none(r.get("impuesto_interno")),
                 "Moneda": str_or_default(r.get("Moneda"), "-"),
             })
         return result

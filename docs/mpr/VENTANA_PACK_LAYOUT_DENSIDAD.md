@@ -1,6 +1,9 @@
 # OPT demanda (`ventana_pack`) — layout y jerarquía
 
 **Plantilla:** `mpr/templates/mpr/ventana_pack.html`  
+**Modal POST MPR (global):** El overlay de espera vive en `mpr/includes/mpr_post_loading_modal.html`, incluido desde `mpr/base_mpr.html`. Los formularios POST marcados con clase `mpr-post-loading` muestran el modal al enviar; textos opcionales con `data-mpr-loading-title` y `data-mpr-loading-subtitle`.
+
+**Lista Packs:** `listar_ventana_pack` solo devuelve artículos con **cantidad a fabricar > 0** (saldo que no cubre ya pedido + reserva maestra); ver `docs/mpr/DIAGNOSTICO_DEMANDA_MPR.md`.  
 **Objetivo:** recuperar altura útil (menos franja oscura y menos aire hasta la tabla), coherencia cromática con MPR (morado), menos ruido en cabeceras de tabla y CTA principal alineado a patrones habituales (derecha en desktop).
 
 ## Análisis (síntesis)
@@ -10,7 +13,7 @@
 | Sección + migas | Mucho padding vertical y `mb-8` en migas | `py-4`/`sm:py-5`, migas `mb-3`/`sm:mb-4` |
 | Bloque oscuro | `p-6`, `mb-6`, `shadow-lg` lo hacían muy alto | `p-3`/`sm:p-4`, `mb-3`/`sm:mb-4`, `rounded-lg`, `shadow-md` |
 | Título + filtros | Banner “alto” con poco aprovechamiento horizontal | H1 más compacto en mobile; filas `gap-2`; fechas con `py-1` |
-| Actualizar | Ámbar desentonaba con el resto del MPR | `bg-purple-600` + foco `ring-purple`; inputs con foco morado |
+| Actualizar | Ámbar desentonaba con el resto del MPR; el POST de sincronización puede tardar | `bg-purple-600` + foco `ring-purple`; inputs con foco morado; **modal global MPR** (`mpr-post-loading` + datos en el formulario; overlay `#mpr-post-loading-modal` en `base_mpr.html`) |
 | Tablero | Botón sólido gris aceptable como secundario | Borde explícito, altura alineada con fila de fechas (`items-end`) |
 | Pestañas + búsqueda | Tabs altos, mucho `mb-4` | `min-h-9`, menos `pb` en la franja |
 | Tabla | Cabeceras slate/zinc fuertes (mucho color) | Fondos `slate-100`/`slate-50` suaves; grupo **Urgente** delimitado con `border-l-rose-*`; cuerpo con tintes `slate-50/90` y borde rosa suave en columnas urgentes |
@@ -37,5 +40,6 @@ En **Packs** y listas que lean `lista_produccion_agrupada` + `articulo`, el mism
 
 ## Notas
 
-- No se modificaron vistas, URLs ni formularios; solo clases y estructura HTML del template.
+- El modal de espera es solo en cliente (no cambia vistas ni servicios). Misma clase `mpr-post-loading` en demanda (**Actualizar**, **Continuar**), asistente, tablero, OPT/OPP, BOM, depósitos, etc.
+- El formulario **Actualizar** conserva `id="form-ventana-pack-actualizar"` por si hay scripts que lo referencian.
 - Si en monitores muy altos se desea más filas visibles, subir el límite (p. ej. `min(28rem,58vh)`).

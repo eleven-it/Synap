@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#136dec",
+                        "accent-red": "#ef4444",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101822",
+                    },
+                    fontFamily: {
+                        "display": ["Manrope", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "2xl": "2rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<title>AdministraNET - Inicio con Ofertas del Día</title>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 overflow-hidden">
+<div class="relative flex h-screen w-full flex-col">
+<div class="absolute inset-0 z-0">
+<div class="h-full w-full bg-cover bg-center bg-no-repeat blur-sm brightness-75 scale-105" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCT3hY55QE7IcSDHeKcd8MYbNW0ueeoKU8Hoqj8JQyKjlcAmrS6yvJtCEX2Tdyq5sk7gnBaKTB8OKyaYe8-v4OCAKHrEdr6ZBPC_WtafbOQpnOSzmKaZaTxLe9JiX6iPWSpUucH4xU1cqVFBeCoyXlz0ec_qcwb_G2XH5fFP1Y_vP4GTbgCyWR4iHyFBZhGSnV6XtYEOfgGCxZ0BmjgAxhnHkBJ9JDllUuJPvMcwlXkHw2PL-kMa9qzl-NV1Gmjc5b3Mh_B9uQClWM')">
+</div>
+<div class="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/60"></div>
+</div>
+<div class="relative z-10 flex h-full w-full flex-col items-center justify-center p-4">
+<div class="flex w-full max-w-5xl flex-col items-center justify-center rounded-2xl bg-white/90 dark:bg-slate-900/95 p-8 shadow-2xl backdrop-blur-md text-center">
+<div class="mb-6 flex items-center gap-4 text-primary">
+<div class="size-12 flex items-center justify-center rounded-xl bg-primary/10">
+<span class="material-symbols-outlined !text-4xl">point_of_sale</span>
+</div>
+<h2 class="text-3xl font-black tracking-tight text-slate-900 dark:text-white uppercase italic">AdministraNET</h2>
+</div>
+<div class="mb-8 space-y-2">
+<h1 class="text-5xl font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white">
+                    ¡Bienvenido!
+                </h1>
+<p class="text-xl font-medium text-slate-600 dark:text-slate-300">
+                    Estamos listos para atenderte
+                </p>
+</div>
+<div class="flex w-full justify-center mb-12">
+<button class="group relative flex h-28 w-full max-w-lg items-center justify-center gap-4 overflow-hidden rounded-2xl bg-primary px-8 text-3xl font-bold text-white shadow-xl transition-all hover:scale-[1.02] hover:bg-primary/90 active:scale-95">
+<span class="material-symbols-outlined !text-5xl group-hover:animate-pulse">touch_app</span>
+<span class="truncate">Toca aquí para comenzar</span>
+<div class="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</button>
+</div>
+<div class="w-full border-t border-slate-200 dark:border-slate-700/50 pt-8">
+<div class="flex items-center justify-between mb-6 px-2">
+<h3 class="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+<span class="material-symbols-outlined text-accent-red">local_fire_department</span>
+                        Ofertas del Día
+                    </h3>
+<div class="flex gap-2">
+<span class="h-2 w-8 rounded-full bg-primary"></span>
+<span class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-700"></span>
+<span class="h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-700"></span>
+</div>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 w-full">
+<div class="group bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border border-slate-100 dark:border-slate-700 hover:shadow-lg transition-shadow">
+<div class="aspect-square w-full rounded-lg bg-slate-100 dark:bg-slate-700 mb-4 overflow-hidden">
+<img alt="Leche de Almendras" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyPuE0BerDlTpoX68C6f7-ZBImegbmx1-KR5Aj997jQXZaRhgGrKTBrOQQoFroe-mSSrC15XzV5YmyLgozQ43VQ0kZQh1Sc0Am7JpouKL1n-P1ojeZ8vDZEEe_bRHIQ-GjMLiPK_Iu6m4yf_QoOmLlsh_Y-hpbRa12Bz1giwFhtei2mKQgYf9ovWDkBKoMg9J6PT26QOtpmMppKDq5XVIpmJYY2OIhanxoAsDKetlhh4kUaX7qBDvuGc-XxAs28D_LxjUeqcIsnug"/>
+</div>
+<div class="text-left space-y-1">
+<p class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Bebidas</p>
+<h4 class="font-bold text-slate-900 dark:text-white truncate">Leche de Almendras</h4>
+<div class="flex items-center gap-2">
+<span class="text-lg font-black text-accent-red">$35.00</span>
+<span class="text-sm text-slate-400 line-through">$48.50</span>
+</div>
+</div>
+</div>
+<div class="group bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border border-slate-100 dark:border-slate-700 hover:shadow-lg transition-shadow">
+<div class="aspect-square w-full rounded-lg bg-slate-100 dark:bg-slate-700 mb-4 overflow-hidden">
+<img alt="Café en Grano" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBw9TbilSZpG8dhjMM7nVBS5_WeMnbmbabP_2KGhYjxAtSz2Q5MJpOlKL5VMTGKfDJW38-1ZMNPF_JJZjIwAG3bAE376sENbVBdSf1JNZCwkvjhBi74iYNKVCmCWWL6t2GBNZQHmu-ap0RPWr31tLT3ax0OhV8wx5YcolCqwIpOwzUobQU11_3Kwe1IbWEVI4R7OND8S_j_sFYSMBLqSJ32krFdkXtYsIIwGvRcbdLcVVaEBsCiZ5gz5h9Ft-9-9cUW0PppZc5XEEw"/>
+</div>
+<div class="text-left space-y-1">
+<p class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cafetería</p>
+<h4 class="font-bold text-slate-900 dark:text-white truncate">Café en Grano</h4>
+<div class="flex items-center gap-2">
+<span class="text-lg font-black text-accent-red">$120.00</span>
+<span class="text-sm text-slate-400 line-through">$155.00</span>
+</div>
+</div>
+</div>
+<div class="group bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border border-slate-100 dark:border-slate-700 hover:shadow-lg transition-shadow">
+<div class="aspect-square w-full rounded-lg bg-slate-100 dark:bg-slate-700 mb-4 overflow-hidden">
+<img alt="Ramen Premium" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3XzTSfTcYYiqS73l6wpeG8j0UWXpPgJ6M0IlH-7tvwY0D1YfjyFdRf3Dv0gweyPV1R9SpEpyDqYw5HPEptsjB0QjCbuM5-Sk-W4Zy8mtalcxEBtvdJ-uMrfcb4QyepAYUjSzQ_LneXHjxq-V2wyEKWKPuzjQbbZ70cLO0qtnwEFemYT7Jzag5Y0csSszJwu5gX4ZvoYbzS-gcwPaURlvMDRzD6-df5rYqoZFEhwmxPoHRVuFgEpV9guE5yN-VZpq0P3Z27pJinF0"/>
+</div>
+<div class="text-left space-y-1">
+<p class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Despensa</p>
+<h4 class="font-bold text-slate-900 dark:text-white truncate">Ramen Premium</h4>
+<div class="flex items-center gap-2">
+<span class="text-lg font-black text-accent-red">$65.00</span>
+<span class="text-sm text-slate-400 line-through">$82.00</span>
+</div>
+</div>
+</div>
+<div class="group bg-white dark:bg-slate-800 rounded-xl p-4 shadow-md border border-slate-100 dark:border-slate-700 hover:shadow-lg transition-shadow">
+<div class="aspect-square w-full rounded-lg bg-slate-100 dark:bg-slate-700 mb-4 overflow-hidden">
+<img alt="Granola Orgánica" class="h-full w-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAM-GvORntMU50lzXsvrJcT5y8Wy8y8kxYPPO_WxPDhCmCKNmSLaIh_0EPtZHU8yAQff2mjxaouL4uzBHToqNiaqk63ehri6dC-DtX90Uy2QEYCEjrXfVB3GDh7Er-VusGj4WDodAUW4bNjH-tw0xznyOJzDpcnTAjwJyug0s1SwxB-ceszfMi1O1heQYqn6DxBnlhpaZaSFguR_MitDAB9QcFUW7FLO0d7JWDw0C6BUZsBksiRdkYag8HotxQpU1on47z5rNcKVkM"/>
+</div>
+<div class="text-left space-y-1">
+<p class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Saludable</p>
+<h4 class="font-bold text-slate-900 dark:text-white truncate">Granola Orgánica</h4>
+<div class="flex items-center gap-2">
+<span class="text-lg font-black text-accent-red">$89.90</span>
+<span class="text-sm text-slate-400 line-through">$115.00</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-8 flex items-center justify-center gap-6 border-t border-slate-200 dark:border-slate-700 pt-6 w-full">
+<button class="flex items-center gap-2 rounded-full bg-primary/10 px-6 py-2.5 text-base font-bold text-primary hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined !text-xl">language</span>
+                    Español
+                </button>
+<button class="flex items-center gap-2 rounded-full bg-transparent px-6 py-2.5 text-base font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined !text-xl">language</span>
+                    English
+                </button>
+</div>
+</div>
+</div>
+<div class="absolute bottom-8 left-0 right-0 z-10 flex justify-center">
+<div class="flex items-center gap-3 rounded-full bg-black/40 px-6 py-3 text-sm font-semibold text-white/90 backdrop-blur-md shadow-lg border border-white/10">
+<span class="material-symbols-outlined !text-xl text-green-400">verified_user</span>
+            Sistema de Autocobro Seguro v2.5 • AdministraNET Retail Solutions
+        </div>
+</div>
+</div>
+
+</body></html>

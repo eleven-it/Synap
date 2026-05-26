@@ -501,6 +501,25 @@ def _get_ticket_data(base_empresa: str, cart_id: int) -> dict:
     tipo = cart.get('tipo_comprobante') or 'FB'
     tipo_letra = tipo[-1] if tipo and len(tipo) >= 1 else 'B'  # FA->A, FB->B, FC->C
     tipo_nombre = {"FA": "FACTURA A", "FB": "FACTURA B", "FC": "FACTURA C"}.get(tipo, "FACTURA B")
+    # 6b. Ítems para ticket: en FB/FC el precio_unitario en BD suele ser neto y el importe_total bruto;
+    #     mostramos P.Unit coherente con el renglón (importe_total/cantidad) para evitar confusiones en el ticket.
+    items_ticket = []
+    for row in items:
+        r = dict(row)
+        try:
+            cant = float(r.get('cantidad') or 0)
+        except (TypeError, ValueError):
+            cant = 0.0
+        if cant <= 0:
+            cant = 1.0
+        imp_tot = float(r.get('importe_total') or 0)
+        pu_db = float(r.get('precio_unitario') or 0)
+        if tipo in ('FB', 'FC'):
+            r['precio_unitario_ticket'] = round(imp_tot / cant, 4)
+        else:
+            r['precio_unitario_ticket'] = pu_db
+        items_ticket.append(r)
+    items = items_ticket
     # 7. Calcular IVAs por alícuota (solo FA discrimina; FB/FC IVA incluido)
     ivas = _calcular_ivas(items) if tipo == 'FA' else []
     
@@ -513,6 +532,11 @@ def _get_ticket_data(base_empresa: str, cart_id: int) -> dict:
     
     # 10. Importe en letras (opcional)
     importe_letras = _numero_a_letras(float(cart.get('total') or 0))
+    subtotal_val = float(cart.get('subtotal') or 0)
+    total_val = float(cart.get('total') or 0)
+    diferencia_impuestos = round(total_val - subtotal_val, 2)
+    if abs(diferencia_impuestos) < 0.02:
+        diferencia_impuestos = 0.0
     
     return {
         'tipo_comprobante': tipo,
@@ -525,6 +549,7 @@ def _get_ticket_data(base_empresa: str, cart_id: int) -> dict:
         'items': items,
         'subtotal': cart.get('subtotal') or 0,
         'total': cart.get('total') or 0,
+        'diferencia_impuestos': diferencia_impuestos,
         'ivas': ivas,
         'otros_impuestos': 0,
         'cae': cart.get('cae'),

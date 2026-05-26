@@ -37,10 +37,18 @@ En dispositivos detectados como móvil (`request.is_mobile`), la aplicación web
 - `/self_checkout/talonarios/` (solo lista)
 - `/self_checkout/ticket/<id>/` (ventana de impresión post-venta usada por el kiosco; excepción operativa respecto al listado estricto de pantallas con plantilla `mobile/`, para no romper el cierre de venta en móvil)
 
+### Dashboard y reportes (UI responsive)
+
+- `/core/dashboard/` — inicio Synap (hero Command Center + accesos Reports / Workspace).
+- `/reports/` — catálogo de reportes.
+- `/reports/workspace/` — workspace personal.
+- `/reports/dashboard/command-center-gerencial/` — Command Center gerencial.
+- APIs: `/api/reports/executive-dashboard/`, `/api/reports/executive-summary/`.
+
 ### Bloqueadas en móvil (ejemplos)
 
 - Formularios de configuración de kiosco, alta/edición de talonarios y PV: `/self_checkout/config/nuevo/`, `.../editar/`, `talonarios/nuevo-pv/`, `talonarios/agregar/`, `talonarios/.../editar/`
-- Dashboard general, reportes, stock, compras, e-com, Tienda Nube, MPR, etc.
+- Detalle de informes individuales (`/reports/dashboard/<slug>/` salvo Command Center), stock, compras, e-com, Tienda Nube, MPR, etc.
 
 ## Manifest PWA
 

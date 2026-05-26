@@ -1,5 +1,7 @@
 // Comentario: Controlador básico para dashboards interactivos con gráficos D3.
 
+import { initializeTagsFilter } from "./tags_filter.mjs";
+
 // ============================================
 // SISTEMA COMÚN: Detección de Tipo de Reporte
 // ============================================
@@ -38,6 +40,7 @@ function detectReportType() {
     "bo-stock-facturacion",
     "ventas-objetivos-vs-bo",
     "ventas-por-vendedor",
+    "ventas-por-articulo",
     "comprobantes-rutas",
   ];
   
@@ -71,7 +74,8 @@ function isInformeBoDualPeriodo(slug) {
   return (
     slug === "bo-stock-facturacion" ||
     slug === "ventas-objetivos-vs-bo" ||
-    slug === "ventas-por-vendedor"
+    slug === "ventas-por-vendedor" ||
+    slug === "ventas-por-articulo"
   );
 }
 
@@ -83,18 +87,28 @@ function isInformeQuerySoloManualORealtime(slug) {
   return (
     slug === "bo-stock-facturacion" ||
     slug === "ventas-objetivos-vs-bo" ||
-    slug === "ventas-por-vendedor"
+    slug === "ventas-por-vendedor" ||
+    slug === "ventas-por-articulo"
   );
 }
 
-/** Objetivos vs BO y Ventas por vendedor: mismos filtros BO y tabla jerárquica (`objetivos_ventas_bo.js`). */
+/** VO, ventas por vendedor y ventas por artículo: filtros BO y período facturación. */
+function isJerarquiaVentasBoFamiliaSlug(slug) {
+  return (
+    slug === "ventas-objetivos-vs-bo" ||
+    slug === "ventas-por-vendedor" ||
+    slug === "ventas-por-articulo"
+  );
+}
+
+/** Objetivos vs BO y Ventas por vendedor: tabla jerárquica (`objetivos_ventas_bo.js`). */
 function isJerarquiaVentasVendedorSlug(slug) {
   return slug === "ventas-objetivos-vs-bo" || slug === "ventas-por-vendedor";
 }
 
 function normalizeJerarquiaSortFilters(slug, ordenarPorRaw, ordenFormaRaw) {
   const allowedOrdenarPor =
-    slug === "ventas-por-vendedor"
+    slug === "ventas-por-vendedor" || slug === "ventas-por-articulo"
       ? ["facturacion_periodo", "unidades_periodo"]
       : ["objetivo_meta", "objetivo_falta", "total_ventas_periodo"];
   const ordenarPor = String(ordenarPorRaw || "").trim();
@@ -4948,7 +4962,7 @@ function syncBoDualSummaryPeriod() {
   const bi = document.getElementById("fecha_inicio")?.value;
   const bf = document.getElementById("fecha_fin")?.value;
   const line =
-    slug === "ventas-por-vendedor"
+    slug === "ventas-por-vendedor" || slug === "ventas-por-articulo"
       ? `Periodo facturación: ${fmt(fif)} al ${fmt(fff)}`
       : `Facturación y remitos: ${fmt(fif)} al ${fmt(fff)} · Backorder: ${fmt(bi)} al ${fmt(bf)}`;
   if (boPeriodEl) boPeriodEl.textContent = line;
@@ -7152,333 +7166,7 @@ if (dashboardRoot) {
   document.addEventListener("fullscreenchange", syncFullscreenState);
 };
 
-// Función para inicializar componentes de tags (debe estar en scope global antes del bloque if)
-  const initializeTagsFilter = (fieldId, fieldType, mutualExcludePeerId) => {
-    console.log(`[initializeTagsFilter] Inicializando ${fieldId} (tipo: ${fieldType})`);
-    const select = document.getElementById(fieldId);
-    const container = document.getElementById(`${fieldId}_tags_container`);
-    const chipsContainer = container?.querySelector(".tags-chips");
-    const input = document.getElementById(`${fieldId}_search`);
-    const dropdown = document.getElementById(`${fieldId}_dropdown`);
-
-    console.log(`[initializeTagsFilter] Elementos encontrados:`, {
-      select: !!select,
-      container: !!container,
-      chipsContainer: !!chipsContainer,
-      input: !!input,
-      dropdown: !!dropdown,
-    });
-
-    if (!select || !container || !chipsContainer || !input || !dropdown) {
-      return;
-    }
-
-    const peerSelect =
-      mutualExcludePeerId && typeof mutualExcludePeerId === "string"
-        ? document.getElementById(mutualExcludePeerId)
-        : null;
-
-    const getPeerExcludedValues = () => {
-      if (!peerSelect) return new Set();
-      return new Set(
-        Array.from(peerSelect.selectedOptions)
-          .map((o) => String(o.value || "").trim())
-          .filter(Boolean)
-      );
-    };
-
-    const filterPeerExcluded = (opts) => {
-      const excl = getPeerExcludedValues();
-      if (!excl.size) return opts;
-      return opts.filter((opt) => !excl.has(String(opt.value)));
-    };
-
-    let allOptions = [];
-    let selectedValues = new Set();
-    let selectedIndex = -1;
-    let searchTimeout = null;
-    
-    // Renderizar chips seleccionados
-    const renderChips = () => {
-      chipsContainer.innerHTML = "";
-      selectedValues.forEach((value) => {
-        const option = allOptions.find((opt) => opt.value === value);
-        if (option) {
-          const chip = document.createElement("div");
-          chip.className = "inline-flex items-center gap-1 px-2 py-1 bg-sky-100 dark:bg-sky-900 text-sky-800 dark:text-sky-200 rounded-full text-xs font-medium";
-          chip.dataset.value = value;
-          
-          const chipText = document.createElement("span");
-          chipText.textContent = option.label;
-          chip.appendChild(chipText);
-          
-          const chipRemove = document.createElement("button");
-          chipRemove.type = "button";
-          chipRemove.className = "ml-1 hover:text-sky-600 dark:hover:text-sky-300 focus:outline-none";
-          chipRemove.innerHTML = "×";
-          chipRemove.addEventListener("click", (e) => {
-            e.stopPropagation();
-            removeTag(value);
-          });
-          chip.appendChild(chipRemove);
-          
-          chipsContainer.appendChild(chip);
-        }
-      });
-    };
-    
-    // Agregar tag
-    const addTag = (value) => {
-      if (!selectedValues.has(value)) {
-        selectedValues.add(value);
-        const option = select.querySelector(`option[value="${value}"]`);
-        if (option) {
-          option.selected = true;
-        }
-        renderChips();
-        input.value = "";
-        hideDropdown();
-        updateSelect();
-      }
-    };
-    
-    // Remover tag
-    const removeTag = (value) => {
-      selectedValues.delete(value);
-      const option = select.querySelector(`option[value="${value}"]`);
-      if (option) {
-        option.selected = false;
-      }
-      renderChips();
-      updateSelect();
-    };
-    
-    // Actualizar select hidden
-    const updateSelect = () => {
-      Array.from(select.options).forEach((opt) => {
-        opt.selected = selectedValues.has(opt.value);
-      });
-      // Disparar evento change para que los filtros se actualicen
-      select.dispatchEvent(new Event("change", { bubbles: true }));
-      // Guardar filtros cuando cambian los tags
-      if (typeof saveFilters === "function") {
-        saveFilters();
-      }
-      // Agrupación local del informe stock-existencias: no vuelve a pedir datos al servidor
-      if (fieldId === "stock_existencias_group_by") {
-        if (typeof window.renderStockExistenciasTableFromState === "function") {
-          window.renderStockExistenciasTableFromState();
-        }
-        return;
-      }
-      // Reportes con dashboard.js (no bloque declarativo inline): recargar datos al cambiar tags
-      const slug = dashboardRoot?.dataset?.reportSlug;
-      if (
-        typeof window.fetchDashboardData === "function" &&
-        slug &&
-        (slug === "uninvoiced_remitos" ||
-          slug === "total-consolidado-operativo" ||
-          slug === "stock-existencias" ||
-          isVentasNetasSlug(slug))
-      ) {
-        window.fetchDashboardData();
-      }
-    };
-    
-    // Mostrar dropdown
-    const showDropdown = () => {
-      dropdown.classList.remove("hidden");
-    };
-    
-    // Ocultar dropdown
-    const hideDropdown = () => {
-      dropdown.classList.add("hidden");
-      selectedIndex = -1;
-    };
-
-    const refreshDropdownIfPeerChanged = () => {
-      if (dropdown.classList.contains("hidden")) return;
-      const q = input.value.trim();
-      const base =
-        q.length === 0
-          ? allOptions.slice(0, 20)
-          : allOptions.filter((opt) =>
-              opt.label.toLowerCase().includes(q.toLowerCase())
-            );
-      renderDropdown(filterPeerExcluded(base), q);
-    };
-
-    // Renderizar dropdown
-    const renderDropdown = (results, query) => {
-      dropdown.innerHTML = "";
-      
-      if (results.length === 0) {
-        const noResults = document.createElement("div");
-        noResults.className = "px-3 py-2 text-xs text-slate-500 dark:text-slate-400";
-        noResults.textContent = query ? "No se encontraron resultados" : "Escribe para buscar...";
-        dropdown.appendChild(noResults);
-        return;
-      }
-      
-      results.forEach((item, index) => {
-        const isSelected = selectedValues.has(item.value);
-        const itemDiv = document.createElement("div");
-        itemDiv.className = `px-3 py-2 text-xs cursor-pointer transition-colors ${
-          index === selectedIndex
-            ? "bg-sky-100 dark:bg-sky-900"
-            : "hover:bg-slate-100 dark:hover:bg-slate-700"
-        } ${isSelected ? "bg-sky-50 dark:bg-sky-950" : ""}`;
-        itemDiv.dataset.value = item.value;
-        
-        const itemContent = document.createElement("div");
-        itemContent.className = "flex items-center justify-between";
-        
-        const itemLabel = document.createElement("span");
-        itemLabel.className = isSelected ? "font-medium text-sky-700 dark:text-sky-300" : "text-slate-700 dark:text-slate-300";
-        itemLabel.textContent = item.label;
-        itemContent.appendChild(itemLabel);
-        
-        if (isSelected) {
-          const checkIcon = document.createElement("span");
-          checkIcon.className = "text-sky-600 dark:text-sky-400";
-          checkIcon.textContent = "✓";
-          itemContent.appendChild(checkIcon);
-        }
-        
-        itemDiv.appendChild(itemContent);
-        
-        itemDiv.addEventListener("click", () => {
-          if (isSelected) {
-            removeTag(item.value);
-          } else {
-            addTag(item.value);
-          }
-        });
-        
-        dropdown.appendChild(itemDiv);
-      });
-      
-      showDropdown();
-    };
-    
-    // Buscar opciones
-    const searchOptions = (query) => {
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => {
-        const filtered = allOptions.filter((opt) =>
-          opt.label.toLowerCase().includes(query.toLowerCase())
-        );
-        renderDropdown(filterPeerExcluded(filtered), query);
-      }, 150);
-    };
-
-    // Event listeners
-    input.addEventListener("input", (e) => {
-      const query = e.target.value.trim();
-      if (query.length > 0) {
-        searchOptions(query);
-      } else {
-        renderDropdown(filterPeerExcluded(allOptions.slice(0, 20)), "");
-      }
-    });
-
-    input.addEventListener("focus", () => {
-      if (input.value.trim().length === 0) {
-        renderDropdown(filterPeerExcluded(allOptions.slice(0, 20)), "");
-      } else {
-        searchOptions(input.value.trim());
-      }
-    });
-    
-    input.addEventListener("keydown", (e) => {
-      const items = dropdown.querySelectorAll("[data-value]");
-      
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-        items[selectedIndex]?.scrollIntoView({ block: "nearest" });
-        renderDropdown(
-          filterPeerExcluded(
-            allOptions.filter((opt) =>
-              opt.label.toLowerCase().includes(input.value.toLowerCase())
-            )
-          ),
-          input.value
-        );
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        selectedIndex = Math.max(selectedIndex - 1, -1);
-        if (selectedIndex >= 0) {
-          items[selectedIndex]?.scrollIntoView({ block: "nearest" });
-        }
-        renderDropdown(
-          filterPeerExcluded(
-            allOptions.filter((opt) =>
-              opt.label.toLowerCase().includes(input.value.toLowerCase())
-            )
-          ),
-          input.value
-        );
-      } else if (e.key === "Enter" && selectedIndex >= 0 && items[selectedIndex]) {
-        e.preventDefault();
-        const value = items[selectedIndex].dataset.value;
-        if (selectedValues.has(value)) {
-          removeTag(value);
-        } else {
-          addTag(value);
-        }
-      } else if (e.key === "Escape") {
-        hideDropdown();
-        input.blur();
-      }
-    });
-    
-    // Cerrar dropdown al hacer clic fuera
-    document.addEventListener("click", (e) => {
-      if (!container.contains(e.target)) {
-        hideDropdown();
-      }
-    });
-    
-    // Cargar opciones desde el select
-    const loadOptions = () => {
-      allOptions = Array.from(select.options)
-        .filter((opt) => opt.value !== "")
-        .map((opt) => ({
-          value: opt.value,
-          label: opt.textContent,
-        }));
-      
-      // Cargar selecciones existentes
-      Array.from(select.selectedOptions).forEach((opt) => {
-        if (opt.value) {
-          selectedValues.add(opt.value);
-        }
-      });
-      
-      renderChips();
-    };
-    
-    // Observar cambios en el select para actualizar chips
-    const observer = new MutationObserver(() => {
-      loadOptions();
-    });
-    observer.observe(select, { childList: true, subtree: true });
-    
-    // Escuchar cambios en el select para actualizar tags visuales
-    select.addEventListener("change", () => {
-      loadOptions();
-    });
-
-    if (peerSelect) {
-      peerSelect.addEventListener("change", refreshDropdownIfPeerChanged);
-    }
-
-    // Cargar opciones iniciales
-    loadOptions();
-  };
-
-  window.initializeTagsFilter = initializeTagsFilter;
+// initializeTagsFilter: módulo compartido ./tags_filter.mjs (import al inicio del archivo).
 
 // Función para inicializar tiempo real en workspace (debe estar definida antes de usarse)
 const initializeWorkspaceRealtime = () => {
@@ -7837,12 +7525,12 @@ if (dashboardRoot) {
             initializeTagsFilter(
               "clientes_excluidos",
               "clientes",
-              isJerarquiaVentasVendedorSlug(reportSlug) ? "clientes_incluir" : undefined
+              isJerarquiaVentasBoFamiliaSlug(reportSlug) ? "clientes_incluir" : undefined
             );
           }
         }
       }
-      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
+      if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
         const clientesIncludeSelect = document.getElementById("clientes_incluir");
         if (clientesIncludeSelect) {
           const clientesIncResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=clientes`, {
@@ -7869,7 +7557,7 @@ if (dashboardRoot) {
         }
       }
 
-      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
+      if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
         const viajResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=viajantes`, {
           headers: {
             "X-Requested-With": "XMLHttpRequest",
@@ -8023,7 +7711,7 @@ if (dashboardRoot) {
         }
       }
 
-      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
+      if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
         const ci = document.getElementById("clientes_incluir");
         const ce = document.getElementById("clientes_excluidos");
         const vi = document.getElementById("vendedores_incluir");
@@ -9479,7 +9167,7 @@ if (dashboardRoot) {
    */
   const applyVentasObjetivosFacturacionFromQueryParams = () => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
-    if (!isJerarquiaVentasVendedorSlug(reportSlug)) return;
+    if (!isJerarquiaVentasBoFamiliaSlug(reportSlug)) return;
 
     let params;
     try {
@@ -9693,7 +9381,7 @@ if (dashboardRoot) {
       }
 
       if (
-        isJerarquiaVentasVendedorSlug(reportSlug) &&
+        isJerarquiaVentasBoFamiliaSlug(reportSlug) &&
         filters.vendedores_excluidos &&
         Array.isArray(filters.vendedores_excluidos)
       ) {
@@ -9712,7 +9400,7 @@ if (dashboardRoot) {
           }, 150);
         }
       }
-      if (isJerarquiaVentasVendedorSlug(reportSlug) && filters.clientes_incluir && Array.isArray(filters.clientes_incluir)) {
+      if (isJerarquiaVentasBoFamiliaSlug(reportSlug) && filters.clientes_incluir && Array.isArray(filters.clientes_incluir)) {
         const clientesIncluirSelect = document.getElementById("clientes_incluir");
         if (clientesIncluirSelect) {
           filters.clientes_incluir.forEach((value) => {
@@ -9726,7 +9414,7 @@ if (dashboardRoot) {
           }, 150);
         }
       }
-      if (isJerarquiaVentasVendedorSlug(reportSlug) && filters.vendedores_incluir && Array.isArray(filters.vendedores_incluir)) {
+      if (isJerarquiaVentasBoFamiliaSlug(reportSlug) && filters.vendedores_incluir && Array.isArray(filters.vendedores_incluir)) {
         const vendedoresIncluirSelect = document.getElementById("vendedores_incluir");
         if (vendedoresIncluirSelect) {
           filters.vendedores_incluir.forEach((value) => {
@@ -9740,7 +9428,7 @@ if (dashboardRoot) {
           }, 150);
         }
       }
-      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
+      if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
         const ordenFormaSelect = document.getElementById("orden_forma");
         const sortFilters = normalizeJerarquiaSortFilters(reportSlug, filters.ordenar_por, filters.orden_forma);
@@ -10107,7 +9795,7 @@ if (dashboardRoot) {
       const vendedoresExcluidosSelect = document.getElementById("vendedores_excluidos");
       const vendedoresIncluirSelect = document.getElementById("vendedores_incluir");
       const clientesIncluirSelect = document.getElementById("clientes_incluir");
-      if (vendedoresExcluidosSelect && isJerarquiaVentasVendedorSlug(currentReportSlug)) {
+      if (vendedoresExcluidosSelect && isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
         const selectedVend = Array.from(vendedoresExcluidosSelect.selectedOptions)
           .map((opt) => String(opt.value))
           .filter((v) => v);
@@ -10115,7 +9803,7 @@ if (dashboardRoot) {
           filters.vendedores_excluidos = selectedVend;
         }
       }
-      if (clientesIncluirSelect && isJerarquiaVentasVendedorSlug(currentReportSlug)) {
+      if (clientesIncluirSelect && isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
         const selectedCliInc = Array.from(clientesIncluirSelect.selectedOptions)
           .map((opt) => String(opt.value))
           .filter((v) => v);
@@ -10123,7 +9811,7 @@ if (dashboardRoot) {
           filters.clientes_incluir = selectedCliInc;
         }
       }
-      if (vendedoresIncluirSelect && isJerarquiaVentasVendedorSlug(currentReportSlug)) {
+      if (vendedoresIncluirSelect && isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
         const selectedVendInc = Array.from(vendedoresIncluirSelect.selectedOptions)
           .map((opt) => String(opt.value))
           .filter((v) => v);
@@ -10152,7 +9840,7 @@ if (dashboardRoot) {
           if (ss.length > 0) filters.subrubros_incluidos = ss;
         }
       }
-      if (isJerarquiaVentasVendedorSlug(currentReportSlug)) {
+      if (isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
         const ordenFormaSelect = document.getElementById("orden_forma");
         const sortFilters = normalizeJerarquiaSortFilters(
@@ -10255,7 +9943,8 @@ if (dashboardRoot) {
       slug === "stock-existencias" ||
       slug === "bo-stock-facturacion" ||
       slug === "ventas-objetivos-vs-bo" ||
-      slug === "ventas-por-vendedor"
+      slug === "ventas-por-vendedor" ||
+      slug === "ventas-por-articulo"
     ) {
       return true;
     }
@@ -10280,6 +9969,10 @@ if (dashboardRoot) {
     "ventas-por-vendedor": {
       title: "Cargando ventas por vendedor",
       subtitle: "Consultando facturación y jerarquía (puede tardar en bases grandes)…",
+    },
+    "ventas-por-articulo": {
+      title: "Cargando ventas por artículo",
+      subtitle: "Consultando facturación por artículo, proveedor y cliente…",
     },
     ventas_netas: {
       title: "Cargando ventas netas",
@@ -10344,6 +10037,7 @@ if (dashboardRoot) {
     slug === "bo-stock-facturacion" ||
     slug === "ventas-objetivos-vs-bo" ||
     slug === "ventas-por-vendedor" ||
+    slug === "ventas-por-articulo" ||
     isLogisticaListaComprobantesRutasSlug(slug);
 
   const fetchDashboardData = async (isAutoRefresh = false) => {
@@ -10463,7 +10157,7 @@ if (dashboardRoot) {
               });
             });
           }
-        } else if (isJerarquiaVentasVendedorSlug(currentReportSlug)) {
+        } else if (isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
           try {
             const voResponse = {
               data: payload.data || [],
@@ -10488,7 +10182,17 @@ if (dashboardRoot) {
               }
               voFiltersSummaryEl.textContent = parts.length ? "Filtros: " + parts.join(" · ") : "";
             }
-            if (window.objetivosVentasBoHandler && typeof window.objetivosVentasBoHandler.processData === "function") {
+            if (currentReportSlug === "ventas-por-articulo") {
+              if (window.ventasPorArticuloHandler && typeof window.ventasPorArticuloHandler.processData === "function") {
+                try {
+                  window.ventasPorArticuloHandler.processData(voResponse);
+                } catch (e) {
+                  console.error("[dashboard] ventas por artículo processData:", e);
+                }
+              } else {
+                console.error("[dashboard] ventasPorArticuloHandler no está definido; ¿cargó ventas_por_articulo.js?");
+              }
+            } else if (window.objetivosVentasBoHandler && typeof window.objetivosVentasBoHandler.processData === "function") {
               try {
                 window.objetivosVentasBoHandler.processData(voResponse);
               } catch (e) {
@@ -10868,7 +10572,7 @@ if (dashboardRoot) {
               if (clientesExcluidosSelect && clientesExcluidosSelect.selectedOptions.length) {
                 filters.clientes_excluidos = Array.from(clientesExcluidosSelect.selectedOptions).map(opt => String(opt.value)).filter(v => v);
               }
-              if (isJerarquiaVentasVendedorSlug(reportSlug)) {
+              if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
                 const vendedoresExcluidosSelect = filtersContainer.querySelector('select[name="vendedores_excluidos"]');
                 if (vendedoresExcluidosSelect && vendedoresExcluidosSelect.selectedOptions.length) {
                   filters.vendedores_excluidos = Array.from(vendedoresExcluidosSelect.selectedOptions)
@@ -10949,7 +10653,7 @@ if (dashboardRoot) {
           }
         }
 
-        if (excelScope && isJerarquiaVentasVendedorSlug(reportSlug)) {
+        if (excelScope && isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
           filters.excel_scope = excelScope;
         }
 
@@ -11014,7 +10718,7 @@ if (dashboardRoot) {
 
     newExportButton.addEventListener("click", async () => {
       const reportSlug = dashboardRoot?.dataset.reportSlug || "";
-      if (isJerarquiaVentasVendedorSlug(reportSlug)) {
+      if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
         createExportScopeDropdown((scope) => {
           performExcelExport(scope);
         });

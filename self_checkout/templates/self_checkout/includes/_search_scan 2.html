@@ -1,0 +1,188 @@
+{% comment %}
+  Columna izquierda: HTML exacto Stitch kiosk_active_cart_1 (card escaneo + ofertas) + feedback + modal cuenta corriente + búsqueda TPV + opciones.
+  Contrato: x-ref="scanInput", id="tpv-busqueda-producto", x-ref="busquedaDropdownList", :data-search-index.
+{% endcomment %}
+      <!-- Feedback agregado / error / stock (toast estilo Stitch) -->
+      <template x-if="scanSuccess || scanError || stockBlockedMsg">
+        <div class="rounded-2xl shadow-2xl flex items-center gap-4 border border-white/10 px-6 py-4"
+             :class="scanSuccess ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : 'bg-red-900 dark:bg-red-100 text-white dark:text-red-900'">
+          <div class="w-10 h-10 rounded-full flex items-center justify-center shrink-0" :class="scanSuccess ? 'bg-green-500' : 'bg-red-500'">
+            <span class="material-symbols-outlined text-white" x-text="scanSuccess ? 'check' : 'error'"></span>
+          </div>
+          <div class="flex flex-col min-w-0">
+            <span class="font-bold text-sm uppercase tracking-tight" x-text="scanSuccess ? 'Agregado' : (stockBlockedMsg ? 'Stock insuficiente' : 'Error')"></span>
+            <span class="text-xs opacity-80 truncate" x-text="scanSuccess || scanError || stockBlockedMsg"></span>
+          </div>
+        </div>
+      </template>
+
+      <!-- Card escaneo: HTML exacto Stitch kiosk_active_cart_1 (solo self-checkout) -->
+      <section x-show="!modoTpv" x-cloak class="bg-white dark:bg-slate-800 rounded-xl border-2 border-primary/30 dark:border-primary/50 p-8 shadow-xl shadow-primary/5 flex flex-col justify-center items-center text-center space-y-8 relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-1 bg-primary animate-pulse"></div>
+        <div class="space-y-4">
+          <h2 class="text-4xl font-black text-slate-900 dark:text-white leading-tight">Escanea tus productos</h2>
+          <p class="text-lg text-slate-500 dark:text-slate-400">Pasa el código de barras por el escáner para continuar agregando</p>
+        </div>
+        <div class="w-full max-w-2xl">
+          <label class="flex flex-col gap-3">
+            <span class="text-left font-semibold text-slate-700 dark:text-slate-300">Código de barras o nombre</span>
+            <div class="relative group">
+              <input
+                x-ref="scanInput"
+                x-model="scanInput"
+                x-on:keydown.enter.prevent="agregarPorCodigo()"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                class="w-full h-20 text-2xl px-6 rounded-xl border-2 border-primary bg-primary/5 dark:bg-slate-900 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all outline-none pr-20 font-medium text-slate-900 dark:text-white placeholder:text-slate-400"
+                placeholder="Esperando escaneo..."
+              />
+              <div class="absolute right-4 top-1/2 -translate-y-1/2 text-primary flex items-center justify-center p-3">
+                <span class="material-symbols-outlined text-4xl animate-pulse">barcode_scanner</span>
+              </div>
+            </div>
+          </label>
+        </div>
+        <div class="grid grid-cols-2 gap-4 w-full max-w-2xl pt-4">
+          <button type="button" class="flex items-center justify-center gap-3 p-4 border-2 border-slate-100 dark:border-slate-700 rounded-xl hover:border-primary hover:bg-primary/5 transition-all group" x-on:click="agregarPorCodigo()" x-bind:disabled="estado === 'paying' || estado === 'confirming'">
+            <span class="material-symbols-outlined text-slate-400 group-hover:text-primary">search</span>
+            <span class="font-bold text-slate-600 dark:text-slate-300 group-hover:text-primary">Búsqueda Teclado</span>
+          </button>
+          <button type="button" class="flex items-center justify-center gap-3 p-4 border-2 border-slate-100 dark:border-slate-700 rounded-xl hover:border-primary hover:bg-primary/5 transition-all group" x-on:click="toastMsg='Función en desarrollo'; toastOk=false; setTimeout(()=>{toastMsg=''}, 2500)">
+            <span class="material-symbols-outlined text-slate-400 group-hover:text-primary">category</span>
+            <span class="font-bold text-slate-600 dark:text-slate-300 group-hover:text-primary">Explorar Categorías</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Caja ofertas: HTML exacto Stitch kiosk_active_cart_1 -->
+      <div class="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl p-6 flex items-center gap-6">
+        <div class="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-white shrink-0">
+          <span class="material-symbols-outlined text-3xl">star</span>
+        </div>
+        <div>
+          <h3 class="font-bold text-amber-800 dark:text-amber-400 text-xl">¡Aprovecha nuestras ofertas!</h3>
+          <p class="text-amber-700 dark:text-amber-500/80">Sigue agregando productos para obtener descuentos por volumen en marcas seleccionadas.</p>
+        </div>
+      </div>
+
+      <!-- Modal Cuenta corriente -->
+      <div x-show="modalCuentaCorriente" x-cloak class="absolute inset-0 z-[60] flex items-center justify-center bg-slate-900/90 rounded-3xl p-4" x-transition
+           x-init="$watch('modalCuentaCorriente', v => v && cargarCuentaCorriente())">
+        <div class="w-full max-w-4xl rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 shadow-xl max-h-[90vh] flex flex-col">
+          <div class="flex-shrink-0 px-5 py-4 border-b border-slate-200 dark:border-slate-600 flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Cuenta corriente</h3>
+              <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400" x-text="cuentaCorrienteData.nombre_cliente || tpvCliente.nombre_cliente || '—'"></p>
+              <p class="mt-1 text-sm font-semibold" :class="(cuentaCorrienteData.saldo || 0) >= 0 ? 'text-slate-700 dark:text-slate-200' : 'text-red-600 dark:text-red-400'">
+                Saldo: <span x-text="'$' + (cuentaCorrienteData.saldo != null ? formatoMoneda(cuentaCorrienteData.saldo) : '—')"></span>
+              </p>
+            </div>
+            <button type="button" x-on:click="modalCuentaCorriente = false" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700" aria-label="Cerrar">✕</button>
+          </div>
+          <div class="flex-1 overflow-auto px-5 py-3">
+            <p class="text-sm text-red-600 dark:text-red-400 mb-2" x-show="cuentaCorrienteError" x-text="cuentaCorrienteError"></p>
+            <p class="text-sm text-slate-500" x-show="cuentaCorrienteLoading">Cargando…</p>
+            <template x-if="!cuentaCorrienteLoading && (cuentaCorrienteData.movimientos || []).length === 0 && !cuentaCorrienteError">
+              <p class="text-sm text-slate-500">No hay movimientos.</p>
+            </template>
+            <div class="overflow-x-auto" x-show="!cuentaCorrienteLoading && (cuentaCorrienteData.movimientos || []).length > 0">
+              <table class="w-full min-w-[520px] text-left text-xs border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Fecha</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Tipo</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Nro</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-right">Imp. venta</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-right">Imp. cobro</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400 text-right">Saldo</th>
+                    <th class="px-2 py-2 font-semibold text-slate-600 dark:text-slate-400">Estado</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                  <template x-for="m in (cuentaCorrienteData.movimientos || [])" :key="m.id_cuentacliente">
+                    <tr class="align-baseline" :class="m.anulado === 'Si' ? 'opacity-60' : ''">
+                      <td class="px-2 py-1.5 text-slate-700 dark:text-slate-300" x-text="m.Fecha"></td>
+                      <td class="px-2 py-1.5 font-medium" x-text="m.TipoComprobante"></td>
+                      <td class="px-2 py-1.5 font-mono" x-text="m.NroCompBusq || m.NroComprobante"></td>
+                      <td class="px-2 py-1.5 text-right" x-text="m.ImporteVenta ? ('$' + formatoMoneda(m.ImporteVenta)) : '—'"></td>
+                      <td class="px-2 py-1.5 text-right" x-text="m.Importecobro ? ('$' + formatoMoneda(m.Importecobro)) : '—'"></td>
+                      <td class="px-2 py-1.5 text-right font-medium" x-text="'$' + formatoMoneda(m.Saldo)"></td>
+                      <td class="px-2 py-1.5"><span x-text="m.Estado"></span><span x-show="m.anulado === 'Si'" class="ml-1 text-red-600 dark:text-red-400">(Anul.)</span></td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="flex-shrink-0 px-5 py-3 border-t border-slate-200 dark:border-slate-600">
+            <button type="button" x-on:click="modalCuentaCorriente = false" class="rounded-xl px-4 py-2 text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Cerrar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Búsqueda predictiva TPV (contrato: id, x-ref, :data-search-index) -->
+      <section x-show="modoTpv" x-cloak class="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 shadow-sm overflow-hidden flex flex-col min-h-0" aria-label="Búsqueda de productos">
+        <label class="sr-only" for="tpv-busqueda-producto">Escanear o buscar por código o nombre</label>
+        <div class="relative mb-3">
+          <input id="tpv-busqueda-producto" type="text" x-model="searchProductos"
+                 placeholder="Escanear o buscar por código de barras, código o nombre… (↑↓ para elegir)"
+                 class="w-full min-h-[3rem] rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 text-base text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation"
+                 x-on:input.debounce.280ms="onBusquedaProductosInput()"
+                 x-on:keydown="onBusquedaProductosKeydown($event)"
+                 x-on:keydown.enter.prevent="onBusquedaProductosEnter()"
+                 :disabled="estado === 'paying' || estado === 'confirming'"/>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-2" x-show="tpvListaPrecio && tpvListaPrecio.nombre">Precios: <span x-text="tpvListaPrecio.nombre"></span></p>
+        </div>
+        <div x-ref="busquedaDropdownList"
+             :tabindex="(articulosGrid.length > 0 && !articulosGridLoading) ? 0 : -1"
+             x-show="articulosGrid.length > 0 && !articulosGridLoading"
+             x-cloak
+             x-transition:enter="transition ease-out duration-150"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             class="flex-1 min-h-0 overflow-auto border border-slate-200 dark:border-slate-700 rounded-xl shadow-inner bg-slate-50/50 dark:bg-slate-800/30 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-inset"
+             role="listbox"
+             aria-label="Resultados de búsqueda. Flechas para mover, Enter para agregar, Esc para volver al buscador."
+             x-on:focus="onFocusTablaBusqueda()"
+             x-on:keydown="onTablaBusquedaKeydown($event)"
+             x-on:keydown.enter.prevent.capture="onBusquedaProductosEnter()">
+          <table class="w-full text-left border-collapse" aria-label="Resultados de búsqueda">
+            <thead class="sticky top-0 bg-white dark:bg-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider z-10 border-b border-slate-100 dark:border-slate-700">
+              <tr>
+                <th class="py-2 px-2">Código</th>
+                <th class="py-2 px-2">Nombre</th>
+                <th class="py-2 px-2 text-right">Stock</th>
+                <th class="py-2 px-2 text-right">Precio</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="(art, index) in articulosGrid" :key="art.id_articulo">
+                <tr :data-search-index="index"
+                    role="option"
+                    :aria-selected="selectedSearchIndex === index"
+                    class="border-b border-slate-100 dark:border-slate-700/50 cursor-pointer transition-colors"
+                    :class="{
+                      'bg-primary/5 dark:bg-primary/10 border-l-4 border-primary': selectedSearchIndex === index,
+                      'hover:bg-slate-50 dark:hover:bg-slate-700/50': selectedSearchIndex !== index && estado !== 'paying' && estado !== 'confirming',
+                      'opacity-60 pointer-events-none': estado === 'paying' || estado === 'confirming'
+                    }"
+                    x-on:click="estado !== 'paying' && estado !== 'confirming' && (selectedSearchIndex = index, agregarArticuloDesdeTile(art))">
+                  <td class="py-2.5 px-2 text-sm font-medium" x-text="art.codigo_articulo || art.id_articulo || '—'"></td>
+                  <td class="py-2.5 px-2 text-sm" x-text="art.descripcion || '—'"></td>
+                  <td class="py-2.5 px-2 text-sm text-right" x-text="art.stock_disponible != null ? art.stock_disponible : '—'"></td>
+                  <td class="py-2.5 px-2 text-sm font-semibold text-primary text-right">
+                    <span x-show="(art.promocion || '').toString().toLowerCase() === 'si'" class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 mr-1">Promo</span>
+                    <span x-text="'$' + formatoMoneda(art.precio||0)"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-sm text-slate-500 dark:text-slate-400 py-2 text-center" x-show="articulosGridLoading" x-cloak>Cargando…</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 py-2 text-center" x-show="!articulosGridLoading && searchProductos.length && articulosGrid.length === 0" x-cloak>No hay coincidencias. Si es código de barras o código de artículo, tocá <strong>Enter</strong> para agregar al carrito.</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 py-2 text-center" x-show="!articulosGridLoading && !searchProductos.length" x-cloak>Escribí o escaneá código / nombre. ↑↓ para mover, Enter para agregar.</p>
+      </section>
+
+      <div class="min-h-0 flex-1"></div>

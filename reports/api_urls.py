@@ -14,6 +14,20 @@ from .executive_summary_api_views import (
     ExecutiveSummaryAPIView,
     PuntoVentaCanalEjecutivoAPIView,
 )
+from .executive_dashboard_api_views import (
+    ExecutiveDashboardAPIView,
+    ExecutiveDashboardVentasResumenAPIView,
+    ExecutiveDashboardInventarioResumenAPIView,
+    ExecutiveDashboardComprasResumenAPIView,
+    ExecutiveDashboardManufacturaResumenAPIView,
+    ExecutiveDashboardCruzadosResumenAPIView,
+    ExecutiveDashboardVentasPedidosPendientesAPIView,
+    ExecutiveDashboardVentasRemitosNoFacturadosAPIView,
+    ExecutiveDashboardCruzadosBackorderAPIView,
+    ExecutiveDashboardInventarioExistenciasAPIView,
+    ExecutiveDashboardTesoreriaResumenAPIView,
+    ExecutiveDashboardVentasCobrosResumenAPIView,
+)
 from .api_views import (
     ReconciliacionMovimientoDetalleAPIView,
     ReportCatalogAPIView,
@@ -83,6 +97,62 @@ urlpatterns = [
     path("reconciliacion-movimiento-detalle/", ReconciliacionMovimientoDetalleAPIView.as_view(), name="reports-reconciliacion-movimiento-detalle"),
     path("executive-summary/", ExecutiveSummaryAPIView.as_view(), name="reports-executive-summary"),
     path("pv-canal-ejecutivo/", PuntoVentaCanalEjecutivoAPIView.as_view(), name="reports-pv-canal-ejecutivo"),
+    path("executive-dashboard/", ExecutiveDashboardAPIView.as_view(), name="reports-executive-dashboard"),
+    path(
+        "executive-dashboard/ventas/resumen/",
+        ExecutiveDashboardVentasResumenAPIView.as_view(),
+        name="reports-executive-dashboard-ventas-resumen",
+    ),
+    path(
+        "executive-dashboard/inventario/resumen/",
+        ExecutiveDashboardInventarioResumenAPIView.as_view(),
+        name="reports-executive-dashboard-inventario-resumen",
+    ),
+    path(
+        "executive-dashboard/compras/resumen/",
+        ExecutiveDashboardComprasResumenAPIView.as_view(),
+        name="reports-executive-dashboard-compras-resumen",
+    ),
+    path(
+        "executive-dashboard/manufactura/resumen/",
+        ExecutiveDashboardManufacturaResumenAPIView.as_view(),
+        name="reports-executive-dashboard-manufactura-resumen",
+    ),
+    path(
+        "executive-dashboard/cruzados/resumen/",
+        ExecutiveDashboardCruzadosResumenAPIView.as_view(),
+        name="reports-executive-dashboard-cruzados-resumen",
+    ),
+    path(
+        "executive-dashboard/ventas/pedidos-pendientes/",
+        ExecutiveDashboardVentasPedidosPendientesAPIView.as_view(),
+        name="reports-executive-dashboard-ventas-pedidos-pendientes",
+    ),
+    path(
+        "executive-dashboard/ventas/remitos-no-facturados/",
+        ExecutiveDashboardVentasRemitosNoFacturadosAPIView.as_view(),
+        name="reports-executive-dashboard-ventas-remitos-nf",
+    ),
+    path(
+        "executive-dashboard/cruzados/backorder/",
+        ExecutiveDashboardCruzadosBackorderAPIView.as_view(),
+        name="reports-executive-dashboard-cruzados-backorder",
+    ),
+    path(
+        "executive-dashboard/inventario/existencias/",
+        ExecutiveDashboardInventarioExistenciasAPIView.as_view(),
+        name="reports-executive-dashboard-inventario-existencias",
+    ),
+    path(
+        "executive-dashboard/tesoreria/resumen/",
+        ExecutiveDashboardTesoreriaResumenAPIView.as_view(),
+        name="reports-executive-dashboard-tesoreria-resumen",
+    ),
+    path(
+        "executive-dashboard/ventas/cobros/resumen/",
+        ExecutiveDashboardVentasCobrosResumenAPIView.as_view(),
+        name="reports-executive-dashboard-ventas-cobros-resumen",
+    ),
     path("catalog/", ReportCatalogAPIView.as_view(), name="reports-catalog"),
     path("query/", ReportQueryAPIView.as_view(), name="reports-query"),
     path("kpi/", KPIAPIView.as_view(), name="reports-kpi"),

@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'reports',
     'ia',  # Módulo transversal de asistentes IA persistentes
     'self_checkout',  # Self-checkout / TPV (comandos manage.py y vistas)
+    'fe_afip',  # Facturación electrónica AFIP/ARCA (config, certificados, CAEA)
     'stock',  # Stock AdministraNET (movimientos, referencias, consultas)
     'ventas',  # Objetivos de venta (MySQL legacy) e informes asociados
     'compras',  # Remitos de compra (PRemito.frm - AdministraNET)
@@ -220,6 +221,22 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Archivos de Medios (subidos por usuarios)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# -----------------------------------------------------------------------------
+# AFIP / ARCA: certificados y claves privadas
+# -----------------------------------------------------------------------------
+# En Docker, montar un volumen (no bind de la carpeta del repo) en SYNAP_AFIP_STORAGE
+# para evitar errores EDEADLK al leer certificados desde pyafipws (macOS + bind mount).
+# Estructura: <SYNAP_AFIP_STORAGE>/pending/*.key, <SYNAP_AFIP_STORAGE>/certs/<base>/certificado.crt|clave.key
+_SYNAP_AFIP_STORAGE = config('SYNAP_AFIP_STORAGE', default='').strip()
+if _SYNAP_AFIP_STORAGE:
+    _afip_root = Path(_SYNAP_AFIP_STORAGE).resolve()
+else:
+    _afip_root = (BASE_DIR / 'private' / 'afip').resolve()
+FE_AFIP_CERT_STORAGE_DIR = str(_afip_root / 'certs')
+FE_AFIP_PENDING_DIR = str(_afip_root / 'pending')
+# Explorador de rutas en la UI FE-AFIP (debe incluir el volumen de secretos).
+FE_AFIP_BROWSE_ROOTS = ['/', '/tmp', '/var', '/home', str(_afip_root)]
 
 # Tailwind CSS
 TAILWIND_APP_NAME = 'theme'

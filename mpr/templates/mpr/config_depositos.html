@@ -61,7 +61,9 @@
                                 <span class="line-clamp-2 break-words sm:line-clamp-none" title="{{ dep.NombreDeposito|default:'' }}">{{ dep.NombreDeposito }}</span>
                             </td>
                             <td class="min-w-[6.5rem] px-2 py-2.5 text-center align-middle sm:min-w-[7.5rem] sm:px-4">
-                                <form method="post" action="" class="inline-flex w-full min-w-0 touch-manipulation items-center justify-center">
+                                <form method="post" action="" class="mpr-post-loading inline-flex w-full min-w-0 touch-manipulation items-center justify-center"
+                                      data-mpr-loading-title="Guardando depósitos"
+                                      data-mpr-loading-subtitle="Actualizando configuración MPR…">
                                     {% csrf_token %}
                                     <input type="hidden" name="cod_deposito" value="{{ dep.CodDeposito }}"/>
                                     <input type="hidden" name="valor" id="valor-suma-{{ forloop.counter0 }}" value="{% if dep.suma_stock == 'Si' %}Si{% else %}No{% endif %}"/>
@@ -82,7 +84,9 @@
                                 </form>
                             </td>
                             <td class="min-w-0 px-2 py-2.5 sm:min-w-[12rem] sm:px-4">
-                                <form method="post" action="" class="flex w-full min-w-0 justify-end sm:justify-start" data-tipo-form="{{ dep.CodDeposito }}">
+                                <form method="post" action="" class="mpr-post-loading flex w-full min-w-0 justify-end sm:justify-start" data-tipo-form="{{ dep.CodDeposito }}"
+                                      data-mpr-loading-title="Guardando depósitos"
+                                      data-mpr-loading-subtitle="Actualizando tipo MPR del depósito…">
                                     {% csrf_token %}
                                     <input type="hidden" name="cod_deposito" value="{{ dep.CodDeposito }}"/>
                                     <label class="sr-only" for="tipo_mpr_{{ dep.CodDeposito }}">Tipo MPR para depósito {{ dep.CodDeposito }}</label>

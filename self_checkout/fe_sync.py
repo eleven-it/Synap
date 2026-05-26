@@ -6,7 +6,12 @@ Sincronización con ARCA: último comprobante autorizado y recuperación de CAE.
 import logging
 from typing import Optional, Tuple
 
-from self_checkout.fe_config import get_fe_config, is_fe_configured, sanitize_for_log
+from self_checkout.fe_config import (
+    get_fe_config,
+    is_fe_configured,
+    sanitize_for_log,
+    validate_fe_certificates_readable,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +32,9 @@ def get_ultimo_autorizado_afip(
     if not is_fe_configured(base_empresa):
         return None, "AFIP no configurado"
     cfg = get_fe_config(base_empresa)
+    ok_read, err_read = validate_fe_certificates_readable(cfg)
+    if not ok_read:
+        return None, err_read[:300]
     tipo_cbte = TIPO_CBTE_AFIP.get(tipo_comprobante.upper() if tipo_comprobante else "FB", 6)
     pto_vta = int(id_punto_venta)
 
@@ -93,6 +101,9 @@ def consultar_cae_comprobante(
     if not is_fe_configured(base_empresa):
         return None, None, "AFIP no configurado"
     cfg = get_fe_config(base_empresa)
+    ok_read, err_read = validate_fe_certificates_readable(cfg)
+    if not ok_read:
+        return None, None, err_read[:300]
     tipo_cbte = TIPO_CBTE_AFIP.get(tipo_comprobante.upper() if tipo_comprobante else "FB", 6)
     pto_vta = int(id_punto_venta)
     cbte_nro = int(nro_comprobante)

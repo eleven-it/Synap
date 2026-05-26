@@ -212,6 +212,7 @@ class QueryRunnerService:
             'bo-stock-facturacion',
             'ventas-objetivos-vs-bo',
             'ventas-por-vendedor',
+            'ventas-por-articulo',
             'stock-existencias',
             'comprobantes-rutas',
             'mayoristapp-lista-comprobantes-rutas',  # compat. clientes que aún envían slug antiguo
@@ -279,6 +280,8 @@ class QueryRunnerService:
             if report.slug == "ventas-objetivos-vs-bo"
             else f"{payload_hash}:vpv_v1"
             if report.slug == "ventas-por-vendedor"
+            else f"{payload_hash}:vpa_v1"
+            if report.slug == "ventas-por-articulo"
             else payload_hash
         )
 
@@ -312,7 +315,7 @@ class QueryRunnerService:
             result = self._run_total_consolidado_operativo(report, payload)
         elif report.slug == "bo-stock-facturacion":
             result = self._run_backorder_vs_stock_vs_facturacion(report, payload)
-        elif report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor"):
+        elif report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
             from .ventas_objetivos_bo_runner import run_ventas_objetivos_vs_bo
 
             result = run_ventas_objetivos_vs_bo(report, payload, self.user)
@@ -326,6 +329,10 @@ class QueryRunnerService:
             result = self._run_mpr_brecha_demanda(report, payload)
         elif report.slug == "mpr-movimientos-produccion":
             result = self._run_mpr_movimientos_produccion(report, payload)
+        elif report.slug == "documento-presupuesto-ventas":
+            from .presupuesto_ventas_runner import run_documento_presupuesto_ventas
+
+            result = run_documento_presupuesto_ventas(report, payload, self.user)
         else:
             # Para otros reportes, usar datos de muestra por ahora
             meta, data, totals, notes = get_sample_data(report.slug, payload)
@@ -2015,188 +2022,25 @@ class QueryRunnerService:
             raise
     
     def _classify_movement(self, tipo_comprobante, tipo, ingreso, egreso, tipo_cp, cod_gasto, gasto_nombre, grupo_gasto_nombre):
-        """
-        Clasifica un movimiento en flujo (operativo, inversión, financiamiento) y subcategoría.
-        Retorna: (flujo_tipo, flujo_subcategoria)
-        
-        Basado en los tipos de comprobantes de ingresos y egresos definidos:
-        - Ingresos: FA, FB, FC, FE, FM, REC, CHEQ, MCAJ (según contexto), TARJ, OMC, etc.
-        - Egresos: FA, FB (compras), CHEQ, MCAJ (según contexto), OP, NCA, etc.
-        """
-        tipo_comp_upper = tipo_comprobante.upper() if tipo_comprobante else ""
-        tipo_upper = tipo.upper() if tipo else ""
-        tipo_lower = tipo.lower() if tipo else ""
-        
-        # OPERATIVO - INGRESOS
-        if ingreso > 0:
-            # Facturas de venta (FA, FB, FC, FE, FM)
-            if tipo_comp_upper in ['FA', 'FB', 'FC', 'FE', 'FM']:
-                return ('operativo', 'ingresos_ventas')
-            # Cobranzas (REC, CHEQ cuando es cobranza)
-            elif tipo_comp_upper in ['REC']:
-                return ('operativo', 'ingresos_cobranzas')
-            # CHEQ puede ser ingreso (cobranza) o egreso (pago)
-            # Si hay cliente asociado, probablemente es cobranza
-            elif tipo_comp_upper == 'CHEQ' and tipo_cp == 'Cliente':
-                return ('operativo', 'ingresos_cobranzas')
-            # MCAJ puede ser ingreso o egreso según el tipo
-            # Si el tipo contiene palabras clave de ingreso
-            elif tipo_comp_upper == 'MCAJ':
-                if any(keyword in tipo_lower for keyword in ['cobro', 'cobranza', 'ingreso', 'deposito', 'depósito']):
-                    return ('operativo', 'ingresos_cobranzas')
-                elif 'cierre' in tipo_lower:
-                    # Cierre de caja es un movimiento interno, pero si tiene ingreso, es operativo
-                    return ('operativo', 'ingresos_otros')
-                else:
-                    return ('operativo', 'ingresos_otros')
-            # Tarjeta (TARJ)
-            elif tipo_comp_upper == 'TARJ':
-                return ('operativo', 'ingresos_ventas')
-            # Documento/Pagaré (OMC)
-            elif tipo_comp_upper == 'OMC':
-                return ('operativo', 'ingresos_cobranzas')
-            # Intereses
-            elif 'interes' in tipo_lower or 'interés' in tipo_lower:
-                return ('operativo', 'ingresos_intereses')
-            # Otros ingresos operativos
-            else:
-                return ('operativo', 'ingresos_otros')
-        
-        # OPERATIVO - EGRESOS
-        elif egreso > 0:
-            # Facturas de compra a proveedores (FA, FB cuando tipo_cp es Proveedor)
-            if tipo_comp_upper in ['FA', 'FB'] and tipo_cp == 'Proveedor':
-                return ('operativo', 'egresos_proveedores')
-            # Pago Efectivo (OP)
-            elif tipo_comp_upper == 'OP':
-                # Puede ser pago a proveedor o gasto, verificar si hay proveedor asociado
-                if tipo_cp == 'Proveedor':
-                    return ('operativo', 'egresos_proveedores')
-                else:
-                    return ('operativo', 'egresos_otros')
-            # CHEQ puede ser egreso (pago)
-            elif tipo_comp_upper == 'CHEQ' and tipo_cp == 'Proveedor':
-                return ('operativo', 'egresos_proveedores')
-            elif tipo_comp_upper == 'CHEQ':
-                return ('operativo', 'egresos_otros')
-            # MCAJ puede ser egreso según el tipo
-            elif tipo_comp_upper == 'MCAJ':
-                if any(keyword in tipo_lower for keyword in ['pago', 'egreso', 'extraccion', 'extracción', 'entrega']):
-                    if tipo_cp == 'Proveedor':
-                        return ('operativo', 'egresos_proveedores')
-                    else:
-                        return ('operativo', 'egresos_otros')
-                elif 'cierre' in tipo_lower:
-                    # Cierre de caja es movimiento interno
-                    return ('operativo', 'egresos_otros')
-                else:
-                    return ('operativo', 'egresos_otros')
-            # Nota de Crédito de compra (NCA) - es un egreso negativo (reducción de deuda)
-            elif tipo_comp_upper == 'NCA':
-                return ('operativo', 'egresos_proveedores')
-            # Gastos imputados (cod_gasto > 0)
-            elif cod_gasto and cod_gasto > 0:
-                # Clasificar por grupo de gasto si está disponible
-                if grupo_gasto_nombre:
-                    grupo_lower = grupo_gasto_nombre.lower()
-                    if 'sueldo' in grupo_lower or 'salario' in grupo_lower:
-                        return ('operativo', 'egresos_sueldos')
-                    elif 'servicio' in grupo_lower:
-                        return ('operativo', 'egresos_servicios')
-                    elif 'impuesto' in grupo_lower or 'iva' in grupo_lower:
-                        return ('operativo', 'egresos_impuestos')
-                    else:
-                        return ('operativo', 'egresos_gastos')
-                # Si no hay grupo, intentar por nombre de gasto
-                elif gasto_nombre:
-                    gasto_lower = gasto_nombre.lower()
-                    if 'sueldo' in gasto_lower or 'salario' in gasto_lower:
-                        return ('operativo', 'egresos_sueldos')
-                    elif 'servicio' in gasto_lower:
-                        return ('operativo', 'egresos_servicios')
-                    elif 'impuesto' in gasto_lower or 'iva' in gasto_lower:
-                        return ('operativo', 'egresos_impuestos')
-                    else:
-                        return ('operativo', 'egresos_gastos')
-                else:
-                    return ('operativo', 'egresos_gastos')
-            # Sueldos (por tipo)
-            elif 'sueldo' in tipo_lower or 'salario' in tipo_lower:
-                return ('operativo', 'egresos_sueldos')
-            # Impuestos (por tipo)
-            elif 'impuesto' in tipo_lower or 'iva' in tipo_lower:
-                return ('operativo', 'egresos_impuestos')
-            # Servicios (por tipo)
-            elif 'servicio' in tipo_lower:
-                return ('operativo', 'egresos_servicios')
-            # Otros egresos operativos
-            else:
-                return ('operativo', 'egresos_otros')
-        
-        # INVERSIÓN (por ahora no hay movimientos de inversión identificados)
-        # Se puede agregar lógica aquí si se identifican tipos específicos
-        
-        # FINANCIAMIENTO (por ahora no hay movimientos de financiamiento identificados)
-        # Se puede agregar lógica aquí si se identifican tipos específicos
-        
-        # Por defecto, operativo
-        return ('operativo', 'otros')
-    
+        """Delega en executive_dashboard.caja_classification (única fuente de verdad)."""
+        from reports.services.executive_dashboard.caja_classification import classify_movement
+
+        return classify_movement(
+            tipo_comprobante,
+            tipo,
+            ingreso,
+            egreso,
+            tipo_cp=tipo_cp,
+            cod_gasto=cod_gasto,
+            gasto_nombre=gasto_nombre,
+            grupo_gasto_nombre=grupo_gasto_nombre,
+        )
+
     def _get_payment_method(self, tipo_comprobante, tipo):
-        """
-        Determina el medio de pago desde tipo_comprobante y tipo.
-        Basado en los tipos de comprobantes de administraNET.
-        """
-        tipo_comp_upper = tipo_comprobante.upper() if tipo_comprobante else ""
-        tipo_comp_lower = tipo_comprobante.lower() if tipo_comprobante else ""
-        tipo_lower = tipo.lower() if tipo else ""
-        
-        # CHEQ = Cheque
-        if tipo_comp_upper == 'CHEQ' or 'cheque' in tipo_comp_lower or 'cheq' in tipo_comp_lower:
-            return "Cheque"
-        # TARJ = Tarjeta
-        elif tipo_comp_upper == 'TARJ' or 'tarjeta' in tipo_lower or 'tarj' in tipo_comp_lower:
-            return "Tarjeta"
-        # MCAJ puede ser varios medios según el tipo
-        elif tipo_comp_upper == 'MCAJ':
-            if 'efectivo' in tipo_lower:
-                return "Efectivo"
-            elif 'cheque' in tipo_lower or 'cheq' in tipo_lower:
-                return "Cheque"
-            elif 'transferencia' in tipo_lower or 'transferencia' in tipo_lower:
-                return "Transferencia"
-            elif 'deposito' in tipo_lower or 'depósito' in tipo_lower:
-                return "Depósito"
-            else:
-                return "Movimiento de Caja"
-        # REC = Recibo (generalmente efectivo)
-        elif tipo_comp_upper == 'REC':
-            if 'efectivo' in tipo_lower:
-                return "Efectivo"
-            elif 'cheque' in tipo_lower or 'cheq' in tipo_lower:
-                return "Cheque"
-            else:
-                return "Recibo"
-        # OP = Orden de Pago (puede ser efectivo o cheque)
-        elif tipo_comp_upper == 'OP':
-            if 'efectivo' in tipo_lower:
-                return "Efectivo"
-            elif 'cheque' in tipo_lower or 'cheq' in tipo_lower:
-                return "Cheque"
-            else:
-                return "Orden de Pago"
-        # Efectivo (por tipo)
-        elif 'efectivo' in tipo_lower:
-            return "Efectivo"
-        # Transferencia (por tipo)
-        elif 'transferencia' in tipo_lower:
-            return "Transferencia"
-        # Depósito (por tipo)
-        elif 'deposito' in tipo_lower or 'depósito' in tipo_lower:
-            return "Depósito"
-        # Por defecto, usar el tipo_comprobante o "Otro"
-        else:
-            return tipo_comprobante if tipo_comprobante else "Otro"
+        """Delega en executive_dashboard.caja_classification."""
+        from reports.services.executive_dashboard.caja_classification import get_payment_method
+
+        return get_payment_method(tipo_comprobante, tipo)
     
     def _run_uninvoiced_remitos(self, report: ReportDefinition, payload: Dict) -> QueryResult:
         """

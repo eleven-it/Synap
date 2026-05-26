@@ -20,6 +20,7 @@ BUILDER_HYBRID_SLUGS = frozenset(
     {
         "ventas-objetivos-vs-bo",
         "ventas-por-vendedor",
+        "ventas-por-articulo",
         "bo-stock-facturacion",
         "stock-existencias",
     }
@@ -124,10 +125,14 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
 
     template_name = "reports/dashboard_detail.html"
     EXECUTIVE_SLUG = "resumen-ejecutivo-ventas"
+    COMMAND_CENTER_SLUG = "command-center-gerencial"
 
     def get_template_names(self):
-        if self.kwargs.get("slug") == self.EXECUTIVE_SLUG:
+        slug = self.kwargs.get("slug")
+        if slug == self.EXECUTIVE_SLUG:
             return ["reports/executive_summary.html"]
+        if slug == self.COMMAND_CENTER_SLUG:
+            return ["reports/command_center.html"]
         return [self.template_name]
 
     def get_report(self) -> ReportDefinition:
@@ -168,6 +173,27 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
         if report.slug == self.EXECUTIVE_SLUG:
             context["executive_summary_api_url"] = reverse("reports-api:reports-executive-summary")
             context["pv_canal_api_url"] = reverse("reports-api:reports-pv-canal-ejecutivo")
+        if report.slug == self.COMMAND_CENTER_SLUG:
+            context["command_center_api_url"] = reverse("reports-api:reports-executive-dashboard")
+            context["executive_summary_api_url"] = reverse("reports-api:reports-executive-summary")
+            context["executive_sales_page_url"] = reverse(
+                "reports:dashboard_detail", kwargs={"slug": self.EXECUTIVE_SLUG}
+            )
+            context["mpr_tablero_url"] = reverse("mpr:tablero")
+            context["detail_urls"] = {
+                "pedidos_pendientes": reverse(
+                    "reports-api:reports-executive-dashboard-ventas-pedidos-pendientes"
+                ),
+                "remitos_nf": reverse(
+                    "reports-api:reports-executive-dashboard-ventas-remitos-nf"
+                ),
+                "backorder": reverse(
+                    "reports-api:reports-executive-dashboard-cruzados-backorder"
+                ),
+                "existencias": reverse(
+                    "reports-api:reports-executive-dashboard-inventario-existencias"
+                ),
+            }
         return context
 
 

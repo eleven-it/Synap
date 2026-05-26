@@ -1,0 +1,17 @@
+schema: spec-driven
+
+context: |
+  Synap: Django, PostgreSQL (Synap) + MySQL legacy AdministraNET.
+  Ventas: app `ventas/`; permisos `core/services/administranet_permisos_sistema.py`;
+  reportes documento operativo en app `reports/` (ReportDefinition).
+  Tipos legacy: `core.utils.administranet_types`.
+
+rules:
+  proposal:
+    - Referenciar docs/general/SPEC_PRESUPUESTO_VENTAS_SYNAP.md como contrato funcional.
+    - UX Synap puede divergir del VB6 cuando mejore usabilidad; paridad en datos y negocio (SPEC §1.3–§1.4).
+    - Canon UI operativo (referencia para migraciones y agentes): reportes `/reports/dashboard/<slug>/` y MPR `/mpr/wizard/`, `/mpr/opt/...`; no usar como referencia visual las pantallas de Objetivos de venta ni Presupuestos en `ventas/` hasta rediseño explícito. Spec vigente: `openspec/specs/ui-fuente-verdad-reportes-mpr/spec.md`; cambio archivado: `openspec/changes/archive/2026-05-06-fuente-verdad-ui-reportes-mpr/`.
+  specs:
+    - Escenarios en español; RFC 2119 (MUST / MUST NOT / SHOULD).
+  design:
+    - Rutas y archivos concretos del repo Synap; no inventar apps no instaladas.

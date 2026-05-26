@@ -36,6 +36,7 @@ Por tanto, para que un artículo aparezca en Demanda:
 
 1. Debe existir **pendiente** en `lista_produccion_agrupada` (`cantidad_pendiente_prod > 0`, `en_proceso_produccion = 'No'`, sin OPT liberada), alimentado por **Actualizar** desde pedidos **y/o** desde la fila de demanda por reserva.
 2. Los pedidos pendientes entran según rango de fechas y búsqueda; la reserva se evalúa en cada Actualizar aunque no haya PED en el rango.
+3. **`listar_ventana_pack`** solo incluye artículos con **cantidad a fabricar > 0** (`max(0, P_ped + R − S)`). Si el **saldo** (stock terminado en depósitos que suman) cubre el pedido más la **reserva maestra** del artículo, la cantidad a fabricar es 0 y **no se muestra** la fila en ventana-pack (demanda satisfecha para producir), aunque el pendiente persistido en agrupada siga siendo > 0.
 
 ---
 

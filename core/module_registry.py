@@ -356,5 +356,28 @@ MODULE_CONFIGS = {
         ],
         'hooks': [],
     },
+
+    'fe_afip': {
+        'name': 'fe_afip',
+        'display_name': 'Facturación AFIP (FE)',
+        'description': (
+            'Configuración de certificados ARCA/AFIP, homologación o producción y CAEA; '
+            'requerido para factura electrónica en TPV / self-checkout.'
+        ),
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core', 'dashboard'],
+        'optional_dependencies': ['self_checkout'],
+        'settings': {},
+        'permissions': [
+            'fe_afip.view_afipconfig',
+            'fe_afip.add_afipconfig',
+            'fe_afip.change_afipconfig',
+            'fe_afip.delete_afipconfig',
+        ],
+        'hooks': [],
+    },
     # self_checkout: app core (siempre instalada), URLs en django_project/urls.py, permisos en PERMISOS_POR_MODULO + sync.
 } 

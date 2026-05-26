@@ -154,6 +154,34 @@ def asignar_series_a_item(
     return True, None
 
 
+def articulos_requieren_serie_map(base_empresa: str, id_articulos: List[int]) -> Dict[int, bool]:
+    """
+    Devuelve { id_articulo: True } si articulo.serie = 'Si' (catálogo administraNET).
+    """
+    out: Dict[int, bool] = {}
+    if not id_articulos:
+        return out
+    uniq = list({int(x) for x in id_articulos})
+    placeholders = ",".join(["%s"] * len(uniq))
+    with mysql_cursor(base_empresa, dict_cursor=True) as c:
+        try:
+            c.execute(
+                f"""
+                SELECT IDArt, serie FROM articulo WHERE IDArt IN ({placeholders})
+                """,
+                uniq,
+            )
+            for r in c.fetchall():
+                ia = int(r["IDArt"])
+                out[ia] = (r.get("serie") or "").strip() == "Si"
+        except Exception as e:
+            if "Unknown column" in str(e):
+                return {}
+            logger.warning("articulos_requieren_serie_map: %s", e)
+            return {}
+    return out
+
+
 def obtener_series_por_item(base_empresa: str, cart_item_id: int) -> List[Dict[str, Any]]:
     """Lista las series asignadas a un ítem del carrito."""
     out = []
@@ -184,35 +212,77 @@ def obtener_series_por_item(base_empresa: str, cart_item_id: int) -> List[Dict[s
 
 def validar_series_carrito(base_empresa: str, cart_id: int) -> Tuple[bool, Optional[str]]:
     """
-    Para cada ítem con serie='Si', verifica que tenga exactamente cantidad series en cart_item_serie.
+    Para cada ítem cuyo artículo es seriado en catálogo (articulo.serie = 'Si'), verifica que
+    haya exactamente `cantidad` filas en self_checkout_cart_item_serie.
+    No depende solo de cart_item.serie (antes NULL hasta asignar → quedaban líneas sin validar).
     Returns (ok, error_msg).
     """
     with mysql_cursor(base_empresa, dict_cursor=True) as c:
         try:
-            c.execute("""
-                SELECT ci.id, ci.id_articulo, ci.cantidad, ci.descripcion, ci.serie
+            c.execute(
+                """
+                SELECT ci.id, ci.id_articulo, ci.cantidad, ci.descripcion,
+                       COALESCE(NULLIF(TRIM(a.serie), ''), 'No') AS articulo_serie
                 FROM self_checkout_cart_item ci
+                LEFT JOIN articulo a ON a.IDArt = ci.id_articulo
                 WHERE ci.cart_id = %s
-            """, [cart_id])
+                """,
+                [cart_id],
+            )
             items = c.fetchall()
         except Exception as e:
-            if 'Unknown column' in str(e):
-                return True, None  # columna serie no existe
+            if "doesn't exist" in str(e) and "articulo" in str(e).lower():
+                try:
+                    c.execute(
+                        """
+                        SELECT ci.id, ci.id_articulo, ci.cantidad, ci.descripcion, ci.serie
+                        FROM self_checkout_cart_item ci
+                        WHERE ci.cart_id = %s
+                        """,
+                        [cart_id],
+                    )
+                    items = c.fetchall()
+                except Exception as e2:
+                    if "Unknown column" in str(e2):
+                        return True, None
+                    raise
+                for it in items:
+                    if (it.get("serie") or "").strip() != "Si":
+                        continue
+                    cant = int(Decimal(str(it["cantidad"])))
+                    try:
+                        c.execute(
+                            "SELECT COUNT(*) AS n FROM self_checkout_cart_item_serie WHERE cart_item_id = %s",
+                            [it["id"]],
+                        )
+                        r = c.fetchone()
+                        n = int(r.get("n", 0) or 0)
+                    except Exception:
+                        n = 0
+                    if n != cant:
+                        nombre = (it.get("descripcion") or "").strip() or f"Artículo {it.get('id_articulo')}"
+                        return (
+                            False,
+                            f'"{nombre}": la cantidad de números de serie ({n}) no coincide con la cantidad ({cant}).',
+                        )
+                return True, None
+            if "Unknown column" in str(e):
+                return True, None
             raise
         for it in items:
-            if (it.get('serie') or '').strip() != 'Si':
+            if (it.get("articulo_serie") or "No").strip() != "Si":
                 continue
-            cant = int(Decimal(str(it['cantidad'])))
+            cant = int(Decimal(str(it["cantidad"])))
             try:
                 c.execute(
                     "SELECT COUNT(*) AS n FROM self_checkout_cart_item_serie WHERE cart_item_id = %s",
-                    [it['id']],
+                    [it["id"]],
                 )
                 r = c.fetchone()
-                n = int(r.get('n', 0) or 0)
+                n = int(r.get("n", 0) or 0)
             except Exception:
                 n = 0
             if n != cant:
-                nombre = (it.get('descripcion') or '').strip() or f"Artículo {it.get('id_articulo')}"
+                nombre = (it.get("descripcion") or "").strip() or f"Artículo {it.get('id_articulo')}"
                 return False, f'"{nombre}": la cantidad de números de serie ({n}) no coincide con la cantidad ({cant}).'
     return True, None

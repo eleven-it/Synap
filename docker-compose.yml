@@ -10,8 +10,12 @@ services:
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
+      # Certificados AFIP fuera del bind mount (.:/app) para I/O estable con pyafipws.
+      - synap_afip_secrets:/var/lib/synap/afip
     env_file:
       - .env
+    environment:
+      SYNAP_AFIP_STORAGE: /var/lib/synap/afip
     depends_on:
       - db
       - redis
@@ -63,6 +67,7 @@ volumes:
   postgres_data:
   redis_data:
   static_volume:
+  synap_afip_secrets:
   # media_volume: Eliminado - usar bind mount (.:/app) para media/
   # qdrant_data: Eliminado (no necesario)
 

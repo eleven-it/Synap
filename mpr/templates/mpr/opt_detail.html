@@ -246,7 +246,7 @@
                     <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-500">OPT cerrada. Todo el armado ya fue registrado.</p>
                 </div>
             </div>
-            {% elif total_pendiente > 0 %}
+            {% elif hay_disponible_opp %}
             <div class="flex cursor-not-allowed items-center gap-4 rounded-2xl border border-gray-200 bg-gray-100/80 p-5 opacity-80 dark:border-gray-700 dark:bg-gray-800" title="Disponible cuando pendiente = 0">
                 <span class="material-icons shrink-0 text-3xl text-gray-400" aria-hidden="true">build</span>
                 <div>
@@ -272,7 +272,7 @@
             </a>
             {% endif %}
             {% endif %}
-            {% if id_lista and total_pendiente > 0 and en_proceso %}
+            {% if id_lista and hay_disponible_opp and en_proceso %}
             <a href="{% url 'mpr:wizard' %}?paso=3&amp;id_lista={{ id_lista }}" class="group flex items-center gap-4 rounded-2xl border border-transparent bg-purple-600 p-5 text-white shadow-md transition-all hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                 <span class="material-icons shrink-0 text-3xl transition-transform group-hover:scale-105" aria-hidden="true">assignment</span>
                 <div class="min-w-0">
@@ -286,7 +286,9 @@
         {% if id_lista and total_pendiente == 0 and en_proceso %}
         <div class="mb-8 rounded-2xl border border-green-600/40 bg-green-50/90 p-5 dark:border-green-500/30 dark:bg-green-900/20">
             <p class="mb-4 text-sm font-medium text-green-900 dark:text-green-200">Pendiente en cero. Puede cerrar esta OPT.</p>
-            <form method="post" action="{% url 'mpr:opt_cerrar' id_lista %}">
+            <form method="post" action="{% url 'mpr:opt_cerrar' id_lista %}" class="mpr-post-loading"
+                  data-mpr-loading-title="Cerrando OPT"
+                  data-mpr-loading-subtitle="Finalizando la orden de producción… No cierres esta ventana.">
                 {% csrf_token %}
                 <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-green-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-lg" aria-hidden="true">task_alt</span>
