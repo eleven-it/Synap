@@ -13,6 +13,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.http import HttpResponse
 
+from .export_filter_labels import build_export_filter_lines
 from .query_runner import QueryRunnerService
 from ..models import ReportDefinition
 
@@ -135,6 +136,41 @@ class ExportService:
             expires_at=None,
             filename=filename,
         )
+
+    def _append_excel_filter_block(
+        self,
+        ws,
+        start_row: int,
+        filter_lines: List[tuple],
+        label_font,
+        value_font,
+        max_merge_col: int = 8,
+    ) -> int:
+        """Escribe bloque «Filtros aplicados» y devuelve la siguiente fila libre."""
+        if not filter_lines:
+            return start_row
+
+        from openpyxl.styles import Alignment
+
+        title_cell = ws.cell(row=start_row, column=1, value="Filtros aplicados")
+        title_cell.font = label_font
+        row = start_row + 1
+        for etiqueta, valor in filter_lines:
+            lc = ws.cell(row=row, column=1, value=etiqueta)
+            lc.font = label_font
+            lc.alignment = Alignment(horizontal="left", vertical="top")
+            if max_merge_col > 2:
+                ws.merge_cells(
+                    start_row=row,
+                    start_column=2,
+                    end_row=row,
+                    end_column=max_merge_col,
+                )
+            vc = ws.cell(row=row, column=2, value=valor)
+            vc.font = value_font
+            vc.alignment = Alignment(horizontal="left", vertical="top", wrap_text=True)
+            row += 1
+        return row + 1
 
     def _resolve_export_filename(self, report_slug: str, payload: Dict[str, Any], timestamp: str) -> str:
         """
@@ -378,7 +414,7 @@ class ExportService:
             self._generate_excel_documento_presupuesto_ventas(file_path, report, query_result, payload)
             return
         if report.slug == "bo-stock-facturacion":
-            self._generate_excel_bo(file_path, report, query_result)
+            self._generate_excel_bo(file_path, report, query_result, payload)
             return
         import openpyxl
         from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -393,11 +429,25 @@ class ExportService:
         header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         header_font = Font(bold=True, color="FFFFFF", size=11)
         title_font = Font(bold=True, size=14, color="1E40AF")
+        filter_label_font = Font(bold=True, size=10)
+        filter_value_font = Font(size=10)
         border = Border(
             left=Side(style='thin'),
             right=Side(style='thin'),
             top=Side(style='thin'),
             bottom=Side(style='thin')
+        )
+
+        base_empresa = None
+        if isinstance(payload, dict):
+            base_empresa = payload.get("base_empresa") or (payload.get("filters") or {}).get(
+                "base_empresa"
+            )
+        filter_lines = build_export_filter_lines(
+            report.slug,
+            payload if isinstance(payload, dict) else {},
+            (query_result.meta or {}).get("filters_applied"),
+            base_empresa,
         )
         
         row = 1
@@ -409,8 +459,13 @@ class ExportService:
         cell.font = title_font
         cell.alignment = Alignment(horizontal='left', vertical='center')
         row += 1
+
+        # 2. Filtros aplicados (nombres legibles)
+        row = self._append_excel_filter_block(
+            ws, row, filter_lines, filter_label_font, filter_value_font
+        )
         
-        # 2. Información del período (desde notes)
+        # 3. Información del período (desde notes)
         if query_result.notes:
             ws.merge_cells(f'A{row}:D{row}')
             cell = ws[f'A{row}']
@@ -421,7 +476,7 @@ class ExportService:
         
         row += 1  # Espacio
         
-        # 3. Headers y datos según el tipo de reporte
+        # 4. Headers y datos según el tipo de reporte
         if report.slug == "sales_summary":
             # Resumen de Ventas: mostrar como tabla de totales
             headers = ["Concepto", "Valor"]
@@ -907,7 +962,9 @@ class ExportService:
         wb.save(file_path)
         logger.info(f"✅ Archivo Excel generado: {file_path}")
 
-    def _generate_excel_bo(self, file_path: Path, report: ReportDefinition, query_result):
+    def _generate_excel_bo(
+        self, file_path: Path, report: ReportDefinition, query_result, payload: Optional[Dict] = None
+    ):
         """
         Genera un archivo Excel multi-hoja para el reporte BO vs Stock vs Facturación.
         Cada tab del reporte se exporta como una hoja.
@@ -933,11 +990,21 @@ class ExportService:
         header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         header_font = Font(bold=True, color="FFFFFF", size=11)
         title_font = Font(bold=True, size=14, color="1E40AF")
+        filter_label_font = Font(bold=True, size=10)
+        filter_value_font = Font(size=10)
         border = Border(
             left=Side(style='thin'),
             right=Side(style='thin'),
             top=Side(style='thin'),
             bottom=Side(style='thin'),
+        )
+        payload = payload if isinstance(payload, dict) else {}
+        base_empresa = payload.get("base_empresa") or (payload.get("filters") or {}).get("base_empresa")
+        filter_lines = build_export_filter_lines(
+            report.slug,
+            payload,
+            (query_result.meta or {}).get("filters_applied"),
+            base_empresa,
         )
         currency_headers = {
             "importe", "sub_total", "subtotal_desc", "bo_importe", "con_stock_importe",
@@ -981,7 +1048,7 @@ class ExportService:
             ws.title = sanitize_sheet_name(sheet_title)
 
             row = 1
-            # Título del reporte y período solo en la primera hoja
+            # Título, filtros y período solo en la primera hoja
             if ws == wb.active:
                 ws.merge_cells(f"A{row}:D{row}")
                 cell = ws[f"A{row}"]
@@ -989,6 +1056,9 @@ class ExportService:
                 cell.font = title_font
                 cell.alignment = Alignment(horizontal='left', vertical='center')
                 row += 1
+                row = self._append_excel_filter_block(
+                    ws, row, filter_lines, filter_label_font, filter_value_font
+                )
                 if query_result.notes:
                     for note_line in query_result.notes[:2]:
                         ws.merge_cells(f"A{row}:D{row}")
@@ -1133,7 +1203,22 @@ class ExportService:
             c.font = Font(size=10, italic=True)
             row += 1
 
-        row += 1
+        base_empresa = None
+        if isinstance(payload, dict):
+            base_empresa = payload.get("base_empresa") or (payload.get("filters") or {}).get(
+                "base_empresa"
+            )
+        filter_lines = build_export_filter_lines(
+            report.slug,
+            payload if isinstance(payload, dict) else {},
+            (query_result.meta or {}).get("filters_applied"),
+            base_empresa,
+        )
+        filter_label_font = Font(bold=True, size=10)
+        filter_value_font = Font(size=10)
+        row = self._append_excel_filter_block(
+            ws, row, filter_lines, filter_label_font, filter_value_font, max_merge_col=6
+        )
 
         def escribe_kv(etiqueta: str, valor):
             nonlocal row
