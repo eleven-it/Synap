@@ -6,7 +6,7 @@ from typing import Any
 
 from .base import DashboardFilters, build_meta, legacy_cursor
 from .cross_metrics import fetch_cruzados_resumen
-from .exceptions import LegacyReadError
+from .exceptions import is_legacy_db_error, legacy_area_failure_payload
 from .inventory_metrics import fetch_inventario_resumen
 from .manufacturing_metrics import fetch_manufactura_resumen
 from .purchase_metrics import fetch_compras_resumen
@@ -43,12 +43,11 @@ def _area_sin_meta_interno(area_payload: dict[str, Any]) -> dict[str, Any]:
 def _safe_legacy_area(name: str, fn, *args, **kwargs) -> dict[str, Any]:
     try:
         return fn(*args, **kwargs)
-    except LegacyReadError as exc:
+    except Exception as exc:
+        if not is_legacy_db_error(exc):
+            raise
         logger.warning("Dashboard área %s: %s", name, exc)
-        return {
-            "disponible": False,
-            "error": {"tipo": "legacy_transient_failure", "mensaje": str(exc)},
-        }
+        return legacy_area_failure_payload(exc)
 
 
 def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
@@ -56,60 +55,33 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
     notas_globales: list[str] = []
 
     sucursales_disponibles: list = []
-    try:
-        with legacy_cursor(filters.base_empresa) as cursor:
-            ventas_full = fetch_ventas_resumen(cursor, filters)
+    with legacy_cursor(filters.base_empresa) as cursor:
+        ventas_full = _safe_legacy_area("ventas", fetch_ventas_resumen, cursor, filters)
+        if ventas_full.get("disponible") is not False:
             areas["ventas"] = _area_sin_meta_interno(ventas_full)
             notas_globales.extend(ventas_full.get("meta", {}).get("notas_semanticas") or [])
+        else:
+            areas["ventas"] = ventas_full
 
-            inv_full = _safe_legacy_area(
-                "inventario", fetch_inventario_resumen, cursor, filters
-            )
-            if inv_full.get("disponible") is not False:
-                areas["inventario"] = _area_sin_meta_interno(inv_full)
+        for area_name, fetch_fn in (
+            ("inventario", fetch_inventario_resumen),
+            ("compras", fetch_compras_resumen),
+            ("cruzados", fetch_cruzados_resumen),
+            ("tesoreria", fetch_tesoreria_resumen),
+            ("ventas_cobros", fetch_ventas_cobros_resumen),
+        ):
+            area_full = _safe_legacy_area(area_name, fetch_fn, cursor, filters)
+            if area_full.get("disponible") is not False:
+                areas[area_name] = _area_sin_meta_interno(area_full)
             else:
-                areas["inventario"] = inv_full
+                areas[area_name] = area_full
 
-            comp_full = _safe_legacy_area(
-                "compras", fetch_compras_resumen, cursor, filters
+        try:
+            sucursales_disponibles = fetch_sucursales_ejecutivo(cursor)
+        except Exception:
+            logger.warning(
+                "No se pudieron cargar sucursales para command center", exc_info=True
             )
-            if comp_full.get("disponible") is not False:
-                areas["compras"] = _area_sin_meta_interno(comp_full)
-            else:
-                areas["compras"] = comp_full
-
-            cruz_full = _safe_legacy_area(
-                "cruzados", fetch_cruzados_resumen, cursor, filters
-            )
-            if cruz_full.get("disponible") is not False:
-                areas["cruzados"] = _area_sin_meta_interno(cruz_full)
-            else:
-                areas["cruzados"] = cruz_full
-
-            tes_full = _safe_legacy_area(
-                "tesoreria", fetch_tesoreria_resumen, cursor, filters
-            )
-            if tes_full.get("disponible") is not False:
-                areas["tesoreria"] = _area_sin_meta_interno(tes_full)
-            else:
-                areas["tesoreria"] = tes_full
-
-            cob_full = _safe_legacy_area(
-                "ventas_cobros", fetch_ventas_cobros_resumen, cursor, filters
-            )
-            if cob_full.get("disponible") is not False:
-                areas["ventas_cobros"] = _area_sin_meta_interno(cob_full)
-            else:
-                areas["ventas_cobros"] = cob_full
-
-            try:
-                sucursales_disponibles = fetch_sucursales_ejecutivo(cursor)
-            except Exception:
-                logger.warning(
-                    "No se pudieron cargar sucursales para command center", exc_info=True
-                )
-    except LegacyReadError:
-        raise
 
     areas["manufactura"] = _area_sin_meta_interno(
         fetch_manufactura_resumen(filters.base_empresa, filters)

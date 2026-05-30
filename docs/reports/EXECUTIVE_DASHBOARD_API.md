@@ -63,6 +63,19 @@ En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente
 - `offset` (≥ 0, default 0) — solo P1
 - `busqueda` o `q` (mín. 2 caracteres, máx. 120) — solo existencias: filtra por artículo, código, manual, depósito, marca, rubro, subrubro
 
+## Performance (may. 2026)
+
+Diagnóstico sobre `administranet93` (mes vigente): el cuello de botella era `_sum_saldo_cajas` en tesorería — subconsulta correlacionada sobre `caja` (~640k filas) superaba 5 min y abortaba todo el orquestador.
+
+**Corrección P0:**
+
+- `_sum_saldo_cajas` reescrito con `MAX(fecha)` + `MAX(codigo_movimiento)` por `id_caja_abm_origen` (compatible MySQL 5.7).
+- Errores SQL por área aislados en `run_command_center` (`_safe_legacy_area` + `legacy_cursor` sin envolver excepciones de queries).
+
+Tiempos orientativos post-fix (misma base, período mes): ventas ~0,7 s, inventario ~0,4 s, tesorería ~2 s, total orquestador ~3 s.
+
+**Carga UI (P1, may. 2026):** el frontend ya no bloquea con modal de espera ni espera al orquestador monolítico. Consulta en **paralelo** cada endpoint de área (`areaUrls` en plantilla) y pinta tarjetas al llegar cada respuesta. El `executive-summary` (ventas del día + sucursales) se dispara en **segundo plano** sin bloquear el grid. Fallback: si no hay `areaUrls`, usa `GET /api/reports/executive-dashboard/`.
+
 ## Código
 
 - Servicios: `reports/services/executive_dashboard/`
