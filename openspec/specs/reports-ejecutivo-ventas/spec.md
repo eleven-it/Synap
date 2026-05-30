@@ -44,8 +44,8 @@ Incorpora el delta del cambio archivado `executive-dashboard-top10-gap-usd` y ex
 
 ### REQ-EXEC-MARG-01 — Definición de margen bruto (día)
 
-- El payload **MUST** incluir **`margen_bruto`** con **`venta_neta_lineas`**, **`costo_neto_lineas`**, **`margen_absoluto`**, **`pct_sobre_venta_lineas`** (`null` si venta de líneas es 0), calculados desde **`stock.PrecioNetoxR`** y **`stock.PrecioCostoxR`** con el mismo signo FA/NC y los mismos filtros de renglón que **`top_productos`** / unidades del día.
-- Para esta versión el costo **MUST** ser el del renglón de comprobante (**`PrecioCostoxR`**), no el **`articulo.PrecioCosto`** actual.
+- El payload **MUST** incluir **`margen_bruto`** con **`venta_neta_lineas`**, **`costo_neto_lineas`**, **`margen_absoluto`**, **`pct_sobre_venta_lineas`** (`null` si venta de líneas es 0), calculados desde **`stock.PrecioNetoxR`** (venta) y **costo normalizado en unidad base** (`reports/services/margen_costo_linea.py`) con el mismo signo FA/NC y los mismos filtros de renglón que **`top_productos`** / unidades del día.
+- El costo agregado **MUST NOT** ser suma cruda de **`PrecioCostoxR`** ni **`articulo.PrecioCosto`** actual.
 
 ### REQ-EXEC-MARG-02 — Desglose por rubro
 
@@ -61,12 +61,13 @@ Incorpora el delta del cambio archivado `executive-dashboard-top10-gap-usd` y ex
 
 ### REQ-EXEC-MARG-05 — Metadatos de rentabilidad
 
-- **`meta`** **MUST** incluir **`margen_costo_criterio`** = `precio_costoxr_linea` y **`margen_venta_criterio`** = `precio_netoxr_linea`.
+- **`meta`** **MUST** incluir **`margen_costo_criterio`** = `costo_empaque_escala_cantidad_dividir` y **`margen_venta_criterio`** = `precio_netoxr_linea`.
+- **`meta`** **SHOULD** incluir **`nota_margen_costo_historico`** sobre comparabilidad con totales previos bajo `precio_costoxr_linea`.
 - **`meta.definicion`** **SHOULD** reflejar el contrato extendido (p. ej. **`executive-sales-v2`**) cuando el payload incluya rentabilidad.
 
 ### REQ-EXEC-MARG-06 — Conciliación con ventas netas KPI
 
-- **`kpis.ventas_netas_dia`** ( **`cuentacliente.SubtotalDesc`** ) puede **no** coincidir con **`margen_bruto.venta_neta_lineas`**; el % de margen mostrado en el bloque rentabilidad **MUST** basarse en **venta de líneas** del universo `stock` definido. La UI o documentación **MUST** comunicar esta diferencia de criterio.
+- **`kpis.ventas_netas_dia`** ( **`cuentacliente.SubtotalDesc`** ) puede **no** coincidir con **`margen_bruto.venta_neta_lineas`**; el % de margen mostrado en el bloque rentabilidad **MUST** basarse en **venta de líneas** del universo `stock` definido.
 
 ### REQ-EXEC-MARG-07 — UI rentabilidad
 

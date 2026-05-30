@@ -18,7 +18,7 @@ from .services.executive_dashboard.cross_metrics import (
     fetch_cruzados_resumen,
     list_backorder_detalle,
 )
-from .services.executive_dashboard.exceptions import InvalidDashboardFilters, LegacyReadError
+from .services.executive_dashboard.exceptions import InvalidDashboardFilters, LegacyReadError, is_legacy_db_error
 from .services.executive_dashboard.inventory_metrics import (
     fetch_inventario_resumen,
     list_existencias,
@@ -67,6 +67,11 @@ class ExecutiveDashboardMixin:
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
 
+    def _legacy_read_error(self, exc: Exception) -> LegacyReadError:
+        if isinstance(exc, LegacyReadError):
+            return exc
+        return LegacyReadError(str(exc))
+
 
 class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
     """GET orquestador command center."""
@@ -79,6 +84,10 @@ class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
             payload = run_command_center(filters)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
+        except Exception as exc:
+            if is_legacy_db_error(exc):
+                return self._legacy_error_response(self._legacy_read_error(exc))
+            raise
         return Response(payload)
 
 

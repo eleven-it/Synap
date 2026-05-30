@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 from django.test import SimpleTestCase
 
 from reports.services.executive_dashboard.base import DashboardFilters, resolve_filters_from_query_params
-from reports.services.executive_dashboard.command_center import run_command_center
+from reports.services.executive_dashboard.command_center import run_command_center, _safe_legacy_area
 from reports.services.executive_dashboard.cross_metrics import (
     fetch_cruzados_resumen,
     list_backorder_detalle,
@@ -18,7 +18,7 @@ from reports.services.executive_dashboard.inventory_metrics import (
 )
 from reports.services.executive_dashboard.manufacturing_metrics import fetch_manufactura_resumen
 from reports.services.executive_dashboard.purchase_metrics import fetch_compras_resumen
-from reports.services.executive_dashboard.tesoreria_metrics import fetch_tesoreria_resumen
+from reports.services.executive_dashboard.tesoreria_metrics import fetch_tesoreria_resumen, _sum_saldo_cajas
 from reports.services.executive_dashboard.ventas_cobros_metrics import fetch_ventas_cobros_resumen
 from reports.services.executive_dashboard.ventas_metrics import (
     fetch_ventas_resumen,
@@ -157,6 +157,87 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertIn("endpoints", out["meta"])
         self.assertIn("tesoreria", out["meta"]["endpoints"])
         self.assertIn("ventas_cobros", out["meta"]["endpoints"])
+
+    @patch("reports.services.executive_dashboard.command_center.fetch_manufactura_resumen")
+    @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
+    @patch(
+        "reports.services.executive_dashboard.command_center.fetch_ventas_cobros_resumen",
+        return_value={"disponible": True, "meta": {}, "facturado_por_medio": {}, "cobrado_caja_por_medio": {}},
+    )
+    @patch(
+        "reports.services.executive_dashboard.command_center.fetch_cruzados_resumen",
+        return_value={"disponible": True, "meta": {}, "backorder_importe": 0},
+    )
+    @patch(
+        "reports.services.executive_dashboard.command_center.fetch_compras_resumen",
+        return_value={"disponible": True, "meta": {}, "oc_pendientes_cantidad": 0},
+    )
+    @patch(
+        "reports.services.executive_dashboard.command_center.fetch_inventario_resumen",
+        return_value={"disponible": True, "meta": {}, "valor_stock": 0},
+    )
+    @patch(
+        "reports.services.executive_dashboard.command_center.fetch_ventas_resumen",
+        return_value={"disponible": True, "meta": {"notas_semanticas": []}, "ventas_netas": 1},
+    )
+    def test_run_command_center_aisla_fallo_tesoreria(
+        self, mock_ventas, mock_inv, mock_comp, mock_cruz, mock_cob, mock_legacy, mock_mfg
+    ):
+        cursor = MagicMock()
+        mock_legacy.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_legacy.return_value.__exit__ = MagicMock(return_value=False)
+
+        class FakeMysqlError(Exception):
+            pass
+
+        FakeMysqlError.__module__ = "MySQLdb"
+
+        with patch(
+            "reports.services.executive_dashboard.command_center.fetch_tesoreria_resumen",
+            side_effect=FakeMysqlError("(1028, 'maximum statement execution time exceeded')"),
+        ):
+            mock_mfg.return_value = {
+                "pedidos_fabrica_pendientes": 0,
+                "opt_atrasadas": 0,
+                "unidades_pendientes_produccion": 0,
+                "items_urgentes": 0,
+                "disponible": True,
+                "meta": {},
+            }
+            out = run_command_center(_filters())
+
+        self.assertIn("ventas", out["areas"])
+        self.assertFalse(out["areas"]["tesoreria"]["disponible"])
+        self.assertEqual(
+            out["areas"]["tesoreria"]["error"]["tipo"], "legacy_transient_failure"
+        )
+
+    def test_sum_saldo_cajas_usa_agregacion_sin_subconsulta_correlacionada(self):
+        cursor = MagicMock()
+        cursor.execute = MagicMock(return_value=None)
+        cursor.fetchone = MagicMock(return_value=(250.0,))
+        total = _sum_saldo_cajas(
+            cursor, "2026-05-01", antes_de=True, cod_sucursal=None
+        )
+        self.assertEqual(total, 250.0)
+        sql = cursor.execute.call_args[0][0]
+        self.assertIn("MAX(fecha)", sql)
+        self.assertIn("MAX(codigo_movimiento)", sql)
+        self.assertNotIn("SELECT c2.saldo FROM caja c2", sql)
+
+    def test_safe_legacy_area_captura_operational_error(self):
+        class FakeOperationalError(Exception):
+            pass
+
+        def _boom():
+            raise FakeOperationalError("timeout")
+
+        with patch(
+            "reports.services.executive_dashboard.command_center.is_legacy_db_error",
+            return_value=True,
+        ):
+            out = _safe_legacy_area("tesoreria", _boom)
+        self.assertFalse(out["disponible"])
 
     @patch(
         "reports.services.executive_dashboard.manufacturing_metrics.listar_ventana_pack",

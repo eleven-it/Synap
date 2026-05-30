@@ -145,18 +145,20 @@ def legacy_cursor(base_empresa: str) -> Generator[Any, None, None]:
 
     pool = get_mysql_pool()
     try:
-        with pool.get_connection(base_empresa) as conn:
-            cursor = conn.cursor()
-            try:
-                try:
-                    cursor.execute("SET SESSION max_execution_time = 300000")
-                except Exception:
-                    pass
-                yield cursor
-            finally:
-                cursor.close()
+        conn_ctx = pool.get_connection(base_empresa)
     except Exception as exc:
         raise LegacyReadError(str(exc)) from exc
+
+    with conn_ctx as conn:
+        cursor = conn.cursor()
+        try:
+            try:
+                cursor.execute("SET SESSION max_execution_time = 300000")
+            except Exception:
+                pass
+            yield cursor
+        finally:
+            cursor.close()
 
 
 def base_empresa_from_request(request) -> str | None:

@@ -180,6 +180,25 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "reports:dashboard_detail", kwargs={"slug": self.EXECUTIVE_SLUG}
             )
             context["mpr_tablero_url"] = reverse("mpr:tablero")
+            context["area_urls"] = {
+                "ventas": reverse("reports-api:reports-executive-dashboard-ventas-resumen"),
+                "inventario": reverse(
+                    "reports-api:reports-executive-dashboard-inventario-resumen"
+                ),
+                "compras": reverse("reports-api:reports-executive-dashboard-compras-resumen"),
+                "manufactura": reverse(
+                    "reports-api:reports-executive-dashboard-manufactura-resumen"
+                ),
+                "cruzados": reverse(
+                    "reports-api:reports-executive-dashboard-cruzados-resumen"
+                ),
+                "tesoreria": reverse(
+                    "reports-api:reports-executive-dashboard-tesoreria-resumen"
+                ),
+                "ventas_cobros": reverse(
+                    "reports-api:reports-executive-dashboard-ventas-cobros-resumen"
+                ),
+            }
             context["detail_urls"] = {
                 "pedidos_pendientes": reverse(
                     "reports-api:reports-executive-dashboard-ventas-pedidos-pendientes"

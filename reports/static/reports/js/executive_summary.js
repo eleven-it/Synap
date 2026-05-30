@@ -250,6 +250,76 @@
     staggerKpiGrid();
   }
 
+  function updateTopOrdenBadge(meta) {
+    const badge = el("exec-top-orden-badge");
+    if (!badge) return;
+    const orden = meta && meta.top_productos_orden === "unidades" ? "unidades" : "importe_neto";
+    badge.classList.remove("hidden");
+    if (orden === "unidades") {
+      badge.textContent = "Top 10 · unidades";
+      badge.title = "Artículos ordenados por cantidad neta vendida (renglón factura − NC)";
+    } else {
+      badge.textContent = "Top 10 · venta neta";
+      badge.title = "Artículos ordenados por suma de PrecioNetoxR por renglón (FA − NC)";
+    }
+  }
+
+  function tablaTopArticulos(rows, meta) {
+    const topOrd = el("exec-top-orden")?.value || meta?.top_productos_orden || "importe_neto";
+    if (!rows.length) {
+      const emptyMsg =
+        topOrd === "unidades"
+          ? "Sin artículos con unidades o importe en el día seleccionado."
+          : "Sin artículos con importe en el día seleccionado.";
+      return `<div class="mb-6"><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 artículos</h3><p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">${escapeHtml(emptyMsg)}</p></div>`;
+    }
+    const head = `
+      <div class="mb-6 hidden overflow-x-auto lg:block">
+        <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 artículos</h3>
+        <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
+          <thead>
+            <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
+              <th scope="col" class="pb-2 pl-1 font-medium">Código</th>
+              <th scope="col" class="pb-2 font-medium">Descripción</th>
+              <th scope="col" class="pb-2 text-right font-medium">Unidades</th>
+              <th scope="col" class="pb-2 pr-1 text-right font-medium">Importe neto</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows
+              .map(
+                (r) => `
+              <tr class="border-b border-slate-100 dark:border-slate-800">
+                <td class="py-2.5 pl-1 font-mono text-xs text-slate-700 dark:text-slate-300">${escapeHtml(r.codigo_articulo || "—")}</td>
+                <td class="py-2.5 pr-2 text-slate-800 dark:text-slate-100">${escapeHtml(r.descripcion || "—")}</td>
+                <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${Number(r.unidades ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</td>
+                <td class="py-2.5 pr-1 text-right font-medium tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.importe_neto ?? 0))}</td>
+              </tr>`,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>`;
+    const cards = `
+      <div class="mb-6 space-y-2 lg:hidden">
+        <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 artículos</h3>
+        ${rows
+          .map(
+            (r) => `
+          <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
+            <div class="flex items-start justify-between gap-2">
+              <span class="font-mono text-xs font-semibold text-sky-700 dark:text-sky-300">${escapeHtml(r.codigo_articulo || "—")}</span>
+              <span class="text-sm font-bold tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.importe_neto ?? 0))}</span>
+            </div>
+            <p class="mt-1 text-sm leading-snug text-slate-700 dark:text-slate-200">${escapeHtml(r.descripcion || "—")}</p>
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400"><span class="font-medium">Unidades</span> ${Number(r.unidades ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</p>
+          </div>`,
+          )
+          .join("")}
+      </div>`;
+    return head + cards;
+  }
+
   function renderRentabilidad(data) {
     const notaEl = el("exec-rentabilidad-nota");
     const kGrid = el("exec-margen-kpis");
@@ -259,8 +329,7 @@
     const meta = data.meta || {};
     if (notaEl) {
       notaEl.textContent =
-        meta.nota_venta_neta_lineas_vs_comprobante ||
-        "Rentabilidad por renglón de facturación (PrecioNetoxR / PrecioCostoxR).";
+        "Rentabilidad por renglón de facturación (PrecioNetoxR / costo normalizado en unidad base).";
     }
 
     const mb = data.margen_bruto || {};
@@ -288,16 +357,17 @@
       }),
     ].join("");
 
-    const rubros = data.margen_por_rubro || [];
-    const subrub = data.margen_por_subrubro || [];
+    const rubros = (data.margen_por_rubro || []).slice(0, 10);
+    const subrub = (data.margen_por_subrubro || []).slice(0, 10);
+    const topProductos = (data.top_productos || []).slice(0, 10);
 
     function tablaMargenRubros(rows) {
       if (!rows.length) {
-        return `<p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en rubros para el día.</p>`;
+        return `<div class="mb-6"><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por rubro</h3><p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en rubros para el día.</p></div>`;
       }
       const head = `
-        <div class="mb-4 hidden overflow-x-auto lg:block">
-          <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por rubro</h3>
+        <div class="mb-6 hidden overflow-x-auto lg:block">
+          <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por rubro</h3>
           <table class="w-full min-w-[32rem] border-collapse text-left text-sm">
             <thead>
               <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
@@ -325,8 +395,8 @@
           </table>
         </div>`;
       const cards = `
-        <div class="mb-4 space-y-2 lg:hidden">
-          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por rubro</h3>
+        <div class="mb-6 space-y-2 lg:hidden">
+          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por rubro</h3>
           ${rows
             .map(
               (r) => `
@@ -347,11 +417,11 @@
 
     function tablaMargenSubrubros(rows) {
       if (!rows.length) {
-        return `<p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en subrubros para el día.</p>`;
+        return `<div><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por subrubro</h3><p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en subrubros para el día.</p></div>`;
       }
       const head = `
         <div class="hidden overflow-x-auto lg:block">
-          <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por subrubro</h3>
+          <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por subrubro</h3>
           <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
             <thead>
               <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
@@ -382,7 +452,7 @@
         </div>`;
       const cards = `
         <div class="space-y-2 lg:hidden">
-          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Por subrubro</h3>
+          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por subrubro</h3>
           ${rows
             .map(
               (r) => `
@@ -402,7 +472,8 @@
       return head + cards;
     }
 
-    tablas.innerHTML = `<div class="max-w-full">${tablaMargenRubros(rubros)}${tablaMargenSubrubros(subrub)}</div>`;
+    tablas.innerHTML = `<div class="max-w-full">${tablaTopArticulos(topProductos, data.meta || {})}${tablaMargenRubros(rubros)}${tablaMargenSubrubros(subrub)}</div>`;
+    updateTopOrdenBadge(data.meta || {});
   }
 
   /**
@@ -613,77 +684,6 @@
     sel.value = match ? cur : "";
   }
 
-  function updateTopOrdenBadge(meta) {
-    const badge = el("exec-top-orden-badge");
-    if (!badge) return;
-    const orden = meta && meta.top_productos_orden === "unidades" ? "unidades" : "importe_neto";
-    if (orden === "unidades") {
-      badge.textContent = "Por unidades";
-      badge.title = "Orden por cantidad neta vendida (renglón factura − NC)";
-    } else {
-      badge.textContent = "Venta neta";
-      badge.title = "Orden por suma de PrecioNetoxR por renglón (FA − NC)";
-    }
-  }
-
-  function renderTopProductos(data) {
-    const wrap = el("exec-top-productos");
-    if (!wrap) return;
-    const rows = data.top_productos || [];
-    if (rows.length === 0) {
-      const topOrd = el("exec-top-orden")?.value || "importe_neto";
-      const emptyMsg =
-        topOrd === "unidades"
-          ? "Sin artículos con unidades o importe en el día seleccionado."
-          : "Sin artículos con importe en el día seleccionado.";
-      wrap.innerHTML = `<p class="px-2 py-6 text-center text-sm text-slate-500 dark:text-slate-400">${escapeHtml(emptyMsg)}</p>`;
-      return;
-    }
-    const head = `
-      <div class="hidden overflow-x-auto lg:block">
-        <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
-          <thead>
-            <tr class="border-b border-slate-200 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:border-slate-600 dark:text-slate-500">
-              <th scope="col" class="pb-2 pl-1 font-medium">Código</th>
-              <th scope="col" class="pb-2 font-medium">Descripción</th>
-              <th scope="col" class="pb-2 text-right font-medium">Unidades</th>
-              <th scope="col" class="pb-2 pr-1 text-right font-medium">Importe neto</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows
-              .map(
-                (r) => `
-              <tr class="border-b border-slate-100 dark:border-slate-800">
-                <td class="py-2.5 pl-1 font-mono text-xs text-slate-700 dark:text-slate-300">${escapeHtml(r.codigo_articulo || "—")}</td>
-                <td class="py-2.5 pr-2 text-slate-800 dark:text-slate-100">${escapeHtml(r.descripcion || "—")}</td>
-                <td class="py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-200">${Number(r.unidades ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</td>
-                <td class="py-2.5 pr-1 text-right font-medium tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.importe_neto ?? 0))}</td>
-              </tr>`,
-              )
-              .join("")}
-          </tbody>
-        </table>
-      </div>`;
-    const cards = `
-      <div class="space-y-2 lg:hidden">
-        ${rows
-          .map(
-            (r) => `
-          <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
-            <div class="flex items-start justify-between gap-2">
-              <span class="font-mono text-xs font-semibold text-sky-700 dark:text-sky-300">${escapeHtml(r.codigo_articulo || "—")}</span>
-              <span class="text-sm font-bold tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.importe_neto ?? 0))}</span>
-            </div>
-            <p class="mt-1 text-sm leading-snug text-slate-700 dark:text-slate-200">${escapeHtml(r.descripcion || "—")}</p>
-            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400"><span class="font-medium">Unidades</span> ${Number(r.unidades ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</p>
-          </div>`,
-          )
-          .join("")}
-      </div>`;
-    wrap.innerHTML = head + cards;
-  }
-
   function renderCharts(data) {
     cachedChartData = data;
     ensureChartResizeObserver();
@@ -733,11 +733,9 @@
       if (topO && data.meta && data.meta.top_productos_orden) {
         topO.value = data.meta.top_productos_orden === "unidades" ? "unidades" : "importe_neto";
       }
-      updateTopOrdenBadge(data.meta || {});
       renderKpis(data);
       renderCharts(data);
       renderRentabilidad(data);
-      renderTopProductos(data);
     } catch (e) {
       showError(e.message || "Error al cargar el resumen.");
     } finally {

@@ -237,6 +237,9 @@
   }
 
   let waitModalLocks = 0;
+  let ventasDiaCache = null;
+  let areasCache = {};
+  let dashboardLoadToken = 0;
 
   const WAIT_LABELS = {
     dashboard: {
@@ -334,19 +337,40 @@
       </div>`;
   }
 
-  function renderGlobalKpis(data, ventasDia) {
+  function kpiCardLoading(label, theme) {
+    return kpiCard(label, "…", theme);
+  }
+
+  function stripAreaMeta(payload) {
+    if (!payload || typeof payload !== "object") return payload || {};
+    const out = { ...payload };
+    delete out.meta;
+    return out;
+  }
+
+  function updatePeriodoLabel(loading) {
+    const lbl = el("cc-periodo-label");
+    if (!lbl) return;
+    const f = readFilters();
+    const base = `Período: ${isoToDisplay(f.fecha_inicio)} — ${isoToDisplay(f.fecha_fin)}`;
+    lbl.textContent = loading ? `${base} · Cargando áreas…` : base;
+  }
+
+  function renderGlobalKpis(areas, ventasDia) {
     const grid = el("cc-global-kpis");
     if (!grid) return;
-    const a = data.areas || {};
+    const a = areas || {};
     const v = a.ventas || {};
     const inv = a.inventario || {};
     const comp = a.compras || {};
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
     const vd = ventasDia?.kpis || {};
+    const ventasDiaVal =
+      ventasDia === null ? "…" : fmtMoney.format(vd.ventas_netas_dia || 0);
 
     const cards = [
-      kpiCard("Ventas netas (día)", fmtMoney.format(vd.ventas_netas_dia || 0), "sky"),
+      kpiCard("Ventas netas (día)", ventasDiaVal, "sky"),
       kpiCard("Total operativo (período)", fmtMoney.format(v.total_operativo || 0), "indigo"),
       kpiCard("Valor stock", fmtMoney.format(inv.valor_stock || 0), "emerald"),
       kpiCard("OC pendientes", fmtNum.format(comp.oc_pendientes_cantidad || 0), "amber"),
@@ -357,6 +381,19 @@
     Array.from(grid.querySelectorAll(".cc-card-animate")).forEach((node, i) => {
       node.style.animationDelay = `${i * 0.05}s`;
     });
+  }
+
+  function renderGlobalKpisLoading() {
+    const grid = el("cc-global-kpis");
+    if (!grid) return;
+    grid.innerHTML = [
+      kpiCardLoading("Ventas netas (día)", "sky"),
+      kpiCardLoading("Total operativo (período)", "indigo"),
+      kpiCardLoading("Valor stock", "emerald"),
+      kpiCardLoading("OC pendientes", "amber"),
+      kpiCardLoading("OPT atrasadas", "purple"),
+      kpiCardLoading("Backorder", "rose"),
+    ].join("");
   }
 
   const AREA_DEFS = [
@@ -522,7 +559,7 @@
       : "";
 
     return `
-      <article class="cc-card-animate flex min-w-0 flex-col overflow-hidden rounded-2xl border ${borderColor} bg-white shadow-md dark:bg-slate-900" style="animation-delay:${delayIdx * 0.06}s">
+      <article data-area-key="${def.key}" class="cc-card-animate flex min-w-0 flex-col overflow-hidden rounded-2xl border ${borderColor} bg-white shadow-md dark:bg-slate-900" style="animation-delay:${delayIdx * 0.06}s">
         <header class="flex items-start gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
           <span class="material-icons mt-0.5 text-xl text-slate-600 dark:text-slate-300" aria-hidden="true">${def.icon}</span>
           <div class="min-w-0 flex-1">
@@ -543,14 +580,76 @@
       </article>`;
   }
 
+  function areaCardSkeleton(def, delayIdx) {
+    const borderColor = {
+      sky: "border-sky-200 dark:border-sky-800",
+      emerald: "border-emerald-200 dark:border-emerald-800",
+      amber: "border-amber-200 dark:border-amber-800",
+      purple: "border-purple-200 dark:border-purple-800",
+      rose: "border-rose-200 dark:border-rose-800",
+      teal: "border-teal-200 dark:border-teal-800",
+      cyan: "border-cyan-200 dark:border-cyan-800",
+    }[def.color] || "border-slate-200";
+
+    return `
+      <article data-area-key="${def.key}" class="cc-card-animate flex min-w-0 flex-col overflow-hidden rounded-2xl border ${borderColor} bg-white shadow-md dark:bg-slate-900" style="animation-delay:${delayIdx * 0.06}s" aria-busy="true">
+        <header class="flex items-start gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
+          <span class="material-icons mt-0.5 text-xl text-slate-400 dark:text-slate-500" aria-hidden="true">${def.icon}</span>
+          <div class="min-w-0 flex-1">
+            <h2 class="text-sm font-bold text-slate-900 dark:text-white">${def.title}</h2>
+            ${
+              def.subtitle
+                ? `<p class="mt-0.5 text-[11px] leading-snug text-slate-500 dark:text-slate-400">${def.subtitle}</p>`
+                : ""
+            }
+          </div>
+        </header>
+        <div class="flex-1 space-y-3 px-4 py-4">
+          ${[1, 2, 3, 4].map(() => '<div class="h-4 animate-pulse rounded bg-slate-200/80 dark:bg-slate-700/80"></div>').join("")}
+        </div>
+      </article>`;
+  }
+
+  function bindDetailButtons(root) {
+    (root || el("cc-areas-grid"))?.querySelectorAll(".cc-detail-btn").forEach((btn) => {
+      btn.addEventListener("click", () => openDetail(btn.dataset.urlKey, btn.dataset.title));
+    });
+  }
+
+  function renderAreasSkeleton() {
+    const grid = el("cc-areas-grid");
+    if (!grid) return;
+    grid.innerHTML = AREA_DEFS.map((def, i) => areaCardSkeleton(def, i)).join("");
+  }
+
+  function updateSingleAreaCard(key, areaData) {
+    const grid = el("cc-areas-grid");
+    if (!grid) return;
+    const idx = AREA_DEFS.findIndex((d) => d.key === key);
+    if (idx < 0) return;
+    const current = grid.querySelector(`[data-area-key="${key}"]`) || grid.children[idx];
+    if (!current) return;
+    const html = areaCard(AREA_DEFS[idx], areaData, idx);
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html.trim();
+    const next = wrap.firstElementChild;
+    if (next) {
+      next.dataset.areaKey = key;
+      current.replaceWith(next);
+      bindDetailButtons(grid);
+    }
+  }
+
   function renderAreas(data) {
     const grid = el("cc-areas-grid");
     if (!grid) return;
-    const areas = data.areas || {};
+    const areas = data.areas || data || {};
     grid.innerHTML = AREA_DEFS.map((def, i) => areaCard(def, areas[def.key], i)).join("");
-    grid.querySelectorAll(".cc-detail-btn").forEach((btn) => {
-      btn.addEventListener("click", () => openDetail(btn.dataset.urlKey, btn.dataset.title));
+    AREA_DEFS.forEach((def, i) => {
+      const node = grid.children[i];
+      if (node) node.dataset.areaKey = def.key;
     });
+    bindDetailButtons(grid);
   }
 
   async function fetchJson(url, options) {
@@ -569,7 +668,66 @@
     return body;
   }
 
-  async function loadDashboard() {
+  function buildSummaryQuery() {
+    const f = readFilters();
+    const q = new URLSearchParams({ fecha: f.fecha });
+    if (f.sucursal) q.set("sucursal", f.sucursal);
+    return q.toString();
+  }
+
+  async function loadExecutiveSummaryDeferred(loadToken) {
+    if (!cfg.executiveSummaryUrl) return;
+    ventasDiaCache = null;
+    renderGlobalKpis(areasCache, null);
+    try {
+      const data = await fetchJson(`${cfg.executiveSummaryUrl}?${buildSummaryQuery()}`);
+      if (loadToken !== dashboardLoadToken) return;
+      ventasDiaCache = data;
+      fillSucursales(data.sucursales_disponibles, readFilters().sucursal);
+      renderGlobalKpis(areasCache, ventasDiaCache);
+    } catch (e) {
+      console.warn("Resumen ventas del día:", e);
+      if (loadToken !== dashboardLoadToken) return;
+      ventasDiaCache = {};
+      renderGlobalKpis(areasCache, ventasDiaCache);
+    }
+  }
+
+  async function fetchArea(key, url, q, loadToken) {
+    try {
+      const payload = await fetchJson(`${url}?${q}`);
+      if (loadToken !== dashboardLoadToken) return null;
+      return { key, ok: true, data: stripAreaMeta(payload) };
+    } catch (e) {
+      if (loadToken !== dashboardLoadToken) return null;
+      return {
+        key,
+        ok: false,
+        data: {
+          disponible: false,
+          error: { tipo: "legacy_transient_failure", mensaje: e.message || "Error al cargar" },
+        },
+      };
+    }
+  }
+
+  async function loadDashboardParallel(loadToken) {
+    const areaUrls = cfg.areaUrls || {};
+    const q = buildQuery();
+    const tasks = AREA_DEFS.map((def) => {
+      const url = areaUrls[def.key];
+      if (!url) return Promise.resolve(null);
+      return fetchArea(def.key, url, q, loadToken).then((result) => {
+        if (!result || loadToken !== dashboardLoadToken) return;
+        areasCache[result.key] = result.data;
+        updateSingleAreaCard(result.key, result.data);
+        renderGlobalKpis(areasCache, ventasDiaCache);
+      });
+    });
+    await Promise.allSettled(tasks);
+  }
+
+  async function loadDashboardMonolith() {
     if (!cfg.dashboardUrl) return;
     setLoading(true);
     showError("");
@@ -577,25 +735,63 @@
       const q = buildQuery();
       const data = await fetchJson(`${cfg.dashboardUrl}?${q}`);
       fillSucursales(data.sucursales_disponibles, data.meta?.cod_sucursal_filtro);
-      const periodo = data.periodo || {};
-      const lbl = el("cc-periodo-label");
-      if (lbl) {
-        lbl.textContent = `Período: ${isoToDisplay(periodo.inicio)} — ${isoToDisplay(periodo.fin)}`;
-      }
+      updatePeriodoLabel(false);
+      areasCache = data.areas || {};
       let ventasDia = null;
       if (cfg.executiveSummaryUrl) {
         try {
-          ventasDia = await fetchJson(`${cfg.executiveSummaryUrl}?fecha=${readFilters().fecha}`);
+          ventasDia = await fetchJson(`${cfg.executiveSummaryUrl}?${buildSummaryQuery()}`);
         } catch (e) {
           console.warn("Resumen ventas del día:", e);
         }
       }
-      renderGlobalKpis(data, ventasDia);
-      renderAreas(data);
+      ventasDiaCache = ventasDia;
+      renderGlobalKpis(areasCache, ventasDiaCache);
+      renderAreas({ areas: areasCache });
     } catch (e) {
       showError(e.message || "No se pudo cargar el Command Center.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadDashboard() {
+    const areaUrls = cfg.areaUrls || {};
+    const hasParallel = Object.keys(areaUrls).length > 0;
+    if (!hasParallel && !cfg.dashboardUrl) return;
+
+    if (!hasParallel) {
+      await loadDashboardMonolith();
+      return;
+    }
+
+    dashboardLoadToken += 1;
+    const loadToken = dashboardLoadToken;
+    showError("");
+    setRefreshDisabled(true);
+    areasCache = {};
+    ventasDiaCache = null;
+    updatePeriodoLabel(true);
+    renderGlobalKpisLoading();
+    renderAreasSkeleton();
+
+    void loadExecutiveSummaryDeferred(loadToken);
+
+    try {
+      await loadDashboardParallel(loadToken);
+      if (loadToken !== dashboardLoadToken) return;
+      updatePeriodoLabel(false);
+      const loaded = Object.keys(areasCache).length;
+      if (!loaded) {
+        showError("No se pudieron cargar las áreas del Command Center.");
+      }
+    } catch (e) {
+      if (loadToken !== dashboardLoadToken) return;
+      showError(e.message || "No se pudo cargar el Command Center.");
+    } finally {
+      if (loadToken === dashboardLoadToken) {
+        setRefreshDisabled(false);
+      }
     }
   }
 

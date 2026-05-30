@@ -204,14 +204,16 @@
 </div>
 
 {{ detail_urls|json_script:"cc-detail-urls" }}
+{{ area_urls|json_script:"cc-area-urls" }}
 <script>
   window.CC_CONFIG = {
     dashboardUrl: "{{ command_center_api_url|escapejs }}",
+    areaUrls: JSON.parse(document.getElementById("cc-area-urls").textContent),
     executiveSummaryUrl: "{{ executive_summary_api_url|escapejs }}",
     executiveSalesPageUrl: "{{ executive_sales_page_url|escapejs }}",
     mprTableroUrl: "{{ mpr_tablero_url|escapejs }}",
     detailUrls: JSON.parse(document.getElementById("cc-detail-urls").textContent),
   };
 </script>
-<script src="{% static 'reports/js/command_center.js' %}?v=20260519d" defer></script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20260529a" defer></script>
 {% endblock %}

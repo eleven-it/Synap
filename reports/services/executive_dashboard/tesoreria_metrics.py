@@ -21,32 +21,44 @@ def _where_caja(filters: DashboardFilters) -> tuple[str, list]:
 
 
 def _sum_saldo_cajas(cursor, fecha_limite: str, *, antes_de: bool, cod_sucursal: int | None) -> float:
-    """Suma último caja.Saldo por id_caja_abm_origen antes o hasta fecha_limite."""
+    """Suma último caja.Saldo por id_caja_abm_origen antes o hasta fecha_limite.
+
+    Implementación con agregaciones (MAX fecha + MAX codigo_movimiento) compatible MySQL 5.7;
+    evita subconsulta correlacionada por caja que escaneaba ~600k filas.
+    """
     op = "<" if antes_de else "<="
     suc_sql = ""
     suc_params: list = []
     if cod_sucursal is not None:
-        suc_sql = " AND c2.cod_sucursal = %s"
+        suc_sql = " AND cod_sucursal = %s"
         suc_params = [cod_sucursal]
-    sql = f"""
-        SELECT COALESCE(SUM(saldo_por_caja), 0)
-        FROM (
-            SELECT DISTINCT c.id_caja_abm_origen,
-                COALESCE((
-                    SELECT c2.saldo FROM caja c2
-                    WHERE c2.id_caja_abm_origen = c.id_caja_abm_origen
-                      AND c2.anulado = 'No'
-                      AND c2.fecha {op} %s
-                      {suc_sql}
-                    ORDER BY c2.fecha DESC, c2.codigo_movimiento DESC
-                    LIMIT 1
-                ), 0) AS saldo_por_caja
-            FROM caja c
-            WHERE c.anulado = 'No'
-              AND c.id_caja_abm_origen IS NOT NULL
-        ) AS saldos
+    base_where = f"""
+        anulado = 'No'
+        AND id_caja_abm_origen IS NOT NULL
+        AND fecha {op} %s
+        {suc_sql}
     """
-    params = [fecha_limite] + suc_params
+    sql = f"""
+        SELECT COALESCE(SUM(c.saldo), 0)
+        FROM caja c
+        INNER JOIN (
+            SELECT id_caja_abm_origen, MAX(fecha) AS max_fecha
+            FROM caja
+            WHERE {base_where}
+            GROUP BY id_caja_abm_origen
+        ) ult_f ON ult_f.id_caja_abm_origen = c.id_caja_abm_origen
+              AND c.fecha = ult_f.max_fecha
+        INNER JOIN (
+            SELECT id_caja_abm_origen, fecha, MAX(codigo_movimiento) AS max_mov
+            FROM caja
+            WHERE {base_where}
+            GROUP BY id_caja_abm_origen, fecha
+        ) ult_m ON ult_m.id_caja_abm_origen = c.id_caja_abm_origen
+              AND ult_m.fecha = c.fecha
+              AND ult_m.max_mov = c.codigo_movimiento
+        WHERE c.anulado = 'No'
+    """
+    params = [fecha_limite] + suc_params + [fecha_limite] + suc_params
     cursor.execute(sql, params)
     row = cursor.fetchone()
     return float(row[0] or 0) if row else 0.0
