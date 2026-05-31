@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Iniciando Synap Reports..."
+echo "🚀 Iniciando Synap..."
 
 # Esperar a que PostgreSQL esté listo
 echo "⏳ Esperando a que PostgreSQL esté listo..."
@@ -19,27 +19,39 @@ until python -c "import redis; r = redis.Redis(host='redis', port=6379, db=0); r
 done
 echo "✅ Redis está listo"
 
-# Ejecutar migraciones automáticamente
 echo ""
 echo "📦 Aplicando migraciones..."
 
-# SIEMPRE ejecutar fix_reports_migrations primero para limpiar migraciones huérfanas
-# Esto es necesario porque pueden existir migraciones que no están en el código
-# (como 0017 que intenta agregar is_visible que ya existe)
-echo "🔍 Verificando y corrigiendo estado de migraciones de reports..."
-python manage.py fix_reports_migrations --force 2>&1 || {
-    echo "⚠️  Advertencia: Error al corregir migraciones, continuando de todas formas..."
-}
+# Detectar base PostgreSQL vacía (sin tabla django_migrations)
+FRESH_DB=$(python manage.py shell -c "
+from django.db import connection
+cursor = connection.cursor()
+cursor.execute(\"\"\"
+    SELECT NOT EXISTS (
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = 'django_migrations'
+    );
+\"\"\")
+print('YES' if cursor.fetchone()[0] else 'NO')
+cursor.close()
+" 2>/dev/null | tail -1)
 
-# Verificar si la tabla reports_reportdefinition existe después de la corrección
-echo "🔍 Verificando estado de migraciones de reports..."
-TABLE_EXISTS=$(python manage.py shell -c "
+if [ "$FRESH_DB" = "YES" ]; then
+    echo "🆕 Instalación nueva detectada (PostgreSQL sin django_migrations)"
+else
+    echo "🔍 Base existente: verificando migraciones de reports..."
+    python manage.py fix_reports_migrations --force 2>&1 || {
+        echo "⚠️  Advertencia: Error al corregir migraciones de reports, continuando..."
+    }
+
+    TABLE_EXISTS=$(python manage.py shell -c "
 from django.db import connection
 cursor = connection.cursor()
 cursor.execute(\"\"\"
     SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
+        SELECT FROM information_schema.tables
+        WHERE table_schema = 'public'
         AND table_name = 'reports_reportdefinition'
     );
 \"\"\")
@@ -48,44 +60,50 @@ cursor.close()
 print('YES' if result else 'NO')
 " 2>&1 | tail -1)
 
-if [ "$TABLE_EXISTS" = "YES" ]; then
-    echo "✅ Tabla reports_reportdefinition existe"
-else
-    echo "⚠️  Tabla reports_reportdefinition NO existe, intentando crear..."
-    # Eliminar entradas de migraciones de reports si existen
-    python manage.py shell -c "
+    if [ "$TABLE_EXISTS" = "YES" ]; then
+        echo "✅ Tabla reports_reportdefinition existe"
+    else
+        echo "⚠️  Tabla reports_reportdefinition NO existe, intentando reparar..."
+        python manage.py shell -c "
 from django.db import connection
 cursor = connection.cursor()
 cursor.execute(\"DELETE FROM django_migrations WHERE app = 'reports'\")
 print(f'Eliminadas {cursor.rowcount} entradas de migraciones de reports')
 cursor.close()
-" 2>&1
-    # Aplicar migración inicial explícitamente
-    echo "   Aplicando migración 0001_initial..."
-    python manage.py migrate reports 0001_initial --noinput 2>&1 || {
-        echo "❌ Error al aplicar migración inicial"
-        exit 1
-    }
+" 2>&1 || true
+        python manage.py migrate reports 0001_initial --noinput 2>&1 || {
+            echo "❌ Error al aplicar migración inicial de reports"
+            exit 1
+        }
+    fi
 fi
 
-# Aplicar todas las migraciones restantes
-echo "📋 Aplicando migraciones restantes..."
+# Migraciones completas (SYNAP_MIGRATIONS_POSTGRES_ONLY evita fallos con MySQL legacy)
+export SYNAP_MIGRATIONS_POSTGRES_ONLY="${SYNAP_MIGRATIONS_POSTGRES_ONLY:-1}"
+echo "📋 Ejecutando migrate (Postgres)..."
 python manage.py migrate --noinput || {
     echo "❌ Error al aplicar migraciones"
     exit 1
 }
 
-# Configurar instalación de Reports
-echo ""
-echo "🔧 Configurando módulo Reports..."
-# No usar --skip-migrations para que el comando pueda aplicar 0001_initial si es necesario
-python manage.py setup_reports_installation || {
-    echo "⚠️  Advertencia: No se pudo configurar Reports automáticamente"
-    echo "   Puedes ejecutar manualmente: python manage.py setup_reports_installation"
-}
+if [ "$FRESH_DB" = "YES" ]; then
+    echo ""
+    echo "🔧 Bootstrap de primera instalación (core, login, dashboard, reports)..."
+    python manage.py bootstrap_instalacion || {
+        echo "⚠️  Advertencia: bootstrap_instalacion falló parcialmente"
+        echo "   Ejecutar manualmente: python manage.py bootstrap_instalacion --force"
+    }
+else
+    echo ""
+    echo "🔧 Verificando módulo Reports..."
+    python manage.py setup_reports_installation --skip-migrations || {
+        echo "⚠️  Advertencia: No se pudo configurar Reports automáticamente"
+    }
+    # Reparar cadena mínima si algún módulo base quedó inactivo
+    python manage.py bootstrap_instalacion 2>&1 || true
+fi
 
-# Recolectar archivos estáticos (si es necesario)
-# Se filtran los avisos "Found another file" (duplicados theme/static/admin vs django.contrib.admin)
+# Recolectar archivos estáticos
 if [ "$COLLECTSTATIC" != "false" ]; then
     echo ""
     echo "📁 Recolectando archivos estáticos..."
@@ -99,9 +117,7 @@ if [ "$COLLECTSTATIC" != "false" ]; then
     rm -f "$_out"
 fi
 
-# Ejecutar el comando pasado como argumento
 echo ""
 echo "✅ Inicialización completada"
 echo "🚀 Iniciando servidor..."
 exec "$@"
-

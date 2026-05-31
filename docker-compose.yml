@@ -16,6 +16,7 @@ services:
       - .env
     environment:
       SYNAP_AFIP_STORAGE: /var/lib/synap/afip
+      SYNAP_MIGRATIONS_POSTGRES_ONLY: "1"
     depends_on:
       - db
       - redis
@@ -37,6 +38,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5435:5432"
+    restart: unless-stopped
     logging:
       driver: "json-file"
       options:
