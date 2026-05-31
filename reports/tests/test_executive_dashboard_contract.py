@@ -4,6 +4,7 @@ from dataclasses import replace
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
+from django.utils import timezone
 
 from reports.services.executive_dashboard.base import DashboardFilters, resolve_filters_from_query_params
 from reports.services.executive_dashboard.command_center import run_command_center, _safe_legacy_area
@@ -46,12 +47,28 @@ def _cursor_zeros():
 
 
 class ExecutiveDashboardContractTests(SimpleTestCase):
-    def test_resolve_filters_periodo_default(self):
+    def test_resolve_filters_periodo_default_hoy(self):
+        with patch.object(timezone, "localdate", return_value=date(2026, 5, 11)):
+            f = resolve_filters_from_query_params({}, base_empresa="be1")
+        self.assertEqual(f.fecha_inicio, date(2026, 5, 11))
+        self.assertEqual(f.fecha_fin, date(2026, 5, 11))
+        self.assertEqual(f.fecha_referencia, date(2026, 5, 11))
+
+    def test_resolve_filters_fecha_legacy_un_dia(self):
         f = resolve_filters_from_query_params(
             {"fecha": "2026-05-11"}, base_empresa="be1"
         )
+        self.assertEqual(f.fecha_inicio, date(2026, 5, 11))
+        self.assertEqual(f.fecha_fin, date(2026, 5, 11))
+
+    def test_resolve_filters_intervalo_explicito(self):
+        f = resolve_filters_from_query_params(
+            {"fecha_inicio": "2026-05-01", "fecha_fin": "2026-05-11"},
+            base_empresa="be1",
+        )
         self.assertEqual(f.fecha_inicio, date(2026, 5, 1))
         self.assertEqual(f.fecha_fin, date(2026, 5, 11))
+        self.assertEqual(f.fecha_referencia, date(2026, 5, 11))
 
     def test_resolve_filters_fechas_invertidas(self):
         with self.assertRaises(InvalidDashboardFilters):
@@ -84,6 +101,8 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertIn("valor_stock", out)
         self.assertIn("productos_bajo_minimo", out)
         self.assertTrue(out["disponible"])
+        sql_bajo_min = cursor.execute.call_args_list[1][0][0]
+        self.assertIn("cp_res.Fecha >= %s", sql_bajo_min)
 
     def test_fetch_compras_resumen_estructura(self):
         cursor = MagicMock()
@@ -92,6 +111,11 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         out = fetch_compras_resumen(cursor, _filters())
         self.assertEqual(out["oc_pendientes_cantidad"], 3)
         self.assertEqual(out["oc_pendientes_importe"], 500.0)
+        sql = cursor.execute.call_args[0][0]
+        self.assertIn("cp_oc.Fecha >= %s", sql)
+        self.assertEqual(cursor.execute.call_args[0][1], ["2026-05-01", "2026-05-11"])
+        notas = out["meta"]["notas_semanticas"]
+        self.assertFalse(any("pendiente_vb6" in n for n in notas))
 
     def test_fetch_tesoreria_resumen_estructura(self):
         cursor = MagicMock()
@@ -131,9 +155,10 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertEqual(out["facturacion_periodo"], 200.0)
         self.assertIsNotNone(out["demand_coverage_pct"])
 
+    @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=True)
     @patch("reports.services.executive_dashboard.command_center.fetch_manufactura_resumen")
     @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
-    def test_run_command_center_estructura(self, mock_legacy, mock_mfg):
+    def test_run_command_center_estructura(self, mock_legacy, mock_mfg, _mpr_on):
         cursor = _cursor_zeros()
         mock_legacy.return_value.__enter__ = MagicMock(return_value=cursor)
         mock_legacy.return_value.__exit__ = MagicMock(return_value=False)
@@ -157,7 +182,21 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertIn("endpoints", out["meta"])
         self.assertIn("tesoreria", out["meta"]["endpoints"])
         self.assertIn("ventas_cobros", out["meta"]["endpoints"])
+        self.assertTrue(out["meta"]["modulos"]["mpr"])
 
+    @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=False)
+    @patch("reports.services.executive_dashboard.command_center.fetch_manufactura_resumen")
+    @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
+    def test_run_command_center_sin_mpr_oculta_manufactura(self, mock_legacy, mock_mfg, _mpr_off):
+        cursor = _cursor_zeros()
+        mock_legacy.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_legacy.return_value.__exit__ = MagicMock(return_value=False)
+        out = run_command_center(_filters())
+        self.assertNotIn("manufactura", out["areas"])
+        self.assertFalse(out["meta"]["modulos"]["mpr"])
+        mock_mfg.assert_not_called()
+
+    @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=True)
     @patch("reports.services.executive_dashboard.command_center.fetch_manufactura_resumen")
     @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
     @patch(
@@ -181,7 +220,7 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         return_value={"disponible": True, "meta": {"notas_semanticas": []}, "ventas_netas": 1},
     )
     def test_run_command_center_aisla_fallo_tesoreria(
-        self, mock_ventas, mock_inv, mock_comp, mock_cruz, mock_cob, mock_legacy, mock_mfg
+        self, mock_ventas, mock_inv, mock_comp, mock_cruz, mock_cob, mock_legacy, mock_mfg, _mpr_on
     ):
         cursor = MagicMock()
         mock_legacy.return_value.__enter__ = MagicMock(return_value=cursor)
@@ -255,11 +294,34 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         "reports.services.executive_dashboard.manufacturing_metrics.listar_lista_produccion_agrupada",
         return_value=[{"cantidad_pendiente_prod": 5}],
     )
-    def test_fetch_manufactura_resumen_ok(self, *_mocks):
+    def test_fetch_manufactura_resumen_ok(
+        self,
+        mock_agrupada,
+        mock_pedidos,
+        mock_opt,
+        mock_pack,
+    ):
         out = fetch_manufactura_resumen("be1", _filters())
         self.assertTrue(out["disponible"])
         self.assertEqual(out["pedidos_fabrica_pendientes"], 1)
         self.assertEqual(out["unidades_pendientes_produccion"], 5.0)
+        fi, ff = date(2026, 5, 1), date(2026, 5, 11)
+        mock_agrupada.assert_called_once_with(
+            "be1",
+            limit=50,
+            excluir_filas_opt_liberadas_mstock=True,
+            fecha_desde=fi,
+            fecha_hasta=ff,
+        )
+        mock_pedidos.assert_called_once_with(
+            "be1", limit=5000, estado="Pendiente", fecha_desde=fi, fecha_hasta=ff
+        )
+        mock_opt.assert_called_once_with(
+            "be1", limit=500, solo_atrasadas=True, fecha_desde=fi, fecha_hasta=ff
+        )
+        mock_pack.assert_called_once_with(
+            "be1", limit=15, fecha_desde=fi, fecha_hasta=ff
+        )
 
     def test_list_pedidos_pendientes_paginado(self):
         cursor = MagicMock()

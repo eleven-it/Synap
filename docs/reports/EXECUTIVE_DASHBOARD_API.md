@@ -26,7 +26,7 @@ En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente
 | GET | `/api/reports/executive-dashboard/ventas/resumen/` | Ventas netas, REM, PED (período) |
 | GET | `/api/reports/executive-dashboard/inventario/resumen/` | Stock agregado |
 | GET | `/api/reports/executive-dashboard/compras/resumen/` | OC pendientes |
-| GET | `/api/reports/executive-dashboard/manufactura/resumen/` | KPIs MPR |
+| GET | `/api/reports/executive-dashboard/manufactura/resumen/` | KPIs MPR (solo si módulo `mpr` activo) |
 | GET | `/api/reports/executive-dashboard/cruzados/resumen/` | Demanda pendiente (BO, reservado, cobertura) |
 | GET | `/api/reports/executive-dashboard/tesoreria/resumen/` | Tesorería **caja** (saldos, flujos, subcategorías); `banco_disponible: false` en P0 |
 | GET | `/api/reports/executive-dashboard/ventas/cobros/resumen/` | Facturado por medio vs cobrado en caja |
@@ -56,12 +56,23 @@ En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente
 
 ## Query params comunes
 
-- `fecha` (yyyy-MM-dd)
-- `fecha_inicio`, `fecha_fin` (default: mes calendario de `fecha`)
+- `fecha_inicio`, `fecha_fin` (default: **hoy** / hoy)
+- `fecha` (opcional, legacy): atajo de un solo día (`inicio` = `fin` = `fecha`)
 - `sucursal` (int; vacío = todas)
 - `limit` (1–500, default 100) — solo P1
 - `offset` (≥ 0, default 0) — solo P1
 - `busqueda` o `q` (mín. 2 caracteres, máx. 120) — solo existencias: filtra por artículo, código, manual, depósito, marca, rubro, subrubro
+
+### Período por área (`fecha_inicio` / `fecha_fin`)
+
+| Área | Criterio de fecha |
+|------|-------------------|
+| Ventas, Tesorería, Ventas/cobros, Cruzados | Comprobantes / movimientos en período |
+| Compras | `cuentaproveedor.Fecha` de OC pendientes |
+| Inventario | Snapshot saldo actual; **reservado** y **bajo mínimo** filtran PED por `comp_ped.Fecha` |
+| Manufactura | `comp_ped.Fecha` (pedidos fábrica); demanda/OPT por pedido vinculado o `fecha_objetivo` |
+
+**UI Command Center:** solo **Desde / Hasta** (default ambos = hoy). Enlaces a informes (p. ej. Panel del día) propagan `fecha_inicio`, `fecha_fin` y `sucursal` en la URL. El bloque **Manufactura**, el KPI **OPT atrasadas** y el enlace **Tablero MPR** solo se muestran si `ModuleConfig` tiene `mpr` activo (`meta.modulos.mpr` en el orquestador).
 
 ## Performance (may. 2026)
 

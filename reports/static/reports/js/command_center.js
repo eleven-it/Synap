@@ -211,29 +211,66 @@
     return `${d.getFullYear()}-${m}-${day}`;
   }
 
-  function firstDayOfMonth(iso) {
-    const p = String(iso).slice(0, 10).split("-");
-    return `${p[0]}-${p[1]}-01`;
-  }
+  const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
   function readFilters() {
-    const fecha = el("cc-fecha")?.value || todayIso();
-    let fi = el("cc-fecha-inicio")?.value || firstDayOfMonth(fecha);
-    let ff = el("cc-fecha-fin")?.value || fecha;
+    const t = todayIso();
+    const fi = el("cc-fecha-inicio")?.value || t;
+    const ff = el("cc-fecha-fin")?.value || t;
     const suc = el("cc-sucursal")?.value || "";
-    return { fecha, fecha_inicio: fi, fecha_fin: ff, sucursal: suc };
+    return { fecha_inicio: fi, fecha_fin: ff, sucursal: suc };
+  }
+
+  function isSingleDayPeriod(f) {
+    return f && f.fecha_inicio === f.fecha_fin;
   }
 
   function buildQuery(extra) {
     const f = readFilters();
     const q = new URLSearchParams({
-      fecha: f.fecha,
       fecha_inicio: f.fecha_inicio,
       fecha_fin: f.fecha_fin,
       ...(extra || {}),
     });
     if (f.sucursal) q.set("sucursal", f.sucursal);
     return q.toString();
+  }
+
+  /** Enlaces a informes externos con el período y sucursal actuales. */
+  function buildReportLink(baseUrl) {
+    if (!baseUrl || baseUrl === "#") return baseUrl;
+    const sep = baseUrl.includes("?") ? "&" : "?";
+    return `${baseUrl}${sep}${buildQuery()}`;
+  }
+
+  function syncReportLinks() {
+    document.querySelectorAll(".cc-report-link[data-base-url]").forEach((node) => {
+      const base = node.getAttribute("data-base-url");
+      if (base) node.setAttribute("href", buildReportLink(base));
+    });
+  }
+
+  function applyPeriodFromUrl() {
+    let params;
+    try {
+      params = new URLSearchParams(window.location.search);
+    } catch (e) {
+      return;
+    }
+    let fi = (params.get("fecha_inicio") || "").trim();
+    let ff = (params.get("fecha_fin") || "").trim();
+    const legacy = (params.get("fecha") || "").trim();
+    if ((!fi || !ff) && legacy && ISO_DATE.test(legacy)) {
+      fi = ff = legacy;
+    }
+    if (!ISO_DATE.test(fi) || !ISO_DATE.test(ff)) return;
+    const fiEl = el("cc-fecha-inicio");
+    const ffEl = el("cc-fecha-fin");
+    if (fiEl) fiEl.value = fi;
+    if (ffEl) ffEl.value = ff;
+    const suc = (params.get("sucursal") || "").trim();
+    const sucEl = el("cc-sucursal");
+    if (suc && sucEl) sucEl.value = suc;
   }
 
   let waitModalLocks = 0;
@@ -261,6 +298,23 @@
     }
   }
 
+  function isMprEnabled() {
+    return cfg.mprModuleActive === true;
+  }
+
+  function visibleAreaDefs() {
+    return isMprEnabled()
+      ? AREA_DEFS
+      : AREA_DEFS.filter((d) => d.key !== "manufactura");
+  }
+
+  function dashboardWaitSubtitle() {
+    const parts = ["ventas", "inventario", "compras"];
+    if (isMprEnabled()) parts.push("manufactura");
+    parts.push("tesorería", "cobros");
+    return `Consultando ${parts.join(", ")} en AdministraNET…`;
+  }
+
   function showWaitModal(kind) {
     const modal = el("cc-wait-modal");
     if (!modal) return;
@@ -269,7 +323,10 @@
     const titleEl = el("cc-wait-title");
     const subEl = el("cc-wait-subtitle");
     if (titleEl) titleEl.textContent = labels.title;
-    if (subEl) subEl.textContent = labels.subtitle;
+    if (subEl) {
+      subEl.textContent =
+        kind === "dashboard" ? dashboardWaitSubtitle() : labels.subtitle;
+    }
     modal.classList.remove("hidden");
     modal.classList.add("flex", "items-center", "justify-center");
     modal.setAttribute("aria-hidden", "false");
@@ -352,13 +409,18 @@
     const lbl = el("cc-periodo-label");
     if (!lbl) return;
     const f = readFilters();
-    const base = `Período: ${isoToDisplay(f.fecha_inicio)} — ${isoToDisplay(f.fecha_fin)}`;
+    const sameDay = isSingleDayPeriod(f);
+    const base = sameDay
+      ? `Período: ${isoToDisplay(f.fecha_inicio)}`
+      : `Período: ${isoToDisplay(f.fecha_inicio)} — ${isoToDisplay(f.fecha_fin)}`;
     lbl.textContent = loading ? `${base} · Cargando áreas…` : base;
   }
 
   function renderGlobalKpis(areas, ventasDia) {
     const grid = el("cc-global-kpis");
     if (!grid) return;
+    const f = readFilters();
+    const singleDay = isSingleDayPeriod(f);
     const a = areas || {};
     const v = a.ventas || {};
     const inv = a.inventario || {};
@@ -366,17 +428,23 @@
     const mfg = a.manufactura || {};
     const cruz = a.cruzados || {};
     const vd = ventasDia?.kpis || {};
-    const ventasDiaVal =
-      ventasDia === null ? "…" : fmtMoney.format(vd.ventas_netas_dia || 0);
+    const ventasFirstLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
+    const ventasFirstVal = singleDay
+      ? ventasDia === null
+        ? "…"
+        : fmtMoney.format(vd.ventas_netas_dia || 0)
+      : fmtMoney.format(v.ventas_netas || 0);
 
     const cards = [
-      kpiCard("Ventas netas (día)", ventasDiaVal, "sky"),
+      kpiCard(ventasFirstLabel, ventasFirstVal, "sky"),
       kpiCard("Total operativo (período)", fmtMoney.format(v.total_operativo || 0), "indigo"),
       kpiCard("Valor stock", fmtMoney.format(inv.valor_stock || 0), "emerald"),
       kpiCard("OC pendientes", fmtNum.format(comp.oc_pendientes_cantidad || 0), "amber"),
-      kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"),
-      kpiCard("Backorder", fmtMoney.format(cruz.backorder_importe || 0), "rose"),
     ];
+    if (isMprEnabled()) {
+      cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
+    }
+    cards.push(kpiCard("Backorder", fmtMoney.format(cruz.backorder_importe || 0), "rose"));
     grid.innerHTML = cards.join("");
     Array.from(grid.querySelectorAll(".cc-card-animate")).forEach((node, i) => {
       node.style.animationDelay = `${i * 0.05}s`;
@@ -386,14 +454,19 @@
   function renderGlobalKpisLoading() {
     const grid = el("cc-global-kpis");
     if (!grid) return;
-    grid.innerHTML = [
-      kpiCardLoading("Ventas netas (día)", "sky"),
+    const singleDay = isSingleDayPeriod(readFilters());
+    const ventasLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
+    const loadingCards = [
+      kpiCardLoading(ventasLabel, "sky"),
       kpiCardLoading("Total operativo (período)", "indigo"),
       kpiCardLoading("Valor stock", "emerald"),
       kpiCardLoading("OC pendientes", "amber"),
-      kpiCardLoading("OPT atrasadas", "purple"),
-      kpiCardLoading("Backorder", "rose"),
-    ].join("");
+    ];
+    if (isMprEnabled()) {
+      loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
+    }
+    loadingCards.push(kpiCardLoading("Backorder", "rose"));
+    grid.innerHTML = loadingCards.join("");
   }
 
   const AREA_DEFS = [
@@ -554,8 +627,8 @@
       )
       .join("");
 
-    const mprBtn = def.linkMpr && cfg.mprTableroUrl
-      ? `<a href="${cfg.mprTableroUrl}" class="inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-purple-300 bg-purple-50 px-2.5 py-2 text-[11px] font-medium text-purple-800 hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-950/50 dark:text-purple-200 sm:w-auto sm:py-1">Tablero MPR</a>`
+    const mprBtn = def.linkMpr && isMprEnabled() && cfg.mprTableroUrl
+      ? `<a href="${buildReportLink(cfg.mprTableroUrl)}" class="inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-purple-300 bg-purple-50 px-2.5 py-2 text-[11px] font-medium text-purple-800 hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-950/50 dark:text-purple-200 sm:w-auto sm:py-1">Tablero MPR</a>`
       : "";
 
     return `
@@ -574,7 +647,7 @@
         <div class="flex-1 px-4 py-2">${body}</div>
         <footer class="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:flex-wrap dark:border-slate-700">
           ${detailBtns}
-          ${def.key === "ventas" ? `<a href="${cfg.executiveSalesPageUrl || "#"}" class="inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-sky-600 px-2.5 py-2 text-[11px] font-medium text-white hover:bg-sky-500 sm:w-auto sm:py-1">Panel del día</a>` : ""}
+          ${def.key === "ventas" ? `<a href="${buildReportLink(cfg.executiveSalesPageUrl || "#")}" class="cc-report-link inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-sky-600 px-2.5 py-2 text-[11px] font-medium text-white hover:bg-sky-500 sm:w-auto sm:py-1" data-base-url="${cfg.executiveSalesPageUrl || ""}">Panel del día</a>` : ""}
           ${mprBtn}
         </footer>
       </article>`;
@@ -619,17 +692,17 @@
   function renderAreasSkeleton() {
     const grid = el("cc-areas-grid");
     if (!grid) return;
-    grid.innerHTML = AREA_DEFS.map((def, i) => areaCardSkeleton(def, i)).join("");
+    grid.innerHTML = visibleAreaDefs().map((def, i) => areaCardSkeleton(def, i)).join("");
   }
 
   function updateSingleAreaCard(key, areaData) {
     const grid = el("cc-areas-grid");
     if (!grid) return;
-    const idx = AREA_DEFS.findIndex((d) => d.key === key);
+    const idx = visibleAreaDefs().findIndex((d) => d.key === key);
     if (idx < 0) return;
     const current = grid.querySelector(`[data-area-key="${key}"]`) || grid.children[idx];
     if (!current) return;
-    const html = areaCard(AREA_DEFS[idx], areaData, idx);
+    const html = areaCard(visibleAreaDefs()[idx], areaData, idx);
     const wrap = document.createElement("div");
     wrap.innerHTML = html.trim();
     const next = wrap.firstElementChild;
@@ -644,8 +717,8 @@
     const grid = el("cc-areas-grid");
     if (!grid) return;
     const areas = data.areas || data || {};
-    grid.innerHTML = AREA_DEFS.map((def, i) => areaCard(def, areas[def.key], i)).join("");
-    AREA_DEFS.forEach((def, i) => {
+    grid.innerHTML = visibleAreaDefs().map((def, i) => areaCard(def, areas[def.key], i)).join("");
+    visibleAreaDefs().forEach((def, i) => {
       const node = grid.children[i];
       if (node) node.dataset.areaKey = def.key;
     });
@@ -670,13 +743,17 @@
 
   function buildSummaryQuery() {
     const f = readFilters();
-    const q = new URLSearchParams({ fecha: f.fecha });
+    const q = new URLSearchParams({
+      fecha_inicio: f.fecha_inicio,
+      fecha_fin: f.fecha_fin,
+    });
     if (f.sucursal) q.set("sucursal", f.sucursal);
     return q.toString();
   }
 
   async function loadExecutiveSummaryDeferred(loadToken) {
     if (!cfg.executiveSummaryUrl) return;
+    if (!isSingleDayPeriod(readFilters())) return;
     ventasDiaCache = null;
     renderGlobalKpis(areasCache, null);
     try {
@@ -714,7 +791,7 @@
   async function loadDashboardParallel(loadToken) {
     const areaUrls = cfg.areaUrls || {};
     const q = buildQuery();
-    const tasks = AREA_DEFS.map((def) => {
+    const tasks = visibleAreaDefs().map((def) => {
       const url = areaUrls[def.key];
       if (!url) return Promise.resolve(null);
       return fetchArea(def.key, url, q, loadToken).then((result) => {
@@ -738,7 +815,7 @@
       updatePeriodoLabel(false);
       areasCache = data.areas || {};
       let ventasDia = null;
-      if (cfg.executiveSummaryUrl) {
+      if (cfg.executiveSummaryUrl && isSingleDayPeriod(readFilters())) {
         try {
           ventasDia = await fetchJson(`${cfg.executiveSummaryUrl}?${buildSummaryQuery()}`);
         } catch (e) {
@@ -911,22 +988,19 @@
   }
 
   function initDates() {
+    applyPeriodFromUrl();
     const t = todayIso();
     const fi = el("cc-fecha-inicio");
     const ff = el("cc-fecha-fin");
-    const f = el("cc-fecha");
-    if (f && !f.value) f.value = t;
-    if (fi && !fi.value) fi.value = firstDayOfMonth(t);
+    if (fi && !fi.value) fi.value = t;
     if (ff && !ff.value) ff.value = t;
-    if (f) {
-      f.addEventListener("change", () => {
-        if (!fi || !ff) return;
-        if (!fi.dataset.touched) fi.value = firstDayOfMonth(f.value);
-        if (!ff.dataset.touched) ff.value = f.value;
-      });
-    }
-    if (fi) fi.addEventListener("change", () => { fi.dataset.touched = "1"; });
-    if (ff) ff.addEventListener("change", () => { ff.dataset.touched = "1"; });
+    const onPeriodChange = () => {
+      syncReportLinks();
+      updatePeriodoLabel(false);
+    };
+    fi?.addEventListener("change", onPeriodChange);
+    ff?.addEventListener("change", onPeriodChange);
+    syncReportLinks();
   }
 
   function bind() {

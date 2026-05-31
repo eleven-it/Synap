@@ -10,7 +10,9 @@ from rest_framework.views import APIView
 from .permissions import ManagerialReportsPermission
 from .services.executive_dashboard.base import (
     base_empresa_from_request,
+    build_meta,
     legacy_cursor,
+    mpr_modulo_activo,
     resolve_filters_from_query_params,
 )
 from .services.executive_dashboard.command_center import run_command_center
@@ -135,6 +137,21 @@ class ExecutiveDashboardManufacturaResumenAPIView(ExecutiveDashboardMixin, APIVi
         filters, err = self._filters_or_error(request)
         if err:
             return err
+        if not mpr_modulo_activo():
+            return Response(
+                {
+                    "pedidos_fabrica_pendientes": 0,
+                    "opt_atrasadas": 0,
+                    "unidades_pendientes_produccion": 0.0,
+                    "items_urgentes": 0,
+                    "disponible": False,
+                    "motivo": "Módulo MPR no activo.",
+                    "meta": build_meta(
+                        filters,
+                        notas_semanticas=["Área manufactura oculta: módulo MPR inactivo."],
+                    ),
+                }
+            )
         payload = fetch_manufactura_resumen(filters.base_empresa, filters)
         return Response(payload)
 

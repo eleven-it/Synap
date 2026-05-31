@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .base import DashboardFilters, build_meta, legacy_cursor
+from .base import DashboardFilters, build_meta, legacy_cursor, mpr_modulo_activo
 from .cross_metrics import fetch_cruzados_resumen
 from .exceptions import is_legacy_db_error, legacy_area_failure_payload
 from .inventory_metrics import fetch_inventario_resumen
@@ -83,14 +83,17 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
                 "No se pudieron cargar sucursales para command center", exc_info=True
             )
 
-    areas["manufactura"] = _area_sin_meta_interno(
-        fetch_manufactura_resumen(filters.base_empresa, filters)
-    )
+    mpr_on = mpr_modulo_activo()
+    if mpr_on:
+        areas["manufactura"] = _area_sin_meta_interno(
+            fetch_manufactura_resumen(filters.base_empresa, filters)
+        )
 
     meta = build_meta(
         filters,
         notas_semanticas=notas_globales,
         endpoints=ENDPOINTS_RELATIVOS,
+        modulos={"mpr": mpr_on},
     )
     return {
         "fecha_referencia": filters.fecha_referencia.isoformat(),

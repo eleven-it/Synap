@@ -9161,6 +9161,82 @@ if (dashboardRoot) {
   };
 
   /**
+   * Desde Command Center u otro origen: ?fecha_inicio=&fecha_fin= (o atajo ?fecha= un día).
+   * Tiene prioridad sobre localStorage para el rango del informe.
+   */
+  const applyPeriodFromQueryParams = () => {
+    const reportSlug = dashboardRoot?.dataset?.reportSlug;
+    if (!reportSlug) return false;
+
+    const allowed =
+      isVentasNetasSlug(reportSlug) ||
+      reportSlug === "cash_flow_waterfall" ||
+      reportSlug === "cash_flow_by_account" ||
+      reportSlug === "uninvoiced_remitos" ||
+      isPedidosPendientesSlug(reportSlug) ||
+      reportSlug === "sales_summary" ||
+      reportSlug === "total-consolidado-operativo" ||
+      reportSlug === "stock-existencias" ||
+      isInformeBoDualPeriodo(reportSlug);
+    if (!allowed) return false;
+
+    let params;
+    try {
+      params = new URLSearchParams(window.location.search);
+    } catch (e) {
+      return false;
+    }
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    let fi = (params.get("fecha_inicio") || "").trim();
+    let ff = (params.get("fecha_fin") || "").trim();
+    const legacy = (params.get("fecha") || "").trim();
+    if ((!fi || !ff) && legacy && iso.test(legacy)) {
+      fi = ff = legacy;
+    }
+    if (!iso.test(fi) || !iso.test(ff)) return false;
+
+    const periodoTipoSelect = document.getElementById("periodo_tipo");
+    if (periodoTipoSelect) {
+      periodoTipoSelect.value = "personalizado";
+      periodoTipoSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    const fechaInicioInput = document.getElementById("fecha_inicio");
+    const fechaFinInput = document.getElementById("fecha_fin");
+    if (fechaInicioInput) fechaInicioInput.value = fi;
+    if (fechaFinInput) fechaFinInput.value = ff;
+
+    if (isInformeBoDualPeriodo(reportSlug)) {
+      const facSel = document.getElementById("periodo_tipo_facturacion");
+      const fifEl = document.getElementById("fecha_inicio_facturacion");
+      const fffEl = document.getElementById("fecha_fin_facturacion");
+      if (facSel && fifEl && fffEl) {
+        facSel.value = "personalizado";
+        fifEl.value = fi;
+        fffEl.value = ff;
+        fifEl.disabled = false;
+        fffEl.disabled = false;
+        facSel.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    }
+
+    if (typeof saveFilters === "function") {
+      saveFilters();
+    }
+
+    try {
+      params.delete("fecha_inicio");
+      params.delete("fecha_fin");
+      params.delete("fecha");
+      const q = params.toString();
+      const newUrl = window.location.pathname + (q ? `?${q}` : "") + window.location.hash;
+      window.history.replaceState({}, "", newUrl);
+    } catch (e) {
+      /* noop */
+    }
+    return true;
+  };
+
+  /**
    * Desde el CRUD de objetivos de venta el enlace incluye ?fecha_inicio_facturacion=&fecha_fin_facturacion=
    * (intervalo del período editado). Solo se ajusta el rango de facturación/remitos; el de backorder
    * sigue viniendo de localStorage (última configuración).
@@ -10753,6 +10829,7 @@ if (dashboardRoot) {
     loadFilterOptions().then(() => {
       setupPeriodoTipo();
       setupBoDualPeriodoTipo();
+      applyPeriodFromQueryParams();
       applyVentasObjetivosFacturacionFromQueryParams();
       setupRefreshIntervalButtons();
       setupCashFlowFilters();

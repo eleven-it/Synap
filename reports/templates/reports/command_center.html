@@ -67,26 +67,24 @@
             </p>
           </div>
           <nav class="flex shrink-0 flex-wrap gap-2 md:justify-end" aria-label="Accesos relacionados">
-            <a href="{{ executive_sales_page_url }}" class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:border-sky-500/40 hover:bg-slate-800/80">
+            <a href="{{ executive_sales_page_url }}" id="cc-link-panel-dia" data-base-url="{{ executive_sales_page_url }}" class="cc-report-link inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:border-sky-500/40 hover:bg-slate-800/80">
               <span class="material-icons text-[1.125rem]" aria-hidden="true">insights</span>
               Ventas del día
             </a>
-            <a href="{{ mpr_tablero_url }}" class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:border-violet-500/40 hover:bg-slate-800/80">
+            {% if mpr_module_active %}
+            <a href="{{ mpr_tablero_url }}" id="cc-link-mpr-tablero" data-base-url="{{ mpr_tablero_url }}" class="cc-report-link inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:border-violet-500/40 hover:bg-slate-800/80">
               <span class="material-icons text-[1.125rem]" aria-hidden="true">precision_manufacturing</span>
               Tablero MPR
             </a>
+            {% endif %}
           </nav>
         </div>
 
         <div class="cc-hero-toolbar rounded-xl p-3 sm:p-3.5">
           <p class="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Filtros del período</p>
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
-            <fieldset class="grid min-w-0 flex-1 grid-cols-1 gap-3 border-0 p-0 sm:grid-cols-3 lg:max-w-[28rem]">
-              <legend class="sr-only">Fechas</legend>
-              <div class="cc-filter-field flex flex-col gap-1">
-                <label for="cc-fecha" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Fecha ref.</label>
-                <input type="date" id="cc-fecha" class="min-h-10 w-full rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35" />
-              </div>
+            <fieldset class="grid min-w-0 flex-1 grid-cols-1 gap-3 border-0 p-0 sm:grid-cols-2 lg:max-w-[22rem]">
+              <legend class="sr-only">Período</legend>
               <div class="cc-filter-field flex flex-col gap-1">
                 <label for="cc-fecha-inicio" class="text-[10px] font-medium uppercase tracking-wide text-slate-400">Desde</label>
                 <input type="date" id="cc-fecha-inicio" class="min-h-10 w-full rounded-lg border border-slate-600/80 bg-slate-950/50 px-2.5 py-2 text-sm text-white focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/35" />
@@ -212,8 +210,9 @@
     executiveSummaryUrl: "{{ executive_summary_api_url|escapejs }}",
     executiveSalesPageUrl: "{{ executive_sales_page_url|escapejs }}",
     mprTableroUrl: "{{ mpr_tablero_url|escapejs }}",
+    mprModuleActive: {{ mpr_module_active|yesno:"true,false" }},
     detailUrls: JSON.parse(document.getElementById("cc-detail-urls").textContent),
   };
 </script>
-<script src="{% static 'reports/js/command_center.js' %}?v=20260529a" defer></script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20260531b" defer></script>
 {% endblock %}

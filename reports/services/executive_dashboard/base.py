@@ -56,9 +56,23 @@ def resolve_filters_from_query_params(
     base_empresa: str,
     default_fecha: date | None = None,
 ) -> DashboardFilters:
-    fecha_ref = _parse_fecha(qp.get("fecha") if qp else None) or default_fecha or timezone.localdate()
-    fecha_inicio = _parse_fecha(qp.get("fecha_inicio") if qp else None) or fecha_ref.replace(day=1)
-    fecha_fin = _parse_fecha(qp.get("fecha_fin") if qp else None) or fecha_ref
+    """Resuelve período canónico ``fecha_inicio`` / ``fecha_fin`` (default: hoy).
+
+    ``fecha`` (legacy) sin intervalo explícito equivale a un solo día (inicio = fin).
+    ``fecha_referencia`` se deriva siempre de ``fecha_fin`` (compatibilidad meta/API).
+    """
+    hoy = default_fecha or timezone.localdate()
+    fi_raw = _parse_fecha(qp.get("fecha_inicio") if qp else None)
+    ff_raw = _parse_fecha(qp.get("fecha_fin") if qp else None)
+    fecha_legacy = _parse_fecha(qp.get("fecha") if qp else None)
+
+    if fi_raw and ff_raw:
+        fecha_inicio, fecha_fin = fi_raw, ff_raw
+    elif fecha_legacy:
+        fecha_inicio = fecha_fin = fecha_legacy
+    else:
+        fecha_inicio = fecha_fin = hoy
+
     if fecha_inicio > fecha_fin:
         raise InvalidDashboardFilters("fecha_inicio no puede ser posterior a fecha_fin.")
 
@@ -85,7 +99,7 @@ def resolve_filters_from_query_params(
 
     return DashboardFilters(
         base_empresa=str(base_empresa).strip(),
-        fecha_referencia=fecha_ref,
+        fecha_referencia=fecha_fin,
         fecha_inicio=fecha_inicio,
         fecha_fin=fecha_fin,
         cod_sucursal=cod_sucursal,
@@ -109,6 +123,24 @@ def build_meta(filters: DashboardFilters, **extra: Any) -> dict[str, Any]:
     }
     meta.update(extra)
     return meta
+
+
+def mpr_modulo_activo() -> bool:
+    """True si el módulo ``mpr`` está activo en ModuleConfig y la app está instalada."""
+    try:
+        from core.module_manager import ModuleManager
+
+        return ModuleManager().is_module_active("mpr")
+    except Exception:
+        return False
+
+
+def sql_fecha_en_periodo(alias: str, filters: DashboardFilters) -> tuple[str, list]:
+    """Cláusula AND para filtrar ``alias.Fecha`` en [fecha_inicio, fecha_fin]."""
+    return (
+        f" AND {alias}.Fecha >= %s AND {alias}.Fecha <= %s",
+        [filters.fecha_inicio_str, filters.fecha_fin_str],
+    )
 
 
 def round_money(value: float) -> float:

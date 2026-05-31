@@ -8,6 +8,21 @@ from django.core.exceptions import ImproperlyConfigured
 from core.module_manager import module_manager
 
 
+# Módulos ya montados en django_project/urls.py (evita W005 namespace duplicado).
+SKIP_MODULES_IN_MAIN_URLS = frozenset(
+    (
+        "core",
+        "login",
+        "reports",
+        "ia",
+        "self_checkout",
+        "logistica",
+        "tiendanube_administranet",
+        "mpr",
+    )
+)
+
+
 class URLRegistry:
     """Registro dinámico de URLs por módulo"""
     
@@ -53,16 +68,7 @@ class URLRegistry:
         No incluye módulos que ya están en urls.py principal (evita W005 namespace duplicado).
         """
         url_patterns = []
-        # Módulos ya incluidos explícitamente en django_project/urls.py (core como stock, compras, mpr)
-        skip_in_main = (
-            'core',
-            'login',
-            'reports',
-            'ia',
-            'self_checkout',
-            'logistica',
-            'tiendanube_administranet',
-        )
+        skip_in_main = SKIP_MODULES_IN_MAIN_URLS
 
         for module_name, module_urls in self.module_urls.items():
             if module_name in skip_in_main or not module_urls:

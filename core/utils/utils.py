@@ -1030,7 +1030,7 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
     """Obtiene las apps visibles para un usuario, ordenadas por prioridad, con sus submenús"""
     from django.urls import reverse
     from django.urls.exceptions import NoReverseMatch
-    from core.models import ModuleConfig
+    from core.module_manager import ModuleManager
     
     if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
         return []
@@ -1038,11 +1038,13 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
     permisos_usuario = get_user_permission_set(user)
     es_supervisor_usuario = user_has_full_access(user)
 
-    # Obtener módulos activos desde la base de datos
-    active_modules = set(ModuleConfig.objects.filter(is_active=True).values_list('name', flat=True))
+    # Módulos activos: ModuleConfig + app instalada (misma regla que ModuleMiddleware).
+    active_modules = set(ModuleManager().get_active_modules())
     
-    # Agregar módulos core que siempre deben estar activos (como stock, compras, mpr)
-    core_modules = {'core', 'login', 'dashboard', 'reports', 'ia', 'stock', 'ventas', 'mpr', 'compras', 'self_checkout'}
+    # Siempre visibles en menú: cadena base y apps sin registro en ModuleConfig.
+    # Los demás módulos de MODULE_CONFIGS (reports, ia, mpr, logistica, fe_afip, …)
+    # dependen solo de ModuleConfig.is_active.
+    core_modules = {'core', 'login', 'dashboard', 'stock', 'ventas', 'compras', 'self_checkout'}
     active_modules.update(core_modules)
 
     from core.services.navbar_visibilidad import (

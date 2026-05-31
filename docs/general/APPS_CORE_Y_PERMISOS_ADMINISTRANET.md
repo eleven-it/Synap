@@ -1,6 +1,6 @@
 # Apps core y permisos compatibles con AdministraNET
 
-Las apps **stock**, **compras**, **mpr** y **self_checkout** son **módulos core**: siempre instaladas, no se activan/desactivan desde Module Management. Sus URLs están en `django_project/urls.py` y el menú las considera siempre activas (junto con reports) en `core/utils/utils.py` → `core_modules`.
+Las apps **stock**, **compras** y **self_checkout** son **módulos core**: siempre instaladas y visibles en menú vía `core_modules` en `core/utils/utils.py` (sin fila en `ModuleConfig`). **MPR** está siempre en `INSTALLED_APPS` y en `django_project/urls.py`, pero su visibilidad en menú, URLs (`ModuleMiddleware`) y Command Center depende de **`ModuleConfig`** (`setup_modules --activate mpr`; registro en `core/module_registry.py`, migración `0013_moduleconfig_mpr`).
 
 ## Permisos: única fuente AdministraNET
 
@@ -14,9 +14,12 @@ Las apps **stock**, **compras**, **mpr** y **self_checkout** son **módulos core
 |--------|-------------------------|----------------------|
 | **Stock** | stock.ver, stock.crear_movimiento, stock.consultas, stock.ref_movstock, stock.informes | permiso app: stock.ver; vistas con @tiene_permiso |
 | **Compras** | compras.ver, compras.crear, compras.editar, … | permiso app: compras.ver |
-| **Producción (MPR)** | mpr.ver | permiso app: mpr.ver |
-| **Self-Checkout / TPV** | self_checkout.ver, self_checkout.kiosk, self_checkout.supervisor, self_checkout.admin | permiso app: self_checkout.ver; vistas con has_self_checkout_admin / has_any_self_checkout_permission |
-| **Reportes** | reports.ver, reports.view_operational, reports.dashboard, … | permiso app: reports.ver |
+| **Producción (MPR)** | mpr.ver | permiso app: mpr.ver; visibilidad vía `ModuleConfig` |
+| **Self-Checkout / TPV** | self_checkout.ver, … | permiso app: self_checkout.ver; siempre activo en menú (`core_modules`) |
+| **Reportes** | reports.ver, … | permiso app: reports.ver; visibilidad vía `ModuleConfig` (bootstrap lo activa) |
+| **IA** | ia.ver, … | permiso app: ia.ver; visibilidad vía `ModuleConfig` |
+| **Logística** | logistica_editar_entregas, … | visibilidad vía `ModuleConfig` |
+| **Facturación AFIP** | fe_afip.view_afipconfig, … | visibilidad vía `ModuleConfig`; URLs dinámicas `/fe_afip/` |
 
 Para que un puesto tenga acceso a una app en Synap, debe tener el valor "Si" en `permiso_sistema_puesto` para el `key_permiso` correspondiente (o el comodín del módulo, o "*" si es supervisor). La verificación se hace con `core.services.administranet_permisos_usuario.get_permisos_totales_administranet` y en el menú con `app["permiso"] in permisos_usuario`.
 
