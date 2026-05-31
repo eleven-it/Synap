@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from .base import DashboardFilters, build_meta, build_paginated_response, round_money
+from .base import DashboardFilters, build_meta, build_paginated_response, round_money, sql_fecha_en_periodo
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,10 @@ def _search_where_sql(busqueda: str | None) -> tuple[str, list]:
     return clause, params
 
 
-_RESERVADO_JOIN = """
+def _reservado_join_sql(filters: DashboardFilters) -> str:
+    """Subconsulta reservado PED; filtra cp_res.Fecha al período del dashboard."""
+    fecha_sql, _ = sql_fecha_en_periodo("cp_res", filters)
+    return f"""
     LEFT JOIN (
         SELECT sp_res.IDArt AS id_articulo,
             sp_res.CodDeposito AS id_deposito,
@@ -51,12 +54,13 @@ _RESERVADO_JOIN = """
             AND cp_res.Estado IN ('En preparación', 'Preparado')
             AND (COALESCE(sp_res.cantidad_pendiente,
                 sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0)
+            {fecha_sql}
         GROUP BY sp_res.IDArt, sp_res.CodDeposito
     ) res ON res.id_articulo = a.IDArt AND res.id_deposito = sd.id_deposito
 """
 
 
-def _count_productos_bajo_minimo(cursor) -> int | None:
+def _count_productos_bajo_minimo(cursor, filters: DashboardFilters) -> int | None:
     """Umbral: articulo.stock_min o punto_pedido (legacy AdministraNET)."""
     sql_bajo_min = f"""
         SELECT COUNT(*) FROM (
@@ -65,7 +69,7 @@ def _count_productos_bajo_minimo(cursor) -> int | None:
                 GREATEST(COALESCE(a.stock_min, 0), COALESCE(a.punto_pedido, 0)) AS umbral
             FROM articulo a
             INNER JOIN stock_deposito sd ON sd.id_articulo = a.IDArt
-            {_RESERVADO_JOIN}
+            {_reservado_join_sql(filters)}
             WHERE a.Discontinuo = 'No'
               AND a.disponible_vta = 'Si'
               AND a.tipo_art = 'Articulo'
@@ -74,7 +78,8 @@ def _count_productos_bajo_minimo(cursor) -> int | None:
         ) sub
     """
     try:
-        cursor.execute(sql_bajo_min)
+        _, reservado_params = sql_fecha_en_periodo("cp_res", filters)
+        cursor.execute(sql_bajo_min, reservado_params)
         row_bm = cursor.fetchone()
         return int(row_bm[0] or 0) if row_bm else 0
     except Exception as exc:
@@ -84,8 +89,8 @@ def _count_productos_bajo_minimo(cursor) -> int | None:
 
 def fetch_inventario_resumen(cursor, filters: DashboardFilters) -> dict[str, Any]:
     notas = [
-        "Valor stock: saldo depósito × Precio1V (lista 1).",
-        "Reservado: PED En preparación/Preparado por artículo-depósito.",
+        "Valor stock: saldo depósito × Precio1V (lista 1); snapshot actual (sin histórico por fecha).",
+        "Reservado y bajo mínimo: PED En preparación/Preparado filtrados por cp_res.Fecha en el período.",
         "Filtro sucursal no aplica a inventario en v1.",
     ]
     sql = """
@@ -105,7 +110,7 @@ def fetch_inventario_resumen(cursor, filters: DashboardFilters) -> dict[str, Any
     productos_con_stock = int(row[1] or 0) if row else 0
     productos_sin_stock = int(row[2] or 0) if row else 0
 
-    productos_bajo_minimo = _count_productos_bajo_minimo(cursor)
+    productos_bajo_minimo = _count_productos_bajo_minimo(cursor, filters)
     if productos_bajo_minimo is None:
         notas.append("productos_bajo_minimo: no disponible (columnas stock_min/punto_pedido).")
 
@@ -129,7 +134,8 @@ def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
         notas.append(
             f"Búsqueda predictiva (mín. {_BUSQUEDA_MIN_LEN} caracteres): artículo, código, depósito, marca, rubro."
         )
-    reservado_join_sql = _RESERVADO_JOIN
+    reservado_join_sql = _reservado_join_sql(filters)
+    _, reservado_params = sql_fecha_en_periodo("cp_res", filters)
     where_art = """
         a.Discontinuo = 'No'
         AND a.disponible_vta = 'Si'
@@ -148,8 +154,9 @@ def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
         {reservado_join_sql}
         WHERE {where_art}
     """
+    notas.append("Reservado: PED en período (cp_res.Fecha entre fecha_inicio y fecha_fin).")
     sql_count = f"SELECT COUNT(*) {from_clause}"
-    cursor.execute(sql_count, search_params)
+    cursor.execute(sql_count, reservado_params + search_params)
     row_count = cursor.fetchone()
     total_registros = int(row_count[0] or 0) if row_count else 0
 
@@ -171,7 +178,7 @@ def list_existencias(cursor, filters: DashboardFilters) -> dict[str, Any]:
         ORDER BY a.NombreArticulo ASC, sd.id_deposito ASC
         LIMIT %s OFFSET %s
     """
-    cursor.execute(sql, search_params + [filters.limit, filters.offset])
+    cursor.execute(sql, reservado_params + search_params + [filters.limit, filters.offset])
     cols = [d[0] for d in cursor.description]
     filas = []
     for row in cursor.fetchall():

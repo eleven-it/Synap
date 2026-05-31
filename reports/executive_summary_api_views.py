@@ -32,13 +32,24 @@ def _base_empresa(request) -> str | None:
     return getattr(settings, "DEFAULT_BASE_EMPRESA", None)
 
 
-def _parse_fecha(qp) -> date:
-    raw = qp.get("fecha") if qp else None
-    if raw:
-        try:
-            return datetime.strptime(str(raw)[:10], "%Y-%m-%d").date()
-        except ValueError:
-            pass
+def _parse_fecha_opcional(raw) -> date | None:
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(str(raw)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _resolve_fecha_referencia(qp) -> date:
+    """Día de referencia intradía: ``fecha_fin`` del intervalo, atajo ``fecha`` o hoy."""
+    fi = _parse_fecha_opcional(qp.get("fecha_inicio") if qp else None)
+    ff = _parse_fecha_opcional(qp.get("fecha_fin") if qp else None)
+    if fi and ff:
+        return ff
+    legacy = _parse_fecha_opcional(qp.get("fecha") if qp else None)
+    if legacy:
+        return legacy
     return timezone.localdate()
 
 
@@ -85,7 +96,7 @@ class ExecutiveSummaryAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         empresa = get_empresa_django_from_request(request)
-        fecha_ref = _parse_fecha(request.query_params)
+        fecha_ref = _resolve_fecha_referencia(request.query_params)
         cod_sucursal = _parse_cod_sucursal(request.query_params)
         top_orden = _parse_top_orden(request.query_params)
         may_ids, min_ids = _ids_por_canal(empresa.id) if empresa else ([], [])

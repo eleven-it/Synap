@@ -174,21 +174,22 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["executive_summary_api_url"] = reverse("reports-api:reports-executive-summary")
             context["pv_canal_api_url"] = reverse("reports-api:reports-pv-canal-ejecutivo")
         if report.slug == self.COMMAND_CENTER_SLUG:
+            from reports.services.executive_dashboard.base import mpr_modulo_activo
+
+            mpr_active = mpr_modulo_activo()
             context["command_center_api_url"] = reverse("reports-api:reports-executive-dashboard")
             context["executive_summary_api_url"] = reverse("reports-api:reports-executive-summary")
             context["executive_sales_page_url"] = reverse(
                 "reports:dashboard_detail", kwargs={"slug": self.EXECUTIVE_SLUG}
             )
-            context["mpr_tablero_url"] = reverse("mpr:tablero")
-            context["area_urls"] = {
+            context["mpr_module_active"] = mpr_active
+            context["mpr_tablero_url"] = reverse("mpr:tablero") if mpr_active else ""
+            area_urls = {
                 "ventas": reverse("reports-api:reports-executive-dashboard-ventas-resumen"),
                 "inventario": reverse(
                     "reports-api:reports-executive-dashboard-inventario-resumen"
                 ),
                 "compras": reverse("reports-api:reports-executive-dashboard-compras-resumen"),
-                "manufactura": reverse(
-                    "reports-api:reports-executive-dashboard-manufactura-resumen"
-                ),
                 "cruzados": reverse(
                     "reports-api:reports-executive-dashboard-cruzados-resumen"
                 ),
@@ -199,6 +200,11 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                     "reports-api:reports-executive-dashboard-ventas-cobros-resumen"
                 ),
             }
+            if mpr_active:
+                area_urls["manufactura"] = reverse(
+                    "reports-api:reports-executive-dashboard-manufactura-resumen"
+                )
+            context["area_urls"] = area_urls
             context["detail_urls"] = {
                 "pedidos_pendientes": reverse(
                     "reports-api:reports-executive-dashboard-ventas-pedidos-pendientes"

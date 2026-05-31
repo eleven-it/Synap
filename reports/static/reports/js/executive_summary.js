@@ -711,12 +711,41 @@
     });
   }
 
+  function applyPeriodFromUrl() {
+    let params;
+    try {
+      params = new URLSearchParams(window.location.search);
+    } catch (e) {
+      return;
+    }
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    let fi = (params.get("fecha_inicio") || "").trim();
+    let ff = (params.get("fecha_fin") || "").trim();
+    const legacy = (params.get("fecha") || "").trim();
+    if ((!fi || !ff) && legacy && iso.test(legacy)) {
+      fi = ff = legacy;
+    }
+    const fin = el("exec-fecha-input");
+    if (!fin) return;
+    if (fi && ff && iso.test(fi) && iso.test(ff)) {
+      fin.value = ff;
+    } else if (legacy && iso.test(legacy)) {
+      fin.value = legacy;
+    }
+    const suc = (params.get("sucursal") || "").trim();
+    const sucEl = el("exec-sucursal-select");
+    if (suc && sucEl) sucEl.value = suc;
+  }
+
   async function loadSummary() {
     const fin = el("exec-fecha-input");
     const suc = el("exec-sucursal-select");
     const topO = el("exec-top-orden");
     const qs = new URLSearchParams();
-    if (fin && fin.value) qs.set("fecha", fin.value);
+    if (fin && fin.value) {
+      qs.set("fecha_inicio", fin.value);
+      qs.set("fecha_fin", fin.value);
+    }
     if (suc && suc.value) qs.set("sucursal", suc.value);
     if (topO && topO.value) qs.set("top_orden", topO.value);
     const wantedSuc = suc && suc.value ? suc.value : "";
@@ -862,6 +891,7 @@
   }
 
   function init() {
+    applyPeriodFromUrl();
     const fin = el("exec-fecha-input");
     if (fin && !fin.value) {
       const t = new Date();

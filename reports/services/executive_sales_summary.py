@@ -1,7 +1,7 @@
 """
 Agregados del panel «Resumen ejecutivo (ventas)»: facturación en ``cuentacliente``
-y rentabilidad por renglón en ``stock`` (PrecioNetoxR / costo normalizado en unidad base),
-con desglose por rubro/subrubro.
+y rentabilidad por renglón en ``stock`` (PrecioNetoxR / PrecioCostoxR, paridad informe
+rentabilidad AdministraNET), con desglose por rubro/subrubro.
 """
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from reports.services.margen_costo_linea import (
-    fetch_utiliza_embalaje_display_bulto,
     margen_costo_criterio_meta,
     signed_costo_neto_linea_sql,
 )
@@ -264,8 +263,6 @@ def _margen_bruto_totales_dia(
     cursor,
     dia: date,
     cod_sucursal: Optional[int] = None,
-    *,
-    utiliza_embalaje_display_bulto: bool = True,
 ) -> Dict[str, Any]:
     """
     Totales de rentabilidad por renglón ``stock`` (misma ventana que unidades del día).
@@ -274,16 +271,13 @@ def _margen_bruto_totales_dia(
     suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     neto = _signed_precio_netoxr_sql()
-    costo = signed_costo_neto_linea_sql(
-        utiliza_embalaje_display_bulto=utiliza_embalaje_display_bulto
-    )
+    costo = signed_costo_neto_linea_sql()
     sql = f"""
         SELECT
             SUM({neto}) AS venta_neta_lineas,
             SUM({costo}) AS costo_neto_lineas
         FROM stock st
         INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
-        LEFT JOIN articulo a ON a.IDArt = st.IDArt
         WHERE cc.Fecha = %s
           AND {base_w}{suc_sql}
           AND st.Anulado = 'No'
@@ -312,16 +306,12 @@ def _margen_por_rubro_dia(
     cursor,
     dia: date,
     cod_sucursal: Optional[int] = None,
-    *,
-    utiliza_embalaje_display_bulto: bool = True,
 ) -> List[Dict[str, Any]]:
     base_w, base_p = _base_cc_where("cc")
     suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     neto = _signed_precio_netoxr_sql()
-    costo = signed_costo_neto_linea_sql(
-        utiliza_embalaje_display_bulto=utiliza_embalaje_display_bulto
-    )
+    costo = signed_costo_neto_linea_sql()
     sql = f"""
         SELECT
             z.codigo_rubro,
@@ -386,16 +376,12 @@ def _margen_por_subrubro_dia(
     cursor,
     dia: date,
     cod_sucursal: Optional[int] = None,
-    *,
-    utiliza_embalaje_display_bulto: bool = True,
 ) -> List[Dict[str, Any]]:
     base_w, base_p = _base_cc_where("cc")
     suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     neto = _signed_precio_netoxr_sql()
-    costo = signed_costo_neto_linea_sql(
-        utiliza_embalaje_display_bulto=utiliza_embalaje_display_bulto
-    )
+    costo = signed_costo_neto_linea_sql()
     sql = f"""
         SELECT
             z.id_subrubro,
@@ -589,17 +575,10 @@ def run_executive_summary(
     split = _split_canal(cursor, hoy, mayorista_ids, minorista_ids, cod_sucursal)
     gap_vs_ayer = round(v_hoy - v_ayer, 2)
 
-    utiliza_embalaje = fetch_utiliza_embalaje_display_bulto(cursor)
-    margen_bruto = _margen_bruto_totales_dia(
-        cursor, hoy, cod_sucursal, utiliza_embalaje_display_bulto=utiliza_embalaje
-    )
-    margen_por_rubro = _margen_por_rubro_dia(
-        cursor, hoy, cod_sucursal, utiliza_embalaje_display_bulto=utiliza_embalaje
-    )
-    margen_por_subrubro = _margen_por_subrubro_dia(
-        cursor, hoy, cod_sucursal, utiliza_embalaje_display_bulto=utiliza_embalaje
-    )
-    criterio_costo = margen_costo_criterio_meta(utiliza_embalaje)
+    margen_bruto = _margen_bruto_totales_dia(cursor, hoy, cod_sucursal)
+    margen_por_rubro = _margen_por_rubro_dia(cursor, hoy, cod_sucursal)
+    margen_por_subrubro = _margen_por_subrubro_dia(cursor, hoy, cod_sucursal)
+    criterio_costo = margen_costo_criterio_meta()
 
     return {
         "fecha_referencia": hoy.isoformat(),
@@ -633,12 +612,11 @@ def run_executive_summary(
             "dia_contable": "Fecha",
             "top_productos_criterio": "importe_neto_linea",
             "margen_costo_criterio": criterio_costo,
-            "utiliza_embalaje_display_bulto": utiliza_embalaje,
             "margen_venta_criterio": "precio_netoxr_linea",
             "nota_margen_costo_historico": (
-                "Hasta mayo 2026 el costo agregado sumaba PrecioCostoxR sin escalar empaque/unidad; "
-                "desde entonces aplica escala Display/Bulto solo si configuracion.utiliza_embalaje='Si' "
-                "y (utiliza_bulto_cerrado='Si' o utiliza_display='Si'); si no, PrecioCostoxU × Cantidad."
+                "Mayo 2026: breve desvío con escala Display/Bulto (revertido). "
+                "Criterio vigente: suma firmada de PrecioCostoxR por renglón, "
+                "paridad informe rentabilidad AdministraNET (venta_rentabilidad_resumen)."
             ),
             "cod_sucursal_filtro": cod_sucursal,
             "top_productos_orden": orden_tp,

@@ -21,8 +21,28 @@ class Command(BaseCommand):
             help='Forzar corrección sin confirmación',
         )
 
+    def _django_migrations_exists(self):
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    AND table_name = 'django_migrations'
+                );
+            """)
+            return cursor.fetchone()[0]
+
     def handle(self, *args, **options):
         force = options.get('force', False)
+
+        if not self._django_migrations_exists():
+            self.stdout.write(
+                self.style.SUCCESS(
+                    'ℹ️  Base de datos nueva (sin django_migrations): '
+                    'omitiendo corrección de migraciones de reports.'
+                )
+            )
+            return
         
         self.stdout.write(self.style.WARNING("=" * 60))
         self.stdout.write(self.style.WARNING("🔧 Corrección de migraciones de Reports"))

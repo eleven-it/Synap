@@ -24,9 +24,9 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 
 | Parámetro | Formato | Default | Uso |
 |-----------|---------|---------|-----|
-| `fecha` | `yyyy-MM-dd` | fecha local servidor | Referencia para orquestador y modo día |
-| `fecha_inicio` | `yyyy-MM-dd` | primer día del mes calendario de `fecha` | Inicio período agregados |
-| `fecha_fin` | `yyyy-MM-dd` | `fecha` | Fin período agregados |
+| `fecha_inicio` | `yyyy-MM-dd` | fecha local (hoy) | Inicio período agregados |
+| `fecha_fin` | `yyyy-MM-dd` | fecha local (hoy) | Fin período agregados |
+| `fecha` | `yyyy-MM-dd` | — | Atajo legacy: un solo día (`fecha_inicio` = `fecha_fin` = `fecha`) |
 | `sucursal` | int o vacío / `todas` | sin filtro | `CodSucursal` en tablas de comprobante |
 | `limit` | int 1–500 | 100 | Solo endpoints P1 con filas |
 | `offset` | int ≥ 0 | 0 | Solo endpoints P1 |
@@ -39,7 +39,7 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 - Toda respuesta **MUST** incluir objeto **`meta`** con al menos:
   - `definicion`: literal `executive-dashboard-v1`
   - `base_empresa`: string usado en la consulta
-  - `fecha_referencia`: `yyyy-MM-dd`
+  - `fecha_referencia`: `yyyy-MM-dd` (derivada de `fecha_fin`; compatibilidad meta)
   - `periodo`: `{ "inicio": "yyyy-MM-dd", "fin": "yyyy-MM-dd" }`
   - `cod_sucursal_filtro`: int o `null`
   - `notas_semanticas`: arreglo de strings (puede estar vacío)
@@ -136,6 +136,8 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 | `productos_bajo_minimo` | Conteo donde disponible (`saldo − reservado` por depósito, agregado por artículo) < `articulo.PuntoPedido` y `PuntoPedido > 0` |
 | `productos_sin_stock` | Conteo con stock total 0 y demanda pendiente > 0 (opcional v1: solo conteo con saldo 0) |
 
+- **`valor_stock`**, **`productos_con_stock`**, **`productos_sin_stock`**: snapshot de saldo actual (sin histórico por fecha).
+- **`reservado`** y **`productos_bajo_minimo`**: subconsulta PED **MUST** filtrar `comp_ped.Fecha` en `[fecha_inicio, fecha_fin]`.
 - Filtro sucursal: cuando informe base no soporta sucursal en existencias, **`meta.notas_semanticas`** **MUST** indicar que `sucursal` no aplica a inventario en v1.
 
 ### REQ-ED-INV-P1-01 — Detalle existencias
@@ -159,10 +161,12 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 | `oc_pendientes_importe` | Suma `stockp.PrecioNetoxR` pendiente (o criterio documentado equivalente al informe BO) |
 
 - SQL **MUST** alinearse a subconsulta `oc_pendiente` de `_run_backorder_vs_stock_vs_facturacion` (no usar `stock_deposito.saldo_pedido_proveedor`).
+- Las OC contabilizadas **MUST** tener `cuentaproveedor.Fecha` dentro de `[fecha_inicio, fecha_fin]` (Command Center; distinto del subquery BO que no filtra fecha en OC pendiente).
 
-### REQ-ED-COMP-03 — Validación pendiente
+### REQ-ED-COMP-03 — Validación
 
-- Hasta confirmación funcional con negocio, **`meta.notas_semanticas`** **SHOULD** incluir `compras_validacion: pendiente_vb6`.
+- **`meta.notas_semanticas`** **MUST** documentar criterio de fecha (`cp_oc.Fecha` en período) y paridad con subconsulta BO.
+- **`compras_validacion: pendiente_vb6`** **MUST NOT** aparecer tras validación (2026-05).
 
 ---
 
@@ -180,6 +184,10 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 | `opt_atrasadas` | Cantidad de `id_lista_produccion` distintos en `listar_opt_listado(..., solo_atrasadas=True)` |
 | `unidades_pendientes_produccion` | Suma `cantidad_pendiente_prod` de `listar_lista_produccion_agrupada` |
 | `items_urgentes` | Mínimo entre 15 y ventana pack + atrasadas (misma heurística que `TableroView`) |
+
+- El área **`manufactura`** y el endpoint **`.../manufactura/resumen/`** **MUST** omitirse (UI y orquestador) cuando el módulo **`mpr`** no está activo en `ModuleConfig` (`ModuleManager.is_module_active('mpr')`).
+- **`meta.modulos.mpr`** **MUST** indicar `true`/`false` en el orquestador.
+- Todas las fuentes MPR del resumen **MUST** recibir `fecha_desde` / `fecha_hasta` del período: `comp_ped.Fecha` en pedidos de fábrica; demanda/OPT vía pedidos vinculados en `lista_produccion_detalle` o `fecha_objetivo` cuando no hay pedido.
 
 ### REQ-ED-MFG-03 — Error de esquema MPR
 

@@ -432,6 +432,56 @@ def _formatear_fecha_dd_mm_yyyy(value: Any) -> str:
     return "—"
 
 
+def _append_filtro_periodo_agrupada(
+    cursor,
+    sql: str,
+    params: list,
+    *,
+    tbl_agrupada: str,
+    alias_l: str = "l",
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    col_fecha: Optional[str] = None,
+) -> tuple[str, list]:
+    """Restringe filas agrupadas al período: pedidos vinculados (comp_ped.Fecha) o fecha_objetivo."""
+    if fecha_desde is None and fecha_hasta is None:
+        return sql, params
+    fd = fecha_desde or date(1900, 1, 1)
+    fh = fecha_hasta or date(9999, 12, 31)
+    tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
+    tbl_cp = _nombre_tabla(cursor, "comp_ped")
+    if tbl_detalle and tbl_cp:
+        sql += f"""
+            AND (
+                EXISTS (
+                    SELECT 1 FROM {tbl_detalle} d
+                    INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
+                    WHERE d.id_lista_produccion = {alias_l}.id_lista_produccion
+                      AND COALESCE(d.codigo_movimiento_pedido, 0) <> 0
+                      AND cp.Fecha >= %s AND cp.Fecha <= %s
+                )
+        """
+        params.extend([fd, fh])
+        if col_fecha:
+            sql += f"""
+                OR (
+                    NOT EXISTS (
+                        SELECT 1 FROM {tbl_detalle} d2
+                        WHERE d2.id_lista_produccion = {alias_l}.id_lista_produccion
+                          AND COALESCE(d2.codigo_movimiento_pedido, 0) <> 0
+                    )
+                    AND {alias_l}.{col_fecha} IS NOT NULL
+                    AND {alias_l}.{col_fecha} >= %s AND {alias_l}.{col_fecha} <= %s
+                )
+            """
+            params.extend([fd, fh])
+        sql += ")"
+    elif col_fecha:
+        sql += f" AND {alias_l}.{col_fecha} >= %s AND {alias_l}.{col_fecha} <= %s"
+        params.extend([fd, fh])
+    return sql, params
+
+
 def listar_lista_produccion_agrupada(
     base_empresa: str,
     limit: int = 200,
@@ -439,6 +489,8 @@ def listar_lista_produccion_agrupada(
     estado_en_proceso: Optional[str] = None,
     solo_atrasadas: bool = False,
     excluir_filas_opt_liberadas_mstock: bool = False,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
 ) -> List[Dict[str, Any]]:
     """
     Lista producción agrupada por artículo (lista_produccion_agrupada + articulo).
@@ -503,6 +555,15 @@ def listar_lista_produccion_agrupada(
                 params.append(estado_en_proceso)
             if solo_atrasadas and col_fecha:
                 sql += f" AND l.{col_fecha} IS NOT NULL AND l.{col_fecha} < CURDATE()"
+            sql, params = _append_filtro_periodo_agrupada(
+                cursor,
+                sql,
+                params,
+                tbl_agrupada=tbl_agrupada,
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                col_fecha=col_fecha,
+            )
             sql += " ORDER BY l.id_lista_produccion, l.id_articulo LIMIT %s"
             params.append(limit)
             try:
@@ -531,6 +592,15 @@ def listar_lista_produccion_agrupada(
                         sql_fallback += " AND COALESCE(NULLIF(TRIM(l.en_proceso_produccion), ''), 'No') = %s"
                     if solo_atrasadas and col_fecha:
                         sql_fallback += f" AND l.{col_fecha} IS NOT NULL AND l.{col_fecha} < CURDATE()"
+                    sql_fallback, params = _append_filtro_periodo_agrupada(
+                        cursor,
+                        sql_fallback,
+                        params,
+                        tbl_agrupada=tbl_agrupada,
+                        fecha_desde=fecha_desde,
+                        fecha_hasta=fecha_hasta,
+                        col_fecha=col_fecha,
+                    )
                     sql_fallback += " ORDER BY l.id_lista_produccion, l.id_articulo LIMIT %s"
                     cursor.execute(sql_fallback, params)
                 else:
@@ -568,6 +638,8 @@ def listar_opt_listado(
     limit: int = 500,
     estado_en_proceso: Optional[str] = None,
     solo_atrasadas: bool = False,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
 ) -> List[Dict[str, Any]]:
     """
     Lista para la pantalla «Órdenes de Producción de Trabajo»: solo OPTs ya creadas (liberadas).
@@ -609,6 +681,15 @@ def listar_opt_listado(
                     params.append(estado_en_proceso)
                 if solo_atrasadas and col_fecha:
                     sql += f" AND l.{col_fecha} IS NOT NULL AND l.{col_fecha} < CURDATE() AND COALESCE(l.cantidad_pendiente_prod, 0) > 0"
+                sql, params = _append_filtro_periodo_agrupada(
+                    cursor,
+                    sql,
+                    params,
+                    tbl_agrupada=tbl_agrupada,
+                    fecha_desde=fecha_desde,
+                    fecha_hasta=fecha_hasta,
+                    col_fecha=col_fecha,
+                )
                 sql += " ORDER BY l.id_lista_produccion DESC, l.id_articulo LIMIT %s"
                 params.append(limit)
                 cursor.execute(sql, params)
@@ -637,6 +718,15 @@ def listar_opt_listado(
                         params.append(estado_en_proceso)
                     if solo_atrasadas and col_fecha:
                         sql += f" AND l.{col_fecha} IS NOT NULL AND l.{col_fecha} < CURDATE() AND COALESCE(l.cantidad_pendiente_prod, 0) > 0"
+                    sql, params = _append_filtro_periodo_agrupada(
+                        cursor,
+                        sql,
+                        params,
+                        tbl_agrupada=tbl_agrupada,
+                        fecha_desde=fecha_desde,
+                        fecha_hasta=fecha_hasta,
+                        col_fecha=col_fecha,
+                    )
                     sql += " ORDER BY l.id_lista_produccion DESC, l.id_articulo LIMIT %s"
                     params.append(limit)
                     cursor.execute(sql, params)
@@ -1620,6 +1710,8 @@ def _sincronizar_demanda_reserva_lista_detalle(
 def listar_ventana_pack(
     base_empresa: str,
     limit: int = 200,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
 ) -> List[Dict[str, Any]]:
     """
     Orden de Producción de Trabajo (OPT): artículos con demanda de producción desde lista_produccion_agrupada
@@ -1647,6 +1739,8 @@ def listar_ventana_pack(
             limit=limit,
             estado_en_proceso="No",
             excluir_filas_opt_liberadas_mstock=True,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
         )
         if not agrupada_rows:
             return []
@@ -3645,6 +3739,8 @@ def listar_pedidos_fabrica(
     base_empresa: str,
     limit: int = 100,
     estado: Optional[str] = None,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
 ) -> List[Dict[str, Any]]:
     """
     Lista pedidos de venta (comp_ped) con estado de producción (estado_pedido_opt: Pendiente, Produccion, Parcial, Terminado).
@@ -3677,6 +3773,12 @@ def listar_pedidos_fabrica(
             if estado:
                 sql += " AND cp.estado_pedido_opt = %s"
                 params.append(estado)
+            if fecha_desde:
+                sql += " AND cp.Fecha >= %s"
+                params.append(fecha_desde)
+            if fecha_hasta:
+                sql += " AND cp.Fecha <= %s"
+                params.append(fecha_hasta)
             sql += " ORDER BY cp.CodigoMovimiento DESC LIMIT %s"
             params.append(limit)
             cursor.execute(sql, params)

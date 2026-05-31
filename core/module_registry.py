@@ -379,5 +379,28 @@ MODULE_CONFIGS = {
         ],
         'hooks': [],
     },
+
+    'mpr': {
+        'name': 'mpr',
+        'display_name': 'Producción (MPR)',
+        'description': (
+            'Manufactura: demanda OPT, órdenes de producción, armado, OPP y tablero '
+            'sobre datos AdministraNET (MySQL).'
+        ),
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core', 'dashboard'],
+        'optional_dependencies': ['reports', 'stock'],
+        'settings': {
+            'max_list_rows': 2000,
+        },
+        'permissions': [
+            'mpr.ver',
+            'mpr.*',
+        ],
+        'hooks': [],
+    },
     # self_checkout: app core (siempre instalada), URLs en django_project/urls.py, permisos en PERMISOS_POR_MODULO + sync.
 } 

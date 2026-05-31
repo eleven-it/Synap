@@ -37,6 +37,7 @@ En algunas carpetas existen archivos cuyo nombre termina en **` 2.py`** (copias 
 | Comando | Objetivo | Ejemplo / notas |
 |--------|-----------|-----------------|
 | `initial_setup` | Puesta en marcha inicial completa del sistema (migraciones, datos, módulos, etc.). | `python manage.py initial_setup --help` (muchas flags: `--skip-migrations`, `--dry-run`, nombre empresa, etc.). |
+| `bootstrap_instalacion` | **Primera instalación / staging:** activa `core`, `login`, `dashboard`, `reports`, permisos Postgres y sync MySQL (best-effort). Idempotente; lo invoca `docker-entrypoint.sh` en DB nueva. | `--force`, `--skip-permisos-mysql`, `--base-empresa`. |
 | `load_initial_data` | Carga datos iniciales (geografía, unidades, medios de pago, categorías, impuestos, etc.). | Opciones `--skip-*` por bloque. |
 | `load_geographic_data` | Carga datos geográficos (AR, CL, UY, PY, BR, US, ES). | |
 | `populate_countries_states` | Puebla países y provincias/estados. | |
