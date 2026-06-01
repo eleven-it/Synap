@@ -34,7 +34,7 @@ Informe histórico de **unidades** y **facturación** del período, agrupado por
 - **Columnas:** UNIDADES (`cantidades_vendidas`), FACTURACIÓN (`facturacion`).
 - **Sin KPIs** de cabecera.
 - **Sin** objetivos, remitos, PEA, backorder, período backorder en UI ni consultas.
-- **Mismo rango** `fecha_inicio_facturacion` / `fecha_fin_facturacion` y filtros sucursal, depósito, PV, clientes, vendedores, lista de precio, rubro/subrubro que ventas por vendedor.
+- **Mismo rango** `fecha_inicio_facturacion` / `fecha_fin_facturacion` y filtros sucursal, depósito, PV, clientes, vendedores, lista de precio, **rubro/subrubro/marca (incluir y excluir)** que ventas por vendedor.
 - **Ordenar por:** Facturación período (`facturacion_periodo`), Unidades período (`unidades_periodo`); forma asc/desc; reorden local sin nueva consulta si hay dataset en memoria.
 
 ---
@@ -70,14 +70,20 @@ El sistema **DEBE** devolver jerarquía `articulo` → `proveedor` → `cliente`
 
 ### R3 — Filtros
 
-El sistema **DEBE** aplicar filtros de vendedor, rubro y subrubro sin mostrarlos como niveles del árbol.
+El sistema **DEBE** aplicar filtros de vendedor, rubro, subrubro y marca (incluir/excluir) sin mostrarlos como niveles del árbol.
 
 #### Escenario: Filtro rubro
 
-- **DADO** filtro rubro activo
+- **DADO** filtro rubro a incluir activo
 - **CUANDO** se ejecuta la consulta
 - **ENTONCES** solo aparecen artículos con ventas en ese rubro en el período
 - **Y** el árbol no muestra nodos rubro/subrubro
+
+#### Escenario: Filtro marca a excluir
+
+- **DADO** una o más marcas en «Marcas a excluir»
+- **CUANDO** se ejecuta la consulta
+- **ENTONCES** no aparecen artículos de esas marcas en el árbol
 
 ### R4 — Exportación
 
