@@ -1,4 +1,5 @@
 import os
+import sys
 
 # firebase_config.py
 # import firebase_admin
@@ -193,8 +194,22 @@ DATABASES = {
 
 # makemigrations/migrate comprueban el historial en todas las conexiones; un MySQL 5.7 remoto
 # (AdministraNET) hace fallar init_connection_state en Django 4.2+. Las migraciones Synap
-# viven solo en PostgreSQL. Exportar SYNAP_MIGRATIONS_POSTGRES_ONLY=1 al ejecutar esos comandos.
-if os.environ.get('SYNAP_MIGRATIONS_POSTGRES_ONLY') == '1':
+# viven solo en PostgreSQL. SYNAP_MIGRATIONS_POSTGRES_ONLY=1 solo durante esos comandos
+# (no en runserver/gunicorn aunque la variable siga en el entorno del contenedor).
+_MIGRATION_CMDS_POSTGRES_ONLY = frozenset(
+    ('migrate', 'makemigrations', 'sqlmigrate', 'showmigrations', 'squashmigrations')
+)
+
+
+def _synap_migrations_postgres_only_active() -> bool:
+    if os.environ.get('SYNAP_MIGRATIONS_POSTGRES_ONLY') != '1':
+        return False
+    if len(sys.argv) < 2:
+        return False
+    return sys.argv[1] in _MIGRATION_CMDS_POSTGRES_ONLY
+
+
+if _synap_migrations_postgres_only_active():
     DATABASES = {'default': DATABASES['default']}
 
 # Base MySQL por defecto para reportes (BO, ventas, etc.) cuando no viene en sesión/filtros

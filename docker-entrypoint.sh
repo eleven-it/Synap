@@ -86,6 +86,9 @@ python manage.py migrate --noinput || {
     exit 1
 }
 
+# Solo migrate/makemigrations deben omitir MySQL legacy; el servidor web lo necesita.
+unset SYNAP_MIGRATIONS_POSTGRES_ONLY
+
 if [ "$FRESH_DB" = "YES" ]; then
     echo ""
     echo "🔧 Bootstrap de primera instalación (core, login, dashboard, reports)..."

@@ -112,6 +112,30 @@ docker exec Synap_app python manage.py migrate reports
 docker exec Synap_app python manage.py bootstrap_instalacion --force
 ```
 
+### KeyError `'mysql'` en `/login/` o al iniciar
+
+Causa habitual: `SYNAP_MIGRATIONS_POSTGRES_ONLY=1` fijada en `docker-compose.yml` o `.env` durante el runtime del servidor (no solo en `migrate`).
+
+- No definir esa variable en el servicio `app` del compose; el `docker-entrypoint.sh` la usa solo para `migrate` y la quita antes de `runserver`.
+- Verificar: `docker exec Synap_app python manage.py shell -c "from django.conf import settings; print(list(settings.DATABASES.keys()))"` → debe incluir `mysql`.
+
+Migraciones manuales (solo ese comando):
+
+```bash
+docker compose run --rm --entrypoint "" -e SYNAP_MIGRATIONS_POSTGRES_ONLY=1 app python manage.py migrate --noinput
+```
+
+### Synap en WSL2: `localhost` responde pero la IP del servidor (LAN) no
+
+Docker escucha en la red virtual de WSL (p. ej. `172.25.x.x`), no en la IP Ethernet de Windows. Reenviar el puerto en Windows Server (PowerShell como administrador):
+
+```powershell
+$wslIp = (wsl hostname -I).Trim().Split(" ")[0]
+netsh interface portproxy add v4tov4 listenport=8000 listenaddress=0.0.0.0 connectport=8000 connectaddress=$wslIp
+```
+
+Incluir la IP LAN en `ALLOWED_HOSTS` del `.env` (p. ej. `192.168.100.51`).
+
 ## Estructura de Archivos
 
 - `docker-entrypoint.sh` — Inicialización automática (migrate + bootstrap)  

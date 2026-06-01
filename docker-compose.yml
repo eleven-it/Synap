@@ -16,7 +16,8 @@ services:
       - .env
     environment:
       SYNAP_AFIP_STORAGE: /var/lib/synap/afip
-      SYNAP_MIGRATIONS_POSTGRES_ONLY: "1"
+      # SYNAP_MIGRATIONS_POSTGRES_ONLY: solo durante migrate (docker-entrypoint.sh).
+      # No definir en runtime: settings.py quita DATABASES['mysql'] y rompe login/MySQL.
     depends_on:
       - db
       - redis
