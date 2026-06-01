@@ -554,17 +554,26 @@
           a.banco_disponible === false
             ? [["Nota", "Sin datos bancarios (P1)"]]
             : [];
+        const drift = Math.abs(Number(a.drift_sistema) || 0);
+        const saldoSistema =
+          drift > 1 && a.saldo_final_sistema != null
+            ? [["Saldo final (sistema BD)", fmtMoney.format(a.saldo_final_sistema || 0)]]
+            : [];
         return [
           ["Saldo inicial", fmtMoney.format(a.saldo_inicial || 0)],
           ["Saldo final", fmtMoney.format(a.saldo_final || 0)],
           ["Variación neta", fmtMoney.format(a.variacion_neta || 0)],
+          ["Ingresos operativos", fmtMoney.format(a.ingresos_operativos || 0)],
+          ["Egresos operativos", fmtMoney.format(a.egresos_operativos || 0)],
           ["Ingresos ventas", fmtMoney.format(a.ingresos_ventas || 0)],
           ["Ingresos cobranzas", fmtMoney.format(a.ingresos_cobranzas || 0)],
           ["Egresos proveedores", fmtMoney.format(a.egresos_proveedores || 0)],
+          ...saldoSistema,
           ...notaBanco,
         ];
       },
       details: [],
+      linkCashFlow: true,
     },
     {
       key: "ventas_cobros",
@@ -628,8 +637,13 @@
       .join("");
 
     const mprBtn = def.linkMpr && isMprEnabled() && cfg.mprTableroUrl
-      ? `<a href="${buildReportLink(cfg.mprTableroUrl)}" class="inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-purple-300 bg-purple-50 px-2.5 py-2 text-[11px] font-medium text-purple-800 hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-950/50 dark:text-purple-200 sm:w-auto sm:py-1">Tablero MPR</a>`
+      ? `<a href="${buildReportLink(cfg.mprTableroUrl)}" class="cc-report-link inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-purple-300 bg-purple-50 px-2.5 py-2 text-[11px] font-medium text-purple-800 hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-950/50 dark:text-purple-200 sm:w-auto sm:py-1" data-base-url="${cfg.mprTableroUrl}">Tablero MPR</a>`
       : "";
+
+    const cashFlowBtn =
+      def.linkCashFlow && cfg.cashFlowWaterfallUrl
+        ? `<a href="${buildReportLink(cfg.cashFlowWaterfallUrl)}" class="cc-report-link inline-flex min-h-10 w-full items-center justify-center gap-1 rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-2 text-[11px] font-medium text-teal-800 hover:bg-teal-100 dark:border-teal-700 dark:bg-teal-950/50 dark:text-teal-200 sm:w-auto sm:py-1" data-base-url="${cfg.cashFlowWaterfallUrl}"><span class="material-icons text-[14px]" aria-hidden="true">account_balance</span>Flujo de caja</a>`
+        : "";
 
     return `
       <article data-area-key="${def.key}" class="cc-card-animate flex min-w-0 flex-col overflow-hidden rounded-2xl border ${borderColor} bg-white shadow-md dark:bg-slate-900" style="animation-delay:${delayIdx * 0.06}s">
@@ -648,6 +662,7 @@
         <footer class="flex flex-col gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:flex-wrap dark:border-slate-700">
           ${detailBtns}
           ${def.key === "ventas" ? `<a href="${buildReportLink(cfg.executiveSalesPageUrl || "#")}" class="cc-report-link inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-sky-600 px-2.5 py-2 text-[11px] font-medium text-white hover:bg-sky-500 sm:w-auto sm:py-1" data-base-url="${cfg.executiveSalesPageUrl || ""}">Panel del día</a>` : ""}
+          ${cashFlowBtn}
           ${mprBtn}
         </footer>
       </article>`;
