@@ -35,9 +35,16 @@ En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente
 
 ### Tesorería (caja)
 
-- Saldos desde último `caja.Saldo` por `id_caja_abm_origen` (paridad informe cash-flow).
-- Neto operativo **excluye** `Cierre de Caja` y `Transferencia de Fondos`.
+- **Fuente única de reglas:** `reports/services/executive_dashboard/caja_classification.py` (SQL + clasificación Python compartida con `cash_flow_*`).
+- Saldos desde último `caja.Saldo` por `id_caja_abm_origen` (`sum_saldo_cajas`).
+- **`saldo_final`** (y `saldo_final_coherente`): saldo inicial + variación neta — **paridad `cash_flow_waterfall`**.
+- **`saldo_final_sistema`**: suma de saldos reales en BD al cierre del período.
+- **`drift_sistema`**: diferencia sistema − coherente (drift legacy en `caja.Saldo`).
+- Neto operativo **excluye** cierres, transferencias entre cajas e inversión/financiamiento (mismo criterio que waterfall).
+- Subcategorías alineadas AdministraNET: ventas (FA/FB/…/TARJ), cobranzas (REC, CHEQ cliente, MCAJ cobro), proveedores (OP, FA/FB proveedor, **CHEQ entrega proveedor**, NCA).
 - **No** incluye `librobanco` en P0 (`meta.notas_semanticas`).
+
+Verificación: `python manage.py uat_tesoreria_cashflow --base <empresa> --fecha-inicio … --fecha-fin …`
 
 ### Ventas por cobro
 
@@ -72,7 +79,7 @@ En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente
 | Inventario | Snapshot saldo actual; **reservado** y **bajo mínimo** filtran PED por `comp_ped.Fecha` |
 | Manufactura | `comp_ped.Fecha` (pedidos fábrica); demanda/OPT por pedido vinculado o `fecha_objetivo` |
 
-**UI Command Center:** solo **Desde / Hasta** (default ambos = hoy). Enlaces a informes (p. ej. Panel del día) propagan `fecha_inicio`, `fecha_fin` y `sucursal` en la URL. El bloque **Manufactura**, el KPI **OPT atrasadas** y el enlace **Tablero MPR** solo se muestran si `ModuleConfig` tiene `mpr` activo (`meta.modulos.mpr` en el orquestador).
+**UI Command Center:** solo **Desde / Hasta** (default ambos = hoy). Enlaces a informes (p. ej. Panel del día, **Flujo de caja** desde Tesorería → `cash_flow_waterfall`) propagan `fecha_inicio`, `fecha_fin` y `sucursal` en la URL. El bloque **Manufactura**, el KPI **OPT atrasadas** y el enlace **Tablero MPR** solo se muestran si `ModuleConfig` tiene `mpr` activo (`meta.modulos.mpr` en el orquestador).
 
 ## Performance (may. 2026)
 

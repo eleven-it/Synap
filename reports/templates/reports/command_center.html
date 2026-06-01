@@ -209,10 +209,11 @@
     areaUrls: JSON.parse(document.getElementById("cc-area-urls").textContent),
     executiveSummaryUrl: "{{ executive_summary_api_url|escapejs }}",
     executiveSalesPageUrl: "{{ executive_sales_page_url|escapejs }}",
+    cashFlowWaterfallUrl: "{{ cash_flow_waterfall_url|escapejs }}",
     mprTableroUrl: "{{ mpr_tablero_url|escapejs }}",
     mprModuleActive: {{ mpr_module_active|yesno:"true,false" }},
     detailUrls: JSON.parse(document.getElementById("cc-detail-urls").textContent),
   };
 </script>
-<script src="{% static 'reports/js/command_center.js' %}?v=20260531b" defer></script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20260531c" defer></script>
 {% endblock %}

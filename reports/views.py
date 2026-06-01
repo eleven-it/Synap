@@ -182,6 +182,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             context["executive_sales_page_url"] = reverse(
                 "reports:dashboard_detail", kwargs={"slug": self.EXECUTIVE_SLUG}
             )
+            context["cash_flow_waterfall_url"] = reverse(
+                "reports:dashboard_detail", kwargs={"slug": "cash_flow_waterfall"}
+            )
             context["mpr_module_active"] = mpr_active
             context["mpr_tablero_url"] = reverse("mpr:tablero") if mpr_active else ""
             area_urls = {

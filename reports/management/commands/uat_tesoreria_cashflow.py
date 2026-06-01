@@ -57,6 +57,9 @@ class Command(BaseCommand):
         for k in (
             "saldo_inicial",
             "saldo_final",
+            "saldo_final_coherente",
+            "saldo_final_sistema",
+            "drift_sistema",
             "ingresos_operativos",
             "egresos_operativos",
             "variacion_neta",
@@ -91,15 +94,19 @@ class Command(BaseCommand):
             )
 
         self.stdout.write("--- COMPARACION (tol 1.00) ---\n")
-        for key in ("saldo_inicial", "starting_balance", "initial_balance"):
-            if key in t:
-                cmp_line("saldo_inicial", tes["saldo_inicial"], t[key])
-                break
-        for key in ("saldo_final", "ending_balance", "final_balance"):
-            if key in t:
-                cmp_line("saldo_final", tes["saldo_final"], t[key])
-                break
+        cmp_line("saldo_inicial", tes["saldo_inicial"], t.get("saldo_inicial"))
+        cmp_line(
+            "saldo_final_coherente",
+            tes["saldo_final_coherente"],
+            t.get("saldo_final_coherente") or t.get("saldo_final"),
+        )
+        cmp_line(
+            "saldo_final_sistema",
+            tes["saldo_final_sistema"],
+            t.get("saldo_final_sistema"),
+        )
         wf_ing = t.get("total_operating_ingresos") or t.get("operating_ingresos") or sum_ing
         wf_egr = t.get("total_operating_egresos") or t.get("operating_egresos") or sum_egr
         cmp_line("ingresos_operativos", tes["ingresos_operativos"], wf_ing)
         cmp_line("egresos_operativos", tes["egresos_operativos"], wf_egr)
+        cmp_line("variacion_neta", tes["variacion_neta"], t.get("cash_variation") or t.get("operating_flow"))

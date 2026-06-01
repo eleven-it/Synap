@@ -846,6 +846,12 @@ class QueryRunnerService:
                     logger.warning(f"⚠️ No se pudo ejecutar consulta de diagnóstico: {diag_error}")
             else:
                 logger.debug(f"⏭️ Consultas de diagnóstico omitidas (DEBUG=False)")
+
+            from reports.services.executive_dashboard.caja_classification import (
+                sql_no_operativo_predicado,
+                sum_saldo_cajas,
+            )
+            no_operativo = sql_no_operativo_predicado("c.tipo")
             
             # Primero, obtener el saldo inicial (último saldo antes de la fecha de inicio)
             # Calcular saldo inicial: suma de los últimos saldos de cada caja antes de fecha_inicio
@@ -888,34 +894,25 @@ class QueryRunnerService:
                     """
                     params_saldo = [fecha_inicio] + id_cajas_int + id_cajas_int
             else:
-                # Si vemos todas las cajas, sumar los últimos saldos de cada caja ANTES de fecha_inicio
-                # IMPORTANTE: Debemos considerar TODAS las cajas que tienen movimientos (en cualquier momento),
-                # no solo las que tienen movimientos antes de fecha_inicio, para que el cálculo sea consistente
-                sql_saldo_inicial = """
-                    SELECT COALESCE(SUM(saldo_por_caja), 0) as saldo_total
-                    FROM (
-                        SELECT 
-                            DISTINCT c.id_caja_abm_origen,
-                            COALESCE((
-                                SELECT c2.saldo 
-                                FROM caja c2 
-                                WHERE c2.id_caja_abm_origen = c.id_caja_abm_origen
-                                  AND c2.anulado = 'No'
-                                  AND c2.fecha < %s
-                                ORDER BY c2.fecha DESC, c2.codigo_movimiento DESC 
-                                LIMIT 1
-                            ), 0) as saldo_por_caja
-                        FROM caja c
-                        WHERE c.anulado = 'No'
-                        GROUP BY c.id_caja_abm_origen
-                    ) as saldos_cajas
-                """
-                params_saldo = [fecha_inicio]
+                try:
+                    saldo_inicial = sum_saldo_cajas(
+                        cursor, fecha_inicio, antes_de=True
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Error calculando saldo inicial, usando 0: {e}")
+                    saldo_inicial = 0.0
+                sql_saldo_inicial = None
+                params_saldo = []
             
             try:
-                cursor.execute(sql_saldo_inicial, params_saldo)
-                saldo_inicial_row = cursor.fetchone()
-                saldo_inicial = float(saldo_inicial_row[0]) if saldo_inicial_row and saldo_inicial_row[0] else 0.0
+                if id_cajas_int and len(id_cajas_int) > 0:
+                    cursor.execute(sql_saldo_inicial, params_saldo)
+                    saldo_inicial_row = cursor.fetchone()
+                    saldo_inicial = float(saldo_inicial_row[0]) if saldo_inicial_row and saldo_inicial_row[0] else 0.0
+                elif sql_saldo_inicial is not None:
+                    cursor.execute(sql_saldo_inicial, params_saldo)
+                    saldo_inicial_row = cursor.fetchone()
+                    saldo_inicial = float(saldo_inicial_row[0]) if saldo_inicial_row and saldo_inicial_row[0] else 0.0
                 logger.info(f"💰 Saldo inicial calculado: ${saldo_inicial:,.2f}")
                 logger.info(f"   Tipo de consulta: {'Caja(s) específica(s) (IDs: ' + ', '.join(map(str, id_cajas_int)) + ')' if id_cajas_int else 'Todas las cajas'}")
                 if not id_cajas_int:
@@ -956,15 +953,7 @@ class QueryRunnerService:
                     -- NOTA: Las transferencias entre cajas aparecen como egreso en origen e ingreso en destino
                     -- Si vemos todas las cajas, se cancelan. Si vemos una caja específica, solo cuenta el movimiento de esa caja.
                     SUM(CASE 
-                        WHEN c.tipo LIKE '%%Inversión%%' OR c.tipo LIKE '%%Activo Fijo%%' 
-                             OR c.tipo LIKE '%%Préstamo%%' OR c.tipo LIKE '%%Aporte%%' OR c.tipo LIKE '%%Capital%%'
-                        THEN 0
-                        -- Excluir cierres de caja (movimientos internos contables que se cancelan entre cajas)
-                        WHEN c.tipo LIKE '%%Cierre de Caja%%'
-                        THEN 0
-                        -- Excluir transferencias entre cajas (se cancelan entre cajas)
-                        WHEN c.tipo LIKE '%%Transferencia de Fondos%%'
-                        THEN 0
+                        WHEN {no_operativo} THEN 0
                         ELSE {campo_ingreso_real} - {campo_egreso_real}
                     END) AS operating_flow,
                     -- Flujos de Inversión (generalmente vacío en administraNET)
@@ -987,20 +976,12 @@ class QueryRunnerService:
                     END) AS financing_flow,
                     -- Ingresos operativos (excluyendo movimientos internos e inversión/financiamiento)
                     SUM(CASE 
-                        WHEN c.tipo LIKE '%%Inversión%%' OR c.tipo LIKE '%%Activo Fijo%%' 
-                             OR c.tipo LIKE '%%Préstamo%%' OR c.tipo LIKE '%%Aporte%%' OR c.tipo LIKE '%%Capital%%'
-                             OR c.tipo LIKE '%%Cierre de Caja%%'
-                             OR c.tipo LIKE '%%Transferencia de Fondos%%'
-                        THEN 0
+                        WHEN {no_operativo} THEN 0
                         ELSE {campo_ingreso_real}
                     END) AS operating_ingresos,
                     -- Egresos operativos (excluyendo movimientos internos e inversión/financiamiento)
                     SUM(CASE 
-                        WHEN c.tipo LIKE '%%Inversión%%' OR c.tipo LIKE '%%Activo Fijo%%' 
-                             OR c.tipo LIKE '%%Préstamo%%' OR c.tipo LIKE '%%Aporte%%' OR c.tipo LIKE '%%Capital%%'
-                             OR c.tipo LIKE '%%Cierre de Caja%%'
-                             OR c.tipo LIKE '%%Transferencia de Fondos%%'
-                        THEN 0
+                        WHEN {no_operativo} THEN 0
                         ELSE {campo_egreso_real}
                     END) AS operating_egresos,
                     -- Total de ingresos y egresos para referencia (usando campos reales)
@@ -1289,6 +1270,7 @@ class QueryRunnerService:
                 """
                 params_saldo_final = [fecha_fin]
             
+            saldo_final_real = None
             try:
                 cursor.execute(sql_saldo_final_validacion, params_saldo_final)
                 saldo_final_row = cursor.fetchone()
@@ -1320,8 +1302,21 @@ class QueryRunnerService:
                 "type": "ending"
             })
             
-            # Agregar saldo final a los totals (usar el saldo real)
+            # Agregar saldo final a los totals (coherente con flujos; paridad Command Center)
             totals["saldo_final"] = float(saldo_final_mostrar)
+            totals["saldo_final_coherente"] = float(saldo_final_mostrar)
+            try:
+                if id_cajas_int and len(id_cajas_int) > 0:
+                    saldo_final_sistema = float(saldo_final_real or 0) if saldo_final_real is not None else None
+                else:
+                    saldo_final_sistema = sum_saldo_cajas(
+                        cursor, fecha_fin, antes_de=False
+                    )
+                if saldo_final_sistema is not None:
+                    totals["saldo_final_sistema"] = float(saldo_final_sistema)
+                    totals["drift_sistema"] = float(saldo_final_sistema) - float(saldo_final_mostrar)
+            except Exception as e:
+                logger.warning(f"⚠️ Error calculando saldo final sistema: {e}")
             
             # VARIACIÓN DE CAJA: Debe ser la suma de los flujos (operating + investing + financing)
             # Esto representa la variación neta de efectivo generada por las actividades operativas,
@@ -1842,6 +1837,11 @@ class QueryRunnerService:
                 "total_cash_variation": 0.0,
             }
             
+            from reports.services.executive_dashboard.caja_classification import (
+                sql_no_operativo_predicado,
+            )
+            no_operativo_cuenta = sql_no_operativo_predicado("c.tipo")
+
             for caja_row in cajas_rows:
                 id_caja_val = caja_row[0]
                 nombre_caja = caja_row[1] or "Sin Caja"
@@ -1892,18 +1892,11 @@ class QueryRunnerService:
                 ]
                 params_caja = [fecha_inicio, fecha_fin, id_caja_val]
                 
-                # Excluir transferencias entre cajas (se cancelan)
-                # Excluir cierres de caja (movimientos internos)
-                # Usar la misma lógica que en la vista consolidada
+                # Excluir transferencias, cierres e inversión/financiamiento (paridad waterfall)
                 sql_flujos = f"""
                     SELECT 
                         SUM(CASE 
-                            WHEN c.tipo LIKE '%%Cierre de Caja%%' OR c.tipo LIKE '%%Transferencia de Fondos%%'
-                            THEN 0
-                            WHEN c.tipo LIKE '%%Inversión%%' OR c.tipo LIKE '%%Activo Fijo%%'
-                            THEN 0
-                            WHEN c.tipo LIKE '%%Préstamo%%' OR c.tipo LIKE '%%Aporte%%' OR c.tipo LIKE '%%Capital%%'
-                            THEN 0
+                            WHEN {no_operativo_cuenta} THEN 0
                             ELSE COALESCE(c.ingreso, 0) - COALESCE(c.egreso, 0)
                         END) AS operating_flow,
                         SUM(CASE 
