@@ -101,6 +101,25 @@ function isJerarquiaVentasBoFamiliaSlug(slug) {
   );
 }
 
+/** Ventas por artículo: filtros rubro/subrubro/marca incluir/excluir. */
+const VPA_CATALOG_FILTER_SPECS = [
+  ["vpa_rubros_incluidos", "rubros_incluidos"],
+  ["vpa_rubros_excluidos", "rubros_excluidos"],
+  ["vpa_subrubros_incluidos", "subrubros_incluidos"],
+  ["vpa_subrubros_excluidos", "subrubros_excluidos"],
+  ["vpa_marcas_incluidos", "marcas_incluidos"],
+  ["vpa_marcas_excluidos", "marcas_excluidos"],
+];
+
+function appendTagMultiFilter(selectId, filters, filterKey) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const vals = Array.from(sel.selectedOptions)
+    .map((opt) => String(opt.value))
+    .filter((v) => v);
+  if (vals.length > 0) filters[filterKey] = vals;
+}
+
 /** Objetivos vs BO y Ventas por vendedor: tabla jerárquica (`objetivos_ventas_bo.js`). */
 function isJerarquiaVentasVendedorSlug(slug) {
   return slug === "ventas-objetivos-vs-bo" || slug === "ventas-por-vendedor";
@@ -7711,6 +7730,57 @@ if (dashboardRoot) {
         }
       }
 
+      if (reportSlug === "ventas-por-articulo") {
+        const filterBase = `${apiUrl.replace("/query/", "/filters/")}`;
+        const headers = { "X-Requested-With": "XMLHttpRequest" };
+        const loadVpaCatalogTags = async (type, jsonKey, selectId, savedKey) => {
+          const resp = await fetch(`${filterBase}?type=${type}`, { headers });
+          if (!resp.ok) return;
+          const json = await resp.json();
+          const items = json[jsonKey] || [];
+          const sel = document.getElementById(selectId);
+          if (!sel) return;
+          sel.innerHTML = "";
+          items.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = String(item.value);
+            option.textContent = item.label;
+            if (
+              savedFilters &&
+              savedFilters[savedKey] &&
+              Array.isArray(savedFilters[savedKey]) &&
+              savedFilters[savedKey].map(String).includes(String(item.value))
+            ) {
+              option.selected = true;
+            }
+            sel.appendChild(option);
+          });
+          initializeTagsFilter(selectId, jsonKey);
+        };
+        try {
+          await loadVpaCatalogTags("rubros", "rubros", "vpa_rubros_incluidos", "rubros_incluidos");
+          await loadVpaCatalogTags("rubros", "rubros", "vpa_rubros_excluidos", "rubros_excluidos");
+          await loadVpaCatalogTags("subrubros", "subrubros", "vpa_subrubros_incluidos", "subrubros_incluidos");
+          await loadVpaCatalogTags("subrubros", "subrubros", "vpa_subrubros_excluidos", "subrubros_excluidos");
+          await loadVpaCatalogTags("marcas", "marcas", "vpa_marcas_incluidos", "marcas_incluidos");
+          await loadVpaCatalogTags("marcas", "marcas", "vpa_marcas_excluidos", "marcas_excluidos");
+        } catch (e) {
+          console.error("Error cargando catálogo ventas por artículo:", e);
+        }
+        [
+          ["vpa_rubros_incluidos", "vpa_rubros_excluidos"],
+          ["vpa_subrubros_incluidos", "vpa_subrubros_excluidos"],
+          ["vpa_marcas_incluidos", "vpa_marcas_excluidos"],
+        ].forEach(([incId, excId]) => {
+          const incEl = document.getElementById(incId);
+          const excEl = document.getElementById(excId);
+          if (incEl && excEl) {
+            incEl.addEventListener("change", () => reconcileMutualExclusiveTags(incId, excId));
+            excEl.addEventListener("change", () => reconcileMutualExclusiveTags(excId, incId));
+          }
+        });
+      }
+
       if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
         const ci = document.getElementById("clientes_incluir");
         const ce = document.getElementById("clientes_excluidos");
@@ -9562,6 +9632,25 @@ if (dashboardRoot) {
         tagRestoreVoRubro(filters.rubros_incluidos, "vo_rubros_incluidos");
         tagRestoreVoRubro(filters.subrubros_incluidos, "vo_subrubros_incluidos");
       }
+      if (reportSlug === "ventas-por-articulo") {
+        const tagRestoreVpa = (arr, selectId) => {
+          if (!arr || !Array.isArray(arr)) return;
+          const sel = document.getElementById(selectId);
+          if (!sel) return;
+          arr.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = sel.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) {
+              option.selected = true;
+            }
+          });
+          setTimeout(() => {
+            sel.dispatchEvent(new Event("change", { bubbles: true }));
+          }, 150);
+        };
+        VPA_CATALOG_FILTER_SPECS.forEach(([selectId, key]) => tagRestoreVpa(filters[key], selectId));
+      }
     }
 
     if (reportSlug === "stock-existencias") {
@@ -9915,6 +10004,11 @@ if (dashboardRoot) {
             .filter((v) => v);
           if (ss.length > 0) filters.subrubros_incluidos = ss;
         }
+      }
+      if (currentReportSlug === "ventas-por-articulo") {
+        VPA_CATALOG_FILTER_SPECS.forEach(([selectId, key]) =>
+          appendTagMultiFilter(selectId, filters, key)
+        );
       }
       if (isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
@@ -10694,6 +10788,16 @@ if (dashboardRoot) {
                     .map((opt) => String(opt.value))
                     .filter((v) => v);
                 }
+              }
+              if (reportSlug === "ventas-por-articulo") {
+                VPA_CATALOG_FILTER_SPECS.forEach(([selectId, key]) => {
+                  const sel = filtersContainer.querySelector(`select[name="${key}"]`);
+                  if (sel && sel.selectedOptions.length) {
+                    filters[key] = Array.from(sel.selectedOptions)
+                      .map((opt) => String(opt.value))
+                      .filter((v) => v);
+                  }
+                });
               }
             }
           }

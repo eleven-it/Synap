@@ -10,10 +10,28 @@ from reports.services.ventas_objetivos_bo_runner import (
     _flatten_filas_ventas_por_articulo,
     _nest_articulo_proveedor_cliente,
     _nombre_proveedor_display,
+    _vo_sql_filtros_articulo,
 )
 
 
 class VentasPorArticuloNestTests(SimpleTestCase):
+    def test_sql_filtros_articulo_incluir_excluir(self):
+        sql, params = _vo_sql_filtros_articulo(
+            "art",
+            rubros_incluidos=[1, 2],
+            rubros_excluidos=[9],
+            marcas_incluidos=[5],
+        )
+        self.assertIn("art.CodigoRubro IN", sql)
+        self.assertIn("art.CodigoRubro NOT IN", sql)
+        self.assertIn("art.CodigoMarca IN", sql)
+        self.assertEqual(params, [1, 2, 9, 5])
+
+    def test_sql_filtros_articulo_vacio(self):
+        sql, params = _vo_sql_filtros_articulo("a")
+        self.assertEqual(sql, "")
+        self.assertEqual(params, [])
+
     def test_sin_proveedor_display(self):
         self.assertEqual(_nombre_proveedor_display(0, ""), "Sin proveedor")
 

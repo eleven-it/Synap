@@ -113,25 +113,65 @@ def _parse_int_list(raw: Any) -> List[int]:
     return out
 
 
-def _vo_sql_filtros_rubro_subrubro(
+def _vo_sql_filtros_articulo(
     alias_art: str,
-    rubros_incluidos: List[int],
-    subrubros_incluidos: List[int],
+    *,
+    rubros_incluidos: List[int] | None = None,
+    rubros_excluidos: List[int] | None = None,
+    subrubros_incluidos: List[int] | None = None,
+    subrubros_excluidos: List[int] | None = None,
+    marcas_incluidos: List[int] | None = None,
+    marcas_excluidos: List[int] | None = None,
 ) -> Tuple[str, List[Any]]:
-    """Fragmento ``AND ...`` para limitar líneas VO por rubro/subrubro (solo cuando hay filtros)."""
+    """Fragmento ``AND ...`` para limitar líneas por rubro/subrubro/marca (incluir y excluir)."""
+    rubros_incluidos = rubros_incluidos or []
+    rubros_excluidos = rubros_excluidos or []
+    subrubros_incluidos = subrubros_incluidos or []
+    subrubros_excluidos = subrubros_excluidos or []
+    marcas_incluidos = marcas_incluidos or []
+    marcas_excluidos = marcas_excluidos or []
     parts: List[str] = []
     params: List[Any] = []
     if rubros_incluidos:
         ph = ",".join(["%s"] * len(rubros_incluidos))
         parts.append(f"{alias_art}.CodigoRubro IN ({ph})")
         params.extend(rubros_incluidos)
+    if rubros_excluidos:
+        ph = ",".join(["%s"] * len(rubros_excluidos))
+        parts.append(f"{alias_art}.CodigoRubro NOT IN ({ph})")
+        params.extend(rubros_excluidos)
     if subrubros_incluidos:
         ph = ",".join(["%s"] * len(subrubros_incluidos))
         parts.append(f"{alias_art}.IDSubRubro IN ({ph})")
         params.extend(subrubros_incluidos)
+    if subrubros_excluidos:
+        ph = ",".join(["%s"] * len(subrubros_excluidos))
+        parts.append(f"{alias_art}.IDSubRubro NOT IN ({ph})")
+        params.extend(subrubros_excluidos)
+    if marcas_incluidos:
+        ph = ",".join(["%s"] * len(marcas_incluidos))
+        parts.append(f"{alias_art}.CodigoMarca IN ({ph})")
+        params.extend(marcas_incluidos)
+    if marcas_excluidos:
+        ph = ",".join(["%s"] * len(marcas_excluidos))
+        parts.append(f"{alias_art}.CodigoMarca NOT IN ({ph})")
+        params.extend(marcas_excluidos)
     if not parts:
         return "", []
     return " AND " + " AND ".join(parts), params
+
+
+def _vo_sql_filtros_rubro_subrubro(
+    alias_art: str,
+    rubros_incluidos: List[int],
+    subrubros_incluidos: List[int],
+) -> Tuple[str, List[Any]]:
+    """Paridad VO: solo rubro/subrubro a incluir."""
+    return _vo_sql_filtros_articulo(
+        alias_art,
+        rubros_incluidos=rubros_incluidos,
+        subrubros_incluidos=subrubros_incluidos,
+    )
 
 
 # Fila sintética en el árbol de detalle cuando la facturación de cabecera (cuentacliente)
@@ -992,14 +1032,38 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
     clientes_incluir = _parse_int_list(filters.get("clientes_incluir", []))
     vendedores_incluir = _parse_int_list(filters.get("vendedores_incluir", []))
     rubros_incluidos = _parse_int_list(filters.get("rubros_incluidos", []))
+    rubros_excluidos = _parse_int_list(filters.get("rubros_excluidos", []))
     subrubros_incluidos = _parse_int_list(filters.get("subrubros_incluidos", []))
+    subrubros_excluidos = _parse_int_list(filters.get("subrubros_excluidos", []))
+    marcas_incluidos = _parse_int_list(filters.get("marcas_incluidos", []))
+    marcas_excluidos = _parse_int_list(filters.get("marcas_excluidos", []))
+    rubros_excluidos = [x for x in rubros_excluidos if x not in set(rubros_incluidos)]
+    subrubros_excluidos = [x for x in subrubros_excluidos if x not in set(subrubros_incluidos)]
+    marcas_excluidos = [x for x in marcas_excluidos if x not in set(marcas_incluidos)]
     vo_filtra_rubro = bool(rubros_incluidos) or bool(subrubros_incluidos)
     if solo_ventas_periodo and not solo_ventas_articulo:
         vo_filtra_rubro = False
+    vo_filtra_catalogo_articulo = solo_ventas_articulo and bool(
+        rubros_incluidos
+        or rubros_excluidos
+        or subrubros_incluidos
+        or subrubros_excluidos
+        or marcas_incluidos
+        or marcas_excluidos
+    )
     rub_sub_sql_art, rub_sub_params_art = _vo_sql_filtros_rubro_subrubro(
         "art", rubros_incluidos, subrubros_incluidos
     )
     rub_sub_sql_a, rub_sub_params_a = _vo_sql_filtros_rubro_subrubro("a", rubros_incluidos, subrubros_incluidos)
+    cat_sql_art, cat_params_art = _vo_sql_filtros_articulo(
+        "art",
+        rubros_incluidos=rubros_incluidos,
+        rubros_excluidos=rubros_excluidos,
+        subrubros_incluidos=subrubros_incluidos,
+        subrubros_excluidos=subrubros_excluidos,
+        marcas_incluidos=marcas_incluidos,
+        marcas_excluidos=marcas_excluidos,
+    )
     ordenar_por, orden_forma = _parse_sorting(filters)
     if solo_ventas_periodo and ordenar_por in ("objetivo_meta", "objetivo_falta"):
         ordenar_por = "facturacion_periodo"
@@ -1388,6 +1452,10 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             if solo_ventas_articulo:
                 where_art = list(where_uni)
                 params_art: List[Any] = list(params_uni)
+                filt_art_catalogo = ""
+                if vo_filtra_catalogo_articulo:
+                    filt_art_catalogo = f" AND art.IDArt IS NOT NULL{cat_sql_art}"
+                    params_art.extend(cat_params_art)
                 if clientes_incluir:
                     phc = ",".join(["%s"] * len(clientes_incluir))
                     where_art.append(f"cc.Codigo IN ({phc})")
@@ -1424,7 +1492,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     INNER JOIN cliente cl_uni ON cl_uni.Codigo = cc.Codigo
                     LEFT JOIN articulo art ON art.IDArt = st.IDArt
                     LEFT JOIN proveedor prov ON prov.Codigo = art.CodigoProveedor
-                    WHERE {where_art_s}{filt_art_venta_det}
+                    WHERE {where_art_s}{filt_art_catalogo}
                     GROUP BY art.IDArt, art.CodigoProveedor, cc.Codigo
                     HAVING art.IDArt IS NOT NULL AND art.IDArt > 0
                         AND (ABS(factu_linea) > 0.00001 OR ABS(unidades_linea) > 0.00001)
@@ -1953,7 +2021,11 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 "clientes_incluir": clientes_incluir,
                 "vendedores_incluir": vendedores_incluir,
                 "rubros_incluidos": rubros_incluidos,
+                "rubros_excluidos": rubros_excluidos,
                 "subrubros_incluidos": subrubros_incluidos,
+                "subrubros_excluidos": subrubros_excluidos,
+                "marcas_incluidos": marcas_incluidos,
+                "marcas_excluidos": marcas_excluidos,
                 "lista_precio": lista_precio,
                 "lista_precio_label": _label_lista_precio(lista_precio),
                 "ordenar_por": ordenar_por,
@@ -1968,6 +2040,11 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         "Informe ventas por artículo: jerarquía artículo → proveedor → cliente; "
                         "sin objetivos, remitos, pedidos en armado ni backorder."
                     )
+                    if vo_filtra_catalogo_articulo:
+                        notes.append(
+                            "Filtros rubro/subrubro/marca (incluir/excluir): limitan artículos "
+                            "con ventas en el período de facturación."
+                        )
                 else:
                     notes.append(
                         "Informe ventas por vendedor: sin objetivos, remitos, pedidos en armado ni backorder; "
