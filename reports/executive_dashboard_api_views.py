@@ -39,6 +39,17 @@ from .services.executive_dashboard.ventas_metrics import (
 class ExecutiveDashboardMixin:
     permission_classes = [ManagerialReportsPermission]
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        from reports.services.report_visibility import command_center_visible_for_user
+
+        empresa = getattr(request.user, "empresa_activa", None)
+        empresa_id = empresa.id if empresa else None
+        if not command_center_visible_for_user(request.user, empresa_id=empresa_id):
+            from rest_framework.exceptions import NotFound
+
+            raise NotFound("Informe no disponible")
+
     def _filters_or_error(self, request):
         base = base_empresa_from_request(request)
         if not base:

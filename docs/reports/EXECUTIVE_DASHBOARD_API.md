@@ -7,6 +7,7 @@ Contrato **`executive-dashboard-v1`**. Datos desde MySQL AdministraNET (`base_em
 - **Ruta:** `/reports/dashboard/command-center-gerencial/`
 - **Plantilla:** `reports/templates/reports/command_center.html`
 - **JS:** `reports/static/reports/js/command_center.js`
+- **Inicio Synap:** la tarjeta hero en `/core/dashboard/` solo se muestra con permiso **`reports.view_managerial`** y **`ReportDefinition.is_visible=True`** para el slug `command-center-gerencial`. Si el informe está desactivado en el catálogo, solo lo ve el usuario **`cod_usuario=supervisor`** (no el puesto Supervisor).
 - **CRM:** deprecado — no se muestra en la UI ni en el payload del orquestador.
 - **Móvil:** allowlist `MobileLevelAOnlyMiddleware`: `/core/dashboard/`, `/reports/`, `/reports/workspace/`, `/reports/dashboard/command-center-gerencial/` y APIs `executive-dashboard` / `executive-summary` (UI responsive en `dashboard.html` y `command_center.html`).
 

@@ -206,8 +206,8 @@ const attachVisibilityHandlers = () => {
         const payload = await response.json();
         showToast(
           payload.message || (isVisible 
-            ? "Reporte visible para usuarios con puesto Supervisor" 
-            : "Reporte oculto para usuarios con puesto Supervisor"),
+            ? "Reporte visible para usuarios (excepto informes desactivados sin ser usuario supervisor)"
+            : "Reporte oculto para usuarios (solo visible para usuario supervisor)"),
           "success"
         );
         
@@ -217,7 +217,7 @@ const attachVisibilityHandlers = () => {
         }
         
         // Nota: El catálogo se actualizará automáticamente al recargar la página
-        // Los usuarios con puesto Supervisor verán solo los reportes con is_visible=True
+        // is_visible=False oculta el informe para todos excepto cod_usuario supervisor
         // El cambio se guarda en la base de datos y se aplicará en la próxima carga del catálogo
       } catch (error) {
         // Revertir el estado del toggle si hay error

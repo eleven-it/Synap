@@ -41,6 +41,25 @@ def get_user_permission_set(user):
     return set()
 
 
+def user_has_permission(user, code: str) -> bool:
+    """True si el usuario tiene el permiso Synap (incluye comodines y acceso total)."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if user_has_full_access(user) or getattr(user, "is_superuser", False):
+        return True
+    if hasattr(user, "tiene_permiso") and callable(user.tiene_permiso):
+        return bool(user.tiene_permiso(code))
+    permisos = get_user_permission_set(user)
+    if "*" in permisos or code in permisos:
+        return True
+    for perm in permisos:
+        if perm.endswith(".*"):
+            modulo = perm[:-2]
+            if code.startswith(modulo + ".") or code.startswith(modulo + "_"):
+                return True
+    return False
+
+
 class CorePermissionRequiredMixin(LoginRequiredMixin, PermissionRequiredMixin):
     """
     Mixin personalizado para verificación de permisos del core
