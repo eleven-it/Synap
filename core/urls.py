@@ -53,6 +53,24 @@ urlpatterns = [
     ),
     path('permisos-sistema/puesto/<int:id_puesto>/', views.editar_permisos_puesto_view, name='editar_permisos_puesto'),
 
+    # Asignación de permisos por puesto (solo usuario cod_usuario supervisor)
+    path('permisos-puesto/', views.permisos_puesto_lista_view, name='permisos_puesto_lista'),
+    path(
+        'permisos-puesto/<int:id_puesto>/',
+        views.permisos_puesto_gestionar_view,
+        name='permisos_puesto_gestionar',
+    ),
+    path(
+        'permisos-puesto/<int:id_puesto>/toggle-synap/',
+        views.permisos_puesto_toggle_synap_view,
+        name='permisos_puesto_toggle_synap',
+    ),
+    path(
+        'permisos-puesto/<int:id_puesto>/modulo-synap/',
+        views.permisos_puesto_modulo_synap_view,
+        name='permisos_puesto_modulo_synap',
+    ),
+
     # Permisos del Sistema (administraNET Gestión) - Solo lectura con toggle de valores
     path('permisos/', views.listar_permisos_view, name='listar_permisos'),
     path('permisos/<int:permiso_id>/toggle-valor/', views.toggle_valor_permiso_view, name='toggle_valor_permiso'),

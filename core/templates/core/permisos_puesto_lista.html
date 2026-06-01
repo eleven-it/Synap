@@ -1,0 +1,72 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+{% block admin_content %}
+<div class="max-w-7xl mx-auto">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Asignar permisos por puesto</h1>
+    <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 max-w-3xl">
+      Solo el usuario <code class="text-xs bg-gray-100 dark:bg-gray-800 px-1 rounded">supervisor</code> puede gestionar permisos Synap
+      (<code class="text-xs">permiso_sistema_puesto</code>), menú AdministraNET (<code class="text-xs">permisos</code>) y reglas legacy
+      (<code class="text-xs">permisos_sistema</code>) para cada puesto.
+    </p>
+  </div>
+
+  <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 mb-4 border border-gray-100 dark:border-gray-800">
+    <form method="get" class="flex gap-2">
+      <input type="text" name="q" value="{{ q }}" placeholder="Buscar puesto…"
+             class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-purple-500 focus:border-purple-500">
+      <button type="submit" class="inline-flex items-center justify-center px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm">
+        <span class="material-icons text-base">search</span>
+      </button>
+      {% if q %}
+      <a href="{% url 'core:permisos_puesto_lista' %}" class="inline-flex items-center px-3 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md text-sm">Limpiar</a>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md overflow-hidden border border-gray-100 dark:border-gray-800">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+      <thead class="bg-gray-50 dark:bg-gray-800">
+        <tr>
+          <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Puesto</th>
+          <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+        {% for puesto in puestos %}
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/80">
+          <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100">{{ puesto.nombre }}</td>
+          <td class="px-6 py-4 text-right">
+            <a href="{% url 'core:permisos_puesto_gestionar' puesto.id %}"
+               class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/50 transition">
+              <span class="material-icons text-base">security</span>
+              Gestionar permisos
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="2" class="px-6 py-8 text-center text-sm text-gray-500">No se encontraron puestos.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if puestos.has_other_pages %}
+  <div class="px-6 py-4 flex justify-between items-center bg-white dark:bg-gray-900 rounded-lg shadow-md mt-4 border border-gray-100 dark:border-gray-800 text-sm text-gray-600 dark:text-gray-400">
+    <span>Página {{ puestos.number }} de {{ puestos.paginator.num_pages }}</span>
+    <div class="flex gap-2">
+      {% if puestos.has_previous %}
+      <a href="?page={{ puestos.previous_page_number }}{% if q %}&q={{ q }}{% endif %}" class="px-3 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-800">Anterior</a>
+      {% endif %}
+      {% if puestos.has_next %}
+      <a href="?page={{ puestos.next_page_number }}{% if q %}&q={{ q }}{% endif %}" class="px-3 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-800">Siguiente</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock admin_content %}

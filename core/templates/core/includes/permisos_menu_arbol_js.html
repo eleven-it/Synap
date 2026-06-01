@@ -1,0 +1,45 @@
+<script>
+function toggleNodo(clave) {
+  const nodo = document.getElementById('nodo_' + clave);
+  const toggleBtn = document.getElementById('toggle_' + clave);
+  const icon = toggleBtn && toggleBtn.querySelector('.expand-icon');
+  if (nodo) {
+    if (nodo.style.display === 'none') {
+      nodo.style.display = 'block';
+      if (icon) { icon.textContent = 'expand_more'; icon.classList.remove('rotate-180'); }
+    } else {
+      nodo.style.display = 'none';
+      if (icon) { icon.textContent = 'chevron_right'; icon.classList.add('rotate-180'); }
+    }
+  }
+}
+function expandirTodo() {
+  document.querySelectorAll('.nodo-hijos').forEach(function (nodo) { nodo.style.display = 'block'; });
+  document.querySelectorAll('.expand-icon').forEach(function (icon) {
+    icon.textContent = 'expand_more';
+    icon.classList.remove('rotate-180');
+  });
+}
+function colapsarTodo() {
+  document.querySelectorAll('.nodo-hijos').forEach(function (nodo) { nodo.style.display = 'none'; });
+  document.querySelectorAll('.expand-icon').forEach(function (icon) {
+    icon.textContent = 'chevron_right';
+    icon.classList.add('rotate-180');
+  });
+}
+function toggleHijos(clavePadre, checked) {
+  document.querySelectorAll('.hijo_' + clavePadre).forEach(function (hijo) {
+    hijo.checked = checked;
+    var hijoId = hijo.id.replace('permiso_', '');
+    toggleHijos(hijoId, checked);
+  });
+}
+document.addEventListener('DOMContentLoaded', function () {
+  expandirTodo();
+});
+</script>
+<style>
+.nodo-hijos { display: block; }
+.expand-icon { transition: transform 0.2s; }
+.expand-icon.rotate-180 { transform: rotate(-90deg); }
+</style>

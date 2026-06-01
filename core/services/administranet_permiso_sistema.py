@@ -492,11 +492,53 @@ class AdministraNETPermisoSistemaService:
             
             logger.info(f"✅ Valor del permiso {id_permiso_sistema} actualizado a '{nuevo_valor}'")
             return True
-            
+
         except MySQLdb.Error as e:
-            logger.error(f"Error MySQL al actualizar valor del permiso {id_permiso_sistema} en empresa {base_empresa}: {e}")
+            logger.error(
+                "Error MySQL al actualizar valor del permiso %s en empresa %s: %s",
+                id_permiso_sistema,
+                base_empresa,
+                e,
+            )
             return False
         except Exception as e:
-            logger.error(f"Error inesperado al actualizar valor del permiso: {e}", exc_info=True)
+            logger.error(
+                "Error inesperado al actualizar valor del permiso: %s", e, exc_info=True
+            )
             return False
+
+    def establecer_modulo_para_puesto(
+        self,
+        base_empresa: str,
+        id_puesto: int,
+        prefijo_modulo: str,
+        activar: bool,
+    ) -> int:
+        """
+        Activa o desactiva permisos Synap cuyo key_permiso coincide con prefijo (ej. ventas → ventas.* y ventas.x).
+        Devuelve cantidad de filas actualizadas en permiso_sistema_puesto.
+        """
+        prefijo = (prefijo_modulo or "").strip().lower()
+        if not prefijo or not id_puesto:
+            return 0
+        valor = "Si" if activar else "No"
+        permisos = self.listar_permisos(base_empresa=base_empresa, id_puesto=id_puesto)
+        actualizados = 0
+        for perm in permisos:
+            key = (perm.get("key_permiso") or "").strip().lower()
+            if not key:
+                continue
+            if key == f"{prefijo}.*" or key.startswith(f"{prefijo}."):
+                id_ps = perm.get("id_permiso_sistema")
+                if id_ps and self.actualizar_valor_permiso(
+                    base_empresa, int(id_ps), valor, int(id_puesto)
+                ):
+                    actualizados += 1
+            elif prefijo == "logistica" and key.startswith("logistica_"):
+                id_ps = perm.get("id_permiso_sistema")
+                if id_ps and self.actualizar_valor_permiso(
+                    base_empresa, int(id_ps), valor, int(id_puesto)
+                ):
+                    actualizados += 1
+        return actualizados
 
