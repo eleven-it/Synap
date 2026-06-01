@@ -131,7 +131,7 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 
 | Campo | Definición |
 |-------|------------|
-| `valor_stock` | Suma valorizada por `stock_deposito.saldo` × precio según lista (default lista 1 / `Precio1V`, alineado a informe existencias) |
+| `valor_stock` | Suma valorizada por `stock_deposito.saldo` × `articulo.PrecioCosto` (paridad Info_Stock `lista_precio=0`) |
 | `productos_con_stock` | Conteo de `IDArt` con saldo > 0 en al menos un depósito |
 | `productos_bajo_minimo` | Conteo donde disponible (`saldo − reservado` por depósito, agregado por artículo) < `articulo.PuntoPedido` y `PuntoPedido > 0` |
 | `productos_sin_stock` | Conteo con stock total 0 y demanda pendiente > 0 (opcional v1: solo conteo con saldo 0) |

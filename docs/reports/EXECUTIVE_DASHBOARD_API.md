@@ -24,7 +24,7 @@ En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente
 |--------|------|-------------|
 | GET | `/api/reports/executive-dashboard/` | Orquestador por área |
 | GET | `/api/reports/executive-dashboard/ventas/resumen/` | Ventas netas, REM, PED (período) |
-| GET | `/api/reports/executive-dashboard/inventario/resumen/` | Stock agregado |
+| GET | `/api/reports/executive-dashboard/inventario/resumen/` | Stock agregado (`valor_stock` = saldo × `PrecioCosto`) |
 | GET | `/api/reports/executive-dashboard/compras/resumen/` | OC pendientes |
 | GET | `/api/reports/executive-dashboard/manufactura/resumen/` | KPIs MPR (solo si módulo `mpr` activo) |
 | GET | `/api/reports/executive-dashboard/cruzados/resumen/` | Demanda pendiente (BO, reservado, cobertura) |
@@ -45,6 +45,11 @@ En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente
 - **No** incluye `librobanco` en P0 (`meta.notas_semanticas`).
 
 Verificación: `python manage.py uat_tesoreria_cashflow --base <empresa> --fecha-inicio … --fecha-fin …`
+
+### Inventario
+
+- **`valor_stock`**: `SUM(stock_deposito.saldo × articulo.PrecioCosto)` — valorización a **costo** (paridad AdministraNET Info_Stock con `lista_precio=0`).
+- Snapshot de saldo actual; el período del dashboard no altera el valor (sí aplica a reservado / bajo mínimo vía `cp_res.Fecha`).
 
 ### Ventas por cobro
 

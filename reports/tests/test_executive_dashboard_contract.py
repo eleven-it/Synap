@@ -99,6 +99,9 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         cursor.fetchone = MagicMock(side_effect=seq)
         out = fetch_inventario_resumen(cursor, _filters())
         self.assertIn("valor_stock", out)
+        sql_valor = cursor.execute.call_args_list[0][0][0]
+        self.assertIn("PrecioCosto", sql_valor)
+        self.assertNotIn("Precio1V", sql_valor)
         self.assertIn("productos_bajo_minimo", out)
         self.assertTrue(out["disponible"])
         sql_bajo_min = cursor.execute.call_args_list[1][0][0]
