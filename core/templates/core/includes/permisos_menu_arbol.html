@@ -1,0 +1,109 @@
+{# Árbol de Clavemenu AdministraNET. Requiere: estructura_menu, permisos_actuales #}
+<div class="border rounded-lg p-4 max-h-[32rem] overflow-y-auto bg-gray-50 dark:bg-gray-800/50 dark:border-gray-700">
+  {% for clave_raiz, datos_raiz in estructura_menu.items %}
+  <div class="mb-2">
+    <div class="flex items-center mb-1">
+      {% if datos_raiz.hijos %}
+      <button type="button"
+              onclick="toggleNodo('{{ clave_raiz }}')"
+              class="toggle-btn text-gray-500 hover:text-gray-700 dark:text-gray-400 mr-1 focus:outline-none"
+              id="toggle_{{ clave_raiz }}">
+        <span class="material-icons text-sm expand-icon">expand_more</span>
+      </button>
+      {% else %}
+      <span class="w-5"></span>
+      {% endif %}
+      <input type="checkbox"
+             id="permiso_{{ clave_raiz }}"
+             name="permisos"
+             value="{{ clave_raiz }}"
+             {% if clave_raiz in permisos_actuales %}checked{% endif %}
+             class="rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+             onchange="toggleHijos('{{ clave_raiz }}', this.checked)">
+      <label for="permiso_{{ clave_raiz }}" class="ml-2 text-xs font-semibold text-gray-800 dark:text-gray-100 cursor-pointer">
+        {{ datos_raiz.nombre }}
+      </label>
+    </div>
+    {% if datos_raiz.hijos %}
+    <div class="nodo-hijos nodo_{{ clave_raiz }} ml-6 space-y-1" id="nodo_{{ clave_raiz }}">
+      {% for clave_hijo1, datos_hijo1 in datos_raiz.hijos.items %}
+      <div class="mb-1">
+        <div class="flex items-center">
+          {% if datos_hijo1.hijos %}
+          <button type="button"
+                  onclick="toggleNodo('{{ clave_hijo1 }}')"
+                  class="toggle-btn text-gray-500 hover:text-gray-700 mr-1 focus:outline-none"
+                  id="toggle_{{ clave_hijo1 }}">
+            <span class="material-icons text-sm expand-icon">expand_more</span>
+          </button>
+          {% else %}
+          <span class="w-5"></span>
+          {% endif %}
+          <input type="checkbox"
+                 id="permiso_{{ clave_hijo1 }}"
+                 name="permisos"
+                 value="{{ clave_hijo1 }}"
+                 {% if clave_hijo1 in permisos_actuales %}checked{% endif %}
+                 class="rounded border-gray-300 text-purple-600 focus:ring-purple-500 hijo_{{ clave_raiz }}"
+                 onchange="toggleHijos('{{ clave_hijo1 }}', this.checked)">
+          <label for="permiso_{{ clave_hijo1 }}" class="ml-2 text-xs text-gray-700 dark:text-gray-300 cursor-pointer">
+            {{ datos_hijo1.nombre }}
+          </label>
+        </div>
+        {% if datos_hijo1.hijos %}
+        <div class="nodo-hijos nodo_{{ clave_hijo1 }} ml-6 mt-1 space-y-1" id="nodo_{{ clave_hijo1 }}">
+          {% for clave_hijo2, datos_hijo2 in datos_hijo1.hijos.items %}
+          <div class="mb-1">
+            <div class="flex items-center">
+              {% if datos_hijo2.hijos %}
+              <button type="button"
+                      onclick="toggleNodo('{{ clave_hijo2 }}')"
+                      class="toggle-btn text-gray-500 hover:text-gray-700 mr-1 focus:outline-none"
+                      id="toggle_{{ clave_hijo2 }}">
+                <span class="material-icons text-sm expand-icon">expand_more</span>
+              </button>
+              {% else %}
+              <span class="w-5"></span>
+              {% endif %}
+              <input type="checkbox"
+                     id="permiso_{{ clave_hijo2 }}"
+                     name="permisos"
+                     value="{{ clave_hijo2 }}"
+                     {% if clave_hijo2 in permisos_actuales %}checked{% endif %}
+                     class="rounded border-gray-300 text-purple-600 focus:ring-purple-500 hijo_{{ clave_hijo1 }}"
+                     onchange="toggleHijos('{{ clave_hijo2 }}', this.checked)">
+              <label for="permiso_{{ clave_hijo2 }}" class="ml-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
+                {{ datos_hijo2.nombre }}
+              </label>
+            </div>
+            {% if datos_hijo2.hijos %}
+            <div class="nodo-hijos nodo_{{ clave_hijo2 }} ml-6 mt-1 space-y-1" id="nodo_{{ clave_hijo2 }}">
+              {% for clave_hijo3, datos_hijo3 in datos_hijo2.hijos.items %}
+              <div class="mb-1">
+                <div class="flex items-center">
+                  <span class="w-5"></span>
+                  <input type="checkbox"
+                         id="permiso_{{ clave_hijo3 }}"
+                         name="permisos"
+                         value="{{ clave_hijo3 }}"
+                         {% if clave_hijo3 in permisos_actuales %}checked{% endif %}
+                         class="rounded border-gray-300 text-purple-600 focus:ring-purple-500 hijo_{{ clave_hijo2 }}">
+                  <label for="permiso_{{ clave_hijo3 }}" class="ml-2 text-xs text-gray-500 dark:text-gray-500 cursor-pointer">
+                    {{ datos_hijo3.nombre }}
+                  </label>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>

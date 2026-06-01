@@ -23,6 +23,8 @@ Las apps **stock**, **compras** y **self_checkout** son **módulos core**: siemp
 
 Para que un puesto tenga acceso a una app en Synap, debe tener el valor "Si" en `permiso_sistema_puesto` para el `key_permiso` correspondiente (o el comodín del módulo, o "*" si es supervisor). La verificación se hace con `core.services.administranet_permisos_usuario.get_permisos_totales_administranet` y en el menú con `app["permiso"] in permisos_usuario`.
 
+**Asignación por puesto (UI):** el usuario `cod_usuario` **supervisor** usa `/core/permisos-puesto/` (menú Archivo → *Asignar permisos por puesto*). Ver [PERMISOS_ASIGNACION_POR_PUESTO_SUPERVISOR.md](PERMISOS_ASIGNACION_POR_PUESTO_SUPERVISOR.md).
+
 ## Self-Checkout como core
 
 - **URLs:** Incluidas en `urls.py` como `path('self_checkout/', include('self_checkout.urls', namespace='self_checkout'))`.

@@ -47,6 +47,7 @@ APPS_MENU = [
                     {"label": _("Puesto"), "url": "core:listar_roles", "icon": "badge", "permission": "usuarios.roles.ver", "menu_item_id": "archivo_param_puesto"},
                     {"label": _("Permiso en menú"), "url": "core:listar_permisos", "icon": "menu_book", "permission": "usuarios.permisos.ver", "menu_item_id": "archivo_param_permiso_menu"},
                     {"label": _("Permiso en sistema"), "url": "core:permisos_sistema", "icon": "admin_panel_settings", "permission": "usuarios.permisos.ver", "menu_item_id": "archivo_param_permiso_sistema"},
+                    {"label": _("Asignar permisos por puesto"), "url": "core:permisos_puesto_lista", "icon": "security", "permission": "usuarios.permisos.ver", "menu_item_id": "archivo_param_permisos_puesto"},
                     {"label": _("Referencia de movimiento de stock"), "url": "stock:ref_movstock_list", "icon": "bookmark", "permission": "stock.ref_movstock", "menu_item_id": "archivo_param_ref_movstock"},
                     {"label": _("Migración esquema MySQL (legacy)"), "url": "core:legacy_mysql_schema", "icon": "storage", "permission": "configuracion.sistema", "menu_item_id": "archivo_param_mysql_schema"},
                 ]
@@ -161,6 +162,8 @@ APPS_MENU = [
                 "items": [
                     {"label": _("Asistente de producción"), "url": "mpr:wizard", "icon": "auto_awesome", "permission": "mpr.ver", "menu_item_id": "mpr_op_wizard"},
                     {"label": _("Listado de OPT existentes"), "url": "mpr:opt_list", "icon": "list_alt", "permission": "mpr.ver", "menu_item_id": "mpr_op_list"},
+                    {"label": _("Armado surtido"), "url": "mpr:armado_surtido", "icon": "category", "permission": "mpr.ver", "menu_item_id": "mpr_op_armado_surtido"},
+                    {"label": _("Reclasificación"), "url": "mpr:reclasificacion", "icon": "swap_horiz", "permission": "mpr.ver", "menu_item_id": "mpr_op_reclasificacion"},
                 ]
             },
             {

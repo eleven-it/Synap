@@ -15,6 +15,12 @@ from .views_permisos_sistema import (
     toggle_navbar_menu_global_view,
     toggle_navbar_granular_view,
 )
+from .views_permisos_puesto import (
+    permisos_puesto_lista_view,
+    permisos_puesto_gestionar_view,
+    permisos_puesto_toggle_synap_view,
+    permisos_puesto_modulo_synap_view,
+)
 from .views_legacy_mysql_schema import legacy_mysql_schema_tool
 from .views_uom import UoMListView, UoMCreateView, UoMUpdateView, UoMDeleteView
 from .views_currency import (

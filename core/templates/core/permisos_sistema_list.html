@@ -204,10 +204,19 @@
             <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ puesto.nombre }}</div>
           </td>
           <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-            <a href="{% url 'core:editar_permisos_puesto' puesto.id %}"
-               class="inline-flex items-center justify-center w-8 h-8 text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded transition-colors" title="Gestionar permisos">
-              <span class="material-icons text-base">settings</span>
-            </a>
+            <div class="inline-flex items-center gap-1 justify-end">
+              {% if es_supervisor_cod %}
+              <a href="{% url 'core:permisos_puesto_gestionar' puesto.id %}"
+                 class="inline-flex items-center justify-center w-8 h-8 text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 rounded transition-colors"
+                 title="Synap y menú (supervisor)">
+                <span class="material-icons text-base">security</span>
+              </a>
+              {% endif %}
+              <a href="{% url 'core:editar_permisos_puesto' puesto.id %}"
+                 class="inline-flex items-center justify-center w-8 h-8 text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded transition-colors" title="Reglas legacy (permisos_sistema)">
+                <span class="material-icons text-base">settings</span>
+              </a>
+            </div>
           </td>
         </tr>
         {% empty %}
