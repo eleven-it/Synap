@@ -89,13 +89,13 @@ def _count_productos_bajo_minimo(cursor, filters: DashboardFilters) -> int | Non
 
 def fetch_inventario_resumen(cursor, filters: DashboardFilters) -> dict[str, Any]:
     notas = [
-        "Valor stock: saldo depósito × Precio1V (lista 1); snapshot actual (sin histórico por fecha).",
+        "Valor stock: saldo depósito × PrecioCosto (costo); paridad Info_Stock lista_precio=0; snapshot actual.",
         "Reservado y bajo mínimo: PED En preparación/Preparado filtrados por cp_res.Fecha en el período.",
         "Filtro sucursal no aplica a inventario en v1.",
     ]
     sql = """
         SELECT
-            COALESCE(SUM(COALESCE(sd.saldo, 0) * COALESCE(a.Precio1V, 0)), 0) AS valor_stock,
+            COALESCE(SUM(COALESCE(sd.saldo, 0) * COALESCE(a.PrecioCosto, 0)), 0) AS valor_stock,
             COUNT(DISTINCT CASE WHEN COALESCE(sd.saldo, 0) > 0 THEN a.IDArt END) AS productos_con_stock,
             COUNT(DISTINCT CASE WHEN COALESCE(sd.saldo, 0) = 0 THEN a.IDArt END) AS productos_sin_stock
         FROM stock_deposito sd
