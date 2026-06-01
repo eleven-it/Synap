@@ -27,6 +27,7 @@ from contextvars import ContextVar
 from typing import Dict, Optional, Tuple, Any
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +181,14 @@ class MySQLConnectionPool:
 
 def get_mysql_pool() -> MySQLConnectionPool:
     """Obtiene el pool MySQL configurado en settings.DATABASES['mysql']."""
-    cfg = settings.DATABASES['mysql']
+    try:
+        cfg = settings.DATABASES['mysql']
+    except KeyError as exc:
+        raise ImproperlyConfigured(
+            "DATABASES['mysql'] no está definido. Si SYNAP_MIGRATIONS_POSTGRES_ONLY=1 "
+            "está en el entorno del contenedor, no afecta runserver tras actualizar settings; "
+            "reiniciá el proceso. Revisá DB_HOST, DB_USER, DB_PASSWORD y DB_NAME en .env."
+        ) from exc
     return MySQLConnectionPool.get_pool(
         host=cfg['HOST'],
         port=int(cfg.get('PORT', 3306)),
