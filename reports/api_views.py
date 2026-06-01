@@ -459,7 +459,7 @@ class ReportVisibilityAPIView(APIView):
                 "status": "success",
                 "slug": report.slug,
                 "is_visible": report.is_visible,
-                "message": f"Reporte {'visible' if report.is_visible else 'oculto'} para usuarios con puesto Supervisor"
+                "message": f"Reporte {'visible' if report.is_visible else 'oculto'} para el resto de usuarios (excepto usuario supervisor)"
             })
         except ReportDefinition.DoesNotExist:
             return Response(

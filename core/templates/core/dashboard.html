@@ -178,6 +178,7 @@
     </div>
   </header>
 
+  {% if show_command_center %}
   <!-- Hero Card: Command Center -->
   <section class="mb-6 sm:mb-8 fade-in-up fade-in-up-delay-1">
     <a href="{% url 'reports:dashboard_detail' slug='command-center-gerencial' %}" class="block hero-card rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 shadow-xl group">
@@ -214,10 +215,13 @@
       </div>
     </a>
   </section>
+  {% endif %}
 
+  {% if show_reports or show_workspace or apps_menu %}
   <!-- Secondary Cards Grid -->
   <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
 
+    {% if show_reports %}
     <!-- Reports Card -->
     <a href="{% url 'reports:catalog' %}" class="action-card card-reports rounded-2xl p-5 sm:p-6 group fade-in-up fade-in-up-delay-2 min-h-[44px]">
       <div class="flex items-start gap-4">
@@ -242,7 +246,9 @@
         </div>
       </div>
     </a>
+    {% endif %}
 
+    {% if show_workspace %}
     <!-- Workspace Card -->
     <a href="{% url 'reports:workspace' %}" class="action-card card-workspace rounded-2xl p-5 sm:p-6 group fade-in-up fade-in-up-delay-3 min-h-[44px]">
       <div class="flex items-start gap-4">
@@ -267,6 +273,7 @@
         </div>
       </div>
     </a>
+    {% endif %}
 
     {% for app in apps_menu %}
       {% if app.id == "settings" %}
@@ -325,7 +332,9 @@
       {% endif %}
     {% endfor %}
   </section>
+  {% endif %}
 
+  {% if show_workspace %}
   <!-- Quick tip / Help section (opcional, sutil) -->
   <footer class="text-center text-sm text-gray-400 dark:text-gray-500 fade-in-up fade-in-up-delay-4">
     <p>
@@ -333,6 +342,7 @@
       {% trans "Guarda tus reportes favoritos en el Workspace para acceder más rápido." %}
     </p>
   </footer>
+  {% endif %}
 </div>
 
 <script>

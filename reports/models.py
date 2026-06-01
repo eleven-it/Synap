@@ -93,7 +93,7 @@ class ReportDefinition(models.Model):
     is_visible = models.BooleanField(
         default=True,
         verbose_name=_("Is visible"),
-        help_text=_("Visible reports are shown to users with Supervisor role. Only the supervisor user can toggle this."),
+        help_text=_("Visible reports are shown to all authorized users. Only the supervisor user (cod_usuario) can see deactivated reports and toggle this flag."),
     )
     show_in_catalog = models.BooleanField(
         default=True,

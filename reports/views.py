@@ -150,6 +150,10 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             raise Http404("Not authorized for operational reports")
         if report.is_managerial() and not ManagerialReportsPermission().has_permission(self.request, self):
             raise Http404("Not authorized for managerial reports")
+        from reports.services.report_visibility import report_visible_for_user
+
+        if not report_visible_for_user(report, self.request.user):
+            raise Http404("Report not visible")
         return report
 
     def get_context_data(self, **kwargs):

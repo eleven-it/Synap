@@ -1,8 +1,29 @@
+from typing import Any, Dict, List
+
 from django.shortcuts import render, redirect
 from core.models import UsuarioExtendido
 from core.utils import permisos_contextuales
 from core.decorators import tiene_permiso, administranet_login_required
 from django.views.generic import TemplateView
+
+
+def get_dashboard_home_visibility(user, apps_menu: List[Dict[str, Any]]) -> Dict[str, bool]:
+    """
+    Tarjetas del inicio (/core/dashboard/) alineadas con permisos reales de Reports.
+    Command Center: reports.view_managerial + ReportDefinition.is_visible (o usuario supervisor).
+    Catálogo/workspace: app Reports visible en menú.
+    """
+    from reports.services.report_visibility import command_center_visible_for_user
+
+    show_reports = any(app.get("id") == "reports" for app in apps_menu)
+    empresa = getattr(user, "empresa_activa", None)
+    empresa_id = empresa.id if empresa else None
+    return {
+        "show_command_center": command_center_visible_for_user(user, empresa_id=empresa_id),
+        "show_reports": show_reports,
+        "show_workspace": show_reports,
+    }
+
 
 @administranet_login_required
 def dashboard_view(request):
@@ -32,7 +53,8 @@ def dashboard_view(request):
     apps_menu = apps_visibles_para_usuario(request.user, request)
     
     context = permisos_contextuales(request, "*", debug=True)
-    context['apps_menu'] = apps_menu
+    context["apps_menu"] = apps_menu
+    context.update(get_dashboard_home_visibility(request.user, apps_menu))
     return render(request, "core/dashboard.html", context)
 
 @tiene_permiso("usuarios.perfil")

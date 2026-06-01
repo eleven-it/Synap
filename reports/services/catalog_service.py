@@ -191,15 +191,7 @@ class CatalogService:
         filters &= Q(show_in_catalog=True)
         
         # Si el usuario NO es el supervisor (por cod_usuario), filtrar por is_visible
-        # Solo el usuario 'supervisor' (por cod_usuario) puede ver todos los reportes
-        # Los usuarios con puesto "Supervisor" (por nombre_puesto) solo ven reportes visibles
-        is_supervisor_user = False
-        if hasattr(self.user, 'cod_usuario') and (self.user.cod_usuario or '').lower() == 'supervisor':
-            is_supervisor_user = True
-        
-        if not is_supervisor_user:
-            # Para usuarios con puesto Supervisor u otros, solo mostrar reportes visibles
-            # Esto incluye usuarios con puesto "Supervisor" (como lvillanueva)
+        if not user_has_full_access(self.user):
             filters &= Q(is_visible=True)
         
         return ReportDefinition.objects.filter(filters).select_related("empresa").prefetch_related("widgets")
