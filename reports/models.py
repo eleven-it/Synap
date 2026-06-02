@@ -782,3 +782,49 @@ class PuntoVentaCanalEjecutivo(models.Model):
         return f"{self.empresa_id} PV {self.id_pv} → {self.canal}"
 
 
+class SucursalCanalEjecutivo(models.Model):
+    """
+    Clasificación Mayorista / Minorista (salón) por sucursal para el panel ejecutivo.
+    Solo sucursales clasificadas entran en el reporte; el resto se ignora.
+    """
+
+    class Canal(models.TextChoices):
+        MAYORISTA = "mayorista", _("Mayorista")
+        MINORISTA = "minorista", _("Minorista (Salón)")
+
+    empresa = models.ForeignKey(
+        "core.Empresa",
+        on_delete=models.CASCADE,
+        related_name="sucursal_canales_ejecutivo",
+        verbose_name=_("Empresa"),
+    )
+    id_sucursal = models.PositiveIntegerField(
+        verbose_name=_("ID sucursal (AdministraNET)"),
+    )
+    canal = models.CharField(
+        max_length=16,
+        choices=Canal.choices,
+        verbose_name=_("Canal"),
+    )
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Updated at"))
+
+    class Meta:
+        verbose_name = _("Clasificación sucursal — panel ejecutivo")
+        verbose_name_plural = _("Clasificaciones sucursal — panel ejecutivo")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("empresa", "id_sucursal"),
+                name="reports_suc_canal_unico_por_empresa",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["empresa", "id_sucursal"],
+                name="reports_suc_canal_emp_suc_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.empresa_id} Suc {self.id_sucursal} → {self.canal}"
+
+

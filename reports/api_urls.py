@@ -13,6 +13,7 @@ from .logistica_lista_comprobantes_rutas_views import (
 from .executive_summary_api_views import (
     ExecutiveSummaryAPIView,
     PuntoVentaCanalEjecutivoAPIView,
+    SucursalCanalEjecutivoAPIView,
 )
 from .executive_dashboard_api_views import (
     ExecutiveDashboardAPIView,
@@ -96,6 +97,11 @@ urlpatterns = [
     ),
     path("reconciliacion-movimiento-detalle/", ReconciliacionMovimientoDetalleAPIView.as_view(), name="reports-reconciliacion-movimiento-detalle"),
     path("executive-summary/", ExecutiveSummaryAPIView.as_view(), name="reports-executive-summary"),
+    path(
+        "sucursal-canal-ejecutivo/",
+        SucursalCanalEjecutivoAPIView.as_view(),
+        name="reports-sucursal-canal-ejecutivo",
+    ),
     path("pv-canal-ejecutivo/", PuntoVentaCanalEjecutivoAPIView.as_view(), name="reports-pv-canal-ejecutivo"),
     path("executive-dashboard/", ExecutiveDashboardAPIView.as_view(), name="reports-executive-dashboard"),
     path(
