@@ -417,7 +417,6 @@
                                 </div>
                             </div>
                             {% if report.slug == 'comprobantes-rutas' %}
-                            <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 md:hidden">Deslizá horizontalmente si no ves todas las columnas.</p>
                             <div id="logistica-lista-cr-scroll" class="h-[min(75vh,56rem)] min-h-[14rem] overflow-auto overscroll-contain [scrollbar-gutter:stable]" role="region" aria-label="Lista comprobantes en rutas">
                                 <div data-widget-table-wrapper class="min-h-0 px-1 pb-2 sm:px-2"></div>
                             </div>
@@ -5110,7 +5109,8 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% else %}
-<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=202604341"></script>
+<script src="{% static 'reports/js/reports_responsive.js' %}?v=20260602b" defer></script>
+<script type="module" src="{% static 'reports/js/dashboard.js' %}?v=202604343"></script>
 {% if report.slug == 'comprobantes-rutas' %}
 <script src="{% static 'reports/js/logistica_lista_comprobantes_rutas.js' %}?v=20260430b" defer></script>
 {% endif %}

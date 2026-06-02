@@ -40,18 +40,16 @@ En dispositivos detectados como móvil (`request.is_mobile`), la aplicación web
 ### Dashboard y reportes (UI responsive)
 
 - `/core/dashboard/` — inicio Synap (hero Command Center + accesos Reports / Workspace).
-- `/reports/` — catálogo de reportes.
-- `/reports/workspace/` — workspace personal.
-- `/reports/dashboard/command-center-gerencial/` — Command Center gerencial.
-- `/reports/dashboard/resumen-ejecutivo-ventas/` — Resumen ejecutivo de ventas (panel del día).
-- `/reports/dashboard/cash_flow_waterfall/`, `cash_flow_by_account/`, `cash_flow_detailed_movements/` — Flujo de caja (enlace desde Tesorería en Command Center).
+- `/reports/` y rutas hijas — catálogo, workspace, todos los dashboards (`/reports/dashboard/<slug>/`), builder y data-map.
 - `/mpr/` y rutas hijas — Tablero MPR (enlace desde Manufactura en Command Center).
-- APIs: `/api/reports/executive-dashboard/`, `/api/reports/executive-summary/`, `/api/reports/pv-canal-ejecutivo/`, `/api/reports/query/`, `/api/reports/filters/`, `/api/reports/export/`.
+- APIs: prefijo `/api/reports/` (consulta, filtros, exportación, Command Center, etc.).
+
+En pantallas &lt; `lg` (1024px), las tablas de informes muestran **tarjetas** (`reports/static/reports/js/reports_responsive.js`); en escritorio se mantiene la **tabla** existente sin cambios visuales.
 
 ### Bloqueadas en móvil (ejemplos)
 
 - Formularios de configuración de kiosco, alta/edición de talonarios y PV: `/self_checkout/config/nuevo/`, `.../editar/`, `talonarios/nuevo-pv/`, `talonarios/agregar/`, `talonarios/.../editar/`
-- Detalle de informes individuales (`/reports/dashboard/<slug>/` salvo los listados arriba), stock, compras, e-com, Tienda Nube, etc.
+- Módulos fuera de Nivel A: compras, e-com, Tienda Nube, administración Django `/admin/`, etc.
 
 ## Manifest PWA
 

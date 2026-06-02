@@ -3523,6 +3523,7 @@ const renderTable = (widgetElement, data, options = {}) => {
         table_metrics: ["ventas_netas", "notas_credito", "ventas_brutas"]
       }
     };
+    widgetEngine.reportSlug = reportSlug;
     widgetEngine.renderTable(target, widgetSchema);
     return;
   }
@@ -3940,8 +3941,49 @@ const renderTable = (widgetElement, data, options = {}) => {
 
   table.appendChild(tbody);
   target.innerHTML = "";
+
+  const sr = window.SynapReportsResponsive;
+  const mobileLabelMap = {};
+  fieldKeys.forEach((k) => {
+    mobileLabelMap[k] =
+      headerTranslations[k.toLowerCase()] ||
+      headerTranslations[k] ||
+      undefined;
+  });
+  const mobileColumns = sr ? sr.buildColumnsFromKeys(fieldKeys, mobileLabelMap) : [];
+  const formatCellForMobile = (key, value) => {
+    if (!sr) return String(value ?? "");
+    if (value == null || value === "") return "—";
+    if (key.toLowerCase() === "type" || key.toLowerCase() === "tipo") {
+      const typeTranslations = {
+        starting: "Inicial",
+        period: "Período",
+        ending: "Final",
+      };
+      return sr.escHtml(typeTranslations[String(value).toLowerCase()] || String(value));
+    }
+    if (isCurrencyField(key)) return sr.escHtml(formatCurrency(value));
+    return sr.escHtml(formatNumber(value));
+  };
+  const mountResponsiveTable = () => {
+    if (sr) {
+      sr.mountDualTableView(target, table, {
+        columns: mobileColumns,
+        rows: rowsToRender,
+        formatCell: formatCellForMobile,
+        reportSlug:
+          tableReportSlug ||
+          widgetElement?.dataset?.reportSlug ||
+          dashboardRoot?.dataset?.reportSlug ||
+          "",
+      });
+    } else {
+      target.appendChild(table);
+    }
+  };
+
   if (isLogisticaListaCrTable) {
-    target.appendChild(table);
+    mountResponsiveTable();
     const logisticaScrollHost = document.getElementById("logistica-lista-cr-scroll");
     if (useLogisticaNestedGroups) {
       attachLogisticaGroupToggleListeners(logisticaScrollHost || target);
@@ -3976,7 +4018,7 @@ const renderTable = (widgetElement, data, options = {}) => {
     foot.textContent = legendText;
     target.appendChild(foot);
   } else {
-    target.appendChild(table);
+    mountResponsiveTable();
   }
 
   if (show) {
@@ -7761,8 +7803,16 @@ if (dashboardRoot) {
         </table>
       </div>
     `;
-    
-    byAccountContent.innerHTML = tableHTML;
+
+    const srCf = window.SynapReportsResponsive;
+    if (srCf) {
+      const mobileHtml = srCf.buildMobileCardsHtml(data, [], {
+        reportSlug: "cash_flow_by_account",
+      });
+      srCf.insertDualHtml(byAccountContent, mobileHtml, tableHTML);
+    } else {
+      byAccountContent.innerHTML = tableHTML;
+    }
   };
 
   const STOCK_EXISTENCIAS_SEARCH_KEYS = [
@@ -8165,8 +8215,33 @@ if (dashboardRoot) {
     const tableScrollClass =
       "overflow-x-auto overflow-y-auto max-h-[min(72vh,48rem)] min-h-[12rem] overscroll-contain rounded-xl border border-slate-200 dark:border-slate-700 [scrollbar-gutter:stable] bg-white dark:bg-slate-950";
 
-    let html = `
-      <div class="${tableScrollClass}">
+    const srStock = window.SynapReportsResponsive;
+    const stockLabelMap = {
+      id_manual: "ID manual",
+      codigo_barras: "Código barras",
+      deposito_nombre: "Depósito",
+      nombre: "Nombre",
+      rubro_nombre: "Rubro",
+      subrubro_nombre: "Subrubro",
+      stock: "Stock",
+      reservado: "Reservado",
+      disponible: "Disponible",
+    };
+    const stockKeys = Object.keys(stockLabelMap);
+    const stockColumns = srStock
+      ? srStock.buildColumnsFromKeys(stockKeys, stockLabelMap)
+      : [];
+
+    let html = "";
+    if (srStock) {
+      html += `<div class="synap-responsive-table-mobile lg:hidden space-y-2">${srStock.buildMobileCardsHtml(
+        filtered,
+        stockColumns,
+        { reportSlug: "stock-existencias" },
+      )}</div>`;
+    }
+    html += `
+      <div class="${tableScrollClass} hidden lg:block">
         <table id="stock-existencias-data-table" class="se-vo-stock-table vo-jerarquia-table w-full table-fixed border-collapse text-left text-[11px] sm:text-xs text-slate-900 dark:text-slate-100">
           ${STOCK_EXISTENCIAS_COLGROUP}
           <thead>${theadRow}</thead>

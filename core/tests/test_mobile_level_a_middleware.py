@@ -169,7 +169,7 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
         resp = self.mw.process_request(req)
         self.assertIsNone(resp)
 
-    def test_movil_api_reports_403_json(self):
+    def test_movil_api_reports_catalog_sin_bloqueo(self):
         req = _build_request(
             'GET',
             '/api/reports/catalog/',
@@ -178,9 +178,24 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
             accept_json=True,
         )
         resp = self.mw.process_request(req)
-        self.assertIsNotNone(resp)
-        self.assertEqual(resp.status_code, 403)
-        self.assertIn(b'error', resp.content.lower())
+        self.assertIsNone(resp)
+
+    def test_movil_dashboard_informe_legacy_sin_bloqueo(self):
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/reports/dashboard/ventas_netas/')
+        )
+        req = _build_request(
+            'GET',
+            '/reports/dashboard/pedidos-pendientes/',
+            MOBILE_UA,
+            _minimal_session_user(),
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_reports_builder_sin_bloqueo(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/reports/builder/'))
+        self.assertTrue(mobile_path_allowed_for_level_a('/reports/builder/data-map/'))
 
     def test_movil_autenticado_command_center_sin_bloqueo(self):
         req = _build_request(
