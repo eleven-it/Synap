@@ -43,6 +43,12 @@ _MOBILE_ALLOWED_API_PREFIXES = (
     # Command Center gerencial (HTML + fetch JSON; UI responsive).
     '/api/reports/executive-dashboard/',
     '/api/reports/executive-summary/',
+    # Resumen ejecutivo ventas (clasificación PV).
+    '/api/reports/pv-canal-ejecutivo/',
+    # Informes enlazados desde Command Center (datos, filtros, exportación).
+    '/api/reports/query/',
+    '/api/reports/filters/',
+    '/api/reports/export/',
 )
 
 # Pantallas HTML self_checkout Nivel A + ticket post-venta (ventana de impresión usada por kiosco.html).
@@ -58,14 +64,22 @@ _SELF_CHECKOUT_PAGE_PATTERNS = tuple(
     )
 )
 
-# Reportes gerenciales con UI móvil (Command Center, catálogo, workspace).
+# Reportes gerenciales con UI móvil (Command Center, resumen ventas, catálogo, workspace).
 _REPORTS_MOBILE_PAGE_PATTERNS = tuple(
     re.compile(p)
     for p in (
         r'^/reports/dashboard/command-center-gerencial/?$',
+        r'^/reports/dashboard/resumen-ejecutivo-ventas/?$',
+        r'^/reports/dashboard/(?:cash_flow_waterfall|cash_flow_by_account|cash_flow_detailed_movements)/?$',
         r'^/reports/?$',
         r'^/reports/workspace/?$',
     )
+)
+
+# MPR (enlace «Tablero MPR» desde Command Center).
+_MPR_MOBILE_PAGE_PATTERNS = tuple(
+    re.compile(p)
+    for p in (r'^/mpr(?:/.*)?$',)
 )
 
 # Dashboard principal Synap (tarjetas Command Center / Reports / Workspace).
@@ -91,6 +105,9 @@ def mobile_path_allowed_for_level_a(path: str) -> bool:
         if rx.match(path):
             return True
     for rx in _REPORTS_MOBILE_PAGE_PATTERNS:
+        if rx.match(path):
+            return True
+    for rx in _MPR_MOBILE_PAGE_PATTERNS:
         if rx.match(path):
             return True
     for rx in _CORE_MOBILE_PAGE_PATTERNS:

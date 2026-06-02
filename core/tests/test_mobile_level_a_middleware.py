@@ -100,6 +100,14 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
             mobile_path_allowed_for_level_a('/reports/dashboard/command-center-gerencial/')
         )
 
+    def test_resumen_ejecutivo_ventas_permitido(self):
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/reports/dashboard/resumen-ejecutivo-ventas/')
+        )
+
+    def test_api_pv_canal_ejecutivo_permitido(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/api/reports/pv-canal-ejecutivo/'))
+
     def test_api_executive_dashboard_permitido(self):
         self.assertTrue(
             mobile_path_allowed_for_level_a('/api/reports/executive-dashboard/')
@@ -112,6 +120,18 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
 
     def test_api_executive_summary_permitido(self):
         self.assertTrue(mobile_path_allowed_for_level_a('/api/reports/executive-summary/'))
+
+    def test_cash_flow_waterfall_permitido(self):
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/reports/dashboard/cash_flow_waterfall/')
+        )
+
+    def test_api_reports_query_permitido(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/api/reports/query/'))
+
+    def test_mpr_tablero_permitido(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/mpr/'))
+        self.assertTrue(mobile_path_allowed_for_level_a('/mpr/opt/list/'))
 
 
 @override_settings(
@@ -179,6 +199,16 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
             MOBILE_UA,
             _minimal_session_user(),
             accept_json=True,
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_autenticado_resumen_ejecutivo_ventas_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/reports/dashboard/resumen-ejecutivo-ventas/',
+            MOBILE_UA,
+            _minimal_session_user(),
         )
         resp = self.mw.process_request(req)
         self.assertIsNone(resp)
