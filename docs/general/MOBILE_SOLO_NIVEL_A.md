@@ -43,12 +43,15 @@ En dispositivos detectados como móvil (`request.is_mobile`), la aplicación web
 - `/reports/` — catálogo de reportes.
 - `/reports/workspace/` — workspace personal.
 - `/reports/dashboard/command-center-gerencial/` — Command Center gerencial.
-- APIs: `/api/reports/executive-dashboard/`, `/api/reports/executive-summary/`.
+- `/reports/dashboard/resumen-ejecutivo-ventas/` — Resumen ejecutivo de ventas (panel del día).
+- `/reports/dashboard/cash_flow_waterfall/`, `cash_flow_by_account/`, `cash_flow_detailed_movements/` — Flujo de caja (enlace desde Tesorería en Command Center).
+- `/mpr/` y rutas hijas — Tablero MPR (enlace desde Manufactura en Command Center).
+- APIs: `/api/reports/executive-dashboard/`, `/api/reports/executive-summary/`, `/api/reports/pv-canal-ejecutivo/`, `/api/reports/query/`, `/api/reports/filters/`, `/api/reports/export/`.
 
 ### Bloqueadas en móvil (ejemplos)
 
 - Formularios de configuración de kiosco, alta/edición de talonarios y PV: `/self_checkout/config/nuevo/`, `.../editar/`, `talonarios/nuevo-pv/`, `talonarios/agregar/`, `talonarios/.../editar/`
-- Detalle de informes individuales (`/reports/dashboard/<slug>/` salvo Command Center), stock, compras, e-com, Tienda Nube, MPR, etc.
+- Detalle de informes individuales (`/reports/dashboard/<slug>/` salvo los listados arriba), stock, compras, e-com, Tienda Nube, etc.
 
 ## Manifest PWA
 

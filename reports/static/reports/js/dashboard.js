@@ -31,8 +31,9 @@ function detectReportType() {
   const legacyReports = [
     "ventas_netas",
     "ventas-netas",
-    "cash_flow_waterfall", 
+    "cash_flow_waterfall",
     "cash_flow_by_account",
+    "cash_flow_detailed_movements",
     "uninvoiced_remitos",
     "pedidos-pendientes",
     "sales_summary",
@@ -2750,7 +2751,13 @@ const renderWaterfall = (container, data, config) => {
   });
 
   const { width, height } = getBounding(container);
-  const margin = { top: 24, right: 24, bottom: 40, left: 72 };
+  const narrowChart = width < 640;
+  const margin = {
+    top: 24,
+    right: narrowChart ? 8 : 24,
+    bottom: narrowChart ? 52 : 40,
+    left: narrowChart ? 44 : 72,
+  };
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
 
@@ -2758,7 +2765,7 @@ const renderWaterfall = (container, data, config) => {
     .scaleBand()
     .domain(nodes.map((node) => node.key))
     .range([margin.left, margin.left + innerWidth])
-    .padding(0.4);
+    .padding(narrowChart ? 0.25 : 0.4);
 
   const yMin = Math.min(0, d3.min(nodes, (node) => Math.min(node.start, node.end)) || 0);
   const yMax = d3.max(nodes, (node) => Math.max(node.start, node.end)) || 1;
@@ -2775,11 +2782,19 @@ const renderWaterfall = (container, data, config) => {
     .attr("viewBox", `0 0 ${width} ${height}`)
     .attr("preserveAspectRatio", "xMidYMid meet");
 
-  svg
+  const xAxisG = svg
     .append("g")
     .attr("transform", `translate(0, ${margin.top + innerHeight})`)
     .attr("class", "text-[10px] text-slate-300 font-medium")
     .call(d3.axisBottom(xScale));
+  if (narrowChart) {
+    xAxisG
+      .selectAll("text")
+      .attr("transform", "rotate(-42)")
+      .style("text-anchor", "end")
+      .attr("dx", "-0.35em")
+      .attr("dy", "0.15em");
+  }
 
   const yAxis = d3.axisLeft(yScale).ticks(8);
   if (isCurrencyField("value")) {
@@ -4002,964 +4017,11 @@ window.refreshLogisticaListaComprobantesTabla = function refreshLogisticaListaCo
   renderTable(widget, null, { show: true, logisticaToolbarRefresh: true });
 };
 
-// Estado de paginación y filtros para movimientos detallados
-let detailedMovementsState = {
-  data: [], // Datos originales
-  filteredData: [], // Datos filtrados por búsqueda
-  groupedData: [], // Datos agrupados
-  currentPage: 1,
-  pageSize: 50,
-  totalItems: 0,
-  searchQuery: "",
-  groupBy: [], // Array de campos de agrupación
-  searchSuggestions: [],
-  controlsInitialized: false,
-};
-
-// Función para filtrar datos por búsqueda
-const filterMovementsBySearch = (data, searchQuery) => {
-  if (!searchQuery || searchQuery.length < 3) {
-    return data;
+// Movimientos detallados de caja: reports/static/reports/js/cash_flow_detailed_movements.js
+window.fetchDetailedMovements = function fetchDetailedMovementsDelegated() {
+  if (window.cashFlowDetailedMovementsHandler?.fetchForWaterfall) {
+    return window.cashFlowDetailedMovementsHandler.fetchForWaterfall();
   }
-  
-  const query = searchQuery.toLowerCase().trim();
-  return data.filter(row => {
-    // Buscar en múltiples campos
-    const searchableFields = [
-      row.contraparte || "",
-      row.detalle || "",
-      row.tipo_comprobante || "",
-      row.nro_comprobante || "",
-      row.medio_pago || "",
-      row.flujo_tipo || "",
-      row.flujo_subcategoria || "",
-      row.caja_origen_nombre || "",
-      row.caja_destino_nombre || "",
-      row.nombre_sucursal || "",
-    ];
-    
-    return searchableFields.some(field => 
-      field.toLowerCase().includes(query)
-    );
-  });
-};
-
-// Función para generar sugerencias de búsqueda
-const generateSearchSuggestions = (data, query) => {
-  if (!query || query.length < 3) {
-    return [];
-  }
-  
-  const queryLower = query.toLowerCase();
-  const suggestions = new Set();
-  const maxSuggestions = 10;
-  
-  data.forEach(row => {
-    // Sugerencias de clientes/proveedores
-    if (row.contraparte && row.contraparte.toLowerCase().includes(queryLower)) {
-      suggestions.add(row.contraparte);
-    }
-    // Sugerencias de detalles
-    if (row.detalle && row.detalle.toLowerCase().includes(queryLower)) {
-      const words = row.detalle.split(/\s+/).filter(w => w.toLowerCase().includes(queryLower));
-      words.forEach(w => suggestions.add(w));
-    }
-    // Sugerencias de tipo de comprobante
-    if (row.tipo_comprobante && row.tipo_comprobante.toLowerCase().includes(queryLower)) {
-      suggestions.add(row.tipo_comprobante);
-    }
-    
-    if (suggestions.size >= maxSuggestions) return;
-  });
-  
-  return Array.from(suggestions).slice(0, maxSuggestions);
-};
-
-// Función para agrupar datos (soporta múltiples campos de agrupación)
-const groupMovements = (data, groupByFields) => {
-  if (!groupByFields || !Array.isArray(groupByFields) || groupByFields.length === 0 || !data || !data.length) {
-    return data;
-  }
-  
-  // Función recursiva para agrupar por múltiples niveles
-  const groupByLevels = (items, fields, level = 0) => {
-    if (level >= fields.length) {
-      // Si no hay más niveles, retornar los items directamente como items finales
-      return items.map(item => ({
-        type: 'item',
-        data: item,
-      }));
-    }
-    
-    const currentField = fields[level];
-    const grouped = {};
-    
-    // Agrupar por el campo actual
-    items.forEach(row => {
-      const groupKey = row[currentField] || "Sin especificar";
-      if (!grouped[groupKey]) {
-        grouped[groupKey] = {
-          groupKey,
-          groupValue: groupKey,
-          groupField: currentField,
-          items: [], // Solo para calcular totales, no se usan en renderizado
-          totals: {
-            ingreso: 0,
-            egreso: 0,
-            importe_neto: 0,
-            count: 0,
-          }
-        };
-      }
-      
-      grouped[groupKey].items.push(row);
-      grouped[groupKey].totals.ingreso += row.ingreso || 0;
-      grouped[groupKey].totals.egreso += row.egreso || 0;
-      grouped[groupKey].totals.importe_neto += row.importe_neto || 0;
-      grouped[groupKey].totals.count += 1;
-    });
-    
-    // Función para ordenar claves según el tipo de campo
-    const sortKeys = (keys, fieldName) => {
-      // Si el campo es "fecha", ordenar como fechas
-      if (fieldName && (fieldName.toLowerCase() === 'fecha' || fieldName.toLowerCase().includes('fecha'))) {
-        return keys.sort((a, b) => {
-          // Intentar parsear fechas en formato DD/MM/YYYY
-          const parseDate = (dateStr) => {
-            if (!dateStr || dateStr === "Sin especificar") return new Date(0);
-            // Intentar formato DD/MM/YYYY
-            const parts = dateStr.split('/');
-            if (parts.length === 3) {
-              const day = parseInt(parts[0], 10);
-              const month = parseInt(parts[1], 10);
-              const year = parseInt(parts[2], 10);
-              if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-                return new Date(year, month - 1, day);
-              }
-            }
-            // Intentar formato YYYY-MM-DD
-            const isoDate = new Date(dateStr);
-            if (!isNaN(isoDate.getTime())) {
-              return isoDate;
-            }
-            // Si no se puede parsear, retornar fecha mínima
-            return new Date(0);
-          };
-          
-          const dateA = parseDate(a);
-          const dateB = parseDate(b);
-          return dateA - dateB;
-        });
-      }
-      // Para otros campos, ordenar alfabéticamente
-      return keys.sort();
-    };
-    
-    // Convertir a array y procesar cada grupo recursivamente
-    const result = [];
-    sortKeys(Object.keys(grouped), currentField).forEach(key => {
-      const group = grouped[key];
-      // Agrupar los items de este grupo por el siguiente nivel
-      // Esto retornará grupos anidados o items finales
-      const nestedGroups = groupByLevels(group.items, fields, level + 1);
-      
-      // Los items siempre están en los children (ya sean grupos o items finales)
-      // Nunca mantener items directos en el grupo padre
-      result.push({
-        type: 'group',
-        data: {
-          ...group,
-          items: [], // Siempre vacío - los items están en children
-        },
-        children: nestedGroups, // Contiene grupos anidados o items finales
-      });
-    });
-    
-    return result;
-  };
-  
-  return groupByLevels(data, groupByFields);
-};
-
-// Función para renderizar tabla de movimientos detallados
-const renderDetailedMovementsTable = (data, page = 1, pageSize = 50, groupByFields = [], searchQuery = "") => {
-  const tableWrapper = document.querySelector("[data-detailed-movements-table-wrapper]");
-  if (!tableWrapper) {
-    console.error("No se encontró el contenedor de la tabla de movimientos detallados");
-    return;
-  }
-  
-  // Limpiar contenido previo de paginación si existe
-  const existingTable = tableWrapper.querySelector("table");
-  if (existingTable) {
-    existingTable.remove();
-  }
-
-  if (!data || !data.length) {
-    const emptyMsg = tableWrapper.querySelector(".empty-message");
-    if (!emptyMsg) {
-      const emptyDiv = document.createElement("div");
-      emptyDiv.className = "empty-message text-center py-8";
-      emptyDiv.innerHTML = `
-        <p class="text-sm text-slate-500 dark:text-slate-400">No hay movimientos detallados disponibles.</p>
-      `;
-      tableWrapper.appendChild(emptyDiv);
-    }
-    return;
-  }
-
-  // Aplicar filtros
-  let processedData = data;
-  
-  // Filtrar por búsqueda
-  if (searchQuery && searchQuery.length >= 3) {
-    processedData = filterMovementsBySearch(processedData, searchQuery);
-  }
-  
-  // Agrupar si es necesario
-  const isGrouped = Array.isArray(groupByFields) && groupByFields.length > 0;
-  if (isGrouped) {
-    processedData = groupMovements(processedData, groupByFields);
-  }
-  
-  // Actualizar estado
-  detailedMovementsState.filteredData = processedData;
-  detailedMovementsState.currentPage = page;
-  detailedMovementsState.pageSize = pageSize;
-  detailedMovementsState.groupBy = groupByFields;
-  detailedMovementsState.searchQuery = searchQuery;
-
-  // Para paginación con grupos: solo paginar grupos de nivel superior (no items ni grupos anidados)
-  let paginatedData = [];
-  let totalItemsForPagination = 0;
-  
-  if (isGrouped) {
-    // Solo contar y paginar grupos de nivel superior
-    totalItemsForPagination = processedData.length;
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, totalItemsForPagination);
-    paginatedData = processedData.slice(startIndex, endIndex);
-    detailedMovementsState.totalItems = totalItemsForPagination;
-  } else {
-    // Sin agrupación: paginar items normalmente
-    totalItemsForPagination = processedData.length;
-    const startIndex = (page - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, totalItemsForPagination);
-    paginatedData = processedData.slice(startIndex, endIndex);
-    detailedMovementsState.totalItems = totalItemsForPagination;
-  }
-  
-  const startIndex = (page - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalItemsForPagination);
-
-  // Traducciones
-  const headerTranslations = {
-    "fecha": "FECHA",
-    "tipo_comprobante": "TIPO COMP.",
-    "tipo": "TIPO",
-    "nro_comprobante": "NRO. COMP.",
-    "moneda": "MONEDA",
-    "ingreso": "INGRESO",
-    "egreso": "EGRESO",
-    "importe_neto": "IMPORTE NETO",
-    "contraparte": "CLIENTE/PROVEEDOR",
-    "flujo_tipo": "FLUJO",
-    "flujo_subcategoria": "SUBCATEGORÍA",
-    "medio_pago": "MEDIO DE PAGO",
-    "caja_origen_nombre": "CAJA ORIGEN",
-    "caja_destino_nombre": "CAJA DESTINO",
-    "nombre_sucursal": "SUCURSAL",
-    "detalle": "DETALLE",
-    "gasto_nombre": "GASTO",
-    "grupo_gasto_nombre": "GRUPO GASTO",
-  };
-
-  const flujoTranslations = {
-    "operativo": "Operativo",
-    "inversion": "Inversión",
-    "financiamiento": "Financiamiento",
-  };
-
-  const subcategoriaTranslations = {
-    "ingresos_ventas": "Cobros por Ventas",
-    "ingresos_cobranzas": "Cobranzas",
-    "ingresos_intereses": "Intereses Recibidos",
-    "ingresos_otros": "Otros Ingresos Operativos",
-    "egresos_proveedores": "Pagos a Proveedores",
-    "egresos_sueldos": "Sueldos",
-    "egresos_impuestos": "Impuestos",
-    "egresos_servicios": "Servicios",
-    "egresos_gastos": "Gastos Operativos Varios",
-    "egresos_otros": "Otros Egresos Operativos",
-    "otros": "Otros",
-  };
-
-  // Definir columnas a mostrar (en orden)
-  const columns = [
-    "fecha",
-    "tipo_comprobante",
-    "nro_comprobante",
-    "flujo_tipo",
-    "flujo_subcategoria",
-    "contraparte",
-    "medio_pago",
-    "ingreso",
-    "egreso",
-    "importe_neto",
-    "caja_origen_nombre",
-    "caja_destino_nombre",
-    "nombre_sucursal",
-    "detalle",
-  ];
-
-  // Crear tabla
-  const table = document.createElement("table");
-  table.className = "min-w-full text-[11px] text-left bg-white dark:bg-slate-950 border border-slate-100 dark:border-slate-800 rounded-xl overflow-hidden";
-
-  // Header
-  const thead = document.createElement("thead");
-  thead.className = "bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-300 uppercase tracking-wide";
-  const headerRow = document.createElement("tr");
-
-  columns.forEach((key) => {
-    const th = document.createElement("th");
-    const isCurrency = isCurrencyField(key);
-    th.className = `px-3 py-2 text-left ${isCurrency ? "text-right" : ""} sticky top-0 bg-slate-50 dark:bg-slate-900/40 z-10`;
-    th.textContent = headerTranslations[key] || key.replace(/_/g, " ").toUpperCase();
-    headerRow.appendChild(th);
-  });
-  thead.appendChild(headerRow);
-  table.appendChild(thead);
-
-  // Body
-  const tbody = document.createElement("tbody");
-  tbody.className = "divide-y divide-slate-100 dark:divide-slate-800";
-
-  // Función recursiva para renderizar grupos anidados con colapsar/expandir
-  const renderGroupItem = (item, level = 0, parentId = null) => {
-    if (item.type === 'group') {
-      const group = item.data;
-      const groupId = `group-${level}-${group.groupKey}-${Math.random().toString(36).substr(2, 9)}`;
-      const groupRow = document.createElement("tr");
-      groupRow.id = groupId;
-      groupRow.dataset.groupId = groupId;
-      groupRow.dataset.level = level;
-      groupRow.dataset.parentId = parentId || '';
-      groupRow.dataset.isCollapsed = "true"; // Por defecto colapsado
-      
-      // Colores diferentes según el nivel de anidación
-      let bgClass = "bg-slate-100 dark:bg-slate-800";
-      if (level === 1) {
-        bgClass = "bg-slate-50 dark:bg-slate-900";
-      } else if (level >= 2) {
-        bgClass = "bg-slate-25 dark:bg-slate-850";
-      }
-      groupRow.className = `${bgClass} font-semibold border-t-2 border-slate-300 dark:border-slate-600 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors`;
-      
-      const groupTd = document.createElement("td");
-      groupTd.colSpan = columns.length;
-      groupTd.className = "px-4 py-3 text-slate-900 dark:text-white";
-      // Aplicar padding izquierdo según el nivel usando estilos inline
-      const paddingLeft = level > 0 ? `${level * 16 + 16}px` : '16px';
-      groupTd.style.paddingLeft = paddingLeft;
-      
-      const groupLabel = headerTranslations[group.groupField] || group.groupField.replace(/_/g, " ").toUpperCase();
-      const groupValue = group.groupValue || "Sin especificar";
-      
-      // Icono de expandir/colapsar
-      const expandIcon = `<svg class="w-4 h-4 inline-block mr-2 transition-transform" data-expand-icon viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M9 18l6-6-6-6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>`;
-      
-      // Colorear ingresos en verde y egresos en rojo en los totales
-      const ingresoClass = group.totals.ingreso > 0 ? "text-green-600 dark:text-green-400 font-semibold" : "text-slate-600 dark:text-slate-400";
-      const egresoClass = group.totals.egreso > 0 ? "text-red-600 dark:text-red-400 font-semibold" : "text-slate-600 dark:text-slate-400";
-      const netoClass = group.totals.importe_neto > 0 ? "text-green-600 dark:text-green-400" : group.totals.importe_neto < 0 ? "text-red-600 dark:text-red-400" : "text-slate-600 dark:text-slate-400";
-      
-      groupTd.innerHTML = `
-        <div class="flex items-center justify-between">
-          <span class="font-semibold flex items-center">
-            ${expandIcon}
-            ${groupLabel}: <span class="font-normal">${groupValue}</span>
-          </span>
-          <span class="text-xs font-normal">
-            <span class="text-slate-600 dark:text-slate-400">${group.totals.count} movimiento(s)</span> | 
-            <span class="${ingresoClass}">Ing: ${formatCurrency(group.totals.ingreso)}</span> | 
-            <span class="${egresoClass}">Egr: ${formatCurrency(group.totals.egreso)}</span> | 
-            <span class="${netoClass}">Neto: ${formatCurrency(group.totals.importe_neto)}</span>
-          </span>
-        </div>
-      `;
-      groupRow.appendChild(groupTd);
-      tbody.appendChild(groupRow);
-      
-      // Event listener para expandir/colapsar
-      groupRow.addEventListener("click", (e) => {
-        e.stopPropagation();
-        const isCollapsed = groupRow.dataset.isCollapsed === "true";
-        const children = Array.from(tbody.querySelectorAll(`[data-parent-id="${groupId}"]`));
-        
-        if (isCollapsed) {
-          // Expandir: mostrar solo hijos directos
-          children.forEach(child => {
-            if (child.dataset.parentId === groupId) {
-              child.style.display = "";
-            }
-          });
-          groupRow.dataset.isCollapsed = "false";
-          const icon = groupRow.querySelector("[data-expand-icon]");
-          if (icon) {
-            icon.style.transform = "rotate(90deg)";
-          }
-        } else {
-          // Colapsar: ocultar hijos (recursivamente)
-          const collapseChildren = (parentId) => {
-            const directChildren = Array.from(tbody.querySelectorAll(`[data-parent-id="${parentId}"]`));
-            directChildren.forEach(child => {
-              if (child.dataset.groupId) {
-                // Es un grupo, colapsarlo también
-                child.dataset.isCollapsed = "true";
-                const childIcon = child.querySelector("[data-expand-icon]");
-                if (childIcon) {
-                  childIcon.style.transform = "rotate(0deg)";
-                }
-                collapseChildren(child.id);
-              }
-              child.style.display = "none";
-            });
-          };
-          collapseChildren(groupId);
-          groupRow.dataset.isCollapsed = "true";
-          const icon = groupRow.querySelector("[data-expand-icon]");
-          if (icon) {
-            icon.style.transform = "rotate(0deg)";
-          }
-        }
-      });
-      
-      // Renderizar hijos (grupos anidados o items) directamente en tbody pero ocultos
-      // Los items directos del grupo (group.items) nunca se renderizan aquí porque están vacíos
-      // Solo renderizamos los children, que pueden ser grupos anidados o items finales
-      if (item.children && item.children.length > 0) {
-        item.children.forEach(child => {
-          renderGroupItem(child, level + 1, groupId);
-        });
-      }
-      // NO renderizar group.items aquí - esos items ya están procesados en los children
-      
-      return groupRow;
-    } else if (item.type === 'item') {
-      // Renderizar fila normal
-      const tr = createTableRow(item.data, columns, flujoTranslations, subcategoriaTranslations, headerTranslations);
-      tr.dataset.parentId = parentId || '';
-      if (level > 0) {
-        const firstTd = tr.querySelector("td");
-        if (firstTd) {
-          const itemPaddingLeft = `${level * 16 + 16}px`;
-          firstTd.style.paddingLeft = itemPaddingLeft;
-        }
-      }
-      // Ocultar por defecto si tiene padre (está dentro de un grupo colapsado)
-      if (parentId) {
-        tr.style.display = "none";
-      }
-      tbody.appendChild(tr);
-      return tr;
-    }
-    return null;
-  };
-  
-  // Renderizar datos paginados
-  if (isGrouped) {
-    paginatedData.forEach((item) => {
-      renderGroupItem(item, 0, null);
-    });
-  } else {
-    paginatedData.forEach((row) => {
-      const tr = createTableRow(row, columns, flujoTranslations, subcategoriaTranslations, headerTranslations);
-      tbody.appendChild(tr);
-    });
-  }
-  
-  // Función auxiliar para crear una fila de tabla
-  function createTableRow(row, columns, flujoTranslations, subcategoriaTranslations, headerTranslations) {
-    const tr = document.createElement("tr");
-    tr.className = "hover:bg-slate-50/70 dark:hover:bg-slate-900/60 transition-colors";
-
-    // Resaltar según tipo de flujo
-    if (row.flujo_tipo === "operativo") {
-      tr.className += " bg-blue-50/30 dark:bg-blue-900/10";
-    } else if (row.flujo_tipo === "inversion") {
-      tr.className += " bg-green-50/30 dark:bg-green-900/10";
-    } else if (row.flujo_tipo === "financiamiento") {
-      tr.className += " bg-purple-50/30 dark:bg-purple-900/10";
-    }
-
-    columns.forEach((key) => {
-      const value = row[key];
-      const td = document.createElement("td");
-      const isCurrency = isCurrencyField(key);
-      td.className = `px-3 py-2 text-slate-700 dark:text-slate-200 ${isCurrency ? "text-right font-medium" : ""}`;
-
-      if (value === null || value === undefined || value === "") {
-        td.textContent = "-";
-        td.className += " text-slate-400 dark:text-slate-500";
-      } else if (key === "flujo_tipo") {
-        td.textContent = flujoTranslations[value.toLowerCase()] || value;
-      } else if (key === "flujo_subcategoria") {
-        td.textContent = subcategoriaTranslations[value.toLowerCase()] || value;
-      } else if (isCurrency) {
-        td.textContent = formatCurrency(value);
-        // Colorear según positivo/negativo
-        if (key === "ingreso" && value > 0) {
-          td.className += " text-green-600 dark:text-green-400";
-        } else if (key === "egreso" && value > 0) {
-          td.className += " text-red-600 dark:text-red-400";
-        } else if (key === "importe_neto") {
-          if (value > 0) {
-            td.className += " text-green-600 dark:text-green-400";
-          } else if (value < 0) {
-            td.className += " text-red-600 dark:text-red-400";
-          }
-        }
-      } else {
-        td.textContent = value;
-      }
-
-      tr.appendChild(td);
-    });
-    
-    return tr;
-  }
-
-  table.appendChild(tbody);
-
-  // Actualizar controles de paginación
-  const paginationInfo = document.getElementById("detailed-movements-pagination-info");
-  const prevButton = document.getElementById("detailed-movements-prev");
-  const nextButton = document.getElementById("detailed-movements-next");
-  const pageSizeSelect = document.getElementById("detailed-movements-page-size");
-
-  if (paginationInfo) {
-    paginationInfo.textContent = `Mostrando ${startIndex + 1} - ${endIndex} de ${totalItemsForPagination} ${isGrouped ? 'grupos' : 'movimientos'}`;
-  }
-
-  if (prevButton) {
-    prevButton.disabled = page === 1;
-    prevButton.onclick = () => {
-      if (page > 1) {
-        renderDetailedMovementsTable(detailedMovementsState.data, page - 1, pageSize, groupByFields, searchQuery);
-      }
-    };
-  }
-
-  if (nextButton) {
-    nextButton.disabled = endIndex >= totalItemsForPagination;
-    nextButton.onclick = () => {
-      if (endIndex < totalItemsForPagination) {
-        renderDetailedMovementsTable(detailedMovementsState.data, page + 1, pageSize, groupByFields, searchQuery);
-      }
-    };
-  }
-
-  if (pageSizeSelect) {
-    pageSizeSelect.value = pageSize;
-    pageSizeSelect.onchange = (e) => {
-      const newPageSize = parseInt(e.target.value);
-      renderDetailedMovementsTable(detailedMovementsState.data, 1, newPageSize, groupByFields, searchQuery);
-    };
-  }
-
-  // Renderizar tabla (ya se limpió arriba)
-  tableWrapper.appendChild(table);
-  
-  // Configurar controles de búsqueda y agrupación (solo la primera vez)
-  // Usar setTimeout para asegurar que el DOM esté listo y no interfiera con el foco
-  setTimeout(() => {
-    if (!detailedMovementsState.controlsInitialized) {
-      setupDetailedMovementsControls();
-      detailedMovementsState.controlsInitialized = true;
-    } else {
-      // Si ya está inicializado, verificar que el componente de tags esté funcionando
-      const container = document.getElementById("detailed-movements-group-by_tags_container");
-      if (container && container.dataset.initialized !== "true") {
-        // Reintentar inicialización del componente de tags
-        const groupBySelect = document.getElementById("detailed-movements-group-by");
-        if (groupBySelect) {
-          try {
-            initializeTagsFilter("detailed-movements-group-by", "group_by");
-            container.dataset.initialized = "true";
-          } catch (error) {
-            console.error("Error reintentando inicialización de tags:", error);
-          }
-        }
-      }
-    }
-  }, 200);
-  
-  // Scroll suave hacia la tabla
-  setTimeout(() => {
-    tableWrapper.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, 100);
-};
-
-const attachTableToggle = (widget, data) => {
-  const toggleButton = widget.querySelector("[data-toggle-table]");
-  const tableWrapper = widget.querySelector("[data-widget-table-wrapper]");
-  if (!toggleButton || !tableWrapper) return;
-
-  const setButtonState = (label) => {
-    toggleButton.innerHTML = label;
-  };
-
-  setButtonState(`
-    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path d="M4 5h16M4 10h16M4 15h16M4 20h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    Ver tabla
-  `);
-  tableWrapper.classList.add("hidden");
-
-  toggleButton.onclick = () => {
-    const isHidden = tableWrapper.classList.contains("hidden");
-    if (isHidden) {
-      renderTable(widget, data, { show: true });
-      setButtonState(`
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M4 5h16M4 10h16M4 15h16M8 20h8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Ocultar tabla
-      `);
-    } else {
-      tableWrapper.classList.add("hidden");
-      setButtonState(`
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path d="M4 5h16M4 10h16M4 15h16M4 20h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        Ver tabla
-      `);
-    }
-  };
-};
-
-// Función para cargar movimientos detallados
-const fetchDetailedMovements = async () => {
-  const section = document.getElementById("detailed-movements-section");
-  const contentArea = document.querySelector("[data-detailed-movements-content]");
-  if (!section || !contentArea) return;
-
-  try {
-    contentArea.innerHTML = `
-      <div class="h-full w-full grid place-content-center text-xs text-slate-200 tracking-[0.2em] uppercase">
-        Cargando movimientos detallados...
-      </div>
-    `;
-
-    // Usar getFilters global o la función local si está disponible
-    const getFiltersFunc = window.getFilters || getFilters;
-    const filters = getFiltersFunc ? getFiltersFunc() : {};
-    const reportSlug = dashboardRoot?.dataset.reportSlug;
-
-    if (!reportSlug || reportSlug !== "cash_flow_waterfall") {
-      return;
-    }
-
-    const apiUrl = dashboardRoot?.dataset.dashboardUrl;
-    if (!apiUrl) return;
-
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Requested-With": "XMLHttpRequest",
-        "X-CSRFToken": getCsrfToken(),
-      },
-      body: JSON.stringify({
-        slug: "cash_flow_detailed_movements",
-        limit: 10000, // Obtener todos los movimientos
-        filters: filters,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Error al cargar movimientos detallados");
-    }
-
-    const payload = await response.json();
-
-    if (payload.data && payload.data.length > 0) {
-      // Guardar los datos en el estado global para que estén disponibles cuando se haga clic en el botón
-      detailedMovementsState.data = payload.data;
-      detailedMovementsState.totalItems = payload.data.length;
-      
-      // Mostrar sección
-      section.classList.remove("hidden");
-      
-      // Renderizar tabla inicialmente oculta
-      const tableWrapper = document.querySelector("[data-detailed-movements-table-wrapper]");
-      if (tableWrapper) {
-        tableWrapper.classList.add("hidden");
-      }
-
-      // Actualizar contenido
-      contentArea.innerHTML = `
-        <div class="text-center py-4">
-          <p class="text-xs text-slate-300">${payload.data.length} movimientos encontrados</p>
-          <p class="text-[10px] text-slate-400 mt-1">Haz clic en "Ver tabla" para ver los detalles</p>
-        </div>
-      `;
-
-      // Configurar toggle de tabla
-      const toggleButton = document.querySelector("[data-toggle-detailed-table]");
-      if (toggleButton && tableWrapper) {
-        // Remover event listeners anteriores si existen
-        const newToggleButton = toggleButton.cloneNode(true);
-        toggleButton.parentNode.replaceChild(newToggleButton, toggleButton);
-        
-        newToggleButton.onclick = () => {
-          const currentTableWrapper = document.querySelector("[data-detailed-movements-table-wrapper]");
-          if (!currentTableWrapper) {
-            console.error("No se encontró el contenedor de la tabla");
-            return;
-          }
-          
-          const isHidden = currentTableWrapper.classList.contains("hidden");
-          if (isHidden) {
-            currentTableWrapper.classList.remove("hidden");
-            // Usar los datos guardados en el estado global
-            if (detailedMovementsState.data && detailedMovementsState.data.length > 0) {
-              // Obtener valores actuales de los controles
-              const searchInput = document.getElementById("detailed-movements-search");
-              const groupBySelect = document.getElementById("detailed-movements-group-by");
-              const searchQuery = searchInput?.value || "";
-              // Obtener array de campos seleccionados
-              const groupByFields = groupBySelect ? Array.from(groupBySelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
-              
-              renderDetailedMovementsTable(detailedMovementsState.data, 1, 50, groupByFields, searchQuery);
-              // Inicializar controles después de que la tabla esté visible
-              setTimeout(() => {
-                setupDetailedMovementsControls();
-              }, 150);
-            } else {
-              console.error("No hay datos disponibles en detailedMovementsState");
-              currentTableWrapper.innerHTML = `
-                <div class="text-center py-8">
-                  <p class="text-sm text-red-500 dark:text-red-400">Error: No hay datos disponibles</p>
-                </div>
-              `;
-            }
-            newToggleButton.innerHTML = `
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M4 5h16M4 10h16M4 15h16M8 20h8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Ocultar tabla
-            `;
-          } else {
-            currentTableWrapper.classList.add("hidden");
-            newToggleButton.innerHTML = `
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M4 5h16M4 10h16M4 15h16M4 20h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Ver tabla
-            `;
-          }
-        };
-      } else {
-        console.error("No se encontró el botón toggle o el contenedor de tabla", { toggleButton, tableWrapper });
-      }
-    } else {
-      section.classList.add("hidden");
-      detailedMovementsState.data = [];
-      detailedMovementsState.totalItems = 0;
-    }
-  } catch (error) {
-    console.error("Error cargando movimientos detallados:", error);
-    if (contentArea) {
-      contentArea.innerHTML = `
-        <div class="text-center py-4">
-          <p class="text-xs text-red-400">Error al cargar movimientos detallados</p>
-        </div>
-      `;
-    }
-  }
-};
-
-// Función para configurar los controles de búsqueda y agrupación
-const setupDetailedMovementsControls = () => {
-  const searchInput = document.getElementById("detailed-movements-search");
-  const groupBySelect = document.getElementById("detailed-movements-group-by");
-  // Botón limpiar filtros eliminado
-  // const clearFiltersBtn = document.getElementById("detailed-movements-clear-filters");
-  const suggestionsDiv = document.getElementById("detailed-movements-search-suggestions");
-  const tableWrapper = document.querySelector("[data-detailed-movements-table-wrapper]");
-  
-  if (!searchInput || !tableWrapper) return;
-  
-  // Evitar múltiples inicializaciones - verificar si el wrapper ya tiene controles inicializados
-  if (tableWrapper.dataset.controlsInitialized === "true") {
-    return;
-  }
-  
-  // Marcar como inicializado
-  tableWrapper.dataset.controlsInitialized = "true";
-  
-  let searchTimeout = null;
-  
-  // Búsqueda predictiva con debounce
-  searchInput.addEventListener("input", (e) => {
-    const query = e.target.value.trim();
-    
-    // Limpiar timeout anterior
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-    
-    // Si tiene menos de 3 caracteres, ocultar sugerencias y no filtrar
-    if (query.length < 3) {
-      if (suggestionsDiv) {
-        suggestionsDiv.classList.add("hidden");
-      }
-      detailedMovementsState.searchQuery = "";
-      const currentGroupBy = groupBySelect ? Array.from(groupBySelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
-      renderDetailedMovementsTable(
-        detailedMovementsState.data,
-        1,
-        detailedMovementsState.pageSize,
-        currentGroupBy,
-        ""
-      );
-      return;
-    }
-    
-    // Generar sugerencias
-    if (suggestionsDiv && detailedMovementsState.data.length > 0) {
-      const suggestions = generateSearchSuggestions(detailedMovementsState.data, query);
-      detailedMovementsState.searchSuggestions = suggestions;
-      
-      if (suggestions.length > 0) {
-        suggestionsDiv.innerHTML = suggestions.map(suggestion => `
-          <div class="px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-xs text-slate-700 dark:text-slate-200"
-               data-suggestion="${suggestion.replace(/"/g, '&quot;')}">
-            ${suggestion}
-          </div>
-        `).join("");
-        
-        // Agregar event listeners a las sugerencias
-        suggestionsDiv.querySelectorAll("[data-suggestion]").forEach(item => {
-          item.addEventListener("click", () => {
-            searchInput.value = item.dataset.suggestion;
-            suggestionsDiv.classList.add("hidden");
-            // Aplicar filtro inmediatamente
-            detailedMovementsState.searchQuery = item.dataset.suggestion;
-            const currentGroupBy = groupBySelect ? Array.from(groupBySelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
-            renderDetailedMovementsTable(
-              detailedMovementsState.data,
-              1,
-              detailedMovementsState.pageSize,
-              currentGroupBy,
-              item.dataset.suggestion
-            );
-          });
-        });
-        
-        suggestionsDiv.classList.remove("hidden");
-      } else {
-        suggestionsDiv.classList.add("hidden");
-      }
-    }
-    
-    // Aplicar filtro con debounce (300ms)
-    searchTimeout = setTimeout(() => {
-      detailedMovementsState.searchQuery = query;
-      const currentGroupBy = groupBySelect ? Array.from(groupBySelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
-      renderDetailedMovementsTable(
-        detailedMovementsState.data,
-        1,
-        detailedMovementsState.pageSize,
-        currentGroupBy,
-        query
-      );
-    }, 300);
-  });
-  
-  // Ocultar sugerencias al hacer clic fuera (pero no si es el input)
-  const hideSuggestionsHandler = (e) => {
-    if (suggestionsDiv && !searchInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
-      suggestionsDiv.classList.add("hidden");
-    }
-  };
-  document.addEventListener("click", hideSuggestionsHandler);
-  
-  // Inicializar componente de tags para agrupación
-  if (groupBySelect) {
-    const container = document.getElementById("detailed-movements-group-by_tags_container");
-    const input = document.getElementById("detailed-movements-group-by_search");
-    const dropdown = document.getElementById("detailed-movements-group-by_dropdown");
-    
-    // Verificar que todos los elementos necesarios estén presentes
-    if (container && input && dropdown) {
-      // Verificar que el componente de tags no esté ya inicializado
-      if (container.dataset.initialized !== "true") {
-        // Verificar que initializeTagsFilter esté disponible
-        if (typeof initializeTagsFilter === "function") {
-          // Inicializar componente de tags
-          try {
-            initializeTagsFilter("detailed-movements-group-by", "group_by");
-            container.dataset.initialized = "true";
-            
-            // Escuchar cambios en el select para actualizar la tabla
-            groupBySelect.addEventListener("change", () => {
-              const groupByFields = Array.from(groupBySelect.selectedOptions).map(opt => opt.value).filter(v => v);
-              detailedMovementsState.groupBy = groupByFields;
-              renderDetailedMovementsTable(
-                detailedMovementsState.data,
-                1,
-                detailedMovementsState.pageSize,
-                groupByFields,
-                detailedMovementsState.searchQuery
-              );
-            });
-          } catch (error) {
-            console.error("Error inicializando componente de tags para agrupación:", error);
-          }
-        } else {
-          // Si initializeTagsFilter no está disponible, intentar más tarde
-          console.warn("initializeTagsFilter no está disponible aún, reintentando en 500ms...");
-          setTimeout(() => {
-            if (typeof initializeTagsFilter === "function" && container.dataset.initialized !== "true") {
-              try {
-                initializeTagsFilter("detailed-movements-group-by", "group_by");
-                container.dataset.initialized = "true";
-                
-                // Escuchar cambios en el select para actualizar la tabla
-                groupBySelect.addEventListener("change", () => {
-                  const groupByFields = Array.from(groupBySelect.selectedOptions).map(opt => opt.value).filter(v => v);
-                  detailedMovementsState.groupBy = groupByFields;
-                  renderDetailedMovementsTable(
-                    detailedMovementsState.data,
-                    1,
-                    detailedMovementsState.pageSize,
-                    groupByFields,
-                    detailedMovementsState.searchQuery
-                  );
-                });
-              } catch (error) {
-                console.error("Error en reintento de inicialización de tags:", error);
-              }
-            }
-          }, 500);
-        }
-      }
-    } else {
-      console.warn("Elementos del componente de tags para agrupación no encontrados:", {
-        container: !!container,
-        input: !!input,
-        dropdown: !!dropdown
-      });
-    }
-  }
-  
-  // Botón limpiar filtros eliminado - funcionalidad removida
 };
 
 /** Debe estar en ámbito de módulo: renderSummary (también de módulo) la invoca al cargar datos BO. */
@@ -5027,6 +4089,14 @@ const renderSummary = (meta, totals) => {
 
   // stock-existencias: sin KPI en el resumen (búsqueda y orden en la tabla)
   if (reportSlug === "stock-existencias") {
+    summaryGrid.innerHTML = "";
+    if (summaryContainer) summaryContainer.classList.add("hidden");
+    updateLastUpdateTime();
+    return;
+  }
+
+  // cash_flow_detailed_movements: totales en tabla; resumen solo período en el panel
+  if (reportSlug === "cash_flow_detailed_movements") {
     summaryGrid.innerHTML = "";
     if (summaryContainer) summaryContainer.classList.add("hidden");
     updateLastUpdateTime();
@@ -7454,7 +6524,7 @@ if (dashboardRoot) {
       return;
     }
     
-    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && !isInformeBoDualPeriodo(reportSlug) && reportSlug !== "total-consolidado-operativo" && reportSlug !== "stock-existencias") {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "cash_flow_detailed_movements" && reportSlug !== "uninvoiced_remitos" && !isInformeBoDualPeriodo(reportSlug) && reportSlug !== "total-consolidado-operativo" && reportSlug !== "stock-existencias") {
       return;
     }
     
@@ -7804,8 +6874,12 @@ if (dashboardRoot) {
       console.error("Error cargando opciones de filtros:", error);
     }
     
-    // Cargar cajas para cash_flow_waterfall y cash_flow_by_account
-    if (reportSlug === "cash_flow_waterfall" || reportSlug === "cash_flow_by_account") {
+    // Cargar cajas para informes de flujo de caja
+    if (
+      reportSlug === "cash_flow_waterfall" ||
+      reportSlug === "cash_flow_by_account" ||
+      reportSlug === "cash_flow_detailed_movements"
+    ) {
       try {
         const cajasResponse = await fetch(`${apiUrl.replace('/query/', '/filters/')}?type=cajas`, {
           headers: {
@@ -8110,7 +7184,7 @@ if (dashboardRoot) {
     const fechaFinInput = document.getElementById("fecha_fin");
     
     // Solo aplicar si existen estos elementos (ventas_netas, cash_flow_*, uninvoiced_remitos, pedidos-pendientes, sales_summary, bo-stock-facturacion)
-    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "uninvoiced_remitos" && !isPedidosPendientesSlug(reportSlug) && !isLogisticaListaComprobantesRutasSlug(reportSlug) && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && !isInformeBoDualPeriodo(reportSlug)) {
+    if (!isVentasNetasSlug(reportSlug) && reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account" && reportSlug !== "cash_flow_detailed_movements" && reportSlug !== "uninvoiced_remitos" && !isPedidosPendientesSlug(reportSlug) && !isLogisticaListaComprobantesRutasSlug(reportSlug) && reportSlug !== "sales_summary" && reportSlug !== "total-consolidado-operativo" && !isInformeBoDualPeriodo(reportSlug)) {
       return;
     }
     if (!buttons.length || !periodoTipoSelect || !fechaInicioInput || !fechaFinInput) {
@@ -8224,7 +7298,12 @@ if (dashboardRoot) {
     // reportSlug ya está declarado arriba, no redeclarar
     
     // En workspace, cash_flow_waterfall y cash_flow_by_account siempre deben mostrar mes en curso
-    if (isWorkspaceMode && (reportSlug === "cash_flow_waterfall" || reportSlug === "cash_flow_by_account")) {
+    if (
+      isWorkspaceMode &&
+      (reportSlug === "cash_flow_waterfall" ||
+        reportSlug === "cash_flow_by_account" ||
+        reportSlug === "cash_flow_detailed_movements")
+    ) {
       periodoTipoSelect.value = "mes_actual";
     } else {
     const savedFilters = loadFilters();
@@ -8346,7 +7425,11 @@ if (dashboardRoot) {
 
   const setupCashFlowFilters = () => {
     const reportSlug = dashboardRoot?.dataset?.reportSlug;
-    if (reportSlug !== "cash_flow_waterfall" && reportSlug !== "cash_flow_by_account") {
+    if (
+      reportSlug !== "cash_flow_waterfall" &&
+      reportSlug !== "cash_flow_by_account" &&
+      reportSlug !== "cash_flow_detailed_movements"
+    ) {
       return;
     }
     
@@ -10054,7 +9137,11 @@ if (dashboardRoot) {
       }
       const isc = document.getElementById("incluir_stock_cero");
       if (isc) filters.incluir_stock_cero = isc.value;
-    } else if (currentReportSlug === "cash_flow_waterfall" || currentReportSlug === "cash_flow_by_account") {
+    } else if (
+      currentReportSlug === "cash_flow_waterfall" ||
+      currentReportSlug === "cash_flow_by_account" ||
+      currentReportSlug === "cash_flow_detailed_movements"
+    ) {
       const periodoTipo = document.getElementById("periodo_tipo")?.value || "personalizado";
       const fechaInicio = document.getElementById("fecha_inicio")?.value;
       const fechaFin = document.getElementById("fecha_fin")?.value;
@@ -10111,6 +9198,7 @@ if (dashboardRoot) {
     if (!slug) return false;
     if (
       slug === "stock-existencias" ||
+      slug === "cash_flow_detailed_movements" ||
       slug === "bo-stock-facturacion" ||
       slug === "ventas-objetivos-vs-bo" ||
       slug === "ventas-por-vendedor" ||
@@ -10201,9 +9289,12 @@ if (dashboardRoot) {
   const EXTENDED_REPORT_FETCH_TIMEOUT_MS = 300000;
   /** Valor enviado en `limit` del POST; el runner de stock-existencias no trunca por este campo. */
   const STOCK_EXISTENCIAS_API_LIMIT = 2147483647;
+  /** Movimientos detallados de caja: traer todos los registros del período. */
+  const CASH_FLOW_DETAILED_MOVEMENTS_API_LIMIT = 10000;
 
   const usesExtendedQueryTimeout = (slug) =>
     slug === "stock-existencias" ||
+    slug === "cash_flow_detailed_movements" ||
     slug === "bo-stock-facturacion" ||
     slug === "ventas-objetivos-vs-bo" ||
     slug === "ventas-por-vendedor" ||
@@ -10236,7 +9327,12 @@ if (dashboardRoot) {
       }
       
       const filters = getFilters();
-      const queryLimit = reportSlug === "stock-existencias" ? STOCK_EXISTENCIAS_API_LIMIT : 200;
+      const queryLimit =
+        reportSlug === "stock-existencias"
+          ? STOCK_EXISTENCIAS_API_LIMIT
+          : reportSlug === "cash_flow_detailed_movements"
+            ? CASH_FLOW_DETAILED_MOVEMENTS_API_LIMIT
+            : 200;
 
       const response = await fetch(apiUrl, {
         method: "POST",
@@ -10401,11 +9497,31 @@ if (dashboardRoot) {
             hasErrorNote = true;
             if (!isAutoRefresh) toast(errNoteSe, "error");
           }
+        } else if (currentReportSlug === "cash_flow_detailed_movements") {
+          try {
+            if (window.cashFlowDetailedMovementsHandler?.processData) {
+              window.cashFlowDetailedMovementsHandler.processData(payload);
+            }
+            renderSummary(payload.meta || {}, payload.totals || {});
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
+          }
+          const errNoteCfdm = (payload.notes || []).find((n) =>
+            /error|tiempo|timeout|interrupted|max_execution|superó/i.test(String(n))
+          );
+          if (errNoteCfdm) {
+            hasErrorNote = true;
+            if (!isAutoRefresh) toast(errNoteCfdm, "error");
+          }
         } else {
           try {
             renderWidgets(payload);
-            if (currentReportSlug === "cash_flow_waterfall") {
-              fetchDetailedMovements();
+            if (currentReportSlug === "cash_flow_waterfall" && typeof window.fetchDetailedMovements === "function") {
+              window.fetchDetailedMovements();
             }
           } finally {
             if (usesReportsQueryLoadingModal(currentReportSlug)) {
@@ -10835,6 +9951,15 @@ if (dashboardRoot) {
 
         if (excelScope && isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
           filters.excel_scope = excelScope;
+        }
+
+        if (
+          (reportSlug === "cash_flow_detailed_movements" ||
+            reportSlug === "cash_flow_waterfall" ||
+            reportSlug === "cash_flow_by_account") &&
+          typeof window.getFilters === "function"
+        ) {
+          Object.assign(filters, window.getFilters());
         }
 
         const baseEmpresa = dashboardRoot?.dataset.baseEmpresa || null;

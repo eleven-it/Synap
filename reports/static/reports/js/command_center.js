@@ -26,9 +26,186 @@
   }
 
   const EXISTENCIAS_SEARCH_MIN = 2;
+  /** Detalle comp_ped en ventas: tarjetas en móvil, tabla en lg+. */
+  const COMP_PED_DETAIL_KEYS = new Set(["pedidos_pendientes", "remitos_nf"]);
+  const BACKORDER_DETAIL_KEYS = new Set(["backorder"]);
+  const DETAIL_TABLE_WRAP_CLASS =
+    "cc-detail-scroll -mx-3 overflow-x-auto px-3 sm:-mx-4 sm:px-4";
+  const DETAIL_TABLE_WRAP_DESKTOP_CLASS =
+    "cc-detail-scroll hidden lg:block lg:-mx-4 lg:overflow-x-auto lg:px-4";
+  const DETAIL_CARDS_CLASS = "hidden space-y-2";
+  const DETAIL_CARDS_MOBILE_CLASS = "block space-y-2 lg:hidden";
+  const COMP_PED_COLUMNS = [
+    { key: "nro_comprobante", label: "Nº comprobante" },
+    { key: "fecha", label: "Fecha" },
+    { key: "nombre_cliente", label: "Cliente" },
+    { key: "codigo_cliente", label: "Cód. cliente" },
+    { key: "estado", label: "Estado" },
+    { key: "codigo_movimiento", label: "Movimiento" },
+    { key: "subtotal_desc", label: "Importe" },
+  ];
+  const BACKORDER_COLUMNS = [
+    { key: "codigo", label: "Código" },
+    { key: "articulo", label: "Artículo" },
+    { key: "categoria", label: "Rubro" },
+    { key: "bo_qty", label: "Ud. BO" },
+    { key: "bo_importe", label: "Importe BO" },
+    { key: "disponible", label: "Disponible" },
+    { key: "stock_actual", label: "Stock" },
+    { key: "oc_pendiente", label: "OC pend." },
+  ];
   let existenciasAbort = null;
   let existenciasDebounce = null;
   let existenciasSearchBound = false;
+
+  function resetDetailPanelsLayout() {
+    const tableWrap = el("cc-detail-table-wrap");
+    const cards = el("cc-detail-cards");
+    if (tableWrap) tableWrap.className = DETAIL_TABLE_WRAP_CLASS;
+    if (cards) cards.className = DETAIL_CARDS_CLASS;
+  }
+
+  function formatTabularCell(key, value) {
+    if (value == null || value === "") return "—";
+    if (
+      key === "subtotal_desc" ||
+      key === "bo_importe" ||
+      key.endsWith("_importe") ||
+      (typeof value === "number" && (key.includes("monto") || key.includes("importe")))
+    ) {
+      return fmtMoney.format(Number(value));
+    }
+    if (typeof value === "number" && (key.includes("qty") || key.includes("stock") || key === "disponible" || key === "oc_pendiente")) {
+      return fmtNum.format(Number(value));
+    }
+    return escHtml(String(value));
+  }
+
+  const formatCompPedCell = formatTabularCell;
+
+  function compPedCardHtml(row) {
+    const nro = escHtml(row.nro_comprobante ?? "—");
+    const mov =
+      row.codigo_movimiento != null && row.codigo_movimiento !== ""
+        ? `Mov. ${escHtml(row.codigo_movimiento)}`
+        : "";
+    const cliente = escHtml(row.nombre_cliente || "Sin nombre");
+    const codCli =
+      row.codigo_cliente != null && row.codigo_cliente !== ""
+        ? `<span class="text-slate-500 dark:text-slate-400"> · Cód. ${escHtml(row.codigo_cliente)}</span>`
+        : "";
+    const fecha = escHtml(row.fecha || "—");
+    const estado = escHtml(row.estado || "—");
+    const importe = formatCompPedCell("subtotal_desc", row.subtotal_desc);
+    return `
+        <article class="rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-bold leading-snug text-slate-900 dark:text-white">Nº ${nro}</p>
+              ${mov ? `<p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">${mov}</p>` : ""}
+            </div>
+            <p class="shrink-0 text-right text-sm font-bold tabular-nums text-sky-700 dark:text-sky-300">${importe}</p>
+          </div>
+          <p class="mt-2 text-sm leading-snug text-slate-800 dark:text-slate-200">${cliente}${codCli}</p>
+          <dl class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
+            <div><dt class="sr-only">Fecha</dt><dd><span class="font-medium text-slate-500 dark:text-slate-500">Fecha</span> ${fecha}</dd></div>
+            <div><dt class="sr-only">Estado</dt><dd><span class="font-medium text-slate-500 dark:text-slate-500">Estado</span> ${estado}</dd></div>
+          </dl>
+        </article>`;
+  }
+
+  function backorderCardHtml(row) {
+    const cod = escHtml(row.codigo || "—");
+    const nombre = escHtml(row.articulo || "Sin nombre");
+    const rubro = escHtml(row.categoria || "—");
+    const importe = formatTabularCell("bo_importe", row.bo_importe);
+    const qty = formatTabularCell("bo_qty", row.bo_qty);
+    return `
+        <article class="rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="font-mono text-xs font-semibold text-sky-700 dark:text-sky-300">${cod}</p>
+              <p class="mt-1 text-sm font-semibold leading-snug text-slate-900 dark:text-white">${nombre}</p>
+              <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">${rubro}</p>
+            </div>
+            <p class="shrink-0 text-right text-sm font-bold tabular-nums text-rose-700 dark:text-rose-300">${importe}</p>
+          </div>
+          <dl class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-400 sm:grid-cols-4">
+            <div><dt class="font-medium text-slate-500">Ud. BO</dt><dd class="tabular-nums">${qty}</dd></div>
+            <div><dt class="font-medium text-slate-500">Stock</dt><dd class="tabular-nums">${formatTabularCell("stock_actual", row.stock_actual)}</dd></div>
+            <div><dt class="font-medium text-slate-500">Disponible</dt><dd class="tabular-nums">${formatTabularCell("disponible", row.disponible)}</dd></div>
+            <div><dt class="font-medium text-slate-500">OC pend.</dt><dd class="tabular-nums">${formatTabularCell("oc_pendiente", row.oc_pendiente)}</dd></div>
+          </dl>
+        </article>`;
+  }
+
+  function renderTabularDetail(data, columns, cardHtmlFn) {
+    const total = data.total_registros ?? 0;
+    let sumTxt = `${total} registro(s)`;
+    if (data.total_monto != null) sumTxt += ` · Total ${fmtMoney.format(data.total_monto)}`;
+    const summaryEl = el("cc-detail-summary");
+    if (summaryEl) summaryEl.textContent = sumTxt;
+
+    const filas = data.filas || [];
+    const tableWrap = el("cc-detail-table-wrap");
+    const cards = el("cc-detail-cards");
+    const tbody = el("cc-detail-tbody");
+    const thead = el("cc-detail-thead");
+
+    if (tableWrap) tableWrap.className = DETAIL_TABLE_WRAP_DESKTOP_CLASS;
+    if (cards) cards.className = DETAIL_CARDS_MOBILE_CLASS;
+
+    if (!filas.length) {
+      if (thead) thead.innerHTML = "";
+      if (tbody) {
+        tbody.innerHTML =
+          '<tr><td class="py-4 text-slate-500" colspan="99">Sin registros en el período.</td></tr>';
+      }
+      if (cards) {
+        cards.innerHTML =
+          '<p class="py-4 text-sm text-slate-500 dark:text-slate-400">Sin registros en el período.</p>';
+      }
+      return;
+    }
+
+    if (thead && tbody) {
+      thead.innerHTML =
+        "<tr>" +
+        columns
+          .map(
+            (c) =>
+              `<th scope="col" class="px-2 py-2 whitespace-nowrap text-[10px] font-semibold uppercase tracking-wide">${c.label}</th>`,
+          )
+          .join("") +
+        "</tr>";
+      tbody.innerHTML = filas
+        .map((row) => {
+          const cells = columns
+            .map((c) => {
+              const wrapText = c.key === "nombre_cliente" || c.key === "articulo";
+              const cls = wrapText
+                ? "max-w-[12rem] break-words px-2 py-1.5 text-sm sm:max-w-[16rem]"
+                : "whitespace-nowrap px-2 py-1.5 text-sm tabular-nums";
+              return `<td class="${cls}">${formatTabularCell(c.key, row[c.key])}</td>`;
+            })
+            .join("");
+          return `<tr class="border-b border-slate-100 dark:border-slate-800">${cells}</tr>`;
+        })
+        .join("");
+    }
+
+    if (cards) {
+      cards.innerHTML = filas.map((row) => cardHtmlFn(row)).join("");
+    }
+  }
+
+  function renderCompPedDetail(data) {
+    renderTabularDetail(data, COMP_PED_COLUMNS, compPedCardHtml);
+  }
+
+  function renderBackorderDetail(data) {
+    renderTabularDetail(data, BACKORDER_COLUMNS, backorderCardHtml);
+  }
 
   function clearDetailContent() {
     const summaryEl = el("cc-detail-summary");
@@ -38,12 +215,8 @@
     if (thead) thead.innerHTML = "";
     if (tbody) tbody.innerHTML = "";
     const cards = el("cc-detail-cards");
-    const tableWrap = el("cc-detail-table-wrap");
-    if (cards) {
-      cards.innerHTML = "";
-      cards.classList.add("hidden");
-    }
-    if (tableWrap) tableWrap.classList.remove("hidden");
+    if (cards) cards.innerHTML = "";
+    resetDetailPanelsLayout();
     const searchWrap = el("cc-detail-search-wrap");
     if (searchWrap) searchWrap.classList.add("hidden");
     const searchInput = el("cc-detail-search");
@@ -144,16 +317,12 @@
   }
 
   function renderGenericDetailTable(data) {
+    resetDetailPanelsLayout();
     const total = data.total_registros ?? 0;
     let sumTxt = `${total} registro(s)`;
     if (data.total_monto != null) sumTxt += ` · Total ${fmtMoney.format(data.total_monto)}`;
     const summaryEl = el("cc-detail-summary");
-    if (summaryEl) {
-      summaryEl.textContent = sumTxt;
-      if (total > 0 && window.matchMedia("(max-width: 640px)").matches) {
-        summaryEl.textContent += " · Deslizá horizontalmente para ver todas las columnas.";
-      }
-    }
+    if (summaryEl) summaryEl.textContent = sumTxt;
 
     const filas = data.filas || [];
     const tbody = el("cc-detail-tbody");
@@ -167,7 +336,14 @@
     }
     const keys = Object.keys(filas[0]);
     thead.innerHTML =
-      "<tr>" + keys.map((k) => `<th class="px-2 py-2">${k.replace(/_/g, " ")}</th>`).join("") + "</tr>";
+      "<tr>" +
+      keys
+        .map(
+          (k) =>
+            `<th scope="col" class="px-2 py-2 text-[10px] font-semibold uppercase tracking-wide">${k.replace(/_/g, " ")}</th>`,
+        )
+        .join("") +
+      "</tr>";
     tbody.innerHTML = filas
       .map((row) => {
         return (
@@ -181,7 +357,11 @@
               ) {
                 v = fmtMoney.format(v);
               }
-              return `<td class="px-2 py-1.5 whitespace-nowrap">${v ?? ""}</td>`;
+              const wrap = /nombre|descripcion|articulo|cliente/i.test(k);
+              const cls = wrap
+                ? "max-w-[12rem] break-words px-2 py-1.5 text-sm"
+                : "whitespace-nowrap px-2 py-1.5 text-sm tabular-nums";
+              return `<td class="${cls}">${v ?? ""}</td>`;
             })
             .join("") +
           "</tr>"
@@ -991,7 +1171,13 @@
       } else {
         const q = buildQuery({ limit: "100", offset: "0" });
         const data = await fetchJson(`${base}?${q}`);
-        renderGenericDetailTable(data);
+        if (COMP_PED_DETAIL_KEYS.has(urlKey)) {
+          renderCompPedDetail(data);
+        } else if (BACKORDER_DETAIL_KEYS.has(urlKey)) {
+          renderBackorderDetail(data);
+        } else {
+          renderGenericDetailTable(data);
+        }
       }
     } catch (e) {
       const err = el("cc-detail-error");

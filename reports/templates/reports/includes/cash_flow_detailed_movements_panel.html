@@ -1,0 +1,126 @@
+{% comment %}
+Panel de movimientos detallados de caja (canon reportes / stock-existencias).
+embedded_waterfall: panel embebido en cash_flow_waterfall con toggle «Ver tabla».
+{% endcomment %}
+<section id="detailed-movements-section"
+         class="{% if embedded_waterfall %}mt-8 hidden{% endif %} relative rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 overflow-hidden">
+    <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800">
+        <div>
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
+                {% if embedded_waterfall %}Movimientos detallados{% else %}Resultados{% endif %}
+            </h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                {% if embedded_waterfall %}
+                Vista detallada de cada movimiento individual de caja
+                {% else %}
+                Movimientos de caja del período seleccionado
+                {% endif %}
+            </p>
+            <p id="cf-detailed-movements-filters-summary" class="text-xs text-slate-500 dark:text-slate-400 mt-1" aria-live="polite"></p>
+        </div>
+        {% if embedded_waterfall %}
+        <div class="flex items-center gap-2 text-[11px]">
+            <button type="button"
+                    class="inline-flex items-center gap-2 text-xs font-semibold text-sky-500 hover:text-sky-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-sky-400 rounded-full px-3 py-1 transition"
+                    data-toggle-detailed-table>
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M4 5h16M4 10h16M4 15h16M4 20h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Ver tabla
+            </button>
+        </div>
+        {% endif %}
+    </header>
+    {% if embedded_waterfall %}
+    <div class="px-4 sm:px-6 py-3 border-b border-slate-100 dark:border-slate-800 hidden" data-detailed-movements-summary-banner>
+        <p class="text-xs text-slate-600 dark:text-slate-400 text-center" data-detailed-movements-count></p>
+    </div>
+    {% endif %}
+    <div class="p-4 sm:p-6{% if embedded_waterfall %} hidden{% endif %}" data-detailed-movements-table-wrapper>
+        <div class="mb-4 space-y-3">
+            <div class="relative">
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2" for="detailed-movements-search">
+                    Buscar movimiento
+                </label>
+                <div class="relative">
+                    <input type="text"
+                           id="detailed-movements-search"
+                           placeholder="Escribe al menos 3 letras para buscar…"
+                           class="w-full synap-input text-xs py-2 px-3 pl-10 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-sky-400"
+                           autocomplete="off">
+                    <svg class="absolute left-3 top-2.5 w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <div id="detailed-movements-search-suggestions"
+                         class="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                </div>
+                <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">Cliente, proveedor, detalle, comprobante, medio de pago, etc.</p>
+            </div>
+            <div class="flex flex-col gap-2">
+                <label class="text-xs font-semibold text-slate-500 dark:text-slate-400" for="detailed-movements-group-by_search">
+                    Agrupar por
+                </label>
+                <div class="relative">
+                    <select name="group_by"
+                            id="detailed-movements-group-by"
+                            multiple
+                            class="hidden"
+                            data-tags-field="group_by">
+                        <option value="fecha">Fecha</option>
+                        <option value="flujo_tipo">Flujo</option>
+                        <option value="flujo_subcategoria">Subcategoría</option>
+                        <option value="contraparte">Cliente/Proveedor</option>
+                        <option value="medio_pago">Medio de pago</option>
+                        <option value="caja_origen_nombre">Caja origen</option>
+                        <option value="caja_destino_nombre">Caja destino</option>
+                        <option value="nombre_sucursal">Sucursal</option>
+                        <option value="tipo_comprobante">Tipo comprobante</option>
+                    </select>
+                    <div id="detailed-movements-group-by_tags_container"
+                         class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                        <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                        <input type="text"
+                               id="detailed-movements-group-by_search"
+                               class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                               placeholder="Buscar campo de agrupación…"
+                               autocomplete="off">
+                        <div id="detailed-movements-group-by_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+                    </div>
+                </div>
+                <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Podés elegir varios campos (ej. fecha y cliente/proveedor)</span>
+            </div>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                <span>Mostrar</span>
+                <select id="detailed-movements-page-size"
+                        class="synap-input text-xs py-1 px-3 min-w-[80px] border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-sky-400">
+                    <option value="25">25</option>
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                </select>
+                <span>registros por página</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
+                <span id="detailed-movements-pagination-info">Mostrando 0 - 0 de 0</span>
+                <button type="button"
+                        id="detailed-movements-prev"
+                        class="px-3 py-1 rounded-md border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                    Anterior
+                </button>
+                <button type="button"
+                        id="detailed-movements-next"
+                        class="px-3 py-1 rounded-md border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled>
+                    Siguiente
+                </button>
+            </div>
+        </div>
+        <div data-detailed-movements-cards-host class="mb-4 hidden min-h-[80px] space-y-2 lg:hidden" role="list" aria-label="Movimientos en tarjetas"></div>
+        <div class="hidden min-h-[120px] overflow-x-auto lg:block" data-detailed-movements-table-scroll role="region" aria-label="Tabla de movimientos detallados">
+            <div data-detailed-movements-table-host class="min-w-0"></div>
+        </div>
+    </div>
+</section>

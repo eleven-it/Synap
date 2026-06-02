@@ -87,6 +87,8 @@ Verificación: `python manage.py uat_tesoreria_cashflow --base <empresa> --fecha
 
 **UI Command Center:** solo **Desde / Hasta** (default ambos = hoy). Enlaces a informes (p. ej. Panel del día, **Flujo de caja** desde Tesorería → `cash_flow_waterfall`) propagan `fecha_inicio`, `fecha_fin` y `sucursal` en la URL. El bloque **Manufactura**, el KPI **OPT atrasadas** y el enlace **Tablero MPR** solo se muestran si `ModuleConfig` tiene `mpr` activo (`meta.modulos.mpr` en el orquestador).
 
+**Móvil (PWA Nivel A):** Command Center, modales de detalle (pedidos, remitos, existencias, backorder), resumen ejecutivo ventas, flujo de caja y tablero MPR están habilitados en `MobileLevelAOnlyMiddleware` con UI responsive (tarjetas en pantallas &lt; `lg`). Ver `docs/general/MOBILE_SOLO_NIVEL_A.md`.
+
 ## Performance (may. 2026)
 
 Diagnóstico sobre `administranet93` (mes vigente): el cuello de botella era `_sum_saldo_cajas` en tesorería — subconsulta correlacionada sobre `caja` (~640k filas) superaba 5 min y abortaba todo el orquestador.
