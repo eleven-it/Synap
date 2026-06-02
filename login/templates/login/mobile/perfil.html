@@ -80,7 +80,8 @@
       </div>
     </section>
 
-    <!-- Configuración de POS -->
+    {% if tpv_visible_movil %}
+    <!-- Configuración de POS (solo si TPV está habilitado para el usuario) -->
     <section class="space-y-2">
       <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 ml-1">Configuración de POS</h3>
       <div class="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-sm border border-primary/5">
@@ -96,6 +97,7 @@
         </a>
       </div>
     </section>
+    {% endif %}
 
     <!-- Seguridad -->
     <section class="space-y-2">

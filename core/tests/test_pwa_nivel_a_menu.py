@@ -1,4 +1,6 @@
 """Tests: filtro de menú PWA / móvil (Nivel A)."""
+from unittest.mock import patch
+
 from django.test import RequestFactory, SimpleTestCase
 
 from core.middleware.base_middleware import DeviceDetectionMiddleware
@@ -6,6 +8,7 @@ from core.pwa_nivel_a import (
     PWA_MENU_APP_IDS,
     filtrar_apps_menu_para_pwa_movil,
     sidebar_visible_en_pwa,
+    tpv_visible_en_movil,
 )
 
 MOBILE_UA = (
@@ -32,13 +35,21 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
         out = filtrar_apps_menu_para_pwa_movil(apps, request)
         self.assertEqual(len(out), 2)
 
-    def test_movil_solo_self_checkout(self):
+    @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=True)
+    def test_movil_solo_self_checkout_si_tpv_habilitado(self, _mock):
         request = _req(MOBILE_UA)
         self.assertTrue(getattr(request, 'is_mobile'))
         apps = [{'id': 'reports'}, {'id': 'self_checkout'}]
         out = filtrar_apps_menu_para_pwa_movil(apps, request)
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]['id'], 'self_checkout')
+
+    @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=False)
+    def test_movil_sin_tpv_menu_vacio(self, _mock):
+        request = _req(MOBILE_UA)
+        apps = [{'id': 'self_checkout'}]
+        out = filtrar_apps_menu_para_pwa_movil(apps, request)
+        self.assertEqual(out, [])
 
     def test_request_none_no_filtra(self):
         apps = [{'id': 'reports'}]
@@ -47,11 +58,22 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
 
 
 class SidebarPwaTests(SimpleTestCase):
-    def test_sidebar_self_checkout(self):
+    @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=True)
+    def test_sidebar_self_checkout_con_tpv(self, _mock):
         self.assertTrue(sidebar_visible_en_pwa('self_checkout'))
+
+    @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=False)
+    def test_sidebar_self_checkout_sin_tpv(self, _mock):
+        self.assertFalse(sidebar_visible_en_pwa('self_checkout'))
 
     def test_sidebar_reports_no(self):
         self.assertFalse(sidebar_visible_en_pwa('reports'))
 
     def test_constantes(self):
         self.assertIn('self_checkout', PWA_MENU_APP_IDS)
+
+
+class TpvVisibleEnMovilTests(SimpleTestCase):
+    @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=True)
+    def test_alias_tpv_visible(self, _mock):
+        self.assertTrue(tpv_visible_en_movil(object(), _req(MOBILE_UA)))

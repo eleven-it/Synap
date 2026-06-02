@@ -284,10 +284,12 @@ def menu_context(request):
         current_sidebar_items = obtener_submenus_por_app(current_app_id, permisos_usuario, request)
 
     # Móvil/PWA: no mostrar sidebar de módulos no incluidos en Nivel A
-    if request and getattr(request, "is_mobile", False):
-        from core.pwa_nivel_a import sidebar_visible_en_pwa
+    from core.pwa_nivel_a import sidebar_visible_en_pwa, tpv_visible_en_movil
 
-        if not sidebar_visible_en_pwa(current_app_id):
+    tpv_visible_movil = False
+    if request and getattr(request, "is_mobile", False):
+        tpv_visible_movil = tpv_visible_en_movil(user, request)
+        if not sidebar_visible_en_pwa(current_app_id, request, user):
             current_sidebar_items = []
 
     return {
@@ -296,6 +298,7 @@ def menu_context(request):
         "current_app_id": current_app_id,
         "current_sidebar_items": current_sidebar_items,
         "show_sidebar": bool(current_sidebar_items),
+        "tpv_visible_movil": tpv_visible_movil,
     }
 
 # Funciones de contexto de menú deshabilitadas para administraNET Analytics

@@ -50,11 +50,16 @@
     <h1>Disponible solo en escritorio</h1>
     <p>
       Esta sección de Synap no está habilitada en el modo móvil. Use un ordenador
-      o acceda al inicio de sesión, al perfil o al TPV (autoservicio) desde este dispositivo.
+      o acceda al inicio de sesión{% if tpv_visible_movil %}, al perfil o al TPV (autoservicio){% else %} o al perfil{% endif %}
+      desde este dispositivo.
     </p>
     <div class="actions">
       <a class="btn primary" href="/login/">Ir al inicio de sesión</a>
+      {% if tpv_visible_movil %}
       <a class="btn secondary" href="/self_checkout/">Ir al TPV</a>
+      {% else %}
+      <a class="btn secondary" href="/login/perfil/">Ir al perfil</a>
+      {% endif %}
     </div>
   </div>
 </body>

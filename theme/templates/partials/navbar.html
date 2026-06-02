@@ -116,7 +116,7 @@
         <svg x-show="!mobileMenuOpen" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
         <svg x-show="mobileMenuOpen" x-cloak class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
       </button>
-      <a href="{% if request.is_mobile %}{% if request.user.is_authenticated %}{% url 'self_checkout:index' %}{% else %}{% url 'login:login' %}{% endif %}{% else %}/{% endif %}" class="flex items-center flex-shrink-0">
+      <a href="{% if request.is_mobile %}{% if request.user.is_authenticated %}{% if tpv_visible_movil %}{% url 'self_checkout:index' %}{% else %}{% url 'core:dashboard' %}{% endif %}{% else %}{% url 'login:login' %}{% endif %}{% else %}/{% endif %}" class="flex items-center flex-shrink-0">
         {% if logo_path %}
           <img src="{{ MEDIA_URL }}{{ logo_path }}" alt="Logo" class="h-8 md:h-10 w-auto object-contain" />
         {% endif %}

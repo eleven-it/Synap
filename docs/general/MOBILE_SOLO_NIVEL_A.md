@@ -57,10 +57,11 @@ En pantallas &lt; `lg` (1024px), las tablas de informes muestran **tarjetas** (`
 
 ## Menú y navegación
 
-- **`apps_visibles_para_usuario`** (`core/utils/utils.py`): tras resolver permisos y reglas habituales, se aplica `filtrar_apps_menu_para_pwa_movil` (`core/pwa_nivel_a.py`). En móvil solo permanecen entradas cuyo `id` está en `PWA_MENU_APP_IDS` (actualmente solo **`self_checkout`**). Los permisos del usuario siguen limitando ítems dentro del TPV (p. ej. configuración y talonarios solo con `self_checkout.admin`).
+- **`apps_visibles_para_usuario`** (`core/utils/utils.py`): tras resolver permisos y reglas habituales, se aplica `filtrar_apps_menu_para_pwa_movil` (`core/pwa_nivel_a.py`). En móvil solo permanecen entradas cuyo `id` está en `PWA_MENU_APP_IDS` (actualmente solo **`self_checkout`**) **y** el usuario tiene TPV en menú de escritorio (`usuario_tiene_tpv_en_menu`: permiso `self_checkout.ver`, submenús visibles, no oculto en navbar granular). Si el TPV no está «activado» para ese usuario, no aparece en menú móvil ni en enlaces (logo, perfil, 403).
 - **`menu_context`**: si `request.is_mobile`, el sidebar contextual solo se rellena para apps Nivel A (`sidebar_visible_en_pwa`); se añadió `current_app_id = 'self_checkout'` cuando la URL es del namespace `self_checkout`.
 - En `partials/navbar.html`, el enlace «Mi perfil» usa `login:perfil` cuando `request.is_mobile` (o en el panel móvil), para coincidir con la plantilla móvil Nivel A. Historial y acceso a `/admin/` no se muestran en móvil desde ese menú (evitan 403 innecesarios).
-- El logo en móvil apunta al TPV (`self_checkout:index`) si hay sesión, o al login si no.
+- El logo en móvil apunta al TPV (`self_checkout:index`) si hay sesión y `tpv_visible_movil`; si no, al dashboard (`core:dashboard`); sin sesión, al login.
+- **`MobileLevelAOnlyMiddleware`**: las rutas `/self_checkout/…` y APIs `/api/self-checkout/`, `/api/mercadopago/` devuelven **403** en móvil si el usuario autenticado no tiene TPV en menú.
 
 ## Tests
 

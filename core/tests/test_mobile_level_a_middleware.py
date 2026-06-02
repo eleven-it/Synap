@@ -3,6 +3,8 @@ Tests: restricción móvil «solo Nivel A» (MobileLevelAOnlyMiddleware).
 
 Ejecutar: docker exec Synap_app python manage.py test core.tests.test_mobile_level_a_middleware
 """
+from unittest.mock import patch
+
 from django.contrib.sessions.middleware import SessionMiddleware
 from django.http import HttpResponse
 from django.test import RequestFactory, SimpleTestCase, override_settings
@@ -11,6 +13,7 @@ from core.middleware.base_middleware import DeviceDetectionMiddleware
 from core.middleware.mobile_level_a_middleware import (
     MobileLevelAOnlyMiddleware,
     mobile_path_allowed_for_level_a,
+    mobile_path_es_ruta_tpv,
 )
 
 MOBILE_UA = (
@@ -87,6 +90,11 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
 
     def test_api_self_checkout_prefijo(self):
         self.assertTrue(mobile_path_allowed_for_level_a('/api/self-checkout/health/'))
+
+    def test_mobile_path_es_ruta_tpv(self):
+        self.assertTrue(mobile_path_es_ruta_tpv('/self_checkout/'))
+        self.assertTrue(mobile_path_es_ruta_tpv('/api/self-checkout/health/'))
+        self.assertFalse(mobile_path_es_ruta_tpv('/reports/'))
 
     def test_core_dashboard_permitido(self):
         self.assertTrue(mobile_path_allowed_for_level_a('/core/dashboard/'))
@@ -234,3 +242,16 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
         resp = self.mw.process_request(req)
         self.assertIsNotNone(resp)
         self.assertEqual(resp.status_code, 403)
+
+    @patch('core.pwa_nivel_a.tpv_visible_en_movil', return_value=False)
+    def test_movil_autenticado_self_checkout_sin_tpv_403(self, _mock):
+        req = _build_request('GET', '/self_checkout/', MOBILE_UA, _minimal_session_user())
+        resp = self.mw.process_request(req)
+        self.assertIsNotNone(resp)
+        self.assertEqual(resp.status_code, 403)
+
+    @patch('core.pwa_nivel_a.tpv_visible_en_movil', return_value=True)
+    def test_movil_autenticado_self_checkout_con_tpv_sin_bloqueo(self, _mock):
+        req = _build_request('GET', '/self_checkout/', MOBILE_UA, _minimal_session_user())
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
