@@ -40,15 +40,8 @@ _MOBILE_ALLOWED_EXACT = frozenset(
 _MOBILE_ALLOWED_API_PREFIXES = (
     '/api/self-checkout/',
     '/api/mercadopago/',
-    # Command Center gerencial (HTML + fetch JSON; UI responsive).
-    '/api/reports/executive-dashboard/',
-    '/api/reports/executive-summary/',
-    # Resumen ejecutivo ventas (clasificación PV).
-    '/api/reports/pv-canal-ejecutivo/',
-    # Informes enlazados desde Command Center (datos, filtros, exportación).
-    '/api/reports/query/',
-    '/api/reports/filters/',
-    '/api/reports/export/',
+    # Módulo de informes (catálogo, dashboards, builder, exportación).
+    '/api/reports/',
 )
 
 # Pantallas HTML self_checkout Nivel A + ticket post-venta (ventana de impresión usada por kiosco.html).
@@ -64,16 +57,10 @@ _SELF_CHECKOUT_PAGE_PATTERNS = tuple(
     )
 )
 
-# Reportes gerenciales con UI móvil (Command Center, resumen ventas, catálogo, workspace).
+# Catálogo, workspace, dashboards y builder (UI responsive en escritorio + móvil).
 _REPORTS_MOBILE_PAGE_PATTERNS = tuple(
     re.compile(p)
-    for p in (
-        r'^/reports/dashboard/command-center-gerencial/?$',
-        r'^/reports/dashboard/resumen-ejecutivo-ventas/?$',
-        r'^/reports/dashboard/(?:cash_flow_waterfall|cash_flow_by_account|cash_flow_detailed_movements)/?$',
-        r'^/reports/?$',
-        r'^/reports/workspace/?$',
-    )
+    for p in (r'^/reports(?:/.*)?$',)
 )
 
 # MPR (enlace «Tablero MPR» desde Command Center).

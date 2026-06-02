@@ -2813,6 +2813,17 @@ const WidgetEngine = {
     if (isGrouped && showTableGroupingChrome) {
       this.attachGroupToggleListeners(container);
     }
+
+    if (window.SynapReportsResponsive && !isWorkspaceTV) {
+      window.SynapReportsResponsive.enhanceWidgetTableContainer(container, {
+        rows: data,
+        dimensions: mappedDimensions,
+        metrics: filteredMetrics,
+        reportSlug: this.reportSlug,
+        formatDimension: (value, dim) => this.formatDimension(value, dim),
+        formatMetric: (value, metric) => this.formatMetric(value, metric),
+      });
+    }
   },
 
   /**
@@ -3094,7 +3105,8 @@ const WidgetEngine = {
     // Preservar los controles de agrupación
     const groupingControls = container.querySelector('[class*="tags-filter-container"]')?.parentElement?.parentElement;
     
-    // Limpiar solo la tabla (preservar controles)
+    // Limpiar tabla y tarjetas móvil previas (preservar controles de agrupación)
+    container.querySelectorAll('.synap-responsive-table-mobile').forEach((el) => el.remove());
     const tableWrapper = container.querySelector('.overflow-x-auto');
     if (tableWrapper) {
       tableWrapper.remove();
@@ -3197,6 +3209,18 @@ const WidgetEngine = {
     // Agregar event listeners para expandir/colapsar si hay agrupación
     if (isGrouped) {
       this.attachGroupToggleListeners(container);
+    }
+
+    const isWorkspaceTV = container.closest("[data-workspace-tv]");
+    if (window.SynapReportsResponsive && !isWorkspaceTV) {
+      window.SynapReportsResponsive.enhanceWidgetTableContainer(container, {
+        rows: data,
+        dimensions,
+        metrics,
+        reportSlug: this.reportSlug,
+        formatDimension: (value, dim) => this.formatDimension(value, dim),
+        formatMetric: (value, metric) => this.formatMetric(value, metric),
+      });
     }
   },
 

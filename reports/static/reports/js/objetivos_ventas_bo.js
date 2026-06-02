@@ -1606,11 +1606,21 @@
       );
       parts.push("</tbody>");
     }
-    container.innerHTML =
+    const tableHtml =
       '<table class="vo-jerarquia-table min-w-full divide-y divide-slate-200 text-xs dark:divide-slate-700">' +
       buildThead() +
       parts.join("") +
       "</table>";
+
+    if (window.SynapReportsResponsive) {
+      window.SynapReportsResponsive.wrapJerarquiaDual(container, tableHtml, {
+        variant: "objetivos-vendedor",
+        rows: jerarquia,
+        compactMetrics: isVentasPorVendedor,
+      });
+    } else {
+      container.innerHTML = tableHtml;
+    }
 
     container.querySelectorAll("tr[data-vo-toggle]").forEach(function (tr) {
       tr.addEventListener("click", function (e) {

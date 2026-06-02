@@ -242,11 +242,20 @@
         "</tr></tbody>");
     }
 
-    container.innerHTML =
+    const tableHtml =
       '<table class="vo-jerarquia-table min-w-full text-xs">' +
       buildThead() +
       parts.join("") +
       "</table>";
+
+    if (window.SynapReportsResponsive) {
+      window.SynapReportsResponsive.wrapJerarquiaDual(container, tableHtml, {
+        variant: "ventas-articulo",
+        rows: jerarquia,
+      });
+    } else {
+      container.innerHTML = tableHtml;
+    }
 
     wireInteractions(container);
     applySearchFromInput();
