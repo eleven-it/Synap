@@ -78,6 +78,16 @@ _CORE_MOBILE_PAGE_PATTERNS = tuple(
 )
 
 
+def mobile_path_es_ruta_tpv(path: str) -> bool:
+    """True si la ruta es HTML o API del módulo TPV / self_checkout."""
+    if path.startswith('/api/self-checkout/') or path.startswith('/api/mercadopago/'):
+        return True
+    for rx in _SELF_CHECKOUT_PAGE_PATTERNS:
+        if rx.match(path):
+            return True
+    return False
+
+
 def mobile_path_allowed_for_level_a(path: str) -> bool:
     """True si la ruta puede atenderse en dispositivo móvil."""
     if path in _MOBILE_ALLOWED_EXACT:
@@ -105,6 +115,10 @@ def mobile_path_allowed_for_level_a(path: str) -> bool:
 
 def _mobile_blocked_response(request):
     """403 HTML o JSON según el tipo de petición."""
+    from core.pwa_nivel_a import tpv_visible_en_movil
+
+    user = getattr(request, 'user', None)
+    tpv_visible = tpv_visible_en_movil(user, request) if user else False
     accept = (request.headers.get('Accept') or '').lower()
     is_api = request.path.startswith('/api/')
     wants_json = (
@@ -113,17 +127,19 @@ def _mobile_blocked_response(request):
         or request.headers.get('x-requested-with') == 'XMLHttpRequest'
     )
     if wants_json:
-        return JsonResponse(
-            {
-                'error': (
-                    'Esta ruta no está disponible en dispositivos móviles. '
-                    'Use Synap desde un ordenador o acceda solo a login, perfil o TPV.'
-                )
-            },
-            status=403,
+        mensaje = (
+            'Esta ruta no está disponible en dispositivos móviles. '
+            'Use Synap desde un ordenador'
         )
-    # Sin request en render_to_string: evita context processors (BD) en el middleware.
-    html = render_to_string('core/mobile_desktop_only.html', {})
+        if tpv_visible:
+            mensaje += ' o acceda solo a login, perfil o TPV.'
+        else:
+            mensaje += ' o acceda solo a login o perfil.'
+        return JsonResponse({'error': mensaje}, status=403)
+    html = render_to_string(
+        'core/mobile_desktop_only.html',
+        {'tpv_visible_movil': tpv_visible},
+    )
     return HttpResponse(html, status=403, content_type='text/html; charset=utf-8')
 
 
@@ -140,6 +156,13 @@ class MobileLevelAOnlyMiddleware(MiddlewareMixin):
 
         path = request.path or '/'
 
+        user = getattr(request, 'user', None)
+        if mobile_path_es_ruta_tpv(path) and user is not None and user.is_authenticated:
+            from core.pwa_nivel_a import tpv_visible_en_movil
+
+            if not tpv_visible_en_movil(user, request):
+                return _mobile_blocked_response(request)
+
         if mobile_path_allowed_for_level_a(path):
             return None
 
@@ -148,7 +171,6 @@ class MobileLevelAOnlyMiddleware(MiddlewareMixin):
             return _mobile_blocked_response(request)
 
         # Dejar pasar anónimos para que @login_required / sesión administraNET redirijan a login.
-        user = getattr(request, 'user', None)
         if user is None or not user.is_authenticated:
             return None
 

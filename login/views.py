@@ -355,7 +355,15 @@ def perfil_view(request):
         messages.success(request, "Perfil actualizado correctamente")
         return redirect("login:perfil")
 
+    from core.pwa_nivel_a import tpv_visible_en_movil
+
     template_name = get_template_for_device(request, "login/perfil.html")
-    return render(request, template_name, {
-        "user": session_user
-    })
+    usuario = getattr(request, "user", None)
+    return render(
+        request,
+        template_name,
+        {
+            "user": session_user,
+            "tpv_visible_movil": tpv_visible_en_movil(usuario, request),
+        },
+    )

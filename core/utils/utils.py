@@ -1029,12 +1029,14 @@ def _navbar_menu_oculto_global() -> bool:
         return False
 
 
-def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -> List[Dict[str, Any]]:
-    """Obtiene las apps visibles para un usuario, ordenadas por prioridad, con sus submenús"""
+def apps_visibles_sin_filtro_pwa(
+    user: Optional[UsuarioExtendido], request=None
+) -> List[Dict[str, Any]]:
+    """Apps visibles en menú (escritorio y móvil) sin el filtro PWA de Nivel A."""
     from django.urls import reverse
     from django.urls.exceptions import NoReverseMatch
     from core.module_manager import ModuleManager
-    
+
     if not user or not hasattr(user, 'is_authenticated') or not user.is_authenticated:
         return []
 
@@ -1124,9 +1126,16 @@ def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -
             resultado = [a for a in resultado if a.get("id") == "archivo"]
         else:
             resultado = []
+    return resultado
+
+
+def apps_visibles_para_usuario(user: Optional[UsuarioExtendido], request=None) -> List[Dict[str, Any]]:
+    """Obtiene las apps visibles para un usuario, ordenadas por prioridad, con sus submenús."""
     from core.pwa_nivel_a import filtrar_apps_menu_para_pwa_movil
 
-    return filtrar_apps_menu_para_pwa_movil(resultado, request)
+    resultado = apps_visibles_sin_filtro_pwa(user, request)
+    return filtrar_apps_menu_para_pwa_movil(resultado, request, user=user)
+
 
 # ─────────────────────────────────────────────
 # COMPATIBILIDAD CON CÓDIGO EXISTENTE
