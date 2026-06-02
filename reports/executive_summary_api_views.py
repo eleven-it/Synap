@@ -1,5 +1,5 @@
 """
-API del panel «Resumen ejecutivo (ventas)» y clasificación PV.
+API del panel «Resumen ejecutivo (ventas)» y clasificación por sucursal.
 """
 from __future__ import annotations
 
@@ -15,10 +15,10 @@ from rest_framework.views import APIView
 from core.utils.administranet_types import to_int_or_none
 from core.utils.empresa_sesion import get_empresa_django_from_request
 
-from .models import PuntoVentaCanalEjecutivo
+from .models import SucursalCanalEjecutivo
 from .permissions import ManagerialReportsPermission
 from .services.connection_pool import get_mysql_pool
-from .services.executive_sales_summary import fetch_puntos_venta_activos, run_executive_summary
+from .services.executive_sales_summary import fetch_sucursales_activas, run_executive_summary
 
 
 def _base_empresa(request) -> str | None:
@@ -53,17 +53,31 @@ def _resolve_fecha_referencia(qp) -> date:
     return timezone.localdate()
 
 
-def _parse_cod_sucursal(qp) -> int | None:
-    """Query ``sucursal``: id numérico o vacío / ``todas`` = sin filtro."""
+def _parse_sucursales_filtro(qp) -> list[int] | None:
+    """
+    Query ``sucursales`` (repetible o CSV). Vacío = todas las clasificadas.
+    Compat: ``sucursal`` único (legacy).
+    """
     if not qp:
         return None
-    raw = qp.get("sucursal")
-    if raw in (None, "", "todas", "all", "*"):
+    raw_list = list(qp.getlist("sucursales"))
+    if not raw_list and qp.get("sucursales"):
+        raw_list = [qp.get("sucursales")]
+    legacy = qp.get("sucursal")
+    if legacy not in (None, "", "todas", "all", "*"):
+        raw_list.append(legacy)
+    ids: list[int] = []
+    for raw in raw_list:
+        for part in str(raw).split(","):
+            part = part.strip()
+            if not part or part.lower() in ("todas", "all", "*"):
+                continue
+            sid = to_int_or_none(part)
+            if sid is not None and sid >= 0:
+                ids.append(int(sid))
+    if not ids:
         return None
-    sid = to_int_or_none(raw)
-    if sid is None or sid < 0:
-        return None
-    return int(sid)
+    return sorted(set(ids))
 
 
 def _parse_top_orden(qp) -> str | None:
@@ -76,15 +90,33 @@ def _parse_top_orden(qp) -> str | None:
     return str(raw).strip()
 
 
-def _ids_por_canal(empresa_id: int) -> tuple[list[int], list[int]]:
-    qs = PuntoVentaCanalEjecutivo.objects.filter(empresa_id=empresa_id)
-    may = list(qs.filter(canal=PuntoVentaCanalEjecutivo.Canal.MAYORISTA).values_list("id_pv", flat=True))
-    mino = list(qs.filter(canal=PuntoVentaCanalEjecutivo.Canal.MINORISTA).values_list("id_pv", flat=True))
+def _sucursales_por_canal(empresa_id: int) -> tuple[list[int], list[int]]:
+    qs = SucursalCanalEjecutivo.objects.filter(empresa_id=empresa_id)
+    may = list(
+        qs.filter(canal=SucursalCanalEjecutivo.Canal.MAYORISTA).values_list(
+            "id_sucursal", flat=True
+        )
+    )
+    mino = list(
+        qs.filter(canal=SucursalCanalEjecutivo.Canal.MINORISTA).values_list(
+            "id_sucursal", flat=True
+        )
+    )
     return may, mino
 
 
+def _sucursal_item(s: dict) -> dict:
+    sid = int(s["id_sucursal"])
+    nombre = (s.get("nombre_sucursal") or f"Sucursal {sid}").strip()
+    return {
+        "id_sucursal": sid,
+        "nombre_sucursal": nombre,
+        "label": nombre,
+    }
+
+
 class ExecutiveSummaryAPIView(APIView):
-    """GET: KPIs, series y split mayorista/minorista."""
+    """GET: KPIs, series y tarjetas mayorista / minorista / consolidado."""
 
     permission_classes = [ManagerialReportsPermission]
 
@@ -97,9 +129,9 @@ class ExecutiveSummaryAPIView(APIView):
             )
         empresa = get_empresa_django_from_request(request)
         fecha_ref = _resolve_fecha_referencia(request.query_params)
-        cod_sucursal = _parse_cod_sucursal(request.query_params)
+        sucursales_filtro = _parse_sucursales_filtro(request.query_params)
         top_orden = _parse_top_orden(request.query_params)
-        may_ids, min_ids = _ids_por_canal(empresa.id) if empresa else ([], [])
+        may_ids, min_ids = _sucursales_por_canal(empresa.id) if empresa else ([], [])
 
         pool = get_mysql_pool()
         try:
@@ -111,7 +143,7 @@ class ExecutiveSummaryAPIView(APIView):
                         fecha_ref,
                         may_ids,
                         min_ids,
-                        cod_sucursal=cod_sucursal,
+                        sucursales_filtro=sucursales_filtro,
                         top_productos_orden=top_orden,
                     )
                 finally:
@@ -134,10 +166,10 @@ class ExecutiveSummaryAPIView(APIView):
         return Response(payload)
 
 
-class PuntoVentaCanalEjecutivoAPIView(APIView):
+class SucursalCanalEjecutivoAPIView(APIView):
     """
-    GET: lista de PV activos (MySQL) + columnas según asignación guardada.
-    PUT: reemplaza asignaciones (mayorista / minorista); el resto queda sin asignar.
+    GET: sucursales activas (MySQL) + columnas según clasificación guardada.
+    PUT: reemplaza asignaciones (mayorista / minorista); sin asignar no entra al reporte.
     """
 
     permission_classes = [ManagerialReportsPermission]
@@ -156,34 +188,40 @@ class PuntoVentaCanalEjecutivoAPIView(APIView):
             with pool.get_connection(base) as conn:
                 cursor = conn.cursor()
                 try:
-                    pvs = fetch_puntos_venta_activos(cursor)
+                    sucursales = fetch_sucursales_activas(cursor)
                 finally:
                     cursor.close()
         except Exception as exc:
             return Response(
-                {"detail": f"Error al listar puntos de venta: {exc}"},
+                {"detail": f"Error al listar sucursales: {exc}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        asig = {}
+        asig: dict[int, str] = {}
         if empresa:
             asig = {
-                r.id_pv: r.canal
-                for r in PuntoVentaCanalEjecutivo.objects.filter(empresa=empresa)
+                int(r.id_sucursal): r.canal
+                for r in SucursalCanalEjecutivo.objects.filter(empresa=empresa)
             }
         col_may, col_min, col_centro = [], [], []
-        for pv in pvs:
-            id_pv = pv["id_pv"]
-            c = asig.get(id_pv)
-            if c == PuntoVentaCanalEjecutivo.Canal.MAYORISTA:
-                col_may.append(pv)
-            elif c == PuntoVentaCanalEjecutivo.Canal.MINORISTA:
-                col_min.append(pv)
+        for s in sucursales:
+            item = _sucursal_item(s)
+            sid = item["id_sucursal"]
+            c = asig.get(sid)
+            if c == SucursalCanalEjecutivo.Canal.MAYORISTA:
+                col_may.append(item)
+            elif c == SucursalCanalEjecutivo.Canal.MINORISTA:
+                col_min.append(item)
             else:
-                col_centro.append(pv)
+                col_centro.append(item)
 
+        clasificadas = sorted(
+            col_may + col_min,
+            key=lambda x: (x.get("nombre_sucursal") or "").lower(),
+        )
         out = {
-            "puntos_venta": pvs,
+            "sucursales": sucursales,
+            "sucursales_clasificadas": clasificadas,
             "columnas": {
                 "mayorista": col_may,
                 "sin_asignar": col_centro,
@@ -199,7 +237,7 @@ class PuntoVentaCanalEjecutivoAPIView(APIView):
             out["meta"] = {
                 "empresa_django": False,
                 "nota": "No se encontró Empresa en Synap (CUIT/nombre) para esta base. "
-                "Las clasificaciones PV no se pueden guardar hasta que exista el registro.",
+                "Las clasificaciones no se pueden guardar hasta que exista el registro.",
             }
         return Response(out)
 
@@ -220,7 +258,7 @@ class PuntoVentaCanalEjecutivoAPIView(APIView):
         minorista = body.get("minorista") or body.get("minorista_ids") or []
         if not isinstance(mayorista, list) or not isinstance(minorista, list):
             return Response(
-                {"detail": "Se esperan listas mayorista y minorista de id_pv."},
+                {"detail": "Se esperan listas mayorista y minorista de id_sucursal."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -231,30 +269,35 @@ class PuntoVentaCanalEjecutivoAPIView(APIView):
         overlap = may_set & min_set
         if overlap:
             return Response(
-                {"detail": f"Un PV no puede estar en ambas columnas: {sorted(overlap)}"},
+                {"detail": f"Una sucursal no puede estar en ambas columnas: {sorted(overlap)}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         with transaction.atomic():
-            PuntoVentaCanalEjecutivo.objects.filter(empresa=empresa).delete()
+            SucursalCanalEjecutivo.objects.filter(empresa=empresa).delete()
             rows = []
-            for pid in sorted(may_set):
+            for sid in sorted(may_set):
                 rows.append(
-                    PuntoVentaCanalEjecutivo(
+                    SucursalCanalEjecutivo(
                         empresa=empresa,
-                        id_pv=int(pid),
-                        canal=PuntoVentaCanalEjecutivo.Canal.MAYORISTA,
+                        id_sucursal=int(sid),
+                        canal=SucursalCanalEjecutivo.Canal.MAYORISTA,
                     )
                 )
-            for pid in sorted(min_set):
+            for sid in sorted(min_set):
                 rows.append(
-                    PuntoVentaCanalEjecutivo(
+                    SucursalCanalEjecutivo(
                         empresa=empresa,
-                        id_pv=int(pid),
-                        canal=PuntoVentaCanalEjecutivo.Canal.MINORISTA,
+                        id_sucursal=int(sid),
+                        canal=SucursalCanalEjecutivo.Canal.MINORISTA,
                     )
                 )
             if rows:
-                PuntoVentaCanalEjecutivo.objects.bulk_create(rows)
+                SucursalCanalEjecutivo.objects.bulk_create(rows)
 
         return Response({"ok": True, "guardados": len(rows)})
+
+
+# Compatibilidad: la URL antigua de PV delega en sucursal.
+class PuntoVentaCanalEjecutivoAPIView(SucursalCanalEjecutivoAPIView):
+    """Obsoleto: usar ``SucursalCanalEjecutivoAPIView`` (clasificación por sucursal)."""

@@ -1,10 +1,11 @@
 /**
- * Panel Resumen ejecutivo (ventas): KPIs, gráficos d3, modal clasificación PV.
+ * Panel Resumen ejecutivo (ventas): KPIs, gráficos d3, modal clasificación por sucursal.
  */
 (function () {
   const cfg = window.EXEC_CONFIG || {};
   const summaryUrl = cfg.summaryUrl || "";
-  const pvCanalUrl = cfg.pvCanalUrl || "";
+  const sucursalCanalUrl = cfg.sucursalCanalUrl || cfg.pvCanalUrl || "";
+  let sucursalesTagsReady = false;
 
   function getCookie(name) {
     const value = `; ${document.cookie}`;
@@ -187,15 +188,60 @@
     });
   }
 
+  function renderCanales(data) {
+    const grid = el("exec-canales-grid");
+    const banner = el("exec-sin-clasificar");
+    const meta = data.meta || {};
+    const split = data.split_mayorista_minorista || {};
+    const sinClas = !!meta.sin_sucursales_clasificadas;
+
+    if (banner) {
+      if (sinClas) {
+        banner.textContent =
+          "No hay sucursales clasificadas como mayorista o minorista. Usá el engranaje en Consolidado para configurarlas.";
+        banner.classList.remove("hidden");
+      } else {
+        banner.classList.add("hidden");
+        banner.textContent = "";
+      }
+    }
+    if (!grid) return;
+
+    const gearBtn = `
+      <button type="button" id="exec-open-pv-modal" class="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white/90 text-slate-500 shadow-sm transition hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 dark:border-slate-600 dark:bg-slate-800/90 dark:hover:border-purple-600 dark:hover:bg-purple-950/50 dark:hover:text-purple-300" title="Clasificar sucursales">
+        <span class="material-icons text-xl" aria-hidden="true">settings</span>
+      </button>`;
+
+    grid.innerHTML = [
+      kpiCard("Mayorista", fmtMoney.format(split.mayorista || 0), {
+        icon: "warehouse",
+        accent: "amber",
+        valueClass: "text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl",
+      }),
+      kpiCard("Minorista (Salón)", fmtMoney.format(split.minorista || 0), {
+        icon: "storefront",
+        accent: "emerald",
+        valueClass: "text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl",
+      }),
+      `<div class="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 p-4 shadow-md dark:border-slate-700 dark:from-slate-900 dark:to-indigo-950/30">
+        ${gearBtn}
+        <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Consolidado</p>
+        <p class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">${fmtMoney.format(split.consolidado || 0)}</p>
+        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Suma mayorista + minorista (solo sucursales clasificadas)</p>
+      </div>`,
+    ].join("");
+    const btn = el("exec-open-pv-modal");
+    if (btn) btn.addEventListener("click", openSucursalModal);
+    grid.querySelectorAll(":scope > div").forEach((node, i) => {
+      node.classList.add("exec-kpi-animate");
+      node.style.animationDelay = `${i * 50}ms`;
+    });
+  }
+
   function renderKpis(data) {
     const grid = el("exec-kpi-grid");
     if (!grid || !data.kpis) return;
     const k = data.kpis;
-    const split = data.split_mayorista_minorista || {};
-    const gearBtn = `
-      <button type="button" id="exec-open-pv-modal" class="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 dark:border-slate-600 dark:bg-slate-800 dark:hover:border-purple-600 dark:hover:bg-purple-950/50 dark:hover:text-purple-300" title="Configurar puntos de venta">
-        <span class="material-icons text-xl" aria-hidden="true">settings</span>
-      </button>`;
     grid.innerHTML = [
       kpiCard("Ventas del día", fmtMoney.format(k.ventas_netas_dia || 0), {
         icon: "payments",
@@ -217,36 +263,7 @@
         icon: "inventory_2",
         accent: "slate",
       }),
-      `<div class="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-white via-slate-50/80 to-slate-100/50 p-4 shadow-md shadow-slate-200/40 transition duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 dark:shadow-black/30 sm:col-span-2 xl:col-span-2">
-        <div class="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br from-purple-400/20 to-indigo-500/10 blur-2xl"></div>
-        <div class="relative flex items-start justify-between gap-2">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="material-icons flex-shrink-0 rounded-xl bg-gradient-to-br from-purple-500/15 to-indigo-500/10 p-2 text-purple-600 dark:text-purple-400" aria-hidden="true">store_mall_directory</span>
-            <div>
-              <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Mayorista / Salón</p>
-              <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-500">Según clasificación de PV</p>
-            </div>
-          </div>
-          ${gearBtn}
-        </div>
-        <div class="relative mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div class="rounded-xl border border-amber-200/80 bg-amber-50/60 px-3 py-2.5 dark:border-amber-900/50 dark:bg-amber-950/30">
-            <span class="text-[10px] font-bold uppercase tracking-wide text-amber-800 dark:text-amber-200">Mayorista</span>
-            <p class="mt-1 text-base font-bold text-slate-900 dark:text-white">${fmtMoney.format(split.mayorista || 0)}</p>
-          </div>
-          <div class="rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-3 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
-            <span class="text-[10px] font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">Minorista</span>
-            <p class="mt-1 text-base font-bold text-slate-900 dark:text-white">${fmtMoney.format(split.minorista || 0)}</p>
-          </div>
-          <div class="rounded-xl border border-slate-200 bg-slate-100/80 px-3 py-2.5 dark:border-slate-600 dark:bg-slate-800/50">
-            <span class="text-[10px] font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300">Sin asignar</span>
-            <p class="mt-1 text-base font-bold text-slate-900 dark:text-white">${fmtMoney.format(split.sin_asignar || 0)}</p>
-          </div>
-        </div>
-      </div>`,
     ].join("");
-    const btn = el("exec-open-pv-modal");
-    if (btn) btn.addEventListener("click", openPvModal);
     staggerKpiGrid();
   }
 
@@ -662,26 +679,102 @@
       .style("filter", "drop-shadow(0 1px 2px rgb(0 0 0 / 0.12))");
   }
 
-  function fillSucursalesSelect(list, selectedValue) {
-    const sel = el("exec-sucursal-select");
+  function updateSucursalesFilterHint(count) {
+    const hint = el("exec-sucursales-hint");
+    const search = el("exec_sucursales_search");
+    if (!hint) return;
+    if (count > 0) {
+      hint.textContent =
+        "Sin selección: todas las clasificadas. Las no clasificadas no entran al informe.";
+      if (search) {
+        search.disabled = false;
+        search.placeholder = "Buscar sucursal…";
+      }
+    } else {
+      hint.innerHTML =
+        'No hay sucursales clasificadas. Usá el engranaje en <strong>Consolidado</strong> para asignar mayorista o minorista.';
+      if (search) {
+        search.disabled = true;
+        search.placeholder = "Clasificá sucursales primero";
+      }
+    }
+  }
+
+  function fillSucursalesTagsOptions(list, preserveSelected) {
+    const sel = el("exec_sucursales");
     if (!sel) return;
-    const cur =
-      selectedValue !== undefined && selectedValue !== null && String(selectedValue).trim() !== ""
-        ? String(selectedValue).trim()
-        : sel.value || "";
+    const prev = preserveSelected
+      ? new Set(Array.from(sel.selectedOptions).map((o) => o.value))
+      : new Set();
     sel.innerHTML = "";
-    const optAll = document.createElement("option");
-    optAll.value = "";
-    optAll.textContent = "Todas las sucursales";
-    sel.appendChild(optAll);
     (list || []).forEach((s) => {
+      const sid = s.id_sucursal != null ? s.id_sucursal : s.value;
+      if (sid === "" || sid == null) return;
       const o = document.createElement("option");
-      o.value = String(s.id_sucursal);
-      o.textContent = s.nombre_sucursal || `Sucursal ${s.id_sucursal}`;
+      o.value = String(sid);
+      o.textContent =
+        s.nombre_sucursal || s.label || `Sucursal ${sid}`;
+      if (prev.has(o.value)) o.selected = true;
       sel.appendChild(o);
     });
-    const match = [...sel.options].some((op) => op.value === cur);
-    sel.value = match ? cur : "";
+    updateSucursalesFilterHint((list || []).length);
+    ensureSucursalesTagsInit();
+  }
+
+  function ensureSucursalesTagsInit(retry = 0) {
+    if (sucursalesTagsReady) return;
+    const initFn =
+      typeof window.initializeTagsFilter === "function"
+        ? window.initializeTagsFilter
+        : typeof window.execInitSucursalesTags === "function"
+          ? window.execInitSucursalesTags
+          : null;
+    if (initFn) {
+      if (initFn === window.execInitSucursalesTags) {
+        window.execInitSucursalesTags();
+      } else {
+        window.initializeTagsFilter("exec_sucursales", "sucursales");
+      }
+      sucursalesTagsReady = true;
+      return;
+    }
+    if (retry < 40) {
+      setTimeout(() => ensureSucursalesTagsInit(retry + 1), 50);
+    }
+  }
+
+  /** Carga opciones del filtro (clasificadas) antes del primer informe. */
+  async function loadSucursalesFilterOptions() {
+    const hint = el("exec-sucursales-hint");
+    if (hint) hint.textContent = "Cargando sucursales…";
+
+    let list = [];
+    if (sucursalCanalUrl) {
+      try {
+        const res = await fetch(sucursalCanalUrl, { credentials: "same-origin" });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.sucursales_clasificadas) && data.sucursales_clasificadas.length) {
+            list = data.sucursales_clasificadas;
+          } else {
+            const col = data.columnas || {};
+            list = [...(col.mayorista || []), ...(col.minorista || [])];
+          }
+        }
+      } catch {
+        /* fallback abajo */
+      }
+    }
+
+    fillSucursalesTagsOptions(list, false);
+  }
+
+  function selectedSucursalesIds() {
+    const sel = el("exec_sucursales");
+    if (!sel) return [];
+    return Array.from(sel.selectedOptions)
+      .map((o) => o.value)
+      .filter((v) => v && v !== "");
   }
 
   function renderCharts(data) {
@@ -732,23 +825,18 @@
     } else if (legacy && iso.test(legacy)) {
       fin.value = legacy;
     }
-    const suc = (params.get("sucursal") || "").trim();
-    const sucEl = el("exec-sucursal-select");
-    if (suc && sucEl) sucEl.value = suc;
   }
 
   async function loadSummary() {
     const fin = el("exec-fecha-input");
-    const suc = el("exec-sucursal-select");
     const topO = el("exec-top-orden");
     const qs = new URLSearchParams();
     if (fin && fin.value) {
       qs.set("fecha_inicio", fin.value);
       qs.set("fecha_fin", fin.value);
     }
-    if (suc && suc.value) qs.set("sucursal", suc.value);
+    selectedSucursalesIds().forEach((id) => qs.append("sucursales", id));
     if (topO && topO.value) qs.set("top_orden", topO.value);
-    const wantedSuc = suc && suc.value ? suc.value : "";
     showError("");
     setLoading(true);
     try {
@@ -758,10 +846,11 @@
         throw new Error(err.detail || res.statusText);
       }
       const data = await res.json();
-      fillSucursalesSelect(data.sucursales_disponibles, wantedSuc || (data.meta && data.meta.cod_sucursal_filtro));
+      fillSucursalesTagsOptions(data.sucursales_disponibles, true);
       if (topO && data.meta && data.meta.top_productos_orden) {
         topO.value = data.meta.top_productos_orden === "unidades" ? "unidades" : "importe_neto";
       }
+      renderCanales(data);
       renderKpis(data);
       renderCharts(data);
       renderRentabilidad(data);
@@ -772,14 +861,14 @@
     }
   }
 
-  /* ——— Modal PV ——— */
+  /* ——— Modal sucursales ——— */
   let dragSrc = null;
 
-  function pvLi(pv) {
-    const id = pv.id_pv;
-    const label = pv.label || `PV ${id}`;
-    return `<li draggable="true" data-id-pv="${id}" class="exec-pv-item flex cursor-grab items-center justify-between gap-2 rounded-lg border border-slate-200/90 bg-white/95 px-2.5 py-2 text-xs shadow-sm transition hover:border-slate-300 hover:shadow dark:border-slate-600 dark:bg-slate-900/90 dark:hover:border-slate-500">
-      <span class="min-w-0 truncate font-medium text-slate-800 dark:text-slate-100">${label}</span>
+  function sucLi(s) {
+    const id = s.id_sucursal;
+    const label = s.label || s.nombre_sucursal || `Sucursal ${id}`;
+    return `<li draggable="true" data-id-sucursal="${id}" class="exec-suc-item flex cursor-grab items-center justify-between gap-2 rounded-lg border border-slate-200/90 bg-white/95 px-2.5 py-2 text-xs shadow-sm transition hover:border-slate-300 hover:shadow dark:border-slate-600 dark:bg-slate-900/90 dark:hover:border-slate-500">
+      <span class="min-w-0 truncate font-medium text-slate-800 dark:text-slate-100">${escapeHtml(label)}</span>
       <span class="flex shrink-0 gap-0.5">
         <button type="button" class="exec-pv-nudge rounded-md p-1 text-slate-500 transition hover:bg-amber-100 hover:text-amber-900 dark:hover:bg-amber-950 dark:hover:text-amber-200" data-dir="mayorista" title="A mayorista">«</button>
         <button type="button" class="exec-pv-nudge rounded-md p-1 text-slate-500 transition hover:bg-slate-200 dark:hover:bg-slate-700" data-dir="centro" title="Sin asignar">○</button>
@@ -802,7 +891,7 @@
 
   function attachDnD(ul) {
     ul.addEventListener("dragstart", (ev) => {
-      const t = ev.target.closest(".exec-pv-item");
+      const t = ev.target.closest(".exec-suc-item");
       if (!t) return;
       dragSrc = t;
       ev.dataTransfer.effectAllowed = "move";
@@ -826,31 +915,31 @@
     [may, cen, min].forEach((u) => {
       u.innerHTML = "";
     });
-    (col.mayorista || []).forEach((pv) => {
-      may.insertAdjacentHTML("beforeend", pvLi(pv));
+    (col.mayorista || []).forEach((s) => {
+      may.insertAdjacentHTML("beforeend", sucLi(s));
     });
-    (col.sin_asignar || []).forEach((pv) => {
-      cen.insertAdjacentHTML("beforeend", pvLi(pv));
+    (col.sin_asignar || []).forEach((s) => {
+      cen.insertAdjacentHTML("beforeend", sucLi(s));
     });
-    (col.minorista || []).forEach((pv) => {
-      min.insertAdjacentHTML("beforeend", pvLi(pv));
+    (col.minorista || []).forEach((s) => {
+      min.insertAdjacentHTML("beforeend", sucLi(s));
     });
     updateCounts();
     [may, cen, min].forEach(attachDnD);
   }
 
-  async function openPvModal() {
+  async function openSucursalModal() {
     const modal = el("exec-modal-pv");
     if (!modal) return;
     modal.classList.remove("hidden");
     modal.classList.add("flex");
     try {
-      const res = await fetch(pvCanalUrl, { credentials: "same-origin" });
+      const res = await fetch(sucursalCanalUrl, { credentials: "same-origin" });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
       const data = await res.json();
       fillModalColumns(data.columnas || {});
     } catch (e) {
-      alert(e.message || "No se pudieron cargar los puntos de venta.");
+      alert(e.message || "No se pudieron cargar las sucursales.");
     }
   }
 
@@ -862,15 +951,15 @@
   }
 
   async function savePvModal() {
-    const mayorista = Array.from(el("exec-col-mayorista").querySelectorAll(".exec-pv-item")).map((li) =>
-      parseInt(li.getAttribute("data-id-pv"), 10)
+    const mayorista = Array.from(el("exec-col-mayorista").querySelectorAll(".exec-suc-item")).map((li) =>
+      parseInt(li.getAttribute("data-id-sucursal"), 10)
     );
-    const minorista = Array.from(el("exec-col-minorista").querySelectorAll(".exec-pv-item")).map((li) =>
-      parseInt(li.getAttribute("data-id-pv"), 10)
+    const minorista = Array.from(el("exec-col-minorista").querySelectorAll(".exec-suc-item")).map((li) =>
+      parseInt(li.getAttribute("data-id-sucursal"), 10)
     );
     const csrftoken = getCookie("csrftoken");
     try {
-      const res = await fetch(pvCanalUrl, {
+      const res = await fetch(sucursalCanalUrl, {
         method: "PUT",
         credentials: "same-origin",
         headers: {
@@ -884,13 +973,14 @@
         throw new Error(err.detail || res.statusText);
       }
       closePvModal();
+      await loadSucursalesFilterOptions();
       loadSummary();
     } catch (e) {
       alert(e.message || "Error al guardar la clasificación.");
     }
   }
 
-  function init() {
+  async function init() {
     applyPeriodFromUrl();
     const fin = el("exec-fecha-input");
     if (fin && !fin.value) {
@@ -898,8 +988,8 @@
       fin.value = t.toISOString().slice(0, 10);
     }
     el("exec-refresh-btn")?.addEventListener("click", loadSummary);
-    el("exec-sucursal-select")?.addEventListener("change", loadSummary);
     el("exec-top-orden")?.addEventListener("change", loadSummary);
+    el("exec_sucursales")?.addEventListener("change", loadSummary);
     el("exec-modal-close")?.addEventListener("click", closePvModal);
     el("exec-modal-cancel")?.addEventListener("click", closePvModal);
     el("exec-modal-save")?.addEventListener("click", savePvModal);
@@ -907,7 +997,7 @@
       const btn = ev.target.closest(".exec-pv-nudge");
       if (!btn) return;
       ev.preventDefault();
-      const li = btn.closest(".exec-pv-item");
+      const li = btn.closest(".exec-suc-item");
       const dir = btn.getAttribute("data-dir");
       const map = {
         mayorista: el("exec-col-mayorista"),
@@ -917,6 +1007,7 @@
       const target = map[dir];
       if (li && target) moveItem(li, target);
     });
+    await loadSucursalesFilterOptions();
     loadSummary();
   }
 

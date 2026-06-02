@@ -64,16 +64,44 @@ def _base_cc_where(alias: str = "cc") -> Tuple[str, List[Any]]:
     return w, list(_TIPOS_TODOS)
 
 
-def _cc_sucursal_sql(cod_sucursal: Optional[int]) -> Tuple[str, List[Any]]:
-    """Filtro opcional por comprobante: ``cuentacliente.CodSucursal`` (AdministraNET)."""
-    if cod_sucursal is None:
-        return "", []
-    return " AND cc.CodSucursal = %s ", [int(cod_sucursal)]
+def resolve_executive_scope(
+    mayorista_sucursales: Sequence[int],
+    minorista_sucursales: Sequence[int],
+    sucursales_filtro: Optional[Sequence[int]] = None,
+) -> Tuple[List[int], List[int], List[int]]:
+    """
+    Devuelve (mayorista_en_alcance, minorista_en_alcance, consolidado_en_alcance).
+
+    Solo entran sucursales clasificadas (mayorista ∪ minorista). Si hay filtro UI,
+    se intersecta con ese conjunto.
+    """
+    may_set = {int(x) for x in mayorista_sucursales}
+    min_set = {int(x) for x in minorista_sucursales}
+    classified = may_set | min_set
+    if not classified:
+        return [], [], []
+    if sucursales_filtro:
+        filt = classified & {int(x) for x in sucursales_filtro}
+    else:
+        filt = classified
+    may_scope = sorted(filt & may_set)
+    min_scope = sorted(filt & min_set)
+    consolidado_scope = sorted(filt)
+    return may_scope, min_scope, consolidado_scope
 
 
-def _ventas_netas_dia(cursor, dia: date, cod_sucursal: Optional[int] = None) -> float:
+def _cc_scope_sql(scope_sucursales: Sequence[int]) -> Tuple[str, List[Any]]:
+    """Limita comprobantes a ``cuentacliente.CodSucursal`` dentro del alcance."""
+    if not scope_sucursales:
+        return " AND 1=0 ", []
+    ids = [int(x) for x in scope_sucursales]
+    ph = ",".join(["%s"] * len(ids))
+    return f" AND cc.CodSucursal IN ({ph}) ", ids
+
+
+def _ventas_netas_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> float:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
     sql = f"""
         SELECT SUM({_net_line_sql('cc')}) AS v
         FROM cuentacliente cc
@@ -85,10 +113,10 @@ def _ventas_netas_dia(cursor, dia: date, cod_sucursal: Optional[int] = None) -> 
     return float(row[0] or 0) if row else 0.0
 
 
-def _tickets_dia(cursor, dia: date, cod_sucursal: Optional[int] = None) -> int:
+def _tickets_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> int:
     ph = ",".join(["%s"] * len(_TIPOS_FA_FM))
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
     sql = f"""
         SELECT COUNT(*) AS c
         FROM cuentacliente cc
@@ -101,9 +129,9 @@ def _tickets_dia(cursor, dia: date, cod_sucursal: Optional[int] = None) -> int:
     return int(row[0] or 0) if row else 0
 
 
-def _unidades_dia(cursor, dia: date, cod_sucursal: Optional[int] = None) -> float:
+def _unidades_dia(cursor, dia: date, scope_sucursales: Sequence[int]) -> float:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     sql = f"""
         SELECT SUM(
@@ -128,9 +156,9 @@ def _unidades_dia(cursor, dia: date, cod_sucursal: Optional[int] = None) -> floa
     return float(row[0] or 0) if row else 0.0
 
 
-def _serie_horaria(cursor, dia: date, cod_sucursal: Optional[int] = None) -> List[Dict[str, Any]]:
+def _serie_horaria(cursor, dia: date, scope_sucursales: Sequence[int]) -> List[Dict[str, Any]]:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
     sql = f"""
         SELECT HOUR(cc.FechaControl) AS hora, SUM({_net_line_sql('cc')}) AS ventas_netas
         FROM cuentacliente cc
@@ -147,10 +175,10 @@ def _serie_horaria(cursor, dia: date, cod_sucursal: Optional[int] = None) -> Lis
     return out
 
 
-def _serie_7_dias(cursor, fecha_fin: date, cod_sucursal: Optional[int] = None) -> List[Dict[str, Any]]:
+def _serie_7_dias(cursor, fecha_fin: date, scope_sucursales: Sequence[int]) -> List[Dict[str, Any]]:
     fecha_ini = fecha_fin - timedelta(days=6)
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
     sql = f"""
         SELECT cc.Fecha AS dia, SUM({_net_line_sql('cc')}) AS ventas_netas
         FROM cuentacliente cc
@@ -173,7 +201,7 @@ def _top_productos_ventas_dia(
     cursor,
     dia: date,
     *,
-    cod_sucursal: Optional[int] = None,
+    scope_sucursales: Sequence[int],
     orden_rank: str = "importe_neto",
     limit: int = _TOP_PRODUCTOS_LIMIT,
 ) -> List[Dict[str, Any]]:
@@ -183,7 +211,7 @@ def _top_productos_ventas_dia(
     Paridad de filtros con ``_unidades_dia``.
     """
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     qty_expr = """
         SUM(CASE
@@ -262,13 +290,13 @@ def _top_productos_ventas_dia(
 def _margen_bruto_totales_dia(
     cursor,
     dia: date,
-    cod_sucursal: Optional[int] = None,
+    scope_sucursales: Sequence[int],
 ) -> Dict[str, Any]:
     """
     Totales de rentabilidad por renglón ``stock`` (misma ventana que unidades del día).
     """
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     neto = _signed_precio_netoxr_sql()
     costo = signed_costo_neto_linea_sql()
@@ -305,10 +333,10 @@ def _margen_bruto_totales_dia(
 def _margen_por_rubro_dia(
     cursor,
     dia: date,
-    cod_sucursal: Optional[int] = None,
+    scope_sucursales: Sequence[int],
 ) -> List[Dict[str, Any]]:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     neto = _signed_precio_netoxr_sql()
     costo = signed_costo_neto_linea_sql()
@@ -375,10 +403,10 @@ def _margen_por_rubro_dia(
 def _margen_por_subrubro_dia(
     cursor,
     dia: date,
-    cod_sucursal: Optional[int] = None,
+    scope_sucursales: Sequence[int],
 ) -> List[Dict[str, Any]]:
     base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
+    suc_sql, suc_p = _cc_scope_sql(scope_sucursales)
     ph_tc = ",".join(["%s"] * len(_STOCK_TIPO_COMP))
     neto = _signed_precio_netoxr_sql()
     costo = signed_costo_neto_linea_sql()
@@ -466,37 +494,18 @@ def _margen_por_subrubro_dia(
 def _split_canal(
     cursor,
     dia: date,
-    mayorista_ids: Sequence[int],
-    minorista_ids: Sequence[int],
-    cod_sucursal: Optional[int] = None,
+    may_scope: Sequence[int],
+    min_scope: Sequence[int],
+    consolidado_scope: Sequence[int],
 ) -> Dict[str, float]:
-    base_w, base_p = _base_cc_where("cc")
-    suc_sql, suc_p = _cc_sucursal_sql(cod_sucursal)
-    net = _net_line_sql("cc")
-
-    def _sum_for_pvs(pvs: Sequence[int]) -> float:
-        if not pvs:
-            return 0.0
-        ph = ",".join(["%s"] * len(pvs))
-        sql = f"""
-            SELECT SUM({net}) AS v
-            FROM cuentacliente cc
-            WHERE cc.Fecha = %s AND {base_w}{suc_sql} AND cc.id_pv IN ({ph})
-        """
-        params = [dia] + base_p + suc_p + list(pvs)
-        cursor.execute(sql, params)
-        row = cursor.fetchone()
-        return float(row[0] or 0) if row else 0.0
-
-    m_may = _sum_for_pvs(mayorista_ids)
-    m_min = _sum_for_pvs(minorista_ids)
-    total_dia = _ventas_netas_dia(cursor, dia, cod_sucursal)
-    asignado = m_may + m_min
-    sin_asignar = max(0.0, total_dia - asignado)
+    """Ventas del día por canal (solo sucursales clasificadas en alcance)."""
+    m_may = _ventas_netas_dia(cursor, dia, may_scope)
+    m_min = _ventas_netas_dia(cursor, dia, min_scope)
+    consolidado = _ventas_netas_dia(cursor, dia, consolidado_scope)
     return {
         "mayorista": round(m_may, 2),
         "minorista": round(m_min, 2),
-        "sin_asignar": round(sin_asignar, 2),
+        "consolidado": round(consolidado, 2),
     }
 
 
@@ -513,8 +522,8 @@ def _normalizar_top_productos_orden(raw: Optional[str]) -> str:
     return "importe_neto"
 
 
-def fetch_sucursales_ejecutivo(cursor) -> List[Dict[str, Any]]:
-    """Sucursales activas para filtro del panel (MySQL ``sucursales``)."""
+def fetch_sucursales_activas(cursor) -> List[Dict[str, Any]]:
+    """Sucursales activas en AdministraNET (modal de clasificación)."""
     try:
         cursor.execute(
             """
@@ -529,7 +538,49 @@ def fetch_sucursales_ejecutivo(cursor) -> List[Dict[str, Any]]:
             return []
         cols = [d[0] for d in desc]
     except Exception:
-        logger.exception("fetch_sucursales_ejecutivo: error al listar sucursales")
+        logger.exception("fetch_sucursales_activas: error al listar sucursales")
+        return []
+    out: List[Dict[str, Any]] = []
+    for row in cursor.fetchall():
+        r = dict(zip(cols, row))
+        try:
+            sid = int(r.get("id_sucursal"))
+        except (TypeError, ValueError):
+            continue
+        nombre = str(r.get("nombre_sucursal") or "-").strip()
+        out.append({"id_sucursal": sid, "nombre_sucursal": nombre})
+    return out
+
+
+# Alias usado por Command Center y código legacy.
+fetch_sucursales_ejecutivo = fetch_sucursales_activas
+
+
+def fetch_sucursales_clasificadas(
+    cursor, classified_ids: Sequence[int]
+) -> List[Dict[str, Any]]:
+    """Nombres de sucursales clasificadas (filtro multiselección del panel)."""
+    if not classified_ids:
+        return []
+    ids = sorted({int(x) for x in classified_ids})
+    ph = ",".join(["%s"] * len(ids))
+    try:
+        cursor.execute(
+            f"""
+            SELECT id_sucursal, nombre_sucursal
+            FROM sucursales
+            WHERE id_sucursal IN ({ph})
+              AND (anulado = 'No' OR anulado IS NULL)
+            ORDER BY nombre_sucursal
+            """,
+            ids,
+        )
+        desc = cursor.description
+        if not desc:
+            return []
+        cols = [d[0] for d in desc]
+    except Exception:
+        logger.exception("fetch_sucursales_clasificadas: error al listar")
         return []
     out: List[Dict[str, Any]] = []
     for row in cursor.fetchall():
@@ -546,39 +597,46 @@ def fetch_sucursales_ejecutivo(cursor) -> List[Dict[str, Any]]:
 def run_executive_summary(
     cursor,
     fecha_referencia: date,
-    mayorista_ids: Sequence[int],
-    minorista_ids: Sequence[int],
+    mayorista_sucursales: Sequence[int],
+    minorista_sucursales: Sequence[int],
     *,
-    cod_sucursal: Optional[int] = None,
+    sucursales_filtro: Optional[Sequence[int]] = None,
     top_productos_orden: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Calcula payload del panel ejecutivo. ``cursor`` sobre MySQL empresa.
-
-    ``cod_sucursal``: si se informa, todos los agregados limitan a ``cuentacliente.CodSucursal``.
-    ``top_productos_orden``: ``importe_neto`` (defecto) o ``unidades`` para el ranking Top 10.
+    Calcula payload del panel ejecutivo. Solo incluye sucursales clasificadas
+    (mayorista o minorista). Las no clasificadas no entran en ningún agregado.
     """
     orden_tp = _normalizar_top_productos_orden(top_productos_orden)
+    may_scope, min_scope, consolidado_scope = resolve_executive_scope(
+        mayorista_sucursales,
+        minorista_sucursales,
+        sucursales_filtro,
+    )
     hoy = fecha_referencia
     ayer = hoy - timedelta(days=1)
     semana_pasada = hoy - timedelta(days=7)
 
-    v_hoy = _ventas_netas_dia(cursor, hoy, cod_sucursal)
-    v_ayer = _ventas_netas_dia(cursor, ayer, cod_sucursal)
-    v_sem = _ventas_netas_dia(cursor, semana_pasada, cod_sucursal)
+    v_hoy = _ventas_netas_dia(cursor, hoy, consolidado_scope)
+    v_ayer = _ventas_netas_dia(cursor, ayer, consolidado_scope)
+    v_sem = _ventas_netas_dia(cursor, semana_pasada, consolidado_scope)
 
-    tickets = _tickets_dia(cursor, hoy, cod_sucursal)
+    tickets = _tickets_dia(cursor, hoy, consolidado_scope)
     ticket_prom = (v_hoy / tickets) if tickets else None
 
-    unidades = _unidades_dia(cursor, hoy, cod_sucursal)
+    unidades = _unidades_dia(cursor, hoy, consolidado_scope)
 
-    split = _split_canal(cursor, hoy, mayorista_ids, minorista_ids, cod_sucursal)
+    split = _split_canal(cursor, hoy, may_scope, min_scope, consolidado_scope)
     gap_vs_ayer = round(v_hoy - v_ayer, 2)
 
-    margen_bruto = _margen_bruto_totales_dia(cursor, hoy, cod_sucursal)
-    margen_por_rubro = _margen_por_rubro_dia(cursor, hoy, cod_sucursal)
-    margen_por_subrubro = _margen_por_subrubro_dia(cursor, hoy, cod_sucursal)
+    margen_bruto = _margen_bruto_totales_dia(cursor, hoy, consolidado_scope)
+    margen_por_rubro = _margen_por_rubro_dia(cursor, hoy, consolidado_scope)
+    margen_por_subrubro = _margen_por_subrubro_dia(cursor, hoy, consolidado_scope)
     criterio_costo = margen_costo_criterio_meta()
+
+    classified_all = sorted(
+        {int(x) for x in mayorista_sucursales} | {int(x) for x in minorista_sucursales}
+    )
 
     return {
         "fecha_referencia": hoy.isoformat(),
@@ -597,17 +655,17 @@ def run_executive_summary(
         "margen_por_rubro": margen_por_rubro,
         "margen_por_subrubro": margen_por_subrubro,
         "split_mayorista_minorista": split,
-        "serie_horaria": _serie_horaria(cursor, hoy, cod_sucursal),
-        "serie_7_dias": _serie_7_dias(cursor, hoy, cod_sucursal),
+        "serie_horaria": _serie_horaria(cursor, hoy, consolidado_scope),
+        "serie_7_dias": _serie_7_dias(cursor, hoy, consolidado_scope),
         "top_productos": _top_productos_ventas_dia(
             cursor,
             hoy,
-            cod_sucursal=cod_sucursal,
+            scope_sucursales=consolidado_scope,
             orden_rank=orden_tp,
         ),
-        "sucursales_disponibles": fetch_sucursales_ejecutivo(cursor),
+        "sucursales_disponibles": fetch_sucursales_clasificadas(cursor, classified_all),
         "meta": {
-            "definicion": "executive-sales-v2",
+            "definicion": "executive-sales-v3-sucursal",
             "hora_eje": "FechaControl",
             "dia_contable": "Fecha",
             "top_productos_criterio": "importe_neto_linea",
@@ -618,35 +676,9 @@ def run_executive_summary(
                 "Criterio vigente: suma firmada de PrecioCostoxR por renglón, "
                 "paridad informe rentabilidad AdministraNET (venta_rentabilidad_resumen)."
             ),
-            "cod_sucursal_filtro": cod_sucursal,
+            "sucursales_filtro": list(sucursales_filtro) if sucursales_filtro else [],
+            "sucursales_clasificadas_total": len(classified_all),
+            "sin_sucursales_clasificadas": len(classified_all) == 0,
             "top_productos_orden": orden_tp,
         },
     }
-
-
-def fetch_puntos_venta_activos(cursor) -> List[Dict[str, Any]]:
-    """Lista PV no anulados (mismo criterio que filtros API)."""
-    cursor.execute(
-        """
-        SELECT id_punto_venta, nro_punto_venta, id_sucursal
-        FROM punto_venta
-        WHERE anulado = 'No' OR anulado IS NULL
-        ORDER BY nro_punto_venta, id_punto_venta
-        """
-    )
-    cols = [d[0] for d in cursor.description]
-    out = []
-    for row in cursor.fetchall():
-        r = dict(zip(cols, row))
-        id_pv = int(r["id_punto_venta"])
-        nro = r.get("nro_punto_venta")
-        label = f"PV {nro}" if nro is not None else f"PV {id_pv}"
-        out.append(
-            {
-                "id_pv": id_pv,
-                "label": label,
-                "nro_punto_venta": nro,
-                "id_sucursal": r.get("id_sucursal"),
-            }
-        )
-    return out

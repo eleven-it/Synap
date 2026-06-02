@@ -3,7 +3,9 @@
 ## Alcance
 
 - **Vista nueva** en el módulo **Reportes**: **Resumen general** — panel ejecutivo con KPIs y gráficos de **ventas facturadas** (solo `cuentacliente`), visible según **permisos gerenciales**.
-- **CRUD de clasificación de puntos de venta (PV)** para el dashboard: **no es pantalla aparte**; se abre en un **modal** desde el **mismo indicador KPI** «Mayorista vs Salón (minorista)», mediante un **icono de engranaje** (Material: `settings` o equivalente en el sistema de iconos Synap) en la tarjeta del KPI. Dentro del modal: **tres columnas** (izquierda / centro / derecha), **arrastre** y **botones de dirección**; el centro lista PV **activos en AdministraNET** y **no anulados**, pendientes de clasificar.
+- **CRUD de clasificación por sucursal** para el dashboard: **no es pantalla aparte**; se abre en un **modal** desde la tarjeta **Consolidado** (icono engranaje). **Tres columnas** (mayorista / sin asignar / minorista) con arrastre y flechas; el centro lista sucursales **activas** en AdministraNET (`sucursales`, `anulado = 'No'`). **Solo** las sucursales clasificadas como mayorista o minorista entran al informe; las no asignadas se ignoran.
+- **Filtro de sucursales** (multiselección tipo tags, como otros informes): restringe el alcance dentro del conjunto clasificado; sin selección = todas las clasificadas.
+- **Tres tarjetas KPI de canal:** Mayorista, Minorista (salón) y Consolidado (suma de ambos canales en alcance).
 - **Fuente temporal intradiaria:** agrupación por hora usando **`cuentacliente.FechaControl`** (ver § Fuentes de datos). **Fecha contable del comprobante:** `cuentacliente.Fecha` para totales diarios y serie de 7 días.
 
 ## Objetivo de producto
@@ -17,7 +19,7 @@ Ofrecer a dirección una **lectura rápida** del día: monto, comparativos, tick
 | Tema | Regla |
 |------|--------|
 | Nivel | **Dashboard gerencial.** Requiere permiso equivalente a **`reports.view_managerial`** (y usuario autenticado con empresa activa). |
-| Visibilidad | Quien tiene acceso gerencial al informe ve **el detalle completo** de la empresa: **sin** restricción obligatoria por sucursal o PV. El panel incluye filtro **opcional por sucursal** (`cuentacliente.CodSucursal`): por defecto **todas**; al elegir una sucursal, **todos** los agregados (KPIs, series, split mayorista/salón y Top 10) se calculan solo para esa sucursal. |
+| Visibilidad | Acceso gerencial a la empresa. Alcance del informe = **solo sucursales clasificadas** (mayorista ∪ minorista). Filtro UI multiselección opcional dentro de ese conjunto. |
 | Permiso CRUD PV | Definir en implementación (p. ej. mismo permiso gerencial o **`configuracion.empresa`** / grupo **Ventas** con permiso dedicado `ventas.config_pv_canal` — cerrar al desarrollar). |
 
 ---
@@ -88,7 +90,7 @@ Ofrecer a dirección una **lectura rápida** del día: monto, comparativos, tick
 
 ### Modelo de datos (implementación)
 
-- **Opción A (recomendada para no tocar VB6):** tabla de configuración en **Synap (PostgreSQL/SQLite según proyecto)** con `base_empresa` o `empresa_id`, `id_pv`, `canal` ∈ { `mayorista`, `minorista` }, unicidad `(empresa, id_pv)`.
+- **Modelo Synap:** `SucursalCanalEjecutivo` con `empresa_id`, `id_sucursal` (`sucursales.id_sucursal`), `canal` ∈ { `mayorista`, `minorista` }. Relación legacy: `punto_venta.id_sucursal` → sucursal; agregación del informe por `cuentacliente.CodSucursal`.
 - **Opción B (legacy MySQL):** nueva columna en `punto_venta` o tabla satélite en MySQL, gestionada vía [`core/services/legacy_mysql_schema/catalog.py`](../../core/services/legacy_mysql_schema/catalog.py) según [HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md](../general/HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md).
 
 **Nota:** La evolución futura a tipos finos (**Normal, Mayorista, TPV, Ecom minorista, Ecom mayorista**) puede mapearse a subetiquetas dentro de Mayorista/Minorista o ampliar el enum; la **v1** de esta spec es el **reparto binario** más columna central de **sin asignar**.

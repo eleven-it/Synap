@@ -176,7 +176,10 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
         )
         if report.slug == self.EXECUTIVE_SLUG:
             context["executive_summary_api_url"] = reverse("reports-api:reports-executive-summary")
-            context["pv_canal_api_url"] = reverse("reports-api:reports-pv-canal-ejecutivo")
+            context["sucursal_canal_api_url"] = reverse(
+                "reports-api:reports-sucursal-canal-ejecutivo"
+            )
+            context["pv_canal_api_url"] = context["sucursal_canal_api_url"]
         if report.slug == self.COMMAND_CENTER_SLUG:
             from reports.services.executive_dashboard.base import mpr_modulo_activo
 
