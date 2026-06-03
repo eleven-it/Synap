@@ -39,23 +39,42 @@
   let chartResizeObserver = null;
   let resizeChartsTimer = null;
 
+  const SECCIONES = [
+    {
+      key: "consolidado",
+      label: "Consolidado",
+      accent: "indigo",
+      icon: "hub",
+      editableAnio: true,
+      showGear: true,
+      subtitle: "Suma mayorista + minorista (solo sucursales clasificadas)",
+    },
+    { key: "mayorista", label: "Mayorista", accent: "amber", icon: "warehouse" },
+    { key: "minorista", label: "Minorista (Salón)", accent: "emerald", icon: "storefront" },
+  ];
+
+  function formatFechaEs(iso) {
+    if (!iso || typeof iso !== "string") return "";
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso.trim());
+    if (!m) return iso;
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  }
+
   function debounceRedrawCharts() {
     if (resizeChartsTimer) clearTimeout(resizeChartsTimer);
     resizeChartsTimer = setTimeout(() => {
       resizeChartsTimer = null;
-      if (cachedChartData) renderCharts(cachedChartData);
+      if (cachedChartData) renderAllCharts(cachedChartData);
     }, 120);
   }
 
   function ensureChartResizeObserver() {
     if (typeof ResizeObserver === "undefined") return;
     if (chartResizeObserver) return;
-    const h = el("exec-chart-hora");
-    const d = el("exec-chart-7d");
-    if (!h && !d) return;
+    const root = el("exec-secciones");
+    if (!root) return;
     chartResizeObserver = new ResizeObserver(() => debounceRedrawCharts());
-    if (h) chartResizeObserver.observe(h);
-    if (d) chartResizeObserver.observe(d);
+    chartResizeObserver.observe(root);
     window.addEventListener("orientationchange", debounceRedrawCharts, { passive: true });
   }
 
@@ -179,8 +198,8 @@
       </div>`;
   }
 
-  function staggerKpiGrid() {
-    const grid = el("exec-kpi-grid");
+  function staggerKpiGrid(sectionKey) {
+    const grid = el(`exec-kpi-grid-${sectionKey}`);
     if (!grid) return;
     grid.querySelectorAll(":scope > div").forEach((node, i) => {
       node.classList.add("exec-kpi-animate");
@@ -188,61 +207,70 @@
     });
   }
 
-  function renderCanales(data) {
-    const grid = el("exec-canales-grid");
-    const banner = el("exec-sin-clasificar");
-    const meta = data.meta || {};
-    const split = data.split_mayorista_minorista || {};
-    const sinClas = !!meta.sin_sucursales_clasificadas;
+  function vsSemanaValueHtml(k) {
+    const pctBlock = pctValueHtml(k.pct_vs_misma_semana_anterior);
+    const gap = k.gap_vs_misma_semana_anterior_monto;
+    if (gap === null || gap === undefined || Number.isNaN(Number(gap))) return pctBlock;
+    const gapNum = Number(gap);
+    const up = gapNum > 0;
+    const down = gapNum < 0;
+    const subCls = up
+      ? "text-emerald-700 dark:text-emerald-300"
+      : down
+        ? "text-red-700 dark:text-red-300"
+        : "text-slate-600 dark:text-slate-400";
+    return `
+      <div class="flex flex-col gap-1.5">
+        ${pctBlock}
+        <div class="text-sm font-semibold tabular-nums ${subCls}">${fmtMoney.format(gapNum)} <span class="font-normal text-slate-500 dark:text-slate-400">vs sem. ant.</span></div>
+      </div>`;
+  }
 
-    if (banner) {
-      if (sinClas) {
-        banner.textContent =
-          "No hay sucursales clasificadas como mayorista o minorista. Usá el engranaje en Consolidado para configurarlas.";
-        banner.classList.remove("hidden");
-      } else {
-        banner.classList.add("hidden");
-        banner.textContent = "";
-      }
+  function vsAnioAnteriorValueHtml(k, editable, meta) {
+    const pctBlock = pctValueHtml(k.pct_vs_anio_anterior);
+    const gap = k.gap_vs_anio_anterior_monto;
+    const fechaComp =
+      k.fecha_comparacion_anio_anterior || meta?.fecha_comparacion_anio_anterior_aplicada || "";
+    const ventasRef = k.ventas_anio_anterior_monto;
+    let gapBlock = "";
+    if (gap !== null && gap !== undefined && !Number.isNaN(Number(gap))) {
+      const gapNum = Number(gap);
+      const up = gapNum > 0;
+      const down = gapNum < 0;
+      const subCls = up
+        ? "text-emerald-700 dark:text-emerald-300"
+        : down
+          ? "text-red-700 dark:text-red-300"
+          : "text-slate-600 dark:text-slate-400";
+      gapBlock = `<div class="text-sm font-semibold tabular-nums ${subCls}">${fmtMoney.format(gapNum)} <span class="font-normal text-slate-500 dark:text-slate-400">vs fecha elegida</span></div>`;
     }
-    if (!grid) return;
-
-    const gearBtn = `
-      <button type="button" id="exec-open-pv-modal" class="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white/90 text-slate-500 shadow-sm transition hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 dark:border-slate-600 dark:bg-slate-800/90 dark:hover:border-purple-600 dark:hover:bg-purple-950/50 dark:hover:text-purple-300" title="Clasificar sucursales">
-        <span class="material-icons text-xl" aria-hidden="true">settings</span>
-      </button>`;
-
-    grid.innerHTML = [
-      kpiCard("Mayorista", fmtMoney.format(split.mayorista || 0), {
-        icon: "warehouse",
-        accent: "amber",
-        valueClass: "text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl",
-      }),
-      kpiCard("Minorista (Salón)", fmtMoney.format(split.minorista || 0), {
-        icon: "storefront",
-        accent: "emerald",
-        valueClass: "text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl",
-      }),
-      `<div class="group relative overflow-hidden rounded-2xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-indigo-50/40 p-4 shadow-md dark:border-slate-700 dark:from-slate-900 dark:to-indigo-950/30">
-        ${gearBtn}
-        <p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">Consolidado</p>
-        <p class="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">${fmtMoney.format(split.consolidado || 0)}</p>
-        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Suma mayorista + minorista (solo sucursales clasificadas)</p>
-      </div>`,
-    ].join("");
-    const btn = el("exec-open-pv-modal");
-    if (btn) btn.addEventListener("click", openSucursalModal);
-    grid.querySelectorAll(":scope > div").forEach((node, i) => {
-      node.classList.add("exec-kpi-animate");
-      node.style.animationDelay = `${i * 50}ms`;
-    });
+    const refTxt =
+      ventasRef != null && !Number.isNaN(Number(ventasRef))
+        ? `Referencia: ${fmtMoney.format(Number(ventasRef))} el ${formatFechaEs(fechaComp)}`
+        : `Fecha de referencia: ${formatFechaEs(fechaComp)}`;
+    if (editable) {
+      const val = fechaComp || meta?.fecha_comparacion_anio_anterior_defecto || "";
+      return `
+        <div class="flex flex-col gap-2">
+          ${pctBlock}
+          ${gapBlock}
+          <label class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400" for="exec-fecha-comparacion-anio">Fecha de comparación</label>
+          <input type="date" id="exec-fecha-comparacion-anio" value="${escapeHtml(val)}" class="w-full max-w-[11rem] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-900 shadow-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/30 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100" title="Elegí el día del año anterior (o promocional) para comparar en las tres secciones" />
+          <p class="text-xs leading-snug text-slate-500 dark:text-slate-400">${escapeHtml(refTxt)}. Cambiá la fecha y se recalcula todo el panel.</p>
+        </div>`;
+    }
+    return `
+      <div class="flex flex-col gap-1.5">
+        ${pctBlock}
+        ${gapBlock}
+        <p class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(refTxt)}</p>
+      </div>`;
   }
 
-  function renderKpis(data) {
-    const grid = el("exec-kpi-grid");
-    if (!grid || !data.kpis) return;
-    const k = data.kpis;
-    grid.innerHTML = [
+  function renderKpiGridHtml(k, opts) {
+    const o = opts || {};
+    const meta = o.meta || {};
+    return [
       kpiCard("Ventas del día", fmtMoney.format(k.ventas_netas_dia || 0), {
         icon: "payments",
         accent: "sky",
@@ -250,10 +278,12 @@
         valueClass: "text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl",
       }),
       kpiCard("Vs ayer", vsAyerValueHtml(k), { icon: "compare_arrows", accent: "indigo" }),
-      kpiCard("Vs mismo día sem. ant.", pctValueHtml(k.pct_vs_misma_semana_anterior), {
-        icon: "date_range",
-        accent: "purple",
-      }),
+      kpiCard("Vs mismo día sem. ant.", vsSemanaValueHtml(k), { icon: "date_range", accent: "purple" }),
+      kpiCard(
+        "Mismo día año anterior",
+        vsAnioAnteriorValueHtml(k, !!o.editableAnio, meta),
+        { icon: "history", accent: "teal", span: o.editableAnio ? "sm:col-span-2 xl:col-span-2" : "" },
+      ),
       kpiCard("Tickets", `${(k.tickets ?? 0).toLocaleString("es-AR")}`, { icon: "confirmation_number", accent: "emerald" }),
       kpiCard("Ticket promedio", k.ticket_promedio != null ? fmtMoney.format(k.ticket_promedio) : "N/D", {
         icon: "functions",
@@ -264,7 +294,125 @@
         accent: "slate",
       }),
     ].join("");
-    staggerKpiGrid();
+  }
+
+  function updateSinClasificarBanner(meta) {
+    const banner = el("exec-sin-clasificar");
+    if (!banner) return;
+    if (meta?.sin_sucursales_clasificadas) {
+      banner.textContent =
+        "No hay sucursales clasificadas como mayorista o minorista. Usá el engranaje en Consolidado para configurarlas.";
+      banner.classList.remove("hidden");
+    } else {
+      banner.classList.add("hidden");
+      banner.textContent = "";
+    }
+  }
+
+  function sectionHeaderHtml(cfg) {
+    const theme = KPI_THEME[cfg.accent] || KPI_THEME.sky;
+    const gear = cfg.showGear
+      ? `<button type="button" id="exec-open-pv-modal" class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white/90 text-slate-500 shadow-sm transition hover:border-purple-300 hover:bg-purple-50 hover:text-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 dark:border-slate-600 dark:bg-slate-800/90 dark:hover:border-purple-600 dark:hover:bg-purple-950/50 dark:hover:text-purple-300" title="Clasificar sucursales">
+        <span class="material-icons text-xl" aria-hidden="true">settings</span>
+      </button>`
+      : "";
+    const sub = cfg.subtitle
+      ? `<p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">${escapeHtml(cfg.subtitle)}</p>`
+      : "";
+    return `
+      <div class="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200/90 pb-3 dark:border-slate-700">
+        <div class="flex min-w-0 items-start gap-3">
+          <span class="material-icons rounded-xl p-2 text-2xl ${theme.icon}" aria-hidden="true">${cfg.icon}</span>
+          <div>
+            <h2 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white sm:text-xl">${escapeHtml(cfg.label)}</h2>
+            ${sub}
+          </div>
+        </div>
+        ${gear}
+      </div>`;
+  }
+
+  function sectionChartsHtml(sectionKey) {
+    return `
+      <div class="mb-8 grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
+        <div class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/40 transition hover:border-sky-200 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:border-sky-800">
+          <div class="flex flex-shrink-0 items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-sky-50/90 to-transparent px-4 py-3 dark:border-slate-700 dark:from-sky-950/50">
+            <span class="material-icons text-xl text-sky-600 dark:text-sky-400" aria-hidden="true">schedule</span>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white sm:text-base">Ventas por hora</h3>
+            <span class="ml-auto rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800 dark:bg-sky-900/60 dark:text-sky-200">Hoy</span>
+          </div>
+          <div id="exec-chart-hora-${sectionKey}" class="exec-chart-wrap w-full min-h-[200px] flex-1 overflow-x-hidden bg-slate-50/50 p-1 sm:min-h-[240px] sm:p-2 dark:bg-slate-950/30"></div>
+        </div>
+        <div class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/40 transition hover:border-indigo-200 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:border-indigo-800">
+          <div class="flex flex-shrink-0 items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-indigo-50/90 to-transparent px-4 py-3 dark:border-slate-700 dark:from-indigo-950/50">
+            <span class="material-icons text-xl text-indigo-600 dark:text-indigo-400" aria-hidden="true">date_range</span>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white sm:text-base">Últimos 7 días</h3>
+            <span class="ml-auto rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200">Tendencia</span>
+          </div>
+          <div id="exec-chart-7d-${sectionKey}" class="exec-chart-wrap w-full min-h-[200px] flex-1 overflow-x-hidden bg-slate-50/50 p-1 sm:min-h-[240px] sm:p-2 dark:bg-slate-950/30"></div>
+        </div>
+        <div class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/40 transition hover:border-violet-200 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:border-violet-800 lg:col-span-2">
+          <div class="flex flex-shrink-0 items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-violet-50/90 to-transparent px-4 py-3 dark:border-slate-700 dark:from-violet-950/50">
+            <span class="material-icons text-xl text-violet-600 dark:text-violet-400" aria-hidden="true">bar_chart</span>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white sm:text-base">Día de referencia vs fecha comparación</h3>
+            <span class="ml-auto rounded-md bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800 dark:bg-violet-900/60 dark:text-violet-200">Ventas netas</span>
+          </div>
+          <div id="exec-chart-yoy-${sectionKey}" class="exec-chart-wrap w-full min-h-[220px] flex-1 overflow-x-hidden bg-slate-50/50 p-1 sm:min-h-[240px] sm:p-2 dark:bg-slate-950/30" role="img" aria-label="Gráfico comparativo de ventas del día de referencia y la fecha de comparación año anterior"></div>
+        </div>
+      </div>`;
+  }
+
+  function sectionRentabilidadShellHtml(sectionKey, showTopBadge) {
+    const badge = showTopBadge
+      ? `<span id="exec-top-orden-badge" class="rounded-md bg-cyan-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-900 dark:bg-cyan-900/50 dark:text-cyan-100" title="Criterio de ranking del Top 10 artículos">Venta neta</span>`
+      : "";
+    return `
+      <div class="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30">
+        <div class="flex flex-shrink-0 flex-col gap-1 border-b border-slate-100 bg-gradient-to-r from-teal-50/90 to-transparent px-4 py-3 dark:border-slate-700 dark:from-teal-950/40 sm:flex-row sm:items-center sm:gap-3">
+          <div class="flex items-center gap-2">
+            <span class="material-icons text-xl text-teal-600 dark:text-teal-400" aria-hidden="true">account_balance_wallet</span>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white sm:text-base">Rentabilidad del día</h3>
+          </div>
+          ${badge}
+          <p id="exec-rentabilidad-nota-${sectionKey}" class="text-xs leading-snug text-slate-500 dark:text-slate-400 sm:ml-auto sm:max-w-xl sm:text-right"></p>
+        </div>
+        <div id="exec-margen-kpis-${sectionKey}" class="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:gap-4 sm:p-4 lg:grid-cols-3"></div>
+        <div id="exec-margen-tablas-${sectionKey}" class="hidden border-t border-slate-100 bg-slate-50/50 p-2 sm:p-4 lg:block dark:border-slate-700 dark:bg-slate-950/30" role="region" aria-label="Top 10 artículos, rubros y subrubros (solo escritorio)"></div>
+      </div>`;
+  }
+
+  function renderSecciones(data) {
+    const root = el("exec-secciones");
+    if (!root) return;
+    const meta = data.meta || {};
+    const secciones = data.secciones || {};
+    updateSinClasificarBanner(meta);
+
+    root.innerHTML = SECCIONES.map((cfg, idx) => {
+      const seccion = secciones[cfg.key] || {};
+      const k = seccion.kpis || {};
+      return `
+        <section id="exec-section-${cfg.key}" class="exec-section rounded-2xl border border-slate-200/60 bg-slate-50/30 p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-950/20 sm:p-5" aria-labelledby="exec-section-title-${cfg.key}">
+          ${sectionHeaderHtml(cfg)}
+          <div class="mb-6 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:gap-4 xl:grid-cols-4" id="exec-kpi-grid-${cfg.key}"></div>
+          ${sectionChartsHtml(cfg.key)}
+          ${sectionRentabilidadShellHtml(cfg.key, idx === 0)}
+        </section>`;
+    }).join("");
+
+    SECCIONES.forEach((cfg) => {
+      const seccion = secciones[cfg.key] || {};
+      const k = seccion.kpis || {};
+      const grid = el(`exec-kpi-grid-${cfg.key}`);
+      if (grid) {
+        grid.innerHTML = renderKpiGridHtml(k, {
+          editableAnio: cfg.editableAnio,
+          meta,
+        });
+        staggerKpiGrid(cfg.key);
+      }
+      renderRentabilidadSection(cfg.key, seccion, meta, cfg.key === "consolidado");
+    });
   }
 
   function updateTopOrdenBadge(meta) {
@@ -288,9 +436,9 @@
         topOrd === "unidades"
           ? "Sin artículos con unidades o importe en el día seleccionado."
           : "Sin artículos con importe en el día seleccionado.";
-      return `<div class="mb-6"><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 artículos</h3><p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">${escapeHtml(emptyMsg)}</p></div>`;
+      return `<div class="mb-6 hidden lg:block"><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 artículos</h3><p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">${escapeHtml(emptyMsg)}</p></div>`;
     }
-    const head = `
+    return `
       <div class="mb-6 hidden overflow-x-auto lg:block">
         <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 artículos</h3>
         <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
@@ -317,39 +465,20 @@
           </tbody>
         </table>
       </div>`;
-    const cards = `
-      <div class="mb-6 space-y-2 lg:hidden">
-        <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 artículos</h3>
-        ${rows
-          .map(
-            (r) => `
-          <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
-            <div class="flex items-start justify-between gap-2">
-              <span class="font-mono text-xs font-semibold text-sky-700 dark:text-sky-300">${escapeHtml(r.codigo_articulo || "—")}</span>
-              <span class="text-sm font-bold tabular-nums text-slate-900 dark:text-white">${fmtMoney.format(Number(r.importe_neto ?? 0))}</span>
-            </div>
-            <p class="mt-1 text-sm leading-snug text-slate-700 dark:text-slate-200">${escapeHtml(r.descripcion || "—")}</p>
-            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400"><span class="font-medium">Unidades</span> ${Number(r.unidades ?? 0).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</p>
-          </div>`,
-          )
-          .join("")}
-      </div>`;
-    return head + cards;
   }
 
-  function renderRentabilidad(data) {
-    const notaEl = el("exec-rentabilidad-nota");
-    const kGrid = el("exec-margen-kpis");
-    const tablas = el("exec-margen-tablas");
+  function renderRentabilidadSection(sectionKey, seccion, meta, updateBadge) {
+    const notaEl = el(`exec-rentabilidad-nota-${sectionKey}`);
+    const kGrid = el(`exec-margen-kpis-${sectionKey}`);
+    const tablas = el(`exec-margen-tablas-${sectionKey}`);
     if (!kGrid || !tablas) return;
 
-    const meta = data.meta || {};
     if (notaEl) {
       notaEl.textContent =
         "Rentabilidad por renglón de facturación (PrecioNetoxR / costo normalizado en unidad base).";
     }
 
-    const mb = data.margen_bruto || {};
+    const mb = seccion.margen_bruto || {};
     const vn = Number(mb.venta_neta_lineas ?? 0);
     const cn = Number(mb.costo_neto_lineas ?? 0);
     const ma = Number(mb.margen_absoluto ?? vn - cn);
@@ -374,15 +503,15 @@
       }),
     ].join("");
 
-    const rubros = (data.margen_por_rubro || []).slice(0, 10);
-    const subrub = (data.margen_por_subrubro || []).slice(0, 10);
-    const topProductos = (data.top_productos || []).slice(0, 10);
+    const rubros = (seccion.margen_por_rubro || []).slice(0, 10);
+    const subrub = (seccion.margen_por_subrubro || []).slice(0, 10);
+    const topProductos = (seccion.top_productos || []).slice(0, 10);
 
     function tablaMargenRubros(rows) {
       if (!rows.length) {
-        return `<div class="mb-6"><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por rubro</h3><p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en rubros para el día.</p></div>`;
+        return `<div class="mb-6 hidden lg:block"><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por rubro</h3><p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en rubros para el día.</p></div>`;
       }
-      const head = `
+      return `
         <div class="mb-6 hidden overflow-x-auto lg:block">
           <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por rubro</h3>
           <table class="w-full min-w-[32rem] border-collapse text-left text-sm">
@@ -411,32 +540,13 @@
             </tbody>
           </table>
         </div>`;
-      const cards = `
-        <div class="mb-6 space-y-2 lg:hidden">
-          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por rubro</h3>
-          ${rows
-            .map(
-              (r) => `
-            <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
-              <p class="text-sm font-semibold text-slate-900 dark:text-white">${escapeHtml(r.nombre_rubro || "—")}</p>
-              <div class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
-                <div><span class="font-medium">Venta</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.venta_neta ?? 0))}</span></div>
-                <div><span class="font-medium">Costo</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.costo_neto ?? 0))}</span></div>
-                <div><span class="font-medium">Margen</span><br/><span class="tabular-nums font-semibold text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</span></div>
-                <div><span class="font-medium">% s/ venta</span><br/>${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</div>
-              </div>
-            </div>`,
-            )
-            .join("")}
-        </div>`;
-      return head + cards;
     }
 
     function tablaMargenSubrubros(rows) {
       if (!rows.length) {
-        return `<div><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por subrubro</h3><p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en subrubros para el día.</p></div>`;
+        return `<div class="hidden lg:block"><h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por subrubro</h3><p class="py-4 text-center text-sm text-slate-500 dark:text-slate-400">Sin movimientos con importe en subrubros para el día.</p></div>`;
       }
-      const head = `
+      return `
         <div class="hidden overflow-x-auto lg:block">
           <h3 class="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por subrubro</h3>
           <table class="w-full min-w-[36rem] border-collapse text-left text-sm">
@@ -467,30 +577,10 @@
             </tbody>
           </table>
         </div>`;
-      const cards = `
-        <div class="space-y-2 lg:hidden">
-          <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">Top 10 por subrubro</h3>
-          ${rows
-            .map(
-              (r) => `
-            <div class="rounded-xl border border-slate-200/90 bg-white/95 px-3 py-2.5 shadow-sm dark:border-slate-600 dark:bg-slate-900/80">
-              <p class="text-sm font-semibold text-slate-900 dark:text-white">${escapeHtml(r.nombre_subrubro || "—")}</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400">${escapeHtml(r.nombre_rubro || "—")}</p>
-              <div class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
-                <div><span class="font-medium">Venta</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.venta_neta ?? 0))}</span></div>
-                <div><span class="font-medium">Costo</span><br/><span class="tabular-nums">${fmtMoney.format(Number(r.costo_neto ?? 0))}</span></div>
-                <div><span class="font-medium">Margen</span><br/><span class="tabular-nums font-semibold text-slate-900 dark:text-white">${fmtMoney.format(Number(r.margen_absoluto ?? 0))}</span></div>
-                <div><span class="font-medium">% s/ venta</span><br/>${fmtMargenSobreVentaPct(r.pct_sobre_venta)}</div>
-              </div>
-            </div>`,
-            )
-            .join("")}
-        </div>`;
-      return head + cards;
     }
 
-    tablas.innerHTML = `<div class="max-w-full">${tablaTopArticulos(topProductos, data.meta || {})}${tablaMargenRubros(rubros)}${tablaMargenSubrubros(subrub)}</div>`;
-    updateTopOrdenBadge(data.meta || {});
+    tablas.innerHTML = `<div class="max-w-full">${tablaTopArticulos(topProductos, meta || {})}${tablaMargenRubros(rubros)}${tablaMargenSubrubros(subrub)}</div>`;
+    if (updateBadge) updateTopOrdenBadge(meta || {});
   }
 
   /**
@@ -535,7 +625,7 @@
     let w = container.clientWidth || container.parentElement?.clientWidth || 320;
     if (w < 16) {
       requestAnimationFrame(() => {
-        if (cachedChartData) renderCharts(cachedChartData);
+        if (cachedChartData) renderAllCharts(cachedChartData);
       });
       return;
     }
@@ -591,7 +681,8 @@
 
     const yMax = d3.max(series, (d) => +d[yKey]) || 1;
 
-    const xScale = d3.scalePoint().domain(xDomain).range([0, iw]).padding(kind === "hora" ? 0.42 : 0.45);
+    const pointPadding = kind === "hora" ? 0.42 : 0.45;
+    const xScale = d3.scalePoint().domain(xDomain).range([0, iw]).padding(pointPadding);
     const yScale = d3.scaleLinear().domain([0, yMax * 1.08]).nice().range([ih, 0]);
 
     const yTickCount = compact ? 4 : 5;
@@ -677,6 +768,165 @@
       .attr("stroke", "#fff")
       .attr("stroke-width", narrow ? 1 : 1.5)
       .style("filter", "drop-shadow(0 1px 2px rgb(0 0 0 / 0.12))");
+  }
+
+  /**
+   * Barras: ventas del día de referencia vs ventas del día elegido en el KPI año anterior.
+   */
+  function drawBarCompareYoY(containerId, kpis, fechaRef, meta) {
+    const container = el(containerId);
+    if (!container || typeof d3 === "undefined") return;
+    let w = container.clientWidth || container.parentElement?.clientWidth || 320;
+    if (w < 16) {
+      requestAnimationFrame(() => {
+        if (cachedChartData) renderAllCharts(cachedChartData);
+      });
+      return;
+    }
+    container.innerHTML = "";
+    const k = kpis || {};
+    const refVal = Number(k.ventas_netas_dia ?? 0);
+    const compVal = Number(k.ventas_anio_anterior_monto ?? 0);
+    const fechaComp =
+      k.fecha_comparacion_anio_anterior || meta?.fecha_comparacion_anio_anterior_aplicada || "";
+    const bars = [
+      {
+        id: "ref",
+        caption: "Día de referencia",
+        fecha: formatFechaEs(fechaRef),
+        value: refVal,
+        fill: "rgb(14 165 233)",
+        fillEnd: "rgb(59 130 246)",
+      },
+      {
+        id: "comp",
+        caption: "Fecha comparación",
+        fecha: formatFechaEs(fechaComp),
+        value: compVal,
+        fill: "rgb(139 92 246)",
+        fillEnd: "rgb(217 70 239)",
+      },
+    ];
+
+    const narrow = w < 640;
+    const compact = w < 400;
+    const chartH = compact ? 220 : narrow ? 240 : 260;
+    const margin = { top: 28, right: narrow ? 10 : 20, bottom: compact ? 56 : 64, left: narrow ? 48 : 60 };
+    const h = chartH;
+    const iw = w - margin.left - margin.right;
+    const ih = h - margin.top - margin.bottom;
+
+    const svg = d3
+      .select(container)
+      .append("svg")
+      .attr("width", w)
+      .attr("height", h)
+      .attr("class", "exec-chart-svg block max-w-full");
+
+    const defs = svg.append("defs");
+    bars.forEach((b) => {
+      const gid = `execBarYoY-${containerId}-${b.id}`;
+      const grad = defs
+        .append("linearGradient")
+        .attr("id", gid)
+        .attr("x1", "0")
+        .attr("y1", "0")
+        .attr("x2", "0")
+        .attr("y2", "1");
+      grad.append("stop").attr("offset", "0%").attr("stop-color", b.fill).attr("stop-opacity", 0.95);
+      grad.append("stop").attr("offset", "100%").attr("stop-color", b.fillEnd).attr("stop-opacity", 0.75);
+      b.gradientId = gid;
+    });
+
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+    const yMax = Math.max(refVal, compVal, 1);
+    const xScale = d3.scaleBand().domain(bars.map((b) => b.id)).range([0, iw]).padding(0.38);
+    const yScale = d3.scaleLinear().domain([0, yMax * 1.12]).nice().range([ih, 0]);
+    const fs = compact ? "9px" : "10px";
+    const yTickCount = compact ? 4 : 5;
+
+    g.append("g")
+      .attr("class", "grid-y")
+      .selectAll("line")
+      .data(yScale.ticks(yTickCount))
+      .join("line")
+      .attr("x1", 0)
+      .attr("x2", iw)
+      .attr("y1", (d) => yScale(d))
+      .attr("y2", (d) => yScale(d))
+      .attr("stroke", "currentColor")
+      .attr("stroke-opacity", 0.06)
+      .attr("class", "text-slate-400");
+
+    const barG = g.selectAll("g.bar").data(bars).join("g").attr("class", "bar");
+
+    barG
+      .append("rect")
+      .attr("x", (d) => xScale(d.id))
+      .attr("y", (d) => yScale(d.value))
+      .attr("width", xScale.bandwidth())
+      .attr("height", (d) => ih - yScale(d.value))
+      .attr("rx", narrow ? 6 : 8)
+      .attr("fill", (d) => `url(#${d.gradientId})`);
+
+    barG
+      .append("text")
+      .attr("x", (d) => (xScale(d.id) || 0) + xScale.bandwidth() / 2)
+      .attr("y", (d) => yScale(d.value) - 6)
+      .attr("text-anchor", "middle")
+      .attr("font-size", compact ? "10px" : "11px")
+      .attr("font-weight", "600")
+      .attr("fill", "currentColor")
+      .attr("class", "text-slate-800 dark:text-slate-100")
+      .text((d) => fmtMoney.format(d.value));
+
+    g.append("g")
+      .attr("transform", `translate(0,${ih})`)
+      .selectAll("g.xlab")
+      .data(bars)
+      .join("g")
+      .attr("class", "xlab")
+      .attr("transform", (d) => `translate(${(xScale(d.id) || 0) + xScale.bandwidth() / 2},0)`)
+      .each(function (d) {
+        const node = d3.select(this);
+        node
+          .append("text")
+          .attr("y", 14)
+          .attr("text-anchor", "middle")
+          .attr("font-size", fs)
+          .attr("font-weight", "600")
+          .attr("fill", "currentColor")
+          .attr("class", "text-slate-700 dark:text-slate-200")
+          .text(d.fecha);
+        node
+          .append("text")
+          .attr("y", compact ? 26 : 28)
+          .attr("text-anchor", "middle")
+          .attr("font-size", compact ? "8px" : "9px")
+          .attr("fill", "currentColor")
+          .attr("class", "text-slate-500 dark:text-slate-400")
+          .text(d.caption);
+      });
+
+    const yg = g.append("g").call(
+      d3
+        .axisLeft(yScale)
+        .ticks(yTickCount)
+        .tickFormat((v) => formatYAxisTick(v, narrow))
+    );
+    yg.selectAll("text").attr("font-size", fs);
+
+    const pct = k.pct_vs_anio_anterior;
+    if (pct !== null && pct !== undefined && !Number.isNaN(Number(pct))) {
+      g.append("text")
+        .attr("x", iw)
+        .attr("y", 0)
+        .attr("text-anchor", "end")
+        .attr("font-size", compact ? "10px" : "11px")
+        .attr("font-weight", "600")
+        .attr("fill", Number(pct) >= 0 ? "rgb(5 150 105)" : "rgb(220 38 38)")
+        .text(`${Number(pct) > 0 ? "+" : ""}${Number(pct).toFixed(2)} % vs fecha comparación`);
+    }
   }
 
   function updateSucursalesFilterHint(count) {
@@ -777,30 +1027,41 @@
       .filter((v) => v && v !== "");
   }
 
-  function renderCharts(data) {
-    cachedChartData = data;
-    ensureChartResizeObserver();
-
-    const hora = (data.serie_horaria || []).map((d) => ({
+  function renderSectionCharts(sectionKey, seccion, fechaRef, meta) {
+    const hora = (seccion.serie_horaria || []).map((d) => ({
       hora: `${d.hora} h`,
       ventas_netas: d.ventas_netas,
     }));
-    drawLineChart("exec-chart-hora", hora, "hora", "ventas_netas", (v) => v, {
+    drawLineChart(`exec-chart-hora-${sectionKey}`, hora, "hora", "ventas_netas", (v) => v, {
       stroke: "rgb(14 165 233)",
       strokeEnd: "rgb(59 130 246)",
-      gradientId: "execAreaHora",
+      gradientId: `execAreaHora-${sectionKey}`,
       kind: "hora",
     });
 
-    const s7 = (data.serie_7_dias || []).map((d) => ({
+    const s7 = (seccion.serie_7_dias || []).map((d) => ({
       fecha: (d.fecha || "").slice(5),
       ventas_netas: d.ventas_netas,
     }));
-    drawLineChart("exec-chart-7d", s7, "fecha", "ventas_netas", (v) => v, {
+    drawLineChart(`exec-chart-7d-${sectionKey}`, s7, "fecha", "ventas_netas", (v) => v, {
       stroke: "rgb(99 102 241)",
       strokeEnd: "rgb(168 85 247)",
-      gradientId: "execArea7d",
+      gradientId: `execArea7d-${sectionKey}`,
       kind: "7d",
+    });
+
+    drawBarCompareYoY(`exec-chart-yoy-${sectionKey}`, seccion.kpis || {}, fechaRef, meta);
+  }
+
+  function renderAllCharts(data) {
+    cachedChartData = data;
+    ensureChartResizeObserver();
+    const secciones = data.secciones || {};
+    const fechaRef = data.fecha_referencia || "";
+    const meta = data.meta || {};
+    SECCIONES.forEach(({ key }) => {
+      const seccion = secciones[key];
+      if (seccion) renderSectionCharts(key, seccion, fechaRef, meta);
     });
   }
 
@@ -837,6 +1098,8 @@
     }
     selectedSucursalesIds().forEach((id) => qs.append("sucursales", id));
     if (topO && topO.value) qs.set("top_orden", topO.value);
+    const fcAnio = el("exec-fecha-comparacion-anio");
+    if (fcAnio && fcAnio.value) qs.set("fecha_comparacion", fcAnio.value);
     showError("");
     setLoading(true);
     try {
@@ -850,10 +1113,12 @@
       if (topO && data.meta && data.meta.top_productos_orden) {
         topO.value = data.meta.top_productos_orden === "unidades" ? "unidades" : "importe_neto";
       }
-      renderCanales(data);
-      renderKpis(data);
-      renderCharts(data);
-      renderRentabilidad(data);
+      renderSecciones(data);
+      renderAllCharts(data);
+      const fc = el("exec-fecha-comparacion-anio");
+      if (fc && data.meta?.fecha_comparacion_anio_anterior_aplicada) {
+        fc.value = data.meta.fecha_comparacion_anio_anterior_aplicada;
+      }
     } catch (e) {
       showError(e.message || "Error al cargar el resumen.");
     } finally {
@@ -990,6 +1255,12 @@
     el("exec-refresh-btn")?.addEventListener("click", loadSummary);
     el("exec-top-orden")?.addEventListener("change", loadSummary);
     el("exec_sucursales")?.addEventListener("change", loadSummary);
+    el("exec-secciones")?.addEventListener("change", (ev) => {
+      if (ev.target && ev.target.id === "exec-fecha-comparacion-anio") loadSummary();
+    });
+    el("exec-secciones")?.addEventListener("click", (ev) => {
+      if (ev.target.closest("#exec-open-pv-modal")) openSucursalModal();
+    });
     el("exec-modal-close")?.addEventListener("click", closePvModal);
     el("exec-modal-cancel")?.addEventListener("click", closePvModal);
     el("exec-modal-save")?.addEventListener("click", savePvModal);

@@ -5,7 +5,7 @@
 - **Vista nueva** en el módulo **Reportes**: **Resumen general** — panel ejecutivo con KPIs y gráficos de **ventas facturadas** (solo `cuentacliente`), visible según **permisos gerenciales**.
 - **CRUD de clasificación por sucursal** para el dashboard: **no es pantalla aparte**; se abre en un **modal** desde la tarjeta **Consolidado** (icono engranaje). **Tres columnas** (mayorista / sin asignar / minorista) con arrastre y flechas; el centro lista sucursales **activas** en AdministraNET (`sucursales`, `anulado = 'No'`). **Solo** las sucursales clasificadas como mayorista o minorista entran al informe; las no asignadas se ignoran.
 - **Filtro de sucursales** (multiselección tipo tags, como otros informes): restringe el alcance dentro del conjunto clasificado; sin selección = todas las clasificadas.
-- **Tres tarjetas KPI de canal:** Mayorista, Minorista (salón) y Consolidado (suma de ambos canales en alcance).
+- **Tres secciones en pantalla** (mismo bloque de indicadores en cada una, en este orden): **Consolidado** → **Mayorista** → **Minorista (salón)**. Cada sección incluye KPIs, gráficos (hora, 7 días y **barras día ref. vs fecha comparación**) y rentabilidad del día para su alcance de sucursales.
 - **Fuente temporal intradiaria:** agrupación por hora usando **`cuentacliente.FechaControl`** (ver § Fuentes de datos). **Fecha contable del comprobante:** `cuentacliente.Fecha` para totales diarios y serie de 7 días.
 
 ## Objetivo de producto
@@ -45,7 +45,8 @@ Ofrecer a dirección una **lectura rápida** del día: monto, comparativos, tick
 | **Ventas del día (total)** | Suma de **ventas netas** (importe) para `Fecha` = día objetivo. |
 | **Ventas vs ayer (%)** | `((Ventas_hoy − Ventas_ayer) / NULLIF(Ventas_ayer, 0)) × 100`. Si ayer es 0 y hoy > 0, política de UI: mostrar «N/D» o «+100 %» según criterio de producto. |
 | **Ventas vs ayer (monto)** | Diferencia **`Ventas_hoy − Ventas_ayer`** en moneda (campo API `gap_vs_ayer_monto`). La UI del KPI «Vs ayer» **MUST** mostrar **% y monto** en la misma tarjeta. |
-| **Ventas vs mismo día semana pasada** | Misma fórmula comparando `Fecha` = hoy vs `Fecha` = hoy − 7 días. |
+| **Ventas vs mismo día semana pasada** | Misma fórmula comparando `Fecha` = hoy vs `Fecha` = hoy − 7 días. API: `pct_vs_misma_semana_anterior`, `gap_vs_misma_semana_anterior_monto`. |
+| **Ventas vs mismo día año anterior** | Comparación de ventas del día objetivo contra ventas del **día de referencia** elegido (por defecto: mismo día calendario del año anterior; 29-feb → 28-feb). API: `pct_vs_anio_anterior`, `gap_vs_anio_anterior_monto`, `ventas_anio_anterior_monto`, `fecha_comparacion_anio_anterior`. Query opcional `fecha_comparacion` (yyyy-MM-dd) aplica a **las tres secciones**. En UI, el selector de fecha solo en la sección **Consolidado**; al cambiar, se recarga el panel completo. |
 | **Cantidad de tickets** | Número de **comprobantes de venta** (FA–FM) en el día, **sin** contar notas de crédito como ticket adicional (definición: un ticket = una factura de venta). Las NC ajustan monto en ventas netas pero no incrementan el conteo de tickets. |
 | **Ticket promedio** | `Ventas_netas_del_día / NULLIF(Cantidad_tickets, 0)` usando la misma ventana de `Fecha` y los mismos filtros. |
 | **Unidades vendidas** | Misma lógica numérica que el informe de objetivos / ventas netas por unidades: renglones **`stock`** ligados a `cuentacliente` por `CodigoMovimiento`, con signo según factura vs NC. Rango: **`stock.Fecha`** coherente con el día de facturación del informe (paridad [`ventas_netas.py`](../../reports/services/ventas_netas.py) `_sum_unidades_sql_stock_line` y filtros `TipoComp` alineados al proyecto). |
@@ -62,6 +63,7 @@ Ofrecer a dirección una **lectura rápida** del día: monto, comparativos, tick
 |---------|-------------|
 | **Ventas por hora (día actual)** | Eje X: horas 0–23 (o franjas configurables). Eje Y: ventas netas del día. Agregación: sumar ventas netas por comprobante usando **`FechaControl`** para la hora, con **`Fecha`** = día seleccionado. |
 | **Comparativo semanal** | Últimos **7 días** calendario (incluyendo hoy): una serie de **ventas netas diarias** (`Fecha` + mismas reglas de facturación). |
+| **Gráfico comparativo año anterior** | Barras con ventas netas del **día de referencia** (`kpis.ventas_netas_dia`) vs ventas del **día de comparación** (`kpis.ventas_anio_anterior_monto`, fecha en `kpis.fecha_comparacion_anio_anterior` / query `fecha_comparacion`). |
 
 ---
 
@@ -101,7 +103,7 @@ Ofrecer a dirección una **lectura rápida** del día: monto, comparativos, tick
 
 - **Ruta sugerida (front):** entrada desde **Reportes** — ítem **Resumen general** o home del submódulo ventas/reportes (cerrar en diseño de navegación).
 - **Backend:** endpoint dedicado (p. ej. `GET /api/reports/executive-summary/` o ampliación de `reports-query` con `slug` reservado) que devuelva en un solo payload:
-  - `fecha_referencia`, `kpis` (incluye `gap_vs_ayer_monto`), `serie_horaria[]`, `serie_7_dias[]`, `split_mayorista_minorista` (montos y/o %),
+  - `fecha_referencia`, `kpis` (incluye `gap_vs_ayer_monto`, `ventas_anio_anterior_monto`, `fecha_comparacion_anio_anterior`), `serie_horaria[]`, `serie_7_dias[]`, `split_mayorista_minorista` (montos y/o %),
   - `top_productos[]` (hasta 10 ítems; ver tabla KPIs),
   - `margen_bruto` (totales día: `venta_neta_lineas`, `costo_neto_lineas`, `margen_absoluto`, `pct_sobre_venta_lineas`), `margen_por_rubro[]` (hasta 10), `margen_por_subrubro[]` (hasta 10); en `meta`: `definicion` = `executive-sales-v2`, `margen_costo_criterio`, `margen_venta_criterio`.
   - `meta` con zona horaria aplicada, versión de definición y `top_productos_criterio`.
@@ -144,9 +146,9 @@ Ofrecer a dirección una **lectura rápida** del día: monto, comparativos, tick
 |----------|-----------|
 | Modelo clasificación PV | `reports.models.PuntoVentaCanalEjecutivo` (Synap DB; único por empresa + `id_pv`). |
 | Agregados SQL | `reports/services/executive_sales_summary.py`. |
-| API JSON | `GET /api/reports/executive-summary/` y `GET|PUT /api/reports/sucursal-canal-ejecutivo/` (`reports/executive_summary_api_views.py`). Permiso: **`reports.view_managerial`**. **Guardar clasificación** exige un registro en **`core.Empresa`** (PostgreSQL Synap) vinculado a la sesión: `base_empresa` → `DatosEmpresa` (MySQL) → cruce por CUIT/nombre. Si no existe, `PUT` intenta **alta automática** desde `DatosEmpresa` (`ensure_empresa_django_from_request`). Si falla (sin CUIT, empresa inactiva, etc.), la respuesta incluye `diagnostico` con base, nombre y CUIT de AdministraNET. **Query `GET /api/reports/executive-summary/`:** `fecha_inicio` / `fecha_fin` o `fecha`; `sucursales` (multiselección); `top_orden` = `importe_neto` \| `unidades`. |
+| API JSON | `GET /api/reports/executive-summary/` y `GET|PUT /api/reports/sucursal-canal-ejecutivo/` (`reports/executive_summary_api_views.py`). Permiso: **`reports.view_managerial`**. **Guardar clasificación** exige un registro en **`core.Empresa`** (PostgreSQL Synap) vinculado a la sesión: `base_empresa` → `DatosEmpresa` (MySQL) → cruce por CUIT/nombre. Si no existe, `PUT` intenta **alta automática** desde `DatosEmpresa` (`ensure_empresa_django_from_request`). Si falla (sin CUIT, empresa inactiva, etc.), la respuesta incluye `diagnostico` con base, nombre y CUIT de AdministraNET. **Query `GET /api/reports/executive-summary/`:** `fecha_inicio` / `fecha_fin` o `fecha`; `sucursales` (multiselección); `top_orden` = `importe_neto` \| `unidades`; `fecha_comparacion` (yyyy-MM-dd, día de referencia para «vs año anterior», opcional). Respuesta: objeto `secciones` con claves `consolidado`, `mayorista`, `minorista` (cada una: `kpis`, series, rentabilidad, top productos); nivel raíz conserva `kpis`/`serie_*` del consolidado por compatibilidad. `meta.definicion` = `executive-sales-v4-secciones`. |
 | Vista HTML | `DashboardDetailView` usa plantilla `reports/executive_summary.html` si `slug=resumen-ejecutivo-ventas`. |
-| Front | `reports/static/reports/js/executive_summary.js` (d3 v7 por CDN); select **Sucursal** (todas + opciones desde API) y **Orden Top 10** (venta neta / unidades; aplica a artículos); KPI «Vs ayer» con % + gap en $. **Rentabilidad del día:** KPIs venta/costo/margen por líneas y **Top 10** en orden **artículos → rubro → subrubro** (tabla en `lg+`, tarjetas en móvil). |
+| Front | `reports/static/reports/js/executive_summary.js` (d3 v7 por CDN); filtro **Sucursales** (tags) y **Orden Top 10**; **tres secciones** repetidas (Consolidado / Mayorista / Minorista); KPIs con % + gap en $ (ayer, semana ant., año ant.); selector de **fecha de comparación año anterior** solo en Consolidado. **Rentabilidad del día** por sección: KPIs venta/costo/margen; tablas **Top 10** artículos → rubro → subrubro **solo en desktop** (`lg+`), ocultas en móvil. |
 | Catálogo | `ReportDefinition` slug **`resumen-ejecutivo-ventas`** (migración `0034`). |
 | Tests | `reports/tests/test_executive_summary_contract.py`. |
 | Migración PostgreSQL | `reports/migrations/0031_add_puntoventacanalejecutivo.py` crea solo la tabla `reports_puntoventacanalejecutivo`. No usar en servidor un `makemigrations` autogenerado que vuelva a declarar modelos ya creados por migraciones `RunPython` (riesgo `DuplicateTable`). |
@@ -163,3 +165,5 @@ Ofrecer a dirección una **lectura rápida** del día: monto, comparativos, tick
 **Implementado (29/05/2026):** tablas **Top 10** unificadas en la sección rentabilidad: **artículos** (orden configurable), **rubro** y **subrubro** (por venta neta); backend con `LIMIT 10` en SQL de rubro/subrubro.
 
 **Implementado (29/05/2026):** costo de margen alineado a informe rentabilidad AdministraNET (`margen_costo_linea.py`): suma firmada de `PrecioCostoxR` por renglón (sin escala Display/Bulto). Cambio SDD: `openspec/changes/margen-ejecutivo-costo-display-bulto/`.
+
+**Implementado (02/06/2026):** panel por **tres secciones** (Consolidado, Mayorista, Minorista) con el mismo set de KPIs, gráficos y rentabilidad; KPI **Mismo día año anterior** con `fecha_comparacion` global (selector en Consolidado) para comparar promociones con fechas desfasadas (ej. Cyber Monday).
