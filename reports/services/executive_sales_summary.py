@@ -515,6 +515,120 @@ def _pct_change(actual: float, anterior: float) -> Optional[float]:
     return round((actual - anterior) / anterior * 100.0, 2)
 
 
+def _fecha_anio_anterior(dia: date) -> date:
+    """Mismo día calendario del año anterior (29-feb → 28-feb)."""
+    try:
+        return dia.replace(year=dia.year - 1)
+    except ValueError:
+        return dia.replace(year=dia.year - 1, day=28)
+
+
+def _kpis_vacios(fecha_comparacion_anio: date) -> Dict[str, Any]:
+    return {
+        "ventas_netas_dia": 0.0,
+        "gap_vs_ayer_monto": 0.0,
+        "pct_vs_ayer": None,
+        "pct_vs_misma_semana_anterior": None,
+        "gap_vs_misma_semana_anterior_monto": 0.0,
+        "pct_vs_anio_anterior": None,
+        "gap_vs_anio_anterior_monto": 0.0,
+        "fecha_comparacion_anio_anterior": fecha_comparacion_anio.isoformat(),
+        "ventas_ayer_monto": 0.0,
+        "ventas_misma_semana_anterior_monto": 0.0,
+        "ventas_anio_anterior_monto": 0.0,
+        "tickets": 0,
+        "ticket_promedio": None,
+        "unidades_vendidas": 0.0,
+    }
+
+
+def _kpis_para_scope(
+    cursor,
+    dia: date,
+    scope_sucursales: Sequence[int],
+    fecha_comparacion_anio: date,
+) -> Dict[str, Any]:
+    if not scope_sucursales:
+        return _kpis_vacios(fecha_comparacion_anio)
+
+    ayer = dia - timedelta(days=1)
+    semana_pasada = dia - timedelta(days=7)
+
+    v_hoy = _ventas_netas_dia(cursor, dia, scope_sucursales)
+    v_ayer = _ventas_netas_dia(cursor, ayer, scope_sucursales)
+    v_sem = _ventas_netas_dia(cursor, semana_pasada, scope_sucursales)
+    v_anio = _ventas_netas_dia(cursor, fecha_comparacion_anio, scope_sucursales)
+
+    tickets = _tickets_dia(cursor, dia, scope_sucursales)
+    ticket_prom = (v_hoy / tickets) if tickets else None
+    unidades = _unidades_dia(cursor, dia, scope_sucursales)
+
+    return {
+        "ventas_netas_dia": round(v_hoy, 2),
+        "gap_vs_ayer_monto": round(v_hoy - v_ayer, 2),
+        "pct_vs_ayer": _pct_change(v_hoy, v_ayer),
+        "pct_vs_misma_semana_anterior": _pct_change(v_hoy, v_sem),
+        "gap_vs_misma_semana_anterior_monto": round(v_hoy - v_sem, 2),
+        "pct_vs_anio_anterior": _pct_change(v_hoy, v_anio),
+        "gap_vs_anio_anterior_monto": round(v_hoy - v_anio, 2),
+        "fecha_comparacion_anio_anterior": fecha_comparacion_anio.isoformat(),
+        "ventas_ayer_monto": round(v_ayer, 2),
+        "ventas_misma_semana_anterior_monto": round(v_sem, 2),
+        "ventas_anio_anterior_monto": round(v_anio, 2),
+        "tickets": tickets,
+        "ticket_promedio": round(ticket_prom, 2) if ticket_prom is not None else None,
+        "unidades_vendidas": round(unidades, 4),
+    }
+
+
+def _build_seccion(
+    cursor,
+    dia: date,
+    scope_sucursales: Sequence[int],
+    *,
+    fecha_comparacion_anio: date,
+    top_productos_orden: str,
+) -> Dict[str, Any]:
+    kpis = _kpis_para_scope(cursor, dia, scope_sucursales, fecha_comparacion_anio)
+    if not scope_sucursales:
+        fecha_ini = dia - timedelta(days=6)
+        serie_7_vacia = []
+        d = fecha_ini
+        while d <= dia:
+            serie_7_vacia.append({"fecha": d.isoformat(), "ventas_netas": 0.0})
+            d += timedelta(days=1)
+        return {
+            "kpis": kpis,
+            "serie_horaria": [{"hora": h, "ventas_netas": 0.0} for h in range(24)],
+            "serie_7_dias": serie_7_vacia,
+            "margen_bruto": {
+                "venta_neta_lineas": 0.0,
+                "costo_neto_lineas": 0.0,
+                "margen_absoluto": 0.0,
+                "pct_sobre_venta_lineas": None,
+            },
+            "margen_por_rubro": [],
+            "margen_por_subrubro": [],
+            "top_productos": [],
+        }
+
+    margen_bruto = _margen_bruto_totales_dia(cursor, dia, scope_sucursales)
+    return {
+        "kpis": kpis,
+        "serie_horaria": _serie_horaria(cursor, dia, scope_sucursales),
+        "serie_7_dias": _serie_7_dias(cursor, dia, scope_sucursales),
+        "margen_bruto": margen_bruto,
+        "margen_por_rubro": _margen_por_rubro_dia(cursor, dia, scope_sucursales),
+        "margen_por_subrubro": _margen_por_subrubro_dia(cursor, dia, scope_sucursales),
+        "top_productos": _top_productos_ventas_dia(
+            cursor,
+            dia,
+            scope_sucursales=scope_sucursales,
+            orden_rank=top_productos_orden,
+        ),
+    }
+
+
 def _normalizar_top_productos_orden(raw: Optional[str]) -> str:
     s = (raw or "").strip().lower()
     if s in ("unidades", "u", "cantidad", "qty"):
@@ -602,10 +716,12 @@ def run_executive_summary(
     *,
     sucursales_filtro: Optional[Sequence[int]] = None,
     top_productos_orden: Optional[str] = None,
+    fecha_comparacion_anio: Optional[date] = None,
 ) -> Dict[str, Any]:
     """
-    Calcula payload del panel ejecutivo. Solo incluye sucursales clasificadas
-    (mayorista o minorista). Las no clasificadas no entran en ningún agregado.
+    Calcula payload del panel ejecutivo por secciones (consolidado, mayorista, minorista).
+    Solo incluye sucursales clasificadas. ``fecha_comparacion_anio`` permite comparar
+    promociones desfasadas (ej. Cyber Monday) en las tres secciones.
     """
     orden_tp = _normalizar_top_productos_orden(top_productos_orden)
     may_scope, min_scope, consolidado_scope = resolve_executive_scope(
@@ -614,58 +730,59 @@ def run_executive_summary(
         sucursales_filtro,
     )
     hoy = fecha_referencia
-    ayer = hoy - timedelta(days=1)
-    semana_pasada = hoy - timedelta(days=7)
-
-    v_hoy = _ventas_netas_dia(cursor, hoy, consolidado_scope)
-    v_ayer = _ventas_netas_dia(cursor, ayer, consolidado_scope)
-    v_sem = _ventas_netas_dia(cursor, semana_pasada, consolidado_scope)
-
-    tickets = _tickets_dia(cursor, hoy, consolidado_scope)
-    ticket_prom = (v_hoy / tickets) if tickets else None
-
-    unidades = _unidades_dia(cursor, hoy, consolidado_scope)
-
-    split = _split_canal(cursor, hoy, may_scope, min_scope, consolidado_scope)
-    gap_vs_ayer = round(v_hoy - v_ayer, 2)
-
-    margen_bruto = _margen_bruto_totales_dia(cursor, hoy, consolidado_scope)
-    margen_por_rubro = _margen_por_rubro_dia(cursor, hoy, consolidado_scope)
-    margen_por_subrubro = _margen_por_subrubro_dia(cursor, hoy, consolidado_scope)
+    fecha_comp_anio = fecha_comparacion_anio or _fecha_anio_anterior(hoy)
     criterio_costo = margen_costo_criterio_meta()
 
     classified_all = sorted(
         {int(x) for x in mayorista_sucursales} | {int(x) for x in minorista_sucursales}
     )
 
-    return {
-        "fecha_referencia": hoy.isoformat(),
-        "kpis": {
-            "ventas_netas_dia": round(v_hoy, 2),
-            "gap_vs_ayer_monto": gap_vs_ayer,
-            "pct_vs_ayer": _pct_change(v_hoy, v_ayer),
-            "pct_vs_misma_semana_anterior": _pct_change(v_hoy, v_sem),
-            "tickets": tickets,
-            "ticket_promedio": round(ticket_prom, 2) if ticket_prom is not None else None,
-            "unidades_vendidas": round(unidades, 4),
-            "ventas_ayer_monto": round(v_ayer, 2),
-            "ventas_misma_semana_anterior_monto": round(v_sem, 2),
-        },
-        "margen_bruto": margen_bruto,
-        "margen_por_rubro": margen_por_rubro,
-        "margen_por_subrubro": margen_por_subrubro,
-        "split_mayorista_minorista": split,
-        "serie_horaria": _serie_horaria(cursor, hoy, consolidado_scope),
-        "serie_7_dias": _serie_7_dias(cursor, hoy, consolidado_scope),
-        "top_productos": _top_productos_ventas_dia(
+    secciones = {
+        "consolidado": _build_seccion(
             cursor,
             hoy,
-            scope_sucursales=consolidado_scope,
-            orden_rank=orden_tp,
+            consolidado_scope,
+            fecha_comparacion_anio=fecha_comp_anio,
+            top_productos_orden=orden_tp,
         ),
+        "mayorista": _build_seccion(
+            cursor,
+            hoy,
+            may_scope,
+            fecha_comparacion_anio=fecha_comp_anio,
+            top_productos_orden=orden_tp,
+        ),
+        "minorista": _build_seccion(
+            cursor,
+            hoy,
+            min_scope,
+            fecha_comparacion_anio=fecha_comp_anio,
+            top_productos_orden=orden_tp,
+        ),
+    }
+
+    cons = secciones["consolidado"]
+    split = (
+        _split_canal(cursor, hoy, may_scope, min_scope, consolidado_scope)
+        if consolidado_scope
+        else {"mayorista": 0.0, "minorista": 0.0, "consolidado": 0.0}
+    )
+
+    return {
+        "fecha_referencia": hoy.isoformat(),
+        "secciones": secciones,
+        # Compatibilidad APIs/consumidores que leen el nivel raíz (consolidado).
+        "kpis": cons["kpis"],
+        "margen_bruto": cons["margen_bruto"],
+        "margen_por_rubro": cons["margen_por_rubro"],
+        "margen_por_subrubro": cons["margen_por_subrubro"],
+        "split_mayorista_minorista": split,
+        "serie_horaria": cons["serie_horaria"],
+        "serie_7_dias": cons["serie_7_dias"],
+        "top_productos": cons["top_productos"],
         "sucursales_disponibles": fetch_sucursales_clasificadas(cursor, classified_all),
         "meta": {
-            "definicion": "executive-sales-v3-sucursal",
+            "definicion": "executive-sales-v4-secciones",
             "hora_eje": "FechaControl",
             "dia_contable": "Fecha",
             "top_productos_criterio": "importe_neto_linea",
@@ -680,5 +797,7 @@ def run_executive_summary(
             "sucursales_clasificadas_total": len(classified_all),
             "sin_sucursales_clasificadas": len(classified_all) == 0,
             "top_productos_orden": orden_tp,
+            "fecha_comparacion_anio_anterior_defecto": _fecha_anio_anterior(hoy).isoformat(),
+            "fecha_comparacion_anio_anterior_aplicada": fecha_comp_anio.isoformat(),
         },
     }

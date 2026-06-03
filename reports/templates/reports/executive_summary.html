@@ -173,41 +173,7 @@
 
     <div id="exec-sin-clasificar" class="mb-4 hidden rounded-xl border border-amber-200/80 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100" role="status"></div>
 
-    <div class="mb-6 grid grid-cols-1 gap-3 min-[400px]:grid-cols-3 sm:gap-4" id="exec-canales-grid"></div>
-
-    <div class="mb-6 grid grid-cols-1 gap-3 min-[400px]:grid-cols-2 sm:gap-4 xl:grid-cols-4" id="exec-kpi-grid"></div>
-
-    <div class="mb-8 grid grid-cols-1 gap-5 lg:grid-cols-2 lg:gap-6">
-      <div class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/40 transition hover:border-sky-200 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:border-sky-800">
-        <div class="flex flex-shrink-0 items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-sky-50/90 to-transparent px-4 py-3 dark:border-slate-700 dark:from-sky-950/50">
-          <span class="material-icons text-xl text-sky-600 dark:text-sky-400" aria-hidden="true">schedule</span>
-          <h2 class="text-sm font-bold text-slate-900 dark:text-white sm:text-base">Ventas por hora</h2>
-          <span class="ml-auto rounded-md bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-800 dark:bg-sky-900/60 dark:text-sky-200">Hoy</span>
-        </div>
-        <div id="exec-chart-hora" class="exec-chart-wrap w-full min-h-[200px] flex-1 overflow-x-hidden bg-slate-50/50 p-1 sm:min-h-[260px] sm:p-2 lg:min-h-[280px] dark:bg-slate-950/30"></div>
-      </div>
-      <div class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/40 transition hover:border-indigo-200 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30 dark:hover:border-indigo-800">
-        <div class="flex flex-shrink-0 items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-indigo-50/90 to-transparent px-4 py-3 dark:border-slate-700 dark:from-indigo-950/50">
-          <span class="material-icons text-xl text-indigo-600 dark:text-indigo-400" aria-hidden="true">date_range</span>
-          <h2 class="text-sm font-bold text-slate-900 dark:text-white sm:text-base">Últimos 7 días</h2>
-          <span class="ml-auto rounded-md bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200">Tendencia</span>
-        </div>
-        <div id="exec-chart-7d" class="exec-chart-wrap w-full min-h-[200px] flex-1 overflow-x-hidden bg-slate-50/50 p-1 sm:min-h-[260px] sm:p-2 lg:min-h-[280px] dark:bg-slate-950/30"></div>
-      </div>
-    </div>
-
-    <div id="exec-rentabilidad-section" class="mb-8 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-md shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900 dark:shadow-black/30">
-      <div class="flex flex-shrink-0 flex-col gap-1 border-b border-slate-100 bg-gradient-to-r from-teal-50/90 to-transparent px-4 py-3 dark:border-slate-700 dark:from-teal-950/40 sm:flex-row sm:items-center sm:gap-3">
-        <div class="flex items-center gap-2">
-          <span class="material-icons text-xl text-teal-600 dark:text-teal-400" aria-hidden="true">account_balance_wallet</span>
-          <h2 class="text-sm font-bold text-slate-900 dark:text-white sm:text-base">Rentabilidad del día</h2>
-        </div>
-        <span id="exec-top-orden-badge" class="hidden rounded-md bg-cyan-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cyan-900 dark:bg-cyan-900/50 dark:text-cyan-100 sm:inline-flex" title="Criterio de ranking del Top 10 artículos">Venta neta</span>
-        <p id="exec-rentabilidad-nota" class="text-xs leading-snug text-slate-500 dark:text-slate-400 sm:ml-auto sm:max-w-xl sm:text-right"></p>
-      </div>
-      <div id="exec-margen-kpis" class="grid grid-cols-1 gap-3 p-3 sm:grid-cols-2 sm:gap-4 sm:p-4 lg:grid-cols-3"></div>
-      <div id="exec-margen-tablas" class="border-t border-slate-100 bg-slate-50/50 p-2 sm:p-4 dark:border-slate-700 dark:bg-slate-950/30" role="region" aria-label="Top 10 artículos, rubros y subrubros"></div>
-    </div>
+    <div id="exec-secciones" class="flex flex-col gap-10"></div>
   </div>
 </section>
 
@@ -274,5 +240,5 @@
     };
 </script>
 <script type="module" src="{% static 'reports/js/executive_summary_tags.mjs' %}"></script>
-<script src="{% static 'reports/js/executive_summary.js' %}?v=20260602e" defer></script>
+<script src="{% static 'reports/js/executive_summary.js' %}?v=20260603d" defer></script>
 {% endblock %}

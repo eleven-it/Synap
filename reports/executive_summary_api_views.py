@@ -22,7 +22,11 @@ from core.utils.empresa_sesion import (
 from .models import SucursalCanalEjecutivo
 from .permissions import ManagerialReportsPermission
 from .services.connection_pool import get_mysql_pool
-from .services.executive_sales_summary import fetch_sucursales_activas, run_executive_summary
+from .services.executive_sales_summary import (
+    _fecha_anio_anterior,
+    fetch_sucursales_activas,
+    run_executive_summary,
+)
 
 
 def _base_empresa(request) -> str | None:
@@ -43,6 +47,18 @@ def _parse_fecha_opcional(raw) -> date | None:
         return datetime.strptime(str(raw)[:10], "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def _resolve_fecha_comparacion_anio(qp, fecha_ref: date) -> date:
+    """
+    Fecha del día de referencia para «vs año anterior».
+    Query ``fecha_comparacion`` (yyyy-MM-dd); si falta, mismo día del año anterior.
+    """
+    if qp:
+        explicit = _parse_fecha_opcional(qp.get("fecha_comparacion"))
+        if explicit:
+            return explicit
+    return _fecha_anio_anterior(fecha_ref)
 
 
 def _resolve_fecha_referencia(qp) -> date:
@@ -133,6 +149,9 @@ class ExecutiveSummaryAPIView(APIView):
             )
         empresa = get_empresa_django_from_request(request)
         fecha_ref = _resolve_fecha_referencia(request.query_params)
+        fecha_comp_anio = _resolve_fecha_comparacion_anio(
+            request.query_params, fecha_ref
+        )
         sucursales_filtro = _parse_sucursales_filtro(request.query_params)
         top_orden = _parse_top_orden(request.query_params)
         may_ids, min_ids = _sucursales_por_canal(empresa.id) if empresa else ([], [])
@@ -149,6 +168,7 @@ class ExecutiveSummaryAPIView(APIView):
                         min_ids,
                         sucursales_filtro=sucursales_filtro,
                         top_productos_orden=top_orden,
+                        fecha_comparacion_anio=fecha_comp_anio,
                     )
                 finally:
                     cursor.close()
