@@ -13,7 +13,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.utils.administranet_types import to_int_or_none
-from core.utils.empresa_sesion import get_empresa_django_from_request
+from core.utils.empresa_sesion import (
+    empresa_django_diagnostico,
+    ensure_empresa_django_from_request,
+    get_empresa_django_from_request,
+)
 
 from .models import SucursalCanalEjecutivo
 from .permissions import ManagerialReportsPermission
@@ -234,22 +238,37 @@ class SucursalCanalEjecutivoAPIView(APIView):
             },
         }
         if not empresa:
+            diag = empresa_django_diagnostico(request)
             out["meta"] = {
                 "empresa_django": False,
                 "nota": "No se encontró Empresa en Synap (CUIT/nombre) para esta base. "
                 "Las clasificaciones no se pueden guardar hasta que exista el registro.",
+                "diagnostico": diag,
             }
         return Response(out)
 
     def put(self, request, *args, **kwargs):
-        empresa = get_empresa_django_from_request(request)
+        empresa = ensure_empresa_django_from_request(request, auto_provision=True)
         if not empresa:
+            diag = empresa_django_diagnostico(request)
+            detail = (
+                "No se encontró la empresa en Synap para esta sesión. "
+                "Verifique que exista un registro en Empresa (administración Synap) con el mismo "
+                "CUIT o nombre que DatosEmpresa de la base en sesión."
+            )
+            if diag.get("base_empresa"):
+                detail += f" Base: {diag['base_empresa']}."
+            if diag.get("nombre_datosempresa"):
+                detail += f" Nombre AdministraNET: {diag['nombre_datosempresa']}."
+            if diag.get("cuit_datosempresa"):
+                detail += f" CUIT AdministraNET: {diag['cuit_datosempresa']}."
+            if diag.get("empresa_inactiva_id"):
+                detail += (
+                    f" Existe Empresa id={diag['empresa_inactiva_id']} inactiva; "
+                    "reactívela en Synap."
+                )
             return Response(
-                {
-                    "detail": "No se encontró la empresa en Synap para esta sesión. "
-                    "Verifique que exista un registro en Empresa con el mismo CUIT o nombre que DatosEmpresa "
-                    "de la base indicada en sesión (base_empresa).",
-                },
+                {"detail": detail, "diagnostico": diag},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
