@@ -11,39 +11,54 @@ from .models import SyncLog, CustomerMapping, ProductMapping, OrderMapping
 logger = logging.getLogger(__name__)
 
 
+def _create_hook_sync_log(
+    sync_type: str,
+    mapping,
+    message: str,
+    *,
+    success: bool = True,
+) -> None:
+    """Crea SyncLog con campos válidos del modelo."""
+    from .models import AdministraNETConfig, SyncLog, TiendanubeConfig
+
+    tn_cfg = TiendanubeConfig.objects.filter(is_active=True).first()
+    an_cfg = AdministraNETConfig.objects.filter(is_active=True).first()
+    st = SyncLog.SyncType.CUSTOMER
+    if sync_type == 'product_sync':
+        st = SyncLog.SyncType.PRODUCT
+    elif sync_type == 'order_sync':
+        st = SyncLog.SyncType.ORDER
+
+    SyncLog.objects.create(
+        sync_type=st,
+        direction=SyncLog.SyncDirection.TO_ADMINET,
+        status=SyncLog.Status.COMPLETED if success else SyncLog.Status.FAILED,
+        total_items=1,
+        processed_items=1,
+        successful_items=1 if success else 0,
+        failed_items=0 if success else 1,
+        error_message='' if success else message,
+        tiendanube_config=tn_cfg,
+        adminet_config=an_cfg,
+        details={'message': message, 'mapping_id': getattr(mapping, 'id', None)},
+    )
+
+
 def pre_customer_sync(customer_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-    """
-    Hook que se ejecuta antes de sincronizar un cliente
-    
-    Args:
-        customer_data: Datos del cliente a sincronizar
-        **kwargs: Argumentos adicionales
-        
-    Returns:
-        Dict con datos procesados del cliente
-    """
+    """Hook pre-sincronización de cliente."""
     try:
-        logger.info(f"Pre-sync hook ejecutado para cliente: {customer_data.get('email', 'N/A')}")
-        
-        # Aquí se pueden agregar validaciones, transformaciones o lógica de negocio
-        # antes de la sincronización
-        
-        # Ejemplo: Validar que el email esté presente
+        logger.info("Pre-sync hook ejecutado para cliente: %s", customer_data.get('email', 'N/A'))
         if not customer_data.get('email'):
-            logger.warning("Cliente sin email, agregando email por defecto")
-            customer_data['email'] = f"cliente_{timezone.now().strftime('%Y%m%d_%H%M%S')}@example.com"
-        
-        # Ejemplo: Normalizar nombre
+            logger.warning(
+                "Cliente sin email en pre_customer_sync; no se inventará dirección ficticia"
+            )
         if customer_data.get('first_name'):
             customer_data['first_name'] = customer_data['first_name'].strip().title()
-        
         if customer_data.get('last_name'):
             customer_data['last_name'] = customer_data['last_name'].strip().title()
-        
         return customer_data
-        
     except Exception as e:
-        logger.error(f"Error en pre_customer_sync hook: {str(e)}")
+        logger.error("Error en pre_customer_sync hook: %s", e)
         return customer_data
 
 
@@ -64,15 +79,10 @@ def post_customer_sync(customer_mapping: CustomerMapping, sync_result: Dict[str,
             customer_mapping.last_synced = timezone.now()
             customer_mapping.sync_status = 'synced'
             customer_mapping.save(update_fields=['last_synced', 'sync_status'])
-            
-            # Crear log de sincronización exitosa
-            SyncLog.objects.create(
-                sync_type='customer_sync',
-                status='success',
-                platform='both',
-                mapping=customer_mapping,
-                message=f"Cliente sincronizado exitosamente: {customer_mapping.tiendanube_email}",
-                started_at=timezone.now()
+            _create_hook_sync_log(
+                'customer_sync',
+                customer_mapping,
+                f"Cliente sincronizado: {customer_mapping.tiendanube_email}",
             )
         
     except Exception as e:
@@ -132,13 +142,10 @@ def post_product_sync(product_mapping: ProductMapping, sync_result: Dict[str, An
             product_mapping.save(update_fields=['last_synced', 'sync_status'])
             
             # Crear log de sincronización exitosa
-            SyncLog.objects.create(
-                sync_type='product_sync',
-                status='success',
-                platform='both',
-                mapping=product_mapping,
-                message=f"Producto sincronizado exitosamente: {product_mapping.tiendanube_name}",
-                started_at=timezone.now()
+            _create_hook_sync_log(
+                'product_sync',
+                product_mapping,
+                f"Producto sincronizado: {product_mapping.tiendanube_name}",
             )
         
     except Exception as e:
@@ -199,13 +206,10 @@ def post_order_sync(order_mapping: OrderMapping, sync_result: Dict[str, Any], **
             order_mapping.save(update_fields=['last_synced', 'sync_status'])
             
             # Crear log de sincronización exitosa
-            SyncLog.objects.create(
-                sync_type='order_sync',
-                status='success',
-                platform='both',
-                mapping=order_mapping,
-                message=f"Orden sincronizada exitosamente: {order_mapping.tiendanube_order_number}",
-                started_at=timezone.now()
+            _create_hook_sync_log(
+                'order_sync',
+                order_mapping,
+                f"Orden sincronizada: {order_mapping.tiendanube_number}",
             )
         
     except Exception as e:
@@ -224,13 +228,11 @@ def sync_error(error_data: Dict[str, Any], **kwargs) -> None:
         logger.error(f"Sync error hook ejecutado: {error_data.get('message', 'Error desconocido')}")
         
         # Crear log de error
-        SyncLog.objects.create(
-            sync_type=error_data.get('sync_type', 'unknown'),
-            status='error',
-            platform=error_data.get('platform', 'unknown'),
-            message=error_data.get('message', 'Error desconocido en sincronización'),
-            error_details=error_data.get('error_details', ''),
-            started_at=timezone.now()
+        _create_hook_sync_log(
+            error_data.get('sync_type', 'customer_sync'),
+            None,
+            error_data.get('message', 'Error desconocido en sincronización'),
+            success=False,
         )
         
         # Aquí se pueden agregar notificaciones, alertas, etc.
@@ -251,14 +253,21 @@ def sync_completed(sync_summary: Dict[str, Any], **kwargs) -> None:
         logger.info(f"Sync completed hook ejecutado: {sync_summary.get('total_items', 0)} items procesados")
         
         # Crear log de resumen
+        from .models import AdministraNETConfig, SyncLog, TiendanubeConfig
+
+        tn_cfg = TiendanubeConfig.objects.filter(is_active=True).first()
+        an_cfg = AdministraNETConfig.objects.filter(is_active=True).first()
         SyncLog.objects.create(
-            sync_type='sync_summary',
-            status='success',
-            platform='both',
-            message=f"Sincronización completada: {sync_summary.get('total_items', 0)} items, "
-                    f"{sync_summary.get('success_count', 0)} exitosos, "
-                    f"{sync_summary.get('error_count', 0)} errores",
-            started_at=timezone.now()
+            sync_type=SyncLog.SyncType.FULL,
+            direction=SyncLog.SyncDirection.BIDIRECTIONAL,
+            status=SyncLog.Status.COMPLETED,
+            total_items=sync_summary.get('total_items', 0),
+            processed_items=sync_summary.get('total_items', 0),
+            successful_items=sync_summary.get('success_count', 0),
+            failed_items=sync_summary.get('error_count', 0),
+            tiendanube_config=tn_cfg,
+            adminet_config=an_cfg,
+            details=sync_summary,
         )
         
         # Aquí se pueden agregar notificaciones, reportes, etc.

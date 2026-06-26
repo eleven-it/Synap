@@ -2,6 +2,19 @@
 
 Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el plan en **ANALISIS_MPR_PROPUESTA_MVP.md**.
 
+**Identificación pack / componente en datos:** ver [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md).
+
+---
+
+## Pack y componente (datos)
+
+| Término | Descripción |
+|--------|-------------|
+| **Pack** | En MPR, unidad de demanda o producto terminado que se fabrica o arma. **No** es un solo campo en `articulo`: según el flujo se identifica por `ensamblado`+`id_en_abm` (BOM), por `lista_produccion_agrupada.id_articulo` (OPT), o por `MprArticuloArmadoSurtido` (armado surtido). |
+| **Componente** | Insumo que sale de un depósito al armar o al registrar OPP/OPT. En BOM está en `en_abm_formula`; en armado surtido es la composición elegida en pantalla. Cualquier `IDArt` puede ser componente sin flag en `articulo`. |
+| **Pack BOM / artículo armado** | `articulo` con `ensamblado = 'Si'` e `id_en_abm` apuntando al conjunto `en_abm`. |
+| **cantidad_promedio_bulto** | Unidades por bulto del artículo; divisor para docenas en OPT/armado. No indica pack vs componente. |
+
 ---
 
 ## Órdenes y demanda
@@ -44,6 +57,10 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 | **Artículo armado** | Artículo resultante del armado: en `articulo` tiene `ensamblado = 'Si'` e `id_en_abm` apuntando al conjunto. Se asigna en la edición de la lista de materiales en MPR. |
 | **Armado** | Operación que consume componentes (salida desde depósito origen) y genera producto armado (entrada en depósito destino). Movimiento_stock tipo_mov 'Armado', motivo 9. Se ejecuta desde “Armado” en MPR con selección de lista de materiales, cantidad y depósitos. |
 | **Ejecutar armado** | Pantalla MPR para elegir conjunto (lista de materiales), cantidad a armar, depósito origen (componentes) y depósito destino (producto armado). |
+| **Armado surtido** | Armado de un pack terminado con **composición variable** (sin BOM fija), típicamente desde depósito **2.ª selección** hacia **Terminado**. Movimiento tipo Armado vía `ejecutar_armado_surtido`. Ver [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.md). |
+| **Lote (armado surtido)** | Conjunto de **varios armados** (packs distintos) capturados en carrito antes de ejecutar; un MSTOCK por pack exitoso. Diseño: [SDD_ARMADO_SURTIDO_MULTI_LOTE.md](SDD_ARMADO_SURTIDO_MULTI_LOTE.md). |
+| **Composición (armado surtido)** | Lista de componentes y cantidades **por pack** elegida al armar; se persiste en tablas Synap (`mpr_armado_surtido_*`), no en `en_abm_formula`. |
+| **Pack habilitado surtido** | Artículo terminado (`IDArt`) autorizado en **`MprArticuloArmadoSurtido`** (Synap), no por `ensamblado` en `articulo`. Alta: `mpr_cargar_packs_armado_surtido` o admin Django. |
 
 ---
 

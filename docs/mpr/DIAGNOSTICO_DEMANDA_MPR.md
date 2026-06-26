@@ -40,6 +40,18 @@ Por tanto, para que un artículo aparezca en Demanda:
 
 ---
 
+## Cantidades de pedido pisadas tras Actualizar (PK / reserva)
+
+Si en **Cant. pedido** aparece un valor distinto al de `stockp` (p. ej. pedido 1000 u y detalle 100 u) **después** de pulsar Actualizar, comprobar:
+
+1. **PK de fila en detalle:** `SHOW COLUMNS FROM lista_produccion_detalle;` — la columna con `Key = PRI` debe ser `id_lista_detalle` (autoincrement). `id_lista_produccion` es FK hacia agrupada (**MUL**), no PK de fila.
+2. **Nombre corrupto:** si la PK física no se llama exactamente `id_lista_detalle` (p. ej. carácter extra en el nombre), ejecutar la migración global **«MPR — corregir nombre PK lista_produccion_detalle»** (`mpr_lista_produccion_detalle_pk_nombre` en el catálogo de esquema).
+3. **Síntoma:** `_sincronizar_demanda_reserva_lista_detalle` actualizaba por `id_lista_produccion` y dejaba la línea PED con la cantidad de reserva (`max(0, R − S)`). Synap corrige la detección de PK (Key=PRI) y filtra `codigo_movimiento_pedido = 0` en UPDATE/DELETE de reserva.
+
+Tras la corrección, **Actualizar** debe dejar en detalle las cantidades de `stockp` y la cantidad a fabricar = `P_ped + R − S` (p. ej. 1000 + 100 − 0 = 1100).
+
+---
+
 ## Comando de diagnóstico
 
 ```bash

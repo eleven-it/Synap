@@ -5,7 +5,7 @@ from django.conf import settings
 from django.utils import timezone
 from decimal import Decimal
 from ..models import TiendanubeConfig, ProductMapping, ProductCategoryMapping, ProductVariantMapping
-from .tiendanube_service import NUVEMSHOP_API_VERSION
+from .tiendanube_service import NUVEMSHOP_API_VERSION, TiendanubeService
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ class TiendanubeProductService:
             'Content-Type': 'application/json',
             'User-Agent': 'AdministraNET (soporte@administranet.com.ar)'
         }
+        self._tn_service = TiendanubeService(config)
     
     def test_connection(self) -> Dict[str, Any]:
         """Probar conexión con Tiendanube."""
@@ -444,6 +445,12 @@ class TiendanubeProductService:
     # ============================================================================
     # STOCK
     # ============================================================================
+
+    def patch_products_stock_price(self, items: List[dict]) -> Dict[str, Any]:
+        """
+        PATCH /products/stock-price — hasta 50 variantes por request (rate limit vía TiendanubeService).
+        """
+        return self._tn_service.patch_products_stock_price(items)
 
     def update_product_stock(self, product_id: int, stock_data: Dict[str, Any]) -> Dict[str, Any]:
         """

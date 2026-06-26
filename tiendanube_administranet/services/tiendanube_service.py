@@ -5,6 +5,13 @@ import requests
 from django.conf import settings
 
 from ..models import TiendanubeConfig
+from .rate_limit import (
+    get_max_consecutive_429,
+    get_max_retries,
+    update_rate_limit_from_response,
+    wait_after_rate_limit_response,
+    wait_for_rate_limit,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +35,53 @@ class TiendanubeService:
             'Content-Type': 'application/json',
             'User-Agent': 'AdministraNET (soporte@administranet.com.ar)'
         }
+
+    _RETRIABLE_STATUS_CODES = frozenset({429, 502, 503, 504})
+
+    def _request(self, method: str, url: str, **kwargs):
+        """HTTP a la API con rate limit Nuvemshop, headers adaptativos y reintentos."""
+        kwargs.setdefault('headers', self.headers)
+        max_retries = get_max_retries()
+        max_consecutive_429 = get_max_consecutive_429()
+
+        response = None
+        retry_attempt = 0
+        consecutive_429 = 0
+
+        while True:
+            wait_for_rate_limit()
+            response = requests.request(method, url, **kwargs)
+            update_rate_limit_from_response(response)
+
+            status = response.status_code
+            if status not in self._RETRIABLE_STATUS_CODES:
+                return response
+
+            if status == 429:
+                consecutive_429 += 1
+                if consecutive_429 >= max_consecutive_429:
+                    logger.error(
+                        'Agotados %s respuestas 429 consecutivas en %s %s',
+                        consecutive_429,
+                        method,
+                        url,
+                    )
+                    return response
+            else:
+                consecutive_429 = 0
+
+            if retry_attempt >= max_retries:
+                logger.error(
+                    'Agotados %s reintentos en %s %s (último status %s)',
+                    retry_attempt,
+                    method,
+                    url,
+                    status,
+                )
+                return response
+
+            retry_attempt += 1
+            wait_after_rate_limit_response(response, attempt=retry_attempt)
     
     def test_connection(self) -> Dict[str, Any]:
         """Probar conexión con Tiendanube."""
@@ -35,7 +89,7 @@ class TiendanubeService:
             # Usar endpoint correcto según documentación 2025-03
             url = f"{self.base_url}/products"
             params = {'limit': 1}
-            response = requests.get(url, headers=self.headers, params=params)
+            response = self._request('GET', url, params=params)
             if response.status_code == 200:
                 return {
                     'success': True,
@@ -73,7 +127,7 @@ class TiendanubeService:
                 if value:
                     params[key] = value
             
-            response = requests.get(url, headers=self.headers, params=params)
+            response = self._request('GET', url, params=params)
             
             if response.status_code == 200:
                 customers = response.json()
@@ -104,11 +158,33 @@ class TiendanubeService:
                 'message': f'Error obteniendo clientes: {str(e)}'
             }
     
+    def find_customer_by_email(self, email: str) -> Dict[str, Any]:
+        """
+        Buscar un cliente en Tienda Nube por email (GET /customers?email=).
+        Devuelve el primer match o customer=None si no hay coincidencias.
+        """
+        normalized = (email or '').strip()
+        if not normalized:
+            return {'success': True, 'customer': None, 'found': False}
+
+        result = self.get_customers(limit=1, email=normalized)
+        if not result.get('success'):
+            return result
+
+        customers = result.get('customers') or []
+        if customers:
+            return {
+                'success': True,
+                'customer': customers[0],
+                'found': True,
+            }
+        return {'success': True, 'customer': None, 'found': False}
+
     def get_customer(self, customer_id: int) -> Dict[str, Any]:
         """Obtener cliente específico de Tiendanube."""
         try:
             url = f"{self.base_url}/customers/{customer_id}"
-            response = requests.get(url, headers=self.headers)
+            response = self._request('GET', url)
             
             if response.status_code == 200:
                 return {
@@ -132,7 +208,7 @@ class TiendanubeService:
         """Crear nuevo cliente en Tiendanube."""
         try:
             url = f"{self.base_url}/customers"
-            response = requests.post(url, headers=self.headers, json=customer_data)
+            response = self._request('POST', url, json=customer_data)
             
             if response.status_code in [200, 201]:
                 return {
@@ -157,7 +233,7 @@ class TiendanubeService:
         """Actualizar cliente existente en Tiendanube."""
         try:
             url = f"{self.base_url}/customers/{customer_id}"
-            response = requests.put(url, headers=self.headers, json=customer_data)
+            response = self._request('PUT', url, json=customer_data)
             
             if response.status_code == 200:
                 return {
@@ -182,7 +258,7 @@ class TiendanubeService:
         """Eliminar cliente de Tiendanube."""
         try:
             url = f"{self.base_url}/customers/{customer_id}"
-            response = requests.delete(url, headers=self.headers)
+            response = self._request('DELETE', url)
             
             if response.status_code == 200:
                 return {
@@ -216,7 +292,7 @@ class TiendanubeService:
                 'limit': limit,
                 'q': query
             }
-            response = requests.get(url, headers=self.headers, params=params)
+            response = self._request('GET', url, params=params)
             
             if response.status_code == 200:
                 customers = response.json()
@@ -251,7 +327,7 @@ class TiendanubeService:
         try:
             url = f"{self.base_url}/{self.config.store_id}/customers/{customer_id}/orders"
             params = {'limit': limit, 'offset': offset}
-            response = requests.get(url, headers=self.headers, params=params)
+            response = self._request('GET', url, params=params)
             
             if response.status_code == 200:
                 orders = response.json()
@@ -383,7 +459,7 @@ class TiendanubeService:
         try:
             url = f"{self.base_url}/products"
             params = {'limit': limit, 'offset': offset}
-            response = requests.get(url, headers=self.headers, params=params)
+            response = self._request('GET', url, params=params)
             
             if response.status_code == 200:
                 return {
@@ -408,7 +484,7 @@ class TiendanubeService:
         """Obtener producto específico de Tiendanube."""
         try:
             url = f"{self.base_url}/products/{product_id}"
-            response = requests.get(url, headers=self.headers)
+            response = self._request('GET', url)
             
             if response.status_code == 200:
                 return {
@@ -449,7 +525,7 @@ class TiendanubeService:
                             }
             
             url = f"{self.base_url}/products"
-            response = requests.post(url, headers=self.headers, json=product_data)
+            response = self._request('POST', url, json=product_data)
             
             if response.status_code in [200, 201]:
                 return {
@@ -491,7 +567,7 @@ class TiendanubeService:
                             }
             
             url = f"{self.base_url}/products/{product_id}"
-            response = requests.put(url, headers=self.headers, json=product_data)
+            response = self._request('PUT', url, json=product_data)
             
             if response.status_code == 200:
                 return {
@@ -516,7 +592,7 @@ class TiendanubeService:
         """Eliminar producto de Tiendanube."""
         try:
             url = f"{self.base_url}/products/{product_id}"
-            response = requests.delete(url, headers=self.headers)
+            response = self._request('DELETE', url)
             
             if response.status_code == 200:
                 return {
@@ -541,7 +617,7 @@ class TiendanubeService:
         try:
             url = f"{self.base_url}/orders"
             params = {'limit': limit, 'offset': offset}
-            response = requests.get(url, headers=self.headers, params=params)
+            response = self._request('GET', url, params=params)
             
             if response.status_code == 200:
                 return {
@@ -566,7 +642,7 @@ class TiendanubeService:
         """Obtener orden específica de Tiendanube."""
         try:
             url = f"{self.base_url}/orders/{order_id}"
-            response = requests.get(url, headers=self.headers)
+            response = self._request('GET', url)
             
             if response.status_code == 200:
                 return {
@@ -590,7 +666,7 @@ class TiendanubeService:
         """Actualizar orden existente en Tiendanube."""
         try:
             url = f"{self.base_url}/orders/{order_id}"
-            response = requests.put(url, headers=self.headers, json=order_data)
+            response = self._request('PUT', url, json=order_data)
             
             if response.status_code == 200:
                 return {
@@ -615,7 +691,7 @@ class TiendanubeService:
         """Obtener categorías de Tiendanube."""
         try:
             url = f"{self.base_url}/categories"
-            response = requests.get(url, headers=self.headers)
+            response = self._request('GET', url)
             
             if response.status_code == 200:
                 return {
@@ -639,7 +715,7 @@ class TiendanubeService:
         """Obtener métodos de pago de Tiendanube."""
         try:
             url = f"{self.base_url}/payment_methods"
-            response = requests.get(url, headers=self.headers)
+            response = self._request('GET', url)
             
             if response.status_code == 200:
                 return {
@@ -663,7 +739,7 @@ class TiendanubeService:
         """Obtener métodos de envío de Tiendanube."""
         try:
             url = f"{self.base_url}/shipping_methods"
-            response = requests.get(url, headers=self.headers)
+            response = self._request('GET', url)
             
             if response.status_code == 200:
                 return {
@@ -687,7 +763,7 @@ class TiendanubeService:
         """Obtener información de la tienda."""
         try:
             url = f"{self.base_url}/store"
-            response = requests.get(url, headers=self.headers)
+            response = self._request('GET', url)
             
             if response.status_code == 200:
                 return {
@@ -711,7 +787,7 @@ class TiendanubeService:
         """Obtener estadísticas de la tienda."""
         try:
             url = f"{self.base_url}/statistics"
-            response = requests.get(url, headers=self.headers)
+            response = self._request('GET', url)
             
             if response.status_code == 200:
                 return {
@@ -746,7 +822,7 @@ class TiendanubeService:
             # Buscar productos con el SKU específico
             url = f"{self.base_url}/products"
             params = {'per_page': 200}  # Obtener todos los productos
-            response = requests.get(url, headers=self.headers, params=params)
+            response = self._request('GET', url, params=params)
             
             if response.status_code == 200:
                 products = response.json()
@@ -816,7 +892,7 @@ class TiendanubeService:
                     }
             
             url = f"{self.base_url}/products/{product_id}/variants/{variant_id}"
-            response = requests.put(url, headers=self.headers, json=variant_data)
+            response = self._request('PUT', url, json=variant_data)
             
             if response.status_code == 200:
                 return {
@@ -837,6 +913,39 @@ class TiendanubeService:
                 'message': f'Error actualizando variante: {str(e)}'
             }
     
+    def patch_products_stock_price(self, items: List[dict]) -> Dict[str, Any]:
+        """
+        Actualizar stock y/o precio de hasta 50 variantes en un solo request.
+
+        Args:
+            items: Payload de la API — lista de productos con variantes, p. ej.:
+                [{"id": 123, "variants": [{"id": 456, "price": 10.0,
+                  "inventory_levels": [{"stock": 5}]}]}]
+        """
+        try:
+            url = f"{self.base_url}/products/stock-price"
+            response = self._request('PATCH', url, json=items)
+
+            if response.status_code == 200:
+                return {
+                    'success': True,
+                    'result': response.json(),
+                    'message': 'Stock/precio actualizado exitosamente',
+                }
+            return {
+                'success': False,
+                'message': (
+                    f'Error actualizando stock/precio: {response.status_code}'
+                ),
+                'error': response.text,
+            }
+        except Exception as e:
+            logger.error(f"Error en patch_products_stock_price: {e}")
+            return {
+                'success': False,
+                'message': f'Error actualizando stock/precio: {str(e)}',
+            }
+
     def create_variant(self, product_id: int, variant_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Crear una nueva variante para un producto.
@@ -864,7 +973,7 @@ class TiendanubeService:
                     }
             
             url = f"{self.base_url}/products/{product_id}/variants"
-            response = requests.post(url, headers=self.headers, json=variant_data)
+            response = self._request('POST', url, json=variant_data)
             
             if response.status_code in [200, 201]:
                 return {

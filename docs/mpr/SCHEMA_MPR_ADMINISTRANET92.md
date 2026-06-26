@@ -16,7 +16,8 @@ Documento de referencia del esquema de base de datos usado por el módulo MPR en
 | **Movimientos de stock** | movimiento_stock (cabecera), stock (renglones), stock_deposito (saldos) |
 | **Secuencia / comprobante** | codmov (CodigoMovimiento), talonarios (MSTOCK, Nro comprobante) |
 | **Pedidos / demanda** | comp_ped (PED, **estado_pedido_opt**: Pendiente \| Produccion \| Terminado), stockp (cantidad). *cantidad_fab_pendiente_opt deprecado para MPR; no usar "En proceso parcial/completo".* |
-| **Lista de materiales / armado** | en_abm, en_abm_formula; articulo (ensamblado, id_en_abm) |
+| **Lista de materiales / armado** | en_abm, en_abm_formula; articulo (ensamblado, id_en_abm). Ver [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md) |
+| **Armado surtido (Synap)** | mpr_mprarticuloarmadosurtido, mpr_mprarmadosurtidomovimiento, mpr_mprarmadosurtidolinea (Django) |
 | **Catálogos** | articulo, deposito, deposito_reposicion, ref_movstock, unimed, presentacion_abm, viajantes |
 
 ---
@@ -293,23 +294,37 @@ Renglones de pedidos (cuerpo). MPR no usa cantidad_fab_pendiente_opt; el pendien
 - **en_abm:** Conjuntos de armado (lista de materiales): id_en_abm, nombre_en_abm, anulado, detalle, descuenta_en.
 - **en_abm_formula:** Componentes: id_en_abm, id_articulo, cantidad_articulo, anulado, tipo_unidad, cantidad_unidad_display, cantidad_dividir.
 
-**articulo:** ensamblado='Si', id_en_abm para productos armados.
+**Pack (BOM):** `articulo.ensamblado='Si'` + `id_en_abm`. **Componentes:** `en_abm_formula`, no flag en `articulo`. **Pack surtido:** tabla Django `MprArticuloArmadoSurtido` (ver [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md)).
 
 ---
 
 ### 2.13 articulo
 
-**Documentación:** [tablas/articulo.md](../general/tablas/articulo.md)
+**Documentación:** [tablas/articulo.md](../general/tablas/articulo.md) · **Pack/componente MPR:** [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md)
 
 | Campo | Tipo | Uso MPR |
 |-------|------|----------|
 | IDArt | INT PK | — |
 | CodigoArticulo, CodigoArticuloT | INT/VARCHAR | Código mostrado. |
 | NombreArticulo | VARCHAR | Descripción. |
-| ensamblado | VARCHAR | 'Si' si es armado. |
-| id_en_abm | DOUBLE | Conjunto de armado (en_abm). |
-| multiplicador_vta | DECIMAL | Unidades por presentación (pack, docena). |
-| **stock_reserva** | **DECIMAL(15,2)** | **Añadido por plan.** Stock de reserva por artículo; usado en Pedido producción trabajo (OPT)/Unidades: stock_reserva - stock_actual (depósitos con suma_stock='Si'). |
+| ensamblado | VARCHAR | `'Si'` → **pack resultado** de armado con lista de materiales (no armado surtido). |
+| id_en_abm | DOUBLE | Conjunto / receta (`en_abm`); explosión a componentes vía `en_abm_formula`. |
+| cantidad_promedio_bulto | DECIMAL | Divisor bulto para docenas · unidades en OPT/armado (presentación). |
+| Lote | VARCHAR | `'Si'` → consumo FIFO por lote en `ejecutar_armado` / `ejecutar_armado_surtido`. |
+| multiplicador_vta | DECIMAL | Unidades por presentación (legacy comercial). |
+| **stock_reserva** | **DECIMAL(15,2)** | Colchón de reserva del **terminado** en ventana demanda; no define componente. |
+
+---
+
+### 2.13.1 Tablas Synap — armado surtido (Django)
+
+No están en MySQL legacy; viven en la BD de Synap (`mpr` app).
+
+| Modelo | Uso |
+|--------|-----|
+| **MprArticuloArmadoSurtido** | Packs terminados **habilitados** para `/mpr/armado-surtido/` (`base_empresa`, `id_articulo`, `activo`). |
+| **MprArmadoSurtidoMovimiento** | Cabecera por movimiento (`codigo_movimiento`, depósitos, `id_lista_produccion` opcional). |
+| **MprArmadoSurtidoLinea** | Componentes de cada armado (`id_articulo_componente`, `cantidad_por_pack`, `cantidad_total`). |
 
 ---
 

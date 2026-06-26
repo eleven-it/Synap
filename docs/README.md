@@ -17,7 +17,7 @@ Toda la documentación del proyecto está en **`docs/`** en la raíz del reposit
 | **support/** | Módulo Support: RAG con LangChain/PGVector, implementación del refactor ([RAG_LANGCHAIN_IMPLEMENTACION.md](support/RAG_LANGCHAIN_IMPLEMENTACION.md)), uso y configuración (ver también [support/docs/RAG_Y_SYNAP.md](../support/docs/RAG_Y_SYNAP.md)). |
 | **login/** | Reservado para documentación de login, sesión y autenticación. |
 | **compras/** | **Factura de compra:** auditoría VB6 (`Guardar` PFactura), origen Manual/Remito/OC/Vale, especificación PWA captura + workflow, posting legacy MySQL, contrato `LegacyPostingCommand`, SQL y tests. Índice: [compras/README.md](compras/README.md). |
-| **mpr/** | Producción (MPR): manual de usuario ([mpr/MANUAL_USUARIO_MPR.md](mpr/MANUAL_USUARIO_MPR.md)), trazabilidad SDD de cambios cerrados ([SDD_OPP_ENTRADA_DOCENAS_UNIDADES.md](mpr/SDD_OPP_ENTRADA_DOCENAS_UNIDADES.md), [SDD_CONFIRMAR_OPT_VENTANA_PACK.md](mpr/SDD_CONFIRMAR_OPT_VENTANA_PACK.md)). |
+| **mpr/** | Producción (MPR): manual ([mpr/MANUAL_USUARIO_MPR.md](mpr/MANUAL_USUARIO_MPR.md)), pack/componente ([mpr/ARTICULO_PACK_COMPONENTE_MPR.md](mpr/ARTICULO_PACK_COMPONENTE_MPR.md)), índice [mpr/README.md](mpr/README.md). |
 
 Los README de proyecto (`README_REPORTS.md`, `README_INSTALLATION.md`) permanecen en la raíz del repo como punto de entrada.
 

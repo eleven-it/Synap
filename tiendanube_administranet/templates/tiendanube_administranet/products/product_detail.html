@@ -48,142 +48,30 @@
     </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-    <!-- Tiendanube Information -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                <span class="material-icons text-blue-600 mr-2">cloud</span>
-                {% trans "Tiendanube Information" %}
-            </h3>
-        </div>
-        <div class="p-6">
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "ID" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.tiendanube_id|default:"N/A" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Handle" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.tiendanube_handle|default:"N/A" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Price" %}</p>
-                    <p class="text-gray-900 dark:text-white">${{ product.tiendanube_price|default:"0.00" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Compare Price" %}</p>
-                    <p class="text-gray-900 dark:text-white">${{ product.tiendanube_compare_at_price|default:"0.00" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Cost" %}</p>
-                    <p class="text-gray-900 dark:text-white">${{ product.tiendanube_cost|default:"0.00" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Stock" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.tiendanube_stock|default:"0" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Weight" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.tiendanube_weight|default:"0" }} kg</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Type" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.tiendanube_product_type|default:"N/A" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Published" %}</p>
-                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                        {% if product.tiendanube_published %}
-                            bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
-                        {% else %}
-                            bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
-                        {% endif %}">
-                        {{ product.tiendanube_published|yesno:"Yes,No" }}
-                    </span>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Featured" %}</p>
-                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                        {% if product.tiendanube_featured %}
-                            bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400
-                        {% else %}
-                            bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400
-                        {% endif %}">
-                        {{ product.tiendanube_featured|yesno:"Yes,No" }}
-                    </span>
-                </div>
-            </div>
-            
-            {% if product.tiendanube_description %}
-            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{% trans "Description" %}</h4>
-                <p class="text-gray-900 dark:text-white">{{ product.tiendanube_description }}</p>
-            </div>
-            {% endif %}
-        </div>
-    </div>
+{% include 'tiendanube_administranet/products/includes/product_comparison_table.html' %}
 
-    <!-- AdministraNET Information -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-green-50 dark:bg-green-900/20">
-            <h3 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                <span class="material-icons text-green-600 mr-2">database</span>
-                {% trans "AdministraNET Information" %}
-            </h3>
-        </div>
-        <div class="p-6">
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "ID" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.adminet_id|default:"N/A" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Article Code" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.adminet_codigo_articulo|default:"N/A" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Name" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.adminet_nombre|default:"N/A" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Cost Price" %}</p>
-                    <p class="text-gray-900 dark:text-white">${{ product.adminet_precio_costo|default:"0.00" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Price 1V" %}</p>
-                    <p class="text-gray-900 dark:text-white">${{ product.adminet_precio_1v|default:"0.00" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Stock" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.adminet_stock|default:"0" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "Barcode" %}</p>
-                    <p class="text-gray-900 dark:text-white">{{ product.adminet_codigo_barra|default:"N/A" }}</p>
-                </div>
-                <div>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">{% trans "E-commerce" %}</p>
-                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full 
-                        {% if product.adminet_ecommerce %}
-                            bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400
-                        {% else %}
-                            bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400
-                        {% endif %}">
-                        {{ product.adminet_ecommerce|yesno:"Yes,No" }}
-                    </span>
-                </div>
-            </div>
-            
-            {% if product.adminet_detalle %}
-            <div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">{% trans "Details" %}</h4>
-                <p class="text-gray-900 dark:text-white">{{ product.adminet_detalle }}</p>
-            </div>
-            {% endif %}
-        </div>
+{% if product.tiendanube_description or product.adminet_detalle %}
+<div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+    {% if product.tiendanube_description %}
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+        <h4 class="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-1">
+            <span class="material-icons text-base">cloud</span>
+            {% trans "Descripción Tiendanube" %}
+        </h4>
+        <p class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{{ product.tiendanube_description }}</p>
     </div>
+    {% endif %}
+    {% if product.adminet_detalle %}
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+        <h4 class="text-sm font-semibold text-green-700 dark:text-green-300 mb-2 flex items-center gap-1">
+            <span class="material-icons text-base">database</span>
+            {% trans "Detalle AdministraNET" %}
+        </h4>
+        <p class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{{ product.adminet_detalle }}</p>
+    </div>
+    {% endif %}
 </div>
+{% endif %}
 
 <!-- Sync Configuration -->
 <div class="mt-8 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">

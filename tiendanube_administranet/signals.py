@@ -3,7 +3,8 @@ Señales de Django para la integración Tiendanube-AdministraNET.
 """
 
 import logging
-from django.db.models.signals import post_save, post_delete
+
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 from django.utils import timezone
 
@@ -25,197 +26,138 @@ def _schedule_sync_pending_async():
         logger.warning("No se pudo programar sincronización en segundo plano: %s", exc)
 
 
+def _log_mapping_event(mapping: CustomerMapping, event: str) -> None:
+    """Registra evento de mapeo usando el schema válido de SyncLog."""
+    tn_cfg = TiendanubeConfig.objects.filter(is_active=True).first()
+    an_cfg = AdministraNETConfig.objects.filter(is_active=True).first()
+    SyncLog.objects.create(
+        sync_type=SyncLog.SyncType.CUSTOMER,
+        direction=SyncLog.SyncDirection.TO_ADMINET,
+        status=SyncLog.Status.COMPLETED,
+        total_items=1,
+        processed_items=1,
+        successful_items=1,
+        failed_items=0,
+        tiendanube_config=tn_cfg,
+        adminet_config=an_cfg,
+        details={
+            'event': event,
+            'mapping_id': mapping.id,
+            'tiendanube_email': mapping.tiendanube_email,
+        },
+    )
+
+
 @receiver(post_save, sender=CustomerMapping)
 def customer_mapping_post_save(sender, instance, created, **kwargs):
-    """
-    Señal que se ejecuta después de guardar un CustomerMapping.
-    
-    Args:
-        sender: Modelo que envió la señal
-        instance: Instancia del CustomerMapping
-        created: True si es una nueva instancia
-    """
+    """Señal post_save de CustomerMapping."""
     try:
         if created:
-            # Nuevo mapeo creado
-            logger.info(f"Nuevo mapeo de cliente creado: {instance}")
-            
-            # Registrar log de creación
-            SyncLog.objects.create(
-                sync_type='mapping_create',
-                status='success',
-                platform='both',
-                mapping=instance,
-                message=f"Mapeo creado para {instance.tiendanube_email}",
-                started_at=timezone.now()
-            )
-            
-            # Si el mapeo está habilitado y es pendiente, programar sincronización
+            logger.info("Nuevo mapeo de cliente creado: %s", instance)
+            _log_mapping_event(instance, 'mapping_create')
             if instance.sync_enabled and instance.sync_status == 'pending':
-                # Programar tarea de sincronización (con delay para evitar bloqueos)
                 _schedule_sync_pending_async()
-                logger.info(f"Sincronización programada para mapeo {instance.id}")
-        
+                logger.info("Sincronización programada para mapeo %s", instance.id)
         else:
-            # Mapeo actualizado
-            logger.info(f"Mapeo de cliente actualizado: {instance}")
-            
-            # Registrar log de actualización
-            SyncLog.objects.create(
-                sync_type='mapping_update',
-                status='success',
-                platform='both',
-                mapping=instance,
-                message=f"Mapeo actualizado para {instance.tiendanube_email}",
-                started_at=timezone.now()
-            )
-            
-            # Si el estado cambió a pendiente y está habilitado, programar sincronización
+            logger.info("Mapeo de cliente actualizado: %s", instance)
+            _log_mapping_event(instance, 'mapping_update')
             if instance.sync_enabled and instance.sync_status == 'pending':
                 _schedule_sync_pending_async()
-                logger.info(f"Sincronización programada para mapeo actualizado {instance.id}")
-                
+                logger.info("Sincronización programada para mapeo actualizado %s", instance.id)
     except Exception as e:
-        logger.error(f"Error en señal post_save de CustomerMapping: {str(e)}")
+        logger.error("Error en señal post_save de CustomerMapping: %s", e)
 
 
 @receiver(post_delete, sender=CustomerMapping)
 def customer_mapping_post_delete(sender, instance, **kwargs):
-    """
-    Señal que se ejecuta después de eliminar un CustomerMapping.
-    
-    Args:
-        sender: Modelo que envió la señal
-        instance: Instancia del CustomerMapping eliminado
-    """
+    """Señal post_delete de CustomerMapping."""
     try:
-        logger.info(f"Mapeo de cliente eliminado: {instance}")
-        
-        # Registrar log de eliminación
+        logger.info("Mapeo de cliente eliminado: %s", instance.tiendanube_email)
+        tn_cfg = TiendanubeConfig.objects.filter(is_active=True).first()
+        an_cfg = AdministraNETConfig.objects.filter(is_active=True).first()
         SyncLog.objects.create(
-            sync_type='mapping_delete',
-            status='success',
-            platform='both',
-            mapping=None,  # Ya no existe la instancia
-            message=f"Mapeo eliminado para {instance.tiendanube_email}",
-            started_at=timezone.now()
+            sync_type=SyncLog.SyncType.CUSTOMER,
+            direction=SyncLog.SyncDirection.TO_ADMINET,
+            status=SyncLog.Status.COMPLETED,
+            total_items=1,
+            processed_items=1,
+            successful_items=1,
+            failed_items=0,
+            tiendanube_config=tn_cfg,
+            adminet_config=an_cfg,
+            details={
+                'event': 'mapping_delete',
+                'tiendanube_email': instance.tiendanube_email,
+            },
         )
-        
     except Exception as e:
-        logger.error(f"Error en señal post_delete de CustomerMapping: {str(e)}")
+        logger.error("Error en señal post_delete de CustomerMapping: %s", e)
 
 
 @receiver(post_save, sender=TiendanubeConfig)
 def tiendanube_config_post_save(sender, instance, created, **kwargs):
-    """
-    Señal que se ejecuta después de guardar una configuración de Tiendanube.
-    
-    Args:
-        sender: Modelo que envió la señal
-        instance: Instancia de TiendanubeConfig
-        created: True si es una nueva instancia
-    """
+    """Una sola configuración Tienda Nube activa."""
     try:
         if created:
-            logger.info(f"Nueva configuración de Tiendanube creada: {instance.name}")
+            logger.info("Nueva configuración de Tiendanube creada: %s", instance.name)
         else:
-            logger.info(f"Configuración de Tiendanube actualizada: {instance.name}")
-            
-        # Si esta configuración se activó, desactivar las demás
+            logger.info("Configuración de Tiendanube actualizada: %s", instance.name)
         if instance.is_active:
             TiendanubeConfig.objects.exclude(id=instance.id).update(is_active=False)
-            logger.info(f"Configuración {instance.name} activada, otras desactivadas")
-            
+            logger.info("Configuración %s activada, otras desactivadas", instance.name)
     except Exception as e:
-        logger.error(f"Error en señal post_save de TiendanubeConfig: {str(e)}")
+        logger.error("Error en señal post_save de TiendanubeConfig: %s", e)
 
 
 @receiver(post_save, sender=AdministraNETConfig)
 def adminet_config_post_save(sender, instance, created, **kwargs):
-    """
-    Señal que se ejecuta después de guardar una configuración de AdministraNET.
-    
-    Args:
-        sender: Modelo que envió la señal
-        instance: Instancia de AdministraNETConfig
-        created: True si es una nueva instancia
-    """
+    """Una sola configuración AdministraNET activa."""
     try:
         if created:
-            logger.info(f"Nueva configuración de AdministraNET creada: {instance.name}")
+            logger.info("Nueva configuración de AdministraNET creada: %s", instance.name)
         else:
-            logger.info(f"Configuración de AdministraNET actualizada: {instance.name}")
-            
-        # Si esta configuración se activó, desactivar las demás
+            logger.info("Configuración de AdministraNET actualizada: %s", instance.name)
         if instance.is_active:
             AdministraNETConfig.objects.exclude(id=instance.id).update(is_active=False)
-            logger.info(f"Configuración {instance.name} activada, otras desactivadas")
-            
+            logger.info("Configuración %s activada, otras desactivadas", instance.name)
     except Exception as e:
-        logger.error(f"Error en señal post_save de AdministraNETConfig: {str(e)}")
+        logger.error("Error en señal post_save de AdministraNETConfig: %s", e)
 
 
 @receiver(post_save, sender=SyncLog)
 def sync_log_post_save(sender, instance, created, **kwargs):
-    """
-    Señal que se ejecuta después de guardar un SyncLog.
-    
-    Args:
-        sender: Modelo que envió la señal
-        instance: Instancia de SyncLog
-        created: True si es una nueva instancia
-    """
+    """Log de nivel según estado del SyncLog."""
     try:
         if created:
-            # Log de nivel apropiado según el estado
-            if instance.status == 'error':
-                logger.error(f"Log de sincronización: {instance.error_message}")
-            elif instance.status == 'failed':
-                logger.warning(f"Log de sincronización: {instance.error_message}")
+            if instance.status == SyncLog.Status.FAILED:
+                logger.warning("Log de sincronización fallido: %s", instance.error_message)
             else:
-                logger.info(f"Log de sincronización: {instance.sync_type} - {instance.status}")
-                
+                logger.info(
+                    "Log de sincronización: %s - %s",
+                    instance.sync_type,
+                    instance.status,
+                )
     except Exception as e:
-        logger.error(f"Error en señal post_save de SyncLog: {str(e)}")
+        logger.error("Error en señal post_save de SyncLog: %s", e)
 
 
-# Señales para productos (futuras implementaciones)
 @receiver(post_save, sender='tiendanube_administranet.ProductMapping')
 def product_mapping_post_save(sender, instance, created, **kwargs):
-    """
-    Señal que se ejecuta después de guardar un ProductMapping.
-    
-    Args:
-        sender: Modelo que envió la señal
-        instance: Instancia del ProductMapping
-        created: True si es una nueva instancia
-    """
     try:
         if created:
-            logger.info(f"Nuevo mapeo de producto creado: {instance}")
+            logger.info("Nuevo mapeo de producto creado: %s", instance)
         else:
-            logger.info(f"Mapeo de producto actualizado: {instance}")
-            
+            logger.info("Mapeo de producto actualizado: %s", instance)
     except Exception as e:
-        logger.error(f"Error en señal post_save de ProductMapping: {str(e)}")
+        logger.error("Error en señal post_save de ProductMapping: %s", e)
 
 
-# Señales para órdenes (futuras implementaciones)
 @receiver(post_save, sender='tiendanube_administranet.OrderMapping')
 def order_mapping_post_save(sender, instance, created, **kwargs):
-    """
-    Señal que se ejecuta después de guardar un OrderMapping.
-    
-    Args:
-        sender: Modelo que envió la señal
-        instance: Instancia del OrderMapping
-        created: True si es una nueva instancia
-    """
     try:
         if created:
-            logger.info(f"Nuevo mapeo de orden creado: {instance}")
+            logger.info("Nuevo mapeo de orden creado: %s", instance)
         else:
-            logger.info(f"Mapeo de orden actualizado: {instance}")
-            
+            logger.info("Mapeo de orden actualizado: %s", instance)
     except Exception as e:
-        logger.error(f"Error en señal post_save de OrderMapping: {str(e)}") 
+        logger.error("Error en señal post_save de OrderMapping: %s", e)

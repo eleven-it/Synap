@@ -96,7 +96,7 @@
                                 <div>
                                     <span class="text-xs font-medium text-blue-700 dark:text-blue-300">{% trans "Name" %}:</span>
                                     <p class="text-sm text-blue-900 dark:text-blue-100">
-                                        {{ object.tiendanube_first_name|default:"" }} {{ object.tiendanube_last_name|default:"" }}
+                                        {{ object.display_name }}
                                     </p>
                                 </div>
                                 {% if object.tiendanube_phone %}

@@ -4,7 +4,7 @@ Este manual describe el uso del módulo MPR en Synap: tablero, demanda, OPT (Ped
 
 **Requisitos:** Usuario con acceso al módulo MPR y **empresa activa** seleccionada en sesión (base de datos AdministraNET). Sin empresa activa, el sistema redirige al dashboard.
 
-**Referencias:** Glosario de términos en [GLOSARIO_MPR.md](GLOSARIO_MPR.md). Análisis y flujo en [ANALISIS_MPR_PROPUESTA_MVP.md](ANALISIS_MPR_PROPUESTA_MVP.md).
+**Referencias:** Glosario de términos en [GLOSARIO_MPR.md](GLOSARIO_MPR.md). Análisis y flujo en [ANALISIS_MPR_PROPUESTA_MVP.md](ANALISIS_MPR_PROPUESTA_MVP.md). **Pack vs componente (datos e implementación):** [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md).
 
 ---
 
@@ -94,9 +94,52 @@ Listado de pedidos de venta (PED) con estado de producción (Pendiente, Producci
 
 ---
 
-## 4. OPT (Pedidos de producción)
+## 4. Pack y componentes: cómo los identifica el sistema
 
-### 4.0 Asistente de producción (wizard)
+En AdministraNET la tabla **`articulo` no tiene un campo único** que diga «soy pack» o «soy componente» para todos los procesos. Synap usa **criterios distintos según el flujo**. Detalle técnico: [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md).
+
+### 4.1 Campos de `articulo` que debe conocer
+
+| Campo | Uso en MPR |
+|-------|------------|
+| **ensamblado** | `'Si'` → artículo **resultado** de un armado con **lista de materiales** (pack BOM). |
+| **id_en_abm** | Número del **conjunto** / receta en `en_abm`. |
+| **cantidad_promedio_bulto** | Unidades por bulto para mostrar cantidades en **docenas · unidades** (no define si es pack o componente). |
+| **stock_reserva** | Reserva del **terminado** en ventana demanda (no es componente). |
+| **Lote** | `'Si'` → al armar se descuenta stock por **lote** (orden FIFO por vencimiento). |
+
+Los **componentes** de una receta **no** se marcan en `articulo`: están en la tabla **`en_abm_formula`** (por cada `id_en_abm`).
+
+### 4.2 Tres situaciones en pantalla
+
+**A) Lista de materiales y armado con receta**
+
+- **Pack:** artículo con `ensamblado = 'Si'` e `id_en_abm` del conjunto (se asigna en **Editar conjunto** → Artículo armado).
+- **Componentes:** filas del conjunto en **Componentes** (`en_abm_formula`).
+
+**B) Demanda, OPT y OPP**
+
+- **Pack:** el artículo de cada línea de la OPT (`lista_produccion_agrupada`).
+- **Componentes:** los que salen al **desglosar la receta** del pack (pestaña Unidades, paso OPP del asistente). Los movimientos de stock de OPT/OPP mueven **componentes**, aunque usted cargue cantidades pensando en packs.
+
+**C) Armado surtido**
+
+- **Pack:** solo los artículos **habilitados en MPR** (tabla Synap; comando `mpr_cargar_packs_armado_surtido` o admin Django). **No** se usa `ensamblado` para elegir el pack.
+- **Componentes:** los que usted agrega en la pantalla Armado surtido (artículos con stock en el depósito origen, p. ej. 2.ª selección).
+
+### 4.3 Qué configurar en datos
+
+| Objetivo | Acción |
+|----------|--------|
+| Armar con receta fija | Lista de materiales → conjunto + componentes + artículo armado (`ensamblado`/`id_en_abm`). |
+| Armar surtido | Habilitar el `IDArt` del pack terminado en config MPR (comando o admin). |
+| Ver armado en detalle OPT | El pack de la línea debe tener receta (`id_en_abm`) para «Armado desde esta OPT»; **Armado surtido** se habilita si la OPT está en curso, hay al menos una **OPP** registrada y alguna cantidad fue a **2.ª selección**. |
+
+---
+
+## 5. OPT (Pedidos de producción)
+
+### 5.0 Asistente de producción (wizard)
 
 **Asignación de operarios (trazabilidad por fase):**
 - En **Generar OPT** (Confirmar OPT / agrupar) **no** se muestra columna operario; la OPT se crea sin pedir operario en ese paso.
@@ -111,7 +154,7 @@ Flujo guiado: **1. Crear orden (OPT)** → **2. Confirmar** (crear OPT y liberar
 
 1. **Paso 1 – Crear orden de producción (OPT):** Artículo, cantidad pedida y opcionales (depósito de producción opcional, prioridad, fecha objetivo). Al continuar no se guarda aún en base de datos.
 2. **Paso 2 – Confirmar orden:** Resumen (artículo, cantidad; el depósito de entrada es el marcado como **Producción** en Config. Depósitos). Al pulsar **Confirmar y liberar a producción** se crea la OPT en base de datos y se ejecuta la liberación (movimiento OPT) hacia ese depósito. No se elige depósito en pantalla.
-3. **Paso 3 – Crear OPP:** Tabla por componente × depósito destino (excepto producción). En cada celda se cargan **docenas** y **unidades sueltas**: el sistema convierte a unidades totales con **1 docena = 12 unidades** (fijo en OPP; no usa el bulto del artículo). Solo cantidades totales > 0 generan movimiento (Producción → Semi Elaborado / Scrap / 2da Selección). **Cada componente con cantidad > 0 requiere operario**. La suma por componente en unidades no puede superar el **pendiente a distribuir**. **Si tras registrar una OPP la columna Pendiente a distribuir sigue siendo mayor que cero** en algún componente, el asistente **permanece en este paso** para poder registrar **otra OPP** (p. ej. otro operario); cuando ya no queda nada por distribuir, pasa al paso 4 (Armado). Al confirmar **Registrar OPP** se muestra modal de espera.
+3. **Paso 3 – Crear OPP:** Tabla por componente × depósito destino (excepto producción). En cada celda se cargan **docenas** y **unidades sueltas**: el sistema convierte a unidades totales con **1 docena = 12 unidades** (fijo en OPP; no usa el bulto del artículo). La columna **Pendiente a distribuir** muestra el saldo en **docenas · unidades** (misma regla de 12 unidades por docena) y se actualiza al cargar cantidades. Solo cantidades totales > 0 generan movimiento (Producción → Semi Elaborado / Scrap / 2da Selección). **Cada componente con cantidad > 0 requiere operario**. La suma por componente en unidades no puede superar el **pendiente a distribuir**. **Si tras registrar una OPP la columna Pendiente a distribuir sigue siendo mayor que cero** en algún componente, el asistente **permanece en este paso** para poder registrar **otra OPP** (p. ej. otro operario); cuando ya no queda nada por distribuir, pasa al paso 4 (Armado). Al confirmar **Registrar OPP** se muestra modal de espera.
 4. **Paso 4 – Armado (condicional):** Solo si el artículo tiene lista de materiales. Ejecutar armado por línea/pack (cantidad, depósitos) y **operario por línea**, u omitir y continuar. Al confirmar **Ejecutar armado** también se muestra modal de espera.
 5. **Paso 5 – Cierre:** Resumen, enlaces a **Registrar OPP**, **Ver detalle de la OPT** y **Cerrar OPT** (si pendiente = 0). **Finalizar asistente** limpia el wizard y lleva al detalle o al tablero.
 
@@ -121,7 +164,7 @@ En cualquier paso puede **Salir del asistente**; se limpia el estado sin modific
 
 ---
 
-### 4.1 Lista de OPT
+### 5.1 Lista de OPT
 
 **Ruta:** Producción → Lista de OPTT (`/mpr/opt/`).
 
@@ -137,7 +180,7 @@ En cualquier paso puede **Salir del asistente**; se limpia el estado sin modific
 - **Ver:** Ir al detalle de la OP.
 - **Liberar:** Lleva al tablero; desde el detalle de la OP se puede “Liberar OPT (solo en wizard; la OPT ya se crea en producción)”.
 
-### 4.2 Nueva OPT
+### 5.2 Nueva OPT
 
 **Ruta:** Órdenes → Nueva OPT o “Nueva OPT” desde Pedido producción trabajo (OPT) / Tablero (`/mpr/ordenes/nueva/`).
 
@@ -150,14 +193,15 @@ En cualquier paso puede **Salir del asistente**; se limpia el estado sin modific
 
 Se crea una línea en `lista_produccion_agrupada` y se redirige al **Detalle de la OP** recién creada.
 
-### 4.3 Detalle de una OP
+### 5.3 Detalle de una OP
 
 **Ruta:** Desde Lista de OPT → “Ver” en una fila (`/mpr/ordenes/<id_lista>/`).
 
 **Qué muestra:**
 
-- Número de OP (id_lista) y totales: cantidad pedida, pendiente, porcentaje completado.
-- Líneas: artículo, cantidad pedida, cantidad pendiente por línea.
+- Número de OP (id_lista) y totales: demanda, cantidad en esta OPT, pendiente OPP y pendiente del pedido. Las cantidades en **packs** se muestran además como **docenas · unidades** usando `articulo.cantidad_promedio_bulto` por artículo (si el bulto es ≤ 0, divisor 12). Si la OPT tiene **varios artículos con distinto bulto**, el total del encabezado queda en **packs** y debajo un **desglose por artículo** en docenas · unidades; si hay una sola línea o todas comparten el mismo bulto, el total del encabezado se muestra directamente en docenas · unidades.
+- Tabla por línea: docenas · unidades y, en texto secundario, el valor en packs.
+- Porcentaje completado y estado del flujo (Pedida → En producción → OPP → Pendiente 0 → Armado → Cerrado).
 
 **Tarjetas de acción:**
 
@@ -166,7 +210,7 @@ Se crea una línea en `lista_produccion_agrupada` y se redirige al **Detalle de 
 - **Registrar OPP:** Solo si la OP tiene id_lista. Lleva al formulario “Registrar parte de producción (OPP)”.
 - **Cerrar OPT:** Visible cuando el **pendiente total es 0**. Botón que envía POST para marcar la OP como cerrada (`en_proceso_produccion = 'No'`).
 
-### 4.4 Liberar a producción (OPT)
+### 5.4 Liberar a producción (OPT)
 
 **Ruta:** Desde Detalle de OP → “Liberar (OPT)” (`/mpr/ordenes/<id_lista>/liberar-opt/`).
 
@@ -181,7 +225,7 @@ Se crea una línea en `lista_produccion_agrupada` y se redirige al **Detalle de 
 
 Al confirmar se genera un movimiento de stock tipo **OPT** (Pedido producción), se actualiza stock y se descuenta el pendiente de la OP. La OP queda “En proceso”.
 
-### 4.5 Registrar parte de producción (OPP)
+### 5.5 Registrar parte de producción (OPP)
 
 **Ruta:** Desde Detalle de OP → “Registrar OPP” (`/mpr/ordenes/<id_lista>/registrar-opp/`), o paso 3 del asistente de producción.
 
@@ -190,13 +234,13 @@ Al confirmar se genera un movimiento de stock tipo **OPT** (Pedido producción),
 - Por cada combinación componente y depósito (Semi Elaborado, Scrap, 2da Selección, etc., según configuración) se indican **docenas** y **unidades sueltas**. En OPP **una docena son siempre 12 unidades**; el sistema calcula el total en unidades por celda y registra el movimiento en unidades.
 - Origen del stock: depósito de **Producción** (configuración MPR).
 - **Operario obligatorio** por cada componente que tenga cantidad total > 0 en algún depósito.
-- La suma por fila (componente) en unidades no puede superar el **pendiente a distribuir** mostrado.
+- La suma por fila (componente) en unidades no puede superar el **pendiente a distribuir** mostrado (en **docenas · unidades**, divisor 12).
 - Al pulsar **Registrar OPP** se muestra un **modal de espera específico del flujo OPP** mientras se valida y envía el POST. No cierre la ventana hasta finalizar.
 - El botón **Registrar OPP** en el detalle OPT y en el wizard se muestra solo cuando hay cantidad **registrable** (> 0) en Producción; si no hay stock origen para continuar OPP, puede pasar a **Armado** con lo ya ingresado a Semi elaborado.
 
 Al confirmar se genera un movimiento tipo **OPP** (Parte producción), se descuenta el pendiente de la OP y se actualizan saldos. La trazabilidad guarda operario por componente en histórico. Si el pendiente total llega a 0, se puede **Cerrar OPT** desde el detalle o el tablero.
 
-### 4.6 Cerrar OPT
+### 5.6 Cerrar OPT
 
 Disponible cuando el **pendiente total de la OPT es 0**.
 
@@ -205,7 +249,7 @@ Disponible cuando el **pendiente total de la OPT es 0**.
 
 Al cerrar, la OPT pasa a `en_proceso_produccion = 'No'`.
 
-### 4.7 Guardrails de proceso
+### 5.7 Guardrails de proceso
 
 El sistema aplica **restricciones entre pasos** para mantener la coherencia del flujo:
 
@@ -218,7 +262,7 @@ El sistema aplica **restricciones entre pasos** para mantener la coherencia del 
 
 Orden recomendado: **Crear OPT** → **Liberar OPT (solo en wizard; la OPT ya se crea en producción)** → (opcionalmente Armado) → **Registrar OPP** hasta pendiente 0 → **Cerrar OPT**.
 
-### 4.8 Operarios (ABM)
+### 5.8 Operarios (ABM)
 
 **Ruta:** Producción → Operarios (`/mpr/operarios/`).
 
@@ -226,28 +270,28 @@ Orden recomendado: **Crear OPT** → **Liberar OPT (solo en wizard; la OPT ya se
 
 ---
 
-## 5. Lista de materiales (recetas)
+## 6. Lista de materiales (recetas)
 
-### 5.1 Listado de conjuntos
+### 6.1 Listado de conjuntos
 
 **Ruta:** Producción → Lista de materiales o “Armado (Lista de materiales)” desde Tablero (`/mpr/bom/`).
 
 Lista de conjuntos de armado (en_abm): ID, nombre, estado (activo/anulado), cantidad de componentes. Filtro “Solo activos”. Acciones: **Ver**, **Editar**.
 
-### 5.2 Nuevo conjunto
+### 6.2 Nuevo conjunto
 
 **Ruta:** Lista de materiales → “Nuevo conjunto” (`/mpr/bom/nuevo/`).
 
 - Ingresar **nombre** y opcionalmente **detalle**.
 - Confirmar. Se crea el conjunto y se redirige a **Editar** para agregar componentes y, si aplica, **artículo armado**.
 
-### 5.3 Detalle de un conjunto
+### 6.3 Detalle de un conjunto
 
 **Ruta:** Lista de materiales → “Ver” en una fila (`/mpr/bom/<id_en_abm>/`).
 
 Muestra cabecera (nombre, ID, detalle, estado), **artículo armado** (si está asignado) y tabla de **componentes** (código, artículo, cantidad, unidad). Acciones: **Editar**, **Ejecutar armado**, **Volver al listado**.
 
-### 5.4 Editar conjunto
+### 6.4 Editar conjunto
 
 **Ruta:** Lista de materiales → “Editar” o desde Detalle (`/mpr/bom/<id_en_abm>/editar/`).
 
@@ -264,7 +308,7 @@ Muestra cabecera (nombre, ID, detalle, estado), **artículo armado** (si está a
 - Tabla de componentes con opción “Anular” por fila.
 - **Añadir componente:** Artículo, cantidad, unidad (opcional). Botón “Añadir”.
 
-### 5.5 Ejecutar armado (desde Lista de materiales)
+### 6.5 Ejecutar armado (desde Lista de materiales)
 
 **Ruta:** Desde Detalle de conjunto → “Ejecutar armado”, o Armado con conjunto preseleccionado (`/mpr/armado/` o `/mpr/armado/<id_en_abm>/`).
 
@@ -279,15 +323,74 @@ Al confirmar se genera un movimiento de stock tipo **Armado**: salidas de compon
 
 ---
 
-## 6. Armado (pantalla general)
+## 7. Armado (pantalla general)
 
 **Ruta:** Menú Armado o “Armado desde esta OP” desde Detalle de OP (`/mpr/armado/` o `/mpr/armado/<id_en_abm>/`).
 
 Misma pantalla que “Ejecutar armado” de la Lista de materiales: selección de conjunto, cantidad, depósito origen y depósito destino. Si se accede con `id_en_abm` (y opcionalmente `?cantidad=X`), el conjunto y la cantidad pueden venir preseleccionados.
 
+### 7.1 Armado surtido
+
+**Ruta:** Producción → **Armado surtido** (`/mpr/armado-surtido/`). Especificación MVP: [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.md). Multi-pack (carrito): [SDD_ARMADO_SURTIDO_MULTI_LOTE.md](SDD_ARMADO_SURTIDO_MULTI_LOTE.md).
+
+**Propósito:** Armar **packs con composición variable** (surtidos) usando stock del depósito **2.ª selección**, sin receta BOM fija, e ingresar cada pack terminado en **Terminado**. No reemplaza el armado con lista de materiales (§6.5 / §7) ni el ingreso manual de movimientos de stock.
+
+**Packs elegibles:** artículos con `tipo_art_fab = 'Fabricado 2da'` en AdministraNET (no usa lista de habilitados Synap `MprArticuloArmadoSurtido` salvo mantenimiento legacy).
+
+#### Cabecera del lote
+
+Antes de agregar armados, complete una sola vez por ejecución:
+
+- **Depósito origen** (default 2.ª selección) y **destino** (default Terminado).
+- **Operario** (obligatorio).
+- **Detalle** (opcional).
+
+Origen y destino son **compartidos** por todos los ítems del lote.
+
+#### Disposición de pantalla (estilo POS)
+
+La pantalla se divide en **dos columnas** (en pantallas anchas):
+
+- **Izquierda — estación de trabajo:** cabecera del lote (se mantiene mientras arma varios packs) y sección **Armar pack** (pack, cantidad, composición).
+- **Derecha — carrito del lote:** lista de packs agregados, consumo agregado en origen (colapsable) y botón **Ejecutar lote**.
+
+Tras **Agregar al carrito**, solo se limpia la sección **Armar pack** (pack, cantidad y composición) para armar el siguiente; la cabecera **no** se reinicia.
+
+#### Armar y agregar al carrito
+
+1. Complete la **cabecera del lote** buscando **origen**, **destino** y **operario** (búsqueda predictiva), además del detalle opcional.
+2. En **Armar pack**, busque el **pack terminado** (búsqueda predictiva por código o descripción), indique la **cantidad de packs** (enteros ≥ 1) y la **composición**: busque en stock origen, marque uno o varios componentes con el selector múltiple y pulse **Agregar seleccionados** (cantidad por pack editable en la tabla).
+3. Pulse **Agregar al carrito**. El ítem aparece en la columna derecha y se limpia el formulario de armado.
+4. Repita para otros packs (máximo **20** armados por lote).
+5. Revise **Consumo en origen** en el carrito: suma de unidades por componente en todo el lote vs saldo disponible (estimación al agregar).
+
+**Reglas al agregar:**
+
+- No puede repetir el mismo pack en el lote (edite la fila existente).
+- Un artículo no puede ser pack en un ítem y componente en otro del mismo lote.
+- Si falta stock estimado, el sistema no agrega el ítem y muestra el motivo (validación en pantalla y, si está disponible, consulta al servidor).
+
+Desde el carrito puede **editar** (carga el ítem en la columna izquierda) o **quitar** filas. Cada ítem permite expandir **Ver composición**.
+
+#### Ejecutar lote
+
+1. Con al menos un ítem en el lote, pulse **Ejecutar lote (N)**.
+2. El sistema procesa los ítems **en orden de la tabla** (FIFO). Cada pack exitoso genera su propio comprobante **Armado** (MSTOCK / tipo OPA).
+3. Tras finalizar, se abre un **modal** con:
+   - **Grabados:** descripción del pack, cantidad grabada, saldo inicial y final del pack en destino, y comprobante MSTOCK.
+   - **No grabados:** pack, cantidad y motivo (p. ej. stock insuficiente).
+4. Los ítems **no grabados** permanecen en el carrito para corregir o quitar; los grabados salen del lote.
+5. La pantalla **permanece en** `/mpr/armado-surtido/` (con `?id_lista=` si vino desde una OPT).
+
+**Desde detalle OPT:** el acceso con `?id_lista=` solo se habilita si ya registró al menos una **OPP** con envío a **2.ª selección**; si no, la tarjeta en el detalle OPT aparece deshabilitada con el motivo.
+
+**Detalles técnicos (operación):** componentes con lote usan consumo **FIFO** por vencimiento en origen; cada MSTOCK exitoso registra composición en Synap y **PrecioCosto** en renglones de stock.
+
+**Nota:** No usar `/stock/ingreso-movimiento/` como proceso estándar de armado surtido.
+
 ---
 
-## 7. Reclasificación
+## 8. Reclasificación
 
 **Ruta:** Producción → Reclasificación (`/mpr/reclasificacion/`).
 
@@ -302,7 +405,7 @@ Al confirmar se genera movimiento de stock tipo Reclasificación (salida en orig
 
 ---
 
-## 8. Configuración: Depósitos
+## 9. Configuración: Depósitos
 
 **Ruta:** Producción → Config. Depósitos (`/mpr/config/depositos/`).
 
@@ -311,7 +414,7 @@ Al confirmar se genera movimiento de stock tipo Reclasificación (salida en orig
 
 ---
 
-## 9. Reportes MPR
+## 10. Reportes MPR
 
 **Ruta:** Producción → Reportes (`/mpr/reportes/`).
 
@@ -324,7 +427,7 @@ Pestañas de solo lectura:
 
 ---
 
-## 10. Flujo resumido (proceso completo)
+## 11. Flujo resumido (proceso completo)
 
 1. **Demanda:** Ver en Pedido producción trabajo (OPT) o Pedidos a fábrica qué hay que fabricar.
 2. **Crear OPT:** (a) **Asistente de producción:** Paso 1 Crear orden (artículo + cantidad) → Paso 2 Confirmar (crea OPT y libera si hay depósito tipo Producción) → Paso 3 Crear OPP (cantidades por depósito) → Armado (opcional) → Cierre; o (b) Desde Pedido producción trabajo (OPT): marcar artículos, **Continuar** → Confirmar OPT (tabla Unidades) → **Generar OPT** (crea la OPT y lleva al detalle); o (c) **Nueva OPT** por artículo y cantidad.
@@ -337,11 +440,17 @@ Para mantener las listas de materiales actualizadas: usar **Lista de materiales*
 
 ---
 
-## 11. Mensajes y errores frecuentes
+## 12. Mensajes y errores frecuentes
 
 - **“No se pudo determinar la empresa activa.”** Seleccionar una empresa/base de datos antes de usar MPR.
-- **“No hay artículo armado asociado a este conjunto.”** En Editar conjunto, asignar el artículo armado antes de ejecutar armado.
-- **“Stock insuficiente de componente…”** En armado, no hay saldo suficiente del componente en el depósito origen; revisar stock o depósito.
+- **“No hay artículo armado asociado a este conjunto.”** En Editar conjunto, asignar el artículo armado (`ensamblado`/`id_en_abm`) antes de ejecutar armado. Ver §4 y [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md).
+- **Pack no aparece en armado surtido.** Verificar que el artículo tenga `tipo_art_fab = 'Fabricado 2da'` en AdministraNET.
+- **«El pack ya está en el lote. Edite la fila existente.»** No agregue dos veces el mismo pack; use Editar en la tabla del lote.
+- **«Agregue al menos un armado al lote.»** Debe agregar al menos un ítem al carrito antes de ejecutar.
+- **«Máximo 20 armados por lote.»** Divida la operación en varios lotes si necesita más packs distintos.
+- **Modal con ítems no grabados.** Tras ejecutar, revise el motivo; los fallidos quedan en el carrito. Corrija cantidades/composición o quite la fila y vuelva a ejecutar.
+- **“Stock insuficiente de componente…”** En armado o al agregar al lote, no hay saldo suficiente del componente en el depósito origen; revisar stock, consumo agregado del lote o depósito.
+- **“Stock en lotes insuficiente…”** Componente con `Lote='Si'`; revisar saldos por lote en el depósito origen.
 - **“Indique cantidad a liberar (entero positivo) y depósito destino.”** Completar cantidad y depósito en Liberar OPT (solo en wizard; la OPT ya se crea en producción).
 - Lista de OPT vacía con datos en la base: comprobar que la empresa activa sea la correcta y que existan filas con `cantidad_pendiente_prod > 0` en `lista_produccion_agrupada`.
 

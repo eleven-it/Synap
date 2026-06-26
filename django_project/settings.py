@@ -301,8 +301,16 @@ REST_FRAMEWORK = {
 CSRF_COOKIE_HTTPONLY = False
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://synap.administranet.com.ar"
+    "https://synap.administranet.com.ar",
 ]
+_extra_csrf = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
+for origin in _extra_csrf:
+    origin = origin.strip().rstrip('/')
+    if origin and origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)
+_site_url = config('SITE_URL', default='').strip().rstrip('/')
+if _site_url.startswith('https://') and _site_url not in CSRF_TRUSTED_ORIGINS:
+    CSRF_TRUSTED_ORIGINS.append(_site_url)
 
 if ENVIRONMENT.strip().lower() in ('production', 'produccion'):
     SESSION_COOKIE_SECURE = True
@@ -410,6 +418,10 @@ LOGGING = {
 
 # API Keys para integraciones - ELIMINADA
 # INGEST_API_KEY = config('INGEST_API_KEY', default='posdif9834usidf@iiu$@&ujsid')
+
+# Kill switch de emergencia (ops/deploy). Control operativo: UI TiendanubeConfig / WebhookConfig.
+TIENDANUBE_SYNC_ENABLED = config('TIENDANUBE_SYNC_ENABLED', default=True, cast=bool)
+TIENDANUBE_WEBHOOKS_ENABLED = config('TIENDANUBE_WEBHOOKS_ENABLED', default=True, cast=bool)
 
 # Configuración de n8n - ELIMINADA
 # N8N_SQL_CHAT_WEBHOOK = config('N8N_SQL_CHAT_WEBHOOK', default='')

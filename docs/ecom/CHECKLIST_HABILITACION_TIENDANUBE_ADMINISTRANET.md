@@ -9,7 +9,7 @@ Documento para ejecutar **antes** y **después** de activar el módulo en un ent
 3. **Permisos en AdministraNET**: sincronizar roles/puestos con las claves de `core/constantes_permisos.py` bajo el bloque «Tiendanube-AdministraNET» (incl. `tiendanube_administranet.change_administranetconfig`, etc.).
 4. **Module Management**: activar el módulo `tiendanube_administranet` en BD (`ModuleConfig`) o vía `setup_modules` / panel de módulos, coherente con `core/module_registry.py`.
 5. **Celery (opcional pero recomendado)**: para sincronización en segundo plano hace falta broker (p. ej. Redis) y worker; sin Celery, las señales no encolan tareas (se registran en log).
-6. **Credenciales Tienda Nube**: `access_token`, `store_id` y URL de API (por defecto `https://api.tiendanube.com/...`); revisar OAuth/scopes en el partner portal.
+6. **Credenciales Tienda Nube**: `access_token`, `store_id` y URL de API (por defecto `https://api.tiendanube.com/...`); revisar OAuth/scopes en el partner portal. Para **renovar** un token existente, usar el botón **Renovar** junto al campo *Access Token* en `/tiendanube_administranet/config/tiendanube/<id>/edit/` (OAuth con App ID + Client Secret; mismo callback que el wizard).
 7. **Git**: el módulo deja de estar en `.gitignore` y pasa a versionarse con el resto del repo.
 
 ## Tras desplegar código

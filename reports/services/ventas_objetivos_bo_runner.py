@@ -1043,13 +1043,17 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
     vo_filtra_rubro = bool(rubros_incluidos) or bool(subrubros_incluidos)
     if solo_ventas_periodo and not solo_ventas_articulo:
         vo_filtra_rubro = False
-    vo_filtra_catalogo_articulo = solo_ventas_articulo and bool(
+    _tiene_filtros_catalogo = bool(
         rubros_incluidos
         or rubros_excluidos
         or subrubros_incluidos
         or subrubros_excluidos
         or marcas_incluidos
         or marcas_excluidos
+    )
+    vo_filtra_catalogo_articulo = solo_ventas_articulo and _tiene_filtros_catalogo
+    vo_filtra_catalogo_vendedor = (
+        solo_ventas_periodo and not solo_ventas_articulo and _tiene_filtros_catalogo
     )
     rub_sub_sql_art, rub_sub_params_art = _vo_sql_filtros_rubro_subrubro(
         "art", rubros_incluidos, subrubros_incluidos
@@ -1447,6 +1451,9 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             if vo_filtra_rubro:
                 filt_art_venta_det = f" AND art.IDArt IS NOT NULL{rub_sub_sql_art}"
                 params_venta_art.extend(rub_sub_params_art)
+            elif vo_filtra_catalogo_vendedor:
+                filt_art_venta_det = f" AND art.IDArt IS NOT NULL{cat_sql_art}"
+                params_venta_art.extend(cat_params_art)
             detalle_flat_por_cliente: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
             detalle_filas_articulo: List[Dict[str, Any]] = []
             if solo_ventas_articulo:
@@ -1561,6 +1568,16 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                             "cantidades_vendidas": float(r[8] or 0),
                         }
                     )
+            if vo_filtra_catalogo_vendedor:
+                fac_desde_det: Dict[int, float] = defaultdict(float)
+                uni_desde_det: Dict[int, float] = defaultdict(float)
+                for cid, lines in detalle_flat_por_cliente.items():
+                    for linea in lines:
+                        fac_desde_det[cid] += float(linea.get("facturacion") or 0)
+                        uni_desde_det[cid] += float(linea.get("cantidades_vendidas") or 0)
+                for cid in fact_map:
+                    fact_map[cid]["facturacion"] = fac_desde_det.get(cid, 0.0)
+                uni_map = {cid: uni_desde_det.get(cid, 0.0) for cid in set(uni_map) | set(fac_desde_det)}
             _mark_phase("query_detalle_ventas")
 
             objetivos_map: Dict[int, Decimal] = {}
@@ -2050,6 +2067,12 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                         "Informe ventas por vendedor: sin objetivos, remitos, pedidos en armado ni backorder; "
                         "jerarquía con/sin compra según facturación o unidades en el período."
                     )
+                    if vo_filtra_catalogo_vendedor:
+                        notes.append(
+                            "Filtros rubro/subrubro/marca (incluir/excluir): limitan artículos "
+                            "con ventas en el período de facturación; facturación y unidades del período "
+                            "se calculan desde el detalle filtrado."
+                        )
                 if puntos_venta_ints:
                     notes.append(
                         f"Puntos de venta filtrados ({len(puntos_venta_ints)}): facturación y unidades/detalle usan cc.id_pv."

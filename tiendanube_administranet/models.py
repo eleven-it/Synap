@@ -14,7 +14,11 @@ class TiendanubeConfig(models.Model):
     name = models.CharField(max_length=100, verbose_name=_("Configuration Name"))
     store_id = models.CharField(max_length=50, unique=True, verbose_name=_("Store ID"))
     access_token = models.CharField(max_length=255, verbose_name=_("Access Token"))
-    api_url = models.URLField(default="https://api.tiendanube.com/v1", verbose_name=_("API URL"))
+    api_url = models.URLField(
+        default="https://api.tiendanube.com/2025-03",
+        verbose_name=_("API URL"),
+        help_text=_("Referencia; los servicios usan NUVEMSHOP_API_VERSION (2025-03)."),
+    )
     is_active = models.BooleanField(default=True, verbose_name=_("Active"))
     
     # Configuración de sincronización automática
@@ -235,7 +239,7 @@ class CustomerMapping(models.Model):
     sync_direction = models.CharField(
         max_length=30,
         choices=SyncDirection.choices,
-        default=SyncDirection.BIDIRECTIONAL,
+        default=SyncDirection.TIENDANUBE_TO_ADMINET,
         verbose_name=_("Sync Direction")
     )
     sync_status = models.CharField(
@@ -244,7 +248,7 @@ class CustomerMapping(models.Model):
         default=SyncStatus.PENDING,
         verbose_name=_("Sync Status")
     )
-    sync_enabled = models.BooleanField(default=True, verbose_name=_("Sync Enabled"))
+    sync_enabled = models.BooleanField(default=False, verbose_name=_("Sync Enabled"))
 
     # Campos de control
     last_synced = models.DateTimeField(auto_now=True, verbose_name=_("Last Synced"))
@@ -256,9 +260,39 @@ class CustomerMapping(models.Model):
         verbose_name = _("Customer Mapping")
         verbose_name_plural = _("Customer Mappings")
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['adminet_codigo'],
+                condition=models.Q(adminet_codigo__isnull=False),
+                name='unique_customermapping_adminet_codigo',
+            ),
+        ]
 
     def __str__(self):
         return f"Customer {self.tiendanube_name or self.adminet_nombre}"
+
+    @property
+    def display_name(self) -> str:
+        """Nombre visible en listados: TN (nombre/apellido), tiendanube_name o adminet_nombre."""
+        first = (self.tiendanube_first_name or '').strip()
+        last = (self.tiendanube_last_name or '').strip()
+        full = f'{first} {last}'.strip()
+        if full:
+            return full
+        if self.tiendanube_name and self.tiendanube_name.strip():
+            return self.tiendanube_name.strip()
+        if self.adminet_nombre and self.adminet_nombre.strip():
+            return self.adminet_nombre.strip()
+        return self.tiendanube_email or 'Sin nombre'
+
+    @property
+    def is_fully_linked(self) -> bool:
+        """Vínculo completo Tienda Nube + AdministraNET."""
+        return bool(
+            self.tiendanube_id
+            and self.adminet_codigo
+            and self.adminet_codigo > 0
+        )
 
     @property
     def needs_sync(self):
@@ -359,6 +393,7 @@ class AdministraNETTipoCliente(models.Model):
         verbose_name = _("AdministraNET Tipo Cliente")
         verbose_name_plural = _("AdministraNET Tipos Cliente")
         db_table = 'tipo_cliente'
+        managed = False
 
     def __str__(self):
         return f"{self.nombre_tipo_cliente}"
@@ -378,6 +413,7 @@ class AdministraNETDepartamento(models.Model):
         verbose_name = _("AdministraNET Departamento")
         verbose_name_plural = _("AdministraNET Departamentos")
         db_table = 'departamento'
+        managed = False
 
     def __str__(self):
         return f"{self.nombre_departamento}"
@@ -399,6 +435,7 @@ class AdministraNETProvincia(models.Model):
         verbose_name = _("AdministraNET Provincia")
         verbose_name_plural = _("AdministraNET Provincias")
         db_table = 'provincia'
+        managed = False
 
     def __str__(self):
         return f"{self.provincia}"
@@ -418,6 +455,7 @@ class AdministraNETDistrito(models.Model):
         verbose_name = _("AdministraNET Distrito")
         verbose_name_plural = _("AdministraNET Distritos")
         db_table = 'distrito'
+        managed = False
 
     def __str__(self):
         return f"{self.nombre_distrito}"
@@ -448,6 +486,7 @@ class AdministraNETViajante(models.Model):
         verbose_name = _("AdministraNET Viajante")
         verbose_name_plural = _("AdministraNET Viajantes")
         db_table = 'viajantes'
+        managed = False
 
     def __str__(self):
         return f"{self.nombre}"
@@ -465,6 +504,7 @@ class AdministraNETPais(models.Model):
         verbose_name = _("AdministraNET País")
         verbose_name_plural = _("AdministraNET Países")
         db_table = 'pais'
+        managed = False
 
     def __str__(self):
         return f"{self.nombre}"
@@ -510,10 +550,7 @@ class ProductMapping(models.Model):
     tiendanube_seo_title = models.CharField(max_length=255, blank=True, verbose_name=_("Tiendanube SEO Title"))
     tiendanube_seo_description = models.TextField(blank=True, verbose_name=_("Tiendanube SEO Description"))
     tiendanube_brand = models.CharField(max_length=255, blank=True, verbose_name=_("Tiendanube Brand"))
-    tiendanube_categories = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Categories"))
     tiendanube_tags = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Tags"))
-    tiendanube_images = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Images"))
-    tiendanube_videos = models.JSONField(default=list, blank=True, verbose_name=_("Tiendanube Videos"))
     tiendanube_created_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Tiendanube Created At"))
     tiendanube_updated_at = models.DateTimeField(null=True, blank=True, verbose_name=_("Tiendanube Updated At"))
 
@@ -529,6 +566,20 @@ class ProductMapping(models.Model):
     adminet_precio_3v = models.DecimalField(max_digits=15, decimal_places=4, blank=True, null=True, verbose_name=_("Precio 3V AdministraNET"))
     adminet_precio_4v = models.DecimalField(max_digits=15, decimal_places=4, blank=True, null=True, verbose_name=_("Precio 4V AdministraNET"))
     adminet_precio_5v = models.DecimalField(max_digits=15, decimal_places=4, blank=True, null=True, verbose_name=_("Precio 5V AdministraNET"))
+    adminet_precio_venta_final = models.DecimalField(
+        max_digits=15,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        verbose_name=_("Precio Venta Final AdministraNET"),
+    )
+    adminet_costo_final = models.DecimalField(
+        max_digits=15,
+        decimal_places=4,
+        blank=True,
+        null=True,
+        verbose_name=_("Costo Final AdministraNET"),
+    )
     adminet_stock = models.IntegerField(blank=True, null=True, verbose_name=_("Stock AdministraNET"))
     adminet_stock_max = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, verbose_name=_("Stock Máximo AdministraNET"))
     adminet_stock_min = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True, verbose_name=_("Stock Mínimo AdministraNET"))
@@ -1309,3 +1360,60 @@ class FieldMappingConfig(models.Model):
             field_name=self.mapped_to_field,
             is_active=True
         ).first()
+
+
+class InitialSyncCheckpoint(models.Model):
+    """
+    Progreso resumible de la sync masiva inicial AdministraNET → Tienda Nube por lotes.
+    """
+    class SyncType(models.TextChoices):
+        CUSTOMER = 'customer', _('Customer')
+        PRODUCT = 'product', _('Product')
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', _('Pending')
+        IN_PROGRESS = 'in_progress', _('In Progress')
+        COMPLETED = 'completed', _('Completed')
+        FAILED = 'failed', _('Failed')
+
+    sync_type = models.CharField(
+        max_length=20,
+        choices=SyncType.choices,
+        verbose_name=_('Sync Type'),
+    )
+    adminet_config = models.ForeignKey(
+        AdministraNETConfig,
+        on_delete=models.CASCADE,
+        verbose_name=_('AdministraNET Config'),
+    )
+    tiendanube_config = models.ForeignKey(
+        TiendanubeConfig,
+        on_delete=models.CASCADE,
+        verbose_name=_('Tiendanube Config'),
+    )
+    last_offset = models.IntegerField(default=0, verbose_name=_('Last Offset'))
+    total_items = models.IntegerField(default=0, verbose_name=_('Total Items'))
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        verbose_name=_('Status'),
+    )
+    last_run_at = models.DateTimeField(null=True, blank=True, verbose_name=_('Last Run At'))
+    error_message = models.TextField(blank=True, verbose_name=_('Error Message'))
+
+    class Meta:
+        verbose_name = _('Initial Sync Checkpoint')
+        verbose_name_plural = _('Initial Sync Checkpoints')
+        ordering = ['-last_run_at', '-id']
+        unique_together = ['sync_type', 'adminet_config', 'tiendanube_config']
+
+    def __str__(self):
+        return (
+            f"{self.get_sync_type_display()} — offset {self.last_offset}/"
+            f"{self.total_items} ({self.get_status_display()})"
+        )
+
+    @property
+    def has_more(self) -> bool:
+        return self.last_offset < self.total_items

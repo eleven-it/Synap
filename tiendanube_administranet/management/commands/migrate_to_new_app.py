@@ -160,7 +160,7 @@ class Command(BaseCommand):
                             # Actualizar configuración existente
                             existing.name = old_config.name or f"Migrated {old_config.store_id}"
                             existing.access_token = old_config.access_token
-                            existing.api_url = getattr(old_config, 'api_url', 'https://api.tiendanube.com/v1')
+                            existing.api_url = getattr(old_config, 'api_url', DEFAULT_TIENDANUBE_API_URL)
                             existing.is_active = old_config.is_active
                             existing.save()
                         else:
@@ -169,7 +169,7 @@ class Command(BaseCommand):
                                 name=old_config.name or f"Migrated {old_config.store_id}",
                                 store_id=old_config.store_id,
                                 access_token=old_config.access_token,
-                                api_url=getattr(old_config, 'api_url', 'https://api.tiendanube.com/v1'),
+                                api_url=getattr(old_config, 'api_url', f'https://api.tiendanube.com/2025-03'),
                                 is_active=old_config.is_active
                             )
                     

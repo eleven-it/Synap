@@ -1,0 +1,14 @@
+{# Presentación C4: total en docenas·unidades o packs + desglose por artículo. Espera ``resumen`` y ``etiqueta``. #}
+<span class="block">
+    <strong class="font-semibold text-slate-100">{{ etiqueta }}:</strong>
+    <span class="text-slate-200">{{ resumen.texto_principal }}</span>
+    {% if resumen.mostrar_desglose and resumen.lineas %}
+    <span class="mt-1 block text-xs font-normal text-slate-400">
+        {% for fila in resumen.lineas %}
+        {% if fila.packs > 0 %}
+        <span class="block before:content-['·_'] before:mr-1">{{ fila.etiqueta }}: {{ fila.texto_docenas_unidades }}</span>
+        {% endif %}
+        {% endfor %}
+    </span>
+    {% endif %}
+</span>

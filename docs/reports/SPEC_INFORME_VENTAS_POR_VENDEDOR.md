@@ -55,7 +55,7 @@ No hace falta **join a `stockp` de REM/PED** para este informe si no mostramos e
 ## 4. UI / UX
 
 - **Período:** solo el bloque **Periodo Facturación** (`filters_period_bo_dual.html`): para `ventas-por-vendedor` **no** se renderiza la fila «Periodo Backorder». El resumen bajo cabecera usa la línea «Periodo facturación: …» (`syncBoDualSummaryPeriod` en `dashboard.js`). La jerarquía **Con compra / Sin compra** se mantiene en datos (igual que VO); no depende del rango de backorder.
-- Misma barra de **filtros** (sucursales, depósitos, clientes/vendedores incluir/excluir, lista de precio si aplica al cálculo de líneas, ordenación).
+- Misma barra de **filtros** (sucursales, depósitos, clientes/vendedores incluir/excluir, lista de precio, rubro/subrubro/marca incluir/excluir, ordenación).
 - Tabla: solo cabeceras **UNIDADES** y **FACTURACIÓN** (sin grupo OBJETIVO, sin REM/PEA/TOTAL, sin BACKORDER).
 - **Sin KPIs** (sin `#vo-kpis-section` o equivalente para este slug).
 - `localStorage` de expansión de jerarquía con **clave distinta** a VO (incluir slug en la clave), para no mezclar estado entre informes.

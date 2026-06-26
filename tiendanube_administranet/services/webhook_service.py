@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.conf import settings
 from ..models import AdministraNETConfig, WebhookConfig, WebhookDeliveryLog, WebhookEvent
 from .tiendanube_service import NUVEMSHOP_API_VERSION
+from .rate_limit import wait_for_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,11 @@ class WebhookService:
 
     def _webhook_detail_url(self, webhook_id: int) -> str:
         return f'{self._webhooks_collection_url()}/{webhook_id}'
+
+    def _request(self, method: str, url: str, **kwargs):
+        wait_for_rate_limit()
+        kwargs.setdefault('headers', self.headers)
+        return requests.request(method, url, **kwargs)
     
     def ensure_webhooks_configured(self) -> Dict[str, Any]:
         """
@@ -191,7 +197,7 @@ class WebhookService:
             }
             
             logger.info(f"Creating webhook for event {event}: {webhook_payload['url']}")
-            response = requests.post(url, headers=self.headers, json=webhook_payload, timeout=30)
+            response = self._request('POST', url, json=webhook_payload, timeout=30)
             
             if response.status_code in [200, 201]:
                 webhook_response = response.json()
@@ -230,7 +236,7 @@ class WebhookService:
         """
         try:
             url = self._webhooks_collection_url()
-            response = requests.get(url, headers=self.headers, timeout=30)
+            response = self._request('GET', url, timeout=30)
             
             if response.status_code == 200:
                 webhooks = response.json()
@@ -270,7 +276,7 @@ class WebhookService:
         """
         try:
             url = self._webhook_detail_url(webhook_id)
-            response = requests.get(url, headers=self.headers, timeout=30)
+            response = self._request('GET', url, timeout=30)
             
             if response.status_code == 200:
                 webhook = response.json()
@@ -327,7 +333,7 @@ class WebhookService:
             }
             
             logger.info(f"Updating webhook {webhook_id}")
-            response = requests.put(url, headers=self.headers, json=webhook_payload, timeout=30)
+            response = self._request('PUT', url, json=webhook_payload, timeout=30)
             
             if response.status_code == 200:
                 webhook_response = response.json()
@@ -419,7 +425,7 @@ class WebhookService:
             url = self._webhook_detail_url(webhook_id)
             
             logger.info(f"Deleting webhook {webhook_id}")
-            response = requests.delete(url, headers=self.headers, timeout=30)
+            response = self._request('DELETE', url, timeout=30)
             
             if response.status_code == 200:
                 logger.info(f"Webhook {webhook_id} deleted successfully")
@@ -479,34 +485,28 @@ class WebhookProcessor:
     """
     
     @staticmethod
-    def verify_signature(payload: str, signature: str, secret: str) -> bool:
-        """
-        Verificar firma del webhook para autenticidad.
-        
-        Args:
-            payload: Cuerpo del request
-            signature: Firma recibida
-            secret: Secreto del webhook
-            
-        Returns:
-            True si la firma es válida
-        """
+    def verify_hmac_signature(payload: str, signature: str, secret: str) -> bool:
+        """Verifica HMAC según documentación Nuvemshop (hex SHA256 del body)."""
         try:
             if not secret:
-                logger.warning("No webhook secret configured, skipping signature verification")
-                return True
-            
-            expected_signature = hmac.new(
+                return False
+            expected = hmac.new(
                 secret.encode('utf-8'),
-                payload.encode('utf-8'),
-                hashlib.sha256
+                payload.encode('utf-8') if isinstance(payload, str) else payload,
+                hashlib.sha256,
             ).hexdigest()
-            
-            return hmac.compare_digest(f"sha256={expected_signature}", signature)
-            
+            sig = (signature or '').strip()
+            if sig.startswith('sha256='):
+                sig = sig[7:]
+            return hmac.compare_digest(expected, sig)
         except Exception as e:
-            logger.error(f"Error verifying webhook signature: {str(e)}")
+            logger.error("Error verificando HMAC webhook: %s", e)
             return False
+
+    @staticmethod
+    def verify_signature(payload: str, signature: str, secret: str) -> bool:
+        """Alias compatible con endpoint legacy."""
+        return WebhookProcessor.verify_hmac_signature(payload, signature, secret)
     
     @staticmethod
     def process_webhook_event(webhook_config: WebhookConfig, event_data: Dict[str, Any], 
@@ -762,7 +762,16 @@ class WebhookProcessor:
             elif webhook_event.event_type == 'order/paid':
                 # Orden pagada → Crear en AdministraNET
                 from ..models import OrderMapping, ProductMapping
-                
+                from ..services.order_customer import (
+                    enrich_order_from_api,
+                    resolve_adminet_customer_id,
+                )
+                from ..services.order_payment import parse_tiendanube_order_payment
+                from ..services.order_stock_push import push_stock_for_article_ids
+
+                order_data = enrich_order_from_api(sync_service, order_id, order_data)
+                payment_parsed = parse_tiendanube_order_payment(order_data)
+
                 # Crear o actualizar mapeo
                 mapping, created = OrderMapping.objects.get_or_create(
                     tiendanube_id=order_id,
@@ -771,13 +780,33 @@ class WebhookProcessor:
                         'tiendanube_status': order_data.get('status', ''),
                         'tiendanube_total': order_data.get('total', 0),
                         'tiendanube_customer_email': order_data.get('customer', {}).get('email', ''),
+                        'tiendanube_payment_status': order_data.get('payment_status', ''),
+                        'tiendanube_payment_method': payment_parsed.method_label,
                         'sync_status': OrderMapping.SyncStatus.PENDING
                     }
                 )
-                
+
+                mapping.tiendanube_payment_status = order_data.get('payment_status', '')
+                mapping.tiendanube_payment_method = payment_parsed.method_label
+                mapping.tiendanube_total = order_data.get('total', mapping.tiendanube_total)
+                mapping.save(
+                    update_fields=[
+                        'tiendanube_payment_status',
+                        'tiendanube_payment_method',
+                        'tiendanube_total',
+                        'updated_at',
+                    ]
+                )
+
                 # Si aún no se creó en AdministraNET, crearlo ahora
                 if not mapping.adminet_codigo:
-                    # Preparar datos de la orden
+                    deposito_id = adminet_config.deposito_tiendanube_id or 1
+                    punto_venta_id = (
+                        adminet_config.punto_venta_tiendanube_id or 1
+                    )
+                    sucursal_id = adminet_config.sucursal_tiendanube_id or 1
+                    user_id = 1
+
                     order_data_for_adminet = {
                         'id': order_id,
                         'number': order_data.get('number'),
@@ -785,6 +814,12 @@ class WebhookProcessor:
                         'shipping_address': order_data.get('shipping_address', {}),
                         'shipping': order_data.get('shipping', {}),
                         'payment': order_data.get('payment', {}),
+                        'payment_details': order_data.get('payment_details', {}),
+                        'gateway': order_data.get('gateway'),
+                        'gateway_id': order_data.get('gateway_id'),
+                        'gateway_name': order_data.get('gateway_name'),
+                        'gateway_method': order_data.get('gateway_method'),
+                        'paid_at': order_data.get('paid_at'),
                         'products': order_data.get('products', []),
                         'subtotal': order_data.get('subtotal', 0),
                         'total': order_data.get('total', 0),
@@ -793,56 +828,80 @@ class WebhookProcessor:
                         'payment_status': order_data.get('payment_status', 'paid'),
                         'created_at': order_data.get('created_at', ''),
                         'updated_at': order_data.get('updated_at', ''),
-                        'adminet_customer_id': 1  # TODO: Obtener o crear cliente
+                        'adminet_customer_id': resolve_adminet_customer_id(
+                            sync_service,
+                            order_data.get('customer', {}),
+                        ),
                     }
-                    
+
                     # Mapear productos a AdministraNET IDs
                     for product in order_data_for_adminet['products']:
                         product_mapping = ProductMapping.objects.filter(
                             tiendanube_id=product.get('product_id')
                         ).first()
-                        
+
                         if product_mapping and product_mapping.adminet_id:
                             product['adminet_product_id'] = product_mapping.adminet_id
                         else:
                             product['adminet_product_id'] = 0
-                            logger.warning(f"Producto {product.get('product_id')} no mapeado en orden {order_id}")
-                    
-                    # Crear orden en AdministraNET
+                            logger.warning(
+                                'Producto %s no mapeado en orden %s',
+                                product.get('product_id'),
+                                order_id,
+                            )
+
                     result = sync_service.adminet_service.create_order_from_tiendanube(
                         order_data_for_adminet,
-                        deposito_id=adminet_config.deposito_tiendanube_id or 1,
-                        user_id=1,
-                        sucursal_id=1
+                        deposito_id=deposito_id,
+                        user_id=user_id,
+                        punto_venta_id=punto_venta_id,
+                        sucursal_id=sucursal_id,
+                        registrar_adelanto=True,
                     )
-                    
+
                     if result['success']:
-                        mapping.adminet_codigo = result['codigo_movimiento']
+                        mapping.adminet_codigo = str(result['codigo_movimiento'])
                         mapping.adminet_numero = result['nro_comprobante']
-                        mapping.adminet_estado = 'Pendiente'
+                        from .adminet_service import ESTADO_PEDIDO_ECOM_TN
+
+                        mapping.adminet_estado = result.get('estado', ESTADO_PEDIDO_ECOM_TN)
                         mapping.sync_status = OrderMapping.SyncStatus.SYNCED
                         mapping.last_synced = timezone.now()
                         mapping.save()
-                        
-                        logger.info(f"Orden {order_id} creada en AdministraNET: {result['nro_comprobante']}")
-                        
+
+                        stock_push = push_stock_for_article_ids(
+                            sync_service,
+                            result.get('affected_article_ids') or [],
+                            deposito_id,
+                        )
+
+                        logger.info(
+                            'Orden %s creada en AdministraNET: %s (adelanto: %s, stock push: %s)',
+                            order_id,
+                            result['nro_comprobante'],
+                            result.get('adelanto', {}).get('nro_recibo'),
+                            stock_push.get('pushed', 0),
+                        )
+
                         return {
                             'success': True,
                             'action': 'order_paid_and_created',
                             'order_id': order_id,
                             'adminet_nro': result['nro_comprobante'],
-                            'adminet_codigo': result['codigo_movimiento']
+                            'adminet_codigo': result['codigo_movimiento'],
+                            'adelanto': result.get('adelanto'),
+                            'stock_push': stock_push,
                         }
                     else:
                         mapping.sync_status = OrderMapping.SyncStatus.ERROR
                         mapping.error_message = result['message']
                         mapping.save()
-                        
+
                         return {
                             'success': False,
                             'error': f"Error creando orden en AdministraNET: {result['message']}"
                         }
-                
+
                 return {
                     'success': True,
                     'action': 'order_paid',

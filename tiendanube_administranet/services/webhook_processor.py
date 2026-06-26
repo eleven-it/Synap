@@ -11,9 +11,11 @@ from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 from django.conf import settings
 
+from ..utils.feature_flags import tiendanube_webhooks_disabled_reason
 from ..models import TiendanubeConfig, AdministraNETConfig, WebhookEvent, WebhookDeliveryLog
 from .sync_service import TiendanubeAdministraNETSyncService
 from .location_mapper import LocationMapper
+from .customer_payload import normalize_adminet_customer_payload
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +30,31 @@ class WebhookProcessor:
         self.adminet_config = adminet_config
         self.sync_service = TiendanubeAdministraNETSyncService(tiendanube_config, adminet_config)
         self.location_mapper = LocationMapper(adminet_config)
+
+    def _build_adminet_customer_payload(
+        self,
+        customer_name: str,
+        customer_email: str,
+        customer_data: Dict[str, Any],
+        address_data: Dict[str, Any],
+        calle_completa: str,
+        cod_provincia,
+        id_departamento,
+        customer_id,
+    ) -> Dict[str, Any]:
+        return normalize_adminet_customer_payload({
+            'nombre_cliente': customer_name,
+            'Email': customer_email,
+            'telefono': customer_data.get('phone', ''),
+            'Calle': calle_completa,
+            'NroCalle': address_data.get('number', ''),
+            'Dpto': address_data.get('floor', ''),
+            'CodProvincia': cod_provincia,
+            'IDDepartamento': id_departamento,
+            'CUIT': customer_data.get('identification', ''),
+            'Estado': 'Activo',
+            'id_tiendanube': customer_id,
+        })
     
     def process_webhook(self, request: HttpRequest) -> Dict[str, Any]:
         """
@@ -40,13 +67,20 @@ class WebhookProcessor:
             Dict con resultado del procesamiento
         """
         try:
-            # Verificar firma del webhook (temporalmente deshabilitado para testing)
-            # if not self._verify_webhook_signature(request):
-            #     logger.warning("Webhook signature verification failed")
-            #     return {
-            #         'success': False,
-            #         'error': 'Invalid webhook signature'
-            #     }
+            disabled = tiendanube_webhooks_disabled_reason(self.tiendanube_config)
+            if disabled:
+                logger.info("Webhook rechazado: %s", disabled)
+                return {
+                    'success': False,
+                    'error': disabled,
+                }
+
+            if not self._verify_webhook_signature(request):
+                logger.warning("Verificación HMAC del webhook fallida")
+                return {
+                    'success': False,
+                    'error': 'Invalid webhook signature'
+                }
             
             # Obtener datos del webhook
             webhook_data = json.loads(request.body.decode('utf-8'))
@@ -205,39 +239,40 @@ class WebhookProcessor:
     
     def _verify_webhook_signature(self, request: HttpRequest) -> bool:
         """
-        Verificar la firma del webhook.
-        
-        Args:
-            request: Request HTTP
-            
-        Returns:
-            True si la firma es válida
+        Verificar firma HMAC Nuvemshop (x-linkedstore-hmac-sha256 + webhook_secret).
         """
-        try:
-            # Obtener firma del header
-            signature = request.headers.get('X-Tiendanube-Signature', '')
-            if not signature:
+        from ..services.webhook_service import WebhookProcessor as WebhookServiceProcessor
+
+        env = getattr(settings, 'ENVIRONMENT', 'production').strip().lower()
+        is_production = env in ('production', 'produccion')
+
+        secret = (self.tiendanube_config.webhook_secret or '').strip()
+        if not secret:
+            secret = (getattr(settings, 'TIENDANUBE_WEBHOOK_SECRET', None) or '').strip()
+
+        signature = (
+            request.headers.get('x-linkedstore-hmac-sha256')
+            or request.headers.get('X-Linkedstore-Hmac-Sha256')
+            or request.headers.get('HTTP_X_LINKEDSTORE_HMAC_SHA256')
+            or request.headers.get('X-Tiendanube-Signature')
+            or ''
+        )
+
+        if not secret:
+            if is_production:
+                logger.error("Webhook rechazado: sin webhook_secret en producción")
                 return False
-            
-            # Obtener secret del webhook (si está configurado)
-            webhook_secret = getattr(settings, 'TIENDANUBE_WEBHOOK_SECRET', None)
-            if not webhook_secret:
-                # Si no hay secret configurado, aceptar el webhook
-                return True
-            
-            # Calcular firma esperada
-            expected_signature = hmac.new(
-                webhook_secret.encode('utf-8'),
-                request.body,
-                hashlib.sha256
-            ).hexdigest()
-            
-            # Comparar firmas
-            return hmac.compare_digest(signature, expected_signature)
-            
-        except Exception as e:
-            logger.error(f"Error verifying webhook signature: {e}")
-            return False
+            logger.warning("Sin webhook_secret; omitiendo verificación HMAC (no producción)")
+            return True
+
+        if not signature:
+            if is_production:
+                logger.warning("Webhook rechazado: falta cabecera HMAC")
+                return False
+            return True
+
+        body = request.body.decode('utf-8') if request.body else ''
+        return WebhookServiceProcessor.verify_hmac_signature(body, signature, secret)
     
     def _handle_webhook_event(self, webhook_event: WebhookEvent, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -470,7 +505,16 @@ class WebhookProcessor:
             from ..models import CustomerMapping
             
             # Usar email único o generar uno si está vacío
-            unique_email = customer_email if customer_email else f"tiendanube_{customer_id}@example.com"
+            unique_email = customer_email if customer_email else None
+            if not unique_email:
+                logger.warning(
+                    "Cliente Tienda Nube %s sin email; no se creará email ficticio",
+                    customer_id,
+                )
+                return {
+                    'success': False,
+                    'error': 'Cliente sin email',
+                }
             
             mapping, created = CustomerMapping.objects.get_or_create(
                 tiendanube_id=customer_id,
@@ -486,19 +530,10 @@ class WebhookProcessor:
                 # Mapear datos de ubicación usando análisis predictivo
                 calle_completa, cod_provincia, id_departamento = self._map_location_data(address_data)
                 
-                adminet_data = {
-                    'nombre_cliente': customer_name,
-                    'Email': customer_email,
-                    'telefono': customer_data.get('phone', ''),
-                    'Calle': calle_completa,
-                    'NroCalle': address_data.get('number', ''),
-                    'Dpto': address_data.get('floor', ''),
-                    'CodProvincia': cod_provincia,
-                    'IDDepartamento': id_departamento,
-                    'CUIT': customer_data.get('identification', ''),
-                    'Estado': 'Activo',
-                    'id_tiendanube': str(customer_id)
-                }
+                adminet_data = self._build_adminet_customer_payload(
+                    customer_name, customer_email, customer_data, address_data,
+                    calle_completa, cod_provincia, id_departamento, customer_id,
+                )
                 
                 result = self.sync_service.adminet_service.create_customer(adminet_data)
                 if result['success']:
@@ -583,26 +618,26 @@ class WebhookProcessor:
             mapping = CustomerMapping.objects.filter(tiendanube_id=customer_id).first()
             
             # Usar email único o generar uno si está vacío
-            unique_email = customer_email if customer_email else f"tiendanube_{customer_id}@example.com"
+            unique_email = customer_email if customer_email else None
+            if not unique_email:
+                logger.warning(
+                    "Cliente Tienda Nube %s sin email; no se creará email ficticio",
+                    customer_id,
+                )
+                return {
+                    'success': False,
+                    'error': 'Cliente sin email',
+                }
             
             if mapping and mapping.adminet_codigo:
                 # Actualizar datos en AdministraNET
                 # Mapear datos de ubicación usando análisis predictivo
                 calle_completa, cod_provincia, id_departamento = self._map_location_data(address_data)
                 
-                adminet_data = {
-                    'nombre_cliente': customer_name,
-                    'Email': customer_email,
-                    'telefono': customer_data.get('phone', ''),
-                    'Calle': calle_completa,
-                    'NroCalle': address_data.get('number', ''),
-                    'Dpto': address_data.get('floor', ''),
-                    'CodProvincia': cod_provincia,
-                    'IDDepartamento': id_departamento,
-                    'CUIT': customer_data.get('identification', ''),
-                    'Estado': 'Activo',
-                    'id_tiendanube': str(customer_id)
-                }
+                adminet_data = self._build_adminet_customer_payload(
+                    customer_name, customer_email, customer_data, address_data,
+                    calle_completa, cod_provincia, id_departamento, customer_id,
+                )
                 
                 result = self.sync_service.adminet_service.update_customer(mapping.adminet_codigo, adminet_data)
                 if result['success']:
@@ -673,19 +708,10 @@ class WebhookProcessor:
                     # Mapear datos de ubicación usando análisis predictivo
                     calle_completa, cod_provincia, id_departamento = self._map_location_data(address_data)
                     
-                    adminet_data = {
-                        'nombre_cliente': customer_name,
-                        'Email': customer_email,
-                        'telefono': customer_data.get('phone', ''),
-                        'Calle': calle_completa,
-                        'NroCalle': address_data.get('number', ''),
-                        'Dpto': address_data.get('floor', ''),
-                        'CodProvincia': cod_provincia,
-                        'IDDepartamento': id_departamento,
-                        'CUIT': customer_data.get('identification', ''),
-                        'Estado': 'Activo',
-                        'id_tiendanube': str(customer_id)
-                    }
+                    adminet_data = self._build_adminet_customer_payload(
+                        customer_name, customer_email, customer_data, address_data,
+                        calle_completa, cod_provincia, id_departamento, customer_id,
+                    )
                     
                     result = self.sync_service.adminet_service.create_customer(adminet_data)
                     if result['success']:

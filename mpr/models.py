@@ -53,3 +53,77 @@ class OptLinea(models.Model):
 
     def __str__(self):
         return f"OPT {self.opt_id} · lista {self.id_lista_produccion} · art. {self.id_articulo}"
+
+
+class MprArticuloArmadoSurtido(models.Model):
+    """Artículos pack habilitados para armado surtido (config MPR en Synap)."""
+
+    base_empresa = models.CharField(max_length=64, db_index=True)
+    id_articulo = models.IntegerField()
+    activo = models.BooleanField(default=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Pack habilitado armado surtido"
+        verbose_name_plural = "Packs habilitados armado surtido"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["base_empresa", "id_articulo"],
+                name="mpr_art_armado_surtido_empresa_art",
+            ),
+        ]
+        ordering = ["base_empresa", "id_articulo"]
+
+    def __str__(self):
+        estado = "activo" if self.activo else "inactivo"
+        return f"{self.base_empresa} · art. {self.id_articulo} ({estado})"
+
+
+class MprArmadoSurtidoMovimiento(models.Model):
+    """Cabecera de trazabilidad Synap por armado surtido (vínculo con movimiento_stock legacy)."""
+
+    base_empresa = models.CharField(max_length=64, db_index=True)
+    codigo_movimiento = models.IntegerField(db_index=True)
+    id_articulo_pack = models.IntegerField()
+    cantidad_packs = models.IntegerField()
+    deposito_origen = models.IntegerField()
+    deposito_destino = models.IntegerField()
+    id_lista_produccion = models.IntegerField(null=True, blank=True)
+    id_operario = models.IntegerField(null=True, blank=True)
+    id_usuario = models.IntegerField()
+    detalle = models.CharField(max_length=500, blank=True, default="")
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Movimiento armado surtido"
+        verbose_name_plural = "Movimientos armado surtido"
+        ordering = ["-creado_en"]
+        indexes = [
+            models.Index(fields=["base_empresa", "codigo_movimiento"]),
+        ]
+
+    def __str__(self):
+        return f"Armado surtido {self.codigo_movimiento} · {self.cantidad_packs} packs"
+
+
+class MprArmadoSurtidoLinea(models.Model):
+    """Línea de composición por movimiento de armado surtido."""
+
+    movimiento = models.ForeignKey(
+        MprArmadoSurtidoMovimiento,
+        on_delete=models.CASCADE,
+        related_name="lineas",
+    )
+    id_articulo_componente = models.IntegerField()
+    codigo_articulo = models.CharField(max_length=64, blank=True, default="-")
+    descripcion_articulo = models.CharField(max_length=255, blank=True, default="-")
+    cantidad_por_pack = models.IntegerField()
+    cantidad_total = models.IntegerField()
+
+    class Meta:
+        verbose_name = "Línea composición armado surtido"
+        verbose_name_plural = "Líneas composición armado surtido"
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Comp. {self.id_articulo_componente} × {self.cantidad_por_pack}/pack"

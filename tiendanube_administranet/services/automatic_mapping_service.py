@@ -13,6 +13,8 @@ from ..models import (
     TiendanubeConfig, AdministraNETConfig
 )
 from .intelligent_name_mapping_service import IntelligentNameMappingService
+from .product_pricing import precios_tiendanube_desde_articulo
+from .product_stock import stock_unidades_articulo_deposito
 
 logger = logging.getLogger(__name__)
 
@@ -101,12 +103,19 @@ class AutomaticMappingService:
             logger.error(f"Error en mapeo Tiendanube → AdministraNET producto: {e}")
             raise
     
-    def map_adminet_to_tiendanube_product(self, adminet_product: Dict[str, Any], deposito_id: int = None) -> Dict[str, Any]:
+    def map_adminet_to_tiendanube_product(
+        self, adminet_product: Dict[str, Any], deposito_id: int = None
+    ) -> Dict[str, Any]:
         """
-        Mapear datos de producto de AdministraNET a Tiendanube.
-        Incluye todos los campos actualizados según la documentación.
+        Mapear datos de producto de AdministraNET a Tiendanube (1 artículo = 1 variante, unidades).
+        Stock desde ``stock_deposito`` del ``deposito_id`` configurado.
         """
         try:
+            stock_units = stock_unidades_articulo_deposito(adminet_product, deposito_id)
+            precios_tn = precios_tiendanube_desde_articulo(
+                adminet_product,
+                config=self.adminet_config,
+            )
             # Mapeo básico de campos
             tiendanube_data = {
                 # Campos principales
@@ -145,12 +154,11 @@ class AutomaticMappingService:
                 
                 # Variantes del producto (requerido por la API de Tiendanube)
                 'variants': [{
-                    'price': float(adminet_product.get('Precio1V', 0)),
-                    'cost': float(adminet_product.get('PrecioCosto', 0)),
-                    'stock': int(adminet_product.get('saldo_articulo', 0)),
+                    'price': precios_tn['price'],
+                    'cost': precios_tn['cost'],
+                    'stock': stock_units,
                     'sku': adminet_product.get('NroCodBarra', ''),
                     'stock_management': True,
-                    'compare_at_price': float(adminet_product.get('Precio2V', 0)) if adminet_product.get('Precio2V', 0) > 0 else None
                 }]
             }
             
@@ -463,22 +471,28 @@ class AutomaticMappingService:
             logger.error(f"Error en mapeo Tiendanube → AdministraNET variante: {e}")
             raise
     
-    def map_adminet_to_tiendanube_variant(self, adminet_variant: Dict[str, Any]) -> Dict[str, Any]:
+    def map_adminet_to_tiendanube_variant(
+        self, adminet_variant: Dict[str, Any], deposito_id: int = None
+    ) -> Dict[str, Any]:
         """
-        Mapear datos de variante de AdministraNET a Tiendanube.
+        Mapear artículo AdministraNET a variante Tiendanube (unidades en depósito configurado).
         """
         try:
+            stock_units = stock_unidades_articulo_deposito(adminet_variant, deposito_id)
+            precios_tn = precios_tiendanube_desde_articulo(
+                adminet_variant,
+                config=self.adminet_config,
+            )
             tiendanube_data = {
                 # Campos principales
                 'name': adminet_variant.get('NombreArticulo', ''),
                 'sku': adminet_variant.get('NroCodBarra', ''),
-                'price': float(adminet_variant.get('Precio1V', 0)),
-                'cost': float(adminet_variant.get('PrecioCosto', 0)),
-                'stock': int(adminet_variant.get('saldo_articulo', 0)),
+                'price': precios_tn['price'],
+                'cost': precios_tn['cost'],
+                'stock': stock_units,
                 
                 # Campos de configuración
                 'published': adminet_variant.get('ecommerce') == 'Si',
-                'compare_at_price': float(adminet_variant.get('Precio2V', 0)),
                 
                 # Campos de dimensiones
                 'weight': 0.5,
@@ -900,33 +914,9 @@ class AutomaticMappingService:
     def update_product_mapping_from_tiendanube(self, mapping: ProductMapping, tiendanube_product: Dict[str, Any]):
         """Actualizar mapeo de producto con datos de Tiendanube."""
         try:
-            # Actualizar campos de Tiendanube
-            mapping.tiendanube_name = tiendanube_product.get('name', '')
-            mapping.tiendanube_handle = tiendanube_product.get('handle', '')
-            mapping.tiendanube_description = tiendanube_product.get('description', '')
-            mapping.tiendanube_sku = tiendanube_product.get('sku', '')
-            mapping.tiendanube_price = float(tiendanube_product.get('price', 0))
-            mapping.tiendanube_compare_at_price = float(tiendanube_product.get('compare_at_price', 0))
-            mapping.tiendanube_cost = float(tiendanube_product.get('cost', 0))
-            mapping.tiendanube_stock = int(tiendanube_product.get('stock', 0))
-            mapping.tiendanube_weight = float(tiendanube_product.get('weight', 0))
-            mapping.tiendanube_width = float(tiendanube_product.get('width', 0))
-            mapping.tiendanube_height = float(tiendanube_product.get('height', 0))
-            mapping.tiendanube_depth = float(tiendanube_product.get('depth', 0))
-            mapping.tiendanube_free_shipping = tiendanube_product.get('free_shipping', False)
-            mapping.tiendanube_published = tiendanube_product.get('published', True)
-            mapping.tiendanube_featured = tiendanube_product.get('featured', False)
-            mapping.tiendanube_product_type = tiendanube_product.get('product_type', 'physical')
-            mapping.tiendanube_brand = tiendanube_product.get('brand', '')
-            mapping.tiendanube_categories = tiendanube_product.get('categories', [])
-            mapping.tiendanube_tags = tiendanube_product.get('tags', [])
-            mapping.tiendanube_images = tiendanube_product.get('images', [])
-            mapping.tiendanube_videos = tiendanube_product.get('videos', [])
-            mapping.tiendanube_seo_title = tiendanube_product.get('seo_title', '')
-            mapping.tiendanube_seo_description = tiendanube_product.get('seo_description', '')
-            mapping.tiendanube_created_at = tiendanube_product.get('created_at')
-            mapping.tiendanube_updated_at = tiendanube_product.get('updated_at')
-            
+            from .tiendanube_product_fields import aplicar_campos_producto_tiendanube
+
+            aplicar_campos_producto_tiendanube(mapping, tiendanube_product)
             mapping.save()
             logger.info(f"Mapeo de producto actualizado desde Tiendanube: {mapping.tiendanube_name}")
             
@@ -934,7 +924,12 @@ class AutomaticMappingService:
             logger.error(f"Error actualizando mapeo de producto desde Tiendanube: {e}")
             raise
     
-    def update_product_mapping_from_adminet(self, mapping: ProductMapping, adminet_product: Dict[str, Any]):
+    def update_product_mapping_from_adminet(
+        self,
+        mapping: ProductMapping,
+        adminet_product: Dict[str, Any],
+        deposito_id: int = None,
+    ):
         """Actualizar mapeo de producto con datos de AdministraNET."""
         try:
             # Actualizar campos de AdministraNET
@@ -949,7 +944,14 @@ class AutomaticMappingService:
             mapping.adminet_precio_3v = float(adminet_product.get('Precio3V', 0)) if adminet_product.get('Precio3V') is not None else None
             mapping.adminet_precio_4v = float(adminet_product.get('Precio4V', 0)) if adminet_product.get('Precio4V') is not None else None
             mapping.adminet_precio_5v = float(adminet_product.get('Precio5V', 0)) if adminet_product.get('Precio5V') is not None else None
-            mapping.adminet_stock = int(adminet_product.get('saldo_articulo', 0)) if adminet_product.get('saldo_articulo') is not None else None
+            if deposito_id and 'stock_deposito' in adminet_product:
+                mapping.adminet_stock = stock_unidades_articulo_deposito(
+                    adminet_product, deposito_id
+                )
+            elif adminet_product.get('saldo_articulo') is not None:
+                mapping.adminet_stock = int(adminet_product.get('saldo_articulo', 0))
+            else:
+                mapping.adminet_stock = None
             mapping.adminet_stock_max = float(adminet_product.get('stock_max', 0)) if adminet_product.get('stock_max') is not None else None
             mapping.adminet_stock_min = float(adminet_product.get('stock_min', 0)) if adminet_product.get('stock_min') is not None else None
             mapping.adminet_codigo_barra = adminet_product.get('NroCodBarra', '')
@@ -972,7 +974,13 @@ class AutomaticMappingService:
             mapping.adminet_promo_destacado = adminet_product.get('promo_destacado', '')
             mapping.adminet_fecha_alta = adminet_product.get('fecha_alta')
             mapping.adminet_fecha_mod = adminet_product.get('fecha_mod')
-            
+            precios_finales = precios_tiendanube_desde_articulo(
+                adminet_product,
+                config=self.adminet_config,
+            )
+            mapping.adminet_precio_venta_final = precios_finales['price']
+            mapping.adminet_costo_final = precios_finales['cost']
+
             mapping.save()
             logger.info(f"Mapeo de producto actualizado desde AdministraNET: {mapping.adminet_nombre}")
             

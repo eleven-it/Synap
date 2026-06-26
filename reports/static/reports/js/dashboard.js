@@ -102,7 +102,11 @@ function isJerarquiaVentasBoFamiliaSlug(slug) {
   );
 }
 
-/** Ventas por artículo: filtros rubro/subrubro/marca incluir/excluir. */
+/** Ventas por artículo / vendedor: filtros rubro/subrubro/marca incluir/excluir. */
+function isVentasCatalogoFiltersSlug(slug) {
+  return slug === "ventas-por-articulo" || slug === "ventas-por-vendedor";
+}
+
 const VPA_CATALOG_FILTER_SPECS = [
   ["vpa_rubros_incluidos", "rubros_incluidos"],
   ["vpa_rubros_excluidos", "rubros_excluidos"],
@@ -6842,7 +6846,7 @@ if (dashboardRoot) {
         }
       }
 
-      if (reportSlug === "ventas-por-articulo") {
+      if (isVentasCatalogoFiltersSlug(reportSlug)) {
         const filterBase = `${apiUrl.replace("/query/", "/filters/")}`;
         const headers = { "X-Requested-With": "XMLHttpRequest" };
         const loadVpaCatalogTags = async (type, jsonKey, selectId, savedKey) => {
@@ -8790,7 +8794,7 @@ if (dashboardRoot) {
         tagRestoreVoRubro(filters.rubros_incluidos, "vo_rubros_incluidos");
         tagRestoreVoRubro(filters.subrubros_incluidos, "vo_subrubros_incluidos");
       }
-      if (reportSlug === "ventas-por-articulo") {
+      if (isVentasCatalogoFiltersSlug(reportSlug)) {
         const tagRestoreVpa = (arr, selectId) => {
           if (!arr || !Array.isArray(arr)) return;
           const sel = document.getElementById(selectId);
@@ -9163,7 +9167,7 @@ if (dashboardRoot) {
           if (ss.length > 0) filters.subrubros_incluidos = ss;
         }
       }
-      if (currentReportSlug === "ventas-por-articulo") {
+      if (isVentasCatalogoFiltersSlug(currentReportSlug)) {
         VPA_CATALOG_FILTER_SPECS.forEach(([selectId, key]) =>
           appendTagMultiFilter(selectId, filters, key)
         );
@@ -9980,7 +9984,7 @@ if (dashboardRoot) {
                     .filter((v) => v);
                 }
               }
-              if (reportSlug === "ventas-por-articulo") {
+              if (isVentasCatalogoFiltersSlug(reportSlug)) {
                 VPA_CATALOG_FILTER_SPECS.forEach(([selectId, key]) => {
                   const sel = filtersContainer.querySelector(`select[name="${key}"]`);
                   if (sel && sel.selectedOptions.length) {

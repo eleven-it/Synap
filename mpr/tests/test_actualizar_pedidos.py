@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 
 from mpr.services import (
+    _mpr_columna_pk_fila_lista_produccion_detalle,
     _mpr_en_proceso_detalle_es_si,
     actualizar_pedidos_produccion,
 )
@@ -99,4 +100,51 @@ class ActualizarPedidosProduccionFiltroEstadoTest(TestCase):
             "('Pendiente', 'Parcial')",
             select_sql,
             "El SQL debe filtrar por estado_pedido_opt IN ('Pendiente', 'Parcial') para ventana-pack.",
+        )
+
+
+class MprColumnaPkListaDetalleTest(TestCase):
+    """PK de fila en lista_produccion_detalle: no confundir id_lista_produccion (FK) con la PK real."""
+
+    def _cursor_con_columnas(self, columnas):
+        cursor = MagicMock()
+
+        def fake_execute(sql, params=None):
+            return None
+
+        def fake_fetchall():
+            if "SHOW COLUMNS" in (fake_execute.last_sql or ""):
+                return columnas
+            return []
+
+        def fake_execute_wrap(sql, params=None):
+            fake_execute.last_sql = sql
+            return fake_execute(sql, params)
+
+        fake_execute.last_sql = ""
+        cursor.execute.side_effect = fake_execute_wrap
+        cursor.fetchall.side_effect = fake_fetchall
+        return cursor
+
+    def test_usa_columna_pri_aunque_nombre_este_corrupto(self):
+        pk_corrupta = "id\x1f_lista_detalle"
+        columnas = [
+            (pk_corrupta, "bigint", "NO", "PRI", "auto_increment"),
+            ("id_lista_produccion", "bigint", "YES", "MUL", ""),
+        ]
+        cursor = self._cursor_con_columnas(columnas)
+        self.assertEqual(
+            _mpr_columna_pk_fila_lista_produccion_detalle(cursor, "lista_produccion_detalle"),
+            pk_corrupta,
+        )
+
+    def test_no_elige_id_lista_produccion_si_pri_es_otra(self):
+        columnas = [
+            ("id_lista_detalle", "bigint", "NO", "PRI", "auto_increment"),
+            ("id_lista_produccion", "bigint", "YES", "MUL", ""),
+        ]
+        cursor = self._cursor_con_columnas(columnas)
+        self.assertEqual(
+            _mpr_columna_pk_fila_lista_produccion_detalle(cursor, "lista_produccion_detalle"),
+            "id_lista_detalle",
         )

@@ -11,8 +11,15 @@ Documentación del módulo MPR en Synap: flujos, esquema de datos, manual de usu
 | [MPR_PASO3_LINEAS_OPP_ANALISIS.md](MPR_PASO3_LINEAS_OPP_ANALISIS.md) | Análisis: líneas de artículos en paso 3 del wizard (Crear OPP). |
 | [SCHEMA_MPR_ADMINISTRANET92.md](SCHEMA_MPR_ADMINISTRANET92.md) | Esquema de tablas MPR en base AdministraNET (lista_produccion_*, movimiento_stock, etc.). |
 | [NORMALIZACION_TABLAS_MPR.md](NORMALIZACION_TABLAS_MPR.md) | Normalización de tablas DB (MPR / AdministraNET) y relaciones. |
-| [MANUAL_USUARIO_MPR.md](MANUAL_USUARIO_MPR.md) | Manual de usuario del módulo MPR. |
+| [MANUAL_USUARIO_MPR.md](MANUAL_USUARIO_MPR.md) | Manual de usuario del módulo MPR (§4 Pack y componentes). |
+| [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md) | **Implementación:** cómo se identifican pack y componente (`articulo`, BOM, OPT, armado surtido). |
 | [GLOSARIO_MPR.md](GLOSARIO_MPR.md) | Glosario de términos MPR. |
+| [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.md) | SDD — Armado surtido desde 2.ª selección (MVP implementado). |
+| [SDD_ARMADO_SURTIDO_MULTI_LOTE.md](SDD_ARMADO_SURTIDO_MULTI_LOTE.md) | SDD — Armado surtido multi-pack (lote / carrito). |
+| [SPEC_ARMADO_SURTIDO_MULTI_LOTE.md](SPEC_ARMADO_SURTIDO_MULTI_LOTE.md) | Especificación normativa — lote multi-pack armado surtido. |
+| [DESIGN_ARMADO_SURTIDO_MULTI_LOTE.md](DESIGN_ARMADO_SURTIDO_MULTI_LOTE.md) | Diseño técnico — refactor TX, sesión, Alpine carrito. |
+| [TASKS_ARMADO_SURTIDO_MULTI_LOTE.md](TASKS_ARMADO_SURTIDO_MULTI_LOTE.md) | Tareas de implementación (fases 1–9). |
+| [MPR_ARMADO_STOCK_COMPONENTES.md](MPR_ARMADO_STOCK_COMPONENTES.md) | Armado, stock de componentes y flujo OPT/OPP. |
 | [FLUJO_VB6_PEDIDO_PRODUCCION_MPR.md](FLUJO_VB6_PEDIDO_PRODUCCION_MPR.md) | Flujo VB6 "Pedido producción" (motivo OPT) – Análisis extremo a extremo. |
 
 ## Scripts SQL

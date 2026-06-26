@@ -1,6 +1,6 @@
 {% extends "base_app.html" %}
 {% load static %}
-{% load i18n %}
+{% load i18n tiendanube_precios %}
 
 {% block title %}{% trans "Product Mapping Detail" %} - {{ block.super }}{% endblock %}
 
@@ -71,13 +71,20 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                                {% trans "Price" %}
+                                {% trans "Precio de venta (final)" %}
                             </label>
                             <p class="mt-1 text-sm text-gray-900 dark:text-white">
-                                ${{ object.tiendanube_price|default:"0.00" }}
+                                ${{ object|tn_precio_venta_final|floatformat:2 }}
                             </p>
                         </div>
-                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 dark:text-gray-400">
+                                {% trans "Costo (final)" %}
+                            </label>
+                            <p class="mt-1 text-sm text-gray-900 dark:text-white">
+                                ${{ object|tn_costo_final|floatformat:2 }}
+                            </p>
+                        </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-600 dark:text-gray-400">
                                 {% trans "Stock" %}
@@ -119,13 +126,21 @@
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-600 dark:text-gray-400">
-                                {% trans "Price" %}
+                                {% trans "Precio de venta (final)" %}
                             </label>
                             <p class="mt-1 text-sm text-gray-900 dark:text-white">
-                                ${{ object.adminet_precio|default:"0.00" }}
+                                ${{ object|adminet_precio_venta_final|floatformat:2 }}
+                            </p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">{{ object|adminet_lista_precio_label }}</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600 dark:text-gray-400">
+                                {% trans "Costo (final)" %}
+                            </label>
+                            <p class="mt-1 text-sm text-gray-900 dark:text-white">
+                                ${{ object|adminet_costo_final|floatformat:2 }}
                             </p>
                         </div>
-                        
                         <div>
                             <label class="block text-sm font-medium text-gray-600 dark:text-gray-400">
                                 {% trans "Stock" %}

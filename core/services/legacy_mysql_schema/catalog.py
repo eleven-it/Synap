@@ -18,6 +18,8 @@ from typing import Any, Callable, Dict, List, Tuple
 
 from .helpers import (
     columna_existe,
+    columna_primary_key,
+    es_nombre_logico_id_lista_detalle,
     fk_existe,
     indice_existe,
     mensaje_final,
@@ -48,7 +50,10 @@ def _append_migration(
 
 def run_tiendanube_integration_mysql(conn) -> Dict[str, Any]:
     """
-    Añade columnas ``id_tiendanube`` en ``cliente`` y ``articulo`` si no existen.
+    Columnas de integración Tiendanube en tablas legacy compartidas con VB6.
+
+    - ``cliente.id_tiendanube``, ``articulo.id_tiendanube``
+    - ``comp_ped.id_tiendanube`` (vínculo pedido ↔ orden TN)
     """
     applied: List[str] = []
     failed: List[str] = []
@@ -64,6 +69,12 @@ def run_tiendanube_integration_mysql(conn) -> Dict[str, Any]:
                 'ALTER TABLE articulo ADD COLUMN id_tiendanube BIGINT NULL COMMENT "ID del producto en Tiendanube"'
             )
             _append_migration(applied, failed, True, "articulo.id_tiendanube")
+        if not columna_existe(cursor, "comp_ped", "id_tiendanube"):
+            cursor.execute(
+                'ALTER TABLE comp_ped ADD COLUMN id_tiendanube BIGINT NULL '
+                'COMMENT "ID de la orden en Tiendanube"'
+            )
+            _append_migration(applied, failed, True, "comp_ped.id_tiendanube")
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -730,6 +741,77 @@ def run_self_checkout_core_tables_mysql(conn) -> Dict[str, Any]:
     }
 
 
+def run_mpr_lista_produccion_detalle_corregir_pk_nombre_mysql(conn) -> Dict[str, Any]:
+    """
+    Renombra la PK de ``lista_produccion_detalle`` a ``id_lista_detalle`` cuando el nombre
+    físico quedó corrupto (p. ej. ``id\\x1f_lista_detalle``) tras una migración parcial.
+    Sin este arreglo, Synap puede confundir ``id_lista_produccion`` (FK) con la PK de fila
+    y la sincronización de demanda por reserva pisa las líneas de pedidos PED.
+    """
+    applied: List[str] = []
+    failed: List[str] = []
+    cursor = conn.cursor()
+    try:
+        tbl_detalle = nombre_tabla_real(cursor, "lista_produccion_detalle")
+        if not tbl_detalle:
+            cursor.close()
+            return {
+                "success": True,
+                "message": "Tabla lista_produccion_detalle no existe; omitido.",
+                "migrations_applied": [],
+                "migrations_failed": [],
+            }
+
+        if columna_existe(cursor, tbl_detalle, "id_lista_detalle"):
+            cursor.close()
+            return {
+                "success": True,
+                "message": "Columna id_lista_detalle ya existe; no se requiere corrección.",
+                "migrations_applied": [],
+                "migrations_failed": [],
+            }
+
+        pk_fisica = columna_primary_key(cursor, tbl_detalle)
+        if not pk_fisica or not es_nombre_logico_id_lista_detalle(pk_fisica):
+            cursor.close()
+            return {
+                "success": True,
+                "message": "No se detectó PK corrupta de id_lista_detalle; omitido.",
+                "migrations_applied": [],
+                "migrations_failed": [],
+            }
+
+        tbl_esc = tbl_detalle.replace("`", "``")
+        pk_esc = pk_fisica.replace("`", "``")
+        conn.autocommit(False)
+        try:
+            cursor.execute(
+                "ALTER TABLE `{}` CHANGE COLUMN `{}` id_lista_detalle BIGINT NOT NULL AUTO_INCREMENT".format(
+                    tbl_esc, pk_esc
+                )
+            )
+            applied.append(
+                "Renombrar PK lista_produccion_detalle ({!r} → id_lista_detalle)".format(pk_fisica)
+            )
+            conn.commit()
+        except Exception as inner:
+            conn.rollback()
+            raise inner
+    except Exception as e:
+        logger.exception("run_mpr_lista_produccion_detalle_corregir_pk_nombre_mysql: %s", e)
+        failed.append(str(e))
+    finally:
+        conn.autocommit(True)
+        cursor.close()
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Registro para la UI y ejecución selectiva
 # ---------------------------------------------------------------------------
@@ -741,7 +823,7 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         "id": "tiendanube_integration",
         "title": "Integración Tienda Nube",
         "description": (
-            "Columnas id_tiendanube en tablas cliente y articulo para sincronización "
+            "Columnas id_tiendanube en cliente, articulo y comp_ped para sincronización "
             "con Tienda Nube / Nuvemshop."
         ),
         "risk": "bajo",
@@ -793,6 +875,17 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "medio",
         "run": run_mpr_lista_produccion_detalle_trazabilidad_mysql,
+    },
+    {
+        "id": "mpr_lista_produccion_detalle_pk_nombre",
+        "title": "MPR — corregir nombre PK lista_produccion_detalle",
+        "description": (
+            "Renombra la columna PRIMARY KEY corrupta (p. ej. id\\x1f_lista_detalle) a "
+            "id_lista_detalle. Ejecutar si la demanda por reserva pisa cantidades de pedidos PED "
+            "en ventana-pack. Complementa «MPR — trazabilidad lista producción (detalle)»."
+        ),
+        "risk": "bajo",
+        "run": run_mpr_lista_produccion_detalle_corregir_pk_nombre_mysql,
     },
     {
         "id": "self_checkout_core_tables",

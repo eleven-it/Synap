@@ -196,7 +196,7 @@
                             <tr class="align-bottom">
                                 <th scope="col" rowspan="2" class="px-3 py-2.5 text-right text-xs font-semibold text-gray-600 align-middle sm:px-4 sm:py-3 dark:text-gray-300">Cod. sist.</th>
                                 <th scope="col" rowspan="2" class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 align-middle sm:px-4 sm:py-3 dark:text-gray-300">Componente</th>
-                                <th scope="col" rowspan="2" class="bg-amber-50 px-3 py-2.5 text-right text-xs font-semibold text-amber-900 align-middle sm:px-4 sm:py-3 dark:bg-amber-900/30 dark:text-amber-200">Pendiente a distribuir (unid.)</th>
+                                <th scope="col" rowspan="2" class="bg-amber-50 px-3 py-2.5 text-right text-xs font-semibold text-amber-900 align-middle sm:px-4 sm:py-3 dark:bg-amber-900/30 dark:text-amber-200" title="1 docena = 12 unidades (componente BOM)">Pendiente a distribuir<br><span class="font-normal text-[10px] uppercase tracking-wide">Docenas · Unidades</span></th>
                                 {% for dep in depositos_opp %}
                                 <th scope="colgroup" colspan="2" class="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wide border-b border-gray-200/80 dark:border-gray-600
                                     {% if forloop.counter0 == 0 %}bg-rose-200 dark:bg-rose-800/50 text-rose-800 dark:text-rose-200
@@ -229,7 +229,7 @@
                                     <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ comp.codigo_articulo|default:"" }}</span>
                                     <span class="block text-xs text-gray-500 dark:text-gray-400">{{ comp.descripcion_articulo|truncatewords:12|default:"" }}</span>
                                 </td>
-                                <td class="bg-amber-50 px-3 py-2.5 text-right text-sm font-medium tabular-nums text-amber-600 sm:px-4 sm:py-3 dark:bg-amber-900/20 dark:text-amber-400"><span class="opp-pendiente-display" data-pendiente-inicial="{{ comp.max_distribuible_unidades|default:0 }}">{{ comp.max_distribuible_unidades|default:0 }}</span></td>
+                                <td class="bg-amber-50 px-3 py-2.5 text-right text-sm font-medium tabular-nums text-amber-700 sm:px-4 sm:py-3 dark:bg-amber-900/20 dark:text-amber-300"><span class="opp-pendiente-display" data-pendiente-inicial="{{ comp.max_distribuible_unidades|default:0 }}">{{ comp.pendiente_texto_du|default:"0 docenas · 0 unidades" }}</span></td>
                                 {% for dep in depositos_opp %}
                                 <td class="px-2 py-2 text-right sm:px-2.5 sm:py-2.5 {% if forloop.counter0 == 0 %}bg-rose-50 dark:bg-rose-900/20{% elif forloop.counter0 == 1 %}bg-amber-50 dark:bg-amber-900/20{% elif forloop.counter0 == 2 %}bg-emerald-50 dark:bg-emerald-900/20{% else %}bg-slate-50 dark:bg-slate-800/50{% endif %}">
                                     <input type="number" name="opp_comp_{{ comp.id_articulo }}_dep_{{ dep.CodDeposito }}_docenas" value="0" min="0" step="1" inputmode="numeric" data-opp-part="docenas" data-id-art="{{ comp.id_articulo }}" data-opp-matriz-par="{{ comp.id_articulo }}_{{ dep.CodDeposito }}" aria-label="Docenas del componente {{ comp.codigo_articulo|default:comp.id_articulo }} hacia depósito {{ dep.NombreDeposito|default:dep.CodDeposito }}" class="w-full min-w-[3.5rem] max-w-[5rem] rounded border border-gray-300 bg-white px-1.5 py-1.5 text-right text-sm tabular-nums text-gray-900 focus:ring-2 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white ml-auto block"/>
@@ -305,6 +305,12 @@
             var modalBackdrop = document.getElementById('modal-opp-backdrop');
 
             var UNIDADES_POR_DOCENA_OPP = 12;
+            function textoPendienteDocenasUnidades(unidades) {
+                var total = Math.max(0, parseInt(unidades, 10) || 0);
+                var docenas = Math.floor(total / UNIDADES_POR_DOCENA_OPP);
+                var resto = total % UNIDADES_POR_DOCENA_OPP;
+                return docenas + ' docenas · ' + resto + ' unidades';
+            }
             function getSumaPorArticulo(idArt) {
                 if (!form) return 0;
                 var docInputs = form.querySelectorAll('input[data-opp-part="docenas"][data-id-art="' + idArt + '"]');
@@ -330,7 +336,7 @@
                     var suma = getSumaPorArticulo(idArt);
                     var restante = Math.max(0, pendienteInicial - suma);
                     var display = row.querySelector('.opp-pendiente-display');
-                    if (display) display.textContent = restante;
+                    if (display) display.textContent = textoPendienteDocenasUnidades(restante);
                 }
             }
 
@@ -553,8 +559,8 @@
                     </div>
                     <div>
                         <h2 class="text-lg font-bold text-gray-900 dark:text-white">Ejecutar armado</h2>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Origen: <strong>{{ nombre_deposito_semi|default:"Semi Elaborado" }}</strong>. Destino: <strong>{{ nombre_deposito_terminado|default:"Terminado" }}</strong>. Indique cantidad por pack.</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Máx. armable se calcula con el stock de los <strong>componentes de la receta</strong> en el depósito Semi elaborado. OPT y OPP solo mueven los artículos pack; el stock de componentes debe cargarse por compras, transferencias o producción previa.</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Origen: <strong>{{ nombre_deposito_semi|default:"Semi Elaborado" }}</strong>. Destino: <strong>{{ nombre_deposito_terminado|default:"Terminado" }}</strong>. Indique cantidad por pack (solo packs completos).</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Máx. armable según stock de <strong>componentes</strong> en Semi elaborado. Se muestra en <strong>docenas enteras</strong> (÷ bulto del pack) y en packs; sin tooltip por depósito.</p>
                     </div>
                 </div>
                 <div class="overflow-x-auto">
@@ -571,7 +577,7 @@
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
                             {% for linea in lineas_armado %}
-                            <tr class="armado-tooltip-row hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-default" data-armado-tooltip="{{ linea.tooltip_semi_elaborado_json|escape }}">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                 <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">{{ linea.id_articulo }}</td>
                                 <td class="px-4 py-3">
                                     <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ linea.codigo_articulo }}</span>
@@ -579,7 +585,10 @@
                                 </td>
                                 <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ linea.nombre_bom }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-sm text-gray-700 dark:text-gray-300">
-                                    {% if linea.max_packs_armable|default:0 > 0 %}{{ linea.max_packs_armable }}{% else %}Sin stock{% endif %}
+                                    {% if linea.max_packs_armable|default:0 > 0 %}
+                                    <span class="block font-medium text-gray-900 dark:text-white">{{ linea.max_docenas_armable }} docena{{ linea.max_docenas_armable|pluralize:"s" }}</span>
+                                    <span class="block text-[10px] text-gray-500 dark:text-gray-400">{{ linea.max_packs_armable }} pack{{ linea.max_packs_armable|pluralize:"s" }}</span>
+                                    {% else %}Sin stock{% endif %}
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <input type="number" name="armar_cantidad_{{ linea.id_articulo }}" value="0" min="0" max="{{ linea.max_packs_armable|default:0 }}" step="1" class="w-24 px-2 py-1.5 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm tabular-nums focus:ring-2 focus:ring-purple-500"/>
@@ -615,78 +624,8 @@
         </form>
         <script>
         (function() {
-            var tooltipEl = null;
-            var padding = 10;
-            function escHtml(s) {
-                if (s == null || s === undefined) return '';
-                var t = String(s);
-                return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            }
-            function formatNum(v) {
-                if (v == null || v === undefined || isNaN(v)) return '0';
-                var n = Number(v);
-                return n % 1 === 0 ? String(Math.round(n)) : n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-            }
-            function getTooltipEl() {
-                if (tooltipEl) return tooltipEl;
-                tooltipEl = document.createElement('div');
-                tooltipEl.setAttribute('class', 'absolute bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-2xl opacity-0 z-[9999] border border-slate-700 overflow-y-auto');
-                tooltipEl.style.fontFamily = 'system-ui, sans-serif';
-                tooltipEl.style.minWidth = '180px';
-                tooltipEl.style.maxWidth = '280px';
-                tooltipEl.style.maxHeight = '400px';
-                tooltipEl.style.transition = 'opacity 0.2s ease-in-out';
-                tooltipEl.style.pointerEvents = 'none';
-                document.body.appendChild(tooltipEl);
-                return tooltipEl;
-            }
-            function buildArmadoTooltipHtml(componentes) {
-                if (!componentes || componentes.length === 0) {
-                    return '<div class="font-bold text-sm text-white mb-0.5">Disponible en Semi Elaborado</div><div class="text-sky-300 text-[10px] font-medium">Sin datos</div>';
-                }
-                var lines = componentes.map(function(d) {
-                    var cod = escHtml(d.codigo || '-');
-                    var qty = formatNum(d.saldo);
-                    return '<div class="flex items-center justify-between gap-3 py-0.5"><span class="text-slate-300 text-xs">' + cod + '</span><span class="text-emerald-300 font-semibold text-xs">' + qty + ' ud.</span></div>';
-                });
-                return '<div class="font-bold text-sm text-white mb-1">Disponible en Semi Elaborado</div><div class="space-y-0.5 border-t border-slate-700 pt-1 mt-1">' + lines.join('') + '</div>';
-            }
-            function setupArmadoTooltips(container) {
-                if (!container) return;
-                var rows = container.querySelectorAll('.armado-tooltip-row');
-                var tooltip = getTooltipEl();
-                rows.forEach(function(row) {
-                    row.addEventListener('mouseenter', function(e) {
-                        var raw = row.getAttribute('data-armado-tooltip');
-                        var data = [];
-                        try { data = raw ? JSON.parse(raw) : []; } catch (_) {}
-                        tooltip.innerHTML = buildArmadoTooltipHtml(data);
-                        tooltip.style.opacity = '1';
-                        var left = e.pageX + padding;
-                        var top = e.pageY + padding;
-                        if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
-                        if (top + 200 > window.innerHeight) top = e.pageY - 200 - padding;
-                        if (top < padding) top = padding;
-                        tooltip.style.left = left + 'px';
-                        tooltip.style.top = top + 'px';
-                    });
-                    row.addEventListener('mousemove', function(e) {
-                        var left = e.pageX + padding;
-                        var top = e.pageY + padding;
-                        if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
-                        if (top + 200 > window.innerHeight) top = e.pageY - 200 - padding;
-                        if (top < padding) top = padding;
-                        tooltip.style.left = left + 'px';
-                        tooltip.style.top = top + 'px';
-                    });
-                    row.addEventListener('mouseleave', function() {
-                        tooltip.style.opacity = '0';
-                    });
-                });
-            }
             var form = document.getElementById('form-armado-wizard');
             if (form) {
-                setupArmadoTooltips(form);
                 form.addEventListener('submit', function() {
                     if (typeof window.mprShowPostLoading === 'function') {
                         window.mprShowPostLoading(form);
