@@ -12,12 +12,28 @@ except ImportError:  # Celery opcional en instalaciones mínimas
             return f
         return _decorator
 from django.utils import timezone
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
+from ..utils.feature_flags import (
+    tiendanube_auto_sync_disabled_reason,
+    tiendanube_sync_disabled_reason,
+)
 from ..services.sync_service import TiendanubeAdministraNETSyncService
+from ..services.initial_sync_service import InitialSyncService
 from ..models import CustomerMapping, SyncLog, TiendanubeConfig, AdministraNETConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _sync_disabled_response(
+    tiendanube_config: Optional[TiendanubeConfig] = None,
+) -> Dict[str, Any]:
+    reason = tiendanube_sync_disabled_reason(tiendanube_config)
+    return {
+        'success': False,
+        'error': reason or 'Sincronización deshabilitada',
+        'timestamp': timezone.now().isoformat(),
+    }
 
 
 @shared_task(bind=True, name='tiendanube_adminet.sync_customers_from_tiendanube')
@@ -33,26 +49,35 @@ def sync_customers_from_tiendanube_task(self, limit: int = 100, offset: int = 0)
         Dict con el resultado de la sincronización
     """
     try:
+        tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
+        if tiendanube_sync_disabled_reason(tiendanube_config):
+            return _sync_disabled_response(tiendanube_config)
         logger.info(f"Iniciando sincronización desde Tiendanube (limit={limit}, offset={offset})")
         
         # Crear servicio de sincronización
         sync_service = TiendanubeAdministraNETSyncService()
         
         # Ejecutar sincronización
-        success_count, failed_count = sync_service.sync_customers_from_tiendanube(limit, offset)
+        result = sync_service.sync_customers_from_tiendanube()
         
-        # Registrar resultado
-        result = {
+        if not result.get('success'):
+            return {
+                'success': False,
+                'error': result.get('message', 'Error en sincronización'),
+                'timestamp': timezone.now().isoformat()
+            }
+
+        result_out = {
             'success': True,
-            'success_count': success_count,
-            'failed_count': failed_count,
-            'total_processed': success_count + failed_count,
+            'success_count': result.get('successful', 0),
+            'failed_count': result.get('failed', 0),
+            'total_processed': result.get('total_processed', 0),
             'timestamp': timezone.now().isoformat()
         }
         
-        logger.info(f"Sincronización desde Tiendanube completada: {success_count} exitosos, {failed_count} fallidos")
+        logger.info(f"Sincronización desde Tiendanube completada: {result_out['success_count']} exitosos, {result_out['failed_count']} fallidos")
         
-        return result
+        return result_out
         
     except Exception as e:
         error_msg = f"Error en tarea de sincronización desde Tiendanube: {str(e)}"
@@ -61,11 +86,10 @@ def sync_customers_from_tiendanube_task(self, limit: int = 100, offset: int = 0)
         # Registrar error en log
         try:
             SyncLog.objects.create(
-                sync_type='customer_sync',
-                status='error',
-                platform='tiendanube',
-                message=error_msg,
-                started_at=timezone.now()
+                sync_type=SyncLog.SyncType.CUSTOMER,
+                direction=SyncLog.SyncDirection.TO_ADMINET,
+                status=SyncLog.Status.FAILED,
+                error_message=error_msg,
             )
         except Exception as log_error:
             logger.error(f"Error registrando log: {str(log_error)}")
@@ -90,26 +114,35 @@ def sync_customers_from_adminet_task(self, limit: int = 100, offset: int = 0) ->
         Dict con el resultado de la sincronización
     """
     try:
+        tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
+        if tiendanube_sync_disabled_reason(tiendanube_config):
+            return _sync_disabled_response(tiendanube_config)
         logger.info(f"Iniciando sincronización desde AdministraNET (limit={limit}, offset={offset})")
         
         # Crear servicio de sincronización
         sync_service = TiendanubeAdministraNETSyncService()
         
         # Ejecutar sincronización
-        success_count, failed_count = sync_service.sync_customers_from_adminet(limit, offset)
+        result = sync_service.sync_customers_from_adminet(limit=limit, offset=offset)
         
-        # Registrar resultado
-        result = {
+        if not result.get('success'):
+            return {
+                'success': False,
+                'error': result.get('message', 'Error en sincronización'),
+                'timestamp': timezone.now().isoformat()
+            }
+
+        result_out = {
             'success': True,
-            'success_count': success_count,
-            'failed_count': failed_count,
-            'total_processed': success_count + failed_count,
+            'success_count': result.get('successful', 0),
+            'failed_count': result.get('failed', 0),
+            'total_processed': result.get('total_processed', 0),
             'timestamp': timezone.now().isoformat()
         }
         
-        logger.info(f"Sincronización desde AdministraNET completada: {success_count} exitosos, {failed_count} fallidos")
+        logger.info(f"Sincronización desde AdministraNET completada: {result_out['success_count']} exitosos, {result_out['failed_count']} fallidos")
         
-        return result
+        return result_out
         
     except Exception as e:
         error_msg = f"Error en tarea de sincronización desde AdministraNET: {str(e)}"
@@ -118,11 +151,10 @@ def sync_customers_from_adminet_task(self, limit: int = 100, offset: int = 0) ->
         # Registrar error en log
         try:
             SyncLog.objects.create(
-                sync_type='customer_sync',
-                status='error',
-                platform='adminet',
-                message=error_msg,
-                started_at=timezone.now()
+                sync_type=SyncLog.SyncType.CUSTOMER,
+                direction=SyncLog.SyncDirection.FROM_ADMINET,
+                status=SyncLog.Status.FAILED,
+                error_message=error_msg,
             )
         except Exception as log_error:
             logger.error(f"Error registrando log: {str(log_error)}")
@@ -131,6 +163,56 @@ def sync_customers_from_adminet_task(self, limit: int = 100, offset: int = 0) ->
             'success': False,
             'error': error_msg,
             'timestamp': timezone.now().isoformat()
+        }
+
+
+@shared_task(bind=True, name='tiendanube_adminet.initial_sync_batch')
+def initial_sync_batch_task(
+    self,
+    sync_type: str = 'customer',
+    limit: int = 30,
+) -> Dict[str, Any]:
+    """
+    Procesa un lote de la sync masiva inicial Adminet → Tienda Nube.
+
+    Args:
+        sync_type: ``customer`` o ``product``
+        limit: Tamaño del lote
+
+    Returns:
+        Dict con resultado del lote y estado del checkpoint
+    """
+    try:
+        tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
+        if tiendanube_sync_disabled_reason(tiendanube_config):
+            return _sync_disabled_response(tiendanube_config)
+
+        adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
+        if not adminet_config:
+            return {
+                'success': False,
+                'error': 'No hay configuración de AdministraNET activa',
+                'timestamp': timezone.now().isoformat(),
+            }
+
+        logger.info(
+            'Sync inicial por lotes (%s, limit=%s, offset desde checkpoint)',
+            sync_type,
+            limit,
+        )
+        service = InitialSyncService(tiendanube_config, adminet_config)
+        result = service.run_next_pending_batch(sync_type=sync_type, limit=limit)
+        result['timestamp'] = timezone.now().isoformat()
+        return result
+
+    except Exception as e:
+        error_msg = f'Error en sync inicial por lotes ({sync_type}): {str(e)}'
+        logger.error(error_msg)
+        return {
+            'success': False,
+            'error': error_msg,
+            'sync_type': sync_type,
+            'timestamp': timezone.now().isoformat(),
         }
 
 
@@ -143,6 +225,9 @@ def sync_pending_mappings_task(self) -> Dict[str, Any]:
         Dict con el resultado de la sincronización
     """
     try:
+        tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
+        if tiendanube_sync_disabled_reason(tiendanube_config):
+            return _sync_disabled_response(tiendanube_config)
         logger.info("Iniciando sincronización de mapeos pendientes")
         
         # Crear servicio de sincronización
@@ -298,16 +383,22 @@ def full_sync_task(self) -> Dict[str, Any]:
         Dict con el resultado de la sincronización completa
     """
     try:
+        tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
+        if tiendanube_sync_disabled_reason(tiendanube_config):
+            return _sync_disabled_response(tiendanube_config)
         logger.info("Iniciando sincronización completa")
         
         # Crear servicio de sincronización
         sync_service = TiendanubeAdministraNETSyncService()
         
         # Sincronizar desde Tiendanube
-        tiendanube_success, tiendanube_failed = sync_service.sync_customers_from_tiendanube(limit=200)
+        tiendanube_result = sync_service.sync_customers_from_tiendanube()
+        tiendanube_success = tiendanube_result.get('successful', 0)
+        tiendanube_failed = tiendanube_result.get('failed', 0)
         
-        # Sincronizar desde AdministraNET
-        adminet_success, adminet_failed = sync_service.sync_customers_from_adminet(limit=200)
+        adminet_result = sync_service.sync_customers_from_adminet()
+        adminet_success = adminet_result.get('successful', 0)
+        adminet_failed = adminet_result.get('failed', 0)
         
         # Sincronizar mapeos pendientes
         pending_result = sync_pending_mappings_task.delay()
@@ -364,29 +455,21 @@ def auto_sync_task(self) -> Dict[str, Any]:
         # Obtener configuración activa
         tiendanube_config = TiendanubeConfig.objects.filter(is_active=True).first()
         adminet_config = AdministraNETConfig.objects.filter(is_active=True).first()
-        
-        if not tiendanube_config:
-            logger.warning("No hay configuración de Tiendanube activa. Saltando sincronización.")
+
+        auto_disabled = tiendanube_auto_sync_disabled_reason(tiendanube_config)
+        if auto_disabled:
+            logger.info("%s", auto_disabled)
             return {
                 'success': False,
-                'message': 'No active Tiendanube configuration',
-                'skipped': True
+                'message': auto_disabled,
+                'skipped': True,
             }
-        
+
         if not adminet_config:
             logger.warning("No hay configuración de AdministraNET activa. Saltando sincronización.")
             return {
                 'success': False,
                 'message': 'No active AdministraNET configuration',
-                'skipped': True
-            }
-        
-        # Verificar si auto_sync está habilitado
-        if not tiendanube_config.auto_sync:
-            logger.info("Auto sync deshabilitado en configuración. Saltando sincronización.")
-            return {
-                'success': False,
-                'message': 'Auto sync is disabled',
                 'skipped': True
             }
         

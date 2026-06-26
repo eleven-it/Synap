@@ -4,6 +4,7 @@ Utilidades compartidas para comprobaciones de esquema MySQL (AdministraNET legac
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List, Optional, Tuple
 
 
@@ -11,6 +12,28 @@ def columna_existe(cursor, tabla: str, columna: str) -> bool:
     sql = "SHOW COLUMNS FROM `%s` LIKE %%s" % tabla.replace("`", "``")
     cursor.execute(sql, (columna,))
     return cursor.fetchone() is not None
+
+
+def es_nombre_logico_id_lista_detalle(nombre_columna: str) -> bool:
+    """True si el nombre físico corresponde a la PK lógica id_lista_detalle (p. ej. id\\x1f_lista_detalle)."""
+    norm = re.sub(r"[^a-z0-9]", "", (nombre_columna or "").lower())
+    return norm == "idlistadetalle"
+
+
+def columna_primary_key(cursor, tabla: str) -> Optional[str]:
+    """Devuelve el nombre físico de la columna PRIMARY KEY de ``tabla``, o None."""
+    tabla_esc = tabla.replace("`", "``")
+    cursor.execute("SHOW COLUMNS FROM `%s`" % tabla_esc)
+    for row in cursor.fetchall() or []:
+        if isinstance(row, dict):
+            field = row.get("Field") or row.get("field")
+            key = row.get("Key") or row.get("key")
+        else:
+            field = row[0] if row else None
+            key = row[3] if row and len(row) > 3 else None
+        if key == "PRI" and field is not None:
+            return str(field).strip()
+    return None
 
 
 def nombre_columna_ci(cursor, tabla: str, nombre_logico: str) -> Optional[str]:

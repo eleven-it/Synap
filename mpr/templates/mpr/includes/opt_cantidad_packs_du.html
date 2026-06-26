@@ -1,0 +1,8 @@
+{# Cantidad OPT: packs, docenas y unidades en líneas separadas. Espera ``packs`` y ``du`` (dict docenas/unidades). #}
+<span class="tabular-nums leading-snug">
+    <span class="block font-medium text-gray-900 dark:text-white">{{ packs|default:0 }} pack{{ packs|default:0|pluralize }}</span>
+    {% if du %}
+    <span class="block text-xs text-gray-600 dark:text-gray-400">{{ du.docenas }} docena{{ du.docenas|pluralize }}</span>
+    <span class="block text-xs text-gray-600 dark:text-gray-400">{{ du.unidades }} unidad{{ du.unidades|pluralize:"es" }}</span>
+    {% endif %}
+</span>

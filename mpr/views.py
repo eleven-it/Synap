@@ -35,10 +35,25 @@ from .services import (
     ejecutar_opp,
     ejecutar_opp_por_componentes,
     ejecutar_reclasificacion,
+    ejecutar_lote_armado_surtido,
+    listar_articulos_stock_deposito,
+    listar_packs_armado_surtido,
+    normalizar_item_lote_armado_surtido,
+    parse_cabecera_lote_armado_surtido,
+    parse_lote_armado_surtido_post,
+    validar_reglas_lote_armado_surtido,
+    validar_reglas_item_candidato_lote,
+    validar_stock_agregado_lote,
+    normalizar_armados_lote_json,
+    normalizar_item_lote_armado_surtido,
+    LOTE_ARMADO_SURTIDO_MAX_ITEMS,
+    TIPO_ART_FAB_PACK_ARMADO_SURTIDO,
+    get_deposito_2da_seleccion_mpr,
     get_articulo_armado_por_bom,
     get_bom_detalle,
     get_cantidades_armadas_por_opt,
     get_cantidad_opp_por_destino_opt,
+    opt_puede_armado_surtido,
     componentes_a_equivalentes_pack,
     get_id_en_abm_por_articulo,
     bulk_id_en_abm,
@@ -65,6 +80,16 @@ from .services import (
     listar_movimientos_recientes_mpr,
     listar_operarios_crud,
     docenas_desde_unidades_opt,
+    bulk_cantidad_promedio_bulto,
+    build_grupos_articulo_renglones_movimiento,
+    build_resumen_metrica_opt,
+    cantidad_opp_presentacion_du,
+    lineas_texto_cantidad_opp,
+    lineas_texto_cantidad_pack,
+    enriquecer_lineas_opt_presentacion_pack,
+    enriquecer_componentes_opp_presentacion,
+    texto_docenas_unidades,
+    _etiqueta_linea_opt,
     listar_ventana_pack,
     listar_ventana_pack_unidades,
     listar_empleados_operarios,
@@ -156,6 +181,23 @@ def _opp_cantidad_unidades_desde_post(post, id_comp: int, cod_dep: int) -> int:
     return docenas * UNIDADES_POR_DOCENA_OPP + unidades_sueltas
 
 
+def _texto_resumen_opt_con_desglose(resumen: dict) -> str:
+    """Texto para estado o etiquetas: total agregado o packs + desglose C4."""
+    if not resumen:
+        return "0 docenas · 0 unidades"
+    if not resumen.get("mostrar_desglose"):
+        return str(resumen.get("texto_principal") or "0 docenas · 0 unidades")
+    partes = [
+        f"{fila['etiqueta']}: {fila['texto_docenas_unidades']}"
+        for fila in (resumen.get("lineas") or [])
+        if (fila.get("packs") or 0) > 0
+    ]
+    base = str(resumen.get("texto_principal") or "")
+    if partes:
+        return f"{base} ({'; '.join(partes)})"
+    return base
+
+
 def _opp_max_distribuible_unidades(comp: dict) -> float:
     """
     Devuelve el máximo distribuible para OPP sin caer en fallback por falsy.
@@ -226,14 +268,16 @@ def _redirect_operarios_list_preserve_filters(request):
 
 def _build_renglones_modal_map(base_empresa, opp_list, opa_list):
     """
-    Mapa codigo_movimiento (str) -> renglones para el modal de comprobante en detalle OPT.
-    Misma fuente que stock (tabla stock por CodigoMovimiento).
+    Mapa codigo_movimiento (str) -> { presentacion_opp_du, articulos } para modal comprobante OPT.
+    ``articulos``: grupos por artículo con filas por depósito.
     """
+    opp_codigos = set()
     codigos = set()
     for row in opp_list or []:
         cm = to_int_or_none(row.get("codigo_movimiento"))
         if cm is not None:
             codigos.add(cm)
+            opp_codigos.add(cm)
     for row in opa_list or []:
         cm = to_int_or_none(row.get("codigo_movimiento"))
         if cm is not None:
@@ -241,19 +285,14 @@ def _build_renglones_modal_map(base_empresa, opp_list, opa_list):
     out = {}
     for cm in codigos:
         renglones = obtener_renglones_movimiento(base_empresa, cm)
-        rows = []
-        for r in renglones:
-            entrada = r.get("Entrada")
-            salida = r.get("Salida")
-            saldo = r.get("saldo")
-            rows.append({
-                "codigo_articulo": str_or_default(r.get("CodigoArticulo"), "—"),
-                "descripcion": str_or_default(r.get("Descripcion"), "—"),
-                "entrada": float(to_decimal_or_none(entrada) or 0),
-                "salida": float(to_decimal_or_none(salida) or 0),
-                "saldo": float(to_decimal_or_none(saldo) if saldo is not None else 0),
-            })
-        out[str(cm)] = rows
+        es_opp = cm in opp_codigos
+        articulos = build_grupos_articulo_renglones_movimiento(
+            renglones, presentacion_opp_du=es_opp
+        )
+        out[str(cm)] = {
+            "presentacion_opp_du": es_opp,
+            "articulos": articulos,
+        }
     return out
 
 
@@ -896,6 +935,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                 context["id_deposito_produccion"] = get_deposito_produccion_mpr(base_empresa)
                 return context
             context["lineas"] = lineas or []
+            enriquecer_componentes_opp_presentacion(componentes_opp)
             context["componentes_opp"] = componentes_opp
             context["depositos_opp"] = depositos_opp
             context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
@@ -930,20 +970,6 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                 (d.get("NombreDeposito") or str(d.get("CodDeposito")) for d in depositos_config if d.get("CodDeposito") == id_term),
                 "Terminado",
             )
-            import json
-            data_by_art = {}
-            for linea in lineas_armado:
-                id_art = linea.get("id_articulo")
-                if id_art is not None:
-                    comps = []
-                    for c in linea.get("bom", {}).get("componentes") or []:
-                        comps.append({
-                            "codigo_articulo": c.get("codigo_articulo") or "-",
-                            "cantidad_articulo": float(c.get("cantidad_articulo") or 0),
-                            "saldo_semi_elaborado": float(c.get("saldo_semi_elaborado") or 0),
-                        })
-                    data_by_art[str(id_art)] = comps
-            context["lineas_armado_json"] = json.dumps(data_by_art)
         elif paso == 5:
             id_lista = wizard.get("id_lista")
             lineas = get_opt_detalle(base_empresa, id_lista) if id_lista else []
@@ -1173,6 +1199,9 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
             opp_semi_por_articulo, opp_otros_por_articulo, opp_desperdicio_por_articulo = get_cantidad_opp_por_destino_opt(base_empresa, id_lista)
 
         all_art_ids = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
+        bulto_por_articulo = (
+            bulk_cantidad_promedio_bulto(base_empresa, all_art_ids) if all_art_ids else {}
+        )
         abm_map = bulk_id_en_abm(base_empresa, all_art_ids) if all_art_ids else {}
         lineas_with_armado = []
         for l in lineas:
@@ -1233,6 +1262,38 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
                 l["cantidad_en_esta_opt"] = (l.get("cantidad_pendiente_prod") or 0) + (l.get("cantidad_ya_armada") or 0)
         total_en_esta_opt = sum(l.get("cantidad_en_esta_opt") or 0 for l in lineas)
         pendiente_del_pedido = max(0, total_pedida - total_en_esta_opt)
+        enriquecer_lineas_opt_presentacion_pack(lineas, bulto_por_articulo)
+
+        def _lineas_metrica(campo: str):
+            items = []
+            for lin in lineas:
+                id_art = lin.get("id_articulo")
+                try:
+                    packs = max(0, int(lin.get(campo) or 0))
+                except (TypeError, ValueError):
+                    packs = 0
+                if campo == "pendiente_del_pedido_linea":
+                    packs = max(
+                        0,
+                        int(lin.get("cantidad_pedida") or 0) - int(lin.get("cantidad_en_esta_opt") or 0),
+                    )
+                items.append({
+                    "etiqueta": _etiqueta_linea_opt(lin),
+                    "packs": packs,
+                    "bulto": bulto_por_articulo.get(id_art, 0),
+                })
+            return items
+
+        resumen_demanda = build_resumen_metrica_opt(total_pedida, _lineas_metrica("cantidad_pedida"))
+        resumen_en_opt = build_resumen_metrica_opt(total_en_esta_opt, _lineas_metrica("cantidad_en_esta_opt"))
+        resumen_pendiente_opp = build_resumen_metrica_opt(
+            total_pendiente, _lineas_metrica("cantidad_pendiente_prod")
+        )
+        resumen_pendiente_pedido = build_resumen_metrica_opt(
+            pendiente_del_pedido,
+            _lineas_metrica("pendiente_del_pedido_linea"),
+        )
+
         if lineas_with_armado and id_lista:
             armado_opt_url = reverse("mpr:armado_opt", kwargs={"id_lista": id_lista})
             for item in lineas_with_armado:
@@ -1273,11 +1334,14 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         elif (not hay_disponible_opp) and en_proceso:
             estado_actual_texto = "Completada (pendiente OPP 0). Puede cerrar la OPT."
         elif not hay_disponible_opp:
-            estado_actual_texto = "Producida (OPP). Pendiente OPP: 0 Packs."
-        elif en_proceso:
-            estado_actual_texto = "En producción. Pendiente OPP (por producir en esta OPT): {} Packs.".format(total_pendiente)
+            estado_actual_texto = "Producida (OPP). Pendiente OPP: 0 docenas · 0 unidades."
         else:
-            estado_actual_texto = "En producción. Pendiente OPP: {} Packs.".format(total_pendiente)
+            prefijo = (
+                "En producción. Pendiente OPP (por producir en esta OPT): "
+                if en_proceso
+                else "En producción. Pendiente OPP: "
+            )
+            estado_actual_texto = prefijo + _texto_resumen_opt_con_desglose(resumen_pendiente_opp) + "."
 
         context["lineas_with_armado"] = lineas_with_armado
         context["hay_restante_armar"] = hay_restante_armar
@@ -1292,6 +1356,10 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         context["hay_disponible_opp"] = hay_disponible_opp
         context["total_en_esta_opt"] = total_en_esta_opt
         context["pendiente_del_pedido"] = pendiente_del_pedido
+        context["resumen_demanda"] = resumen_demanda
+        context["resumen_en_opt"] = resumen_en_opt
+        context["resumen_pendiente_opp"] = resumen_pendiente_opp
+        context["resumen_pendiente_pedido"] = resumen_pendiente_pedido
         context["porcentaje_completado"] = porcentaje_estado
         context["estado_actual_texto"] = estado_actual_texto
         context["paso_pedida"] = paso_pedida
@@ -1301,6 +1369,20 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         context["paso_armado"] = paso_armado
         context["paso_cerrado"] = paso_cerrado
         context["en_proceso"] = en_proceso
+        puede_armado_surtido = False
+        motivo_armado_surtido_bloqueado = ""
+        if id_lista and en_proceso:
+            puede_armado_surtido, motivo_armado_surtido_bloqueado = opt_puede_armado_surtido(
+                base_empresa, id_lista
+            )
+        context["mostrar_tarjeta_armado_surtido"] = bool(id_lista and en_proceso)
+        context["puede_armado_surtido"] = puede_armado_surtido
+        context["motivo_armado_surtido_bloqueado"] = motivo_armado_surtido_bloqueado
+        context["armado_surtido_url"] = (
+            f"{reverse('mpr:armado_surtido')}?id_lista={id_lista}"
+            if id_lista
+            else reverse("mpr:armado_surtido")
+        )
         # Codigo de movimiento para imprimir comprobante PDF (si la OPT fue liberada)
         codigo_movimiento = None
         if id_lista and id_lista != 0:
@@ -1373,6 +1455,7 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
             context["cantidad_opp_registradas"] = 0
         else:
             context["lineas"] = lineas
+            enriquecer_componentes_opp_presentacion(componentes_opp)
             context["componentes_opp"] = componentes_opp
             context["depositos_opp"] = depositos_opp
             context["total_pendiente"] = (
@@ -1526,20 +1609,6 @@ class ArmadoOptView(MprLoginRequiredMixin, TemplateView):
             (d.get("NombreDeposito") or str(d.get("CodDeposito")) for d in depositos_config if d.get("CodDeposito") == id_term),
             "Terminado",
         )
-        import json
-        data_by_art = {}
-        for linea in lineas_armado:
-            id_art = linea.get("id_articulo")
-            if id_art is not None:
-                comps = []
-                for c in linea.get("bom", {}).get("componentes") or []:
-                    comps.append({
-                        "codigo_articulo": c.get("codigo_articulo") or "-",
-                        "cantidad_articulo": float(c.get("cantidad_articulo") or 0),
-                        "saldo_semi_elaborado": float(c.get("saldo_semi_elaborado") or 0),
-                    })
-                    data_by_art[str(id_art)] = comps
-        context["lineas_armado_json"] = json.dumps(data_by_art)
         context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
         return context
 
@@ -1666,6 +1735,35 @@ class CerrarOptView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:opt_detail", id_lista=id_lista)
 
 
+def _pdf_fila_altura_para_lineas(n_lineas: int, base_mm: float = 5.0, paso_mm: float = 3.2) -> float:
+    from reportlab.lib.units import mm
+    n = max(1, int(n_lineas or 1))
+    return (base_mm + (n - 1) * paso_mm) * mm
+
+
+def _pdf_draw_cantidad_lineas(p, x: float, y: float, fila_altura: float, lineas: list) -> None:
+    """Dibuja cantidad en varias líneas (docenas/unidades o packs/docenas/unidades)."""
+    from reportlab.lib.units import mm
+    paso = 3.2 * mm
+    y_top = y + fila_altura - 3.5 * mm
+    for i, texto in enumerate(lineas or ["—"]):
+        p.setFont("Helvetica", 10 if i == 0 else 9)
+        p.drawString(x, y_top - i * paso, str(texto))
+
+
+def _pdf_lineas_resumen_metrica(resumen: dict) -> list:
+    """Texto multilínea para métricas del encabezado OPT en PDF."""
+    if not resumen:
+        return ["0 packs", "0 docenas", "0 unidades"]
+    if resumen.get("mostrar_desglose"):
+        return [str(resumen.get("texto_principal") or "0 packs")]
+    return [
+        f"{resumen.get('packs', 0)} packs",
+        f"{resumen.get('docenas', 0)} docenas",
+        f"{resumen.get('unidades', 0)} unidades",
+    ]
+
+
 def _opt_comprobante_pdf(request, id_lista):
     """Genera PDF con detalle completo de la OPT: liberación OPT, OPPs y OPAs. Uso interno desde opt_comprobante_pdf_view."""
     from reportlab.lib.pagesizes import A4, landscape
@@ -1674,7 +1772,7 @@ def _opt_comprobante_pdf(request, id_lista):
 
     from core.report_pdf import draw_report_footer, draw_report_header, get_empresa_para_reporte
     from core.services.administranet_stock import (
-        get_nombre_deposito,
+        get_nombres_depositos,
         obtener_movimiento,
         obtener_renglones_movimiento,
     )
@@ -1687,22 +1785,37 @@ def _opt_comprobante_pdf(request, id_lista):
     opp_list = listar_opp_por_opt(base_empresa, id_lista)
     opa_list = listar_opa_por_opt(base_empresa, id_lista)
 
-    # Bloques a imprimir: (título sección, subtítulo contexto, codigo_movimiento)
     bloques = []
     if codigo_opt:
-        bloques.append(("1. Liberación OPT", "Movimiento a producción", codigo_opt))
+        bloques.append({
+            "tipo": "opt",
+            "titulo": "1. Liberación OPT",
+            "subtitulo": "Movimiento a producción",
+            "codigo_movimiento": codigo_opt,
+        })
     for i, opp in enumerate(opp_list or [], 1):
-        bloques.append((f"2.{i}. OPP – Parte de producción", f"Comprobante {opp.get('nro_comprobante', '-')}", opp["codigo_movimiento"]))
+        bloques.append({
+            "tipo": "opp",
+            "titulo": f"2.{i}. OPP – Parte de producción",
+            "subtitulo": f"Comprobante {opp.get('nro_comprobante', '-')}",
+            "codigo_movimiento": opp["codigo_movimiento"],
+        })
     for i, opa in enumerate(opa_list or [], 1):
-        bloques.append((f"3.{i}. OPA – Armado", f"Comprobante {opa.get('nro_comprobante', '-')}", opa["codigo_movimiento"]))
+        bloques.append({
+            "tipo": "opa",
+            "titulo": f"3.{i}. OPA – Armado",
+            "subtitulo": f"Comprobante {opa.get('nro_comprobante', '-')}",
+            "codigo_movimiento": opa["codigo_movimiento"],
+        })
 
     if not bloques:
         return None
 
-    todos_cod_mov = [cod for _, __, cod in bloques]
+    todos_cod_mov = [b["codigo_movimiento"] for b in bloques]
     mov_cache = {}
     renglones_cache = {}
     dep_ids_set = set()
+    all_id_arts = set()
     for cod_mov in todos_cod_mov:
         mov_cache[cod_mov] = obtener_movimiento(base_empresa, cod_mov)
         renglones_cache[cod_mov] = obtener_renglones_movimiento(base_empresa, cod_mov)
@@ -1712,20 +1825,77 @@ def _opt_comprobante_pdf(request, id_lista):
                 dep_ids_set.add(m["deposito_origen"])
             if m.get("deposito_destino"):
                 dep_ids_set.add(m["deposito_destino"])
-    dep_nombres = {}
-    if dep_ids_set:
-        from core.services.administranet_stock import get_nombres_depositos
-        dep_nombres = get_nombres_depositos(base_empresa, list(dep_ids_set))
+        for r in renglones_cache.get(cod_mov) or []:
+            aid = to_int_or_none(r.get("IDArt"))
+            if aid is not None:
+                all_id_arts.add(aid)
+    dep_nombres = get_nombres_depositos(base_empresa, list(dep_ids_set)) if dep_ids_set else {}
+    bulto_map = bulk_cantidad_promedio_bulto(base_empresa, list(all_id_arts)) if all_id_arts else {}
+
+    # Resumen OPT (demanda, en OPT, pendientes) — mismo criterio pack/docenas/unidades que detalle
+    resumenes_pdf = []
+    try:
+        lineas_opt = get_opt_detalle(base_empresa, id_lista) or []
+        if lineas_opt:
+            for lin in lineas_opt:
+                cantidad_asignada = lin.get("cantidad_asignada_opt")
+                if cantidad_asignada is not None and int(cantidad_asignada or 0) > 0:
+                    lin["cantidad_en_esta_opt"] = int(cantidad_asignada)
+                elif lin.get("cantidad_en_esta_opt") is None:
+                    lin["cantidad_en_esta_opt"] = (lin.get("cantidad_pendiente_prod") or 0) + (
+                        lin.get("cantidad_ya_armada") or 0
+                    )
+            total_pedida = sum(l.get("cantidad_pedida") or 0 for l in lineas_opt)
+            total_en_esta_opt = sum(l.get("cantidad_en_esta_opt") or 0 for l in lineas_opt)
+            total_pendiente = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas_opt)
+            pendiente_del_pedido = max(0, total_pedida - total_en_esta_opt)
+            bulto_lineas = bulk_cantidad_promedio_bulto(
+                base_empresa,
+                [l.get("id_articulo") for l in lineas_opt if l.get("id_articulo")],
+            )
+
+            def _lineas_metrica(campo: str):
+                items = []
+                for lin in lineas_opt:
+                    id_art = lin.get("id_articulo")
+                    try:
+                        packs = max(0, int(lin.get(campo) or 0))
+                    except (TypeError, ValueError):
+                        packs = 0
+                    if campo == "pendiente_del_pedido_linea":
+                        packs = max(
+                            0,
+                            int(lin.get("cantidad_pedida") or 0) - int(lin.get("cantidad_en_esta_opt") or 0),
+                        )
+                    items.append({
+                        "etiqueta": _etiqueta_linea_opt(lin),
+                        "packs": packs,
+                        "bulto": bulto_lineas.get(id_art, 0),
+                    })
+                return items
+
+            resumenes_pdf = [
+                ("Demanda total", build_resumen_metrica_opt(total_pedida, _lineas_metrica("cantidad_pedida"))),
+                ("En esta OPT", build_resumen_metrica_opt(total_en_esta_opt, _lineas_metrica("cantidad_en_esta_opt"))),
+                ("Pendiente OPP (por producir aquí)", build_resumen_metrica_opt(total_pendiente, _lineas_metrica("cantidad_pendiente_prod"))),
+                ("Pendiente del pedido (para otras OPT)", build_resumen_metrica_opt(pendiente_del_pedido, _lineas_metrica("pendiente_del_pedido_linea"))),
+            ]
+    except Exception as e:
+        logger.warning("Resumen OPT PDF %s: %s", id_lista, e, exc_info=True)
 
     empresa = get_empresa_para_reporte(base_empresa)
     margin = 20 * mm
-    col_articulo = 168 * mm
+    col_articulo = 118 * mm
+    col_deposito = 36 * mm
     col_entrada = 28 * mm
     col_salida = 28 * mm
     col_saldo = 28 * mm
-    ancho_tabla = col_articulo + col_entrada + col_salida + col_saldo
+    ancho_tabla = col_articulo + col_deposito + col_entrada + col_salida + col_saldo
+    x_col_deposito = margin + col_articulo
+    x_col_entrada = x_col_deposito + col_deposito
+    x_col_salida = x_col_entrada + col_entrada
+    x_col_saldo = x_col_salida + col_salida
     x_fin_tabla = margin + ancho_tabla
-    fila_altura = 5 * mm
     cabecera_altura = 6 * mm
     y_min = 45 * mm
 
@@ -1735,7 +1905,60 @@ def _opt_comprobante_pdf(request, id_lista):
     primera_pagina = True
     y_content = 210 * mm
 
-    for titulo_seccion, subtitulo_seccion, cod_mov in bloques:
+    def _lineas_cantidad_celda(tipo_bloque: str, valor, id_art) -> list:
+        try:
+            qty = float(valor or 0)
+        except (TypeError, ValueError):
+            qty = 0.0
+        if qty <= 0:
+            return ["0 docenas", "0 unidades"] if tipo_bloque == "opp" else ["0 packs", "0 docenas", "0 unidades"]
+        if tipo_bloque == "opp":
+            return lineas_texto_cantidad_opp(int(qty))
+        bulto = float(bulto_map.get(id_art, 0) if id_art is not None else 0)
+        return lineas_texto_cantidad_pack(int(qty), bulto)
+
+    y_content = draw_report_header(
+        p, empresa, f"Comprobante completo OPT {id_lista}", 210 * mm
+    )
+    primera_pagina = False
+
+    if resumenes_pdf:
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(margin, y_content, "Resumen de cantidades")
+        y_content -= 5 * mm
+        p.setFont("Helvetica", 9)
+        col_w = ancho_tabla / 2
+        for idx, (etiq, res) in enumerate(resumenes_pdf):
+            col = idx % 2
+            row = idx // 2
+            x = margin + col * col_w
+            y_block = y_content - row * 14 * mm
+            p.setFont("Helvetica-Bold", 9)
+            p.drawString(x, y_block, f"{etiq}:")
+            lineas_res = _pdf_lineas_resumen_metrica(res)
+            for j, ln in enumerate(lineas_res):
+                p.setFont("Helvetica", 9 if j else 9)
+                p.drawString(x + 2 * mm, y_block - (j + 1) * 3.2 * mm, ln)
+            if res.get("mostrar_desglose") and res.get("lineas"):
+                extra_y = y_block - (len(lineas_res) + 1) * 3.2 * mm
+                for fila in res["lineas"]:
+                    if (fila.get("packs") or 0) <= 0:
+                        continue
+                    p.setFont("Helvetica", 8)
+                    p.drawString(
+                        x + 4 * mm,
+                        extra_y,
+                        f"· {fila['etiqueta']}: {fila['texto_docenas_unidades']}",
+                    )
+                    extra_y -= 3 * mm
+        filas_resumen = (len(resumenes_pdf) + 1) // 2
+        y_content -= filas_resumen * 14 * mm + 4 * mm
+
+    for bloque in bloques:
+        titulo_seccion = bloque["titulo"]
+        subtitulo_seccion = bloque["subtitulo"]
+        cod_mov = bloque["codigo_movimiento"]
+        tipo_bloque = bloque.get("tipo") or "opt"
         mov = mov_cache.get(cod_mov)
         if not mov:
             continue
@@ -1743,17 +1966,11 @@ def _opt_comprobante_pdf(request, id_lista):
         nombre_dep_origen = dep_nombres.get(mov.get("deposito_origen"), "-")
         nombre_dep_destino = dep_nombres.get(mov.get("deposito_destino"), "-")
 
-        if primera_pagina:
-            y_content = draw_report_header(
-                p, empresa, f"Comprobante completo OPT {id_lista}", 210 * mm
-            )
-            primera_pagina = False
+        if y_content < y_min + 30 * mm:
+            draw_report_footer(p)
+            p.showPage()
+            y_content = 210 * mm - 25 * mm
         else:
-            if y_content < y_min:
-                draw_report_footer(p)
-                p.showPage()
-                y_content = 210 * mm - 25 * mm
-            # Separador visual entre secciones
             y_content -= 4 * mm
             p.setStrokeColorRGB(0.75, 0.75, 0.75)
             p.setLineWidth(0.3)
@@ -1794,7 +2011,7 @@ def _opt_comprobante_pdf(request, id_lista):
         else:
             p.setFont("Helvetica", 9)
             p.setFillColorRGB(0.35, 0.35, 0.35)
-            p.drawString(margin, y_content, "Detalle de movimientos (Artículo, Entrada, Salida, Saldo):")
+            p.drawString(margin, y_content, "Detalle de movimientos (artículo, depósito, entrada, salida, saldo):")
             p.setFillColorRGB(0, 0, 0)
             y_content -= 5 * mm
 
@@ -1809,45 +2026,129 @@ def _opt_comprobante_pdf(request, id_lista):
             y_content -= cabecera_altura
             p.setFont("Helvetica-Bold", 10)
             p.drawString(margin + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Artículo / Descripción")
-            p.drawString(margin + col_articulo + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Entrada")
-            p.drawString(margin + col_articulo + col_entrada + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Salida")
-            p.drawString(margin + col_articulo + col_entrada + col_salida + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Saldo")
+            p.drawString(x_col_deposito + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Depósito")
+            p.drawString(x_col_entrada + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Entrada")
+            p.drawString(x_col_salida + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Salida")
+            p.drawString(x_col_saldo + 2 * mm, y_content + (cabecera_altura - 4 * mm), "Saldo")
             p.line(margin, y_content + cabecera_altura, margin, y_content)
-            p.line(margin + col_articulo, y_content + cabecera_altura, margin + col_articulo, y_content)
-            p.line(margin + col_articulo + col_entrada, y_content + cabecera_altura, margin + col_articulo + col_entrada, y_content)
-            p.line(margin + col_articulo + col_entrada + col_salida, y_content + cabecera_altura, margin + col_articulo + col_entrada + col_salida, y_content)
+            p.line(x_col_deposito, y_content + cabecera_altura, x_col_deposito, y_content)
+            p.line(x_col_entrada, y_content + cabecera_altura, x_col_entrada, y_content)
+            p.line(x_col_salida, y_content + cabecera_altura, x_col_salida, y_content)
+            p.line(x_col_saldo, y_content + cabecera_altura, x_col_saldo, y_content)
             p.line(x_fin_tabla, y_content + cabecera_altura, x_fin_tabla, y_content)
-            y_content -= fila_altura
+            y_content -= 2 * mm
 
             p.setFont("Helvetica", 10)
-            for r in renglones[:25]:
-                if y_content < y_min:
+            grupos = build_grupos_articulo_renglones_movimiento(
+                renglones, presentacion_opp_du=(tipo_bloque == "opp")
+            )
+            filas_impresas = 0
+            max_filas = 25
+            total_filas = sum(len(g.get("filas") or []) for g in grupos)
+
+            for grupo in grupos:
+                if filas_impresas >= max_filas:
+                    break
+                plan_filas = []
+                for fila in grupo.get("filas") or []:
+                    if filas_impresas + len(plan_filas) >= max_filas:
+                        break
+                    id_art = to_int_or_none(fila.get("id_articulo"))
+                    try:
+                        entrada_qty = float(fila.get("entrada") or 0)
+                    except (TypeError, ValueError):
+                        entrada_qty = 0.0
+                    try:
+                        salida_qty = float(fila.get("salida") or 0)
+                    except (TypeError, ValueError):
+                        salida_qty = 0.0
+                    saldo_val = fila.get("saldo")
+                    lineas_entrada = (
+                        _lineas_cantidad_celda(tipo_bloque, fila.get("entrada"), id_art)
+                        if entrada_qty > 0
+                        else ["—"]
+                    )
+                    lineas_salida = (
+                        _lineas_cantidad_celda(tipo_bloque, fila.get("salida"), id_art)
+                        if salida_qty > 0
+                        else ["—"]
+                    )
+                    lineas_saldo = (
+                        _lineas_cantidad_celda(tipo_bloque, saldo_val, id_art)
+                        if saldo_val is not None
+                        else ["—"]
+                    )
+                    altura = _pdf_fila_altura_para_lineas(
+                        max(len(lineas_entrada), len(lineas_salida), len(lineas_saldo))
+                    )
+                    plan_filas.append({
+                        "nombre_deposito": str_or_default(fila.get("nombre_deposito"), "—"),
+                        "lineas_entrada": lineas_entrada,
+                        "lineas_salida": lineas_salida,
+                        "lineas_saldo": lineas_saldo,
+                        "altura": altura,
+                    })
+
+                if not plan_filas:
+                    continue
+
+                grupo_altura = sum(f["altura"] for f in plan_filas)
+                if y_content - grupo_altura < y_min:
                     draw_report_footer(p)
                     p.showPage()
                     y_content = 210 * mm - 25 * mm
                     p.setFont("Helvetica", 10)
-                p.line(margin, y_content + fila_altura, x_fin_tabla, y_content + fila_altura)
-                art_desc = f"{r.get('CodigoArticulo') or ''} {str(r.get('Descripcion') or '')[:70]}".strip()
-                if len(art_desc) > 73:
-                    art_desc = art_desc[:70] + "..."
-                p.drawString(margin + 2 * mm, y_content + (fila_altura - 3.5 * mm), art_desc)
-                p.drawString(margin + col_articulo + 2 * mm, y_content + (fila_altura - 3.5 * mm), str(r.get("Entrada") or "0"))
-                p.drawString(margin + col_articulo + col_entrada + 2 * mm, y_content + (fila_altura - 3.5 * mm), str(r.get("Salida") or "0"))
-                saldo_val = r.get("saldo", r.get("Saldo"))
-                saldo_str = str(saldo_val) if saldo_val is not None else "-"
-                p.drawString(margin + col_articulo + col_entrada + col_salida + 2 * mm, y_content + (fila_altura - 3.5 * mm), saldo_str)
-                p.line(margin, y_content + fila_altura, margin, y_content)
-                p.line(margin + col_articulo, y_content + fila_altura, margin + col_articulo, y_content)
-                p.line(margin + col_articulo + col_entrada, y_content + fila_altura, margin + col_articulo + col_entrada, y_content)
-                p.line(margin + col_articulo + col_entrada + col_salida, y_content + fila_altura, margin + col_articulo + col_entrada + col_salida, y_content)
-                p.line(x_fin_tabla, y_content + fila_altura, x_fin_tabla, y_content)
-                y_content -= fila_altura
 
-            p.line(margin, y_content, x_fin_tabla, y_content)
-            if len(renglones) > 25:
+                y_top_grupo = y_content
+                cod_txt = str_or_default(grupo.get("codigo_articulo"), "—")[:28]
+                desc_txt = str_or_default(grupo.get("descripcion"), "—")[:52]
+                p.setFont("Helvetica", 9)
+                p.drawString(margin + 2 * mm, y_top_grupo - 3.5 * mm, cod_txt)
+                p.setFont("Helvetica", 8)
+                p.drawString(margin + 2 * mm, y_top_grupo - 7 * mm, desc_txt)
+                p.setFont("Helvetica", 10)
+
+                for fila_data in plan_filas:
+                    fila_altura = fila_data["altura"]
+                    if y_content - fila_altura < y_min:
+                        draw_report_footer(p)
+                        p.showPage()
+                        y_content = 210 * mm - 25 * mm
+                        p.setFont("Helvetica", 10)
+                        y_top_grupo = y_content
+
+                    p.line(margin, y_content, x_fin_tabla, y_content)
+                    dep_txt = fila_data["nombre_deposito"][:22]
+                    if len(fila_data["nombre_deposito"]) > 22:
+                        dep_txt += "..."
+                    p.setFont("Helvetica", 9)
+                    p.drawString(x_col_deposito + 2 * mm, y_content - 3.5 * mm, dep_txt)
+                    p.setFont("Helvetica", 10)
+                    y_fila = y_content - fila_altura
+                    _pdf_draw_cantidad_lineas(
+                        p, x_col_entrada + 2 * mm, y_fila, fila_altura, fila_data["lineas_entrada"]
+                    )
+                    _pdf_draw_cantidad_lineas(
+                        p, x_col_salida + 2 * mm, y_fila, fila_altura, fila_data["lineas_salida"]
+                    )
+                    _pdf_draw_cantidad_lineas(
+                        p, x_col_saldo + 2 * mm, y_fila, fila_altura, fila_data["lineas_saldo"]
+                    )
+                    p.line(x_col_entrada, y_content, x_col_entrada, y_fila)
+                    p.line(x_col_salida, y_content, x_col_salida, y_fila)
+                    p.line(x_col_saldo, y_content, x_col_saldo, y_fila)
+                    p.line(x_fin_tabla, y_content, x_fin_tabla, y_fila)
+                    y_content = y_fila
+                    filas_impresas += 1
+
+                p.line(margin, y_content, x_fin_tabla, y_content)
+                p.line(margin, y_top_grupo, margin, y_content)
+                p.line(x_col_deposito, y_top_grupo, x_col_deposito, y_content)
+
+            if total_filas > max_filas:
                 y_content -= 4 * mm
                 p.setFont("Helvetica", 9)
-                p.drawString(margin, y_content, f"... y {len(renglones) - 25} renglones más.")
+                p.drawString(margin, y_content, f"... y {total_filas - max_filas} renglones más.")
                 y_content -= 4 * mm
             y_content -= 8 * mm
 
@@ -2672,6 +2973,333 @@ class ReclasificacionView(MprLoginRequiredMixin, TemplateView):
         else:
             messages.error(request, error or "Error al ejecutar reclasificación.")
         return redirect("mpr:reclasificacion")
+
+
+def _parse_lineas_composicion_armado_surtido(request) -> list:
+    """Extrae líneas {id_articulo, cantidad_por_pack} del POST del formulario armado surtido."""
+    ids = request.POST.getlist("comp_id_articulo")
+    cants = request.POST.getlist("comp_cantidad_por_pack")
+    lineas = []
+    for i, id_raw in enumerate(ids):
+        try:
+            id_a = int(str(id_raw).strip())
+        except (TypeError, ValueError):
+            continue
+        try:
+            qty = int(str(cants[i] if i < len(cants) else "0").strip())
+        except (TypeError, ValueError):
+            qty = 0
+        if id_a and qty > 0:
+            lineas.append({"id_articulo": id_a, "cantidad_por_pack": qty})
+    return lineas
+
+
+def _fallidos_para_carrito_armado_surtido(fallidos: list) -> list:
+    """Ítems fallidos listos para rehidratar el carrito Alpine (Fase 5)."""
+    resultado = []
+    for item in fallidos or []:
+        lineas = []
+        for ln in item.get("lineas") or []:
+            lineas.append({
+                "id_articulo": ln.get("id_articulo"),
+                "cantidad_por_pack": ln.get("cantidad_por_pack"),
+            })
+        resultado.append({
+            "id_articulo_pack": item.get("id_articulo_pack"),
+            "cantidad_packs": item.get("cantidad_packs"),
+            "lineas": lineas,
+        })
+    return resultado
+
+
+def _resolver_post_armado_surtido(request):
+    """
+    Cabecera + armados desde POST.
+    Prioriza lote_json; si no viene, arma un lote de un ítem (formulario single-pack MVP).
+    Devuelve (cabecera, armados, error).
+    """
+    raw_lote = (request.POST.get("lote_json") or "").strip()
+    if raw_lote:
+        return parse_lote_armado_surtido_post(request)
+
+    cabecera = parse_cabecera_lote_armado_surtido(request.POST)
+    lineas = _parse_lineas_composicion_armado_surtido(request)
+    try:
+        id_articulo_pack = int(str(request.POST.get("id_articulo_pack", "")).strip())
+    except (TypeError, ValueError):
+        id_articulo_pack = None
+    try:
+        cantidad_packs = int(str(request.POST.get("cantidad_packs", "")).strip())
+    except (TypeError, ValueError):
+        cantidad_packs = 0
+    item_raw = {
+        "id_articulo_pack": id_articulo_pack,
+        "cantidad_packs": cantidad_packs,
+        "lineas": lineas,
+    }
+    item, err_item = normalizar_item_lote_armado_surtido(item_raw)
+    if err_item or not item:
+        return cabecera, None, err_item or "Agregue al menos un armado al lote."
+    return cabecera, [item], None
+
+
+def _redirect_armado_surtido(id_lista=None):
+    q = f"?id_lista={id_lista}" if id_lista else ""
+    return redirect(f"{reverse('mpr:armado_surtido')}{q}")
+
+
+class ArmadoSurtidoStockOrigenAPIView(MprLoginRequiredMixin, View):
+    """API: artículos con saldo > 0 en depósito origen. GET ?deposito=&q="""
+
+    def get(self, request, *args, **kwargs):
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"articulos": []})
+        try:
+            deposito = int((request.GET.get("deposito") or "").strip())
+        except (TypeError, ValueError):
+            return JsonResponse({"articulos": [], "error": "Depósito inválido."})
+        q = (request.GET.get("q") or "").strip() or None
+        try:
+            articulos = listar_articulos_stock_deposito(base_empresa, deposito, busqueda=q, limit=50)
+            return JsonResponse({"articulos": articulos})
+        except Exception as e:
+            logger.warning("API stock origen armado surtido: %s", e, exc_info=True)
+            return JsonResponse({"articulos": []})
+
+
+class ArmadoSurtidoValidarItemLoteAPIView(MprLoginRequiredMixin, View):
+    """
+    GET: valida ítem candidato contra lote actual (reglas + stock agregado en origen).
+    Query: deposito, lote_json (URL-encoded), item_json (URL-encoded).
+    """
+
+    def get(self, request, *args, **kwargs):
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"ok": False, "error": "Empresa no indicada.", "conflictos": []})
+        try:
+            deposito = int((request.GET.get("deposito") or "").strip())
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "Depósito inválido.", "conflictos": []})
+        raw_item = (request.GET.get("item_json") or "").strip()
+        if not raw_item:
+            return JsonResponse({"ok": False, "error": "Ítem candidato requerido.", "conflictos": []})
+        raw_lote = (request.GET.get("lote_json") or "").strip()
+        try:
+            item_data = json.loads(raw_item)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return JsonResponse({"ok": False, "error": "El ítem candidato no tiene un JSON válido.", "conflictos": []})
+        armados: list = []
+        if raw_lote:
+            try:
+                lote_data = json.loads(raw_lote)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return JsonResponse({"ok": False, "error": "El lote enviado no tiene un JSON válido.", "conflictos": []})
+            if isinstance(lote_data, list):
+                lote_payload = {"armados": lote_data}
+            elif isinstance(lote_data, dict):
+                lote_payload = lote_data
+            else:
+                return JsonResponse({"ok": False, "error": "Formato de lote inválido.", "conflictos": []})
+            armados, err_lote = normalizar_armados_lote_json(lote_payload)
+            if err_lote:
+                return JsonResponse({"ok": False, "error": err_lote, "conflictos": []})
+        item, err_item = normalizar_item_lote_armado_surtido(item_data)
+        if err_item or not item:
+            return JsonResponse({"ok": False, "error": err_item or "Ítem inválido.", "conflictos": []})
+        ok_reg, err_reg = validar_reglas_item_candidato_lote(armados or [], item)
+        if not ok_reg:
+            return JsonResponse({"ok": False, "error": err_reg, "conflictos": []})
+        try:
+            ok_stock, conflictos = validar_stock_agregado_lote(
+                base_empresa,
+                deposito,
+                armados or [],
+                item_extra=item,
+            )
+        except MprSchemaError as e:
+            _log_mpr_schema_error(e)
+            return JsonResponse({"ok": False, "error": str(e), "conflictos": []})
+        except Exception as e:
+            logger.warning("API validar-item-lote armado surtido: %s", e, exc_info=True)
+            return JsonResponse({"ok": False, "error": "Error al validar stock del lote.", "conflictos": []})
+        return JsonResponse({"ok": bool(ok_stock), "conflictos": conflictos if not ok_stock else []})
+
+
+class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
+    """Armado surtido: composición libre desde 2.ª selección (u otro origen) hacia Terminado."""
+
+    template_name = "mpr/armado_surtido.html"
+
+    def get(self, request, *args, **kwargs):
+        from django.contrib import messages
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("core:dashboard")
+        id_lista = to_int_or_none(request.GET.get("id_lista"))
+        if id_lista:
+            ok, msg = opt_puede_armado_surtido(base_empresa, id_lista)
+            if not ok:
+                messages.error(request, msg)
+                return redirect("mpr:opt_detail", id_lista=id_lista)
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        from django.contrib import messages
+
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        context["base_empresa"] = base_empresa
+        id_lista = to_int_or_none(self.request.GET.get("id_lista"))
+        context["id_lista"] = id_lista
+        context["packs_habilitados"] = listar_packs_armado_surtido(base_empresa)
+        if not context["packs_habilitados"]:
+            messages.info(
+                self.request,
+                f"No hay artículos con tipo_art_fab «{TIPO_ART_FAB_PACK_ARMADO_SURTIDO}» "
+                "para armado surtido.",
+            )
+        context["depositos"] = get_depositos_con_suma_stock(
+            base_empresa, _get_id_puesto(self.request)
+        )
+        dep_origen_def = get_deposito_2da_seleccion_mpr(base_empresa)
+        dep_dest_def = get_deposito_terminado_mpr(base_empresa)
+        context["deposito_origen_default"] = dep_origen_def
+        context["deposito_destino_default"] = dep_dest_def
+        context["empleados"] = listar_empleados_operarios(base_empresa, limit=200)
+        context["stock_api_url"] = reverse("mpr:api_armado_surtido_stock")
+        context["validar_item_lote_api_url"] = reverse("mpr:api_armado_surtido_validar_item_lote")
+        if id_lista:
+            try:
+                opt = get_opt_detalle(base_empresa, id_lista)
+                context["opt_numero"] = opt.get("numero") if opt else str(id_lista)
+            except Exception:
+                context["opt_numero"] = str(id_lista)
+        bultos = bulk_cantidad_promedio_bulto(
+            base_empresa,
+            [p["id_articulo"] for p in context["packs_habilitados"] if p.get("id_articulo")],
+        )
+        context["packs_bulto_json"] = json.dumps(
+            {str(k): v for k, v in bultos.items()}
+        )
+        context["packs_catalog_json"] = json.dumps([
+            {
+                "id_articulo": p.get("id_articulo"),
+                "codigo_articulo": p.get("codigo_articulo", ""),
+                "descripcion_articulo": p.get("descripcion_articulo", ""),
+            }
+            for p in context["packs_habilitados"]
+            if p.get("id_articulo")
+        ])
+        context["depositos_catalog_json"] = json.dumps([
+            {
+                "cod_deposito": d.get("CodDeposito"),
+                "nombre_deposito": str_or_default(
+                    d.get("NombreDeposito"), str(d.get("CodDeposito", ""))
+                ),
+            }
+            for d in context["depositos"]
+            if d.get("CodDeposito") is not None
+        ])
+        context["operarios_catalog_json"] = json.dumps(context["empleados"])
+        context["lote_max_items"] = LOTE_ARMADO_SURTIDO_MAX_ITEMS
+        resultado_lote = self.request.session.pop("armado_surtido_resultado_lote", None)
+        lote_fallidos = self.request.session.pop("armado_surtido_lote_fallidos", None)
+        context["resultado_lote_json"] = json.dumps(resultado_lote) if resultado_lote else "null"
+        context["lote_fallidos_json"] = json.dumps(lote_fallidos) if lote_fallidos else "null"
+        context["mostrar_modal_resultado_lote"] = bool(resultado_lote)
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return _redirect_armado_surtido()
+        session_user = request.session.get("user", {})
+        try:
+            id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else None
+        except (TypeError, ValueError):
+            id_usuario = None
+        if not id_usuario:
+            messages.error(request, "Usuario no identificado en sesión.")
+            return _redirect_armado_surtido()
+
+        cabecera, armados, err_parse = _resolver_post_armado_surtido(request)
+        id_lista = cabecera.get("id_lista_produccion") or to_int_or_none(
+            request.POST.get("id_lista") or request.GET.get("id_lista")
+        )
+        if err_parse:
+            messages.error(request, err_parse)
+            return _redirect_armado_surtido(id_lista)
+
+        if id_lista:
+            ok_opt, msg_opt = opt_puede_armado_surtido(base_empresa, id_lista)
+            if not ok_opt:
+                messages.error(request, msg_opt)
+                return redirect("mpr:opt_detail", id_lista=id_lista)
+
+        ok_reg, err_reg = validar_reglas_lote_armado_surtido(
+            armados,
+            deposito_origen=cabecera.get("deposito_origen"),
+            deposito_destino=cabecera.get("deposito_destino"),
+            id_operario=cabecera.get("id_operario"),
+            require_non_empty=True,
+        )
+        if not ok_reg:
+            messages.error(request, err_reg)
+            return _redirect_armado_surtido(id_lista)
+
+        try:
+            resultado = ejecutar_lote_armado_surtido(
+                base_empresa,
+                id_usuario,
+                cabecera,
+                armados,
+            )
+        except MprSchemaError as e:
+            _log_mpr_schema_error(e)
+            messages.error(request, str(e))
+            return _redirect_armado_surtido(id_lista)
+
+        exitosos = resultado.get("exitosos") or []
+        fallidos = resultado.get("fallidos") or []
+        n_ok = len(exitosos)
+        n_fail = len(fallidos)
+
+        if n_ok or n_fail:
+            request.session["armado_surtido_resultado_lote"] = resultado
+            request.session["armado_surtido_lote_fallidos"] = _fallidos_para_carrito_armado_surtido(fallidos)
+
+        if n_ok and not n_fail:
+            if n_ok == 1:
+                ex = exitosos[0]
+                messages.success(
+                    request,
+                    f"Armado surtido registrado. Comprobante {ex.get('nro_comprobante')} "
+                    f"(código {ex.get('codigo_movimiento')}). Puede armar otro pack.",
+                )
+            else:
+                messages.success(
+                    request,
+                    f"Se grabaron {n_ok} armados surtido correctamente.",
+                )
+        elif n_ok and n_fail:
+            messages.warning(
+                request,
+                f"Se grabaron {n_ok} armado(s); {n_fail} no se pudieron grabar. Revise el detalle en el modal.",
+            )
+        else:
+            messages.error(
+                request,
+                f"No se pudo grabar ningún armado ({n_fail} con error). Revise el detalle en el modal.",
+            )
+
+        return _redirect_armado_surtido(id_lista)
 
 
 class ReportesMPRView(MprLoginRequiredMixin, TemplateView):

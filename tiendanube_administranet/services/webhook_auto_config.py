@@ -67,11 +67,17 @@ class WebhookAutoConfig:
             'order/updated',
             'order/fulfilled',
             'order/cancelled',
-            
             # Eventos de productos
             'product/created',
             'product/updated',
             'product/deleted',
+            # Eventos de clientes
+            'customer/created',
+            'customer/updated',
+            # LGPD / compliance (obligatorios partner portal)
+            'store/redact',
+            'customers/redact',
+            'customers/data_request',
         ]
     
     def configure_all_webhooks(self) -> Dict[str, Any]:
@@ -168,9 +174,8 @@ class WebhookAutoConfig:
             Dict con resultado de la creación
         """
         try:
-                # Un endpoint HTTPS común; el tipo de evento va en el cuerpo POST de Tienda Nube
-                webhook_url = f"{base_url.rstrip('/')}/tiendanube_administranet/webhook/"
-            
+            webhook_url = f"{base_url.rstrip('/')}/tiendanube_administranet/webhook/"
+
             payload = {
                 'event': event,
                 'url': webhook_url

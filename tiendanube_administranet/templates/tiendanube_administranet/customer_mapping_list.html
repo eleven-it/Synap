@@ -34,21 +34,39 @@
 </div>
 
 <!-- Search Section -->
-<div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white mb-8">
+<div class="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white mb-4">
     <form method="get" class="flex items-center space-x-4">
         <div class="flex-1">
             <input type="text" name="search" value="{{ search }}" 
                    class="w-full px-4 py-3 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-white/20"
                    placeholder="{% trans 'Search customers...' %}">
         </div>
+        <input type="hidden" name="link" value="{{ link }}">
         <button type="submit" class="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors duration-200">
             <span class="material-icons">search</span>
         </button>
     </form>
 </div>
 
+<!-- Filtro vínculo -->
+<div class="flex flex-wrap gap-2 mb-8">
+    <a href="?link=all{% if search %}&search={{ search }}{% endif %}"
+       class="px-4 py-2 rounded-lg text-sm {% if link == 'all' %}bg-orange-500 text-white{% else %}bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300{% endif %}">
+        {% trans "Todos" %} ({{ stats.total }})
+    </a>
+    <a href="?link=complete{% if search %}&search={{ search }}{% endif %}"
+       class="px-4 py-2 rounded-lg text-sm {% if link == 'complete' %}bg-green-600 text-white{% else %}bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300{% endif %}">
+        {% trans "Vínculo completo" %}
+    </a>
+    <a href="?link=incomplete{% if search %}&search={{ search }}{% endif %}"
+       class="px-4 py-2 rounded-lg text-sm {% if link == 'incomplete' %}bg-yellow-600 text-white{% else %}bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300{% endif %}">
+        {% trans "Incompletos" %} ({{ stats.incomplete }})
+    </a>
+</div>
+
 <!-- Statistics -->
 <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    {% csrf_token %}
     <div class="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 text-center">
         <div class="text-3xl font-bold text-blue-600 mb-2">{{ stats.total }}</div>
         <div class="text-sm text-gray-600 dark:text-gray-400">{% trans "Total Customers" %}</div>
@@ -69,11 +87,14 @@
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{% trans "Customer List" %}</h3>
     </div>
     
-    {% if page_obj %}
+    {% if customers %}
     <div class="overflow-x-auto">
         <table class="w-full">
             <thead class="bg-gray-50 dark:bg-gray-700">
                 <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        {% trans "Link" %}
+                    </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         {% trans "Customer" %}
                     </th>
@@ -101,16 +122,23 @@
                 </tr>
             </thead>
             <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {% for customer in page_obj %}
+                {% for customer in customers %}
                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        {% if customer.is_fully_linked %}
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">{% trans "Complete" %}</span>
+                        {% else %}
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">{% trans "Incomplete" %}</span>
+                        {% endif %}
+                    </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <div class="flex items-center">
                             <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm mr-3">
-                                {{ customer.tiendanube_first_name|first|upper|default:customer.tiendanube_email|first|upper|default:"C" }}
+                                {{ customer.display_name|first|upper|default:"C" }}
                             </div>
                             <div>
                                 <div class="text-sm font-medium text-gray-900 dark:text-white">
-                                    {{ customer.tiendanube_first_name|default:"" }} {{ customer.tiendanube_last_name|default:"" }}{% if not customer.tiendanube_first_name %}N/A{% endif %}
+                                    {{ customer.display_name }}
                                 </div>
                                 <div class="text-sm text-gray-500 dark:text-gray-400">
                                     {{ customer.tiendanube_phone|default:"No phone" }}
@@ -180,6 +208,12 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div class="flex items-center justify-end space-x-2">
+                            <button type="button"
+                                    class="text-orange-600 hover:text-orange-900 dark:text-orange-400 sync-now-btn"
+                                    data-sync-url="{% url 'tiendanube_administranet:sync_mapping_ajax' customer.id %}"
+                                    title="{% trans 'Sync now' %}">
+                                <span class="material-icons text-sm">sync</span>
+                            </button>
                             <a href="{% url 'tiendanube_administranet:customer_mapping_detail' customer.id %}" 
                                class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
                                title="{% trans 'View Details' %}">
@@ -213,11 +247,11 @@
             </div>
             <div class="flex items-center space-x-2">
                 {% if page_obj.has_previous %}
-                    <a href="?page=1{% if search %}&search={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if verified %}&verified={{ verified }}{% endif %}" 
+                    <a href="?page=1{% if link %}&link={{ link }}{% endif %}{% if search %}&search={{ search|urlencode }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sync_enabled %}&sync_enabled={{ sync_enabled }}{% endif %}"
                        class="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
                         {% trans "First" %}
                     </a>
-                    <a href="?page={{ page_obj.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if verified %}&verified={{ verified }}{% endif %}" 
+                    <a href="?page={{ page_obj.previous_page_number }}{% if link %}&link={{ link }}{% endif %}{% if search %}&search={{ search|urlencode }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sync_enabled %}&sync_enabled={{ sync_enabled }}{% endif %}"
                        class="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
                         {% trans "Previous" %}
                     </a>
@@ -228,11 +262,11 @@
                 </span>
                 
                 {% if page_obj.has_next %}
-                    <a href="?page={{ page_obj.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if verified %}&verified={{ verified }}{% endif %}" 
+                    <a href="?page={{ page_obj.next_page_number }}{% if link %}&link={{ link }}{% endif %}{% if search %}&search={{ search|urlencode }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sync_enabled %}&sync_enabled={{ sync_enabled }}{% endif %}"
                        class="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
                         {% trans "Next" %}
                     </a>
-                    <a href="?page={{ page_obj.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if verified %}&verified={{ verified }}{% endif %}" 
+                    <a href="?page={{ page_obj.paginator.num_pages }}{% if link %}&link={{ link }}{% endif %}{% if search %}&search={{ search|urlencode }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if sync_enabled %}&sync_enabled={{ sync_enabled }}{% endif %}"
                        class="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors duration-200">
                         {% trans "Last" %}
                     </a>
@@ -257,5 +291,47 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+window.showMappingToast = window.showMappingToast || function(message, type) {
+    const colors = { success: 'bg-green-600', error: 'bg-red-600', warning: 'bg-yellow-600' };
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-20 right-6 z-[60] ' + (colors[type] || colors.success) + ' text-white rounded-xl shadow-lg px-4 py-3 text-sm max-w-sm';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 4000);
+};
+
+document.querySelectorAll('.sync-now-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        const url = this.dataset.syncUrl;
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+            || '{{ csrf_token }}';
+        btn.disabled = true;
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrf,
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'force=1',
+        })
+        .then(r => r.json())
+        .then(data => {
+            const msg = data.message || data.error || (data.success ? '{% trans "Sincronización completada" %}' : '{% trans "Error de sincronización" %}');
+            showMappingToast(msg, data.success ? 'success' : 'error');
+            if (data.success) window.location.reload();
+        })
+        .catch(function() {
+            showMappingToast('{% trans "Error de sincronización" %}', 'error');
+        })
+        .finally(function() { btn.disabled = false; });
+    });
+});
+</script>
 
 {% endblock %} 

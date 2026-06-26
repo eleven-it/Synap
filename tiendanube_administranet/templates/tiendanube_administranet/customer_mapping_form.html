@@ -48,7 +48,27 @@
 </div>
 
 <div class="max-w-6xl mx-auto">
-    <form method="post" class="space-y-8">
+    {% if form.non_field_errors %}
+    <div class="mb-6 rounded-xl border border-red-300 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3">
+        <ul class="list-disc list-inside text-sm text-red-800 dark:text-red-200 space-y-1">
+            {% for error in form.non_field_errors %}
+            <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if messages %}
+    <div class="mb-6 space-y-2">
+        {% for message in messages %}
+        <div class="rounded-xl px-4 py-3 text-sm {% if message.tags == 'error' %}bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/20 dark:text-red-200{% elif message.tags == 'warning' %}bg-yellow-50 text-yellow-900 border border-yellow-200 dark:bg-yellow-900/20{% else %}bg-green-50 text-green-800 border border-green-200 dark:bg-green-900/20{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-8" id="customer-mapping-form">
         {% csrf_token %}
         
         <!-- Basic Information Section -->
@@ -63,15 +83,110 @@
                 </p>
             </div>
             
-            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    {{ form.tiendanube_id|as_crispy_field }}
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6" x-data="customerMappingLookup()">
+                <p class="md:col-span-2 text-sm text-gray-600 dark:text-gray-400">
+                    {% trans "Los IDs los genera cada sistema. Use Consultar (por número) o Buscar (por email, nombre o documento) antes de guardar." %}
+                </p>
+
+                <!-- Tienda Nube -->
+                <div class="space-y-3">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="id_tiendanube_id">
+                        {% trans "Tiendanube ID" %}
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="number" name="tiendanube_id" id="id_tiendanube_id" min="1"
+                               class="form-control flex-1 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"
+                               x-model="tnId"
+                               value="{{ form.tiendanube_id.value|default:'' }}">
+                        <button type="button" @click="lookupTiendanube()"
+                                class="px-3 py-2 text-sm bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg whitespace-nowrap">
+                            {% trans "Consultar" %}
+                        </button>
+                        <button type="button" @click="openSearch('tiendanube')"
+                                class="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg whitespace-nowrap">
+                            {% trans "Buscar" %}
+                        </button>
+                    </div>
+                    {% if form.tiendanube_id.errors %}
+                    <p class="text-sm text-red-600">{{ form.tiendanube_id.errors.0 }}</p>
+                    {% endif %}
+                    <div x-show="previewTn" x-cloak class="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 text-sm">
+                        <p class="font-medium text-blue-900 dark:text-blue-100" x-text="previewTn?.name"></p>
+                        <p class="text-blue-800 dark:text-blue-200" x-text="'ID: ' + (previewTn?.id || '-')"></p>
+                        <p class="text-blue-700 dark:text-blue-300" x-text="previewTn?.email"></p>
+                        <p class="text-blue-600 dark:text-blue-400 text-xs" x-text="previewTn?.document + ' · ' + previewTn?.phone"></p>
+                    </div>
                 </div>
-                <div>
-                    {{ form.adminet_codigo|as_crispy_field }}
+
+                <!-- AdministraNET -->
+                <div class="space-y-3">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="id_adminet_codigo">
+                        {% trans "AdministraNET Code" %}
+                    </label>
+                    <div class="flex gap-2">
+                        <input type="number" name="adminet_codigo" id="id_adminet_codigo" min="1"
+                               class="form-control flex-1 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700"
+                               x-model="adminetCode"
+                               value="{{ form.adminet_codigo.value|default:'' }}">
+                        <button type="button" @click="lookupAdminet()"
+                                class="px-3 py-2 text-sm bg-green-100 hover:bg-green-200 text-green-800 rounded-lg whitespace-nowrap">
+                            {% trans "Consultar" %}
+                        </button>
+                        <button type="button" @click="openSearch('adminet')"
+                                class="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg whitespace-nowrap">
+                            {% trans "Buscar" %}
+                        </button>
+                    </div>
+                    {% if form.adminet_codigo.errors %}
+                    <p class="text-sm text-red-600">{{ form.adminet_codigo.errors.0 }}</p>
+                    {% endif %}
+                    <div x-show="previewAdminet" x-cloak class="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 p-3 text-sm">
+                        <p class="font-medium text-green-900 dark:text-green-100" x-text="previewAdminet?.name"></p>
+                        <p class="text-green-800 dark:text-green-200" x-text="'{% trans "Código" %}: ' + (previewAdminet?.id || '-')"></p>
+                        <p class="text-green-700 dark:text-green-300" x-text="previewAdminet?.email"></p>
+                        <p class="text-green-600 dark:text-green-400 text-xs" x-text="previewAdminet?.document + ' · ' + previewAdminet?.phone"></p>
+                    </div>
                 </div>
+
                 <div class="md:col-span-2">
                     {{ form.sync_direction|as_crispy_field }}
+                </div>
+
+                <!-- Modal búsqueda -->
+                <div x-show="searchOpen" x-cloak
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                     @keydown.escape.window="searchOpen = false">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col"
+                         @click.outside="searchOpen = false">
+                        <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                            <h4 class="font-semibold text-gray-900 dark:text-white"
+                                x-text="searchSource === 'tiendanube' ? '{% trans "Buscar en Tienda Nube" %}' : '{% trans "Buscar en AdministraNET" %}'"></h4>
+                            <div class="flex gap-2 mt-3">
+                                <input type="text" x-model="searchQuery" @keydown.enter.prevent="runSearch()"
+                                       class="flex-1 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm"
+                                       placeholder="{% trans 'Email, nombre o documento...' %}">
+                                <button type="button" @click="runSearch()"
+                                        class="px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">{% trans "Buscar" %}</button>
+                            </div>
+                        </div>
+                        <div class="overflow-y-auto flex-1 p-2">
+                            <p x-show="searchLoading" class="text-sm text-gray-500 p-4 text-center">{% trans "Buscando..." %}</p>
+                            <p x-show="searchError" class="text-sm text-red-600 p-4" x-text="searchError"></p>
+                            <template x-for="row in searchResults" :key="row.id">
+                                <button type="button" @click="selectCustomer(row)"
+                                        class="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg border-b border-gray-100 dark:border-gray-700">
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="row.name"></span>
+                                    <span class="block text-xs text-gray-500" x-text="'ID ' + row.id + ' · ' + row.email"></span>
+                                </button>
+                            </template>
+                            <p x-show="!searchLoading && searchResults.length === 0 && searchQuery && !searchError"
+                               class="text-sm text-gray-500 p-4 text-center">{% trans "Sin resultados" %}</p>
+                        </div>
+                        <div class="p-3 border-t border-gray-200 dark:border-gray-700 text-right">
+                            <button type="button" @click="searchOpen = false"
+                                    class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">{% trans "Cerrar" %}</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -223,6 +338,11 @@
                 <span class="material-icons text-sm mr-2">cancel</span>
                 {% trans "Cancel" %}
             </a>
+            <button type="submit" name="save_and_sync" value="1"
+                    class="inline-flex items-center px-6 py-3 border border-orange-300 rounded-lg shadow-sm text-sm font-medium text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500">
+                <span class="material-icons text-sm mr-2">sync</span>
+                {% trans "Save and sync now" %}
+            </button>
             <button type="submit" 
                     class="inline-flex items-center px-6 py-3 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 transform hover:scale-105">
                 <span class="material-icons text-sm mr-2">{% if object %}edit{% else %}add{% endif %}</span>
@@ -234,61 +354,145 @@
 
 <!-- JavaScript for enhanced UX -->
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Auto-save functionality
-    const form = document.querySelector('form');
-    const formData = new FormData(form);
-    
-    // Save form state to localStorage
-    function saveFormState() {
-        const formElements = form.querySelectorAll('input, select, textarea');
-        const formState = {};
-        
-        formElements.forEach(element => {
-            if (element.name) {
-                formState[element.name] = element.value;
+function customerMappingLookup() {
+    const lookupTnBase = '{% url "tiendanube_administranet:lookup_tiendanube_customer_ajax" customer_id=0 %}'.replace('/0/', '/');
+    const lookupAdminetBase = '{% url "tiendanube_administranet:lookup_adminet_customer_ajax" customer_code=0 %}'.replace('/0/', '/');
+    const searchTnUrl = '{% url "tiendanube_administranet:search_customers_ajax" %}';
+    const searchAdminetUrl = '{% url "tiendanube_administranet:search_adminet_customers_ajax" %}';
+
+    return {
+        tnId: document.getElementById('id_tiendanube_id')?.value || '',
+        adminetCode: document.getElementById('id_adminet_codigo')?.value || '',
+        previewTn: null,
+        previewAdminet: null,
+        searchOpen: false,
+        searchSource: 'tiendanube',
+        searchQuery: '',
+        searchResults: [],
+        searchLoading: false,
+        searchError: '',
+
+        toast(msg, type) {
+            if (typeof window.showMappingToast === 'function') {
+                window.showMappingToast(msg, type);
+            } else {
+                alert(msg);
             }
-        });
-        
-        localStorage.setItem('customerMappingFormState', JSON.stringify(formState));
-    }
-    
-    // Restore form state from localStorage
-    function restoreFormState() {
-        const savedState = localStorage.getItem('customerMappingFormState');
-        if (savedState) {
-            const formState = JSON.parse(savedState);
-            const formElements = form.querySelectorAll('input, select, textarea');
-            
-            formElements.forEach(element => {
-                if (element.name && formState[element.name] !== undefined) {
-                    element.value = formState[element.name];
+        },
+
+        async lookupTiendanube() {
+            const id = String(this.tnId || '').trim();
+            if (!id) {
+                this.toast('{% trans "Ingrese un ID de Tienda Nube" %}', 'warning');
+                return;
+            }
+            try {
+                const r = await fetch(lookupTnBase + id + '/');
+                const data = await r.json();
+                if (data.success) {
+                    this.previewTn = data.customer;
+                    this.tnId = data.customer.id;
+                } else {
+                    this.previewTn = null;
+                    this.toast(data.message || '{% trans "Cliente no encontrado" %}', 'error');
                 }
-            });
-        }
-    }
-    
-    // Auto-save every 30 seconds
-    setInterval(saveFormState, 30000);
-    
-    // Restore state on page load
-    restoreFormState();
-    
-    // Clear saved state on successful submit
+            } catch (e) {
+                this.toast('{% trans "Error de conexión" %}', 'error');
+            }
+        },
+
+        async lookupAdminet() {
+            const id = String(this.adminetCode || '').trim();
+            if (!id) {
+                this.toast('{% trans "Ingrese un código AdministraNET" %}', 'warning');
+                return;
+            }
+            try {
+                const r = await fetch(lookupAdminetBase + id + '/');
+                const data = await r.json();
+                if (data.success) {
+                    this.previewAdminet = data.customer;
+                    this.adminetCode = data.customer.id;
+                } else {
+                    this.previewAdminet = null;
+                    this.toast(data.message || '{% trans "Cliente no encontrado" %}', 'error');
+                }
+            } catch (e) {
+                this.toast('{% trans "Error de conexión" %}', 'error');
+            }
+        },
+
+        openSearch(source) {
+            this.searchSource = source;
+            this.searchOpen = true;
+            this.searchQuery = '';
+            this.searchResults = [];
+            this.searchError = '';
+        },
+
+        async runSearch() {
+            const q = this.searchQuery.trim();
+            if (q.length < 2) {
+                this.toast('{% trans "Ingrese al menos 2 caracteres" %}', 'warning');
+                return;
+            }
+            this.searchLoading = true;
+            this.searchError = '';
+            const url = (this.searchSource === 'tiendanube' ? searchTnUrl : searchAdminetUrl) + '?q=' + encodeURIComponent(q);
+            try {
+                const r = await fetch(url);
+                const data = await r.json();
+                if (data.success) {
+                    this.searchResults = data.customers || [];
+                } else {
+                    this.searchResults = [];
+                    this.searchError = data.message || '{% trans "Error en la búsqueda" %}';
+                }
+            } catch (e) {
+                this.searchError = '{% trans "Error de conexión" %}';
+            } finally {
+                this.searchLoading = false;
+            }
+        },
+
+        selectCustomer(row) {
+            if (this.searchSource === 'tiendanube') {
+                this.tnId = row.id;
+                this.previewTn = row;
+                document.getElementById('id_tiendanube_id').value = row.id;
+            } else {
+                this.adminetCode = row.id;
+                this.previewAdminet = row;
+                document.getElementById('id_adminet_codigo').value = row.id;
+            }
+            this.searchOpen = false;
+        },
+    };
+}
+
+window.showMappingToast = function(message, type) {
+    const colors = {
+        success: 'bg-green-600',
+        error: 'bg-red-600',
+        warning: 'bg-yellow-600',
+    };
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-20 right-6 z-[60] ' + (colors[type] || colors.success) + ' text-white rounded-xl shadow-lg px-4 py-3 text-sm max-w-sm';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(function() {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 4000);
+};
+
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('customer-mapping-form');
+    if (!form) return;
+
     form.addEventListener('submit', function() {
         localStorage.removeItem('customerMappingFormState');
-    });
-    
-    // Enhanced field validation
-    const requiredFields = form.querySelectorAll('[required]');
-    requiredFields.forEach(field => {
-        field.addEventListener('blur', function() {
-            if (!this.value.trim()) {
-                this.classList.add('border-red-500', 'focus:border-red-500', 'focus:ring-red-500');
-            } else {
-                this.classList.remove('border-red-500', 'focus:border-red-500', 'focus:ring-red-500');
-            }
-        });
     });
 });
 </script>
@@ -296,6 +500,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block extra_css %}
 <style>
+    [x-cloak] { display: none !important; }
     .form-input, .form-select, .form-textarea {
         @apply text-xs;
     }

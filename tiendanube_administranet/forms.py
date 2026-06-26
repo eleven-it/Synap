@@ -7,11 +7,14 @@ from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 from django.conf import settings
 
+from .services.tiendanube_service import NUVEMSHOP_API_VERSION
 from .models import (
     TiendanubeConfig, AdministraNETConfig, CustomerMapping,
     ProductMapping, ProductVariantMapping, ProductCategoryMapping,
     OrderMapping, WebhookConfig
 )
+
+DEFAULT_TIENDANUBE_API_URL = f'https://api.tiendanube.com/{NUVEMSHOP_API_VERSION}'
 
 
 class TiendanubeConfigForm(forms.ModelForm):
@@ -41,7 +44,7 @@ class TiendanubeConfigForm(forms.ModelForm):
             }),
             'api_url': forms.URLInput(attrs={
                 'class': 'form-control',
-                'placeholder': 'https://api.tiendanube.com/v1'
+                'placeholder': DEFAULT_TIENDANUBE_API_URL
             }),
             'is_active': forms.CheckboxInput(attrs={
                 'class': 'form-check-input'
@@ -569,14 +572,47 @@ class CustomerMappingForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        self._request = kwargs.pop('request', None)
         super().__init__(*args, **kwargs)
-        
-        # Hacer algunos campos de solo lectura
+
+        is_create = not self.instance.pk
+        if is_create:
+            self.initial.setdefault('sync_enabled', False)
+            self.initial.setdefault(
+                'sync_direction',
+                CustomerMapping.SyncDirection.TIENDANUBE_TO_ADMINET,
+            )
+            self.initial.setdefault('tiendanube_total_spent', 0)
+            self.initial.setdefault('tiendanube_orders_count', 0)
+            for name, field in self.fields.items():
+                if name.startswith('tiendanube_') or name.startswith('adminet_'):
+                    if name not in ('tiendanube_id', 'adminet_codigo'):
+                        field.required = False
+            if 'tiendanube_id' in self.fields:
+                self.fields['tiendanube_id'].required = False
+            if 'adminet_codigo' in self.fields:
+                self.fields['adminet_codigo'].required = False
+
+        if 'tiendanube_id' in self.fields:
+            self.fields['tiendanube_id'].widget.attrs.update({
+                'id': 'id_tiendanube_id',
+                'data-customer-lookup': 'tiendanube',
+                'placeholder': _('Consulte o busque en Tienda Nube'),
+            })
+        if 'adminet_codigo' in self.fields:
+            self.fields['adminet_codigo'].widget.attrs.update({
+                'id': 'id_adminet_codigo',
+                'data-customer-lookup': 'adminet',
+                'placeholder': _('Consulte o busque en AdministraNET'),
+            })
+
         readonly_fields = [
-            'tiendanube_id', 'tiendanube_created_at', 'tiendanube_updated_at',
+            'tiendanube_created_at', 'tiendanube_updated_at',
             'tiendanube_total_spent', 'tiendanube_orders_count', 'tiendanube_last_order_id',
-            'tiendanube_verified_email', 'tiendanube_multipass_identifier'
+            'tiendanube_verified_email', 'tiendanube_multipass_identifier',
         ]
+        if not is_create:
+            readonly_fields.append('tiendanube_id')
         
         for field_name in readonly_fields:
             if field_name in self.fields:
@@ -616,19 +652,78 @@ class CustomerMappingForm(forms.ModelForm):
         return exemptions
     
     def clean(self):
-        """Validación cruzada de campos."""
+        """Validación cruzada: consulta IDs en origen y valida vínculo."""
         cleaned_data = super().clean()
-        
-        # Validar que al menos uno de name o first_name+last_name esté presente
-        name = cleaned_data.get('tiendanube_name')
-        first_name = cleaned_data.get('tiendanube_first_name')
-        last_name = cleaned_data.get('tiendanube_last_name')
-        
-        if not name and not (first_name or last_name):
+        if cleaned_data is None:
+            return cleaned_data
+
+        tn_id = cleaned_data.get('tiendanube_id')
+        adminet_codigo = cleaned_data.get('adminet_codigo')
+
+        if not tn_id and not adminet_codigo:
             raise forms.ValidationError(
-                "Debe proporcionar un nombre completo (name) o nombre y apellido (first_name + last_name)."
+                _('Indique al menos un ID: Tienda Nube y/o código AdministraNET '
+                  '(use Consultar o Buscar).')
             )
-        
+
+        base_empresa = None
+        if self._request:
+            from .mysql import get_session_base_empresa
+            base_empresa = get_session_base_empresa(self._request)
+
+        from .services.customer_lookup import enrich_cleaned_data_from_sources
+
+        try:
+            enrich_cleaned_data_from_sources(
+                cleaned_data,
+                base_empresa=base_empresa,
+                instance=self.instance,
+            )
+        except ValueError as exc:
+            code = str(exc)
+            if code == 'tn_config':
+                self.add_error(
+                    'tiendanube_id',
+                    _('No hay configuración Tiendanube activa.'),
+                )
+            elif code == 'tn_not_found':
+                self.add_error(
+                    'tiendanube_id',
+                    _('El cliente Tienda Nube indicado no existe o no es accesible.'),
+                )
+            elif code == 'an_config':
+                self.add_error(
+                    'adminet_codigo',
+                    _('No hay configuración AdministraNET activa.'),
+                )
+            elif code == 'an_not_found':
+                self.add_error(
+                    'adminet_codigo',
+                    _('El cliente AdministraNET indicado no existe.'),
+                )
+            else:
+                raise
+
+        if self.errors:
+            return cleaned_data
+
+        cleaned_data.setdefault('tiendanube_total_spent', 0)
+        cleaned_data.setdefault('tiendanube_orders_count', 0)
+
+        from .services.customer_mapping_validation import validate_customer_mapping_form
+        try:
+            validate_customer_mapping_form(
+                cleaned_data, self.instance, base_empresa=base_empresa
+            )
+        except ValidationError as exc:
+            if hasattr(exc, 'error_dict'):
+                for field, messages in exc.error_dict.items():
+                    if field == '__all__':
+                        raise forms.ValidationError(messages)
+                    self.add_error(field if field != '__all__' else None, messages)
+            else:
+                raise forms.ValidationError(exc.messages)
+
         return cleaned_data
 
 

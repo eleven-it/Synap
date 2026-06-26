@@ -14,6 +14,17 @@ urlpatterns = [
     path("armado/", views.ArmadoView.as_view(), name="armado"),
     path("armado/<int:id_en_abm>/", views.ArmadoView.as_view(), name="armado_bom"),
     path("reclasificacion/", views.ReclasificacionView.as_view(), name="reclasificacion"),
+    path("armado-surtido/", views.ArmadoSurtidoView.as_view(), name="armado_surtido"),
+    path(
+        "api/armado-surtido/stock-origen/",
+        views.ArmadoSurtidoStockOrigenAPIView.as_view(),
+        name="api_armado_surtido_stock",
+    ),
+    path(
+        "api/armado-surtido/validar-item-lote/",
+        views.ArmadoSurtidoValidarItemLoteAPIView.as_view(),
+        name="api_armado_surtido_validar_item_lote",
+    ),
     path("reportes/", views.ReportesMPRView.as_view(), name="reportes"),
     path("config/depositos/", views.ConfigDepositosView.as_view(), name="config_depositos"),
     path("operarios/", views.OperariosListView.as_view(), name="operarios_list"),

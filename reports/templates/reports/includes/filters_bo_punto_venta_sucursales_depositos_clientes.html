@@ -57,7 +57,7 @@ Filtros BO/Objetivos BO con layout específico solicitado.
     </div>
     {% endif %}
 
-    {% if report.slug == 'ventas-por-articulo' %}
+    {% if report.slug == 'ventas-por-articulo' or report.slug == 'ventas-por-vendedor' %}
     {% include "reports/includes/filters_ventas_por_articulo_catalogo.html" %}
     {% endif %}
 

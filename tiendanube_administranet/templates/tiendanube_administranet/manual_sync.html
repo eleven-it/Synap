@@ -284,6 +284,76 @@
         loadSyncHistory();
     });
 
+    // Actualizar barra de progreso desde datos del SyncLog
+    function updateSyncProgressUI(data) {
+        const progressBar = document.getElementById('sync-progress-bar');
+        const progressText = document.getElementById('sync-progress-text');
+        const description = document.getElementById('sync-progress-description');
+
+        const total = data.total_items || 0;
+        const processed = data.processed_items || 0;
+        const successful = data.successful_items || 0;
+        const failed = data.failed_items || 0;
+        const percent = data.percent != null
+            ? data.percent
+            : (total > 0 ? Math.round((processed / total) * 100) : 0);
+
+        progressBar.style.width = `${percent}%`;
+        progressText.textContent = `${percent}%`;
+
+        if (total > 0) {
+            description.textContent = `Procesados ${processed}/${total} (${successful} OK, ${failed} error)`;
+        } else {
+            description.textContent = 'Preparando sincronización…';
+        }
+    }
+
+    // Polling del SyncLog hasta completar
+    function pollSyncLogProgress(syncLogId, button, onComplete) {
+        const statusUrl = '{% url "tiendanube_administranet:get_sync_log_status_ajax" pk=0 %}'.replace('/0/', `/${syncLogId}/`);
+        let pollTimer = null;
+
+        const poll = async () => {
+            try {
+                const response = await fetch(statusUrl, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                const data = await response.json();
+                if (!data.success) {
+                    return;
+                }
+                updateSyncProgressUI(data);
+                if (data.is_complete) {
+                    if (pollTimer) clearInterval(pollTimer);
+                    onComplete(data);
+                }
+            } catch (err) {
+                console.error('Error polling sync status:', err);
+            }
+        };
+
+        poll();
+        pollTimer = setInterval(poll, 1500);
+        return () => { if (pollTimer) clearInterval(pollTimer); };
+    }
+
+    function finishSyncFromLog(data, button, fallbackMessage) {
+        const failed = data.failed_items || 0;
+        const successful = data.successful_items || 0;
+        const total = data.total_items || 0;
+        const msg = data.message || fallbackMessage || 'Sincronización finalizada';
+
+        setTimeout(() => {
+            hideSyncProgress();
+            const toastMsg = total > 0
+                ? `${msg} — ${successful}/${total} OK, ${failed} error`
+                : msg;
+            showToast(toastMsg, failed > 0 ? 'warning' : 'success');
+            loadSyncHistory();
+            if (button) setLoading(button, false);
+        }, 800);
+    }
+
     // Trigger sync function
     async function triggerSync(type, direction) {
         // Validate restrictions
@@ -318,34 +388,28 @@
             
             const data = await response.json();
             
+            if (data.success && data.async && data.sync_log_id) {
+                pollSyncLogProgress(
+                    data.sync_log_id,
+                    button,
+                    (logData) => finishSyncFromLog(logData, button, data.message)
+                );
+                return;
+            }
+
             if (data.success) {
-                // Mostrar resultado real de la sincronización
-                const progressBar = document.getElementById('sync-progress-bar');
-                const progressText = document.getElementById('sync-progress-text');
-                const description = document.getElementById('sync-progress-description');
+                updateSyncProgressUI({
+                    total_items: data.total_processed || data.total_items || 1,
+                    processed_items: (data.successful || 0) + (data.failed || 0),
+                    successful_items: data.successful || 0,
+                    failed_items: data.failed || 0,
+                    percent: null,
+                });
                 
-                // Usar estructura real del backend (no "details")
-                const total = data.total_processed || data.total_items || 1;
-                const successful = data.successful || data.successful_items || 0;
-                const failed = data.failed || data.failed_items || 0;
-                const processed = successful + failed;
-                const progressPercent = processed > 0 ? Math.round((processed / total) * 100) : 100;
-                
-                progressBar.style.width = `${progressPercent}%`;
-                progressText.textContent = `${progressPercent}%`;
-                description.textContent = `Processed ${processed}/${total} items (${successful} successful, ${failed} failed)`;
-                
-                // Wait a moment to show results, then hide modal
                 setTimeout(() => {
                     hideSyncProgress();
-                    
-                    // Mostrar mensaje con detalles
-                    showToast(data.message || 'Sync completed successfully', failed > 0 ? 'warning' : 'success');
-                    
-                    // Reload sync history
+                    showToast(data.message || 'Sync completed successfully', (data.failed || 0) > 0 ? 'warning' : 'success');
                     loadSyncHistory();
-                    
-                    // Re-enable button
                     setLoading(button, false);
                 }, 1500);
             } else {
@@ -465,8 +529,8 @@
         const progressBar = document.getElementById('sync-progress-bar');
         const progressText = document.getElementById('sync-progress-text');
         
-        title.textContent = `Syncing ${type} ${direction === 'tiendanube' ? 'from Tiendanube' : 'from AdministraNET'}`;
-        description.textContent = 'Please wait while the synchronization is in progress...';
+        title.textContent = `Sincronizando ${type} ${direction === 'tiendanube' ? 'desde Tienda Nube' : 'desde AdministraNET'}`;
+        description.textContent = 'Espere mientras avanza la sincronización…';
         
         // Reset progress to 0%
         progressBar.style.width = '0%';

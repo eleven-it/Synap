@@ -18,6 +18,7 @@ urlpatterns = [
     path('config/tiendanube/list/', views.TiendanubeConfigListView.as_view(), name='tiendanube_config_list'),
     path('config/tiendanube/create/', views.TiendanubeConfigCreateView.as_view(), name='tiendanube_config_create'),
     path('config/tiendanube/<int:pk>/edit/', views.TiendanubeConfigUpdateView.as_view(), name='tiendanube_config_update'),
+    path('config/tiendanube/<int:pk>/renew-token/', views.TiendanubeConfigRenewTokenStartView.as_view(), name='tiendanube_config_renew_token'),
     path('config/tiendanube/<int:pk>/delete/', views.TiendanubeConfigDeleteView.as_view(), name='tiendanube_config_delete'),
     path('config/tiendanube/wizard/', views.TiendanubeConfigWizardView.as_view(), name='tiendanube_config_wizard'),
     path('config/tiendanube/wizard/callback/', views.TiendanubeConfigWizardCallbackView.as_view(), name='tiendanube_config_wizard_callback'),
@@ -98,6 +99,7 @@ urlpatterns = [
     path('api/migrate-adminet-schema/', views.migrate_adminet_schema_ajax, name='migrate_adminet_schema_ajax'),
     path('api/test-tiendanube-connection/', views.test_tiendanube_connection_ajax, name='test_tiendanube_connection_ajax'),
     path('api/trigger-sync/', views.trigger_sync_ajax, name='trigger_sync_ajax'),
+    path('api/sync-log/<int:pk>/status/', views.get_sync_log_status_ajax, name='get_sync_log_status_ajax'),
     path('api/sync-history/', views.get_sync_history_ajax, name='get_sync_history_ajax'),
     
     # APIs de productos
@@ -107,6 +109,9 @@ urlpatterns = [
     
     # APIs de clientes
     path('api/customers/search/', views.search_customers_ajax, name='search_customers_ajax'),
+    path('api/customers/tiendanube/<int:customer_id>/', views.lookup_tiendanube_customer_ajax, name='lookup_tiendanube_customer_ajax'),
+    path('api/customers/adminet/search/', views.search_adminet_customers_ajax, name='search_adminet_customers_ajax'),
+    path('api/customers/adminet/<int:customer_code>/', views.lookup_adminet_customer_ajax, name='lookup_adminet_customer_ajax'),
     path('api/customers/<int:customer_id>/orders/', views.get_customer_orders_ajax, name='get_customer_orders_ajax'),
     path('api/customers/validate/', views.validate_customer_data_ajax, name='validate_customer_data_ajax'),
     path('api/customers/statistics/', views.get_customer_statistics_ajax, name='get_customer_statistics_ajax'),

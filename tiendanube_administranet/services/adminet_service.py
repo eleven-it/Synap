@@ -17,8 +17,13 @@ from core.mysql_pool import get_connection
 from core.services.legacy_mysql_schema import run_tiendanube_integration_mysql
 
 from ..models import AdministraNETConfig
+from .customer_payload import normalize_adminet_customer_payload
 
 logger = logging.getLogger(__name__)
+
+# Paridad VB6 / e-commerce legacy (Gestión de pedidos avanzado, pedido 0204-*)
+ESTADO_PEDIDO_ECOM_TN = 'En preparación'
+TIPO_PEDIDO_ECOM_TN = 'Ecom cliente'
 
 
 class AdministraNETService:
@@ -72,7 +77,7 @@ class AdministraNETService:
                     }
                 conn.commit()
                 affected = cursor.rowcount
-                last_id = conn.insert_id()
+                last_id = cursor.lastrowid or conn.insert_id()
                 cursor.close()
                 return {
                     'success': True,
@@ -148,7 +153,8 @@ class AdministraNETService:
                 NroIngBrutos,
                 NroAgenteRetencion,
                 saldo,
-                id_tiendanube
+                id_tiendanube,
+                cliente_ecommerce
             FROM cliente
             WHERE 1=1
             """
@@ -162,6 +168,10 @@ class AdministraNETService:
             else:
                 # Por defecto, solo clientes activos
                 query += " AND Estado = 'Activo'"
+            
+            if filters.get('cliente_ecommerce'):
+                query += " AND cliente_ecommerce = %s"
+                params.append(filters['cliente_ecommerce'])
             
             if filters.get('search'):
                 search_term = f"%{filters['search']}%"
@@ -190,69 +200,6 @@ class AdministraNETService:
             return {
                 'success': False,
                 'message': f'Error obteniendo clientes: {str(e)}'
-            }
-
-    def create_customer(self, customer_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Crear nuevo cliente en AdministraNET.
-        
-        Args:
-            customer_data: Datos del cliente a crear
-        
-        Returns:
-            Dict con success, customer_id y message
-        """
-        try:
-            # Obtener el siguiente código de cliente
-            next_code_result = self.get_next_customer_code()
-            if not next_code_result['success']:
-                return next_code_result
-            
-            customer_code = next_code_result['next_code']
-            
-            # Query para insertar cliente
-            query = """
-            INSERT INTO cliente (
-                Codigo, nombre_cliente, Email, telefono, Calle, CUIT, Estado,
-                TipoCliente, IDIva, Credito, fecha_alta, id_tiendanube
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s
-            )
-            """
-            
-            params = (
-                customer_code,
-                customer_data.get('nombre_cliente', ''),
-                customer_data.get('Email', ''),
-                customer_data.get('telefono', ''),
-                customer_data.get('Calle', ''),
-                customer_data.get('CUIT', ''),
-                customer_data.get('Estado', 'Activo'),
-                'Consumidor Final',  # TipoCliente por defecto
-                1,  # IDIva por defecto
-                0.0,  # Credito por defecto
-                customer_data.get('id_tiendanube', None),  # ID de TiendaNube
-            )
-            
-            result = self.execute_query(query, params)
-            
-            if result['success']:
-                return {
-                    'success': True,
-                    'customer_id': customer_code,
-                    'message': 'Cliente creado exitosamente'
-                }
-            else:
-                return {
-                    'success': False,
-                    'message': f'Error creando cliente: {result["message"]}'
-                }
-                
-        except Exception as e:
-            logger.error(f"Error creating customer in AdministraNET: {e}")
-            return {
-                'success': False,
-                'message': f'Error creando cliente: {str(e)}'
             }
 
     def update_customer(self, customer_code: int, customer_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -288,7 +235,7 @@ class AdministraNETService:
                 customer_data.get('Calle', ''),
                 customer_data.get('CUIT', ''),
                 customer_data.get('Estado', 'Activo'),
-                customer_data.get('id_tiendanube', None),  # ID de TiendaNube
+                customer_data.get('id_tiendanube', None),
                 customer_code
             )
             
@@ -385,7 +332,8 @@ class AdministraNETService:
             saldo,
             TipoCliente,
             Fax,
-            id_tiendanube
+            id_tiendanube,
+            cliente_ecommerce
         FROM cliente 
         WHERE Codigo = %s
         """
@@ -399,6 +347,55 @@ class AdministraNETService:
             'success': False,
             'message': 'Cliente no encontrado'
         }
+
+    def get_customer_by_tiendanube_id(self, tiendanube_id: int) -> Dict[str, Any]:
+        """Buscar cliente AdministraNET por id_tiendanube (vínculo ecommerce)."""
+        result = self.execute_query(
+            """
+            SELECT Codigo FROM cliente
+            WHERE id_tiendanube = %s
+            ORDER BY Codigo DESC
+            LIMIT 1
+            """,
+            (tiendanube_id,),
+        )
+        if result.get('success') and result.get('results'):
+            codigo = result['results'][0].get('Codigo')
+            if codigo is not None:
+                return self.get_customer(int(codigo))
+        return {'success': False, 'message': 'Cliente no encontrado por id_tiendanube'}
+
+    def _reject_duplicate_adminet_customer(
+        self, customer_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Evita alta duplicada por email o CUIT en tabla cliente."""
+        from core.utils.administranet_types import str_or_default
+
+        email = str_or_default(customer_data.get('Email'), '').strip()
+        if email and email != '-':
+            found = self.get_customer_by_email(email)
+            if found.get('success'):
+                cod = found['customer'].get('Codigo')
+                return {
+                    'success': False,
+                    'message': (
+                        f'Ya existe un cliente AdministraNET con email {email} '
+                        f'(código {cod}). Vincule ese código en lugar de crear uno nuevo.'
+                    ),
+                }
+        cuit = str_or_default(customer_data.get('CUIT'), '').strip()
+        if cuit and cuit not in ('-', ''):
+            found = self.get_customer_by_cuit(cuit)
+            if found.get('success'):
+                cod = found['customer'].get('Codigo')
+                return {
+                    'success': False,
+                    'message': (
+                        f'Ya existe un cliente AdministraNET con CUIT {cuit} '
+                        f'(código {cod}).'
+                    ),
+                }
+        return None
     
     def create_customer(self, customer_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -418,6 +415,10 @@ class AdministraNETService:
             Dict con success, message y customer_id
         """
         try:
+            customer_data = normalize_adminet_customer_payload(dict(customer_data))
+            dup = self._reject_duplicate_adminet_customer(customer_data)
+            if dup:
+                return dup
             # Campos básicos requeridos y opcionales
             fields = [
                 'nombre_cliente', 'nombre_fantasia', 'CUIT', 'tipo_doc',
@@ -455,6 +456,20 @@ class AdministraNETService:
             if result['success']:
                 new_id = result.get('last_insert_id')
                 if not new_id:
+                    tn_id = customer_data.get('id_tiendanube')
+                    if tn_id:
+                        lookup = self.execute_query(
+                            """
+                            SELECT Codigo FROM cliente
+                            WHERE id_tiendanube = %s
+                            ORDER BY Codigo DESC
+                            LIMIT 1
+                            """,
+                            (tn_id,),
+                        )
+                        if lookup.get('success') and lookup.get('results'):
+                            new_id = lookup['results'][0].get('Codigo')
+                if not new_id:
                     return {
                         'success': False,
                         'message': 'Cliente insertado pero no se obtuvo LAST_INSERT_ID',
@@ -487,6 +502,7 @@ class AdministraNETService:
             Dict con success y message
         """
         try:
+            customer_data = normalize_adminet_customer_payload(dict(customer_data))
             # Campos que se pueden actualizar
             fields = [
                 'nombre_cliente', 'nombre_fantasia', 'CUIT', 'tipo_doc',
@@ -919,6 +935,11 @@ class AdministraNETService:
                 a.Precio3V,
                 a.Precio4V,
                 a.Precio5V,
+                a.Precio1VI,
+                a.Precio2VI,
+                a.Precio3VI,
+                a.Precio4VI,
+                a.Precio5VI,
                 a.saldo_articulo,
                 a.stock_max,
                 a.stock_min,
@@ -1130,70 +1151,71 @@ class AdministraNETService:
                 'message': f'Error obteniendo número de comprobante: {str(e)}'
             }
 
-    def create_order_from_tiendanube(self, order_data: Dict[str, Any], deposito_id: int = 1, 
-                                     user_id: int = 1, punto_venta_id: int = 1) -> Dict[str, Any]:
+    def create_order_from_tiendanube(
+        self,
+        order_data: Dict[str, Any],
+        deposito_id: int = 1,
+        user_id: int = 1,
+        punto_venta_id: int = 1,
+        sucursal_id: int = 1,
+        registrar_adelanto: bool = True,
+    ) -> Dict[str, Any]:
         """
-        Crear pedido en AdministraNET desde orden de TiendaNube.
-        
-        Args:
-            order_data: Datos de la orden de TiendaNube
-            deposito_id: ID del depósito de despacho
-            user_id: ID del usuario del sistema
-            punto_venta_id: ID del punto de venta
-            
-        Returns:
-            Dict con el resultado de la creación
+        Crear pedido en AdministraNET desde orden Tiendanube pagada (``order/paid``).
+
+        Estado inicial ``En preparación``, ``TipoPedido='Ecom cliente'``,
+        ``estado_pago_ecom='Si'`` y, si corresponde, REC a cuenta (adelanto) con datos de pago TN.
         """
+        import json
+        from datetime import datetime, timedelta
+        from decimal import Decimal
+
+        from .adelanto_recibo_service import (
+            allocate_codigo_movimiento,
+            registrar_adelanto_tiendanube,
+        )
+        from .order_payment import parse_tiendanube_order_payment, pago_confirmado
+        from ..utils.number_to_words import number_to_words
+
         try:
-            import json
-            from datetime import datetime, timedelta
-            from decimal import Decimal
-            from ..utils.number_to_words import number_to_words
-            
-            # 1. Obtener próximo código de movimiento
-            codigo_result = self.get_next_codigo_movimiento()
-            if not codigo_result['success']:
-                return codigo_result
-            
-            codigo_movimiento = codigo_result['codigo_movimiento']
-            
-            # 2. Obtener próximo número de comprobante
+            existing = self.get_order_by_tiendanube_id(str(order_data.get('id', '')))
+            if existing.get('success') and existing.get('order'):
+                ped = existing['order']
+                return {
+                    'success': True,
+                    'codigo_movimiento': ped.get('CodigoMovimiento'),
+                    'nro_comprobante': ped.get('NroComprobante'),
+                    'message': 'Pedido TN ya existía en AdministraNET',
+                    'already_exists': True,
+                }
+
+            payment_info = parse_tiendanube_order_payment(order_data)
             nro_result = self.get_next_nro_comprobante('PED', punto_venta_id)
             if not nro_result['success']:
                 return nro_result
-            
             nro_comprobante = nro_result['nro_comprobante']
-            
-            # 3. Extraer datos de la orden
+
             customer = order_data.get('customer', {})
             shipping = order_data.get('shipping_address', {})
             shipping_method = order_data.get('shipping', {})
-            payment = order_data.get('payment', {})
             products = order_data.get('products', [])
-            
-            # 4. Calcular totales
+
             subtotal = Decimal(str(order_data.get('subtotal', 0)))
             total = Decimal(str(order_data.get('total', 0)))
             discount = Decimal(str(order_data.get('discount', 0)))
             shipping_cost = Decimal(str(order_data.get('shipping_cost', 0)))
-            
-            # Calcular IVA (asumiendo IVA 21% en Argentina)
-            iva_21 = total * Decimal('0.21') / Decimal('1.21')
-            subtotal_sin_iva = total - iva_21
-            
-            # 5. Determinar forma de entrega
+
             if shipping_method.get('type') == 'pickup':
-                forma_entrega = "Retira cliente mostrador"
+                forma_entrega = 'Retira cliente mostrador'
             else:
-                forma_entrega = "Envía por despacho"
-            
-            # 6. Preparar JSON con información completa
+                forma_entrega = 'Envía por despacho'
+
             info_ped_eco = json.dumps({
                 'tiendanube': {
                     'order_id': str(order_data.get('id', '')),
                     'order_number': order_data.get('number', 0),
                     'created_at': order_data.get('created_at', ''),
-                    'updated_at': order_data.get('updated_at', '')
+                    'updated_at': order_data.get('updated_at', ''),
                 },
                 'shipping': {
                     'address': f"{shipping.get('address', '')} {shipping.get('number', '')}",
@@ -1208,207 +1230,198 @@ class AdministraNETService:
                     'method': shipping_method.get('name', ''),
                     'tracking_number': shipping_method.get('tracking_number', ''),
                     'tracking_url': shipping_method.get('tracking_url', ''),
-                    'cost': float(shipping_cost)
+                    'cost': float(shipping_cost),
                 },
                 'customer': {
                     'name': customer.get('name', ''),
                     'email': customer.get('email', ''),
                     'phone': customer.get('phone', ''),
-                    'identification': customer.get('identification', '')
+                    'identification': customer.get('identification', ''),
                 },
-                'payment': {
-                    'method': payment.get('name', ''),
-                    'status': order_data.get('payment_status', '')
-                }
+                'payment': payment_info.to_info_ped_eco_fragment(),
             }, ensure_ascii=False)
-            
-            # 7. Fecha de entrega estimada (7 días por defecto)
+
             fecha_entrega = datetime.now() + timedelta(days=7)
             if shipping_method.get('estimated_delivery_date'):
                 try:
-                    fecha_entrega = datetime.fromisoformat(shipping_method['estimated_delivery_date'].replace('Z', '+00:00'))
-                except:
+                    fecha_entrega = datetime.fromisoformat(
+                        shipping_method['estimated_delivery_date'].replace('Z', '+00:00')
+                    )
+                except (TypeError, ValueError):
                     pass
-            
-            # 8. Convertir total a palabras
+
             importe_letras = number_to_words(float(total))
-            
-            # 9. Insertar cabecera del pedido
-            insert_comp_ped = """
-            INSERT INTO comp_ped (
-                Fecha, TipoComprobante, NroComprobante, CodigoMovimiento,
-                Estado, Codigo, ImporteVenta, ImporteVentaL, SubtotalGral,
-                Subtotal1, Subtotal2, IVA1, IVA2,
-                Alicuota1, Alicuota2, Exento,
-                PorDesc1, ImpDesc1, SubTotalDesc1, SubTotalDesc2, SubtotalDesc,
-                id_condventa, CondVenta, CodViajante,
-                idUsuario, codSucursal, id_deposito_despacho,
-                FechaEntrega, FormaEntrega, operador_logistico,
-                autorizacion_sistema, anulado,
-                id_tiendanube, ped_eco, info_ped_eco, estado_pago_ecom,
-                Vencimiento, TipoPedido, id_pv
-            ) VALUES (
-                NOW(), 'PED', %s, %s,
-                'Pendiente', %s, %s, %s, %s,
-                %s, %s, %s, %s,
-                %s, %s, %s,
-                %s, %s, %s, %s, %s,
-                %s, %s, %s,
-                %s, %s, %s,
-                %s, %s, %s,
-                'Autorizado', 'No',
-                %s, %s, %s, %s,
-                %s, 'tiendanube', %s
-            )
-            """
-            
-            # Cliente ID (debe existir o crearse antes)
-            cliente_id = order_data.get('adminet_customer_id', 1)  # Default genérico
-            
-            # 10. Mapear medio de pago a condición de venta
-            payment_method = payment.get('method', '').lower() if payment else ''
-            payment_status = order_data.get('payment_status', 'pending').lower()
-            
-            # Mapeo de medios de pago a condiciones de venta
-            if payment_status == 'paid':
-                if any(method in payment_method for method in ['tarjeta', 'card', 'credit', 'debit']):
-                    id_condventa = 1
-                    cond_venta = "Contado"
-                elif any(method in payment_method for method in ['transferencia', 'bank', 'transfer']):
-                    id_condventa = 1
-                    cond_venta = "Contado"
-                elif any(method in payment_method for method in ['mercado', 'mercadopago', 'mp']):
-                    id_condventa = 1
-                    cond_venta = "Contado"
-                elif any(method in payment_method for method in ['efectivo', 'cash']):
-                    id_condventa = 1
-                    cond_venta = "Contado"
-                elif any(method in payment_method for method in ['cuenta', 'corriente', 'account']):
-                    id_condventa = 2
-                    cond_venta = "Cuenta Corriente"
+            cliente_id = int(order_data.get('adminet_customer_id') or 1)
+
+            payment_method = payment_info.method_label.lower()
+            payment_status = payment_info.payment_status
+            if payment_status == 'paid' or pago_confirmado(payment_info):
+                if any(m in payment_method for m in ('cuenta', 'corriente', 'account')):
+                    id_condventa, cond_venta = 2, 'Cuenta Corriente'
                 else:
-                    # Por defecto, pago confirmado = contado
-                    id_condventa = 1
-                    cond_venta = "Contado"
+                    id_condventa, cond_venta = 1, 'Contado'
             else:
-                # Pago pendiente - determinar por método
-                if any(method in payment_method for method in ['contra', 'reembolso', 'cod', 'cash_on_delivery']):
-                    id_condventa = 1
-                    cond_venta = "Contado"
-                elif any(method in payment_method for method in ['cuenta', 'corriente', 'account']):
-                    id_condventa = 2
-                    cond_venta = "Cuenta Corriente"
-                else:
-                    # Por defecto, pago pendiente = contado
-                    id_condventa = 1
-                    cond_venta = "Contado"
-            
-            # Vendedor (usar el configurado o 0 por defecto)
+                id_condventa, cond_venta = 1, 'Contado'
+
             cod_viajante = getattr(self.config, 'viajante_tiendanube_id', 0) or 0
-            
-            params = (
-                nro_comprobante, codigo_movimiento,
-                cliente_id, float(total), importe_letras, float(subtotal),
-                float(subtotal_sin_iva), Decimal(0), float(iva_21), Decimal(0),
-                Decimal(21.0), Decimal(0), Decimal(0),
-                float(discount), float(discount), Decimal(0), Decimal(0), float(subtotal - discount),
-                id_condventa, cond_venta, cod_viajante,
-                user_id, punto_venta_id, deposito_id,
-                fecha_entrega.strftime('%Y-%m-%d'), forma_entrega, shipping_method.get('carrier', ''),
-                str(order_data.get('id', '')), order_data.get('number', 0), info_ped_eco, 
-                'P',  # Valor fijo corto para estado_pago_ecom
-                fecha_entrega.strftime('%Y-%m-%d'), punto_venta_id
-            )
-            
-            result = self.execute_query(insert_comp_ped, params)
-            
-            if not result['success']:
-                return {
-                    'success': False,
-                    'message': f'Error insertando cabecera del pedido: {result.get("message", "")}'
-                }
-            
-            # 9. Insertar items del pedido
-            for index, product in enumerate(products, 1):
-                insert_stockp = """
-                INSERT INTO stockp (
-                    Fecha, CodigoArticulo, Descripcion, Cantidad,
-                    cantidad_entregada, cantidad_pendiente,
-                    PrecioVentaxU, PrecioCostoxU, PrecioNetoxU, PrecioBrutoxU, PrecioIVAxU,
-                    Alicuota, Pordesc, Impdesc,
-                    PrecioVentaxR, PrecioCostoxR, PrecioNetoxR, PrecioBrutoxR, PrecioIVAxR,
-                    CodigoMovimiento, CodDeposito, IDArt,
-                    Salida, Saldo, orden, codSucursal,
-                    CodViajante, NroComprobante, Comprobante
-                ) VALUES (
-                    NOW(), %s, %s, %s,
-                    %s, %s,
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s,
-                    %s, %s, %s, %s, %s,
-                    %s, %s, %s,
-                    %s, %s, %s, %s,
-                    %s, %s, %s
-                )
-                """
-                
-                cantidad = Decimal(str(product.get('quantity', 1)))
-                precio_unitario = Decimal(str(product.get('price', 0)))
-                precio_total = cantidad * precio_unitario
-                
-                # Calcular IVA del producto
-                iva_producto = precio_unitario * Decimal('0.21') / Decimal('1.21')
-                precio_sin_iva = precio_unitario - iva_producto
-                precio_total_sin_iva = precio_total - (iva_producto * cantidad)
-                
-                # ID del artículo (debe mapearse)
-                id_art = product.get('adminet_product_id', 0)
-                sku = product.get('sku', '')
-                
-                params_item = (
-                    sku, product.get('name', ''), float(cantidad),
-                    float(cantidad), float(cantidad),
-                    float(precio_unitario), float(precio_sin_iva), float(precio_sin_iva), 
-                    float(precio_unitario), float(iva_producto),
-                    Decimal(21.0), Decimal(0), Decimal(0),
-                    float(precio_total), float(precio_total_sin_iva), float(precio_total_sin_iva),
-                    float(precio_total), float(iva_producto * cantidad),
-                    codigo_movimiento, deposito_id, id_art,
-                    float(cantidad), float(cantidad), index, punto_venta_id,
-                    cod_viajante, nro_comprobante, 'PED'
-                )
-                
-                result_item = self.execute_query(insert_stockp, params_item)
-                
-                if not result_item['success']:
-                    logger.error(f"Error insertando item {index}: {result_item.get('message', '')}")
-                
-                # 10. Actualizar stock comprometido
-                if id_art > 0:
-                    update_stock = """
-                    UPDATE stock_deposito 
-                    SET saldo_pedido_cliente = saldo_pedido_cliente + %s
-                    WHERE id_articulo = %s AND id_deposito = %s
+            estado_pedido = ESTADO_PEDIDO_ECOM_TN
+            estado_pago_ecom = 'Si' if pago_confirmado(payment_info) else 'No'
+
+            iva_21 = total * Decimal('0.21') / Decimal('1.21')
+            subtotal_sin_iva = total - iva_21
+            affected_articles: List[int] = []
+
+            with get_connection(self._base_empresa) as conn:
+                conn.autocommit(False)
+                cursor = conn.cursor(MySQLdb.cursors.DictCursor)
+                try:
+                    codigo_movimiento = allocate_codigo_movimiento(cursor)
+
+                    insert_comp_ped = """
+                    INSERT INTO comp_ped (
+                        Fecha, TipoComprobante, NroComprobante, CodigoMovimiento,
+                        Estado, Codigo, ImporteVenta, ImporteVentaL, SubtotalGral,
+                        Subtotal1, Subtotal2, IVA1, IVA2,
+                        Alicuota1, Alicuota2, Exento,
+                        PorDesc1, ImpDesc1, SubTotalDesc1, SubTotalDesc2, SubtotalDesc,
+                        id_condventa, CondVenta, CodViajante,
+                        idUsuario, codSucursal, id_deposito_despacho,
+                        FechaEntrega, FormaEntrega, operador_logistico,
+                        autorizacion_sistema, anulado,
+                        id_tiendanube, ped_eco, info_ped_eco, estado_pago_ecom,
+                        Vencimiento, TipoPedido, id_pv
+                    ) VALUES (
+                        NOW(), 'PED', %s, %s,
+                        %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s, %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s, %s,
+                        %s, %s, %s,
+                        'Autorizado', 'No',
+                        %s, %s, %s, %s,
+                        %s, %s, %s
+                    )
                     """
-                    
-                    self.execute_query(update_stock, (float(cantidad), id_art, deposito_id))
-            
-            logger.info(f"Pedido creado exitosamente: {nro_comprobante} (CodigoMovimiento: {codigo_movimiento})")
-            
+                    params = (
+                        nro_comprobante, codigo_movimiento,
+                        estado_pedido, cliente_id, float(total), importe_letras, float(subtotal),
+                        float(subtotal_sin_iva), Decimal(0), float(iva_21), Decimal(0),
+                        Decimal(21.0), Decimal(0), Decimal(0),
+                        float(discount), float(discount), Decimal(0), Decimal(0),
+                        float(subtotal - discount),
+                        id_condventa, cond_venta, cod_viajante,
+                        user_id, sucursal_id, deposito_id,
+                        fecha_entrega.strftime('%Y-%m-%d'), forma_entrega,
+                        shipping_method.get('carrier', ''),
+                        str(order_data.get('id', '')), order_data.get('number', 0),
+                        info_ped_eco, estado_pago_ecom,
+                        fecha_entrega.strftime('%Y-%m-%d'), TIPO_PEDIDO_ECOM_TN, punto_venta_id,
+                    )
+                    cursor.execute(insert_comp_ped, params)
+
+                    for index, product in enumerate(products, 1):
+                        cantidad = Decimal(str(product.get('quantity', 1)))
+                        precio_unitario = Decimal(str(product.get('price', 0)))
+                        precio_total = cantidad * precio_unitario
+                        iva_producto = precio_unitario * Decimal('0.21') / Decimal('1.21')
+                        precio_sin_iva = precio_unitario - iva_producto
+                        precio_total_sin_iva = precio_total - (iva_producto * cantidad)
+                        id_art = int(product.get('adminet_product_id') or 0)
+                        sku = product.get('sku', '')
+
+                        cursor.execute(
+                            """
+                            INSERT INTO stockp (
+                                Fecha, CodigoArticulo, Descripcion, Cantidad,
+                                cantidad_entregada, cantidad_pendiente,
+                                PrecioVentaxU, PrecioCostoxU, PrecioNetoxU, PrecioBrutoxU, PrecioIVAxU,
+                                Alicuota, Pordesc, Impdesc,
+                                PrecioVentaxR, PrecioCostoxR, PrecioNetoxR, PrecioBrutoxR, PrecioIVAxR,
+                                CodigoMovimiento, CodDeposito, IDArt,
+                                Salida, Saldo, orden, codSucursal,
+                                CodViajante, NroComprobante, Comprobante
+                            ) VALUES (
+                                NOW(), %s, %s, %s,
+                                %s, %s,
+                                %s, %s, %s, %s, %s,
+                                %s, %s, %s,
+                                %s, %s, %s, %s, %s,
+                                %s, %s, %s,
+                                %s, %s, %s, %s,
+                                %s, %s, %s
+                            )
+                            """,
+                            (
+                                sku, product.get('name', ''), float(cantidad),
+                                float(cantidad), float(cantidad),
+                                float(precio_unitario), float(precio_sin_iva), float(precio_sin_iva),
+                                float(precio_unitario), float(iva_producto),
+                                Decimal(21.0), Decimal(0), Decimal(0),
+                                float(precio_total), float(precio_total_sin_iva),
+                                float(precio_total_sin_iva), float(precio_total),
+                                float(iva_producto * cantidad),
+                                codigo_movimiento, deposito_id, id_art,
+                                float(cantidad), float(cantidad), index, sucursal_id,
+                                cod_viajante, nro_comprobante, 'PED',
+                            ),
+                        )
+
+                        if id_art > 0:
+                            cursor.execute(
+                                """
+                                UPDATE stock_deposito
+                                SET saldo_pedido_cliente = saldo_pedido_cliente + %s
+                                WHERE id_articulo = %s AND id_deposito = %s
+                                """,
+                                (float(cantidad), id_art, deposito_id),
+                            )
+                            affected_articles.append(id_art)
+
+                    adelanto_result = None
+                    if registrar_adelanto and pago_confirmado(payment_info):
+                        adelanto_result = registrar_adelanto_tiendanube(
+                            cursor,
+                            codigo_cliente=cliente_id,
+                            payment=payment_info,
+                            punto_venta_id=punto_venta_id,
+                            user_id=user_id,
+                            cod_viajante=cod_viajante,
+                            pedido_nro=nro_comprobante,
+                            pedido_codmov=codigo_movimiento,
+                            tiendanube_order_id=str(order_data.get('id', '')),
+                        )
+
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+                finally:
+                    cursor.close()
+                    conn.autocommit(True)
+
+            logger.info(
+                'Pedido TN creado: %s (CodigoMovimiento: %s, estado: %s)',
+                nro_comprobante, codigo_movimiento, estado_pedido,
+            )
+
             return {
                 'success': True,
                 'codigo_movimiento': codigo_movimiento,
                 'nro_comprobante': nro_comprobante,
-                'message': f'Pedido creado exitosamente: {nro_comprobante}'
-            }
-            
-        except Exception as e:
-            logger.error(f"Error creating order from TiendaNube: {e}")
-            return {
-                'success': False,
-                'message': f'Error creando pedido: {str(e)}'
+                'estado': estado_pedido,
+                'adelanto': adelanto_result,
+                'affected_article_ids': affected_articles,
+                'message': f'Pedido creado exitosamente: {nro_comprobante}',
             }
 
+        except Exception as e:
+            logger.error('Error creating order from TiendaNube: %s', e)
+            return {
+                'success': False,
+                'message': f'Error creando pedido: {str(e)}',
+            }
     def get_tiendanube_orders_with_changes(self, hours: int = 24) -> Dict[str, Any]:
         """
         Obtener pedidos de TiendaNube que han sido modificados recientemente.

@@ -71,14 +71,24 @@
                     </div>
 
                     <div>
-                        <label for="{{ form.access_token.id_for_label }}" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        <label for="access_token_field" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {% trans "Access Token" %} *
                         </label>
-                        <input type="text" name="access_token" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" autocomplete="off" value="{{ form.access_token.value|default:'' }}" required>
+                        <div class="flex gap-2 items-stretch">
+                            <input type="text" id="access_token_field" name="access_token" class="flex-1 min-w-0 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-base font-mono bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500" autocomplete="off" value="{{ form.access_token.value|default:'' }}" required>
+                            {% if object and can_renew_access_token %}
+                            <button type="button" id="renewTokenBtn" class="inline-flex items-center shrink-0 px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 border border-transparent rounded-lg hover:from-orange-600 hover:to-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition whitespace-nowrap" title="{% trans 'Renovar access token vía OAuth' %}">
+                                <span class="material-icons text-sm mr-1">key</span>
+                                {% trans "Renovar" %}
+                            </button>
+                            {% endif %}
+                        </div>
                         {% if form.access_token.errors %}
                             <p class="text-red-500 text-sm mt-1">{{ form.access_token.errors|first }}</p>
                         {% endif %}
-                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{% trans "API access token from Tiendanube" %}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {% trans "Token de acceso API de Tienda Nube. Use «Renovar» para obtener uno nuevo vía OAuth sin salir del formulario." %}
+                        </p>
                     </div>
 
                     <div>
@@ -200,6 +210,54 @@
     </div>
 </div>
 
+{% if object and can_renew_access_token %}
+<div id="renewTokenModal" class="fixed inset-0 z-50 hidden" aria-modal="true" role="dialog">
+    <div class="absolute inset-0 bg-black/50" id="renewTokenModalBackdrop"></div>
+    <div class="relative flex min-h-full items-center justify-center p-4">
+        <div class="w-full max-w-lg bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                    <span class="material-icons text-orange-500 mr-2">key</span>
+                    {% trans "Renovar access token" %}
+                </h2>
+                <button type="button" id="renewTokenModalClose" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                {% trans "Ingrese las credenciales de su app en Partners Tienda Nube. Será redirigido a autorizar la tienda; al volver, el token se actualizará en esta configuración." %}
+            </p>
+            <form method="post" action="{% url 'tiendanube_administranet:tiendanube_config_renew_token' object.pk %}">
+                {% csrf_token %}
+                <div class="space-y-4">
+                    <div>
+                        <label for="renew_app_id" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">App ID *</label>
+                        <input type="text" id="renew_app_id" name="app_id" required class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500">
+                    </div>
+                    <div>
+                        <label for="renew_client_secret" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Client Secret *</label>
+                        <input type="password" id="renew_client_secret" name="client_secret" required autocomplete="off" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500">
+                    </div>
+                    <div class="rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-3 text-xs text-blue-800 dark:text-blue-200">
+                        <span class="font-semibold">Redirect URI:</span>
+                        <code class="block mt-1 break-all font-mono">{{ oauth_redirect_uri }}</code>
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-2">
+                    <button type="button" id="renewTokenModalCancel" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600">
+                        {% trans "Cancelar" %}
+                    </button>
+                    <button type="submit" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg hover:from-orange-600 hover:to-orange-700">
+                        <span class="material-icons text-sm mr-1">login</span>
+                        {% trans "Autorizar en Tienda Nube" %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const autoSyncCheckbox = document.getElementById('{{ form.is_active.id_for_label }}');
@@ -216,6 +274,20 @@ document.addEventListener('DOMContentLoaded', function() {
             autoSyncCheckbox.checked = false;
         });
     }
+
+    const renewBtn = document.getElementById('renewTokenBtn');
+    const modal = document.getElementById('renewTokenModal');
+    if (renewBtn && modal) {
+        const closeEls = [
+            document.getElementById('renewTokenModalClose'),
+            document.getElementById('renewTokenModalCancel'),
+            document.getElementById('renewTokenModalBackdrop'),
+        ];
+        const openModal = () => modal.classList.remove('hidden');
+        const closeModal = () => modal.classList.add('hidden');
+        renewBtn.addEventListener('click', openModal);
+        closeEls.forEach(el => { if (el) el.addEventListener('click', closeModal); });
+    }
 });
 </script>
-{% endblock %} 
+{% endblock %}

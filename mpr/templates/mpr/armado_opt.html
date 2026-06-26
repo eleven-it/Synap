@@ -31,8 +31,8 @@
 
         <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
             <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Armado OPT {{ opt_numero }}</h1>
-            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Origen: <strong class="text-gray-900 dark:text-white">{{ nombre_deposito_semi|default:"Semi Elaborado" }}</strong>. Destino: <strong class="text-gray-900 dark:text-white">{{ nombre_deposito_terminado|default:"Terminado" }}</strong>. Indique cantidad por pack.</p>
-            <p class="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">Máx. armable se calcula con el stock de los <strong>componentes de la receta</strong> en el depósito Semi elaborado. OPT y OPP solo mueven los artículos pack; el stock de componentes debe cargarse por compras, transferencias o producción previa.</p>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Origen: <strong class="text-gray-900 dark:text-white">{{ nombre_deposito_semi|default:"Semi Elaborado" }}</strong>. Destino: <strong class="text-gray-900 dark:text-white">{{ nombre_deposito_terminado|default:"Terminado" }}</strong>. Indique cantidad por pack (solo packs completos con todos los componentes de la receta).</p>
+            <p class="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">Máx. armable se calcula con el stock de los <strong>componentes de la receta</strong> en Semi elaborado. Las docenas usan <strong>cantidad_promedio_bulto</strong> del pack (si no está definida, divisor 12); solo se muestran docenas enteras, sin unidades sueltas.</p>
         </header>
 
         <form method="post" action="{% url 'mpr:armado_opt' id_lista %}" id="form-armado-opt"
@@ -50,14 +50,14 @@
                                 <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Cod. sist.</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Artículo (pack)</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Receta</th>
-                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Máx. armable</th>
-                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Cant. a armar</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300" title="Packs completos armables según stock de componentes en Semi elaborado">Máx. armable</th>
+                                <th scope="col" class="px-4 py-3 text-right text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Cant. a armar (packs)</th>
                                 <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 align-bottom dark:text-gray-300">Operario</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
                             {% for linea in lineas_armado %}
-                            <tr class="armado-tooltip-row hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-default" data-armado-tooltip="{{ linea.tooltip_semi_elaborado_json|escape }}">
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                 <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">{{ linea.id_articulo }}</td>
                                 <td class="px-4 py-3">
                                     <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ linea.codigo_articulo }}</span>
@@ -65,10 +65,15 @@
                                 </td>
                                 <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ linea.nombre_bom }}</td>
                                 <td class="px-4 py-3 text-right tabular-nums text-sm text-gray-700 dark:text-gray-300">
-                                    {% if linea.max_packs_armable|default:0 > 0 %}{{ linea.max_packs_armable }}{% else %}Sin stock{% endif %}
+                                    {% if linea.max_packs_armable|default:0 > 0 %}
+                                    <span class="block font-medium text-gray-900 dark:text-white">{{ linea.max_docenas_armable }} docena{{ linea.max_docenas_armable|pluralize:"s" }}</span>
+                                    <span class="block text-[10px] text-gray-500 dark:text-gray-400">{{ linea.max_packs_armable }} pack{{ linea.max_packs_armable|pluralize:"s" }}</span>
+                                    {% else %}
+                                    <span class="text-amber-700 dark:text-amber-300">Sin stock</span>
+                                    {% endif %}
                                 </td>
                                 <td class="px-4 py-3 text-right">
-                                    <input type="number" name="armar_cantidad_{{ linea.id_articulo }}" value="0" min="0" max="{{ linea.max_packs_armable|default:0 }}" step="1" class="w-24 px-2 py-1.5 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm tabular-nums focus:ring-2 focus:ring-purple-500"/>
+                                    <input type="number" name="armar_cantidad_{{ linea.id_articulo }}" value="0" min="0" max="{{ linea.max_packs_armable|default:0 }}" step="1" class="w-24 px-2 py-1.5 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm tabular-nums focus:ring-2 focus:ring-purple-500" aria-label="Cantidad a armar en packs para {{ linea.codigo_articulo }}"/>
                                 </td>
                                 <td class="px-4 py-3">
                                     <select name="operario_armado_{{ linea.id_articulo }}" class="w-full min-w-[180px] rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent">
@@ -87,7 +92,7 @@
                 </div>
             </div>
             <div class="flex flex-wrap gap-3">
-                <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+                <button type="submit" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">build</span>
                     Ejecutar armado
                 </button>
@@ -98,78 +103,8 @@
         </form>
         <script>
         (function() {
-            var tooltipEl = null;
-            var padding = 10;
-            function escHtml(s) {
-                if (s == null || s === undefined) return '';
-                var t = String(s);
-                return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            }
-            function formatNum(v) {
-                if (v == null || v === undefined || isNaN(v)) return '0';
-                var n = Number(v);
-                return n % 1 === 0 ? String(Math.round(n)) : n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-            }
-            function getTooltipEl() {
-                if (tooltipEl) return tooltipEl;
-                tooltipEl = document.createElement('div');
-                tooltipEl.setAttribute('class', 'absolute bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-2xl opacity-0 z-[9999] border border-slate-700 overflow-y-auto');
-                tooltipEl.style.fontFamily = 'system-ui, sans-serif';
-                tooltipEl.style.minWidth = '180px';
-                tooltipEl.style.maxWidth = '280px';
-                tooltipEl.style.maxHeight = '400px';
-                tooltipEl.style.transition = 'opacity 0.2s ease-in-out';
-                tooltipEl.style.pointerEvents = 'none';
-                document.body.appendChild(tooltipEl);
-                return tooltipEl;
-            }
-            function buildArmadoTooltipHtml(componentes) {
-                if (!componentes || componentes.length === 0) {
-                    return '<div class="font-bold text-sm text-white mb-0.5">Disponible en Semi Elaborado</div><div class="text-sky-300 text-[10px] font-medium">Sin datos</div>';
-                }
-                var lines = componentes.map(function(d) {
-                    var cod = escHtml(d.codigo || '-');
-                    var qty = formatNum(d.saldo);
-                    return '<div class="flex items-center justify-between gap-3 py-0.5"><span class="text-slate-300 text-xs">' + cod + '</span><span class="text-emerald-300 font-semibold text-xs">' + qty + ' ud.</span></div>';
-                });
-                return '<div class="font-bold text-sm text-white mb-1">Disponible en Semi Elaborado</div><div class="space-y-0.5 border-t border-slate-700 pt-1 mt-1">' + lines.join('') + '</div>';
-            }
-            function setupArmadoTooltips(container) {
-                if (!container) return;
-                var rows = container.querySelectorAll('.armado-tooltip-row');
-                var tooltip = getTooltipEl();
-                rows.forEach(function(row) {
-                    row.addEventListener('mouseenter', function(e) {
-                        var raw = row.getAttribute('data-armado-tooltip');
-                        var data = [];
-                        try { data = raw ? JSON.parse(raw) : []; } catch (_) {}
-                        tooltip.innerHTML = buildArmadoTooltipHtml(data);
-                        tooltip.style.opacity = '1';
-                        var left = e.pageX + padding;
-                        var top = e.pageY + padding;
-                        if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
-                        if (top + 200 > window.innerHeight) top = e.pageY - 200 - padding;
-                        if (top < padding) top = padding;
-                        tooltip.style.left = left + 'px';
-                        tooltip.style.top = top + 'px';
-                    });
-                    row.addEventListener('mousemove', function(e) {
-                        var left = e.pageX + padding;
-                        var top = e.pageY + padding;
-                        if (left + 280 > window.innerWidth) left = e.pageX - 280 - padding;
-                        if (top + 200 > window.innerHeight) top = e.pageY - 200 - padding;
-                        if (top < padding) top = padding;
-                        tooltip.style.left = left + 'px';
-                        tooltip.style.top = top + 'px';
-                    });
-                    row.addEventListener('mouseleave', function() {
-                        tooltip.style.opacity = '0';
-                    });
-                });
-            }
             var form = document.getElementById('form-armado-opt');
             if (form) {
-                setupArmadoTooltips(form);
                 form.addEventListener('submit', function() {
                     if (typeof window.mprShowPostLoading === 'function') {
                         window.mprShowPostLoading(form);

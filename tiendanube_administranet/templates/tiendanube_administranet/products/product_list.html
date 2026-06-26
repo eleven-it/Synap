@@ -1,6 +1,6 @@
 {% extends "base_app.html" %}
 {% load static %}
-{% load i18n %}
+{% load i18n tiendanube_precios %}
 
 {% block title %}{% trans "Products" %} - {% trans "Tiendanube-AdministraNET" %}{% endblock %}
 
@@ -88,7 +88,7 @@
                         {% trans "AdministraNET ID" %}
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                        {% trans "Price" %}
+                        {% trans "Precio venta (final)" %}
                     </th>
                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                         {% trans "Status" %}
@@ -133,8 +133,10 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                         <div>
-                            <div class="font-medium">${{ product.adminet_precio_1v|floatformat:2|default:"N/A" }}</div>
-                            <div class="text-xs text-gray-500">Stock: {{ product.adminet_stock|default:"0" }}</div>
+                            <div class="font-medium">${{ product|adminet_precio_venta_final|floatformat:2 }}</div>
+                            <div class="text-xs text-gray-500">
+                                TN: ${{ product|tn_precio_venta_final|floatformat:2 }} · Stock: {{ product.adminet_stock|default:"0" }}
+                            </div>
                         </div>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">

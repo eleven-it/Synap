@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from core.mysql_pool import get_connection, mysql_cursor
 from core.services.administranet_stock import get_depositos as _get_depositos_core
 from core.services.legacy_mysql_schema.helpers import columna_existe, nombre_columna_ci
-from core.utils.administranet_types import to_int_or_none, str_or_default, str_codigo_manual_articulo, to_date_or_none
+from core.utils.administranet_types import to_int_or_none, str_or_default, str_codigo_manual_articulo, to_date_or_none, to_decimal_or_none, to_decimal_or_none
 
 from mpr.exceptions import MprSchemaError, formatear_error_esquema
 
@@ -100,6 +100,324 @@ def docenas_desde_unidades_opt(unidades: Any, cantidad_promedio_bulto: Any) -> f
         return round(u / divisor, 2)
     except ZeroDivisionError:
         return 0.0
+
+
+def divisor_docena_pack(cantidad_promedio_bulto: Any) -> int:
+    """Unidades por docena en pantallas pack/OPT: ``cantidad_promedio_bulto`` o 12 si no aplica."""
+    try:
+        b = float(cantidad_promedio_bulto) if cantidad_promedio_bulto is not None else 0.0
+    except (TypeError, ValueError):
+        b = 0.0
+    return int(b) if b > 0 else 12
+
+
+def descomponer_docenas_unidades(
+    cantidad: Any,
+    cantidad_promedio_bulto: Any = None,
+    *,
+    unidades_por_docena_fijo: Optional[int] = None,
+) -> Dict[str, int]:
+    """
+    Descompone una cantidad entera en docenas completas y unidades sueltas.
+
+    Pack/OPT: divisor = ``divisor_docena_pack(cantidad_promedio_bulto)``.
+    Componentes OPP (BOM): ``unidades_por_docena_fijo=12``.
+    """
+    try:
+        total = int(float(cantidad or 0))
+    except (TypeError, ValueError):
+        total = 0
+    total = max(0, total)
+    if unidades_por_docena_fijo is not None:
+        divisor = int(unidades_por_docena_fijo) if int(unidades_por_docena_fijo) > 0 else 12
+    else:
+        divisor = divisor_docena_pack(cantidad_promedio_bulto)
+    docenas, unidades = divmod(total, divisor)
+    return {"docenas": docenas, "unidades": unidades, "divisor": divisor, "total": total}
+
+
+def texto_docenas_unidades(
+    cantidad: Any,
+    cantidad_promedio_bulto: Any = None,
+    *,
+    unidades_por_docena_fijo: Optional[int] = None,
+) -> str:
+    """Texto UI: «N docenas · M unidades»."""
+    partes = descomponer_docenas_unidades(
+        cantidad,
+        cantidad_promedio_bulto,
+        unidades_por_docena_fijo=unidades_por_docena_fijo,
+    )
+    return f"{partes['docenas']} docenas · {partes['unidades']} unidades"
+
+
+def docenas_enteras_desde_packs(cantidad_packs: Any, cantidad_promedio_bulto: Any) -> int:
+    """
+    Docenas completas equivalentes a una cantidad en packs (división entera por bulto).
+    Usado en armado: solo packs enteros; no se muestran unidades sueltas del resto.
+    """
+    try:
+        packs = max(0, int(float(cantidad_packs or 0)))
+    except (TypeError, ValueError):
+        packs = 0
+    divisor = divisor_docena_pack(cantidad_promedio_bulto)
+    return packs // divisor
+
+
+def bulk_cantidad_promedio_bulto(
+    base_empresa: str,
+    id_articulos: List[int],
+) -> Dict[int, float]:
+    """Devuelve {id_articulo: cantidad_promedio_bulto} (0 si falta columna o valor)."""
+    if not (base_empresa or "").strip() or not id_articulos:
+        return {}
+    ids = [int(i) for i in id_articulos if i is not None]
+    if not ids:
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl:
+                return {i: 0.0 for i in ids}
+            bulto_sql = _fragmento_sql_cantidad_promedio_bulto(cursor, tbl)
+            ph = ",".join(["%s"] * len(ids))
+            cursor.execute(
+                f"SELECT IDArt{bulto_sql} FROM {tbl} WHERE IDArt IN ({ph})",
+                ids,
+            )
+            out: Dict[int, float] = {i: 0.0 for i in ids}
+            for r in cursor.fetchall() or []:
+                aid = to_int_or_none(r.get("IDArt") or r.get("idart"))
+                if aid is None:
+                    continue
+                try:
+                    out[aid] = float(r.get("cantidad_promedio_bulto") or 0)
+                except (TypeError, ValueError):
+                    out[aid] = 0.0
+            return out
+    except Exception as e:
+        logger.warning("bulk_cantidad_promedio_bulto error: %s", e)
+        return {i: 0.0 for i in ids}
+
+
+def _etiqueta_linea_opt(linea: Dict[str, Any]) -> str:
+    cod = (linea.get("codigo_manual") or linea.get("codigo_articulo") or "").strip()
+    desc = (linea.get("descripcion_articulo") or "").strip()
+    if cod and desc:
+        return f"{cod} {desc}"[:80]
+    return cod or desc or str(linea.get("id_articulo") or "-")
+
+
+def build_resumen_metrica_opt(
+    total_packs: int,
+    lineas_detalle: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Presentación C4 para totales del encabezado OPT.
+
+    Si hay una sola línea o todas comparten el mismo divisor de docena, el total se muestra
+    como docenas · unidades. Si hay varios artículos con distinto bulto, total en packs
+    más desglose por línea.
+    """
+    try:
+        total = max(0, int(total_packs or 0))
+    except (TypeError, ValueError):
+        total = 0
+    filas: List[Dict[str, Any]] = []
+    divisores: set = set()
+    for item in lineas_detalle or []:
+        try:
+            packs = max(0, int(item.get("packs") or 0))
+        except (TypeError, ValueError):
+            packs = 0
+        bulto = item.get("bulto", 0)
+        partes = descomponer_docenas_unidades(packs, bulto)
+        divisores.add(partes["divisor"])
+        filas.append({
+            "etiqueta": str(item.get("etiqueta") or "-"),
+            "packs": packs,
+            "bulto": bulto,
+            "docenas": partes["docenas"],
+            "unidades": partes["unidades"],
+            "texto_docenas_unidades": texto_docenas_unidades(packs, bulto),
+        })
+    unico_divisor = len(divisores) == 1
+    una_linea = len(filas) <= 1
+    puede_total_docenas = una_linea or unico_divisor
+    divisor_total = next(iter(divisores)) if unico_divisor and divisores else (
+        divisor_docena_pack(filas[0]["bulto"]) if filas else 12
+    )
+    if puede_total_docenas:
+        if unico_divisor:
+            kw_fijo = {"unidades_por_docena_fijo": divisor_total}
+            total_partes = descomponer_docenas_unidades(total, **kw_fijo)
+            texto_total = texto_docenas_unidades(total, **kw_fijo)
+        elif filas:
+            total_partes = descomponer_docenas_unidades(total, filas[0]["bulto"])
+            texto_total = texto_docenas_unidades(total, filas[0]["bulto"])
+        else:
+            total_partes = descomponer_docenas_unidades(total, 0)
+            texto_total = texto_docenas_unidades(total, 0)
+        return {
+            "packs": total,
+            "mostrar_desglose": False,
+            "texto_principal": texto_total,
+            "docenas": total_partes["docenas"],
+            "unidades": total_partes["unidades"],
+            "lineas": filas,
+        }
+    return {
+        "packs": total,
+        "mostrar_desglose": True,
+        "texto_principal": f"{total} packs",
+        "docenas": None,
+        "unidades": None,
+        "lineas": filas,
+    }
+
+
+def enriquecer_lineas_opt_presentacion_pack(
+    lineas: List[Dict[str, Any]],
+    bulto_por_articulo: Dict[int, float],
+) -> None:
+    """Añade en cada línea campos ``*_du`` y textos para plantillas OPT (pack + bulto por artículo)."""
+    campos = (
+        "cantidad_pedida",
+        "cantidad_pendiente_prod",
+        "cantidad_en_esta_opt",
+        "cantidad_ya_armada",
+        "cantidad_restante_armar",
+        "cantidad_a_otros_depositos",
+    )
+    for linea in lineas or []:
+        id_art = to_int_or_none(linea.get("id_articulo"))
+        bulto = float(bulto_por_articulo.get(id_art, 0) if id_art is not None else 0)
+        linea["cantidad_promedio_bulto"] = bulto
+        for campo in campos:
+            val = linea.get(campo)
+            if val is None:
+                continue
+            try:
+                if int(val) < 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            partes = descomponer_docenas_unidades(val, bulto)
+            linea[f"{campo}_du"] = partes
+            linea[f"{campo}_texto_du"] = texto_docenas_unidades(val, bulto)
+
+
+def enriquecer_componentes_opp_presentacion(componentes: List[Dict[str, Any]]) -> None:
+    """Pendiente distribuible en docenas · unidades (divisor fijo 12)."""
+    for comp in componentes or []:
+        max_u = comp.get("max_distribuible_unidades")
+        if max_u is None:
+            max_u = comp.get("disponible_unidades", 0)
+        partes = descomponer_docenas_unidades(max_u, unidades_por_docena_fijo=12)
+        comp["pendiente_du"] = partes
+        comp["pendiente_texto_du"] = texto_docenas_unidades(max_u, unidades_por_docena_fijo=12)
+
+
+def cantidad_opp_presentacion_du(cantidad: Any) -> Dict[str, int]:
+    """Desglose docenas + unidades sueltas para UI OPP (1 docena = 12 unidades)."""
+    return descomponer_docenas_unidades(cantidad, unidades_por_docena_fijo=12)
+
+
+def enriquecer_movimientos_opp_presentacion_du(movimientos: List[Dict[str, Any]]) -> None:
+    """Añade ``cantidad_du`` a filas OPP listadas (cantidad_total en unidades)."""
+    for mov in movimientos or []:
+        if mov.get("cantidad_total") is None:
+            continue
+        mov["cantidad_du"] = cantidad_opp_presentacion_du(mov.get("cantidad_total"))
+
+
+def lineas_texto_cantidad_opp(unidades: Any) -> List[str]:
+    """Líneas UI/PDF OPP: docenas y unidades sueltas (divisor 12)."""
+    du = cantidad_opp_presentacion_du(unidades)
+    return [f"{du['docenas']} docenas", f"{du['unidades']} unidades"]
+
+
+def lineas_texto_cantidad_pack(packs: Any, cantidad_promedio_bulto: Any) -> List[str]:
+    """Líneas UI/PDF pack: packs, docenas y unidades sueltas."""
+    try:
+        total_packs = max(0, int(float(packs or 0)))
+    except (TypeError, ValueError):
+        total_packs = 0
+    partes = descomponer_docenas_unidades(total_packs, cantidad_promedio_bulto)
+    return [
+        f"{total_packs} packs",
+        f"{partes['docenas']} docenas",
+        f"{partes['unidades']} unidades",
+    ]
+
+
+def _clave_grupo_articulo_movimiento(fila: Dict[str, Any]) -> str:
+    id_art = to_int_or_none(fila.get("id_articulo"))
+    if id_art is not None:
+        return f"id:{id_art}"
+    cod = str_or_default(fila.get("codigo_articulo"), "")
+    desc = str_or_default(fila.get("descripcion"), "")
+    return f"cod:{cod}|{desc}"
+
+
+def fila_movimiento_desde_renglon_stock(
+    r: Dict[str, Any],
+    *,
+    presentacion_opp_du: bool = False,
+) -> Dict[str, Any]:
+    """Normaliza un renglón de ``stock`` para modal/PDF de comprobante."""
+    entrada = r.get("Entrada")
+    salida = r.get("Salida")
+    saldo = r.get("saldo")
+    row: Dict[str, Any] = {
+        "id_articulo": to_int_or_none(r.get("IDArt")),
+        "codigo_articulo": str_or_default(r.get("CodigoArticulo"), "—"),
+        "descripcion": str_or_default(r.get("Descripcion"), "—"),
+        "nombre_deposito": str_or_default(r.get("nombre_deposito"), "—"),
+        "cod_deposito": to_int_or_none(r.get("CodDeposito")),
+        "entrada": float(to_decimal_or_none(entrada) or 0),
+        "salida": float(to_decimal_or_none(salida) or 0),
+        "saldo": float(to_decimal_or_none(saldo) if saldo is not None else 0),
+    }
+    if presentacion_opp_du:
+        row["entrada_du"] = cantidad_opp_presentacion_du(row["entrada"])
+        row["salida_du"] = cantidad_opp_presentacion_du(row["salida"])
+        row["saldo_du"] = cantidad_opp_presentacion_du(row["saldo"])
+    return row
+
+
+def agrupar_filas_movimiento_por_articulo(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Agrupa filas de un mismo movimiento por artículo (celda consolidada tipo Excel).
+    Conserva el orden de aparición.
+    """
+    grupos: List[Dict[str, Any]] = []
+    indice: Dict[str, int] = {}
+    for fila in filas or []:
+        clave = _clave_grupo_articulo_movimiento(fila)
+        if clave not in indice:
+            indice[clave] = len(grupos)
+            grupos.append({
+                "id_articulo": fila.get("id_articulo"),
+                "codigo_articulo": fila.get("codigo_articulo"),
+                "descripcion": fila.get("descripcion"),
+                "filas": [],
+            })
+        grupos[indice[clave]]["filas"].append(fila)
+    return grupos
+
+
+def build_grupos_articulo_renglones_movimiento(
+    renglones: List[Dict[str, Any]],
+    *,
+    presentacion_opp_du: bool = False,
+) -> List[Dict[str, Any]]:
+    """Renglones MySQL ``stock`` → grupos por artículo para comprobante."""
+    filas = [
+        fila_movimiento_desde_renglon_stock(r, presentacion_opp_du=presentacion_opp_du)
+        for r in (renglones or [])
+    ]
+    return agrupar_filas_movimiento_por_articulo(filas)
 
 
 def _fragmento_sql_cantidad_promedio_bulto(cursor, tbl_art: str) -> str:
@@ -3703,6 +4021,11 @@ def get_deposito_desperdicio_mpr(base_empresa: str) -> Optional[int]:
     return _get_deposito_por_tipo_mpr(base_empresa, TIPO_MPR_SCRAP)
 
 
+def get_deposito_2da_seleccion_mpr(base_empresa: str) -> Optional[int]:
+    """Depósito 2.ª selección (tipo_mpr=2daSeleccion), origen típico del armado surtido."""
+    return _get_deposito_por_tipo_mpr(base_empresa, TIPO_MPR_2DA_SELECCION)
+
+
 def get_depositos_opp(base_empresa: str) -> List[Dict[str, Any]]:
     """Lista depósitos que son destino válido de OPP: tipo_mpr en (SemiElaborado, Scrap, 2daSeleccion).
     Orden por nombre. Si falta tabla/columna lanza MprSchemaError."""
@@ -4151,6 +4474,7 @@ def get_lineas_armado_opt(
     if not art_ids:
         return []
     abm_map = bulk_id_en_abm(base_empresa, art_ids)
+    bulto_por_pack = bulk_cantidad_promedio_bulto(base_empresa, art_ids)
     abm_ids = list(set(abm_map.values()))
     bom_map = bulk_bom_detalle(base_empresa, abm_ids) if abm_ids else {}
     armado_map = bulk_articulo_armado(base_empresa, abm_ids) if abm_ids else {}
@@ -4218,12 +4542,11 @@ def get_lineas_armado_opt(
                 saldo = float(c.get("saldo_semi_elaborado") or 0)
                 packs_i = int(saldo // cant)
                 max_packs_armable = min(max_packs_armable, packs_i) if max_packs_armable else packs_i
-        tooltip_data = [
-            {"codigo": str_or_default(c.get("codigo_articulo"), "-"), "saldo": float(c.get("saldo_semi_elaborado") or 0)}
-            for c in componentes
-        ]
+        id_art_pack = to_int_or_none(linea.get("id_articulo"))
+        bulto_pack = float(bulto_por_pack.get(id_art_pack, 0) if id_art_pack is not None else 0)
+        max_docenas = docenas_enteras_desde_packs(max_packs_armable, bulto_pack)
         result.append({
-            "id_articulo": to_int_or_none(linea.get("id_articulo")),
+            "id_articulo": id_art_pack,
             "codigo_articulo": str_or_default(linea.get("codigo_articulo"), "-"),
             "descripcion_articulo": str_or_default(linea.get("descripcion_articulo"), "-"),
             "id_en_abm": item["id_en_abm"],
@@ -4231,7 +4554,8 @@ def get_lineas_armado_opt(
             "bom": {"cabecera": bom.get("cabecera"), "componentes": componentes},
             "articulo_armado": item["articulo_armado"],
             "max_packs_armable": max_packs_armable,
-            "tooltip_semi_elaborado_json": json.dumps(tooltip_data, ensure_ascii=False),
+            "max_docenas_armable": max_docenas,
+            "cantidad_promedio_bulto": bulto_pack,
         })
     return result
 
@@ -4403,6 +4727,93 @@ def get_cantidad_opp_por_destino_opt(
     return semi, otros, desperdicio
 
 
+def get_cantidad_opp_2da_seleccion_opt(
+    base_empresa: str, id_lista_produccion: int
+) -> Dict[int, int]:
+    """Unidades por artículo enviadas a depósito 2.ª selección vía OPP de esta OPT."""
+    resultado: Dict[int, int] = {}
+    if not (base_empresa or "").strip() or id_lista_produccion is None:
+        return resultado
+    deposito_2da = get_deposito_2da_seleccion_mpr(base_empresa)
+    if deposito_2da is None:
+        return resultado
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            if not tbl_mov or not tbl_stock:
+                return resultado
+            patron = f"OPT {id_lista_produccion} desde"
+            cursor.execute(
+                f"""
+                SELECT codigo_movimiento FROM {tbl_mov}
+                WHERE (UPPER(TRIM(COALESCE(tipo_mov,''))) = 'OPP' OR COALESCE(motivo_movimiento,'') = 'Parte producción')
+                  AND INSTR(COALESCE(detalle,''), %s) > 0
+                  AND COALESCE(anulado,'No') <> 'Si'
+                """,
+                [patron],
+            )
+            codigos = [
+                c
+                for c in (
+                    to_int_or_none(r.get("codigo_movimiento"))
+                    for r in (cursor.fetchall() or [])
+                )
+                if c is not None
+            ]
+            if not codigos:
+                return resultado
+            placeholders = ",".join(["%s"] * len(codigos))
+            cursor.execute(
+                f"""
+                SELECT IDArt, COALESCE(SUM(Entrada), 0) AS total
+                FROM {tbl_stock}
+                WHERE CodigoMovimiento IN ({placeholders})
+                  AND CodDeposito = %s
+                  AND COALESCE(Entrada, 0) > 0
+                GROUP BY IDArt
+                """,
+                codigos + [deposito_2da],
+            )
+            for row in cursor.fetchall() or []:
+                id_art = to_int_or_none(row.get("IDArt"))
+                total = int(float(row.get("total") or 0))
+                if id_art is not None and total > 0:
+                    resultado[id_art] = resultado.get(id_art, 0) + total
+    except Exception as e:
+        logger.warning(
+            "Error al obtener OPP en 2.ª selección para OPT %s en %s: %s",
+            id_lista_produccion,
+            base_empresa,
+            e,
+            exc_info=True,
+        )
+    return resultado
+
+
+def opt_puede_armado_surtido(
+    base_empresa: str, id_lista_produccion: Optional[int]
+) -> Tuple[bool, str]:
+    """
+    Condiciones para armado surtido vinculado a una OPT (``?id_lista=``):
+    al menos una OPP registrada y cantidad > 0 enviada a 2.ª selección.
+    Sin ``id_lista`` (acceso desde menú) no aplica el bloqueo.
+    """
+    if id_lista_produccion is None or int(id_lista_produccion or 0) == 0:
+        return True, ""
+    if not listar_opp_por_opt(base_empresa, int(id_lista_produccion)):
+        return False, "Registre al menos una parte de producción (OPP) en esta OPT."
+    if get_deposito_2da_seleccion_mpr(base_empresa) is None:
+        return False, "No hay depósito 2.ª selección configurado (tipo_mpr=2daSeleccion)."
+    qty_2da = get_cantidad_opp_2da_seleccion_opt(base_empresa, int(id_lista_produccion))
+    if sum(qty_2da.values()) <= 0:
+        return (
+            False,
+            "Registre una OPP con envío a 2.ª selección antes de armar surtido.",
+        )
+    return True, ""
+
+
 def listar_opp_por_opt(base_empresa: str, id_lista_produccion: int) -> List[Dict[str, Any]]:
     """
     Lista las partes de producción (OPP) ya registradas para una OPT.
@@ -4491,6 +4902,7 @@ def listar_opp_por_opt(base_empresa: str, id_lista_produccion: int) -> List[Dict
                     "nombre_destino": nombres_dep.get(dep_dest, str(dep_dest) if dep_dest is not None else "-"),
                     "cantidad_total": cantidades.get(cod_mov, 0),
                 })
+            enriquecer_movimientos_opp_presentacion_du(result)
     except MprSchemaError:
         raise
     except Exception as e:
@@ -7789,6 +8201,1496 @@ def ejecutar_reclasificacion(
             raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
         logger.warning("Error de conexión en ejecutar_reclasificacion: %s", e, exc_info=True)
         return False, None, None, str(e)
+
+
+# --- Armado surtido (composición libre, sin BOM) ---
+
+TIPO_ART_FAB_PACK_ARMADO_SURTIDO = "Fabricado 2da"
+
+
+TIPO_ART_FAB_PACK_ARMADO_SURTIDO = "Fabricado 2da"
+LOTE_ARMADO_SURTIDO_MAX_ITEMS = 20
+
+
+def calcular_demanda_item_lote(item: Dict[str, Any]) -> Dict[int, Decimal]:
+    """Demanda de componentes para un ítem del lote: id_articulo → unidades totales."""
+    demanda: Dict[int, Decimal] = {}
+    cantidad_packs = to_int_or_none(item.get("cantidad_packs")) or 0
+    if cantidad_packs < 1:
+        return demanda
+    for ln in item.get("lineas") or []:
+        id_a = to_int_or_none(ln.get("id_articulo"))
+        qty_pp = to_int_or_none(ln.get("cantidad_por_pack")) or 0
+        if not id_a or qty_pp < 1:
+            continue
+        total = Decimal(str(qty_pp * cantidad_packs))
+        demanda[id_a] = demanda.get(id_a, Decimal(0)) + total
+    return demanda
+
+
+def calcular_demanda_agregada_lote(armados: List[Dict[str, Any]]) -> Dict[int, Decimal]:
+    """Suma consumo por componente en todo el lote pendiente."""
+    demanda: Dict[int, Decimal] = {}
+    for item in armados or []:
+        for id_a, qty in calcular_demanda_item_lote(item).items():
+            demanda[id_a] = demanda.get(id_a, Decimal(0)) + qty
+    return demanda
+
+
+def _normalizar_lineas_composicion_lote(raw_lineas: Any) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    if not isinstance(raw_lineas, list) or not raw_lineas:
+        return [], "Indique al menos un componente en la composición."
+    lineas: List[Dict[str, Any]] = []
+    for ln in raw_lineas:
+        if not isinstance(ln, dict):
+            return [], "Composición inválida."
+        id_a = to_int_or_none(ln.get("id_articulo"))
+        qty = to_int_or_none(ln.get("cantidad_por_pack"))
+        if not id_a:
+            return [], "Cada línea de composición debe tener un artículo válido."
+        if not qty or qty < 1:
+            return [], "Cada componente debe tener cantidad por pack ≥ 1."
+        lineas.append({"id_articulo": int(id_a), "cantidad_por_pack": int(qty)})
+    return lineas, None
+
+
+def normalizar_item_lote_armado_surtido(raw: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Normaliza un ítem del lote desde JSON/dict."""
+    if not isinstance(raw, dict):
+        return None, "Ítem de lote inválido."
+    id_pack = to_int_or_none(raw.get("id_articulo_pack"))
+    cantidad_packs = to_int_or_none(raw.get("cantidad_packs"))
+    if not id_pack:
+        return None, "Seleccione el pack terminado."
+    if not cantidad_packs or cantidad_packs < 1:
+        return None, "Indique cantidad de packs (entero ≥ 1)."
+    lineas, err_ln = _normalizar_lineas_composicion_lote(raw.get("lineas"))
+    if err_ln:
+        return None, err_ln
+    return {
+        "id_articulo_pack": int(id_pack),
+        "cantidad_packs": int(cantidad_packs),
+        "lineas": lineas,
+    }, None
+
+
+def normalizar_armados_lote_json(data: Any) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+    """Parsea lista de armados desde el objeto JSON del POST (`armados` o lista directa)."""
+    if data is None:
+        return [], None
+    if isinstance(data, list):
+        raw_items = data
+    elif isinstance(data, dict):
+        raw_items = data.get("armados")
+        if raw_items is None:
+            return None, "Formato de lote inválido: falta clave «armados»."
+        if not isinstance(raw_items, list):
+            return None, "Formato de lote inválido: «armados» debe ser una lista."
+    else:
+        return None, "Formato de lote inválido."
+    armados: List[Dict[str, Any]] = []
+    for raw in raw_items:
+        item, err = normalizar_item_lote_armado_surtido(raw)
+        if err:
+            return None, err
+        if item:
+            armados.append(item)
+    return armados, None
+
+
+def parse_cabecera_lote_armado_surtido(post: Dict[str, Any]) -> Dict[str, Any]:
+    """Cabecera compartida del lote desde campos POST."""
+    detalle = str_or_default(post.get("detalle"), "").strip()[:200] or None
+    return {
+        "deposito_origen": to_int_or_none(post.get("deposito_origen")),
+        "deposito_destino": to_int_or_none(post.get("deposito_destino")),
+        "id_operario": to_int_or_none(post.get("id_operario")),
+        "detalle": detalle,
+        "id_lista_produccion": to_int_or_none(post.get("id_lista")),
+    }
+
+
+def parse_lote_armado_surtido_post(request) -> Tuple[Optional[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[str]]:
+    """
+    Extrae cabecera + armados desde POST (campo lote_json + cabecera HTML).
+    Devuelve (cabecera, armados, error).
+    """
+    import json
+
+    cabecera = parse_cabecera_lote_armado_surtido(request.POST)
+    raw_json = (request.POST.get("lote_json") or "").strip()
+    if not raw_json:
+        return cabecera, None, "Agregue al menos un armado al lote."
+    try:
+        data = json.loads(raw_json)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return cabecera, None, "El lote enviado no tiene un formato JSON válido."
+    armados, err = normalizar_armados_lote_json(data)
+    if err:
+        return cabecera, None, err
+    if not armados:
+        return cabecera, None, "Agregue al menos un armado al lote."
+    return cabecera, armados, None
+
+
+def validar_reglas_lote_armado_surtido(
+    armados: List[Dict[str, Any]],
+    *,
+    deposito_origen: Optional[int] = None,
+    deposito_destino: Optional[int] = None,
+    id_operario: Optional[int] = None,
+    require_non_empty: bool = True,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Reglas del lote: límite, packs únicos, cruce pack/componente, validación por ítem.
+    Si se pasan depósitos y operario, delega validar_datos_armado_surtido por ítem.
+    """
+    items = list(armados or [])
+    if require_non_empty and not items:
+        return False, "Agregue al menos un armado al lote."
+    if len(items) > LOTE_ARMADO_SURTIDO_MAX_ITEMS:
+        return False, f"Máximo {LOTE_ARMADO_SURTIDO_MAX_ITEMS} armados por lote."
+    packs_vistos: Set[int] = set()
+    todos_packs: Set[int] = set()
+    todos_componentes: Set[int] = set()
+    for item in items:
+        id_pack = to_int_or_none(item.get("id_articulo_pack"))
+        if not id_pack:
+            return False, "Seleccione el pack terminado."
+        if id_pack in packs_vistos:
+            return False, "El pack ya está en el lote. Edite la fila existente."
+        packs_vistos.add(id_pack)
+        todos_packs.add(id_pack)
+        lineas = item.get("lineas") or []
+        for ln in lineas:
+            id_c = to_int_or_none(ln.get("id_articulo"))
+            if id_c:
+                todos_componentes.add(int(id_c))
+        if deposito_origen is not None or deposito_destino is not None or id_operario is not None:
+            ok_item, err_item = validar_datos_armado_surtido(
+                int(item.get("cantidad_packs") or 0),
+                deposito_origen,
+                deposito_destino,
+                lineas,
+                id_operario=id_operario,
+                id_articulo_pack=id_pack,
+            )
+            if not ok_item:
+                return False, err_item
+    cruce = todos_packs & todos_componentes
+    if cruce:
+        id_conflicto = sorted(cruce)[0]
+        return False, (
+            f"El artículo {id_conflicto} no puede ser pack y componente en el mismo lote."
+        )
+    return True, None
+
+
+def validar_reglas_item_candidato_lote(
+    lote_actual: List[Dict[str, Any]],
+    item_candidato: Dict[str, Any],
+) -> Tuple[bool, Optional[str]]:
+    """Valida agregar un ítem al carrito (sin cabecera operario/depósitos)."""
+    item, err = normalizar_item_lote_armado_surtido(item_candidato)
+    if err or not item:
+        return False, err or "Ítem inválido."
+    if len(lote_actual or []) >= LOTE_ARMADO_SURTIDO_MAX_ITEMS:
+        return False, f"Máximo {LOTE_ARMADO_SURTIDO_MAX_ITEMS} armados por lote."
+    id_pack = item["id_articulo_pack"]
+    for existente in lote_actual or []:
+        if to_int_or_none(existente.get("id_articulo_pack")) == id_pack:
+            return False, "El pack ya está en el lote. Edite la fila existente."
+    lote_simulado = list(lote_actual or []) + [item]
+    return validar_reglas_lote_armado_surtido(lote_simulado, require_non_empty=True)
+
+
+def validar_datos_armado_surtido(
+    cantidad_packs: int,
+    deposito_origen: Optional[int],
+    deposito_destino: Optional[int],
+    lineas_composicion: List[Dict[str, Any]],
+    id_operario: Optional[int] = None,
+    id_articulo_pack: Optional[int] = None,
+) -> Tuple[bool, Optional[str]]:
+    """Validaciones previas (sin MySQL). Devuelve (ok, mensaje_error)."""
+    if not id_articulo_pack:
+        return False, "Seleccione el pack terminado."
+    if not cantidad_packs or cantidad_packs < 1:
+        return False, "Indique cantidad de packs (entero ≥ 1)."
+    if not id_operario:
+        return False, "Seleccione operario."
+    dep_o = to_int_or_none(deposito_origen)
+    dep_d = to_int_or_none(deposito_destino)
+    if not dep_o or not dep_d:
+        return False, "Indique depósito origen y destino."
+    if dep_o == dep_d:
+        return False, "Origen y destino deben ser distintos."
+    if not lineas_composicion:
+        return False, "Indique al menos un componente en la composición."
+    vistos: Set[int] = set()
+    for ln in lineas_composicion:
+        id_a = to_int_or_none(ln.get("id_articulo"))
+        qty = to_int_or_none(ln.get("cantidad_por_pack"))
+        if not id_a:
+            return False, "Cada línea de composición debe tener un artículo válido."
+        if id_a in vistos:
+            return False, f"El artículo {id_a} está repetido en la composición."
+        vistos.add(id_a)
+        if not qty or qty < 1:
+            return False, "Cada componente debe tener cantidad por pack ≥ 1."
+    return True, None
+
+
+def articulo_habilitado_armado_surtido(base_empresa: str, id_articulo: int) -> bool:
+    """True si el pack tiene articulo.tipo_art_fab = 'Fabricado 2da'."""
+    id_art = to_int_or_none(id_articulo)
+    if not (base_empresa or "").strip() or not id_art:
+        return False
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl or not columna_existe(cursor, tbl, "tipo_art_fab"):
+                return False
+            cursor.execute(
+                f"""
+                SELECT IDArt
+                FROM {tbl}
+                WHERE IDArt = %s
+                  AND COALESCE(TRIM(tipo_art_fab), '') = %s
+                LIMIT 1
+                """,
+                [id_art, TIPO_ART_FAB_PACK_ARMADO_SURTIDO],
+            )
+            return cursor.fetchone() is not None
+    except Exception as e:
+        logger.warning("articulo_habilitado_armado_surtido %s: %s", base_empresa, e, exc_info=True)
+        return False
+
+
+def listar_packs_armado_surtido(base_empresa: str) -> List[Dict[str, Any]]:
+    """Packs terminados: artículos con articulo.tipo_art_fab = 'Fabricado 2da'."""
+    if not (base_empresa or "").strip():
+        return []
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl or not columna_existe(cursor, tbl, "tipo_art_fab"):
+                return []
+            cursor.execute(
+                f"""
+                SELECT IDArt AS id_articulo,
+                       COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo_articulo,
+                       COALESCE(NombreArticulo, '') AS descripcion_articulo
+                FROM {tbl}
+                WHERE COALESCE(TRIM(tipo_art_fab), '') = %s
+                ORDER BY CodigoArticuloT, IDArt
+                """,
+                [TIPO_ART_FAB_PACK_ARMADO_SURTIDO],
+            )
+            rows = cursor.fetchall()
+        return [
+            {
+                "id_articulo": to_int_or_none(r.get("id_articulo")),
+                "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
+                "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.warning("listar_packs_armado_surtido %s: %s", base_empresa, e, exc_info=True)
+        return []
+
+
+def listar_articulos_stock_deposito(
+    base_empresa: str,
+    id_deposito: int,
+    busqueda: Optional[str] = None,
+    limit: int = 40,
+) -> List[Dict[str, Any]]:
+    """Artículos con saldo > 0 en el depósito indicado (para composición armado surtido)."""
+    if not (base_empresa or "").strip():
+        return []
+    dep = to_int_or_none(id_deposito)
+    if not dep:
+        return []
+    lim = max(1, min(int(limit or 40), 100))
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_art = _nombre_tabla(cursor, "articulo")
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            if not tbl_art or not tbl_sd:
+                return []
+            params: List[Any] = [dep]
+            filtro_q = ""
+            if busqueda and (busqueda or "").strip():
+                q = f"%{(busqueda or '').strip()}%"
+                filtro_q = (
+                    " AND (a.CodigoArticuloT LIKE %s OR CAST(a.CodigoArticulo AS CHAR) LIKE %s "
+                    "OR a.NombreArticulo LIKE %s)"
+                )
+                params.extend([q, q, q])
+            params.append(lim)
+            cursor.execute(
+                f"""
+                SELECT a.IDArt AS id_articulo,
+                       COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
+                       COALESCE(a.NombreArticulo, '') AS descripcion_articulo,
+                       sd.saldo AS saldo
+                FROM {tbl_sd} sd
+                INNER JOIN {tbl_art} a ON a.IDArt = sd.id_articulo
+                WHERE sd.id_deposito = %s AND COALESCE(sd.saldo, 0) > 0
+                {filtro_q}
+                ORDER BY a.CodigoArticuloT, a.IDArt
+                LIMIT %s
+                """,
+                params,
+            )
+            rows = cursor.fetchall()
+        return [
+            {
+                "id_articulo": to_int_or_none(r.get("id_articulo")),
+                "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
+                "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
+                "saldo": float(r.get("saldo") or 0),
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.warning("listar_articulos_stock_deposito %s dep %s: %s", base_empresa, id_deposito, e, exc_info=True)
+        return []
+
+
+def _mpr_costo_stock_desde_articulo(
+    precio_costo_u: Any,
+    cantidad: Decimal,
+) -> Tuple[Decimal, Decimal]:
+    """Precio unitario y total de costo para renglón stock (desde articulo.PrecioCosto)."""
+    pc_u = to_decimal_or_none(precio_costo_u) or Decimal(0)
+    cant = cantidad or Decimal(0)
+    pc_r = (pc_u * cant).quantize(Decimal("0.000001"))
+    return pc_u, pc_r
+
+
+def _fetch_articulos_map(cursor, tbl_articulo: str, ids: List[int]) -> Dict[int, Dict[str, Any]]:
+    if not ids or not tbl_articulo:
+        return {}
+    placeholders = ",".join(["%s"] * len(ids))
+    precio_sel = (
+        "COALESCE(PrecioCosto, 0)"
+        if columna_existe(cursor, tbl_articulo, "PrecioCosto")
+        else "0"
+    )
+    cursor.execute(
+        f"""
+        SELECT IDArt,
+               COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo,
+               COALESCE(NombreArticulo, '') AS nombre,
+               {precio_sel} AS precio_costo
+        FROM {tbl_articulo}
+        WHERE IDArt IN ({placeholders})
+        """,
+        ids,
+    )
+    out: Dict[int, Dict[str, Any]] = {}
+    for row in cursor.fetchall():
+        if isinstance(row, dict):
+            id_a = to_int_or_none(row.get("IDArt"))
+            if not id_a:
+                continue
+            out[int(id_a)] = {
+                "codigo_articulo": str_or_default(row.get("codigo"), "-"),
+                "descripcion_articulo": str_or_default(row.get("nombre"), "-"),
+                "precio_costo": to_decimal_or_none(row.get("precio_costo")) or Decimal(0),
+            }
+        else:
+            id_a = int(row[0])
+            out[id_a] = {
+                "codigo_articulo": str_or_default(row[1], "-"),
+                "descripcion_articulo": str_or_default(row[2], "-"),
+                "precio_costo": to_decimal_or_none(row[3]) or Decimal(0),
+            }
+    return out
+
+
+def _articulos_con_lote_ids(cursor, tbl_articulo: str, ids: List[int]) -> Set[int]:
+    """IDs de artículos con Lote=Si en AdministraNET."""
+    if not tbl_articulo or not ids:
+        return set()
+    placeholders = ",".join(["%s"] * len(ids))
+    cursor.execute(
+        f"SELECT IDArt FROM {tbl_articulo} WHERE IDArt IN ({placeholders}) AND UPPER(TRIM(COALESCE(Lote,''))) = 'SI'",
+        ids,
+    )
+    return {
+        int(row.get("IDArt") if isinstance(row, dict) else row[0])
+        for row in cursor.fetchall()
+    }
+
+
+def _mpr_insert_renglon_stock_armado(
+    cursor,
+    tbl_stock: str,
+    codigo_mov: int,
+    id_art: int,
+    codigo_art: str,
+    descripcion_art: str,
+    fecha_mov: str,
+    entrada: Decimal,
+    salida: Decimal,
+    saldo: Decimal,
+    deposito: int,
+    id_ref_movstock: int,
+    orden: int,
+    id_usuario: int,
+    nro_comprobante: str,
+    id_operario: Optional[int] = None,
+    id_lote: Optional[int] = None,
+    precio_costo_u: Optional[Decimal] = None,
+) -> None:
+    """Inserta renglón en stock (Armado surtido); tolera esquemas sin columnas opcionales."""
+    cantidad = entrada if entrada > 0 else salida
+    pc_u, pc_r = _mpr_costo_stock_desde_articulo(precio_costo_u, cantidad)
+    params_tail = [
+        deposito,
+        id_ref_movstock,
+        orden,
+        id_usuario,
+        MOTIVO_ARMADO_TEXTO,
+        nro_comprobante,
+        None,
+    ]
+    params_base = [
+        codigo_mov,
+        id_art,
+        codigo_art,
+        descripcion_art,
+        fecha_mov,
+        entrada,
+        salida,
+        saldo,
+    ] + params_tail
+    params_con_costo = params_base[:8] + [cantidad, pc_u, pc_r] + params_tail
+    intentos: List[Tuple[str, List[Any]]] = []
+    id_op = to_int_or_none(id_operario)
+
+    def _agregar_variantes(params: List[Any], cols_extra: str, vals_extra: str) -> None:
+        intentos.append((
+            f"""
+            INSERT INTO {tbl_stock}
+            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo,
+             Cantidad, PrecioCostoxU, PrecioCostoxR, CodDeposito,
+             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante{cols_extra})
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s{vals_extra})
+            """,
+            params,
+        ))
+
+    if precio_costo_u is not None:
+        if id_lote is not None:
+            if id_op is not None:
+                _agregar_variantes(
+                    params_con_costo + [id_lote, id_op],
+                    ", id_lote, id_operario_opt",
+                    ", %s, %s",
+                )
+            _agregar_variantes(params_con_costo + [id_lote], ", id_lote", ", %s")
+        elif id_op is not None:
+            _agregar_variantes(params_con_costo + [id_op], ", id_operario_opt", ", %s")
+        _agregar_variantes(params_con_costo, "", "")
+
+    if id_lote is not None:
+        params_lote = params_base + [id_lote]
+        if id_op is not None:
+            intentos.append((
+                f"""
+                INSERT INTO {tbl_stock}
+                (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+                 id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante, id_lote, id_operario_opt)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s, %s, %s)
+                """,
+                params_lote + [id_op],
+            ))
+        intentos.append((
+            f"""
+            INSERT INTO {tbl_stock}
+            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante, id_lote)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s, %s)
+            """,
+            params_lote,
+        ))
+    elif id_op is not None:
+        intentos.append((
+            f"""
+            INSERT INTO {tbl_stock}
+            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante, id_operario_opt)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s, %s)
+            """,
+            params_base + [id_op],
+        ))
+    intentos.append((
+        f"""
+        INSERT INTO {tbl_stock}
+        (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+         id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
+        """,
+        params_base,
+    ))
+    _mpr_ejecutar_insert_intentos(cursor, intentos)
+
+
+def _mpr_consumir_salida_componente_surtido(
+    cursor,
+    tbl_stock: str,
+    tbl_sd: str,
+    tbl_lote: Optional[str],
+    tbl_lote_stock: Optional[str],
+    stock_tiene_id_lote: bool,
+    usa_lote: bool,
+    codigo_mov: int,
+    id_art: int,
+    codigo_art: str,
+    descripcion_art: str,
+    fecha_mov: str,
+    qty_salida: Decimal,
+    deposito_origen: int,
+    id_ref_movstock: int,
+    orden: int,
+    id_usuario: int,
+    nro_comprobante: str,
+    id_operario: Optional[int],
+    precio_costo_u: Optional[Decimal] = None,
+) -> Tuple[int, Optional[str]]:
+    """
+    Salida de componente en armado surtido (sin lote o FIFO por lote).
+    Devuelve (orden_siguiente, mensaje_error).
+    """
+    cursor.execute(
+        f"SELECT id_stock_deposito, saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+        [id_art, deposito_origen],
+    )
+    sd_row = cursor.fetchone()
+    saldo_actual = Decimal(str(sd_row[1] or 0)) if sd_row else Decimal(0)
+    saldo_despues = saldo_actual - qty_salida
+
+    if not usa_lote:
+        orden += 1
+        _mpr_insert_renglon_stock_armado(
+            cursor,
+            tbl_stock,
+            codigo_mov,
+            id_art,
+            codigo_art,
+            descripcion_art,
+            fecha_mov,
+            Decimal(0),
+            qty_salida,
+            saldo_despues,
+            deposito_origen,
+            id_ref_movstock,
+            orden,
+            id_usuario,
+            nro_comprobante,
+            id_operario=id_operario,
+            precio_costo_u=precio_costo_u,
+        )
+        if sd_row:
+            cursor.execute(
+                f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+                [saldo_despues, sd_row[0]],
+            )
+        else:
+            cursor.execute(
+                f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                [id_art, deposito_origen, saldo_despues],
+            )
+        return orden, None
+
+    if not tbl_lote or not tbl_lote_stock:
+        return orden, f"El artículo {codigo_art} usa lote pero faltan tablas de lote en la base."
+
+    cursor.execute(
+        f"""
+        SELECT l.id_lote, ls.id_lote_stock, ls.stock_lote
+        FROM {tbl_lote} l
+        INNER JOIN {tbl_lote_stock} ls ON ls.id_lote = l.id_lote
+        WHERE l.id_articulo = %s AND ls.id_deposito = %s
+          AND COALESCE(l.anulado,'No') = 'No' AND COALESCE(ls.stock_lote,0) > 0
+        ORDER BY l.fecha_vto_lote ASC
+        FOR UPDATE
+        """,
+        [id_art, deposito_origen],
+    )
+    filas_lote = cursor.fetchall()
+    stock_total_lotes = sum(float(f[2] or 0) for f in filas_lote)
+    if stock_total_lotes < float(qty_salida):
+        return (
+            orden,
+            f"Stock en lotes insuficiente de {codigo_art} en depósito origen: "
+            f"disponible en lotes {stock_total_lotes}, se necesitan {qty_salida}.",
+        )
+    qty_restante = qty_salida
+    for fila in filas_lote:
+        if qty_restante <= 0:
+            break
+        id_lote, id_lote_stock, stock_lote = fila[0], fila[1], Decimal(str(fila[2] or 0))
+        tomar = min(stock_lote, qty_restante)
+        nuevo_stock_lote = stock_lote - tomar
+        cursor.execute(
+            f"UPDATE {tbl_lote_stock} SET stock_lote = %s WHERE id_lote_stock = %s",
+            [nuevo_stock_lote, id_lote_stock],
+        )
+        cursor.execute(
+            f"UPDATE {tbl_lote} SET stock_total_lote = COALESCE(stock_total_lote, 0) - %s WHERE id_lote = %s",
+            [tomar, id_lote],
+        )
+        orden += 1
+        saldo_parcial = saldo_actual - (qty_salida - qty_restante + tomar)
+        id_lote_ins = id_lote if stock_tiene_id_lote else None
+        _mpr_insert_renglon_stock_armado(
+            cursor,
+            tbl_stock,
+            codigo_mov,
+            id_art,
+            codigo_art,
+            descripcion_art,
+            fecha_mov,
+            Decimal(0),
+            tomar,
+            saldo_parcial,
+            deposito_origen,
+            id_ref_movstock,
+            orden,
+            id_usuario,
+            nro_comprobante,
+            id_operario=id_operario,
+            id_lote=id_lote_ins,
+            precio_costo_u=precio_costo_u,
+        )
+        qty_restante -= tomar
+    if sd_row:
+        cursor.execute(
+            f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+            [saldo_despues, sd_row[0]],
+        )
+    else:
+        cursor.execute(
+            f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+            [id_art, deposito_origen, saldo_despues],
+        )
+    return orden, None
+
+
+def _guardar_historial_armado_surtido(
+    cursor,
+    tbl_historico: str,
+    id_art_pack: int,
+    cantidad_packs: int,
+    deposito_origen: int,
+    deposito_destino: int,
+    codigo_mov: int,
+    nro_comprobante: str,
+    id_usuario: int,
+    id_lista_produccion: Optional[int],
+    fecha_mov: str,
+    hora_evento: str,
+    id_operario: Optional[int],
+    num_componentes: int,
+) -> None:
+    if not tbl_historico:
+        return
+    det = f"Armado surtido MPR ({num_componentes} componentes)"
+    base_opa = [
+        TIPO_MOV_OPA,
+        id_art_pack,
+        cantidad_packs,
+        deposito_destino,
+        deposito_origen,
+        deposito_destino,
+        codigo_mov,
+        nro_comprobante,
+        id_usuario,
+        id_lista_produccion,
+        fecha_mov,
+        hora_evento,
+    ]
+    intentos_opa: List[Tuple[str, List[Any]]] = []
+    id_op_h = to_int_or_none(id_operario)
+    if id_op_h is not None:
+        intentos_opa.append((
+            f"""
+            INSERT INTO {tbl_historico}
+            (tipo_evento, id_articulo, id_articulo_formula, cantidad_pedida, cantidad_movimiento, cantidad_armada,
+             id_deposito, id_deposito_origen, id_deposito_destino, codigo_movimiento_mstock, codigo_movimiento_opt,
+             nro_comprobante, id_usuario, id_lista_produccion, fecha, hora_evento, id_operario, id_operario_opt)
+            VALUES (%s, %s, NULL, 0, 0, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            base_opa + [id_op_h, id_op_h],
+        ))
+    intentos_opa.append((
+        f"""
+        INSERT INTO {tbl_historico}
+        (tipo_evento, id_articulo, id_articulo_formula, cantidad_pedida, cantidad_movimiento, cantidad_armada,
+         id_deposito, id_deposito_origen, id_deposito_destino, codigo_movimiento_mstock, codigo_movimiento_opt,
+         nro_comprobante, id_usuario, id_lista_produccion, fecha, hora_evento)
+        VALUES (%s, %s, NULL, 0, 0, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s)
+        """,
+        base_opa,
+    ))
+    try:
+        _mpr_ejecutar_insert_intentos(cursor, intentos_opa)
+    except Exception as hist_err:
+        logger.warning("Historial armado surtido: %s", hist_err)
+
+
+def guardar_composicion_armado_surtido(
+    base_empresa: str,
+    codigo_movimiento: int,
+    id_articulo_pack: int,
+    cantidad_packs: int,
+    deposito_origen: int,
+    deposito_destino: int,
+    lineas_enriquecidas: List[Dict[str, Any]],
+    id_usuario: int,
+    id_operario: Optional[int] = None,
+    id_lista_produccion: Optional[int] = None,
+    detalle: Optional[str] = None,
+) -> None:
+    from mpr.models import MprArmadoSurtidoLinea, MprArmadoSurtidoMovimiento
+
+    mov = MprArmadoSurtidoMovimiento.objects.create(
+        base_empresa=base_empresa.strip(),
+        codigo_movimiento=int(codigo_movimiento),
+        id_articulo_pack=int(id_articulo_pack),
+        cantidad_packs=int(cantidad_packs),
+        deposito_origen=int(deposito_origen),
+        deposito_destino=int(deposito_destino),
+        id_lista_produccion=to_int_or_none(id_lista_produccion),
+        id_operario=to_int_or_none(id_operario),
+        id_usuario=int(id_usuario),
+        detalle=(detalle or "").strip()[:500],
+    )
+    bulk = []
+    for ln in lineas_enriquecidas:
+        qty_pack = int(ln.get("cantidad_por_pack") or 0)
+        bulk.append(
+            MprArmadoSurtidoLinea(
+                movimiento=mov,
+                id_articulo_componente=int(ln["id_articulo"]),
+                codigo_articulo=str_or_default(ln.get("codigo_articulo"), "-"),
+                descripcion_articulo=str_or_default(ln.get("descripcion_articulo"), "-"),
+                cantidad_por_pack=qty_pack,
+                cantidad_total=qty_pack * int(cantidad_packs),
+            )
+        )
+    if bulk:
+        MprArmadoSurtidoLinea.objects.bulk_create(bulk)
+
+
+def _detalle_mov_armado_surtido(
+    id_articulo_pack: int,
+    cantidad_packs: int,
+    lineas_composicion: List[Dict[str, Any]],
+    *,
+    detalle: Optional[str] = None,
+    id_lista_produccion: Optional[int] = None,
+) -> str:
+    n_comp = len(lineas_composicion or [])
+    return (detalle or "").strip() or (
+        f"Armado surtido MPR (pack {id_articulo_pack}, {cantidad_packs} packs, {n_comp} componentes)"
+        + (f" OPT {id_lista_produccion}" if id_lista_produccion else "")
+    )
+
+
+def _ejecutar_armado_surtido_tx(
+    cursor,
+    _conn,
+    *,
+    id_usuario: int,
+    id_articulo_pack: int,
+    cantidad_packs: int,
+    deposito_origen: int,
+    deposito_destino: int,
+    lineas_composicion: List[Dict[str, Any]],
+    id_operario: Optional[int] = None,
+    id_lista_produccion: Optional[int] = None,
+    detalle_mov: Optional[str] = None,
+) -> Tuple[bool, Optional[int], Optional[str], Optional[str], List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    """
+    Núcleo transaccional de armado surtido sobre cursor activo.
+    No realiza commit/rollback ante errores de negocio; delega al caller.
+    Devuelve info_pack en el 6.º elemento (descripción y saldos del pack en destino).
+    """
+    id_ref_movstock = 1
+    id_pv = 1
+    fecha_mov = date.today().isoformat()
+    hora_evento = datetime.now().strftime("%H:%M:%S")
+    n_comp = len(lineas_composicion or [])
+    lineas_enriquecidas: List[Dict[str, Any]] = []
+    detalle_mov = detalle_mov or _detalle_mov_armado_surtido(
+        id_articulo_pack,
+        cantidad_packs,
+        lineas_composicion,
+        id_lista_produccion=id_lista_produccion,
+    )
+
+    try:
+        tbl_codmov = _nombre_tabla(cursor, "codmov")
+        tbl_talonarios = _nombre_tabla(cursor, "talonarios")
+        tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+        tbl_stock = _nombre_tabla(cursor, "stock")
+        tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+        tbl_articulo = _nombre_tabla(cursor, "articulo")
+        if not all([tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd, tbl_articulo]):
+            raise MprSchemaError("Faltan tablas de stock para armado surtido.")
+
+        ids_todos = [int(id_articulo_pack)] + [
+            int(to_int_or_none(ln.get("id_articulo")) or 0) for ln in lineas_composicion
+        ]
+        arts = _fetch_articulos_map(cursor, tbl_articulo, [i for i in ids_todos if i])
+        if id_articulo_pack not in arts:
+            return False, None, None, "Pack terminado no encontrado en artículos.", lineas_enriquecidas, None
+        pack_info = arts[id_articulo_pack]
+
+        tbl_lote = _nombre_tabla(cursor, "lote")
+        tbl_lote_stock = _nombre_tabla(cursor, "lote_stock")
+        stock_tiene_id_lote = False
+        if tbl_stock:
+            cursor.execute(
+                "SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s AND COLUMN_NAME = 'id_lote'",
+                [tbl_stock],
+            )
+            stock_tiene_id_lote = cursor.fetchone() is not None
+
+        ids_comp = [int(ln["id_articulo"]) for ln in lineas_composicion]
+        articulos_con_lote = _articulos_con_lote_ids(cursor, tbl_articulo, ids_comp)
+        for ln in lineas_composicion:
+            id_c = int(ln["id_articulo"])
+            qty_pp = int(ln["cantidad_por_pack"])
+            info = arts.get(id_c)
+            if not info:
+                return False, None, None, f"Componente {id_c} no encontrado.", lineas_enriquecidas, None
+            necesario = qty_pp * cantidad_packs
+            usa_lote = id_c in articulos_con_lote and tbl_lote and tbl_lote_stock
+            if usa_lote:
+                cursor.execute(
+                    f"""
+                    SELECT COALESCE(SUM(ls.stock_lote), 0)
+                    FROM {tbl_lote} l
+                    INNER JOIN {tbl_lote_stock} ls ON ls.id_lote = l.id_lote
+                    WHERE l.id_articulo = %s AND ls.id_deposito = %s
+                      AND COALESCE(l.anulado,'No') = 'No' AND COALESCE(ls.stock_lote,0) > 0
+                    """,
+                    [id_c, deposito_origen],
+                )
+                row_lote = cursor.fetchone()
+                saldo_lotes = float(row_lote[0] or 0) if row_lote else 0
+                if saldo_lotes < necesario:
+                    return (
+                        False,
+                        None,
+                        None,
+                        f"Stock en lotes insuficiente de {info['codigo_articulo']} en origen: "
+                        f"disponible {saldo_lotes}, se necesitan {necesario}.",
+                        lineas_enriquecidas,
+                        None,
+                    )
+            cursor.execute(
+                f"SELECT saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s",
+                [id_c, deposito_origen],
+            )
+            row_sd = cursor.fetchone()
+            saldo = Decimal(str(row_sd[0] or 0)) if row_sd else Decimal(0)
+            if saldo < Decimal(str(necesario)):
+                return (
+                    False,
+                    None,
+                    None,
+                    f"Stock insuficiente de {info['codigo_articulo']} en origen: "
+                    f"tiene {saldo}, se necesitan {necesario}.",
+                    lineas_enriquecidas,
+                    None,
+                )
+            lineas_enriquecidas.append({
+                "id_articulo": id_c,
+                "cantidad_por_pack": qty_pp,
+                "codigo_articulo": info["codigo_articulo"],
+                "descripcion_articulo": info["descripcion_articulo"],
+                "usa_lote": usa_lote,
+                "precio_costo": info.get("precio_costo") or Decimal(0),
+            })
+
+        cursor.execute(f"SELECT CodigoMovimiento FROM {tbl_codmov} WHERE codigo = 1 FOR UPDATE")
+        row = cursor.fetchone()
+        if not row:
+            return False, None, None, "No se pudo obtener código de movimiento.", lineas_enriquecidas, None
+        codigo_mov = int(row[0] or 0) + 1
+        cursor.execute(f"UPDATE {tbl_codmov} SET CodigoMovimiento = %s WHERE codigo = 1", [codigo_mov])
+
+        cursor.execute(
+            f"SELECT Orden, Nro FROM {tbl_talonarios} WHERE TipoComprobante = 'MSTOCK' AND id_punto_venta = %s FOR UPDATE",
+            [id_pv],
+        )
+        talon_row = cursor.fetchone()
+        if not talon_row:
+            return (
+                False,
+                None,
+                None,
+                "No existe talonario MSTOCK para el punto de venta.",
+                lineas_enriquecidas,
+                None,
+            )
+        orden_talon, nro_actual = talon_row[0], int(talon_row[1] or 0)
+        nro_nuevo = nro_actual + 1
+        cursor.execute(f"UPDATE {tbl_talonarios} SET Nro = %s WHERE Orden = %s", [nro_nuevo, orden_talon])
+        nro_comprobante = _formato_nro_comprobante_mstock(id_pv, nro_actual)
+        nro_comprobante_busq = nro_actual
+
+        params_mov = [
+            codigo_mov,
+            nro_comprobante,
+            MOTIVO_ARMADO_TEXTO,
+            fecha_mov,
+            deposito_origen,
+            deposito_destino,
+            detalle_mov,
+            id_usuario,
+            id_ref_movstock,
+            1,
+            None,
+            None,
+            None,
+            TIPO_MOV_OPA,
+            id_pv,
+            nro_comprobante_busq,
+        ]
+        params_mov_ins = (
+            params_mov[:8] + ["MSTOCK"] + [params_mov[8], params_mov[9], params_mov[10], params_mov[11], params_mov[13], params_mov[14]]
+        )
+        id_op_arm = to_int_or_none(id_operario)
+        intentos_m: List[Tuple[str, List[Any]]] = []
+        if id_op_arm is not None:
+            intentos_m.append((
+                f"""
+                INSERT INTO {tbl_mov}
+                (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                 detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv, id_operario_opt)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'No', %s, %s, %s, %s, %s, %s, %s)
+                """,
+                list(params_mov_ins) + [id_op_arm],
+            ))
+        intentos_m.append((
+            f"""
+            INSERT INTO {tbl_mov}
+            (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+             detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'No', %s, %s, %s, %s, %s, %s)
+            """,
+            params_mov_ins,
+        ))
+        _mpr_ejecutar_insert_intentos(cursor, intentos_m)
+
+        orden = 0
+        for ln in lineas_enriquecidas:
+            id_c = ln["id_articulo"]
+            qty_salida = Decimal(str(ln["cantidad_por_pack"] * cantidad_packs))
+            orden, err_cons = _mpr_consumir_salida_componente_surtido(
+                cursor,
+                tbl_stock,
+                tbl_sd,
+                tbl_lote,
+                tbl_lote_stock,
+                stock_tiene_id_lote,
+                bool(ln.get("usa_lote")),
+                codigo_mov,
+                id_c,
+                ln["codigo_articulo"],
+                ln["descripcion_articulo"],
+                fecha_mov,
+                qty_salida,
+                deposito_origen,
+                id_ref_movstock,
+                orden,
+                id_usuario,
+                nro_comprobante,
+                id_operario,
+                ln.get("precio_costo"),
+            )
+            if err_cons:
+                return False, None, None, err_cons, lineas_enriquecidas, None
+
+        id_pack = int(id_articulo_pack)
+        entrada_pack = Decimal(str(cantidad_packs))
+        cursor.execute(
+            f"SELECT id_stock_deposito, saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+            [id_pack, deposito_destino],
+        )
+        sd_dest = cursor.fetchone()
+        saldo_dest = Decimal(str(sd_dest[1] or 0)) if sd_dest else Decimal(0)
+        saldo_dest_despues = saldo_dest + entrada_pack
+        orden += 1
+        _mpr_insert_renglon_stock_armado(
+            cursor,
+            tbl_stock,
+            codigo_mov,
+            id_pack,
+            pack_info["codigo_articulo"],
+            pack_info["descripcion_articulo"],
+            fecha_mov,
+            entrada_pack,
+            Decimal(0),
+            saldo_dest_despues,
+            deposito_destino,
+            id_ref_movstock,
+            orden,
+            id_usuario,
+            nro_comprobante,
+            id_operario=id_operario,
+            precio_costo_u=pack_info.get("precio_costo"),
+        )
+        if sd_dest:
+            cursor.execute(
+                f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+                [saldo_dest_despues, sd_dest[0]],
+            )
+        else:
+            cursor.execute(
+                f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                [id_pack, deposito_destino, saldo_dest_despues],
+            )
+
+        tbl_historico = _nombre_tabla(cursor, "lista_produccion_historico")
+        _guardar_historial_armado_surtido(
+            cursor,
+            tbl_historico,
+            id_pack,
+            cantidad_packs,
+            deposito_origen,
+            deposito_destino,
+            codigo_mov,
+            nro_comprobante,
+            id_usuario,
+            id_lista_produccion,
+            fecha_mov,
+            hora_evento,
+            id_operario,
+            n_comp,
+        )
+        info_pack = {
+            "codigo_articulo_pack": str_or_default(pack_info.get("codigo_articulo"), ""),
+            "descripcion_articulo_pack": str_or_default(pack_info.get("descripcion_articulo"), ""),
+            "saldo_inicial": _saldo_modal_armado_surtido(saldo_dest),
+            "saldo_final": _saldo_modal_armado_surtido(saldo_dest_despues),
+        }
+        return True, codigo_mov, nro_comprobante, None, lineas_enriquecidas, info_pack
+    except MprSchemaError:
+        raise
+    except Exception as e:
+        if "1054" in str(e) or "Unknown column" in str(e).lower():
+            raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
+        logger.warning("_ejecutar_armado_surtido_tx: %s", e, exc_info=True)
+        return False, None, None, str(e), lineas_enriquecidas, None
+
+
+def ejecutar_armado_surtido(
+    base_empresa: str,
+    id_usuario: int,
+    id_articulo_pack: int,
+    cantidad_packs: int,
+    deposito_origen: int,
+    deposito_destino: int,
+    lineas_composicion: List[Dict[str, Any]],
+    id_operario: Optional[int] = None,
+    id_lista_produccion: Optional[int] = None,
+    detalle: Optional[str] = None,
+) -> Tuple[bool, Optional[int], Optional[str], Optional[str]]:
+    """
+    Armado surtido: N salidas de componentes desde origen y entrada del pack en destino.
+    Sin BOM; composición libre. Devuelve (ok, codigo_movimiento, nro_comprobante, error).
+    """
+    if not (base_empresa or "").strip():
+        return False, None, None, "Base de datos no indicada."
+    if not id_usuario:
+        return False, None, None, "Usuario no indicado."
+    ok_val, err_val = validar_datos_armado_surtido(
+        cantidad_packs,
+        deposito_origen,
+        deposito_destino,
+        lineas_composicion,
+        id_operario=id_operario,
+        id_articulo_pack=id_articulo_pack,
+    )
+    if not ok_val:
+        return False, None, None, err_val
+    if not articulo_habilitado_armado_surtido(base_empresa, id_articulo_pack):
+        return False, None, None, (
+            f"El pack seleccionado no tiene tipo_art_fab '{TIPO_ART_FAB_PACK_ARMADO_SURTIDO}'."
+        )
+
+    deposito_origen = int(to_int_or_none(deposito_origen) or 0)
+    deposito_destino = int(to_int_or_none(deposito_destino) or 0)
+    detalle_mov = _detalle_mov_armado_surtido(
+        id_articulo_pack,
+        cantidad_packs,
+        lineas_composicion,
+        detalle=detalle,
+        id_lista_produccion=id_lista_produccion,
+    )
+    lineas_enriquecidas: List[Dict[str, Any]] = []
+    try:
+        with get_connection(base_empresa) as conn:
+            conn.autocommit(False)
+            cursor = conn.cursor()
+            ok_tx, codigo_mov, nro_comprobante, err_tx, lineas_enriquecidas, info_pack = _ejecutar_armado_surtido_tx(
+                cursor,
+                conn,
+                id_usuario=id_usuario,
+                id_articulo_pack=int(id_articulo_pack),
+                cantidad_packs=int(cantidad_packs),
+                deposito_origen=deposito_origen,
+                deposito_destino=deposito_destino,
+                lineas_composicion=lineas_composicion,
+                id_operario=id_operario,
+                id_lista_produccion=id_lista_produccion,
+                detalle_mov=detalle_mov,
+            )
+            if not ok_tx:
+                conn.rollback()
+                return False, None, None, err_tx
+            conn.commit()
+
+        if codigo_mov is None or nro_comprobante is None:
+            return False, None, None, "No se pudo confirmar el movimiento de armado surtido."
+
+        guardar_composicion_armado_surtido(
+            base_empresa,
+            codigo_mov,
+            id_articulo_pack,
+            cantidad_packs,
+            deposito_origen,
+            deposito_destino,
+            lineas_enriquecidas,
+            id_usuario,
+            id_operario=id_operario,
+            id_lista_produccion=id_lista_produccion,
+            detalle=detalle_mov,
+        )
+        return True, codigo_mov, nro_comprobante, None
+    except MprSchemaError:
+        raise
+    except Exception as e:
+        if "1054" in str(e) or "Unknown column" in str(e).lower():
+            raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
+        logger.warning("Conexión ejecutar_armado_surtido: %s", e, exc_info=True)
+        return False, None, None, str(e)
+
+
+def validar_stock_agregado_lote(
+    base_empresa: str,
+    deposito_origen: int,
+    armados: List[Dict[str, Any]],
+    item_extra: Optional[Dict[str, Any]] = None,
+) -> Tuple[bool, List[Dict[str, Any]]]:
+    """
+    Valida stock agregado de componentes para el lote actual + opcional item candidato.
+    Devuelve (ok, conflictos).
+    """
+    items = list(armados or [])
+    if item_extra:
+        item_norm, err_item = normalizar_item_lote_armado_surtido(item_extra)
+        if err_item or not item_norm:
+            return False, [{
+                "id_articulo": None,
+                "codigo_articulo": "-",
+                "necesario": 0,
+                "disponible": 0,
+                "mensaje": err_item or "Ítem de lote inválido.",
+            }]
+        items.append(item_norm)
+
+    demanda = calcular_demanda_agregada_lote(items)
+    if not demanda:
+        return True, []
+
+    dep_o = to_int_or_none(deposito_origen)
+    if not dep_o:
+        return False, [{
+            "id_articulo": None,
+            "codigo_articulo": "-",
+            "necesario": 0,
+            "disponible": 0,
+            "mensaje": "Depósito origen inválido.",
+        }]
+
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            tbl_articulo = _nombre_tabla(cursor, "articulo")
+            if not tbl_sd or not tbl_articulo:
+                raise MprSchemaError("Faltan tablas de stock para validar lote de armado surtido.")
+
+            ids = sorted(int(i) for i in demanda.keys())
+            placeholders = ",".join(["%s"] * len(ids))
+            cursor.execute(
+                f"""
+                SELECT id_articulo, COALESCE(saldo, 0) AS saldo
+                FROM {tbl_sd}
+                WHERE id_deposito = %s AND id_articulo IN ({placeholders})
+                """,
+                [dep_o] + ids,
+            )
+            saldos: Dict[int, Decimal] = {}
+            for row in cursor.fetchall() or []:
+                id_a = to_int_or_none((row or {}).get("id_articulo"))
+                if id_a:
+                    saldos[int(id_a)] = Decimal(str((row or {}).get("saldo") or 0))
+            arts = _fetch_articulos_map(cursor, tbl_articulo, ids)
+            tbl_lote = _nombre_tabla(cursor, "lote")
+            tbl_lote_stock = _nombre_tabla(cursor, "lote_stock")
+            articulos_con_lote = _articulos_con_lote_ids(cursor, tbl_articulo, ids)
+
+            conflictos: List[Dict[str, Any]] = []
+            for id_a, necesario in demanda.items():
+                id_int = int(id_a)
+                necesario_dec = Decimal(str(necesario))
+                info = arts.get(id_int) or {}
+                cod = str_or_default(info.get("codigo_articulo"), str(id_int))
+
+                if id_int in articulos_con_lote and tbl_lote and tbl_lote_stock:
+                    cursor.execute(
+                        f"""
+                        SELECT COALESCE(SUM(ls.stock_lote), 0) AS saldo_lotes
+                        FROM {tbl_lote} l
+                        INNER JOIN {tbl_lote_stock} ls ON ls.id_lote = l.id_lote
+                        WHERE l.id_articulo = %s AND ls.id_deposito = %s
+                          AND COALESCE(l.anulado,'No') = 'No' AND COALESCE(ls.stock_lote,0) > 0
+                        """,
+                        [id_int, dep_o],
+                    )
+                    row_lote = cursor.fetchone() or {}
+                    saldo_lotes = Decimal(str((row_lote.get("saldo_lotes") if isinstance(row_lote, dict) else row_lote[0]) or 0))
+                    if saldo_lotes < necesario_dec:
+                        conflictos.append({
+                            "id_articulo": id_int,
+                            "codigo_articulo": cod,
+                            "necesario": float(necesario_dec),
+                            "disponible": float(saldo_lotes),
+                            "mensaje": "Stock en lotes insuficiente para agregar al lote.",
+                        })
+                        continue
+
+                disponible = saldos.get(id_int, Decimal(0))
+                if disponible >= necesario_dec:
+                    continue
+                conflictos.append({
+                    "id_articulo": id_int,
+                    "codigo_articulo": cod,
+                    "necesario": float(necesario_dec),
+                    "disponible": float(disponible),
+                    "mensaje": "Stock insuficiente para agregar al lote.",
+                })
+            return len(conflictos) == 0, conflictos
+    except MprSchemaError:
+        raise
+    except Exception as e:
+        logger.warning("validar_stock_agregado_lote %s: %s", base_empresa, e, exc_info=True)
+        return False, [{
+            "id_articulo": None,
+            "codigo_articulo": "-",
+            "necesario": 0,
+            "disponible": 0,
+            "mensaje": f"Error validando stock agregado del lote: {e}",
+        }]
+
+
+def _saldo_modal_armado_surtido(val: Any) -> Optional[float]:
+    """Saldo para modal de resultado (entero si aplica)."""
+    if val is None:
+        return None
+    try:
+        f = float(val)
+    except (TypeError, ValueError):
+        return None
+    if f == int(f):
+        return float(int(f))
+    return round(f, 4)
+
+
+def _descripcion_pack_armado_surtido(
+    info_pack: Optional[Dict[str, Any]],
+    item: Dict[str, Any],
+) -> str:
+    info = info_pack or {}
+    cod = str_or_default(info.get("codigo_articulo_pack"), "")
+    desc = str_or_default(info.get("descripcion_articulo_pack"), "")
+    if cod and desc:
+        return f"{cod} — {desc}"
+    if desc:
+        return desc
+    if cod:
+        return cod
+    id_pack = to_int_or_none(item.get("id_articulo_pack"))
+    return str(id_pack) if id_pack else "-"
+
+
+def _item_fallido_lote_armado_surtido(
+    item: Dict[str, Any],
+    error: str,
+) -> Dict[str, Any]:
+    return {
+        "id_articulo_pack": to_int_or_none(item.get("id_articulo_pack")),
+        "cantidad_packs": int(to_int_or_none(item.get("cantidad_packs")) or 0),
+        "lineas": list(item.get("lineas") or []),
+        "error": str_or_default(error, "Error no especificado."),
+    }
+
+
+def _item_exitoso_lote_armado_surtido(
+    item: Dict[str, Any],
+    codigo_movimiento: int,
+    nro_comprobante: str,
+    info_pack: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    cantidad = int(to_int_or_none(item.get("cantidad_packs")) or 0)
+    info = info_pack or {}
+    return {
+        "id_articulo_pack": to_int_or_none(item.get("id_articulo_pack")),
+        "codigo_articulo_pack": str_or_default(info.get("codigo_articulo_pack"), "") or None,
+        "descripcion_articulo_pack": str_or_default(info.get("descripcion_articulo_pack"), "") or None,
+        "descripcion_pack": _descripcion_pack_armado_surtido(info_pack, item),
+        "cantidad_packs": cantidad,
+        "cantidad_grabada": cantidad,
+        "saldo_inicial": info.get("saldo_inicial"),
+        "saldo_final": info.get("saldo_final"),
+        "codigo_movimiento": int(codigo_movimiento),
+        "nro_comprobante": str_or_default(nro_comprobante, "-"),
+    }
+
+
+def ejecutar_lote_armado_surtido(
+    base_empresa: str,
+    id_usuario: int,
+    cabecera: Dict[str, Any],
+    armados: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Ejecuta lote FIFO de armados surtido.
+    Commit por ítem exitoso y continuación ante errores de negocio.
+    """
+    resultado: Dict[str, Any] = {"exitosos": [], "fallidos": []}
+    items = list(armados or [])
+    if not items:
+        resultado["fallidos"].append(_item_fallido_lote_armado_surtido({}, "Agregue al menos un armado al lote."))
+        return resultado
+    if not (base_empresa or "").strip():
+        for item in items:
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, "Base de datos no indicada."))
+        return resultado
+    if not id_usuario:
+        for item in items:
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, "Usuario no indicado."))
+        return resultado
+
+    deposito_origen = to_int_or_none(cabecera.get("deposito_origen"))
+    deposito_destino = to_int_or_none(cabecera.get("deposito_destino"))
+    id_operario = to_int_or_none(cabecera.get("id_operario"))
+    id_lista_produccion = to_int_or_none(cabecera.get("id_lista_produccion"))
+    detalle_lote = str_or_default(cabecera.get("detalle"), "").strip() or None
+
+    ok_reglas, err_reglas = validar_reglas_lote_armado_surtido(
+        items,
+        deposito_origen=deposito_origen,
+        deposito_destino=deposito_destino,
+        id_operario=id_operario,
+        require_non_empty=True,
+    )
+    if not ok_reglas:
+        for item in items:
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, err_reglas or "Lote inválido."))
+        return resultado
+
+    for item in items:
+        id_articulo_pack = int(to_int_or_none(item.get("id_articulo_pack")) or 0)
+        cantidad_packs = int(to_int_or_none(item.get("cantidad_packs")) or 0)
+        lineas = list(item.get("lineas") or [])
+        if not articulo_habilitado_armado_surtido(base_empresa, id_articulo_pack):
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
+                item,
+                f"El pack seleccionado no tiene tipo_art_fab '{TIPO_ART_FAB_PACK_ARMADO_SURTIDO}'.",
+            ))
+            continue
+
+        detalle_mov = _detalle_mov_armado_surtido(
+            id_articulo_pack,
+            cantidad_packs,
+            lineas,
+            detalle=detalle_lote,
+            id_lista_produccion=id_lista_produccion,
+        )
+        try:
+            lineas_enriquecidas: List[Dict[str, Any]] = []
+            with get_connection(base_empresa) as conn:
+                conn.autocommit(False)
+                cursor = conn.cursor()
+                ok_tx, codigo_mov, nro_comprobante, err_tx, lineas_enriquecidas, info_pack = _ejecutar_armado_surtido_tx(
+                    cursor,
+                    conn,
+                    id_usuario=int(id_usuario),
+                    id_articulo_pack=id_articulo_pack,
+                    cantidad_packs=cantidad_packs,
+                    deposito_origen=int(deposito_origen or 0),
+                    deposito_destino=int(deposito_destino or 0),
+                    lineas_composicion=lineas,
+                    id_operario=id_operario,
+                    id_lista_produccion=id_lista_produccion,
+                    detalle_mov=detalle_mov,
+                )
+                if not ok_tx:
+                    conn.rollback()
+                    resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
+                        item,
+                        err_tx or "No se pudo ejecutar el armado surtido.",
+                    ))
+                    continue
+                conn.commit()
+
+            if codigo_mov is None or nro_comprobante is None:
+                resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
+                    item,
+                    "No se pudo confirmar el movimiento de armado surtido.",
+                ))
+                continue
+
+            guardar_composicion_armado_surtido(
+                base_empresa,
+                codigo_mov,
+                id_articulo_pack,
+                cantidad_packs,
+                int(deposito_origen or 0),
+                int(deposito_destino or 0),
+                lineas_enriquecidas,
+                int(id_usuario),
+                id_operario=id_operario,
+                id_lista_produccion=id_lista_produccion,
+                detalle=detalle_mov,
+            )
+            resultado["exitosos"].append(_item_exitoso_lote_armado_surtido(
+                item,
+                codigo_mov,
+                nro_comprobante,
+                info_pack=info_pack,
+            ))
+        except MprSchemaError:
+            raise
+        except Exception as e:
+            if "1054" in str(e) or "Unknown column" in str(e).lower():
+                raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
+            logger.warning("ejecutar_lote_armado_surtido item %s: %s", id_articulo_pack, e, exc_info=True)
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, str(e)))
+    return resultado
 
 
 # --- Reportes MPR (solo lectura) ---

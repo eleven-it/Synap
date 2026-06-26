@@ -3,20 +3,40 @@ Servicio principal de sincronización entre Tiendanube y AdministraNET.
 """
 
 import logging
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
+
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext as _
+
+from core.utils.administranet_types import str_or_default, to_int_or_none
+from ..utils.feature_flags import tiendanube_sync_disabled_reason
+from .customer_lookup import (
+    nombre_completo_a_campos_tiendanube,
+    tiendanube_customer_to_form_fields,
+)
 from .tiendanube_service import TiendanubeService
 from .adminet_service import AdministraNETService
 from .product_service import TiendanubeProductService
 from .automatic_mapping_service import AutomaticMappingService
+from .product_pricing import precios_tiendanube_desde_articulo
+from .sync_change_detection import (
+    actualizar_snapshot_cliente_adminet,
+    actualizar_snapshot_cliente_tiendanube,
+    cliente_adminet_cambio,
+    cliente_tn_modificado,
+    producto_requiere_sync_adminet_a_tn,
+)
 from ..models import (
     TiendanubeConfig, AdministraNETConfig, CustomerMapping, 
     ProductMapping, ProductVariantMapping, OrderMapping, SyncLog
 )
 
 logger = logging.getLogger(__name__)
+
+SYNC_SKIP_MINUTES = 5
+STOCK_PRICE_BATCH_MAX = 50
 
 
 class TiendanubeAdministraNETSyncService:
@@ -141,115 +161,318 @@ class TiendanubeAdministraNETSyncService:
         }
         
         return estado_map.get(estado, {'order_status': 'open', 'fulfillment_status': 'pending'})
-    
-    def sync_customers_from_tiendanube(self) -> Dict[str, Any]:
-        """Sincronizar clientes desde Tiendanube hacia AdministraNET."""
-        try:
-            # Crear log de sincronización
-            sync_log = SyncLog.objects.create(
-                sync_type=SyncLog.SyncType.CUSTOMER,
-                direction=SyncLog.SyncDirection.TO_ADMINET,
-                status=SyncLog.Status.IN_PROGRESS,
-                tiendanube_config=self.tiendanube_config,
-                adminet_config=self.adminet_config
+
+    def _should_skip_recent_sync(self, mapping: CustomerMapping) -> bool:
+        """Evita loops: omitir si se sincronizó hace menos de SYNC_SKIP_MINUTES."""
+        if not mapping.last_synced:
+            return False
+        cutoff = timezone.now() - timedelta(minutes=SYNC_SKIP_MINUTES)
+        return mapping.last_synced >= cutoff
+
+    @staticmethod
+    def _build_adminet_data_from_tiendanube_customer(customer: Dict[str, Any]) -> Dict[str, Any]:
+        from .customer_lookup import tiendanube_customer_to_form_fields
+
+        tn_id = to_int_or_none(customer.get('id'))
+        tn_fields = tiendanube_customer_to_form_fields(customer)
+        name = tn_fields.get('tiendanube_name') or '-'
+        if name == '-' and tn_fields.get('tiendanube_first_name'):
+            name = (
+                f"{tn_fields['tiendanube_first_name']} "
+                f"{tn_fields.get('tiendanube_last_name', '')}"
+            ).strip()
+        addr = str_or_default(tn_fields.get('tiendanube_address'), '-')
+        data = {
+            'nombre_cliente': name,
+            'Email': str_or_default(tn_fields.get('tiendanube_email') or customer.get('email'), '-'),
+            'telefono': str_or_default(tn_fields.get('tiendanube_phone') or customer.get('phone'), '-'),
+            'Calle': addr,
+            'CUIT': str_or_default(
+                tn_fields.get('tiendanube_document')
+                or customer.get('identification')
+                or customer.get('document'),
+                '-',
+            ),
+            'Estado': 'Activo',
+            'cliente_ecommerce': 'Si',
+            'ListaPrecio': 'Lista 1',
+        }
+        if tn_id is not None:
+            data['id_tiendanube'] = tn_id
+        return data
+
+    def _check_sync_enabled(self) -> Optional[Dict[str, Any]]:
+        reason = tiendanube_sync_disabled_reason(self.tiendanube_config)
+        if reason:
+            return {'success': False, 'message': reason}
+        return None
+
+    @staticmethod
+    def _is_adminet_ecommerce_customer(customer: Dict[str, Any]) -> bool:
+        return str_or_default(customer.get('cliente_ecommerce'), 'No').strip().lower() == 'si'
+
+    @staticmethod
+    def _customer_email_for_tiendanube(customer: Dict[str, Any]) -> str:
+        email = str_or_default(customer.get('Email'), '').strip()
+        if email and email != '-':
+            return email
+        codigo = customer.get('Codigo')
+        return f'adminet_{codigo or 0}@noemail.local'
+
+    @staticmethod
+    def _customer_email_is_real_for_dedup(email: str) -> bool:
+        """True si el email permite deduplicación (no es fallback @noemail.local)."""
+        normalized = (email or '').strip().lower()
+        return bool(normalized) and not normalized.endswith('@noemail.local')
+
+    def _build_tiendanube_payload_from_adminet(self, customer: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            'name': str_or_default(customer.get('nombre_cliente'), '-'),
+            'email': self._customer_email_for_tiendanube(customer),
+            'document': str_or_default(customer.get('CUIT'), '-'),
+            'phone': str_or_default(customer.get('telefono'), '-'),
+            'address': f"{customer.get('Calle', '')} {customer.get('NroCalle', '')}".strip(),
+        }
+
+    def _resolve_customer_mapping(
+        self,
+        customer: Dict[str, Any],
+        tiendanube_id: Optional[int] = None,
+    ) -> CustomerMapping:
+        codigo = to_int_or_none(customer.get('Codigo'))
+        mapping = None
+        if codigo is not None:
+            mapping = CustomerMapping.objects.filter(adminet_codigo=codigo).first()
+        if mapping is None and tiendanube_id is not None:
+            mapping = CustomerMapping.objects.filter(tiendanube_id=tiendanube_id).first()
+
+        email = self._customer_email_for_tiendanube(customer)
+        adminet_nombre = str_or_default(customer.get('nombre_cliente'), '')
+        defaults = {
+            'adminet_nombre': adminet_nombre,
+            'adminet_email': email,
+            'adminet_cliente_ecommerce': str_or_default(customer.get('cliente_ecommerce'), ''),
+            'sync_status': CustomerMapping.SyncStatus.PENDING,
+        }
+        defaults.update(nombre_completo_a_campos_tiendanube(adminet_nombre))
+
+        if mapping is None:
+            return CustomerMapping.objects.create(
+                adminet_codigo=codigo,
+                tiendanube_id=tiendanube_id,
+                tiendanube_email=email,
+                **defaults,
             )
-            
-            # Obtener clientes de Tiendanube
-            tiendanube_result = self.tiendanube_service.get_customers(limit=100)
-            if not tiendanube_result['success']:
-                sync_log.complete_sync(False, tiendanube_result['message'])
-                return tiendanube_result
-            
-            customers = tiendanube_result['customers']
-            sync_log.total_items = len(customers)
-            sync_log.save()
-            
-            successful_syncs = 0
-            failed_syncs = 0
-            
-            for customer in customers:
-                try:
-                    # Verificar si ya existe el mapeo
-                    mapping, created = CustomerMapping.objects.get_or_create(
-                        tiendanube_id=customer['id'],
-                        defaults={
-                            'tiendanube_email': customer.get('email', ''),
-                            'tiendanube_name': customer.get('name', ''),
-                            'sync_status': CustomerMapping.SyncStatus.PENDING
-                        }
+
+        update_fields = []
+        if codigo is not None and mapping.adminet_codigo != codigo:
+            mapping.adminet_codigo = codigo
+            update_fields.append('adminet_codigo')
+        if tiendanube_id is not None and mapping.tiendanube_id != tiendanube_id:
+            mapping.tiendanube_id = tiendanube_id
+            update_fields.append('tiendanube_id')
+        for field, value in defaults.items():
+            if field.startswith('tiendanube_') and field != 'tiendanube_email':
+                if value and not getattr(mapping, field):
+                    setattr(mapping, field, value)
+                    update_fields.append(field)
+                continue
+            if getattr(mapping, field) != value and value:
+                setattr(mapping, field, value)
+                update_fields.append(field)
+        if update_fields:
+            mapping.save(update_fields=list(set(update_fields)))
+        return mapping
+
+    def _push_adminet_customer_to_tiendanube(
+        self,
+        customer: Dict[str, Any],
+        mapping: Optional[CustomerMapping] = None,
+    ) -> Tuple[bool, str, Optional[int], Optional[CustomerMapping]]:
+        """
+        Crear o actualizar un cliente AdministraNET en Tienda Nube.
+        Persiste id_tiendanube en MySQL cuando se crea en TN.
+        """
+        if not self._is_adminet_ecommerce_customer(customer):
+            return (
+                False,
+                'Cliente sin cliente_ecommerce=Si; no se publica en Tienda Nube',
+                None,
+                mapping,
+            )
+
+        tiendanube_id = to_int_or_none(customer.get('id_tiendanube'))
+        if mapping and not tiendanube_id:
+            tiendanube_id = to_int_or_none(mapping.tiendanube_id)
+
+        tiendanube_data = self._build_tiendanube_payload_from_adminet(customer)
+        codigo = to_int_or_none(customer.get('Codigo'))
+        created_in_tn = False
+
+        if tiendanube_id:
+            result = self.tiendanube_service.update_customer(tiendanube_id, tiendanube_data)
+        else:
+            email = self._customer_email_for_tiendanube(customer)
+            if self._customer_email_is_real_for_dedup(email):
+                find_result = self.tiendanube_service.find_customer_by_email(email)
+                if not find_result.get('success'):
+                    return (
+                        False,
+                        find_result.get('message', 'Error buscando cliente por email'),
+                        None,
+                        mapping,
                     )
-                    
-                    if created or mapping.sync_status != CustomerMapping.SyncStatus.SYNCED:
-                        # Crear/actualizar en AdministraNET
-                        adminet_data = {
-                            'nombre': customer.get('name', ''),
-                            'email': customer.get('email', ''),
-                            'documento': customer.get('document', ''),
-                            'telefono': customer.get('phone', ''),
-                            'direccion': customer.get('address', '')
-                        }
-                        
-                        if mapping.adminet_codigo:
-                            # Actualizar cliente existente
-                            result = self.adminet_service.update_customer(mapping.adminet_codigo, adminet_data)
-                        else:
-                            # Crear nuevo cliente
-                            result = self.adminet_service.create_customer(adminet_data)
-                            if result['success']:
-                                mapping.adminet_codigo = result.get('customer_id')
-                        
-                        if result['success']:
-                            mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
-                            mapping.last_synced = timezone.now()
-                            mapping.save()
-                            successful_syncs += 1
-                        else:
-                            mapping.sync_status = CustomerMapping.SyncStatus.ERROR
-                            mapping.error_message = result['message']
-                            mapping.save()
-                            failed_syncs += 1
-                    
-                    sync_log.processed_items += 1
-                    sync_log.save()
-                    
-                except Exception as e:
-                    logger.error(f"Error syncing customer {customer.get('id')}: {e}")
-                    failed_syncs += 1
-                    sync_log.processed_items += 1
-                    sync_log.save()
-            
-            # Completar sincronización
-            self._complete_sync_with_status(sync_log, successful_syncs, failed_syncs, len(customers))
-            
-            return {
-                'success': True,
-                'message': f'Sincronización completada: {successful_syncs} exitosas, {failed_syncs} fallidas',
-                'sync_log_id': sync_log.id,
-                'total_processed': len(customers),
-                'successful': successful_syncs,
-                'failed': failed_syncs
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in sync_customers_from_tiendanube: {e}")
-            if 'sync_log' in locals():
-                sync_log.complete_sync(False, str(e))
-            return {
-                'success': False,
-                'message': f'Error en sincronización: {str(e)}'
-            }
-    
-    def sync_customers_from_tiendanube(self) -> Dict[str, Any]:
-        """Sincronizar clientes desde TiendaNube hacia AdministraNET."""
+                existing = find_result.get('customer')
+                if existing:
+                    tiendanube_id = to_int_or_none(existing.get('id'))
+                    if tiendanube_id and codigo is not None:
+                        update_result = self.adminet_service.update_customer_tiendanube_id(
+                            codigo, tiendanube_id
+                        )
+                        if not update_result.get('success'):
+                            logger.warning(
+                                'Error actualizando id_tiendanube en AdministraNET para cliente %s: %s',
+                                codigo,
+                                update_result.get('message'),
+                            )
+                        customer['id_tiendanube'] = tiendanube_id
+
+            if tiendanube_id:
+                result = self.tiendanube_service.update_customer(tiendanube_id, tiendanube_data)
+            else:
+                result = self.tiendanube_service.create_customer(tiendanube_data)
+                created_in_tn = True
+                if result.get('success'):
+                    tn_customer = result.get('customer') or {}
+                    tiendanube_id = to_int_or_none(tn_customer.get('id'))
+                    if tiendanube_id and codigo is not None:
+                        update_result = self.adminet_service.update_customer_tiendanube_id(
+                            codigo, tiendanube_id
+                        )
+                        if not update_result.get('success'):
+                            logger.warning(
+                                'Error actualizando id_tiendanube en AdministraNET para cliente %s: %s',
+                                codigo,
+                                update_result.get('message'),
+                            )
+                        customer['id_tiendanube'] = tiendanube_id
+
+        if not result.get('success'):
+            return False, result.get('message', 'Error desconocido'), tiendanube_id, mapping
+
         try:
-            # Crear log de sincronización
-            sync_log = SyncLog.objects.create(
-                sync_type=SyncLog.SyncType.CUSTOMER,
-                direction=SyncLog.SyncDirection.TO_ADMINET,
-                status=SyncLog.Status.IN_PROGRESS,
-                tiendanube_config=self.tiendanube_config,
-                adminet_config=self.adminet_config
+            mapping = mapping or self._resolve_customer_mapping(customer, tiendanube_id)
+        except Exception as exc:
+            logger.error('Error resolviendo CustomerMapping para cliente %s: %s', codigo, exc)
+            return (
+                False,
+                f'Cliente sincronizado en Tienda Nube pero falló el mapeo local: {exc}',
+                tiendanube_id,
+                mapping,
             )
+
+        mapping.tiendanube_id = tiendanube_id
+        actualizar_snapshot_cliente_adminet(mapping, customer)
+        mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
+        mapping.last_synced = timezone.now()
+        mapping.error_message = ''
+        mapping.save()
+        action = 'creado' if created_in_tn else 'actualizado'
+        return True, f'Cliente {action} en Tienda Nube (ID: {tiendanube_id})', tiendanube_id, mapping
+
+    def sync_customer_to_adminet(
+        self, mapping: CustomerMapping, force: bool = False
+    ) -> Tuple[bool, str]:
+        """Sincronizar un cliente Tienda Nube → AdministraNET."""
+        if not mapping.tiendanube_id:
+            return False, 'El mapeo no tiene tiendanube_id'
+        if not mapping.sync_enabled and not force:
+            return False, 'Sincronización deshabilitada para este mapeo'
+        tn_result = self.tiendanube_service.get_customer(mapping.tiendanube_id)
+        if not tn_result.get('success'):
+            msg = tn_result.get('message', 'Error obteniendo cliente de Tienda Nube')
+            mapping.sync_status = CustomerMapping.SyncStatus.ERROR
+            mapping.error_message = msg
+            mapping.save(update_fields=['sync_status', 'error_message'])
+            return False, msg
+
+        tn_customer = tn_result['customer']
+        if not force and mapping.sync_status == CustomerMapping.SyncStatus.SYNCED:
+            if not cliente_tn_modificado(tn_customer, mapping):
+                return True, 'Omitido: sin cambios en Tienda Nube'
+
+        adminet_data = self._build_adminet_data_from_tiendanube_customer(tn_customer)
+        if not mapping.adminet_codigo and mapping.tiendanube_id:
+            linked = self.adminet_service.get_customer_by_tiendanube_id(
+                int(mapping.tiendanube_id)
+            )
+            if linked.get('success'):
+                mapping.adminet_codigo = linked['customer'].get('Codigo')
+
+        if mapping.adminet_codigo:
+            result = self.adminet_service.update_customer(mapping.adminet_codigo, adminet_data)
+        else:
+            result = self.adminet_service.create_customer(adminet_data)
+            if result.get('success'):
+                mapping.adminet_codigo = result.get('customer_id')
+
+        if result.get('success'):
+            actualizar_snapshot_cliente_tiendanube(mapping, tn_customer)
+            mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
+            mapping.last_synced = timezone.now()
+            mapping.error_message = ''
+            mapping.save()
+            return True, result.get('message', 'Cliente sincronizado hacia AdministraNET')
+
+        mapping.sync_status = CustomerMapping.SyncStatus.ERROR
+        mapping.error_message = result.get('message', 'Error desconocido')
+        mapping.save(update_fields=['sync_status', 'error_message'])
+        return False, mapping.error_message
+
+    def sync_customer_to_tiendanube(
+        self, mapping: CustomerMapping, force: bool = False
+    ) -> Tuple[bool, str]:
+        """Sincronizar un cliente AdministraNET → Tienda Nube (crear o actualizar)."""
+        if not mapping.adminet_codigo:
+            return False, 'El mapeo no tiene adminet_codigo'
+        if not mapping.sync_enabled and not force:
+            return False, 'Sincronización deshabilitada para este mapeo'
+        an_result = self.adminet_service.get_customer(mapping.adminet_codigo)
+        if not an_result.get('success'):
+            msg = an_result.get('message', 'Cliente no encontrado en AdministraNET')
+            mapping.sync_status = CustomerMapping.SyncStatus.ERROR
+            mapping.error_message = msg
+            mapping.save(update_fields=['sync_status', 'error_message'])
+            return False, msg
+
+        customer = an_result['customer']
+        if not force and mapping.sync_status == CustomerMapping.SyncStatus.SYNCED:
+            if not cliente_adminet_cambio(mapping, customer):
+                return True, 'Omitido: sin cambios en AdministraNET'
+
+        ok, msg, _, _ = self._push_adminet_customer_to_tiendanube(customer, mapping=mapping)
+        if not ok:
+            mapping.sync_status = CustomerMapping.SyncStatus.ERROR
+            mapping.error_message = msg
+            mapping.save(update_fields=['sync_status', 'error_message'])
+        return ok, msg
+
+    def sync_customers_from_tiendanube(
+        self, sync_log: Optional[SyncLog] = None
+    ) -> Dict[str, Any]:
+        """Sincronizar clientes desde TiendaNube hacia AdministraNET."""
+        disabled = self._check_sync_enabled()
+        if disabled:
+            return disabled
+        try:
+            if sync_log is None:
+                sync_log = SyncLog.objects.create(
+                    sync_type=SyncLog.SyncType.CUSTOMER,
+                    direction=SyncLog.SyncDirection.TO_ADMINET,
+                    status=SyncLog.Status.IN_PROGRESS,
+                    tiendanube_config=self.tiendanube_config,
+                    adminet_config=self.adminet_config
+                )
             
             # Obtener clientes de TiendaNube
             tiendanube_result = self.tiendanube_service.get_customers(limit=100)
@@ -266,47 +489,41 @@ class TiendanubeAdministraNETSyncService:
             
             for customer in customers:
                 try:
-                    # Verificar si ya existe el mapeo
+                    tn_fields = tiendanube_customer_to_form_fields(customer)
+                    create_defaults = {
+                        k: v
+                        for k, v in tn_fields.items()
+                        if k != 'tiendanube_id' and v not in (None, '')
+                    }
+                    create_defaults['sync_status'] = CustomerMapping.SyncStatus.PENDING
                     mapping, created = CustomerMapping.objects.get_or_create(
                         tiendanube_id=customer['id'],
-                        defaults={
-                            'tiendanube_email': customer.get('email', ''),
-                            'tiendanube_first_name': customer.get('name', ''),
-                            'sync_status': CustomerMapping.SyncStatus.PENDING
-                        }
+                        defaults=create_defaults,
                     )
+                    if not created:
+                        fill_fields = []
+                        for field, value in create_defaults.items():
+                            if field == 'sync_status' or not value:
+                                continue
+                            if not getattr(mapping, field):
+                                setattr(mapping, field, value)
+                                fill_fields.append(field)
+                        if fill_fields:
+                            mapping.save(update_fields=fill_fields)
                     
                     if created or mapping.sync_status != CustomerMapping.SyncStatus.SYNCED:
-                        # Crear/actualizar en AdministraNET
-                        adminet_data = {
-                            'nombre_cliente': customer.get('name', ''),
-                            'Email': customer.get('email', ''),
-                            'telefono': customer.get('phone', ''),
-                            'Calle': customer.get('address', ''),
-                            'CUIT': customer.get('document', ''),
-                            'Estado': 'Activo'
-                        }
-                        
-                        if mapping.adminet_codigo:
-                            # Actualizar cliente existente en AdministraNET
-                            result = self.adminet_service.update_customer(mapping.adminet_codigo, adminet_data)
-                        else:
-                            # Crear nuevo cliente en AdministraNET
-                            result = self.adminet_service.create_customer(adminet_data)
-                            if result['success']:
-                                mapping.adminet_codigo = result.get('customer_id')
-                        
-                        if result['success']:
-                            mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
-                            mapping.last_synced = timezone.now()
-                            mapping.save()
+                        ok, msg = self.sync_customer_to_adminet(mapping, force=True)
+                        if ok and 'Omitido' not in msg:
                             successful_syncs += 1
-                        else:
-                            mapping.sync_status = CustomerMapping.SyncStatus.ERROR
-                            mapping.error_message = result['message']
-                            mapping.save()
+                        elif not ok:
                             failed_syncs += 1
-                    
+                    elif cliente_tn_modificado(customer, mapping):
+                        ok, msg = self.sync_customer_to_adminet(mapping, force=False)
+                        if ok and 'Omitido' not in msg:
+                            successful_syncs += 1
+                        elif not ok:
+                            failed_syncs += 1
+
                     sync_log.processed_items += 1
                     sync_log.save()
                     
@@ -316,8 +533,7 @@ class TiendanubeAdministraNETSyncService:
                     sync_log.processed_items += 1
                     sync_log.save()
             
-            # Completar log de sincronización
-            sync_log.complete_sync(True, f"Sincronización completada: {successful_syncs} exitosas, {failed_syncs} fallidas")
+            self._complete_sync_with_status(sync_log, successful_syncs, failed_syncs, len(customers))
             
             return {
                 'success': True,
@@ -337,40 +553,56 @@ class TiendanubeAdministraNETSyncService:
                 'message': f'Error en sincronización: {str(e)}'
             }
 
-    def sync_customers_from_adminet(self) -> Dict[str, Any]:
+    def sync_customers_from_adminet(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        sync_log: Optional[SyncLog] = None,
+        force: bool = False,
+    ) -> Dict[str, Any]:
         """
         Sincronizar clientes desde AdministraNET hacia Tiendanube.
-        Solo sincroniza clientes que ya tienen id_tiendanube establecido.
+        Solo clientes con cliente_ecommerce='Si': crea en TN si no tienen id_tiendanube
+        o actualiza si ya están vinculados.
+
+        Args:
+            limit: Cantidad máxima de clientes a procesar en este lote (None = todos desde offset).
+            offset: Desplazamiento sobre la lista completa obtenida de AdministraNET.
+            sync_log: Log existente a reutilizar (p. ej. sync inicial por lotes).
         """
+        disabled = self._check_sync_enabled()
+        if disabled:
+            return disabled
         try:
-            # Crear log de sincronización
-            sync_log = SyncLog.objects.create(
-                sync_type=SyncLog.SyncType.CUSTOMER,
-                direction=SyncLog.SyncDirection.FROM_ADMINET,
-                status=SyncLog.Status.IN_PROGRESS,
-                tiendanube_config=self.tiendanube_config,
-                adminet_config=self.adminet_config
+            if sync_log is None:
+                sync_log = SyncLog.objects.create(
+                    sync_type=SyncLog.SyncType.CUSTOMER,
+                    direction=SyncLog.SyncDirection.FROM_ADMINET,
+                    status=SyncLog.Status.IN_PROGRESS,
+                    tiendanube_config=self.tiendanube_config,
+                    adminet_config=self.adminet_config
+                )
+
+            adminet_result = self.adminet_service.get_customers(
+                limit=None,
+                cliente_ecommerce='Si',
             )
-            
-            # Obtener TODOS los clientes de AdministraNET (sin límite)
-            adminet_result = self.adminet_service.get_customers(limit=None)
             if not adminet_result['success']:
                 sync_log.complete_sync(False, adminet_result['message'])
                 return adminet_result
-            
+
             all_customers = adminet_result['data']
-            
-            # Filtrar SOLO clientes que tienen id_tiendanube establecido
-            # Estos son clientes que fueron creados en Tiendanube primero
-            customers = [c for c in all_customers if c.get('id_tiendanube')]
-            
-            skipped_count = len(all_customers) - len(customers)
-            if skipped_count > 0:
-                logger.info(f"🔍 Omitidos {skipped_count} clientes sin id_tiendanube (total clientes: {len(all_customers)})")
-            
-            # Si no hay clientes con id_tiendanube, completar sync con mensaje informativo
-            if len(customers) == 0:
-                message = f'No hay clientes con id_tiendanube para sincronizar ({len(all_customers)} clientes totales). Los clientes deben ser creados primero en Tiendanube (vía webhook) para poder sincronizar cambios desde AdministraNET.'
+            total_available = len(all_customers)
+            if limit is not None:
+                customers = all_customers[offset:offset + limit]
+            else:
+                customers = all_customers[offset:]
+
+            if not customers and total_available == 0:
+                message = (
+                    'No hay clientes con cliente_ecommerce=Si para sincronizar. '
+                    'Marque clientes en AdministraNET como ecommerce antes de publicarlos en Tienda Nube.'
+                )
                 logger.warning(message)
                 sync_log.status = SyncLog.Status.COMPLETED
                 sync_log.total_items = 0
@@ -380,7 +612,6 @@ class TiendanubeAdministraNETSyncService:
                 sync_log.completed_at = timezone.now()
                 sync_log.error_message = message
                 sync_log.save()
-                
                 return {
                     'success': True,
                     'message': message,
@@ -388,96 +619,118 @@ class TiendanubeAdministraNETSyncService:
                     'total_processed': 0,
                     'successful': 0,
                     'failed': 0,
-                    'skipped': skipped_count
+                    'skipped': 0,
+                    'total_available': 0,
+                    'offset': offset,
+                    'limit': limit,
+                    'has_more': False,
                 }
-            
+
+            if not customers:
+                sync_log.status = SyncLog.Status.COMPLETED
+                sync_log.total_items = 0
+                sync_log.processed_items = 0
+                sync_log.successful_items = 0
+                sync_log.failed_items = 0
+                sync_log.completed_at = timezone.now()
+                sync_log.save()
+                return {
+                    'success': True,
+                    'message': 'No hay más clientes en este lote.',
+                    'sync_log_id': sync_log.id,
+                    'total_processed': 0,
+                    'successful': 0,
+                    'failed': 0,
+                    'skipped': 0,
+                    'total_available': total_available,
+                    'offset': offset,
+                    'limit': limit,
+                    'has_more': offset < total_available,
+                }
+
             sync_log.total_items = len(customers)
             sync_log.save()
-            
+
             successful_syncs = 0
             failed_syncs = 0
-            
+            skipped = 0
+
             for customer in customers:
                 try:
-                    # El cliente debe tener id_tiendanube
-                    tiendanube_id = customer.get('id_tiendanube')
-                    if not tiendanube_id:
-                        # Este cliente no fue creado en Tiendanube, omitir
-                        logger.debug(f"Cliente {customer.get('Codigo')} omitido: sin id_tiendanube")
+                    codigo = to_int_or_none(customer.get('Codigo'))
+                    mapping_existente = None
+                    if codigo is not None:
+                        mapping_existente = CustomerMapping.objects.filter(
+                            adminet_codigo=codigo
+                        ).first()
+                    if (
+                        not force
+                        and mapping_existente
+                        and mapping_existente.sync_status == CustomerMapping.SyncStatus.SYNCED
+                        and not cliente_adminet_cambio(mapping_existente, customer)
+                    ):
+                        skipped += 1
                         sync_log.processed_items += 1
-                        sync_log.save()
+                        sync_log.save(update_fields=['processed_items'])
                         continue
-                    
-                    # Buscar o crear el mapeo
-                    mapping, created = CustomerMapping.objects.get_or_create(
-                        adminet_codigo=customer['Codigo'],
-                        defaults={
-                            'adminet_nombre': customer.get('nombre_cliente', ''),
-                            'tiendanube_id': tiendanube_id,
-                            'sync_status': CustomerMapping.SyncStatus.PENDING
-                        }
-                    )
-                    
-                    # Si se creó el mapping pero no tenía tiendanube_id, actualizarlo
-                    if created and not mapping.tiendanube_id:
-                        mapping.tiendanube_id = tiendanube_id
-                    
-                    # Preparar datos para actualizar en Tiendanube
-                    customer_email = customer.get('Email', '').strip()
-                    if not customer_email:
-                        customer_email = f"adminet_{customer.get('Codigo', 0)}@noemail.local"
-                    
-                    tiendanube_data = {
-                        'name': customer.get('nombre_cliente', ''),
-                        'email': customer_email,
-                        'document': customer.get('CUIT', ''),
-                        'phone': customer.get('telefono', ''),
-                        'address': f"{customer.get('Calle', '')} {customer.get('NroCalle', '')}".strip()
-                    }
-                    
-                    # SOLO ACTUALIZAR (no crear) - el cliente ya existe en Tiendanube
-                    result = self.tiendanube_service.update_customer(tiendanube_id, tiendanube_data)
-                    
-                    if result['success']:
-                        mapping.sync_status = CustomerMapping.SyncStatus.SYNCED
-                        mapping.last_synced = timezone.now()
-                        mapping.save()
+
+                    ok, msg, _, mapping = self._push_adminet_customer_to_tiendanube(customer)
+                    if ok:
                         successful_syncs += 1
-                        logger.debug(f"Cliente {customer.get('Codigo')} actualizado en Tiendanube (ID: {tiendanube_id})")
+                        logger.debug(
+                            'Cliente %s sincronizado hacia Tienda Nube: %s',
+                            customer.get('Codigo'),
+                            msg,
+                        )
                     else:
-                        # Mejorar mensaje de error para casos específicos
-                        error_msg = result['message']
-                        if '404' in str(error_msg) or 'not found' in str(error_msg).lower():
-                            error_msg = f"Cliente no existe en Tiendanube (ID: {tiendanube_id}). El cliente fue eliminado o el ID es incorrecto. Se recomienda eliminar este mapping y dejarlo recrear via webhook."
-                        
-                        mapping.sync_status = CustomerMapping.SyncStatus.ERROR
-                        mapping.error_message = error_msg
-                        mapping.save()
                         failed_syncs += 1
-                        logger.error(f"Error actualizando cliente {customer.get('Codigo')} en Tiendanube: {error_msg}")
-                    
+                        if mapping:
+                            mapping.sync_status = CustomerMapping.SyncStatus.ERROR
+                            mapping.error_message = msg
+                            mapping.save(update_fields=['sync_status', 'error_message'])
+                        logger.error(
+                            'Error sincronizando cliente %s hacia Tienda Nube: %s',
+                            customer.get('Codigo'),
+                            msg,
+                        )
+
                     sync_log.processed_items += 1
-                    sync_log.save()
-                    
+                    sync_log.successful_items = successful_syncs
+                    sync_log.failed_items = failed_syncs
+                    sync_log.save(
+                        update_fields=['processed_items', 'successful_items', 'failed_items']
+                    )
+
                 except Exception as e:
                     logger.error(f"Error syncing customer {customer.get('Codigo')}: {e}")
                     failed_syncs += 1
                     sync_log.processed_items += 1
-                    sync_log.save()
-            
-            # Completar sincronización
+                    sync_log.successful_items = successful_syncs
+                    sync_log.failed_items = failed_syncs
+                    sync_log.save(
+                        update_fields=['processed_items', 'successful_items', 'failed_items']
+                    )
+
             self._complete_sync_with_status(sync_log, successful_syncs, failed_syncs, len(customers))
-            
+
+            next_offset = offset + len(customers)
             return {
                 'success': True,
-                'message': f'Sincronización completada: {successful_syncs} clientes actualizados, {failed_syncs} fallidas (solo clientes con id_tiendanube)',
+                'message': (
+                    f'Sincronización completada: {successful_syncs} clientes en Tienda Nube, '
+                    f'{failed_syncs} fallidas, {skipped} omitidos (cliente_ecommerce=Si)'
+                ),
                 'sync_log_id': sync_log.id,
                 'total_processed': len(customers),
                 'successful': successful_syncs,
                 'failed': failed_syncs,
-                'skipped': skipped_count
+                'skipped': skipped,
+                'total_available': total_available,
+                'offset': offset,
+                'limit': limit,
+                'has_more': next_offset < total_available,
             }
-            
+
         except Exception as e:
             logger.error(f"Error in sync_customers_from_adminet: {e}")
             if 'sync_log' in locals():
@@ -491,17 +744,19 @@ class TiendanubeAdministraNETSyncService:
     # PRODUCTOS
     # ============================================================================
 
-    def sync_products_from_tiendanube(self) -> Dict[str, Any]:
+    def sync_products_from_tiendanube(
+        self, sync_log: Optional[SyncLog] = None
+    ) -> Dict[str, Any]:
         """Sincronizar productos desde Tiendanube hacia AdministraNET."""
         try:
-            # Crear log de sincronización
-            sync_log = SyncLog.objects.create(
-                sync_type=SyncLog.SyncType.PRODUCT,
-                direction=SyncLog.SyncDirection.TO_ADMINET,
-                status=SyncLog.Status.IN_PROGRESS,
-                tiendanube_config=self.tiendanube_config,
-                adminet_config=self.adminet_config
-            )
+            if sync_log is None:
+                sync_log = SyncLog.objects.create(
+                    sync_type=SyncLog.SyncType.PRODUCT,
+                    direction=SyncLog.SyncDirection.TO_ADMINET,
+                    status=SyncLog.Status.IN_PROGRESS,
+                    tiendanube_config=self.tiendanube_config,
+                    adminet_config=self.adminet_config
+                )
             
             # Obtener productos de Tiendanube
             tiendanube_result = self.product_service.get_products(limit=None)  # Sin límite - sincronizar todos
@@ -586,153 +841,209 @@ class TiendanubeAdministraNETSyncService:
                 'message': f'Error en sincronización: {str(e)}'
             }
 
-    def sync_products_from_adminet(self) -> Dict[str, Any]:
-        """Sincronizar productos desde AdministraNET hacia Tiendanube."""
+    def sync_products_from_adminet(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        sync_log: Optional[SyncLog] = None,
+        force: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Sincronizar productos desde AdministraNET hacia Tiendanube.
+
+        Args:
+            limit: Cantidad máxima de productos a procesar en este lote (None = todos desde offset).
+            offset: Desplazamiento sobre la lista completa obtenida de AdministraNET.
+            sync_log: Log existente a reutilizar (p. ej. sync inicial por lotes).
+        """
         try:
-            # Crear log de sincronización
-            sync_log = SyncLog.objects.create(
-                sync_type=SyncLog.SyncType.PRODUCT,
-                direction=SyncLog.SyncDirection.FROM_ADMINET,
-                status=SyncLog.Status.IN_PROGRESS,
-                tiendanube_config=self.tiendanube_config,
-                adminet_config=self.adminet_config
-            )
+            if sync_log is None:
+                sync_log = SyncLog.objects.create(
+                    sync_type=SyncLog.SyncType.PRODUCT,
+                    direction=SyncLog.SyncDirection.FROM_ADMINET,
+                    status=SyncLog.Status.IN_PROGRESS,
+                    tiendanube_config=self.tiendanube_config,
+                    adminet_config=self.adminet_config
+                )
             
-            # Obtener depósito configurado
             deposito_id = self.adminet_config.deposito_tiendanube_id
-            
-            # Obtener productos de AdministraNET con stock del depósito específico
-            if deposito_id:
-                logger.info(f"Sincronizando productos desde depósito {deposito_id}")
-                adminet_result = self.adminet_service.get_products_with_stock_by_deposito(
-                    deposito_id=deposito_id,
-                    limit=None,  # Sin límite - sincronizar todos
-                    ecommerce='Si',
-                    disponible_vta='Si'
+            if not deposito_id:
+                msg = (
+                    'Configure deposito_tiendanube_id en la integración AdministraNET. '
+                    'Tiendanube publica stock por artículo en unidades del depósito definido.'
                 )
-            else:
-                logger.warning("No hay depósito configurado, usando stock general")
-                adminet_result = self.adminet_service.get_products(
-                    limit=None,  # Sin límite - sincronizar todos
-                    ecommerce='Si',
-                    disponible_vta='Si'
-                )
+                sync_log.complete_sync(False, msg)
+                return {'success': False, 'message': msg}
+
+            logger.info('Sincronizando productos desde depósito %s', deposito_id)
+            adminet_result = self.adminet_service.get_products_with_stock_by_deposito(
+                deposito_id=deposito_id,
+                limit=None,
+                ecommerce='Si',
+                disponible_vta='Si',
+            )
             
             if not adminet_result['success']:
                 sync_log.complete_sync(False, adminet_result['message'])
                 return adminet_result
             
-            products = adminet_result['results']
+            all_products = adminet_result['results']
+            total_available = len(all_products)
+            if limit is not None:
+                products = all_products[offset:offset + limit]
+            else:
+                products = all_products[offset:]
+
+            if not products:
+                sync_log.status = SyncLog.Status.COMPLETED
+                sync_log.total_items = 0
+                sync_log.processed_items = 0
+                sync_log.successful_items = 0
+                sync_log.failed_items = 0
+                sync_log.completed_at = timezone.now()
+                sync_log.save()
+                return {
+                    'success': True,
+                    'message': 'No hay más productos en este lote.',
+                    'sync_log_id': sync_log.id,
+                    'total_processed': 0,
+                    'successful': 0,
+                    'failed': 0,
+                    'total_available': total_available,
+                    'offset': offset,
+                    'limit': limit,
+                    'has_more': offset < total_available,
+                }
+
             sync_log.total_items = len(products)
             sync_log.save()
             
             successful_syncs = 0
             failed_syncs = 0
-            
-            for product in products:
+            skipped = 0
+            stock_price_pending: List[dict] = []
+
+            for adminet_product in products:
                 try:
-                    # Verificar si ya existe el mapeo
                     mapping, created = ProductMapping.objects.get_or_create(
-                        adminet_id=product['IDArt'],
+                        adminet_id=adminet_product['IDArt'],
                         defaults={
-                            'adminet_nombre': product.get('NombreArticulo', ''),
-                            'adminet_codigo_articulo': product.get('CodigoArticuloT', ''),
+                            'adminet_nombre': adminet_product.get('NombreArticulo', ''),
+                            'adminet_codigo_articulo': adminet_product.get('CodigoArticuloT', ''),
                             'sync_status': ProductMapping.SyncStatus.PENDING
                         }
                     )
-                    
-                    if created or mapping.sync_status != ProductMapping.SyncStatus.SYNCED:
-                        # Actualizar mapeo con datos de AdministraNET PRIMERO
-                        self.mapping_service.update_product_mapping_from_adminet(mapping, product)
-                        
-                        # Mapear datos de AdministraNET a Tiendanube (pasando deposito_id)
-                        tiendanube_data = self.mapping_service.map_adminet_to_tiendanube_product(
-                            product, 
-                            deposito_id=deposito_id
-                        )
-                        
-                        if mapping.tiendanube_id:
-                            # Obtener el producto existente para verificar variantes
-                            existing_product = self.product_service.get_product(mapping.tiendanube_id)
-                            if existing_product['success']:
-                                product_data = existing_product['product']
-                                variants = product_data.get('variants', [])
-                                
-                                if variants:
-                                    # Actualizar la primera variante (asumiendo una variante por producto)
-                                    variant = variants[0]
-                                    variant_id = variant.get('id')
-                                    
-                                    # Preparar datos de la variante
-                                    variant_data = {
-                                        'sku': tiendanube_data.get('variants', [{}])[0].get('sku'),
-                                        'price': tiendanube_data.get('variants', [{}])[0].get('price'),
-                                        'stock': tiendanube_data.get('variants', [{}])[0].get('stock'),
-                                        'stock_management': True
-                                    }
-                                    
-                                    # Actualizar variante usando el método correcto
-                                    result = self.product_service.update_variant(
-                                        mapping.tiendanube_id, 
-                                        variant_id, 
-                                        variant_data
+
+                    necesita_sync, _motivo = producto_requiere_sync_adminet_a_tn(
+                        mapping,
+                        adminet_product,
+                        deposito_id,
+                        force=force or created,
+                        config=self.adminet_config,
+                    )
+                    if not necesita_sync:
+                        skipped += 1
+                        sync_log.processed_items += 1
+                        sync_log.save(update_fields=['processed_items'])
+                        continue
+
+                    self.mapping_service.update_product_mapping_from_adminet(
+                        mapping, adminet_product, deposito_id=deposito_id
+                    )
+                    tiendanube_data = self.mapping_service.map_adminet_to_tiendanube_product(
+                        adminet_product,
+                        deposito_id=deposito_id
+                    )
+
+                    if mapping.tiendanube_id:
+                        variant_mapping = self._get_product_variant_mapping(mapping)
+                        if variant_mapping and variant_mapping.tiendanube_variant_id:
+                            queued = self._queue_stock_price_update(
+                                stock_price_pending,
+                                mapping,
+                                adminet_product,
+                                tiendanube_data,
+                                variant_mapping.tiendanube_variant_id,
+                            )
+                            if queued:
+                                if len(stock_price_pending) >= STOCK_PRICE_BATCH_MAX:
+                                    ok, fail = self._flush_stock_price_batch(
+                                        stock_price_pending
                                     )
-                                else:
-                                    # No hay variantes, crear una nueva
-                                    variant_data = tiendanube_data.get('variants', [{}])[0]
-                                    result = self.product_service.create_variant(
-                                        mapping.tiendanube_id, 
-                                        variant_data
-                                    )
+                                    successful_syncs += ok
+                                    failed_syncs += fail
                             else:
-                                result = existing_product
-                        else:
-                            # Crear nuevo producto
-                            result = self.product_service.create_product(tiendanube_data)
-                            if result['success']:
-                                # El ID del producto está en result['product']['id']
-                                product = result.get('product', {})
-                                mapping.tiendanube_id = product.get('id')
-                        
-                        if result['success']:
-                            # Actualizar el campo id_tiendanube en AdministraNET
-                            if mapping.tiendanube_id and product.get('IDArt'):
-                                update_result = self.adminet_service.update_product_tiendanube_id(
-                                    product['IDArt'], 
-                                    mapping.tiendanube_id
+                                self._finalize_product_sync_error(
+                                    mapping,
+                                    'Sin datos de variante para actualizar',
                                 )
-                                if not update_result['success']:
-                                    logger.warning(f"Error actualizando id_tiendanube en AdministraNET: {update_result['message']}")
-                            
-                            mapping.sync_status = ProductMapping.SyncStatus.SYNCED
-                            mapping.last_synced = timezone.now()
-                            mapping.save()
+                                failed_syncs += 1
+                        else:
+                            result = self._sync_product_update_fallback(
+                                mapping, tiendanube_data
+                            )
+                            if result.get('success'):
+                                self._finalize_product_sync_success(
+                                    mapping, adminet_product
+                                )
+                                successful_syncs += 1
+                            else:
+                                self._finalize_product_sync_error(
+                                    mapping, result.get('message', '')
+                                )
+                                failed_syncs += 1
+                    else:
+                        result = self._sync_product_create(
+                            mapping, tiendanube_data, adminet_product
+                        )
+                        if result.get('success'):
                             successful_syncs += 1
                         else:
-                            mapping.sync_status = ProductMapping.SyncStatus.ERROR
-                            mapping.error_message = result['message']
-                            mapping.save()
                             failed_syncs += 1
-                    
+
                     sync_log.processed_items += 1
-                    sync_log.save()
-                    
+                    sync_log.successful_items = successful_syncs
+                    sync_log.failed_items = failed_syncs
+                    sync_log.save(
+                        update_fields=['processed_items', 'successful_items', 'failed_items']
+                    )
+
                 except Exception as e:
-                    logger.error(f"Error syncing product {product.get('IDArt')}: {e}")
+                    logger.error(
+                        f"Error syncing product {adminet_product.get('IDArt')}: {e}"
+                    )
                     failed_syncs += 1
                     sync_log.processed_items += 1
-                    sync_log.save()
-            
+                    sync_log.successful_items = successful_syncs
+                    sync_log.failed_items = failed_syncs
+                    sync_log.save(
+                        update_fields=['processed_items', 'successful_items', 'failed_items']
+                    )
+
+            if stock_price_pending:
+                ok, fail = self._flush_stock_price_batch(stock_price_pending)
+                successful_syncs += ok
+                failed_syncs += fail
+
             # Completar sincronización
             self._complete_sync_with_status(sync_log, successful_syncs, failed_syncs, len(products))
             
+            next_offset = offset + len(products)
             return {
                 'success': True,
-                'message': f'Sincronización completada: {successful_syncs} exitosas, {failed_syncs} fallidas',
+                'message': (
+                    f'Sincronización completada: {successful_syncs} exitosas, '
+                    f'{failed_syncs} fallidas, {skipped} omitidas'
+                ),
                 'sync_log_id': sync_log.id,
                 'total_processed': len(products),
                 'successful': successful_syncs,
-                'failed': failed_syncs
+                'failed': failed_syncs,
+                'skipped': skipped,
+                'total_available': total_available,
+                'offset': offset,
+                'limit': limit,
+                'has_more': next_offset < total_available,
             }
             
         except Exception as e:
@@ -743,6 +1054,224 @@ class TiendanubeAdministraNETSyncService:
                 'success': False,
                 'message': f'Error en sincronización: {str(e)}'
             }
+
+    def _strip_images_from_product_payload(self, product_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Omitir imágenes en POST /products (creación inicial)."""
+        payload = dict(product_data)
+        payload.pop('images', None)
+        return payload
+
+    def _get_product_variant_mapping(
+        self, mapping: ProductMapping
+    ) -> Optional[ProductVariantMapping]:
+        return mapping.variants.filter(tiendanube_variant_id__isnull=False).first()
+
+    def _extract_variant_fields(
+        self, tiendanube_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        variants = tiendanube_data.get('variants') or [{}]
+        source = variants[0] if variants else {}
+        return {
+            'sku': source.get('sku'),
+            'price': source.get('price'),
+            'stock': source.get('stock'),
+            'stock_management': True,
+        }
+
+    def _build_stock_price_patch_payload(
+        self, pending_items: List[dict]
+    ) -> List[dict]:
+        by_product: Dict[int, dict] = {}
+        for item in pending_items:
+            product_id = item['product_id']
+            variant_entry: Dict[str, Any] = {'id': item['variant_id']}
+            if item.get('price') is not None:
+                variant_entry['price'] = item['price']
+            if item.get('stock') is not None:
+                variant_entry['inventory_levels'] = [{'stock': item['stock']}]
+            if product_id not in by_product:
+                by_product[product_id] = {'id': product_id, 'variants': []}
+            by_product[product_id]['variants'].append(variant_entry)
+        return list(by_product.values())
+
+    def _queue_stock_price_update(
+        self,
+        pending: List[dict],
+        mapping: ProductMapping,
+        adminet_product: dict,
+        tiendanube_data: Dict[str, Any],
+        variant_id: int,
+    ) -> bool:
+        variant_fields = self._extract_variant_fields(tiendanube_data)
+        if variant_fields.get('price') is None and variant_fields.get('stock') is None:
+            return False
+        pending.append({
+            'product_id': mapping.tiendanube_id,
+            'variant_id': variant_id,
+            'price': variant_fields.get('price'),
+            'stock': variant_fields.get('stock'),
+            'mapping': mapping,
+            'adminet_product': adminet_product,
+        })
+        return True
+
+    def _flush_stock_price_batch(self, pending: List[dict]) -> Tuple[int, int]:
+        if not pending:
+            return 0, 0
+        batch = pending[:]
+        pending.clear()
+        payload = self._build_stock_price_patch_payload(batch)
+        result = self.product_service.patch_products_stock_price(payload)
+        ok_count = 0
+        fail_count = 0
+        if result.get('success'):
+            for item in batch:
+                self._finalize_product_sync_success(
+                    item['mapping'], item['adminet_product']
+                )
+                ok_count += 1
+        else:
+            msg = result.get('message', 'Error en batch stock/precio')
+            for item in batch:
+                self._finalize_product_sync_error(item['mapping'], msg)
+                fail_count += 1
+        return ok_count, fail_count
+
+    def _sync_product_create(
+        self,
+        mapping: ProductMapping,
+        tiendanube_data: Dict[str, Any],
+        adminet_product: dict,
+    ) -> Dict[str, Any]:
+        create_payload = self._strip_images_from_product_payload(tiendanube_data)
+        result = self.product_service.create_product(create_payload)
+        if result.get('success'):
+            tn_product = result.get('product', {})
+            mapping.tiendanube_id = tn_product.get('id')
+            self._save_variant_mapping_from_tn_product(
+                mapping, tn_product, adminet_product
+            )
+            self._finalize_product_sync_success(mapping, adminet_product)
+        else:
+            self._finalize_product_sync_error(
+                mapping, result.get('message', 'Error creando producto')
+            )
+        return result
+
+    def _sync_product_update_fallback(
+        self, mapping: ProductMapping, tiendanube_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """GET /products + PUT variant cuando no hay tiendanube_variant_id en mapping."""
+        existing_product = self.product_service.get_product(mapping.tiendanube_id)
+        if not existing_product.get('success'):
+            return existing_product
+
+        product_data = existing_product['product']
+        variants = product_data.get('variants', [])
+        variant_fields = self._extract_variant_fields(tiendanube_data)
+
+        if variants:
+            variant_id = variants[0].get('id')
+            result = self.product_service.update_variant(
+                mapping.tiendanube_id,
+                variant_id,
+                variant_fields,
+            )
+            if result.get('success'):
+                self._save_variant_mapping_from_tn_product(
+                    mapping,
+                    {
+                        'id': mapping.tiendanube_id,
+                        'variants': [result.get('variant', {})],
+                    },
+                    {},
+                )
+        else:
+            result = self.product_service.create_variant(
+                mapping.tiendanube_id,
+                tiendanube_data.get('variants', [{}])[0],
+            )
+            if result.get('success'):
+                variant = result.get('variant', {})
+                ProductVariantMapping.objects.update_or_create(
+                    product_mapping=mapping,
+                    defaults={
+                        'tiendanube_variant_id': variant.get('id'),
+                        'tiendanube_sku': variant.get('sku', ''),
+                    },
+                )
+        return result
+
+    def _save_variant_mapping_from_tn_product(
+        self,
+        mapping: ProductMapping,
+        tn_product: dict,
+        adminet_product: dict,
+    ) -> None:
+        variants = tn_product.get('variants') or []
+        if not variants:
+            return
+        variant = variants[0]
+        defaults = {
+            'tiendanube_variant_id': variant.get('id'),
+            'tiendanube_sku': variant.get('sku', ''),
+            'tiendanube_price': variant.get('price'),
+            'tiendanube_stock': variant.get('stock', 0),
+            'tiendanube_product_id': tn_product.get('id'),
+        }
+        if adminet_product:
+            defaults['adminet_id'] = adminet_product.get('IDArt')
+            defaults['adminet_nombre'] = adminet_product.get('NombreArticulo', '')
+        ProductVariantMapping.objects.update_or_create(
+            product_mapping=mapping,
+            defaults=defaults,
+        )
+
+    def _finalize_product_sync_success(
+        self, mapping: ProductMapping, adminet_product: dict
+    ) -> None:
+        if adminet_product:
+            deposito_id = self.adminet_config.deposito_tiendanube_id
+            self.mapping_service.update_product_mapping_from_adminet(
+                mapping,
+                adminet_product,
+                deposito_id=deposito_id,
+            )
+            precios = precios_tiendanube_desde_articulo(
+                adminet_product,
+                config=self.adminet_config,
+            )
+            mapping.tiendanube_price = precios['price']
+            mapping.tiendanube_cost = precios['cost']
+            if mapping.adminet_stock is not None:
+                mapping.tiendanube_stock = int(mapping.adminet_stock)
+            nombre = adminet_product.get('NombreArticulo')
+            if nombre:
+                mapping.tiendanube_name = str(nombre)[:255]
+            sku = adminet_product.get('NroCodBarra')
+            if sku:
+                mapping.tiendanube_sku = str(sku)
+        if mapping.tiendanube_id and adminet_product.get('IDArt'):
+            update_result = self.adminet_service.update_product_tiendanube_id(
+                adminet_product['IDArt'],
+                mapping.tiendanube_id,
+            )
+            if not update_result.get('success'):
+                logger.warning(
+                    "Error actualizando id_tiendanube en AdministraNET: "
+                    f"{update_result.get('message')}"
+                )
+        mapping.sync_status = ProductMapping.SyncStatus.SYNCED
+        mapping.last_synced = timezone.now()
+        mapping.error_message = ''
+        mapping.save()
+
+    def _finalize_product_sync_error(
+        self, mapping: ProductMapping, message: str
+    ) -> None:
+        mapping.sync_status = ProductMapping.SyncStatus.ERROR
+        mapping.error_message = message
+        mapping.save()
 
     def sync_product_variants_from_tiendanube(self, product_mapping: ProductMapping) -> Dict[str, Any]:
         """Sincronizar variantes de un producto desde Tiendanube hacia AdministraNET."""
@@ -833,17 +1362,19 @@ class TiendanubeAdministraNETSyncService:
     # ÓRDENES (mantener implementación existente)
     # ============================================================================
     
-    def sync_orders_from_tiendanube(self) -> Dict[str, Any]:
+    def sync_orders_from_tiendanube(
+        self, sync_log: Optional[SyncLog] = None
+    ) -> Dict[str, Any]:
         """Sincronizar órdenes desde Tiendanube hacia AdministraNET."""
         try:
-            # Crear log de sincronización
-            sync_log = SyncLog.objects.create(
-                sync_type=SyncLog.SyncType.ORDER,
-                direction=SyncLog.SyncDirection.TO_ADMINET,
-                status=SyncLog.Status.IN_PROGRESS,
-                tiendanube_config=self.tiendanube_config,
-                adminet_config=self.adminet_config
-            )
+            if sync_log is None:
+                sync_log = SyncLog.objects.create(
+                    sync_type=SyncLog.SyncType.ORDER,
+                    direction=SyncLog.SyncDirection.TO_ADMINET,
+                    status=SyncLog.Status.IN_PROGRESS,
+                    tiendanube_config=self.tiendanube_config,
+                    adminet_config=self.adminet_config
+                )
             
             # Obtener órdenes de Tiendanube
             tiendanube_result = self.tiendanube_service.get_orders(limit=50)
