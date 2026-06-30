@@ -1,0 +1,13 @@
+{% with o=origen|default:"" %}
+{% if o == "Pedido + reserva" %}
+<span class="inline-flex rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900 dark:bg-violet-900/40 dark:text-violet-100 sm:text-xs" title="Demanda desde pedidos PED y reserva de stock.">Ped.+res.</span>
+{% elif o == "Reserva" %}
+<span class="inline-flex rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900/35 dark:text-amber-100 sm:text-xs" title="Solo demanda por reserva (sin líneas PED en detalle).">Reserva</span>
+{% elif o == "Pedido" %}
+<span class="inline-flex rounded-md bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold text-sky-900 dark:bg-sky-900/40 dark:text-sky-100 sm:text-xs" title="Demanda desde pedidos PED.">Pedido</span>
+{% elif o == "Varios" %}
+<span class="inline-flex rounded-md bg-slate-200/90 px-1.5 py-0.5 text-[10px] font-semibold text-slate-800 dark:bg-slate-700 dark:text-slate-200 sm:text-xs" title="Más de un origen de demanda entre los artículos de esta OPT.">Varios</span>
+{% else %}
+<span class="text-slate-400 dark:text-slate-500 text-xs">—</span>
+{% endif %}
+{% endwith %}

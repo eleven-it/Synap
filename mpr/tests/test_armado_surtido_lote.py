@@ -233,11 +233,15 @@ class EjecutarLoteArmadoSurtidoTest(SimpleTestCase):
             "detalle": "Turno",
         }
 
+    @patch("mpr.models.MprArmadoLote")
     @patch("mpr.services.guardar_composicion_armado_surtido")
     @patch("mpr.services.get_connection")
     @patch("mpr.services.articulo_habilitado_armado_surtido", return_value=True)
     @patch("mpr.services._ejecutar_armado_surtido_tx")
     def test_parcial_falla_segundo_item(self, mock_tx, *_mocks):
+        lote_mock = MagicMock()
+        lote_mock.id = "00000000-0000-0000-0000-000000000001"
+        _mocks[3].objects.create.return_value = lote_mock
         mock_tx.side_effect = [
             (True, 11, "0001-00000011", None, [{"id_articulo": 813}], {
                 "codigo_articulo_pack": "1.1.100",
@@ -283,3 +287,23 @@ class EjecutarLoteArmadoSurtidoTest(SimpleTestCase):
         self.assertEqual(resultado["exitosos"], [])
         self.assertEqual(len(resultado["fallidos"]), 2)
         mock_tx.assert_not_called()
+
+
+class DetalleMovArmado1raOptTest(SimpleTestCase):
+    def test_incluye_opt_en_detalle_si_id_lista(self):
+        from mpr.services import _detalle_mov_armado_1ra
+
+        det = _detalle_mov_armado_1ra(
+            489, 10, [{"id_articulo": 813, "cantidad_por_pack": 1}],
+            id_lista_produccion=11,
+        )
+        self.assertIn("OPT 11", det)
+        self.assertIn("Armado OPT 11", det)
+
+    def test_sin_opt_si_no_id_lista(self):
+        from mpr.services import _detalle_mov_armado_1ra
+
+        det = _detalle_mov_armado_1ra(
+            489, 10, [{"id_articulo": 813, "cantidad_por_pack": 1}],
+        )
+        self.assertNotIn("OPT", det)

@@ -9,16 +9,16 @@ class ListarUnidadesDesdeSeleccionFlagTest(SimpleTestCase):
     @patch("mpr.services._explosion_demanda_componentes_pedido_reserva_pack")
     @patch("mpr.services.bulk_bom_detalle")
     @patch("mpr.services.bulk_id_en_abm")
-    @patch("mpr.services.listar_ventana_pack")
+    @patch("mpr.services.obtener_pp_ped_y_stock_pack_por_articulos")
     def test_llama_listar_unidades_sin_restar_saldo_semi_en_cant_fabricar(
         self,
-        mock_listar_vp,
+        mock_refresco,
         mock_bulk_abm,
         mock_bulk_bom,
         mock_explosion,
         mock_listar_ud,
     ):
-        mock_listar_vp.return_value = []
+        mock_refresco.return_value = {100: {"cantidad_pedida_pedido": 0.0, "stock_terminado": 0.0}}
         mock_bulk_abm.return_value = {100: 1}
         mock_bulk_bom.return_value = {}
         mock_explosion.return_value = ({}, {})

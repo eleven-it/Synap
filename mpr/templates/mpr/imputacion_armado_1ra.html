@@ -1,0 +1,262 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Imputación de pedido - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
+    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4 sm:text-sm" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li>
+                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a>
+                </li>
+                <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Imputación de pedido</span></li>
+            </ol>
+        </nav>
+
+        <header class="mb-6 flex flex-col gap-4 border-b border-slate-200/80 pb-5 dark:border-slate-700/80 lg:flex-row lg:items-center lg:justify-between">
+            <div class="min-w-0 max-w-3xl">
+                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">Imputación de pedido</h1>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    Asigne producción armada (Armado 1ra) a pedidos con demanda abierta. Los movimientos de Armado 2da no aparecen aquí.
+                </p>
+                <p class="mt-1 text-sm tabular-nums text-purple-700 dark:text-purple-300">
+                    {{ total_pendientes }} MSTOCK pendiente{{ total_pendientes|pluralize:"s" }} de imputar
+                </p>
+            </div>
+            <div class="flex shrink-0 flex-wrap gap-2">
+                <a href="{% url 'mpr:opt_list' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900">
+                    <span class="material-icons text-lg text-slate-500 dark:text-slate-400" aria-hidden="true">list_alt</span>
+                    Lista de OPTs
+                </a>
+                <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900">
+                    <span class="material-icons text-lg text-slate-500 dark:text-slate-400" aria-hidden="true">dashboard</span>
+                    Tablero
+                </a>
+            </div>
+        </header>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm shadow-sm {% if message.tags == 'error' %}border-red-200 bg-red-500/10 text-red-800 dark:border-red-800 dark:bg-red-500/20 dark:text-red-200{% elif message.tags == 'success' %}border-emerald-200 bg-emerald-500/10 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200{% else %}border-amber-200 bg-amber-500/10 text-amber-900 dark:border-amber-800 dark:bg-amber-500/20 dark:text-amber-200{% endif %}" role="alert">
+            <span>{{ message }}</span>
+            <button type="button" onclick="this.closest('[role=alert]').remove()" class="shrink-0 rounded-lg p-1 transition-colors hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:hover:bg-white/5" aria-label="Cerrar">
+                <span class="material-icons text-lg">close</span>
+            </button>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% if filtrado_por_lote %}
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-purple-200/80 bg-purple-50/60 px-4 py-3 text-sm dark:border-purple-900/40 dark:bg-purple-950/20">
+            <p class="text-slate-700 dark:text-slate-300">Mostrando MSTOCK del lote recién ejecutado.</p>
+            <a href="{% url 'mpr:imputacion_armado_1ra' %}" class="font-semibold text-purple-700 hover:text-purple-900 dark:text-purple-300 dark:hover:text-purple-100">Ver todos los pendientes</a>
+        </div>
+        {% elif filtrado_por_articulo %}
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-purple-200/80 bg-purple-50/60 px-4 py-3 text-sm dark:border-purple-900/40 dark:bg-purple-950/20">
+            <p class="text-slate-700 dark:text-slate-300">Filtrado por artículo (pack) <strong class="tabular-nums">{{ id_articulo_sel }}</strong>.</p>
+            <a href="{% url 'mpr:imputacion_armado_1ra' %}" class="font-semibold text-purple-700 hover:text-purple-900 dark:text-purple-300 dark:hover:text-purple-100">Ver todos los pendientes</a>
+        </div>
+        {% endif %}
+
+        {% if codigo_movimiento_sel %}
+        <div id="confirmar-imputacion" class="mb-6 overflow-hidden rounded-2xl border border-purple-200/80 bg-white shadow-sm dark:border-purple-900/50 dark:bg-slate-800">
+            <div class="border-b border-purple-100 bg-purple-50/80 px-5 py-4 dark:border-purple-900/40 dark:bg-purple-950/30">
+                <h2 class="text-base font-bold text-slate-900 dark:text-white">Confirmar imputación — MSTOCK {{ codigo_movimiento_sel }}</h2>
+                {% if sugerencias_error %}
+                <p class="mt-1 text-sm text-amber-700 dark:text-amber-300">{{ sugerencias_error }}</p>
+                {% else %}
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Sugerencia FIFO (puede ajustar cantidades antes de confirmar).</p>
+                {% endif %}
+            </div>
+            <form method="post" action="{% url 'mpr:imputacion_armado_1ra' %}" class="p-5 space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="codigo_movimiento" value="{{ codigo_movimiento_sel }}"/>
+                {% if lote_armado_sel %}
+                <input type="hidden" name="id_lote_armado" value="{{ lote_armado_sel }}"/>
+                {% endif %}
+                <input type="hidden" name="lineas_json" id="lineas-json-imputacion" value=""/>
+                {% if sugerencias_fifo %}
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-800/80">
+                            <tr>
+                                <th class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Pedido</th>
+                                <th class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Cliente</th>
+                                <th class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Fecha</th>
+                                <th class="px-4 py-2 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Cant. imputar</th>
+                                <th class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Regla</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700" id="tbody-sugerencias">
+                            {% for s in sugerencias_fifo %}
+                            <tr data-idx="{{ forloop.counter0 }}">
+                                <td class="px-4 py-2 font-medium text-slate-900 dark:text-white">{{ s.nro_pedido }}</td>
+                                <td class="px-4 py-2 text-slate-700 dark:text-slate-300">{{ s.nombre_cliente }}</td>
+                                <td class="px-4 py-2 text-slate-600 dark:text-slate-400">{{ s.fecha_pedido }}</td>
+                                <td class="px-4 py-2 text-right">
+                                    <input type="number" min="1" step="1" value="{{ s.cantidad }}"
+                                           data-field="cantidad"
+                                           class="w-20 rounded-lg border border-slate-300 px-2 py-1 text-right tabular-nums dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+                                </td>
+                                <td class="px-4 py-2 text-xs text-slate-500">{{ s.origen_regla }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {{ sugerencias_fifo|json_script:"sugerencias-data" }}
+                {% endif %}
+                <div id="imputacion-error-cliente" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200" role="alert"></div>
+                <div class="flex flex-wrap gap-3">
+                    <button type="submit" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-purple-700">
+                        <span class="material-icons text-lg">check</span>
+                        Confirmar imputación
+                    </button>
+                    <a href="{% url 'mpr:imputacion_armado_1ra' %}{% if lote_armado_sel %}?id_lote_armado={{ lote_armado_sel }}{% endif %}" class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">Cancelar</a>
+                </div>
+            </form>
+        </div>
+        <script>
+        (function () {
+            var form = document.querySelector('#confirmar-imputacion form');
+            var dataEl = document.getElementById('sugerencias-data');
+            var hidden = document.getElementById('lineas-json-imputacion');
+            var errorBox = document.getElementById('imputacion-error-cliente');
+            if (!form || !hidden) return;
+
+            function mostrarErrorCliente(texto) {
+                if (!errorBox) {
+                    window.alert(texto);
+                    return;
+                }
+                errorBox.textContent = texto;
+                errorBox.classList.remove('hidden');
+                errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            function parseSugerenciasBase() {
+                if (!dataEl) return [];
+                try {
+                    var parsed = JSON.parse(dataEl.textContent || '[]');
+                    if (Array.isArray(parsed)) return parsed;
+                    if (typeof parsed === 'string') {
+                        var inner = JSON.parse(parsed);
+                        return Array.isArray(inner) ? inner : [];
+                    }
+                } catch (e) { /* ignorar */ }
+                return [];
+            }
+
+            form.addEventListener('submit', function (e) {
+                if (errorBox) {
+                    errorBox.classList.add('hidden');
+                    errorBox.textContent = '';
+                }
+                var base = parseSugerenciasBase();
+                var rows = document.querySelectorAll('#tbody-sugerencias tr[data-idx]');
+                var out = [];
+                rows.forEach(function (tr) {
+                    var idx = parseInt(tr.getAttribute('data-idx'), 10);
+                    var src = base[idx] || {};
+                    var qtyInp = tr.querySelector('[data-field="cantidad"]');
+                    var qty = parseInt(qtyInp && qtyInp.value, 10) || 0;
+                    if (qty <= 0) return;
+                    if (!src.codigo_movimiento_pedido) return;
+                    out.push({
+                        codigo_movimiento_pedido: src.codigo_movimiento_pedido,
+                        cantidad: qty,
+                        origen_regla: src.origen_regla || 'MANUAL',
+                        id_lista_detalle: (src.id_fila_detalle != null ? src.id_fila_detalle : src.id_lista_detalle),
+                        id_lista_produccion: src.id_lista_produccion != null ? src.id_lista_produccion : null
+                    });
+                });
+                if (!out.length) {
+                    e.preventDefault();
+                    mostrarErrorCliente(
+                        rows.length
+                            ? 'No se pudo armar la imputación. Verifique cantidades y recargue la página.'
+                            : 'No hay líneas de imputación sugeridas para este MSTOCK.'
+                    );
+                    return;
+                }
+                hidden.value = JSON.stringify(out);
+            });
+        })();
+        </script>
+        {% endif %}
+
+        {% if not lotes_pendientes %}
+        <div class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center dark:border-slate-600 dark:bg-slate-800">
+            {% if filtrado_por_lote %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">No hay MSTOCK pendientes de imputar en este lote (ya fueron imputados o no hubo grabados exitosos).</p>
+            <a href="{% url 'mpr:imputacion_armado_1ra' %}" class="mt-4 inline-flex min-h-10 items-center text-sm font-semibold text-purple-700 hover:text-purple-900 dark:text-purple-300">Ver todos los pendientes</a>
+            {% else %}
+            <p class="text-sm text-slate-600 dark:text-slate-400">No hay MSTOCK de Armado 1ra pendientes de imputar.</p>
+            <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <a href="{% url 'mpr:armado' %}?modo=1ra" class="inline-flex min-h-10 items-center rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Ir a Armado 1ra</a>
+                <a href="{% url 'mpr:opt_list' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Lista de OPTs</a>
+                <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Tablero</a>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="space-y-4">
+            {% for lote in lotes_pendientes %}
+            <details class="group overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm open:ring-1 open:ring-purple-500/20 dark:border-slate-700 dark:bg-slate-800" {% if lote_armado_sel and lote.id_lote_armado == lote_armado_sel %}open{% elif not lote_armado_sel and forloop.first %}open{% endif %}>
+                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 marker:content-none hover:bg-slate-50 dark:hover:bg-slate-800/80">
+                    <div>
+                        <span class="text-sm font-semibold text-slate-900 dark:text-white">
+                            {% if lote.id_lote_armado %}Lote {{ lote.id_lote_armado|truncatechars:13 }}{% else %}Sin lote{% endif %}
+                        </span>
+                        {% if lote.ejecutado_en %}
+                        <span class="ml-2 text-xs text-slate-500 dark:text-slate-400">{{ lote.ejecutado_en|date:"d/m/Y H:i" }}</span>
+                        {% endif %}
+                    </div>
+                    <span class="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium tabular-nums text-purple-800 dark:bg-purple-950/50 dark:text-purple-200">
+                        {{ lote.movimientos|length }} MSTOCK
+                    </span>
+                </summary>
+                <div class="overflow-x-auto border-t border-slate-100 dark:border-slate-700">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50/90 dark:bg-slate-800/80">
+                            <tr>
+                                <th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Comprobante</th>
+                                <th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Pack</th>
+                                <th class="px-4 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Armado</th>
+                                <th class="px-4 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Imputado</th>
+                                <th class="px-4 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Pendiente</th>
+                                <th class="px-4 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                            {% for m in lote.movimientos %}
+                            <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
+                                <td class="whitespace-nowrap px-4 py-3 tabular-nums text-slate-800 dark:text-slate-200">{{ m.nro_comprobante }}</td>
+                                <td class="px-4 py-3">
+                                    <span class="font-medium text-slate-900 dark:text-white">{{ m.codigo_articulo_pack }}</span>
+                                    <span class="block max-w-xs truncate text-xs text-slate-500 dark:text-slate-400">{{ m.descripcion_articulo_pack }}</span>
+                                </td>
+                                <td class="px-4 py-3 text-right tabular-nums">{{ m.cantidad_armada }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums">{{ m.cantidad_imputada }}</td>
+                                <td class="px-4 py-3 text-right tabular-nums font-semibold text-purple-700 dark:text-purple-300">{{ m.cantidad_pendiente_imputar }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    <a href="{% url 'mpr:imputacion_armado_1ra' %}?codigo_movimiento={{ m.codigo_movimiento }}{% if lote_armado_sel %}&amp;id_lote_armado={{ lote_armado_sel }}{% endif %}#confirmar-imputacion"
+                                       class="inline-flex min-h-8 items-center rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white hover:bg-purple-700">
+                                        Imputar
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

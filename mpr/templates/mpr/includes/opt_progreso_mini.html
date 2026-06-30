@@ -1,0 +1,8 @@
+{% with pct=porcentaje|default:0 %}
+<div class="flex min-w-[5.5rem] items-center gap-2" title="Progreso del flujo OPT ({{ pct }}%)">
+    <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        <div class="h-full rounded-full bg-purple-600 transition-all dark:bg-purple-500" style="width: {{ pct }}%"></div>
+    </div>
+    <span class="w-8 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-300">{{ pct }}%</span>
+</div>
+{% endwith %}

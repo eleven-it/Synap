@@ -2417,3 +2417,46 @@ def obtener_renglones_movimiento(base_empresa: str, codigo_movimiento: int) -> L
     except Exception as e:
         logger.warning("Error al obtener renglones: %s", e)
         return []
+
+
+def obtener_renglones_movimiento_bulk(
+    base_empresa: str,
+    codigos_movimiento: List[int],
+) -> Dict[int, List[Dict[str, Any]]]:
+    """Renglones de varios movimientos en una sola consulta (modal comprobante OPT)."""
+    codigos = sorted({c for c in (to_int_or_none(x) for x in (codigos_movimiento or [])) if c is not None})
+    if not (base_empresa or "").strip() or not codigos:
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            ph = ",".join(["%s"] * len(codigos))
+            cursor.execute(
+                f"""
+                SELECT CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Entrada, Salida,
+                       COALESCE(saldo, 0) AS saldo, CodDeposito
+                FROM stock
+                WHERE CodigoMovimiento IN ({ph})
+                ORDER BY CodigoMovimiento, Orden
+                """,
+                codigos,
+            )
+            rows = cursor.fetchall() or []
+        por_codigo: Dict[int, List[Dict[str, Any]]] = {c: [] for c in codigos}
+        codigos_dep: set = set()
+        for r in rows:
+            row = dict(r)
+            cod = to_int_or_none(row.get("CodigoMovimiento"))
+            if cod is None:
+                continue
+            por_codigo.setdefault(cod, []).append(row)
+            dep = to_int_or_none(row.get("CodDeposito"))
+            if dep is not None:
+                codigos_dep.add(dep)
+        nombres = get_nombres_depositos(base_empresa, list(codigos_dep)) if codigos_dep else {}
+        for renglones in por_codigo.values():
+            for r in renglones:
+                r["nombre_deposito"] = nombres.get(to_int_or_none(r.get("CodDeposito")), "—")
+        return por_codigo
+    except Exception as e:
+        logger.warning("Error al obtener renglones bulk: %s", e)
+        return {}

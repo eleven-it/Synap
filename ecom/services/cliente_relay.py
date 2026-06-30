@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional
 from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import to_int_or_none
 
+from ecom.services.vendedor_asignacion_sql import where_vendedor_cliente
+
 
 def _si_no(val: Any, default: str = "No") -> str:
     if val is None:
@@ -66,29 +68,17 @@ def vendedor_a_cargo_desde_sesion(sess_user: Dict[str, Any]) -> List[int]:
 
 def _where_viajante(
     sess_user: Dict[str, Any],
+    base_empresa: str = "",
 ) -> tuple[str, List[Any]]:
     """
     Restricción ``CodViajante`` como en PHP (``todos_clientes``, supervisor, ``vendedor_a_cargo``).
+
+    Si ``configuracion_ecom.ecom_fuente_vendedor_cliente`` = ``tabla``, usa
+    ``vendedores_clientes_asignacion`` (sin sincronizar con ``cliente.CodViajante``).
     """
-    todos = _si_no(sess_user.get("todos_clientes"), "No")
-    if todos == "Si":
-        return "", []
-
-    sup = _si_no(sess_user.get("supervisor_venta") or sess_user.get("permiso_supervisor_venta_web"), "No")
-    cv = cod_viajante_desde_sesion_usuario(sess_user)
-    if cv is None:
-        return " AND 1=0 ", []
-
-    cargo = vendedor_a_cargo_desde_sesion(sess_user)
-    if sup == "No":
-        return " AND cliente.CodViajante = %s ", [cv]
-
-    if cargo:
-        placeholders = ",".join(["%s"] * (len(cargo) + 1))
-        params = [cv] + list(cargo)
-        return f" AND cliente.CodViajante IN ({placeholders}) ", params
-
-    return " AND cliente.CodViajante = %s ", [cv]
+    if base_empresa:
+        return where_vendedor_cliente(base_empresa, sess_user)
+    return where_vendedor_cliente("", sess_user)
 
 
 def _patron_texto_busqueda(patron: str) -> tuple[Optional[str], List[Any]]:
@@ -181,7 +171,7 @@ def buscar_clientes_relay(
             )
             params.extend(p_params)
 
-    w_viaj, p_viaj = _where_viajante(sess_user)
+    w_viaj, p_viaj = _where_viajante(sess_user, base_empresa)
     params.extend(p_viaj)
 
     lim = max(1, min(int(limit), 50))
@@ -236,7 +226,7 @@ def cliente_accesible_por_sesion(
     cod_int = to_int_or_none(codigo_cliente)
     if cod_int is None or cod_int == 1:
         return False
-    w_viaj, p_viaj = _where_viajante(sess_user)
+    w_viaj, p_viaj = _where_viajante(sess_user, base_empresa)
     params: List[Any] = [cod_int]
     params.extend(p_viaj)
     sql = f"""

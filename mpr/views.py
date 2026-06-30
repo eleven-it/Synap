@@ -3,8 +3,10 @@ import json
 import logging
 import traceback
 from datetime import date, datetime, timedelta
+from typing import Any, Dict, List
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
@@ -14,7 +16,7 @@ from django.views.generic import TemplateView
 
 logger = logging.getLogger(__name__)
 
-from core.services.administranet_stock import get_depositos, obtener_renglones_movimiento
+from core.services.administranet_stock import get_depositos, obtener_renglones_movimiento_bulk
 from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 
 from .exceptions import MprSchemaError
@@ -35,30 +37,41 @@ from .services import (
     ejecutar_opp,
     ejecutar_opp_por_componentes,
     ejecutar_reclasificacion,
+    ejecutar_lote_armado,
     ejecutar_lote_armado_surtido,
     listar_articulos_stock_deposito,
+    listar_packs_armado_1ra,
+    listar_packs_armado_catalogo,
     listar_packs_armado_surtido,
+    lineas_bom_pack_1ra,
+    calcular_max_packs_armado_1ra,
+    confirmar_imputacion_armado,
+    listar_mstock_pendientes_imputacion,
+    sugerir_imputacion_fifo,
+    validar_reglas_lote_armado,
+    validar_reglas_lote_armado_surtido,
+    validar_reglas_item_candidato_lote,
     normalizar_item_lote_armado_surtido,
     parse_cabecera_lote_armado_surtido,
     parse_lote_armado_surtido_post,
-    validar_reglas_lote_armado_surtido,
-    validar_reglas_item_candidato_lote,
     validar_stock_agregado_lote,
     normalizar_armados_lote_json,
-    normalizar_item_lote_armado_surtido,
     LOTE_ARMADO_SURTIDO_MAX_ITEMS,
     TIPO_ART_FAB_PACK_ARMADO_SURTIDO,
     get_deposito_2da_seleccion_mpr,
+    get_deposito_semi_elaborado_mpr,
     get_articulo_armado_por_bom,
     get_bom_detalle,
     get_cantidades_armadas_por_opt,
     get_cantidad_opp_por_destino_opt,
     opt_puede_armado_surtido,
     componentes_a_equivalentes_pack,
+    bulk_componentes_a_equivalentes_pack,
     get_id_en_abm_por_articulo,
     bulk_id_en_abm,
     bulk_bom_detalle,
     get_lineas_armado_opt,
+    construir_items_precarga_armado_desde_opt,
     get_lineas_opt_directo,
     get_op_detalle,
     get_opt_detalle,
@@ -88,19 +101,31 @@ from .services import (
     lineas_texto_cantidad_pack,
     enriquecer_lineas_opt_presentacion_pack,
     enriquecer_componentes_opp_presentacion,
+    bulk_origen_demanda_por_articulo,
+    aplicar_origen_demanda_a_filas,
+    resumen_origen_demanda_opt,
+    calcular_porcentaje_progreso_opt,
+    bulk_mstock_imputacion_por_articulo,
+    bulk_restante_armar_opt_listado,
+    agrupar_filas_opt_listado_por_lote,
     texto_docenas_unidades,
     _etiqueta_linea_opt,
     listar_ventana_pack,
     listar_ventana_pack_unidades,
     listar_empleados_operarios,
     listar_unidades_desde_seleccion,
+    obtener_pp_ped_y_stock_pack_por_articulos,
     lineas_opt_desde_formulario_unidades,
     listar_ops_para_cerrar,
     listar_opt_en_proceso,
     estado_acciones_opt,
+    estado_acciones_opt_bulk,
     listar_opa_por_opt,
     listar_opp_por_opt,
     listar_pedidos_fabrica,
+    contar_pedidos_fabrica,
+    contar_opt_atrasadas_distintas,
+    listar_opt_atrasadas_tablero,
     listar_opts_por_pedido,
     get_depositos_con_suma_stock,
     get_deposito_produccion_mpr,
@@ -151,6 +176,43 @@ class MprLoginRequiredMixin(LoginRequiredMixin, MprSchemaErrorMixin):
             return redirect("login:login")
         if not getattr(request.user, "is_authenticated", False):
             return redirect("login:login")
+        return super().dispatch(request, *args, **kwargs)
+
+
+def _usuario_tiene_permiso_mpr(user, permiso: str) -> bool:
+    """Comprueba permiso MPR (admin, supervisor legacy, rol administrador o permiso explícito)."""
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+    if hasattr(user, "is_admin") and user.is_admin():
+        return True
+    if hasattr(user, "cod_usuario"):
+        if (user.cod_usuario or "").strip().lower() == "supervisor":
+            return True
+    if hasattr(user, "roles"):
+        if any(rol.nombre.lower() == "administrador" for rol in user.roles.all()):
+            return True
+    if hasattr(user, "tiene_permiso") and permiso:
+        return user.tiene_permiso(permiso)
+    return False
+
+
+def _usuario_puede_imputar_pedido(user) -> bool:
+    return _usuario_tiene_permiso_mpr(user, "mpr.imputar_armado_1ra")
+
+
+class MprPermisoMixin:
+    """Exige permiso administraNET en vista basada en clase."""
+
+    permiso_requerido: str = ""
+
+    def _usuario_tiene_permiso(self, user) -> bool:
+        return _usuario_tiene_permiso_mpr(user, self.permiso_requerido)
+
+    def dispatch(self, request, *args, **kwargs):
+        if self.permiso_requerido and not self._usuario_tiene_permiso(
+            getattr(request, "user", None)
+        ):
+            raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -283,8 +345,11 @@ def _build_renglones_modal_map(base_empresa, opp_list, opa_list):
         if cm is not None:
             codigos.add(cm)
     out = {}
+    if not codigos:
+        return out
+    renglones_por_codigo = obtener_renglones_movimiento_bulk(base_empresa, list(codigos))
     for cm in codigos:
-        renglones = obtener_renglones_movimiento(base_empresa, cm)
+        renglones = renglones_por_codigo.get(cm) or []
         es_opp = cm in opp_codigos
         articulos = build_grupos_articulo_renglones_movimiento(
             renglones, presentacion_opp_du=es_opp
@@ -303,6 +368,7 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        context["armado_url"] = reverse("mpr:armado") + "?modo=1ra"
         base_empresa = _get_base_empresa(self.request)
         # KPIs y listas desde MySQL si hay empresa; si no, placeholders
         if base_empresa:
@@ -325,12 +391,13 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
                 return context
             total_pendiente = sum(r["cantidad_pendiente_prod"] for r in agrupada)
             try:
-                pedidos_pendientes = listar_pedidos_fabrica(base_empresa, limit=500, estado="Pendiente")
-                context["kpi_pedidos_pendientes"] = len(pedidos_pendientes)
+                context["kpi_pedidos_pendientes"] = contar_pedidos_fabrica(
+                    base_empresa, estado="Pendiente"
+                )
             except MprSchemaError:
                 context["kpi_pedidos_pendientes"] = 0
             try:
-                ventana_pack = listar_ventana_pack(base_empresa, limit=15)
+                ventana_pack = listar_ventana_pack(base_empresa, limit=15, modo_ligero=True)
             except MprSchemaError as e:
                 _log_mpr_schema_error(e)
                 context["mpr_schema_error_modal"] = str(e)
@@ -345,10 +412,10 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
                 return context
             atrasadas = []
             try:
-                atrasadas = listar_opt_listado(base_empresa, limit=500, solo_atrasadas=True)
+                atrasadas = listar_opt_atrasadas_tablero(base_empresa, limit=10)
+                kpi_delayed_ops = contar_opt_atrasadas_distintas(base_empresa)
             except MprSchemaError:
-                pass
-            kpi_delayed_ops = len(set(r["id_lista_produccion"] for r in atrasadas if r.get("id_lista_produccion")))
+                kpi_delayed_ops = 0
             context["kpi_delayed_ops"] = kpi_delayed_ops
             context["kpi_pending_units"] = total_pendiente
             context["kpi_urgent_items"] = min(15, len(ventana_pack) + kpi_delayed_ops)
@@ -391,16 +458,26 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
             context["ops_to_close"] = []
             try:
                 ops_en_proceso_raw = listar_opt_en_proceso(base_empresa, limit=15)
+                ids_proceso = [
+                    op.get("id_lista_produccion")
+                    for op in ops_en_proceso_raw
+                    if op.get("id_lista_produccion")
+                ]
+                estados_opt = estado_acciones_opt_bulk(base_empresa, ids_proceso)
                 ops_en_proceso = []
                 for op in ops_en_proceso_raw:
                     id_lista = op.get("id_lista_produccion")
                     if not id_lista:
                         continue
-                    estado = estado_acciones_opt(base_empresa, id_lista)
+                    estado = estados_opt.get(
+                        int(id_lista),
+                        {
+                            "puede_cerrar": False,
+                            "puede_crear_opp": False,
+                        },
+                    )
                     if estado["puede_cerrar"]:
                         accion_principal = "cerrar"
-                    elif estado["puede_crear_opa"]:
-                        accion_principal = "crear_opa"
                     elif estado["puede_crear_opp"]:
                         accion_principal = "crear_opp"
                     else:
@@ -412,7 +489,6 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
                         "unidades": op.get("cantidad_pedida") or 0,
                         "detail_url": detail_url,
                         "crear_opp_url": reverse("mpr:wizard") + f"?paso=3&id_lista={id_lista}",
-                        "crear_opa_url": reverse("mpr:armado_opt", kwargs={"id_lista": id_lista}),
                         "cerrar_url": reverse("mpr:opt_cerrar", kwargs={"id_lista": id_lista}),
                         "accion_principal": accion_principal,
                     })
@@ -444,13 +520,26 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
 WIZARD_SESSION_KEY = "mpr_wizard"
 
 
+def _limpiar_mpr_wizard(request, id_lista=None) -> None:
+    """Elimina el estado del asistente. Con id_lista, solo si la sesión apunta a esa OPT."""
+    wizard = request.session.get(WIZARD_SESSION_KEY)
+    if not wizard:
+        return
+    if id_lista is not None and wizard.get("id_lista") != id_lista:
+        return
+    del request.session[WIZARD_SESSION_KEY]
+    request.session.modified = True
+
+
 class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
     """
-    Asistente de producción: 1.Crear OPT → 2.Confirmar (crear+liberar) → 3.Crear OPP → 4.Armado → 5.Cierre.
-    Depósito de producción (config) se usa al confirmar; no se pide en pantalla.
+    Asistente de producción: 1.Crear OPT → 2.Confirmar (crear+liberar) → 3.Crear OPP → 4.Cierre.
+    El armado 1ra/2da es independiente (menú Producción → Armado). Depósito de producción (config) al confirmar.
     """
 
     template_name = "mpr/wizard.html"
+
+    WIZARD_PASO_MAX = 4
 
     def get(self, request, *args, **kwargs):
         base_empresa = _get_base_empresa(request)
@@ -472,19 +561,17 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                 request.session[WIZARD_SESSION_KEY] = wizard
                 request.session.modified = True
         paso = wizard.get("paso", 1)
+        # Sesiones legacy: paso 5 (cierre antiguo) o paso 4 (armado deprecado) → paso 4 cierre
+        if paso >= self.WIZARD_PASO_MAX:
+            wizard["paso"] = self.WIZARD_PASO_MAX
+            request.session[WIZARD_SESSION_KEY] = wizard
+            request.session.modified = True
+            paso = self.WIZARD_PASO_MAX
         # Paso 1 del wizard = pantalla ventana-pack (demanda por artículo)
         if paso == 1:
             request.session[WIZARD_SESSION_KEY] = {"paso": 1}
             request.session.modified = True
             return redirect("mpr:ventana_pack")
-        if paso == 4:
-            id_lista = wizard.get("id_lista")
-            lineas_armado = get_lineas_armado_opt(base_empresa, id_lista) if id_lista else []
-            if not lineas_armado:
-                wizard["paso"] = 5
-                request.session[WIZARD_SESSION_KEY] = wizard
-                request.session.modified = True
-                return redirect("mpr:wizard")
         return super().get(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
@@ -506,10 +593,9 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         if paso == 3:
             return self._post_paso3(request, base_empresa, wizard)
         if paso == 4:
-            return self._post_paso4(request, base_empresa, wizard)
-        if paso == 5:
             if request.POST.get("accion") == "cerrar_opt":
                 id_lista = wizard.get("id_lista")
+                ok = False
                 if id_lista:
                     try:
                         ok, error = cerrar_opt(base_empresa, id_lista)
@@ -519,22 +605,24 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                             messages.error(request, error or "Error al cerrar la OPT.")
                     except MprSchemaError as e:
                         return _mpr_schema_error_redirect(request, e)
+                if ok:
+                    _limpiar_mpr_wizard(request)
+                    return redirect("mpr:opt_detail", id_lista=id_lista) if id_lista else redirect("mpr:tablero")
                 return redirect("mpr:wizard")
             if request.POST.get("accion") == "finalizar":
-                self._limpiar_wizard(request)
+                _limpiar_mpr_wizard(request)
                 id_lista = wizard.get("id_lista")
                 if id_lista:
                     return redirect("mpr:opt_detail", id_lista=id_lista)
                 return redirect("mpr:tablero")
-            self._limpiar_wizard(request)
+            _limpiar_mpr_wizard(request)
             id_lista = wizard.get("id_lista")
             if id_lista:
                 return redirect("mpr:opt_detail", id_lista=id_lista)
             return redirect("mpr:tablero")
 
     def _limpiar_wizard(self, request):
-        if WIZARD_SESSION_KEY in request.session:
-            del request.session[WIZARD_SESSION_KEY]
+        _limpiar_mpr_wizard(request)
 
     def _post_paso1(self, request, base_empresa, wizard):
         """Paso 1: Crear orden (solo sesión). Artículo + cantidad."""
@@ -777,116 +865,15 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         request.session.modified = True
         return redirect("mpr:wizard")
 
-    def _post_paso4(self, request, base_empresa, wizard):
-        from django.contrib import messages
-        from core.utils.administranet_types import to_int_or_none
-        if request.POST.get("omitir_armado") == "1":
-            wizard["paso"] = 5
-            request.session[WIZARD_SESSION_KEY] = wizard
-            request.session.modified = True
-            return redirect("mpr:wizard")
-        session_user = request.session.get("user", {})
-        try:
-            id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else None
-        except (TypeError, ValueError):
-            id_usuario = None
-        if not id_usuario:
-            messages.error(request, "Usuario no identificado en sesión.")
-            return redirect("mpr:wizard")
-        id_lista = wizard.get("id_lista")
-        if not id_lista:
-            messages.error(request, "Falta la OPT. Vuelva al asistente desde la pantalla de demanda.")
-            return redirect("mpr:wizard")
-        lineas_armado = get_lineas_armado_opt(base_empresa, id_lista)
-        if not lineas_armado:
-            messages.error(request, "No hay artículos armables para esta OPT.")
-            wizard["paso"] = 5
-            request.session[WIZARD_SESSION_KEY] = wizard
-            request.session.modified = True
-            return redirect("mpr:wizard")
-        deposito_semi = get_deposito_semi_elaborado_mpr(base_empresa)
-        deposito_terminado = get_deposito_terminado_mpr(base_empresa)
-        if not deposito_semi or not deposito_terminado:
-            messages.error(request, "Configure depósitos Semi Elaborado y Terminado en Config. Depósitos.")
-            return redirect("mpr:wizard")
-        cantidades = []
-        for linea in lineas_armado:
-            id_art = linea.get("id_articulo")
-            key = f"armar_cantidad_{id_art}"
-            try:
-                qty = int((request.POST.get(key) or "0").strip())
-            except (TypeError, ValueError):
-                qty = 0
-            qty = max(0, qty)
-            if qty > 0:
-                id_operario_linea = to_int_or_none(request.POST.get(f"operario_armado_{id_art}"))
-                if id_operario_linea is None:
-                    messages.error(request, f"Seleccione operario para el pack {linea.get('codigo_articulo') or id_art}.")
-                    return redirect("mpr:wizard")
-                cantidades.append((linea, qty, id_operario_linea))
-        if not cantidades:
-            messages.error(request, "Indique al menos una cantidad mayor a 0 en algún pack para ejecutar el armado.")
-            return redirect("mpr:wizard")
-        consumo_por_componente = {}
-        saldo_por_componente = {}
-        for linea, qty, _id_operario_linea in cantidades:
-            for comp in linea.get("bom", {}).get("componentes") or []:
-                cid = to_int_or_none(comp.get("id_articulo"))
-                if cid is None:
-                    continue
-                cant_por_pack = float(comp.get("cantidad_articulo") or 0)
-                consumo_por_componente[cid] = consumo_por_componente.get(cid, 0) + cant_por_pack * qty
-                if cid not in saldo_por_componente:
-                    saldo_por_componente[cid] = float(comp.get("saldo_semi_elaborado") or 0)
-        for cid, necesario in consumo_por_componente.items():
-            saldo = saldo_por_componente.get(cid, 0)
-            if necesario > saldo:
-                codigo_comp = None
-                for linea, _qty, _id_operario_linea in cantidades:
-                    for comp in linea.get("bom", {}).get("componentes") or []:
-                        if to_int_or_none(comp.get("id_articulo")) == cid:
-                            codigo_comp = comp.get("codigo_articulo") or cid
-                            break
-                    if codigo_comp is not None:
-                        break
-                messages.error(
-                    request,
-                    f"Stock insuficiente del componente {codigo_comp or cid} en Semi Elaborado: se necesitan {int(necesario)}, hay {int(saldo)}.",
-                )
-                return redirect("mpr:wizard")
-        for linea, qty, id_operario_linea in cantidades:
-            id_en_abm = linea.get("id_en_abm")
-            articulo_armado = linea.get("articulo_armado") or {}
-            id_art_armado = articulo_armado.get("id_articulo")
-            try:
-                ok, codigo_mov, nro_comp, error = ejecutar_armado(
-                    base_empresa,
-                    id_usuario,
-                    id_en_abm,
-                    qty,
-                    deposito_semi,
-                    deposito_terminado,
-                    id_lista_produccion=id_lista,
-                    id_articulo_armado=id_art_armado,
-                    id_operario=id_operario_linea,
-                )
-            except MprSchemaError as e:
-                return _mpr_schema_error_redirect(request, e)
-            if not ok:
-                messages.error(request, error or "Error al ejecutar armado.")
-                return redirect("mpr:wizard")
-        messages.success(request, "Armado registrado por pack.")
-        wizard["paso"] = 5
-        request.session[WIZARD_SESSION_KEY] = wizard
-        request.session.modified = True
-        return redirect("mpr:wizard")
-
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         base_empresa = _get_base_empresa(self.request)
         wizard = self.request.session.get(WIZARD_SESSION_KEY) or {}
         paso = wizard.get("paso", 1)
+        if paso >= WizardProduccionView.WIZARD_PASO_MAX:
+            paso = WizardProduccionView.WIZARD_PASO_MAX
         context["wizard_paso"] = paso
+        context["wizard_paso_max"] = WizardProduccionView.WIZARD_PASO_MAX
         context["base_empresa"] = base_empresa
         context["wizard"] = wizard
         context["fecha_hoy"] = date.today()
@@ -951,26 +938,6 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                 context["cantidad_opp_registradas"] = 0
             context["id_deposito_produccion"] = get_deposito_produccion_mpr(base_empresa)
         elif paso == 4:
-            id_lista = wizard.get("id_lista")
-            lineas_armado = get_lineas_armado_opt(base_empresa, id_lista) if id_lista else []
-            context["id_lista"] = id_lista
-            context["lineas_armado"] = lineas_armado
-            context["mostrar_armado"] = bool(lineas_armado)
-            context["operarios"] = listar_empleados_operarios(base_empresa, busqueda=None, limit=200)
-            context["id_deposito_semi"] = get_deposito_semi_elaborado_mpr(base_empresa)
-            context["id_deposito_terminado"] = get_deposito_terminado_mpr(base_empresa)
-            depositos_config = listar_depositos_config(base_empresa)
-            id_semi = context["id_deposito_semi"]
-            id_term = context["id_deposito_terminado"]
-            context["nombre_deposito_semi"] = next(
-                (d.get("NombreDeposito") or str(d.get("CodDeposito")) for d in depositos_config if d.get("CodDeposito") == id_semi),
-                "Semi Elaborado",
-            )
-            context["nombre_deposito_terminado"] = next(
-                (d.get("NombreDeposito") or str(d.get("CodDeposito")) for d in depositos_config if d.get("CodDeposito") == id_term),
-                "Terminado",
-            )
-        elif paso == 5:
             id_lista = wizard.get("id_lista")
             lineas = get_opt_detalle(base_empresa, id_lista) if id_lista else []
             en_proceso = (lineas[0].get("en_proceso_produccion") or "No").strip().lower() == "si" if lineas else False
@@ -1066,6 +1033,9 @@ class OptListView(MprLoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         base_empresa = _get_base_empresa(self.request)
         estado_filter = (self.request.GET.get("estado", "") or "todos").strip().lower()
+        origen_filter = (self.request.GET.get("origen", "") or "todos").strip().lower()
+        extra_filter = (self.request.GET.get("extra", "") or "todos").strip().lower()
+        vista_agrupada = (self.request.GET.get("vista", "") or "detalle").strip().lower() == "agrupada"
         estado_en_proceso = None
         solo_atrasadas = False
         if estado_filter == "en_proceso":
@@ -1080,7 +1050,28 @@ class OptListView(MprLoginRequiredMixin, TemplateView):
             estado_en_proceso=estado_en_proceso,
             solo_atrasadas=solo_atrasadas,
         )
-        # Enriquecer cada fila: pendiente del pedido y fase (OPTs creadas) o "Demanda" (aún no liberada)
+        ids_proceso = [
+            opt.get("id_lista_produccion")
+            for opt in ordenes
+            if opt.get("es_opt_creada")
+            and (opt.get("en_proceso_produccion") or "No").strip() == "Si"
+            and opt.get("id_lista_produccion")
+        ]
+        estados_opt = estado_acciones_opt_bulk(base_empresa, ids_proceso)
+        art_ids = [opt.get("id_articulo") for opt in ordenes if opt.get("id_articulo")]
+        abm_map = bulk_id_en_abm(base_empresa, art_ids) if art_ids else {}
+        puede_imputar = _usuario_puede_imputar_pedido(self.request.user)
+        imputacion_map = (
+            bulk_mstock_imputacion_por_articulo(base_empresa, art_ids)
+            if puede_imputar and art_ids
+            else {}
+        )
+        kpi_en_proceso = 0
+        kpi_lista_cerrar = 0
+        kpi_cerradas = 0
+        kpi_armado_pendiente = 0
+        kpi_imputacion_articulos = len(imputacion_map)
+        # Enriquecer cada fila: pendiente del pedido, fase, progreso y acciones
         for opt in ordenes:
             id_lista = opt.get("id_lista_produccion")
             en_proceso = (opt.get("en_proceso_produccion") or "No").strip() == "Si"
@@ -1092,15 +1083,39 @@ class OptListView(MprLoginRequiredMixin, TemplateView):
                 opt["cantidad_pendiente_mostrar"] = max(0, cantidad_pedida - int(cantidad_asignada_opt))
             else:
                 opt["cantidad_pendiente_mostrar"] = cantidad_pendiente_prod
+            opt["porcentaje_progreso"] = calcular_porcentaje_progreso_opt(
+                en_proceso, int(cantidad_pendiente_prod or 0)
+            )
+            opt["accion_principal"] = None
+            opt["puede_crear_opp"] = False
+            opt["puede_cerrar"] = False
+            opt["mostrar_link_armado"] = False
+            opt["tiene_armado_pendiente"] = False
+            opt["restante_armar"] = 0
+            opt["mostrar_link_imputacion"] = False
+            opt["imputacion_url"] = None
+            if id_lista:
+                opt["detail_url"] = reverse("mpr:opt_detail", kwargs={"id_lista": id_lista})
+                opt["crear_opp_url"] = reverse("mpr:wizard") + f"?paso=3&id_lista={id_lista}"
+                opt["cerrar_url"] = reverse("mpr:opt_cerrar", kwargs={"id_lista": id_lista})
+            else:
+                opt["detail_url"] = (
+                    reverse("mpr:opt_detail", kwargs={"id_lista": 0})
+                    + f"?articulo={opt.get('id_articulo')}"
+                )
+                opt["crear_opp_url"] = None
+                opt["cerrar_url"] = None
+            id_art = opt.get("id_articulo")
+            opt["tiene_bom_armable"] = bool(id_art and abm_map.get(id_art))
+            opt["armado_url"] = reverse("mpr:armado") + "?modo=1ra"
             if not es_opt_creada:
                 opt["etiqueta_fase"] = "Demanda"
                 opt["fase_clave"] = "demanda"
             elif not en_proceso:
-                # Cerrada = esta OPT no tiene más pendiente de producir (cantidad_pendiente_prod),
-                # no el "pend. del pedido" (cantidad_pendiente_mostrar) que puede ser > 0 para otras OPT.
                 if int(cantidad_pendiente_prod or 0) == 0:
                     opt["etiqueta_fase"] = "Cerrada"
                     opt["fase_clave"] = "cerrada"
+                    kpi_cerradas += 1
                 else:
                     opt["etiqueta_fase"] = "Pendiente"
                     opt["fase_clave"] = "pendiente"
@@ -1108,22 +1123,108 @@ class OptListView(MprLoginRequiredMixin, TemplateView):
                 opt["etiqueta_fase"] = "Pendiente"
                 opt["fase_clave"] = "pendiente"
             else:
-                estado = estado_acciones_opt(base_empresa, id_lista)
+                kpi_en_proceso += 1
+                id_lista_int = int(id_lista)
+                estado = estados_opt.get(
+                    id_lista_int,
+                    {"puede_cerrar": False, "puede_crear_opp": False},
+                )
+                opt["puede_cerrar"] = bool(estado.get("puede_cerrar"))
+                opt["puede_crear_opp"] = bool(estado.get("puede_crear_opp"))
                 if estado.get("puede_cerrar"):
                     opt["etiqueta_fase"] = "Lista para cerrar"
                     opt["fase_clave"] = "lista_cerrar"
-                elif estado.get("puede_crear_opa"):
-                    opt["etiqueta_fase"] = "Lista para armado (OPA)"
-                    opt["fase_clave"] = "lista_opa"
+                    opt["accion_principal"] = "cerrar"
+                    kpi_lista_cerrar += 1
                 elif estado.get("puede_crear_opp"):
                     opt["etiqueta_fase"] = "En producción (OPP pendiente)"
                     opt["fase_clave"] = "en_produccion_opp"
+                    opt["accion_principal"] = "crear_opp"
                 else:
                     opt["etiqueta_fase"] = "En producción"
                     opt["fase_clave"] = "en_produccion"
+        origen_map = bulk_origen_demanda_por_articulo(base_empresa, art_ids)
+        aplicar_origen_demanda_a_filas(ordenes, origen_map)
+        restante_por_lista = bulk_restante_armar_opt_listado(
+            base_empresa, ordenes, abm_map
+        )
+        for opt in ordenes:
+            id_lista = opt.get("id_lista_produccion")
+            id_art = opt.get("id_articulo")
+            if id_lista and id_art and abm_map.get(id_art):
+                rest = int(
+                    restante_por_lista.get(f"{int(id_lista)}:{int(id_art)}", 0) or 0
+                )
+                if int(opt.get("cantidad_pendiente_prod") or 0) <= 0 and rest > 0:
+                    opt["tiene_armado_pendiente"] = True
+                    opt["restante_armar"] = rest
+                    opt["mostrar_link_armado"] = True
+                    params_arm = {"modo": "1ra", "id_lista": int(id_lista)}
+                    if id_art:
+                        params_arm["id_articulo"] = int(id_art)
+                    opt["armado_url"] = (
+                        reverse("mpr:armado") + "?" + urlencode(params_arm)
+                    )
+            if puede_imputar and id_art:
+                imp = imputacion_map.get(int(id_art))
+                if imp:
+                    params = {"codigo_movimiento": imp["codigo_movimiento"]}
+                    if imp.get("id_lote_armado"):
+                        params["id_lote_armado"] = imp["id_lote_armado"]
+                    opt["imputacion_url"] = (
+                        reverse("mpr:imputacion_armado_1ra")
+                        + "?"
+                        + urlencode(params)
+                    )
+                    opt["mostrar_link_imputacion"] = True
+                    opt["mstock_pendiente_imputar"] = imp.get("cantidad_pendiente_imputar")
+        kpi_armado_pendiente = sum(
+            1 for o in ordenes if o.get("tiene_armado_pendiente")
+        )
+        if origen_filter and origen_filter != "todos":
+            filtro_map = {
+                "pedido": "Pedido",
+                "reserva": "Reserva",
+                "pedido_reserva": "Pedido + reserva",
+            }
+            etiqueta_obj = filtro_map.get(origen_filter)
+            if etiqueta_obj:
+                ordenes = [
+                    o
+                    for o in ordenes
+                    if (o.get("origen_demanda_etiqueta") or "") == etiqueta_obj
+                ]
+        if extra_filter == "armado_pendiente":
+            ordenes = [o for o in ordenes if o.get("tiene_armado_pendiente")]
+        elif extra_filter == "imputacion_pendiente":
+            ordenes = [o for o in ordenes if o.get("mostrar_link_imputacion")]
+        if vista_agrupada:
+            ordenes = agrupar_filas_opt_listado_por_lote(ordenes)
+        mstock_pendientes = 0
+        if _usuario_puede_imputar_pedido(self.request.user):
+            try:
+                mstock_pendientes = len(
+                    listar_mstock_pendientes_imputacion(base_empresa, filtros=None)
+                )
+            except Exception:
+                mstock_pendientes = 0
         context["base_empresa"] = base_empresa
         context["ordenes"] = ordenes
         context["filtro_estado"] = estado_filter
+        context["filtro_origen"] = origen_filter
+        context["filtro_extra"] = extra_filter
+        context["vista_agrupada"] = vista_agrupada
+        context["kpi_en_proceso"] = kpi_en_proceso
+        context["kpi_lista_cerrar"] = kpi_lista_cerrar
+        context["kpi_cerradas"] = kpi_cerradas
+        context["kpi_armado_pendiente"] = kpi_armado_pendiente
+        context["kpi_imputacion_articulos"] = kpi_imputacion_articulos
+        context["mstock_imputacion_pendientes"] = mstock_pendientes
+        context["puede_imputar_pedido"] = _usuario_puede_imputar_pedido(
+            self.request.user
+        )
+        context["armado_url"] = reverse("mpr:armado") + "?modo=1ra"
+        context["imputacion_pedido_url"] = reverse("mpr:imputacion_armado_1ra")
         return context
 
 
@@ -1174,7 +1275,7 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
                 )
             except Exception:
                 hay_disponible_opp = False
-        # Estado del flujo: Pedida → En producción → Producida (OPP) → Pendiente 0 → Armado → Cerrado
+        # Estado del flujo: Pedida → En producción → Producida (OPP) → Pendiente 0 → Cerrado
         en_proceso = (lineas[0].get("en_proceso_produccion") or "No").strip().lower() == "si"
         paso_pedida = True
         paso_cerrado = not en_proceso
@@ -1183,12 +1284,10 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
             paso_liberada_opt = True
             paso_producida_opp = True
             paso_pendiente_cero = True
-            paso_armado = True
         else:
             paso_liberada_opt = en_proceso or (not hay_disponible_opp)
             paso_producida_opp = not hay_disponible_opp
             paso_pendiente_cero = not hay_disponible_opp
-            paso_armado = None  # se calcula más abajo
 
         # Cantidades ya armadas por artículo (solo si OPT con id_lista)
         cantidades_armadas = {}
@@ -1203,6 +1302,13 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
             bulk_cantidad_promedio_bulto(base_empresa, all_art_ids) if all_art_ids else {}
         )
         abm_map = bulk_id_en_abm(base_empresa, all_art_ids) if all_art_ids else {}
+        pack_ids_armado = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
+        equiv_semi = bulk_componentes_a_equivalentes_pack(
+            base_empresa, pack_ids_armado, opp_semi_por_articulo
+        )
+        equiv_otros = bulk_componentes_a_equivalentes_pack(
+            base_empresa, pack_ids_armado, opp_otros_por_articulo
+        )
         lineas_with_armado = []
         for l in lineas:
             id_art = l.get("id_articulo")
@@ -1217,8 +1323,8 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
                 cantidad_en_esta_opt = cantidad_pendiente_prod + cantidad_ya_armada
             l["cantidad_en_esta_opt"] = cantidad_en_esta_opt
             # OPP guarda por componente (medias); convertir a equivalente en packs para esta línea (BOM)
-            cantidad_disponible_armar = componentes_a_equivalentes_pack(base_empresa, id_art, opp_semi_por_articulo) if id_art else 0
-            cantidad_a_otros_dep = componentes_a_equivalentes_pack(base_empresa, id_art, opp_otros_por_articulo) if id_art else 0
+            cantidad_disponible_armar = equiv_semi.get(id_art, 0) if id_art else 0
+            cantidad_a_otros_dep = equiv_otros.get(id_art, 0) if id_art else 0
             l["cantidad_a_otros_depositos"] = cantidad_a_otros_dep if id_art and abm_map.get(id_art) else None
             l["cantidad_ya_armada"] = cantidad_ya_armada if id_art and abm_map.get(id_art) else None
             cantidad_pedida = l.get("cantidad_pedida") or 0
@@ -1241,7 +1347,9 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         hay_restante_armar = any(item["cantidad_restante_armar"] > 0 for item in lineas_with_armado)
         # Equivalentes en packs para mostrar (OPP está en unidades de componente; 1 pack = N medias)
         primer_pack_id = lineas[0].get("id_articulo") if lineas else None
-        total_a_desperdicio_otro = componentes_a_equivalentes_pack(base_empresa, primer_pack_id, opp_otros_por_articulo) if primer_pack_id else 0
+        total_a_desperdicio_otro = (
+            equiv_otros.get(primer_pack_id, 0) if primer_pack_id else 0
+        )
         hay_unidades_a_desperdicio_otro = total_a_desperdicio_otro > 0
         # Enriquecer cada línea con datos de armado para la tabla (ya asignados arriba en l)
         armado_por_articulo = {
@@ -1262,6 +1370,10 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
                 l["cantidad_en_esta_opt"] = (l.get("cantidad_pendiente_prod") or 0) + (l.get("cantidad_ya_armada") or 0)
         total_en_esta_opt = sum(l.get("cantidad_en_esta_opt") or 0 for l in lineas)
         pendiente_del_pedido = max(0, total_pedida - total_en_esta_opt)
+        art_ids = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
+        origen_map = bulk_origen_demanda_por_articulo(base_empresa, art_ids)
+        aplicar_origen_demanda_a_filas(lineas, origen_map)
+        origen_demanda_opt = resumen_origen_demanda_opt(lineas)
         enriquecer_lineas_opt_presentacion_pack(lineas, bulto_por_articulo)
 
         def _lineas_metrica(campo: str):
@@ -1295,27 +1407,14 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         )
 
         if lineas_with_armado and id_lista:
-            armado_opt_url = reverse("mpr:armado_opt", kwargs={"id_lista": id_lista})
             for item in lineas_with_armado:
-                item["armado_url"] = armado_opt_url
-        if not paso_cerrado:
-            # Armado no puede figurar cumplido antes que OPP pendiente = 0 (evita marcar True si no hay
-            # líneas en ABM/conjunto: antes `not lineas_with_armado` activaba el paso con OPP aún pendiente).
-            if not paso_pendiente_cero:
-                paso_armado = False
-            elif not lineas_with_armado:
-                # Pendiente OPP 0 y sin artículos armables (sin BOM/conjunto en ABM): paso N/A → cumplido
-                paso_armado = True
-            else:
-                # Todo lo disponible en Semi elaborado ya armado (no se exige lo enviado a otros depósitos)
-                paso_armado = all(
-                    item["cantidad_ya_armada"] >= item.get("cantidad_disponible_armar", 0)
-                    for item in lineas_with_armado
-                )
-        # si paso_cerrado, paso_armado ya quedó True arriba
+                id_art_linea = item["linea"].get("id_articulo")
+                params_arm = {"modo": "1ra", "id_lista": int(id_lista)}
+                if id_art_linea:
+                    params_arm["id_articulo"] = int(id_art_linea)
+                item["armado_url"] = reverse("mpr:armado") + "?" + urlencode(params_arm)
 
-        # Porcentaje según 6 pasos: Pedida, En producción, Producida (OPP), Pendiente 0, Armado, Cerrado
-        # OPT cerrada: 100 % (todos los pasos cumplidos de forma persistente)
+        # Porcentaje según 5 pasos obligatorios del timeline OPT
         if paso_cerrado:
             porcentaje_estado = 100
         else:
@@ -1324,10 +1423,9 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
                 paso_liberada_opt,
                 paso_producida_opp,
                 paso_pendiente_cero,
-                paso_armado,
                 paso_cerrado,
             ])
-            porcentaje_estado = min(100, round(100 * num_pasos / 6)) if num_pasos else 0
+            porcentaje_estado = min(100, round(100 * num_pasos / 5)) if num_pasos else 0
 
         if paso_cerrado:
             estado_actual_texto = "OPT cerrada."
@@ -1360,28 +1458,22 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         context["resumen_en_opt"] = resumen_en_opt
         context["resumen_pendiente_opp"] = resumen_pendiente_opp
         context["resumen_pendiente_pedido"] = resumen_pendiente_pedido
+        context["origen_demanda_opt"] = origen_demanda_opt
         context["porcentaje_completado"] = porcentaje_estado
         context["estado_actual_texto"] = estado_actual_texto
         context["paso_pedida"] = paso_pedida
         context["paso_liberada_opt"] = paso_liberada_opt
         context["paso_producida_opp"] = paso_producida_opp
         context["paso_pendiente_cero"] = paso_pendiente_cero
-        context["paso_armado"] = paso_armado
         context["paso_cerrado"] = paso_cerrado
         context["en_proceso"] = en_proceso
-        puede_armado_surtido = False
-        motivo_armado_surtido_bloqueado = ""
-        if id_lista and en_proceso:
-            puede_armado_surtido, motivo_armado_surtido_bloqueado = opt_puede_armado_surtido(
-                base_empresa, id_lista
-            )
-        context["mostrar_tarjeta_armado_surtido"] = bool(id_lista and en_proceso)
-        context["puede_armado_surtido"] = puede_armado_surtido
-        context["motivo_armado_surtido_bloqueado"] = motivo_armado_surtido_bloqueado
-        context["armado_surtido_url"] = (
-            f"{reverse('mpr:armado_surtido')}?id_lista={id_lista}"
+        context["mostrar_tarjeta_armado_surtido"] = False
+        context["puede_armado_surtido"] = False
+        context["motivo_armado_surtido_bloqueado"] = ""
+        context["armado_url"] = (
+            reverse("mpr:armado") + f"?modo=1ra&id_lista={id_lista}"
             if id_lista
-            else reverse("mpr:armado_surtido")
+            else reverse("mpr:armado") + "?modo=1ra"
         )
         # Codigo de movimiento para imprimir comprobante PDF (si la OPT fue liberada)
         codigo_movimiento = None
@@ -1408,6 +1500,15 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         context["opas_registradas"] = opas_registradas
         context["renglones_por_movimiento"] = _build_renglones_modal_map(
             base_empresa, opp_registradas, opas_registradas
+        )
+        # Métricas de armado en tabla: solo cuando OPP de esta OPT está completo (evita 0/0 confuso)
+        tiene_lineas_armables = bool(lineas_with_armado)
+        context["tiene_lineas_armables"] = tiene_lineas_armables
+        context["mostrar_metricas_armado_opt"] = (
+            tiene_lineas_armables and not hay_disponible_opp
+        )
+        context["mostrar_aviso_armado_pendiente_opp"] = (
+            tiene_lineas_armables and hay_disponible_opp and en_proceso
         )
         return context
 
@@ -1562,8 +1663,20 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:opt_detail", id_lista=id_lista)
 
 
-class ArmadoOptView(MprLoginRequiredMixin, TemplateView):
-    """Armado multi-artículo desde detalle OPT: tabla por pack, depósitos fijos Semi Elaborado → Terminado."""
+class ArmadoOptView(MprLoginRequiredMixin, View):
+    """Deprecado: redirige a Armado 1ra unificado."""
+
+    def get(self, request, *args, **kwargs):
+        from django.contrib import messages
+        messages.info(request, "Use Armado 1ra desde el menú de Producción.")
+        return _redirect_armado("1ra")
+
+    def post(self, request, *args, **kwargs):
+        return self.get(request, *args, **kwargs)
+
+
+class _ArmadoOptViewLegacy(MprLoginRequiredMixin, TemplateView):
+    """Legacy — armado multi-artículo desde detalle OPT (deprecado)."""
 
     template_name = "mpr/armado_opt.html"
 
@@ -1727,6 +1840,7 @@ class CerrarOptView(MprLoginRequiredMixin, TemplateView):
             return _mpr_schema_error_redirect(request, e)
         if ok:
             messages.success(request, f"OPT {id_lista} cerrada correctamente.")
+            _limpiar_mpr_wizard(request, id_lista)
         else:
             messages.error(request, error or "Error al cerrar la OPT.")
         referer = request.META.get("HTTP_REFERER") or ""
@@ -1774,7 +1888,6 @@ def _opt_comprobante_pdf(request, id_lista):
     from core.services.administranet_stock import (
         get_nombres_depositos,
         obtener_movimiento,
-        obtener_renglones_movimiento,
     )
 
     base_empresa = _get_base_empresa(request)
@@ -1813,12 +1926,11 @@ def _opt_comprobante_pdf(request, id_lista):
 
     todos_cod_mov = [b["codigo_movimiento"] for b in bloques]
     mov_cache = {}
-    renglones_cache = {}
+    renglones_cache = obtener_renglones_movimiento_bulk(base_empresa, todos_cod_mov)
     dep_ids_set = set()
     all_id_arts = set()
     for cod_mov in todos_cod_mov:
         mov_cache[cod_mov] = obtener_movimiento(base_empresa, cod_mov)
-        renglones_cache[cod_mov] = obtener_renglones_movimiento(base_empresa, cod_mov)
         m = mov_cache[cod_mov]
         if m:
             if m.get("deposito_origen"):
@@ -2743,8 +2855,8 @@ class OperarioReactivarView(MprLoginRequiredMixin, View):
         return _redirect_operarios_list_preserve_filters(request)
 
 
-class ArmadoView(MprLoginRequiredMixin, TemplateView):
-    """Armado solo por OPT: salida componentes desde depósito origen, entrada producto armado en depósito destino. Requiere id_lista (OPT con pendiente 0)."""
+class ArmadoLegacyView(MprLoginRequiredMixin, TemplateView):
+    """Legacy — armado por OPT (deprecado; usar Armado 1ra unificado)."""
 
     template_name = "mpr/armado.html"
 
@@ -2800,6 +2912,7 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
         opp_semi, _, _ = get_cantidad_opp_por_destino_opt(base_empresa, id_lista)
         art_ids_liberar = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
         abm_map_liberar = bulk_id_en_abm(base_empresa, art_ids_liberar) if art_ids_liberar else {}
+        equiv_semi = bulk_componentes_a_equivalentes_pack(base_empresa, art_ids_liberar, opp_semi)
         lineas_armado = []
         for l in lineas:
             id_art = l.get("id_articulo")
@@ -2807,7 +2920,7 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             if not id_en_abm:
                 continue
             cantidad_ya_armada = cantidades_armadas.get(id_art, 0)
-            cantidad_disponible_armar = componentes_a_equivalentes_pack(base_empresa, id_art, opp_semi)
+            cantidad_disponible_armar = equiv_semi.get(id_art, 0)
             cantidad_restante_armar = max(0, cantidad_disponible_armar - cantidad_ya_armada)
             producto_label = f"{l.get('codigo_articulo') or '-'} — {l.get('descripcion_articulo') or '-'}"
             lineas_armado.append({
@@ -2867,6 +2980,7 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
         opp_semi, _, _ = get_cantidad_opp_por_destino_opt(base_empresa, id_lista)
         art_ids_post = [l.get("id_articulo") for l in lineas if l.get("id_articulo")]
         abm_map_post = bulk_id_en_abm(base_empresa, art_ids_post) if art_ids_post else {}
+        equiv_semi_post = bulk_componentes_a_equivalentes_pack(base_empresa, art_ids_post, opp_semi)
         ejecutados = 0
         primer_error = None
         for l in lineas:
@@ -2875,7 +2989,7 @@ class ArmadoView(MprLoginRequiredMixin, TemplateView):
             if not id_en_abm:
                 continue
             cantidad_ya_armada = cantidades_armadas.get(id_art, 0)
-            cantidad_disponible_armar = componentes_a_equivalentes_pack(base_empresa, id_art, opp_semi)
+            cantidad_disponible_armar = equiv_semi_post.get(id_art, 0)
             cantidad_restante_armar = max(0, cantidad_disponible_armar - cantidad_ya_armada)
             if cantidad_restante_armar <= 0:
                 continue
@@ -3043,9 +3157,61 @@ def _resolver_post_armado_surtido(request):
     return cabecera, [item], None
 
 
+def _modo_armado_desde_request(request, default="1ra"):
+    modo = (request.GET.get("modo") or request.POST.get("modo") or default).strip().lower()
+    return modo if modo in ("1ra", "2da") else default
+
+
+def _redirect_armado(modo="2da", id_lista=None):
+    params = {"modo": modo}
+    if id_lista:
+        params["id_lista"] = id_lista
+    return redirect(f"{reverse('mpr:armado')}?{urlencode(params)}")
+
+
 def _redirect_armado_surtido(id_lista=None):
-    q = f"?id_lista={id_lista}" if id_lista else ""
-    return redirect(f"{reverse('mpr:armado_surtido')}{q}")
+    return _redirect_armado("2da", id_lista)
+
+
+class ArmadoPacksCatalogAPIView(MprLoginRequiredMixin, View):
+    """API: catálogo de packs Armado (lazy). GET ?modo=1ra|2da&q=&limit=25"""
+
+    def get(self, request, *args, **kwargs):
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"packs": []})
+        modo = (request.GET.get("modo") or "1ra").strip().lower()
+        if modo not in ("1ra", "2da"):
+            modo = "1ra"
+        q = (request.GET.get("q") or "").strip()
+        try:
+            limit = int(request.GET.get("limit") or 25)
+        except (TypeError, ValueError):
+            limit = 25
+        try:
+            packs = listar_packs_armado_catalogo(
+                base_empresa, modo, busqueda=q or None, limit=limit
+            )
+            return JsonResponse({"packs": packs})
+        except Exception as e:
+            logger.warning("API catálogo packs armado: %s", e, exc_info=True)
+            return JsonResponse({"packs": [], "error": "No se pudo cargar el catálogo."})
+
+
+class ArmadoBomPackAPIView(MprLoginRequiredMixin, View):
+    """API: líneas BOM para pack Armado 1ra. GET ?id_articulo="""
+
+    def get(self, request, *args, **kwargs):
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"lineas": [], "max_packs": 0})
+        id_art = to_int_or_none(request.GET.get("id_articulo"))
+        if not id_art:
+            return JsonResponse({"lineas": [], "max_packs": 0, "error": "Pack requerido."})
+        dep = to_int_or_none(request.GET.get("deposito"))
+        lineas = lineas_bom_pack_1ra(base_empresa, int(id_art))
+        max_p = calcular_max_packs_armado_1ra(base_empresa, int(id_art), deposito_semi=dep)
+        return JsonResponse({"lineas": lineas, "max_packs": max_p})
 
 
 class ArmadoSurtidoStockOrigenAPIView(MprLoginRequiredMixin, View):
@@ -3128,7 +3294,7 @@ class ArmadoSurtidoValidarItemLoteAPIView(MprLoginRequiredMixin, View):
 
 
 class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
-    """Armado surtido: composición libre desde 2.ª selección (u otro origen) hacia Terminado."""
+    """Armado unificado 1ra/2da (POS + carrito). Alias legacy: armado-surtido → ?modo=2da."""
 
     template_name = "mpr/armado_surtido.html"
 
@@ -3139,12 +3305,12 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
             return redirect("core:dashboard")
-        id_lista = to_int_or_none(request.GET.get("id_lista"))
-        if id_lista:
-            ok, msg = opt_puede_armado_surtido(base_empresa, id_lista)
-            if not ok:
-                messages.error(request, msg)
-                return redirect("mpr:opt_detail", id_lista=id_lista)
+        if not (request.GET.get("modo") or "").strip():
+            params = {"modo": "1ra"}
+            id_lista = request.GET.get("id_lista")
+            if id_lista:
+                params["id_lista"] = id_lista
+            return redirect(f"{reverse('mpr:armado')}?{urlencode(params)}")
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -3152,48 +3318,116 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
 
         context = super().get_context_data(**kwargs)
         base_empresa = _get_base_empresa(self.request)
+        modo = _modo_armado_desde_request(self.request)
+        context["modo"] = modo
+        context["modo_label"] = "Armado 1ra" if modo == "1ra" else "Armado 2da"
         context["base_empresa"] = base_empresa
         id_lista = to_int_or_none(self.request.GET.get("id_lista"))
         context["id_lista"] = id_lista
-        context["packs_habilitados"] = listar_packs_armado_surtido(base_empresa)
-        if not context["packs_habilitados"]:
-            messages.info(
-                self.request,
-                f"No hay artículos con tipo_art_fab «{TIPO_ART_FAB_PACK_ARMADO_SURTIDO}» "
-                "para armado surtido.",
+        id_articulo_opt = to_int_or_none(self.request.GET.get("id_articulo"))
+        context["id_articulo_opt"] = id_articulo_opt
+        lote_fallidos_preview = self.request.session.get("armado_surtido_lote_fallidos")
+        hay_fallidos_sesion = bool(
+            lote_fallidos_preview
+            and isinstance(lote_fallidos_preview, list)
+            and len(lote_fallidos_preview) > 0
+        )
+        # Desde listado OPT: priorizar precarga sobre carrito fallido previo en sesión
+        if id_articulo_opt and hay_fallidos_sesion:
+            self.request.session.pop("armado_surtido_lote_fallidos", None)
+            lote_fallidos_preview = None
+            hay_fallidos_sesion = False
+        if modo == "1ra":
+            hay_packs = bool(
+                listar_packs_armado_catalogo(base_empresa, "1ra", limit=1)
             )
+            if not hay_packs:
+                messages.info(
+                    self.request,
+                    "No hay packs con BOM para Armado 1ra.",
+                )
+            dep_origen_def = get_deposito_semi_elaborado_mpr(base_empresa)
+        else:
+            hay_packs = bool(
+                listar_packs_armado_catalogo(base_empresa, "2da", limit=1)
+            )
+            if not hay_packs:
+                messages.info(
+                    self.request,
+                    f"No hay artículos con tipo_art_fab «{TIPO_ART_FAB_PACK_ARMADO_SURTIDO}» "
+                    "para Armado 2da.",
+                )
+            dep_origen_def = get_deposito_2da_seleccion_mpr(base_empresa)
+        context["packs_habilitados"] = []
         context["depositos"] = get_depositos_con_suma_stock(
             base_empresa, _get_id_puesto(self.request)
         )
-        dep_origen_def = get_deposito_2da_seleccion_mpr(base_empresa)
         dep_dest_def = get_deposito_terminado_mpr(base_empresa)
         context["deposito_origen_default"] = dep_origen_def
         context["deposito_destino_default"] = dep_dest_def
         context["empleados"] = listar_empleados_operarios(base_empresa, limit=200)
         context["stock_api_url"] = reverse("mpr:api_armado_surtido_stock")
         context["validar_item_lote_api_url"] = reverse("mpr:api_armado_surtido_validar_item_lote")
+        context["bom_pack_api_url"] = reverse("mpr:api_armado_bom_pack")
+        context["packs_catalog_api_url"] = reverse("mpr:api_armado_packs_catalog")
         if id_lista:
             try:
                 opt = get_opt_detalle(base_empresa, id_lista)
                 context["opt_numero"] = opt.get("numero") if opt else str(id_lista)
             except Exception:
                 context["opt_numero"] = str(id_lista)
-        bultos = bulk_cantidad_promedio_bulto(
-            base_empresa,
-            [p["id_articulo"] for p in context["packs_habilitados"] if p.get("id_articulo")],
-        )
+        packs_precargados: List[Dict[str, Any]] = []
+        lote_precarga_opt: List[Dict[str, Any]] = []
+        if id_lista and modo == "1ra" and not hay_fallidos_sesion:
+            try:
+                lote_precarga_opt = construir_items_precarga_armado_desde_opt(
+                    base_empresa,
+                    int(id_lista),
+                    id_articulo_opt,
+                )
+            except Exception as e:
+                logger.warning(
+                    "Precarga armado desde OPT %s: %s", id_lista, e, exc_info=True
+                )
+            if id_articulo_opt and not lote_precarga_opt:
+                messages.warning(
+                    self.request,
+                    "No se pudo precargar el pack en el carrito. Verifique BOM, "
+                    "semi elaborado disponible y que el artículo esté habilitado para Armado 1ra.",
+                )
+        if lote_fallidos_preview and isinstance(lote_fallidos_preview, list):
+            ids_fallidos = [
+                to_int_or_none(it.get("id_articulo_pack"))
+                for it in lote_fallidos_preview
+                if isinstance(it, dict)
+            ]
+            ids_fallidos = [x for x in ids_fallidos if x is not None]
+            if ids_fallidos:
+                packs_precargados = listar_packs_armado_catalogo(
+                    base_empresa, modo, ids=ids_fallidos, limit=len(ids_fallidos)
+                )
+        elif lote_precarga_opt:
+            ids_precarga = [
+                to_int_or_none(it.get("id_articulo_pack"))
+                for it in lote_precarga_opt
+                if isinstance(it, dict)
+            ]
+            ids_precarga = [x for x in ids_precarga if x is not None]
+            if ids_precarga:
+                packs_precargados = listar_packs_armado_catalogo(
+                    base_empresa, modo, ids=ids_precarga, limit=len(ids_precarga)
+                )
+        context["lote_precarga_opt_json"] = json.dumps(lote_precarga_opt)
+        context["precarga_desde_opt"] = bool(lote_precarga_opt)
         context["packs_bulto_json"] = json.dumps(
-            {str(k): v for k, v in bultos.items()}
-        )
-        context["packs_catalog_json"] = json.dumps([
             {
-                "id_articulo": p.get("id_articulo"),
-                "codigo_articulo": p.get("codigo_articulo", ""),
-                "descripcion_articulo": p.get("descripcion_articulo", ""),
+                str(p["id_articulo"]): p.get("cantidad_promedio_bulto", 12)
+                for p in packs_precargados
+                if p.get("id_articulo")
             }
-            for p in context["packs_habilitados"]
-            if p.get("id_articulo")
-        ])
+        )
+        context["packs_precargados_json"] = json.dumps(packs_precargados)
+        context["packs_catalog_json"] = "[]"
         context["depositos_catalog_json"] = json.dumps([
             {
                 "cod_deposito": d.get("CodDeposito"),
@@ -3211,15 +3445,23 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
         context["resultado_lote_json"] = json.dumps(resultado_lote) if resultado_lote else "null"
         context["lote_fallidos_json"] = json.dumps(lote_fallidos) if lote_fallidos else "null"
         context["mostrar_modal_resultado_lote"] = bool(resultado_lote)
+        context["puede_imputar_pedido"] = _usuario_puede_imputar_pedido(
+            getattr(self.request, "user", None)
+        )
+        context["imputacion_pedido_url"] = reverse("mpr:imputacion_armado_1ra")
+        context["imputacion_confirmar_api_url"] = reverse(
+            "mpr:api_imputacion_armado_confirmar"
+        )
         return context
 
     def post(self, request, *args, **kwargs):
         from django.contrib import messages
 
         base_empresa = _get_base_empresa(request)
+        modo = _modo_armado_desde_request(request)
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
-            return _redirect_armado_surtido()
+            return _redirect_armado(modo)
         session_user = request.session.get("user", {})
         try:
             id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else None
@@ -3227,35 +3469,32 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
             id_usuario = None
         if not id_usuario:
             messages.error(request, "Usuario no identificado en sesión.")
-            return _redirect_armado_surtido()
+            return _redirect_armado(modo)
 
         cabecera, armados, err_parse = _resolver_post_armado_surtido(request)
+        cabecera["modo"] = modo
         id_lista = cabecera.get("id_lista_produccion") or to_int_or_none(
             request.POST.get("id_lista") or request.GET.get("id_lista")
         )
         if err_parse:
             messages.error(request, err_parse)
-            return _redirect_armado_surtido(id_lista)
+            return _redirect_armado(modo, id_lista)
 
-        if id_lista:
-            ok_opt, msg_opt = opt_puede_armado_surtido(base_empresa, id_lista)
-            if not ok_opt:
-                messages.error(request, msg_opt)
-                return redirect("mpr:opt_detail", id_lista=id_lista)
-
-        ok_reg, err_reg = validar_reglas_lote_armado_surtido(
+        ok_reg, err_reg = validar_reglas_lote_armado(
             armados,
+            modo=modo,
             deposito_origen=cabecera.get("deposito_origen"),
             deposito_destino=cabecera.get("deposito_destino"),
             id_operario=cabecera.get("id_operario"),
             require_non_empty=True,
+            base_empresa=base_empresa,
         )
         if not ok_reg:
             messages.error(request, err_reg)
-            return _redirect_armado_surtido(id_lista)
+            return _redirect_armado(modo, id_lista)
 
         try:
-            resultado = ejecutar_lote_armado_surtido(
+            resultado = ejecutar_lote_armado(
                 base_empresa,
                 id_usuario,
                 cabecera,
@@ -3264,12 +3503,13 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
         except MprSchemaError as e:
             _log_mpr_schema_error(e)
             messages.error(request, str(e))
-            return _redirect_armado_surtido(id_lista)
+            return _redirect_armado(modo, id_lista)
 
         exitosos = resultado.get("exitosos") or []
         fallidos = resultado.get("fallidos") or []
         n_ok = len(exitosos)
         n_fail = len(fallidos)
+        label = "1ra" if modo == "1ra" else "2da"
 
         if n_ok or n_fail:
             request.session["armado_surtido_resultado_lote"] = resultado
@@ -3280,14 +3520,11 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
                 ex = exitosos[0]
                 messages.success(
                     request,
-                    f"Armado surtido registrado. Comprobante {ex.get('nro_comprobante')} "
-                    f"(código {ex.get('codigo_movimiento')}). Puede armar otro pack.",
+                    f"Armado {label} registrado. Comprobante {ex.get('nro_comprobante')} "
+                    f"(código {ex.get('codigo_movimiento')}).",
                 )
             else:
-                messages.success(
-                    request,
-                    f"Se grabaron {n_ok} armados surtido correctamente.",
-                )
+                messages.success(request, f"Se grabaron {n_ok} armados {label} correctamente.")
         elif n_ok and n_fail:
             messages.warning(
                 request,
@@ -3299,7 +3536,311 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
                 f"No se pudo grabar ningún armado ({n_fail} con error). Revise el detalle en el modal.",
             )
 
-        return _redirect_armado_surtido(id_lista)
+        return _redirect_armado(modo, id_lista)
+
+
+# Vista canónica (menú Armado 1ra / 2da)
+ArmadoView = ArmadoSurtidoView
+
+
+class ArmadoSurtidoRedirectView(MprLoginRequiredMixin, View):
+    """Alias legacy /mpr/armado-surtido/ → /mpr/armado/?modo=2da."""
+
+    def get(self, request, *args, **kwargs):
+        id_lista = to_int_or_none(request.GET.get("id_lista"))
+        return _redirect_armado("2da", id_lista)
+
+    def post(self, request, *args, **kwargs):
+        return self.get(request, *args, **kwargs)
+
+
+def _agrupar_mstock_por_lote(pendientes: list) -> list:
+    """Agrupa MSTOCK pendientes por id_lote_armado para la UI."""
+    lotes_map: dict = {}
+    sin_lote: list = []
+    for item in pendientes or []:
+        lid = item.get("id_lote_armado")
+        if lid:
+            if lid not in lotes_map:
+                lotes_map[lid] = {
+                    "id_lote_armado": lid,
+                    "ejecutado_en": item.get("lote_ejecutado_en"),
+                    "movimientos": [],
+                }
+            lotes_map[lid]["movimientos"].append(item)
+        else:
+            sin_lote.append(item)
+    lotes = sorted(
+        lotes_map.values(),
+        key=lambda x: x.get("ejecutado_en") or datetime.min,
+        reverse=True,
+    )
+    if sin_lote:
+        lotes.append({
+            "id_lote_armado": None,
+            "ejecutado_en": None,
+            "movimientos": sin_lote,
+        })
+    return lotes
+
+
+def _redirect_imputacion_pedido(request, codigo_movimiento=None, id_lote_armado=None):
+    """Redirige a Imputación de pedido conservando MSTOCK/lote en query string."""
+    params = {}
+    if codigo_movimiento is not None:
+        params["codigo_movimiento"] = int(codigo_movimiento)
+    lote = (id_lote_armado or request.GET.get("id_lote_armado") or "").strip()
+    if not lote and request.method == "POST":
+        lote = (request.POST.get("id_lote_armado") or "").strip()
+    if lote:
+        params["id_lote_armado"] = lote
+    url = reverse("mpr:imputacion_armado_1ra")
+    if params:
+        url = f"{url}?{urlencode(params)}"
+    return redirect(url)
+
+
+class ImputacionArmadoSugerirAPIView(MprLoginRequiredMixin, MprPermisoMixin, View):
+    """API: sugerencia FIFO de imputación para un MSTOCK 1ra."""
+
+    permiso_requerido = "mpr.imputar_armado_1ra"
+
+    def get(self, request, *args, **kwargs):
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"lineas": [], "error": "Empresa no indicada."})
+        cod = to_int_or_none(request.GET.get("codigo_movimiento"))
+        if not cod:
+            return JsonResponse({"lineas": [], "error": "Movimiento requerido."})
+        lineas, err = sugerir_imputacion_fifo(base_empresa, int(cod))
+        if err:
+            return JsonResponse({"lineas": [], "error": err})
+        return JsonResponse({"lineas": lineas})
+
+
+class ImputacionArmadoConfirmarAPIView(MprLoginRequiredMixin, MprPermisoMixin, View):
+    """API POST: confirma imputación FIFO (o líneas explícitas) para un MSTOCK 1ra."""
+
+    permiso_requerido = "mpr.imputar_armado_1ra"
+
+    def post(self, request, *args, **kwargs):
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"ok": False, "error": "Empresa no indicada."}, status=400)
+
+        session_user = request.session.get("user", {})
+        try:
+            id_supervisor = int(session_user.get("id_usuario"))
+        except (TypeError, ValueError):
+            id_supervisor = None
+        if not id_supervisor:
+            return JsonResponse({"ok": False, "error": "Usuario no identificado."}, status=400)
+
+        try:
+            body = json.loads((request.body or b"").decode() or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            body = {}
+
+        cod = to_int_or_none(body.get("codigo_movimiento"))
+        if not cod:
+            return JsonResponse({"ok": False, "error": "Movimiento requerido."}, status=400)
+
+        lineas = body.get("lineas")
+        if not isinstance(lineas, list):
+            lineas = []
+        if not lineas and body.get("usar_fifo", True):
+            lineas, err_fifo = sugerir_imputacion_fifo(base_empresa, int(cod))
+            if err_fifo:
+                return JsonResponse({"ok": False, "error": err_fifo}, status=400)
+            if not lineas:
+                return JsonResponse(
+                    {"ok": False, "error": "No hay demanda abierta para imputar."},
+                    status=400,
+                )
+
+        if not lineas:
+            return JsonResponse(
+                {"ok": False, "error": "Indique al menos una línea de imputación."},
+                status=400,
+            )
+
+        lineas_norm: list = []
+        for ln in lineas:
+            if not isinstance(ln, dict):
+                continue
+            qty = int(to_int_or_none(ln.get("cantidad")) or 0)
+            cod_ped = to_int_or_none(ln.get("codigo_movimiento_pedido"))
+            if not cod_ped or qty <= 0:
+                continue
+            lineas_norm.append({
+                "codigo_movimiento_pedido": int(cod_ped),
+                "cantidad": qty,
+                "origen_regla": (ln.get("origen_regla") or "FIFO").strip() or "FIFO",
+                "id_lista_detalle": to_int_or_none(ln.get("id_lista_detalle")),
+                "id_lista_produccion": to_int_or_none(ln.get("id_lista_produccion")),
+                "notas": str_or_default(ln.get("notas"), "").strip(),
+            })
+
+        if not lineas_norm:
+            return JsonResponse(
+                {"ok": False, "error": "Líneas de imputación inválidas."},
+                status=400,
+            )
+
+        try:
+            ok, err = confirmar_imputacion_armado(
+                base_empresa,
+                int(cod),
+                lineas_norm,
+                id_supervisor,
+            )
+        except MprSchemaError as e:
+            _log_mpr_schema_error(e)
+            return JsonResponse({"ok": False, "error": str(e)}, status=400)
+
+        if not ok:
+            return JsonResponse(
+                {"ok": False, "error": err or "No se pudo confirmar la imputación."},
+                status=400,
+            )
+
+        total = sum(ln["cantidad"] for ln in lineas_norm)
+        return JsonResponse({
+            "ok": True,
+            "cantidad_imputada": total,
+            "mensaje": f"Imputación confirmada ({total} u.).",
+        })
+
+
+class ImputacionArmado1raView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Imputación de pedido: asigna MSTOCK Armado 1ra a pedidos con demanda abierta."""
+
+    template_name = "mpr/imputacion_armado_1ra.html"
+    permiso_requerido = "mpr.imputar_armado_1ra"
+
+    def get(self, request, *args, **kwargs):
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            from django.contrib import messages
+
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("core:dashboard")
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        context["base_empresa"] = base_empresa
+        lote_sel = (self.request.GET.get("id_lote_armado") or "").strip() or None
+        id_art_sel = to_int_or_none(self.request.GET.get("id_articulo"))
+        context["lote_armado_sel"] = lote_sel
+        context["id_articulo_sel"] = id_art_sel
+        context["filtrado_por_lote"] = bool(lote_sel)
+        context["filtrado_por_articulo"] = bool(id_art_sel)
+        filtros: Dict[str, Any] = {}
+        if lote_sel:
+            filtros["id_lote_armado"] = lote_sel
+        if id_art_sel:
+            filtros["id_articulo_pack"] = id_art_sel
+        pendientes = listar_mstock_pendientes_imputacion(
+            base_empresa, filtros=filtros or None
+        )
+        context["lotes_pendientes"] = _agrupar_mstock_por_lote(pendientes)
+        context["total_pendientes"] = len(pendientes)
+        context["sugerir_api_url"] = reverse("mpr:api_imputacion_armado_sugerir")
+        cod_sel = to_int_or_none(self.request.GET.get("codigo_movimiento"))
+        if not cod_sel and pendientes:
+            if lote_sel or id_art_sel:
+                cod_sel = pendientes[0].get("codigo_movimiento")
+                if not lote_sel and pendientes[0].get("id_lote_armado"):
+                    lote_sel = pendientes[0].get("id_lote_armado")
+                    context["lote_armado_sel"] = lote_sel
+                    context["filtrado_por_lote"] = True
+        context["codigo_movimiento_sel"] = cod_sel
+        if cod_sel:
+            sugerencias, err = sugerir_imputacion_fifo(base_empresa, int(cod_sel))
+            context["sugerencias_fifo"] = sugerencias
+            context["sugerencias_fifo_json"] = json.dumps(sugerencias or [], ensure_ascii=False)
+            context["sugerencias_error"] = err
+        else:
+            context["sugerencias_fifo"] = []
+            context["sugerencias_fifo_json"] = "[]"
+            context["sugerencias_error"] = None
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages
+
+        base_empresa = _get_base_empresa(request)
+        lote_post = (request.POST.get("id_lote_armado") or "").strip() or None
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return _redirect_imputacion_pedido(
+                request,
+                codigo_movimiento=to_int_or_none(request.POST.get("codigo_movimiento")),
+                id_lote_armado=lote_post,
+            )
+
+        session_user = request.session.get("user", {})
+        try:
+            id_supervisor = int(session_user.get("id_usuario"))
+        except (TypeError, ValueError):
+            id_supervisor = None
+        if not id_supervisor:
+            messages.error(request, "Usuario no identificado en sesión.")
+            return _redirect_imputacion_pedido(
+                request,
+                codigo_movimiento=to_int_or_none(request.POST.get("codigo_movimiento")),
+                id_lote_armado=lote_post,
+            )
+
+        cod = to_int_or_none(request.POST.get("codigo_movimiento"))
+        raw_lineas = (request.POST.get("lineas_json") or "").strip()
+        lineas: list = []
+        if raw_lineas:
+            try:
+                parsed = json.loads(raw_lineas)
+                lineas = parsed if isinstance(parsed, list) else []
+            except (TypeError, ValueError, json.JSONDecodeError):
+                messages.error(request, "Formato de líneas de imputación inválido.")
+                return _redirect_imputacion_pedido(
+                    request, codigo_movimiento=cod, id_lote_armado=lote_post
+                )
+
+        if not lineas:
+            accion = (request.POST.get("accion") or "").strip()
+            if accion == "sugerir_fifo" and cod:
+                return _redirect_imputacion_pedido(
+                    request, codigo_movimiento=cod, id_lote_armado=lote_post
+                )
+            messages.error(request, "Indique al menos una línea de imputación.")
+            return _redirect_imputacion_pedido(
+                request, codigo_movimiento=cod, id_lote_armado=lote_post
+            )
+
+        try:
+            ok, err = confirmar_imputacion_armado(
+                base_empresa,
+                int(cod or 0),
+                lineas,
+                id_supervisor,
+            )
+        except MprSchemaError as e:
+            _log_mpr_schema_error(e)
+            messages.error(request, str(e))
+            return _redirect_imputacion_pedido(
+                request, codigo_movimiento=cod, id_lote_armado=lote_post
+            )
+
+        if ok:
+            messages.success(request, "Imputación confirmada correctamente.")
+        else:
+            messages.error(request, err or "No se pudo confirmar la imputación.")
+        return _redirect_imputacion_pedido(
+            request,
+            codigo_movimiento=None if ok else cod,
+            id_lote_armado=lote_post if not ok else None,
+        )
 
 
 class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
@@ -3576,13 +4117,26 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
         import json
         from .services import bulk_detalle_pedidos_por_articulos
         art_ids_pack = [f.get("id_articulo") for f in filas if f.get("id_articulo")]
+        refresco_pack = (
+            obtener_pp_ped_y_stock_pack_por_articulos(base_empresa, art_ids_pack)
+            if art_ids_pack and base_empresa
+            else {}
+        )
+        for f in filas:
+            aid = to_int_or_none(f.get("id_articulo"))
+            ref = refresco_pack.get(aid) if aid is not None else None
+            if ref:
+                f["cantidad_pedida_pedido"] = ref.get("cantidad_pedida_pedido", 0.0)
+                f["stock_terminado"] = ref.get("stock_terminado", 0.0)
         detalle_map = bulk_detalle_pedidos_por_articulos(base_empresa, art_ids_pack, limit_por_articulo=30) if art_ids_pack else {}
         for f in filas:
             detalle = detalle_map.get(f.get("id_articulo"), [])
             f["detalle_pedidos"] = detalle
             f["detalle_pedidos_json"] = json.dumps(detalle)
         wizard = self.request.session.get(WIZARD_SESSION_KEY) or {}
-        filas_unidades = listar_unidades_desde_seleccion(base_empresa, filas, limit=200)
+        filas_unidades = listar_unidades_desde_seleccion(
+            base_empresa, filas, limit=200, refresco_pack=refresco_pack
+        )
         for f in filas_unidades:
             f["cantidad_docenas"] = f.get("cantidad_a_fabricar_docenas", 0)
             f["cantidad_urgente_docenas"] = f.get("cantidad_urgente_docenas", 0)

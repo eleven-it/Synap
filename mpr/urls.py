@@ -12,9 +12,34 @@ urlpatterns = [
     path("bom/<int:id_en_abm>/", views.BomDetailView.as_view(), name="bom_detail"),
     path("bom/<int:id_en_abm>/editar/", views.BomEditView.as_view(), name="bom_edit"),
     path("armado/", views.ArmadoView.as_view(), name="armado"),
-    path("armado/<int:id_en_abm>/", views.ArmadoView.as_view(), name="armado_bom"),
+    path("armado/legacy/<int:id_en_abm>/", views.ArmadoLegacyView.as_view(), name="armado_bom"),
     path("reclasificacion/", views.ReclasificacionView.as_view(), name="reclasificacion"),
-    path("armado-surtido/", views.ArmadoSurtidoView.as_view(), name="armado_surtido"),
+    path("armado-surtido/", views.ArmadoSurtidoRedirectView.as_view(), name="armado_surtido"),
+    path(
+        "imputacion-armado-1ra/",
+        views.ImputacionArmado1raView.as_view(),
+        name="imputacion_armado_1ra",
+    ),
+    path(
+        "api/imputacion-armado-1ra/sugerir/",
+        views.ImputacionArmadoSugerirAPIView.as_view(),
+        name="api_imputacion_armado_sugerir",
+    ),
+    path(
+        "api/imputacion-armado-1ra/confirmar/",
+        views.ImputacionArmadoConfirmarAPIView.as_view(),
+        name="api_imputacion_armado_confirmar",
+    ),
+    path(
+        "api/armado/packs-catalog/",
+        views.ArmadoPacksCatalogAPIView.as_view(),
+        name="api_armado_packs_catalog",
+    ),
+    path(
+        "api/armado/bom-pack/",
+        views.ArmadoBomPackAPIView.as_view(),
+        name="api_armado_bom_pack",
+    ),
     path(
         "api/armado-surtido/stock-origen/",
         views.ArmadoSurtidoStockOrigenAPIView.as_view(),

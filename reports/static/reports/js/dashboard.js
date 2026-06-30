@@ -7828,8 +7828,132 @@ if (dashboardRoot) {
     "rubro_nombre",
     "subrubro_nombre",
   ];
-  const stockExistenciasDataset = { rows: [], notes: [] };
+  const STOCK_EXISTENCIAS_PAGE_SIZE = 150;
+  const STOCK_EXISTENCIAS_FULL_LIMIT = 2147483647;
+  const STOCK_EXISTENCIAS_ROW_HEIGHT = 40;
+  const STOCK_EXISTENCIAS_VIRTUAL_BUFFER = 25;
+  const stockExistenciasDataset = {
+    rows: [],
+    notes: [],
+    totalRegistros: 0,
+    hasMore: false,
+    offset: 0,
+    paginated: true,
+  };
   let stockExistenciasSort = { col: "nombre", dir: "asc" };
+  let stockExistenciasFetchInFlight = false;
+  let stockExistenciasLoadMoreInFlight = false;
+
+  const getStockExistenciasGroupFields = () => {
+    const wrapGb = document.getElementById("stock_existencias_group_by_tags_container");
+    const chipsRoot = wrapGb?.querySelector(".tags-chips");
+    const stripRetired = (arr) => arr.filter((v) => v && v !== "marca");
+    if (chipsRoot) {
+      const chipEls = chipsRoot.querySelectorAll("[data-value]");
+      if (chipEls.length) {
+        return stripRetired(
+          Array.from(chipEls)
+            .map((el) => el.dataset.value)
+            .filter(Boolean)
+        );
+      }
+    }
+    const sel = document.getElementById("stock_existencias_group_by");
+    return stripRetired(sel ? Array.from(sel.selectedOptions).map((o) => o.value).filter(Boolean) : []);
+  };
+
+  const stockExistenciasNeedsFullFetch = () => getStockExistenciasGroupFields().length > 0;
+
+  const enrichStockExistenciasFilters = (baseFilters) => {
+    const out = { ...(baseFilters || {}) };
+    const searchEl = document.getElementById("stock_existencias_busqueda");
+    const q = searchEl ? String(searchEl.value || "").trim() : "";
+    if (q.length >= 2) out.busqueda = q;
+    out.sort_col = stockExistenciasSort.col;
+    out.sort_dir = stockExistenciasSort.dir;
+    if (stockExistenciasNeedsFullFetch()) out.agrupacion_activa = true;
+    return out;
+  };
+
+  const fetchStockExistenciasData = async ({ offset = 0, append = false, silent = false } = {}) => {
+    const reportSlug = dashboardRoot?.dataset?.reportSlug;
+    const apiUrl = dashboardRoot?.dataset?.dashboardUrl;
+    if (reportSlug !== "stock-existencias" || !apiUrl) return null;
+    if (stockExistenciasFetchInFlight && !append) return null;
+    if (append && stockExistenciasLoadMoreInFlight) return null;
+
+    if (append) stockExistenciasLoadMoreInFlight = true;
+    else stockExistenciasFetchInFlight = true;
+
+    const fullFetch = stockExistenciasNeedsFullFetch();
+    const limit = fullFetch ? STOCK_EXISTENCIAS_FULL_LIMIT : STOCK_EXISTENCIAS_PAGE_SIZE;
+  const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), EXTENDED_REPORT_FETCH_TIMEOUT_MS);
+
+    if (!silent && !append) {
+      showReportsQueryLoadingModal("stock-existencias");
+    }
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "XMLHttpRequest",
+          "X-CSRFToken": getCsrfToken(),
+        },
+        body: JSON.stringify({
+          slug: reportSlug,
+          limit,
+          offset,
+          filters: enrichStockExistenciasFilters(getFilters()),
+        }),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        let errorMessage = "Error al cargar stock y existencias";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.error || errorMessage;
+        } catch (e) {
+          /* ignore */
+        }
+        throw new Error(errorMessage);
+      }
+      const payload = await response.json();
+      renderStockExistenciasTable(payload, { append });
+      return payload;
+    } catch (error) {
+      if (!silent) {
+        console.error("Error stock-existencias:", error);
+        toast(error.message || "Error al cargar stock y existencias", "error");
+      }
+      return null;
+    } finally {
+      clearTimeout(timeoutId);
+      stockExistenciasFetchInFlight = false;
+      stockExistenciasLoadMoreInFlight = false;
+      if (!silent && !append) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => hideReportsQueryLoadingModal());
+        });
+      }
+    }
+  };
+
+  window.refetchStockExistenciasData = () => fetchStockExistenciasData({ offset: 0, append: false });
+
+  const maybeLoadMoreStockExistencias = (scrollEl) => {
+    if (!stockExistenciasDataset.paginated || !stockExistenciasDataset.hasMore) return;
+    if (stockExistenciasLoadMoreInFlight || stockExistenciasFetchInFlight) return;
+    const threshold = 240;
+    if (scrollEl.scrollTop + scrollEl.clientHeight < scrollEl.scrollHeight - threshold) return;
+    fetchStockExistenciasData({
+      offset: stockExistenciasDataset.rows.length,
+      append: true,
+      silent: true,
+    });
+  };
 
   const filterStockExistenciasBySearch = (rows, query) => {
     if (!Array.isArray(rows)) return [];
@@ -8028,28 +8152,16 @@ if (dashboardRoot) {
     ensureStockExistenciasTableStylesOnce();
     const rows = stockExistenciasDataset.rows || [];
     const notes = stockExistenciasDataset.notes || [];
+    const paginated = stockExistenciasDataset.paginated;
     const searchEl = document.getElementById("stock_existencias_busqueda");
     const q = searchEl ? searchEl.value : "";
-    let filtered = filterStockExistenciasBySearch(rows, q);
-    filtered = sortStockExistenciasRows(filtered, stockExistenciasSort.col, stockExistenciasSort.dir);
+    let filtered = rows.slice();
+    if (!paginated) {
+      filtered = filterStockExistenciasBySearch(rows, q);
+      filtered = sortStockExistenciasRows(filtered, stockExistenciasSort.col, stockExistenciasSort.dir);
+    }
 
-    const getGroupFieldsStock = () => {
-      const wrapGb = document.getElementById("stock_existencias_group_by_tags_container");
-      const chipsRoot = wrapGb?.querySelector(".tags-chips");
-      const stripRetired = (arr) => arr.filter((v) => v && v !== "marca");
-      if (chipsRoot) {
-        const chipEls = chipsRoot.querySelectorAll("[data-value]");
-        if (chipEls.length) {
-          return stripRetired(
-            Array.from(chipEls)
-              .map((el) => el.dataset.value)
-              .filter(Boolean)
-          );
-        }
-      }
-      const sel = document.getElementById("stock_existencias_group_by");
-      return stripRetired(sel ? Array.from(sel.selectedOptions).map((o) => o.value).filter(Boolean) : []);
-    };
+    const getGroupFieldsStock = getStockExistenciasGroupFields;
 
     const fmt = (v) => {
       const n = Number(v);
@@ -8125,14 +8237,15 @@ if (dashboardRoot) {
 
     const NUM_COL_STOCK = 9;
 
-    if (!rows.length) {
-      const msg = notes[0] || "Sin datos para los filtros seleccionados.";
-      wrap.innerHTML = `<p class="text-xs text-slate-500 dark:text-slate-400 py-4">${escStockHtml(msg)}</p>`;
-      return;
-    }
-
     if (!filtered.length) {
-      wrap.innerHTML = `<p class="text-xs text-slate-500 dark:text-slate-400 py-4">Ninguna fila coincide con la búsqueda (mínimo 2 caracteres).</p>`;
+      const qTrim = (q && String(q).trim()) || "";
+      const msg =
+        qTrim.length >= 2 && paginated
+          ? "Ninguna fila coincide con la búsqueda (mínimo 2 caracteres)."
+          : qTrim.length >= 2
+            ? "Ninguna fila coincide con la búsqueda (mínimo 2 caracteres)."
+            : notes[0] || "Sin datos para los filtros seleccionados.";
+      wrap.innerHTML = `<p class="text-xs text-slate-500 dark:text-slate-400 py-4">${escStockHtml(msg)}</p>`;
       return;
     }
 
@@ -8140,10 +8253,53 @@ if (dashboardRoot) {
     let bodyHtml = "";
     let pieAgrupado = "";
     const qTrim = (q && String(q).trim()) || "";
+    const totalReg = stockExistenciasDataset.totalRegistros || filtered.length;
     const leyendaBusqueda =
-      qTrim.length >= 2 && rows.length
+      qTrim.length >= 2 && !paginated && rows.length
         ? ` · Mostrando ${filtered.length} de ${rows.length} filas`
         : "";
+    const leyendaPaginacion = paginated
+      ? ` · ${filtered.length} de ${totalReg} fila(s) cargadas${stockExistenciasDataset.hasMore ? " (desplazá para cargar más)" : ""}`
+      : "";
+
+    const renderStockExistenciasVirtualBody = (scrollEl, dataRows) => {
+      const ROW_H = STOCK_EXISTENCIAS_ROW_HEIGHT;
+      const BUF = STOCK_EXISTENCIAS_VIRTUAL_BUFFER;
+      const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
+      const viewH = scrollEl ? scrollEl.clientHeight : ROW_H * 20;
+      let start = Math.max(0, Math.floor(scrollTop / ROW_H) - BUF);
+      let end = Math.min(dataRows.length, Math.ceil((scrollTop + viewH) / ROW_H) + BUF);
+      const topPad = start * ROW_H;
+      const bottomPad = Math.max(0, (dataRows.length - end) * ROW_H);
+      let html = "";
+      if (topPad > 0) {
+        html += `<tr class="se-stock-virtual-spacer" aria-hidden="true"><td colspan="${NUM_COL_STOCK}" style="height:${topPad}px;padding:0;border:none;"></td></tr>`;
+      }
+      for (let i = start; i < end; i++) {
+        html += stockRow(dataRows[i]);
+      }
+      if (bottomPad > 0) {
+        html += `<tr class="se-stock-virtual-spacer" aria-hidden="true"><td colspan="${NUM_COL_STOCK}" style="height:${bottomPad}px;padding:0;border:none;"></td></tr>`;
+      }
+      return html;
+    };
+
+    const attachStockExistenciasVirtualScroll = (scrollEl, dataRows) => {
+      if (!scrollEl || dataRows.length < 40) return;
+      const onScroll = () => {
+        const tbody = scrollEl.querySelector("#stock-existencias-tbody");
+        if (tbody) {
+          tbody.innerHTML = renderStockExistenciasVirtualBody(scrollEl, dataRows);
+        }
+        maybeLoadMoreStockExistencias(scrollEl);
+      };
+      if (scrollEl._seVirtualScrollHandler) {
+        scrollEl.removeEventListener("scroll", scrollEl._seVirtualScrollHandler);
+      }
+      scrollEl._seVirtualScrollHandler = onScroll;
+      scrollEl.addEventListener("scroll", onScroll, { passive: true });
+      onScroll();
+    };
 
     if (groupFields.length) {
       const grouped = groupStockExistenciasToTree(filtered, groupFields, 0);
@@ -8196,11 +8352,14 @@ if (dashboardRoot) {
       pieAgrupado = `<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Stock y existencias. Agrupado por: ${escStockHtml(
         labelsAgrupacion
       )}. ${numAgrupaciones} agrupación${numAgrupaciones !== 1 ? "es" : ""}${leyendaBusqueda}.</p>`;
+    } else if (paginated && filtered.length >= 40) {
+      bodyHtml = renderStockExistenciasVirtualBody(null, filtered);
+      pieAgrupado = `<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Mostrando ${filtered.length} fila(s)${leyendaPaginacion}.</p>`;
     } else {
       filtered.forEach((r) => {
         bodyHtml += stockRow(r);
       });
-      pieAgrupado = `<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Mostrando ${filtered.length} fila(s)${leyendaBusqueda}.</p>`;
+      pieAgrupado = `<p class="text-xs text-slate-400 dark:text-slate-500 mt-3">Mostrando ${filtered.length} fila(s)${leyendaBusqueda}${leyendaPaginacion}.</p>`;
     }
 
     const theadRow = `
@@ -8245,11 +8404,11 @@ if (dashboardRoot) {
       )}</div>`;
     }
     html += `
-      <div class="${tableScrollClass} hidden lg:block">
+      <div id="stock-existencias-scroll" class="${tableScrollClass} hidden lg:block">
         <table id="stock-existencias-data-table" class="se-vo-stock-table vo-jerarquia-table w-full table-fixed border-collapse text-left text-[11px] sm:text-xs text-slate-900 dark:text-slate-100">
           ${STOCK_EXISTENCIAS_COLGROUP}
           <thead>${theadRow}</thead>
-          <tbody>${bodyHtml}</tbody></table></div>`;
+          <tbody id="stock-existencias-tbody">${bodyHtml}</tbody></table></div>`;
     html += pieAgrupado;
     if (notes.length) {
       html += `<p class="text-[10px] text-amber-700 dark:text-amber-400 mt-2">${notes.map(escStockHtml).join(" ")}</p>`;
@@ -8258,6 +8417,15 @@ if (dashboardRoot) {
 
     if (groupFields.length) {
       attachStockExistenciasGroupToggles(wrap);
+    } else if (paginated && filtered.length >= 40) {
+      const scrollEl = document.getElementById("stock-existencias-scroll");
+      attachStockExistenciasVirtualScroll(scrollEl, filtered);
+    }
+
+    if (stockExistenciasDataset._prevScrollTop != null) {
+      const scrollEl = document.getElementById("stock-existencias-scroll");
+      if (scrollEl) scrollEl.scrollTop = stockExistenciasDataset._prevScrollTop;
+      stockExistenciasDataset._prevScrollTop = null;
     }
 
     wrap.querySelectorAll("th[data-sort-col]").forEach((th) => {
@@ -8269,6 +8437,13 @@ if (dashboardRoot) {
         } else {
           stockExistenciasSort.col = col;
           stockExistenciasSort.dir = "asc";
+        }
+        if (stockExistenciasDataset.paginated) {
+          fetchStockExistenciasData({
+            offset: 0,
+            append: false,
+          });
+          return;
         }
         showReportsQueryLoadingModal("stock-existencias", {
           title: "Ordenando tabla",
@@ -8290,18 +8465,30 @@ if (dashboardRoot) {
   window.renderStockExistenciasTableFromState = renderStockExistenciasTableFromState;
 
   /**
-   * Informe stock-existencias: detalle por depósito; búsqueda y orden en columnas de la tabla.
+   * Informe stock-existencias: detalle por depósito; búsqueda y orden en servidor (paginado).
    */
-  const renderStockExistenciasTable = (payload) => {
+  const renderStockExistenciasTable = (payload, { append = false } = {}) => {
     const wrap = document.getElementById("stock-existencias-table-wrap");
     const summaryEl = document.getElementById("stock-existencias-filters-summary");
     if (!wrap) return;
-    const rows = payload.data || [];
+    const incoming = payload.data || [];
     const meta = payload.meta || {};
     const fa = meta.filters_applied || {};
-    stockExistenciasDataset.rows = rows;
+    if (append) {
+      stockExistenciasDataset.rows = (stockExistenciasDataset.rows || []).concat(incoming);
+    } else {
+      stockExistenciasDataset.rows = incoming;
+      if (fa.sort_col) {
+        stockExistenciasSort = { col: fa.sort_col, dir: fa.sort_dir || "asc" };
+      } else if (!stockExistenciasNeedsFullFetch()) {
+        stockExistenciasSort = { col: "nombre", dir: "asc" };
+      }
+    }
     stockExistenciasDataset.notes = payload.notes || [];
-    stockExistenciasSort = { col: "nombre", dir: "asc" };
+    stockExistenciasDataset.totalRegistros = meta.total_registros ?? incoming.length;
+    stockExistenciasDataset.hasMore = Boolean(meta.has_more);
+    stockExistenciasDataset.offset = meta.offset ?? 0;
+    stockExistenciasDataset.paginated = !fa.agrupacion_activa && !stockExistenciasNeedsFullFetch();
 
     if (summaryEl) {
       const parts = [];
@@ -8316,6 +8503,9 @@ if (dashboardRoot) {
         parts.push(`${fa.subrubros_incluidos.length} subrubro(s)`);
       }
       if (fa.incluir_stock_cero) parts.push("Incluye stock cero");
+      if (stockExistenciasDataset.paginated && stockExistenciasDataset.totalRegistros) {
+        parts.push(`${stockExistenciasDataset.totalRegistros} fila(s) en total`);
+      }
       summaryEl.textContent = parts.length ? parts.join(" · ") : "";
     }
 
@@ -8327,10 +8517,23 @@ if (dashboardRoot) {
         section.addEventListener("input", (e) => {
           if (e.target && e.target.id === "stock_existencias_busqueda") {
             if (searchT) clearTimeout(searchT);
-            searchT = setTimeout(() => renderStockExistenciasTableFromState(), 400);
+            searchT = setTimeout(() => {
+              if (stockExistenciasDataset.paginated) {
+                fetchStockExistenciasData({ offset: 0, append: false });
+              } else {
+                renderStockExistenciasTableFromState();
+              }
+            }, 400);
           }
         });
       }
+    }
+
+    if (append) {
+      const scrollEl = document.getElementById("stock-existencias-scroll");
+      stockExistenciasDataset._prevScrollTop = scrollEl ? scrollEl.scrollTop : 0;
+    } else {
+      stockExistenciasDataset._prevScrollTop = null;
     }
 
     renderStockExistenciasTableFromState();
@@ -9364,10 +9567,8 @@ if (dashboardRoot) {
   /** Si llega otra petición mientras hay fetch en curso, se reprograma una al terminar (evita perder refetch tras cargar opciones async, p. ej. rutas en logística). */
   let fetchDashboardDataPending = false;
   const FETCH_TIMEOUT_MS = 120000; // 2 min para reportes pesados (ej. BO con administranet89)
-  /** 5 min: stock sin LIMIT, informes BO (consultas pesadas). */
+  /** 5 min: informes BO y stock paginado (cargas largas con agrupación). */
   const EXTENDED_REPORT_FETCH_TIMEOUT_MS = 300000;
-  /** Valor enviado en `limit` del POST; el runner de stock-existencias no trunca por este campo. */
-  const STOCK_EXISTENCIAS_API_LIMIT = 2147483647;
   /** Movimientos detallados de caja: traer todos los registros del período. */
   const CASH_FLOW_DETAILED_MOVEMENTS_API_LIMIT = 10000;
 
@@ -9405,10 +9606,15 @@ if (dashboardRoot) {
         showLoadingAnimation();
       }
       
-      const filters = getFilters();
+      const filters =
+        reportSlug === "stock-existencias"
+          ? enrichStockExistenciasFilters(getFilters())
+          : getFilters();
       const queryLimit =
         reportSlug === "stock-existencias"
-          ? STOCK_EXISTENCIAS_API_LIMIT
+          ? stockExistenciasNeedsFullFetch()
+            ? STOCK_EXISTENCIAS_FULL_LIMIT
+            : STOCK_EXISTENCIAS_PAGE_SIZE
           : reportSlug === "cash_flow_detailed_movements"
             ? CASH_FLOW_DETAILED_MOVEMENTS_API_LIMIT
             : 200;
@@ -9423,6 +9629,7 @@ if (dashboardRoot) {
         body: JSON.stringify({
           slug: reportSlug,
           limit: queryLimit,
+          offset: reportSlug === "stock-existencias" ? 0 : 0,
           filters: filters,
         }),
         signal: controller.signal,
