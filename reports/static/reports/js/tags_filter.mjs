@@ -173,7 +173,9 @@ export function initializeTagsFilter(
       saveFilters();
     }
     if (fieldId === "stock_existencias_group_by") {
-      if (typeof window.renderStockExistenciasTableFromState === "function") {
+      if (typeof window.refetchStockExistenciasData === "function") {
+        window.refetchStockExistenciasData();
+      } else if (typeof window.renderStockExistenciasTableFromState === "function") {
         window.renderStockExistenciasTableFromState();
       }
       return;

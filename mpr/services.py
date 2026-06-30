@@ -14,7 +14,12 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from core.mysql_pool import get_connection, mysql_cursor
 from core.services.administranet_stock import get_depositos as _get_depositos_core
-from core.services.legacy_mysql_schema.helpers import columna_existe, nombre_columna_ci
+from core.services.legacy_mysql_schema.helpers import (
+    columna_existe,
+    columna_primary_key,
+    es_nombre_logico_id_lista_detalle,
+    nombre_columna_ci,
+)
 from core.utils.administranet_types import to_int_or_none, str_or_default, str_codigo_manual_articulo, to_date_or_none, to_decimal_or_none, to_decimal_or_none
 
 from mpr.exceptions import MprSchemaError, formatear_error_esquema
@@ -485,6 +490,90 @@ def _explosion_demanda_componentes_pedido_reserva_pack(
     return dem_ped, dem_res
 
 
+def obtener_pp_ped_y_stock_pack_por_articulos(
+    base_empresa: str,
+    id_articulos: List[int],
+) -> Dict[int, Dict[str, float]]:
+    """
+    P_ped y stock terminado (depósitos suma_stock='Si') para artículos pack concretos.
+
+    Consulta acotada para el wizard «agrupar»: datos en vivo sin recalcular listar_ventana_pack.
+    """
+    ids = sorted({x for x in (to_int_or_none(i) for i in (id_articulos or [])) if x is not None})
+    if not (base_empresa or "").strip() or not ids:
+        return {}
+    out: Dict[int, Dict[str, float]] = {
+        aid: {"cantidad_pedida_pedido": 0.0, "stock_terminado": 0.0} for aid in ids
+    }
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
+            if tbl_detalle:
+                ph = ",".join(["%s"] * len(ids))
+                try:
+                    cursor.execute(
+                        f"""
+                        SELECT d.id_articulo,
+                               COALESCE(SUM(CASE WHEN COALESCE(d.codigo_movimiento_pedido, 0) <> 0
+                                    THEN COALESCE(d.cantidad_pedida, 0) ELSE 0 END), 0) AS p_ped
+                        FROM {tbl_detalle} d
+                        WHERE d.id_articulo IN ({ph})
+                          AND COALESCE(TRIM(d.en_proceso_produccion), 'No') = 'No'
+                        GROUP BY d.id_articulo
+                        """,
+                        ids,
+                    )
+                    for r in cursor.fetchall() or []:
+                        aid = to_int_or_none(r.get("id_articulo"))
+                        if aid is None or aid not in out:
+                            continue
+                        try:
+                            out[aid]["cantidad_pedida_pedido"] = float(r.get("p_ped") or 0)
+                        except (TypeError, ValueError):
+                            out[aid]["cantidad_pedida_pedido"] = 0.0
+                except Exception as e_split:
+                    logger.debug(
+                        "No se pudo cargar P_ped para selección ventana-pack: %s", e_split
+                    )
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            tbl_dep = _nombre_tabla(cursor, "deposito")
+            if tbl_sd and tbl_dep:
+                ph = ",".join(["%s"] * len(ids))
+                try:
+                    cursor.execute(
+                        f"""
+                        SELECT sd.id_articulo, COALESCE(SUM(sd.saldo), 0) AS stock_terminado
+                        FROM {tbl_sd} sd
+                        INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
+                          AND COALESCE(d.anulado, 'No') = 'No'
+                          AND COALESCE(d.suma_stock, 'Si') = 'Si'
+                        WHERE sd.id_articulo IN ({ph})
+                        GROUP BY sd.id_articulo
+                        """,
+                        ids,
+                    )
+                    for r in cursor.fetchall() or []:
+                        aid = to_int_or_none(r.get("id_articulo"))
+                        if aid is None or aid not in out:
+                            continue
+                        try:
+                            out[aid]["stock_terminado"] = float(r.get("stock_terminado") or 0)
+                        except (TypeError, ValueError):
+                            out[aid]["stock_terminado"] = 0.0
+                except Exception as e_st:
+                    logger.debug(
+                        "No se pudo cargar stock terminado para selección ventana-pack: %s", e_st
+                    )
+    except Exception as e:
+        logger.warning(
+            "Error en obtener_pp_ped_y_stock_pack_por_articulos en %s: %s",
+            base_empresa,
+            e,
+            exc_info=True,
+        )
+    return out
+
+
 _tabla_cache: Dict[str, Dict[str, Optional[str]]] = {}
 
 
@@ -668,69 +757,870 @@ def bulk_articulo_armado(base_empresa: str, id_en_abms: List[int]) -> Dict[int, 
         return {}
 
 
+def _bulk_bom_detalle_con_cursor(
+    cursor,
+    id_en_abms: List[int],
+) -> Dict[int, Dict[str, Any]]:
+    """Misma lógica que bulk_bom_detalle reutilizando el cursor abierto."""
+    ids = [to_int_or_none(x) for x in (id_en_abms or [])]
+    ids = [x for x in ids if x is not None]
+    if not ids:
+        return {}
+    tbl_abm = _nombre_tabla(cursor, "en_abm")
+    tbl_formula = _nombre_tabla(cursor, "en_abm_formula")
+    tbl_articulo = _nombre_tabla(cursor, "articulo")
+    if not tbl_abm:
+        return {}
+    ph = ",".join(["%s"] * len(ids))
+    cursor.execute(
+        f"SELECT id_en_abm, COALESCE(nombre_en_abm, '') AS nombre_en_abm, "
+        f"COALESCE(anulado, 'No') AS anulado, COALESCE(detalle, '') AS detalle, "
+        f"COALESCE(descuenta_en, '') AS descuenta_en "
+        f"FROM {tbl_abm} WHERE id_en_abm IN ({ph})",
+        ids,
+    )
+    cabeceras: Dict[int, Dict[str, Any]] = {}
+    for r in cursor.fetchall() or []:
+        abm_id = to_int_or_none(r.get("id_en_abm"))
+        if abm_id is not None:
+            cabeceras[abm_id] = {
+                "id_en_abm": abm_id,
+                "nombre_en_abm": str_or_default(r.get("nombre_en_abm"), "-"),
+                "anulado": str_or_default(r.get("anulado"), "No"),
+                "detalle": str_or_default(r.get("detalle"), ""),
+                "descuenta_en": str_or_default(r.get("descuenta_en"), ""),
+            }
+    comps_map: Dict[int, list] = {abm_id: [] for abm_id in cabeceras}
+    if tbl_formula and tbl_articulo and cabeceras:
+        cursor.execute(
+            f"SELECT f.id_en_abm, f.id_en_abm_formula, f.id_articulo, "
+            f"f.cantidad_articulo, COALESCE(f.tipo_unidad, '') AS tipo_unidad, "
+            f"COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo, "
+            f"COALESCE(a.NombreArticulo, '') AS descripcion_articulo "
+            f"FROM {tbl_formula} f INNER JOIN {tbl_articulo} a ON a.IDArt = f.id_articulo "
+            f"WHERE f.id_en_abm IN ({ph}) AND COALESCE(f.anulado, 'No') = 'No' "
+            f"ORDER BY f.id_en_abm, f.id_en_abm_formula",
+            ids,
+        )
+        for r in cursor.fetchall() or []:
+            abm_id = to_int_or_none(r.get("id_en_abm"))
+            if abm_id in comps_map:
+                comps_map[abm_id].append({
+                    "id_en_abm_formula": to_int_or_none(r.get("id_en_abm_formula")),
+                    "id_articulo": to_int_or_none(r.get("id_articulo")),
+                    "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
+                    "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
+                    "cantidad_articulo": float(r.get("cantidad_articulo") or 0),
+                    "tipo_unidad": str_or_default(r.get("tipo_unidad"), ""),
+                })
+    return {
+        abm_id: {"cabecera": cab, "componentes": comps_map.get(abm_id, [])}
+        for abm_id, cab in cabeceras.items()
+    }
+
+
 def bulk_bom_detalle(base_empresa: str, id_en_abms: List[int]) -> Dict[int, Dict[str, Any]]:
     """Dado un lote de id_en_abm, devuelve {id_en_abm: {cabecera, componentes}} en 2 queries."""
     if not id_en_abms:
         return {}
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
-            tbl_abm = _nombre_tabla(cursor, "en_abm")
-            tbl_formula = _nombre_tabla(cursor, "en_abm_formula")
-            tbl_articulo = _nombre_tabla(cursor, "articulo")
-            if not tbl_abm:
-                return {}
-            ph = ",".join(["%s"] * len(id_en_abms))
-            cursor.execute(
-                f"SELECT id_en_abm, COALESCE(nombre_en_abm, '') AS nombre_en_abm, "
-                f"COALESCE(anulado, 'No') AS anulado, COALESCE(detalle, '') AS detalle, "
-                f"COALESCE(descuenta_en, '') AS descuenta_en "
-                f"FROM {tbl_abm} WHERE id_en_abm IN ({ph})",
-                list(id_en_abms),
-            )
-            cabeceras = {}
-            for r in cursor.fetchall():
-                abm_id = to_int_or_none(r.get("id_en_abm"))
-                if abm_id is not None:
-                    cabeceras[abm_id] = {
-                        "id_en_abm": abm_id,
-                        "nombre_en_abm": str_or_default(r.get("nombre_en_abm"), "-"),
-                        "anulado": str_or_default(r.get("anulado"), "No"),
-                        "detalle": str_or_default(r.get("detalle"), ""),
-                        "descuenta_en": str_or_default(r.get("descuenta_en"), ""),
-                    }
-            comps_map: Dict[int, list] = {abm_id: [] for abm_id in cabeceras}
-            if tbl_formula and tbl_articulo and cabeceras:
-                cursor.execute(
-                    f"SELECT f.id_en_abm, f.id_en_abm_formula, f.id_articulo, "
-                    f"f.cantidad_articulo, COALESCE(f.tipo_unidad, '') AS tipo_unidad, "
-                    f"COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo, "
-                    f"COALESCE(a.NombreArticulo, '') AS descripcion_articulo "
-                    f"FROM {tbl_formula} f INNER JOIN {tbl_articulo} a ON a.IDArt = f.id_articulo "
-                    f"WHERE f.id_en_abm IN ({ph}) AND COALESCE(f.anulado, 'No') = 'No' "
-                    f"ORDER BY f.id_en_abm, f.id_en_abm_formula",
-                    list(id_en_abms),
-                )
-                for r in cursor.fetchall():
-                    abm_id = to_int_or_none(r.get("id_en_abm"))
-                    if abm_id in comps_map:
-                        comps_map[abm_id].append({
-                            "id_en_abm_formula": to_int_or_none(r.get("id_en_abm_formula")),
-                            "id_articulo": to_int_or_none(r.get("id_articulo")),
-                            "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
-                            "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
-                            "cantidad_articulo": float(r.get("cantidad_articulo") or 0),
-                            "tipo_unidad": str_or_default(r.get("tipo_unidad"), ""),
-                        })
-            return {
-                abm_id: {"cabecera": cab, "componentes": comps_map.get(abm_id, [])}
-                for abm_id, cab in cabeceras.items()
-            }
+            return _bulk_bom_detalle_con_cursor(cursor, id_en_abms)
     except Exception as e:
         logger.warning("bulk_bom_detalle error: %s", e)
         return {}
 
 
-def _formatear_fecha_dd_mm_yyyy(value: Any) -> str:
+def _ventana_pack_by_art_desde_agrupada(
+    cursor,
+    tbl_agrupada: str,
+    tbl_articulo: str,
+    opts: Dict[str, str],
+    limit: int,
+    fecha_desde: Optional[date],
+    fecha_hasta: Optional[date],
+) -> Dict[int, Dict[str, Any]]:
+    """Demanda agrupada por id_articulo (una fila por pack) para ventana-pack."""
+    col_fab = opts.get("cantidad_fabricada_acumulada")
+    fab_agg = (
+        f"SUM(COALESCE(l.{col_fab}, 0)) AS cantidad_fabricada_acumulada"
+        if col_fab
+        else "0 AS cantidad_fabricada_acumulada"
+    )
+    col_cod_mov_opt = opts.get("codigo_movimiento_opt")
+    sql_excl_opt_lib = ""
+    if col_cod_mov_opt:
+        sql_excl_opt_lib = f" AND NOT (COALESCE(l.{col_cod_mov_opt}, 0) > 0)"
+    sql = f"""
+        SELECT
+            l.id_articulo,
+            MAX(COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '')) AS codigo_articulo,
+            MAX(COALESCE(a.NombreArticulo, '')) AS descripcion_articulo,
+            MAX(COALESCE(a.id_manual, '')) AS codigo_manual,
+            SUM(COALESCE(l.cantidad_pedida, 0)) AS cantidad_pedida,
+            SUM(COALESCE(l.cantidad_pendiente_prod, 0)) AS cantidad_pendiente_prod,
+            {fab_agg}
+        FROM {tbl_agrupada} l
+        INNER JOIN {tbl_articulo} a ON a.IDArt = l.id_articulo
+        WHERE COALESCE(l.cantidad_pendiente_prod, 0) > 0
+          AND COALESCE(NULLIF(TRIM(l.en_proceso_produccion), ''), 'No') = 'No'
+          {sql_excl_opt_lib}
+        GROUP BY l.id_articulo
+    """
+    params: List[Any] = []
+    sql, params = _append_filtro_periodo_agrupada(
+        cursor,
+        sql,
+        params,
+        tbl_agrupada=tbl_agrupada,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        col_fecha=opts.get("fecha_objetivo"),
+    )
+    sql += " ORDER BY SUM(COALESCE(l.cantidad_pendiente_prod, 0)) DESC LIMIT %s"
+    params.append(limit)
+    try:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall() or []
+    except Exception as col_err:
+        if "id_manual" in str(col_err) or "unknown column" in str(col_err).lower():
+            sql = f"""
+                SELECT
+                    l.id_articulo,
+                    MAX(COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '')) AS codigo_articulo,
+                    MAX(COALESCE(a.NombreArticulo, '')) AS descripcion_articulo,
+                    '' AS codigo_manual,
+                    SUM(COALESCE(l.cantidad_pedida, 0)) AS cantidad_pedida,
+                    SUM(COALESCE(l.cantidad_pendiente_prod, 0)) AS cantidad_pendiente_prod,
+                    {fab_agg}
+                FROM {tbl_agrupada} l
+                INNER JOIN {tbl_articulo} a ON a.IDArt = l.id_articulo
+                WHERE COALESCE(l.cantidad_pendiente_prod, 0) > 0
+                  AND COALESCE(NULLIF(TRIM(l.en_proceso_produccion), ''), 'No') = 'No'
+                  {sql_excl_opt_lib}
+                GROUP BY l.id_articulo
+            """
+            params_fb: List[Any] = []
+            sql, params_fb = _append_filtro_periodo_agrupada(
+                cursor,
+                sql,
+                params_fb,
+                tbl_agrupada=tbl_agrupada,
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                col_fecha=opts.get("fecha_objetivo"),
+            )
+            sql += " ORDER BY SUM(COALESCE(l.cantidad_pendiente_prod, 0)) DESC LIMIT %s"
+            params_fb.append(limit)
+            cursor.execute(sql, params_fb)
+            rows = cursor.fetchall() or []
+        else:
+            raise
+    by_art: Dict[int, Dict[str, Any]] = {}
+    for row in rows:
+        id_art = to_int_or_none(row.get("id_articulo"))
+        if id_art is None:
+            continue
+        try:
+            fab_acum = float(row.get("cantidad_fabricada_acumulada") or 0)
+        except (TypeError, ValueError):
+            fab_acum = 0.0
+        by_art[id_art] = {
+            "id_articulo": id_art,
+            "codigo_articulo": str_or_default(row.get("codigo_articulo"), "-"),
+            "codigo_manual": str_codigo_manual_articulo(row.get("codigo_manual")),
+            "descripcion_articulo": str_or_default(row.get("descripcion_articulo"), "-"),
+            "cantidad_pedida": to_int_or_none(row.get("cantidad_pedida")) or 0,
+            "cantidad_pendiente_prod": to_int_or_none(row.get("cantidad_pendiente_prod")) or 0,
+            "cantidad_fabricada_acumulada": fab_acum,
+            "id_listas": set(),
+        }
+    return by_art
+
+
+def _ventana_pack_pp_ped_q_res(
+    cursor,
+    tbl_detalle: Optional[str],
+    ids: List[int],
+) -> Tuple[Dict[int, float], Dict[int, float]]:
+    split_p_ped: Dict[int, float] = {}
+    split_q_res: Dict[int, float] = {}
+    if not tbl_detalle or not ids:
+        return split_p_ped, split_q_res
+    ph = ",".join(["%s"] * len(ids))
+    try:
+        cursor.execute(
+            f"""
+            SELECT d.id_articulo,
+                   COALESCE(SUM(CASE WHEN COALESCE(d.codigo_movimiento_pedido, 0) <> 0
+                        THEN COALESCE(d.cantidad_pedida, 0) ELSE 0 END), 0) AS p_ped,
+                   COALESCE(SUM(CASE WHEN COALESCE(d.codigo_movimiento_pedido, 0) = 0
+                        THEN COALESCE(d.cantidad_pedida, 0) ELSE 0 END), 0) AS q_res
+            FROM {tbl_detalle} d
+            WHERE d.id_articulo IN ({ph})
+              AND COALESCE(TRIM(d.en_proceso_produccion), 'No') = 'No'
+            GROUP BY d.id_articulo
+            """,
+            ids,
+        )
+        for r in cursor.fetchall() or []:
+            aid = to_int_or_none(r.get("id_articulo"))
+            if aid is None:
+                continue
+            try:
+                split_p_ped[aid] = float(r.get("p_ped") or 0)
+            except (TypeError, ValueError):
+                split_p_ped[aid] = 0.0
+            try:
+                split_q_res[aid] = float(r.get("q_res") or 0)
+            except (TypeError, ValueError):
+                split_q_res[aid] = 0.0
+    except Exception as e_split:
+        logger.debug("No se pudo cargar desglose P_ped/Q_res en ventana-pack: %s", e_split)
+    return split_p_ped, split_q_res
+
+
+def _etiqueta_origen_demanda_desde_split(p_ped: float, q_res: float) -> str:
+    """Etiqueta visible: Pedido, Reserva, Pedido + reserva o — (misma regla que ventana-pack)."""
+    p = float(p_ped or 0)
+    q = float(q_res or 0)
+    if p > 0 and q > 0:
+        return "Pedido + reserva"
+    if q > 0:
+        return "Reserva"
+    if p > 0:
+        return "Pedido"
+    return "—"
+
+
+def bulk_origen_demanda_por_articulo(
+    base_empresa: str, id_articulos: List[int]
+) -> Dict[int, Dict[str, Any]]:
+    """
+    Origen de demanda por artículo (P_ped / Q_res en lista_produccion_detalle).
+    Retorna {id_articulo: {origen_demanda_etiqueta, cantidad_pedida_pedido, cantidad_demanda_reserva}}.
+    """
+    ids = sorted(
+        {
+            x
+            for x in (to_int_or_none(a) for a in (id_articulos or []))
+            if x is not None
+        }
+    )
+    out: Dict[int, Dict[str, Any]] = {}
+    if not (base_empresa or "").strip() or not ids:
+        return out
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
+            split_p_ped, split_q_res = _ventana_pack_pp_ped_q_res(cursor, tbl_detalle, ids)
+        for aid in ids:
+            p_ped = float(split_p_ped.get(aid, 0.0))
+            q_res = float(split_q_res.get(aid, 0.0))
+            out[aid] = {
+                "cantidad_pedida_pedido": p_ped,
+                "cantidad_demanda_reserva": q_res,
+                "origen_demanda_etiqueta": _etiqueta_origen_demanda_desde_split(p_ped, q_res),
+            }
+    except Exception as e:
+        logger.warning(
+            "bulk_origen_demanda_por_articulo %s: %s", base_empresa, e, exc_info=True
+        )
+    return out
+
+
+def aplicar_origen_demanda_a_filas(
+    filas: List[Dict[str, Any]], mapa: Dict[int, Dict[str, Any]]
+) -> None:
+    """Inyecta origen_demanda_etiqueta (y desglose P_ped/Q_res) en filas con id_articulo."""
+    for f in filas or []:
+        aid = to_int_or_none(f.get("id_articulo"))
+        if aid is None:
+            continue
+        info = mapa.get(aid) or {}
+        f["origen_demanda_etiqueta"] = info.get("origen_demanda_etiqueta") or "—"
+        f["cantidad_pedida_pedido"] = info.get("cantidad_pedida_pedido")
+        f["cantidad_demanda_reserva"] = info.get("cantidad_demanda_reserva")
+
+
+def resumen_origen_demanda_opt(lineas: List[Dict[str, Any]]) -> str:
+    """Un solo origen, «Varios» si mezcla, o — si no hay datos."""
+    etiquetas = {
+        str(l.get("origen_demanda_etiqueta") or "").strip()
+        for l in (lineas or [])
+        if str(l.get("origen_demanda_etiqueta") or "").strip() not in ("", "—")
+    }
+    if not etiquetas:
+        return "—"
+    if len(etiquetas) == 1:
+        return etiquetas.pop()
+    return "Varios"
+
+
+def calcular_porcentaje_progreso_opt(
+    en_proceso: bool, cantidad_pendiente_opp: int
+) -> int:
+    """
+    Progreso del timeline OPT (5 pasos) para listados.
+    Misma lógica simplificada que el detalle: Pedida → En prod. → OPP → Pend. 0 → Cerrado.
+    """
+    pend = max(0, int(cantidad_pendiente_opp or 0))
+    paso_pedida = True
+    paso_cerrado = not en_proceso
+    if paso_cerrado:
+        return 100
+    paso_liberada = True
+    paso_producida_opp = pend <= 0
+    paso_pendiente_cero = pend <= 0
+    num_pasos = sum([
+        paso_pedida,
+        paso_liberada,
+        paso_producida_opp,
+        paso_pendiente_cero,
+        paso_cerrado,
+    ])
+    return min(100, round(100 * num_pasos / 5))
+
+
+def _mpr_parse_id_lista_desde_detalle_opp(detalle: str) -> Optional[int]:
+    """Extrae id_lista_produccion de detalle OPP «OPT N desde…»."""
+    m = re.search(r"OPT\s+(\d+)\s+desde", detalle or "", re.IGNORECASE)
+    return to_int_or_none(m.group(1)) if m else None
+
+
+def _mpr_parse_id_lista_desde_detalle_opa(detalle: str) -> Optional[int]:
+    """Extrae id_lista_produccion de detalle OPA «OPT N …»."""
+    m = re.search(r"OPT\s+(\d+)(?:\s|\)|$)", detalle or "", re.IGNORECASE)
+    return to_int_or_none(m.group(1)) if m else None
+
+
+def bulk_semi_elaborado_opp_por_opts(
+    base_empresa: str, id_listas: List[int]
+) -> Dict[int, Dict[int, int]]:
+    """
+    Cantidades OPP en Semi elaborado por OPT y artículo (unidades de componente/pack en stock).
+    Retorna {id_lista: {id_articulo: cantidad}}.
+    """
+    ids = sorted({int(i) for i in (id_listas or []) if i is not None})
+    out: Dict[int, Dict[int, int]] = {i: {} for i in ids}
+    if not ids or not (base_empresa or "").strip():
+        return out
+    deposito_semi = get_deposito_semi_elaborado_mpr(base_empresa)
+    if deposito_semi is None:
+        return out
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            if not tbl_mov or not tbl_stock:
+                return out
+            condiciones = " OR ".join(
+                ["INSTR(COALESCE(detalle,''), %s) > 0" for _ in ids]
+            )
+            params_pat = [f"OPT {i} desde" for i in ids]
+            cursor.execute(
+                f"""
+                SELECT codigo_movimiento, detalle FROM {tbl_mov}
+                WHERE (UPPER(TRIM(COALESCE(tipo_mov,''))) = 'OPP'
+                       OR COALESCE(motivo_movimiento,'') = 'Parte producción')
+                  AND ({condiciones})
+                  AND COALESCE(anulado,'No') <> 'Si'
+                """,
+                params_pat,
+            )
+            mov_rows = cursor.fetchall() or []
+            cod_a_lista: Dict[int, int] = {}
+            codigos: List[int] = []
+            for row in mov_rows:
+                cod = to_int_or_none(row.get("codigo_movimiento"))
+                id_l = _mpr_parse_id_lista_desde_detalle_opp(str(row.get("detalle") or ""))
+                if cod is None or id_l is None or id_l not in out:
+                    continue
+                cod_a_lista[int(cod)] = int(id_l)
+                codigos.append(int(cod))
+            if not codigos:
+                return out
+            ph = ",".join(["%s"] * len(codigos))
+            cursor.execute(
+                f"""
+                SELECT CodigoMovimiento, IDArt, COALESCE(SUM(Entrada), 0) AS total
+                FROM {tbl_stock}
+                WHERE CodigoMovimiento IN ({ph})
+                  AND CodDeposito = %s
+                  AND COALESCE(Entrada, 0) > 0
+                GROUP BY CodigoMovimiento, IDArt
+                """,
+                codigos + [deposito_semi],
+            )
+            for row in cursor.fetchall() or []:
+                cod = to_int_or_none(row.get("CodigoMovimiento"))
+                id_art = to_int_or_none(row.get("IDArt"))
+                if cod is None or id_art is None:
+                    continue
+                id_l = cod_a_lista.get(int(cod))
+                if id_l is None:
+                    continue
+                qty = int(float(row.get("total") or 0))
+                if qty <= 0:
+                    continue
+                bucket = out[id_l]
+                bucket[id_art] = bucket.get(id_art, 0) + qty
+    except Exception as e:
+        logger.warning(
+            "bulk_semi_elaborado_opp_por_opts %s: %s", base_empresa, e, exc_info=True
+        )
+    return out
+
+
+def bulk_cantidades_armadas_por_opts(
+    base_empresa: str, id_listas: List[int]
+) -> Dict[int, Dict[int, int]]:
+    """Cantidades ya armadas por OPT y pack: {id_lista: {id_articulo: qty}}."""
+    ids = sorted({int(i) for i in (id_listas or []) if i is not None})
+    out: Dict[int, Dict[int, int]] = {i: {} for i in ids}
+    if not ids or not (base_empresa or "").strip():
+        return out
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            if not tbl_mov or not tbl_stock:
+                return out
+            condiciones = " OR ".join(
+                [
+                    "(INSTR(COALESCE(detalle,''), %s) > 0 OR INSTR(COALESCE(detalle,''), %s) > 0)"
+                    for _ in ids
+                ]
+            )
+            params_pat: List[str] = []
+            for i in ids:
+                params_pat.extend([f"OPT {i} ", f"OPT {i})"])
+            cursor.execute(
+                f"""
+                SELECT codigo_movimiento, detalle FROM {tbl_mov}
+                WHERE UPPER(TRIM(COALESCE(tipo_mov,''))) IN ('OPA', 'ARMADO')
+                  AND ({condiciones})
+                  AND COALESCE(anulado,'No') <> 'Si'
+                """,
+                params_pat,
+            )
+            mov_rows = cursor.fetchall() or []
+            cod_a_lista: Dict[int, int] = {}
+            codigos: List[int] = []
+            for row in mov_rows:
+                cod = to_int_or_none(row.get("codigo_movimiento"))
+                det = str(row.get("detalle") or "")
+                id_l = _mpr_parse_id_lista_desde_detalle_opa(det)
+                if cod is None or id_l is None or id_l not in out:
+                    continue
+                cod_a_lista[int(cod)] = int(id_l)
+                codigos.append(int(cod))
+            if not codigos:
+                return out
+            ph = ",".join(["%s"] * len(codigos))
+            cursor.execute(
+                f"""
+                SELECT CodigoMovimiento, IDArt, COALESCE(SUM(Entrada), 0) AS total_entrada
+                FROM {tbl_stock}
+                WHERE CodigoMovimiento IN ({ph}) AND COALESCE(Entrada, 0) > 0
+                GROUP BY CodigoMovimiento, IDArt
+                """,
+                codigos,
+            )
+            for row in cursor.fetchall() or []:
+                cod = to_int_or_none(row.get("CodigoMovimiento"))
+                id_art = to_int_or_none(row.get("IDArt"))
+                if cod is None or id_art is None:
+                    continue
+                id_l = cod_a_lista.get(int(cod))
+                if id_l is None:
+                    continue
+                qty = int(float(row.get("total_entrada") or 0))
+                if qty <= 0:
+                    continue
+                bucket = out[id_l]
+                bucket[id_art] = bucket.get(id_art, 0) + qty
+    except Exception as e:
+        logger.warning(
+            "bulk_cantidades_armadas_por_opts %s: %s", base_empresa, e, exc_info=True
+        )
+    return out
+
+
+def bulk_restante_armar_opt_listado(
+    base_empresa: str,
+    filas: List[Dict[str, Any]],
+    abm_map: Dict[int, Optional[int]],
+) -> Dict[str, int]:
+    """
+    Por par (id_lista, id_articulo): packs aún por armar (semi − ya armado).
+    Clave ``"{id_lista}:{id_articulo}"``.
+    """
+    candidatos = [
+        f for f in (filas or [])
+        if to_int_or_none(f.get("id_lista_produccion")) is not None
+        and int(f.get("cantidad_pendiente_prod") or 0) <= 0
+        and abm_map.get(f.get("id_articulo"))
+    ]
+    ids = sorted({int(f["id_lista_produccion"]) for f in candidatos})
+    if not ids:
+        return {}
+    semi_por_opt = bulk_semi_elaborado_opp_por_opts(base_empresa, ids)
+    armadas_por_opt = bulk_cantidades_armadas_por_opts(base_empresa, ids)
+    resultado: Dict[str, int] = {}
+    for f in candidatos:
+        id_lista = int(f["id_lista_produccion"])
+        id_art = f.get("id_articulo")
+        if not id_art:
+            continue
+        semi_map = semi_por_opt.get(id_lista, {})
+        equiv = bulk_componentes_a_equivalentes_pack(
+            base_empresa, [id_art], semi_map
+        )
+        disponible = equiv.get(id_art, 0)
+        ya_armada = armadas_por_opt.get(id_lista, {}).get(id_art, 0)
+        restante = max(0, int(disponible) - int(ya_armada))
+        resultado[f"{id_lista}:{id_art}"] = restante
+    return resultado
+
+
+def bulk_mstock_imputacion_por_articulo(
+    base_empresa: str, id_articulos: List[int]
+) -> Dict[int, Dict[str, Any]]:
+    """
+    Resumen de MSTOCK Armado 1ra pendiente de imputar por pack.
+    {id_articulo_pack: {codigo_movimiento, id_lote_armado, cantidad_pendiente_imputar, n_mstock}}.
+    """
+    from mpr.models import (
+        ESTADO_IMPUTACION_PARCIAL,
+        ESTADO_IMPUTACION_PENDIENTE,
+        MODO_ARMADO_1RA,
+        MprArmadoSurtidoMovimiento,
+    )
+
+    ids = sorted(
+        {x for x in (to_int_or_none(a) for a in (id_articulos or [])) if x is not None}
+    )
+    out: Dict[int, Dict[str, Any]] = {}
+    if not ids or not (base_empresa or "").strip():
+        return out
+    movs = (
+        MprArmadoSurtidoMovimiento.objects.filter(
+            base_empresa=(base_empresa or "").strip(),
+            modo=MODO_ARMADO_1RA,
+            id_articulo_pack__in=ids,
+            estado_imputacion__in=[
+                ESTADO_IMPUTACION_PENDIENTE,
+                ESTADO_IMPUTACION_PARCIAL,
+            ],
+        )
+        .order_by("-creado_en")
+        .only(
+            "codigo_movimiento",
+            "id_articulo_pack",
+            "cantidad_packs",
+            "id_lote_armado_id",
+            "estado_imputacion",
+        )
+    )
+    for m in movs:
+        aid = int(m.id_articulo_pack)
+        imputado = _cantidad_imputada_mstock(base_empresa, m.codigo_movimiento)
+        pend = int(m.cantidad_packs or 0) - imputado
+        if pend <= 0:
+            continue
+        if aid not in out:
+            out[aid] = {
+                "codigo_movimiento": m.codigo_movimiento,
+                "id_lote_armado": str(m.id_lote_armado_id) if m.id_lote_armado_id else None,
+                "cantidad_pendiente_imputar": pend,
+                "n_mstock": 1,
+            }
+        else:
+            out[aid]["n_mstock"] = int(out[aid].get("n_mstock") or 0) + 1
+            out[aid]["cantidad_pendiente_imputar"] = int(
+                out[aid].get("cantidad_pendiente_imputar") or 0
+            ) + pend
+    return out
+
+
+def _fase_clave_prioridad(clave: str) -> int:
+    orden = {
+        "demanda": 0,
+        "pendiente": 1,
+        "en_produccion_opp": 2,
+        "en_produccion": 3,
+        "lista_cerrar": 4,
+        "cerrada": 5,
+    }
+    return orden.get(clave or "", 1)
+
+
+def agrupar_filas_opt_listado_por_lote(
+    filas: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Agrupa filas con el mismo codigo_movimiento_opt (lote OPT multi-artículo).
+    Cada grupo expone lineas[] y métricas agregadas; es_grupo=True si hay >1 línea.
+    """
+    from collections import OrderedDict
+
+    grupos: "OrderedDict[int, Dict[str, Any]]" = OrderedDict()
+    sin_codigo: List[Dict[str, Any]] = []
+    for f in filas or []:
+        cod = to_int_or_none(f.get("codigo_movimiento_opt"))
+        if cod is None or cod <= 0:
+            f["es_grupo"] = False
+            sin_codigo.append(f)
+            continue
+        if cod not in grupos:
+            grupos[cod] = {
+                "es_grupo": False,
+                "codigo_movimiento_opt": cod,
+                "lineas": [],
+            }
+        grupos[cod]["lineas"].append(f)
+
+    resultado: List[Dict[str, Any]] = []
+    for cod, g in grupos.items():
+        lineas_g = g["lineas"]
+        g["es_grupo"] = len(lineas_g) > 1
+        g["id_lista_produccion"] = min(
+            to_int_or_none(ln.get("id_lista_produccion")) or 0 for ln in lineas_g
+        )
+        g["cantidad_pedida"] = sum(int(ln.get("cantidad_pedida") or 0) for ln in lineas_g)
+        g["cantidad_pendiente_prod"] = sum(
+            int(ln.get("cantidad_pendiente_prod") or 0) for ln in lineas_g
+        )
+        g["cantidad_pendiente_mostrar"] = sum(
+            int(ln.get("cantidad_pendiente_mostrar") or 0) for ln in lineas_g
+        )
+        g["porcentaje_progreso"] = min(
+            int(ln.get("porcentaje_progreso") or 0) for ln in lineas_g
+        )
+        g["origen_demanda_etiqueta"] = resumen_origen_demanda_opt(lineas_g)
+        peor = min(lineas_g, key=lambda ln: _fase_clave_prioridad(ln.get("fase_clave")))
+        g["fase_clave"] = peor.get("fase_clave")
+        g["etiqueta_fase"] = peor.get("etiqueta_fase")
+        g["en_proceso_produccion"] = any(
+            (ln.get("en_proceso_produccion") or "No").strip() == "Si" for ln in lineas_g
+        )
+        id_lista = g["id_lista_produccion"]
+        if id_lista:
+            g["detail_url"] = reverse_mpr_opt_detail(id_lista)
+            from django.urls import reverse as dj_reverse
+            g["crear_opp_url"] = dj_reverse("mpr:wizard") + f"?paso=3&id_lista={id_lista}"
+            g["cerrar_url"] = dj_reverse("mpr:opt_cerrar", kwargs={"id_lista": id_lista})
+        else:
+            g["detail_url"] = None
+            g["crear_opp_url"] = None
+            g["cerrar_url"] = None
+        g["armado_url"] = lineas_g[0].get("armado_url")
+        g["accion_principal"] = None
+        g["mostrar_link_armado"] = any(ln.get("mostrar_link_armado") for ln in lineas_g)
+        g["tiene_armado_pendiente"] = any(ln.get("tiene_armado_pendiente") for ln in lineas_g)
+        g["restante_armar"] = sum(int(ln.get("restante_armar") or 0) for ln in lineas_g)
+        g["mostrar_link_imputacion"] = any(
+            ln.get("mostrar_link_imputacion") for ln in lineas_g
+        )
+        g["imputacion_url"] = next(
+            (ln.get("imputacion_url") for ln in lineas_g if ln.get("imputacion_url")),
+            None,
+        )
+        g["codigo_articulo"] = (
+            f"{len(lineas_g)} artículos" if g["es_grupo"] else lineas_g[0].get("codigo_articulo")
+        )
+        g["descripcion_articulo"] = (
+            " · ".join(
+                str(ln.get("codigo_articulo") or "")[:20] for ln in lineas_g[:3]
+            )
+            + ("…" if len(lineas_g) > 3 else "")
+            if g["es_grupo"]
+            else lineas_g[0].get("descripcion_articulo")
+        )
+        if any(ln.get("accion_principal") == "cerrar" for ln in lineas_g):
+            g["accion_principal"] = "cerrar"
+        elif any(ln.get("accion_principal") == "crear_opp" for ln in lineas_g):
+            g["accion_principal"] = "crear_opp"
+        if not g["es_grupo"]:
+            ln0 = lineas_g[0]
+            for key in (
+                "es_opt_creada", "codigo_articulo", "descripcion_articulo", "codigo_manual",
+                "id_articulo", "en_proceso_produccion", "puede_crear_opp", "puede_cerrar",
+                "tiene_bom_armable", "mstock_pendiente_imputar",
+            ):
+                if key in ln0:
+                    g[key] = ln0[key]
+        resultado.append(g)
+    resultado.extend(sin_codigo)
+    return resultado
+
+
+def reverse_mpr_opt_detail(id_lista: int) -> str:
+    """URL detalle OPT (evita import circular django.urls en tests unitarios)."""
+    from django.urls import reverse
+
+    return reverse("mpr:opt_detail", kwargs={"id_lista": id_lista})
+
+
+def _ventana_pack_pedidos_resumen(
+    cursor,
+    tbl_detalle: Optional[str],
+    tbl_cp: Optional[str],
+    tbl_cli: Optional[str],
+    ids: List[int],
+    split_q_res: Dict[int, float],
+) -> Dict[int, List[Dict[str, Any]]]:
+    pedidos_por_articulo: Dict[int, List[Dict[str, Any]]] = {aid: [] for aid in ids}
+    if not tbl_detalle or not tbl_cp or not ids:
+        return pedidos_por_articulo
+    ph = ",".join(["%s"] * len(ids))
+    join_cli = f"LEFT JOIN {tbl_cli} cli ON cli.codigo = cp.codigo" if tbl_cli else ""
+    sql_ped = f"""
+        SELECT d.id_articulo,
+               cp.CodigoMovimiento AS codigo_movimiento_pedido,
+               MAX(COALESCE(cp.NroComprobante, cp.NroCompBusq, '')) AS nro_pedido,
+               MAX(COALESCE(cp.estado_pedido_opt, '')) AS estado_pedido_opt,
+               MAX(COALESCE(cli.nombre_cliente, '')) AS nombre_cliente
+        FROM {tbl_detalle} d
+        INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
+        {join_cli}
+        WHERE d.id_articulo IN ({ph})
+          AND COALESCE(d.codigo_movimiento_pedido, 0) <> 0
+        GROUP BY d.id_articulo, cp.CodigoMovimiento
+        ORDER BY d.id_articulo, nro_pedido DESC, cp.CodigoMovimiento DESC
+    """
+    sql_ped_sin_cli = f"""
+        SELECT d.id_articulo,
+               cp.CodigoMovimiento AS codigo_movimiento_pedido,
+               MAX(COALESCE(cp.NroComprobante, cp.NroCompBusq, '')) AS nro_pedido,
+               MAX(COALESCE(cp.estado_pedido_opt, '')) AS estado_pedido_opt,
+               '' AS nombre_cliente
+        FROM {tbl_detalle} d
+        INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
+        WHERE d.id_articulo IN ({ph})
+          AND COALESCE(d.codigo_movimiento_pedido, 0) <> 0
+        GROUP BY d.id_articulo, cp.CodigoMovimiento
+        ORDER BY d.id_articulo, nro_pedido DESC, cp.CodigoMovimiento DESC
+    """
+    rows_ped: List[Any] = []
+    try:
+        cursor.execute(sql_ped, ids)
+        rows_ped = list(cursor.fetchall() or [])
+    except Exception as e_ped:
+        err = str(e_ped).lower()
+        if "1054" in str(e_ped) or "unknown column" in err:
+            try:
+                cursor.execute(sql_ped_sin_cli, ids)
+                rows_ped = list(cursor.fetchall() or [])
+            except Exception as e2:
+                logger.debug("No se pudo cargar pedidos_resumen en ventana-pack: %s", e2)
+        else:
+            logger.debug("No se pudo cargar pedidos_resumen desde detalle en ventana-pack: %s", e_ped)
+    pedidos_ya_vistos: Dict[int, Set[str]] = {aid: set() for aid in ids}
+    for r in rows_ped:
+        aid = to_int_or_none(r.get("id_articulo"))
+        if aid is None or aid not in pedidos_por_articulo:
+            continue
+        cod_mov = r.get("codigo_movimiento_pedido")
+        if cod_mov is not None and str(cod_mov).strip() != "":
+            clave_unica = str(cod_mov).strip()
+        else:
+            clave_unica = "nro:" + str_or_default(r.get("nro_pedido"), "-")
+        if clave_unica in pedidos_ya_vistos[aid]:
+            continue
+        pedidos_ya_vistos[aid].add(clave_unica)
+        pedidos_por_articulo[aid].append({
+            "nro_pedido": str_or_default(r.get("nro_pedido"), "-"),
+            "estado_pedido_opt": str_or_default(r.get("estado_pedido_opt"), "-"),
+            "nombre_cliente": str_or_default(r.get("nombre_cliente"), "-"),
+        })
+    for aid in ids:
+        q_res = float(split_q_res.get(aid, 0.0))
+        if q_res > 0:
+            pedidos_por_articulo[aid].append({
+                "es_demanda_reserva": True,
+                "nro_pedido": "—",
+                "estado_pedido_opt": "Demanda reserva",
+                "nombre_cliente": "",
+                "cantidad_demanda_reserva": q_res,
+            })
+        pedidos_por_articulo[aid].sort(
+            key=lambda p: str(p.get("nro_pedido") or ""),
+            reverse=True,
+        )
+    return pedidos_por_articulo
+
+
+def _ventana_pack_stock_maps(
+    cursor,
+    tbl_sd: Optional[str],
+    tbl_dep: Optional[str],
+    ids: List[int],
+    *,
+    incluir_detalle: bool,
+) -> Tuple[Dict[int, float], Dict[int, List[Dict[str, Any]]]]:
+    stock_map: Dict[int, float] = {}
+    detalle_por_art: Dict[int, List[Dict[str, Any]]] = {}
+    if not tbl_sd or not tbl_dep or not ids:
+        return stock_map, detalle_por_art
+    ph = ",".join(["%s"] * len(ids))
+    if incluir_detalle:
+        try:
+            cursor.execute(
+                f"""
+                SELECT sd.id_articulo,
+                       COALESCE(d.NombreDeposito, CAST(d.CodDeposito AS CHAR), '') AS deposito,
+                       COALESCE(sd.saldo, 0) AS stock_terminado
+                FROM {tbl_sd} sd
+                INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
+                  AND COALESCE(d.anulado, 'No') = 'No'
+                  AND COALESCE(d.suma_stock, 'Si') = 'Si'
+                WHERE sd.id_articulo IN ({ph})
+                ORDER BY sd.id_articulo, d.NombreDeposito, d.CodDeposito
+                """,
+                ids,
+            )
+            for row in cursor.fetchall() or []:
+                id_art = to_int_or_none(row.get("id_articulo"))
+                if id_art is None:
+                    continue
+                try:
+                    saldo = float(row.get("stock_terminado") or 0)
+                except (TypeError, ValueError):
+                    saldo = 0.0
+                detalle_por_art.setdefault(id_art, []).append({
+                    "deposito": str_or_default(row.get("deposito"), "-"),
+                    "stock_terminado": saldo,
+                })
+                stock_map[id_art] = stock_map.get(id_art, 0.0) + saldo
+        except Exception:
+            detalle_por_art = {}
+            stock_map = {}
+    if not stock_map:
+        cursor.execute(
+            f"""
+            SELECT sd.id_articulo, COALESCE(SUM(sd.saldo), 0) AS stock_terminado
+            FROM {tbl_sd} sd
+            INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
+              AND COALESCE(d.anulado, 'No') = 'No'
+              AND COALESCE(d.suma_stock, 'Si') = 'Si'
+            WHERE sd.id_articulo IN ({ph})
+            GROUP BY sd.id_articulo
+            """,
+            ids,
+        )
+        for row in cursor.fetchall() or []:
+            id_art = to_int_or_none(row.get("id_articulo"))
+            if id_art is not None:
+                try:
+                    stock_map[id_art] = float(row.get("stock_terminado") or 0)
+                except (TypeError, ValueError):
+                    stock_map[id_art] = 0.0
+    return stock_map, detalle_por_art
+
+
+def _formatear_fecha_dd_mm_yyyy(value) -> str:
     """
     Formatea una fecha para visualización en la UI MPR: dd-MM-yyyy.
     Acepta date, datetime o string (yyyy-mm-dd). Si es None o inválido, devuelve "—".
@@ -1084,6 +1974,118 @@ def listar_opt_listado(
         return []
 
 
+def contar_opt_atrasadas_distintas(base_empresa: str) -> int:
+    """Cantidad de OPT distintas vencidas (fecha objetivo pasada y pendiente > 0). Para KPI tablero."""
+    if not (base_empresa or "").strip():
+        return 0
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            if not tbl_agrupada:
+                return 0
+            opts = _columnas_opcionales_op_agrupada(cursor, tbl_agrupada)
+            col_fecha = opts.get("fecha_objetivo")
+            if not col_fecha:
+                return 0
+            try:
+                cursor.execute(
+                    f"""
+                    SELECT COUNT(DISTINCT l.id_lista_produccion) AS total
+                    FROM {tbl_agrupada} l
+                    WHERE l.codigo_movimiento_opt IS NOT NULL AND l.codigo_movimiento_opt > 0
+                      AND l.{col_fecha} IS NOT NULL AND l.{col_fecha} < CURDATE()
+                      AND COALESCE(l.cantidad_pendiente_prod, 0) > 0
+                    """,
+                )
+            except Exception as e:
+                if "1054" in str(e) or "unknown column" in str(e).lower():
+                    cursor.execute(
+                        f"""
+                        SELECT COUNT(DISTINCT l.id_lista_produccion) AS total
+                        FROM {tbl_agrupada} l
+                        WHERE COALESCE(l.en_proceso_produccion, 'No') = 'Si'
+                          AND l.{col_fecha} IS NOT NULL AND l.{col_fecha} < CURDATE()
+                          AND COALESCE(l.cantidad_pendiente_prod, 0) > 0
+                        """,
+                    )
+                else:
+                    raise
+            row = cursor.fetchone()
+            return to_int_or_none(row.get("total") if isinstance(row, dict) else None) or 0
+    except Exception as e:
+        logger.warning("Error al contar OPT atrasadas en %s: %s", base_empresa, e, exc_info=True)
+        return 0
+
+
+def listar_opt_atrasadas_tablero(
+    base_empresa: str,
+    limit: int = 10,
+) -> List[Dict[str, Any]]:
+    """OPT vencidas para el tablero: una fila por id_lista_produccion (sin traer 500 líneas)."""
+    if not (base_empresa or "").strip():
+        return []
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            tbl_articulo = _nombre_tabla(cursor, "articulo")
+            if not tbl_agrupada or not tbl_articulo:
+                return []
+            opts = _columnas_opcionales_op_agrupada(cursor, tbl_agrupada)
+            col_fecha = opts.get("fecha_objetivo")
+            if not col_fecha:
+                return []
+            sql_tpl = """
+                SELECT l.id_lista_produccion,
+                       MAX(COALESCE(a.NombreArticulo, '')) AS descripcion_articulo,
+                       SUM(COALESCE(l.cantidad_pendiente_prod, 0)) AS cantidad_pendiente_prod
+                FROM {tbl_agrupada} l
+                INNER JOIN {tbl_articulo} a ON a.IDArt = l.id_articulo
+                WHERE {where_extra}
+                  AND l.{col_fecha} IS NOT NULL AND l.{col_fecha} < CURDATE()
+                  AND COALESCE(l.cantidad_pendiente_prod, 0) > 0
+                GROUP BY l.id_lista_produccion
+                ORDER BY l.id_lista_produccion DESC
+                LIMIT %s
+            """
+            rows = []
+            try:
+                cursor.execute(
+                    sql_tpl.format(
+                        tbl_agrupada=tbl_agrupada,
+                        tbl_articulo=tbl_articulo,
+                        col_fecha=col_fecha,
+                        where_extra="l.codigo_movimiento_opt IS NOT NULL AND l.codigo_movimiento_opt > 0",
+                    ),
+                    [limit],
+                )
+                rows = cursor.fetchall() or []
+            except Exception as e:
+                if "1054" in str(e) or "unknown column" in str(e).lower():
+                    cursor.execute(
+                        sql_tpl.format(
+                            tbl_agrupada=tbl_agrupada,
+                            tbl_articulo=tbl_articulo,
+                            col_fecha=col_fecha,
+                            where_extra="COALESCE(l.en_proceso_produccion, 'No') = 'Si'",
+                        ),
+                        [limit],
+                    )
+                    rows = cursor.fetchall() or []
+                else:
+                    raise
+        return [
+            {
+                "id_lista_produccion": to_int_or_none(r.get("id_lista_produccion")),
+                "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
+                "cantidad_pendiente_prod": to_int_or_none(r.get("cantidad_pendiente_prod")) or 0,
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.warning("Error al listar OPT atrasadas tablero en %s: %s", base_empresa, e, exc_info=True)
+        return []
+
+
 def listar_ops_para_cerrar(base_empresa: str, limit: int = 50) -> List[Dict[str, Any]]:
     """
     OPTs con pendiente total 0 y aún en proceso (en_proceso_produccion='Si'), listas para cerrar.
@@ -1204,18 +2206,353 @@ def listar_opt_en_proceso(base_empresa: str, limit: int = 20) -> List[Dict[str, 
         return []
 
 
+def _estado_acciones_opt_vacio() -> Dict[str, Any]:
+    return {
+        "total_pendiente_opp": 0,
+        "puede_crear_opp": False,
+        "puede_cerrar": False,
+    }
+
+
+def _ids_miembros_grupo_opt_bulk(
+    base_empresa: str,
+    id_listas: List[int],
+) -> Dict[int, List[int]]:
+    """Mapa id_lista (entrada) → ids lista_produccion del mismo lote OPT (paridad get_opt_detalle)."""
+    ids_in = sorted({int(i) for i in id_listas if i is not None})
+    if not ids_in or not (base_empresa or "").strip():
+        return {}
+    result: Dict[int, List[int]] = {i: [i] for i in ids_in}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            if not tbl:
+                return result
+            ph = ",".join(["%s"] * len(ids_in))
+            row_by_id: Dict[int, Dict[str, Any]] = {}
+            tiene_id_opt = True
+            try:
+                cursor.execute(
+                    f"SELECT id_lista_produccion, codigo_movimiento_opt, id_opt FROM {tbl} "
+                    f"WHERE id_lista_produccion IN ({ph})",
+                    ids_in,
+                )
+            except Exception as col_err:
+                if "1054" in str(col_err) or "unknown column" in str(col_err).lower():
+                    tiene_id_opt = False
+                    try:
+                        cursor.execute(
+                            f"SELECT id_lista_produccion, codigo_movimiento_opt FROM {tbl} "
+                            f"WHERE id_lista_produccion IN ({ph})",
+                            ids_in,
+                        )
+                    except Exception:
+                        return result
+                else:
+                    raise
+            for r in cursor.fetchall() or []:
+                r_l = _row_dict_lower_keys(r)
+                lid = to_int_or_none(r_l.get("id_lista_produccion"))
+                if lid is not None:
+                    row_by_id[lid] = r_l
+
+            cods: Set[int] = set()
+            id_opts: Set[int] = set()
+            for lid in ids_in:
+                row = row_by_id.get(lid, {})
+                cod = to_int_or_none(row.get("codigo_movimiento_opt"))
+                if cod is not None and cod != 0:
+                    cods.add(int(cod))
+                if tiene_id_opt:
+                    id_opt = to_int_or_none(row.get("id_opt"))
+                    if id_opt is not None and id_opt != 0:
+                        id_opts.add(int(id_opt))
+
+            members_by_cod: Dict[int, List[int]] = {}
+            if cods:
+                ph_c = ",".join(["%s"] * len(cods))
+                cursor.execute(
+                    f"SELECT id_lista_produccion, codigo_movimiento_opt FROM {tbl} "
+                    f"WHERE codigo_movimiento_opt IN ({ph_c}) ORDER BY id_lista_produccion",
+                    list(cods),
+                )
+                for r in cursor.fetchall() or []:
+                    r_l = _row_dict_lower_keys(r)
+                    cod = to_int_or_none(r_l.get("codigo_movimiento_opt"))
+                    lid = to_int_or_none(r_l.get("id_lista_produccion"))
+                    if cod is not None and lid is not None:
+                        members_by_cod.setdefault(int(cod), []).append(int(lid))
+
+            members_by_id_opt: Dict[int, List[int]] = {}
+            if id_opts and tiene_id_opt:
+                try:
+                    ph_o = ",".join(["%s"] * len(id_opts))
+                    cursor.execute(
+                        f"SELECT id_lista_produccion, id_opt FROM {tbl} "
+                        f"WHERE id_opt IN ({ph_o}) ORDER BY id_lista_produccion",
+                        list(id_opts),
+                    )
+                    for r in cursor.fetchall() or []:
+                        r_l = _row_dict_lower_keys(r)
+                        id_opt = to_int_or_none(r_l.get("id_opt"))
+                        lid = to_int_or_none(r_l.get("id_lista_produccion"))
+                        if id_opt is not None and lid is not None:
+                            members_by_id_opt.setdefault(int(id_opt), []).append(int(lid))
+                except Exception:
+                    pass
+
+            for lid in ids_in:
+                row = row_by_id.get(lid, {})
+                cod = to_int_or_none(row.get("codigo_movimiento_opt"))
+                if cod is not None and cod != 0:
+                    miembros = members_by_cod.get(int(cod))
+                    if miembros:
+                        result[lid] = sorted(set(miembros))
+                        continue
+                if tiene_id_opt:
+                    id_opt = to_int_or_none(row.get("id_opt"))
+                    if id_opt is not None and id_opt != 0:
+                        miembros = members_by_id_opt.get(int(id_opt))
+                        if miembros:
+                            result[lid] = sorted(set(miembros))
+    except Exception as e:
+        logger.warning(
+            "_ids_miembros_grupo_opt_bulk %s: %s", base_empresa, e, exc_info=True
+        )
+    return result
+
+
+def _lineas_opt_minimas_bulk(
+    base_empresa: str,
+    id_listas: List[int],
+) -> Dict[int, List[Dict[str, Any]]]:
+    """Líneas mínimas indexadas por id_lista_produccion."""
+    ids = sorted({int(i) for i in id_listas if i is not None})
+    if not ids or not (base_empresa or "").strip():
+        return {}
+    out: Dict[int, List[Dict[str, Any]]] = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            if not tbl:
+                return {}
+            ph = ",".join(["%s"] * len(ids))
+            cursor.execute(
+                f"""
+                SELECT id_lista_produccion, id_articulo,
+                       COALESCE(cantidad_pendiente_prod, 0) AS cantidad_pendiente_prod
+                FROM {tbl}
+                WHERE id_lista_produccion IN ({ph})
+                """,
+                ids,
+            )
+            for r in cursor.fetchall() or []:
+                r_l = _row_dict_lower_keys(r)
+                lid = to_int_or_none(r_l.get("id_lista_produccion"))
+                if lid is None:
+                    continue
+                out.setdefault(lid, []).append({
+                    "id_lista_produccion": lid,
+                    "id_articulo": to_int_or_none(r_l.get("id_articulo")),
+                    "cantidad_pendiente_prod": to_int_or_none(r_l.get("cantidad_pendiente_prod")) or 0,
+                })
+    except Exception as e:
+        logger.warning("_lineas_opt_minimas_bulk %s: %s", base_empresa, e, exc_info=True)
+    return out
+
+
+def _lineas_grupo_opt_bulk(
+    base_empresa: str,
+    id_listas: List[int],
+) -> Dict[int, List[Dict[str, Any]]]:
+    """Líneas del grupo OPT por cada id_lista de entrada."""
+    ids_in = [int(i) for i in id_listas if i is not None]
+    if not ids_in:
+        return {}
+    grupos = _ids_miembros_grupo_opt_bulk(base_empresa, ids_in)
+    all_members = sorted({m for members in grupos.values() for m in members})
+    lineas_por_id = _lineas_opt_minimas_bulk(base_empresa, all_members)
+    result: Dict[int, List[Dict[str, Any]]] = {}
+    for id_in in ids_in:
+        lineas: List[Dict[str, Any]] = []
+        for mid in grupos.get(id_in, [id_in]):
+            lineas.extend(lineas_por_id.get(mid, []))
+        if not lineas:
+            lineas = get_opt_detalle(base_empresa, id_in)
+            if not lineas:
+                lineas = get_op_detalle(base_empresa, id_in)
+        result[id_in] = lineas
+    return result
+
+
+def _stock_deposito_por_articulos(
+    base_empresa: str,
+    id_deposito: Optional[int],
+    id_articulos: List[int],
+) -> Dict[int, float]:
+    """Saldo en stock_deposito por id_articulo."""
+    dep = to_int_or_none(id_deposito)
+    ids = sorted({int(i) for i in id_articulos if i is not None})
+    if not dep or not ids or not (base_empresa or "").strip():
+        return {i: 0.0 for i in ids}
+    out: Dict[int, float] = {i: 0.0 for i in ids}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            if not tbl_sd:
+                return out
+            ph = ",".join(["%s"] * len(ids))
+            cursor.execute(
+                f"""
+                SELECT id_articulo, COALESCE(saldo, 0) AS saldo
+                FROM {tbl_sd}
+                WHERE id_deposito = %s AND id_articulo IN ({ph})
+                """,
+                [dep, *ids],
+            )
+            for rs in cursor.fetchall() or []:
+                r_l = _row_dict_lower_keys(rs)
+                aid = to_int_or_none(r_l.get("id_articulo"))
+                if aid is None:
+                    continue
+                try:
+                    out[int(aid)] = float(r_l.get("saldo") or 0)
+                except (TypeError, ValueError):
+                    out[int(aid)] = 0.0
+    except Exception as e:
+        logger.warning("_stock_deposito_por_articulos %s: %s", base_empresa, e, exc_info=True)
+    return out
+
+
+def estado_acciones_opt_bulk(
+    base_empresa: str,
+    id_listas: List[int],
+) -> Dict[int, Dict[str, Any]]:
+    """
+    Variante batch de estado_acciones_opt para tablero y listados.
+    Devuelve {id_lista: {total_pendiente_opp, puede_crear_opp, puede_cerrar}}.
+    """
+    ids = sorted({int(i) for i in (id_listas or []) if i is not None})
+    vacio = _estado_acciones_opt_vacio()
+    if not ids or not (base_empresa or "").strip():
+        return {}
+    try:
+        lineas_por_id = _lineas_grupo_opt_bulk(base_empresa, ids)
+        deposito_origen = get_deposito_produccion_mpr(base_empresa)
+
+        pendientes_positivos: Dict[int, List[Dict[str, Any]]] = {}
+        pack_ids_global: Set[int] = set()
+        totales: Dict[int, int] = {}
+
+        for id_lista in ids:
+            lineas = lineas_por_id.get(id_lista, [])
+            total = sum(int(l.get("cantidad_pendiente_prod") or 0) for l in lineas)
+            totales[id_lista] = total
+            if total <= 0:
+                continue
+            pendientes_positivos[id_lista] = lineas
+            for linea in lineas:
+                qty = int(linea.get("cantidad_pendiente_prod") or 0)
+                if qty <= 0:
+                    continue
+                id_pack = to_int_or_none(linea.get("id_articulo"))
+                if id_pack:
+                    pack_ids_global.add(int(id_pack))
+
+        abm_map = (
+            bulk_id_en_abm(base_empresa, list(pack_ids_global), requiere_ensamblado_si=False)
+            if pack_ids_global
+            else {}
+        )
+        bom_cache = (
+            bulk_bom_detalle(base_empresa, list(set(abm_map.values())))
+            if abm_map
+            else {}
+        )
+
+        def _explode_con_cache(distribucion):
+            agregado: Dict[int, float] = {}
+            for linea, qty_pack in distribucion:
+                id_pack = to_int_or_none(linea.get("id_articulo"))
+                if id_pack is None or qty_pack <= 0:
+                    continue
+                id_en_abm = abm_map.get(int(id_pack))
+                bom = bom_cache.get(id_en_abm) if id_en_abm else None
+                if bom and bom.get("componentes"):
+                    for comp in bom["componentes"]:
+                        id_comp = to_int_or_none(comp.get("id_articulo"))
+                        if id_comp is None:
+                            continue
+                        cant = float(comp.get("cantidad_articulo") or 0) * qty_pack
+                        if cant > 0:
+                            agregado[int(id_comp)] = agregado.get(int(id_comp), 0) + cant
+                else:
+                    agregado[int(id_pack)] = agregado.get(int(id_pack), 0) + float(qty_pack)
+            return agregado
+
+        agregado_por_opt: Dict[int, Dict[int, float]] = {}
+        for id_lista, lineas in pendientes_positivos.items():
+            distribucion = [
+                (ln, int(ln.get("cantidad_pendiente_prod") or 0))
+                for ln in lineas
+                if int(ln.get("cantidad_pendiente_prod") or 0) > 0
+            ]
+            agregado_por_opt[id_lista] = _explode_con_cache(distribucion)
+
+        all_comp_ids = sorted({
+            comp
+            for ag in agregado_por_opt.values()
+            for comp in ag.keys()
+        })
+        stock_cache = (
+            _stock_deposito_por_articulos(base_empresa, deposito_origen, all_comp_ids)
+            if deposito_origen and all_comp_ids
+            else {}
+        )
+
+        out: Dict[int, Dict[str, Any]] = {}
+        for id_lista in ids:
+            total = totales.get(id_lista, 0)
+            puede_cerrar = total == 0
+            puede_crear_opp = False
+            if total > 0:
+                ag = agregado_por_opt.get(id_lista, {})
+                if deposito_origen and ag:
+                    puede_crear_opp = any(
+                        min(float(pend), float(stock_cache.get(int(comp), 0.0))) > 0
+                        for comp, pend in ag.items()
+                    )
+                elif ag:
+                    puede_crear_opp = any(float(p) > 0 for p in ag.values())
+            out[id_lista] = {
+                "total_pendiente_opp": total,
+                "puede_crear_opp": puede_crear_opp,
+                "puede_cerrar": puede_cerrar,
+            }
+        return out
+    except Exception as e:
+        logger.warning(
+            "estado_acciones_opt_bulk %s ids=%s: %s",
+            base_empresa,
+            ids,
+            e,
+            exc_info=True,
+        )
+        return {i: dict(vacio) for i in ids}
+
+
 def estado_acciones_opt(
     base_empresa: str, id_lista_produccion: int
 ) -> Dict[str, Any]:
     """
     Estado y acciones disponibles para una OPT en proceso.
-    Devuelve: total_pendiente_opp, puede_crear_opp, puede_crear_opa, puede_cerrar.
-    Usado por el tablero para mostrar el botón principal (Crear OPP, Crear OPA o Cerrar).
+    Devuelve: total_pendiente_opp, puede_crear_opp, puede_cerrar.
+    Usado por el tablero para mostrar el botón principal (Crear OPP o Cerrar).
+    Armado 1ra/2da está desacoplado de la OPT (menú Producción).
     """
     out = {
         "total_pendiente_opp": 0,
         "puede_crear_opp": False,
-        "puede_crear_opa": False,
         "puede_cerrar": False,
     }
     if not (base_empresa or "").strip() or id_lista_produccion is None:
@@ -1238,27 +2575,8 @@ def estado_acciones_opt(
         )
         out["puede_crear_opp"] = hay_disponible_opp
 
-        lineas_armado = get_lineas_armado_opt(base_empresa, id_lista_produccion)
-        cantidades_armadas = get_cantidades_armadas_por_opt(base_empresa, id_lista_produccion)
-        opp_semi, _, _ = get_cantidad_opp_por_destino_opt(base_empresa, id_lista_produccion)
-        hay_restante_armar = False
-        for linea in lineas:
-            id_art = linea.get("id_articulo")
-            if id_art is None:
-                continue
-            cantidad_ya_armada = cantidades_armadas.get(id_art, 0)
-            cantidad_disponible_armar = componentes_a_equivalentes_pack(base_empresa, id_art, opp_semi)
-            restante = max(0, cantidad_disponible_armar - cantidad_ya_armada)
-            if restante > 0:
-                hay_restante_armar = True
-                break
-        tiene_lineas_armado = bool(lineas_armado)
-        puede_armar = tiene_lineas_armado and hay_restante_armar
-        if puede_armar and lineas_armado:
-            alguno_armable = any((ln.get("max_packs_armable") or 0) > 0 for ln in lineas_armado)
-            puede_armar = puede_armar and alguno_armable
-        out["puede_crear_opa"] = puede_armar
-        out["puede_cerrar"] = total_pendiente_opp == 0 and not hay_restante_armar
+        # Cierre OPT: solo pendiente OPP (armado desacoplado de OPT; imputación supervisor aparte).
+        out["puede_cerrar"] = total_pendiente_opp == 0
     except Exception as e:
         logger.warning(
             "Error en estado_acciones_opt id_lista=%s en %s: %s",
@@ -1830,12 +3148,124 @@ def _mpr_columna_pk_fila_lista_produccion_detalle(cursor, tbl_detalle: str) -> s
     Tras la migración MPR de trazabilidad es ``id_lista_detalle``; en bases legacy
     la misma columna puede seguir llamándose ``id_lista_produccion`` (ver
     ``run_mpr_lista_produccion_detalle_trazabilidad_mysql``).
+    Si existe una columna ``id_lista_detalle`` no-PK junto a PK ``id_lista_produccion``,
+    se usa la PK real del esquema (evita leer FK como fila).
     """
+    pk_fisica = columna_primary_key(cursor, tbl_detalle)
+    if pk_fisica:
+        if es_nombre_logico_id_lista_detalle(pk_fisica):
+            return pk_fisica
+        pk_norm = re.sub(r"[^a-z0-9]", "", pk_fisica.lower())
+        if pk_norm == "idlistaproduccion":
+            return pk_fisica
     if columna_existe(cursor, tbl_detalle, "id_lista_detalle"):
         return "id_lista_detalle"
     if columna_existe(cursor, tbl_detalle, "id_lista_produccion"):
         return "id_lista_produccion"
     return "id_lista_detalle"
+
+
+def _demanda_detalle_pk_columna(cursor, tbl_detalle: str) -> str:
+    """PK de fila en lista_produccion_detalle (legacy o migrado)."""
+    return _mpr_columna_pk_fila_lista_produccion_detalle(cursor, tbl_detalle)
+
+
+def _demanda_detalle_pendiente_actual(
+    cursor,
+    tbl_detalle: str,
+    pk_col: str,
+    *,
+    id_fila: Optional[int] = None,
+    codigo_movimiento_pedido: Optional[int] = None,
+    id_articulo: Optional[int] = None,
+) -> int:
+    """Lee pendiente de producción en detalle (por PK de fila o suma pedido+artículo)."""
+    if id_fila is not None:
+        cursor.execute(
+            f"SELECT COALESCE(cantidad_pendiente_prod, 0) FROM `{tbl_detalle}` "
+            f"WHERE `{pk_col}` = %s",
+            [int(id_fila)],
+        )
+        row = cursor.fetchone()
+        pend_fila = int(float(row[0] or 0)) if row else 0
+        if pend_fila > 0:
+            return pend_fila
+        # id_fila puede ser FK confundida con PK o fila ya consumida: usar suma pedido+artículo
+        if codigo_movimiento_pedido is not None and id_articulo is not None:
+            cursor.execute(
+                f"SELECT COALESCE(SUM(cantidad_pendiente_prod), 0) FROM `{tbl_detalle}` "
+                f"WHERE codigo_movimiento_pedido = %s AND id_articulo = %s",
+                [int(codigo_movimiento_pedido), int(id_articulo)],
+            )
+            row_sum = cursor.fetchone()
+            return int(float(row_sum[0] or 0)) if row_sum else 0
+        return 0
+    if codigo_movimiento_pedido is None or id_articulo is None:
+        return 0
+    cursor.execute(
+        f"SELECT COALESCE(SUM(cantidad_pendiente_prod), 0) FROM `{tbl_detalle}` "
+        f"WHERE codigo_movimiento_pedido = %s AND id_articulo = %s",
+        [int(codigo_movimiento_pedido), int(id_articulo)],
+    )
+    row = cursor.fetchone()
+    return int(float(row[0] or 0)) if row else 0
+
+
+def _demanda_detalle_decrementar_pendiente(
+    cursor,
+    tbl_detalle: str,
+    pk_col: str,
+    cantidad: int,
+    *,
+    id_fila: Optional[int] = None,
+    codigo_movimiento_pedido: Optional[int] = None,
+    id_articulo: Optional[int] = None,
+) -> None:
+    """Reduce cantidad_pendiente_prod en detalle (fila puntual o reparto FIFO por PK)."""
+    qty = int(cantidad or 0)
+    if qty <= 0:
+        return
+    if id_fila is not None:
+        pend = _demanda_detalle_pendiente_actual(
+            cursor, tbl_detalle, pk_col, id_fila=int(id_fila)
+        )
+        if pend > 0:
+            cursor.execute(
+                f"UPDATE `{tbl_detalle}` SET cantidad_pendiente_prod = %s "
+                f"WHERE `{pk_col}` = %s",
+                [max(0, pend - qty), int(id_fila)],
+            )
+            return
+    if codigo_movimiento_pedido is None or id_articulo is None:
+        return
+    restante = qty
+    cursor.execute(
+        f"SELECT `{pk_col}`, COALESCE(cantidad_pendiente_prod, 0) AS pend "
+        f"FROM `{tbl_detalle}` "
+        f"WHERE codigo_movimiento_pedido = %s AND id_articulo = %s "
+        f"AND COALESCE(cantidad_pendiente_prod, 0) > 0 "
+        f"ORDER BY `{pk_col}`",
+        [int(codigo_movimiento_pedido), int(id_articulo)],
+    )
+    rows = cursor.fetchall() or []
+    for row in rows:
+        if restante <= 0:
+            break
+        if isinstance(row, (list, tuple)):
+            rid, pend_raw = row[0], row[1]
+        else:
+            rid = row.get(pk_col)
+            pend_raw = row.get("pend")
+        pend = int(float(pend_raw or 0))
+        if pend <= 0:
+            continue
+        take = min(restante, pend)
+        cursor.execute(
+            f"UPDATE `{tbl_detalle}` SET cantidad_pendiente_prod = %s "
+            f"WHERE `{pk_col}` = %s",
+            [max(0, pend - take), rid],
+        )
+        restante -= take
 
 
 def _sincronizar_demanda_reserva_lista_detalle(
@@ -2030,6 +3460,8 @@ def listar_ventana_pack(
     limit: int = 200,
     fecha_desde: Optional[date] = None,
     fecha_hasta: Optional[date] = None,
+    *,
+    modo_ligero: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Orden de Producción de Trabajo (OPT): artículos con demanda de producción desde lista_produccion_agrupada
@@ -2051,393 +3483,192 @@ def listar_ventana_pack(
     if not (base_empresa or "").strip():
         return []
     try:
-        # Demanda desde lista_produccion_agrupada (solo pendientes, en_proceso='No').
-        agrupada_rows = listar_lista_produccion_agrupada(
-            base_empresa,
-            limit=limit,
-            estado_en_proceso="No",
-            excluir_filas_opt_liberadas_mstock=True,
-            fecha_desde=fecha_desde,
-            fecha_hasta=fecha_hasta,
-        )
-        if not agrupada_rows:
-            return []
-        has_fabricada_col = False
-        try:
-            with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
-                tbl_a = _nombre_tabla(cursor, "lista_produccion_agrupada")
-                if tbl_a:
-                    has_fabricada_col = (
-                        "cantidad_fabricada_acumulada"
-                        in _columnas_opcionales_op_agrupada(cursor, tbl_a)
-                    )
-        except Exception:
-            has_fabricada_col = False
-
-        by_art: Dict[int, Dict[str, Any]] = {}
-        for row in agrupada_rows:
-            id_art = to_int_or_none(row.get("id_articulo"))
-            if id_art is None:
-                continue
-            if id_art not in by_art:
-                by_art[id_art] = {
-                    "id_articulo": id_art,
-                    "codigo_articulo": str_or_default(row.get("codigo_articulo"), "-"),
-                    "codigo_manual": str_codigo_manual_articulo(row.get("codigo_manual")),
-                    "descripcion_articulo": str_or_default(row.get("descripcion_articulo"), "-"),
-                    "cantidad_pedida": 0,
-                    "cantidad_pendiente_prod": 0,
-                    "cantidad_fabricada_acumulada": 0.0,
-                    "id_listas": set(),
-                }
-            by_art[id_art]["cantidad_pedida"] += row.get("cantidad_pedida") or 0
-            by_art[id_art]["cantidad_pendiente_prod"] += row.get("cantidad_pendiente_prod") or 0
-            try:
-                by_art[id_art]["cantidad_fabricada_acumulada"] += float(
-                    row.get("cantidad_fabricada_acumulada") or 0
-                )
-            except (TypeError, ValueError):
-                pass
-            id_lista = to_int_or_none(row.get("id_lista_produccion"))
-            if id_lista is not None:
-                by_art[id_art]["id_listas"].add(id_lista)
-
-        ids = list(by_art.keys())
-        split_p_ped: Dict[int, float] = {}
-        split_q_res: Dict[int, float] = {}
-        # Pedidos y estado desde lista_produccion_detalle + comp_ped (excluye código 0 = demanda reserva).
-        pedidos_por_articulo: Dict[int, List[Dict[str, Any]]] = {aid: [] for aid in ids}
-        pedidos_ya_vistos: Dict[int, Set[str]] = {aid: set() for aid in ids}
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            tbl_articulo = _nombre_tabla(cursor, "articulo")
             tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
             tbl_cp = _nombre_tabla(cursor, "comp_ped")
             tbl_cli = _nombre_tabla(cursor, "cliente")
-            if tbl_detalle and ids:
-                ph = ",".join(["%s"] * len(ids))
-                try:
-                    cursor.execute(
-                        f"""
-                        SELECT d.id_articulo,
-                               COALESCE(SUM(CASE WHEN COALESCE(d.codigo_movimiento_pedido, 0) <> 0
-                                    THEN COALESCE(d.cantidad_pedida, 0) ELSE 0 END), 0) AS p_ped,
-                               COALESCE(SUM(CASE WHEN COALESCE(d.codigo_movimiento_pedido, 0) = 0
-                                    THEN COALESCE(d.cantidad_pedida, 0) ELSE 0 END), 0) AS q_res
-                        FROM {tbl_detalle} d
-                        WHERE d.id_articulo IN ({ph})
-                          AND COALESCE(TRIM(d.en_proceso_produccion), 'No') = 'No'
-                        GROUP BY d.id_articulo
-                        """,
-                        ids,
-                    )
-                    for r in cursor.fetchall() or []:
-                        aid = to_int_or_none(r.get("id_articulo"))
-                        if aid is None:
-                            continue
-                        try:
-                            split_p_ped[aid] = float(r.get("p_ped") or 0)
-                        except (TypeError, ValueError):
-                            split_p_ped[aid] = 0.0
-                        try:
-                            split_q_res[aid] = float(r.get("q_res") or 0)
-                        except (TypeError, ValueError):
-                            split_q_res[aid] = 0.0
-                except Exception as e_split:
-                    logger.debug("No se pudo cargar desglose P_ped/Q_res en ventana-pack: %s", e_split)
-            if tbl_detalle and tbl_cp and ids:
-                ph = ",".join(["%s"] * len(ids))
-                join_cli = f"LEFT JOIN {tbl_cli} cli ON cli.codigo = cp.codigo" if tbl_cli else ""
-                sql_ped = (
-                    f"""SELECT d.id_articulo,
-                               cp.CodigoMovimiento AS codigo_movimiento_pedido,
-                               COALESCE(cp.NroComprobante, cp.NroCompBusq, '') AS nro_pedido,
-                               COALESCE(cp.estado_pedido_opt, '') AS estado_pedido_opt,
-                               COALESCE(cli.nombre_cliente, '') AS nombre_cliente
-                        FROM {tbl_detalle} d
-                        INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
-                        {join_cli}
-                        WHERE d.id_articulo IN ({ph})
-                          AND COALESCE(d.codigo_movimiento_pedido, 0) <> 0
-                        ORDER BY d.id_articulo,
-                                 COALESCE(cp.NroComprobante, CAST(cp.NroCompBusq AS CHAR), '') DESC,
-                                 cp.CodigoMovimiento DESC
-                        """
-                )
-                sql_ped_sin_cli = (
-                    f"""SELECT d.id_articulo,
-                               cp.CodigoMovimiento AS codigo_movimiento_pedido,
-                               COALESCE(cp.NroComprobante, cp.NroCompBusq, '') AS nro_pedido,
-                               COALESCE(cp.estado_pedido_opt, '') AS estado_pedido_opt,
-                               '' AS nombre_cliente
-                        FROM {tbl_detalle} d
-                        INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
-                        WHERE d.id_articulo IN ({ph})
-                          AND COALESCE(d.codigo_movimiento_pedido, 0) <> 0
-                        ORDER BY d.id_articulo,
-                                 COALESCE(cp.NroComprobante, CAST(cp.NroCompBusq AS CHAR), '') DESC,
-                                 cp.CodigoMovimiento DESC
-                        """
-                )
-                rows_ped: List[Any] = []
-                try:
-                    cursor.execute(sql_ped, ids)
-                    rows_ped = list(cursor.fetchall() or [])
-                except Exception as e_ped:
-                    err = str(e_ped).lower()
-                    if "1054" in str(e_ped) or "unknown column" in err:
-                        try:
-                            cursor.execute(sql_ped_sin_cli, ids)
-                            rows_ped = list(cursor.fetchall() or [])
-                        except Exception as e2:
-                            logger.debug("No se pudo cargar pedidos_resumen en ventana-pack: %s", e2)
-                    else:
-                        logger.debug("No se pudo cargar pedidos_resumen desde detalle en ventana-pack: %s", e_ped)
-                for r in rows_ped:
-                    aid = to_int_or_none(r.get("id_articulo"))
-                    if aid is None or aid not in pedidos_por_articulo:
-                        continue
-                    cod_mov = r.get("codigo_movimiento_pedido")
-                    if cod_mov is not None and str(cod_mov).strip() != "":
-                        clave_unica = str(cod_mov).strip()
-                    else:
-                        clave_unica = "nro:" + str_or_default(r.get("nro_pedido"), "-")
-                    if clave_unica in pedidos_ya_vistos[aid]:
-                        continue
-                    pedidos_ya_vistos[aid].add(clave_unica)
-                    pedidos_por_articulo[aid].append({
-                        "nro_pedido": str_or_default(r.get("nro_pedido"), "-"),
-                        "estado_pedido_opt": str_or_default(r.get("estado_pedido_opt"), "-"),
-                        "nombre_cliente": str_or_default(r.get("nombre_cliente"), "-"),
-                    })
-                # Un pedido por CodigoMovimiento; orden final por nº de comprobante descendente.
-                for aid in ids:
-                    pedidos_por_articulo[aid].sort(
-                        key=lambda p: str(p.get("nro_pedido") or ""),
-                        reverse=True,
-                    )
-            for aid in ids:
-                q_res = float(split_q_res.get(aid, 0.0))
-                if q_res > 0:
-                    pedidos_por_articulo[aid].append({
-                        "es_demanda_reserva": True,
-                        "nro_pedido": "—",
-                        "estado_pedido_opt": "Demanda reserva",
-                        "nombre_cliente": "",
-                        "cantidad_demanda_reserva": q_res,
-                    })
-
-        for id_art, row in by_art.items():
-            row["pedidos_resumen"] = pedidos_por_articulo.get(id_art) or []
-
-        # Stock terminado: SUM(saldo) en depósitos con suma_stock='Si'
-        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             tbl_sd = _nombre_tabla(cursor, "stock_deposito")
             tbl_dep = _nombre_tabla(cursor, "deposito")
 
-            if not tbl_sd or not tbl_dep:
-                for v in by_art.values():
-                    id_a = to_int_or_none(v.get("id_articulo"))
-                    p_ped = float(split_p_ped.get(id_a, 0.0)) if id_a is not None else 0.0
-                    q_res = float(split_q_res.get(id_a, 0.0)) if id_a is not None else 0.0
-                    cant_ped = float(v.get("cantidad_pedida") or 0)
-                    cant_pend = float(v.get("cantidad_pendiente_prod") or 0)
-                    fab_acum = float(v.get("cantidad_fabricada_acumulada") or 0)
-                    if has_fabricada_col:
-                        v["cantidad_parcial_fabricada"] = max(0.0, fab_acum)
-                    else:
-                        v["cantidad_parcial_fabricada"] = max(0.0, cant_ped - cant_pend)
-                    v["stock_terminado"] = 0
-                    v["stock_reserva"] = 0.0
-                    v["cantidad_pedida_pedido"] = p_ped
-                    v["cantidad_demanda_reserva"] = q_res
-                    v["cantidad_a_fabricar"] = max(0.0, p_ped + v["stock_reserva"] - 0.0)
-                    v["cantidad_urgente_abs"] = max(0.0, p_ped - 0.0)
-                    v["cantidad_urgente"] = v["cantidad_urgente_abs"]
-                    v["cantidad_promedio_bulto"] = 0.0
-                    v["cantidad_a_fabricar_docenas"] = docenas_desde_unidades_opt(v["cantidad_a_fabricar"], 0.0)
-                    v["cantidad_urgente_docenas"] = docenas_desde_unidades_opt(v["cantidad_urgente_abs"], 0.0)
-                    if p_ped > 0 and q_res > 0:
-                        v["origen_demanda_etiqueta"] = "Pedido + reserva"
-                    elif q_res > 0:
-                        v["origen_demanda_etiqueta"] = "Reserva"
-                    elif p_ped > 0:
-                        v["origen_demanda_etiqueta"] = "Pedido"
-                    else:
-                        v["origen_demanda_etiqueta"] = "—"
-                    v["stock"] = 0
-                    v["brecha_reserva"] = 0
-                    v["nombre_unimed"] = "-"
-                    v["nombre_presentacion"] = "-"
-                    v["cantidad_presentacion"] = None
-                    v["detalle_stock_depositos_json"] = json.dumps({"filas": [], "total": 0, "disponible": 0, "reserva": 0})
-                con_brecha_degradado = [
-                    r for r in by_art.values() if float(r.get("cantidad_a_fabricar") or 0) > 0
-                ]
-                return sorted(con_brecha_degradado, key=lambda x: -x["cantidad_a_fabricar"])[:limit]
-            # COALESCE(d.suma_stock,'Si') por si la columna no existe aún
-            placeholders = ",".join(["%s"] * len(ids))
-            cursor.execute(
-                f"""
-                SELECT sd.id_articulo, COALESCE(SUM(sd.saldo), 0) AS stock_terminado
-                FROM {tbl_sd} sd
-                INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
-                  AND COALESCE(d.anulado, 'No') = 'No'
-                  AND COALESCE(d.suma_stock, 'Si') = 'Si'
-                WHERE sd.id_articulo IN ({placeholders})
-                GROUP BY sd.id_articulo
-                """,
-                ids,
+            if not tbl_agrupada or not tbl_articulo:
+                return []
+
+            opts = _columnas_opcionales_op_agrupada(cursor, tbl_agrupada)
+            has_fabricada_col = bool(opts.get("cantidad_fabricada_acumulada"))
+
+            by_art = _ventana_pack_by_art_desde_agrupada(
+                cursor,
+                tbl_agrupada,
+                tbl_articulo,
+                opts,
+                limit,
+                fecha_desde,
+                fecha_hasta,
             )
-            stock_map = {}
-            for row in cursor.fetchall():
-                id_art = to_int_or_none(row.get("id_articulo"))
-                if id_art is not None:
-                    try:
-                        st = float(row.get("stock_terminado") or 0)
-                    except (TypeError, ValueError):
-                        st = 0
-                    stock_map[id_art] = st  # valor real (puede ser negativo)
-            # Desglose por depósito (mismos depósitos) para tooltip en Pend. producción
-            detalle_por_art = {}
-            try:
-                cursor.execute(
-                    f"""
-                    SELECT sd.id_articulo,
-                           COALESCE(d.NombreDeposito, CAST(d.CodDeposito AS CHAR), '') AS deposito,
-                           COALESCE(sd.saldo, 0) AS stock_terminado
-                    FROM {tbl_sd} sd
-                    INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
-                      AND COALESCE(d.anulado, 'No') = 'No'
-                      AND COALESCE(d.suma_stock, 'Si') = 'Si'
-                    WHERE sd.id_articulo IN ({placeholders})
-                    ORDER BY sd.id_articulo, d.NombreDeposito, d.CodDeposito
-                    """,
+            if not by_art:
+                return []
+
+            ids = list(by_art.keys())
+            split_p_ped, split_q_res = _ventana_pack_pp_ped_q_res(cursor, tbl_detalle, ids)
+
+            stock_map: Dict[int, float] = {}
+            detalle_por_art: Dict[int, List[Dict[str, Any]]] = {}
+            if tbl_sd and tbl_dep:
+                stock_map, detalle_por_art = _ventana_pack_stock_maps(
+                    cursor,
+                    tbl_sd,
+                    tbl_dep,
                     ids,
+                    incluir_detalle=not modo_ligero,
                 )
-                for row in cursor.fetchall():
-                    id_art = to_int_or_none(row.get("id_articulo"))
-                    if id_art is None:
-                        continue
-                    if id_art not in detalle_por_art:
-                        detalle_por_art[id_art] = []
-                    try:
-                        saldo = float(row.get("stock_terminado") or 0)
-                    except (TypeError, ValueError):
-                        saldo = 0
-                    detalle_por_art[id_art].append({
-                        "deposito": str_or_default(row.get("deposito"), "-"),
-                        "stock_terminado": saldo,
-                    })
-            except Exception:
-                detalle_por_art = {}
-            # articulo: stock_reserva, id_unimed, id_presentacionV, multiplicador_vta, cantidad_promedio_bulto (docenas OPT)
-            tbl_art = _nombre_tabla(cursor, "articulo")
-            reserva_map = {}
-            art_um_pres_map = {}  # id_art -> {id_unimed, id_presentacionV, multiplicador_vta, cantidad_promedio_bulto, id_en_abm}
-            if tbl_art and ids:
+
+            reserva_map: Dict[int, float] = {}
+            art_um_pres_map: Dict[int, Dict[str, Any]] = {}
+            if tbl_articulo and ids:
+                placeholders = ",".join(["%s"] * len(ids))
                 try:
-                    bulto_sql = _fragmento_sql_cantidad_promedio_bulto(cursor, tbl_art)
+                    bulto_sql = _fragmento_sql_cantidad_promedio_bulto(cursor, tbl_articulo)
                     cursor.execute(
                         f"""SELECT IDArt, COALESCE(stock_reserva, 0) AS stock_reserva,
                                    id_unimed, id_presentacionV, COALESCE(multiplicador_vta, 0) AS multiplicador_vta,
                                    id_en_abm{bulto_sql}
-                            FROM {tbl_art} WHERE IDArt IN ({placeholders})""",
+                            FROM {tbl_articulo} WHERE IDArt IN ({placeholders})""",
                         ids,
                     )
-                    for r in cursor.fetchall():
+                    for r in cursor.fetchall() or []:
                         aid = to_int_or_none(r.get("IDArt"))
-                        if aid is not None:
-                            try:
-                                reserva_map[aid] = float(r.get("stock_reserva") or 0)
-                            except (TypeError, ValueError):
-                                reserva_map[aid] = 0
-                            try:
-                                mult = float(r.get("multiplicador_vta") or 0)
-                            except (TypeError, ValueError):
-                                mult = 0
-                            try:
-                                bulto = float(r.get("cantidad_promedio_bulto") or 0)
-                            except (TypeError, ValueError):
-                                bulto = 0.0
-                            art_um_pres_map[aid] = {
-                                "id_unimed": r.get("id_unimed"),
-                                "id_presentacionV": r.get("id_presentacionV"),
-                                "multiplicador_vta": mult,
-                                "id_en_abm": r.get("id_en_abm"),
-                                "cantidad_promedio_bulto": bulto,
-                            }
+                        if aid is None:
+                            continue
+                        try:
+                            reserva_map[aid] = float(r.get("stock_reserva") or 0)
+                        except (TypeError, ValueError):
+                            reserva_map[aid] = 0.0
+                        try:
+                            mult = float(r.get("multiplicador_vta") or 0)
+                        except (TypeError, ValueError):
+                            mult = 0.0
+                        try:
+                            bulto = float(r.get("cantidad_promedio_bulto") or 0)
+                        except (TypeError, ValueError):
+                            bulto = 0.0
+                        art_um_pres_map[aid] = {
+                            "id_unimed": r.get("id_unimed"),
+                            "id_presentacionV": r.get("id_presentacionV"),
+                            "multiplicador_vta": mult,
+                            "id_en_abm": r.get("id_en_abm"),
+                            "cantidad_promedio_bulto": bulto,
+                        }
                 except Exception:
                     pass
-            # unidmed: id_unimed -> nombre_unimed (UM)
-            tbl_um = _nombre_tabla(cursor, "unidmed")
-            unimed_map = {}
-            if tbl_um and art_um_pres_map:
-                id_unimeds = list({v["id_unimed"] for v in art_um_pres_map.values() if v.get("id_unimed") is not None})
-                if id_unimeds:
-                    try:
-                        ph_um = ",".join(["%s"] * len(id_unimeds))
-                        cursor.execute(
-                            f"SELECT id_unimed, COALESCE(nombre_unimed, '') AS nombre_unimed FROM {tbl_um} WHERE id_unimed IN ({ph_um})",
-                            id_unimeds,
-                        )
-                        for r in cursor.fetchall():
-                            uid = r.get("id_unimed")
-                            if uid is not None:
-                                unimed_map[uid] = str_or_default(r.get("nombre_unimed"), "-")
-                    except Exception:
-                        pass
-            # Recetas (BOM) por id_en_abm para tooltip en nombre del artículo
-            id_en_abm_set = {v.get("id_en_abm") for v in art_um_pres_map.values() if v.get("id_en_abm") is not None}
-            bom_cache = bulk_bom_detalle(base_empresa, [to_int_or_none(x) for x in id_en_abm_set if x is not None])
-            # presentacion_abm: id_presentacion -> nombre_presentacion
-            tbl_pres = _nombre_tabla(cursor, "presentacion_abm")
-            pres_map = {}
-            if tbl_pres and art_um_pres_map:
-                id_pres = list({v["id_presentacionV"] for v in art_um_pres_map.values() if v.get("id_presentacionV") is not None})
-                if id_pres:
-                    try:
-                        ph_pres = ",".join(["%s"] * len(id_pres))
-                        cursor.execute(
-                            f"SELECT id_presentacion, COALESCE(nombre_presentacion, '') AS nombre_presentacion FROM {tbl_pres} WHERE id_presentacion IN ({ph_pres})",
-                            id_pres,
-                        )
-                        for r in cursor.fetchall():
-                            pid = r.get("id_presentacion")
-                            if pid is not None:
-                                pres_map[pid] = str_or_default(r.get("nombre_presentacion"), "-")
-                    except Exception:
-                        pass
+
             for id_art, row in by_art.items():
-                st = stock_map.get(id_art, 0)  # valor real (puede ser negativo)
-                reserva = reserva_map.get(id_art, 0)
-                row["stock_terminado"] = st
+                st = stock_map.get(id_art, 0.0)
+                reserva = reserva_map.get(id_art, 0.0)
+                p_ped = float(split_p_ped.get(id_art, 0.0))
+                q_res = float(split_q_res.get(id_art, 0.0))
                 cant_pedida = float(row.get("cantidad_pedida") or 0)
                 cant_pend = float(row.get("cantidad_pendiente_prod") or 0)
                 fab_acum = float(row.get("cantidad_fabricada_acumulada") or 0)
-                p_ped = float(split_p_ped.get(id_art, 0.0))
-                q_res = float(split_q_res.get(id_art, 0.0))
                 row["cantidad_pedida_pedido"] = p_ped
                 row["cantidad_demanda_reserva"] = q_res
-                # Parcial fabricada: acumulado persistido por armado (OPA) si existe columna; si no, pedida − pendiente.
                 if has_fabricada_col:
                     row["cantidad_parcial_fabricada"] = max(0.0, fab_acum)
                 else:
                     row["cantidad_parcial_fabricada"] = max(0.0, cant_pedida - cant_pend)
-                # Cant. a fabricar = max(0, P_ped + R − S); urgente solo pedidos: max(0, P_ped − S).
-                row["cantidad_a_fabricar"] = max(0.0, p_ped + float(reserva) - float(st))
-                row["cantidad_urgente_abs"] = max(0.0, p_ped - float(st))
-                row["cantidad_urgente"] = row["cantidad_urgente_abs"]
-                if p_ped > 0 and q_res > 0:
-                    row["origen_demanda_etiqueta"] = "Pedido + reserva"
-                elif q_res > 0:
-                    row["origen_demanda_etiqueta"] = "Reserva"
-                elif p_ped > 0:
-                    row["origen_demanda_etiqueta"] = "Pedido"
-                else:
-                    row["origen_demanda_etiqueta"] = "—"
+                row["stock_terminado"] = st
                 row["stock_reserva"] = reserva
-                row["stock"] = st  # Solo suma de saldos; reserva no se usa para saldos
-                row["brecha_reserva"] = reserva_map.get(id_art, 0) - st
-                # UM y presentación
+                row["cantidad_a_fabricar"] = max(0.0, p_ped + reserva - st)
+                row["cantidad_urgente_abs"] = max(0.0, p_ped - st)
+                row["cantidad_urgente"] = row["cantidad_urgente_abs"]
+                row["origen_demanda_etiqueta"] = _etiqueta_origen_demanda_desde_split(p_ped, q_res)
+
+            con_brecha = [
+                r for r in by_art.values() if float(r.get("cantidad_a_fabricar") or 0) > 0
+            ]
+            filas_final = sorted(con_brecha, key=lambda x: -x["cantidad_a_fabricar"])[:limit]
+            if not filas_final:
+                return []
+
+            ids_final = [to_int_or_none(r.get("id_articulo")) for r in filas_final]
+            ids_final = [x for x in ids_final if x is not None]
+
+            pedidos_por_articulo: Dict[int, List[Dict[str, Any]]] = {aid: [] for aid in ids_final}
+            if not modo_ligero:
+                pedidos_por_articulo = _ventana_pack_pedidos_resumen(
+                    cursor,
+                    tbl_detalle,
+                    tbl_cp,
+                    tbl_cli,
+                    ids_final,
+                    {aid: split_q_res.get(aid, 0.0) for aid in ids_final},
+                )
+
+            unimed_map: Dict[Any, str] = {}
+            bom_cache: Dict[Any, Any] = {}
+            pres_map: Dict[Any, str] = {}
+            if not modo_ligero:
+                tbl_um = _nombre_tabla(cursor, "unidmed")
+                if tbl_um and art_um_pres_map:
+                    id_unimeds = list({
+                        v["id_unimed"]
+                        for aid, v in art_um_pres_map.items()
+                        if aid in ids_final and v.get("id_unimed") is not None
+                    })
+                    if id_unimeds:
+                        try:
+                            ph_um = ",".join(["%s"] * len(id_unimeds))
+                            cursor.execute(
+                                f"SELECT id_unimed, COALESCE(nombre_unimed, '') AS nombre_unimed "
+                                f"FROM {tbl_um} WHERE id_unimed IN ({ph_um})",
+                                id_unimeds,
+                            )
+                            for r in cursor.fetchall() or []:
+                                uid = r.get("id_unimed")
+                                if uid is not None:
+                                    unimed_map[uid] = str_or_default(r.get("nombre_unimed"), "-")
+                        except Exception:
+                            pass
+                id_en_abm_set = [
+                    to_int_or_none(art_um_pres_map[aid].get("id_en_abm"))
+                    for aid in ids_final
+                    if aid in art_um_pres_map and art_um_pres_map[aid].get("id_en_abm") is not None
+                ]
+                id_en_abm_set = [x for x in id_en_abm_set if x is not None]
+                if id_en_abm_set:
+                    bom_cache = _bulk_bom_detalle_con_cursor(cursor, id_en_abm_set)
+                tbl_pres = _nombre_tabla(cursor, "presentacion_abm")
+                if tbl_pres and art_um_pres_map:
+                    id_pres = list({
+                        v["id_presentacionV"]
+                        for aid, v in art_um_pres_map.items()
+                        if aid in ids_final and v.get("id_presentacionV") is not None
+                    })
+                    if id_pres:
+                        try:
+                            ph_pres = ",".join(["%s"] * len(id_pres))
+                            cursor.execute(
+                                f"SELECT id_presentacion, COALESCE(nombre_presentacion, '') AS nombre_presentacion "
+                                f"FROM {tbl_pres} WHERE id_presentacion IN ({ph_pres})",
+                                id_pres,
+                            )
+                            for r in cursor.fetchall() or []:
+                                pid = r.get("id_presentacion")
+                                if pid is not None:
+                                    pres_map[pid] = str_or_default(r.get("nombre_presentacion"), "-")
+                        except Exception:
+                            pass
+
+            for row in filas_final:
+                id_art = to_int_or_none(row.get("id_articulo"))
+                if id_art is None:
+                    continue
+                st = float(row.get("stock_terminado") or 0)
+                reserva = float(row.get("stock_reserva") or 0)
+                row["pedidos_resumen"] = pedidos_por_articulo.get(id_art) or []
+                row["stock"] = st
+                row["brecha_reserva"] = reserva - st
                 ap = art_um_pres_map.get(id_art) or {}
                 id_um = ap.get("id_unimed")
                 row["nombre_unimed"] = unimed_map.get(id_um, "-") if id_um is not None else "-"
@@ -2456,39 +3687,57 @@ def listar_ventana_pack(
                 except (TypeError, ValueError):
                     bulto_pack = 0.0
                 row["cantidad_promedio_bulto"] = bulto_pack
-                row["cantidad_a_fabricar_docenas"] = docenas_desde_unidades_opt(row["cantidad_a_fabricar"], bulto_pack)
-                row["cantidad_urgente_docenas"] = docenas_desde_unidades_opt(row["cantidad_urgente_abs"], bulto_pack)
-                # Tooltip receta (BOM) en nombre del artículo
-                id_en_abm = ap.get("id_en_abm")
-                bom = bom_cache.get(to_int_or_none(id_en_abm)) if id_en_abm is not None else None
-                if bom and bom.get("componentes"):
-                    receta = [
-                        {
-                            "articulo": str_or_default(c.get("codigo_articulo"), "-") + " — " + str_or_default(c.get("descripcion_articulo"), "-"),
-                            "cantidad": float(c.get("cantidad_articulo") or 0),
-                        }
-                        for c in bom["componentes"]
-                    ]
+                row["cantidad_a_fabricar_docenas"] = docenas_desde_unidades_opt(
+                    row["cantidad_a_fabricar"], bulto_pack
+                )
+                row["cantidad_urgente_docenas"] = docenas_desde_unidades_opt(
+                    row["cantidad_urgente_abs"], bulto_pack
+                )
+                if modo_ligero:
+                    row["nombre_unimed"] = "-"
+                    row["nombre_presentacion"] = "-"
+                    row["cantidad_presentacion"] = None
+                    row["receta_json"] = json.dumps([])
+                    row["detalle_stock_depositos"] = []
+                    row["total_stock_detalle"] = st
+                    row["disponible_detalle"] = st
+                    row["detalle_stock_depositos_json"] = json.dumps({
+                        "filas": [],
+                        "total": st,
+                        "disponible": st,
+                        "reserva": reserva,
+                    })
                 else:
-                    receta = []
-                row["receta_json"] = json.dumps(receta)
-                # Tooltip Stock: solo depósitos con suma_stock='Si' (como el cálculo del campo) + Reserva
-                detalle = detalle_por_art.get(id_art) or []
-                total_raw = sum(d.get("stock_terminado", 0) for d in detalle)
-                row["detalle_stock_depositos"] = detalle
-                row["total_stock_detalle"] = total_raw
-                row["disponible_detalle"] = total_raw  # valor real (puede ser negativo)
-                row["detalle_stock_depositos_json"] = json.dumps({
-                    "filas": detalle,
-                    "total": total_raw,
-                    "disponible": total_raw,
-                    "reserva": reserva,
-                })
-        # Ventana-pack: no listar artículos cuya brecha de producción es cero (stock cubre P_ped + reserva).
-        con_brecha = [
-            r for r in by_art.values() if float(r.get("cantidad_a_fabricar") or 0) > 0
-        ]
-        return sorted(con_brecha, key=lambda x: -x["cantidad_a_fabricar"])[:limit]
+                    id_en_abm = ap.get("id_en_abm")
+                    bom = bom_cache.get(to_int_or_none(id_en_abm)) if id_en_abm is not None else None
+                    if bom and bom.get("componentes"):
+                        receta = [
+                            {
+                                "articulo": (
+                                    str_or_default(c.get("codigo_articulo"), "-")
+                                    + " — "
+                                    + str_or_default(c.get("descripcion_articulo"), "-")
+                                ),
+                                "cantidad": float(c.get("cantidad_articulo") or 0),
+                            }
+                            for c in bom["componentes"]
+                        ]
+                    else:
+                        receta = []
+                    row["receta_json"] = json.dumps(receta)
+                    detalle = detalle_por_art.get(id_art) or []
+                    total_raw = sum(d.get("stock_terminado", 0) for d in detalle)
+                    row["detalle_stock_depositos"] = detalle
+                    row["total_stock_detalle"] = total_raw
+                    row["disponible_detalle"] = total_raw
+                    row["detalle_stock_depositos_json"] = json.dumps({
+                        "filas": detalle,
+                        "total": total_raw,
+                        "disponible": total_raw,
+                        "reserva": reserva,
+                    })
+
+            return filas_final
     except MprSchemaError:
         raise
     except Exception as e:
@@ -2754,29 +4003,34 @@ def listar_unidades_desde_seleccion(
     base_empresa: str,
     filas: List[Dict[str, Any]],
     limit: int = 200,
+    *,
+    refresco_pack: Optional[Dict[int, Dict[str, float]]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Desglose por unidades a partir de la selección de la ventana Confirmar OPT.
     filas: lista de dicts con id_articulo y cantidad_a_fabricar (packs seleccionados).
     Devuelve componentes de las recetas (BOM) con cantidades agregadas.
-    Enriquece P_ped y stock del pack desde ``listar_ventana_pack`` si faltan en sesión.
+    Siempre refresca P_ped y stock del pack en MySQL (solo los id seleccionados).
     """
     if not (base_empresa or "").strip() or not filas:
         return []
-    ventana_ref = listar_ventana_pack(base_empresa, limit=max(limit * 2, 400))
-    by_pack = {
-        to_int_or_none(r.get("id_articulo")): r
-        for r in ventana_ref
-        if to_int_or_none(r.get("id_articulo")) is not None
-    }
+    art_ids_sel = [
+        to_int_or_none(f.get("id_articulo"))
+        for f in filas
+        if to_int_or_none(f.get("id_articulo")) is not None
+    ]
+    if refresco_pack is None:
+        refresco = obtener_pp_ped_y_stock_pack_por_articulos(base_empresa, art_ids_sel)
+    else:
+        refresco = refresco_pack
     filas_enriquecidas: List[Dict[str, Any]] = []
     for f in filas:
         ff = dict(f)
         aid = to_int_or_none(ff.get("id_articulo"))
-        ref = by_pack.get(aid) if aid is not None else None
+        ref = refresco.get(aid) if aid is not None else None
         if ref:
-            ff["cantidad_pedida_pedido"] = ref.get("cantidad_pedida_pedido", ff.get("cantidad_pedida_pedido", 0))
-            ff["stock_terminado"] = ref.get("stock_terminado", ff.get("stock_terminado", 0))
+            ff["cantidad_pedida_pedido"] = ref.get("cantidad_pedida_pedido", 0.0)
+            ff["stock_terminado"] = ref.get("stock_terminado", 0.0)
         else:
             ff.setdefault(
                 "cantidad_pedida_pedido",
@@ -3421,6 +4675,111 @@ def bulk_detalle_pedidos_por_articulos(
         return {}
 
 
+def _filas_a_op_detalle(rows: List[Any]) -> List[Dict[str, Any]]:
+    """Normaliza filas SQL de lista_produccion_agrupada (+ articulo) al dict de detalle OPT."""
+    result = []
+    for r in rows or []:
+        r = {str(k).lower(): v for k, v in (r or {}).items()}
+        row = {
+            "id_lista_produccion": to_int_or_none(r.get("id_lista_produccion")),
+            "id_articulo": to_int_or_none(r.get("id_articulo")),
+            "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
+            "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
+            "cantidad_pedida": to_int_or_none(r.get("cantidad_pedida")) or 0,
+            "cantidad_pendiente_prod": to_int_or_none(r.get("cantidad_pendiente_prod")) or 0,
+            "cantidad_asignada_opt": to_int_or_none(r.get("cantidad_asignada_opt")),
+            "en_proceso_produccion": str_or_default(r.get("en_proceso_produccion"), "No"),
+        }
+        row["id_operario_opt"] = to_int_or_none(r.get("id_operario_opt"))
+        result.append(row)
+    return result
+
+
+def get_op_detalle_bulk(
+    base_empresa: str,
+    id_listas: List[int],
+) -> List[Dict[str, Any]]:
+    """Varias OPT en una sola consulta (evita N+1 en get_opt_detalle agrupada)."""
+    ids = [to_int_or_none(x) for x in (id_listas or [])]
+    ids = sorted({x for x in ids if x is not None})
+    if not (base_empresa or "").strip() or not ids:
+        return []
+    if len(ids) == 1:
+        return get_op_detalle(base_empresa, ids[0])
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            if not tbl_agrupada:
+                return []
+            tbl_articulo = _nombre_tabla(cursor, "articulo")
+            placeholders = ",".join(["%s"] * len(ids))
+            rows = []
+            if tbl_articulo:
+                sql = f"""
+                    SELECT
+                        l.id_lista_produccion,
+                        l.id_articulo,
+                        COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '-') AS codigo_articulo,
+                        COALESCE(a.NombreArticulo, '') AS descripcion_articulo,
+                        COALESCE(l.cantidad_pedida, 0) AS cantidad_pedida,
+                        COALESCE(l.cantidad_pendiente_prod, 0) AS cantidad_pendiente_prod,
+                        COALESCE(l.cantidad_asignada_opt, 0) AS cantidad_asignada_opt,
+                        COALESCE(l.en_proceso_produccion, 'No') AS en_proceso_produccion,
+                        l.id_operario_opt
+                    FROM {tbl_agrupada} l
+                    LEFT JOIN {tbl_articulo} a ON a.IDArt = l.id_articulo
+                    WHERE l.id_lista_produccion IN ({placeholders})
+                    ORDER BY l.id_lista_produccion, l.id_articulo
+                """
+                try:
+                    cursor.execute(sql, ids)
+                    rows = cursor.fetchall()
+                except Exception as col_err:
+                    if "1054" in str(col_err) or "unknown column" in str(col_err).lower():
+                        sql_fallback = f"""
+                            SELECT
+                                l.id_lista_produccion,
+                                l.id_articulo,
+                                COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '-') AS codigo_articulo,
+                                COALESCE(a.NombreArticulo, '') AS descripcion_articulo,
+                                COALESCE(l.cantidad_pedida, 0) AS cantidad_pedida,
+                                COALESCE(l.cantidad_pendiente_prod, 0) AS cantidad_pendiente_prod,
+                                COALESCE(l.en_proceso_produccion, 'No') AS en_proceso_produccion,
+                                l.id_operario_opt
+                            FROM {tbl_agrupada} l
+                            LEFT JOIN {tbl_articulo} a ON a.IDArt = l.id_articulo
+                            WHERE l.id_lista_produccion IN ({placeholders})
+                            ORDER BY l.id_lista_produccion, l.id_articulo
+                        """
+                        cursor.execute(sql_fallback, ids)
+                        rows = cursor.fetchall()
+                    else:
+                        raise
+            if not rows:
+                for sql_agrupada in [
+                    f"SELECT id_lista_produccion, id_articulo, cantidad_pedida, cantidad_pendiente_prod, cantidad_asignada_opt, en_proceso_produccion, id_operario_opt FROM {tbl_agrupada} WHERE id_lista_produccion IN ({placeholders})",
+                    f"SELECT id_lista_produccion, id_articulo, cantidad_pedida, cantidad_pendiente_prod, en_proceso_produccion, id_operario_opt FROM {tbl_agrupada} WHERE id_lista_produccion IN ({placeholders})",
+                    f"SELECT id_lista_produccion, id_articulo, cantidad_pedida, cantidad_pendiente_prod, en_proceso_produccion FROM {tbl_agrupada} WHERE id_lista_produccion IN ({placeholders})",
+                ]:
+                    try:
+                        cursor.execute(sql_agrupada, ids)
+                        rows = cursor.fetchall()
+                        if rows:
+                            break
+                    except Exception:
+                        continue
+        return _filas_a_op_detalle(rows)
+    except Exception as e:
+        logger.warning(
+            "Error al obtener detalle OPT bulk ids=%s en %s: %s",
+            ids,
+            base_empresa,
+            e,
+            exc_info=True,
+        )
+        return []
+
+
 def get_op_detalle(
     base_empresa: str,
     id_lista_produccion: int,
@@ -3500,22 +4859,7 @@ def get_op_detalle(
                             break
                     except Exception:
                         continue
-        result = []
-        for r in rows or []:
-            r = {str(k).lower(): v for k, v in (r or {}).items()}
-            row = {
-                "id_lista_produccion": to_int_or_none(r.get("id_lista_produccion")),
-                "id_articulo": to_int_or_none(r.get("id_articulo")),
-                "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
-                "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
-                "cantidad_pedida": to_int_or_none(r.get("cantidad_pedida")) or 0,
-                "cantidad_pendiente_prod": to_int_or_none(r.get("cantidad_pendiente_prod")) or 0,
-                "cantidad_asignada_opt": to_int_or_none(r.get("cantidad_asignada_opt")),
-                "en_proceso_produccion": str_or_default(r.get("en_proceso_produccion"), "No"),
-            }
-            row["id_operario_opt"] = to_int_or_none(r.get("id_operario_opt"))
-            result.append(row)
-        return result
+        return _filas_a_op_detalle(rows)
     except Exception as e:
         logger.warning(
             "Error al obtener detalle OPT id_lista_produccion=%s en %s: %s",
@@ -3595,9 +4939,7 @@ def get_opt_detalle(
                 except Exception:
                     ids = []
             if ids:
-                result = []
-                for id_lista in ids:
-                    result.extend(get_op_detalle(base_empresa, id_lista))
+                result = get_op_detalle_bulk(base_empresa, ids)
                 if result:
                     return result
     except Exception as e:
@@ -3816,7 +5158,22 @@ def get_depositos_con_suma_stock(
     """
     Lista depósitos (misma lógica que get_depositos) añadiendo suma_stock (Si/No).
     Si la columna no existe en deposito, se asume 'Si' para todos.
+
+    Con RequestScopedMysqlMiddleware activo, el resultado se cachea por request
+    (base_empresa + id_puesto) para evitar consultas repetidas en la misma vista.
     """
+    from mpr.request_scope_cache import (
+        get_cached_depositos_con_suma_stock,
+        mpr_request_cache_enabled,
+        set_cached_depositos_con_suma_stock,
+    )
+
+    key = ((base_empresa or "").strip(), id_puesto)
+    if mpr_request_cache_enabled():
+        cached = get_cached_depositos_con_suma_stock(key)
+        if cached is not None:
+            return cached
+
     depositos = _get_depositos_core(base_empresa, id_puesto)
     if not depositos:
         return []
@@ -3841,6 +5198,8 @@ def get_depositos_con_suma_stock(
     except Exception:
         for d in depositos:
             d["suma_stock"] = "Si"
+    if mpr_request_cache_enabled():
+        set_cached_depositos_con_suma_stock(key, depositos)
     return depositos
 
 
@@ -4122,6 +5481,49 @@ def listar_pedidos_fabrica(
     except Exception as e:
         logger.warning("Error al listar pedidos fábrica en %s: %s", base_empresa, e, exc_info=True)
         return []
+
+
+def contar_pedidos_fabrica(
+    base_empresa: str,
+    estado: Optional[str] = None,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+) -> int:
+    """Cuenta pedidos PED con estado_pedido_opt (para KPI tablero sin limit=500)."""
+    if not (base_empresa or "").strip():
+        return 0
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_cp = _nombre_tabla(cursor, "comp_ped")
+            if not tbl_cp:
+                raise MprSchemaError(
+                    "Falta la tabla comp_ped en la base de datos. Cree la tabla o verifique el esquema para usar MPR."
+                )
+            sql = f"""
+                SELECT COUNT(*) AS total
+                FROM {tbl_cp} cp
+                WHERE COALESCE(cp.Anulado, 'No') = 'No'
+                  AND COALESCE(cp.TipoComprobante, '') = 'PED'
+                  AND COALESCE(cp.estado_pedido_opt, '') IN ('Pendiente', 'Produccion', 'Parcial', 'Terminado')
+            """
+            params: List[Any] = []
+            if estado:
+                sql += " AND cp.estado_pedido_opt = %s"
+                params.append(estado)
+            if fecha_desde:
+                sql += " AND cp.Fecha >= %s"
+                params.append(fecha_desde)
+            if fecha_hasta:
+                sql += " AND cp.Fecha <= %s"
+                params.append(fecha_hasta)
+            cursor.execute(sql, params)
+            row = cursor.fetchone()
+            return to_int_or_none(row.get("total") if isinstance(row, dict) else None) or 0
+    except MprSchemaError:
+        raise
+    except Exception as e:
+        logger.warning("Error al contar pedidos fábrica en %s: %s", base_empresa, e, exc_info=True)
+        return 0
 
 
 def listar_opts_por_pedido(
@@ -4560,6 +5962,111 @@ def get_lineas_armado_opt(
     return result
 
 
+def _bom_lineas_para_precarga_armado(
+    base_empresa: str,
+    id_articulo: int,
+    id_en_abm: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Líneas BOM para precargar carrito (1ra): catálogo armado o detalle ABM."""
+    lineas = lineas_bom_pack_1ra(base_empresa, int(id_articulo))
+    if lineas:
+        return [
+            {
+                "id_articulo": int(bl["id_articulo"]),
+                "cantidad_por_pack": int(bl["cantidad_por_pack"]),
+                "codigo_articulo": bl.get("codigo_articulo"),
+                "descripcion_articulo": bl.get("descripcion_articulo"),
+            }
+            for bl in lineas
+        ]
+    id_abm = to_int_or_none(id_en_abm) or get_id_en_abm_por_articulo(
+        base_empresa, int(id_articulo)
+    )
+    if not id_abm:
+        return []
+    bom = get_bom_detalle(base_empresa, int(id_abm))
+    resultado: List[Dict[str, Any]] = []
+    for comp in (bom or {}).get("componentes") or []:
+        id_c = to_int_or_none(comp.get("id_articulo"))
+        qty = int(float(comp.get("cantidad_articulo") or 0))
+        if id_c and qty > 0:
+            resultado.append({
+                "id_articulo": int(id_c),
+                "cantidad_por_pack": qty,
+                "codigo_articulo": comp.get("codigo_articulo"),
+                "descripcion_articulo": comp.get("descripcion_articulo"),
+            })
+    return resultado
+
+
+def construir_items_precarga_armado_desde_opt(
+    base_empresa: str,
+    id_lista: int,
+    id_articulo: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Ítems listos para rehidratar el carrito de Armado 1ra desde una OPT.
+    Usa la misma lógica de cantidad pendiente que el listado OPT
+    (``bulk_restante_armar_opt_listado``), no ``get_lineas_armado_opt`` (más restrictivo).
+    """
+    if not (base_empresa or "").strip() or id_lista is None:
+        return []
+    lineas_opt = get_opt_detalle(base_empresa, int(id_lista))
+    filtro = to_int_or_none(id_articulo)
+    ids_candidatos: List[int] = []
+    meta_por_art: Dict[int, Dict[str, Any]] = {}
+    for ln in lineas_opt or []:
+        id_art = to_int_or_none(ln.get("id_articulo"))
+        if id_art is None:
+            continue
+        if filtro is not None and int(id_art) != int(filtro):
+            continue
+        ids_candidatos.append(int(id_art))
+        meta_por_art[int(id_art)] = ln
+    if filtro is not None and int(filtro) not in meta_por_art:
+        ids_candidatos.append(int(filtro))
+    ids_candidatos = sorted(set(ids_candidatos))
+    if not ids_candidatos:
+        return []
+    abm_map = bulk_id_en_abm(base_empresa, ids_candidatos)
+    filas_bulk = [
+        {
+            "id_lista_produccion": int(id_lista),
+            "id_articulo": id_a,
+            "cantidad_pendiente_prod": 0,
+        }
+        for id_a in ids_candidatos
+        if abm_map.get(id_a)
+    ]
+    if not filas_bulk:
+        return []
+    restante_map = bulk_restante_armar_opt_listado(
+        base_empresa, filas_bulk, abm_map
+    )
+    items: List[Dict[str, Any]] = []
+    for f in filas_bulk:
+        id_a = int(f["id_articulo"])
+        rest = int(restante_map.get(f"{int(id_lista)}:{id_a}", 0) or 0)
+        if rest <= 0:
+            continue
+        bom_lineas = _bom_lineas_para_precarga_armado(
+            base_empresa, id_a, abm_map.get(id_a)
+        )
+        if not bom_lineas:
+            continue
+        meta = meta_por_art.get(id_a) or {}
+        items.append({
+            "id_articulo_pack": id_a,
+            "codigo_articulo_pack": str_or_default(meta.get("codigo_articulo"), "-"),
+            "descripcion_articulo_pack": str_or_default(
+                meta.get("descripcion_articulo"), "-"
+            ),
+            "cantidad_packs": rest,
+            "lineas": bom_lineas,
+        })
+    return items
+
+
 def get_cantidades_armadas_por_opt(
     base_empresa: str, id_lista_produccion: int
 ) -> Dict[int, int]:
@@ -4618,6 +6125,59 @@ def get_cantidades_armadas_por_opt(
     return result
 
 
+def _equivalentes_pack_desde_bom(
+    id_pack: int,
+    id_en_abm: Optional[int],
+    bom: Optional[Dict[str, Any]],
+    componente_cantidades: Dict[int, int],
+) -> int:
+    """Calcula equivalente en packs a partir de BOM ya cargado (sin queries)."""
+    if not id_pack or not componente_cantidades:
+        return 0
+    if not id_en_abm:
+        return int(componente_cantidades.get(id_pack, 0))
+    if not bom or not bom.get("componentes"):
+        return int(componente_cantidades.get(id_pack, 0))
+    min_packs: Optional[float] = None
+    for c in bom["componentes"]:
+        id_comp = to_int_or_none(c.get("id_articulo"))
+        qty_bom = float(c.get("cantidad_articulo") or 0)
+        if id_comp is None or qty_bom <= 0:
+            continue
+        qty_comp = float(componente_cantidades.get(id_comp, 0) or 0)
+        packs_this = qty_comp / qty_bom
+        if min_packs is None or packs_this < min_packs:
+            min_packs = packs_this
+    return int(min_packs) if min_packs is not None else 0
+
+
+def bulk_componentes_a_equivalentes_pack(
+    base_empresa: str,
+    pack_ids: List[int],
+    componente_cantidades: Dict[int, int],
+) -> Dict[int, int]:
+    """
+    Versión bulk de componentes_a_equivalentes_pack: 2 queries (abm + BOM) para N packs.
+    """
+    if not (base_empresa or "").strip() or not pack_ids or not componente_cantidades:
+        return {}
+    unique_ids = sorted({x for x in (to_int_or_none(p) for p in pack_ids) if x is not None})
+    if not unique_ids:
+        return {}
+    abm_map = bulk_id_en_abm(base_empresa, unique_ids)
+    id_en_abms = [v for v in abm_map.values() if v is not None]
+    bom_map = bulk_bom_detalle(base_empresa, id_en_abms) if id_en_abms else {}
+    return {
+        pid: _equivalentes_pack_desde_bom(
+            pid,
+            abm_map.get(pid),
+            bom_map.get(abm_map.get(pid)) if abm_map.get(pid) else None,
+            componente_cantidades,
+        )
+        for pid in unique_ids
+    }
+
+
 def componentes_a_equivalentes_pack(
     base_empresa: str,
     id_pack: int,
@@ -4632,23 +6192,8 @@ def componentes_a_equivalentes_pack(
     """
     if not id_pack or not componente_cantidades:
         return 0
-    id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_pack)
-    if not id_en_abm:
-        return int(componente_cantidades.get(id_pack, 0))
-    bom = get_bom_detalle(base_empresa, id_en_abm)
-    if not bom or not bom.get("componentes"):
-        return int(componente_cantidades.get(id_pack, 0))
-    min_packs: Optional[float] = None
-    for c in bom["componentes"]:
-        id_comp = to_int_or_none(c.get("id_articulo"))
-        qty_bom = float(c.get("cantidad_articulo") or 0)
-        if id_comp is None or qty_bom <= 0:
-            continue
-        qty_comp = float(componente_cantidades.get(id_comp, 0) or 0)
-        packs_this = qty_comp / qty_bom
-        if min_packs is None or packs_this < min_packs:
-            min_packs = packs_this
-    return int(min_packs) if min_packs is not None else 0
+    bulk = bulk_componentes_a_equivalentes_pack(base_empresa, [id_pack], componente_cantidades)
+    return bulk.get(id_pack, 0)
 
 
 def get_cantidad_opp_por_destino_opt(
@@ -8298,6 +9843,11 @@ def normalizar_armados_lote_json(data: Any) -> Tuple[Optional[List[Dict[str, Any
     return armados, None
 
 
+def _normalizar_modo_armado(modo: Optional[str], default: str = "2da") -> str:
+    m = str_or_default(modo, default).strip().lower()
+    return m if m in ("1ra", "2da") else default
+
+
 def parse_cabecera_lote_armado_surtido(post: Dict[str, Any]) -> Dict[str, Any]:
     """Cabecera compartida del lote desde campos POST."""
     detalle = str_or_default(post.get("detalle"), "").strip()[:200] or None
@@ -8307,7 +9857,13 @@ def parse_cabecera_lote_armado_surtido(post: Dict[str, Any]) -> Dict[str, Any]:
         "id_operario": to_int_or_none(post.get("id_operario")),
         "detalle": detalle,
         "id_lista_produccion": to_int_or_none(post.get("id_lista")),
+        "modo": _normalizar_modo_armado(post.get("modo")),
     }
+
+
+def parse_cabecera_lote_armado(post: Dict[str, Any]) -> Dict[str, Any]:
+    """Alias canónico (Armado 1ra/2da unificado)."""
+    return parse_cabecera_lote_armado_surtido(post)
 
 
 def parse_lote_armado_surtido_post(request) -> Tuple[Optional[Dict[str, Any]], Optional[List[Dict[str, Any]]], Optional[str]]:
@@ -8384,6 +9940,48 @@ def validar_reglas_lote_armado_surtido(
             f"El artículo {id_conflicto} no puede ser pack y componente en el mismo lote."
         )
     return True, None
+
+
+def validar_reglas_lote_armado(
+    armados: List[Dict[str, Any]],
+    *,
+    modo: str = "2da",
+    deposito_origen: Optional[int] = None,
+    deposito_destino: Optional[int] = None,
+    id_operario: Optional[int] = None,
+    require_non_empty: bool = True,
+    base_empresa: Optional[str] = None,
+) -> Tuple[bool, Optional[str]]:
+    """Reglas del lote unificado Armado 1ra/2da (modo + reglas comunes)."""
+    modo_n = _normalizar_modo_armado(modo)
+    be = (base_empresa or "").strip()
+    if modo_n == "1ra" and be:
+        dep_semi = get_deposito_semi_elaborado_mpr(be)
+        if dep_semi and deposito_origen is not None and int(deposito_origen) != int(dep_semi):
+            return False, "Armado 1ra: el depósito origen debe ser Semi elaborado."
+        for item in armados or []:
+            id_pack = to_int_or_none(item.get("id_articulo_pack"))
+            if not id_pack:
+                continue
+            if not articulo_habilitado_armado_1ra(be, int(id_pack)):
+                return False, "El pack seleccionado no tiene BOM válido para Armado 1ra."
+            ok_bom, err_bom = validar_composicion_bom_1ra(be, int(id_pack), item.get("lineas") or [])
+            if not ok_bom:
+                return False, err_bom
+    elif modo_n == "2da" and be:
+        for item in armados or []:
+            id_pack = to_int_or_none(item.get("id_articulo_pack"))
+            if id_pack and not articulo_habilitado_armado_surtido(be, int(id_pack)):
+                return False, (
+                    f"El pack seleccionado no tiene tipo_art_fab '{TIPO_ART_FAB_PACK_ARMADO_SURTIDO}'."
+                )
+    return validar_reglas_lote_armado_surtido(
+        armados,
+        deposito_origen=deposito_origen,
+        deposito_destino=deposito_destino,
+        id_operario=id_operario,
+        require_non_empty=require_non_empty,
+    )
 
 
 def validar_reglas_item_candidato_lote(
@@ -8499,6 +10097,310 @@ def listar_packs_armado_surtido(base_empresa: str) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.warning("listar_packs_armado_surtido %s: %s", base_empresa, e, exc_info=True)
         return []
+
+
+def _tablas_armado_1ra(cursor) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Resuelve articulo, en_abm y en_abm_formula con un solo SHOW TABLES."""
+    cursor.execute("SHOW TABLES")
+    by_lower: Dict[str, str] = {}
+    for row in cursor.fetchall() or []:
+        nombre = str_or_default(_first_column_value(row), "").strip()
+        if nombre:
+            by_lower[nombre.lower()] = nombre
+    return (
+        by_lower.get("articulo"),
+        by_lower.get("en_abm"),
+        by_lower.get("en_abm_formula"),
+    )
+
+
+def _sql_filtro_descuenta_en_mstock(alias: str = "ab") -> str:
+    """BOM armable 1ra: descuenta_en vacío o MSTOCK."""
+    return f"""(
+                  TRIM(COALESCE({alias}.descuenta_en, '')) = ''
+                  OR UPPER(TRIM({alias}.descuenta_en)) = 'MSTOCK'
+              )"""
+
+
+def articulo_habilitado_armado_1ra(base_empresa: str, id_articulo: int) -> bool:
+    """Pack 1ra: ensamblado=Si con BOM MSTOCK (una sola query EXISTS)."""
+    if not (base_empresa or "").strip() or not id_articulo:
+        return False
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_art, tbl_abm, tbl_formula = _tablas_armado_1ra(cursor)
+            if not tbl_art or not tbl_abm or not tbl_formula:
+                return False
+            cursor.execute(
+                f"""
+                SELECT 1 AS ok
+                FROM {tbl_art} a
+                INNER JOIN {tbl_abm} ab ON ab.id_en_abm = a.id_en_abm
+                INNER JOIN {tbl_formula} f
+                    ON f.id_en_abm = ab.id_en_abm
+                    AND COALESCE(f.anulado, 'No') = 'No'
+                WHERE a.IDArt = %s
+                  AND UPPER(TRIM(COALESCE(a.ensamblado,''))) = 'SI'
+                  AND a.id_en_abm IS NOT NULL
+                  AND {_sql_filtro_descuenta_en_mstock('ab')}
+                LIMIT 1
+                """,
+                [id_articulo],
+            )
+            return bool(cursor.fetchone())
+    except Exception as e:
+        logger.warning("articulo_habilitado_armado_1ra %s: %s", base_empresa, e, exc_info=True)
+        return False
+
+
+def listar_packs_armado_1ra(base_empresa: str) -> List[Dict[str, Any]]:
+    """Packs Armado 1ra: ensamblado=Si con BOM válido (una query JOIN, sin N+1)."""
+    if not (base_empresa or "").strip():
+        return []
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_art, tbl_abm, tbl_formula = _tablas_armado_1ra(cursor)
+            if not tbl_art or not tbl_abm or not tbl_formula:
+                return []
+            cursor.execute(
+                f"""
+                SELECT DISTINCT a.IDArt AS id_articulo,
+                       COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
+                       COALESCE(a.NombreArticulo, '') AS descripcion_articulo
+                FROM {tbl_art} a
+                INNER JOIN {tbl_abm} ab ON ab.id_en_abm = a.id_en_abm
+                INNER JOIN {tbl_formula} f
+                    ON f.id_en_abm = ab.id_en_abm
+                    AND COALESCE(f.anulado, 'No') = 'No'
+                WHERE UPPER(TRIM(COALESCE(a.ensamblado,''))) = 'SI'
+                  AND a.id_en_abm IS NOT NULL
+                  AND {_sql_filtro_descuenta_en_mstock('ab')}
+                ORDER BY codigo_articulo, a.IDArt
+                """,
+            )
+            rows = cursor.fetchall() or []
+        return [
+            {
+                "id_articulo": id_a,
+                "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
+                "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
+            }
+            for r in rows
+            if (id_a := to_int_or_none(r.get("id_articulo"))) is not None
+        ]
+    except Exception as e:
+        logger.warning("listar_packs_armado_1ra %s: %s", base_empresa, e, exc_info=True)
+        return []
+
+
+def listar_packs_armado_catalogo(
+    base_empresa: str,
+    modo: str,
+    busqueda: Optional[str] = None,
+    limit: int = 25,
+    ids: Optional[List[int]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Catálogo de packs para Armado (API lazy): búsqueda acotada por código/descripción/id.
+    modo: '1ra' (BOM Mstock) o '2da' (tipo_art_fab Fabricado 2da).
+    """
+    if not (base_empresa or "").strip():
+        return []
+    modo_norm = (modo or "1ra").strip().lower()
+    try:
+        lim = max(1, min(int(limit or 25), 50))
+    except (TypeError, ValueError):
+        lim = 25
+    id_filtro = sorted({x for x in (to_int_or_none(i) for i in (ids or [])) if x is not None})
+    q = (busqueda or "").strip()
+    like_params: List[Any] = []
+    filtro_busqueda = ""
+    if q and not id_filtro:
+        like = f"%{q}%"
+        like_params = [like, like, like]
+        filtro_busqueda = """
+          AND (
+                COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') LIKE %s
+             OR COALESCE(a.NombreArticulo, '') LIKE %s
+             OR CAST(a.IDArt AS CHAR) LIKE %s
+          )
+        """
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            if modo_norm == "2da":
+                tbl = _nombre_tabla(cursor, "articulo")
+                if not tbl or not columna_existe(cursor, tbl, "tipo_art_fab"):
+                    return []
+                bulto_sql = _fragmento_sql_cantidad_promedio_bulto(cursor, tbl)
+                params: List[Any] = [TIPO_ART_FAB_PACK_ARMADO_SURTIDO]
+                filtro_ids = ""
+                if id_filtro:
+                    ph = ",".join(["%s"] * len(id_filtro))
+                    filtro_ids = f" AND a.IDArt IN ({ph})"
+                    params.extend(id_filtro)
+                if like_params:
+                    params.extend(like_params)
+                params.append(lim)
+                cursor.execute(
+                    f"""
+                    SELECT a.IDArt AS id_articulo,
+                           COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
+                           COALESCE(a.NombreArticulo, '') AS descripcion_articulo{bulto_sql}
+                    FROM {tbl} a
+                    WHERE COALESCE(TRIM(a.tipo_art_fab), '') = %s
+                    {filtro_ids}
+                    {filtro_busqueda if like_params else ''}
+                    ORDER BY codigo_articulo, a.IDArt
+                    LIMIT %s
+                    """,
+                    params,
+                )
+            else:
+                tbl_art, tbl_abm, tbl_formula = _tablas_armado_1ra(cursor)
+                if not tbl_art or not tbl_abm or not tbl_formula:
+                    return []
+                bulto_sql = _fragmento_sql_cantidad_promedio_bulto(cursor, tbl_art)
+                params = []
+                filtro_ids = ""
+                if id_filtro:
+                    ph = ",".join(["%s"] * len(id_filtro))
+                    filtro_ids = f" AND a.IDArt IN ({ph})"
+                    params.extend(id_filtro)
+                if like_params:
+                    params.extend(like_params)
+                params.append(lim)
+                cursor.execute(
+                    f"""
+                    SELECT DISTINCT a.IDArt AS id_articulo,
+                           COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
+                           COALESCE(a.NombreArticulo, '') AS descripcion_articulo{bulto_sql}
+                    FROM {tbl_art} a
+                    INNER JOIN {tbl_abm} ab ON ab.id_en_abm = a.id_en_abm
+                    INNER JOIN {tbl_formula} f
+                        ON f.id_en_abm = ab.id_en_abm
+                        AND COALESCE(f.anulado, 'No') = 'No'
+                    WHERE UPPER(TRIM(COALESCE(a.ensamblado,''))) = 'SI'
+                      AND a.id_en_abm IS NOT NULL
+                      AND {_sql_filtro_descuenta_en_mstock('ab')}
+                    {filtro_ids}
+                    {filtro_busqueda if like_params else ''}
+                    ORDER BY codigo_articulo, a.IDArt
+                    LIMIT %s
+                    """,
+                    params,
+                )
+            rows = cursor.fetchall() or []
+        out = []
+        for r in rows:
+            id_a = to_int_or_none(r.get("id_articulo"))
+            if id_a is None:
+                continue
+            try:
+                bulto = float(r.get("cantidad_promedio_bulto") or 0)
+            except (TypeError, ValueError):
+                bulto = 0.0
+            out.append({
+                "id_articulo": id_a,
+                "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
+                "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
+                "cantidad_promedio_bulto": bulto if bulto > 0 else 12,
+            })
+        return out
+    except Exception as e:
+        logger.warning(
+            "listar_packs_armado_catalogo modo=%s %s: %s",
+            modo_norm,
+            base_empresa,
+            e,
+            exc_info=True,
+        )
+        return []
+
+
+def lineas_bom_pack_1ra(base_empresa: str, id_articulo_pack: int) -> List[Dict[str, Any]]:
+    """Componentes BOM para un pack 1ra (cantidad por pack)."""
+    if not articulo_habilitado_armado_1ra(base_empresa, id_articulo_pack):
+        return []
+    id_en_abm = get_id_en_abm_por_articulo(base_empresa, id_articulo_pack)
+    if not id_en_abm:
+        return []
+    bom = get_bom_detalle(base_empresa, id_en_abm)
+    lineas = []
+    for comp in (bom or {}).get("componentes") or []:
+        id_c = to_int_or_none(comp.get("id_articulo"))
+        qty = int(float(comp.get("cantidad_articulo") or 0))
+        if id_c and qty > 0:
+            lineas.append({
+                "id_articulo": id_c,
+                "cantidad_por_pack": qty,
+                "codigo_articulo": str_or_default(comp.get("codigo_articulo"), "-"),
+                "descripcion_articulo": str_or_default(comp.get("descripcion_articulo"), "-"),
+            })
+    return lineas
+
+
+def validar_composicion_bom_1ra(
+    base_empresa: str,
+    id_articulo_pack: int,
+    lineas_post: List[Dict[str, Any]],
+) -> Tuple[bool, Optional[str]]:
+    """Anti-tamper: composición POST debe coincidir con BOM."""
+    esperadas = lineas_bom_pack_1ra(base_empresa, id_articulo_pack)
+    if not esperadas:
+        return False, "No se encontró BOM para el pack seleccionado."
+    map_esp: Dict[int, int] = {}
+    for ln in esperadas:
+        map_esp[int(ln["id_articulo"])] = int(ln["cantidad_por_pack"])
+    map_post: Dict[int, int] = {}
+    for ln in lineas_post or []:
+        id_c = to_int_or_none(ln.get("id_articulo"))
+        qty = to_int_or_none(ln.get("cantidad_por_pack"))
+        if id_c and qty and int(qty) > 0:
+            map_post[int(id_c)] = int(qty)
+    if map_post != map_esp:
+        return False, "La composición no coincide con la lista de materiales del pack."
+    return True, None
+
+
+def calcular_max_packs_armado_1ra(
+    base_empresa: str,
+    id_articulo_pack: int,
+    deposito_semi: Optional[int] = None,
+) -> int:
+    """Máximo de packs armables según stock semi de componentes BOM."""
+    dep = deposito_semi or get_deposito_semi_elaborado_mpr(base_empresa)
+    if not dep:
+        return 0
+    lineas = lineas_bom_pack_1ra(base_empresa, id_articulo_pack)
+    if not lineas:
+        return 0
+    ids_comp = [ln["id_articulo"] for ln in lineas]
+    saldos: Dict[int, float] = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            if tbl_sd and ids_comp:
+                ph = ",".join(["%s"] * len(ids_comp))
+                cursor.execute(
+                    f"SELECT id_articulo, saldo FROM {tbl_sd} WHERE id_deposito = %s AND id_articulo IN ({ph})",
+                    [dep] + ids_comp,
+                )
+                for row in cursor.fetchall() or []:
+                    aid = to_int_or_none(row.get("id_articulo"))
+                    if aid is not None:
+                        saldos[aid] = float(row.get("saldo") or 0)
+    except Exception as e:
+        logger.warning("calcular_max_packs_armado_1ra saldos: %s", e)
+        return 0
+    max_packs = 0
+    for ln in lineas:
+        qty = int(ln["cantidad_por_pack"])
+        if qty <= 0:
+            continue
+        saldo = saldos.get(int(ln["id_articulo"]), 0)
+        packs_i = int(saldo // qty)
+        max_packs = min(max_packs, packs_i) if max_packs else packs_i
+    return max(0, max_packs)
 
 
 def listar_articulos_stock_deposito(
@@ -8957,8 +10859,23 @@ def guardar_composicion_armado_surtido(
     id_operario: Optional[int] = None,
     id_lista_produccion: Optional[int] = None,
     detalle: Optional[str] = None,
+    *,
+    modo: str = "2da",
+    id_lote_armado=None,
+    estado_imputacion: str = "na",
 ) -> None:
-    from mpr.models import MprArmadoSurtidoLinea, MprArmadoSurtidoMovimiento
+    from mpr.models import (
+        ESTADO_IMPUTACION_NA,
+        ESTADO_IMPUTACION_PENDIENTE,
+        MODO_ARMADO_1RA,
+        MprArmadoSurtidoLinea,
+        MprArmadoSurtidoMovimiento,
+    )
+
+    modo_n = _normalizar_modo_armado(modo)
+    est_imp = estado_imputacion
+    if modo_n == MODO_ARMADO_1RA and est_imp == ESTADO_IMPUTACION_NA:
+        est_imp = ESTADO_IMPUTACION_PENDIENTE
 
     mov = MprArmadoSurtidoMovimiento.objects.create(
         base_empresa=base_empresa.strip(),
@@ -8971,6 +10888,9 @@ def guardar_composicion_armado_surtido(
         id_operario=to_int_or_none(id_operario),
         id_usuario=int(id_usuario),
         detalle=(detalle or "").strip()[:500],
+        modo=modo_n,
+        id_lote_armado_id=id_lote_armado,
+        estado_imputacion=est_imp,
     )
     bulk = []
     for ln in lineas_enriquecidas:
@@ -8987,6 +10907,27 @@ def guardar_composicion_armado_surtido(
         )
     if bulk:
         MprArmadoSurtidoLinea.objects.bulk_create(bulk)
+
+
+def _detalle_mov_armado_1ra(
+    id_articulo_pack: int,
+    cantidad_packs: int,
+    lineas_composicion: List[Dict[str, Any]],
+    *,
+    detalle: Optional[str] = None,
+    id_lista_produccion: Optional[int] = None,
+) -> str:
+    n_comp = len(lineas_composicion or [])
+    if (detalle or "").strip():
+        return (detalle or "").strip()
+    if id_lista_produccion:
+        return (
+            f"Armado OPT {id_lista_produccion} (1ra MPR, pack {id_articulo_pack}, "
+            f"{cantidad_packs} packs, {n_comp} componentes)"
+        )
+    return (
+        f"Armado 1ra MPR (pack {id_articulo_pack}, {cantidad_packs} packs, {n_comp} componentes)"
+    )
 
 
 def _detalle_mov_armado_surtido(
@@ -9570,17 +11511,22 @@ def _item_exitoso_lote_armado_surtido(
     }
 
 
-def ejecutar_lote_armado_surtido(
+def ejecutar_lote_armado(
     base_empresa: str,
     id_usuario: int,
     cabecera: Dict[str, Any],
     armados: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
-    Ejecuta lote FIFO de armados surtido.
-    Commit por ítem exitoso y continuación ante errores de negocio.
+    Orquestador unificado Armado 1ra/2da. Commit por ítem exitoso.
     """
-    resultado: Dict[str, Any] = {"exitosos": [], "fallidos": []}
+    from mpr.models import MprArmadoLote
+
+    modo = _normalizar_modo_armado(cabecera.get("modo"))
+    cabecera = dict(cabecera or {})
+    cabecera["modo"] = modo
+
+    resultado: Dict[str, Any] = {"exitosos": [], "fallidos": [], "id_lote_armado": None}
     items = list(armados or [])
     if not items:
         resultado["fallidos"].append(_item_fallido_lote_armado_surtido({}, "Agregue al menos un armado al lote."))
@@ -9600,36 +11546,65 @@ def ejecutar_lote_armado_surtido(
     id_lista_produccion = to_int_or_none(cabecera.get("id_lista_produccion"))
     detalle_lote = str_or_default(cabecera.get("detalle"), "").strip() or None
 
-    ok_reglas, err_reglas = validar_reglas_lote_armado_surtido(
+    ok_reglas, err_reglas = validar_reglas_lote_armado(
         items,
+        modo=modo,
         deposito_origen=deposito_origen,
         deposito_destino=deposito_destino,
         id_operario=id_operario,
         require_non_empty=True,
+        base_empresa=base_empresa,
     )
     if not ok_reglas:
         for item in items:
             resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, err_reglas or "Lote inválido."))
         return resultado
 
+    lote_obj = MprArmadoLote.objects.create(
+        base_empresa=(base_empresa or "").strip(),
+        modo=modo,
+        id_operario=id_operario,
+        id_usuario=int(id_usuario),
+        deposito_origen=int(deposito_origen or 0),
+        deposito_destino=int(deposito_destino or 0),
+        cantidad_items=len(items),
+    )
+    resultado["id_lote_armado"] = str(lote_obj.id)
+
     for item in items:
         id_articulo_pack = int(to_int_or_none(item.get("id_articulo_pack")) or 0)
         cantidad_packs = int(to_int_or_none(item.get("cantidad_packs")) or 0)
         lineas = list(item.get("lineas") or [])
-        if not articulo_habilitado_armado_surtido(base_empresa, id_articulo_pack):
-            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
-                item,
-                f"El pack seleccionado no tiene tipo_art_fab '{TIPO_ART_FAB_PACK_ARMADO_SURTIDO}'.",
-            ))
-            continue
 
-        detalle_mov = _detalle_mov_armado_surtido(
-            id_articulo_pack,
-            cantidad_packs,
-            lineas,
-            detalle=detalle_lote,
-            id_lista_produccion=id_lista_produccion,
-        )
+        if modo == "1ra":
+            if not articulo_habilitado_armado_1ra(base_empresa, id_articulo_pack):
+                resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
+                    item, "El pack seleccionado no tiene BOM válido para Armado 1ra.",
+                ))
+                continue
+            ok_bom, err_bom = validar_composicion_bom_1ra(base_empresa, id_articulo_pack, lineas)
+            if not ok_bom:
+                resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, err_bom or "BOM inválido."))
+                continue
+            detalle_mov = _detalle_mov_armado_1ra(
+                id_articulo_pack, cantidad_packs, lineas, detalle=detalle_lote,
+                id_lista_produccion=id_lista_produccion,
+            )
+        else:
+            if not articulo_habilitado_armado_surtido(base_empresa, id_articulo_pack):
+                resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
+                    item,
+                    f"El pack seleccionado no tiene tipo_art_fab '{TIPO_ART_FAB_PACK_ARMADO_SURTIDO}'.",
+                ))
+                continue
+            detalle_mov = _detalle_mov_armado_surtido(
+                id_articulo_pack,
+                cantidad_packs,
+                lineas,
+                detalle=detalle_lote,
+                id_lista_produccion=id_lista_produccion,
+            )
+
         try:
             lineas_enriquecidas: List[Dict[str, Any]] = []
             with get_connection(base_empresa) as conn:
@@ -9651,16 +11626,14 @@ def ejecutar_lote_armado_surtido(
                 if not ok_tx:
                     conn.rollback()
                     resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
-                        item,
-                        err_tx or "No se pudo ejecutar el armado surtido.",
+                        item, err_tx or "No se pudo ejecutar el armado.",
                     ))
                     continue
                 conn.commit()
 
             if codigo_mov is None or nro_comprobante is None:
                 resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
-                    item,
-                    "No se pudo confirmar el movimiento de armado surtido.",
+                    item, "No se pudo confirmar el movimiento de armado.",
                 ))
                 continue
 
@@ -9676,21 +11649,520 @@ def ejecutar_lote_armado_surtido(
                 id_operario=id_operario,
                 id_lista_produccion=id_lista_produccion,
                 detalle=detalle_mov,
+                modo=modo,
+                id_lote_armado=lote_obj.id,
             )
             resultado["exitosos"].append(_item_exitoso_lote_armado_surtido(
-                item,
-                codigo_mov,
-                nro_comprobante,
-                info_pack=info_pack,
+                item, codigo_mov, nro_comprobante, info_pack=info_pack,
             ))
         except MprSchemaError:
             raise
         except Exception as e:
             if "1054" in str(e) or "Unknown column" in str(e).lower():
                 raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
-            logger.warning("ejecutar_lote_armado_surtido item %s: %s", id_articulo_pack, e, exc_info=True)
+            logger.warning("ejecutar_lote_armado item %s: %s", id_articulo_pack, e, exc_info=True)
             resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, str(e)))
+
+    lote_obj.cantidad_exitosos = len(resultado.get("exitosos") or [])
+    lote_obj.cantidad_fallidos = len(resultado.get("fallidos") or [])
+    lote_obj.save(update_fields=["cantidad_exitosos", "cantidad_fallidos"])
     return resultado
+
+
+def ejecutar_lote_armado_surtido(
+    base_empresa: str,
+    id_usuario: int,
+    cabecera: Dict[str, Any],
+    armados: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Ejecuta lote FIFO de armados surtido (modo 2da).
+    Commit por ítem exitoso y continuación ante errores de negocio.
+    """
+    cab = dict(cabecera or {})
+    cab["modo"] = _normalizar_modo_armado(cab.get("modo"), default="2da")
+    if cab["modo"] != "2da":
+        cab["modo"] = "2da"
+    return ejecutar_lote_armado(base_empresa, id_usuario, cab, armados)
+
+
+# --- Imputación Armado 1ra (supervisor) ---
+
+
+def _cantidad_imputada_mstock(base_empresa: str, codigo_movimiento: int) -> int:
+    from django.db.models import Sum
+
+    from mpr.models import MprImputacionArmado
+
+    total = (
+        MprImputacionArmado.objects.filter(
+            base_empresa=(base_empresa or "").strip(),
+            codigo_movimiento=int(codigo_movimiento),
+        ).aggregate(s=Sum("cantidad"))["s"]
+    )
+    return int(total or 0)
+
+
+def _bulk_nro_comprobante_movimientos(
+    base_empresa: str, codigos: List[int]
+) -> Dict[int, str]:
+    if not codigos:
+        return {}
+    out: Dict[int, str] = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "movimiento_stock")
+            if not tbl:
+                return {}
+            ph = ",".join(["%s"] * len(codigos))
+            cursor.execute(
+                f"SELECT codigo_movimiento, nro_comprobante FROM {tbl} "
+                f"WHERE codigo_movimiento IN ({ph})",
+                codigos,
+            )
+            for row in cursor.fetchall() or []:
+                cod = to_int_or_none(row.get("codigo_movimiento"))
+                if cod is not None:
+                    out[cod] = str_or_default(row.get("nro_comprobante"), str(cod))
+    except Exception as e:
+        logger.warning("_bulk_nro_comprobante_movimientos %s: %s", base_empresa, e)
+    return out
+
+
+def _bulk_etiquetas_articulos(
+    base_empresa: str, ids: List[int]
+) -> Dict[int, Dict[str, str]]:
+    if not ids:
+        return {}
+    out: Dict[int, Dict[str, str]] = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl:
+                return {}
+            ph = ",".join(["%s"] * len(ids))
+            cursor.execute(
+                f"""SELECT IDArt AS id_articulo,
+                           COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo_articulo,
+                           COALESCE(NombreArticulo, '') AS descripcion_articulo
+                    FROM {tbl} WHERE IDArt IN ({ph})""",
+                ids,
+            )
+            for row in cursor.fetchall() or []:
+                aid = to_int_or_none(row.get("id_articulo"))
+                if aid is not None:
+                    out[aid] = {
+                        "codigo_articulo": str_or_default(row.get("codigo_articulo"), "-"),
+                        "descripcion_articulo": str_or_default(
+                            row.get("descripcion_articulo"), "-"
+                        ),
+                    }
+    except Exception as e:
+        logger.warning("_bulk_etiquetas_articulos %s: %s", base_empresa, e)
+    return out
+
+
+def _listar_demanda_abierta_fifo(
+    base_empresa: str, id_articulo: int, limit: int = 50
+) -> List[Dict[str, Any]]:
+    """Demanda abierta por artículo ordenada FIFO (fecha pedido ascendente)."""
+    if not (base_empresa or "").strip() or not id_articulo:
+        return []
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
+            tbl_cp = _nombre_tabla(cursor, "comp_ped")
+            tbl_cli = _nombre_tabla(cursor, "cliente")
+            if not tbl_detalle or not tbl_cp:
+                return []
+            pk_col = _demanda_detalle_pk_columna(cursor, tbl_detalle)
+            join_cli = (
+                f"LEFT JOIN {tbl_cli} cli ON cli.codigo = cp.codigo" if tbl_cli else ""
+            )
+            fk_agrupada_sql = ""
+            if (
+                columna_existe(cursor, tbl_detalle, "id_lista_produccion")
+                and pk_col != "id_lista_produccion"
+            ):
+                fk_agrupada_sql = ", d.id_lista_produccion"
+            sql = f"""
+                SELECT d.codigo_movimiento_pedido,
+                       COALESCE(d.cantidad_pendiente_prod, 0) AS cantidad_pendiente_prod,
+                       d.`{pk_col}` AS id_fila_detalle
+                       {fk_agrupada_sql},
+                       cp.Fecha AS fecha,
+                       COALESCE(cp.NroComprobante, cp.NroCompBusq, '') AS nro_pedido,
+                       COALESCE(cli.nombre_cliente, '') AS nombre_cliente
+                FROM {tbl_detalle} d
+                INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = d.codigo_movimiento_pedido
+                {join_cli}
+                WHERE d.id_articulo = %s
+                  AND COALESCE(d.cantidad_pendiente_prod, 0) > 0
+                  AND d.codigo_movimiento_pedido <> %s
+                ORDER BY cp.Fecha ASC, d.codigo_movimiento_pedido ASC, d.`{pk_col}` ASC
+                LIMIT %s
+            """
+            cursor.execute(
+                sql,
+                [id_articulo, COD_MOV_PEDIDO_DEMANDA_RESERVA, limit],
+            )
+            rows = cursor.fetchall() or []
+        result = []
+        for r in rows:
+            item = {
+                "codigo_movimiento_pedido": to_int_or_none(
+                    r.get("codigo_movimiento_pedido")
+                ),
+                "cantidad_pendiente_prod": int(
+                    float(r.get("cantidad_pendiente_prod") or 0)
+                ),
+                "nro_pedido": str_or_default(r.get("nro_pedido"), "-"),
+                "nombre_cliente": str_or_default(r.get("nombre_cliente"), "-"),
+            "id_lista_detalle": to_int_or_none(r.get("id_fila_detalle")),
+            "id_fila_detalle": to_int_or_none(r.get("id_fila_detalle")),
+            "id_lista_produccion": to_int_or_none(r.get("id_lista_produccion")),
+            }
+            fecha_val = r.get("fecha")
+            if hasattr(fecha_val, "strftime"):
+                item["fecha"] = fecha_val.strftime("%d/%m/%Y")
+            else:
+                item["fecha"] = str(fecha_val or "-")[:10]
+            result.append(item)
+        return result
+    except Exception as e:
+        logger.warning(
+            "_listar_demanda_abierta_fifo %s art %s: %s",
+            base_empresa,
+            id_articulo,
+            e,
+            exc_info=True,
+        )
+        return []
+
+
+def _actualizar_estado_imputacion_movimiento(
+    movimiento,
+    cantidad_imputada: int,
+) -> None:
+    from mpr.models import (
+        ESTADO_IMPUTACION_COMPLETO,
+        ESTADO_IMPUTACION_PARCIAL,
+        ESTADO_IMPUTACION_PENDIENTE,
+    )
+
+    total = int(movimiento.cantidad_packs or 0)
+    if cantidad_imputada <= 0:
+        estado = ESTADO_IMPUTACION_PENDIENTE
+    elif cantidad_imputada >= total:
+        estado = ESTADO_IMPUTACION_COMPLETO
+    else:
+        estado = ESTADO_IMPUTACION_PARCIAL
+    if movimiento.estado_imputacion != estado:
+        movimiento.estado_imputacion = estado
+        movimiento.save(update_fields=["estado_imputacion"])
+
+
+def listar_mstock_pendientes_imputacion(
+    base_empresa: str,
+    filtros: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    MSTOCK Armado 1ra con imputación incompleta (Synap + legacy).
+    Excluye Armado 2da.
+    """
+    from mpr.models import (
+        ESTADO_IMPUTACION_COMPLETO,
+        ESTADO_IMPUTACION_PARCIAL,
+        ESTADO_IMPUTACION_PENDIENTE,
+        MODO_ARMADO_1RA,
+        MprArmadoSurtidoMovimiento,
+    )
+
+    if not (base_empresa or "").strip():
+        return []
+    filtros = filtros or {}
+    qs = MprArmadoSurtidoMovimiento.objects.filter(
+        base_empresa=(base_empresa or "").strip(),
+        modo=MODO_ARMADO_1RA,
+        estado_imputacion__in=[
+            ESTADO_IMPUTACION_PENDIENTE,
+            ESTADO_IMPUTACION_PARCIAL,
+        ],
+    ).select_related("id_lote_armado").order_by("-creado_en")
+
+    id_lote_filtro = filtros.get("id_lote_armado")
+    if id_lote_filtro:
+        qs = qs.filter(id_lote_armado_id=id_lote_filtro)
+    id_art_filtro = to_int_or_none(filtros.get("id_articulo_pack"))
+    if id_art_filtro:
+        qs = qs.filter(id_articulo_pack=int(id_art_filtro))
+
+    movs = list(qs)
+    if not movs:
+        return []
+
+    codigos = [m.codigo_movimiento for m in movs]
+    ids_pack = list({m.id_articulo_pack for m in movs})
+    nro_map = _bulk_nro_comprobante_movimientos(base_empresa, codigos)
+    art_map = _bulk_etiquetas_articulos(base_empresa, ids_pack)
+
+    resultado: List[Dict[str, Any]] = []
+    for m in movs:
+        imputado = _cantidad_imputada_mstock(base_empresa, m.codigo_movimiento)
+        pendiente = int(m.cantidad_packs or 0) - imputado
+        if pendiente <= 0:
+            if m.estado_imputacion != ESTADO_IMPUTACION_COMPLETO:
+                m.estado_imputacion = ESTADO_IMPUTACION_COMPLETO
+                m.save(update_fields=["estado_imputacion"])
+            continue
+        art = art_map.get(m.id_articulo_pack, {})
+        lote = m.id_lote_armado
+        resultado.append({
+            "codigo_movimiento": m.codigo_movimiento,
+            "nro_comprobante": nro_map.get(m.codigo_movimiento, str(m.codigo_movimiento)),
+            "id_articulo_pack": m.id_articulo_pack,
+            "codigo_articulo_pack": art.get("codigo_articulo", str(m.id_articulo_pack)),
+            "descripcion_articulo_pack": art.get("descripcion_articulo", ""),
+            "cantidad_armada": int(m.cantidad_packs or 0),
+            "cantidad_imputada": imputado,
+            "cantidad_pendiente_imputar": pendiente,
+            "creado_en": m.creado_en,
+            "id_operario": m.id_operario,
+            "id_lote_armado": str(lote.id) if lote else None,
+            "lote_ejecutado_en": lote.ejecutado_en if lote else None,
+            "estado_imputacion": m.estado_imputacion,
+        })
+    return resultado
+
+
+def sugerir_imputacion_fifo(
+    base_empresa: str, codigo_movimiento: int
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    Sugiere líneas FIFO sobre demanda abierta del mismo pack.
+    Retorna lista de {codigo_movimiento_pedido, cantidad, origen_regla, ...}.
+    """
+    from mpr.models import MODO_ARMADO_1RA, ORIGEN_REGLA_FIFO, MprArmadoSurtidoMovimiento
+
+    cod = to_int_or_none(codigo_movimiento)
+    if not cod:
+        return [], "Movimiento no indicado."
+    try:
+        mov = MprArmadoSurtidoMovimiento.objects.get(
+            base_empresa=(base_empresa or "").strip(),
+            codigo_movimiento=int(cod),
+            modo=MODO_ARMADO_1RA,
+        )
+    except MprArmadoSurtidoMovimiento.DoesNotExist:
+        return [], "MSTOCK de Armado 1ra no encontrado."
+
+    disponible = int(mov.cantidad_packs or 0) - _cantidad_imputada_mstock(
+        base_empresa, int(cod)
+    )
+    if disponible <= 0:
+        return [], "No queda cantidad pendiente de imputar en este MSTOCK."
+
+    demanda = _listar_demanda_abierta_fifo(base_empresa, mov.id_articulo_pack)
+    sugerencias: List[Dict[str, Any]] = []
+    restante = disponible
+    for d in demanda:
+        if restante <= 0:
+            break
+        need = int(d.get("cantidad_pendiente_prod") or 0)
+        if need <= 0:
+            continue
+        qty = min(restante, need)
+        if qty <= 0:
+            continue
+        sugerencias.append({
+            "codigo_movimiento_pedido": d["codigo_movimiento_pedido"],
+            "cantidad": qty,
+            "origen_regla": ORIGEN_REGLA_FIFO,
+            "id_lista_detalle": d.get("id_lista_detalle"),
+            "id_fila_detalle": d.get("id_fila_detalle") or d.get("id_lista_detalle"),
+            "id_lista_produccion": d.get("id_lista_produccion"),
+            "nro_pedido": d.get("nro_pedido"),
+            "nombre_cliente": d.get("nombre_cliente"),
+            "fecha_pedido": d.get("fecha"),
+        })
+        restante -= qty
+    if not sugerencias:
+        return [], "No hay demanda abierta para este artículo."
+    return sugerencias, None
+
+
+def confirmar_imputacion_armado(
+    base_empresa: str,
+    codigo_movimiento: int,
+    lineas: List[Dict[str, Any]],
+    id_supervisor: int,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Confirma imputación de un MSTOCK 1ra a uno o más pedidos.
+    lineas: [{codigo_movimiento_pedido, cantidad, origen_regla, id_lista_detalle?, notas?}]
+    """
+    from mpr.models import (
+        MODO_ARMADO_1RA,
+        ORIGEN_REGLA_FIFO,
+        ORIGEN_REGLA_MANUAL,
+        MprArmadoSurtidoMovimiento,
+        MprImputacionArmado,
+    )
+
+    if not (base_empresa or "").strip():
+        return False, "Base de datos no indicada."
+    if not id_supervisor:
+        return False, "Supervisor no identificado."
+    cod = to_int_or_none(codigo_movimiento)
+    if not cod:
+        return False, "Movimiento no indicado."
+    if not lineas:
+        return False, "Indique al menos una línea de imputación."
+
+    try:
+        mov = MprArmadoSurtidoMovimiento.objects.get(
+            base_empresa=(base_empresa or "").strip(),
+            codigo_movimiento=int(cod),
+            modo=MODO_ARMADO_1RA,
+        )
+    except MprArmadoSurtidoMovimiento.DoesNotExist:
+        return False, "MSTOCK de Armado 1ra no encontrado."
+
+    ya_imputado = _cantidad_imputada_mstock(base_empresa, int(cod))
+    total_nuevo = 0
+    normalizadas: List[Dict[str, Any]] = []
+    for ln in lineas:
+        qty = int(to_int_or_none(ln.get("cantidad")) or 0)
+        cod_ped = to_int_or_none(ln.get("codigo_movimiento_pedido"))
+        if qty <= 0 or not cod_ped:
+            continue
+        regla = str(ln.get("origen_regla") or ORIGEN_REGLA_MANUAL).strip().upper()
+        if regla not in (ORIGEN_REGLA_FIFO, ORIGEN_REGLA_MANUAL):
+            regla = ORIGEN_REGLA_MANUAL
+        normalizadas.append({
+            "codigo_movimiento_pedido": int(cod_ped),
+            "cantidad": qty,
+            "origen_regla": regla,
+            "id_lista_detalle": to_int_or_none(ln.get("id_lista_detalle")),
+            "id_lista_produccion": to_int_or_none(ln.get("id_lista_produccion")),
+            "notas": str_or_default(ln.get("notas"), "").strip()[:500],
+        })
+        total_nuevo += qty
+
+    if not normalizadas:
+        return False, "Las líneas de imputación no son válidas."
+    if ya_imputado + total_nuevo > int(mov.cantidad_packs or 0):
+        restante = max(0, int(mov.cantidad_packs or 0) - ya_imputado)
+        return False, f"No puede imputar más de {restante} pack(s) en este MSTOCK."
+
+    codigos_pedido = list({ln["codigo_movimiento_pedido"] for ln in normalizadas})
+    registros_synap: List[Dict[str, Any]] = []
+
+    try:
+        with get_connection(base_empresa) as conn:
+            conn.autocommit(False)
+            cursor = conn.cursor()
+            tbl_detalle = _nombre_tabla(cursor, "lista_produccion_detalle")
+            tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            tbl_cp = _nombre_tabla(cursor, "comp_ped")
+            pk_det = _demanda_detalle_pk_columna(cursor, tbl_detalle) if tbl_detalle else "id_lista_detalle"
+
+            for ln in normalizadas:
+                qty = ln["cantidad"]
+                cod_ped = ln["codigo_movimiento_pedido"]
+                id_fila = to_int_or_none(ln.get("id_lista_detalle"))
+
+                if tbl_detalle:
+                    pend_actual = _demanda_detalle_pendiente_actual(
+                        cursor,
+                        tbl_detalle,
+                        pk_det,
+                        id_fila=id_fila,
+                        codigo_movimiento_pedido=int(cod_ped),
+                        id_articulo=int(mov.id_articulo_pack),
+                    )
+                    if qty > pend_actual:
+                        conn.rollback()
+                        return False, (
+                            f"La cantidad a imputar ({qty}) supera la demanda pendiente "
+                            f"({pend_actual}) del pedido."
+                        )
+                    _demanda_detalle_decrementar_pendiente(
+                        cursor,
+                        tbl_detalle,
+                        pk_det,
+                        qty,
+                        id_fila=id_fila,
+                        codigo_movimiento_pedido=int(cod_ped),
+                        id_articulo=int(mov.id_articulo_pack),
+                    )
+
+                id_lista = ln.get("id_lista_produccion")
+                if tbl_agrupada and id_lista:
+                    try:
+                        cursor.execute(
+                            f"UPDATE {tbl_agrupada} SET cantidad_pendiente_prod = "
+                            f"GREATEST(0, COALESCE(cantidad_pendiente_prod, 0) - %s) "
+                            f"WHERE id_lista_produccion = %s AND id_articulo = %s",
+                            [qty, id_lista, mov.id_articulo_pack],
+                        )
+                    except Exception as agg_err:
+                        logger.debug(
+                            "Imputación: no se actualizó agrupada id_lista=%s: %s",
+                            id_lista,
+                            agg_err,
+                        )
+
+                registros_synap.append(ln)
+
+            if tbl_cp and tbl_detalle and codigos_pedido:
+                for cod_p in codigos_pedido:
+                    try:
+                        cursor.execute(
+                            f"SELECT COALESCE(SUM(cantidad_pendiente_prod), 0) FROM {tbl_detalle} "
+                            f"WHERE codigo_movimiento_pedido = %s",
+                            [cod_p],
+                        )
+                        row = cursor.fetchone()
+                        total_pend = int(float(row[0] or 0)) if row else 0
+                        estado = (
+                            ESTADO_PEDIDO_OPT_PARCIAL
+                            if total_pend > 0
+                            else ESTADO_PEDIDO_OPT_TERMINADO
+                        )
+                        _actualizar_comp_ped_estado_produccion(
+                            cursor, tbl_cp, [cod_p], estado
+                        )
+                    except Exception as st_err:
+                        logger.warning(
+                            "Imputación: estado pedido cod=%s: %s", cod_p, st_err
+                        )
+
+            conn.commit()
+    except MprSchemaError:
+        raise
+    except Exception as e:
+        logger.warning(
+            "confirmar_imputacion_armado cod=%s: %s", cod, e, exc_info=True
+        )
+        return False, str(e) or "Error al confirmar imputación."
+
+    for ln in registros_synap:
+        MprImputacionArmado.objects.create(
+            base_empresa=(base_empresa or "").strip(),
+            codigo_movimiento=int(cod),
+            id_articulo_pack=int(mov.id_articulo_pack),
+            cantidad=ln["cantidad"],
+            codigo_movimiento_pedido=ln["codigo_movimiento_pedido"],
+            id_lista_detalle=ln.get("id_lista_detalle"),
+            origen_regla=ln["origen_regla"],
+            id_usuario_supervisor=int(id_supervisor),
+            notas=ln.get("notas") or "",
+        )
+
+    nuevo_total = ya_imputado + total_nuevo
+    _actualizar_estado_imputacion_movimiento(mov, nuevo_total)
+    return True, None
 
 
 # --- Reportes MPR (solo lectura) ---

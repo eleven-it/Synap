@@ -1,0 +1,15 @@
+name: armado-unificado-imputacion-1ra
+status: archived
+created: 2026-06-17
+archived_at: 2026-06-17
+phases:
+  proposal: done
+  spec: done
+  design: done
+  tasks: done
+  apply: done
+  verify: done
+  archive: done
+depends_on:
+  - mpr-armado-surtido-multi-lote
+verify_verdict: pass-with-warnings

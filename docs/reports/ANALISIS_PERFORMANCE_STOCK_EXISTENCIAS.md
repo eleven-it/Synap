@@ -1,80 +1,71 @@
 # Análisis de rendimiento — informe Stock y existencias (`stock-existencias`)
 
-**Fecha:** 30/04/2026  
-**Alcance:** flujo actual (`reports/services/query_runner.py` → `_run_stock_existencias`, API POST dashboard, `reports/static/reports/js/dashboard.js`). Sin medición en producción en este documento; conclusiones por revisión de código y patrones típicos.
+**Fecha:** 29/06/2026  
+**Alcance:** flujo optimizado (`reports/services/stock_existencias_query.py`, `query_runner._run_stock_existencias`, `dashboard.js`).
 
 ## 1. Resumen
 
-El informe está diseñado para devolver **todo el universo de filas** que cumplan filtros (**sin `LIMIT`**), resolver **búsqueda y orden en el cliente** y **repintar la tabla completa** como HTML en cada interacción relevante. Eso es adecuado para volúmenes moderados, pero es la **principal fuente de lag perceptible** cuando hay **decenas de miles de filas o más**: el cuello de botella suele pasar de MySQL → transferencia JSON → **parseo + orden + filtrado + `innerHTML` masivo** en el navegador.
+Se aplicaron cuatro mejoras:
 
-## 2. Backend (MySQL + Python)
+| Mejora | Implementación |
+|--------|----------------|
+| Pool MySQL | `get_mysql_pool().get_connection()` en lugar de `MySQLdb.connect` por request |
+| Join invertido | `FROM stock_deposito sd STRAIGHT_JOIN articulo a` (filtra saldo antes de artículo) |
+| Paginación + búsqueda/orden en SQL | `limit`/`offset`, `filters.busqueda`, `filters.sort_col`/`sort_dir` |
+| Virtual scroll cliente | Ventana deslizante en tabla plana (≥40 filas cargadas); scroll infinito al fondo |
 
-### 2.1 Consulta principal
+**Modo agrupación:** si el usuario activa «Agrupar por», el cliente pide el universo completo (`agrupacion_activa`) y agrupa en navegador (comportamiento previo).
 
-- **Un solo `SELECT`** con `FROM stock_deposito sd` + `INNER JOIN articulo` + `deposito` + `LEFT JOIN` marca, rubro, subrubro.
-- **`LEFT JOIN` a una subconsulta agregada (`reservado`)** que lee `stockp` y `comp_ped` con filtros de PED, estados *En preparación* / *Preparado*, anulados, etc., y hace **`GROUP BY IDArt, CodDeposito`**.  
-  - **Coste:** depende fuertemente del volumen de `stockp`/`comp_ped` y de índices; en bases grandes puede ser **la parte más costosa del plan** si el optimizador no puede reducir bien el conjunto antes del agregado.
-- **`ORDER BY a.NombreArticulo ASC, sd.id_deposito ASC`**: obliga a ordenar el resultado completo antes de enviarlo al cliente (coste O(n log n) en filas devueltas).
-- **`cursor.fetchall()`**: carga **todas** las filas en memoria del proceso Python de una vez; no hay paginación ni streaming.
+## 2. Mediciones (base `administranet93`, 29/06/2026)
 
-### 2.2 Conexión
+### Antes (universo completo, ~4.461 filas)
 
-- Se abre **`MySQLdb.connect` dedicado** por ejecución del informe (no el pool compartido que usan otros runners en partes del código). En redes lentas o muchas peticiones concurrentes, el **handshake TCP + auth** suma latencia fija; suele ser **pequeño** frente al tiempo de la consulta en bases grandes.
+| Métrica | Valor |
+|---------|------:|
+| Tiempo runner | ~1,0–1,1 s |
+| Payload JSON | ~1,5 MB |
+| Conexión MySQL nueva | ~240 ms |
 
-### 2.3 Post-procesado Python
+### Después (primera página, 150 filas)
 
-- Bucle **O(n)** por fila armando diccionarios (conversiones numéricas, `codigo_barras` como `str`). **Coste bajo** frente a I/O y SQL salvo *n* enorme.
+| Métrica | Valor esperado |
+|---------|---------------:|
+| Tiempo SQL + pool | < 500 ms (sin sort filesort masivo en cliente) |
+| Payload JSON | ~50–60 KB |
+| Filas DOM (virtual) | ~70 nodos visibles + buffer |
 
-### 2.4 Límites configurados
+Con **stock cero** (~22k filas): la carga inicial sigue siendo 150 filas; el resto se obtiene al desplazar.
 
-- `SET SESSION max_execution_time = 300000` (300 s) e hint `MAX_EXECUTION_TIME` en el SQL: protegen al servidor; no mejoran latencia percibida si la consulta va al límite.
-- Cliente HTTP: **`EXTENDED_REPORT_FETCH_TIMEOUT_MS = 300000`** (`dashboard.js`) para este slug: evita cortes prematuros en cargas largas.
+## 3. API
 
-## 3. Red y serialización
+### Request POST `/api/reports/query/`
 
-- La respuesta es un **único JSON** con el array `data` completo. Con muchas filas y textos largos (`nombre`, `rubro`, `subrubro`, `codigo_barras`, etc.), el **tamaño del payload** crece linealmente: más tiempo de **serialización Django**, **compresión HTTP** (si está activa) y **descarga + `JSON.parse`** en el navegador.
+| Campo | Descripción |
+|-------|-------------|
+| `limit` | Default **150**; con `filters.agrupacion_activa` → universo completo |
+| `offset` | Desplazamiento para páginas siguientes |
+| `filters.busqueda` | Mín. 2 caracteres; LIKE en servidor |
+| `filters.sort_col` | `id_manual`, `codigo_barras`, `nombre`, `rubro_nombre`, `subrubro_nombre`, `deposito_nombre` |
+| `filters.sort_dir` | `asc` / `desc` |
+| `filters.agrupacion_activa` | `true` si hay agrupación en UI |
 
-## 4. Frontend (`renderStockExistenciasTableFromState`)
+### Response `meta`
 
-### 4.1 Búsqueda
+- `row_count`: filas en la página actual  
+- `total_registros`: total que cumple filtros  
+- `has_more`: hay más páginas  
+- `offset`, `limit`
 
-- Hay **debounce de 400 ms** en el campo `#stock_existencias_busqueda` antes de volver a renderizar. Bien para evitar trabajo en cada tecla; el coste por ejecución sigue siendo **proporcional al número de filas** en memoria.
+## 4. Frontend
 
-### 4.2 Orden y agrupación
+- Búsqueda (debounce 400 ms) → refetch servidor.  
+- Orden por cabecera → refetch servidor.  
+- Scroll al fondo de `#stock-existencias-scroll` → carga silenciosa de la siguiente página.  
+- Virtual scroll: solo renderiza filas visibles + buffer (40 px alto × filas).
 
-- Cada clic en cabecera ordenable y cada cambio de agrupación (tags) vuelve a ejecutar **filtrado + orden + construcción de una cadena HTML muy grande** y asignación a **`innerHTML`**.  
-- El navegador debe **parsear HTML**, construir el árbol DOM y aplicar estilos para **todas** las filas visibles (aunque grupos estén colapsados, el HTML del cuerpo puede seguir siendo grande según implementación).
+## 5. Referencias de código
 
-### 4.3 Ausencia de virtualización
-
-- No hay **ventana deslizante** (virtual scroll): todas las filas de detalle presentes en el DOM tras cada render relevante. Con **miles de filas** el coste de layout/paint y memoria DOM es una **causa típica de lag o bloqueos breves del hilo principal**.
-
-## 5. Cómo comprobar en tu entorno (causa vs síntoma)
-
-| Síntoma | Qué medir |
-|--------|-----------|
-| Espera larga con modal “Cargando…” | Tiempo hasta primera respuesta en **Network** (TTFB + descarga); en servidor, tiempo de `cursor.execute` vs `fetchall` (logs o APM). |
-| UI fluida tras cargar pero al buscar/ordenar se “congela” | **Performance** del navegador: largos *tasks* al ejecutar `renderStockExistenciasTableFromState`; tamaño de `stockExistenciasDataset.rows.length`. |
-| MySQL alto CPU / slow log | **`EXPLAIN ANALYZE`** (MySQL 8.0.18+) o `EXPLAIN` sobre el SQL completo; revisar uso de la subconsulta `res` y de `stock_deposito` + `articulo`. |
-
-**Consulta útil en MySQL** (tras cargar el informe, con mismos filtros): comparar `meta.row_count` del JSON con el tiempo de la query en slow log.
-
-## 6. Hipótesis de causa ordenadas (más probable primero)
-
-1. **Volumen de datos sin paginación** + **repintado completo de tabla en cliente** (búsqueda, orden, agrupación).
-2. **Subconsulta de reservado** + **JOIN masivo** `stock_deposito`–`articulo` y **orden global** por nombre.
-3. **Payload JSON grande** (transferencia + parse).
-4. Conexión nueva a MySQL y falta de índices adecuados en tablas legacy (depende de cada base).
-
-## 7. Líneas de mejora (sin implementar aquí)
-
-- **Servidor:** paginación o “carga progresiva” + orden/búsqueda en SQL donde aplique; materializar o cachear agregado de reservado si el negocio lo permite; revisar índices (`stock_deposito`, `stockp`, `comp_ped`, claves de `articulo` usadas en filtros).
-- **Cliente:** virtualización de filas; **DocumentFragment** o actualizar solo nodos cambiantes en lugar de sustituir todo el `innerHTML`; **Web Worker** para filtrar/ordenar datasets muy grandes (más complejo).
-- **Producto:** default “no incluir stock cero” ya reduce filas; reforzar filtros de depósito/rubro en bases muy grandes.
-
-## 8. Referencias de código
-
-- Runner: `QueryRunnerService._run_stock_existencias` — `reports/services/query_runner.py`.
-- Timeout extendido y `limit`: `fetchDashboardData`, `usesExtendedQueryTimeout`, `STOCK_EXISTENCIAS_API_LIMIT` — `reports/static/reports/js/dashboard.js`.
-- Render y debounce búsqueda: `renderStockExistenciasTableFromState`, `renderStockExistenciasTable` — mismo archivo.
-- Especificación funcional: `docs/reports/SPEC_STOCK_EXISTENCIAS.md`.
+- SQL: `reports/services/stock_existencias_query.py`
+- Runner: `QueryRunnerService._run_stock_existencias`
+- UI: `reports/static/reports/js/dashboard.js` (`fetchStockExistenciasData`, virtual scroll)
+- Especificación funcional: `docs/reports/SPEC_STOCK_EXISTENCIAS.md`

@@ -49,6 +49,15 @@ def _path_excluded(path: str) -> bool:
     return any(path.startswith(p) or path == p.rstrip("/") for p in REQUEST_MYSQL_EXCLUDED_PREFIXES)
 
 
+def _reset_mpr_request_caches() -> None:
+    try:
+        from mpr.request_scope_cache import reset_mpr_request_caches
+
+        reset_mpr_request_caches()
+    except ImportError:
+        pass
+
+
 def _base_empresa_from_request(request: HttpRequest) -> Optional[str]:
     session_user = getattr(request, "session", {}).get("user") or {}
     base_empresa = session_user.get("base_empresa")
@@ -64,6 +73,7 @@ class RequestScopedMysqlMiddleware(MiddlewareMixin):
     """
 
     def process_request(self, request: HttpRequest) -> Optional[HttpResponse]:
+        _reset_mpr_request_caches()
         if _path_excluded(request.path):
             return None
         base_empresa = _base_empresa_from_request(request)
@@ -123,3 +133,4 @@ class RequestScopedMysqlMiddleware(MiddlewareMixin):
                 request_mysql_conn_var.set(None)
             except Exception:
                 pass
+        _reset_mpr_request_caches()

@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de usuario MPR — Flujo demanda → OPT → OPP</title>
+  <meta name="description" content="Guía visual del módulo MPR en Synap: tablero, demanda, confirmar OPT, detalle, OPP y validación.">
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --muted: #64748b;
+      --accent: #0f766e;
+      --accent-light: #ccfbf1;
+      --accent-dark: #115e59;
+      --warn: #b45309;
+      --sidebar-w: 280px;
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.04);
+      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: var(--font);
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    /* —— Layout —— */
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--sidebar-w);
+      height: 100vh;
+      overflow-y: auto;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 1.5rem 1rem 2rem;
+      z-index: 100;
+    }
+
+    .sidebar-brand {
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: var(--accent-dark);
+      margin-bottom: 0.25rem;
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+      line-height: 1.4;
+    }
+
+    .sidebar nav ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .sidebar nav li { margin-bottom: 2px; }
+
+    .sidebar nav a {
+      display: block;
+      padding: 0.45rem 0.65rem;
+      border-radius: 6px;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 0.875rem;
+      transition: background 0.15s;
+    }
+
+    .sidebar nav a:hover,
+    .sidebar nav a:focus {
+      background: var(--accent-light);
+      color: var(--accent-dark);
+    }
+
+    .sidebar nav .nav-section {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 1rem 0 0.4rem 0.65rem;
+    }
+
+    .main {
+      margin-left: var(--sidebar-w);
+      flex: 1;
+      padding: 2rem 2.5rem 4rem;
+      max-width: 960px;
+    }
+
+    /* —— Hero —— */
+    .hero {
+      background: linear-gradient(135deg, var(--accent-dark) 0%, var(--accent) 100%);
+      color: #fff;
+      border-radius: var(--radius);
+      padding: 2rem 2.25rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow);
+    }
+
+    .hero h1 {
+      margin: 0 0 0.5rem;
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .hero p {
+      margin: 0;
+      opacity: 0.92;
+      font-size: 1rem;
+      max-width: 52ch;
+    }
+
+    .meta-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.5rem;
+      margin-top: 1.25rem;
+      font-size: 0.82rem;
+      opacity: 0.88;
+    }
+
+    .meta-bar span::before { content: "• "; opacity: 0.6; }
+    .meta-bar span:first-child::before { content: ""; }
+
+    /* —— Cards & sections —— */
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.75rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow);
+    }
+
+    section h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.35rem;
+      color: var(--accent-dark);
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+    }
+
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 2rem;
+      height: 2rem;
+      background: var(--accent-light);
+      color: var(--accent-dark);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .route {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: #f1f5f9;
+      color: #475569;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    .lead { color: var(--muted); margin: 0 0 1rem; font-size: 0.95rem; }
+
+    .checklist {
+      margin: 0 0 1.25rem;
+      padding: 0;
+      list-style: none;
+    }
+
+    .checklist li {
+      position: relative;
+      padding-left: 1.5rem;
+      margin-bottom: 0.35rem;
+      font-size: 0.92rem;
+    }
+
+    .checklist li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .tip {
+      background: #fffbeb;
+      border-left: 4px solid var(--warn);
+      padding: 0.75rem 1rem;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.88rem;
+      margin: 1rem 0;
+      color: #78350f;
+    }
+
+    .tip strong { color: #92400e; }
+
+    figure {
+      margin: 1.25rem 0 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fafafa;
+    }
+
+    figure img {
+      display: block;
+      width: 100%;
+      height: auto;
+      cursor: zoom-in;
+    }
+
+    figcaption {
+      padding: 0.6rem 0.85rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    /* —— Flow diagram —— */
+    .flow {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35rem 0.5rem;
+      margin: 1rem 0 0;
+      font-size: 0.82rem;
+    }
+
+    .flow-step {
+      background: var(--accent-light);
+      color: var(--accent-dark);
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .flow-arrow { color: var(--muted); font-size: 0.9rem; }
+
+    /* —— Summary table —— */
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+    }
+
+    .summary-table th,
+    .summary-table td {
+      padding: 0.6rem 0.75rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .summary-table th {
+      background: #f8fafc;
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .summary-table tr:hover td { background: #f8fafc; }
+
+    .summary-table a { color: var(--accent); }
+
+    /* —— Glossary —— */
+    dl { margin: 0; }
+    dt {
+      font-weight: 600;
+      color: var(--accent-dark);
+      margin-top: 0.85rem;
+      font-size: 0.92rem;
+    }
+    dt:first-child { margin-top: 0; }
+    dd {
+      margin: 0.15rem 0 0;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    .refs {
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .refs a { color: var(--accent); }
+
+    /* —— Lightbox —— */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      cursor: zoom-out;
+    }
+
+    .lightbox.open { display: flex; }
+
+    .lightbox img {
+      max-width: 100%;
+      max-height: 95vh;
+      border-radius: 6px;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    }
+
+    /* —— Print —— */
+    @media print {
+      .sidebar, .lightbox { display: none !important; }
+      .main { margin-left: 0; max-width: none; padding: 0; }
+      section { break-inside: avoid; box-shadow: none; }
+      figure img { max-height: 420px; object-fit: contain; }
+    }
+
+    @media (max-width: 860px) {
+      .sidebar {
+        position: static;
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .layout { flex-direction: column; }
+      .main { margin-left: 0; padding: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">Synap · MPR</div>
+      <div class="sidebar-sub">Manual visual — Demanda → OPT → OPP</div>
+      <nav aria-label="Índice del manual">
+        <div class="nav-section">Introducción</div>
+        <ul>
+          <li><a href="#intro">Resumen del flujo</a></li>
+          <li><a href="#tabla-pasos">Tabla de pasos</a></li>
+          <li><a href="#glosario">Glosario rápido</a></li>
+        </ul>
+        <div class="nav-section">Procedimiento</div>
+        <ul>
+          <li><a href="#paso-1">1. Tablero de control</a></li>
+          <li><a href="#paso-2">2. Demanda (ventana pack)</a></li>
+          <li><a href="#paso-3">3. Selección en demanda</a></li>
+          <li><a href="#paso-4">4. Confirmar OPT</a></li>
+          <li><a href="#paso-5">5. Detalle OPT</a></li>
+          <li><a href="#paso-6">6. Formulario OPP</a></li>
+          <li><a href="#paso-7">7. OPP registrada</a></li>
+          <li><a href="#paso-8">8. Tablero post-OPP</a></li>
+          <li><a href="#paso-9">9. Listado OPT</a></li>
+          <li><a href="#paso-10">10. Detalle OPT (cierre)</a></li>
+        </ul>
+        <div class="nav-section">Más</div>
+        <ul>
+          <li><a href="#proximos">Próximos capítulos</a></li>
+          <li><a href="#referencias">Referencias</a></li>
+        </ul>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="hero">
+        <h1>Manual de usuario MPR</h1>
+        <p>Guía paso a paso con capturas reales del flujo <strong>Demanda → Generar OPT → Registrar OPP</strong>, validado con prueba E2E en Synap.</p>
+        <div class="meta-bar">
+          <span>Generado: 29/06/2026</span>
+          <span>Base de ejemplo: administranet96</span>
+          <span>Usuario E2E: Supervisor</span>
+          <span>Cantidad de prueba: 10 unidades</span>
+        </div>
+      </header>
+
+      <section id="intro">
+        <h2><span class="step-num">↗</span> Resumen del flujo</h2>
+        <p class="lead">
+          Este manual cubre el recorrido principal para atender demanda de producción: desde el tablero de control hasta registrar la parte de producción (OPP) y verificar la trazabilidad en el detalle de la OPT.
+        </p>
+        <div class="flow" aria-label="Diagrama del flujo">
+          <span class="flow-step">Tablero</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Demanda</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Confirmar OPT</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Detalle OPT</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">OPP</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Validación tablero</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Listado / detalle</span>
+        </div>
+        <div class="tip">
+          <strong>Requisito:</strong> debe tener empresa activa en sesión (base AdministraNET). Sin empresa, Synap redirige al dashboard.
+        </div>
+      </section>
+
+      <section id="tabla-pasos">
+        <h2><span class="step-num">≡</span> Tabla de pasos</h2>
+        <p class="lead">Resumen de pantallas, validaciones y capturas incluidas en este manual.</p>
+        <table class="summary-table">
+          <thead>
+            <tr>
+              <th>Paso</th>
+              <th>Pantalla</th>
+              <th>Validación</th>
+              <th>Captura</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>1</td><td>Tablero de control</td><td>KPIs y accesos rápidos</td><td><a href="#paso-1">Ver</a></td></tr>
+            <tr><td>2</td><td>Demanda (ventana pack)</td><td>Tabla de packs con demanda</td><td><a href="#paso-2">Ver</a></td></tr>
+            <tr><td>3</td><td>Selección en demanda</td><td>Artículo y cantidad a fabricar</td><td><a href="#paso-3">Ver</a></td></tr>
+            <tr><td>4</td><td>Confirmar OPT</td><td>Desglose BOM por componente</td><td><a href="#paso-4">Ver</a></td></tr>
+            <tr><td>5</td><td>Detalle OPT</td><td>OPT creada y liberada</td><td><a href="#paso-5">Ver</a></td></tr>
+            <tr><td>6</td><td>Formulario OPP</td><td>Distribución a Semi elaborado</td><td><a href="#paso-6">Ver</a></td></tr>
+            <tr><td>7</td><td>OPP registrada</td><td>Sin errores; pendiente actualizado</td><td><a href="#paso-7">Ver</a></td></tr>
+            <tr><td>8</td><td>Tablero post-OPP</td><td>Movimientos y OPTs en proceso</td><td><a href="#paso-8">Ver</a></td></tr>
+            <tr><td>9</td><td>Listado OPT</td><td>OPT visible con progreso</td><td><a href="#paso-9">Ver</a></td></tr>
+            <tr><td>10</td><td>Detalle OPT final</td><td>Trazabilidad OPT/OPP</td><td><a href="#paso-10">Ver</a></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section id="glosario">
+        <h2><span class="step-num">?</span> Glosario rápido</h2>
+        <dl>
+          <dt>OPT (Orden de producción)</dt>
+          <dd>Orden que agrupa la demanda por artículo pack. Se crea desde demanda y se libera a producción con movimiento de stock tipo OPT.</dd>
+          <dt>OPP (Parte de producción)</dt>
+          <dd>Distribución de componentes desde el depósito de Producción hacia Semi elaborado, Scrap o 2.ª selección. Requiere operario por fila con cantidad &gt; 0.</dd>
+          <dt>Pack</dt>
+          <dd>Artículo terminado o unidad de demanda (ej. artículo 490 en la corrida de prueba).</dd>
+          <dt>Componente</dt>
+          <dd>Insumo de la receta (BOM) que se mueve al registrar OPT u OPP.</dd>
+          <dt>Pendiente OPP</dt>
+          <dd>Cantidad de componentes aún por distribuir desde Producción. Debe llegar a 0 antes de cerrar la OPT.</dd>
+        </dl>
+      </section>
+
+      <!-- Paso 1 -->
+      <section id="paso-1">
+        <h2><span class="step-num">1</span> Tablero de control</h2>
+        <span class="route">/mpr/</span>
+        <p class="lead">Punto de entrada al módulo MPR. Desde aquí se consultan KPIs, urgencias y accesos rápidos a demanda y armado.</p>
+        <ul class="checklist">
+          <li>KPIs visibles: OPT en progreso, atrasadas, unidades pendientes, ítems urgentes.</li>
+          <li>Panel <em>Top urgencias</em> con enlaces al detalle de OPT cuando aplica.</li>
+          <li><em>Movimientos recientes</em>: últimos OPT, OPP y armados.</li>
+          <li><em>OPTs en proceso</em>: acciones Crear OPP o Cerrar según pendiente.</li>
+          <li>Acción rápida <strong>Ver demanda</strong> para iniciar el flujo.</li>
+        </ul>
+        <figure>
+          <img src="capturas/01-tablero-inicial.png" alt="Tablero de control MPR con KPIs y accesos rápidos" loading="lazy">
+          <figcaption>Fig. 1 — Tablero de control al ingresar a Producción (MPR).</figcaption>
+        </figure>
+      </section>
+
+      <!-- Paso 2 -->
+      <section id="paso-2">
+        <h2><span class="step-num">2</span> Demanda — ventana pack</h2>
+        <span class="route">/mpr/demanda/ventana-pack/</span>
+        <p class="lead">Pedido producción trabajo (OPT). Muestra packs con demanda, saldo, reserva y cantidad a fabricar.</p>
+        <ul class="checklist">
+          <li>Pestaña <strong>Packs</strong> activa (alternar con Unidades para ver BOM).</li>
+          <li>Columnas: artículo, saldo, reserva, cant. pedido, cant. a fabricar, urgente.</li>
+          <li>Use <strong>Actualizar</strong> si necesita refrescar demanda desde pedidos.</li>
+        </ul>
+        <figure>
+          <img src="capturas/02-demanda-ventana-pack.png" alt="Pantalla de demanda por pack con tabla de artículos" loading="lazy">
+          <figcaption>Fig. 2 — Ventana demanda, vista Pack.</figcaption>
+        </figure>
+      </section>
+
+      <!-- Paso 3 -->
+      <section id="paso-3">
+        <h2><span class="step-num">3</span> Selección en demanda</h2>
+        <span class="route">/mpr/demanda/ventana-pack/</span>
+        <p class="lead">Marque la fila del pack a fabricar e indique la cantidad. En la corrida de prueba: artículo <strong>490</strong>, cantidad <strong>10</strong> unidades.</p>
+        <ul class="checklist">
+          <li>Active el checkbox de la fila deseada.</li>
+          <li>Edite <strong>Cant. a fabricar</strong> en la pestaña Packs (valor enviado al confirmar).</li>
+          <li>Pulse <strong>Continuar</strong> (debajo de la tabla) para ir a Confirmar OPT.</li>
+        </ul>
+        <div class="tip">
+          <strong>Docenas:</strong> en columnas Docenas el valor es unidades ÷ bulto del artículo (por defecto 12 si no está definido).
+        </div>
+        <figure>
+          <img src="capturas/03-demanda-fila-seleccionada.png" alt="Fila seleccionada en demanda con cantidad a fabricar" loading="lazy">
+          <figcaption>Fig. 3 — Pack seleccionado con cantidad a fabricar.</figcaption>
+        </figure>
+      </section>
+
+      <!-- Paso 4 -->
+      <section id="paso-4">
+        <h2><span class="step-num">4</span> Confirmar OPT (agrupar)</h2>
+        <span class="route">/mpr/demanda/ventana-pack/agrupar/</span>
+        <p class="lead">Desglose por componentes (BOM) de los packs seleccionados. Revise cantidades antes de generar la orden.</p>
+        <ul class="checklist">
+          <li>Tabla <strong>Unidades</strong> con saldo en Semi elaborado por componente.</li>
+          <li>Ajuste <strong>Cant. a fabricar</strong> (unidades o docenas) si hace falta.</li>
+          <li>Opcional: <strong>Fecha objetivo</strong> para KPI de OPT atrasadas.</li>
+          <li>No se pide operario aquí; se asigna en OPP.</li>
+          <li>Pulse <strong>Generar OPT</strong> para crear y liberar la orden.</li>
+        </ul>
+        <figure>
+          <img src="capturas/04-confirmar-opt.png" alt="Pantalla confirmar OPT con desglose BOM" loading="lazy">
+          <figcaption>Fig. 4 — Confirmar OPT antes de generar la orden.</figcaption>
+        </figure>
+      </section>
+
+      <!-- Paso 5 -->
+      <section id="paso-5">
+        <h2><span class="step-num">5</span> Detalle OPT (post-generar)</h2>
+        <span class="route">/mpr/opt/&lt;id_lista&gt;/</span>
+        <p class="lead">Tras generar, Synap redirige al detalle de la OPT recién creada (en la prueba: OPT 10).</p>
+        <ul class="checklist">
+          <li>Cabecera con número de OP, demanda, pendiente OPP y origen de demanda.</li>
+          <li>Timeline de progreso (Pedida → En producción → OPP → …).</li>
+          <li>Enlace <strong>Registrar OPP</strong> cuando hay componentes pendientes de distribuir.</li>
+          <li>La liberación OPT se ejecuta automáticamente si existe depósito tipo Producción.</li>
+        </ul>
+        <figure>
+          <img src="capturas/05-opt-detalle-post-generar.png" alt="Detalle de OPT recién generada" loading="lazy">
+          <figcaption>Fig. 5 — Detalle OPT inmediatamente después de Generar OPT.</figcaption>
+        </figure>
+      </section>
+
+      <!-- Paso 6 -->
+      <section id="paso-6">
+        <h2><span class="step-num">6</span> Formulario OPP (asistente paso 3)</h2>
+        <span class="route">/mpr/wizard/?paso=3&amp;id_lista=&lt;id&gt;</span>
+        <p class="lead">Distribución de componentes desde Producción hacia depósitos destino (Semi elaborado, Scrap, 2.ª selección).</p>
+        <ul class="checklist">
+          <li>Matriz componente × depósito: cargue docenas y unidades (1 docena = 12 unidades en OPP).</li>
+          <li><strong>Operario obligatorio</strong> en cada componente con cantidad &gt; 0.</li>
+          <li>La suma por componente no puede superar el pendiente a distribuir.</li>
+          <li>Solo cantidades &gt; 0 generan movimiento de stock.</li>
+        </ul>
+        <figure>
+          <img src="capturas/06-opp-formulario-completo.png" alt="Formulario OPP con operarios y cantidades por depósito" loading="lazy">
+          <figcaption>Fig. 6 — Paso 3 del asistente: crear OPP.</figcaption>
+        </figure>
+      </section>
+
+      <!-- Paso 7 -->
+      <section id="paso-7">
+        <h2><span class="step-num">7</span> OPP registrada</h2>
+        <span class="route">/mpr/wizard/?paso=3&amp;id_lista=&lt;id&gt;</span>
+        <p class="lead">Confirmación tras pulsar <strong>Registrar OPP</strong>. El asistente permanece en paso 3 si aún queda pendiente por distribuir.</p>
+        <ul class="checklist">
+          <li>Sin modal de error; mensaje de éxito o actualización de pendientes.</li>
+          <li>Columna <em>Pendiente a distribuir</em> disminuye según lo registrado.</li>
+          <li>Si el pendiente llega a 0, el asistente avanza al paso 4 (Cierre).</li>
+        </ul>
+        <figure>
+          <img src="capturas/07-opp-registrada.png" alt="Pantalla tras registrar OPP correctamente" loading="lazy">
+          <figcaption>Fig. 7 — OPP registrada sin errores.</figcaption>
+        </figure>
+      </section>
+
+      <!-- Paso 8 -->
+      <section id="paso-8">
+        <h2><span class="step-num">8</span> Tablero — validación post-OPP</h2>
+        <span class="route">/mpr/</span>
+        <p class="lead">Vuelva al tablero para verificar que el sistema refleja la OPP recién registrada.</p>
+        <ul class="checklist">
+          <li><em>Movimientos recientes</em> debe mostrar «OPP registrada» con comprobante.</li>
+          <li><em>OPTs en proceso</em> actualiza progreso y acciones (Crear OPP / Cerrar).</li>
+          <li>KPIs coherentes con el estado de la OPT de prueba.</li>
+        </ul>
+        <figure>
+          <img src="capturas/08-tablero-post-opp.png" alt="Tablero tras registrar OPP con movimientos actualizados" loading="lazy">
+          <figcaption>Fig. 8 — Tablero validado después de la OPP.</figcaption>
+        </figure>
+      </section>
+
+      <!-- Paso 9 -->
+      <section id="paso-9">
+        <h2><span class="step-num">9</span> Listado OPT</h2>
+        <span class="route">/mpr/opt/</span>
+        <p class="lead">Listado general de órdenes de producción con filtros, KPIs y acciones por fila.</p>
+        <ul class="checklist">
+          <li>La OPT de prueba aparece en la tabla (Nº lista, artículo, progreso %).</li>
+          <li>Columna <strong>Pend. OPP</strong> refleja lo distribuido.</li>
+          <li>Acciones: Ver, OPP (si aplica), Cerrar, Armado (cuando OPP = 0 y hay BOM).</li>
+        </ul>
+        <figure>
+          <img src="capturas/09-listado-opt.png" alt="Listado de OPT con la orden de prueba visible" loading="lazy">
+          <figcaption>Fig. 9 — Lista de OPT con la orden generada en la prueba.</figcaption>
+        </figure>
+      </section>
+
+      <!-- Paso 10 -->
+      <section id="paso-10">
+        <h2><span class="step-num">10</span> Detalle OPT — cierre del recorrido</h2>
+        <span class="route">/mpr/opt/&lt;id_lista&gt;/</span>
+        <p class="lead">Revisión final de trazabilidad: OPPs vinculadas, pendientes y estado de armado (si aplica BOM).</p>
+        <ul class="checklist">
+          <li>Progreso % del timeline actualizado tras la OPP.</li>
+          <li>Historial / enlaces a movimientos OPT y OPP.</li>
+          <li>Si pendiente OPP = 0: botón <strong>Cerrar OPT</strong> disponible.</li>
+          <li>Armado 1ra se realiza desde Producción → Armado (fuera del asistente).</li>
+        </ul>
+        <figure>
+          <img src="capturas/10-opt-detalle-final.png" alt="Detalle final de OPT con trazabilidad completa" loading="lazy">
+          <figcaption>Fig. 10 — Detalle OPT al cerrar el recorrido documentado.</figcaption>
+        </figure>
+      </section>
+
+      <section id="proximos">
+        <h2><span class="step-num">+</span> Próximos capítulos</h2>
+        <p class="lead">Este manual visual cubre demanda → OPT → OPP. Capítulos planificados para ampliar la suite E2E:</p>
+        <ul class="checklist">
+          <li>Armado 1ra desde OPT (carrito BOM, movimiento OPA).</li>
+          <li>Armado 2da (surtido) e imputación supervisor 1ra.</li>
+          <li>Cierre de OPT y validación de KPIs finales.</li>
+          <li>Lista de materiales y configuración de depósitos.</li>
+        </ul>
+        <p class="refs">Las capturas se regeneran con <code>tests/e2e/mpr/</code> (Playwright). Ver <a href="REGISTRO_FLUJO_E2E.md">REGISTRO_FLUJO_E2E.md</a>.</p>
+      </section>
+
+      <section id="referencias">
+        <h2><span class="step-num">📄</span> Referencias</h2>
+        <p class="refs">
+          Manual completo (texto): <a href="../MANUAL_USUARIO_MPR.md">MANUAL_USUARIO_MPR.md</a><br>
+          Glosario: <a href="../GLOSARIO_MPR.md">GLOSARIO_MPR.md</a><br>
+          Registro E2E: <a href="REGISTRO_FLUJO_E2E.md">REGISTRO_FLUJO_E2E.md</a><br>
+          Suite Playwright: <code>tests/e2e/mpr/README.md</code>
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <div class="lightbox" id="lightbox" role="dialog" aria-label="Ampliar captura">
+    <img src="" alt="" id="lightbox-img">
+  </div>
+
+  <script>
+    (function () {
+      var lb = document.getElementById('lightbox');
+      var lbImg = document.getElementById('lightbox-img');
+      document.querySelectorAll('figure img').forEach(function (img) {
+        img.addEventListener('click', function () {
+          lbImg.src = img.src;
+          lbImg.alt = img.alt;
+          lb.classList.add('open');
+        });
+      });
+      lb.addEventListener('click', function () {
+        lb.classList.remove('open');
+        lbImg.src = '';
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') lb.classList.remove('open');
+      });
+    })();
+  </script>
+</body>
+</html>

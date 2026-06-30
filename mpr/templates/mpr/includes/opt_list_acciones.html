@@ -1,0 +1,22 @@
+<div class="flex flex-wrap items-center gap-1.5">
+    <a href="{{ opt.detail_url }}" class="inline-flex min-h-9 items-center justify-center rounded-lg bg-purple-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-800">Ver</a>
+    {% if opt.accion_principal == 'crear_opp' and opt.crear_opp_url %}
+    <a href="{{ opt.crear_opp_url }}" class="inline-flex min-h-9 items-center justify-center rounded-lg border border-purple-300 bg-purple-50 px-2.5 text-xs font-semibold text-purple-800 transition-colors hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-950/30 dark:text-purple-200" title="Registrar parte de producción">OPP</a>
+    {% elif opt.accion_principal == 'cerrar' and opt.cerrar_url %}
+    <form method="post" action="{{ opt.cerrar_url }}" class="mpr-post-loading inline"
+          data-mpr-loading-title="Cerrando OPT"
+          data-mpr-loading-subtitle="Actualizando estado…">
+        {% csrf_token %}
+        <button type="submit" class="inline-flex min-h-9 items-center justify-center rounded-lg bg-emerald-600 px-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700">Cerrar</button>
+    </form>
+    {% endif %}
+    {% if opt.mostrar_link_armado %}
+    <a href="{{ opt.armado_url }}" class="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200" title="Armado 1ra unificado">Armado</a>
+    {% endif %}
+    {% if opt.mostrar_link_imputacion and opt.imputacion_url %}
+    <a href="{{ opt.imputacion_url }}" class="inline-flex min-h-9 items-center justify-center gap-1 rounded-lg border border-purple-300 bg-purple-50 px-2.5 text-xs font-semibold text-purple-800 transition-colors hover:bg-purple-100 dark:border-purple-700 dark:bg-purple-950/30 dark:text-purple-200" title="Imputar MSTOCK pendiente{% if opt.mstock_pendiente_imputar %} ({{ opt.mstock_pendiente_imputar }} u.){% endif %}">
+        <span class="material-icons text-sm" aria-hidden="true">assignment_turned_in</span>
+        Imputar
+    </a>
+    {% endif %}
+</div>

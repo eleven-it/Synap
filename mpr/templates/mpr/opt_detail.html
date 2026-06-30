@@ -5,7 +5,7 @@
 
 {% block content %}
 <section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
-    <div class="mx-auto w-full min-w-0 max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
         <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
             <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <li><a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a></li>
@@ -31,6 +31,10 @@
             <div class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                 <div class="min-w-0">
                     <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">OPT {{ opt_numero }}</h1>
+                    <p class="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-300 dark:text-slate-400">
+                        <span>Origen de demanda:</span>
+                        {% include "mpr/includes/origen_demanda_badge.html" with origen=origen_demanda_opt %}
+                    </p>
                     <div class="mt-3 grid grid-cols-1 gap-3 text-sm text-slate-300 dark:text-slate-400 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 sm:gap-x-4">
                         {% include "mpr/includes/opt_resumen_metrica.html" with resumen=resumen_demanda etiqueta="Demanda total" only %}
                         {% include "mpr/includes/opt_resumen_metrica.html" with resumen=resumen_en_opt etiqueta="En esta OPT" only %}
@@ -80,7 +84,6 @@
                 <span class="inline-flex items-center gap-1">{% if paso_liberada_opt %}<span class="material-icons text-base text-green-500">check_circle</span>{% else %}<span class="material-icons text-base text-gray-400">radio_button_unchecked</span>{% endif %} En producción</span>
                 <span class="inline-flex items-center gap-1">{% if paso_producida_opp %}<span class="material-icons text-base text-green-500">check_circle</span>{% else %}<span class="material-icons text-base text-gray-400">radio_button_unchecked</span>{% endif %} Producida (OPP)</span>
                 <span class="inline-flex items-center gap-1">{% if paso_pendiente_cero %}<span class="material-icons text-base text-green-500">check_circle</span>{% else %}<span class="material-icons text-base text-gray-400">radio_button_unchecked</span>{% endif %} Pendiente 0</span>
-                <span class="inline-flex items-center gap-1">{% if paso_armado %}<span class="material-icons text-base text-green-500">check_circle</span>{% else %}<span class="material-icons text-base text-gray-400">radio_button_unchecked</span>{% endif %} Armado</span>
                 <span class="inline-flex items-center gap-1">{% if paso_cerrado %}<span class="material-icons text-base text-green-500">check_circle</span>{% else %}<span class="material-icons text-base text-gray-400">radio_button_unchecked</span>{% endif %} Cerrado</span>
             </div>
         </div>
@@ -89,6 +92,13 @@
             <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
                 <h2 class="text-base font-bold text-gray-900 dark:text-white">Artículos en producción ({{ lineas|length }})</h2>
                 <p class="mt-1 text-xs text-gray-500 dark:text-gray-400 md:hidden">Deslizá horizontalmente si hace falta</p>
+                {% if mostrar_aviso_armado_pendiente_opp %}
+                <p class="mt-2 max-w-3xl text-xs text-slate-600 dark:text-slate-400">
+                    Este pack tiene lista de materiales. El armado se hace desde
+                    <a href="{{ armado_url }}" class="font-semibold text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción → Armado</a>.
+                    Las columnas <strong>Armado</strong> y <strong>Restante por armar</strong> aparecerán cuando el pendiente OPP de esta OPT sea 0.
+                </p>
+                {% endif %}
             </div>
             <div class="overflow-x-auto" role="region" aria-label="Líneas de producción">
                 <table class="min-w-[48rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
@@ -97,9 +107,10 @@
                         <tr>
                             <th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Cod. sistema</th>
                             <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Cod. manual y descripción</th>
+                            <th scope="col" class="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5" title="Pedido PED, reserva de stock o ambos (detalle lista_produccion_detalle)">Origen</th>
                             <th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Demanda total</th>
                             <th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Cant. en esta OPT</th>
-                            {% if lineas_with_armado %}<th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Armado</th><th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Restante por armar</th>{% if hay_unidades_a_desperdicio_otro %}<th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5" title="Unidades enviadas a Desperdicio u otro depósito distinto de Semi elaborado (no se arman)">A desperdicio/otros</th>{% endif %}{% endif %}
+                            {% if mostrar_metricas_armado_opt %}<th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Armado</th><th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5" title="Semi elaborado enviado por OPP menos lo ya armado vinculado a esta OPT">Restante por armar</th>{% if hay_unidades_a_desperdicio_otro %}<th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5" title="Unidades enviadas a Desperdicio u otro depósito distinto de Semi elaborado (no se arman)">A desperdicio/otros</th>{% endif %}{% endif %}
                             <th scope="col" class="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Estado</th>
                         </tr>
                     </thead>
@@ -111,6 +122,9 @@
                                 <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ linea.codigo_manual|default:linea.codigo_articulo|default:"-" }}</span>
                                 <span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">{{ linea.descripcion_articulo|default:"-" }}</span>
                             </td>
+                            <td class="px-4 py-3.5 text-center sm:px-5">
+                                {% include "mpr/includes/origen_demanda_badge.html" with origen=linea.origen_demanda_etiqueta %}
+                            </td>
                             <td class="px-4 py-3.5 text-right text-sm text-gray-700 dark:text-gray-300 sm:px-5">
                                 {% include "mpr/includes/opt_cantidad_packs_du.html" with packs=linea.cantidad_pedida du=linea.cantidad_pedida_du only %}
                             </td>
@@ -119,7 +133,7 @@
                                 {% include "mpr/includes/opt_cantidad_packs_du.html" with packs=linea.cantidad_en_esta_opt du=linea.cantidad_en_esta_opt_du only %}
                                 {% else %}—{% endif %}
                             </td>
-                            {% if lineas_with_armado %}
+                            {% if mostrar_metricas_armado_opt %}
                             <td class="px-4 py-3.5 text-right text-sm text-gray-700 dark:text-gray-300 sm:px-5">
                                 {% if linea.cantidad_ya_armada_texto_du %}
                                 {% include "mpr/includes/opt_cantidad_packs_du.html" with packs=linea.cantidad_ya_armada du=linea.cantidad_ya_armada_du only %}
@@ -154,8 +168,16 @@
 
         {% if id_lista %}
         <div class="mb-8 overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+            <div class="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
                 <h2 class="text-base font-bold text-gray-900 dark:text-white">Partes de producción (OPP) registradas</h2>
+                {% if hay_disponible_opp and en_proceso %}
+                <a href="{% url 'mpr:wizard' %}?paso=3&amp;id_lista={{ id_lista }}"
+                   class="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 sm:self-auto"
+                   title="Registrar parte de producción (asistente paso OPP)">
+                    <span class="material-icons text-lg" aria-hidden="true">assignment</span>
+                    Registrar OPP
+                </a>
+                {% endif %}
             </div>
             <div class="p-5 sm:p-6">
                 {% if not opp_registradas %}
@@ -207,14 +229,23 @@
         </div>
         {% endif %}
 
-        {% if id_lista %}
+        {% if id_lista and tiene_lineas_armables %}
         <div class="mb-8 overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-                <h2 class="text-base font-bold text-gray-900 dark:text-white">Armados (OPA) registrados</h2>
+                <h2 class="text-base font-bold text-gray-900 dark:text-white">Armados (OPA) vinculados a esta OPT</h2>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    Solo comprobantes cuyo detalle referencia esta OPT. Armados desde el menú sin vínculo no se listan aquí;
+                    use <a href="{% url 'mpr:imputacion_armado_1ra' %}" class="font-semibold text-purple-600 hover:text-purple-800 dark:text-purple-400">Imputación de pedido</a> para reconciliar demanda.
+                </p>
             </div>
             <div class="p-5 sm:p-6">
                 {% if not opas_registradas %}
-                <p class="text-sm text-gray-600 dark:text-gray-400">Aún no se registró ningún armado para esta OPT.</p>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Aún no hay armados vinculados a esta OPT.
+                    {% if en_proceso %}
+                    Ejecute armado desde <a href="{{ armado_url }}" class="font-semibold text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción → Armado</a> (modo 1ra).
+                    {% endif %}
+                </p>
                 {% else %}
                 <div class="overflow-x-auto" role="region" aria-label="OPA registrados">
                     <table class="min-w-[40rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
@@ -256,72 +287,6 @@
             </div>
         </div>
         {% endif %}
-
-        <div class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2">
-            {% if mostrar_tarjeta_armado_surtido %}
-            {% if puede_armado_surtido %}
-            <a href="{{ armado_surtido_url }}" class="group flex items-center gap-4 rounded-2xl border border-emerald-200/90 bg-white p-5 shadow-sm transition-all hover:border-emerald-500 hover:shadow-md dark:border-emerald-800/50 dark:bg-gray-800 dark:hover:border-emerald-500">
-                <span class="material-icons shrink-0 text-3xl text-emerald-600 transition-transform group-hover:scale-105 dark:text-emerald-400" aria-hidden="true">category</span>
-                <div class="min-w-0">
-                    <p class="font-bold text-gray-900 dark:text-white">Armado surtido</p>
-                    <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Pack con composición libre desde 2.ª selección (trazabilidad OPT {{ opt_numero }})</p>
-                </div>
-            </a>
-            {% else %}
-            <div class="flex cursor-not-allowed items-center gap-4 rounded-2xl border border-gray-200 bg-gray-100/80 p-5 opacity-80 dark:border-gray-700 dark:bg-gray-800" title="{{ motivo_armado_surtido_bloqueado|default:'Armado surtido no disponible' }}">
-                <span class="material-icons shrink-0 text-3xl text-gray-400" aria-hidden="true">category</span>
-                <div class="min-w-0">
-                    <p class="font-bold text-gray-600 dark:text-gray-400">Armado surtido</p>
-                    <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-500">{{ motivo_armado_surtido_bloqueado|default:"Registre OPP con envío a 2.ª selección." }}</p>
-                </div>
-            </div>
-            {% endif %}
-            {% endif %}
-            {% if lineas_with_armado %}
-            {% if not en_proceso %}
-            <div class="flex cursor-not-allowed items-center gap-4 rounded-2xl border border-gray-200 bg-gray-100/80 p-5 opacity-80 dark:border-gray-700 dark:bg-gray-800" title="OPT cerrada">
-                <span class="material-icons shrink-0 text-3xl text-gray-400" aria-hidden="true">build</span>
-                <div>
-                    <p class="font-bold text-gray-600 dark:text-gray-400">Armado desde esta OPT</p>
-                    <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-500">OPT cerrada. Todo el armado ya fue registrado.</p>
-                </div>
-            </div>
-            {% elif hay_disponible_opp %}
-            <div class="flex cursor-not-allowed items-center gap-4 rounded-2xl border border-gray-200 bg-gray-100/80 p-5 opacity-80 dark:border-gray-700 dark:bg-gray-800" title="Disponible cuando pendiente = 0">
-                <span class="material-icons shrink-0 text-3xl text-gray-400" aria-hidden="true">build</span>
-                <div>
-                    <p class="font-bold text-gray-600 dark:text-gray-400">Armado desde esta OPT</p>
-                    <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-500">Disponible cuando pendiente = 0 (todo registrado por OPP)</p>
-                </div>
-            </div>
-            {% elif not hay_restante_armar %}
-            <div class="flex cursor-not-allowed items-center gap-4 rounded-2xl border border-gray-200 bg-gray-100/80 p-5 opacity-80 dark:border-gray-700 dark:bg-gray-800" title="Todo el armado ya registrado">
-                <span class="material-icons shrink-0 text-3xl text-gray-400" aria-hidden="true">build</span>
-                <div>
-                    <p class="font-bold text-gray-600 dark:text-gray-400">Armado desde esta OPT</p>
-                    <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-500">Todo el armado de esta OPT ya fue registrado</p>
-                </div>
-            </div>
-            {% else %}
-            <a href="{{ lineas_with_armado.0.armado_url }}" class="group flex items-center gap-4 rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm transition-all hover:border-purple-400 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-purple-500">
-                <span class="material-icons shrink-0 text-3xl text-blue-500 transition-transform group-hover:scale-105 dark:text-blue-400" aria-hidden="true">build</span>
-                <div class="min-w-0">
-                    <p class="font-bold text-gray-900 dark:text-white">Armado desde esta OPT</p>
-                    <p class="mt-0.5 text-sm text-gray-500 dark:text-gray-400">Ir a armado con cantidades restantes por artículo</p>
-                </div>
-            </a>
-            {% endif %}
-            {% endif %}
-            {% if id_lista and hay_disponible_opp and en_proceso %}
-            <a href="{% url 'mpr:wizard' %}?paso=3&amp;id_lista={{ id_lista }}" class="group flex items-center gap-4 rounded-2xl border border-transparent bg-purple-600 p-5 text-white shadow-md transition-all hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
-                <span class="material-icons shrink-0 text-3xl transition-transform group-hover:scale-105" aria-hidden="true">assignment</span>
-                <div class="min-w-0">
-                    <p class="font-bold">Registrar OPP</p>
-                    <p class="mt-0.5 text-sm text-white/90">Registrar parte de producción (asistente paso OPP)</p>
-                </div>
-            </a>
-            {% endif %}
-        </div>
 
         {% if id_lista and total_pendiente == 0 and en_proceso %}
         <div class="mb-8 rounded-2xl border border-green-600/40 bg-green-50/90 p-5 dark:border-green-500/30 dark:bg-green-900/20">

@@ -1,0 +1,199 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Asignación vendedor | Ventas | Synap{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<style>
+  .va-vendedor-drop-target.va-drag-over {
+    outline: 2px solid rgb(147 51 234);
+    outline-offset: 2px;
+    background: rgb(243 232 255 / 0.5);
+  }
+  .va-row-dragging { opacity: 0.45; }
+  .va-sidebar { max-height: min(70vh, 36rem); }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="flex flex-col bg-slate-50 py-4 dark:bg-slate-900 sm:py-5">
+  <div class="mx-auto w-full min-w-0 max-w-[1600px] px-4 sm:px-6 lg:px-8"
+       x-data="vaAsignacionApp({
+         modoInicial: '{{ modo_inicial }}',
+         puedeEditar: {{ puede_editar|yesno:'true,false' }},
+         pageSize: {{ page_size_default }},
+         urls: {
+           resumen: '{% url 'ventas:api_vendedor_asignacion_resumen' %}',
+           items: '{% url 'ventas:api_vendedor_asignacion_items' %}',
+           asignar: '{% url 'ventas:api_vendedor_asignacion_asignar' %}',
+           vendedoresBuscar: '{% url 'ventas:api_vendedor_asignacion_vendedores_buscar' %}'
+         }
+       })"
+       x-init="init()">
+
+    {% csrf_token %}
+
+    <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4" aria-label="Migas de pan">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Ventas</span></li>
+        <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+        <li><span class="font-medium text-slate-800 dark:text-slate-200">Asignación vendedor</span></li>
+      </ol>
+    </nav>
+
+    <header class="mb-5 flex flex-col gap-4 border-b border-slate-200/80 pb-5 dark:border-slate-700/80 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">Asignación vendedor</h1>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          Asigná clientes o marcas a vendedores activos. Arrastrá filas al vendedor en la lista lateral o usá asignación masiva.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Tipo de asignación">
+        <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Asignar:</span>
+        <button type="button"
+                class="inline-flex min-h-9 items-center rounded-lg px-3.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                :class="modo === 'cliente' ? 'bg-purple-600 text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'"
+                @click="cambiarModo('cliente')">Cliente</button>
+        <button type="button"
+                class="inline-flex min-h-9 items-center rounded-lg px-3.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                :class="modo === 'marca' ? 'bg-purple-600 text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'"
+                @click="cambiarModo('marca')">Marca</button>
+      </div>
+    </header>
+
+    <div x-show="mensaje" x-cloak class="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200" x-text="mensaje" role="status"></div>
+    <div x-show="error" x-cloak class="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-900 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200" x-text="error" role="alert"></div>
+
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(14rem,18rem)_minmax(0,1fr)]">
+      <!-- Sidebar vendedores -->
+      <aside class="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="border-b border-slate-100 p-3 dark:border-slate-700">
+          <button type="button"
+                  class="va-vendedor-drop-target mb-2 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors"
+                  :class="vendedorSeleccionado === null && filtro === 'sin_asignar' ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/30' : 'border-amber-300 bg-amber-50/80 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/20'"
+                  @click="seleccionarVendedor(null)"
+                  @dragover="onDragOver($event)"
+                  @drop="onDropDesasignar($event)">
+            <span class="text-slate-800 dark:text-slate-100">Sin asignar</span>
+            <span class="tabular-nums text-xs font-bold text-amber-800 dark:text-amber-200" x-text="sinAsignar"></span>
+          </button>
+          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Buscar vendedor</label>
+          <input type="search" x-model="qVendedor" @input.debounce.300ms="cargarResumen()"
+                 placeholder="Código o nombre…"
+                 class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+        </div>
+        <div class="va-sidebar overflow-y-auto p-2" role="navigation" aria-label="Vendedores">
+          <template x-for="v in vendedores" :key="v.id_vendedor">
+            <button type="button"
+                    class="va-vendedor-drop-target mb-1 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors"
+                    :class="vendedorSeleccionado === v.id_vendedor ? 'border-purple-500 bg-purple-50 dark:bg-purple-950/30' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700/50'"
+                    @click="seleccionarVendedor(v.id_vendedor)"
+                    @dragover="onDragOver($event)"
+                    @drop="onDropVendedor($event, v.id_vendedor)">
+              <span class="min-w-0 truncate font-medium text-slate-800 dark:text-slate-100" x-text="v.etiqueta"></span>
+              <span class="ml-2 shrink-0 tabular-nums text-xs text-slate-500" x-text="v.cantidad"></span>
+            </button>
+          </template>
+        </div>
+        <p class="border-t border-slate-100 p-2 text-[10px] text-slate-500 dark:border-slate-700" x-show="puedeEditar">
+          Soltá aquí filas seleccionadas para asignar o en «Sin asignar» para quitar.
+        </p>
+      </aside>
+
+      <!-- Panel principal -->
+      <div class="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex flex-wrap items-end gap-3 border-b border-slate-100 p-4 dark:border-slate-700">
+          <div class="min-w-[12rem] flex-1">
+            <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+              Buscar <span x-text="etiquetaModoPlural().toLowerCase()"></span>
+            </label>
+            <input type="search" x-model="qItem" @input.debounce.350ms="page=1; cargarItems()"
+                   :placeholder="'Código o nombre de ' + etiquetaModo().toLowerCase() + '…'"
+                   class="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+          </div>
+          <template x-if="puedeEditar">
+            <div class="flex flex-wrap items-end gap-2">
+              <div class="min-w-[10rem]">
+                <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">Asignar selección a</label>
+                <select x-model="destinoVendedorId"
+                        class="h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+                  <option value="">— Elegir vendedor —</option>
+                  <template x-for="v in vendedores" :key="'d'+v.id_vendedor">
+                    <option :value="v.id_vendedor" x-text="v.etiqueta"></option>
+                  </template>
+                </select>
+              </div>
+              <button type="button" @click="asignarA(destinoVendedorId ? Number(destinoVendedorId) : null)"
+                      :disabled="!destinoVendedorId || cargando"
+                      class="inline-flex h-10 items-center rounded-lg bg-purple-600 px-4 text-xs font-semibold text-white hover:bg-purple-700 disabled:opacity-50">
+                Aplicar
+              </button>
+              <button type="button" @click="desasignarSeleccionados()" :disabled="cargando"
+                      class="inline-flex h-10 items-center rounded-lg border border-slate-300 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200">
+                Quitar asignación
+              </button>
+            </div>
+          </template>
+        </div>
+
+        <div class="overflow-x-auto" role="region" :aria-label="'Tabla de ' + etiquetaModoPlural().toLowerCase()">
+          <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+            <thead class="bg-slate-50 dark:bg-slate-800/90">
+              <tr>
+                <th class="w-10 px-3 py-2" x-show="puedeEditar">
+                  <input type="checkbox" class="rounded border-slate-300" @change="toggleTodosVisibles($event)" aria-label="Seleccionar todos visibles" />
+                </th>
+                <th class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Código</th>
+                <th class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300" x-text="etiquetaModo()"></th>
+                <th class="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300">Vendedor actual</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+              <template x-if="!items.length && !cargando">
+                <tr><td colspan="4" class="px-4 py-8 text-center text-sm text-slate-500" x-text="mensajeVacio()"></td></tr>
+              </template>
+              <template x-for="row in items" :key="row.id_item">
+                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30"
+                    :class="puedeEditar ? 'cursor-grab' : ''"
+                    :draggable="puedeEditar"
+                    @dragstart="onDragStart($event, row.id_item)">
+                  <td class="px-3 py-2" x-show="puedeEditar">
+                    <input type="checkbox" class="rounded border-slate-300"
+                           :checked="seleccionados.includes(row.id_item)"
+                           @change="toggleSeleccion(row.id_item)" />
+                  </td>
+                  <td class="whitespace-nowrap px-4 py-2 text-sm tabular-nums text-slate-800 dark:text-slate-100" x-text="row.id_item"></td>
+                  <td class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300" x-text="row.nombre || '—'"></td>
+                  <td class="px-4 py-2 text-sm text-slate-600 dark:text-slate-400">
+                    <span x-text="row.nombre_vendedor ? (row.nombre_vendedor + ' (cod: ' + row.id_vendedor + ')') : '—'"></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <footer class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-sm dark:border-slate-700">
+          <span class="text-slate-600 dark:text-slate-400">
+            <span x-text="total"></span> <span x-text="etiquetaModoPlural().toLowerCase()"></span>
+            <span x-show="cargando" class="ml-2 text-purple-600">Cargando…</span>
+          </span>
+          <div class="flex items-center gap-2">
+            <button type="button" @click="irPagina(page - 1)" :disabled="page <= 1"
+                    class="rounded-lg border border-slate-300 px-3 py-1 text-xs disabled:opacity-40 dark:border-slate-600">Anterior</button>
+            <span class="tabular-nums text-xs text-slate-600 dark:text-slate-400" x-text="'Pág. ' + page + ' / ' + totalPages"></span>
+            <button type="button" @click="irPagina(page + 1)" :disabled="page >= totalPages"
+                    class="rounded-lg border border-slate-300 px-3 py-1 text-xs disabled:opacity-40 dark:border-slate-600">Siguiente</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script src="{% static 'ventas/js/vendedor_asignacion.js' %}"></script>
+{% endblock %}

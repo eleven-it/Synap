@@ -6,7 +6,7 @@ Normativa de **referencia canónica de interfaz** en Synap para migraciones, rev
 
 Documento operativo asociado: `docs/general/FUENTE_VERDAD_UI_REPORTES_MPR.md`.
 
-*Archivado desde el cambio OpenSpec `fuente-verdad-ui-reportes-mpr` (06/05/2026).*
+*Archivado desde los cambios OpenSpec `fuente-verdad-ui-reportes-mpr` (06/05/2026) y `armado-unificado-imputacion-1ra` (17/06/2026).*
 
 ## Requirements
 
@@ -15,7 +15,7 @@ Documento operativo asociado: `docs/general/FUENTE_VERDAD_UI_REPORTES_MPR.md`.
 The organization MUST tratar como **referencia canónica de UX/UI** (layout, jerarquía visual, patrones de feedback, tablas responsive, héroes, modales de carga, breadcrumbs y accesibilidad mínima documentada) las siguientes superficies implementadas en el código:
 
 - **Reportes:** vistas bajo la ruta HTTP `/reports/dashboard/<slug>/` resueltas por `DashboardDetailView`, usando por defecto la plantilla `reports/dashboard_detail.html`, y la plantilla `reports/executive_summary.html` cuando el slug sea el de resumen ejecutivo definido en código.
-- **MPR:** vistas bajo `/mpr/wizard/` (asistente de producción) y el conjunto de rutas `/mpr/opt/...` (listado, detalle, creación, armado de OPT y acciones asociadas en `mpr/urls.py`), incluyendo el layout `mpr/base_mpr.html` y las plantillas que extienden dicho layout para esos flujos.
+- **MPR:** vistas bajo `/mpr/wizard/` (asistente de producción), el conjunto de rutas `/mpr/opt/...` para listado, detalle, creación y OPP (sin CTAs de armado en detalle), **`/mpr/armado/`** (Armado 1ra y 2da unificado), **`/mpr/imputacion-armado-1ra/`** (supervisor), incluyendo `mpr/base_mpr.html` y plantillas que extienden dicho layout para esos flujos.
 
 #### Scenario: Identificación de canon para un informe nuevo
 
@@ -28,7 +28,14 @@ The organization MUST tratar como **referencia canónica de UX/UI** (layout, jer
 
 - **GIVEN** un desarrollador o agente debe alinear una pantalla de producción con el resto del módulo MPR
 - **WHEN** elige componentes o clases Tailwind de referencia
-- **THEN** MUST basarse en `mpr/wizard.html`, `mpr/opt_list.html`, `mpr/opt_detail.html` y `mpr/base_mpr.html`
+- **THEN** MUST basarse en `mpr/wizard.html`, `mpr/opt_list.html`, `mpr/opt_detail.html`, **`mpr/armado_surtido.html`** (POS armado unificado 1ra/2da), **`mpr/imputacion_armado_1ra.html`** y `mpr/base_mpr.html`
+
+#### Scenario: Canon para pantalla de armado POS
+
+- **GIVEN** un desarrollador implementa o migra flujo de armado con carrito
+- **WHEN** busca referencia visual en MPR
+- **THEN** MUST usar `/mpr/armado/` y includes asociados (`armado_surtido.html`)
+- **AND** MUST NOT usar `mpr/armado_opt.html` ni CTAs de armado en `opt_detail.html` como patrón canónico
 
 ### Requirement: Exclusión explícita de Ventas (objetivos y presupuestos) como referencia UI
 

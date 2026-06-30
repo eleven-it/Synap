@@ -813,6 +813,172 @@ def run_mpr_lista_produccion_detalle_corregir_pk_nombre_mysql(conn) -> Dict[str,
 
 
 # ---------------------------------------------------------------------------
+# Asignación vendedor ↔ cliente / marca (Synap ventas + ecom)
+# ---------------------------------------------------------------------------
+
+_ECOM_FUENTE_VENDEDOR_CONFIG: Tuple[Dict[str, str], ...] = (
+    {
+        "key_permiso": "ecom_fuente_vendedor_cliente",
+        "nombre_permiso": "Fuente relación vendedor-cliente",
+        "detalle_permiso": (
+            "legacy: filtra por cliente.CodViajante; "
+            "tabla: filtra por vendedores_clientes_asignacion"
+        ),
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Texto",
+        "valor_permiso": "legacy",
+        "detalle_valor_permiso": "legacy-tabla",
+    },
+    {
+        "key_permiso": "ecom_fuente_vendedor_marca",
+        "nombre_permiso": "Fuente relación vendedor-marca",
+        "detalle_permiso": (
+            "legacy: sin tabla de asignación por marca; "
+            "tabla: usa vendedores_marcas_asignacion"
+        ),
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Texto",
+        "valor_permiso": "legacy",
+        "detalle_valor_permiso": "legacy-tabla",
+    },
+)
+
+
+def _tabla_existe(cursor, table_name: str) -> bool:
+    cursor.execute(
+        """
+        SELECT COUNT(*) FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = %s
+        """,
+        (table_name,),
+    )
+    row = cursor.fetchone()
+    return bool(row and int(row[0] or 0) > 0)
+
+
+def _ecom_config_key_existe(cursor, tabla: str, key_permiso: str) -> bool:
+    if not _tabla_existe(cursor, tabla):
+        return False
+    tbl = nombre_tabla_real(cursor, tabla) or tabla
+    cursor.execute(
+        f"SELECT 1 FROM `{tbl.replace('`', '``')}` WHERE key_permiso = %s LIMIT 1",
+        (key_permiso,),
+    )
+    return cursor.fetchone() is not None
+
+
+def _insertar_ecom_config_si_falta(
+    cursor,
+    tabla: str,
+    row: Dict[str, str],
+    applied: List[str],
+    failed: List[str],
+) -> None:
+    key = row["key_permiso"]
+    if _ecom_config_key_existe(cursor, tabla, key):
+        _append_migration(applied, failed, True, f"{tabla}.{key} ya existe (omitido)")
+        return
+    tbl = nombre_tabla_real(cursor, tabla) or tabla
+    tbl_esc = tbl.replace("`", "``")
+    cursor.execute(
+        f"""
+        INSERT INTO `{tbl_esc}` (
+            key_permiso, nombre_permiso, detalle_permiso,
+            grupo_permiso, tipo_permiso, valor_permiso, detalle_valor_permiso
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            row["key_permiso"],
+            row["nombre_permiso"],
+            row["detalle_permiso"],
+            row["grupo_permiso"],
+            row["tipo_permiso"],
+            row["valor_permiso"],
+            row["detalle_valor_permiso"],
+        ),
+    )
+    _append_migration(applied, failed, True, f"INSERT {tabla}.{key}")
+
+
+def run_vendedores_asignacion_mysql(conn) -> Dict[str, Any]:
+    """
+    Tablas ``vendedores_clientes_asignacion`` y ``vendedores_marcas_asignacion``,
+    más claves en ``configuracion_ecom_conf`` / ``configuracion_ecom`` para elegir
+    fuente legacy vs tabla en ecom.
+
+    Ver ``docs/general/SPEC_VENDEDOR_ASIGNACION_VENTAS.md``.
+    """
+    applied: List[str] = []
+    failed: List[str] = []
+    cursor = conn.cursor()
+    try:
+        if not _tabla_existe(cursor, "vendedores_clientes_asignacion"):
+            cursor.execute(
+                """
+                CREATE TABLE vendedores_clientes_asignacion (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    id_vendedor INT NOT NULL COMMENT 'viajantes.CodViajante',
+                    id_cliente INT NOT NULL COMMENT 'cliente.Codigo',
+                    fecha_alta DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    fecha_mod DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+                    usuario_mod VARCHAR(60) NULL,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uk_vca_cliente (id_cliente),
+                    INDEX idx_vca_vendedor (id_vendedor)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Asignación vendedor-cliente (Synap; alternativa a cliente.CodViajante)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE vendedores_clientes_asignacion")
+        else:
+            _append_migration(
+                applied, failed, True, "vendedores_clientes_asignacion ya existe (omitido)"
+            )
+
+        if not _tabla_existe(cursor, "vendedores_marcas_asignacion"):
+            cursor.execute(
+                """
+                CREATE TABLE vendedores_marcas_asignacion (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    id_vendedor INT NOT NULL COMMENT 'viajantes.CodViajante',
+                    id_marca INT NOT NULL COMMENT 'marca.CodMarca',
+                    fecha_alta DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    fecha_mod DATETIME NULL ON UPDATE CURRENT_TIMESTAMP,
+                    usuario_mod VARCHAR(60) NULL,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uk_vma_marca (id_marca),
+                    INDEX idx_vma_vendedor (id_vendedor)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Asignación vendedor-marca (Synap)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE vendedores_marcas_asignacion")
+        else:
+            _append_migration(
+                applied, failed, True, "vendedores_marcas_asignacion ya existe (omitido)"
+            )
+
+        for row in _ECOM_FUENTE_VENDEDOR_CONFIG:
+            _insertar_ecom_config_si_falta(cursor, "configuracion_ecom_conf", row, applied, failed)
+            _insertar_ecom_config_si_falta(cursor, "configuracion_ecom", row, applied, failed)
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_vendedores_asignacion_mysql: %s", e)
+        failed.append(str(e))
+    finally:
+        cursor.close()
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Registro para la UI y ejecución selectiva
 # ---------------------------------------------------------------------------
 
@@ -908,6 +1074,17 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "bajo",
         "run": run_viajantes_objetivos_ventas_mysql,
+    },
+    {
+        "id": "vendedores_asignacion",
+        "title": "Ventas — asignación vendedor-cliente / vendedor-marca",
+        "description": (
+            "Tablas ``vendedores_clientes_asignacion`` y ``vendedores_marcas_asignacion``, "
+            "y claves ``ecom_fuente_vendedor_cliente`` / ``ecom_fuente_vendedor_marca`` "
+            "(legacy | tabla) en configuracion_ecom_conf y configuracion_ecom."
+        ),
+        "risk": "bajo",
+        "run": run_vendedores_asignacion_mysql,
     },
 ]
 

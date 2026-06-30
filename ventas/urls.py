@@ -2,6 +2,7 @@ from django.urls import path
 
 from ventas import views
 from ventas import views_presupuesto
+from ventas import views_vendedor_asignacion
 
 app_name = "ventas"
 
@@ -26,6 +27,32 @@ urlpatterns = [
     path("objetivos-venta/<int:id_periodo>/", views.objetivos_periodo_detalle_view, name="objetivos_periodo_detalle"),
     path("api/objetivos-venta/guardar/", views.objetivos_venta_guardar_api, name="api_objetivos_guardar"),
     path("api/vendedores/buscar/", views.api_vendedores_buscar, name="api_vendedores_buscar"),
+    # Asignación vendedor ↔ cliente / marca
+    path(
+        "asignacion-vendedor/",
+        views_vendedor_asignacion.vendedor_asignacion_view,
+        name="vendedor_asignacion",
+    ),
+    path(
+        "api/asignacion-vendedor/resumen/",
+        views_vendedor_asignacion.api_vendedor_asignacion_resumen,
+        name="api_vendedor_asignacion_resumen",
+    ),
+    path(
+        "api/asignacion-vendedor/items/",
+        views_vendedor_asignacion.api_vendedor_asignacion_items,
+        name="api_vendedor_asignacion_items",
+    ),
+    path(
+        "api/asignacion-vendedor/vendedores/buscar/",
+        views_vendedor_asignacion.api_vendedor_asignacion_vendedores_buscar,
+        name="api_vendedor_asignacion_vendedores_buscar",
+    ),
+    path(
+        "api/asignacion-vendedor/asignar/",
+        views_vendedor_asignacion.api_vendedor_asignacion_asignar,
+        name="api_vendedor_asignacion_asignar",
+    ),
     # Presupuestos de venta (PRE)
     path("presupuestos/", views_presupuesto.presupuesto_list_view, name="presupuesto_list"),
     path("presupuestos/nuevo/", views_presupuesto.presupuesto_nuevo_view, name="presupuesto_nuevo"),

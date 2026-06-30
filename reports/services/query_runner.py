@@ -2439,8 +2439,14 @@ class QueryRunnerService:
         Listado de stock y existencias por artículo y depósito. Disponible alineado al informe BO:
         GREATEST(0, stock_deposito.saldo − reservado), con reservado por (IDArt, CodDeposito)
         desde stockp+comp_ped (PED En preparación/Preparado), sin usar saldo_pedido_cliente.
-        La búsqueda predictiva y el orden por columnas se resuelven en el cliente.
+        Búsqueda, orden y paginación en servidor; agrupación en cliente (fetch completo si activa).
         """
+        from .stock_existencias_query import (
+            DEFAULT_PAGE_SIZE,
+            execute_stock_existencias,
+            parse_stock_existencias_filters,
+        )
+
         started_at = timezone.now()
         try:
             filters = payload.get("filters") or {}
@@ -2463,194 +2469,16 @@ class QueryRunnerService:
                     notes=["No se pudo determinar la base de datos de la empresa."],
                 )
 
-            depositos_incluidos = filters.get("depositos_incluidos", [])
-            if isinstance(depositos_incluidos, str):
-                depositos_incluidos = [depositos_incluidos] if depositos_incluidos else []
-            elif not isinstance(depositos_incluidos, list):
-                depositos_incluidos = []
-            depositos_incluidos = [
-                int(x)
-                for x in depositos_incluidos
-                if str(x).strip() and str(x).replace("-", "").isdigit()
-            ]
-
-            raw_stock = filters.get("incluir_stock_cero") or filters.get("stock_cero") or "no"
-            incluir_cero = str(raw_stock).strip().lower() in ("si", "sí", "1", "true", "yes")
-
-            def _parse_int_id_list(key: str) -> List[int]:
-                raw = filters.get(key)
-                if raw is None:
-                    return []
-                if isinstance(raw, str):
-                    raw = [raw] if str(raw).strip() else []
-                elif not isinstance(raw, list):
-                    return []
-                out: List[int] = []
-                for x in raw:
-                    try:
-                        out.append(int(str(x).strip()))
-                    except (TypeError, ValueError):
-                        continue
-                return out
-
-            marcas_incluidos = _parse_int_id_list("marcas_incluidos")
-            rubros_incluidos = _parse_int_id_list("rubros_incluidos")
-            subrubros_incluidos = _parse_int_id_list("subrubros_incluidos")
-
-            def _opt_int(key: str):
-                v = filters.get(key)
-                if v is None or v == "":
-                    return None
-                try:
-                    return int(v)
-                except (TypeError, ValueError):
-                    return None
-
-            if not marcas_incluidos:
-                cm = _opt_int("codigo_marca")
-                if cm is not None:
-                    marcas_incluidos = [cm]
-            if not rubros_incluidos:
-                cr = _opt_int("codigo_rubro")
-                if cr is not None:
-                    rubros_incluidos = [cr]
-            if not subrubros_incluidos:
-                isr = _opt_int("id_subrubro")
-                if isr is not None:
-                    subrubros_incluidos = [isr]
-
-            mysql_config = settings.DATABASES["mysql"]
-            import MySQLdb
-
-            conn = MySQLdb.connect(
-                host=mysql_config["HOST"],
-                port=int(mysql_config["PORT"]),
-                user=mysql_config["USER"],
-                passwd=mysql_config["PASSWORD"],
-                db=base_empresa,
-                charset="latin1",
+            parsed = parse_stock_existencias_filters(
+                filters,
+                payload_limit=payload.get("limit", DEFAULT_PAGE_SIZE),
+                payload_offset=payload.get("offset", 0),
             )
-            cursor = conn.cursor()
-            try:
-                cursor.execute("SET SESSION max_execution_time = 300000")
-            except Exception:
-                pass
-
-            where_art = [
-                "a.Discontinuo = 'No'",
-                "a.disponible_vta = 'Si'",
-                "a.tipo_art = 'Articulo'",
-            ]
-            params: List = []
-
-            if marcas_incluidos:
-                where_art.append("a.CodigoMarca IN (" + ",".join(["%s"] * len(marcas_incluidos)) + ")")
-                params.extend(marcas_incluidos)
-            if rubros_incluidos:
-                where_art.append("a.CodigoRubro IN (" + ",".join(["%s"] * len(rubros_incluidos)) + ")")
-                params.extend(rubros_incluidos)
-            if subrubros_incluidos:
-                where_art.append("a.IDSubRubro IN (" + ",".join(["%s"] * len(subrubros_incluidos)) + ")")
-                params.extend(subrubros_incluidos)
-
-            where_sd: List[str] = []
-            if depositos_incluidos:
-                where_sd.append("sd.id_deposito IN (" + ",".join(str(d) for d in depositos_incluidos) + ")")
-
-            if not incluir_cero:
-                where_sd.append("COALESCE(sd.saldo, 0) > 0")
-
-            where_sd_sql = (" AND " + " AND ".join(where_sd)) if where_sd else ""
-
-            where_s = " AND ".join(where_art)
-
-            reservado_join_sql = """
-                LEFT JOIN (
-                    SELECT sp_res.IDArt AS id_articulo,
-                        sp_res.CodDeposito AS id_deposito,
-                        SUM(COALESCE(sp_res.cantidad_pendiente,
-                            sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0))) AS reservado
-                    FROM stockp sp_res
-                    INNER JOIN comp_ped cp_res ON cp_res.CodigoMovimiento = sp_res.CodigoMovimiento
-                    WHERE cp_res.TipoComprobante = 'PED'
-                        AND (sp_res.Comprobante = 'PED' OR sp_res.Comprobante IS NULL)
-                        AND cp_res.Anulado = 'No'
-                        AND (sp_res.anulado IS NULL OR sp_res.anulado = 'No')
-                        AND cp_res.Estado IN ('En preparación', 'Preparado')
-                        AND (COALESCE(sp_res.cantidad_pendiente,
-                            sp_res.Cantidad - COALESCE(sp_res.cantidad_entregada, 0)) > 0)
-                    GROUP BY sp_res.IDArt, sp_res.CodDeposito
-                ) res ON res.id_articulo = a.IDArt AND res.id_deposito = sd.id_deposito
-            """
-
-            sql = f"""
-                SELECT /*+ MAX_EXECUTION_TIME(300000) */
-                    a.IDArt AS id_art,
-                    COALESCE(a.CodigoArticulo, 0) AS codigo_articulo,
-                    a.id_manual AS id_manual,
-                    COALESCE(
-                        NULLIF(TRIM(IFNULL(a.NroCodBarraF, '')), ''),
-                        NULLIF(TRIM(IFNULL(a.NroCodBarra, '')), ''),
-                        ''
-                    ) AS codigo_barras,
-                    a.NombreArticulo AS nombre,
-                    sd.id_deposito AS id_deposito,
-                    IFNULL(dep.NombreDeposito, CONCAT('Depósito ', sd.id_deposito)) AS deposito_nombre,
-                    IFNULL(ma.NombreMarca, '') AS marca_nombre,
-                    IFNULL(ru.NombreRubro, '') AS rubro_nombre,
-                    IFNULL(su.NombreSubRubro, '') AS subrubro_nombre,
-                    COALESCE(sd.saldo, 0) AS stock,
-                    COALESCE(res.reservado, 0) AS reservado,
-                    GREATEST(0, COALESCE(sd.saldo, 0) - COALESCE(res.reservado, 0)) AS disponible
-                FROM stock_deposito sd
-                INNER JOIN articulo a ON a.IDArt = sd.id_articulo
-                INNER JOIN deposito dep ON dep.CodDeposito = sd.id_deposito
-                LEFT JOIN marca ma ON ma.CodMarca = a.CodigoMarca
-                LEFT JOIN rubro ru ON ru.CodigoRubro = a.CodigoRubro
-                LEFT JOIN subrubro su ON su.IDSubRubro = a.IDSubRubro
-                {reservado_join_sql}
-                WHERE {where_s}
-                {where_sd_sql}
-                ORDER BY a.NombreArticulo ASC, sd.id_deposito ASC
-            """
-
-            exec_params = tuple(params)
-            cursor.execute(sql, exec_params)
-            rows = cursor.fetchall()
-            cols = [d[0] for d in cursor.description]
-            cursor.close()
-            conn.close()
-
-            data = []
-            for row in rows:
-                item = {}
-                for i, c in enumerate(cols):
-                    v = row[i]
-                    if c in ("stock", "reservado", "disponible") and v is not None:
-                        item[c] = float(v)
-                    elif c in ("id_art", "codigo_articulo", "id_deposito") and v is not None:
-                        item[c] = int(v) if str(v).replace("-", "").isdigit() else v
-                    elif c == "codigo_barras":
-                        # Siempre cadena en JSON (evita notación científica en el cliente por tipo number).
-                        if v is None or v == "":
-                            item[c] = ""
-                        elif isinstance(v, (bytes, bytearray)):
-                            item[c] = v.decode("latin1", errors="replace").strip()
-                        else:
-                            item[c] = str(v).strip()
-                    else:
-                        item[c] = v
-                data.append(item)
-
-            notes = []
-
-            filters_applied = {
-                "depositos_incluidos": depositos_incluidos,
-                "incluir_stock_cero": incluir_cero,
-                "marcas_incluidos": marcas_incluidos,
-                "rubros_incluidos": rubros_incluidos,
-                "subrubros_incluidos": subrubros_incluidos,
-            }
+            result = execute_stock_existencias(base_empresa, parsed)
+            data = result["data"]
+            filters_applied = result["filters_applied"]
+            notes = result["notes"]
+            total_registros = result["total_registros"]
 
             return QueryResult(
                 meta={
@@ -2661,6 +2489,10 @@ class QueryRunnerService:
                     "filters_applied": filters_applied,
                     "executed_at": started_at.isoformat(),
                     "row_count": len(data),
+                    "total_registros": total_registros,
+                    "offset": parsed.offset,
+                    "limit": parsed.limit,
+                    "has_more": (parsed.offset + len(data)) < total_registros,
                 },
                 data=data,
                 totals={},

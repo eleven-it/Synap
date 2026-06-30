@@ -1,0 +1,16 @@
+{% if opt.fase_clave == 'cerrada' %}
+<span class="inline-flex rounded-md bg-slate-200/90 px-2 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-700 dark:text-slate-200">Cerrada</span>
+{% elif opt.fase_clave == 'demanda' %}
+<span class="inline-flex rounded-md bg-slate-200/90 px-2 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-600 dark:text-slate-200">{{ opt.etiqueta_fase }}</span>
+{% elif opt.fase_clave == 'pendiente' %}
+<span class="inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{{ opt.etiqueta_fase }}</span>
+{% elif opt.fase_clave == 'lista_cerrar' %}
+<span class="inline-flex rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">{{ opt.etiqueta_fase }}</span>
+{% elif opt.fase_clave == 'en_produccion_opp' or opt.fase_clave == 'en_produccion' %}
+<span class="inline-flex rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">{{ opt.etiqueta_fase }}</span>
+{% else %}
+<span class="inline-flex rounded-md bg-slate-200/90 px-2 py-0.5 text-xs font-medium text-slate-800 dark:bg-slate-700 dark:text-slate-200">{{ opt.etiqueta_fase|default:"—" }}</span>
+{% endif %}
+{% if opt.tiene_armado_pendiente %}
+<span class="ml-1 inline-flex rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-900 dark:bg-violet-900/40 dark:text-violet-100" title="Quedan packs por armar en Semi elaborado">Armado pend.</span>
+{% endif %}

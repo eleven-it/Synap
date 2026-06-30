@@ -78,3 +78,4 @@ Si al abrir la conexión para `base_empresa` MySQL devuelve **1049** (base desco
 - **Timeout:** La conexión permanece abierta durante todo el request; en requests muy largos podría aplicarse timeout del servidor MySQL (p. ej. `wait_timeout`). No se cambia por defecto en esta especificación.
 - **Hilos:** La conexión de request no debe usarse desde otro hilo; `contextvars` es por contexto de ejecución, no por hilo.
 - **Tests:** Tests unitarios con mock del pool o del contextvar para verificar una adquisición/una devolución; tests de integración opcionales (ej. GET a ventana-pack con sesión) espiando el pool.
+- **Cache MPR por request (jun/2026):** `RequestScopedMysqlMiddleware` también limpia `mpr.request_scope_cache` al inicio y al cierre del request. `get_depositos_con_suma_stock` deduplica lecturas solo mientras la conexión por request está activa (sin TTL global).

@@ -398,6 +398,7 @@ MODULE_CONFIGS = {
         },
         'permissions': [
             'mpr.ver',
+            'mpr.imputar_armado_1ra',
             'mpr.*',
         ],
         'hooks': [],

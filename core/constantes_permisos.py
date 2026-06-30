@@ -141,6 +141,7 @@ PERMISOS_POR_MODULO = {
     ],
     "Producción (MPR)": [
         ("mpr.ver", "Ver módulo Producción (MPR)"),
+        ("mpr.imputar_armado_1ra", "Imputación de pedido — Armado 1ra (supervisor)"),
     ],
     "Self-Checkout / TPV": [
         ("self_checkout.ver", "Ver Self-Checkout / TPV"),

@@ -19,8 +19,14 @@ Documentación del módulo MPR en Synap: flujos, esquema de datos, manual de usu
 | [SPEC_ARMADO_SURTIDO_MULTI_LOTE.md](SPEC_ARMADO_SURTIDO_MULTI_LOTE.md) | Especificación normativa — lote multi-pack armado surtido. |
 | [DESIGN_ARMADO_SURTIDO_MULTI_LOTE.md](DESIGN_ARMADO_SURTIDO_MULTI_LOTE.md) | Diseño técnico — refactor TX, sesión, Alpine carrito. |
 | [TASKS_ARMADO_SURTIDO_MULTI_LOTE.md](TASKS_ARMADO_SURTIDO_MULTI_LOTE.md) | Tareas de implementación (fases 1–9). |
+| [SDD_ARMADO_UNIFICADO_IMPUTACION.md](SDD_ARMADO_UNIFICADO_IMPUTACION.md) | **Propuesto** — Armado 1ra/2da unificado (fuera de OPT) + imputación supervisor 1ra. OpenSpec: `armado-unificado-imputacion-1ra`. |
+| [SPEC_ARMADO_UNIFICADO_IMPUTACION.md](SPEC_ARMADO_UNIFICADO_IMPUTACION.md) | Especificación normativa — armado unificado e imputación. |
+| [DESIGN_ARMADO_UNIFICADO_IMPUTACION.md](DESIGN_ARMADO_UNIFICADO_IMPUTACION.md) | Diseño técnico — vista unificada, TX 1ra, imputación supervisor. |
+| [TASKS_ARMADO_UNIFICADO_IMPUTACION.md](TASKS_ARMADO_UNIFICADO_IMPUTACION.md) | Tareas de implementación (Fases A–D + verify). |
 | [MPR_ARMADO_STOCK_COMPONENTES.md](MPR_ARMADO_STOCK_COMPONENTES.md) | Armado, stock de componentes y flujo OPT/OPP. |
 | [FLUJO_VB6_PEDIDO_PRODUCCION_MPR.md](FLUJO_VB6_PEDIDO_PRODUCCION_MPR.md) | Flujo VB6 "Pedido producción" (motivo OPT) – Análisis extremo a extremo. |
+| [e2e/REGISTRO_FLUJO_E2E.md](e2e/REGISTRO_FLUJO_E2E.md) | Registro E2E Playwright (demanda → OPT → OPP) con capturas en [e2e/capturas/](e2e/capturas/). Suite en `tests/e2e/mpr/`. |
+| [e2e/MANUAL_USUARIO_MPR.html](e2e/MANUAL_USUARIO_MPR.html) | **Manual visual HTML** (demanda → OPT → OPP) con capturas E2E; abrir en navegador desde `docs/mpr/e2e/`. |
 
 ## Scripts SQL
 
@@ -37,3 +43,16 @@ En la carpeta [sql/](sql/):
 | [fix_opt16_pendiente_tras_opp.sql](sql/fix_opt16_pendiente_tras_opp.sql) | Corrección puntual pendiente OPT tras OPP (referencia). |
 
 Ejecutar los scripts en la base de la empresa (ej. administranet92) según corresponda.
+
+## Comandos de diagnóstico (manage.py)
+
+En entorno Docker: `docker exec Synap_app python manage.py <comando> ... --base-empresa=administranet96`
+
+| Comando | Uso |
+|---------|-----|
+| `auditar_opt_trazabilidad` | Audita coherencia agrupada + OPP/OPA + métricas UI. |
+| `inspeccionar_opt` | Detalle DB de una OPT (agrupada, movimiento OPT, stock). |
+| `eliminar_opt` | Borra OPT(s) de prueba: agrupada, detalle, histórico, movimientos y renglones stock (revierte `stock_deposito`). Dry-run por defecto; `--confirmar` para ejecutar. |
+
+**Armado 1ra desde OPT:** al ejecutar lote con `id_lista` en POST, el movimiento OPA debe llevar `Armado OPT {id}` en `movimiento_stock.detalle` y `id_lista_produccion` en `MprArmadoSurtidoMovimiento` para que el listado deje de mostrar «Armado pend.».
+

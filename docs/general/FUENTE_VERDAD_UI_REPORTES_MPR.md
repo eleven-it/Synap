@@ -35,13 +35,18 @@ Documento normativo para **equipo humano y agentes**: define qué superficies de
 
 - **Rutas:** definidas en `mpr/urls.py`, en particular:
   - `wizard` → `/mpr/wizard/`
-  - `opt_list`, `opt_create`, `opt_detail`, `armado_opt`, etc. → bajo `/mpr/opt/...`
+  - `armado` → `/mpr/armado/?modo=1ra|2da` (Armado unificado 1ra/2da)
+  - `imputacion_armado_1ra` → `/mpr/imputacion-armado-1ra/` (supervisor)
+  - `opt_list`, `opt_create`, `opt_detail`, etc. → bajo `/mpr/opt/...` (`armado_opt` redirige a `armado?modo=1ra`)
 - **Layout obligatorio del módulo:** `mpr/templates/mpr/base_mpr.html` (extiende `base_app.html`).
 - **Plantillas de referencia:**
   - `mpr/templates/mpr/wizard.html` — asistente por pasos, hero oscuro, barra de progreso con ARIA.
+  - `mpr/templates/mpr/armado_surtido.html` — POS armado unificado (toggle 1ra/2da, carrito lote).
+  - `mpr/templates/mpr/imputacion_armado_1ra.html` — cola MSTOCK e imputación supervisor.
   - `mpr/templates/mpr/opt_list.html` — listado con filtros, búsqueda con Alpine, tabla responsive.
   - `mpr/templates/mpr/opt_detail.html` — detalle con hero, estado, pasos y tablas.
 - **Feedback en envíos:** formularios con clase `mpr-post-loading` y `mpr/templates/mpr/includes/mpr_post_loading_modal.html`.
+- **Contenedor de página:** clase **`mpr-contenedor-pagina`** (o include `mpr/includes/contenedor_pagina_open.html`) en todas las pantallas del módulo: **`w-full max-w-none`** con padding horizontal responsive (`px-3 … 2xl:px-12`). No usar `max-w-7xl`, `max-w-4xl` ni otros topes de ancho en el shell principal; las tablas usan `overflow-x-auto` cuando hace falta.
 
 ## 3. Exclusiones explícitas (hasta nuevo aviso)
 

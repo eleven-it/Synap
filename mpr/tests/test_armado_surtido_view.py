@@ -57,12 +57,11 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
         self.factory = RequestFactory()
         self.view = ArmadoSurtidoView()
 
-    @patch("mpr.views.ejecutar_lote_armado_surtido")
+    @patch("mpr.views.ejecutar_lote_armado")
     @patch("mpr.views._get_base_empresa", return_value="empresa_test")
-    @patch("mpr.views.opt_puede_armado_surtido", return_value=(True, ""))
-    @patch("mpr.views.validar_reglas_lote_armado_surtido", return_value=(True, None))
+    @patch("mpr.views.validar_reglas_lote_armado", return_value=(True, None))
     def test_post_guarda_sesion_y_mensaje_exito(self, *_mocks):
-        ejecutar_lote = _mocks[3]
+        ejecutar_lote = _mocks[2]
         ejecutar_lote.return_value = {
             "exitosos": [{
                 "id_articulo_pack": 100,
@@ -73,8 +72,9 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
             "fallidos": [],
         }
         request = self.factory.post(
-            "/mpr/armado-surtido/",
+            "/mpr/armado/?modo=2da",
             {
+                "modo": "2da",
                 "id_articulo_pack": "100",
                 "cantidad_packs": "1",
                 "deposito_origen": "3",
@@ -91,17 +91,17 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
 
         response = self.view.post(request)
         self.assertEqual(response.status_code, 302)
+        self.assertIn("modo=2da", response.url)
         self.assertIn("armado_surtido_resultado_lote", request.session)
         self.assertEqual(request.session.get("armado_surtido_lote_fallidos"), [])
         msgs = [m.message for m in get_messages(request)]
         self.assertTrue(any("Comprobante" in m for m in msgs))
 
-    @patch("mpr.views.ejecutar_lote_armado_surtido")
+    @patch("mpr.views.ejecutar_lote_armado")
     @patch("mpr.views._get_base_empresa", return_value="empresa_test")
-    @patch("mpr.views.opt_puede_armado_surtido", return_value=(True, ""))
-    @patch("mpr.views.validar_reglas_lote_armado_surtido", return_value=(True, None))
+    @patch("mpr.views.validar_reglas_lote_armado", return_value=(True, None))
     def test_post_parcial_mensaje_warning(self, *_mocks):
-        ejecutar_lote = _mocks[3]
+        ejecutar_lote = _mocks[2]
         ejecutar_lote.return_value = {
             "exitosos": [{"id_articulo_pack": 100, "cantidad_packs": 1, "codigo_movimiento": 1, "nro_comprobante": "A"}],
             "fallidos": [{
@@ -112,8 +112,9 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
             }],
         }
         request = self.factory.post(
-            "/mpr/armado-surtido/",
+            "/mpr/armado/?modo=2da",
             {
+                "modo": "2da",
                 "lote_json": '{"armados":[{"id_articulo_pack":100,"cantidad_packs":1,"lineas":[{"id_articulo":813,"cantidad_por_pack":1}]}]}',
                 "deposito_origen": "3",
                 "deposito_destino": "5",

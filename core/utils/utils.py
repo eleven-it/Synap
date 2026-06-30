@@ -114,6 +114,18 @@ APPS_MENU = [
                 ]
             },
             {
+                "seccion": _("Gestión"),
+                "items": [
+                    {
+                        "label": _("Asignación vendedor"),
+                        "url": "ventas:vendedor_asignacion",
+                        "icon": "swap_horiz",
+                        "permission": "ventas.ver",
+                        "menu_item_id": "ventas_gest_asignacion_vendedor",
+                    },
+                ]
+            },
+            {
                 "seccion": _("Objetivos"),
                 "items": [
                     {
@@ -162,7 +174,8 @@ APPS_MENU = [
                 "items": [
                     {"label": _("Asistente de producción"), "url": "mpr:wizard", "icon": "auto_awesome", "permission": "mpr.ver", "menu_item_id": "mpr_op_wizard"},
                     {"label": _("Listado de OPT existentes"), "url": "mpr:opt_list", "icon": "list_alt", "permission": "mpr.ver", "menu_item_id": "mpr_op_list"},
-                    {"label": _("Armado surtido"), "url": "mpr:armado_surtido", "icon": "category", "permission": "mpr.ver", "menu_item_id": "mpr_op_armado_surtido"},
+                    {"label": _("Armado"), "url": "mpr:armado", "icon": "build", "permission": "mpr.ver", "menu_item_id": "mpr_op_armado"},
+                    {"label": _("Imputación de pedido"), "url": "mpr:imputacion_armado_1ra", "icon": "assignment_turned_in", "permission": "mpr.imputar_armado_1ra", "menu_item_id": "mpr_op_imputacion_armado_1ra"},
                     {"label": _("Reclasificación"), "url": "mpr:reclasificacion", "icon": "swap_horiz", "permission": "mpr.ver", "menu_item_id": "mpr_op_reclasificacion"},
                 ]
             },
@@ -938,6 +951,10 @@ def _resolver_url_item(item: Dict, request, permisos_usuario: Set[str]) -> Optio
         else:
             url_kwargs = item.get("url_kwargs") or {}
             url = reverse(item["url"], kwargs=url_kwargs)
+            url_query = item.get("url_query") or {}
+            if url_query:
+                from urllib.parse import urlencode
+                url = f"{url}?{urlencode(url_query)}"
         if request and "{empresa_id}" in url:
             empresa_activa = None
             if hasattr(request.user, "empresa_activa") and request.user.empresa_activa:
