@@ -114,7 +114,7 @@ def run_mpr_deposito_articulo_mysql(conn) -> Dict[str, Any]:
             if not columna_existe(cursor, tbl_dep, "tipo_mpr"):
                 cursor.execute(
                     "ALTER TABLE `{}` ADD COLUMN tipo_mpr VARCHAR(20) NULL "
-                    "COMMENT 'Uso MPR: Produccion, SemiElaborado, Terminado, Scrap, 2daSeleccion'".format(
+                    "COMMENT 'Uso MPR: Produccion, SemiElaborado, Terminado, Scrap, 2daSeleccion, Planchado'".format(
                         tdep
                     )
                 )
@@ -128,6 +128,16 @@ def run_mpr_deposito_articulo_mysql(conn) -> Dict[str, Any]:
                 )
             )
             _append_migration(applied, failed, True, f"{tbl_art}.stock_reserva")
+
+        # Índice para query pivote del tablero de producción (Etapa 2)
+        tbl_sd = nombre_tabla_real(cursor, "stock_deposito")
+        if tbl_sd:
+            tsd = tbl_sd.replace("`", "``")
+            if not indice_existe(cursor, tbl_sd, "idx_sd_art_dep"):
+                cursor.execute(
+                    "CREATE INDEX `idx_sd_art_dep` ON `{}`(id_articulo, id_deposito)".format(tsd)
+                )
+                _append_migration(applied, failed, True, "idx_sd_art_dep en stock_deposito")
         conn.commit()
     except Exception as e:
         conn.rollback()

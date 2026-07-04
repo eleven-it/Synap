@@ -2,6 +2,44 @@
 {% load static %}
 {# Contenedor principal MPR: clase mpr-contenedor-pagina o include includes/contenedor_pagina_open.html — ancho fluido (max-w-none). #}
 
+{% block mpr_quick_nav %}
+{# Barra de acceso rápido MPR — Etapa 4: Parte de producción añadido #}
+<div class="border-b border-gray-100 bg-white dark:border-gray-800 dark:bg-gray-950 print:hidden">
+    <div class="mx-auto flex max-w-none flex-wrap items-center gap-1 overflow-x-auto px-4 py-1.5 sm:px-6 lg:px-8">
+        <a href="{% url 'mpr:tablero_produccion' %}"
+           class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-gray-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300">
+            <span class="material-icons text-sm" aria-hidden="true">bar_chart</span>
+            Tablero consolidado
+        </a>
+        <a href="{% url 'mpr:parte_produccion' %}"
+           class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-gray-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300">
+            <span class="material-icons text-sm" aria-hidden="true">assignment</span>
+            Parte de producción
+        </a>
+        <a href="{% url 'mpr:clasificacion_produccion' %}"
+           class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-gray-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300">
+            <span class="material-icons text-sm" aria-hidden="true">category</span>
+            Clasificación
+        </a>
+        <a href="{% url 'mpr:opt_list' %}"
+           class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-gray-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300">
+            <span class="material-icons text-sm" aria-hidden="true">list_alt</span>
+            Trazabilidad OPT
+        </a>
+        <a href="{% url 'mpr:planificacion_turnos' %}"
+           class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-gray-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300">
+            <span class="material-icons text-sm" aria-hidden="true">calendar_month</span>
+            Planificación de turnos
+        </a>
+        <a href="{% url 'mpr:tablero' %}"
+           class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-gray-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300">
+            <span class="material-icons text-sm" aria-hidden="true">dashboard</span>
+            KPIs
+        </a>
+    </div>
+</div>
+{% endblock %}
+
 {% block extra_js %}
 {{ block.super }}
 {% include "mpr/includes/mpr_post_loading_modal.html" %}

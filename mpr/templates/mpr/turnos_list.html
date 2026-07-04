@@ -1,0 +1,119 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Turnos - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li>
+                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a>
+                </li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Turnos</span></li>
+            </ol>
+        </nav>
+
+        <header class="mb-8 flex flex-col gap-6 border-b border-gray-200/80 pb-8 dark:border-gray-700/80 lg:flex-row lg:items-end lg:justify-between">
+            <div class="min-w-0 max-w-3xl">
+                <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Turnos de producción</h1>
+                <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Gestión de turnos globales por empresa (Mañana, Tarde, Noche). Los turnos activos se usan en la planificación de roster.</p>
+            </div>
+            <a href="{% url 'mpr:turno_create' %}" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+                <span class="material-icons text-lg" aria-hidden="true">add</span>
+                Nuevo turno
+            </a>
+        </header>
+
+        <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Turnos registrados</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 md:hidden" aria-hidden="true">Deslizá horizontalmente si hace falta</p>
+            </div>
+            <div class="overflow-x-auto" role="region" aria-label="Tabla de turnos">
+                <table class="min-w-[32rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                    <caption class="sr-only">Turnos de producción</caption>
+                    <thead class="bg-gray-50/90 dark:bg-gray-800/80">
+                        <tr>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Nombre</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Hora inicio</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Hora fin</th>
+                            <th scope="col" class="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Estado</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for turno in turnos %}
+                        <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40">
+                            <td class="px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-5">{{ turno.nombre }}</td>
+                            <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">{{ turno.hora_inicio }}</td>
+                            <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">
+                                {{ turno.hora_fin }}
+                                {% if turno.hora_fin < turno.hora_inicio %}
+                                <span class="ml-1 inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" title="Turno nocturno: cruza medianoche">Nocturno</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3.5 text-center align-middle sm:px-5">
+                                <form id="form-toggle-turno-{{ turno.id }}" method="post" action="{% url 'mpr:turnos_list' %}" hidden
+                                      class="mpr-post-loading"
+                                      data-mpr-loading-title="Actualizando turno"
+                                      data-mpr-loading-subtitle="Guardando estado…">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="id_turno" value="{{ turno.id }}"/>
+                                    <input type="hidden" name="activo" value="{% if turno.activo %}False{% else %}True{% endif %}"/>
+                                </form>
+                                <label class="relative inline-flex min-h-[44px] cursor-pointer touch-manipulation items-center justify-center gap-2">
+                                    <input type="checkbox"
+                                           role="switch"
+                                           class="peer sr-only turno-estado-switch"
+                                           data-id="{{ turno.id }}"
+                                           {% if turno.activo %}checked{% endif %}
+                                           aria-checked="{% if turno.activo %}true{% else %}false{% endif %}"
+                                           aria-label="Turno {{ turno.nombre }}: {% if turno.activo %}activo{% else %}inactivo{% endif %}. Pulsar para cambiar."/>
+                                    <span class="relative inline-block h-7 w-12 shrink-0 rounded-full bg-red-500 transition-colors duration-200 peer-focus-visible:outline-none peer-focus-visible:ring-2 peer-focus-visible:ring-purple-500 peer-focus-visible:ring-offset-2 peer-checked:bg-green-500 dark:bg-red-600 dark:peer-checked:bg-green-600 dark:peer-focus-visible:ring-offset-gray-900 after:pointer-events-none after:absolute after:left-[3px] after:top-[3px] after:h-[22px] after:w-[22px] after:rounded-full after:bg-white after:shadow after:ring-1 after:ring-black/10 after:transition-transform after:duration-200 after:ease-out peer-checked:after:translate-x-5" aria-hidden="true"></span>
+                                    <span class="text-xs font-semibold text-gray-600 dark:text-gray-300" aria-hidden="true">{% if turno.activo %}Activo{% else %}Inactivo{% endif %}</span>
+                                </label>
+                            </td>
+                            <td class="px-4 py-3.5 text-left sm:px-5">
+                                <a href="{% url 'mpr:turno_edit' id_turno=turno.id %}" class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-purple-600 transition-colors hover:bg-purple-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:text-purple-400 dark:hover:bg-purple-900/20">
+                                    <span class="material-icons text-sm" aria-hidden="true">edit</span>
+                                    Editar
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay turnos registrados. Crea el primer turno usando el botón "Nuevo turno".</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-6">
+            <a href="{% url 'mpr:planificacion_turnos' %}" class="inline-flex items-center gap-2 text-sm font-medium text-purple-600 transition-colors hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300">
+                <span class="material-icons text-base" aria-hidden="true">calendar_month</span>
+                Ir a Planificación de turnos (roster)
+            </a>
+        </div>
+    </div>
+</section>
+
+<script>
+(function() {
+    document.addEventListener('DOMContentLoaded', function() {
+        var switches = document.querySelectorAll('.turno-estado-switch');
+        switches.forEach(function(sw) {
+            sw.addEventListener('change', function() {
+                var idTurno = this.getAttribute('data-id');
+                var form = document.getElementById('form-toggle-turno-' + idTurno);
+                if (form) form.submit();
+            });
+        });
+    });
+})();
+</script>
+{% endblock %}

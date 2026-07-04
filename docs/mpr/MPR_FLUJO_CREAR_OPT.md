@@ -23,6 +23,45 @@ Por tanto: **lista_produccion_historico** solo se escribe al **liberar** la OPT 
 
 ---
 
+## 0. Validación de receta (BOM) antes de avanzar — Pantalla 1 → Pantalla 2
+
+**Change:** `opt-bloqueo-pack-sin-receta` (2026-07-02)
+
+El flujo de creación de OPT tiene dos pantallas:
+
+| Pantalla | Vista Django | URL |
+|---|---|---|
+| Pantalla 1 — Selección de packs | `VentanaPackView` | `/mpr/demanda/ventana-pack/` |
+| Pantalla 2 — Agrupar / Generar OPT | `VentanaPackAgruparView` | `/mpr/demanda/ventana-pack/agrupar/` |
+
+### Criterio "sin receta"
+
+Un pack se considera **sin receta** si su campo `receta_json` en `listar_ventana_pack`:
+- Es `None` o ausente
+- Es string vacío `""`
+- Es JSON inválido (malformado)
+- Decodifica a lista vacía `[]`
+
+El helper `_tiene_receta(fila: dict) -> bool` en `mpr/views.py` centraliza este criterio.
+
+### Flujo de bloqueo
+
+1. El usuario selecciona packs en Pantalla 1 y pulsa **«Continuar»**.
+2. **JS cliente (opcional):** el interceptor en el `submit` de `#form-crear-opt` verifica el atributo `data-receta` de cada fila marcada. Si detecta algún pack sin receta, muestra el modal directamente en cliente sin hacer el POST.
+3. **Servidor (autoritativo):** `VentanaPackAgruparView.post` construye el `lookup` desde `listar_ventana_pack`, evalúa `_tiene_receta()` por cada artículo seleccionado con qty > 0. Si hay ≥1 sin receta:
+   - Guarda `request.session["ventana_pack_sin_receta"] = [{"id_articulo": …, "codigo_manual": …, "descripcion_articulo": …}]`
+   - Redirige a `mpr:ventana_pack` (PRG, sin guardar `ventana_pack_seleccion`)
+4. `VentanaPackView.get_context_data` lee y limpia la clave temporal con `session.pop("ventana_pack_sin_receta", None)` y la expone como `context["packs_sin_receta"]`.
+5. El template renderiza el modal `#modal-sin-receta` automáticamente si `packs_sin_receta` no está vacío, listando código de sistema, código manual y descripción.
+6. El usuario cierra el modal con el botón «Cerrar» y permanece en Pantalla 1 para corregir la selección o cargar la receta faltante.
+
+### Restricciones
+
+- La validación **es obligatoria en servidor** y no puede bypassearse via POST directo.
+- La sesión temporal se consume en el primer GET tras el redirect (pop), evitando que el modal reaparezca al recargar.
+
+---
+
 ## 1. Origen de los datos (vista)
 
 1. El usuario llega a **Confirmar OPT** con una selección en sesión (`ventana_pack_seleccion.filas`) que viene de la pantalla «Pedido producción trabajo (OPT)».

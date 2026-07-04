@@ -1,0 +1,224 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Trazabilidad OPT {{ id_lista }} — MPR — Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+
+        {# Migas de pan #}
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{{ tablero_url }}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300">Producción</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><a href="{{ opt_list_url }}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300">OPT</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><a href="{{ opt_detail_url }}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300">OPT {{ id_lista }}</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Trazabilidad</span></li>
+            </ol>
+        </nav>
+
+        {# Banner advertencia si hay fuentes fallidas #}
+        {% if fuentes_fallidas %}
+        <div class="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 shadow-sm dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200" role="alert">
+            <span class="material-icons mt-0.5 text-lg shrink-0 text-amber-500" aria-hidden="true">warning</span>
+            <div>
+                <p class="font-semibold">Algunos datos no están disponibles</p>
+                <p class="mt-0.5 text-xs text-amber-700 dark:text-amber-300">
+                    Las siguientes fuentes no pudieron consultarse y pueden faltar eventos:
+                    {{ fuentes_fallidas|join:", " }}.
+                    El historial mostrado es parcial.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+
+        {# Cabecera OPT #}
+        <div class="mb-8 rounded-2xl border border-slate-700/80 bg-slate-800 p-6 text-white shadow-lg dark:bg-slate-900 dark:border-slate-800 sm:p-8">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div class="min-w-0">
+                    <h1 class="text-2xl font-bold tracking-tight sm:text-3xl">Trazabilidad OPT {{ id_lista }}</h1>
+                    <p class="mt-1 text-sm text-slate-300 dark:text-slate-400">
+                        {{ cabecera.codigo_manual|default:"-" }} — {{ cabecera.descripcion|default:"-" }}
+                    </p>
+                    <div class="mt-3 flex flex-wrap items-center gap-3 text-sm">
+                        <span class="text-slate-300 dark:text-slate-400">
+                            <span class="font-medium text-white">Cantidad pedida:</span> {{ cabecera.cantidad_pedida|default:0 }}
+                        </span>
+                        <span>
+                            {% if cabecera.estado == "en_proceso" %}
+                            <span class="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/20 px-2.5 py-1 text-xs font-medium text-amber-200">
+                                <span class="material-icons text-sm" aria-hidden="true">schedule</span>
+                                En progreso
+                            </span>
+                            {% else %}
+                            <span class="inline-flex items-center gap-1 rounded-full border border-slate-500/30 bg-slate-500/20 px-2.5 py-1 text-xs font-medium text-slate-200">
+                                <span class="material-icons text-sm" aria-hidden="true">check_circle</span>
+                                Cerrada
+                            </span>
+                            {% endif %}
+                        </span>
+                        <span class="text-slate-400 text-xs">{{ eventos|length }} evento{{ eventos|length|pluralize }}</span>
+                    </div>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    <a href="{{ opt_detail_url }}"
+                       class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                        <span class="material-icons text-lg" aria-hidden="true">arrow_back</span>
+                        Ver OPT
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {# Timeline de eventos #}
+        <div class="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-6">
+            <h2 class="mb-6 text-base font-semibold text-gray-800 dark:text-gray-200">
+                Historial de eventos
+                <span class="ml-2 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                    {{ eventos|length }}
+                </span>
+            </h2>
+
+            {% if not eventos %}
+            <p class="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                No se encontraron eventos registrados para esta OPT.
+            </p>
+            {% else %}
+            <ul class="relative space-y-0 before:absolute before:left-5 before:top-0 before:h-full before:w-px before:bg-gray-200 dark:before:bg-gray-700">
+                {% for evento in eventos %}
+                <li class="relative flex gap-4 pb-6 last:pb-0">
+                    {# Ícono por tipo #}
+                    <div class="relative z-10 flex-shrink-0">
+                        {% if evento.tipo == "OPT" %}
+                        <span class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-blue-200 bg-blue-100 text-blue-700 shadow-sm dark:border-blue-700 dark:bg-blue-900/40 dark:text-blue-300" title="Liberación OPT">
+                            <span class="material-icons text-lg" aria-hidden="true">assignment</span>
+                        </span>
+                        {% elif evento.tipo == "OPP" %}
+                        <span class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-green-200 bg-green-100 text-green-700 shadow-sm dark:border-green-700 dark:bg-green-900/40 dark:text-green-300" title="Parte de producción (OPP)">
+                            <span class="material-icons text-lg" aria-hidden="true">factory</span>
+                        </span>
+                        {% elif evento.tipo == "OPP-ajuste" %}
+                        <span class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-amber-200 bg-amber-100 text-amber-700 shadow-sm dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-300" title="Ajuste de parte">
+                            <span class="material-icons text-lg" aria-hidden="true">tune</span>
+                        </span>
+                        {% elif evento.tipo == "Transicion" %}
+                        <span class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-purple-200 bg-purple-100 text-purple-700 shadow-sm dark:border-purple-700 dark:bg-purple-900/40 dark:text-purple-300" title="Transición entre etapas">
+                            <span class="material-icons text-lg" aria-hidden="true">swap_horiz</span>
+                        </span>
+                        {% elif evento.tipo == "Armado" %}
+                        <span class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-indigo-200 bg-indigo-100 text-indigo-700 shadow-sm dark:border-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300" title="Armado surtido">
+                            <span class="material-icons text-lg" aria-hidden="true">inventory_2</span>
+                        </span>
+                        {% elif evento.tipo == "Imputacion" %}
+                        <span class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-teal-200 bg-teal-100 text-teal-700 shadow-sm dark:border-teal-700 dark:bg-teal-900/40 dark:text-teal-300" title="Imputación de armado">
+                            <span class="material-icons text-lg" aria-hidden="true">link</span>
+                        </span>
+                        {% elif evento.tipo == "Terminado" %}
+                        <span class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-emerald-200 bg-emerald-100 text-emerald-700 shadow-sm dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" title="Terminado">
+                            <span class="material-icons text-lg" aria-hidden="true">check_circle</span>
+                        </span>
+                        {% else %}
+                        <span class="flex h-10 w-10 items-center justify-center rounded-full border-2 border-gray-200 bg-gray-100 text-gray-500 shadow-sm dark:border-gray-600 dark:bg-gray-700/40 dark:text-gray-400" title="{{ evento.tipo }}">
+                            <span class="material-icons text-lg" aria-hidden="true">info</span>
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    {# Contenido del evento #}
+                    <div class="flex-1 min-w-0 pt-1.5" x-data="{ expandido: false }">
+                        <div class="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between">
+                            <div class="min-w-0">
+                                <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                                    {{ evento.descripcion|default:evento.tipo }}
+                                </p>
+                                <p class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-gray-400">
+                                    {% if evento.fecha %}
+                                    <span class="inline-flex items-center gap-1">
+                                        <span class="material-icons text-xs" aria-hidden="true">calendar_today</span>
+                                        {{ evento.fecha }}{% if evento.hora %} {{ evento.hora }}{% endif %}
+                                    </span>
+                                    {% endif %}
+                                    {% if evento.cantidad %}
+                                    <span class="inline-flex items-center gap-1">
+                                        <span class="material-icons text-xs" aria-hidden="true">straighten</span>
+                                        {{ evento.cantidad }}
+                                    </span>
+                                    {% endif %}
+                                    {% if evento.operario and evento.operario != "-" %}
+                                    <span class="inline-flex items-center gap-1">
+                                        <span class="material-icons text-xs" aria-hidden="true">person</span>
+                                        {{ evento.operario }}
+                                    </span>
+                                    {% endif %}
+                                    {% if evento.fuente == "sin_opt" %}
+                                    <span class="rounded bg-gray-100 px-1.5 py-0.5 text-gray-500 dark:bg-gray-700 dark:text-gray-400">sin OPT asociada</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+
+                            {# Badge tipo #}
+                            <div class="mt-1 sm:mt-0 sm:ml-3 shrink-0">
+                                {% if evento.tipo == "OPT" %}
+                                <span class="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">OPT</span>
+                                {% elif evento.tipo == "OPP" %}
+                                <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-300">OPP</span>
+                                {% elif evento.tipo == "OPP-ajuste" %}
+                                <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Ajuste</span>
+                                {% elif evento.tipo == "Transicion" %}
+                                <span class="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900/40 dark:text-purple-300">Transición</span>
+                                {% elif evento.tipo == "Armado" %}
+                                <span class="rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300">Armado</span>
+                                {% elif evento.tipo == "Imputacion" %}
+                                <span class="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-900/40 dark:text-teal-300">Imputación</span>
+                                {% else %}
+                                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">{{ evento.tipo }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {# Expandible: detalles técnicos #}
+                        {% if evento.codigo_movimiento or evento.fuente %}
+                        <div class="mt-1">
+                            <button @click="expandido = !expandido"
+                                    class="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 focus:outline-none"
+                                    :aria-expanded="expandido">
+                                <span class="material-icons text-xs" x-text="expandido ? 'expand_less' : 'expand_more'" aria-hidden="true">expand_more</span>
+                                <span x-text="expandido ? 'Ocultar detalles' : 'Ver detalles'">Ver detalles</span>
+                            </button>
+                            <div x-show="expandido" x-collapse class="mt-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-900/50">
+                                <dl class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-gray-400 sm:grid-cols-3">
+                                    {% if evento.fuente %}
+                                    <div>
+                                        <dt class="font-medium text-gray-500 dark:text-gray-500">Fuente</dt>
+                                        <dd>{{ evento.fuente }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    {% if evento.codigo_movimiento %}
+                                    <div>
+                                        <dt class="font-medium text-gray-500 dark:text-gray-500">Cod. movimiento</dt>
+                                        <dd>{{ evento.codigo_movimiento }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    {% if evento.id_lista_produccion %}
+                                    <div>
+                                        <dt class="font-medium text-gray-500 dark:text-gray-500">OPT</dt>
+                                        <dd># {{ evento.id_lista_produccion }}</dd>
+                                    </div>
+                                    {% endif %}
+                                </dl>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+
+    </div>
+</section>
+{% endblock %}

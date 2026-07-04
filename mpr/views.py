@@ -140,7 +140,10 @@ from .services import (
     reporte_mpr_desperdicio,
     reporte_mpr_produccion_por_operario,
     reporte_mpr_opt_cerradas,
+    listar_tablero_por_articulo,
+    transferir_stock_entre_etapas,
     TIPO_MPR_2DA_SELECCION,
+    TIPO_MPR_PLANCHADO,
     TIPO_MPR_PRODUCCION,
     TIPO_MPR_SCRAP,
     TIPO_MPR_SEMI_ELABORADO,
@@ -442,7 +445,7 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
             max_demanda = 10 - len(top_urgencies)
             for r in ventana_pack[:max_demanda]:
                 id_art = r.get("id_articulo")
-                detail_url = (reverse("mpr:ventana_pack") + "?articulo=" + str(id_art)) if id_art else None
+                detail_url = reverse("mpr:tablero_produccion") if id_art else None
                 top_urgencies.append({
                     "id_articulo": id_art,
                     "article_id": r.get("codigo_articulo", "-"),
@@ -488,7 +491,7 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
                         "descripcion": op.get("descripcion_articulo") or "-",
                         "unidades": op.get("cantidad_pedida") or 0,
                         "detail_url": detail_url,
-                        "crear_opp_url": reverse("mpr:wizard") + f"?paso=3&id_lista={id_lista}",
+                        "crear_opp_url": reverse("mpr:parte_produccion"),
                         "cerrar_url": reverse("mpr:opt_cerrar", kwargs={"id_lista": id_lista}),
                         "accion_principal": accion_principal,
                     })
@@ -1096,7 +1099,7 @@ class OptListView(MprLoginRequiredMixin, TemplateView):
             opt["imputacion_url"] = None
             if id_lista:
                 opt["detail_url"] = reverse("mpr:opt_detail", kwargs={"id_lista": id_lista})
-                opt["crear_opp_url"] = reverse("mpr:wizard") + f"?paso=3&id_lista={id_lista}"
+                opt["crear_opp_url"] = reverse("mpr:parte_produccion")
                 opt["cerrar_url"] = reverse("mpr:opt_cerrar", kwargs={"id_lista": id_lista})
             else:
                 opt["detail_url"] = (
@@ -1514,7 +1517,12 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
 
 
 class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
-    """Pantalla Registrar OPP: matriz artículo x depósito (Semi Elaborado, Scrap, 2da Selección)."""
+    """
+    DEPRECATED (E6): pendiente eliminación hasta migrar wizard paso 3.
+    Usar RegistrarParteProduccionView / ParteProduccionView en su lugar.
+
+    Pantalla Registrar OPP: matriz artículo x depósito (Semi Elaborado, Scrap, 2da Selección).
+    """
 
     template_name = "mpr/registrar_opp.html"
 
@@ -2612,6 +2620,7 @@ class OptsPorPedidoView(MprLoginRequiredMixin, TemplateView):
 TIPOS_MPR_CON_ETIQUETA = [
     ("", "— Sin tipo —"),
     (TIPO_MPR_PRODUCCION, "Producción"),
+    (TIPO_MPR_PLANCHADO, "Planchado"),
     (TIPO_MPR_SEMI_ELABORADO, "Semi Elaborado"),
     (TIPO_MPR_TERMINADO, "Terminado"),
     (TIPO_MPR_SCRAP, "Scrap"),
@@ -3948,6 +3957,18 @@ class EmpleadosOperariosAPIView(MprLoginRequiredMixin, View):
             return JsonResponse({"empleados": []})
 
 
+def _tiene_receta(fila: dict) -> bool:
+    """True si el pack tiene BOM (receta_json decodifica a lista no vacía)."""
+    raw = fila.get("receta_json")
+    if not raw:
+        return False
+    try:
+        receta = json.loads(raw)
+    except (ValueError, TypeError):
+        return False
+    return isinstance(receta, list) and len(receta) > 0
+
+
 class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
     """Pantalla 2: recibe selección desde Orden de Producción de Trabajo (OPT), muestra tabla con cantidades editables y tooltip; POST 'Generar OPT' crea la OPT."""
 
@@ -4046,18 +4067,14 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
                     return redirect("mpr:ventana_pack_agrupar")
                 wizard = request.session.get(WIZARD_SESSION_KEY) or {}
                 if wizard.get("paso") == 1 and liberada:
-                    primer_art = lineas_detalle[0].get("id_articulo") if lineas_detalle else None
-                    total_liberar = sum(l.get("cantidad_pendiente_prod") or 0 for l in lineas_detalle)
-                    request.session[WIZARD_SESSION_KEY] = {
-                        "paso": 3,
-                        "id_lista": id_lista_principal,
-                        "id_articulo": primer_art,
-                        "cantidad_pedida": total_liberar,
-                    }
+                    request.session.pop(WIZARD_SESSION_KEY, None)
                     request.session.modified = True
-                    messages.success(request, f"OPT Nº {id_lista_principal} creada y liberada. Comprobante {nro_comp_liberada}. Siguiente: Crear OPP.")
-                    url_wizard = reverse("mpr:wizard")
-                    return redirect(f"{url_wizard}?paso=3&id_lista={id_lista_principal}")
+                    messages.success(
+                        request,
+                        f"OPT Nº {id_lista_principal} creada y liberada. Comprobante {nro_comp_liberada}. "
+                        "Registrar producción en Parte de producción.",
+                    )
+                    return redirect("mpr:opt_detail", id_lista=id_lista_principal)
                 if liberada:
                     messages.success(request, f"OPT Nº {id_lista_principal} creada y liberada con {len(lineas)} artículo(s). Comprobante {nro_comp_liberada}.")
                 else:
@@ -4106,6 +4123,22 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
         if not filas_sesion:
             messages.error(request, "Seleccione al menos un artículo con cantidad a fabricar mayor a 0.")
             return redirect("mpr:ventana_pack")
+
+        # Validación de receta: bloquear si algún pack seleccionado no tiene BOM
+        packs_sin_receta = [
+            {
+                "id_articulo": f["id_articulo"],
+                "codigo_manual": f.get("codigo_manual", "-"),
+                "descripcion_articulo": f.get("descripcion_articulo", "-"),
+            }
+            for fila in filas_sesion
+            for f in [lookup.get(fila["id_articulo"])]
+            if f and not _tiene_receta(f)
+        ]
+        if packs_sin_receta:
+            request.session["ventana_pack_sin_receta"] = packs_sin_receta
+            return redirect("mpr:ventana_pack")
+
         request.session["ventana_pack_seleccion"] = {"filas": filas_sesion}
         return redirect("mpr:ventana_pack_agrupar")
 
@@ -4149,6 +4182,7 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
         context["filas_unidades"] = filas_unidades
         context["en_wizard"] = wizard.get("paso") == 1
         context["wizard_paso"] = 2
+        context["wizard_paso_max"] = WizardProduccionView.WIZARD_PASO_MAX
         context["fecha_hoy"] = date.today()
         if base_empresa:
             context["opcional_op"] = listar_columnas_opcionales_nueva_op(base_empresa)
@@ -4201,6 +4235,11 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
         from django.contrib import messages
 
         context = super().get_context_data(**kwargs)
+
+        # Leer y limpiar packs sin receta comunicados desde VentanaPackAgruparView
+        packs_sin_receta = self.request.session.pop("ventana_pack_sin_receta", None)
+        context["packs_sin_receta"] = packs_sin_receta or []
+
         base_empresa = _get_base_empresa(self.request)
         vista = (self.request.GET.get("vista") or "pack").strip().lower()
         if vista != "unidades":
@@ -4258,4 +4297,806 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
         )
         context["en_wizard"] = wizard.get("paso") == 1
         context["wizard_paso"] = 1
+        context["wizard_paso_max"] = WizardProduccionView.WIZARD_PASO_MAX
         return context
+
+
+# ---------------------------------------------------------------------------
+# ETAPA 2: Tablero de Demanda Consolidado por Artículo
+# ---------------------------------------------------------------------------
+
+class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
+    """Tablero de demanda consolidado por artículo/componente (solo lectura). Etapa 2 MPR."""
+
+    template_name = "mpr/tablero_produccion.html"
+
+    def get(self, request, *args, **kwargs):
+        from django.contrib import messages
+        from core.utils.administranet_types import to_date_or_none
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("core:dashboard")
+        fecha_desde_str = (request.GET.get("fecha_desde") or "").strip() or None
+        fecha_hasta_str = (request.GET.get("fecha_hasta") or "").strip() or None
+        solo_pendiente = request.GET.get("solo_pendiente") == "1"
+        try:
+            filas = listar_tablero_por_articulo(
+                base_empresa,
+                fecha_desde=to_date_or_none(fecha_desde_str) if fecha_desde_str else None,
+                fecha_hasta=to_date_or_none(fecha_hasta_str) if fecha_hasta_str else None,
+                solo_pendiente=solo_pendiente,
+                limit=200,
+            )
+        except MprSchemaError as e:
+            return _mpr_schema_error_redirect(request, e)
+        except Exception as e:
+            logger.warning("TableroProduccionView error: %s", e, exc_info=True)
+            filas = []
+        ultima_act = request.session.get("tablero_produccion_ultima_actualizacion", None)
+        return self.render_to_response({
+            "filas": filas,
+            "fecha_desde": fecha_desde_str or "",
+            "fecha_hasta": fecha_hasta_str or "",
+            "solo_pendiente": solo_pendiente,
+            "ultima_actualizacion": ultima_act,
+            "tablero_url": reverse("mpr:tablero"),
+            "opt_list_url": reverse("mpr:opt_list"),
+        })
+
+
+class TableroProduccionActualizarView(MprLoginRequiredMixin, TemplateView):
+    """POST: actualizar_pedidos_produccion() y redirigir al tablero de producción. Etapa 2 MPR."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:tablero_produccion")
+        session_user = request.session.get("user", {})
+        try:
+            id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else None
+        except (TypeError, ValueError):
+            id_usuario = None
+        try:
+            ok, msg = actualizar_pedidos_produccion(
+                base_empresa,
+                id_usuario=id_usuario,
+            )
+            if ok:
+                messages.success(request, msg)
+            else:
+                messages.error(request, msg)
+        except MprSchemaError as e:
+            return _mpr_schema_error_redirect(request, e)
+        except Exception as e:
+            logger.warning("TableroProduccionActualizarView error: %s", e, exc_info=True)
+            messages.error(request, "Error al actualizar la demanda.")
+        request.session["tablero_produccion_ultima_actualizacion"] = (
+            datetime.now().strftime("%d/%m/%Y %H:%M")
+        )
+        return redirect("mpr:tablero_produccion")
+
+
+# =============================================================================
+# Etapa 3: Turnos (CRUD) + Roster Rotativo
+# =============================================================================
+
+class TurnosListView(MprLoginRequiredMixin, TemplateView):
+    """
+    Listado de turnos de producción con toggle Activo/Inactivo.
+    GET: lista todos los turnos (activos e inactivos).
+    POST: toggle activo de un turno.
+    """
+
+    template_name = "mpr/turnos_list.html"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services import listar_turnos
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        context["turnos"] = listar_turnos(base_empresa, solo_activos=False)
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages
+        from mpr.services import toggle_turno_activo
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:turnos_list")
+        id_turno_raw = request.POST.get("id_turno", "")
+        activo_str = request.POST.get("activo", "")
+        try:
+            id_turno = int(id_turno_raw)
+            activo = activo_str == "True"
+        except (ValueError, TypeError):
+            messages.error(request, "Datos inválidos.")
+            return redirect("mpr:turnos_list")
+        ok, error = toggle_turno_activo(base_empresa, id_turno, activo)
+        if ok:
+            estado = "activado" if activo else "desactivado"
+            messages.success(request, f"Turno {estado} exitosamente.")
+        else:
+            messages.error(request, error or "Error al cambiar estado del turno.")
+        return redirect("mpr:turnos_list")
+
+
+class TurnoCreateView(MprLoginRequiredMixin, TemplateView):
+    """
+    Alta de turno de producción.
+    GET: muestra formulario.
+    POST: crea turno y redirige a listado si OK.
+    """
+
+    template_name = "mpr/turno_form.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["titulo"] = "Nuevo turno"
+        context["accion"] = "Crear"
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages
+        from mpr.services import crear_turno
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:turnos_list")
+        nombre = (request.POST.get("nombre") or "").strip()
+        hora_inicio = (request.POST.get("hora_inicio") or "").strip()
+        hora_fin = (request.POST.get("hora_fin") or "").strip()
+        ok, _id, error = crear_turno(base_empresa, nombre, hora_inicio, hora_fin)
+        if ok:
+            messages.success(request, f"Turno '{nombre}' creado exitosamente.")
+            return redirect("mpr:turnos_list")
+        messages.error(request, error or "Error al crear turno.")
+        context = self.get_context_data()
+        context["nombre"] = nombre
+        context["hora_inicio"] = hora_inicio
+        context["hora_fin"] = hora_fin
+        return self.render_to_response(context)
+
+
+class TurnoUpdateView(MprLoginRequiredMixin, TemplateView):
+    """
+    Edición de turno de producción.
+    GET: muestra formulario con datos actuales.
+    POST: actualiza turno y redirige a listado si OK.
+    """
+
+    template_name = "mpr/turno_form.html"
+
+    def get_context_data(self, **kwargs):
+        from django.contrib import messages
+        from mpr.services import obtener_turno
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        id_turno = kwargs.get("id_turno")
+        turno = obtener_turno(base_empresa, id_turno) if id_turno else None
+        if not turno:
+            context["titulo"] = "Editar turno"
+            context["accion"] = "Guardar cambios"
+            return context
+        context["titulo"] = f"Editar turno: {turno.nombre}"
+        context["accion"] = "Guardar cambios"
+        context["id_turno"] = turno.id
+        context["nombre"] = turno.nombre
+        context["hora_inicio"] = turno.hora_inicio.strftime("%H:%M")
+        context["hora_fin"] = turno.hora_fin.strftime("%H:%M")
+        return context
+
+    def get(self, request, *args, **kwargs):
+        from django.contrib import messages
+        from mpr.services import obtener_turno
+        base_empresa = _get_base_empresa(request)
+        id_turno = kwargs.get("id_turno")
+        if not base_empresa or not obtener_turno(base_empresa, id_turno):
+            messages.error(request, "Turno no encontrado.")
+            return redirect("mpr:turnos_list")
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages
+        from mpr.services import actualizar_turno
+        base_empresa = _get_base_empresa(request)
+        id_turno = kwargs.get("id_turno")
+        if not base_empresa or not id_turno:
+            messages.error(request, "Parámetros inválidos.")
+            return redirect("mpr:turnos_list")
+        nombre = (request.POST.get("nombre") or "").strip()
+        hora_inicio = (request.POST.get("hora_inicio") or "").strip()
+        hora_fin = (request.POST.get("hora_fin") or "").strip()
+        ok, error = actualizar_turno(base_empresa, id_turno, nombre, hora_inicio, hora_fin)
+        if ok:
+            messages.success(request, f"Turno '{nombre}' actualizado exitosamente.")
+            return redirect("mpr:turnos_list")
+        messages.error(request, error or "Error al actualizar turno.")
+        context = self.get_context_data(id_turno=id_turno)
+        context["nombre"] = nombre
+        context["hora_inicio"] = hora_inicio
+        context["hora_fin"] = hora_fin
+        return self.render_to_response(context)
+
+
+class PlanificacionTurnosView(MprLoginRequiredMixin, TemplateView):
+    """
+    Pantalla de planificación semanal (roster): grilla operadores × 7 días.
+    GET: muestra grilla de la semana seleccionada (default: semana actual).
+    Query param: semana=YYYY-MM-DD (lunes de la semana).
+    """
+
+    template_name = "mpr/planificacion_turnos.html"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services import listar_turnos, listar_roster_semana
+        from datetime import timedelta
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        semana_str = self.request.GET.get("semana")
+        if semana_str:
+            try:
+                from datetime import date as _date
+                fecha_lunes = _date.fromisoformat(semana_str)
+                fecha_lunes = fecha_lunes - timedelta(days=fecha_lunes.weekday())
+            except ValueError:
+                from datetime import date as _date
+                hoy = _date.today()
+                fecha_lunes = hoy - timedelta(days=hoy.weekday())
+        else:
+            from datetime import date as _date
+            hoy = _date.today()
+            fecha_lunes = hoy - timedelta(days=hoy.weekday())
+        semana_anterior = fecha_lunes - timedelta(days=7)
+        semana_siguiente = fecha_lunes + timedelta(days=7)
+        turnos_activos = listar_turnos(base_empresa, solo_activos=True)
+        roster_data = listar_roster_semana(base_empresa, fecha_lunes)
+        from datetime import date as _date2
+        hoy = _date2.today()
+        context.update({
+            "fecha_lunes": fecha_lunes,
+            "semana_anterior": semana_anterior,
+            "semana_siguiente": semana_siguiente,
+            "turnos_activos": turnos_activos,
+            "operarios": roster_data["operarios"],
+            "dias": roster_data["dias"],
+            "asignaciones": roster_data["asignaciones"],
+            "hoy": hoy,
+        })
+        return context
+
+
+class AsignarTurnoRosterView(MprLoginRequiredMixin, View):
+    """
+    POST: asigna (o reasigna) turno a un operario en una fecha.
+    Params POST: fecha (dd/MM/yyyy), id_operario, id_turno, semana (YYYY-MM-DD para redirect).
+    """
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages
+        from django.urls import reverse
+        from mpr.services import asignar_turno_roster
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:planificacion_turnos")
+        fecha_str = (request.POST.get("fecha") or "").strip()
+        id_operario_raw = request.POST.get("id_operario", "")
+        id_turno_raw = request.POST.get("id_turno", "")
+        semana_param = (request.POST.get("semana") or "").strip()
+        try:
+            id_operario = int(id_operario_raw)
+            id_turno = int(id_turno_raw)
+        except (ValueError, TypeError):
+            messages.error(request, "Datos inválidos.")
+            return redirect("mpr:planificacion_turnos")
+        ok, error = asignar_turno_roster(base_empresa, fecha_str, id_operario, id_turno)
+        if ok:
+            messages.success(request, "Turno asignado exitosamente.")
+        else:
+            messages.error(request, error or "Error al asignar turno.")
+        base_url = reverse("mpr:planificacion_turnos")
+        if semana_param:
+            return redirect(f"{base_url}?semana={semana_param}")
+        return redirect(base_url)
+
+
+class EliminarAsignacionRosterView(MprLoginRequiredMixin, View):
+    """
+    POST: elimina asignación de turno de un operario en una fecha.
+    Params POST: fecha (dd/MM/yyyy), id_operario, semana (YYYY-MM-DD para redirect).
+    """
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages
+        from django.urls import reverse
+        from mpr.services import eliminar_asignacion_roster
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:planificacion_turnos")
+        fecha_str = (request.POST.get("fecha") or "").strip()
+        id_operario_raw = request.POST.get("id_operario", "")
+        semana_param = (request.POST.get("semana") or "").strip()
+        try:
+            id_operario = int(id_operario_raw)
+        except (ValueError, TypeError):
+            messages.error(request, "Datos inválidos.")
+            return redirect("mpr:planificacion_turnos")
+        ok, error = eliminar_asignacion_roster(base_empresa, fecha_str, id_operario)
+        if ok:
+            messages.success(request, "Asignación eliminada exitosamente.")
+        else:
+            messages.error(request, error or "Error al eliminar asignación.")
+        base_url = reverse("mpr:planificacion_turnos")
+        if semana_param:
+            return redirect(f"{base_url}?semana={semana_param}")
+        return redirect(base_url)
+
+
+# ---------------------------------------------------------------------------
+# ETAPA 4: Parte de Producción (Ledger OPP-parte)
+# ---------------------------------------------------------------------------
+
+class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
+    """Vista de captura de parte de producción (grilla packs × operarios)."""
+
+    template_name = "mpr/parte_produccion.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from mpr.services import construir_grilla_parte, listar_turnos
+
+        base_empresa = _get_base_empresa(self.request)
+        if not base_empresa:
+            return context
+
+        context["turnos_activos"] = listar_turnos(base_empresa, solo_activos=True)
+
+        fecha_str = (self.request.GET.get("fecha") or "").strip()
+        turno_id_raw = (self.request.GET.get("turno_id") or "").strip()
+        context["fecha_str"] = fecha_str
+        context["turno_id"] = turno_id_raw
+
+        warnings_opp = self.request.session.pop("parte_warnings", None)
+        if warnings_opp:
+            context["warnings_opp"] = warnings_opp
+
+        if fecha_str and turno_id_raw:
+            try:
+                from datetime import datetime
+                fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
+                turno_id = int(turno_id_raw)
+                grilla = construir_grilla_parte(base_empresa, fecha_obj, turno_id)
+                context["grilla"] = grilla
+                context["fecha_obj"] = fecha_obj
+            except (ValueError, TypeError):
+                messages.error(self.request, "Fecha o turno inválidos.")
+
+        return context
+
+
+class RegistrarParteProduccionView(MprLoginRequiredMixin, View):
+    """POST: Registra un parte de producción completo (lote de celdas)."""
+
+    def post(self, request):
+        from decimal import Decimal
+        from datetime import datetime
+        from mpr.services import registrar_parte_produccion
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:parte_produccion")
+
+        fecha_str = (request.POST.get("fecha") or "").strip()
+        turno_id_raw = (request.POST.get("turno_id") or "").strip()
+
+        if not fecha_str or not turno_id_raw:
+            messages.error(request, "Fecha y turno son requeridos.")
+            return redirect("mpr:parte_produccion")
+
+        try:
+            fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
+            turno_id = int(turno_id_raw)
+        except (ValueError, TypeError):
+            messages.error(request, "Fecha o turno inválidos.")
+            return redirect("mpr:parte_produccion")
+
+        # Parsear celdas: parte_art_{id_art}_op_{id_op}
+        lineas = []
+        import re as _re
+        for key, value in request.POST.items():
+            m = _re.match(r"^parte_art_(\d+)_op_(\d+)$", key)
+            if m:
+                try:
+                    cantidad = Decimal(value.replace(",", ".").strip())
+                except Exception:
+                    continue
+                if cantidad > 0:
+                    lineas.append({
+                        "id_articulo": int(m.group(1)),
+                        "id_operario": int(m.group(2)),
+                        "cantidad": cantidad,
+                    })
+
+        notas = (request.POST.get("notas") or "").strip()
+        id_usuario = getattr(request.user, "id", 0) or 0
+
+        try:
+            parte, warnings = registrar_parte_produccion(
+                base_empresa, fecha_obj, turno_id, id_usuario, lineas, notas
+            )
+            if warnings:
+                request.session["parte_warnings"] = warnings
+            messages.success(request, "Parte de producción registrado exitosamente.")
+        except Exception as e:
+            messages.error(request, f"Error al registrar el parte: {e}")
+
+        redirect_url = reverse("mpr:parte_produccion")
+        return redirect(f"{redirect_url}?fecha={fecha_str}&turno_id={turno_id_raw}")
+
+
+class AjusteParteView(MprLoginRequiredMixin, View):
+    """POST: Registra un ajuste delta sobre una línea de parte de producción."""
+
+    def post(self, request, parte_id):
+        from decimal import Decimal, InvalidOperation
+        from django.core.exceptions import ValidationError
+        from mpr.services import agregar_ajuste_parte
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:parte_produccion")
+
+        try:
+            id_articulo = int(request.POST.get("id_articulo", ""))
+            id_operario = int(request.POST.get("id_operario", ""))
+            delta = Decimal(str(request.POST.get("delta", "")).replace(",", "."))
+            motivo = (request.POST.get("motivo") or "").strip()
+        except (ValueError, TypeError, InvalidOperation):
+            messages.error(request, "Datos del ajuste inválidos.")
+            return redirect("mpr:parte_produccion")
+
+        id_usuario = getattr(request.user, "id", 0) or 0
+
+        try:
+            agregar_ajuste_parte(
+                base_empresa, parte_id, id_articulo, id_operario, delta, motivo, id_usuario
+            )
+            messages.success(request, "Ajuste registrado exitosamente.")
+        except ValidationError as ve:
+            messages.error(request, str(ve.message if hasattr(ve, "message") else ve))
+        except Exception as e:
+            messages.error(request, f"Error al registrar ajuste: {e}")
+
+        return redirect("mpr:parte_produccion")
+
+
+# =============================================================================
+# Etapa 5: Transiciones de lote (TransicionLoteView)
+# =============================================================================
+
+class TransicionLoteView(MprLoginRequiredMixin, View):
+    """POST: registra una transferencia de stock entre etapas MPR (Producción, Planchado, etc.).
+
+    Parámetros POST esperados:
+        id_articulo: int — ID componente (nivel al que opera la transición).
+        tipo_origen: str — constante TIPO_MPR_* del depósito de origen.
+        tipo_destino: str — constante TIPO_MPR_* del depósito de destino.
+        cantidad: Decimal — unidades a transferir.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages as dj_messages
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            dj_messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:tablero_produccion")
+
+        session_user = request.session.get("user", {})
+        try:
+            id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else 0
+        except (TypeError, ValueError):
+            id_usuario = 0
+
+        id_articulo = to_int_or_none(request.POST.get("id_articulo"))
+        tipo_origen = (request.POST.get("tipo_origen") or "").strip()
+        tipo_destino = (request.POST.get("tipo_destino") or "").strip()
+        cantidad = to_decimal_or_none(request.POST.get("cantidad"))
+
+        if not id_articulo:
+            dj_messages.error(request, "Artículo no indicado.")
+            return redirect("mpr:tablero_produccion")
+
+        try:
+            ok, codigo_mov, nro_comp, msg_error = transferir_stock_entre_etapas(
+                base_empresa=base_empresa,
+                id_usuario=id_usuario,
+                id_articulo=id_articulo,
+                tipo_origen=tipo_origen,
+                tipo_destino=tipo_destino,
+                cantidad=cantidad,
+            )
+            if ok:
+                dj_messages.success(
+                    request,
+                    f"Transición {tipo_origen} → {tipo_destino} registrada correctamente "
+                    f"(comprobante {nro_comp}).",
+                )
+            else:
+                dj_messages.error(request, msg_error or "Error al registrar la transición.")
+        except MprSchemaError as e:
+            return _mpr_schema_error_redirect(request, e)
+        except Exception as e:
+            logger.warning("TransicionLoteView error: %s", e, exc_info=True)
+            dj_messages.error(request, f"Error inesperado al procesar la transición: {e}")
+
+        return redirect("mpr:tablero_produccion")
+
+
+# =============================================================================
+# Etapa 6: Trazabilidad OPT
+# =============================================================================
+
+
+class TrazabilidadOptView(MprLoginRequiredMixin, TemplateView):
+    """GET: Trazabilidad detallada de una OPT por id_lista_produccion (E6).
+
+    Integra 6 fuentes de datos para mostrar un timeline cronológico de todos los eventos
+    asociados a la OPT: historico, movimiento_stock (OPP), partes E4+, transiciones E5,
+    armados y sus imputaciones.
+
+    URL: /mpr/opt/<id_lista>/trazabilidad/
+    """
+
+    template_name = "mpr/trazabilidad_opt.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        id_lista = self.kwargs.get("id_lista", 0)
+        if not base_empresa or not id_lista:
+            raise Http404("Parámetros insuficientes para trazabilidad.")
+        from mpr.services import construir_trazabilidad_opt
+        trazabilidad = construir_trazabilidad_opt(base_empresa, id_lista)
+        cabecera = trazabilidad.get("cabecera") or {}
+        if not cabecera:
+            raise Http404("OPT no encontrada para esta empresa.")
+        emp_cabecera = cabecera.get("base_empresa", "")
+        if emp_cabecera and emp_cabecera != base_empresa:
+            raise Http404("OPT no pertenece a esta empresa.")
+        context.update({
+            "trazabilidad": trazabilidad,
+            "cabecera": cabecera,
+            "eventos": trazabilidad.get("eventos", []),
+            "fuentes_fallidas": trazabilidad.get("fuentes_fallidas", []),
+            "id_lista": id_lista,
+            "opt_detail_url": reverse("mpr:opt_detail", kwargs={"id_lista": id_lista}),
+            "tablero_url": reverse("mpr:tablero"),
+            "opt_list_url": reverse("mpr:opt_list"),
+        })
+        return context
+
+
+# =============================================================================
+# Etapa 7: Envío directo a producción desde el Tablero (ledger-componente)
+# =============================================================================
+
+
+class EnviarProduccionLoteView(MprLoginRequiredMixin, View):
+    """POST: registra un lote de envíos a producción desde el tablero (E7).
+
+    Parsea inputs con prefijo envio_{id_art} y pendiente_{id_art};
+    delega en enviar_a_produccion_lote (ledger-only, no toca MySQL legacy).
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        from decimal import Decimal
+        from django.contrib import messages as dj_messages
+        from core.utils.administranet_types import to_int_or_none, to_decimal_or_none
+        from mpr.services import enviar_a_produccion_lote
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            dj_messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:tablero_produccion")
+
+        session_user = request.session.get("user", {})
+        try:
+            id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else 0
+        except (TypeError, ValueError):
+            id_usuario = 0
+
+        items = []
+        pendientes = {}
+        for key, value in request.POST.items():
+            if key.startswith("envio_"):
+                id_art = to_int_or_none(key[6:])
+                qty = to_decimal_or_none(value)
+                if id_art is not None and qty is not None:
+                    items.append((id_art, qty))
+            elif key.startswith("pendiente_"):
+                id_art = to_int_or_none(key[10:])
+                pend = to_decimal_or_none(value)
+                if id_art is not None and pend is not None:
+                    pendientes[id_art] = pend
+
+        filtros_qs = (request.POST.get("filtros_qs") or "").strip()
+        ok, creados, warnings, error = enviar_a_produccion_lote(
+            base_empresa, id_usuario, items, pendientes
+        )
+
+        redirect_url = reverse("mpr:tablero_produccion")
+        if filtros_qs:
+            redirect_url += "?" + filtros_qs
+
+        if ok:
+            if creados:
+                sufijo = "s" if creados != 1 else ""
+                dj_messages.success(
+                    request,
+                    f"{creados} componente{sufijo} enviado{sufijo} a producción.",
+                )
+            for w in warnings:
+                dj_messages.warning(request, w)
+        else:
+            dj_messages.error(request, error or "Error al registrar envíos.")
+
+        return redirect(redirect_url)
+
+
+# =============================================================================
+# Etapa 10: Clasificación de Producción (pantalla única consolidada)
+#
+# El planchado es un momento dentro de la producción y no deja stock. La
+# clasificación sale directo de Producción hacia {Semi | 2da | Descarte}, en
+# un único formulario multi-línea con fecha de carga (permite carga diferida).
+# Reemplaza las pantallas de Inspección y Clasificación de la Etapa 9.
+# =============================================================================
+
+
+class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
+    """GET: pantalla de Clasificación de Producción en lote (E10).
+
+    Muestra los componentes con saldo en Producción y permite distribuirlos a
+    Semi Elaborado, 2da Selección y Desperdicio (Scrap) en un solo formulario,
+    indicando la fecha de carga del parte.
+    """
+
+    template_name = "mpr/clasificacion_produccion.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from datetime import date as _date
+        from mpr.services import construir_grilla_clasificacion_produccion, TIPO_MPR_PRODUCCION
+
+        base_empresa = _get_base_empresa(self.request)
+        grilla = (
+            construir_grilla_clasificacion_produccion(base_empresa)
+            if base_empresa
+            else {"componentes": [], "componentes_vacio": True}
+        )
+
+        context.update({
+            "titulo_pantalla": "Clasificación de producción",
+            "tipo_origen": TIPO_MPR_PRODUCCION,
+            "url_registrar": reverse("mpr:clasificacion_produccion_registrar"),
+            "fecha_hoy": _date.today().strftime("%d/%m/%Y"),
+            "componentes": grilla["componentes"],
+            "componentes_vacio": grilla["componentes_vacio"],
+        })
+        return context
+
+
+class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
+    """POST: registra la clasificación Producción → {Semi | 2da | Scrap} en lote (E10).
+
+    Parsea semi_{id}, seg2da_{id}, scrap_{id} y una ``fecha`` (dd/MM/yyyy) de carga.
+    Re-valida el saldo real de Producción desde BD (ignora hidden manipulable).
+    Pre-check por fila: (semi + 2da + scrap) ≤ producción disponible.
+    Best-effort: un ítem fallido no frena los demás. La fecha se propaga al asiento.
+    """
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        from decimal import Decimal
+        from django.contrib import messages as dj_messages
+        from mpr.services import (
+            TIPO_MPR_PRODUCCION,
+            TIPO_MPR_2DA_SELECCION,
+            TIPO_MPR_SEMI_ELABORADO,
+            TIPO_MPR_SCRAP,
+            _pivot_stock_por_tipo_mpr,
+            _parse_fecha_ddmmaaaa,
+            transferir_stock_lote,
+        )
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            dj_messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:clasificacion_produccion")
+
+        session_user = request.session.get("user", {})
+        try:
+            id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else 0
+        except (TypeError, ValueError):
+            id_usuario = 0
+
+        # Fecha de carga del parte (dd/MM/yyyy). Obligatoria.
+        fecha_str = (request.POST.get("fecha") or "").strip()
+        fecha_obj, err_fecha = _parse_fecha_ddmmaaaa(fecha_str)
+        if err_fecha or fecha_obj is None:
+            dj_messages.error(request, err_fecha or "Fecha de carga inválida.")
+            return redirect("mpr:clasificacion_produccion")
+
+        # Recopilar ids desde prefijos del POST
+        ids_post: set = set()
+        for key in request.POST:
+            for prefijo in ("semi_", "seg2da_", "scrap_"):
+                if key.startswith(prefijo):
+                    id_art = to_int_or_none(key[len(prefijo):])
+                    if id_art is not None:
+                        ids_post.add(id_art)
+                    break
+
+        if not ids_post:
+            dj_messages.warning(request, "No se enviaron cantidades.")
+            return redirect("mpr:clasificacion_produccion")
+
+        # Re-validación server-side del stock real (ignora hidden disponible_{id})
+        stock_real, _ = _pivot_stock_por_tipo_mpr(base_empresa, list(ids_post))
+
+        items = []
+        for id_art in ids_post:
+            cant_semi = to_decimal_or_none(request.POST.get(f"semi_{id_art}")) or Decimal(0)
+            cant_2da = to_decimal_or_none(request.POST.get(f"seg2da_{id_art}")) or Decimal(0)
+            cant_scrap = to_decimal_or_none(request.POST.get(f"scrap_{id_art}")) or Decimal(0)
+            if cant_semi <= 0 and cant_2da <= 0 and cant_scrap <= 0:
+                continue
+            disponible_real = Decimal(str(stock_real.get(id_art, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
+            suma = cant_semi + cant_2da + cant_scrap
+            if suma > disponible_real:
+                dj_messages.error(
+                    request,
+                    f"Producción insuficiente para artículo {id_art}: "
+                    f"disponible {disponible_real:g}, solicitado {suma:g}. Fila ignorada.",
+                )
+                continue
+            for cant, destino in (
+                (cant_semi, TIPO_MPR_SEMI_ELABORADO),
+                (cant_2da, TIPO_MPR_2DA_SELECCION),
+                (cant_scrap, TIPO_MPR_SCRAP),
+            ):
+                if cant > 0:
+                    items.append({
+                        "id_articulo": id_art,
+                        "tipo_origen": TIPO_MPR_PRODUCCION,
+                        "tipo_destino": destino,
+                        "cantidad": cant,
+                    })
+
+        if items:
+            resultado = transferir_stock_lote(base_empresa, id_usuario, items, fecha=fecha_obj)
+            if resultado["exitosas"]:
+                comprobantes = ", ".join(c for c in resultado["comprobantes"] if c)
+                sufijo = "s" if resultado["exitosas"] != 1 else ""
+                dj_messages.success(
+                    request,
+                    f"{resultado['exitosas']} transferencia{sufijo} registrada{sufijo}."
+                    + (f" Comprobantes: {comprobantes}." if comprobantes else ""),
+                )
+            for id_art_err, msg_err in resultado["errores"]:
+                dj_messages.error(request, f"Error en artículo {id_art_err}: {msg_err}")
+
+        return redirect("mpr:clasificacion_produccion")

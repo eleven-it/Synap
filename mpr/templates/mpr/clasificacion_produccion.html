@@ -1,0 +1,254 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+{#
+  Etapa 10 — Clasificación de producción (pantalla única consolidada).
+  El planchado es un momento dentro de la producción y no deja stock: la
+  clasificación sale directo de Producción hacia {Semi | 2da | Descarte}.
+  Contexto requerido:
+    titulo_pantalla    — str
+    tipo_origen        — str (TIPO_MPR_PRODUCCION)
+    url_registrar      — str  URL POST
+    fecha_hoy          — str  dd/MM/yyyy (preselección)
+    componentes        — list [{id_articulo, codigo_manual, descripcion, disponible}]
+    componentes_vacio  — bool
+#}
+
+{% block title %}{{ titulo_pantalla }} — MPR{% endblock %}
+
+{% block content %}
+<style>[x-cloak]{display:none!important}</style>
+<div class="min-h-screen bg-slate-50 dark:bg-slate-900">
+<div class="mx-auto max-w-none px-4 py-4 sm:px-6 lg:px-8">
+
+    {# Encabezado con marco oscuro (estética Tablero de producción) #}
+    <header class="rounded-xl bg-slate-800 px-5 py-4 shadow-sm dark:bg-slate-900">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h1 class="flex items-center gap-2 text-lg font-semibold text-white">
+                    <span class="material-icons text-purple-400" aria-hidden="true">category</span>
+                    {{ titulo_pantalla }}
+                </h1>
+                <p class="mt-0.5 text-xs text-slate-400">
+                    Distribuí el saldo de <strong class="text-slate-200">Producción</strong> hacia
+                    Semi Elaborado, 2da Selección o Desperdicio. El planchado no deja stock.
+                </p>
+            </div>
+            <a href="{% url 'mpr:tablero_produccion' %}"
+               class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                <span class="material-icons text-base" aria-hidden="true">arrow_back</span>
+                Volver al tablero
+            </a>
+        </div>
+    </header>
+
+    {# Mensajes Django — consumidos en esta pantalla #}
+    {% if messages %}
+    <div class="mt-4 flex flex-col gap-2">
+        {% for msg in messages %}
+        <div class="flex items-start gap-3 rounded-lg border px-4 py-3
+            {% if msg.tags == 'success' %}border-green-200 bg-green-50 dark:border-green-700/50 dark:bg-green-900/20
+            {% elif msg.tags == 'error' %}border-red-200 bg-red-50 dark:border-red-700/50 dark:bg-red-900/20
+            {% else %}border-amber-200 bg-amber-50 dark:border-amber-700/50 dark:bg-amber-900/20{% endif %}">
+            <span class="material-icons text-lg
+                {% if msg.tags == 'success' %}text-green-600 dark:text-green-400
+                {% elif msg.tags == 'error' %}text-red-600 dark:text-red-400
+                {% else %}text-amber-600 dark:text-amber-400{% endif %}"
+                aria-hidden="true">
+                {% if msg.tags == 'success' %}check_circle{% elif msg.tags == 'error' %}error{% else %}warning{% endif %}
+            </span>
+            <p class="text-sm font-medium
+                {% if msg.tags == 'success' %}text-green-800 dark:text-green-200
+                {% elif msg.tags == 'error' %}text-red-800 dark:text-red-200
+                {% else %}text-amber-800 dark:text-amber-200{% endif %}">
+                {{ msg }}
+            </p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if componentes_vacio %}
+    {# Estado vacío #}
+    <div class="mt-4 rounded-xl border border-slate-200 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-800">
+        <span class="material-icons mb-2 text-4xl text-slate-300 dark:text-slate-600" aria-hidden="true">inventory_2</span>
+        <p class="text-sm font-medium text-slate-600 dark:text-slate-400">
+            No hay componentes con saldo en <strong>Producción</strong>.
+        </p>
+        <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">
+            Cuando se registre parte de producción, los componentes aparecerán aquí para clasificar.
+        </p>
+    </div>
+
+    {% else %}
+    {#
+      Formulario único. Alpine.js maneja:
+        - fecha de carga (selector nativo -> hidden dd/MM/yyyy),
+        - validación por fila (suma destinos <= producción disponible),
+        - bloqueo del submit si alguna fila excede o falta la fecha.
+    #}
+    <form method="post" action="{{ url_registrar }}"
+          x-data="clasificacionProduccion()"
+          x-init="init()"
+          @submit="onSubmit($event)"
+          @fila-excede.window="setExcede($event.detail.id, $event.detail.excede)"
+          class="mt-4 rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+        {% csrf_token %}
+        <input type="hidden" name="fecha" :value="fechaDdmmyyyy">
+
+        {# Barra superior: fecha + contador + acción #}
+        <div class="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+            <div class="flex flex-wrap items-end gap-3">
+                <label class="flex flex-col gap-0.5">
+                    <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Fecha de carga</span>
+                    <input type="date"
+                           x-model="fechaIso"
+                           required
+                           class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:[color-scheme:dark]"/>
+                </label>
+                <p class="pb-1 text-xs text-slate-500 dark:text-slate-400">
+                    {{ componentes|length }} componente{% if componentes|length != 1 %}s{% endif %} con saldo en Producción
+                </p>
+            </div>
+            <button type="submit"
+                    :disabled="hayExcedida"
+                    :class="hayExcedida
+                        ? 'cursor-not-allowed opacity-50 bg-purple-600'
+                        : 'hover:bg-purple-500 bg-purple-600'"
+                    class="inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2">
+                <span class="material-icons text-base" aria-hidden="true">save</span>
+                Guardar parte
+            </button>
+        </div>
+
+        {# Tabla de componentes #}
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                    <tr>
+                        <th class="px-4 py-2.5">Componente</th>
+                        <th class="px-4 py-2.5">Descripción</th>
+                        <th class="px-4 py-2.5 text-right">Producción disp.</th>
+                        <th class="px-4 py-2.5 text-right">&rarr; Semi</th>
+                        <th class="px-4 py-2.5 text-right">&rarr; 2da</th>
+                        <th class="px-4 py-2.5 text-right">&rarr; Descarte</th>
+                        <th class="px-4 py-2.5 text-right">Suma</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                    {% for comp in componentes %}
+                    <tr x-data="{
+                            cantSemi: 0,
+                            cant2da: 0,
+                            cantScrap: 0,
+                            disp: {{ comp.disponible }},
+                            get suma() { return parseFloat(this.cantSemi||0) + parseFloat(this.cant2da||0) + parseFloat(this.cantScrap||0); },
+                            get excede() { return this.suma > this.disp; },
+                            init() { this.$watch('excede', val => this.$dispatch('fila-excede', { id: {{ comp.id_articulo }}, excede: val })); }
+                        }"
+                        :class="excede ? 'bg-red-50 dark:bg-red-900/20' : ''"
+                        class="transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/30">
+
+                        <td class="px-4 py-2.5 font-mono text-xs text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                            {{ comp.codigo_manual }}
+                        </td>
+                        <td class="px-4 py-2.5 text-slate-700 dark:text-slate-300">
+                            {{ comp.descripcion }}
+                        </td>
+                        <td class="px-4 py-2.5 text-right font-medium text-slate-800 dark:text-slate-200 whitespace-nowrap">
+                            {{ comp.disponible|floatformat:"-2" }}
+                            {# hidden: la vista lo ignora y re-valida el saldo real desde BD #}
+                            <input type="hidden" name="disponible_{{ comp.id_articulo }}" value="{{ comp.disponible }}">
+                        </td>
+                        <td class="px-4 py-2.5 text-right whitespace-nowrap">
+                            <input type="number"
+                                   name="semi_{{ comp.id_articulo }}"
+                                   x-model="cantSemi"
+                                   min="0" step="0.01"
+                                   :class="excede ? 'ring-2 ring-red-500 border-red-400' : 'border-slate-300 dark:border-slate-600'"
+                                   class="w-24 rounded border bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:bg-slate-700 dark:text-slate-100">
+                        </td>
+                        <td class="px-4 py-2.5 text-right whitespace-nowrap">
+                            <input type="number"
+                                   name="seg2da_{{ comp.id_articulo }}"
+                                   x-model="cant2da"
+                                   min="0" step="0.01"
+                                   :class="excede ? 'ring-2 ring-red-500 border-red-400' : 'border-slate-300 dark:border-slate-600'"
+                                   class="w-24 rounded border bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:bg-slate-700 dark:text-slate-100">
+                        </td>
+                        <td class="px-4 py-2.5 text-right whitespace-nowrap">
+                            <input type="number"
+                                   name="scrap_{{ comp.id_articulo }}"
+                                   x-model="cantScrap"
+                                   min="0" step="0.01"
+                                   :class="excede ? 'ring-2 ring-red-500 border-red-400' : 'border-slate-300 dark:border-slate-600'"
+                                   class="w-24 rounded border bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-red-500 focus:outline-none focus:ring-1 focus:ring-red-500 dark:bg-slate-700 dark:text-slate-100">
+                        </td>
+                        <td class="px-4 py-2.5 text-right whitespace-nowrap">
+                            <span :class="excede ? 'font-semibold text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'"
+                                  class="text-sm" x-text="suma.toFixed(2)">0.00</span>
+                            <span x-show="excede" x-cloak class="ml-1 text-xs text-red-500 dark:text-red-400">&#9888; excede</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {# Footer del form #}
+        <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 dark:border-slate-700">
+            <p x-show="hayExcedida" x-cloak class="text-xs font-medium text-red-600 dark:text-red-400">
+                <span class="material-icons align-text-bottom text-sm" aria-hidden="true">error_outline</span>
+                Corregí las filas marcadas en rojo antes de guardar.
+            </p>
+            <div class="ml-auto">
+                <button type="submit"
+                        :disabled="hayExcedida"
+                        :class="hayExcedida
+                            ? 'cursor-not-allowed opacity-50 bg-purple-600'
+                            : 'hover:bg-purple-500 bg-purple-600'"
+                        class="inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2">
+                    <span class="material-icons text-base" aria-hidden="true">save</span>
+                    Guardar parte
+                </button>
+            </div>
+        </div>
+
+    </form>
+    {% endif %}
+
+</div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', function () {
+    Alpine.data('clasificacionProduccion', function () {
+        return {
+            excedidas: {},
+            fechaIso: '',
+            init: function () {
+                var raw = '{{ fecha_hoy|escapejs }}';
+                if (raw && raw.indexOf('/') > -1) {
+                    var p = raw.split('/');
+                    this.fechaIso = p[2] + '-' + p[1] + '-' + p[0];
+                }
+            },
+            get fechaDdmmyyyy() {
+                if (!this.fechaIso) { return ''; }
+                var p = this.fechaIso.split('-');
+                if (p.length !== 3) { return ''; }
+                return p[2] + '/' + p[1] + '/' + p[0];
+            },
+            setExcede: function (id, val) { this.excedidas[id] = val; },
+            get hayExcedida() {
+                return Object.values(this.excedidas).some(function (v) { return v; });
+            },
+            onSubmit: function (e) {
+                if (this.hayExcedida || !this.fechaDdmmyyyy) {
+                    e.preventDefault();
+                }
+            }
+        };
+    });
+});
+</script>
+{% endblock %}

@@ -27,6 +27,15 @@ Documentación del módulo MPR en Synap: flujos, esquema de datos, manual de usu
 | [FLUJO_VB6_PEDIDO_PRODUCCION_MPR.md](FLUJO_VB6_PEDIDO_PRODUCCION_MPR.md) | Flujo VB6 "Pedido producción" (motivo OPT) – Análisis extremo a extremo. |
 | [e2e/REGISTRO_FLUJO_E2E.md](e2e/REGISTRO_FLUJO_E2E.md) | Registro E2E Playwright (demanda → OPT → OPP) con capturas en [e2e/capturas/](e2e/capturas/). Suite en `tests/e2e/mpr/`. |
 | [e2e/MANUAL_USUARIO_MPR.html](e2e/MANUAL_USUARIO_MPR.html) | **Manual visual HTML** (demanda → OPT → OPP) con capturas E2E; abrir en navegador desde `docs/mpr/e2e/`. |
+| [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md) | **Etapa 2** — Tablero de demanda consolidado por artículo: 10 columnas, algoritmo, columna Enviado (fórmula definitiva desde Etapa 4), índice `idx_sd_art_dep`. |
+| [TURNOS_Y_ROSTER.md](TURNOS_Y_ROSTER.md) | **Etapa 3** — Turnos de producción (CRUD) + Roster rotativo (planificación semanal de asignación de turnos a operarios). Modelos `MprTurno`/`MprRosterDia`, servicios, vistas/URLs, UI, validaciones, migración 0010, tests. |
+| [OPP_PARTE_PRODUCCION.md](OPP_PARTE_PRODUCCION.md) | **Etapa 4 + 5** — Parte de producción: captura ledger OPP-parte (E4) + asiento físico MySQL en depósito Producción (E5). `movimiento_fisico_ok`, `ajuste_fisico_ok`. Migración 0011+0012, servicios, vistas `/mpr/parte-produccion/`. |
+| [TRANSICIONES_LOTE.md](TRANSICIONES_LOTE.md) | **Etapa 5** — Transiciones de stock entre etapas MPR: `transferir_stock_entre_etapas`, `MprTransicionLote`, TRANSICIONES_LEGALES, UI columna Acciones en tablero. Migración 0012. |
+| [TRAZABILIDAD_OPT.md](TRAZABILIDAD_OPT.md) | **Etapa 6** — Trazabilidad OPT drill-down: `id_lista_produccion` en `MprParte`, escritura a `lista_produccion_historico`, servicios `construir_trazabilidad_opt` / `construir_trazabilidad_articulo`, vista `TrazabilidadOptView` (`/mpr/opt/<id>/trazabilidad/`). Migración 0013. |
+| [ENVIO_PRODUCCION_TABLERO.md](ENVIO_PRODUCCION_TABLERO.md) | **Etapa 7** — Envío directo a producción desde el Tablero (ledger-componente, lote): `MprEnvioProduccion`, `enviar_a_produccion_lote`, `_query_enviado_tablero_componente`, `EnviarProduccionLoteView`, fórmula Enviado dos fuentes. Migración 0014. |
+| [PARTE_PRODUCCION.md](PARTE_PRODUCCION.md) | **Etapa 8** — Parte de producción por componente: grilla desde Fabricando (E7), asiento físico directo sin BOM (`ya_componentes=True`), warning tope Fabricando, compatibilidad E6 (`id_lista_produccion=None`). Migración 0015. |
+| [ACCIONES_LOTE_TABLERO.md](ACCIONES_LOTE_TABLERO.md) | **Etapa 9 + 10** — Acciones de lote (supersedido por clasificación global E10). Ver también clasificación única desde Producción. |
+| [NAVIGACION_MPR_ETAPA11.md](NAVIGACION_MPR_ETAPA11.md) | **Etapa 11** — Hub de navegación: tablero consolidado como operación diaria; ventana pack/wizard como trazabilidad OPT avanzada; menú, CTAs y `crear_opp_url` → parte de producción. |
 
 ## Scripts SQL
 

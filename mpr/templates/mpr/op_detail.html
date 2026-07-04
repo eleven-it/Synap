@@ -133,11 +133,11 @@
                 </div>
             </a>
             {% if id_lista and total_pendiente > 0 %}
-            <a href="{% url 'mpr:wizard' %}?paso=3&amp;id_lista={{ id_lista }}" class="group flex items-center gap-4 rounded-2xl border border-transparent bg-purple-600 p-5 text-white shadow-md transition-all hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 md:col-span-1">
+            <a href="{% url 'mpr:parte_produccion' %}" class="group flex items-center gap-4 rounded-2xl border border-transparent bg-purple-600 p-5 text-white shadow-md transition-all hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 md:col-span-1">
                 <span class="material-icons shrink-0 text-3xl transition-transform group-hover:scale-105" aria-hidden="true">assignment</span>
                 <div class="min-w-0">
-                    <p class="font-bold">Registrar OPP</p>
-                    <p class="mt-0.5 text-sm text-white/90">Registrar parte de producción (asistente paso OPP)</p>
+                    <p class="font-bold">Parte de producción</p>
+                    <p class="mt-0.5 text-sm text-white/90">Registrar cantidades producidas (tablero consolidado)</p>
                 </div>
             </a>
             {% elif id_lista %}

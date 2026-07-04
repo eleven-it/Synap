@@ -1409,7 +1409,7 @@ def agrupar_filas_opt_listado_por_lote(
         if id_lista:
             g["detail_url"] = reverse_mpr_opt_detail(id_lista)
             from django.urls import reverse as dj_reverse
-            g["crear_opp_url"] = dj_reverse("mpr:wizard") + f"?paso=3&id_lista={id_lista}"
+            g["crear_opp_url"] = dj_reverse("mpr:parte_produccion")
             g["cerrar_url"] = dj_reverse("mpr:opt_cerrar", kwargs={"id_lista": id_lista})
         else:
             g["detail_url"] = None
@@ -5215,6 +5215,7 @@ TIPO_MPR_SEMI_ELABORADO = "SemiElaborado"
 TIPO_MPR_TERMINADO = "Terminado"
 TIPO_MPR_SCRAP = "Scrap"
 TIPO_MPR_2DA_SELECCION = "2daSeleccion"
+TIPO_MPR_PLANCHADO = "Planchado"
 
 TIPOS_MPR_OPP = (TIPO_MPR_SEMI_ELABORADO, TIPO_MPR_SCRAP, TIPO_MPR_2DA_SELECCION)
 
@@ -5272,7 +5273,7 @@ def actualizar_deposito_tipo_mpr(
         return False, "Depósito no indicado."
     valor_interno = None
     if tipo_mpr and (tipo_mpr := (tipo_mpr or "").strip()):
-        validos = (TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO, TIPO_MPR_TERMINADO, TIPO_MPR_SCRAP, TIPO_MPR_2DA_SELECCION)
+        validos = (TIPO_MPR_PRODUCCION, TIPO_MPR_SEMI_ELABORADO, TIPO_MPR_TERMINADO, TIPO_MPR_SCRAP, TIPO_MPR_2DA_SELECCION, TIPO_MPR_PLANCHADO)
         if tipo_mpr not in validos:
             return False, f"Tipo MPR no válido. Use: {', '.join(validos)}."
         valor_interno = tipo_mpr
@@ -5383,6 +5384,11 @@ def get_deposito_desperdicio_mpr(base_empresa: str) -> Optional[int]:
 def get_deposito_2da_seleccion_mpr(base_empresa: str) -> Optional[int]:
     """Depósito 2.ª selección (tipo_mpr=2daSeleccion), origen típico del armado surtido."""
     return _get_deposito_por_tipo_mpr(base_empresa, TIPO_MPR_2DA_SELECCION)
+
+
+def get_deposito_planchado_mpr(base_empresa: str) -> Optional[int]:
+    """Depósito de planchado (tipo_mpr=Planchado): etapa de inspección aprobatoria desde Producción."""
+    return _get_deposito_por_tipo_mpr(base_empresa, TIPO_MPR_PLANCHADO)
 
 
 def get_depositos_opp(base_empresa: str) -> List[Dict[str, Any]]:
@@ -8369,100 +8375,10 @@ def ejecutar_liberar_opt(
                                 raise MprSchemaError(formatear_error_esquema(ins_err2, "movimiento_stock")) from ins_err2
                     else:
                         raise MprSchemaError(formatear_error_esquema(ins_err, "movimiento_stock")) from ins_err
-                # (4) Por línea pack: componentes a producción; stock con id_operario_opt por línea OPT (sue_abm_empleado).
-                all_comp_ids: set = set()
-                for linea_lp, qp in distribucion:
-                    if qp <= 0:
-                        continue
-                    for cid in _explode_packs_to_components(base_empresa, [(linea_lp, qp)]).keys():
-                        all_comp_ids.add(cid)
-                articulo_info: Dict[int, Tuple[str, str]] = {}
-                if all_comp_ids and tbl_articulo:
-                    ids_comp = list(all_comp_ids)
-                    placeholders = ",".join(["%s"] * len(ids_comp))
-                    cursor.execute(
-                        f"SELECT IDArt, COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo, COALESCE(NombreArticulo, '') AS descripcion FROM {tbl_articulo} WHERE IDArt IN ({placeholders})",
-                        ids_comp,
-                    )
-                    for r in cursor.fetchall() or []:
-                        aid = to_int_or_none(r[0])
-                        if aid is not None:
-                            articulo_info[aid] = (str_or_default(r[1], "-"), str_or_default(r[2], "-"))
-                orden = 0
-                sql_stock_opt_abm_op = f"""
-                            INSERT INTO {tbl_stock}
-                            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
-                             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante, codigo_mov_opt, id_en_abm, id_operario_opt)
-                            VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s, %s, %s, %s)
-                            """
-                sql_stock_opt_abm = f"""
-                            INSERT INTO {tbl_stock}
-                            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
-                             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante, codigo_mov_opt, id_en_abm)
-                            VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s, %s, %s)
-                            """
-                sql_stock_op = f"""
-                            INSERT INTO {tbl_stock}
-                            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
-                             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante, id_operario_opt)
-                            VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s, %s)
-                            """
-                sql_stock_min = f"""
-                            INSERT INTO {tbl_stock}
-                            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
-                             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
-                            VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
-                            """
-                for linea, qty_pack in distribucion:
-                    if qty_pack <= 0:
-                        continue
-                    id_op_line = to_int_or_none(linea.get("id_operario_opt"))
-                    id_art_pack_linea = to_int_or_none(linea.get("id_articulo"))
-                    id_en_abm_linea = (
-                        get_id_en_abm_por_articulo(base_empresa, id_art_pack_linea)
-                        if id_art_pack_linea is not None
-                        else None
-                    )
-                    comps_line = _explode_packs_to_components(base_empresa, [(linea, qty_pack)])
-                    for id_art in sorted(comps_line.keys()):
-                        qty = comps_line[id_art]
-                        if qty <= 0:
-                            continue
-                        codigo_art, descripcion_art = articulo_info.get(id_art, ("-", "-"))
-                        entrada = Decimal(str(qty))
-                        orden += 1
-                        cursor.execute(
-                            f"SELECT id_stock_deposito, saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
-                            [id_art, deposito_destino],
-                        )
-                        sd_row = cursor.fetchone()
-                        saldo_actual = Decimal(str(sd_row[1] or 0)) if sd_row else Decimal(0)
-                        saldo_despues = saldo_actual + entrada
-                        params_stock = [
-                            codigo_mov, id_art, codigo_art, descripcion_art, fecha_mov,
-                            entrada, saldo_despues, deposito_destino, id_ref_movstock,
-                            orden, id_usuario, MOTIVO_OPT_TEXTO, nro_comprobante, None,
-                        ]
-                        intentos_stock: List[Tuple[str, List[Any]]] = []
-                        if id_en_abm_linea is not None:
-                            p_abm = params_stock + [codigo_mov, id_en_abm_linea]
-                            if id_op_line is not None:
-                                intentos_stock.append((sql_stock_opt_abm_op, p_abm + [id_op_line]))
-                            intentos_stock.append((sql_stock_opt_abm, p_abm))
-                        if id_op_line is not None:
-                            intentos_stock.append((sql_stock_op, params_stock + [id_op_line]))
-                        intentos_stock.append((sql_stock_min, params_stock))
-                        _mpr_ejecutar_insert_intentos(cursor, intentos_stock)
-                        if sd_row:
-                            cursor.execute(
-                                f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
-                                [saldo_despues, sd_row[0]],
-                            )
-                        else:
-                            cursor.execute(
-                                f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
-                                [id_art, deposito_destino, saldo_despues],
-                            )
+                # (4) Etapa 5: el asiento físico en stock_deposito[Produccion] lo realiza
+                # registrar_parte_produccion (OPP-parte) vía _registrar_asiento_fisico_opp_parte.
+                # ejecutar_liberar_opt conserva SOLO el comprobante MSTOCK OPT y las actualizaciones
+                # a lista_produccion_agrupada/historico/detalle.
                 # Actualizar lista_produccion_agrupada por pack: marcar en proceso (NO decrementar cantidad_pendiente_prod al liberar)
                 for linea, _ in distribucion:
                     id_lista_linea = to_int_or_none(linea.get("id_lista_produccion")) or id_lista_produccion
@@ -8608,6 +8524,9 @@ def ejecutar_opp(
     distribucion: Optional[List[Tuple[Dict[str, Any], int]]] = None,
 ) -> Tuple[bool, Optional[int], Optional[str], Optional[str]]:
     """
+    DEPRECATED (E6): pendiente eliminación hasta migrar wizard paso 3.
+    Usar registrar_parte_produccion / RegistrarParteProduccionView en su lugar.
+
     Registra Parte de producción (OPP): movimiento Salida desde deposito_origen (Producción) y Entrada
     a deposito_destino (Semi Elaborado, Scrap, 2da) para los componentes. La distribución (pack, qty)
     se explota a componentes vía BOM; se mueven componentes, no packs. Valida stock de componentes en
@@ -9118,6 +9037,9 @@ def ejecutar_opp_por_componentes(
     id_operario_por_componente: Optional[Dict[int, int]] = None,
 ) -> Tuple[bool, Optional[int], Optional[str], Optional[str]]:
     """
+    DEPRECATED (E6): pendiente eliminación hasta migrar wizard paso 3.
+    Usar registrar_parte_produccion / RegistrarParteProduccionView en su lugar.
+
     Registra OPP a partir de distribución por componente y depósito.
     distribucion_por_deposito: { cod_deposito_destino: [ (id_componente, qty_unidades), ... ] }.
     Valida stock en Producción, crea movimientos por depósito (Salida origen, Entrada destino),
@@ -12806,7 +12728,7 @@ def reporte_mpr_opt_cerradas(
                 articulos_str = ", ".join(data["articulos"][:5]) if data["articulos"] else "-"
                 if len(data["articulos"]) > 5:
                     articulos_str += "…"
-                result.append({
+                    result.append({
                     "id_opt": id_lista,
                     "articulos": articulos_str,
                     "cantidad_total": data["cantidad_total"],
@@ -12818,3 +12740,2435 @@ def reporte_mpr_opt_cerradas(
     except Exception as e:
         logger.warning("Error reporte_mpr_opt_cerradas en %s: %s", base_empresa, e, exc_info=True)
         return []
+
+
+# ---------------------------------------------------------------------------
+# ETAPA 2: Tablero de Demanda Consolidado por Artículo
+# ---------------------------------------------------------------------------
+
+def _query_enviado_packs(
+    cursor,
+    tbl_agrupada: str,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+) -> Dict[int, float]:
+    """
+    Retorna {id_articulo: sum(cantidad_asignada_opt)} para packs con OPT formalmente
+    liberada (codigo_movimiento_opt > 0) en el rango de fechas indicado.
+
+    Si la columna codigo_movimiento_opt no existe, retorna {} (compatible con bases
+    sin la columna opcional).
+    """
+    try:
+        opts = _columnas_opcionales_op_agrupada(cursor, tbl_agrupada)
+        col_cod_mov = opts.get("codigo_movimiento_opt")
+        if not col_cod_mov:
+            return {}
+        col_fecha = opts.get("fecha_objetivo")
+        where_fecha = ""
+        params: List = []
+        if col_fecha and fecha_desde:
+            where_fecha += f" AND {col_fecha} >= %s"
+            params.append(fecha_desde)
+        if col_fecha and fecha_hasta:
+            where_fecha += f" AND {col_fecha} <= %s"
+            params.append(fecha_hasta)
+        cursor.execute(
+            f"""
+            SELECT id_articulo, COALESCE(SUM(COALESCE(cantidad_asignada_opt, 0)), 0) AS total_env
+            FROM {tbl_agrupada}
+            WHERE COALESCE(`{col_cod_mov}`, 0) > 0
+              AND COALESCE(cantidad_asignada_opt, 0) > 0
+              {where_fecha}
+            GROUP BY id_articulo
+            """,
+            params,
+        )
+        result: Dict[int, float] = {}
+        for r in cursor.fetchall() or []:
+            aid = to_int_or_none(r.get("id_articulo") if isinstance(r, dict) else r[0])
+            if aid is not None:
+                try:
+                    result[aid] = float(r.get("total_env", 0) if isinstance(r, dict) else r[1] or 0)
+                except (TypeError, ValueError):
+                    result[aid] = 0.0
+        return result
+    except Exception as e:
+        logger.debug("_query_enviado_packs error: %s", e)
+        return {}
+
+
+def _pivot_stock_por_tipo_mpr(
+    base_empresa: str,
+    ids_articulo: List[int],
+) -> Tuple[Dict[int, Dict[str, float]], Dict[int, Dict[str, float]]]:
+    """
+    Consulta pivote única para los 6 tipos MPR físicos. Una sola round-trip SQL.
+
+    Devuelve una tupla ``(stock, stock_suma)``:
+    - ``stock``: {id_articulo: {tipo_mpr: saldo}} con el saldo real de cada etapa
+      (todos los depósitos de ese tipo). Alimenta las columnas por etapa del tablero.
+    - ``stock_suma``: {id_articulo: {tipo_mpr: saldo_que_suma}} con el saldo únicamente
+      de los depósitos con ``suma_stock='Si'``. Alimenta la columna Total (respeta el
+      flag de configuración de cada depósito, igual que el resto del sistema).
+    """
+    ids = [x for x in (to_int_or_none(i) for i in (ids_articulo or [])) if x is not None]
+    if not ids or not (base_empresa or "").strip():
+        return {}, {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            tbl_dep = _nombre_tabla(cursor, "deposito")
+            if not tbl_sd or not tbl_dep:
+                return {}, {}
+            ph = ",".join(["%s"] * len(ids))
+            tipos_validos = (
+                TIPO_MPR_PRODUCCION,
+                TIPO_MPR_PLANCHADO,
+                TIPO_MPR_2DA_SELECCION,
+                TIPO_MPR_SEMI_ELABORADO,
+                TIPO_MPR_TERMINADO,
+                TIPO_MPR_SCRAP,
+            )
+            tipos_ph = ",".join(["%s"] * len(tipos_validos))
+            cursor.execute(
+                f"""
+                SELECT sd.id_articulo, d.tipo_mpr,
+                       COALESCE(SUM(sd.saldo), 0) AS saldo,
+                       COALESCE(SUM(CASE WHEN COALESCE(d.suma_stock, 'Si') = 'Si'
+                                         THEN sd.saldo ELSE 0 END), 0) AS saldo_suma
+                FROM {tbl_sd} sd
+                INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
+                  AND COALESCE(d.anulado, 'No') = 'No'
+                  AND d.tipo_mpr IN ({tipos_ph})
+                WHERE sd.id_articulo IN ({ph})
+                GROUP BY sd.id_articulo, d.tipo_mpr
+                """,
+                list(tipos_validos) + ids,
+            )
+            from collections import defaultdict
+            stock: Dict[int, Dict[str, float]] = defaultdict(lambda: {t: 0.0 for t in tipos_validos})
+            stock_suma: Dict[int, Dict[str, float]] = defaultdict(lambda: {t: 0.0 for t in tipos_validos})
+            for r in cursor.fetchall() or []:
+                aid = to_int_or_none(r.get("id_articulo"))
+                tipo = str(r.get("tipo_mpr") or "")
+                if aid is not None and tipo:
+                    try:
+                        stock[aid][tipo] = float(r.get("saldo") or 0)
+                    except (TypeError, ValueError):
+                        stock[aid][tipo] = 0.0
+                    try:
+                        stock_suma[aid][tipo] = float(r.get("saldo_suma") or 0)
+                    except (TypeError, ValueError):
+                        stock_suma[aid][tipo] = 0.0
+            return dict(stock), dict(stock_suma)
+    except Exception as e:
+        logger.warning("_pivot_stock_por_tipo_mpr error: %s", e)
+        return {}, {}
+
+
+def _enviado_produccion_por_componente(
+    enviado_pack_map: Dict[int, float],
+    abm_map: Dict[int, int],
+    bom_map: Dict[int, Any],
+) -> Dict[int, float]:
+    """
+    Explota la cantidad de OPT liberada (nivel pack) a componentes vía BOM.
+
+    PROVISIONAL en etapa 2: aproxima OPT_liberado_acumulado al nivel componente.
+    # ETAPA 4-5: refinar enviado → usar ledger OPT_liberado_acumulado - OPP_registrado
+                  cuando ejecutar_liberar_opt() deje de escribir a stock_deposito.
+
+    Función pura sin I/O; testeable con mocks.
+    """
+    result: Dict[int, float] = {}
+    for id_pack, cant_opt in (enviado_pack_map or {}).items():
+        try:
+            cant_opt_f = float(cant_opt or 0)
+        except (TypeError, ValueError):
+            cant_opt_f = 0.0
+        if cant_opt_f <= 0:
+            continue
+        id_en_abm = abm_map.get(id_pack)
+        if id_en_abm is None:
+            continue
+        bom = bom_map.get(id_en_abm)
+        if not bom or not bom.get("componentes"):
+            continue
+        for comp in bom["componentes"]:
+            id_comp = to_int_or_none(comp.get("id_articulo"))
+            if id_comp is None:
+                continue
+            try:
+                coef = float(comp.get("cantidad_articulo") or 0)
+            except (TypeError, ValueError):
+                coef = 0.0
+            if coef <= 0:
+                continue
+            result[id_comp] = result.get(id_comp, 0.0) + coef * cant_opt_f
+    return result
+
+
+def _fetch_descripciones_articulo(
+    base_empresa: str,
+    ids_articulo: List[int],
+) -> Dict[int, Tuple[str, str]]:
+    """
+    Retorna {id_articulo: (codigo_manual, descripcion)} para los artículos dados.
+    """
+    ids = [x for x in (to_int_or_none(i) for i in (ids_articulo or [])) if x is not None]
+    if not ids or not (base_empresa or "").strip():
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl:
+                return {}
+            ph = ",".join(["%s"] * len(ids))
+            cursor.execute(
+                f"""
+                SELECT IDArt AS id_articulo,
+                       COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS id_manual,
+                       COALESCE(NombreArticulo, '') AS descripcion
+                FROM {tbl}
+                WHERE IDArt IN ({ph})
+                """,
+                ids,
+            )
+            result: Dict[int, Tuple[str, str]] = {}
+            for r in cursor.fetchall() or []:
+                aid = to_int_or_none(r.get("id_articulo"))
+                if aid is not None:
+                    result[aid] = (
+                        str_or_default(r.get("id_manual"), "-"),
+                        str_or_default(r.get("descripcion"), "-"),
+                    )
+            return result
+    except Exception as e:
+        logger.warning("_fetch_descripciones_articulo error: %s", e)
+        return {}
+
+
+# =============================================================================
+# Etapa 7: Envío directo a producción desde el Tablero (ledger-componente)
+# =============================================================================
+
+
+def _query_enviado_tablero_componente(
+    base_empresa: str,
+    comp_ids: List[int],
+) -> Dict[int, Decimal]:
+    """Suma de envíos directos al tablero por componente (no anulados).
+
+    Backward-safe: retorna {} si comp_ids vacío o sin registros.
+    """
+    from django.db.models import Sum
+    from mpr.models import MprEnvioProduccion
+
+    if not base_empresa or not comp_ids:
+        return {}
+    qs = (
+        MprEnvioProduccion.objects.filter(
+            base_empresa=base_empresa,
+            id_articulo__in=comp_ids,
+            anulado=False,
+        )
+        .values("id_articulo")
+        .annotate(total=Sum("cantidad"))
+    )
+    return {row["id_articulo"]: row["total"] for row in qs}
+
+
+def _query_enviados_todos_componentes(
+    base_empresa: str,
+) -> Dict[int, "Decimal"]:
+    """Suma envíos activos por componente para toda la empresa (sin filtro __in).
+
+    Uso exclusivo: construir_grilla_parte. No reemplaza _query_enviado_tablero_componente.
+    """
+    from django.db.models import Sum
+    from mpr.models import MprEnvioProduccion
+
+    if not (base_empresa or "").strip():
+        return {}
+    qs = (
+        MprEnvioProduccion.objects
+        .filter(base_empresa=base_empresa, anulado=False)
+        .values("id_articulo")
+        .annotate(total=Sum("cantidad"))
+    )
+    return {row["id_articulo"]: row["total"] for row in qs}
+
+
+def enviar_a_produccion_lote(
+    base_empresa: str,
+    id_usuario: int,
+    items: List[Tuple[int, "Decimal"]],
+    pendientes: Optional[Dict[int, "Decimal"]] = None,
+) -> Tuple[bool, int, List[str], Optional[str]]:
+    """Crea N registros MprEnvioProduccion en transacción atómica.
+
+    - Omite filas con cantidad <= 0 (warning, no error).
+    - Warning no-bloqueante si cantidad > pendiente (si pendientes provisto).
+    - NO escribe en MySQL legacy (ledger-only Synap Postgres).
+
+    Args:
+        base_empresa: Scope de empresa.
+        id_usuario: ID usuario AdministraNET.
+        items: Lista de (id_articulo, cantidad).
+        pendientes: Mapa {id_articulo: pendiente} para warnings de sobreenvío.
+
+    Returns:
+        (ok, n_creados, warnings, error|None)
+    """
+    from django.db import transaction
+    from mpr.models import MprEnvioProduccion
+
+    pendientes = pendientes or {}
+    warnings_list: List[str] = []
+    to_create: List[MprEnvioProduccion] = []
+
+    for id_art, cantidad in items:
+        id_art_int = to_int_or_none(id_art)
+        qty = to_decimal_or_none(cantidad)
+        if id_art_int is None or qty is None or qty <= Decimal("0"):
+            warnings_list.append(
+                f"Artículo {id_art}: cantidad inválida o cero, omitido."
+            )
+            continue
+        pend = pendientes.get(id_art_int)
+        if pend is not None:
+            pend_dec = to_decimal_or_none(pend)
+            if pend_dec is not None and qty > pend_dec:
+                warnings_list.append(
+                    f"Artículo {id_art_int}: cantidad {qty} supera pendiente"
+                    f" {pend_dec} — enviado igual."
+                )
+        to_create.append(
+            MprEnvioProduccion(
+                base_empresa=str_or_default(base_empresa, "-"),
+                id_articulo=id_art_int,
+                cantidad=qty,
+                id_usuario=id_usuario or 0,
+            )
+        )
+
+    if not to_create:
+        return True, 0, warnings_list, None
+
+    try:
+        with transaction.atomic():
+            MprEnvioProduccion.objects.bulk_create(to_create)
+        return True, len(to_create), warnings_list, None
+    except Exception as exc:
+        logger.error(
+            "enviar_a_produccion_lote: error: %s", exc, exc_info=True
+        )
+        return False, 0, warnings_list, str(exc)
+
+
+def listar_tablero_por_articulo(
+    base_empresa: str,
+    *,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    solo_pendiente: bool = False,
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """
+    Tablero de demanda consolidado por artículo/componente. 10 columnas del pipeline MPR.
+
+    Algoritmo (14 pasos):
+    1.  listar_ventana_pack(base, limit*2, fecha_desde, fecha_hasta) → filas_pack (demanda pendiente)
+    2.  _query_enviado_packs(cursor, tbl_agrupada, fecha_desde, fecha_hasta) → enviado_pack_map
+    3.  art_ids = union(filas_pack.id_articulo, enviado_pack_map.keys())
+    4.  abm_map = bulk_id_en_abm(base, art_ids)  — único batch ABM
+    5.  bom_map = bulk_bom_detalle(base, abm_map.values())  — único batch BOM
+    6.  dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(filas_pack, abm_map, bom_map)
+    7.  enviado_comp = _enviado_produccion_por_componente(enviado_pack_map, abm_map, bom_map)
+    8.  comp_ids = set(dem_ped) | set(dem_res)  — solo componentes con demanda
+    9.  stock_pivot = _pivot_stock_por_tipo_mpr(base, list(comp_ids))  — 1 round-trip
+    10. desc_map = _fetch_descripciones_articulo(base, list(comp_ids))  — 1 query
+    11. Por cada comp_id construir fila con 10 columnas canónicas
+    12. sort(key=lambda r: -r['pendiente'])
+    13. if solo_pendiente: filtrar r['pendiente'] > 0
+    14. return[:limit]
+
+    Shape de fila retornada:
+        id_articulo, codigo_manual, descripcion_articulo, demanda, urgente,
+        pendiente, enviado (max(0, OPT_liberado_acum − OPP_parte_acum), por BOM a componente),
+        produccion, planchado, segunda_seleccion, semi_elaborado, desperdicio,
+        terminado, total.
+
+    Columna Enviado: fórmula definitiva Etapa 4 — max(0, OPT_liberado_acumulado − OPP_parte_acumulado),
+    explotada por BOM al nivel componente (paso 2b + paso 7).
+    """
+    from mpr.pipeline import TIPOS_QUE_SUMAN_STOCK
+
+    if not (base_empresa or "").strip():
+        return []
+
+    # Paso 1: demanda pendiente de packs
+    filas_pack = listar_ventana_pack(base_empresa, limit=limit * 2,
+                                     fecha_desde=str(fecha_desde) if fecha_desde else None,
+                                     fecha_hasta=str(fecha_hasta) if fecha_hasta else None)
+
+    # Paso 2: packs con OPT liberada (OPT_liberado_acumulado)
+    enviado_pack_map: Dict[int, float] = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_agrupada = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            if tbl_agrupada:
+                enviado_pack_map = _query_enviado_packs(
+                    cursor, tbl_agrupada, fecha_desde, fecha_hasta
+                )
+    except Exception as e:
+        logger.debug("listar_tablero_por_articulo: error obteniendo enviado packs: %s", e)
+
+    # Paso 2b: descontar OPP-parte acumulado → fórmula definitiva Enviado (Etapa 4)
+    # Sólo se ejecuta cuando hay packs con OPT liberada; backward-safe si enviado_pack_map vacío.
+    if enviado_pack_map:
+        try:
+            opp_map = opp_parte_acumulado_por_pack(base_empresa, list(enviado_pack_map))
+            if opp_map:
+                all_aids = set(enviado_pack_map) | set(opp_map)
+                enviado_pack_map = {
+                    aid: max(0.0, enviado_pack_map.get(aid, 0.0) - float(opp_map.get(aid, Decimal("0"))))
+                    for aid in all_aids
+                }
+        except Exception as e:
+            logger.debug("listar_tablero_por_articulo: error en paso 2b OPP-parte: %s", e)
+
+    # Paso 3: union de artículos (packs con demanda + packs con OPT)
+    art_ids: List[int] = []
+    seen: Set[int] = set()
+    for fp in filas_pack:
+        aid = to_int_or_none(fp.get("id_articulo"))
+        if aid is not None and aid not in seen:
+            art_ids.append(aid)
+            seen.add(aid)
+    for aid in enviado_pack_map:
+        if aid not in seen:
+            art_ids.append(aid)
+            seen.add(aid)
+
+    if not art_ids:
+        return []
+
+    # Paso 4: ABM map (incluye packs sin ensamblado=Si para explosión BOM)
+    abm_map = bulk_id_en_abm(base_empresa, art_ids, requiere_ensamblado_si=False)
+
+    # Paso 5: BOM map
+    id_en_abms = [v for v in abm_map.values() if v is not None]
+    bom_map = bulk_bom_detalle(base_empresa, id_en_abms)
+
+    # Paso 6: explosión demanda pack → componentes
+    dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(
+        filas_pack, abm_map, bom_map
+    )
+
+    # Paso 7: explosión enviado (OPT) pack → componentes
+    enviado_comp = _enviado_produccion_por_componente(enviado_pack_map, abm_map, bom_map)
+
+    # Paso 8: conjunto de componentes con demanda derivada
+    comp_ids: Set[int] = set(dem_ped.keys()) | set(dem_res.keys())
+    if not comp_ids:
+        return []
+
+    # Paso 7b: envíos directos tablero nivel COMPONENTE (E7, backward-safe)
+    envios_tablero: Dict[int, Decimal] = {}
+    if comp_ids:
+        try:
+            envios_tablero = _query_enviado_tablero_componente(base_empresa, list(comp_ids))
+        except Exception as _e7b:
+            logger.debug("listar_tablero_por_articulo paso 7b: %s", _e7b)
+
+    # Paso 9: stock físico pivote por tipo MPR (saldo real por etapa + saldo que suma stock)
+    stock_pivot, stock_suma_pivot = _pivot_stock_por_tipo_mpr(base_empresa, list(comp_ids))
+
+    # Paso 10: descripciones de artículos componentes
+    desc_map = _fetch_descripciones_articulo(base_empresa, list(comp_ids))
+
+    # Paso 11: construir filas
+    filas: List[Dict[str, Any]] = []
+    tipos_suma = TIPOS_QUE_SUMAN_STOCK
+    for comp_id in comp_ids:
+        demanda = dem_ped.get(comp_id, 0.0) + dem_res.get(comp_id, 0.0)
+        urgente = dem_ped.get(comp_id, 0.0)
+        # Enviado = OPT path (E4) + envíos directos tablero (E7), sin doble conteo
+        enviado_opt = enviado_comp.get(comp_id, 0.0)
+        stock_comp = stock_pivot.get(comp_id, {})
+        suma_comp = stock_suma_pivot.get(comp_id, {})
+        produccion = stock_comp.get(TIPO_MPR_PRODUCCION, 0.0)
+        segunda_seleccion = stock_comp.get(TIPO_MPR_2DA_SELECCION, 0.0)
+        semi_elaborado = stock_comp.get(TIPO_MPR_SEMI_ELABORADO, 0.0)
+        desperdicio = stock_comp.get(TIPO_MPR_SCRAP, 0.0)
+        terminado = stock_comp.get(TIPO_MPR_TERMINADO, 0.0)
+        # Total: suma del saldo que suma stock (respeta deposito.suma_stock por depósito),
+        # restringido a los tipos físicos que integran el Total (excluye Desperdicio/Scrap).
+        total = sum(
+            suma_comp.get(t, 0.0)
+            for t in tipos_suma
+        )
+        # Fórmula E7: Enviado_tablero = max(0, SUM(envíos_tablero) − stock_produccion)
+        # Evita doble conteo: los envíos tablero que ya generaron parte se reflejan en stock_prod.
+        stock_prod = stock_comp.get(TIPO_MPR_PRODUCCION, 0.0)
+        envios_dir = float(envios_tablero.get(comp_id, Decimal("0")))
+        enviado_tablero_val = max(0.0, envios_dir - stock_prod)
+        enviado = enviado_opt + enviado_tablero_val
+        pendiente = max(0.0, demanda - (enviado + total))
+        codigo_manual, descripcion = desc_map.get(comp_id, ("-", "-"))
+        filas.append({
+            "id_articulo": comp_id,
+            "codigo_manual": codigo_manual,
+            "descripcion_articulo": descripcion,
+            "demanda": demanda,
+            "urgente": urgente,
+            "pendiente": pendiente,
+            "enviado": enviado,
+            "produccion": produccion,
+            "segunda_seleccion": segunda_seleccion,
+            "semi_elaborado": semi_elaborado,
+            "desperdicio": desperdicio,
+            "terminado": terminado,
+            "total": total,
+        })
+
+    # Paso 12: ordenar por pendiente descendente (más críticos primero)
+    filas.sort(key=lambda r: -r["pendiente"])
+
+    # Paso 13: filtro opcional solo con pendiente
+    if solo_pendiente:
+        filas = [r for r in filas if r["pendiente"] > 0]
+
+    # Paso 14: limit
+    return filas[:limit]
+
+
+# =============================================================================
+# Etapa 3: Turnos (CRUD) + Roster Rotativo
+# =============================================================================
+
+def _parse_fecha_ddmmaaaa(fecha_str: str) -> Tuple[Optional[date], Optional[str]]:
+    """
+    Parsea fecha en formato dd/MM/yyyy a objeto date.
+    Retorna (fecha_obj, None) si OK, (None, mensaje_error) si falla.
+    """
+    if not (fecha_str or "").strip():
+        return None, "Fecha vacía."
+    try:
+        fecha_obj = datetime.strptime(fecha_str.strip(), "%d/%m/%Y").date()
+        return fecha_obj, None
+    except ValueError:
+        return None, "Formato de fecha inválido. Use dd/MM/yyyy."
+
+
+def _fmt_fecha_ddmmaaaa(fecha) -> str:
+    """
+    Formatea fecha (date o datetime) a dd/MM/yyyy para UI.
+    """
+    if fecha is None:
+        return "-"
+    if isinstance(fecha, (date, datetime)):
+        return fecha.strftime("%d/%m/%Y")
+    return "-"
+
+
+def listar_turnos(
+    base_empresa: str,
+    solo_activos: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Lista turnos de producción de la empresa.
+    Retorna lista de dict con id, nombre, hora_inicio, hora_fin, activo.
+    """
+    from mpr.models import MprTurno
+    if not (base_empresa or "").strip():
+        return []
+    try:
+        qs = MprTurno.objects.filter(base_empresa=base_empresa)
+        if solo_activos:
+            qs = qs.filter(activo=True)
+        qs = qs.order_by("nombre")
+        return [
+            {
+                "id": t.id,
+                "nombre": t.nombre,
+                "hora_inicio": t.hora_inicio.strftime("%H:%M"),
+                "hora_fin": t.hora_fin.strftime("%H:%M"),
+                "activo": t.activo,
+            }
+            for t in qs
+        ]
+    except Exception as e:
+        logger.warning("Error al listar turnos en %s: %s", base_empresa, e, exc_info=True)
+        return []
+
+
+def obtener_turno(base_empresa: str, id_turno: int) -> Optional[Any]:
+    """
+    Obtiene un turno por ID y empresa. Retorna instancia MprTurno o None.
+    """
+    from mpr.models import MprTurno
+    if not (base_empresa or "").strip():
+        return None
+    try:
+        return MprTurno.objects.get(base_empresa=base_empresa, id=id_turno)
+    except MprTurno.DoesNotExist:
+        return None
+    except Exception as e:
+        logger.warning("Error al obtener turno %s en %s: %s", id_turno, base_empresa, e, exc_info=True)
+        return None
+
+
+def crear_turno(
+    base_empresa: str,
+    nombre: str,
+    hora_inicio: str,
+    hora_fin: str,
+) -> Tuple[bool, Optional[int], Optional[str]]:
+    """
+    Crea un nuevo turno de producción.
+    Args:
+        hora_inicio, hora_fin: strings en formato HH:MM.
+    Returns:
+        (ok, id_turno, mensaje_error)
+    """
+    from mpr.models import MprTurno
+    from django.db import IntegrityError
+    if not (base_empresa or "").strip():
+        return False, None, "Empresa inválida."
+    if not (nombre or "").strip():
+        return False, None, "El nombre del turno no puede estar vacío."
+    try:
+        h_inicio = datetime.strptime((hora_inicio or "").strip(), "%H:%M").time()
+        h_fin = datetime.strptime((hora_fin or "").strip(), "%H:%M").time()
+    except ValueError:
+        return False, None, "Formato de hora inválido. Use HH:MM."
+    if h_inicio == h_fin:
+        return False, None, "La hora de inicio y fin no pueden ser iguales."
+    try:
+        turno = MprTurno.objects.create(
+            base_empresa=base_empresa.strip(),
+            nombre=nombre.strip(),
+            hora_inicio=h_inicio,
+            hora_fin=h_fin,
+            activo=True,
+        )
+        return True, turno.id, None
+    except IntegrityError:
+        return False, None, "Ya existe un turno con ese nombre en la empresa."
+    except Exception as e:
+        logger.error("Error al crear turno en %s: %s", base_empresa, e, exc_info=True)
+        return False, None, "Error al crear turno."
+
+
+def actualizar_turno(
+    base_empresa: str,
+    id_turno: int,
+    nombre: str,
+    hora_inicio: str,
+    hora_fin: str,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Actualiza un turno existente.
+    Returns:
+        (ok, mensaje_error)
+    """
+    from django.db import IntegrityError
+    if not (base_empresa or "").strip():
+        return False, "Empresa inválida."
+    if not (nombre or "").strip():
+        return False, "El nombre del turno no puede estar vacío."
+    turno = obtener_turno(base_empresa, id_turno)
+    if not turno:
+        return False, "Turno no encontrado."
+    try:
+        h_inicio = datetime.strptime((hora_inicio or "").strip(), "%H:%M").time()
+        h_fin = datetime.strptime((hora_fin or "").strip(), "%H:%M").time()
+    except ValueError:
+        return False, "Formato de hora inválido. Use HH:MM."
+    if h_inicio == h_fin:
+        return False, "La hora de inicio y fin no pueden ser iguales."
+    try:
+        turno.nombre = nombre.strip()
+        turno.hora_inicio = h_inicio
+        turno.hora_fin = h_fin
+        turno.save()
+        return True, None
+    except IntegrityError:
+        return False, "Ya existe un turno con ese nombre en la empresa."
+    except Exception as e:
+        logger.error("Error al actualizar turno %s en %s: %s", id_turno, base_empresa, e, exc_info=True)
+        return False, "Error al actualizar turno."
+
+
+def toggle_turno_activo(
+    base_empresa: str,
+    id_turno: int,
+    activo: bool,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Cambia el estado activo/inactivo de un turno.
+    Returns:
+        (ok, mensaje_error)
+    """
+    if not (base_empresa or "").strip():
+        return False, "Empresa inválida."
+    turno = obtener_turno(base_empresa, id_turno)
+    if not turno:
+        return False, "Turno no encontrado."
+    try:
+        turno.activo = activo
+        turno.save()
+        return True, None
+    except Exception as e:
+        logger.error("Error al cambiar estado turno %s en %s: %s", id_turno, base_empresa, e, exc_info=True)
+        return False, "Error al cambiar estado del turno."
+
+
+def listar_roster_semana(
+    base_empresa: str,
+    fecha_lunes: date,
+) -> Dict[str, Any]:
+    """
+    Lista asignaciones de roster para una semana (lunes a domingo).
+    Returns:
+        Dict con:
+        - operarios: [{"id": int, "nombre": str}]
+        - dias: [{"fecha": date, "fecha_str": "dd/MM/yyyy", "dia_nombre": "Lu"}] (7 días)
+        - asignaciones: {id_operario: {"YYYY-MM-DD": {"id_turno": int, "nombre_turno": str}}}
+    """
+    from mpr.models import MprRosterDia
+    from datetime import timedelta
+    if not (base_empresa or "").strip():
+        return {"operarios": [], "dias": [], "asignaciones": {}}
+    dias_semana = []
+    nombres_dia = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"]
+    for i in range(7):
+        fecha = fecha_lunes + timedelta(days=i)
+        dias_semana.append({
+            "fecha": fecha,
+            "fecha_str": _fmt_fecha_ddmmaaaa(fecha),
+            "dia_nombre": nombres_dia[fecha.weekday()],
+        })
+    operarios_raw = listar_empleados_operarios(base_empresa, busqueda=None, limit=500)
+    fecha_fin = fecha_lunes + timedelta(days=6)
+    try:
+        asignaciones_qs = MprRosterDia.objects.filter(
+            base_empresa=base_empresa,
+            fecha__gte=fecha_lunes,
+            fecha__lte=fecha_fin,
+        ).select_related("turno")
+        asignaciones_dict: Dict[int, Dict[str, Any]] = {}
+        for asig in asignaciones_qs:
+            op_id = asig.id_operario
+            if op_id not in asignaciones_dict:
+                asignaciones_dict[op_id] = {}
+            asignaciones_dict[op_id][asig.fecha.isoformat()] = {
+                "id_turno": asig.turno.id,
+                "nombre_turno": asig.turno.nombre,
+            }
+        return {
+            "operarios": [{"id": op["id"], "nombre": op["label"]} for op in operarios_raw],
+            "dias": dias_semana,
+            "asignaciones": asignaciones_dict,
+        }
+    except Exception as e:
+        logger.error("Error al listar roster semana en %s: %s", base_empresa, e, exc_info=True)
+        return {"operarios": [], "dias": [], "asignaciones": {}}
+
+
+def asignar_turno_roster(
+    base_empresa: str,
+    fecha_str: str,
+    id_operario: int,
+    id_turno: int,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Asigna (o reasigna) un turno a un operario en una fecha.
+    Usa update_or_create para garantizar constraint único (no duplica).
+    Validaciones: fecha >= hoy, turno existe, operario existe.
+    Returns:
+        (ok, mensaje_error)
+    """
+    from mpr.models import MprRosterDia
+    from django.db import IntegrityError
+    if not (base_empresa or "").strip():
+        return False, "Empresa inválida."
+    fecha_obj, error = _parse_fecha_ddmmaaaa(fecha_str)
+    if error:
+        return False, error
+    hoy = date.today()
+    if fecha_obj < hoy:
+        return False, "No se pueden asignar turnos en fechas pasadas."
+    turno = obtener_turno(base_empresa, id_turno)
+    if not turno:
+        return False, "Turno no encontrado."
+    operario_data = obtener_operario(base_empresa, id_operario)
+    if not operario_data:
+        return False, "Operario no encontrado."
+    try:
+        MprRosterDia.objects.update_or_create(
+            base_empresa=base_empresa,
+            fecha=fecha_obj,
+            id_operario=id_operario,
+            defaults={"turno": turno},
+        )
+        return True, None
+    except IntegrityError as e:
+        logger.error("IntegrityError al asignar turno roster en %s: %s", base_empresa, e, exc_info=True)
+        return False, "Error de integridad: el operario ya tiene un turno asignado para esta fecha."
+    except Exception as e:
+        logger.error("Error al asignar turno roster en %s: %s", base_empresa, e, exc_info=True)
+        return False, "Error al asignar turno."
+
+
+def eliminar_asignacion_roster(
+    base_empresa: str,
+    fecha_str: str,
+    id_operario: int,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Elimina la asignación de turno de un operario en una fecha.
+    Validación: fecha >= hoy.
+    Returns:
+        (ok, mensaje_error)
+    """
+    from mpr.models import MprRosterDia
+    if not (base_empresa or "").strip():
+        return False, "Empresa inválida."
+    fecha_obj, error = _parse_fecha_ddmmaaaa(fecha_str)
+    if error:
+        return False, error
+    hoy = date.today()
+    if fecha_obj < hoy:
+        return False, "No se pueden eliminar asignaciones de fechas pasadas."
+    try:
+        deleted, _ = MprRosterDia.objects.filter(
+            base_empresa=base_empresa,
+            fecha=fecha_obj,
+            id_operario=id_operario,
+        ).delete()
+        if deleted == 0:
+            return False, "No se encontró asignación para eliminar."
+        return True, None
+    except Exception as e:
+        logger.error("Error al eliminar asignación roster en %s: %s", base_empresa, e, exc_info=True)
+        return False, "Error al eliminar asignación."
+
+
+# ---------------------------------------------------------------------------
+# ETAPA 4: Parte de Producción (Ledger OPP-parte)
+# ---------------------------------------------------------------------------
+
+def opp_parte_acumulado_por_pack(
+    base_empresa: str,
+    pack_ids: Optional[List[int]] = None,
+) -> Dict[int, Decimal]:
+    """
+    {id_articulo: SUM(linea.cantidad) + SUM(ajuste.delta)} agrupado por id_articulo,
+    filtrado por parte__base_empresa=base_empresa.
+
+    pack_ids opcional para filtrar subconjunto.
+    Backward-safe: retorna {} si no hay partes.
+    NO lee stock_deposito ni tablas MySQL legacy.
+    """
+    from mpr.models import MprParteAjuste, MprParteLinea
+    from django.db.models import Sum
+
+    if not (base_empresa or "").strip():
+        return {}
+    try:
+        lineas_qs = MprParteLinea.objects.filter(parte__base_empresa=base_empresa)
+        ajustes_qs = MprParteAjuste.objects.filter(parte__base_empresa=base_empresa)
+        if pack_ids is not None:
+            lineas_qs = lineas_qs.filter(id_articulo__in=pack_ids)
+            ajustes_qs = ajustes_qs.filter(id_articulo__in=pack_ids)
+
+        lineas_agg = lineas_qs.values("id_articulo").annotate(total=Sum("cantidad"))
+        ajustes_agg = ajustes_qs.values("id_articulo").annotate(total=Sum("delta"))
+
+        acum: Dict[int, Decimal] = {}
+        for row in lineas_agg:
+            aid = to_int_or_none(row["id_articulo"])
+            if aid is not None:
+                acum[aid] = acum.get(aid, Decimal("0")) + (to_decimal_or_none(row["total"]) or Decimal("0"))
+        for row in ajustes_agg:
+            aid = to_int_or_none(row["id_articulo"])
+            if aid is not None:
+                acum[aid] = acum.get(aid, Decimal("0")) + (to_decimal_or_none(row["total"]) or Decimal("0"))
+        return acum
+    except Exception as e:
+        logger.warning("opp_parte_acumulado_por_pack error en %s: %s", base_empresa, e, exc_info=True)
+        return {}
+
+
+def registrar_parte_produccion(
+    base_empresa: str,
+    fecha_produccion,
+    turno_id: int,
+    id_usuario: int,
+    lineas: List[Dict[str, Any]],
+    notas: str = "",
+) -> Tuple[Any, List[str]]:
+    """
+    Crea MprParte + MprParteLineas en transacción atómica (ledger-only).
+    NO escribe stock_deposito ni movimiento_stock.
+
+    lineas: [{id_articulo: int, id_operario: int, cantidad: Decimal/float/str}]
+    Returns: (parte, warnings_español)
+    """
+    from django.db import transaction
+    from django.core.exceptions import ValidationError as DjValidationError
+    from mpr.models import MprParte, MprParteLinea, MprTurno
+
+    if not (base_empresa or "").strip():
+        raise ValueError("Empresa inválida.")
+
+    warnings: List[str] = []
+
+    try:
+        turno = MprTurno.objects.get(pk=turno_id)
+    except MprTurno.DoesNotExist:
+        raise ValueError(f"Turno {turno_id} no encontrado.")
+
+    deposito_produccion = get_deposito_produccion_mpr(base_empresa)
+
+    # Pre-snapshot Fabricando ANTES del atomic() — batch, sin N+1
+    comp_ids_reg: List[int] = [
+        to_int_or_none(c.get("id_articulo"))
+        for c in (lineas or [])
+        if to_int_or_none(c.get("id_articulo")) is not None
+    ]
+    cantidad_por_comp: Dict[int, "Decimal"] = {
+        to_int_or_none(c.get("id_articulo")): (to_decimal_or_none(c.get("cantidad")) or Decimal("0"))
+        for c in (lineas or [])
+        if to_int_or_none(c.get("id_articulo")) is not None
+    }
+    fab_pre: Dict[int, float] = {}
+    desc_pre: Dict[int, tuple] = {}
+    try:
+        if comp_ids_reg:
+            envios_pre = _query_enviado_tablero_componente(base_empresa, comp_ids_reg)
+            stock_pre, _ = _pivot_stock_por_tipo_mpr(base_empresa, comp_ids_reg)
+            desc_pre = _fetch_descripciones_articulo(base_empresa, comp_ids_reg)
+            for comp in comp_ids_reg:
+                enviado = float(envios_pre.get(comp, 0) or 0)
+                stock_prod = stock_pre.get(comp, {}).get(TIPO_MPR_PRODUCCION, 0.0)
+                fab_pre[comp] = max(0.0, enviado - stock_prod)
+    except Exception as e:
+        logger.warning("registrar_parte_produccion: error en pre-snapshot Fabricando: %s", e)
+
+    with transaction.atomic():
+        parte = MprParte.objects.create(
+            base_empresa=base_empresa,
+            fecha_produccion=fecha_produccion,
+            turno=turno,
+            id_usuario=to_int_or_none(id_usuario) or 0,
+            notas=str_or_default(notas, ""),
+        )
+        lineas_creadas: List[Tuple[Dict[str, Any], Decimal]] = []
+        for cel in (lineas or []):
+            id_art = to_int_or_none(cel.get("id_articulo"))
+            id_op = to_int_or_none(cel.get("id_operario"))
+            cantidad = to_decimal_or_none(cel.get("cantidad"))
+            if id_art is None or id_op is None or cantidad is None:
+                continue
+            if cantidad <= 0:
+                continue
+            op_data = obtener_operario(base_empresa, id_op)
+            nombre_snap = str_or_default(
+                op_data.get("nombre_empleado") if op_data else None, "-"
+            )
+            MprParteLinea.objects.update_or_create(
+                parte=parte,
+                id_articulo=id_art,
+                id_operario=id_op,
+                defaults={"cantidad": cantidad, "operario_nombre": nombre_snap},
+            )
+            lineas_creadas.append(({"id_articulo": id_art}, cantidad))
+
+        # Partes E8: componentes sin OPT activa en lista_produccion_agrupada → id_lista=None
+        parte.id_lista_produccion = None
+        parte.save(update_fields=["id_lista_produccion"])
+
+        # Asiento físico en depósito Producción (E8: directo por componente, sin explosión BOM).
+        # Guardia de idempotencia: no re-ejecutar si ya fue confirmado.
+        if not parte.movimiento_fisico_ok:
+            if deposito_produccion and lineas_creadas:
+                _registrar_asiento_fisico_opp_parte(
+                    base_empresa=base_empresa,
+                    id_usuario=to_int_or_none(id_usuario) or 0,
+                    parte=parte,
+                    lineas_pack_qty=lineas_creadas,
+                    deposito_produccion=deposito_produccion,
+                    ya_componentes=True,
+                )
+            parte.movimiento_fisico_ok = True
+            parte.save(update_fields=["movimiento_fisico_ok"])
+
+    # Warnings no bloqueantes si se superó Fabricando disponible (español)
+    try:
+        for comp in comp_ids_reg:
+            qty = float(cantidad_por_comp.get(comp, Decimal("0")) or 0)
+            fab = fab_pre.get(comp, 0.0)
+            if qty > fab:
+                cod, desc = desc_pre.get(comp, ("-", "-"))
+                warnings.append(
+                    f"Atención: se registraron {qty:.1f} u. de {desc} ({cod}) "
+                    f"pero solo {fab:.1f} u. estaban en Fabricando. El parte fue guardado."
+                )
+    except Exception as e:
+        logger.warning("registrar_parte_produccion: error generando warnings: %s", e)
+
+    return parte, warnings
+
+
+def agregar_ajuste_parte(
+    base_empresa: str,
+    parte_id: str,
+    id_articulo: int,
+    id_operario: int,
+    delta,
+    motivo: str,
+    id_usuario: int,
+) -> Any:
+    """
+    Crea MprParteAjuste (delta append-only). Valida que cantidad_efectiva+delta >= 0.
+    Raises django.core.exceptions.ValidationError (español) si quedaría negativo.
+    Returns: MprParteAjuste creado.
+    """
+    from django.core.exceptions import ValidationError
+    from django.db.models import Sum
+    from mpr.models import MprParte, MprParteAjuste, MprParteLinea
+
+    try:
+        parte = MprParte.objects.get(pk=parte_id, base_empresa=base_empresa)
+    except MprParte.DoesNotExist:
+        raise ValidationError(f"Parte {parte_id} no encontrada para empresa {base_empresa}.")
+
+    delta_dec = to_decimal_or_none(delta)
+    if delta_dec is None:
+        raise ValidationError("El delta del ajuste es inválido.")
+
+    try:
+        linea = MprParteLinea.objects.get(parte=parte, id_articulo=id_articulo, id_operario=id_operario)
+        cantidad_base = linea.cantidad
+    except MprParteLinea.DoesNotExist:
+        raise ValidationError(
+            f"No existe línea para artículo {id_articulo}, operario {id_operario} en este parte."
+        )
+
+    ajustes_previos = MprParteAjuste.objects.filter(
+        parte=parte, id_articulo=id_articulo, id_operario=id_operario
+    ).aggregate(total=Sum("delta"))["total"] or Decimal("0")
+
+    cantidad_efectiva = cantidad_base + ajustes_previos
+    if cantidad_efectiva + delta_dec < 0:
+        raise ValidationError(
+            f"El ajuste dejaría la cantidad efectiva en negativo "
+            f"(actual: {cantidad_efectiva}, delta: {delta_dec})."
+        )
+
+    ajuste = MprParteAjuste.objects.create(
+        parte=parte,
+        id_articulo=to_int_or_none(id_articulo) or id_articulo,
+        id_operario=to_int_or_none(id_operario) or id_operario,
+        delta=delta_dec,
+        motivo=str_or_default(motivo, "-"),
+        id_usuario=to_int_or_none(id_usuario) or 0,
+        ajuste_fisico_ok=False,
+    )
+
+    # Registrar delta físico en depósito Producción (Etapa 5).
+    deposito_produccion = get_deposito_produccion_mpr(base_empresa)
+    id_art_int = to_int_or_none(id_articulo) or id_articulo
+    id_usuario_int = to_int_or_none(id_usuario) or 0
+    if deposito_produccion and id_art_int is not None:
+        try:
+            _registrar_delta_stock_ajuste(
+                base_empresa=base_empresa,
+                id_usuario=id_usuario_int,
+                id_articulo=id_art_int,
+                delta=delta_dec,
+                deposito_id=deposito_produccion,
+            )
+            ajuste.ajuste_fisico_ok = True
+            ajuste.save(update_fields=["ajuste_fisico_ok"])
+        except (ValidationError, Exception) as e:
+            # Si el delta físico falla, revertir la creación del ajuste
+            # para mantener coherencia entre ledger y stock físico.
+            ajuste.delete()
+            raise
+
+    return ajuste
+
+
+def construir_grilla_parte(
+    base_empresa: str,
+    fecha,
+    turno_id: int,
+) -> Dict[str, Any]:
+    """
+    Construye la grilla componentes × operarios para la pantalla de captura (E8).
+
+    Fuente de filas: componentes con Fabricando > 0 desde MprEnvioProduccion (E7).
+    Fabricando(comp) = max(0, Σ_envíos(comp) − stock_produccion(comp)).
+
+    Returns:
+      {
+        "componentes":     [{id_articulo, codigo_manual, descripcion, fabricando}],
+        "componentes_vacio": bool,
+        "operarios":       [{id_operario, nombre}],
+        "celdas":          {(id_articulo, id_operario): Decimal},
+        "roster_vacio":    bool,
+      }
+    """
+    from mpr.models import MprParteLinea, MprParteAjuste, MprParte, MprRosterDia
+    from django.db.models import Sum
+
+    resultado: Dict[str, Any] = {
+        "componentes": [],
+        "componentes_vacio": False,
+        "operarios": [],
+        "celdas": {},
+        "roster_vacio": False,
+    }
+
+    if not (base_empresa or "").strip():
+        resultado["roster_vacio"] = True
+        resultado["componentes_vacio"] = True
+        return resultado
+
+    # Operarios del roster para esa fecha y turno
+    roster_qs = MprRosterDia.objects.filter(
+        base_empresa=base_empresa,
+        fecha=fecha,
+        turno_id=turno_id,
+    ).select_related("turno")
+
+    operarios_list: List[Dict[str, Any]] = []
+    for r in roster_qs:
+        op_data = obtener_operario(base_empresa, r.id_operario)
+        nombre = str_or_default(op_data.get("nombre_empleado") if op_data else None, "-")
+        operarios_list.append({"id_operario": r.id_operario, "nombre": nombre})
+
+    resultado["roster_vacio"] = len(operarios_list) == 0
+    resultado["operarios"] = operarios_list
+
+    # Componentes con Fabricando > 0 desde ledger MprEnvioProduccion (E7)
+    componentes_list: List[Dict[str, Any]] = []
+    try:
+        envios_map = _query_enviados_todos_componentes(base_empresa)
+        if not envios_map:
+            resultado["componentes_vacio"] = True
+            resultado["componentes"] = []
+        else:
+            comp_ids = list(envios_map.keys())
+            stock_pivot, _ = _pivot_stock_por_tipo_mpr(base_empresa, comp_ids)
+
+            # Calcular Fabricando por componente: max(0, enviado − stock_produccion)
+            fabricando_map: Dict[int, float] = {}
+            for comp in comp_ids:
+                enviado = float(envios_map.get(comp) or 0)
+                stock_prod = stock_pivot.get(comp, {}).get(TIPO_MPR_PRODUCCION, 0.0)
+                fabricando_map[comp] = max(0.0, enviado - stock_prod)
+
+            comp_activos = [c for c in comp_ids if fabricando_map.get(c, 0.0) > 0]
+
+            if not comp_activos:
+                resultado["componentes_vacio"] = True
+                resultado["componentes"] = []
+            else:
+                desc_map = _fetch_descripciones_articulo(base_empresa, comp_activos)
+                for comp in comp_activos:
+                    cod, desc = desc_map.get(comp, ("-", "-"))
+                    componentes_list.append({
+                        "id_articulo": comp,
+                        "codigo_manual": str_codigo_manual_articulo(cod),
+                        "descripcion": str_or_default(desc, "-"),
+                        "fabricando": fabricando_map[comp],
+                    })
+                resultado["componentes_vacio"] = len(componentes_list) == 0
+                resultado["componentes"] = componentes_list
+    except Exception as e:
+        logger.warning("construir_grilla_parte: error obteniendo componentes en %s: %s", base_empresa, e)
+        resultado["componentes_vacio"] = True
+
+    # Celdas pre-existentes (cantidades efectivas del último parte para esta fecha+turno)
+    celdas: Dict[tuple, Decimal] = {}
+    try:
+        partes_qs = MprParte.objects.filter(
+            base_empresa=base_empresa,
+            fecha_produccion=fecha,
+            turno_id=turno_id,
+        ).prefetch_related("lineas", "ajustes")
+        for parte in partes_qs:
+            ajustes_por_clave: Dict[tuple, Decimal] = {}
+            for aj in parte.ajustes.all():
+                clave = (aj.id_articulo, aj.id_operario)
+                ajustes_por_clave[clave] = ajustes_por_clave.get(clave, Decimal("0")) + aj.delta
+            for linea in parte.lineas.all():
+                clave = (linea.id_articulo, linea.id_operario)
+                efectiva = linea.cantidad + ajustes_por_clave.get(clave, Decimal("0"))
+                celdas[clave] = celdas.get(clave, Decimal("0")) + efectiva
+    except Exception as e:
+        logger.warning("construir_grilla_parte: error obteniendo celdas en %s: %s", base_empresa, e)
+
+    resultado["celdas"] = celdas
+
+    # E8: adjuntar a cada componente sus celdas alineadas con el orden de operarios,
+    # para que el template pueda precargar el valor por celda sin lookup por tupla.
+    for comp in componentes_list:
+        cid = comp["id_articulo"]
+        comp["celdas_ops"] = [
+            {
+                "id_operario": op["id_operario"],
+                "nombre": op["nombre"],
+                "cantidad": celdas.get((cid, op["id_operario"]), ""),
+            }
+            for op in operarios_list
+        ]
+
+    return resultado
+
+
+def listar_partes(
+    base_empresa: str,
+    fecha=None,
+    turno_id: Optional[int] = None,
+):
+    """
+    QuerySet de MprParte filtrado por base_empresa; opcionalmente por fecha y/o turno_id.
+    Prefetch lineas para evitar N+1.
+    """
+    from mpr.models import MprParte
+    if not (base_empresa or "").strip():
+        from mpr.models import MprParte as _M
+        return _M.objects.none()
+    qs = MprParte.objects.filter(base_empresa=base_empresa).prefetch_related("lineas")
+    if fecha is not None:
+        qs = qs.filter(fecha_produccion=fecha)
+    if turno_id is not None:
+        qs = qs.filter(turno_id=turno_id)
+    return qs
+
+
+def obtener_parte(
+    base_empresa: str,
+    parte_id: str,
+) -> Optional[Any]:
+    """
+    Obtiene MprParte por UUID y base_empresa. Retorna None si no existe o empresa no coincide.
+    """
+    from mpr.models import MprParte
+    if not (base_empresa or "").strip() or not parte_id:
+        return None
+    try:
+        return MprParte.objects.get(pk=parte_id, base_empresa=base_empresa)
+    except MprParte.DoesNotExist:
+        return None
+
+
+# =============================================================================
+# Etapa 5: Transiciones por lote + desmontaje de automatismos
+# =============================================================================
+
+def _registrar_asiento_fisico_opp_parte(
+    base_empresa: str,
+    id_usuario: int,
+    parte: Any,
+    lineas_pack_qty: List[Tuple[Dict[str, Any], Any]],
+    deposito_produccion: int,
+    ya_componentes: bool = False,
+) -> None:
+    """Registra el asiento físico de una parte de producción en el depósito Producción.
+
+    Escribe en MySQL legacy:
+    - INSERT movimiento_stock (tipo_mov='OPP', motivo='Parte producción')
+    - Por cada componente: INSERT stock (Entrada=qty) + UPDATE/INSERT stock_deposito
+
+    Cuando ``ya_componentes=True``, las líneas son ya componentes directos (E8):
+    no se llama ``_explode_packs_to_components``. Cuando es False (default), se
+    mantiene el comportamiento original (explosión BOM). Backward-safe.
+
+    Debe llamarse dentro del ``transaction.atomic()`` de ``registrar_parte_produccion``.
+    El commit MySQL se realiza aquí, ANTES de que Django cierre el atomic block.
+
+    Raises: MprSchemaError si faltan tablas; ValidationError si componentes vacíos.
+    """
+    from django.core.exceptions import ValidationError as DjValidationError
+
+    if not lineas_pack_qty:
+        return
+
+    if ya_componentes:
+        # E8: las líneas son componentes directos — no explotar BOM
+        componentes_total = {
+            int(l["id_articulo"]): float(q)
+            for l, q in lineas_pack_qty
+            if float(q) > 0
+        }
+    else:
+        # Comportamiento original (E4/E5): explosión BOM desde packs
+        componentes_total = _explode_packs_to_components(base_empresa, [
+            (l, float(q)) for l, q in lineas_pack_qty if to_decimal_or_none(q) and float(q) > 0
+        ])
+
+    if not componentes_total:
+        raise DjValidationError(
+            "No se pudo determinar los componentes del parte (BOM vacío o artículos sin BOM). "
+            "Verifique la fórmula de los artículos antes de registrar el parte."
+        )
+
+    id_ref_movstock = 1
+    id_pv = 1
+    fecha_mov = date.today().isoformat()
+    detalle_mov = f"OPP-parte {parte.pk} desde MPR"
+
+    with get_connection(base_empresa) as conn:
+        conn.autocommit(False)
+        cursor = conn.cursor()
+        try:
+            tbl_codmov = _nombre_tabla(cursor, "codmov")
+            tbl_talonarios = _nombre_tabla(cursor, "talonarios")
+            tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            tbl_articulo = _nombre_tabla(cursor, "articulo")
+            if not all([tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd]):
+                faltan = [n for n, t in [
+                    ("codmov", tbl_codmov), ("talonarios", tbl_talonarios),
+                    ("movimiento_stock", tbl_mov), ("stock", tbl_stock), ("stock_deposito", tbl_sd),
+                ] if not t]
+                conn.rollback()
+                raise MprSchemaError(
+                    f"Faltan tablas para asiento físico OPP-parte: {', '.join(faltan)}."
+                )
+
+            # (1) Siguiente codigo_movimiento
+            cursor.execute(f"SELECT CodigoMovimiento FROM {tbl_codmov} WHERE codigo = 1 FOR UPDATE")
+            row = cursor.fetchone()
+            if not row:
+                conn.rollback()
+                raise MprSchemaError("No se pudo obtener código de movimiento para el asiento físico.")
+            codigo_mov = int(row[0] or 0) + 1
+            cursor.execute(f"UPDATE {tbl_codmov} SET CodigoMovimiento = %s WHERE codigo = 1", [codigo_mov])
+
+            # (2) Talonario MSTOCK
+            cursor.execute(
+                f"SELECT Orden, Nro FROM {tbl_talonarios} WHERE TipoComprobante = 'MSTOCK' AND id_punto_venta = %s FOR UPDATE",
+                [id_pv],
+            )
+            talon_row = cursor.fetchone()
+            if not talon_row:
+                conn.rollback()
+                raise MprSchemaError("No existe talonario MSTOCK para el punto de venta (OPP-parte).")
+            orden_talon, nro_actual = talon_row[0], int(talon_row[1] or 0)
+            nro_nuevo = nro_actual + 1
+            cursor.execute(f"UPDATE {tbl_talonarios} SET Nro = %s WHERE Orden = %s", [nro_nuevo, orden_talon])
+            nro_comprobante = _formato_nro_comprobante_mstock(id_pv, nro_actual)
+            nro_comprobante_busq = nro_actual
+
+            # (3) INSERT movimiento_stock (OPP, deposito_produccion → deposito_produccion)
+            params_mov_base = [
+                codigo_mov, nro_comprobante, MOTIVO_OPP_TEXTO, fecha_mov,
+                deposito_produccion, deposito_produccion, detalle_mov, id_usuario,
+                id_ref_movstock, None, None, None, TIPO_MOV_OPP, id_pv, nro_comprobante_busq,
+            ]
+            intentos_mov: List[Tuple[str, List[Any]]] = [
+                (
+                    f"""
+                    INSERT INTO {tbl_mov}
+                    (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                     detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv, nro_comprobante_busq)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    params_mov_base,
+                ),
+                (
+                    f"""
+                    INSERT INTO {tbl_mov}
+                    (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                     detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
+                    """,
+                    params_mov_base[:14],
+                ),
+            ]
+            try:
+                _mpr_ejecutar_insert_intentos(cursor, intentos_mov)
+            except Exception as e:
+                conn.rollback()
+                raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
+
+            # (4) Cargar codigo/descripcion de componentes
+            all_comp_ids: set = set(componentes_total.keys())
+            articulo_info: Dict[int, Tuple[str, str]] = {}
+            if all_comp_ids and tbl_articulo:
+                ids_comp = list(all_comp_ids)
+                placeholders = ",".join(["%s"] * len(ids_comp))
+                cursor.execute(
+                    f"SELECT IDArt, COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo, "
+                    f"COALESCE(NombreArticulo, '') AS descripcion FROM {tbl_articulo} WHERE IDArt IN ({placeholders})",
+                    ids_comp,
+                )
+                for r in cursor.fetchall() or []:
+                    aid = to_int_or_none(r[0])
+                    if aid is not None:
+                        articulo_info[aid] = (str_or_default(r[1], "-"), str_or_default(r[2], "-"))
+
+            # SQL mínimo para INSERT stock (Entrada a depósito Producción)
+            sql_stock_min = f"""
+                INSERT INTO {tbl_stock}
+                (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+                 id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
+                VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
+                """
+
+            orden = 0
+            for id_art in sorted(componentes_total.keys()):
+                qty = componentes_total[id_art]
+                if qty <= 0:
+                    continue
+                codigo_art, descripcion_art = articulo_info.get(id_art, ("-", "-"))
+                entrada = Decimal(str(qty))
+                orden += 1
+
+                cursor.execute(
+                    f"SELECT id_stock_deposito, saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+                    [id_art, deposito_produccion],
+                )
+                sd_row = cursor.fetchone()
+                saldo_actual = Decimal(str(sd_row[1] or 0)) if sd_row else Decimal(0)
+                saldo_despues = saldo_actual + entrada
+
+                params_stock = [
+                    codigo_mov, id_art, codigo_art, descripcion_art, fecha_mov,
+                    entrada, saldo_despues, deposito_produccion, id_ref_movstock,
+                    orden, id_usuario, MOTIVO_OPP_TEXTO, nro_comprobante, None,
+                ]
+                try:
+                    _mpr_ejecutar_insert_intentos(cursor, [(sql_stock_min, params_stock)])
+                except Exception as e:
+                    conn.rollback()
+                    raise MprSchemaError(formatear_error_esquema(e, "stock")) from e
+
+                if sd_row:
+                    cursor.execute(
+                        f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+                        [saldo_despues, sd_row[0]],
+                    )
+                else:
+                    cursor.execute(
+                        f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                        [id_art, deposito_produccion, saldo_despues],
+                    )
+
+            # Historico OPP-parte (E6): best-effort, no interrumpe el asiento físico.
+            try:
+                _escribir_historico_opp_parte(
+                    cursor, parte, lineas_pack_qty, codigo_mov, id_usuario, fecha_mov, deposito_produccion
+                )
+            except Exception as hist_err:
+                logger.warning(
+                    "_registrar_asiento_fisico_opp_parte: historico no escrito en %s: %s",
+                    base_empresa, hist_err,
+                )
+
+            conn.commit()
+        except MprSchemaError:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise MprSchemaError(f"Error en asiento físico OPP-parte: {e}") from e
+
+
+def _registrar_delta_stock_ajuste(
+    base_empresa: str,
+    id_usuario: int,
+    id_articulo: int,
+    delta: Decimal,
+    deposito_id: int,
+) -> None:
+    """Registra el delta físico de un ajuste en el depósito indicado (normalmente Producción).
+
+    - delta > 0: Entrada al stock.
+    - delta < 0: Salida del stock; valida que el saldo no quede negativo.
+
+    Raises:
+        django.core.exceptions.ValidationError: si el saldo quedaría negativo.
+        MprSchemaError: si faltan tablas o hay error de esquema.
+    """
+    from django.core.exceptions import ValidationError as DjValidationError
+
+    if delta == 0:
+        return
+
+    id_ref_movstock = 1
+    id_pv = 1
+    fecha_mov = date.today().isoformat()
+    detalle_mov = f"Ajuste físico OPP-parte art.{id_articulo} desde MPR"
+
+    with get_connection(base_empresa) as conn:
+        conn.autocommit(False)
+        cursor = conn.cursor()
+        try:
+            tbl_codmov = _nombre_tabla(cursor, "codmov")
+            tbl_talonarios = _nombre_tabla(cursor, "talonarios")
+            tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+            tbl_stock = _nombre_tabla(cursor, "stock")
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            if not all([tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd]):
+                conn.rollback()
+                raise MprSchemaError("Faltan tablas para registrar delta físico del ajuste.")
+
+            # Validar saldo antes de operar (si delta < 0)
+            if delta < 0:
+                cursor.execute(
+                    f"SELECT saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+                    [id_articulo, deposito_id],
+                )
+                sd_check = cursor.fetchone()
+                saldo_actual = Decimal(str(sd_check[0] or 0)) if sd_check else Decimal(0)
+                if saldo_actual + delta < 0:
+                    conn.rollback()
+                    raise DjValidationError(
+                        f"Saldo insuficiente en Producción para aplicar el ajuste "
+                        f"(saldo actual: {saldo_actual}, delta: {delta})."
+                    )
+
+            # codmov + talonario
+            cursor.execute(f"SELECT CodigoMovimiento FROM {tbl_codmov} WHERE codigo = 1 FOR UPDATE")
+            row = cursor.fetchone()
+            if not row:
+                conn.rollback()
+                raise MprSchemaError("No se pudo obtener código de movimiento para el ajuste físico.")
+            codigo_mov = int(row[0] or 0) + 1
+            cursor.execute(f"UPDATE {tbl_codmov} SET CodigoMovimiento = %s WHERE codigo = 1", [codigo_mov])
+
+            cursor.execute(
+                f"SELECT Orden, Nro FROM {tbl_talonarios} WHERE TipoComprobante = 'MSTOCK' AND id_punto_venta = %s FOR UPDATE",
+                [id_pv],
+            )
+            talon_row = cursor.fetchone()
+            if not talon_row:
+                conn.rollback()
+                raise MprSchemaError("No existe talonario MSTOCK para el ajuste físico.")
+            orden_talon, nro_actual = talon_row[0], int(talon_row[1] or 0)
+            nro_nuevo = nro_actual + 1
+            cursor.execute(f"UPDATE {tbl_talonarios} SET Nro = %s WHERE Orden = %s", [nro_nuevo, orden_talon])
+            nro_comprobante = _formato_nro_comprobante_mstock(id_pv, nro_actual)
+            nro_comprobante_busq = nro_actual
+
+            # INSERT movimiento_stock
+            params_mov = [
+                codigo_mov, nro_comprobante, MOTIVO_OPP_TEXTO, fecha_mov,
+                deposito_id, deposito_id, detalle_mov, id_usuario,
+                id_ref_movstock, None, None, None, TIPO_MOV_OPP, id_pv, nro_comprobante_busq,
+            ]
+            intentos_mov: List[Tuple[str, List[Any]]] = [
+                (
+                    f"""
+                    INSERT INTO {tbl_mov}
+                    (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                     detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv, nro_comprobante_busq)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    params_mov,
+                ),
+                (
+                    f"""
+                    INSERT INTO {tbl_mov}
+                    (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                     detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
+                    """,
+                    params_mov[:14],
+                ),
+            ]
+            try:
+                _mpr_ejecutar_insert_intentos(cursor, intentos_mov)
+            except Exception as e:
+                conn.rollback()
+                raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
+
+            # INSERT stock (Entrada si delta>0, Salida si delta<0)
+            abs_delta = abs(delta)
+            es_entrada = delta > 0
+            entrada_val = abs_delta if es_entrada else Decimal(0)
+            salida_val = abs_delta if not es_entrada else Decimal(0)
+
+            cursor.execute(
+                f"SELECT id_stock_deposito, saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+                [id_articulo, deposito_id],
+            )
+            sd_row = cursor.fetchone()
+            saldo_base = Decimal(str(sd_row[1] or 0)) if sd_row else Decimal(0)
+            saldo_despues = saldo_base + delta  # delta puede ser negativo
+
+            sql_stock_min = f"""
+                INSERT INTO {tbl_stock}
+                (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+                 id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
+                """
+            params_stock = [
+                codigo_mov, id_articulo, str(id_articulo), "-", fecha_mov,
+                entrada_val, salida_val, saldo_despues, deposito_id,
+                id_ref_movstock, 1, id_usuario, MOTIVO_OPP_TEXTO, nro_comprobante, None,
+            ]
+            try:
+                cursor.execute(sql_stock_min, params_stock)
+            except Exception as e:
+                conn.rollback()
+                raise MprSchemaError(formatear_error_esquema(e, "stock")) from e
+
+            if sd_row:
+                cursor.execute(
+                    f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+                    [saldo_despues, sd_row[0]],
+                )
+            else:
+                cursor.execute(
+                    f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                    [id_articulo, deposito_id, saldo_despues],
+                )
+
+            conn.commit()
+        except (DjValidationError, MprSchemaError):
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
+        except Exception as e:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise MprSchemaError(f"Error al registrar delta físico del ajuste: {e}") from e
+
+
+def transferir_stock_entre_etapas(
+    base_empresa: str,
+    id_usuario: int,
+    id_articulo: int,
+    tipo_origen: str,
+    tipo_destino: str,
+    cantidad: Any,
+    notas: str = "",
+    fecha: "Optional[date]" = None,
+) -> Tuple[bool, Optional[int], Optional[str], Optional[str]]:
+    """Transfiere stock físico de un depósito MPR a otro (transición entre etapas).
+
+    Opera a nivel componente (el caller ya ha explotado el pack si corresponde).
+    Valida con ``validar_transicion``, lanza MSTOCK (Salida origen + Entrada destino),
+    actualiza ``stock_deposito`` en ambos depósitos y crea un registro ``MprTransicionLote``.
+
+    Args:
+        fecha: fecha del asiento MSTOCK. Si es None se usa ``date.today()``.
+            Permite cargas diferidas (informe de fábrica días posteriores).
+
+    Returns:
+        (ok, codigo_movimiento, nro_comprobante, mensaje_error)
+    """
+    from django.core.exceptions import ValidationError as DjValidationError
+    from mpr.models import MprTransicionLote
+    from mpr.pipeline import validar_transicion
+
+    cantidad_dec = to_decimal_or_none(cantidad)
+
+    # Validaciones previas (sin acceso a DB)
+    if not (base_empresa or "").strip():
+        return False, None, None, "Base de datos no indicada."
+    if not id_articulo or not tipo_origen or not tipo_destino:
+        return False, None, None, "Faltan parámetros obligatorios (articulo, origen, destino)."
+    if cantidad_dec is None or cantidad_dec <= 0:
+        return False, None, None, "La cantidad debe ser mayor a cero."
+
+    # Pre-validación de legalidad de la transición (saldo_origen=0 sólo valida el grafo)
+    ok_legal, msg_legal = validar_transicion(tipo_origen, tipo_destino, cantidad_dec, saldo_origen=Decimal("9999999"))
+    if not ok_legal:
+        return False, None, None, msg_legal
+
+    # Resolver depósitos
+    deposito_origen_id = _get_deposito_por_tipo_mpr(base_empresa, tipo_origen)
+    deposito_destino_id = _get_deposito_por_tipo_mpr(base_empresa, tipo_destino)
+    if not deposito_origen_id:
+        return False, None, None, f"No se encontró el depósito de origen '{tipo_origen}' en la base de datos."
+    if not deposito_destino_id:
+        return False, None, None, f"No se encontró el depósito de destino '{tipo_destino}' en la base de datos."
+
+    id_ref_movstock = 1
+    id_pv = 1
+    fecha_mov = (fecha or date.today()).isoformat()
+    detalle_mov = f"Transición MPR {tipo_origen}→{tipo_destino} art.{id_articulo}"
+
+    try:
+        with get_connection(base_empresa) as conn:
+            conn.autocommit(False)
+            cursor = conn.cursor()
+            try:
+                tbl_codmov = _nombre_tabla(cursor, "codmov")
+                tbl_talonarios = _nombre_tabla(cursor, "talonarios")
+                tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+                tbl_stock = _nombre_tabla(cursor, "stock")
+                tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+                if not all([tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd]):
+                    conn.rollback()
+                    faltan = [n for n, t in [
+                        ("codmov", tbl_codmov), ("talonarios", tbl_talonarios),
+                        ("movimiento_stock", tbl_mov), ("stock", tbl_stock), ("stock_deposito", tbl_sd),
+                    ] if not t]
+                    return False, None, None, f"Faltan tablas para la transición: {', '.join(faltan)}."
+
+                # SELECT saldo origen FOR UPDATE
+                cursor.execute(
+                    f"SELECT saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+                    [id_articulo, deposito_origen_id],
+                )
+                sd_origen = cursor.fetchone()
+                saldo_origen = Decimal(str(sd_origen[0] or 0)) if sd_origen else Decimal(0)
+
+                # Re-validar con saldo real
+                ok_real, msg_real = validar_transicion(tipo_origen, tipo_destino, cantidad_dec, saldo_origen=saldo_origen)
+                if not ok_real:
+                    conn.rollback()
+                    return False, None, None, msg_real
+
+                # codmov FOR UPDATE
+                cursor.execute(f"SELECT CodigoMovimiento FROM {tbl_codmov} WHERE codigo = 1 FOR UPDATE")
+                row = cursor.fetchone()
+                if not row:
+                    conn.rollback()
+                    return False, None, None, "No se pudo obtener código de movimiento para la transición."
+                codigo_mov = int(row[0] or 0) + 1
+                cursor.execute(f"UPDATE {tbl_codmov} SET CodigoMovimiento = %s WHERE codigo = 1", [codigo_mov])
+
+                # Talonario MSTOCK FOR UPDATE
+                cursor.execute(
+                    f"SELECT Orden, Nro FROM {tbl_talonarios} WHERE TipoComprobante = 'MSTOCK' AND id_punto_venta = %s FOR UPDATE",
+                    [id_pv],
+                )
+                talon_row = cursor.fetchone()
+                if not talon_row:
+                    conn.rollback()
+                    return False, None, None, "No existe talonario MSTOCK para la transición."
+                orden_talon, nro_actual = talon_row[0], int(talon_row[1] or 0)
+                nro_nuevo = nro_actual + 1
+                cursor.execute(f"UPDATE {tbl_talonarios} SET Nro = %s WHERE Orden = %s", [nro_nuevo, orden_talon])
+                nro_comprobante = _formato_nro_comprobante_mstock(id_pv, nro_actual)
+                nro_comprobante_busq = nro_actual
+
+                # INSERT movimiento_stock (origen → destino)
+                params_mov = [
+                    codigo_mov, nro_comprobante, MOTIVO_OPP_TEXTO, fecha_mov,
+                    deposito_origen_id, deposito_destino_id, detalle_mov, id_usuario,
+                    id_ref_movstock, None, None, None, TIPO_MOV_OPP, id_pv, nro_comprobante_busq,
+                ]
+                intentos_mov: List[Tuple[str, List[Any]]] = [
+                    (
+                        f"""
+                        INSERT INTO {tbl_mov}
+                        (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                         detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv, nro_comprobante_busq)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        params_mov,
+                    ),
+                    (
+                        f"""
+                        INSERT INTO {tbl_mov}
+                        (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                         detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'MSTOCK', 'No', %s, %s, %s, %s, %s, %s)
+                        """,
+                        params_mov[:14],
+                    ),
+                ]
+                try:
+                    _mpr_ejecutar_insert_intentos(cursor, intentos_mov)
+                except Exception as e:
+                    conn.rollback()
+                    return False, None, None, formatear_error_esquema(e, "movimiento_stock")
+
+                sql_stock_min = f"""
+                    INSERT INTO {tbl_stock}
+                    (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+                     id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
+                    """
+
+                id_art_str = str(id_articulo)
+
+                # INSERT stock Salida desde origen
+                cursor.execute(
+                    f"SELECT id_stock_deposito, saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+                    [id_articulo, deposito_origen_id],
+                )
+                sd_orig_row = cursor.fetchone()
+                saldo_orig_base = Decimal(str(sd_orig_row[1] or 0)) if sd_orig_row else Decimal(0)
+                saldo_orig_despues = saldo_orig_base - cantidad_dec
+                params_salida = [
+                    codigo_mov, id_articulo, id_art_str, "-", fecha_mov,
+                    Decimal(0), cantidad_dec, saldo_orig_despues, deposito_origen_id,
+                    id_ref_movstock, 1, id_usuario, MOTIVO_OPP_TEXTO, nro_comprobante, None,
+                ]
+                try:
+                    cursor.execute(sql_stock_min, params_salida)
+                except Exception as e:
+                    conn.rollback()
+                    return False, None, None, formatear_error_esquema(e, "stock (salida)")
+
+                if sd_orig_row:
+                    cursor.execute(
+                        f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+                        [saldo_orig_despues, sd_orig_row[0]],
+                    )
+                else:
+                    cursor.execute(
+                        f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                        [id_articulo, deposito_origen_id, saldo_orig_despues],
+                    )
+
+                # INSERT stock Entrada al destino
+                cursor.execute(
+                    f"SELECT id_stock_deposito, saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+                    [id_articulo, deposito_destino_id],
+                )
+                sd_dest_row = cursor.fetchone()
+                saldo_dest_base = Decimal(str(sd_dest_row[1] or 0)) if sd_dest_row else Decimal(0)
+                saldo_dest_despues = saldo_dest_base + cantidad_dec
+                params_entrada = [
+                    codigo_mov, id_articulo, id_art_str, "-", fecha_mov,
+                    cantidad_dec, Decimal(0), saldo_dest_despues, deposito_destino_id,
+                    id_ref_movstock, 2, id_usuario, MOTIVO_OPP_TEXTO, nro_comprobante, None,
+                ]
+                try:
+                    cursor.execute(sql_stock_min, params_entrada)
+                except Exception as e:
+                    conn.rollback()
+                    return False, None, None, formatear_error_esquema(e, "stock (entrada)")
+
+                if sd_dest_row:
+                    cursor.execute(
+                        f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+                        [saldo_dest_despues, sd_dest_row[0]],
+                    )
+                else:
+                    cursor.execute(
+                        f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                        [id_articulo, deposito_destino_id, saldo_dest_despues],
+                    )
+
+                conn.commit()
+
+            except (MprSchemaError, Exception) as e:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                if isinstance(e, MprSchemaError):
+                    raise
+                return False, None, None, f"Error al procesar la transición: {e}"
+
+    except MprSchemaError as e:
+        return False, None, None, str(e)
+    except Exception as e:
+        return False, None, None, f"Error inesperado en la transición: {e}"
+
+    # Crear registro de trazabilidad en Django ORM (post-commit MySQL)
+    try:
+        MprTransicionLote.objects.create(
+            base_empresa=base_empresa,
+            id_articulo=id_articulo,
+            tipo_origen=tipo_origen,
+            tipo_destino=tipo_destino,
+            cantidad=cantidad_dec,
+            codigo_movimiento=codigo_mov,
+            id_usuario=id_usuario,
+        )
+    except Exception as e:
+        logger.warning(
+            "transferir_stock_entre_etapas: no se pudo crear MprTransicionLote tras commit MySQL: %s", e
+        )
+
+    return True, codigo_mov, nro_comprobante, None
+
+
+# =============================================================================
+# Etapa 6: Trazabilidad OPT
+# =============================================================================
+
+
+def _capturar_id_lista_opt_activa(
+    base_empresa: str,
+    id_articulos: List[int],
+) -> Optional[int]:
+    """Retorna el id_lista_produccion de la OPT activa más reciente para los artículos dados.
+
+    Consulta lista_produccion_agrupada con en_proceso_produccion='Si'.
+    Best-effort: si múltiples activas → toma la de mayor id_lista_produccion + warning.
+    Retorna None si no hay OPT activa o falla MySQL.
+    """
+    if not id_articulos:
+        return None
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "lista_produccion_agrupada")
+            if not tbl:
+                return None
+            ph = ",".join(["%s"] * len(id_articulos))
+            cursor.execute(
+                f"SELECT id_lista_produccion FROM {tbl} "
+                f"WHERE id_articulo IN ({ph}) "
+                f"AND COALESCE(NULLIF(TRIM(en_proceso_produccion), ''), 'No') = 'Si' "
+                f"ORDER BY id_lista_produccion DESC LIMIT 2",
+                id_articulos,
+            )
+            rows = cursor.fetchall() or []
+            if not rows:
+                return None
+            ids = [to_int_or_none(r.get("id_lista_produccion")) for r in rows if r.get("id_lista_produccion")]
+            ids = [i for i in ids if i is not None]
+            if len(ids) > 1:
+                logger.warning(
+                    "_capturar_id_lista_opt_activa: ambigüedad en %s artículos %s → "
+                    "múltiples OPTs activas %s; usando %s (mayor id)",
+                    base_empresa, id_articulos, ids, ids[0],
+                )
+            return ids[0] if ids else None
+    except Exception as exc:
+        logger.warning("_capturar_id_lista_opt_activa: fallo en %s: %s", base_empresa, exc)
+        return None
+
+
+def _escribir_historico_opp_parte(
+    cursor,
+    parte: Any,
+    lineas_pack_qty: List[Tuple[Dict[str, Any], Any]],
+    codigo_mov: int,
+    id_usuario: int,
+    fecha_mov: str,
+    deposito_produccion: int,
+) -> None:
+    """Registra eventos OPP-parte en lista_produccion_historico (best-effort).
+
+    Si parte.id_lista_produccion es None o la tabla no existe → silencioso.
+    Usa el cursor ya abierto (mismo contexto de conexión del asiento físico).
+    Debe estar envuelta en try/except en el caller para no interrumpir el asiento físico.
+    """
+    if parte.id_lista_produccion is None:
+        return
+    tbl = _nombre_tabla(cursor, "lista_produccion_historico")
+    if not tbl:
+        logger.warning(
+            "_escribir_historico_opp_parte: tabla lista_produccion_historico no encontrada; "
+            "omitiendo historico para parte %s",
+            parte.pk,
+        )
+        return
+    hora_evento = datetime.now().strftime("%H:%M:%S")
+    id_lista = to_int_or_none(parte.id_lista_produccion)
+    for linea_dict, cantidad in (lineas_pack_qty or []):
+        id_art = to_int_or_none(linea_dict.get("id_articulo"))
+        if id_art is None:
+            continue
+        qty = float(to_decimal_or_none(cantidad) or 0)
+        if qty <= 0:
+            continue
+        params_base = [
+            id_art,                # id_articulo
+            None,                  # id_articulo_formula (no aplica, registro por pack)
+            qty,                   # cantidad_movimiento
+            deposito_produccion,   # id_deposito
+            deposito_produccion,   # id_deposito_origen
+            deposito_produccion,   # id_deposito_destino
+            codigo_mov,            # codigo_movimiento_mstock
+            None,                  # codigo_movimiento_opt
+            None,                  # nro_comprobante
+            id_usuario,            # id_usuario
+            id_lista,              # id_lista_produccion
+            fecha_mov,             # fecha
+            hora_evento,           # hora_evento
+        ]
+        intentos: List[Tuple[str, List[Any]]] = [
+            (
+                f"""
+                INSERT INTO {tbl}
+                (tipo_evento, id_articulo, id_articulo_formula, cantidad_pedida, cantidad_movimiento, cantidad_armada,
+                 id_deposito, id_deposito_origen, id_deposito_destino, codigo_movimiento_mstock, codigo_movimiento_opt,
+                 nro_comprobante, id_usuario, id_lista_produccion, fecha, hora_evento, id_operario)
+                VALUES ('OPP', %s, %s, 0, %s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                params_base + [id_usuario],
+            ),
+            (
+                f"""
+                INSERT INTO {tbl}
+                (tipo_evento, id_articulo, id_articulo_formula, cantidad_pedida, cantidad_movimiento, cantidad_armada,
+                 id_deposito, id_deposito_origen, id_deposito_destino, codigo_movimiento_mstock, codigo_movimiento_opt,
+                 nro_comprobante, id_usuario, id_lista_produccion, fecha, hora_evento)
+                VALUES ('OPP', %s, %s, 0, %s, 0, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                params_base,
+            ),
+        ]
+        try:
+            _mpr_ejecutar_insert_intentos(cursor, intentos)
+        except Exception as exc:
+            logger.warning(
+                "_escribir_historico_opp_parte: no se pudo insertar en %s para parte %s art %s: %s",
+                tbl, parte.pk, id_art, exc,
+            )
+
+
+def construir_trazabilidad_opt(
+    base_empresa: str,
+    id_lista_produccion: int,
+) -> Dict[str, Any]:
+    """Construye la trazabilidad completa de una OPT integrando 6 fuentes de datos.
+
+    Retorna:
+        {
+            cabecera: {id_lista, id_articulo, codigo_manual, descripcion, cantidad_pedida, estado},
+            eventos: [{tipo, fecha, hora, descripcion, cantidad, operario, fuente, codigo_movimiento, id_lista_produccion}],
+            fuentes_fallidas: [nombre_fuente, ...]
+        }
+    Cada fuente se integra con try/except independiente. Los eventos se ordenan cronológicamente.
+    Eventos sin OPT asociada se marcan fuente='sin_opt'.
+    Fechas en formato dd/MM/yyyy.
+    """
+    from mpr.models import MprParte, MprParteAjuste, MprParteLinea, MprTransicionLote, MprArmadoSurtidoMovimiento, MprImputacionArmado
+
+    id_lista = to_int_or_none(id_lista_produccion)
+    if not id_lista or not (base_empresa or "").strip():
+        return {"cabecera": {}, "eventos": [], "fuentes_fallidas": []}
+
+    cabecera: Dict[str, Any] = {}
+    eventos: List[Dict[str, Any]] = []
+    fuentes_fallidas: List[str] = []
+
+    def _fmt_fecha(v):
+        if v is None:
+            return None
+        if hasattr(v, "strftime"):
+            return v.strftime("%d/%m/%Y")
+        d = to_date_or_none(str(v))
+        return d.strftime("%d/%m/%Y") if d else str(v)
+
+    # --- Cabecera desde get_op_detalle ---
+    try:
+        lineas_opt = get_op_detalle(base_empresa, id_lista)
+        if lineas_opt:
+            r0 = lineas_opt[0]
+            cabecera = {
+                "id_lista": id_lista,
+                "id_articulo": to_int_or_none(r0.get("id_articulo")),
+                "codigo_manual": str_or_default(r0.get("codigo_manual") or r0.get("codigo_articulo"), "-"),
+                "descripcion": str_or_default(r0.get("descripcion_articulo"), "-"),
+                "cantidad_pedida": to_int_or_none(r0.get("cantidad_pedida")) or 0,
+                "estado": "en_proceso" if (r0.get("en_proceso_produccion") or "No").strip().lower() == "si" else "cerrada",
+                "base_empresa": base_empresa,
+            }
+    except Exception as exc:
+        logger.warning("construir_trazabilidad_opt: cabecera fallida para %s id_lista=%s: %s", base_empresa, id_lista, exc)
+        fuentes_fallidas.append("cabecera_opt")
+
+    if not cabecera:
+        return {"cabecera": {}, "eventos": [], "fuentes_fallidas": fuentes_fallidas}
+
+    id_articulo_pack = cabecera.get("id_articulo")
+
+    # --- Fuente 1: lista_produccion_historico ---
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_hist = _nombre_tabla(cursor, "lista_produccion_historico")
+            if tbl_hist:
+                cursor.execute(
+                    f"SELECT tipo_evento, id_articulo, cantidad_movimiento, fecha, hora_evento, "
+                    f"id_usuario, id_operario, codigo_movimiento_mstock "
+                    f"FROM {tbl_hist} WHERE id_lista_produccion = %s ORDER BY fecha, hora_evento",
+                    [id_lista],
+                )
+                for row in (cursor.fetchall() or []):
+                    tipo = str_or_default(row.get("tipo_evento"), "OPP")
+                    fecha_raw = row.get("fecha")
+                    eventos.append({
+                        "tipo": tipo,
+                        "fecha": _fmt_fecha(fecha_raw),
+                        "fecha_sort": to_date_or_none(str(fecha_raw)) if fecha_raw else None,
+                        "hora": str_or_default(row.get("hora_evento"), "00:00:00"),
+                        "descripcion": f"Evento {tipo} (historico)",
+                        "cantidad": float(to_decimal_or_none(row.get("cantidad_movimiento")) or 0),
+                        "operario": str(to_int_or_none(row.get("id_operario")) or "-"),
+                        "fuente": "historico",
+                        "codigo_movimiento": to_int_or_none(row.get("codigo_movimiento_mstock")),
+                        "id_lista_produccion": id_lista,
+                    })
+    except Exception as exc:
+        logger.warning("construir_trazabilidad_opt: fuente historico fallida %s id_lista=%s: %s", base_empresa, id_lista, exc)
+        fuentes_fallidas.append("lista_produccion_historico")
+
+    # --- Fuente 2: movimiento_stock (OPP legacy) via listar_opp_por_opt ---
+    try:
+        opps = listar_opp_por_opt(base_empresa, id_lista)
+        for opp in (opps or []):
+            fecha_raw = opp.get("fecha")
+            eventos.append({
+                "tipo": "OPP",
+                "fecha": _fmt_fecha(fecha_raw),
+                "fecha_sort": to_date_or_none(str(fecha_raw)) if fecha_raw else None,
+                "hora": "00:00:00",
+                "descripcion": f"OPP legacy movimiento_stock (cod. {opp.get('codigo_movimiento', '-')})",
+                "cantidad": float(opp.get("cantidad_total") or 0),
+                "operario": "-",
+                "fuente": "movimiento_stock",
+                "codigo_movimiento": to_int_or_none(opp.get("codigo_movimiento")),
+                "id_lista_produccion": id_lista,
+            })
+    except Exception as exc:
+        logger.warning("construir_trazabilidad_opt: fuente opp_legacy fallida %s id_lista=%s: %s", base_empresa, id_lista, exc)
+        fuentes_fallidas.append("movimiento_stock_opp")
+
+    # --- Fuente 3: MprParte + MprParteAjuste (E4+) ---
+    try:
+        partes_qs = MprParte.objects.filter(
+            base_empresa=base_empresa, id_lista_produccion=id_lista
+        ).prefetch_related("lineas")
+        for parte in partes_qs:
+            fecha_p = parte.fecha_produccion
+            turno_nombre = str(parte.turno_id)
+            try:
+                turno_nombre = parte.turno.nombre
+            except Exception:
+                pass
+            for linea in parte.lineas.all():
+                eventos.append({
+                    "tipo": "OPP",
+                    "fecha": _fmt_fecha(fecha_p),
+                    "fecha_sort": fecha_p,
+                    "hora": parte.registrado_en.strftime("%H:%M:%S") if parte.registrado_en else "00:00:00",
+                    "descripcion": f"Parte producción turno {turno_nombre} art.{linea.id_articulo}",
+                    "cantidad": float(linea.cantidad),
+                    "operario": str_or_default(linea.operario_nombre, str(linea.id_operario)),
+                    "fuente": "mpr_parte",
+                    "codigo_movimiento": None,
+                    "id_lista_produccion": id_lista,
+                })
+            for ajuste in MprParteAjuste.objects.filter(parte=parte):
+                eventos.append({
+                    "tipo": "OPP-ajuste",
+                    "fecha": _fmt_fecha(ajuste.creado_en.date()),
+                    "fecha_sort": ajuste.creado_en.date(),
+                    "hora": ajuste.creado_en.strftime("%H:%M:%S"),
+                    "descripcion": f"Ajuste parte {str(ajuste.motivo or '-')} art.{ajuste.id_articulo}",
+                    "cantidad": float(ajuste.delta),
+                    "operario": str(ajuste.id_operario),
+                    "fuente": "mpr_parte_ajuste",
+                    "codigo_movimiento": None,
+                    "id_lista_produccion": id_lista,
+                })
+    except Exception as exc:
+        logger.warning("construir_trazabilidad_opt: fuente mpr_parte fallida %s id_lista=%s: %s", base_empresa, id_lista, exc)
+        fuentes_fallidas.append("mpr_parte")
+
+    # --- Fuente 4: MprTransicionLote (por artículo pack de la OPT) ---
+    if id_articulo_pack is not None:
+        try:
+            for tl in MprTransicionLote.objects.filter(
+                base_empresa=base_empresa, id_articulo=id_articulo_pack
+            ).order_by("creado_en"):
+                fecha_t = tl.creado_en.date()
+                eventos.append({
+                    "tipo": "Transicion",
+                    "fecha": _fmt_fecha(fecha_t),
+                    "fecha_sort": fecha_t,
+                    "hora": tl.creado_en.strftime("%H:%M:%S"),
+                    "descripcion": f"Transición {tl.tipo_origen} → {tl.tipo_destino} art.{tl.id_articulo}",
+                    "cantidad": float(tl.cantidad),
+                    "operario": str(tl.id_usuario),
+                    "fuente": "mpr_transicion_lote",
+                    "codigo_movimiento": tl.codigo_movimiento,
+                    "id_lista_produccion": id_lista,
+                })
+        except Exception as exc:
+            logger.warning("construir_trazabilidad_opt: fuente transicion fallida %s: %s", base_empresa, exc)
+            fuentes_fallidas.append("mpr_transicion_lote")
+
+    # --- Fuente 5: MprArmadoSurtidoMovimiento ---
+    try:
+        for arm in MprArmadoSurtidoMovimiento.objects.filter(
+            base_empresa=base_empresa, id_lista_produccion=id_lista
+        ).order_by("creado_en"):
+            fecha_a = arm.creado_en.date()
+            eventos.append({
+                "tipo": "Armado",
+                "fecha": _fmt_fecha(fecha_a),
+                "fecha_sort": fecha_a,
+                "hora": arm.creado_en.strftime("%H:%M:%S"),
+                "descripcion": f"Armado {arm.modo} {arm.cantidad_packs} packs",
+                "cantidad": float(arm.cantidad_packs),
+                "operario": str(arm.id_operario or arm.id_usuario),
+                "fuente": "mpr_armado",
+                "codigo_movimiento": arm.codigo_movimiento,
+                "id_lista_produccion": id_lista,
+            })
+    except Exception as exc:
+        logger.warning("construir_trazabilidad_opt: fuente armado fallida %s: %s", base_empresa, exc)
+        fuentes_fallidas.append("mpr_armado")
+
+    # --- Fuente 6: MprImputacionArmado (via codigos de armados) ---
+    try:
+        codigos_armado = [
+            e["codigo_movimiento"] for e in eventos
+            if e.get("fuente") == "mpr_armado" and e.get("codigo_movimiento") is not None
+        ]
+        if codigos_armado:
+            for imp in MprImputacionArmado.objects.filter(
+                base_empresa=base_empresa, codigo_movimiento__in=codigos_armado
+            ).order_by("imputado_en"):
+                fecha_i = imp.imputado_en.date()
+                eventos.append({
+                    "tipo": "Imputacion",
+                    "fecha": _fmt_fecha(fecha_i),
+                    "fecha_sort": fecha_i,
+                    "hora": imp.imputado_en.strftime("%H:%M:%S"),
+                    "descripcion": f"Imputación armado {imp.cantidad} packs (cod. {imp.codigo_movimiento_pedido})",
+                    "cantidad": float(imp.cantidad),
+                    "operario": str(imp.id_usuario_supervisor),
+                    "fuente": "mpr_imputacion",
+                    "codigo_movimiento": imp.codigo_movimiento,
+                    "id_lista_produccion": id_lista,
+                })
+    except Exception as exc:
+        logger.warning("construir_trazabilidad_opt: fuente imputacion fallida %s: %s", base_empresa, exc)
+        fuentes_fallidas.append("mpr_imputacion")
+
+    # Ordenar cronológicamente
+    from datetime import date as _date
+    eventos.sort(key=lambda e: (e.get("fecha_sort") or _date.min, e.get("hora") or "00:00:00"))
+    # Limpiar campo auxiliar de sort
+    for ev in eventos:
+        ev.pop("fecha_sort", None)
+
+    return {"cabecera": cabecera, "eventos": eventos, "fuentes_fallidas": fuentes_fallidas}
+
+
+def construir_trazabilidad_articulo(
+    base_empresa: str,
+    id_articulo: int,
+    fecha_desde: Optional[Any] = None,
+    fecha_hasta: Optional[Any] = None,
+) -> Dict[str, Any]:
+    """Construye trazabilidad agregada para un artículo en un rango de fechas.
+
+    Llama listar_lista_produccion_agrupada para obtener las OPTs del artículo,
+    luego construir_trazabilidad_opt para cada OPT y agrega todos los eventos.
+    Eventos huérfanos (sin OPT) se marcan como fuente='sin_opt' y descripcion='sin OPT asociada'.
+    Retorna {eventos: [...], fuentes_fallidas: [...]}.
+    """
+    from datetime import date as _date
+
+    id_art = to_int_or_none(id_articulo)
+    if not id_art or not (base_empresa or "").strip():
+        return {"eventos": [], "fuentes_fallidas": []}
+
+    fd = to_date_or_none(str(fecha_desde)) if fecha_desde else None
+    fh = to_date_or_none(str(fecha_hasta)) if fecha_hasta else None
+
+    todos_eventos: List[Dict[str, Any]] = []
+    todas_fuentes_fallidas: List[str] = []
+
+    try:
+        opts = listar_lista_produccion_agrupada(base_empresa, id_articulo=id_art)
+    except Exception as exc:
+        logger.warning("construir_trazabilidad_articulo: no se pudo listar opts %s art %s: %s", base_empresa, id_art, exc)
+        return {"eventos": [], "fuentes_fallidas": ["listar_lista_produccion_agrupada"]}
+
+    for opt in (opts or []):
+        id_lista_row = to_int_or_none(opt.get("id_lista_produccion"))
+        if id_lista_row is None:
+            todos_eventos.append({
+                "tipo": "sin_opt",
+                "fecha": None,
+                "hora": "00:00:00",
+                "descripcion": "sin OPT asociada",
+                "cantidad": 0,
+                "operario": "-",
+                "fuente": "sin_opt",
+                "codigo_movimiento": None,
+                "id_lista_produccion": None,
+            })
+            continue
+        try:
+            traza = construir_trazabilidad_opt(base_empresa, id_lista_row)
+            for ev in traza.get("eventos", []):
+                # Filtrar por rango de fechas
+                fecha_ev = None
+                if ev.get("fecha"):
+                    fecha_ev = to_date_or_none(ev["fecha"].replace("/", "-") if "/" in str(ev["fecha"]) else ev["fecha"])
+                    if fecha_ev is None and ev.get("fecha"):
+                        try:
+                            parts = str(ev["fecha"]).split("/")
+                            if len(parts) == 3:
+                                fecha_ev = _date(int(parts[2]), int(parts[1]), int(parts[0]))
+                        except Exception:
+                            pass
+                if fd and fecha_ev and fecha_ev < fd:
+                    continue
+                if fh and fecha_ev and fecha_ev > fh:
+                    continue
+                todos_eventos.append(ev)
+            todas_fuentes_fallidas.extend(traza.get("fuentes_fallidas", []))
+        except Exception as exc:
+            logger.warning("construir_trazabilidad_articulo: error en opt %s: %s", id_lista_row, exc)
+            todas_fuentes_fallidas.append(f"opt_{id_lista_row}")
+
+    todas_fuentes_fallidas = list(dict.fromkeys(todas_fuentes_fallidas))
+    todos_eventos.sort(key=lambda e: (
+        to_date_or_none(e["fecha"].replace("/", "-") if e.get("fecha") and "/" in str(e["fecha"]) else (e.get("fecha") or "")) or _date.min,
+        e.get("hora") or "00:00:00",
+    ))
+
+    return {"eventos": todos_eventos, "fuentes_fallidas": todas_fuentes_fallidas}
+
+
+# =============================================================================
+# Etapa 9: Acciones Consolidadas — Grillas de Lote (Inspección / Clasificación)
+# =============================================================================
+
+
+def _construir_grilla_transicion_lote(
+    base_empresa: str,
+    tipo_origen: str,
+) -> List[Dict[str, Any]]:
+    """Universo de artículos con saldo físico en el depósito MPR de tipo_origen.
+
+    Query directa stock_deposito JOIN deposito WHERE tipo_mpr=tipo_origen AND saldo>0
+    para la empresa dada.  Luego llama _pivot_stock_por_tipo_mpr para confirmar saldo
+    y _fetch_descripciones_articulo para obtener código y descripción.
+
+    Returns: lista ordenada por codigo_manual de
+        [{id_articulo, codigo_manual, descripcion, disponible}]
+    """
+    if not (base_empresa or "").strip() or not (tipo_origen or "").strip():
+        return []
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+            tbl_dep = _nombre_tabla(cursor, "deposito")
+            if not tbl_sd or not tbl_dep:
+                return []
+            cursor.execute(
+                f"""
+                SELECT DISTINCT sd.id_articulo
+                FROM {tbl_sd} sd
+                INNER JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito
+                WHERE COALESCE(d.anulado, 'No') = 'No'
+                  AND d.tipo_mpr = %s
+                  AND sd.saldo > 0
+                """,
+                [tipo_origen],
+            )
+            rows = cursor.fetchall() or []
+    except Exception as e:
+        logger.warning("_construir_grilla_transicion_lote error consultando candidatos: %s", e)
+        return []
+
+    ids_candidatos = [to_int_or_none(r.get("id_articulo")) for r in rows]
+    ids_candidatos = [i for i in ids_candidatos if i is not None]
+    if not ids_candidatos:
+        return []
+
+    stock, _ = _pivot_stock_por_tipo_mpr(base_empresa, ids_candidatos)
+    ids_activos = [
+        aid for aid in ids_candidatos
+        if stock.get(aid, {}).get(tipo_origen, 0.0) > 0
+    ]
+    if not ids_activos:
+        return []
+
+    descripciones = _fetch_descripciones_articulo(base_empresa, ids_activos)
+    componentes: List[Dict[str, Any]] = []
+    for aid in ids_activos:
+        codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
+        componentes.append({
+            "id_articulo": aid,
+            "codigo_manual": str_or_default(codigo_manual, "-"),
+            "descripcion": str_or_default(descripcion, "-"),
+            "disponible": stock[aid].get(tipo_origen, 0.0),
+        })
+    componentes.sort(key=lambda c: c["codigo_manual"])
+    return componentes
+
+
+def construir_grilla_clasificacion_produccion(base_empresa: str) -> Dict[str, Any]:
+    """Grilla de la pantalla 'Clasificación de producción' (Etapa 10).
+
+    Lista los componentes con saldo físico en Producción. La clasificación sale
+    directo de Producción hacia {Semi Elaborado | 2da Selección | Desperdicio}:
+    el planchado es un momento dentro de la producción y no deja stock.
+
+    Returns: {"componentes": [...], "componentes_vacio": bool}
+        donde cada componente expone ``disponible`` (saldo en Producción).
+    """
+    componentes = _construir_grilla_transicion_lote(base_empresa, TIPO_MPR_PRODUCCION)
+    return {"componentes": componentes, "componentes_vacio": len(componentes) == 0}
+
+
+def transferir_stock_lote(
+    base_empresa: str,
+    id_usuario: int,
+    items: List[Dict[str, Any]],
+    fecha: "Optional[date]" = None,
+) -> Dict[str, Any]:
+    """Ejecuta N transferencias de stock en modo best-effort (sin atomic()).
+
+    Cada item debe tener: {id_articulo, tipo_origen, tipo_destino, cantidad}.
+    Si un ítem falla (ok=False o excepción), se acumula en errores y se continúa.
+
+    Args:
+        fecha: fecha del parte para el asiento MSTOCK. Si es None se usa la del
+            sistema. Permite cargas diferidas (informe de fábrica días posteriores).
+
+    Returns: {exitosas: int, fallidas: int,
+               errores: [(id_articulo, mensaje)], comprobantes: [str]}
+    """
+    resultado: Dict[str, Any] = {
+        "exitosas": 0,
+        "fallidas": 0,
+        "errores": [],
+        "comprobantes": [],
+    }
+    for item in (items or []):
+        id_art = to_int_or_none(item.get("id_articulo"))
+        try:
+            ok, _codigo_mov, nro, msg = transferir_stock_entre_etapas(
+                base_empresa=base_empresa,
+                id_usuario=id_usuario,
+                id_articulo=item.get("id_articulo"),
+                tipo_origen=item.get("tipo_origen", ""),
+                tipo_destino=item.get("tipo_destino", ""),
+                cantidad=item.get("cantidad"),
+                fecha=fecha,
+            )
+            if ok:
+                resultado["exitosas"] += 1
+                resultado["comprobantes"].append(nro or "")
+            else:
+                resultado["fallidas"] += 1
+                resultado["errores"].append((id_art, msg or "Error desconocido"))
+        except Exception as e:
+            resultado["fallidas"] += 1
+            resultado["errores"].append((id_art, str(e)))
+    return resultado

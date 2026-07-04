@@ -1,0 +1,372 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Tablero de producción — MPR — Synap{% endblock %}
+
+{% block content %}
+<section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
+    <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+
+        {# Encabezado fijo #}
+        <div class="flex-shrink-0">
+            {# Migas de pan #}
+            <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4" aria-label="Migas de pan">
+                <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <li><a href="{{ tablero_url }}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Producción</a></li>
+                    <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+                    <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Tablero de demanda consolidado</span></li>
+                </ol>
+            </nav>
+
+            {# Frame de encabezado #}
+            <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 dark:bg-slate-900 sm:mb-4 sm:p-4"
+                 x-data="{ envioModalOpen: false, envioCount: 0, envioEmpty: false }">
+                <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                    <div class="min-w-0">
+                        <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">
+                            Tablero de demanda consolidado
+                        </h1>
+                        <p class="mt-0.5 text-xs text-slate-400">
+                            Demanda por artículo/componente — 10 columnas del pipeline MPR
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap items-end gap-2 sm:gap-2.5 sm:shrink-0">
+                        {# Formulario de filtros de fecha (server-side) #}
+                        <form method="get" action="" class="flex flex-wrap items-end gap-2">
+                            <label class="flex flex-col gap-0.5">
+                                <span class="text-[10px] font-medium text-slate-400">Fecha desde</span>
+                                <input type="date" name="fecha_desde" value="{{ fecha_desde|default:'' }}"
+                                       class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
+                            </label>
+                            <label class="flex flex-col gap-0.5">
+                                <span class="text-[10px] font-medium text-slate-400">Fecha hasta</span>
+                                <input type="date" name="fecha_hasta" value="{{ fecha_hasta|default:'' }}"
+                                       class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
+                            </label>
+                            {% if solo_pendiente %}
+                            <input type="hidden" name="solo_pendiente" value="1"/>
+                            {% endif %}
+                            <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                <span class="material-icons text-base" aria-hidden="true">filter_list</span>
+                                Filtrar
+                            </button>
+                        </form>
+
+                        {# Botón Actualizar demanda #}
+                        <form method="post" action="{% url 'mpr:tablero_produccion_actualizar' %}"
+                              class="mpr-post-loading"
+                              data-mpr-loading-title="Actualizando demanda"
+                              data-mpr-loading-subtitle="Sincronizando pedidos con la lista de producción… No cierres esta ventana.">
+                            {% csrf_token %}
+                            <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                <span class="material-icons text-base" aria-hidden="true">refresh</span>
+                                Actualizar demanda
+                            </button>
+                        </form>
+
+                        {# Botón Enviar a producción — Etapa 7 (abre modal Synap; form fantasma anti-nesting) #}
+                        <button type="button"
+                                @click="
+                                    const filas = Array.from(document.querySelectorAll('[data-envio-qty]')).filter(el => !el.disabled && parseFloat(el.value || 0) > 0);
+                                    envioCount = filas.length;
+                                    envioEmpty = filas.length === 0;
+                                    envioModalOpen = true;
+                                "
+                                class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                            <span class="material-icons text-base" aria-hidden="true">send</span>
+                            Enviar a producción
+                        </button>
+
+                        {# Enlace de retorno a tablero #}
+                        <a href="{{ tablero_url }}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                            <span class="material-icons text-base" aria-hidden="true">dashboard</span>
+                            Tablero
+                        </a>
+                        <a href="{{ opt_list_url }}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                            <span class="material-icons text-base" aria-hidden="true">list_alt</span>
+                            Trazabilidad OPT
+                        </a>
+                        <a href="{% url 'mpr:parte_produccion' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                            <span class="material-icons text-base" aria-hidden="true">assignment</span>
+                            Parte de producción
+                        </a>
+                        <a href="{% url 'mpr:clasificacion_produccion' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                            <span class="material-icons text-base" aria-hidden="true">category</span>
+                            Clasificación de producción
+                        </a>
+                    </div>
+                </header>
+
+                {# Timestamp y controles adicionales #}
+                <div class="mt-2 flex flex-wrap items-center gap-3 border-t border-slate-700 pt-2">
+                    <p class="text-xs text-slate-400">
+                        Última actualización:
+                        <span class="font-medium text-slate-300">{{ ultima_actualizacion|default:"—" }}</span>
+                    </p>
+                    <div class="flex gap-2">
+                        {% if solo_pendiente %}
+                        <a href="?fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}"
+                           class="inline-flex items-center gap-1 rounded-md bg-purple-700 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-purple-600">
+                            <span class="material-icons text-xs" aria-hidden="true">check_box</span>
+                            Solo pendientes (activo)
+                        </a>
+                        {% else %}
+                        <a href="?solo_pendiente=1&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}"
+                           class="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition-colors hover:bg-slate-700">
+                            <span class="material-icons text-xs" aria-hidden="true">check_box_outline_blank</span>
+                            Solo con pendiente
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Modal Synap — confirmación de envío a producción (reemplaza window.confirm/alert) #}
+                <div x-show="envioModalOpen"
+                     x-cloak
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+                     @keydown.escape.window="envioModalOpen = false"
+                     x-transition.opacity>
+                    <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-600 dark:bg-slate-800"
+                         @click.stop>
+                        {# Estado 1: sin cantidades cargadas #}
+                        <template x-if="envioEmpty">
+                            <div>
+                                <div class="mb-3 flex items-center gap-2">
+                                    <span class="material-icons text-amber-500" aria-hidden="true">warning_amber</span>
+                                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Sin cantidades a enviar</h3>
+                                </div>
+                                <p class="mb-5 text-xs text-slate-500 dark:text-slate-400">
+                                    Ingrese al menos una cantidad en la columna <strong>Enviar</strong> antes de enviar a producción.
+                                </p>
+                                <div class="flex justify-end">
+                                    <button type="button" @click="envioModalOpen = false"
+                                            class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:bg-emerald-700 dark:hover:bg-emerald-600">
+                                        Entendido
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        {# Estado 2: confirmación de envío #}
+                        <template x-if="!envioEmpty">
+                            <div>
+                                <div class="mb-1 flex items-center gap-2">
+                                    <span class="material-icons text-emerald-500" aria-hidden="true">send</span>
+                                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Enviar a producción</h3>
+                                </div>
+                                <p class="mb-5 text-xs text-slate-500 dark:text-slate-400">
+                                    ¿Confirma enviar
+                                    <strong x-text="envioCount"></strong>
+                                    <span x-text="envioCount === 1 ? 'componente' : 'componentes'"></span>
+                                    a producción?
+                                </p>
+                                <div class="flex justify-end gap-2">
+                                    <button type="button" @click="envioModalOpen = false"
+                                            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+                                        Cancelar
+                                    </button>
+                                    <button type="submit" form="form-enviar-lote"
+                                            class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:bg-emerald-700 dark:hover:bg-emerald-600">
+                                        <span class="material-icons text-sm" aria-hidden="true">check</span>
+                                        Confirmar envío
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>{# fin encabezado #}
+
+        {# Mensajes Django — se consumen aquí (evita que se filtren a otras pantallas) #}
+        {% if messages %}
+        <div class="mb-3 flex flex-col gap-2">
+            {% for msg in messages %}
+            <div class="flex items-start gap-3 rounded-xl border px-4 py-3
+                {% if msg.tags == 'success' %}border-green-200 bg-green-50 dark:border-green-700/50 dark:bg-green-900/20{% elif msg.tags == 'error' %}border-red-200 bg-red-50 dark:border-red-700/50 dark:bg-red-900/20{% else %}border-amber-200 bg-amber-50 dark:border-amber-700/50 dark:bg-amber-900/20{% endif %}">
+                <span class="material-icons text-lg
+                    {% if msg.tags == 'success' %}text-green-600 dark:text-green-400{% elif msg.tags == 'error' %}text-red-600 dark:text-red-400{% else %}text-amber-600 dark:text-amber-400{% endif %}"
+                    aria-hidden="true">
+                    {% if msg.tags == 'success' %}check_circle{% elif msg.tags == 'error' %}error{% else %}warning{% endif %}
+                </span>
+                <p class="text-sm font-medium
+                    {% if msg.tags == 'success' %}text-green-800 dark:text-green-200{% elif msg.tags == 'error' %}text-red-800 dark:text-red-200{% else %}text-amber-800 dark:text-amber-200{% endif %}">
+                    {{ msg }}
+                </p>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# Zona de tabla con búsqueda Alpine y scroll #}
+        <div x-data="{ busqueda: '' }" class="flex flex-col">
+
+            {# Búsqueda client-side + contador #}
+            <div class="mb-2 flex flex-shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                <div class="flex items-center gap-1.5">
+                    <p class="text-[11px] text-slate-400 dark:text-slate-500 sm:text-xs">
+                        Deslizá horizontalmente para ver todas las columnas
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="relative min-w-0 sm:w-72">
+                        <span class="material-icons absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
+                        <input type="text"
+                               x-model="busqueda"
+                               placeholder="Buscar artículo…"
+                               class="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-purple-500"/>
+                    </div>
+                </div>
+            </div>
+
+            {# Tabla principal #}
+            <div class="min-h-0 overflow-x-auto overflow-y-auto rounded-lg border border-slate-200 shadow-sm dark:border-slate-700"
+                 role="region" aria-label="Tablero de demanda consolidado">
+                <table class="min-w-[72rem] w-full divide-y divide-slate-200 dark:divide-slate-700">
+                    <caption class="sr-only">Tablero de demanda consolidada por artículo/componente — 9 columnas del pipeline MPR</caption>
+                    <thead class="sticky top-0 z-20 bg-slate-50/95 dark:bg-slate-800/90 backdrop-blur-sm">
+                        <tr>
+                            {# Col 1: Artículo sticky-left #}
+                            <th scope="col"
+                                class="sticky left-0 z-30 min-w-[14rem] bg-slate-50/95 px-4 py-2.5 text-left text-xs font-semibold text-slate-600 dark:bg-slate-800/90 dark:text-slate-300 sm:px-5">
+                                Artículo
+                            </th>
+                            {# Col 2: Pendiente #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                Pendiente
+                            </th>
+                            {# Col 3: Fabricando (antes "Enviado") #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                Fabricando
+                            </th>
+                            {# Col 4: Producido (antes "Producción") #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Producido</th>
+                            {# Col 5: 2da Selección #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">2da Selección</th>
+                            {# Col 6: Semi Elaborado #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Semi Elaborado</th>
+                            {# Col 7: Desperdicio (no suma al total) #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold italic text-slate-400 dark:text-slate-500">
+                                Desperdicio
+                                <span title="No se incluye en el Total" class="cursor-help">·</span>
+                            </th>
+                            {# Col 8: Terminado #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Terminado</th>
+                            {# Col 9: Total #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Total</th>
+                            {# Col 10: Enviar (Etapa 7 — envío directo a producción) #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Enviar</th>
+                            {# Col 11: Trazabilidad (E9: botones por fila eliminados; solo enlace OPT) #}
+                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Trazabilidad</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                        {% for fila in filas %}
+                        <tr class="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                            data-descripcion="{{ fila.descripcion_articulo|lower }} {{ fila.codigo_manual|lower }}"
+                            x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase())">
+                            {# Col 1: Artículo sticky-left #}
+                            <td class="sticky left-0 z-10 min-w-[14rem] bg-white px-4 py-2.5 dark:bg-slate-900">
+                                <div class="flex flex-col gap-0.5">
+                                    <span class="text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-200">{{ fila.codigo_manual }}</span>
+                                    <span class="text-[11px] leading-tight text-slate-500 dark:text-slate-400">{{ fila.descripcion_articulo }}</span>
+                                </div>
+                            </td>
+                            {# Col 2: Pendiente #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums{% if fila.pendiente > 0 %} font-semibold text-red-600 dark:text-red-400{% else %} text-slate-500 dark:text-slate-400{% endif %}">
+                                {{ fila.pendiente|floatformat:1 }}
+                            </td>
+                            {# Col 3: Enviado #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300" data-col="enviado">
+                                {{ fila.enviado|floatformat:1 }}
+                            </td>
+                            {# Col 4: Producción #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
+                                {{ fila.produccion|floatformat:1 }}
+                            </td>
+                            {# Col 5: 2da Selección #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
+                                {{ fila.segunda_seleccion|floatformat:1 }}
+                            </td>
+                            {# Col 6: Semi Elaborado #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
+                                {{ fila.semi_elaborado|floatformat:1 }}
+                            </td>
+                            {# Col 7: Desperdicio (diferenciado, no suma al total) #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums italic text-slate-400 dark:text-slate-500">
+                                {{ fila.desperdicio|floatformat:1 }}
+                            </td>
+                            {# Col 8: Terminado #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
+                                {{ fila.terminado|floatformat:1 }}
+                            </td>
+                            {# Col 9: Total #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums font-semibold text-green-700 dark:text-green-400">
+                                {{ fila.total|floatformat:1 }}
+                            </td>
+                            {# Col 10: Enviar — Etapa 7. Input del form fantasma anti-nesting. #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right">
+                                <input form="form-enviar-lote"
+                                       type="number"
+                                       name="envio_{{ fila.id_articulo }}"
+                                       data-envio-qty
+                                       min="0" step="1"
+                                       value="{% if fila.pendiente > 0 %}{{ fila.pendiente|floatformat:0 }}{% endif %}"
+                                       class="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                       {% if fila.pendiente <= 0 %}disabled{% endif %}>
+                                <input form="form-enviar-lote"
+                                       type="hidden"
+                                       name="pendiente_{{ fila.id_articulo }}"
+                                       value="{{ fila.pendiente }}">
+                            </td>
+                            {# Col 11: Trazabilidad — E9: solo enlace OPT (botones de acción por fila eliminados) #}
+                            <td class="whitespace-nowrap px-3 py-2.5 text-right">
+                                <div class="flex items-center justify-end gap-1">
+                                    {% if fila.id_lista_produccion %}
+                                    <a href="{% url 'mpr:opt_trazabilidad' id_lista=fila.id_lista_produccion %}"
+                                       title="Ver trazabilidad OPT {{ fila.id_lista_produccion }}"
+                                       class="inline-flex items-center rounded-md border border-purple-500 bg-purple-600 px-2 py-1 text-xs font-medium text-white hover:bg-purple-500 dark:border-purple-400 dark:bg-purple-700 dark:hover:bg-purple-600">
+                                        <span class="material-icons text-sm mr-0.5" aria-hidden="true">timeline</span>
+                                        Trazabilidad
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="11" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
+                                Sin artículos con demanda en el rango especificado
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                {# Mensaje sin resultados en búsqueda client-side #}
+                {% if filas %}
+                <div class="hidden px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5"
+                     x-show="busqueda.trim() !== '' && Array.from($root.querySelectorAll('tbody tr[data-descripcion]')).every(function(el) { return !el.offsetParent; })">
+                    Ningún artículo coincide con la búsqueda.
+                </div>
+                {% endif %}
+            </div>
+
+            {# Nota al pie — Fabricando (fórmula definitiva Etapa 7) #}
+            <p class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
+                Columna <strong>Fabricando</strong>: Fabricando_OPT (max(0, OPT liberado − OPP parte)) + Fabricando_tablero (max(0, Σ envíos directos − stock Producido)), explotado por BOM a nivel componente.
+            </p>
+        </div>
+    </div>
+
+    {# Form fantasma Etapa 7 — fuera de la tabla para evitar forms anidados (HTML5 form= attribute) #}
+    <form id="form-enviar-lote"
+          method="post"
+          action="{% url 'mpr:tablero_produccion_enviar' %}">
+        {% csrf_token %}
+        {# Filtros actuales para preservar redirect tras envío #}
+        <input type="hidden" name="filtros_qs"
+               value="fecha_desde={{ fecha_desde|urlencode }}&amp;fecha_hasta={{ fecha_hasta|urlencode }}&amp;solo_pendiente={{ solo_pendiente|yesno:'1,0' }}">
+    </form>
+</section>
+{% endblock %}
