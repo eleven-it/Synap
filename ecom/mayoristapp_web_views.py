@@ -63,3 +63,31 @@ class PresupuestosVendedorView(MayoristappWebSessionMixin, TemplateView):
             }
         )
         return context
+
+
+class CompraMayoristaView(MayoristappWebSessionMixin, TemplateView):
+    """
+    UI web del vertical mayorista (Fase P3): catálogo → carrito → checkout en una sola
+    pantalla estilo POS. Consume las APIs P0/P1/P2/P3 ya migradas. Sigue los patrones
+    canónicos (ver docs/general/FUENTE_VERDAD_UI_REPORTES_MPR.md).
+    """
+
+    template_name = "ecom/compra_mayorista.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context.update(
+            {
+                "page_title": "Compra mayorista",
+                "urls": {
+                    "listado": reverse("ecom:mayoristapp_catalogo_articulos_listado"),
+                    "carrito": reverse("ecom:mayoristapp_carrito"),
+                    "carrito_vaciar": reverse("ecom:mayoristapp_carrito_vaciar"),
+                    "carrito_descuento_pie": reverse("ecom:mayoristapp_carrito_descuento_pie"),
+                    "checkout": reverse("ecom:mayoristapp_checkout_confirmar"),
+                    "lista_precios_pdf": reverse("ecom:mayoristapp_lista_precios_pdf"),
+                    "carrito_item_tpl": reverse("ecom:mayoristapp_carrito_item", args=[0]),
+                },
+            }
+        )
+        return context

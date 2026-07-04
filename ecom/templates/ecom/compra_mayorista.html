@@ -1,0 +1,297 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Compra mayorista — Synap{% endblock %}
+
+{% block content %}
+{{ urls|json_script:"compra-mayorista-urls" }}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24"
+         x-data="compraMayorista()" x-init="init()">
+
+  <!-- Hero -->
+  <div class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 opacity-95"></div>
+    <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
+      <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+        <div>
+          <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">Portal mayorista</p>
+          <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">Compra mayorista</h1>
+          <p class="mt-2 text-sm text-slate-300 max-w-3xl">
+            Buscá artículos con precio del motor, armá el carrito y confirmá el comprobante
+            (pedido, presupuesto o devolución) sobre AdministraNET.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+          <label class="text-[11px] uppercase tracking-wide text-slate-300 font-semibold">Comprobante</label>
+          <select x-model="tipo"
+                  class="rounded-full bg-white/10 border border-white/20 text-white text-xs font-semibold px-3 py-2 focus:ring-2 focus:ring-sky-400 outline-none">
+            <option class="text-slate-900" value="PED">Pedido</option>
+            <option class="text-slate-900" value="PRE">Presupuesto</option>
+            <option class="text-slate-900" value="DEV">Devolución</option>
+          </select>
+          <a :href="urls.lista_precios_pdf" target="_blank"
+             class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white bg-slate-900/60 hover:bg-slate-900 border border-white/20 transition">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Lista de precios PDF
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="relative w-full px-4 sm:px-6 lg:px-12 -mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+    <!-- Catálogo -->
+    <div class="xl:col-span-2 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden">
+      {% csrf_token %}
+      <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800">
+        <form @submit.prevent="buscar(1)" class="flex flex-col sm:flex-row gap-3">
+          <input type="text" x-model="q" placeholder="Buscar por nombre, código o código manual…"
+                 class="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm px-4 py-2.5 focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 outline-none" />
+          <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <input type="checkbox" x-model="soloPromo" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500"> Solo promociones
+          </label>
+          <button type="submit" :disabled="cargandoCat"
+                  class="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 transition">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+            Buscar
+          </button>
+        </form>
+      </div>
+
+      <div class="px-6 py-6">
+        <template x-if="cargandoCat">
+          <p class="text-sm text-slate-500 py-10 text-center">Buscando artículos…</p>
+        </template>
+        <template x-if="!cargandoCat && articulos.length === 0">
+          <div class="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 py-16 text-center text-sm text-slate-500 dark:text-slate-400">
+            Buscá un artículo para empezar. El precio y el stock disponible se calculan al momento.
+          </div>
+        </template>
+        <template x-if="!cargandoCat && articulos.length > 0">
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm text-left border-collapse">
+              <thead>
+                <tr class="border-b border-slate-200 dark:border-slate-700 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  <th class="py-3 pr-3 font-semibold">Cód</th>
+                  <th class="py-3 pr-3 font-semibold min-w-[220px]">Artículo</th>
+                  <th class="py-3 pr-3 font-semibold text-right">Precio</th>
+                  <th class="py-3 pr-3 font-semibold text-right">Disp.</th>
+                  <th class="py-3 pr-3 font-semibold text-right">Cant.</th>
+                  <th class="py-3 pr-3 font-semibold"></th>
+                </tr>
+              </thead>
+              <tbody class="text-slate-800 dark:text-slate-200">
+                <template x-for="a in articulos" :key="a.id_articulo">
+                  <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td class="py-2.5 pr-3 whitespace-nowrap text-xs text-slate-500" x-text="a.id_manual || a.codigo"></td>
+                    <td class="py-2.5 pr-3">
+                      <span x-text="a.nombre"></span>
+                      <span x-show="a.en_promocion" class="ml-1 inline-block rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-0.5">Promo</span>
+                    </td>
+                    <td class="py-2.5 pr-3 text-right font-semibold whitespace-nowrap" x-text="money(a.precio)"></td>
+                    <td class="py-2.5 pr-3 text-right whitespace-nowrap" :class="a.stock_disponible > 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-500'" x-text="a.stock_disponible"></td>
+                    <td class="py-2.5 pr-3 text-right">
+                      <input type="number" min="1" step="1" x-model.number="a._cant"
+                             class="w-16 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-right text-sm px-2 py-1 focus:ring-2 focus:ring-sky-500/40 outline-none" />
+                    </td>
+                    <td class="py-2.5 pr-3 text-right">
+                      <button type="button" @click="agregar(a)"
+                              class="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 transition">
+                        Agregar
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+            <div class="flex items-center justify-between pt-4 text-xs text-slate-500">
+              <span x-text="`Página ${pagina} de ${totalPaginas} · ${total} artículos`"></span>
+              <div class="flex gap-2">
+                <button type="button" @click="buscar(pagina - 1)" :disabled="pagina <= 1"
+                        class="rounded-full px-3 py-1.5 font-semibold bg-slate-100 dark:bg-slate-800 disabled:opacity-40">Anterior</button>
+                <button type="button" @click="buscar(pagina + 1)" :disabled="pagina >= totalPaginas"
+                        class="rounded-full px-3 py-1.5 font-semibold bg-slate-100 dark:bg-slate-800 disabled:opacity-40">Siguiente</button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Carrito + checkout -->
+    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden flex flex-col">
+      <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Carrito</h2>
+        <button type="button" @click="vaciar()" x-show="cart.items && cart.items.length"
+                class="text-xs font-semibold text-rose-500 hover:text-rose-400">Vaciar</button>
+      </div>
+
+      <div class="px-6 py-4 flex-1 overflow-y-auto max-h-[46vh]">
+        <template x-if="!cart.items || cart.items.length === 0">
+          <p class="text-sm text-slate-500 py-8 text-center">El carrito está vacío.</p>
+        </template>
+        <template x-for="it in (cart.items || [])" :key="it.id">
+          <div class="py-3 border-b border-slate-100 dark:border-slate-800 flex items-start gap-3">
+            <div class="flex-1 min-w-0">
+              <p class="text-sm font-medium text-slate-800 dark:text-slate-100 truncate" x-text="it.descripcion"></p>
+              <p class="text-xs text-slate-500" x-text="`${money(it.precio_unitario_neto)} c/u · ${it.alicuota_iva}% IVA`"></p>
+            </div>
+            <input type="number" min="1" step="1" :value="it.cantidad"
+                   @change="cambiarCantidad(it.id, $event.target.value)"
+                   class="w-16 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-right text-sm px-2 py-1 focus:ring-2 focus:ring-sky-500/40 outline-none" />
+            <div class="text-right w-24">
+              <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="money(it.total)"></p>
+              <button type="button" @click="quitar(it.id)" class="text-[11px] text-rose-500 hover:text-rose-400">Quitar</button>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <!-- Totales -->
+      <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-sm">
+        <div class="flex justify-between text-slate-600 dark:text-slate-300"><span>Neto</span><span x-text="money(tot.subtotal_neto)"></span></div>
+        <div class="flex justify-between text-slate-600 dark:text-slate-300"><span>IVA</span><span x-text="money(tot.iva_total)"></span></div>
+        <div class="flex justify-between text-slate-600 dark:text-slate-300" x-show="tot.impuesto_interno_total > 0"><span>Imp. interno</span><span x-text="money(tot.impuesto_interno_total)"></span></div>
+        <div class="flex items-center justify-between gap-2 pt-1">
+          <label class="text-xs text-slate-500">Desc. al pie %</label>
+          <input type="number" min="0" max="100" step="0.01" x-model.number="descPie" @change="aplicarDescuentoPie()"
+                 class="w-20 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-right text-sm px-2 py-1 focus:ring-2 focus:ring-sky-500/40 outline-none" />
+        </div>
+        <div class="flex justify-between text-base font-bold text-slate-900 dark:text-white pt-1 border-t border-slate-100 dark:border-slate-800 mt-1">
+          <span>Total</span><span x-text="money(tot.total)"></span>
+        </div>
+      </div>
+
+      <!-- Checkout -->
+      <div class="px-6 py-5 border-t border-slate-100 dark:border-slate-800 space-y-3">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Punto de venta</label>
+            <input type="number" x-model.number="pv" placeholder="Sesión"
+                   class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Forma de entrega</label>
+            <input type="text" x-model="formaEntrega" placeholder="Retira / Envío"
+                   class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Observaciones</label>
+          <textarea x-model="observaciones" rows="2"
+                    class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none"></textarea>
+        </div>
+
+        <p x-show="mensaje" x-text="mensaje" :class="mensajeOk ? 'text-emerald-600' : 'text-rose-600'" class="text-sm font-medium" x-cloak></p>
+
+        <button type="button" @click="confirmar()"
+                :disabled="confirmando || !cart.items || cart.items.length === 0"
+                class="w-full inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg shadow-sky-500/30 hover:shadow-xl disabled:opacity-50 disabled:pointer-events-none transition">
+          <span x-show="!confirmando" x-text="`Confirmar ${tipoLabel}`"></span>
+          <span x-show="confirmando">Confirmando…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('compraMayorista', () => ({
+    urls: JSON.parse(document.getElementById('compra-mayorista-urls').textContent),
+    q: '', soloPromo: false,
+    articulos: [], pagina: 1, tam: 20, total: 0, totalPaginas: 0, cargandoCat: false,
+    cart: { items: [] }, tot: {}, descPie: 0,
+    tipo: 'PED', pv: null, formaEntrega: '', observaciones: '',
+    confirmando: false, mensaje: '', mensajeOk: false,
+
+    get tipoLabel() { return { PED: 'pedido', PRE: 'presupuesto', DEV: 'devolución' }[this.tipo] || 'comprobante'; },
+
+    init() { this.refrescarCarrito(); },
+
+    csrf() {
+      const el = document.querySelector('[name=csrfmiddlewaretoken]');
+      return el ? el.value : '';
+    },
+    async api(url, method = 'GET', body = null) {
+      const opts = { method, headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrf() } };
+      if (body) opts.body = JSON.stringify(body);
+      const r = await fetch(url, opts);
+      let data = null;
+      try { data = await r.json(); } catch (e) { data = null; }
+      return { ok: r.ok, status: r.status, data };
+    },
+    money(v) {
+      const n = Number(v || 0);
+      return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    itemUrl(id) { return this.urls.carrito_item_tpl.replace(/0\/$/, id + '/'); },
+
+    async buscar(pagina) {
+      if (pagina < 1) return;
+      this.cargandoCat = true;
+      const filtros = {};
+      if (this.q.trim()) filtros.q = this.q.trim();
+      if (this.soloPromo) filtros.solo_promocion = true;
+      const { ok, data } = await this.api(this.urls.listado, 'POST', { filtros, pagina, tam: this.tam });
+      this.cargandoCat = false;
+      if (!ok || !data) { this.flash('No se pudo cargar el catálogo.', false); return; }
+      this.articulos = (data.items || []).map(a => ({ ...a, _cant: 1 }));
+      this.pagina = data.pagina || 1;
+      this.total = data.total || 0;
+      this.totalPaginas = data.total_paginas || 0;
+    },
+
+    async agregar(a) {
+      const cantidad = Math.max(1, Number(a._cant || 1));
+      const { ok, data } = await this.api(this.urls.carrito, 'POST', { id_articulo: a.id_articulo, cantidad });
+      if (!ok) { this.flash((data && data.detail) || 'No se pudo agregar el artículo.', false); if (data && data.carrito) this.setCart(data.carrito); return; }
+      this.setCart(data);
+      this.flash('Artículo agregado.', true);
+    },
+    async cambiarCantidad(itemId, cantidad) {
+      const { ok, data } = await this.api(this.itemUrl(itemId), 'PATCH', { cantidad: Number(cantidad) });
+      if (!ok) { this.flash((data && data.detail) || 'No se pudo actualizar la cantidad.', false); if (data && data.carrito) this.setCart(data.carrito); return; }
+      this.setCart(data);
+    },
+    async quitar(itemId) {
+      const { ok, data } = await this.api(this.itemUrl(itemId), 'DELETE');
+      if (ok) this.setCart(data);
+    },
+    async vaciar() {
+      const { ok, data } = await this.api(this.urls.carrito_vaciar, 'POST');
+      if (ok) this.setCart(data);
+    },
+    async aplicarDescuentoPie() {
+      const { ok, data } = await this.api(this.urls.carrito_descuento_pie, 'POST', { porcentaje: Number(this.descPie || 0) });
+      if (ok) this.setCart(data); else this.flash((data && data.detail) || 'Descuento inválido.', false);
+    },
+    async refrescarCarrito() {
+      const { ok, data } = await this.api(this.urls.carrito, 'GET');
+      if (ok) this.setCart(data);
+    },
+    setCart(data) {
+      this.cart = data || { items: [] };
+      this.tot = (data && data.totales) || {};
+      this.descPie = (data && data.descuento_pie_pct) || 0;
+    },
+
+    async confirmar() {
+      this.confirmando = true; this.mensaje = '';
+      const body = { tipo: this.tipo, forma_entrega: this.formaEntrega, observaciones: this.observaciones };
+      if (this.pv) body.id_punto_venta = this.pv;
+      const { ok, data } = await this.api(this.urls.checkout, 'POST', body);
+      this.confirmando = false;
+      if (!ok) { this.flash((data && data.detail) || 'No se pudo confirmar el comprobante.', false); return; }
+      const nro = (data && data.nro_comprobante) ? data.nro_comprobante : '';
+      const aut = (data && data.autorizacion) ? ` · ${data.autorizacion}` : '';
+      this.flash(`${this.tipoLabel[0].toUpperCase() + this.tipoLabel.slice(1)} confirmado: ${nro}${aut}`, true);
+      this.refrescarCarrito();
+    },
+
+    flash(msg, ok) { this.mensaje = msg; this.mensajeOk = ok; },
+  }));
+});
+</script>
+{% endblock %}

@@ -287,3 +287,69 @@ def calcular_precio_con_motor(
         impuesto_interno_pct=impuesto_interno_pct,
         tipo_cliente=tipo_cliente,
     )
+
+
+def calcular_precio_articulo_row(
+    art: dict,
+    *,
+    lista_id: int,
+    codigo_cliente: Optional[int],
+    descuento_cliente: Decimal,
+    iva_incluido: bool,
+    conn: Any,
+) -> Decimal:
+    """
+    Función integradora para calcular precio de un artículo (fuente única para listado/ficha/carrito).
+
+    Resuelve precio_base desde la columna de lista del row, alícuotas, reglas y promociones,
+    y delega en calcular_precio_con_motor para el cálculo final.
+
+    Args:
+        art: dict con claves del row de articulo (IDArt, Precio1V..Precio5V, PNOficial, alic_iva,
+             impuesto_interno, CodigoProveedor, CodigoRubro, IDSubRubro, promocion, promocion_por, etc.).
+        lista_id: ID de lista de precios (1..5 o 6 para Lista Oficial).
+        codigo_cliente: ID del cliente (None si no hay cliente en sesión).
+        descuento_cliente: Descuento de renglón/cliente (porcentaje 0-100).
+        iva_incluido: Si True, devuelve precio con IVA; si False, neto.
+        conn: Conexión MySQL para consultar reglas.
+
+    Returns:
+        Precio calculado (Decimal).
+    """
+    col_precio = {
+        1: "Precio1V",
+        2: "Precio2V",
+        3: "Precio3V",
+        4: "Precio4V",
+        5: "Precio5V",
+        6: "PNOficial",
+    }.get(lista_id)
+    if col_precio is None:
+        col_precio = "Precio1V"
+
+    precio_base = _d(art.get(col_precio), "0")
+    alicuota_iva = _d(art.get("alic_iva"), "21")
+    impuesto_interno_pct = _d(art.get("impuesto_interno"), "0")
+
+    tipo_cliente = None if codigo_cliente is None else "C"
+
+    regla = None
+    if codigo_cliente is not None and conn is not None:
+        try:
+            regla = resolver_regla_precio(conn, art, codigo_cliente)
+        except Exception:
+            pass
+
+    promo = resolver_promocion_articulo(art, lista_id)
+
+    return calcular_precio_con_motor(
+        precio_base=precio_base,
+        lista_id=lista_id,
+        descuento_cliente=descuento_cliente,
+        alicuota_iva=alicuota_iva,
+        impuesto_interno_pct=impuesto_interno_pct,
+        incluir_iva=iva_incluido,
+        tipo_cliente=tipo_cliente,
+        regla=regla,
+        promo=promo,
+    )
