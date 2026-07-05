@@ -687,11 +687,22 @@ def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
 
     Equivalente a ``manage.py apply_mpr_core_tables``. Idempotente.
     """
-    from django.conf import settings
+    from django.apps import apps
 
     applied: List[str] = []
     failed: List[str] = []
-    sql_path = Path(settings.BASE_DIR) / "docs" / "mpr" / "sql" / "001_mpr_core_tables.sql"
+    try:
+        app_path = Path(apps.get_app_config("mpr").path)
+    except LookupError:
+        msg = "La app Django «mpr» no está instalada."
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    sql_path = app_path / "sql" / "001_mpr_core_tables.sql"
     if not sql_path.is_file():
         msg = f"No se encontró el archivo {sql_path}"
         return {

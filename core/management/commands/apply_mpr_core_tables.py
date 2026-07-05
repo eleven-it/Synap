@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Crea tablas MPR core (mpr_*) en la base MySQL de la empresa.
-Referencia: docs/mpr/sql/001_mpr_core_tables.sql, docs/mpr/PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md
+Referencia: mpr/sql/001_mpr_core_tables.sql, docs/mpr/PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md
 
 Lógica: core.services.legacy_mysql_schema.catalog.run_mpr_core_tables_mysql
 """
@@ -38,7 +38,7 @@ class Command(BaseCommand):
 
         if dry_run:
             self.stdout.write(
-                "Se ejecutaría DDL desde docs/mpr/sql/001_mpr_core_tables.sql "
+                "Se ejecutaría DDL desde mpr/sql/001_mpr_core_tables.sql "
                 f"en base {base_empresa} (13 tablas mpr_* + seed mpr_config)."
             )
             return
