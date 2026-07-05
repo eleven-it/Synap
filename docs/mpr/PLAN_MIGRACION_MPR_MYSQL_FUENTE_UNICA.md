@@ -16,7 +16,7 @@
 | **Identificadores** | PK **autonumérica** `BIGINT AUTO_INCREMENT` en cada tabla; códigos de negocio (`codigo_movimiento`, etc.) como columnas **adicionales**, no como PK. |
 | **Integridad** | FK **físicas** entre tablas `mpr_*` del mismo cluster; FK hacia catálogos AdministraNET donde el motor y el esquema lo permitan (`articulo`, `deposito`, `movimiento_stock`, `comp_ped`, `sue_abm_empleado`). |
 | **Charset** | `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci` en todas las tablas nuevas MPR. |
-| **Despliegue** | DDL idempotente vía catálogo `core/services/legacy_mysql_schema/catalog.py` + script `docs/mpr/sql/001_mpr_core_tables.sql` (mismo patrón que self-checkout). |
+| **Despliegue** | DDL idempotente vía catálogo `core/services/legacy_mysql_schema/catalog.py` + script `mpr/sql/001_mpr_core_tables.sql` (mismo patrón que `self_checkout/sql/`). |
 | **Acceso en Synap** | Repositorios con `get_connection(base_empresa)` / `mysql_cursor` — **no** ORM Django sobre alias `mysql` fijo (la BD cambia por sesión). |
 
 ### 1.1 Modelo de tenancy AdministraNET (importante)
@@ -58,7 +58,7 @@ Por eso la configuración MPR no se llama `mpr_empresa_config`: en MySQL es simp
 
 Seguir el modelo **self-checkout**:
 
-- DDL en `docs/mpr/sql/001_mpr_core_tables.sql`
+- DDL en `mpr/sql/001_mpr_core_tables.sql` (runtime; scripts manuales en `docs/mpr/sql/`)
 - Proveedor en `PROVIDER_REGISTRY` (Archivo → Migración esquema MySQL)
 - Acceso vía `mpr/db.py` + repositorios (SQL parametrizado, `administranet_types`)
 - **Ninguna** tabla `mpr_*` lleva columna `base_empresa`: la conexión **ya** apunta a la única empresa de esa BD

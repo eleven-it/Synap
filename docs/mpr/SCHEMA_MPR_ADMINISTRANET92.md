@@ -318,7 +318,7 @@ Renglones de pedidos (cuerpo). MPR no usa cantidad_fab_pendiente_opt; el pendien
 
 ### 2.13.1 Tablas Synap MPR — ledgers en MySQL (`mpr_*`)
 
-**Estado objetivo (change `mpr-mysql-fuente-unica`):** toda persistencia operativa MPR vive en la **base MySQL de la empresa** (una BD = una empresa; **sin** columna `base_empresa`). DDL: `docs/mpr/sql/001_mpr_core_tables.sql`; comando `apply_mpr_core_tables`; proveedor en herramienta global **«MPR — tablas core Synap (ledgers MySQL)»** (`mpr_core_tables`).
+**Estado objetivo (change `mpr-mysql-fuente-unica`):** toda persistencia operativa MPR vive en la **base MySQL de la empresa** (una BD = una empresa; **sin** columna `base_empresa`). DDL runtime: `mpr/sql/001_mpr_core_tables.sql` (scripts manuales adicionales en `docs/mpr/sql/`); comando `apply_mpr_core_tables`; proveedor en herramienta global **«MPR — tablas core Synap (ledgers MySQL)»** (`mpr_core_tables`).
 
 | Tabla MySQL | Reemplaza (Postgres legacy) | Uso |
 |-------------|----------------------------|-----|

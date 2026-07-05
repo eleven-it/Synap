@@ -16,18 +16,21 @@
 
 Las ramas **Reports** y **Reports-1.0** se mantienen para historial y compatibilidad; el flujo estándar de versionado es Desarrollo → Staging → Produccion.
 
-### Carpeta `docs/` y archivos `.md` solo en Desarrollo
+### Carpetas de documentación solo en Desarrollo
 
-La documentación en **`docs/`** y los archivos **`.md`** (raíz del repo) se versionan y suben **solo en la rama Desarrollo**. **No subir a Staging** la carpeta `docs/` ni archivos `.md`. Tras hacer **merge Desarrollo → Staging**, en la rama Staging ejecutar:
+La documentación de desarrollo en **`docs/`**, **`openspec/`** y los archivos **`.md`** (raíz del repo) se versionan y suben **solo en la rama Desarrollo**. **No subir a Staging** esas carpetas ni archivos `.md`. Tras hacer **merge Desarrollo → Staging**, en la rama Staging ejecutar:
 
 ```bash
 git rm -r docs
+git rm -r openspec
 # Si hubiera .md en la raíz que no deban estar en Staging: git rm *.md
-git commit -m "Release: quitar docs y .md (solo en Desarrollo)"
+git commit -m "Release: quitar docs, openspec y .md (solo en Desarrollo)"
 git push origin Staging
 ```
 
-Luego continuar con el despliegue. Así Staging y Produccion no contendrán documentación.
+**Scripts SQL operativos** (DDL ejecutado en runtime por comandos o la herramienta global de esquema) deben vivir **fuera de `docs/`**, en la app correspondiente (ej. `mpr/sql/`, `self_checkout/sql/`), para que Staging y Produccion los incluyan al desplegar.
+
+Luego continuar con el despliegue. Así Staging y Produccion no contendrán documentación de desarrollo.
 
 ---
 
