@@ -19,6 +19,12 @@ def formatear_error_esquema(exc: BaseException, tabla: Optional[str] = None) -> 
     sin lenguaje técnico pero con la información necesaria para localizar la falla.
     """
     texto = str(exc).strip()
+    if isinstance(exc, UnicodeEncodeError) or "unicodeencodeerror" in texto.lower():
+        return (
+            "No se pudo guardar el detalle del movimiento por un carácter no admitido "
+            "en la codificación de la base de datos. Intente nuevamente; si persiste, "
+            "contacte soporte técnico."
+        )
     # Extraer nombre de columna de mensajes tipo: Unknown column 'nombre' in 'field list'
     columna = None
     match = re.search(r"Unknown column\s+'([^']+)'", texto, re.IGNORECASE)

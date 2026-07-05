@@ -4067,8 +4067,16 @@ class QueryRunnerService:
             )
         try:
             from mpr.services import reporte_mpr_movimientos
-            limit = (payload.get("filters") or {}).get("limit", 200)
-            filas = reporte_mpr_movimientos(base_empresa, limit=int(limit) if limit else 200)
+            filters = payload.get("filters") or {}
+            limit = filters.get("limit", 200)
+            fecha_desde = filters.get("fecha_desde") or filters.get("desde")
+            fecha_hasta = filters.get("fecha_hasta") or filters.get("hasta")
+            filas = reporte_mpr_movimientos(
+                base_empresa,
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                limit=int(limit) if limit else 200,
+            )
         except Exception as e:
             logger.warning("Error reporte MPR movimientos producción: %s", e, exc_info=True)
             return QueryResult(meta=meta, data=[], totals={"total_movimientos": 0}, notes=[f"Error: {e}"])

@@ -47,6 +47,7 @@ from ecom.services.mayoristapp_session import (
     leer_cliente_seleccionado,
     leer_idcliente_mayoristapp,
 )
+from ecom.services.mayoristapp_sesion_contexto import asegurar_contexto_mayoristapp
 from core.utils.administranet_types import to_int_or_none
 
 
@@ -57,7 +58,7 @@ def _session_base_empresa(request: Request) -> str | None:
 
 
 def _session_user(request: Request) -> dict:
-    return (getattr(request, "session", None) or {}).get("user") or {}
+    return asegurar_contexto_mayoristapp(request)
 
 
 class ClienteBuscarRelayAPIView(APIView):
@@ -73,7 +74,12 @@ class ClienteBuscarRelayAPIView(APIView):
     def _parse(self, request: Request) -> tuple[str, str, str, int]:
         if request.method == "GET":
             modo = request.query_params.get("modoBus") or request.query_params.get("modo_busqueda") or ""
-            patron = request.query_params.get("patron") or request.query_params.get("queCliente") or ""
+            patron = (
+                request.query_params.get("patron")
+                or request.query_params.get("queCliente")
+                or request.query_params.get("q")
+                or ""
+            )
             codigo = request.query_params.get("codigo") or ""
             lim = to_int_or_none(request.query_params.get("limit")) or 10
         else:
@@ -108,9 +114,32 @@ class ClienteBuscarRelayAPIView(APIView):
         modo, patron, codigo, lim = self._parse(request)
         return self._ejecutar_busqueda(request, base, modo, patron, codigo, lim)
 
+    @staticmethod
+    def _filas_a_results_synap(rows: list) -> list[dict]:
+        """Formato autocomplete Synap (`{ id, text }`) para tags_filter / presupuesto."""
+        results = []
+        for row in rows:
+            cod = row.get("Codigo")
+            if cod is None:
+                cod = row.get("codigo")
+            if cod is None:
+                continue
+            nombre = (row.get("nombre_cliente") or row.get("nombre") or row.get("Nombre") or "").strip()
+            try:
+                cid = int(cod)
+            except (TypeError, ValueError):
+                try:
+                    cid = int(float(cod))
+                except (TypeError, ValueError):
+                    continue
+            results.append({"id": cid, "text": nombre or str(cid)})
+        return results
+
     def _ejecutar_busqueda(
         self, request: Request, base: str, modo: str, patron: str, codigo: str, lim: int
     ) -> Response:
+        if not modo and (patron or codigo):
+            modo = "codigo" if codigo and not patron else "texto"
         sess_user = _session_user(request)
         rows, err = buscar_clientes_relay(
             base,
@@ -130,7 +159,13 @@ class ClienteBuscarRelayAPIView(APIView):
             msg, status = msg_map.get(err, ("Error en búsqueda.", 400))
             return Response({"detail": msg, "codigo": err}, status=status)
 
-        return Response({"clientes": rows, "total": len(rows)})
+        return Response(
+            {
+                "clientes": rows,
+                "total": len(rows),
+                "results": self._filas_a_results_synap(rows),
+            }
+        )
 
 
 class ClienteSeleccionadoRelayAPIView(APIView):

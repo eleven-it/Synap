@@ -105,7 +105,8 @@ class TestFacturasImputarAccionView(unittest.TestCase):
         u.is_superuser = False
         return u
 
-    def test_accion_bloqueada_por_plan(self):
+    @patch("ecom.facturas_imputar_relay_views.ecom_imputacion_write_enabled", return_value=False)
+    def test_accion_bloqueada_por_plan(self, _mock):
         req = _req_post(
             "/ecom/api/mayoristapp/fe/facturas-imputar/accion/?ajax=1",
             {

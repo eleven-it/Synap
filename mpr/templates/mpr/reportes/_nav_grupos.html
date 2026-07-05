@@ -1,0 +1,22 @@
+<div class="min-w-0 space-y-2.5">
+    <div class="flex gap-1 overflow-x-auto rounded-lg bg-gray-100/80 p-1 dark:bg-gray-900/50 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Grupo de reportes">
+        <a href="?grupo=produccion&reporte=resumen_diario&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}"
+           role="tab" aria-selected="{% if grupo == 'produccion' %}true{% else %}false{% endif %}"
+           class="inline-flex h-8 shrink-0 items-center rounded-md px-3 text-xs font-semibold transition-colors {% if grupo == 'produccion' %}bg-white text-purple-700 shadow-sm dark:bg-gray-800 dark:text-purple-300{% else %}text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200{% endif %}">Producción</a>
+        <a href="?grupo=demanda&reporte=brecha_pack&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}"
+           role="tab" aria-selected="{% if grupo == 'demanda' %}true{% else %}false{% endif %}"
+           class="inline-flex h-8 shrink-0 items-center rounded-md px-3 text-xs font-semibold transition-colors {% if grupo == 'demanda' %}bg-white text-purple-700 shadow-sm dark:bg-gray-800 dark:text-purple-300{% else %}text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200{% endif %}">Demanda</a>
+        <a href="?grupo=trazabilidad&reporte=timeline&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}"
+           role="tab" aria-selected="{% if grupo == 'trazabilidad' %}true{% else %}false{% endif %}"
+           class="inline-flex h-8 shrink-0 items-center rounded-md px-3 text-xs font-semibold transition-colors {% if grupo == 'trazabilidad' %}bg-white text-purple-700 shadow-sm dark:bg-gray-800 dark:text-purple-300{% else %}text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200{% endif %}">Trazabilidad</a>
+    </div>
+    {% if reportes_nav %}
+    <div class="flex gap-1 overflow-x-auto border-t border-gray-100 pt-2.5 dark:border-gray-700/80 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" aria-label="Reporte del grupo">
+        {% for rkey, rlabel in reportes_nav.items %}
+        <a href="?grupo={{ grupo }}&reporte={{ rkey }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}{% if rkey == 'timeline' and meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}"
+           role="tab" aria-selected="{% if reporte == rkey %}true{% else %}false{% endif %}"
+           class="inline-flex h-8 shrink-0 items-center rounded-md px-2.5 text-xs font-semibold whitespace-nowrap transition-colors {% if reporte == rkey %}bg-slate-800 text-white shadow-sm dark:bg-slate-600{% else %}text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800{% endif %}">{{ rlabel }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>

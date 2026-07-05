@@ -1,0 +1,61 @@
+{# Buscador predictivo client-side para tablas con artículos (hereda mprReportesHub). #}
+<div class="mb-3 flex flex-col gap-2 border-b border-gray-100 pb-3 dark:border-gray-700/80 sm:flex-row sm:items-start sm:justify-between">
+    <div class="relative min-w-0 flex-1 sm:max-w-lg" @click.outside="sugerenciasAbiertas = false">
+        <label for="mpr-reportes-busqueda-articulo" class="sr-only">Buscar artículo en la tabla</label>
+        <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 text-lg text-gray-400" aria-hidden="true">search</span>
+        <input type="search"
+               id="mpr-reportes-busqueda-articulo"
+               x-model="busquedaTabla"
+               @input="sugerenciasAbiertas = true"
+               @focus="sugerenciasAbiertas = true"
+               @keydown.escape="sugerenciasAbiertas = false; busquedaTabla = ''"
+               @keydown.arrow-down.prevent="focoSugerencia(1)"
+               @keydown.arrow-up.prevent="focoSugerencia(-1)"
+               @keydown.enter.prevent="aplicarSugerenciaActiva()"
+               placeholder="Buscar por código o descripción…"
+               autocomplete="off"
+               role="combobox"
+               aria-autocomplete="list"
+               aria-controls="mpr-reportes-sugerencias"
+               :aria-expanded="sugerenciasAbiertas && sugerenciasFiltradas.length ? 'true' : 'false'"
+               class="h-9 w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-8 text-sm text-gray-800 shadow-sm placeholder:text-gray-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/25 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"/>
+        <button type="button"
+                x-show="busquedaTabla.trim() !== ''"
+                x-cloak
+                @click="limpiarBusquedaTabla()"
+                class="absolute right-1.5 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-200"
+                aria-label="Limpiar búsqueda">
+            <span class="material-icons text-base" aria-hidden="true">close</span>
+        </button>
+
+        <ul id="mpr-reportes-sugerencias"
+            x-show="sugerenciasAbiertas && sugerenciasFiltradas.length"
+            x-cloak
+            role="listbox"
+            class="absolute left-0 right-0 top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800">
+            <template x-for="(item, idx) in sugerenciasFiltradas" :key="item.codigo + '-' + idx">
+                <li>
+                    <button type="button"
+                            role="option"
+                            :aria-selected="idx === sugerenciaActiva ? 'true' : 'false'"
+                            @mousedown.prevent="seleccionarArticulo(item)"
+                            :class="idx === sugerenciaActiva ? 'bg-purple-50 text-purple-900 dark:bg-purple-950/50 dark:text-purple-100' : 'text-gray-800 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700/60'"
+                            class="flex w-full flex-col gap-0.5 px-3 py-2 text-left">
+                        <span class="text-sm font-semibold tabular-nums" x-text="item.codigo"></span>
+                        <span class="line-clamp-1 text-xs text-gray-500 dark:text-gray-400" x-text="item.descripcion"></span>
+                    </button>
+                </li>
+            </template>
+        </ul>
+    </div>
+
+    <div class="flex shrink-0 flex-col items-start gap-0.5 sm:items-end sm:pt-1">
+        <p class="text-xs text-gray-500 dark:text-gray-400" x-show="busquedaTabla.trim() !== ''" x-cloak>
+            <span x-text="contadorFilasVisibles()"></span>
+            <span x-text="contadorFilasVisibles() === 1 ? ' resultado' : ' resultados'"></span>
+        </p>
+        <p class="text-[11px] text-gray-400 dark:text-gray-500" x-show="busquedaTabla.trim() === ''">
+            {{ total_filas_tabla|default:0 }} artículo{{ total_filas_tabla|default:0|pluralize }} en la tabla
+        </p>
+    </div>
+</div>

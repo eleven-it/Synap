@@ -39,25 +39,15 @@ class ValidarComposicionBom1raTest(SimpleTestCase):
 
 
 class CalcularMaxPacksArmado1raTest(SimpleTestCase):
-    @patch("mpr.services.mysql_cursor")
-    @patch("mpr.services._nombre_tabla", return_value="stock_deposito")
-    @patch("mpr.services.lineas_bom_pack_1ra")
-    def test_max_packs_limitado_por_componente_escaso(self, mock_lineas, _tbl, mock_cursor_ctx):
-        mock_lineas.return_value = [
-            {"id_articulo": 813, "cantidad_por_pack": 3},
-            {"id_articulo": 900, "cantidad_por_pack": 1},
-        ]
-        cursor = MagicMock()
-        cursor.fetchall.return_value = [
-            {"id_articulo": 813, "saldo": 5},
-            {"id_articulo": 900, "saldo": 10},
-        ]
-        mock_cursor_ctx.return_value.__enter__.return_value = cursor
+    @patch("mpr.services._max_packs_armado_1ra_bulk")
+    def test_max_packs_delega_en_bulk(self, mock_bulk):
+        mock_bulk.return_value = {100: 2}
         n = calcular_max_packs_armado_1ra("emp", 100, deposito_semi=3)
-        self.assertEqual(n, 1)
+        self.assertEqual(n, 2)
+        mock_bulk.assert_called_once_with("emp", [100], 3)
 
-    @patch("mpr.services.articulo_habilitado_armado_1ra", return_value=False)
-    def test_pack_no_habilitado_devuelve_cero(self, _hab):
+    @patch("mpr.services._max_packs_armado_1ra_bulk", return_value={999: 0})
+    def test_sin_stock_devuelve_cero(self, _mock_bulk):
         self.assertEqual(calcular_max_packs_armado_1ra("emp", 999, deposito_semi=3), 0)
 
 

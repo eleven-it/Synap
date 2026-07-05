@@ -11,7 +11,7 @@
         {# Migas de pan #}
         <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4" aria-label="Migas de pan">
             <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <li><a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Producción</a></li>
+                <li><a href="{% url 'mpr:tablero_produccion' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Producción</a></li>
                 <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
                 <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Orden de Producción de Trabajo (OPT)</span></li>
             </ol>
@@ -22,8 +22,15 @@
             {# Asistente de producción #}
             {% if en_wizard %}
             <div class="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-purple-200/80 bg-purple-50/90 px-3 py-1.5 dark:border-purple-700 dark:bg-purple-900/25 sm:mb-3 sm:px-4 sm:py-2">
-                <span class="text-[11px] font-medium text-purple-900 dark:text-purple-100 sm:text-xs">Asistente de producción — Paso {{ wizard_paso }} de 5: Crear OPT (demanda)</span>
+                <span class="text-[11px] font-medium text-purple-900 dark:text-purple-100 sm:text-xs">Trazabilidad OPT (asistente legacy) — Paso {{ wizard_paso }} de {{ wizard_paso_max|default:4 }}: Crear OPT (demanda pack)</span>
                 <a href="{% url 'mpr:wizard' %}?salir=1" class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 sm:text-xs">Salir del asistente</a>
+            </div>
+            {% else %}
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200/80 bg-amber-50/90 px-3 py-1.5 dark:border-amber-700/60 dark:bg-amber-900/20 sm:mb-3 sm:px-4 sm:py-2">
+                <span class="text-[11px] font-medium text-amber-900 dark:text-amber-100 sm:text-xs">
+                    Flujo avanzado de trazabilidad OPT (demanda por pack). Para la operación diaria use el
+                    <a href="{% url 'mpr:tablero_produccion' %}" class="underline decoration-amber-600/50 underline-offset-2 hover:text-amber-950 dark:hover:text-amber-50">tablero de producción</a>.
+                </span>
             </div>
             {% endif %}
 
@@ -55,9 +62,9 @@
                             Actualizar
                         </button>
                     </form>
-                    <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                        <span class="material-icons text-base" aria-hidden="true">dashboard</span>
-                        Tablero
+                    <a href="{% url 'mpr:tablero_produccion' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                        <span class="material-icons text-base" aria-hidden="true">table_chart</span>
+                        Tablero de producción
                     </a>
                 </div>
             </header>
@@ -136,6 +143,8 @@
                             {% for f in filas %}
                             <tr class="ventana-pack-row hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                                 data-search-text="{{ f.id_articulo|default:'' }} {{ f.codigo_articulo|default:'' }} {{ f.codigo_manual|default:''|escape }} {{ f.descripcion_articulo|default:''|escape }} {{ f.origen_demanda_etiqueta|default:''|escape }} {{ f.stock_terminado|floatformat:0 }} {{ f.stock_reserva|floatformat:0 }} {{ f.cantidad_pedida_pedido|default:0|floatformat:0 }} {{ f.cantidad_demanda_reserva|default:0|floatformat:0 }} {{ f.cantidad_parcial_fabricada|floatformat:0 }} {% for p in f.pedidos_resumen %}{{ p.nro_pedido|default:'' }} {{ p.estado_pedido_opt|default:'' }} {{ p.nombre_cliente|default:''|escape }} {% endfor %} {{ f.cantidad_a_fabricar|floatformat:0 }} {{ f.cantidad_urgente_abs|floatformat:0 }}"
+                                data-codigo-manual="{{ f.codigo_manual|default:'-' }}"
+                                data-descripcion="{{ f.descripcion_articulo|default:'-'|escape }}"
                                 x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase())">
                                 <td class="px-4 py-3">
                                     <input type="checkbox" name="sel" value="{{ f.id_articulo }}" class="row-sel rounded border-slate-300 dark:border-slate-600 text-purple-600 focus:ring-purple-500" aria-label="Incluir en OPT"/>
@@ -586,4 +595,148 @@
         </script>
     </div>
 </section>
+
+{% if packs_sin_receta %}
+<div class="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+     id="modal-sin-receta" role="dialog" aria-modal="true" aria-labelledby="modal-sin-receta-titulo">
+    <div class="w-full max-w-lg rounded-2xl border border-amber-200/90 bg-white p-6 shadow-2xl
+                dark:border-amber-800/50 dark:bg-slate-800 sm:p-7">
+        <div class="flex items-start gap-4">
+            <span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full
+                         bg-amber-100 dark:bg-amber-900/40" aria-hidden="true">
+                <span class="material-icons text-2xl text-amber-600 dark:text-amber-400">warning_amber</span>
+            </span>
+            <div class="min-w-0 flex-1">
+                <h2 id="modal-sin-receta-titulo"
+                    class="mb-1 text-lg font-bold tracking-tight text-slate-900 dark:text-white">
+                    Pack(s) sin receta definida
+                </h2>
+                <p class="mb-4 text-sm text-slate-600 dark:text-slate-300">
+                    Los siguientes artículos no tienen receta (BOM) cargada y no pueden incluirse
+                    en una OPT. Cargue la receta en el módulo correspondiente antes de continuar.
+                </p>
+                <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-600">
+                    <table class="min-w-full divide-y divide-slate-200 text-xs dark:divide-slate-600">
+                        <thead class="bg-slate-50 dark:bg-slate-700">
+                            <tr>
+                                <th class="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-300">Cód. Sistema</th>
+                                <th class="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-300">Cód. Manual</th>
+                                <th class="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-300">Descripción</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 bg-white dark:divide-slate-700 dark:bg-slate-800">
+                            {% for p in packs_sin_receta %}
+                            <tr>
+                                <td class="px-3 py-2 font-mono text-slate-700 dark:text-slate-200">{{ p.id_articulo }}</td>
+                                <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{{ p.codigo_manual|default:"-" }}</td>
+                                <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{{ p.descripcion_articulo|default:"-" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-6 flex justify-end border-t border-slate-100 pt-5 dark:border-slate-700">
+                    <button type="button"
+                            onclick="document.getElementById('modal-sin-receta').remove();"
+                            class="inline-flex min-h-10 items-center justify-center rounded-xl
+                                   bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800
+                                   transition-colors hover:bg-slate-300 focus:outline-none
+                                   focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2
+                                   dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500
+                                   dark:focus-visible:ring-offset-slate-800">
+                        Cerrar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+(function () {
+    var form = document.getElementById('form-crear-opt');
+    if (!form) return;
+
+    form.addEventListener('submit', function (ev) {
+        var seleccionados = Array.from(form.querySelectorAll('input[name="sel"]:checked'));
+        if (!seleccionados.length) return;
+
+        var sinReceta = [];
+        seleccionados.forEach(function (chk) {
+            var row = chk.closest('tr');
+            if (!row) return;
+            var trigger = row.querySelector('.receta-tooltip-trigger');
+            if (!trigger) return;
+            var raw = trigger.getAttribute('data-receta');
+            var receta = [];
+            try { if (raw) receta = JSON.parse(raw); } catch (e) {}
+            if (!Array.isArray(receta) || receta.length === 0) {
+                sinReceta.push({
+                    idArticulo: chk.value,
+                    codigoManual: row.dataset.codigoManual || '-',
+                    descripcion: row.dataset.descripcion || '-',
+                });
+            }
+        });
+
+        if (sinReceta.length > 0) {
+            ev.preventDefault();
+            mostrarModalSinRecetaCliente(sinReceta);
+        }
+    });
+
+    function mostrarModalSinRecetaCliente(items) {
+        var existing = document.getElementById('modal-sin-receta-cliente');
+        if (existing) existing.remove();
+
+        var filas = items.map(function (it) {
+            return '<tr>' +
+                '<td class="px-3 py-2 font-mono text-slate-700 dark:text-slate-200">' + escHtml(it.idArticulo) + '</td>' +
+                '<td class="px-3 py-2 text-slate-700 dark:text-slate-200">' + escHtml(it.codigoManual) + '</td>' +
+                '<td class="px-3 py-2 text-slate-700 dark:text-slate-200">' + escHtml(it.descripcion) + '</td>' +
+                '</tr>';
+        }).join('');
+
+        var modal = document.createElement('div');
+        modal.id = 'modal-sin-receta-cliente';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'modal-sin-receta-cliente-titulo');
+        modal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm';
+        modal.innerHTML =
+            '<div class="w-full max-w-lg rounded-2xl border border-amber-200/90 bg-white p-6 shadow-2xl dark:border-amber-800/50 dark:bg-slate-800 sm:p-7">' +
+                '<div class="flex items-start gap-4">' +
+                    '<span class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40" aria-hidden="true">' +
+                        '<span class="material-icons text-2xl text-amber-600 dark:text-amber-400">warning_amber</span>' +
+                    '</span>' +
+                    '<div class="min-w-0 flex-1">' +
+                        '<h2 id="modal-sin-receta-cliente-titulo" class="mb-1 text-lg font-bold tracking-tight text-slate-900 dark:text-white">Pack(s) sin receta definida</h2>' +
+                        '<p class="mb-4 text-sm text-slate-600 dark:text-slate-300">Los siguientes artículos no tienen receta (BOM) cargada. Cargue la receta antes de continuar.</p>' +
+                        '<div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-600">' +
+                            '<table class="min-w-full divide-y divide-slate-200 text-xs dark:divide-slate-600">' +
+                                '<thead class="bg-slate-50 dark:bg-slate-700"><tr>' +
+                                    '<th class="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-300">Cód. Sistema</th>' +
+                                    '<th class="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-300">Cód. Manual</th>' +
+                                    '<th class="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-300">Descripción</th>' +
+                                '</tr></thead>' +
+                                '<tbody class="divide-y divide-slate-100 bg-white dark:divide-slate-700 dark:bg-slate-800">' + filas + '</tbody>' +
+                            '</table>' +
+                        '</div>' +
+                        '<div class="mt-6 flex justify-end border-t border-slate-100 pt-5 dark:border-slate-700">' +
+                            '<button type="button" class="inline-flex min-h-10 items-center justify-center rounded-xl bg-slate-200 px-4 py-2 text-sm font-medium text-slate-800 transition-colors hover:bg-slate-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 dark:bg-slate-600 dark:text-slate-200 dark:hover:bg-slate-500 dark:focus-visible:ring-offset-slate-800">Cerrar</button>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+
+        modal.querySelector('button').addEventListener('click', function () { modal.remove(); });
+        document.body.appendChild(modal);
+    }
+
+    function escHtml(s) {
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+})();
+</script>
 {% endblock %}

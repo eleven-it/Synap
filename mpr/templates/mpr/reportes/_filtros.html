@@ -1,0 +1,80 @@
+<form method="get" x-ref="filtrosForm"
+      class="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:gap-x-4 lg:gap-y-2">
+    <input type="hidden" name="grupo" value="{{ grupo }}">
+    <input type="hidden" name="reporte" value="{{ reporte }}">
+    <input type="hidden" name="presentacion" x-model="presentacion">
+    {% if meta.id_articulo %}<input type="hidden" name="id_articulo" value="{{ meta.id_articulo }}">{% endif %}
+
+    {# Período #}
+    <div class="min-w-0 flex-1 lg:flex-[1_1_auto]">
+        <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Período</p>
+        <div class="flex flex-wrap items-end gap-2">
+            <div class="w-[9.5rem] shrink-0">
+                <label for="desde" class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Desde</label>
+                <input type="date" id="desde" name="desde" x-model="desde" @change="presetActivo = null"
+                       class="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-sm shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/25 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+            </div>
+            <div class="w-[9.5rem] shrink-0">
+                <label for="hasta" class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">Hasta</label>
+                <input type="date" id="hasta" name="hasta" x-model="hasta" @change="presetActivo = null"
+                       class="h-9 w-full rounded-lg border border-gray-300 bg-white px-2.5 text-sm shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/25 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+            </div>
+            <div class="shrink-0 pb-0">
+                <span class="mb-1 block text-xs font-medium text-transparent select-none" aria-hidden="true">Atajos</span>
+                <div class="inline-flex h-9 overflow-hidden rounded-lg border border-gray-300 bg-white p-0.5 shadow-sm dark:border-gray-600 dark:bg-gray-900" role="group" aria-label="Atajos de período">
+                    <button type="button" @click="preset(0)"
+                            :class="clasePreset(0)"
+                            class="h-full rounded-md px-3 text-xs font-semibold transition-colors">Hoy</button>
+                    <button type="button" @click="preset(7)"
+                            :class="clasePreset(7)"
+                            class="h-full rounded-md px-3 text-xs font-semibold transition-colors">7 días</button>
+                    <button type="button" @click="preset(30)"
+                            :class="clasePreset(30)"
+                            class="h-full rounded-md px-3 text-xs font-semibold transition-colors">Mes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Presentación #}
+    <div class="shrink-0">
+        <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Presentación</p>
+        <div>
+            <span class="mb-1 block text-xs font-medium text-transparent select-none" aria-hidden="true">Modo</span>
+            <div class="inline-flex h-9 w-full min-w-[11rem] overflow-hidden rounded-lg border border-gray-300 bg-white p-0.5 shadow-sm dark:border-gray-600 dark:bg-gray-900 sm:w-auto" role="group" aria-label="Unidades o docenas">
+            <button type="button" @click="cambiarPresentacion('unidades')"
+                    :class="presentacion === 'unidades' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800'"
+                    class="inline-flex h-full flex-1 items-center justify-center gap-1 rounded-md px-3 text-xs font-semibold transition-colors whitespace-nowrap">
+                <span class="material-icons text-sm" aria-hidden="true">straighten</span>
+                Unidades
+            </button>
+            <button type="button" @click="cambiarPresentacion('docenas')"
+                    :class="presentacion === 'docenas' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800'"
+                    class="inline-flex h-full flex-1 items-center justify-center gap-1 rounded-md px-3 text-xs font-semibold transition-colors whitespace-nowrap">
+                <span class="material-icons text-sm" aria-hidden="true">view_week</span>
+                Docenas
+            </button>
+        </div>
+        </div>
+    </div>
+
+    {# Acciones — misma línea base que los controles h-9 #}
+    <div class="flex shrink-0 flex-col lg:ml-auto">
+        <p class="mb-1.5 hidden text-[11px] font-semibold uppercase tracking-wide text-transparent select-none lg:block" aria-hidden="true">Acciones</p>
+        <div>
+            <span class="mb-1 hidden text-xs font-medium text-transparent select-none lg:block" aria-hidden="true">Ejecutar</span>
+            <div class="flex flex-wrap items-center gap-2">
+        <button type="submit" @click.prevent="enviarFiltros()"
+                class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-4 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+            <span class="material-icons text-base" aria-hidden="true">refresh</span>
+            Actualizar
+        </button>
+        <a href="?grupo={{ grupo }}&reporte={{ reporte }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}{% if meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}&format=csv"
+           class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+            <span class="material-icons text-base" aria-hidden="true">download</span>
+            Exportar CSV
+        </a>
+            </div>
+        </div>
+    </div>
+</form>

@@ -100,6 +100,8 @@
       id="presupuestos-app"
       class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden reports-fullscreen-shadow"
       data-api-url="{{ presupuestos_api_url }}"
+      data-sugerencias-url="{{ presupuestos_sugerencias_api_url }}"
+      data-sugerencias-key="sugerencias"
       data-usa-id-manual="{% if usa_id_manual_cliente %}1{% else %}0{% endif %}"
     >
       {% csrf_token %}
@@ -167,7 +169,10 @@
           </div>
           <div id="wrap-busca-numero" class="hidden">
             <label for="numeroComp" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">N.º comprobante</label>
-            <input type="text" id="numeroComp" autocomplete="off" class="presup-filter-input w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2.5 focus:ring-2 focus:ring-sky-500/40 outline-none" placeholder="Buscar en NroCompBusq" />
+            <div class="relative">
+              <input type="text" id="numeroComp" autocomplete="off" class="presup-filter-input w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2.5 focus:ring-2 focus:ring-sky-500/40 outline-none" placeholder="Escriba para buscar en NroCompBusq…" />
+              <div id="numeroComp_dropdown" class="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-48 overflow-y-auto hidden"></div>
+            </div>
           </div>
           <div id="wrap-busca-tipo" class="hidden">
             <label for="tipoPedido" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">Tipo de presupuesto</label>
@@ -227,4 +232,5 @@
 
 {% block extra_js %}
 <script src="{% static 'ecom/js/presupuestos_vendedor.js' %}"></script>
+<script type="module" src="{% static 'ecom/js/ecom_predictive_boot.mjs' %}"></script>
 {% endblock %}

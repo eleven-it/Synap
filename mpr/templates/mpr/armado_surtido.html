@@ -344,8 +344,11 @@
                                                 </button>
                                             </template>
                                         </div>
-                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" x-show="packDropdownOpen && !resultadosPack.length && busquedaPack.trim()" x-cloak>
-                                            Sin packs que coincidan con la búsqueda.
+                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" x-show="modo === '1ra' && !depositoOrigen && packDropdownOpen" x-cloak>
+                                            Seleccione el depósito origen para listar packs armables.
+                                        </p>
+                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" x-show="packDropdownOpen && !resultadosPack.length && busquedaPack.trim() && (modo !== '1ra' || depositoOrigen)" x-cloak>
+                                            Sin packs armables con stock suficiente en el depósito seleccionado.
                                         </p>
                                     </div>
                                     <div class="w-full sm:w-auto">
@@ -635,7 +638,7 @@
                                         <template x-for="row in resumenConsumo" :key="row.id_articulo">
                                             <tr :class="row.insuficiente ? 'text-red-700 dark:text-red-300' : 'text-gray-700 dark:text-gray-300'">
                                                 <td class="py-1 pr-2">
-                                                    <span class="font-medium tabular-nums" x-text="row.codigo_articulo"></span>
+                                                    <span class="font-medium" x-text="row.descripcion_articulo || row.codigo_articulo"></span>
                                                 </td>
                                                 <td class="py-1 text-right tabular-nums font-medium" x-text="row.total"></td>
                                                 <td class="py-1 text-right tabular-nums" x-text="row.saldo != null ? row.saldo : '—'"></td>
@@ -1358,6 +1361,11 @@ function armadoSurtidoForm() {
                 self.packHighlightIndex = -1;
                 return;
             }
+            if (self.modo === '1ra' && !parseInt(self.depositoOrigen, 10)) {
+                self.resultadosPack = [];
+                self.packHighlightIndex = -1;
+                return;
+            }
             if (packSearchTimer) {
                 clearTimeout(packSearchTimer);
             }
@@ -1367,6 +1375,9 @@ function armadoSurtidoForm() {
                     + '?modo=' + encodeURIComponent(self.modo || '1ra')
                     + '&q=' + encodeURIComponent(q)
                     + '&limit=25';
+                if (self.modo === '1ra' && self.depositoOrigen) {
+                    url += '&deposito=' + encodeURIComponent(self.depositoOrigen);
+                }
                 fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
                     .then(function (r) { return r.json(); })
                     .then(function (data) {
@@ -1539,10 +1550,12 @@ function armadoSurtidoForm() {
             this.resultadosBusqueda = [];
             this.compSeleccion = {};
             this.saldosCache = {};
-            this.recalcularResumen();
+            this.resultadosPack = [];
+            this.packHighlightIndex = -1;
             if (this.modo === '1ra' && this.packId) {
-                this.cargarBomPack();
+                this.limpiarPackSeleccion();
             }
+            this.recalcularResumen();
         },
 
         buscarArticulos: function () {
@@ -1961,7 +1974,9 @@ function armadoSurtidoForm() {
                 });
             }
             rows.sort(function (a, b) {
-                return String(a.codigo_articulo).localeCompare(String(b.codigo_articulo));
+                var la = String(a.descripcion_articulo || a.codigo_articulo || '');
+                var lb = String(b.descripcion_articulo || b.codigo_articulo || '');
+                return la.localeCompare(lb);
             });
             this.resumenConsumo = rows;
             if (this.hayStockInsuficiente()) {

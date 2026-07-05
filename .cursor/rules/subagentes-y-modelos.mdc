@@ -1,0 +1,40 @@
+---
+description: Selección de subagentes y modelos según complejidad (eficiencia de tokens)
+alwaysApply: true
+---
+
+# Subagentes y selección de modelos
+
+Cuando la tarea lo permita, **delegar en subagentes** (`Task`, fases SDD, explore/review/CI) en lugar de hacer todo inline. Elegir el **modelo mínimo suficiente** para cumplir la tarea al 100%: ni infrautilizar capacidad ni usar modelos pesados en trabajo trivial.
+
+## Cuándo lanzar subagentes
+
+- **Sí:** exploración amplia, tareas independientes en paralelo, implementación acotada por archivo/módulo, reviews (bugbot/security), fases SDD, comandos shell aislados.
+- **No:** preguntas puntuales, lectura de un archivo, diffs de 1–5 líneas, respuestas que caben en una sola tool call — resolver en el agente principal.
+
+Lanzar **varios subagentes en paralelo** cuando no haya dependencias entre ellos.
+
+## Matriz de modelos (usar el más barato que alcance)
+
+| Complejidad | Ejemplos | Modelo sugerido |
+|-------------|----------|-----------------|
+| **Baja** | grep/glob, inventario de rutas, docs lookup, fixes mecánicos, explore acotado | `composer-2.5-fast`, `claude-4.5-haiku-thinking` |
+| **Media** | implementación multiarchivo, propose/spec SDD, integraciones, tests unitarios | `claude-4.5-sonnet-thinking`, `gpt-5.5-medium` |
+| **Alta** | diseño/arquitectura, refactors grandes, seguridad, debugging profundo, apply SDD P0 | `claude-4.6-sonnet-medium-thinking`, `gpt-5.3-codex` |
+| **Crítica** | decisiones de arquitectura con alto riesgo, revisiones adversariales, cambios transversales | `claude-opus-4-8-thinking-high` (solo si media/alta no alcanza) |
+
+## Reglas obligatorias
+
+1. **Suficiencia:** el modelo elegido debe poder completar la tarea sin atajos; si falla o queda incompleto, escalar un nivel — no repetir con el mismo modelo.
+2. **Eficiencia:** no usar Opus/Codex para tareas de la fila Baja; no usar Haiku/Composer para refactors o specs que exijan razonamiento profundo.
+3. **Paralelismo:** identificar correlativas vs independientes; solo encadenar lo que tenga dependencia real.
+4. **Prompt del subagente:** incluir contexto mínimo necesario (paths, criterios de éxito, restricciones del repo); evitar pegar conversaciones enteras.
+5. **Modelo pedido por el usuario:** respetar el slug solicitado; si no está disponible, informar y ofrecer alternativas de la lista permitida.
+6. **Orquestador SDD:** explore/propose → modelos media/baja; spec/design/apply P0 → media/alta según alcance; verify → media.
+
+## Anti-patrones
+
+- Un solo subagente Opus para todo un change de 12 tareas mecánicas.
+- Hacer inline una exploración de 20+ archivos que un explore en Haiku resolvería.
+- Lanzar subagentes secuenciales cuando las tareas son independientes.
+- Omitir subagentes en `/sdd-new` u orquestación multi-fase cuando el skill lo exige.

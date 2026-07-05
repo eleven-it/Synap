@@ -24,28 +24,17 @@
         {% trans "La ejecución puede tardar minutos en tablas grandes o si otra aplicación tiene abierta la misma tabla." %}
         {% trans "Mientras tanto verás mensajes de avance en pantalla." %}
         {% trans "En el servidor también quedan trazas en el log (p. ej. «legacy_mysql_schema»). Si el navegador cortara la conexión, puede usarse la CLI:" %}
-        <code class="block mt-1 whitespace-pre-wrap break-all bg-white/60 dark:bg-black/30 px-2 py-1 rounded text-[11px]">docker exec Synap_app python manage.py apply_alter_detalle_trazabilidad {{ base_empresa }}</code>
+        <code class="block mt-1 whitespace-pre-wrap break-all bg-white/60 dark:bg-black/30 px-2 py-1 rounded text-[11px]">docker exec Synap_app python manage.py apply_mpr_core_tables {{ base_empresa }}</code>
       </p>
       <p class="mt-3 text-xs leading-relaxed border-t border-amber-200/80 dark:border-amber-800/60 pt-2">
         <span class="font-medium">{% trans "Bloqueo «metadata lock» (pocas filas y aun así no avanza)" %}:</span>
         {% trans "MySQL puede poner en cola los cambios de estructura aunque la tabla tenga pocos registros, si otra sesión (VB6, HeidiSQL, otro Synap, informes) sigue conectada a esa base o dejó una transacción abierta." %}
         {% trans "En SHOW PROCESSLIST suele verse «Waiting for table metadata lock»." %}
-        {% trans "Cierre otras pantallas que usen listas de producción, no ejecute varias migraciones a la vez y, si hace falta, identifique la sesión que retiene el bloqueo con la ayuda del DBA (p. ej. performance_schema.metadata_locks en MySQL 8)." %}
+        {% trans "Cierre otras pantallas que usen la misma base, no ejecute varias migraciones a la vez y, si hace falta, identifique la sesión que retiene el bloqueo con la ayuda del DBA (p. ej. performance_schema.metadata_locks en MySQL 8)." %}
       </p>
     </div>
     {% endif %}
   </div>
-
-  {% if messages %}
-  <ul class="mb-6 space-y-2">
-    {% for message in messages %}
-    <li class="text-sm px-3 py-2 rounded border {% if message.tags == 'success' %}border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-100{% elif message.tags == 'error' %}border-red-200 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-900/30 dark:text-red-100{% else %}border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50{% endif %}">
-      {{ message }}
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-
   {% if last_result and last_result.migrations_applied %}
   <div class="mb-4 text-sm text-gray-700 dark:text-gray-300">
     <span class="font-medium">{% trans "Aplicado:" %}</span>
@@ -191,20 +180,10 @@
       '{% filter escapejs %}{% trans "Así el stock y la reserva se entienden igual en pantalla y en la base." %}{% endfilter %}',
       '{% filter escapejs %}{% trans "Un momento más y queda aplicado." %}{% endfilter %}'
     ],
-    mpr_lista_produccion_agrupada: [
-      '{% filter escapejs %}{% trans "Preparamos la lista resumida de lo que hay que producir." %}{% endfilter %}',
-      '{% filter escapejs %}{% trans "Creamos o completamos la tabla que agrupa la demanda por artículo." %}{% endfilter %}',
-      '{% filter escapejs %}{% trans "Seguimos; es un paso importante para las órdenes de trabajo." %}{% endfilter %}'
-    ],
-    mpr_lista_produccion_detalle: [
-      '{% filter escapejs %}{% trans "Preparamos el detalle por pedido y artículo para producción." %}{% endfilter %}',
-      '{% filter escapejs %}{% trans "Así el botón «Actualizar» y la ventana Pack tienen datos coherentes." %}{% endfilter %}',
-      '{% filter escapejs %}{% trans "Puede tardar si hay muchos pedidos; es normal." %}{% endfilter %}'
-    ],
-    mpr_lista_produccion_trazabilidad: [
-      '{% filter escapejs %}{% trans "Unimos bien el detalle con la lista agrupada de producción." %}{% endfilter %}',
-      '{% filter escapejs %}{% trans "Este paso es delicado: lo hacemos despacio para no perder vínculos." %}{% endfilter %}',
-      '{% filter escapejs %}{% trans "Si tarda varios minutos, suele ser por el tamaño de la tabla o porque otra sesión la está usando." %}{% endfilter %}',
+    mpr_core_tables: [
+      '{% filter escapejs %}{% trans "Preparamos las tablas operativas del módulo de producción (MPR) en MySQL." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Creamos turnos, partes, envíos, transiciones y armado surtido en la base de la empresa." %}{% endfilter %}',
+      '{% filter escapejs %}{% trans "Es idempotente: si una tabla ya existe, no se pierden datos." %}{% endfilter %}',
       '{% filter escapejs %}{% trans "Seguimos; no cierres esta ventana." %}{% endfilter %}'
     ],
     self_checkout_core_tables: [

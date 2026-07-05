@@ -161,6 +161,20 @@ PERMISOS_POR_MODULO = {
             "Operar entregas (pantalla Logística — Entregas)",
         ),
     ],
+    "E-commerce Mayorista": [
+        ("ecom.ver", "Acceder al módulo E-commerce mayorista"),
+        ("ecom.catalogo.ver", "Ver catálogo y lista de precios"),
+        ("ecom.carrito.editar", "Usar carrito y checkout mayorista"),
+        ("ecom.comprobantes.ver", "Ver listados de comprobantes (PED/PRE/REM/FE/NC)"),
+        ("ecom.comprobantes.anular", "Anular pedidos desde el portal"),
+        ("ecom.clientes.ver", "Ver clientes del portal"),
+        ("ecom.clientes.editar", "Editar clientes y domicilios del portal"),
+        ("ecom.ctacte.ver", "Ver cuenta corriente y consumos del portal"),
+        ("ecom.cobranzas.ver", "Ver recibos y cobranzas del portal"),
+        ("ecom.cobranzas.editar", "Registrar recibos e imputaciones"),
+        ("ecom.logistica.ver", "Ver logística operativa del portal"),
+        ("ecom.informes.ver", "Acceder a informes enlazados desde E-commerce"),
+    ],
     "Reportes": [
         ("reports.view_operational", "Informes operativos"),
         ("reports.view_managerial", "Informes gerenciales"),
@@ -287,7 +301,7 @@ ROLES_PREDEFINIDOS = {
         "descripcion": "Gestión completa de operaciones",
         "permisos": [
             "clientes.*", "proveedores.*", "inventory.*", 
-            "sales.*", "purchases.*", "compras.*", "reports.*",
+            "sales.*", "purchases.*", "compras.*", "reports.*", "ecom.*",
             "core.ver_contact", "core.crear_contact", "core.editar_contact",
             "usuarios.ver", "usuarios.editar", "usuarios.perfil",
             "configuracion.general", "configuracion.empresa"
@@ -299,7 +313,10 @@ ROLES_PREDEFINIDOS = {
             "clientes.ver", "clientes.crear", "clientes.editar",
             "ventas.ver", "ventas.crear", "ventas.editar",
             "inventario.ver", "inventario.ver_stock",
-            "reports.ver", "usuarios.perfil"
+            "reports.ver", "usuarios.perfil",
+            "ecom.ver", "ecom.catalogo.ver", "ecom.carrito.editar",
+            "ecom.comprobantes.ver", "ecom.clientes.ver", "ecom.ctacte.ver",
+            "ecom.logistica.ver", "ecom.informes.ver",
         ]
     },
     "Comprador": {

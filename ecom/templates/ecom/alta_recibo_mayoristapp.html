@@ -1,0 +1,198 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} — Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
+  <div class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 opacity-90"></div>
+    <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
+      <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">Cobranzas</p>
+      <h1 class="text-3xl font-semibold text-white">{{ page_title }}</h1>
+      <p class="mt-2 text-sm text-slate-300 max-w-3xl">
+        Cliente: <strong>{{ cliente_nombre }}</strong> (cód. {{ cliente_codigo }}) — Saldo: ${{ cliente_saldo }}
+        <span id="saldo-a-cuenta-label" class="block text-xs text-slate-400 mt-1"></span>
+      </p>
+    </div>
+  </div>
+
+  <div class="relative w-full px-4 sm:px-6 lg:px-12 -mt-6">
+    <div id="alta-recibo-app"
+         class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-6 sm:p-8"
+         data-alta-url="{{ api_alta_accion }}"
+         data-catalogos-url="{{ api_alta_catalogos }}"
+         data-imputar-listado-url="{{ api_imputar_listado }}"
+         data-imputar-accion-url="{{ api_imputar_accion }}"
+         data-id-caja="{{ id_caja_usuario|default:'' }}"
+         data-write-enabled="{{ cobranzas_write_enabled|yesno:'1,0' }}"
+         data-url-recibos="{{ url_recibos }}">
+      {% csrf_token %}
+
+      {% if not cobranzas_write_enabled %}
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 text-amber-900 px-4 py-3 text-sm mb-6" role="alert">
+        La escritura de cobranzas está deshabilitada. Active <em>cobranzas_write_enabled</em> en el módulo ecom.
+      </div>
+      {% endif %}
+
+      <nav class="flex flex-wrap gap-2 mb-8" aria-label="Pasos del recibo">
+        <button type="button" data-step-tab="1" class="step-tab rounded-full px-4 py-1.5 text-xs font-semibold bg-sky-100 text-sky-800">1. Inicio</button>
+        <button type="button" data-step-tab="2" class="step-tab rounded-full px-4 py-1.5 text-xs font-semibold bg-slate-100 text-slate-600">2. Imputación</button>
+        <button type="button" data-step-tab="3" class="step-tab rounded-full px-4 py-1.5 text-xs font-semibold bg-slate-100 text-slate-600">3. Medios</button>
+        <button type="button" data-step-tab="4" class="step-tab rounded-full px-4 py-1.5 text-xs font-semibold bg-slate-100 text-slate-600">4. Confirmar</button>
+      </nav>
+
+      <div data-step-panel="1">
+        <div class="grid gap-4 sm:grid-cols-2 max-w-2xl">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1" for="selectPv">Punto de venta</label>
+            <select id="selectPv" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1" for="selectTipoNro">Numeración</label>
+            <select id="selectTipoNro" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
+              <option value="sistema">Sistema (talonario REC)</option>
+              <option value="talonario">Talonario manual</option>
+            </select>
+          </div>
+          <div id="wrapTalonario" class="hidden sm:col-span-2">
+            <label class="block text-xs font-semibold text-slate-500 mb-1" for="inputNroTalonario">N.º talonario</label>
+            <input type="number" id="inputNroTalonario" min="1" class="w-full max-w-xs rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <button type="button" id="btnIniciarRecibo" class="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold text-white bg-slate-900 disabled:opacity-50" {% if not cobranzas_write_enabled %}disabled{% endif %}>
+          Iniciar recibo
+        </button>
+        <p id="nro-recibo-label" class="mt-3 text-sm font-medium text-slate-700 dark:text-slate-200"></p>
+      </div>
+
+      <div data-step-panel="2" class="hidden">
+        <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
+          <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Facturas a imputar</h2>
+          <div class="flex gap-2 items-center">
+            <label class="text-xs text-slate-500" for="inputDescuentoPct">Desc. %</label>
+            <input type="number" id="inputDescuentoPct" min="0" max="100" step="0.01" class="w-20 rounded-lg border px-2 py-1 text-sm" />
+            <button type="button" id="btnAplicarDescuento" class="text-xs font-semibold text-sky-600">Aplicar</button>
+            <button type="button" id="btnCargarFacturas" class="text-sm font-semibold text-sky-600">Actualizar</button>
+          </div>
+        </div>
+        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-800 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th class="px-3 py-2">Factura</th>
+                <th class="px-3 py-2">Saldo</th>
+                <th class="px-3 py-2">A imputar</th>
+                <th class="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody id="facturas-tbody" class="divide-y divide-slate-100 dark:divide-slate-800"></tbody>
+          </table>
+        </div>
+        <p id="total-imputado-label" class="mt-4 text-sm font-semibold text-slate-700 dark:text-slate-200"></p>
+        <button type="button" id="btnFinImputacion" class="mt-3 rounded-full px-5 py-2 text-sm font-semibold text-white bg-sky-600">Continuar a medios</button>
+      </div>
+
+      <div data-step-panel="3" class="hidden space-y-8">
+        <section>
+          <h2 class="text-base font-semibold text-slate-800 mb-2">Efectivo</h2>
+          <div class="flex flex-wrap gap-3 items-end">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1" for="inputEfectivoPesos">Pesos</label>
+              <input type="number" step="0.01" min="0" id="inputEfectivoPesos" class="w-36 rounded-xl border px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs text-slate-500 mb-1" for="inputEfectivoDolar">Dólares</label>
+              <input type="number" step="0.01" min="0" id="inputEfectivoDolar" class="w-36 rounded-xl border px-3 py-2 text-sm" />
+            </div>
+            <span id="coti-dolar-label" class="text-xs text-slate-500"></span>
+            <button type="button" id="btnGuardarEfectivo" class="rounded-full px-4 py-2 text-sm font-semibold text-white bg-slate-900">Registrar</button>
+          </div>
+          <p id="total-efectivo-label" class="mt-2 text-sm text-slate-600"></p>
+        </section>
+
+        <section>
+          <h2 class="text-base font-semibold text-slate-800 mb-2">Cheques</h2>
+          <div class="grid gap-2 sm:grid-cols-3 max-w-4xl">
+            <input type="text" id="chNumero" placeholder="N.º cheque" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="number" id="chImporte" step="0.01" placeholder="Importe" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="text" id="chLibrador" placeholder="Librador" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="text" id="chBanco" placeholder="Banco" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="date" id="chCobro" class="rounded-xl border px-3 py-2 text-sm" />
+            <button type="button" id="btnAgregarCheque" class="rounded-full px-4 py-2 text-sm font-semibold bg-sky-600 text-white">Agregar cheque</button>
+          </div>
+          <ul id="lista-cheques" class="mt-3 text-sm text-slate-600 space-y-1"></ul>
+        </section>
+
+        <section>
+          <h2 class="text-base font-semibold text-slate-800 mb-2">Transferencia bancaria</h2>
+          <div class="grid gap-2 sm:grid-cols-3 max-w-4xl">
+            <select id="selectCuentaBancaria" class="rounded-xl border px-3 py-2 text-sm sm:col-span-2"></select>
+            <input type="text" id="trNro" placeholder="N.º referencia" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="date" id="trFecha" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="number" id="trImporte" step="0.01" placeholder="Importe" class="rounded-xl border px-3 py-2 text-sm" />
+            <button type="button" id="btnAgregarTransferencia" class="rounded-full px-4 py-2 text-sm font-semibold bg-sky-600 text-white">Agregar</button>
+          </div>
+          <ul id="lista-transferencias" class="mt-3 text-sm text-slate-600 space-y-1"></ul>
+        </section>
+
+        <section>
+          <h2 class="text-base font-semibold text-slate-800 mb-2">Tarjeta</h2>
+          <div class="grid gap-2 sm:grid-cols-3 max-w-4xl">
+            <select id="selectTarjeta" class="rounded-xl border px-3 py-2 text-sm"></select>
+            <select id="selectPlanTarjeta" class="rounded-xl border px-3 py-2 text-sm"></select>
+            <input type="text" id="tjNumero" placeholder="N.º tarjeta" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="number" id="tjImporte" step="0.01" placeholder="Importe" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="text" id="tjCupon" placeholder="Cupón" class="rounded-xl border px-3 py-2 text-sm" />
+            <button type="button" id="btnAgregarTarjeta" class="rounded-full px-4 py-2 text-sm font-semibold bg-sky-600 text-white">Agregar</button>
+          </div>
+          <ul id="lista-tarjetas" class="mt-3 text-sm text-slate-600 space-y-1"></ul>
+        </section>
+
+        <section>
+          <h2 class="text-base font-semibold text-slate-800 mb-2">Saldo a favor (a cuenta)</h2>
+          <p id="saldo-favor-disponible" class="text-xs text-slate-500 mb-2"></p>
+          <div class="flex flex-wrap gap-3 items-end max-w-xl">
+            <div>
+              <label class="block text-xs text-slate-500 mb-1" for="inputSaldoAFavor">Monto a aplicar</label>
+              <input type="number" step="0.01" min="0" id="inputSaldoAFavor" class="w-40 rounded-xl border px-3 py-2 text-sm" />
+            </div>
+            <button type="button" id="btnAplicarSaldoAFavor" class="rounded-full px-4 py-2 text-sm font-semibold bg-emerald-600 text-white">Aplicar saldo</button>
+            <button type="button" id="btnQuitarSaldoAFavor" class="rounded-full px-4 py-2 text-sm font-semibold text-slate-600 bg-slate-100">Quitar</button>
+          </div>
+          <p id="saldo-favor-aplicado-label" class="mt-2 text-sm text-slate-600"></p>
+        </section>
+
+        <section>
+          <h2 class="text-base font-semibold text-slate-800 mb-2">Retenciones</h2>
+          <div class="grid gap-2 sm:grid-cols-3 max-w-4xl">
+            <select id="selectRetencion" class="rounded-xl border px-3 py-2 text-sm"></select>
+            <input type="text" id="retCertificado" placeholder="Certificado" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="number" id="retMonto" step="0.01" placeholder="Monto" class="rounded-xl border px-3 py-2 text-sm" />
+            <input type="date" id="retFecha" class="rounded-xl border px-3 py-2 text-sm" />
+            <button type="button" id="btnAgregarRetencion" class="rounded-full px-4 py-2 text-sm font-semibold bg-sky-600 text-white">Agregar</button>
+          </div>
+          <ul id="lista-retenciones" class="mt-3 text-sm text-slate-600 space-y-1"></ul>
+        </section>
+
+        <button type="button" id="btnIrResumen" class="rounded-full px-5 py-2 text-sm font-semibold text-white bg-sky-600">Ver resumen</button>
+      </div>
+
+      <div data-step-panel="4" class="hidden">
+        <div id="resumen-recibo" class="rounded-2xl bg-slate-50 dark:bg-slate-800 p-4 text-sm space-y-2 mb-4"></div>
+        <p id="control-final-msg" class="text-sm mb-4"></p>
+        <div class="flex flex-wrap gap-3">
+          <button type="button" id="btnGuardarRecibo" class="rounded-full px-6 py-2.5 text-sm font-semibold text-white bg-emerald-600 disabled:opacity-50" {% if not cobranzas_write_enabled %}disabled{% endif %}>Guardar recibo</button>
+          <button type="button" id="btnCancelarRecibo" class="rounded-full px-6 py-2.5 text-sm font-semibold text-rose-700 bg-rose-50 border border-rose-200">Cancelar</button>
+        </div>
+      </div>
+
+      <p id="alta-recibo-status" class="mt-6 text-xs text-slate-500" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'ecom/js/alta_recibo_mayoristapp.js' %}"></script>
+{% endblock %}

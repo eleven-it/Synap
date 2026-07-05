@@ -9,7 +9,7 @@
         <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4 sm:text-sm" aria-label="Migas de pan">
             <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <li>
-                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a>
+                    <a href="{% url 'mpr:tablero_produccion' %}" class="rounded font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a>
                 </li>
                 <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
                 <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Imputación de pedido</span></li>
@@ -20,35 +20,23 @@
             <div class="min-w-0 max-w-3xl">
                 <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl">Imputación de pedido</h1>
                 <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                    Asigne producción armada (Armado 1ra) a pedidos con demanda abierta. Los movimientos de Armado 2da no aparecen aquí.
+                    Asigne producción armada (Armado 1ra) a pedidos PED con demanda abierta. La asignación FIFO usa la cantidad pedida en vivo menos lo ya imputado. Los movimientos de Armado 2da no aparecen aquí.
                 </p>
                 <p class="mt-1 text-sm tabular-nums text-purple-700 dark:text-purple-300">
                     {{ total_pendientes }} MSTOCK pendiente{{ total_pendientes|pluralize:"s" }} de imputar
                 </p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
-                <a href="{% url 'mpr:opt_list' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900">
-                    <span class="material-icons text-lg text-slate-500 dark:text-slate-400" aria-hidden="true">list_alt</span>
-                    Lista de OPTs
+                <a href="{% url 'mpr:armado' %}?modo=1ra" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900">
+                    <span class="material-icons text-lg text-slate-500 dark:text-slate-400" aria-hidden="true">inventory_2</span>
+                    Armado 1ra
                 </a>
-                <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900">
+                <a href="{% url 'mpr:tablero_produccion' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900">
                     <span class="material-icons text-lg text-slate-500 dark:text-slate-400" aria-hidden="true">dashboard</span>
-                    Tablero
+                    Tablero de producción
                 </a>
             </div>
         </header>
-
-        {% if messages %}
-        {% for message in messages %}
-        <div class="mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm shadow-sm {% if message.tags == 'error' %}border-red-200 bg-red-500/10 text-red-800 dark:border-red-800 dark:bg-red-500/20 dark:text-red-200{% elif message.tags == 'success' %}border-emerald-200 bg-emerald-500/10 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200{% else %}border-amber-200 bg-amber-500/10 text-amber-900 dark:border-amber-800 dark:bg-amber-500/20 dark:text-amber-200{% endif %}" role="alert">
-            <span>{{ message }}</span>
-            <button type="button" onclick="this.closest('[role=alert]').remove()" class="shrink-0 rounded-lg p-1 transition-colors hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:hover:bg-white/5" aria-label="Cerrar">
-                <span class="material-icons text-lg">close</span>
-            </button>
-        </div>
-        {% endfor %}
-        {% endif %}
-
         {% if filtrado_por_lote %}
         <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-purple-200/80 bg-purple-50/60 px-4 py-3 text-sm dark:border-purple-900/40 dark:bg-purple-950/20">
             <p class="text-slate-700 dark:text-slate-300">Mostrando MSTOCK del lote recién ejecutado.</p>
@@ -197,8 +185,7 @@
             <p class="text-sm text-slate-600 dark:text-slate-400">No hay MSTOCK de Armado 1ra pendientes de imputar.</p>
             <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <a href="{% url 'mpr:armado' %}?modo=1ra" class="inline-flex min-h-10 items-center rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Ir a Armado 1ra</a>
-                <a href="{% url 'mpr:opt_list' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Lista de OPTs</a>
-                <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Tablero</a>
+                <a href="{% url 'mpr:tablero_produccion' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Tablero de producción</a>
             </div>
             {% endif %}
         </div>

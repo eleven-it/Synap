@@ -19,6 +19,7 @@ SKIP_MODULES_IN_MAIN_URLS = frozenset(
         "logistica",
         "tiendanube_administranet",
         "mpr",
+        "ecom",
     )
 )
 

@@ -1,0 +1,271 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}{{ titulo_pantalla }} — MPR — Synap{% endblock %}
+
+{% block content %}
+<section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
+    <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col gap-2 px-3 sm:gap-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12"
+         x-data="{
+            seleccionados: [],
+            expandidos: {},
+            modalAnularOpen: false,
+            modalAnularEmpty: false,
+            modalAnularCount: 0,
+            toggleLote(key) { this.expandidos[key] = !this.expandidos[key]; },
+            estaExpandido(key) { return !!this.expandidos[key]; },
+            toggleSeleccion(id, checked) {
+                const s = String(id);
+                if (checked) {
+                    if (!this.seleccionados.includes(s)) this.seleccionados.push(s);
+                } else {
+                    this.seleccionados = this.seleccionados.filter(x => x !== s);
+                }
+            },
+            solicitarAnulacion() {
+                const n = this.seleccionados.length;
+                this.modalAnularEmpty = n === 0;
+                this.modalAnularCount = n;
+                this.modalAnularOpen = true;
+            },
+            confirmarAnulacion() {
+                const form = document.getElementById('form-anular-envios');
+                if (form) form.requestSubmit();
+                this.modalAnularOpen = false;
+            }
+         }">
+
+        <nav class="mb-0 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'mpr:tablero_produccion' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Producción</a></li>
+                <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">{{ titulo_pantalla }}</span></li>
+            </ol>
+        </nav>
+
+        <div class="rounded-lg border border-slate-700 bg-slate-800 p-2 shadow-md dark:border-slate-800 dark:bg-slate-900 sm:p-3">
+            <header class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
+                <div>
+                    <h1 class="flex min-w-0 items-center gap-2 text-lg font-bold tracking-tight text-white sm:text-xl">
+                        <span class="material-icons shrink-0 text-2xl text-red-400" aria-hidden="true">undo</span>
+                        {{ titulo_pantalla }}
+                    </h1>
+                    <p class="mt-1 max-w-2xl text-xs text-slate-400">
+                        Elija la fecha del envío, abra cada lote y seleccione las líneas a anular.
+                        No revierte stock físico en depósitos.
+                    </p>
+                </div>
+                <a href="{% url 'mpr:tablero_produccion' %}"
+                   class="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                    <span class="material-icons text-base" aria-hidden="true">dashboard</span>
+                    Tablero
+                </a>
+            </header>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-4">
+            <form method="get" action="" class="flex flex-wrap items-end gap-3">
+                <label class="flex flex-col gap-0.5">
+                    <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Fecha del envío</span>
+                    <input type="date" name="fecha" value="{{ fecha }}" required
+                           class="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-800 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 dark:border-slate-600 dark:bg-slate-700 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"/>
+                </label>
+                <label class="inline-flex min-h-8 cursor-pointer items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                    <input type="checkbox" name="incluir_anulados" value="1" {% if incluir_anulados %}checked{% endif %}
+                           class="rounded border-slate-300 text-purple-600 focus:ring-purple-500 dark:border-slate-600"/>
+                    Incluir ya anulados
+                </label>
+                <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500">
+                    <span class="material-icons text-base" aria-hidden="true">search</span>
+                    Buscar lotes
+                </button>
+            </form>
+        </div>
+
+        {% if not lotes %}
+        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <span class="material-icons mb-2 text-4xl text-slate-300 dark:text-slate-600" aria-hidden="true">inventory_2</span>
+            <p class="text-sm font-medium text-slate-600 dark:text-slate-400">
+                No hay envíos registrados en la fecha seleccionada.
+            </p>
+            <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                Cambie la fecha o verifique que existan envíos desde el tablero de producción.
+            </p>
+        </div>
+        {% else %}
+        <form id="form-anular-envios"
+              method="post" action="{% url 'mpr:envios_produccion_anular' %}"
+              class="mpr-post-loading flex flex-col gap-2 sm:gap-3"
+              data-mpr-loading-title="Anulando envíos"
+              data-mpr-loading-subtitle="Actualizando ledger del tablero…">
+            {% csrf_token %}
+            <input type="hidden" name="fecha" value="{{ fecha }}"/>
+            {% if incluir_anulados %}<input type="hidden" name="incluir_anulados" value="1"/>{% endif %}
+
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+                {{ lotes|length }} lote{{ lotes|length|pluralize:"s" }} en la fecha {{ fecha_etiqueta }}.
+                Haga clic en un lote para ver sus líneas.
+            </p>
+
+            <div class="flex flex-col gap-2">
+                {% for lote in lotes %}
+                <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                     {% if lote.todo_anulado %}data-anulado="1"{% endif %}>
+                    <button type="button"
+                            class="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-700/40 sm:px-4"
+                            @click="toggleLote('{{ lote.lote_key|escapejs }}')"
+                            :aria-expanded="estaExpandido('{{ lote.lote_key|escapejs }}')">
+                        <span class="material-icons text-slate-400 transition-transform"
+                              :class="estaExpandido('{{ lote.lote_key|escapejs }}') ? 'rotate-180' : ''"
+                              aria-hidden="true">expand_more</span>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                <span class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                    {{ lote.creado_en|date:"d/m/Y H:i:s" }}
+                                </span>
+                                <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                                    Usuario #{{ lote.id_usuario }}
+                                </span>
+                                {% if lote.uuid_lote %}
+                                <span class="font-mono text-[10px] text-slate-400" title="UUID lote">{{ lote.uuid_lote|slice:":8" }}…</span>
+                                {% endif %}
+                            </div>
+                            <div class="mt-0.5 flex flex-wrap gap-2 text-[11px]">
+                                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-700 dark:text-slate-300">{{ lote.n_lineas }} línea{{ lote.n_lineas|pluralize:"s" }}</span>
+                                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 dark:bg-slate-700 dark:text-slate-300">{{ lote.total_cantidad }} u. total</span>
+                                {% if lote.n_anulables %}
+                                <span class="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">{{ lote.n_anulables }} anulable{{ lote.n_anulables|pluralize:"s" }}</span>
+                                {% endif %}
+                                {% if lote.todo_anulado %}
+                                <span class="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-600 dark:text-slate-300">Anulado</span>
+                                {% elif lote.alguno_anulado %}
+                                <span class="rounded-full bg-amber-100 px-2 py-0.5 font-medium text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">Parcialmente anulado</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </button>
+
+                    <div x-show="estaExpandido('{{ lote.lote_key|escapejs }}')" x-cloak
+                         class="border-t border-slate-100 dark:border-slate-700">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-100 text-xs dark:divide-slate-700">
+                                <thead class="bg-slate-50/80 dark:bg-slate-800/50">
+                                    <tr>
+                                        <th scope="col" class="w-10 px-3 py-2"></th>
+                                        <th scope="col" class="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-300">#</th>
+                                        <th scope="col" class="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-300">Artículo</th>
+                                        <th scope="col" class="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300">Cantidad</th>
+                                        <th scope="col" class="px-3 py-2 text-right font-semibold text-slate-600 dark:text-slate-300">Saldo anulable</th>
+                                        <th scope="col" class="px-3 py-2 text-left font-semibold text-slate-600 dark:text-slate-300">Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-50 dark:divide-slate-700/80">
+                                    {% for fila in lote.lineas %}
+                                    <tr class="{% if fila.anulado %}opacity-60{% elif fila.anulable %}bg-emerald-50/30 dark:bg-emerald-900/5{% endif %}">
+                                        <td class="px-3 py-2 align-middle">
+                                            {% if fila.anulable %}
+                                            <input type="checkbox" name="envio_ids" value="{{ fila.id_mpr_envio_produccion }}"
+                                                   class="rounded border-slate-300 text-red-600 focus:ring-red-500 dark:border-slate-600"
+                                                   @change="toggleSeleccion('{{ fila.id_mpr_envio_produccion }}', $event.target.checked)"/>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-3 py-2 font-mono text-slate-700 dark:text-slate-200">{{ fila.id_mpr_envio_produccion }}</td>
+                                        <td class="px-3 py-2">
+                                            <span class="font-medium text-slate-800 dark:text-slate-100">{{ fila.codigo_articulo }}</span>
+                                            <span class="block max-w-xs truncate text-[11px] text-slate-500 dark:text-slate-400" title="{{ fila.descripcion_articulo }}">{{ fila.descripcion_articulo }}</span>
+                                        </td>
+                                        <td class="px-3 py-2 text-right tabular-nums">{{ fila.cantidad }}</td>
+                                        <td class="px-3 py-2 text-right tabular-nums {% if fila.anulable %}text-emerald-700 dark:text-emerald-400{% else %}text-slate-500{% endif %}">{{ fila.saldo_anulable }}</td>
+                                        <td class="px-3 py-2">
+                                            {% if fila.anulado %}
+                                            <span class="text-[10px] font-semibold text-slate-500">Anulado{% if fila.anulado_en %} · {{ fila.anulado_en|date:"d/m/Y H:i" }}{% endif %}</span>
+                                            {% elif fila.anulable %}
+                                            <span class="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">Anulable</span>
+                                            {% else %}
+                                            <span class="text-[10px] font-semibold text-amber-800 dark:text-amber-300" title="{{ fila.motivo_no_anulable }}">{{ fila.motivo_no_anulable|default:"No anulable" }}</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:px-4">
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    La anulación ajusta Pendiente y Fabricando del tablero.
+                </p>
+                <button type="button"
+                        @click="solicitarAnulacion()"
+                        class="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
+                    <span class="material-icons text-base" aria-hidden="true">delete_outline</span>
+                    Anular seleccionados
+                </button>
+            </div>
+        </form>
+
+        {# Modal Synap — confirmación de anulación (reemplaza window.confirm/alert) #}
+        <div x-show="modalAnularOpen"
+             x-cloak
+             class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+             role="dialog"
+             aria-modal="true"
+             :aria-labelledby="modalAnularEmpty ? 'modal-anular-vacio-title' : 'modal-anular-title'"
+             @keydown.escape.window="modalAnularOpen = false"
+             @click.self="modalAnularOpen = false"
+             x-transition.opacity>
+            <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-600 dark:bg-slate-800"
+                 @click.stop>
+                <template x-if="modalAnularEmpty">
+                    <div>
+                        <div class="mb-3 flex items-center gap-2">
+                            <span class="material-icons text-amber-500" aria-hidden="true">warning_amber</span>
+                            <h3 id="modal-anular-vacio-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Sin envíos seleccionados</h3>
+                        </div>
+                        <p class="mb-5 text-xs text-slate-500 dark:text-slate-400">
+                            Seleccione al menos un envío anulable antes de continuar.
+                        </p>
+                        <div class="flex justify-end">
+                            <button type="button" @click="modalAnularOpen = false"
+                                    class="rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:bg-red-700 dark:hover:bg-red-600">
+                                Entendido
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="!modalAnularEmpty">
+                    <div>
+                        <div class="mb-1 flex items-center gap-2">
+                            <span class="material-icons text-red-500" aria-hidden="true">delete_outline</span>
+                            <h3 id="modal-anular-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Anular envíos seleccionados</h3>
+                        </div>
+                        <p class="mb-5 text-xs text-slate-500 dark:text-slate-400">
+                            ¿Confirma anular
+                            <strong x-text="modalAnularCount"></strong>
+                            <span x-text="modalAnularCount === 1 ? ' línea' : ' líneas'"></span>?
+                            No revierte stock físico en depósitos; solo ajusta el ledger del tablero.
+                        </p>
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="modalAnularOpen = false"
+                                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+                                Cancelar
+                            </button>
+                            <button type="button" @click="confirmarAnulacion()"
+                                    class="inline-flex items-center gap-1 rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:bg-red-700 dark:hover:bg-red-600">
+                                <span class="material-icons text-sm" aria-hidden="true">check</span>
+                                Confirmar anulación
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+<style>[x-cloak]{display:none!important}</style>
+{% endblock %}

@@ -109,25 +109,57 @@ class TestReporteMprBrechaDemanda(TestCase):
             if "cantidad_a_fabricar" in item:
                 self.assertGreaterEqual(item["cantidad_a_fabricar"], 0)
 
+    def test_pasa_fechas_a_listar_demanda(self):
+        with patch(
+            "mpr.services.listar_demanda_pack_desde_pedidos",
+            return_value=[],
+        ) as mock_listar:
+            mpr_services.reporte_mpr_brecha_demanda(
+                "empresa92",
+                fecha_desde="2026-06-29",
+                fecha_hasta="2026-07-05",
+            )
+        mock_listar.assert_called_once()
+        _, kwargs = mock_listar.call_args
+        self.assertEqual(kwargs.get("fecha_desde"), "2026-06-29")
+        self.assertEqual(kwargs.get("fecha_hasta"), "2026-07-05")
+
 
 # --- Movimientos de producción ---
 
 
 class TestReporteMprMovimientos(TestCase):
-    """ESPEC_MPR_MOVIMIENTOS_PRODUCCION: reporte_mpr_movimientos(base_empresa, limit=200)."""
+    """ESPEC_MPR_MOVIMIENTOS_PRODUCCION: ledgers mpr_* (sin lista_produccion ni MSTOCK legacy)."""
 
     def test_base_empresa_vacia_retorna_lista_vacia(self):
         self.assertEqual(mpr_services.reporte_mpr_movimientos(""), [])
         self.assertEqual(mpr_services.reporte_mpr_movimientos(None, limit=50), [])
 
-    def test_cada_fila_tiene_fecha_tipo_mov_codigo_movimiento(self):
-        result = mpr_services.reporte_mpr_movimientos("empresa92", limit=50)
-        self.assertIsInstance(result, list)
-        for item in result:
-            self.assertIn("fecha", item)
-            self.assertIn("tipo_mov", item)
-            self.assertIn("codigo_movimiento", item)
-        self.assertLessEqual(len(result), 200)
+    def test_cada_fila_tiene_campos_ledgers(self):
+        mock_eventos = [{
+            "tipo": "parte",
+            "tipo_label": "Parte de producción",
+            "fecha_sort": "2026-07-04 10:00:00",
+            "fecha_display": "04/07/2026 10:00",
+            "cantidad": 12,
+            "id_articulo": 1275,
+            "detalle": "Parte #1",
+            "operario": "Juan",
+        }]
+        with patch("mpr.services._recolectar_eventos_ledgers_mpr", return_value=mock_eventos):
+            with patch(
+                "mpr.services._fetch_descripciones_articulo",
+                return_value={1275: ("COMP01", "Componente prueba")},
+            ):
+                result = mpr_services.reporte_mpr_movimientos(
+                    "empresa92", fecha_desde="2026-07-04", fecha_hasta="2026-07-04", limit=50
+                )
+        self.assertEqual(len(result), 1)
+        fila = result[0]
+        self.assertEqual(fila["tipo_mov"], "Parte de producción")
+        self.assertEqual(fila["codigo_articulo"], "COMP01")
+        self.assertEqual(fila["cantidad"], 12)
+        self.assertEqual(fila["operario"], "Juan")
 
 
 # --- Desperdicio / Scrap ---
@@ -151,47 +183,3 @@ class TestReporteMprDesperdicio(TestCase):
         for item in result:
             self.assertIn("articulo", item)
             self.assertIn("cantidad_desperdicio", item)
-
-
-# --- Producción por operario ---
-
-
-class TestReporteMprProduccionPorOperario(TestCase):
-    """ESPEC_MPR_PRODUCCION_OPERARIO: reporte_mpr_produccion_por_operario(base_empresa, fecha_desde, fecha_hasta)."""
-
-    def test_base_empresa_vacia_retorna_lista_vacia(self):
-        self.assertEqual(mpr_services.reporte_mpr_produccion_por_operario(""), [])
-        self.assertEqual(mpr_services.reporte_mpr_produccion_por_operario(None, fecha_desde="2025-01-01"), [])
-
-    def test_retorna_lista_con_nro_opt_asignadas(self):
-        result = mpr_services.reporte_mpr_produccion_por_operario(
-            "empresa92",
-            fecha_desde="2025-01-01",
-            fecha_hasta="2025-12-31",
-        )
-        self.assertIsInstance(result, list)
-        for item in result:
-            self.assertIn("nro_opt_asignadas", item)
-            self.assertIn("operario", item)
-
-
-# --- OPT cerradas ---
-
-
-class TestReporteMprOptCerradas(TestCase):
-    """ESPEC_MPR_OPT_CERRADAS: reporte_mpr_opt_cerradas(base_empresa, fecha_desde, fecha_hasta)."""
-
-    def test_base_empresa_vacia_retorna_lista_vacia(self):
-        self.assertEqual(mpr_services.reporte_mpr_opt_cerradas(""), [])
-        self.assertEqual(mpr_services.reporte_mpr_opt_cerradas(None), [])
-
-    def test_retorna_lista_con_id_lista_principal_y_cantidad(self):
-        result = mpr_services.reporte_mpr_opt_cerradas(
-            "empresa92",
-            fecha_desde="2025-01-01",
-            fecha_hasta="2025-12-31",
-        )
-        self.assertIsInstance(result, list)
-        for item in result:
-            self.assertIn("id_opt", item)
-            self.assertIn("cantidad_total", item)

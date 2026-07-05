@@ -5,17 +5,6 @@
 <div class="max-w-7xl mx-auto" x-data="{ menuAbierto: null }">
   <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-2">Facturas de Compra / Notas de Crédito / Notas de Débito / Órdenes de Pago</h1>
   <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">Seleccione un proveedor y elija la acción. Las validaciones (CAI, OC, bloqueo OP) se aplican igual que en AdministraNET.</p>
-
-  {% if messages %}
-  <ul class="mb-4">
-    {% for message in messages %}
-    <li class="p-4 rounded-lg {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300{% endif %}">
-      {{ message }}
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-
   <form method="get" action="{% url 'compras:hub_comprobantes' %}" class="mb-6 p-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
     <input type="hidden" name="page" value="1">
     <div class="flex flex-wrap items-end gap-4">

@@ -497,6 +497,14 @@ CDN_CACHE_HEADERS = {
 # Reports cache - desactivado para que los datos se refresquen inmediatamente
 REPORTS_CACHE_ENABLED = config('REPORTS_CACHE_ENABLED', default=False, cast=bool)
 
+# Export lista de precios PDF (ecom mayorista, Fase P3) — umbrales/guardrails.
+# Defaults = paridad legacy exporta_lista_pdf.php (ver docs/general/RUNBOOK_EXPORTACION_PDF.md).
+# Re-medir LP_PDF_MAX_SECONDS* en el entorno objetivo (reportlab != mPDF).
+LP_PDF_MAX_ITEMS = config('LP_PDF_MAX_ITEMS', default=2500, cast=int)
+LP_PDF_MAX_ITEMS_CON_IMAGEN = config('LP_PDF_MAX_ITEMS_CON_IMAGEN', default=1800, cast=int)
+LP_PDF_MAX_SECONDS = config('LP_PDF_MAX_SECONDS', default=90, cast=int)
+LP_PDF_MAX_SECONDS_CON_IMAGEN = config('LP_PDF_MAX_SECONDS_CON_IMAGEN', default=180, cast=int)
+
 # Celery Configuration - ELIMINADO (No necesario para Reportes básico)
 # CELERY_BROKER_URL = "redis://localhost:6379/0"
 # CELERY_RESULT_BACKEND = "redis://localhost:6379/0"

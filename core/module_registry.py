@@ -403,5 +403,42 @@ MODULE_CONFIGS = {
         ],
         'hooks': [],
     },
+
+    'ecom': {
+        'name': 'ecom',
+        'display_name': 'E-commerce Mayorista',
+        'description': (
+            'Portal mayoristapp: catálogo, carrito, checkout, comprobantes y APIs '
+            'sobre AdministraNET (MySQL legacy).'
+        ),
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core', 'dashboard'],
+        'optional_dependencies': ['reports', 'logistica'],
+        'settings': {
+            'lp_pdf_max_items': 2500,
+            'lp_pdf_max_items_con_imagen': 1800,
+            'fe_write_enabled': False,
+            'cobranzas_write_enabled': False,
+        },
+        'permissions': [
+            'ecom.ver',
+            'ecom.catalogo.ver',
+            'ecom.carrito.editar',
+            'ecom.comprobantes.ver',
+            'ecom.comprobantes.anular',
+            'ecom.clientes.ver',
+            'ecom.clientes.editar',
+            'ecom.ctacte.ver',
+            'ecom.cobranzas.ver',
+            'ecom.cobranzas.editar',
+            'ecom.logistica.ver',
+            'ecom.informes.ver',
+            'ecom.*',
+        ],
+        'hooks': [],
+    },
     # self_checkout: app core (siempre instalada), URLs en django_project/urls.py, permisos en PERMISOS_POR_MODULO + sync.
 } 

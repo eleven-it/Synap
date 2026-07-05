@@ -1,0 +1,328 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} - Synap{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cob-bar-track { background: rgba(148,163,184,0.20); border-radius: 9999px; overflow: hidden; }
+  .cob-bar-fill { height: 100%; border-radius: 9999px; transition: width .4s ease; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-8"
+     data-api-url="{{ cobranzas_api_url }}"
+     data-scope="{{ cobranzas_scope }}"
+     id="cob-root">
+
+  <!-- Encabezado -->
+  <div class="mb-6">
+    <nav class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+      <a href="{% url 'reports:catalog' %}" class="hover:text-sky-600">Reportes</a>
+      <span class="mx-1">/</span>
+      <span class="text-slate-700 dark:text-slate-200">{{ report.name }}</span>
+    </nav>
+    <h1 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">{{ report.name }}</h1>
+    {% if report.description %}
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ report.description }}</p>
+    {% endif %}
+  </div>
+
+  <!-- Filtros -->
+  <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 sm:p-5 mb-6">
+    <div class="flex flex-col gap-4">
+      {% include "reports/includes/filters_period.html" %}
+
+      <div class="flex flex-wrap items-end gap-4">
+        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0 min-w-[240px]" id="cob-vendedor-wrap">
+          Vendedor
+          <select id="cob-vendedor"
+                  class="synap-input px-3 py-1.5 text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
+            <option value="">Todos los vendedores</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 flex-shrink-0 min-w-[160px]">
+          Período
+          <select id="cob-modo"
+                  class="synap-input px-3 py-1.5 text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 focus:border-sky-400">
+            <option value="mes" selected>Mensual</option>
+            <option value="totalizado">Totalizado</option>
+          </select>
+        </label>
+
+        <button type="button" id="cob-generar"
+                class="ml-auto inline-flex items-center gap-2 px-4 py-2 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-sm transition-all">
+          <span class="material-icons text-sm">query_stats</span>
+          Generar informe
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado / mensajes -->
+  <div id="cob-msg" class="hidden mb-4 text-sm rounded-xl px-4 py-3"></div>
+
+  <!-- Tarjetas resumen (totales generales) -->
+  <div id="cob-resumen" class="hidden mb-6 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="text-xs text-slate-500 dark:text-slate-400">Efectivo</div>
+      <div id="cob-t-efectivo" class="text-lg font-bold text-slate-800 dark:text-slate-100">$0,00</div>
+    </div>
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="text-xs text-slate-500 dark:text-slate-400">Dólares</div>
+      <div id="cob-t-dolar" class="text-lg font-bold text-slate-800 dark:text-slate-100">$0,00</div>
+    </div>
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="text-xs text-slate-500 dark:text-slate-400">Cheques</div>
+      <div id="cob-t-cheque" class="text-lg font-bold text-slate-800 dark:text-slate-100">$0,00</div>
+    </div>
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="text-xs text-slate-500 dark:text-slate-400">Transferencias</div>
+      <div id="cob-t-transferencia" class="text-lg font-bold text-slate-800 dark:text-slate-100">$0,00</div>
+    </div>
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="text-xs text-slate-500 dark:text-slate-400">Percepciones</div>
+      <div id="cob-t-percepcion" class="text-lg font-bold text-slate-800 dark:text-slate-100">$0,00</div>
+    </div>
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 p-4">
+      <div class="text-xs text-emerald-600 dark:text-emerald-400">Total general</div>
+      <div id="cob-t-total" class="text-lg font-bold text-emerald-600 dark:text-emerald-400">$0,00</div>
+    </div>
+  </div>
+
+  <!-- Gráfico por período (Total) -->
+  <div id="cob-grafico-card" class="hidden mb-6 bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+    <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-3">Total cobrado por período</div>
+    <div id="cob-grafico" class="flex flex-col gap-3"></div>
+  </div>
+
+  <!-- Tabla -->
+  <div id="cob-tabla-card" class="hidden bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+    <div class="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-slate-200 dark:border-slate-700">
+      <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+        Cobranzas por período <span id="cob-total-count" class="text-slate-400 font-normal"></span>
+      </div>
+      <input type="search" id="cob-buscar" placeholder="Buscar período…"
+             class="synap-input px-3 py-1.5 text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 min-w-[220px]">
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400">
+          <tr id="cob-thead"></tr>
+        </thead>
+        <tbody id="cob-tbody" class="divide-y divide-slate-100 dark:divide-slate-700/60"></tbody>
+        <tfoot class="bg-slate-50 dark:bg-slate-900/40 font-semibold text-slate-700 dark:text-slate-200">
+          <tr id="cob-tfoot"></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- Placeholder inicial -->
+  <div id="cob-placeholder" class="text-center text-slate-400 dark:text-slate-500 py-16">
+    <span class="material-icons text-4xl mb-2 block">payments</span>
+    Elegí el período y presioná <strong>Generar informe</strong>.
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("cob-root");
+  if (!root) return;
+  var API_URL = root.getAttribute("data-api-url");
+  var SCOPE = root.getAttribute("data-scope");
+
+  var elGenerar = document.getElementById("cob-generar");
+  var elVendedor = document.getElementById("cob-vendedor");
+  var elVendedorWrap = document.getElementById("cob-vendedor-wrap");
+  var elModo = document.getElementById("cob-modo");
+  var elBuscar = document.getElementById("cob-buscar");
+  var elMsg = document.getElementById("cob-msg");
+  var elPlaceholder = document.getElementById("cob-placeholder");
+  var elTablaCard = document.getElementById("cob-tabla-card");
+  var elResumen = document.getElementById("cob-resumen");
+  var elGraficoCard = document.getElementById("cob-grafico-card");
+  var elGrafico = document.getElementById("cob-grafico");
+  var elThead = document.getElementById("cob-thead");
+  var elTbody = document.getElementById("cob-tbody");
+  var elTfoot = document.getElementById("cob-tfoot");
+  var elTotalCount = document.getElementById("cob-total-count");
+
+  var MONTO_KEYS = ["efectivo", "dolar", "cheque", "transferencia", "percepcion", "total"];
+  var fmtMoney = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
+
+  var estado = { columns: [], filas: [], totales: {} };
+
+  // El scope operativo no puede elegir vendedor (fijo al de sesión).
+  if (SCOPE !== "gerencia") { elVendedorWrap.classList.add("hidden"); }
+
+  function getFechas() {
+    var fi = document.getElementById("fecha_inicio");
+    var ff = document.getElementById("fecha_fin");
+    return { desde: fi ? fi.value : "", hasta: ff ? ff.value : "" };
+  }
+
+  function mostrarMsg(texto, tipo) {
+    elMsg.textContent = texto;
+    elMsg.className = "mb-4 text-sm rounded-xl px-4 py-3 " + (
+      tipo === "error"
+        ? "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/20 dark:text-rose-300"
+        : "bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-900/20 dark:text-sky-300"
+    );
+    elMsg.classList.remove("hidden");
+  }
+  function ocultarMsg() { elMsg.classList.add("hidden"); }
+
+  function cargarVendedores() {
+    if (SCOPE !== "gerencia") return;
+    fetch(API_URL + "?queInforme=seleccion", { credentials: "same-origin", headers: { "X-Requested-With": "XMLHttpRequest" } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (lista) {
+        if (!Array.isArray(lista)) return;
+        lista.forEach(function (item) {
+          var partes = String(item.value || "").split("|");
+          var opt = document.createElement("option");
+          opt.value = partes[0] || "";
+          opt.textContent = item.label || "";
+          elVendedor.appendChild(opt);
+        });
+      })
+      .catch(function () { /* silencioso: filtro opcional */ });
+  }
+
+  function generar() {
+    var f = getFechas();
+    if (!f.desde || !f.hasta) { mostrarMsg("Seleccioná fecha desde y hasta.", "error"); return; }
+    ocultarMsg();
+    elGenerar.disabled = true;
+    elGenerar.classList.add("opacity-60");
+
+    var params = new URLSearchParams({
+      fechaDesde: f.desde,
+      fechaHasta: f.hasta,
+      modo: elModo.value || "mes"
+    });
+    if (SCOPE === "gerencia" && elVendedor.value) { params.set("codViajante", elVendedor.value); }
+
+    fetch(API_URL + "?" + params.toString(), {
+      credentials: "same-origin",
+      headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+      .then(function (r) {
+        if (!r.ok) { return r.json().then(function (j) { throw new Error(j.detail || "Error"); }); }
+        return r.json();
+      })
+      .then(function (payload) {
+        if (!payload) { throw new Error("Respuesta vacía."); }
+        estado.columns = payload.columns || [];
+        estado.filas = payload.filas || [];
+        estado.totales = payload.totales || {};
+        renderResumen();
+        renderGrafico();
+        renderTabla();
+        elPlaceholder.classList.add("hidden");
+        if (!estado.filas.length) { mostrarMsg("Sin resultados: no hay cobranzas en el período.", "info"); }
+      })
+      .catch(function (err) { mostrarMsg(err.message || "Error al generar el informe.", "error"); })
+      .finally(function () {
+        elGenerar.disabled = false;
+        elGenerar.classList.remove("opacity-60");
+      });
+  }
+
+  function renderResumen() {
+    var t = estado.totales || {};
+    MONTO_KEYS.forEach(function (k) {
+      var el = document.getElementById("cob-t-" + k);
+      if (el) el.textContent = fmtMoney.format(Number(t[k] || 0));
+    });
+    elResumen.classList.remove("hidden");
+  }
+
+  function renderGrafico() {
+    elGrafico.innerHTML = "";
+    if (!estado.filas.length) { elGraficoCard.classList.add("hidden"); return; }
+    var max = estado.filas.reduce(function (m, f) { return Math.max(m, Number(f.total || 0)); }, 0);
+    estado.filas.forEach(function (f) {
+      var val = Number(f.total || 0);
+      var pct = max > 0 ? Math.round((val / max) * 100) : 0;
+      var row = document.createElement("div");
+      row.innerHTML =
+        '<div class="flex justify-between text-xs mb-1">' +
+          '<span class="text-slate-600 dark:text-slate-300 font-medium">' + escapeHtml(f.periodo || "") + '</span>' +
+          '<span class="text-slate-400">' + fmtMoney.format(val) + '</span>' +
+        '</div>' +
+        '<div class="cob-bar-track h-3">' +
+          '<div class="cob-bar-fill bg-sky-500" style="width:' + pct + '%"></div>' +
+        '</div>';
+      elGrafico.appendChild(row);
+    });
+    elGraficoCard.classList.remove("hidden");
+  }
+
+  function esMonto(dataKey) { return MONTO_KEYS.indexOf(dataKey) !== -1; }
+
+  function renderTabla() {
+    elThead.innerHTML = "";
+    estado.columns.forEach(function (c) {
+      var th = document.createElement("th");
+      th.className = "font-semibold px-4 py-3 whitespace-nowrap " + (esMonto(c.data) ? "text-right" : "text-left");
+      th.textContent = c.title;
+      elThead.appendChild(th);
+    });
+    aplicarFiltro();
+    renderPie();
+    elTablaCard.classList.remove("hidden");
+  }
+
+  function renderPie() {
+    elTfoot.innerHTML = "";
+    var t = estado.totales || {};
+    estado.columns.forEach(function (c) {
+      var th = document.createElement("th");
+      th.className = "px-4 py-3 whitespace-nowrap " + (esMonto(c.data) ? "text-right" : "text-left");
+      if (c.data === "periodo") { th.textContent = t.periodo || "Total Gral"; }
+      else if (esMonto(c.data)) { th.textContent = fmtMoney.format(Number(t[c.data] || 0)); }
+      else { th.textContent = ""; }
+      elTfoot.appendChild(th);
+    });
+  }
+
+  function aplicarFiltro() {
+    var q = (elBuscar.value || "").trim().toLowerCase();
+    elTbody.innerHTML = "";
+    var visibles = 0;
+    estado.filas.forEach(function (fila) {
+      if (q && String(fila.periodo || "").toLowerCase().indexOf(q) === -1) return;
+      visibles++;
+      var tr = document.createElement("tr");
+      tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/30";
+      estado.columns.forEach(function (c) {
+        var td = document.createElement("td");
+        var monto = esMonto(c.data);
+        td.className = "px-4 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap " + (monto ? "text-right tabular-nums" : "text-left");
+        td.textContent = monto ? fmtMoney.format(Number(fila[c.data] || 0)) : (fila[c.data] != null ? fila[c.data] : "");
+        tr.appendChild(td);
+      });
+      elTbody.appendChild(tr);
+    });
+    elTotalCount.textContent = "(" + visibles + (q ? " de " + estado.filas.length : "") + ")";
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (m) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m];
+    });
+  }
+
+  elGenerar.addEventListener("click", generar);
+  elBuscar.addEventListener("input", aplicarFiltro);
+  cargarVendedores();
+})();
+</script>
+{% endblock %}

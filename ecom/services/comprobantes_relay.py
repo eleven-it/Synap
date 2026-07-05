@@ -83,6 +83,17 @@ def _append_estado(body: Dict[str, Any], where: List[str], params: List[Any]) ->
     params.append(str(ep).strip())
 
 
+def _append_anulado(body: Dict[str, Any], where: List[str], params: List[Any]) -> None:
+    """Paridad ``campoAnulado`` Si/No en ``relay-pedidos.php``."""
+    ca = body.get("campoAnulado")
+    if ca is None:
+        return
+    s = str(ca).strip()
+    if s in ("Si", "No"):
+        where.append("comp_ped.Anulado = %s")
+        params.append(s)
+
+
 def _append_tipo_remito(body: Dict[str, Any], where: List[str], params: List[Any]) -> None:
     tr = body.get("tipoRemito")
     if tr is None or str(tr).strip() in ("", "1"):
@@ -190,6 +201,7 @@ def listar_pedidos_relay(
     params: List[Any] = ["PED"]
     _append_filtros_busqueda(body, "ped", where, params)
     _append_estado(body, where, params)
+    _append_anulado(body, where, params)
     extra_sql, extra_p = _where_pedidos(body, sess_user, idcliente)
     where_sql = " AND ".join(where) + extra_sql
     params.extend(extra_p)
@@ -396,3 +408,39 @@ def sugerencias_nro_comp_relay(
             if row[0] is not None:
                 out.append(str(row[0]))
     return out
+
+
+def detalle_pedido_relay(
+    base_empresa: str,
+    codigo_movimiento: int,
+    usa_id_manual: bool = False,
+) -> List[Dict[str, Any]]:
+    """Paridad ``rp_get_detalle_pedido`` — renglones ``stockp`` de un pedido."""
+    join_art = ""
+    select_cod = "stockp.IDArt AS CodigoArticulo"
+    if usa_id_manual:
+        join_art = " LEFT JOIN articulo ON articulo.IDArt = stockp.IDArt "
+        select_cod = "COALESCE(articulo.id_manual, stockp.IDArt) AS CodigoArticulo"
+
+    sql = f"""
+        SELECT
+            stockp.IDArt,
+            {select_cod},
+            stockp.Descripcion,
+            stockp.Salida,
+            stockp.PrecioVentaxU,
+            stockp.PrecioNetoxU,
+            stockp.PrecioIVAxU,
+            stockp.PrecioNetoxR,
+            stockp.PrecioIVAxR,
+            stockp.TipoIVA,
+            stockp.promocion,
+            stockp.tipo_unidad,
+            stockp.cantidad_dividir,
+            stockp.cantidad_unidad_display
+        FROM stockp
+        {join_art}
+        WHERE stockp.CodigoMovimiento = %s
+        ORDER BY stockp.id_stock ASC
+    """
+    return _fetch_all(base_empresa, sql, [int(codigo_movimiento)])

@@ -1,0 +1,177 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static mpr_filters %}
+
+{% block title %}Planificación de turnos - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li>
+                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a>
+                </li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Planificación de turnos</span></li>
+            </ol>
+        </nav>
+
+        <header class="mb-8 flex flex-col gap-6 border-b border-gray-200/80 pb-8 dark:border-gray-700/80 lg:flex-row lg:items-end lg:justify-between">
+            <div class="min-w-0 max-w-3xl">
+                <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Planificación de turnos (roster)</h1>
+                <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Asigna el turno de cada operario por fecha. Solo se pueden editar hoy y fechas futuras.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+                <a href="?semana={{ semana_anterior|isoformat }}"
+                   class="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
+                    <span class="material-icons text-lg" aria-hidden="true">chevron_left</span>
+                    Anterior
+                </a>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Semana del {{ fecha_lunes|date:"d/m/Y" }}</span>
+                <a href="?semana={{ semana_siguiente|isoformat }}"
+                   class="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
+                    Siguiente
+                    <span class="material-icons text-lg" aria-hidden="true">chevron_right</span>
+                </a>
+                <a href="{% url 'mpr:turnos_list' %}" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
+                    <span class="material-icons text-base" aria-hidden="true">settings</span>
+                    Gestionar turnos
+                </a>
+            </div>
+        </header>
+
+        {% if not turnos_activos %}
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-700/50 dark:bg-amber-900/20">
+            <div class="flex items-start gap-3">
+                <span class="material-icons text-amber-600 dark:text-amber-400" aria-hidden="true">warning</span>
+                <div>
+                    <p class="text-sm font-semibold text-amber-800 dark:text-amber-200">No hay turnos activos</p>
+                    <p class="mt-1 text-sm text-amber-700 dark:text-amber-300">Para planificar el roster, primero <a href="{% url 'mpr:turno_create' %}" class="font-semibold underline hover:no-underline">creá al menos un turno</a>.</p>
+                </div>
+            </div>
+        </div>
+        {% elif not operarios %}
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-700/50 dark:bg-amber-900/20">
+            <div class="flex items-start gap-3">
+                <span class="material-icons text-amber-600 dark:text-amber-400" aria-hidden="true">group</span>
+                <div>
+                    <p class="text-sm font-semibold text-amber-800 dark:text-amber-200">No hay operarios registrados</p>
+                    <p class="mt-1 text-sm text-amber-700 dark:text-amber-300">Para planificar el roster, primero <a href="{% url 'mpr:operario_create' %}" class="font-semibold underline hover:no-underline">registrá operarios</a>.</p>
+                </div>
+            </div>
+        </div>
+        {% else %}
+
+        <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Grilla semanal (operadores × días)</h2>
+                <p class="text-xs text-gray-500 dark:text-gray-400 md:hidden" aria-hidden="true">Deslizá horizontalmente</p>
+            </div>
+            <div class="overflow-x-auto" role="region" aria-label="Grilla de planificación de turnos">
+                <table class="w-full divide-y divide-gray-200 dark:divide-gray-700" style="min-width: 56rem;">
+                    <caption class="sr-only">Planificación de turnos — semana del {{ fecha_lunes|date:"d/m/Y" }}</caption>
+                    <thead class="bg-gray-50/90 dark:bg-gray-800/80">
+                        <tr>
+                            <th scope="col" class="sticky left-0 z-10 min-w-[160px] max-w-[200px] bg-gray-50 px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:bg-gray-800 dark:text-gray-300 sm:px-5">Operario</th>
+                            {% for dia in dias %}
+                            <th scope="col" class="min-w-[150px] px-3 py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300{% if dia.fecha == hoy %} bg-purple-50 dark:bg-purple-900/20{% endif %}">
+                                <div class="font-bold">{{ dia.dia_nombre }}</div>
+                                <div class="font-normal text-gray-500 dark:text-gray-400">{{ dia.fecha_str }}</div>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for op in operarios %}
+                        {% with op_asigs=asignaciones|dict_get:op.id %}
+                        <tr class="transition-colors hover:bg-gray-50/60 dark:hover:bg-gray-700/30">
+                            <td class="sticky left-0 z-10 min-w-[160px] max-w-[200px] bg-white px-4 py-3 dark:bg-gray-800 sm:px-5">
+                                <span class="block truncate text-sm font-medium text-gray-900 dark:text-white" title="{{ op.nombre }}">{{ op.nombre }}</span>
+                            </td>
+                            {% for dia in dias %}
+                            {% with fecha_iso=dia.fecha|isoformat %}
+                            {% with asig=op_asigs|dict_get:fecha_iso %}
+                            <td class="px-3 py-2 text-center align-middle{% if dia.fecha == hoy %} bg-purple-50/50 dark:bg-purple-900/10{% endif %}{% if dia.fecha < hoy %} opacity-60{% endif %}">
+                                {% if dia.fecha < hoy %}
+                                    {# Fecha pasada: solo lectura #}
+                                    {% if asig %}
+                                    <span class="inline-block rounded-lg bg-gray-200 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">{{ asig.nombre_turno }}</span>
+                                    {% else %}
+                                    <span class="text-gray-300 dark:text-gray-600">—</span>
+                                    {% endif %}
+                                {% else %}
+                                    {# Fecha hoy o futura: editable #}
+                                    {% if asig %}
+                                    <div class="flex flex-col items-center gap-1">
+                                        <span class="inline-block rounded-lg bg-green-100 px-2 py-1 text-xs font-semibold text-green-800 dark:bg-green-900/30 dark:text-green-300">{{ asig.nombre_turno }}</span>
+                                        <form method="post" action="{% url 'mpr:roster_eliminar' %}" class="inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="fecha" value="{{ dia.fecha_str }}"/>
+                                            <input type="hidden" name="id_operario" value="{{ op.id }}"/>
+                                            <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
+                                            <button type="submit"
+                                                    class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-red-500 dark:text-red-400 dark:hover:bg-red-900/20"
+                                                    title="Quitar turno {{ dia.fecha_str }}"
+                                                    onclick="return confirm('¿Quitar turno de {{ op.nombre }} para el {{ dia.fecha_str }}?')">
+                                                <span class="material-icons text-xs" aria-hidden="true">close</span>
+                                                Quitar
+                                            </button>
+                                        </form>
+                                    </div>
+                                    {% else %}
+                                    <form method="post" action="{% url 'mpr:roster_asignar' %}" class="inline-flex items-center justify-center gap-1">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="fecha" value="{{ dia.fecha_str }}"/>
+                                        <input type="hidden" name="id_operario" value="{{ op.id }}"/>
+                                        <input type="hidden" name="semana" value="{{ fecha_lunes|isoformat }}"/>
+                                        <select name="id_turno"
+                                                class="roster-select h-8 rounded-lg border border-gray-300 bg-white px-1.5 text-xs text-gray-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-200"
+                                                aria-label="Seleccionar turno para {{ op.nombre }} el {{ dia.fecha_str }}">
+                                            <option value="">— turno —</option>
+                                            {% for t in turnos_activos %}
+                                            <option value="{{ t.id }}">{{ t.nombre }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit"
+                                                class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600 text-white transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500"
+                                                title="Asignar turno">
+                                            <span class="material-icons text-sm" aria-hidden="true">check</span>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            {% endwith %}
+                            {% endwith %}
+                            {% endfor %}
+                        </tr>
+                        {% endwith %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+            <span class="flex items-center gap-1.5"><span class="inline-block h-3 w-3 rounded-full bg-green-400"></span> Turno asignado (editable)</span>
+            <span class="flex items-center gap-1.5"><span class="inline-block h-3 w-3 rounded-full bg-gray-300 dark:bg-gray-600"></span> Fecha pasada (solo lectura)</span>
+            <span class="flex items-center gap-1.5"><span class="inline-block h-4 w-6 rounded bg-purple-100 dark:bg-purple-900/30"></span> Hoy</span>
+        </div>
+
+        {% endif %}
+    </div>
+</section>
+
+<script>
+(function() {
+    document.querySelectorAll('select.roster-select').forEach(function(sel) {
+        sel.addEventListener('change', function() {
+            if (this.value) {
+                var form = this.closest('form');
+                if (form) form.submit();
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

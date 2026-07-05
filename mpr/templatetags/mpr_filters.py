@@ -28,3 +28,27 @@ def fecha_dd_mm_yyyy(value):
         except (ValueError, TypeError):
             return "—"
     return "—"
+
+
+@register.filter
+def dict_get(d, key):
+    """
+    Accede a un dict con clave dinámica en templates.
+    Uso: {{ asignaciones|dict_get:operario.id }}
+    """
+    if d is None:
+        return None
+    return d.get(key)
+
+
+@register.filter
+def isoformat(value):
+    """
+    Devuelve la representación ISO (YYYY-MM-DD) de un objeto date/datetime.
+    Uso: {{ fecha_lunes|isoformat }}
+    """
+    if value is None:
+        return ""
+    if isinstance(value, (date, datetime)):
+        return value.strftime("%Y-%m-%d")
+    return str(value)

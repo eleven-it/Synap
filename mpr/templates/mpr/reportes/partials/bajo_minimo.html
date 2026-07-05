@@ -1,0 +1,15 @@
+<div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-800/50"><tr>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Código</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Artículo</th>
+            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Saldo ({{ etiqueta_cantidad_corta|default:"u." }})</th>
+            <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Mínimo ({{ etiqueta_cantidad_corta|default:"u." }})</th>
+        </tr></thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for r in filas %}
+            <tr><td class="px-4 py-3 text-sm font-medium">{{ r.codigo_articulo }}</td><td class="px-4 py-3 text-sm">{{ r.descripcion_articulo }}</td><td class="px-4 py-3 text-right tabular-nums">{{ r.saldo_total_display|default:r.saldo_total }}</td><td class="px-4 py-3 text-right tabular-nums text-red-600">{{ r.stock_minimo_display|default:r.stock_minimo }}</td></tr>
+            {% empty %}<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">Sin artículos bajo mínimo.</td></tr>{% endfor %}
+        </tbody>
+    </table>
+</div>

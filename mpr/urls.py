@@ -66,9 +66,35 @@ urlpatterns = [
     path("opt/", views.OptListView.as_view(), name="opt_list"),
     path("opt/nueva/", views.NuevaOptView.as_view(), name="opt_create"),
     path("opt/<int:id_lista>/", views.OptDetailView.as_view(), name="opt_detail"),
+    path("opt/<int:id_lista>/trazabilidad/", views.TrazabilidadOptView.as_view(), name="opt_trazabilidad"),
     path("opt/<int:id_lista>/armado/", views.ArmadoOptView.as_view(), name="armado_opt"),
-    # Deprecado: usar asistente (wizard ?paso=3&id_lista=X) para registrar OPP.
+    # DEPRECATED (E6/E11): usar /mpr/parte-produccion/ para registrar parte de producción.
     path("opt/<int:id_lista>/registrar-opp/", views.RegistrarOppView.as_view(), name="registrar_opp"),
     path("opt/<int:id_lista>/cerrar/", views.CerrarOptView.as_view(), name="opt_cerrar"),
     path("opt/<int:id_lista>/comprobante.pdf/", views.opt_comprobante_pdf_view, name="opt_comprobante_pdf"),
+    # Etapa 2: Tablero de Demanda Consolidado por Artículo
+    path("tablero-produccion/", views.TableroProduccionView.as_view(), name="tablero_produccion"),
+    path("tablero-produccion/actualizar/", views.TableroProduccionActualizarView.as_view(), name="tablero_produccion_actualizar"),
+    # Etapa 3: Turnos (CRUD) + Roster Rotativo
+    path("turnos/", views.TurnosListView.as_view(), name="turnos_list"),
+    path("turnos/nuevo/", views.TurnoCreateView.as_view(), name="turno_create"),
+    path("turnos/<int:id_turno>/editar/", views.TurnoUpdateView.as_view(), name="turno_edit"),
+    path("planificacion-turnos/", views.PlanificacionTurnosView.as_view(), name="planificacion_turnos"),
+    path("planificacion-turnos/asignar/", views.AsignarTurnoRosterView.as_view(), name="roster_asignar"),
+    path("planificacion-turnos/eliminar/", views.EliminarAsignacionRosterView.as_view(), name="roster_eliminar"),
+    # Etapa 4: Parte de producción (ledger OPP-parte)
+    path("parte-produccion/", views.ParteProduccionView.as_view(), name="parte_produccion"),
+    path("parte-produccion/registrar/", views.RegistrarParteProduccionView.as_view(), name="parte_produccion_registrar"),
+    path("parte-produccion/<str:parte_id>/ajuste/", views.AjusteParteView.as_view(), name="parte_ajuste"),
+    # Etapa 5: Transición de stock entre etapas MPR
+    # DEPRECADO UI (E9): la UI de transición por fila fue reemplazada por las pantallas
+    # globales de Inspección y Clasificación. La URL se mantiene backward-safe.
+    path("tablero-produccion/transicion/", views.TransicionLoteView.as_view(), name="transicion_lote"),
+    # Etapa 7: Envío directo a producción desde el Tablero (ledger-componente, lote)
+    path("tablero-produccion/enviar/", views.EnviarProduccionLoteView.as_view(), name="tablero_produccion_enviar"),
+    path("tablero-produccion/envios/", views.EnviosProduccionListView.as_view(), name="envios_produccion"),
+    path("tablero-produccion/envios/anular/", views.AnularEnviosProduccionView.as_view(), name="envios_produccion_anular"),
+    # Etapa 10: Clasificación de Producción (pantalla única; reemplaza Inspección/Clasificación E9)
+    path("tablero-produccion/clasificacion-produccion/", views.ClasificacionProduccionView.as_view(), name="clasificacion_produccion"),
+    path("tablero-produccion/clasificacion-produccion/registrar/", views.RegistrarClasificacionProduccionView.as_view(), name="clasificacion_produccion_registrar"),
 ]

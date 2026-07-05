@@ -114,11 +114,28 @@ def run_mpr_deposito_articulo_mysql(conn) -> Dict[str, Any]:
             if not columna_existe(cursor, tbl_dep, "tipo_mpr"):
                 cursor.execute(
                     "ALTER TABLE `{}` ADD COLUMN tipo_mpr VARCHAR(20) NULL "
-                    "COMMENT 'Uso MPR: Produccion, SemiElaborado, Terminado, Scrap, 2daSeleccion'".format(
+                    "COMMENT 'Uso MPR: Produccion, SemiElaborado, Terminado, Scrap, 2daSeleccion, Planchado'".format(
                         tdep
                     )
                 )
                 _append_migration(applied, failed, True, f"{tbl_dep}.tipo_mpr")
+            # Etapas productivas del pipeline deben sumar al Total del tablero
+            tipos_suma = ("Produccion", "2daSeleccion", "SemiElaborado", "Terminado")
+            tipos_ph = ",".join(["%s"] * len(tipos_suma))
+            cursor.execute(
+                f"UPDATE `{tdep}` SET suma_stock = 'Si' "
+                f"WHERE tipo_mpr IN ({tipos_ph}) "
+                f"AND COALESCE(anulado, 'No') = 'No' "
+                f"AND COALESCE(suma_stock, 'No') <> 'Si'",
+                list(tipos_suma),
+            )
+            if cursor.rowcount:
+                _append_migration(
+                    applied,
+                    failed,
+                    True,
+                    f"{tbl_dep}.suma_stock normalizado en {cursor.rowcount} depósito(s) MPR",
+                )
 
         tbl_art = nombre_tabla_real(cursor, "articulo")
         if tbl_art and not columna_existe(cursor, tbl_art, "stock_reserva"):
@@ -128,6 +145,16 @@ def run_mpr_deposito_articulo_mysql(conn) -> Dict[str, Any]:
                 )
             )
             _append_migration(applied, failed, True, f"{tbl_art}.stock_reserva")
+
+        # Índice para query pivote del tablero de producción (Etapa 2)
+        tbl_sd = nombre_tabla_real(cursor, "stock_deposito")
+        if tbl_sd:
+            tsd = tbl_sd.replace("`", "``")
+            if not indice_existe(cursor, tbl_sd, "idx_sd_art_dep"):
+                cursor.execute(
+                    "CREATE INDEX `idx_sd_art_dep` ON `{}`(id_articulo, id_deposito)".format(tsd)
+                )
+                _append_migration(applied, failed, True, "idx_sd_art_dep en stock_deposito")
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -148,6 +175,11 @@ def run_mpr_deposito_articulo_mysql(conn) -> Dict[str, Any]:
 # MPR — tabla lista_produccion_agrupada (creación + columnas Synap)
 # (docs/mpr/SCHEMA_MPR_ADMINISTRANET92.md, docs/mpr/sql/alter_lista_produccion_agrupada_*.sql)
 # ---------------------------------------------------------------------------
+
+
+# --- Proveedores OPT legacy (lista_produccion_*): retirados de PROVIDER_REGISTRY ---
+# Las funciones siguen disponibles para CLI de emergencia (apply_alter_detalle_trazabilidad, etc.).
+# Ver docs/mpr/PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md (deprecación OPT/OPP).
 
 
 def run_mpr_lista_produccion_agrupada_mysql(conn) -> Dict[str, Any]:
@@ -649,6 +681,83 @@ def _sc_sql_strip_leading_comments(stmt: str) -> str:
     return ""
 
 
+def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
+    """
+    Crea tablas ``mpr_*`` (config, turnos, envíos, partes, transiciones, armado) si no existen.
+
+    Equivalente a ``manage.py apply_mpr_core_tables``. Idempotente.
+    """
+    from django.conf import settings
+
+    applied: List[str] = []
+    failed: List[str] = []
+    sql_path = Path(settings.BASE_DIR) / "docs" / "mpr" / "sql" / "001_mpr_core_tables.sql"
+    if not sql_path.is_file():
+        msg = f"No se encontró el archivo {sql_path}"
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    cursor = conn.cursor()
+    try:
+        sql_content = sql_path.read_text(encoding="utf-8")
+        raw_statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+        statements: List[str] = []
+        for stmt in raw_statements:
+            stmt = _sc_sql_strip_leading_comments(stmt)
+            if stmt:
+                statements.append(stmt)
+
+        for stmt in statements:
+            cursor.execute(stmt)
+        _append_migration(applied, failed, True, "DDL MPR core (001_mpr_core_tables.sql)")
+
+        tbl_ep = nombre_tabla_real(cursor, "mpr_envio_produccion")
+        if tbl_ep:
+            tep = tbl_ep.replace("`", "``")
+            if not columna_existe(cursor, tbl_ep, "anulado_en"):
+                cursor.execute(
+                    "ALTER TABLE `{}` ADD COLUMN anulado_en DATETIME NULL "
+                    "COMMENT 'Timestamp anulación supervisor'".format(tep)
+                )
+                _append_migration(applied, failed, True, f"{tbl_ep}.anulado_en")
+            if not columna_existe(cursor, tbl_ep, "id_usuario_anula"):
+                cursor.execute(
+                    "ALTER TABLE `{}` ADD COLUMN id_usuario_anula INT NULL "
+                    "COMMENT 'Usuario que anuló el envío'".format(tep)
+                )
+                _append_migration(applied, failed, True, f"{tbl_ep}.id_usuario_anula")
+            if not columna_existe(cursor, tbl_ep, "uuid_lote"):
+                cursor.execute(
+                    "ALTER TABLE `{}` ADD COLUMN uuid_lote CHAR(36) NULL "
+                    "COMMENT 'Agrupa líneas del mismo envío desde tablero'".format(tep)
+                )
+                _append_migration(applied, failed, True, f"{tbl_ep}.uuid_lote")
+            if not indice_existe(cursor, tbl_ep, "idx_mpr_ep_lote"):
+                cursor.execute(
+                    "CREATE INDEX `idx_mpr_ep_lote` ON `{}`(uuid_lote)".format(tep)
+                )
+                _append_migration(applied, failed, True, f"idx_mpr_ep_lote en {tbl_ep}")
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_mpr_core_tables_mysql: %s", e)
+        failed.append(str(e))
+    finally:
+        cursor.close()
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 def run_self_checkout_core_tables_mysql(conn) -> Dict[str, Any]:
     """
     Crea las tablas ``self_checkout_*`` (kiosco, carrito, sesión, etc.) si no existen
@@ -979,6 +1088,70 @@ def run_vendedores_asignacion_mysql(conn) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# MPR — eliminar tablas OPT legacy lista_produccion_* (deprecación fuente única MySQL)
+# ---------------------------------------------------------------------------
+
+_TABLAS_LISTA_PRODUCCION_LEGACY = (
+    "lista_produccion_historico",
+    "lista_produccion_detalle",
+    "lista_produccion_agrupada",
+)
+
+
+def run_mpr_drop_lista_produccion_legacy_mysql(conn) -> Dict[str, Any]:
+    """
+    Elimina las tablas ``lista_produccion_*`` del flujo OPT/OPP legacy.
+
+    Destructivo e irreversible. Cualquier código Synap/VB6 que aún las consulte fallará
+    hasta completar la migración al flujo MPR diario (ledgers ``mpr_*``).
+
+    Orden: histórico → detalle → agrupada. Usa ``FOREIGN_KEY_CHECKS=0`` durante el DROP.
+    """
+    applied: List[str] = []
+    failed: List[str] = []
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SET FOREIGN_KEY_CHECKS=0")
+        for logical in _TABLAS_LISTA_PRODUCCION_LEGACY:
+            tbl = nombre_tabla_real(cursor, logical)
+            if not tbl:
+                applied.append(f"Omitido {logical} (no existe en esta base)")
+                continue
+            tq = tbl.replace("`", "``")
+            try:
+                cursor.execute(f"DROP TABLE IF EXISTS `{tq}`")
+                applied.append(f"DROP TABLE {tbl}")
+            except Exception as drop_err:
+                failed.append(f"DROP TABLE {tbl}: {drop_err}")
+        cursor.execute("SET FOREIGN_KEY_CHECKS=1")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        try:
+            cursor.execute("SET FOREIGN_KEY_CHECKS=1")
+            conn.commit()
+        except Exception:
+            pass
+        logger.exception("run_mpr_drop_lista_produccion_legacy_mysql: %s", e)
+        failed.append(str(e))
+    finally:
+        cursor.close()
+
+    msg = mensaje_final(applied, failed)
+    if applied and not failed:
+        msg += (
+            " Las tablas OPT legacy fueron eliminadas. Revise rutas /mpr/opt/, ventana pack "
+            "y reportes: el código que aún dependa de lista_produccion_* debe migrarse a mpr_*."
+        )
+    return {
+        "success": len(failed) == 0,
+        "message": msg,
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Registro para la UI y ejecución selectiva
 # ---------------------------------------------------------------------------
 
@@ -1007,51 +1180,31 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         "run": run_mpr_deposito_articulo_mysql,
     },
     {
-        "id": "mpr_lista_produccion_agrupada",
-        "title": "MPR — tabla lista_produccion_agrupada",
+        "id": "mpr_core_tables",
+        "title": "MPR — tablas core Synap (ledgers MySQL)",
         "description": (
-            "Crea la tabla lista_produccion_agrupada si no existe (bases sin MPR previo) y añade "
-            "columnas opcionales Synap (OPT, fecha objetivo, cantidad_fabricada_acumulada, etc.). "
-            "Requiere que exista la tabla articulo (no se crea aquí). "
-            "Ver docs/mpr/SCHEMA_MPR_ADMINISTRANET92.md."
+            "Crea las 13 tablas mpr_* en la base de la empresa (``001_mpr_core_tables.sql``): "
+            "mpr_config, mpr_turno, mpr_roster_dia, mpr_envio_produccion, mpr_parte, "
+            "mpr_parte_linea, mpr_parte_ajuste, mpr_transicion_lote, mpr_articulo_armado_surtido, "
+            "mpr_armado_lote, mpr_armado_surtido_movimiento, mpr_armado_surtido_linea, "
+            "mpr_imputacion_armado. Fuente única AdministraNET; sin columna base_empresa. "
+            "Equivalente a ``manage.py apply_mpr_core_tables``. "
+            "Ver docs/mpr/PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md."
         ),
         "risk": "medio",
-        "run": run_mpr_lista_produccion_agrupada_mysql,
+        "run": run_mpr_core_tables_mysql,
     },
     {
-        "id": "mpr_lista_produccion_detalle",
-        "title": "MPR — tabla lista_produccion_detalle",
+        "id": "mpr_drop_lista_produccion_legacy",
+        "title": "MPR — eliminar tablas OPT legacy (lista_produccion_*)",
         "description": (
-            "Crea la tabla lista_produccion_detalle si no existe (demanda por pedido y artículo; "
-            "«Actualizar» en MPR). Requiere articulo y lista_produccion_agrupada. "
-            "Si la tabla ya existe, solo añade columnas opcionales que falten (Fecha, id_usuario, …). "
-            "Elimina una FK heredada detalle.codigo_movimiento_pedido → comp_ped si existe, porque Synap "
-            "usa código 0 para demanda por reserva (sin fila en comp_ped). "
-            "Después conviene ejecutar «MPR — trazabilidad lista producción (detalle)» para FK/índices hacia agrupada."
+            "DROP irreversible de lista_produccion_historico, lista_produccion_detalle y "
+            "lista_produccion_agrupada. Expone dependencias de código no migrado al flujo MPR diario. "
+            "Equivalente CLI: ``manage.py drop_mpr_lista_produccion_legacy <base_empresa> --confirm``. "
+            "Ver docs/mpr/PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md."
         ),
-        "risk": "medio",
-        "run": run_mpr_lista_produccion_detalle_mysql,
-    },
-    {
-        "id": "mpr_lista_produccion_trazabilidad",
-        "title": "MPR — trazabilidad lista producción (detalle)",
-        "description": (
-            "Ajuste de lista_produccion_detalle e índices/FK hacia lista_produccion_agrupada. "
-            "Ejecutar con precaución si hay datos en esas tablas."
-        ),
-        "risk": "medio",
-        "run": run_mpr_lista_produccion_detalle_trazabilidad_mysql,
-    },
-    {
-        "id": "mpr_lista_produccion_detalle_pk_nombre",
-        "title": "MPR — corregir nombre PK lista_produccion_detalle",
-        "description": (
-            "Renombra la columna PRIMARY KEY corrupta (p. ej. id\\x1f_lista_detalle) a "
-            "id_lista_detalle. Ejecutar si la demanda por reserva pisa cantidades de pedidos PED "
-            "en ventana-pack. Complementa «MPR — trazabilidad lista producción (detalle)»."
-        ),
-        "risk": "bajo",
-        "run": run_mpr_lista_produccion_detalle_corregir_pk_nombre_mysql,
+        "risk": "alto",
+        "run": run_mpr_drop_lista_produccion_legacy_mysql,
     },
     {
         "id": "self_checkout_core_tables",

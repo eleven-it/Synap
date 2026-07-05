@@ -99,6 +99,13 @@ def login_view(request):
                 "base_empresa": base_empresa,
                 "id_sesion": session_data['id_sesion'] if session_data else None
             }
+
+            # Paridad control.php: CodViajante, todos_clientes, supervisor_venta en sesión.
+            try:
+                from ecom.services.mayoristapp_sesion_contexto import contexto_usuario_mayoristapp
+                contexto_usuario_mayoristapp(request, persistir=True)
+            except Exception as e:
+                logger.debug("Contexto mayoristapp post-login (no crítico): %s", e)
             
             # Sincronización automática de permisos Synap → permiso_sistema (con cache por empresa)
             try:

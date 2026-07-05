@@ -15,18 +15,6 @@
                 <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">OPT {{ opt_numero }}</span></li>
             </ol>
         </nav>
-
-        {% if messages %}
-        {% for message in messages %}
-        <div class="mb-6 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm shadow-sm {% if message.tags == 'error' %}border-red-200 bg-red-500/10 text-red-800 dark:border-red-800 dark:bg-red-500/20 dark:text-red-200{% elif message.tags == 'success' %}border-emerald-200 bg-emerald-500/10 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200{% else %}border-amber-200 bg-amber-500/10 text-amber-900 dark:border-amber-800 dark:bg-amber-500/20 dark:text-amber-200{% endif %}" role="alert">
-            <span>{{ message }}</span>
-            <button type="button" onclick="this.closest('[role=alert]').remove()" class="shrink-0 rounded-lg p-1 transition-colors hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:hover:bg-white/5" aria-label="Cerrar">
-                <span class="material-icons text-lg">close</span>
-            </button>
-        </div>
-        {% endfor %}
-        {% endif %}
-
         <div class="mb-8 rounded-2xl border border-slate-700/80 bg-slate-800 p-6 text-white shadow-lg dark:bg-slate-900 dark:border-slate-800 sm:p-8">
             <div class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                 <div class="min-w-0">
@@ -56,6 +44,13 @@
                     </div>
                 </div>
                 <div class="flex shrink-0 flex-wrap gap-2">
+                    {% if id_lista %}
+                    <a href="{% url 'mpr:opt_trazabilidad' id_lista=id_lista %}"
+                       class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                        <span class="material-icons text-lg" aria-hidden="true">timeline</span>
+                        Ver trazabilidad
+                    </a>
+                    {% endif %}
                     {% if codigo_movimiento and id_lista %}
                     <a href="{% url 'mpr:opt_comprobante_pdf' id_lista %}" target="_blank" rel="noopener noreferrer" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-slate-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                         <span class="material-icons text-lg" aria-hidden="true">print</span>
@@ -171,11 +166,11 @@
             <div class="flex flex-col gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between">
                 <h2 class="text-base font-bold text-gray-900 dark:text-white">Partes de producción (OPP) registradas</h2>
                 {% if hay_disponible_opp and en_proceso %}
-                <a href="{% url 'mpr:wizard' %}?paso=3&amp;id_lista={{ id_lista }}"
+                <a href="{% url 'mpr:parte_produccion' %}"
                    class="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900 sm:self-auto"
-                   title="Registrar parte de producción (asistente paso OPP)">
+                   title="Registrar parte de producción (tablero consolidado)">
                     <span class="material-icons text-lg" aria-hidden="true">assignment</span>
-                    Registrar OPP
+                    Parte de producción
                 </a>
                 {% endif %}
             </div>
