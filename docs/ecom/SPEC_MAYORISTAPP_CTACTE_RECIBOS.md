@@ -69,7 +69,31 @@ Top artículos por **cantidad vendida** al cliente (`stock.CodigoCP`), ventana p
 
 ---
 
-## 5 — Pendientes Fase C
+## 6 — Alta de recibo (`recibo/alta_recibo.php` + `json_recibo.php`)
+
+Wizard móvil por pasos: inicio → imputación de facturas → medios de cobro (MVP: efectivo) → confirmación y guardado.
+
+| Acción PHP | Método | Ruta Synap | Notas |
+|------------|--------|------------|--------|
+| `altaRecibo=1` | POST | `/ecom/api/mayoristapp/recibos/alta/accion/?ajax=1` | Cuerpo `{ "iniciar": 1, "tipoNro": "sistema" \| "talonario", ... }`. Inicializa `session['recibo']`. |
+| `listarFacturas=1` | POST | `/ecom/api/mayoristapp/fe/facturas-imputar/listado/?ajax=1` | Reutilizado del relay FE. |
+| `imputarFactura` / `desimputarFactura` / `finImputacion` | POST | `/ecom/api/mayoristapp/fe/facturas-imputar/accion/?ajax=1` | Sesión `recibo.facturas`; `finImputacion` fija `totalImputado`. |
+| `altaEfectivo` / cheques / tarjetas / transferencias / retenciones / descuento / `saldoAFavor` | POST | `…/recibos/alta/accion/?ajax=1` | Ver `INVENTARIO_FORMULARIO_ALTA_RECIBO.md`. |
+| Catálogos (PV, cotización, cuentas, tarjetas…) | GET | `…/recibos/alta/catalogos/?ajax=1&tipo=…` | Solo lectura; no requiere `cobranzas.editar`. |
+| `traeResumenRecibo` / `controlFinalRecibo` | POST | `…/recibos/alta/accion/?ajax=1` | `{ "resumen": 1 }`, `{ "controlFinal": 1 }`. |
+| `guardarRecibo=1` | POST | `…/recibos/alta/accion/?ajax=1` o facturas-imputar/accion | Reserva `codmov` + talonario REC (sistema), persiste imputación (`guardar_recibo_imputacion_legacy`) e ingreso caja si hay efectivo. |
+
+**UI:** `/ecom/mayoristapp/recibos/alta/` (`alta_recibo_mayoristapp.html`). Requiere cliente en sesión; enlace desde hub «Alta recibo».
+
+**Permisos:** `ecom.cobranzas.editar` en APIs de escritura. **Flags módulo ecom:** `cobranzas_write_enabled` (guardar/alta/efectivo), `fe_write_enabled` o `cobranzas_write_enabled` para imputar. Overrides Django: `MAYORISTAPP_RECIBO_WRITE_ENABLED`, `MAYORISTAPP_FE_WRITE_ENABLED`.
+
+**Asiento contable:** si `configuracion.activ_contabilidad = 'Si'` y el PV del recibo tiene `cont = 'Si'`, `guardar_recibo` genera asiento en `cont_asiento` (paridad `generar_asiento_cont`).
+
+**Saldo a favor:** el wizard permite aplicar saldo existente (`saldoAFavor` en sesión); al guardar se consumen líneas `recibo_factura` REC/NCA/… en orden FIFO.
+
+---
+
+## 7 — Pendientes Fase C
 
 - Tests de integración MySQL (`@pytest.mark.integration`).
 

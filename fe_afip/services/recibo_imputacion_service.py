@@ -100,3 +100,15 @@ def resumen_imputacion_sesion(session: Dict[str, Any]) -> Dict[str, Any]:
         return {"msg": "fallo", "total": 0.0, "resumen": []}
     return {"msg": "ok", "total": float(total), "resumen": resumen}
 
+
+def fin_imputacion_sesion(session: Dict[str, Any]) -> Dict[str, Any]:
+    """Cierra paso imputación y persiste ``totalImputado`` en sesión."""
+    data = resumen_imputacion_sesion(session)
+    if data.get("msg") == "ok":
+        recibo = session.get("recibo")
+        if not isinstance(recibo, dict):
+            recibo = {}
+            session["recibo"] = recibo
+        recibo["totalImputado"] = data["total"]
+    return data
+

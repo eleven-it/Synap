@@ -20,6 +20,7 @@ from django.test import TestCase, SimpleTestCase, RequestFactory
 from django.urls import reverse
 
 from mpr.models import MprEnvioProduccion
+from mpr.repositories.envio_produccion import crear_envios_lote
 from mpr.services import (
     TIPO_MPR_2DA_SELECCION,
     TIPO_MPR_PLANCHADO,
@@ -33,7 +34,8 @@ from mpr.services import (
 )
 
 User = get_user_model()
-EMPRESA = "empresa_test"
+EMPRESA = "administranet93"
+ART_ENVIO_TEST = 999042
 
 
 # ===========================================================================
@@ -70,6 +72,35 @@ def _stock_pivot(produccion=0.0):
 
 def _desc_map():
     return {42: ("C-42", "Componente 42")}
+
+
+def _count_envios_mysql(id_articulos=None):
+    from mpr.db import mysql_cursor
+
+    with mysql_cursor(EMPRESA) as c:
+        if id_articulos:
+            ph = ",".join(["%s"] * len(id_articulos))
+            c.execute(
+                f"SELECT COUNT(*) FROM mpr_envio_produccion "
+                f"WHERE anulado = 0 AND id_articulo IN ({ph})",
+                list(id_articulos),
+            )
+        else:
+            c.execute("SELECT COUNT(*) FROM mpr_envio_produccion WHERE anulado = 0")
+        return int(c.fetchone()[0])
+
+
+def _limpiar_envios_mysql(id_articulos):
+    from mpr.db import mysql_cursor
+
+    if not id_articulos:
+        return
+    ph = ",".join(["%s"] * len(id_articulos))
+    with mysql_cursor(EMPRESA) as c:
+        c.execute(
+            f"DELETE FROM mpr_envio_produccion WHERE id_articulo IN ({ph})",
+            list(id_articulos),
+        )
 
 
 def _filas_pack(demanda=50.0):
@@ -145,6 +176,14 @@ class TestMprEnvioProduccionModelo(TestCase):
 class TestEnviarProduccionLote(TestCase):
     """REQ: Servicio de Envío por Lote — Spec 1."""
 
+    _ARTS = [10, 20, 30, 40, 99, 42]
+
+    def setUp(self):
+        _limpiar_envios_mysql(self._ARTS)
+
+    def tearDown(self):
+        _limpiar_envios_mysql(self._ARTS)
+
     def test_lote_3_filas_validas_crea_3_registros(self):
         """Lote con 3 filas válidas crea 3 registros en transacción única."""
         items = [
@@ -156,7 +195,7 @@ class TestEnviarProduccionLote(TestCase):
         self.assertTrue(ok)
         self.assertEqual(creados, 3)
         self.assertIsNone(error)
-        self.assertEqual(MprEnvioProduccion.objects.filter(base_empresa=EMPRESA).count(), 3)
+        self.assertEqual(_count_envios_mysql([10, 20, 30]), 3)
 
     def test_omite_qty_cero_con_warning(self):
         """Items con cantidades {10, 0, -5, 8} crea solo 2 registros (10 y 8)."""
@@ -171,9 +210,16 @@ class TestEnviarProduccionLote(TestCase):
         self.assertEqual(creados, 2)
         self.assertEqual(len(warnings), 2)
         self.assertIsNone(error)
-        ids_creados = list(
-            MprEnvioProduccion.objects.filter(base_empresa=EMPRESA).values_list("id_articulo", flat=True)
-        )
+        ids_creados = []
+        from mpr.db import mysql_cursor
+
+        with mysql_cursor(EMPRESA) as c:
+            c.execute(
+                "SELECT id_articulo FROM mpr_envio_produccion "
+                "WHERE anulado = 0 AND id_articulo IN (%s, %s, %s, %s)",
+                [10, 20, 30, 40],
+            )
+            ids_creados = [row[0] for row in c.fetchall()]
         self.assertIn(10, ids_creados)
         self.assertIn(40, ids_creados)
         self.assertNotIn(20, ids_creados)
@@ -221,18 +267,35 @@ class TestEnviarProduccionLote(TestCase):
 class TestQueryEnviadoTableroComponente(TestCase):
     """REQ: Helper de Consulta Backward-Safe — Spec 1."""
 
+    def setUp(self):
+        from mpr.db import mysql_cursor
+
+        with mysql_cursor(EMPRESA) as c:
+            c.execute(
+                "DELETE FROM mpr_envio_produccion WHERE id_articulo IN (%s, %s, %s)",
+                [42, 10, 20],
+            )
+
+    def tearDown(self):
+        from mpr.db import mysql_cursor
+
+        with mysql_cursor(EMPRESA) as c:
+            c.execute(
+                "DELETE FROM mpr_envio_produccion WHERE id_articulo IN (%s, %s, %s)",
+                [42, 10, 20],
+            )
+
     def test_suma_solo_no_anulados(self):
         """comp_id=42 con 2 envíos activos (10,15) y 1 anulado (5) retorna {42: 25}."""
-        MprEnvioProduccion.objects.create(
-            base_empresa=EMPRESA, id_articulo=42, cantidad=Decimal("10"), id_usuario=1,
-        )
-        MprEnvioProduccion.objects.create(
-            base_empresa=EMPRESA, id_articulo=42, cantidad=Decimal("15"), id_usuario=1,
-        )
-        MprEnvioProduccion.objects.create(
-            base_empresa=EMPRESA, id_articulo=42, cantidad=Decimal("5"), id_usuario=1,
-            anulado=True,
-        )
+        crear_envios_lote(EMPRESA, 1, [(42, Decimal("10")), (42, Decimal("15"))])
+        from mpr.db import mysql_cursor
+
+        with mysql_cursor(EMPRESA) as c:
+            c.execute(
+                "INSERT INTO mpr_envio_produccion "
+                "(id_articulo, cantidad, id_usuario, anulado) VALUES (%s, %s, %s, %s)",
+                [42, Decimal("5"), 1, 1],
+            )
         resultado = _query_enviado_tablero_componente(EMPRESA, [42])
         self.assertIn(42, resultado)
         self.assertEqual(resultado[42], Decimal("25"))
@@ -249,12 +312,7 @@ class TestQueryEnviadoTableroComponente(TestCase):
 
     def test_filtra_por_comp_ids(self):
         """Solo retorna datos para los comp_ids solicitados."""
-        MprEnvioProduccion.objects.create(
-            base_empresa=EMPRESA, id_articulo=10, cantidad=Decimal("5"), id_usuario=1,
-        )
-        MprEnvioProduccion.objects.create(
-            base_empresa=EMPRESA, id_articulo=20, cantidad=Decimal("8"), id_usuario=1,
-        )
+        crear_envios_lote(EMPRESA, 1, [(10, Decimal("5")), (20, Decimal("8"))])
         resultado = _query_enviado_tablero_componente(EMPRESA, [10])
         self.assertIn(10, resultado)
         self.assertNotIn(20, resultado)

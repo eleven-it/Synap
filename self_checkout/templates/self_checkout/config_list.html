@@ -28,17 +28,6 @@
         </a>
       </div>
     </header>
-
-    {% if messages %}
-    <div class="mb-6 space-y-2">
-      {% for message in messages %}
-      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">
-        {{ message }}
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-
     <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden">
       {% if kiosks %}
       <div class="overflow-x-auto">

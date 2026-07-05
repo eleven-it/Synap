@@ -1,6 +1,6 @@
 # Tablero de Demanda Consolidado por Artículo — MPR Etapa 2
 
-**Fecha:** 2026-07-02 (actualizado 03/07/2026 — Etapa 7: Enviado dos fuentes, col Enviar)  
+**Fecha:** 2026-07-02 (actualizado 04/07/2026 — desacople OPT/OPP del flujo diario)  
 **Change:** `mpr-pipeline-etapa2-tablero-consolidado`  
 **Artefactos SDD:** Proposal #969, Spec #970, Design #971, Tasks #973  
 
@@ -11,13 +11,16 @@
 > «Clasificación de producción» (ver `ACCIONES_LOTE_TABLERO.md`). Las referencias abajo a
 > **Actualización Etapa 11 (04/07/2026):** el tablero consolidado es la **entrada principal**
 > del módulo MPR (menú, URL del módulo y barra rápida). Ventana pack y asistente wizard quedan
-> en «Trazabilidad OPT (avanzado)». Ver `NAVIGACION_MPR_ETAPA11.md`.
+> **Menú (04/07/2026):** solo flujo MPR diario; sin sección OPT legacy. Ver `NAVIGACION_MPR_ETAPA11.md`.
+
 
 ---
 
 ## Propósito
 
-El **Tablero de producción** es una vista viva de solo lectura que consolida la demanda del pipeline MPR a nivel de artículo/componente. Mientras la Ventana de Packs (OPT) muestra la demanda a nivel pack, este tablero la explota mediante BOM al nivel de insumo/componente, presentando las 10 columnas canónicas del pipeline.
+El **Tablero de producción** es una vista viva de solo lectura que consolida la demanda del pipeline MPR a nivel de artículo/componente. Explota la demanda de packs terminados (desde pedidos PED en vivo) mediante BOM al nivel de insumo/componente.
+
+> **Desacople OPT/OPP (04/07/2026):** el tablero **no** lee `lista_produccion_*`, OPT liberadas ni OPP-parte. La columna **Fabricando** proviene únicamente de envíos directos (`mpr_envio_produccion`). Las tablas OPT legacy fueron eliminables vía `drop_mpr_lista_produccion_legacy`; el menú ya no expone ventana pack, wizard ni listado OPT.
 
 A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herramienta operativa de fábrica: muestra cuánto hay de cada componente en cada etapa del proceso, cuánto falta producir y cuánto ya fue enviado.
 
@@ -37,70 +40,40 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 |---|---------|------|-------------|
 | 1 | **Artículo** | metadato | Código manual + descripción del artículo/componente. Sticky-left al hacer scroll horizontal. |
 | 2 | **Pendiente de producir** | virtual derivado | `max(0, Demanda − [Enviado + Total])`. Rojo si > 0. |
-| 3 | **Enviado a producción** | virtual definitivo (Etapa 4) | `max(0, OPT_liberado_acumulado − OPP_parte_acumulado)` explotado por BOM a nivel componente. Ver sección Enviado. |
+| 3 | **Fabricando** | virtual | `max(0, Σ envíos directos al tablero − stock Producido)` por componente (`mpr_envio_produccion`). |
 | 4 | **Producción** | físico | Saldo en depósito `tipo_mpr = 'Produccion'`. |
 | 5 | **Planchado** | físico | Saldo en depósito `tipo_mpr = 'Planchado'`. |
 | 6 | **2da Selección** | físico | Saldo en depósito `tipo_mpr = '2daSeleccion'`. |
 | 7 | **Semi Elaborado** | físico | Saldo en depósito `tipo_mpr = 'SemiElaborado'`. |
 | 8 | **Desperdicio** | físico | Saldo en depósito `tipo_mpr = 'Scrap'`. **No suma al Total.** Mostrado en itálica/gris. |
 | 9 | **Terminado** | físico | Saldo en depósito `tipo_mpr = 'Terminado'`. |
-| 10 | **Total** | derivado | Suma del saldo **que suma stock** de las etapas físicas en `TIPOS_QUE_SUMAN_STOCK` (cols 4–7 y 9, excluye Desperdicio). Respeta el flag `deposito.suma_stock` por depósito: si un depósito de una etapa que integra el Total tiene `suma_stock='No'`, su saldo se muestra en la columna de la etapa pero **no** se cuenta en el Total. Verde. |
+| 10 | **Total** | derivado | Suma del saldo de las etapas en `TIPOS_QUE_SUMAN_STOCK` (Producción, 2da Selección, Semi Elaborado, Terminado). **Scrap/Desperdicio no suma.** Los depósitos con esos tipos MPR tienen `suma_stock='Si'` obligatorio (Synap lo fuerza al asignar tipo y en migración de esquema). Depósitos sin tipo o auxiliares (p. ej. tránsito) pueden tener `suma_stock='No'`. Verde. |
 
 ---
 
 ## Algoritmo del Servicio `listar_tablero_por_articulo()`
 
-El servicio centraliza todo el cálculo en 14 pasos:
-
 ```
-Paso 1:  listar_ventana_pack(base, limit*2, fecha_desde, fecha_hasta)
-         → filas_pack (packs con demanda pendiente, OPT no liberada)
+Paso 1:  listar_demanda_pack_desde_pedidos(base, limit*2, fecha_desde, fecha_hasta)
+         → filas_pack (demanda en vivo desde stockp + comp_ped PED)
 
-Paso 2:  _query_enviado_packs(cursor, tbl_agrupada, fecha_desde, fecha_hasta)
-         → enviado_pack_map {id_pack: sum(cantidad_asignada_opt)}
-         (packs con OPT ya liberada: codigo_movimiento_opt > 0)
+Paso 2:  _query_enviados_todos_componentes(base)
+         → componentes con envío directo al tablero (sin demanda pack)
 
-Paso 3:  art_ids = union(filas_pack.id_articulo, enviado_pack_map.keys())
+Paso 3:  Explosión BOM: dem_ped, dem_res desde filas_pack
 
-Paso 4:  abm_map = bulk_id_en_abm(base, art_ids)   — único batch ABM
+Paso 4:  comp_ids = demanda ∪ envíos directos
 
-Paso 5:  bom_map = bulk_bom_detalle(base, abm_map.values())  — único batch BOM
+Paso 5:  Enviado = max(0, Σ mpr_envio_produccion − stock Producido) por componente
 
-Paso 6:  dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(
-             filas_pack, abm_map, bom_map)
-         → demanda por pedido y por reserva, explotadas vía BOM
-
-Paso 7:  enviado_comp = _enviado_produccion_por_componente(
-             enviado_pack_map, abm_map, bom_map)
-         → demanda enviada virtual, explotada vía BOM
-
-Paso 8:  comp_ids = set(dem_ped) | set(dem_res)
-         → solo componentes con demanda derivada
-
-Paso 9:  stock_pivot = _pivot_stock_por_tipo_mpr(base, list(comp_ids))
-         → 1 round-trip SQL GROUP BY id_articulo, tipo_mpr
-
-Paso 10: desc_map = _fetch_descripciones_articulo(base, list(comp_ids))
-         → 1 query SQL
-
-Paso 11: Por cada comp_id construir fila con 10 columnas:
-         demanda = dem_ped[comp] + dem_res[comp]
-         urgente = dem_ped[comp]
-         enviado = enviado_comp.get(comp, 0)
-         # stock_suma = saldo por tipo solo de depósitos con suma_stock='Si'
-         total = sum(stock_suma[tipo] for tipo in TIPOS_QUE_SUMAN_STOCK)
-         pendiente = max(0, demanda - [enviado + total])
-
-Paso 12: sort(key=lambda r: -r['pendiente'])
-
-Paso 13: if solo_pendiente: filtrar r['pendiente'] > 0
-
-Paso 14: return[:limit]
+Paso 6:  stock_pivot, desc_map, construir filas, ordenar por pendiente
 ```
+
+La demanda **no** depende de «Actualizar demanda» ni de `lista_produccion_*`. El botón **Actualizar vista** solo refresca el timestamp de sesión.
 
 ### Invariantes de diseño
 
-- `enviado` y `produccion` son **independientes por construcción**: `enviado` viene de OPT (`lista_produccion_agrupada`), `produccion` viene de `stock_deposito`. No pueden ser iguales "por diseño".
+- `enviado` (Fabricando) y `produccion` (Producido) son **independientes**: Fabricando viene de `mpr_envio_produccion`; Producido de `stock_deposito`.
 - `desperdicio` (**Scrap**) **no se incluye en `total`**. Está separado visualmente.
 - `pendiente` nunca es negativo (`max(0, ...)`).
 
@@ -147,7 +120,7 @@ El tooltip y la nota al pie "PROVISIONAL" se eliminaron en Etapa 4. La columna m
 
 | Filtro | Tipo | Descripción |
 |--------|------|-------------|
-| Fecha desde / hasta | server-side | Pasa a `listar_ventana_pack()` y `_query_enviado_packs()`. Restringe los packs considerados. |
+| Fecha desde / hasta | server-side | Restringe la **demanda** a pedidos PED (`comp_ped.Fecha`) en el rango. No filtra stock ni envíos del pipeline. Etiqueta UI: «Demanda — fecha del pedido PED». |
 | Búsqueda por artículo | client-side (Alpine.js) | Filtra filas visibles por `data-descripcion` (descripción + código). Sin round-trip. |
 | Solo con pendiente | server-side | Toggle que filtra en Python antes de renderizar (`pendiente > 0`). |
 
@@ -250,7 +223,7 @@ Cobertura de los tests:
 - Enviado ≠ Producción por construcción
 - Tablero vacío sin error
 - Artículo sin BOM no aparece
-- Toggle solo_pendiente filtra correctamente
+- Toggle **Solo pendientes** activo por defecto; la elección se persiste en sesión (`tablero_produccion_solo_pendiente`) por usuario
 - Ordenamiento descendente por pendiente
 - Idempotencia del índice `idx_sd_art_dep`
 - Constantes TIPOS_QUE_SUMAN_STOCK excluyen Scrap
@@ -302,10 +275,11 @@ Ver [TRANSICIONES_LOTE.md](TRANSICIONES_LOTE.md) para detalles del servicio.
 Enviado[comp] = Enviado_OPT[comp] + Enviado_tablero[comp]
 
 Enviado_OPT[comp]     = max(0, OPT_liberado_acum − OPP_parte_acum)   ← E4, intacto
-Enviado_tablero[comp] = max(0, SUM(envíos_tablero[comp]) − stock_produccion[comp])
+Enviado_tablero[comp] = max(0, SUM(envíos_tablero[comp]) − stock_pipeline[comp])
+stock_pipeline = Producido + Semi + 2da + Scrap + Terminado
 ```
 
-**Sin doble conteo:** cuando un envío tablero genera un parte y ese parte escribe `stock_produccion`, la fórmula `max(0, envíos − stock_prod)` absorbe la diferencia automáticamente.
+**Sin doble conteo:** al registrar parte o clasificar hacia Semi/2da/Scrap, el stock pipeline acredita envíos; Fabricando no repunta al vaciar Producido.
 
 ### Paso 7b en el algoritmo
 
@@ -321,9 +295,9 @@ Paso 11 (por comp_id):
    enviado_opt         = enviado_comp.get(comp_id, 0.0)
    stock_prod          = stock_pivot[comp_id].get(TIPO_MPR_PRODUCCION, 0.0)
    envios_dir          = float(envios_tablero.get(comp_id, 0))
-   enviado_tablero_val = max(0.0, envios_dir - stock_prod)   # clamp >= 0
+   enviado_tablero_val = max(0.0, envios_dir - stock_pipeline)   # stock_pipeline = prod+semi+2da+scrap+term
    enviado             = enviado_opt + enviado_tablero_val
-   pendiente           = max(0.0, demanda - (enviado + total))
+     pendiente           = max(0.0, (demanda - total) - envios_dir)
 ```
 
 ### Columna "Enviar" (col 11, nueva en E7)

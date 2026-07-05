@@ -4,8 +4,9 @@
 {% block title %}Tablero de producción — MPR — Synap{% endblock %}
 
 {% block content %}
-<section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
-    <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-3 transition-colors duration-300 dark:bg-slate-900 sm:py-4">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12"
+         x-data="{ envioModalOpen: false, envioCount: 0, envioEmpty: false, busqueda: '' }">
 
         {# Encabezado fijo #}
         <div class="flex-shrink-0">
@@ -19,82 +20,72 @@
             </nav>
 
             {# Frame de encabezado #}
-            <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 dark:bg-slate-900 sm:mb-4 sm:p-4"
-                 x-data="{ envioModalOpen: false, envioCount: 0, envioEmpty: false }">
-                <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-                    <div class="min-w-0">
-                        <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">
-                            Tablero de demanda consolidado
-                        </h1>
-                        <p class="mt-0.5 text-xs text-slate-400">
-                            Demanda por artículo/componente — 10 columnas del pipeline MPR
-                        </p>
-                    </div>
+            <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 dark:bg-slate-900 sm:mb-4 sm:p-4">
+                <header class="flex flex-col">
+                    <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">
+                        Tablero de demanda consolidado
+                    </h1>
+                    <div class="mt-0.5 h-[1.125rem] sm:h-5" aria-hidden="true"></div>
 
-                    <div class="flex flex-wrap items-end gap-2 sm:gap-2.5 sm:shrink-0">
-                        {# Formulario de filtros de fecha (server-side) #}
-                        <form method="get" action="" class="flex flex-wrap items-end gap-2">
-                            <label class="flex flex-col gap-0.5">
-                                <span class="text-[10px] font-medium text-slate-400">Fecha desde</span>
-                                <input type="date" name="fecha_desde" value="{{ fecha_desde|default:'' }}"
-                                       class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
-                            </label>
-                            <label class="flex flex-col gap-0.5">
-                                <span class="text-[10px] font-medium text-slate-400">Fecha hasta</span>
-                                <input type="date" name="fecha_hasta" value="{{ fecha_hasta|default:'' }}"
-                                       class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
-                            </label>
-                            {% if solo_pendiente %}
-                            <input type="hidden" name="solo_pendiente" value="1"/>
+                    {# Una fila, dos columnas: filtros (izq.) | resto de acciones (der.) #}
+                    <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
+                        <div class="flex min-w-0 flex-col gap-1">
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400" id="filtro-fecha-pedido-label">
+                                Demanda — fecha del pedido PED
+                            </span>
+                            <form method="get" action="" class="flex flex-wrap items-end gap-2" aria-labelledby="filtro-fecha-pedido-label">
+                                <label class="flex flex-col gap-0.5">
+                                    <span class="text-[10px] font-medium text-slate-400">Desde</span>
+                                    <input type="date" name="fecha_desde" value="{{ fecha_desde|default:'' }}"
+                                           class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
+                                </label>
+                                <label class="flex flex-col gap-0.5">
+                                    <span class="text-[10px] font-medium text-slate-400">Hasta</span>
+                                    <input type="date" name="fecha_hasta" value="{{ fecha_hasta|default:'' }}"
+                                           class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
+                                </label>
+                                <input type="hidden" name="solo_pendiente" value="{% if solo_pendiente %}1{% else %}0{% endif %}"/>
+                                <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                    <span class="material-icons text-base" aria-hidden="true">filter_list</span>
+                                    Filtrar
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="flex min-w-0 flex-wrap items-end justify-start gap-2 sm:justify-end sm:gap-2.5">
+                            <form method="post" action="{% url 'mpr:tablero_produccion_actualizar' %}"
+                                  class="mpr-post-loading"
+                                  data-mpr-loading-title="Actualizando vista"
+                                  data-mpr-loading-subtitle="Recalculando demanda desde pedidos PED…">
+                                {% csrf_token %}
+                                <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                    <span class="material-icons text-base" aria-hidden="true">refresh</span>
+                                    Actualizar vista
+                                </button>
+                            </form>
+                            <a href="{{ tablero_url }}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                <span class="material-icons text-base" aria-hidden="true">dashboard</span>
+                                Tablero KPIs
+                            </a>
+                            <a href="{% url 'mpr:parte_produccion' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                <span class="material-icons text-base" aria-hidden="true">assignment</span>
+                                Parte de producción
+                            </a>
+                            <a href="{% url 'mpr:clasificacion_produccion' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                <span class="material-icons text-base" aria-hidden="true">category</span>
+                                Clasificación de producción
+                            </a>
+                            <a href="{% url 'mpr:armado' %}?modo=1ra" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                <span class="material-icons text-base" aria-hidden="true">build</span>
+                                Armado
+                            </a>
+                            {% if puede_anular_envios %}
+                            <a href="{% url 'mpr:envios_produccion' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-red-500/70 bg-red-900/40 px-3 py-1.5 text-xs font-medium text-red-100 transition-colors hover:bg-red-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                <span class="material-icons text-base" aria-hidden="true">undo</span>
+                                Anular envíos
+                            </a>
                             {% endif %}
-                            <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                                <span class="material-icons text-base" aria-hidden="true">filter_list</span>
-                                Filtrar
-                            </button>
-                        </form>
-
-                        {# Botón Actualizar demanda #}
-                        <form method="post" action="{% url 'mpr:tablero_produccion_actualizar' %}"
-                              class="mpr-post-loading"
-                              data-mpr-loading-title="Actualizando demanda"
-                              data-mpr-loading-subtitle="Sincronizando pedidos con la lista de producción… No cierres esta ventana.">
-                            {% csrf_token %}
-                            <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                                <span class="material-icons text-base" aria-hidden="true">refresh</span>
-                                Actualizar demanda
-                            </button>
-                        </form>
-
-                        {# Botón Enviar a producción — Etapa 7 (abre modal Synap; form fantasma anti-nesting) #}
-                        <button type="button"
-                                @click="
-                                    const filas = Array.from(document.querySelectorAll('[data-envio-qty]')).filter(el => !el.disabled && parseFloat(el.value || 0) > 0);
-                                    envioCount = filas.length;
-                                    envioEmpty = filas.length === 0;
-                                    envioModalOpen = true;
-                                "
-                                class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                            <span class="material-icons text-base" aria-hidden="true">send</span>
-                            Enviar a producción
-                        </button>
-
-                        {# Enlace de retorno a tablero #}
-                        <a href="{{ tablero_url }}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                            <span class="material-icons text-base" aria-hidden="true">dashboard</span>
-                            Tablero
-                        </a>
-                        <a href="{{ opt_list_url }}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                            <span class="material-icons text-base" aria-hidden="true">list_alt</span>
-                            Trazabilidad OPT
-                        </a>
-                        <a href="{% url 'mpr:parte_produccion' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                            <span class="material-icons text-base" aria-hidden="true">assignment</span>
-                            Parte de producción
-                        </a>
-                        <a href="{% url 'mpr:clasificacion_produccion' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                            <span class="material-icons text-base" aria-hidden="true">category</span>
-                            Clasificación de producción
-                        </a>
+                        </div>
                     </div>
                 </header>
 
@@ -106,16 +97,16 @@
                     </p>
                     <div class="flex gap-2">
                         {% if solo_pendiente %}
-                        <a href="?fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}"
+                        <a href="?solo_pendiente=0&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}"
                            class="inline-flex items-center gap-1 rounded-md bg-purple-700 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-purple-600">
                             <span class="material-icons text-xs" aria-hidden="true">check_box</span>
-                            Solo pendientes (activo)
+                            Solo pendientes
                         </a>
                         {% else %}
-                        <a href="?solo_pendiente=1&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}"
+                        <a href="?solo_pendiente=1&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}"
                            class="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition-colors hover:bg-slate-700">
                             <span class="material-icons text-xs" aria-hidden="true">check_box_outline_blank</span>
-                            Solo con pendiente
+                            Solo pendientes
                         </a>
                         {% endif %}
                     </div>
@@ -165,7 +156,8 @@
                                             class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
                                         Cancelar
                                     </button>
-                                    <button type="submit" form="form-enviar-lote"
+                                    <button type="button"
+                                            @click="confirmarEnvioProduccion()"
                                             class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-medium text-white hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:bg-emerald-700 dark:hover:bg-emerald-600">
                                         <span class="material-icons text-sm" aria-hidden="true">check</span>
                                         Confirmar envío
@@ -178,37 +170,17 @@
             </div>
         </div>{# fin encabezado #}
 
-        {# Mensajes Django — se consumen aquí (evita que se filtren a otras pantallas) #}
-        {% if messages %}
-        <div class="mb-3 flex flex-col gap-2">
-            {% for msg in messages %}
-            <div class="flex items-start gap-3 rounded-xl border px-4 py-3
-                {% if msg.tags == 'success' %}border-green-200 bg-green-50 dark:border-green-700/50 dark:bg-green-900/20{% elif msg.tags == 'error' %}border-red-200 bg-red-50 dark:border-red-700/50 dark:bg-red-900/20{% else %}border-amber-200 bg-amber-50 dark:border-amber-700/50 dark:bg-amber-900/20{% endif %}">
-                <span class="material-icons text-lg
-                    {% if msg.tags == 'success' %}text-green-600 dark:text-green-400{% elif msg.tags == 'error' %}text-red-600 dark:text-red-400{% else %}text-amber-600 dark:text-amber-400{% endif %}"
-                    aria-hidden="true">
-                    {% if msg.tags == 'success' %}check_circle{% elif msg.tags == 'error' %}error{% else %}warning{% endif %}
-                </span>
-                <p class="text-sm font-medium
-                    {% if msg.tags == 'success' %}text-green-800 dark:text-green-200{% elif msg.tags == 'error' %}text-red-800 dark:text-red-200{% else %}text-amber-800 dark:text-amber-200{% endif %}">
-                    {{ msg }}
-                </p>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-
         {# Zona de tabla con búsqueda Alpine y scroll #}
-        <div x-data="{ busqueda: '' }" class="flex flex-col">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
 
-            {# Búsqueda client-side + contador #}
+            {# Búsqueda client-side + envío a producción #}
             <div class="mb-2 flex flex-shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                 <div class="flex items-center gap-1.5">
                     <p class="text-[11px] text-slate-400 dark:text-slate-500 sm:text-xs">
                         Deslizá horizontalmente para ver todas las columnas
                     </p>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center justify-end gap-2">
                     <div class="relative min-w-0 sm:w-72">
                         <span class="material-icons absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
                         <input type="text"
@@ -216,48 +188,57 @@
                                placeholder="Buscar artículo…"
                                class="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-purple-500"/>
                     </div>
+                    <button type="button"
+                            @click="
+                                const filas = window.mprLineasEnvioConCantidad();
+                                envioCount = filas.length;
+                                envioEmpty = filas.length === 0;
+                                envioModalOpen = true;
+                            "
+                            class="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
+                        <span class="material-icons text-base" aria-hidden="true">send</span>
+                        Enviar a producción
+                    </button>
                 </div>
             </div>
 
-            {# Tabla principal #}
-            <div class="min-h-0 overflow-x-auto overflow-y-auto rounded-lg border border-slate-200 shadow-sm dark:border-slate-700"
+            {# Tabla principal — scroll interno; thead fijo #}
+            <div class="relative z-0 min-h-0 flex-1 overflow-auto overscroll-contain rounded-lg border border-slate-200 shadow-sm dark:border-slate-700"
                  role="region" aria-label="Tablero de demanda consolidado">
-                <table class="min-w-[72rem] w-full divide-y divide-slate-200 dark:divide-slate-700">
-                    <caption class="sr-only">Tablero de demanda consolidada por artículo/componente — 9 columnas del pipeline MPR</caption>
-                    <thead class="sticky top-0 z-20 bg-slate-50/95 dark:bg-slate-800/90 backdrop-blur-sm">
+                <table class="min-w-[72rem] w-full border-separate border-spacing-0 divide-y divide-slate-200 dark:divide-slate-700">
+                    <caption class="sr-only">Tablero de demanda consolidada por artículo/componente — pipeline MPR</caption>
+                    <thead>
                         <tr>
-                            {# Col 1: Artículo sticky-left #}
+                            {# Col 1: Artículo — fijo al scroll vertical y horizontal #}
                             <th scope="col"
-                                class="sticky left-0 z-30 min-w-[14rem] bg-slate-50/95 px-4 py-2.5 text-left text-xs font-semibold text-slate-600 dark:bg-slate-800/90 dark:text-slate-300 sm:px-5">
+                                class="sticky left-0 top-0 z-20 min-w-[18rem] border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-xs font-semibold text-slate-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)] sm:min-w-[20rem] sm:px-5">
                                 Artículo
                             </th>
                             {# Col 2: Pendiente #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                 Pendiente
                             </th>
                             {# Col 3: Fabricando (antes "Enviado") #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">
+                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                 Fabricando
                             </th>
                             {# Col 4: Producido (antes "Producción") #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Producido</th>
+                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Producido</th>
                             {# Col 5: 2da Selección #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">2da Selección</th>
+                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">2da Selección</th>
                             {# Col 6: Semi Elaborado #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Semi Elaborado</th>
+                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Semi Elaborado</th>
                             {# Col 7: Desperdicio (no suma al total) #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold italic text-slate-400 dark:text-slate-500">
+                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold italic text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500">
                                 Desperdicio
                                 <span title="No se incluye en el Total" class="cursor-help">·</span>
                             </th>
                             {# Col 8: Terminado #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Terminado</th>
+                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Terminado</th>
                             {# Col 9: Total #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Total</th>
-                            {# Col 10: Enviar (Etapa 7 — envío directo a producción) #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Enviar</th>
-                            {# Col 11: Trazabilidad (E9: botones por fila eliminados; solo enlace OPT) #}
-                            <th scope="col" class="whitespace-nowrap px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:text-slate-300">Trazabilidad</th>
+                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Total</th>
+                            {# Col 10: Enviar (envío directo a producción) #}
+                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Enviar</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
@@ -266,10 +247,10 @@
                             data-descripcion="{{ fila.descripcion_articulo|lower }} {{ fila.codigo_manual|lower }}"
                             x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase())">
                             {# Col 1: Artículo sticky-left #}
-                            <td class="sticky left-0 z-10 min-w-[14rem] bg-white px-4 py-2.5 dark:bg-slate-900">
-                                <div class="flex flex-col gap-0.5">
-                                    <span class="text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-200">{{ fila.codigo_manual }}</span>
-                                    <span class="text-[11px] leading-tight text-slate-500 dark:text-slate-400">{{ fila.descripcion_articulo }}</span>
+                            <td class="sticky left-0 z-10 min-w-[18rem] max-w-[28rem] bg-white px-4 py-2.5 dark:bg-slate-900 sm:min-w-[20rem]">
+                                <div class="flex flex-col gap-1">
+                                    <span class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">{{ fila.codigo_manual }}</span>
+                                    <span class="text-sm leading-snug text-slate-600 dark:text-slate-300">{{ fila.descripcion_articulo }}</span>
                                 </div>
                             </td>
                             {# Col 2: Pendiente #}
@@ -312,30 +293,17 @@
                                        data-envio-qty
                                        min="0" step="1"
                                        value="{% if fila.pendiente > 0 %}{{ fila.pendiente|floatformat:0 }}{% endif %}"
-                                       class="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                                       {% if fila.pendiente <= 0 %}disabled{% endif %}>
+                                       {% if fila.pendiente <= 0 %}disabled{% endif %}
+                                       class="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:disabled:bg-slate-800 dark:disabled:text-slate-500">
                                 <input form="form-enviar-lote"
                                        type="hidden"
                                        name="pendiente_{{ fila.id_articulo }}"
                                        value="{{ fila.pendiente }}">
                             </td>
-                            {# Col 11: Trazabilidad — E9: solo enlace OPT (botones de acción por fila eliminados) #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right">
-                                <div class="flex items-center justify-end gap-1">
-                                    {% if fila.id_lista_produccion %}
-                                    <a href="{% url 'mpr:opt_trazabilidad' id_lista=fila.id_lista_produccion %}"
-                                       title="Ver trazabilidad OPT {{ fila.id_lista_produccion }}"
-                                       class="inline-flex items-center rounded-md border border-purple-500 bg-purple-600 px-2 py-1 text-xs font-medium text-white hover:bg-purple-500 dark:border-purple-400 dark:bg-purple-700 dark:hover:bg-purple-600">
-                                        <span class="material-icons text-sm mr-0.5" aria-hidden="true">timeline</span>
-                                        Trazabilidad
-                                    </a>
-                                    {% endif %}
-                                </div>
-                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="11" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
+                            <td colspan="10" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
                                 Sin artículos con demanda en el rango especificado
                             </td>
                         </tr>
@@ -352,9 +320,10 @@
                 {% endif %}
             </div>
 
-            {# Nota al pie — Fabricando (fórmula definitiva Etapa 7) #}
-            <p class="mt-2 text-[11px] text-slate-400 dark:text-slate-500">
-                Columna <strong>Fabricando</strong>: Fabricando_OPT (max(0, OPT liberado − OPP parte)) + Fabricando_tablero (max(0, Σ envíos directos − stock Producido)), explotado por BOM a nivel componente.
+            {# Nota al pie — Fabricando #}
+            <p class="mt-2 flex-shrink-0 text-[11px] text-slate-400 dark:text-slate-500">
+                Columna <strong>Fabricando</strong>: max(0, Σ envíos − stock en pipeline MPR: Producido + Semi + 2da + Scrap + Terminado) por componente.
+                La demanda se calcula en vivo desde pedidos PED (sin lista de producción OPT/OPP).
             </p>
         </div>
     </div>
@@ -368,5 +337,60 @@
         <input type="hidden" name="filtros_qs"
                value="fecha_desde={{ fecha_desde|urlencode }}&amp;fecha_hasta={{ fecha_hasta|urlencode }}&amp;solo_pendiente={{ solo_pendiente|yesno:'1,0' }}">
     </form>
+
+    <script>
+    (function () {
+        function parseQty(val) {
+            var n = parseFloat(String(val || '').replace(',', '.'));
+            return isNaN(n) ? 0 : n;
+        }
+
+        function lineasEnvioConCantidad() {
+            return Array.from(document.querySelectorAll('[data-envio-qty]')).filter(function (el) {
+                return parseQty(el.value) > 0;
+            });
+        }
+
+        window.mprLineasEnvioConCantidad = lineasEnvioConCantidad;
+
+        window.confirmarEnvioProduccion = function () {
+            var form = document.getElementById('form-enviar-lote');
+            if (!form) return;
+            form.querySelectorAll('[data-envio-sync]').forEach(function (el) { el.remove(); });
+
+            var lineas = lineasEnvioConCantidad();
+            if (!lineas.length) return;
+
+            lineas.forEach(function (inp) {
+                var idArt = inp.name.replace(/^envio_/, '');
+                var qty = parseQty(inp.value);
+                if (qty <= 0 || !idArt) return;
+
+                var hQty = document.createElement('input');
+                hQty.type = 'hidden';
+                hQty.name = inp.name;
+                hQty.value = String(qty);
+                hQty.setAttribute('data-envio-sync', '1');
+                form.appendChild(hQty);
+
+                var pendSrc = document.querySelector('[name="pendiente_' + idArt + '"]');
+                if (pendSrc) {
+                    var hPend = document.createElement('input');
+                    hPend.type = 'hidden';
+                    hPend.name = pendSrc.name;
+                    hPend.value = pendSrc.value;
+                    hPend.setAttribute('data-envio-sync', '1');
+                    form.appendChild(hPend);
+                }
+            });
+
+            if (typeof form.requestSubmit === 'function') {
+                form.requestSubmit();
+            } else {
+                form.submit();
+            }
+        };
+    })();
+    </script>
 </section>
 {% endblock %}

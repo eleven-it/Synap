@@ -16,6 +16,7 @@ from mpr.services import (
     TIPO_MPR_TERMINADO,
     TIPOS_MPR_OPP,
     actualizar_deposito_tipo_mpr,
+    actualizar_deposito_suma_stock,
     get_deposito_planchado_mpr,
 )
 from mpr.pipeline import (
@@ -67,6 +68,36 @@ class TestConstantesPlanchado(SimpleTestCase):
         """REQ-004: La etiqueta asociada a TIPO_MPR_PLANCHADO debe ser 'Planchado'."""
         etiquetas = {v: label for v, label in TIPOS_MPR_CON_ETIQUETA}
         self.assertEqual(etiquetas.get(TIPO_MPR_PLANCHADO), "Planchado")
+
+
+class TestSumaStockEtapasProductivas(SimpleTestCase):
+    """Depósitos con tipo en TIPOS_QUE_SUMAN_STOCK deben mantener suma_stock='Si'."""
+
+    @patch("mpr.services.get_connection")
+    @patch("mpr.services._nombre_tabla", return_value="deposito")
+    def test_tipo_produccion_fuerza_suma_stock_si(self, _mock_tabla, mock_conn):
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = (0,)
+        mock_conn.return_value.__enter__ = MagicMock(return_value=mock_conn.return_value)
+        mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+        mock_conn.return_value.cursor.return_value = mock_cursor
+        ok, error = actualizar_deposito_tipo_mpr("empresa_test", 1, TIPO_MPR_PRODUCCION)
+        self.assertTrue(ok)
+        self.assertIsNone(error)
+        sql = mock_cursor.execute.call_args_list[-1][0][0]
+        self.assertIn("suma_stock = 'Si'", sql)
+
+    @patch("mpr.services.get_connection")
+    @patch("mpr.services._nombre_tabla", return_value="deposito")
+    def test_no_permite_desactivar_suma_en_produccion(self, _mock_tabla, mock_conn):
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = (TIPO_MPR_PRODUCCION,)
+        mock_conn.return_value.__enter__ = MagicMock(return_value=mock_conn.return_value)
+        mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+        mock_conn.return_value.cursor.return_value = mock_cursor
+        ok, error = actualizar_deposito_suma_stock("empresa_test", 1, "No")
+        self.assertFalse(ok)
+        self.assertIn("etapa productiva", error or "")
 
 
 class TestGetDepositoPlanchado(SimpleTestCase):

@@ -3,6 +3,7 @@
 Suite pura: no requiere base de datos MySQL real. Usa SimpleTestCase y mocks.
 Comando: docker exec Synap_app python manage.py test mpr.tests.test_tablero_consolidado
 """
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase
@@ -15,6 +16,8 @@ from mpr.services import (
     TIPO_MPR_SCRAP,
     TIPO_MPR_SEMI_ELABORADO,
     TIPO_MPR_TERMINADO,
+    _calcular_fabricando_componente,
+    _calcular_pendiente_componente,
     _enviado_produccion_por_componente,
     listar_tablero_por_articulo,
 )
@@ -63,6 +66,43 @@ def _desc_map_simple():
 # ---------------------------------------------------------------------------
 # Fase 5.2: Tests de helpers puros
 # ---------------------------------------------------------------------------
+
+class TestCalcularFabricandoComponente(SimpleTestCase):
+    """Fabricando no repunta al clasificar fuera de Producido."""
+
+    def test_solo_producido_descuenta_envios(self):
+        stock = {TIPO_MPR_PRODUCCION: 286.0}
+        self.assertAlmostEqual(_calcular_fabricando_componente(300.0, stock), 14.0)
+
+    def test_clasificacion_no_repunta_fabricando(self):
+        stock = {
+            TIPO_MPR_PRODUCCION: 0.0,
+            TIPO_MPR_SEMI_ELABORADO: 281.0,
+            TIPO_MPR_2DA_SELECCION: 28.0,
+            TIPO_MPR_SCRAP: 1.0,
+        }
+        self.assertAlmostEqual(_calcular_fabricando_componente(300.0, stock), 0.0)
+
+    def test_nunca_negativo(self):
+        stock = {
+            TIPO_MPR_PRODUCCION: 10.0,
+            TIPO_MPR_SEMI_ELABORADO: 20.0,
+        }
+        self.assertAlmostEqual(_calcular_fabricando_componente(15.0, stock), 0.0)
+
+
+class TestCalcularPendienteComponente(SimpleTestCase):
+    """Envíos ledger reducen pendiente aunque Fabricando sea 0."""
+
+    def test_envio_cubre_brecha(self):
+        self.assertAlmostEqual(_calcular_pendiente_componente(12.0, 11.0, 1.0), 0.0)
+
+    def test_sin_envio_mantiene_brecha(self):
+        self.assertAlmostEqual(_calcular_pendiente_componente(12.0, 11.0, 0.0), 1.0)
+
+    def test_sobre_envio_no_negativo(self):
+        self.assertAlmostEqual(_calcular_pendiente_componente(12.0, 11.0, 3.0), 0.0)
+
 
 class TestEnviadoProduccionPorComponente(SimpleTestCase):
     """Tests de la función pura _enviado_produccion_por_componente."""
@@ -152,19 +192,17 @@ def _mock_filas_pack():
 class TestListarTableroPorArticulo(SimpleTestCase):
     """Tests del servicio principal con mocks completos."""
 
-    def _patch_servicio(self, filas_pack=None, enviado_pack_map=None,
+    def _patch_servicio(self, filas_pack=None, enviados_tablero=None,
+                        enviado_tablero_map=None,
                         abm_map=None, bom_map=None, stock_pivot=None, desc_map=None,
                         stock_suma_pivot=None):
-        """Aplica todos los parches necesarios y devuelve context manager apilado.
-
-        _pivot_stock_por_tipo_mpr ahora devuelve la tupla (stock, stock_suma).
-        Si no se indica stock_suma_pivot, se asume que todos los depósitos suman
-        stock (stock_suma == stock), que es la configuración por defecto.
-        """
+        """Aplica todos los parches necesarios y devuelve context manager apilado."""
         if filas_pack is None:
             filas_pack = _mock_filas_pack()
-        if enviado_pack_map is None:
-            enviado_pack_map = {}
+        if enviados_tablero is None:
+            enviados_tablero = {}
+        if enviado_tablero_map is None:
+            enviado_tablero_map = {}
         if abm_map is None:
             abm_map = _abm_map_simple()
         if bom_map is None:
@@ -177,25 +215,18 @@ class TestListarTableroPorArticulo(SimpleTestCase):
             desc_map = _desc_map_simple()
 
         patches = [
-            patch("mpr.services.listar_ventana_pack", return_value=filas_pack),
-            patch("mpr.services.mysql_cursor"),
-            patch("mpr.services._query_enviado_packs", return_value=enviado_pack_map),
+            patch("mpr.services.listar_demanda_pack_desde_pedidos", return_value=filas_pack),
+            patch("mpr.services._query_enviados_todos_componentes", return_value=enviados_tablero),
             patch("mpr.services.bulk_id_en_abm", return_value=abm_map),
             patch("mpr.services.bulk_bom_detalle", return_value=bom_map),
             patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(stock_pivot, stock_suma_pivot)),
             patch("mpr.services._fetch_descripciones_articulo", return_value=desc_map),
-            # E7 backward-safe: sin envíos tablero → Enviado_tablero=0, tablero idéntico a E6
-            patch("mpr.services._query_enviado_tablero_componente", return_value={}),
+            patch("mpr.services._query_enviado_tablero_componente", return_value=enviado_tablero_map),
         ]
         return patches
 
     def _call_con_parches(self, patches, **kwargs):
         activos = [p.start() for p in patches]
-        # mysql_cursor mock como context manager
-        ctx_mock = MagicMock()
-        ctx_mock.__enter__ = MagicMock(return_value=MagicMock())
-        ctx_mock.__exit__ = MagicMock(return_value=False)
-        activos[1].return_value = ctx_mock
         try:
             return listar_tablero_por_articulo("empresa_test", **kwargs)
         finally:
@@ -304,36 +335,47 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         stock_pivot = {
             10: {
                 TIPO_MPR_PRODUCCION: 5.0,
-                # Etapa 10: sin stock en Planchado; el saldo intermedio ya está clasificado.
                 TIPO_MPR_2DA_SELECCION: 7.0,
                 TIPO_MPR_SEMI_ELABORADO: 0.0,
                 TIPO_MPR_SCRAP: 0.0,
                 TIPO_MPR_TERMINADO: 0.0,
             }
         }
-        enviado_comp_result = {10: 8.0}
         patches = self._patch_servicio(
-            enviado_pack_map={1: 4.0},
             stock_pivot=stock_pivot,
+            enviado_tablero_map={10: Decimal("13")},
         )
-        # Reemplazar _enviado_produccion_por_componente para controlar enviado a nivel componente
-        with patch("mpr.services._enviado_produccion_por_componente", return_value=enviado_comp_result):
-            activos = [p.start() for p in patches]
-            ctx_mock = MagicMock()
-            ctx_mock.__enter__ = MagicMock(return_value=MagicMock())
-            ctx_mock.__exit__ = MagicMock(return_value=False)
-            activos[1].return_value = ctx_mock
-            try:
-                resultado = listar_tablero_por_articulo("empresa_test")
-            finally:
-                for p in patches:
-                    p.stop()
+        resultado = self._call_con_parches(patches)
 
         fila = resultado[0]
-        self.assertAlmostEqual(fila["enviado"], 8.0)
+        # brecha=8, envios=13 → pendiente=0 (envíos ledger cubren la brecha)
+        self.assertAlmostEqual(fila["enviado"], 1.0)
         self.assertAlmostEqual(fila["total"], 12.0)
-        # pendiente = max(0, 20 - [8+12]) = 0
         self.assertAlmostEqual(fila["pendiente"], 0.0)
+
+    def test_enviado_diferente_de_produccion(self):
+        """Enviado (virtual tablero) ≠ produccion (físico) por construcción."""
+        stock_pivot = {
+            10: {
+                TIPO_MPR_PRODUCCION: 20.0,
+                TIPO_MPR_PLANCHADO: 0.0,
+                TIPO_MPR_2DA_SELECCION: 0.0,
+                TIPO_MPR_SEMI_ELABORADO: 0.0,
+                TIPO_MPR_SCRAP: 0.0,
+                TIPO_MPR_TERMINADO: 0.0,
+            }
+        }
+        patches = self._patch_servicio(
+            stock_pivot=stock_pivot,
+            enviado_tablero_map={10: Decimal("50")},
+        )
+        resultado = self._call_con_parches(patches)
+
+        fila = resultado[0]
+        # enviado = max(0, 50 - 20) = 30
+        self.assertAlmostEqual(fila["enviado"], 30.0)
+        self.assertAlmostEqual(fila["produccion"], 20.0)
+        self.assertNotAlmostEqual(fila["enviado"], fila["produccion"])
 
     def test_pendiente_no_negativo(self):
         """REQ-025 Esc.25.4: oferta supera demanda → pendiente=0 (no negativo)."""
@@ -353,43 +395,9 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         fila = resultado[0]
         self.assertGreaterEqual(fila["pendiente"], 0.0)
 
-    def test_enviado_diferente_de_produccion(self):
-        """REQ-024 Esc.24.4: enviado (virtual) ≠ produccion (físico) por construcción."""
-        stock_pivot = {
-            10: {
-                TIPO_MPR_PRODUCCION: 20.0,
-                TIPO_MPR_PLANCHADO: 0.0,
-                TIPO_MPR_2DA_SELECCION: 0.0,
-                TIPO_MPR_SEMI_ELABORADO: 0.0,
-                TIPO_MPR_SCRAP: 0.0,
-                TIPO_MPR_TERMINADO: 0.0,
-            }
-        }
-        enviado_comp_result = {10: 50.0}
-        patches = self._patch_servicio(
-            enviado_pack_map={1: 25.0},
-            stock_pivot=stock_pivot,
-        )
-        with patch("mpr.services._enviado_produccion_por_componente", return_value=enviado_comp_result):
-            activos = [p.start() for p in patches]
-            ctx_mock = MagicMock()
-            ctx_mock.__enter__ = MagicMock(return_value=MagicMock())
-            ctx_mock.__exit__ = MagicMock(return_value=False)
-            activos[1].return_value = ctx_mock
-            try:
-                resultado = listar_tablero_por_articulo("empresa_test")
-            finally:
-                for p in patches:
-                    p.stop()
-
-        fila = resultado[0]
-        self.assertAlmostEqual(fila["enviado"], 50.0)
-        self.assertAlmostEqual(fila["produccion"], 20.0)
-        self.assertNotAlmostEqual(fila["enviado"], fila["produccion"])
-
     def test_tablero_vacio_sin_error(self):
-        """REQ-035 Esc.35.1: sin packs con demanda → resultado vacío sin excepción."""
-        patches = self._patch_servicio(filas_pack=[], enviado_pack_map={})
+        """REQ-035 Esc.35.1: sin demanda ni envíos → resultado vacío sin excepción."""
+        patches = self._patch_servicio(filas_pack=[], enviados_tablero={})
         resultado = self._call_con_parches(patches)
 
         self.assertEqual(resultado, [])

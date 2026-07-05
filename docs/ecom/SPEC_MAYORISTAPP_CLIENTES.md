@@ -26,7 +26,7 @@
 
 | Acción PHP | Método | Ruta Synap | Notas |
 |------------|--------|------------|--------|
-| `buscarCliente` (POST) | POST | `/ecom/api/mayoristapp/clientes/buscar/` | Cuerpo JSON: `buscarCliente=1`, `queCliente`, `claseBusqueda` (`codigo` \| `texto`), `codigo`. O GET `?ajax=1&modoBus=&patron=&codigo=&limit=`. Respuesta: `{ "clientes": [...], "total" }`. Sesión: `user.todos_clientes`, `usa_id_manual`, `supervisor_venta` / `permiso_supervisor_venta_web`, `vendedor_a_cargo`, `id_vendedor_usr`. |
+| `buscarCliente` (POST) | POST | `/ecom/api/mayoristapp/clientes/buscar/` | Cuerpo JSON: `buscarCliente=1`, `queCliente`, `claseBusqueda` (`codigo` \| `texto`), `codigo`. O GET `?ajax=1&modoBus=&patron=&codigo=&limit=` (alias Synap: `q` en lugar de `patron`). Respuesta: `{ "clientes": [...], "total", "results": [{ "id", "text" }] }` para autocomplete. UI web: `clientes_mayoristapp.html` usa `tags_filter.mjs` (mismo patrón que presupuesto ventas). Sesión: `user.todos_clientes`, `usa_id_manual`, `supervisor_venta` / `permiso_supervisor_venta_web`, `vendedor_a_cargo`, `id_vendedor_usr`. |
 | `traeDatosClienteSeleccionado` | GET | `/ecom/api/mayoristapp/clientes/seleccionado/?ajax=1` | JSON: datos en `mayoristapp.cliente` o `session.cliente`. |
 | `seleccionarComprobante` | GET | `/ecom/api/mayoristapp/clientes/comprobante-formulario/?ajax=1&frm=0..5` | Respuesta `{ "estado":"ok", "url", "formulario" }`; guarda en `mayoristapp.formulario` / `u_formulario`. |
 | `selecciona_cliente` | POST | `/ecom/api/mayoristapp/clientes/seleccionar/?ajax=1` | Cuerpo JSON `codigo` o `codCliente`. Persiste en `mayoristapp` + raíz de sesión: `cliente` (lista `[datos, autoriza_credito]`), `idcliente`, `domicilios_cliente`, `iva_incluido` / `ivaIncluido`; vacía `jcart`. |
@@ -40,7 +40,15 @@
 
 ---
 
-## 4 — Pendientes
+## 4 — UI web (búsqueda predictiva)
 
-- Paridad visual/HTML de la búsqueda (en PHP era tabla); Synap entrega JSON.
+- **Listado clientes** (`/ecom/mayoristapp/clientes/`): campo tipo tags (`reports/js/tags_filter.mjs`), debounce 280 ms, mínimo 2 caracteres, chip de selección única; al elegir cliente se llama `POST …/clientes/seleccionar/`.
+- **Contexto sesión:** en **login** (`login/views.py`) y en cada vista/API mayoristapp, `asegurar_contexto_mayoristapp` **refresca siempre** desde MySQL `CodViajante`, `todos_clientes` (permiso `visualiza_clientes_todos_web` / id 99, con `TRIM` en `key_permiso` por espacios legacy) y `supervisor_venta`. Sin `id_vendedor_usr` y con `todos_clientes=No`, el filtro devuelve 0 filas (`AND 1=0`) — paridad PHP.
+- **Feedback UI:** `clientes-status` muestra cantidad de resultados o mensaje de error de la API (antes el dropdown quedaba vacío sin explicación).
+- **N.º comprobante** en listados/pedidos/presupuestos: `ecom/static/ecom/js/ecom_predictive.mjs` + `ecom_predictive_boot.mjs` contra relays `sugerencias-nro` (o v1 pedidos `results`).
+- **Compra mayorista**: búsqueda de catálogo con debounce Alpine (`@input.debounce.400ms`), mínimo 2 caracteres antes de consultar.
+
+## 5 — Pendientes
+
+- Paridad visual/HTML de la búsqueda (en PHP era tabla); Synap entrega JSON y dropdown predictivo.
 - Tests con MySQL real para `CodViajante` / `todos_clientes` y escrituras de domicilio/contacto.

@@ -14,17 +14,18 @@ from mpr.views import (
 
 
 class ConfirmarImputacionTest(SimpleTestCase):
+    @patch("mpr.services._actualizar_estados_pedido_tras_imputacion")
+    @patch("mpr.repositories.imputacion.crear_imputacion")
     @patch("mpr.services._actualizar_estado_imputacion_movimiento")
-    @patch("mpr.models.MprImputacionArmado")
     @patch("mpr.services.get_connection")
     @patch("mpr.services._cantidad_imputada_mstock", return_value=3)
-    @patch("mpr.models.MprArmadoSurtidoMovimiento")
-    def test_rechaza_exceder_cantidad_armada(self, mock_mov_cls, *_mocks):
+    @patch("mpr.repositories.armado_surtido.obtener_movimiento_por_codigo")
+    def test_rechaza_exceder_cantidad_armada(self, mock_obtener_mov, *_mocks):
         mov = MagicMock()
         mov.modo = "1ra"
         mov.cantidad_packs = 5
         mov.id_articulo_pack = 100
-        mock_mov_cls.objects.get.return_value = mov
+        mock_obtener_mov.return_value = mov
 
         ok, err = confirmar_imputacion_armado(
             "emp",
@@ -39,12 +40,12 @@ class ConfirmarImputacionTest(SimpleTestCase):
 class SugerirFifoTest(SimpleTestCase):
     @patch("mpr.services._listar_demanda_abierta_fifo")
     @patch("mpr.services._cantidad_imputada_mstock", return_value=0)
-    @patch("mpr.models.MprArmadoSurtidoMovimiento")
-    def test_fifo_asigna_pedido_mas_antiguo_primero(self, mock_mov_cls, *_mocks):
+    @patch("mpr.repositories.armado_surtido.obtener_movimiento_por_codigo")
+    def test_fifo_asigna_pedido_mas_antiguo_primero(self, mock_obtener_mov, *_mocks):
         mov = MagicMock()
         mov.cantidad_packs = 10
         mov.id_articulo_pack = 200
-        mock_mov_cls.objects.get.return_value = mov
+        mock_obtener_mov.return_value = mov
         _listar_demanda = _mocks[1]
         _listar_demanda.return_value = [
             {
@@ -53,8 +54,6 @@ class SugerirFifoTest(SimpleTestCase):
                 "nro_pedido": "P-A",
                 "nombre_cliente": "Cliente A",
                 "fecha": "01/01/2026",
-                "id_lista_detalle": 10,
-                "id_lista_produccion": 5,
             },
             {
                 "codigo_movimiento_pedido": 2,
@@ -62,8 +61,6 @@ class SugerirFifoTest(SimpleTestCase):
                 "nro_pedido": "P-B",
                 "nombre_cliente": "Cliente B",
                 "fecha": "02/01/2026",
-                "id_lista_detalle": 11,
-                "id_lista_produccion": 6,
             },
         ]
         lineas, err = sugerir_imputacion_fifo("emp", 50)
@@ -202,6 +199,58 @@ class ImputacionConfirmarApiTest(SimpleTestCase):
         request.user = user
         with self.assertRaises(PermissionDenied):
             ImputacionArmadoConfirmarAPIView.as_view()(request)
+
+
+class DemandaPedVivoFifoTest(SimpleTestCase):
+    @patch("mpr.services._cantidad_imputada_pedido_pack")
+    @patch("mpr.services._sql_filtro_estado_pedido_opt", return_value="")
+    @patch("mpr.services._nombre_tabla")
+    def test_fifo_excluye_pedidos_sin_pendiente(
+        self, mock_nombre_tabla, _filtro_estado, mock_imputado
+    ):
+        from mpr.services import _listar_demanda_ped_vivo_fifo
+
+        mock_nombre_tabla.side_effect = lambda _c, t: t
+        mock_imputado.side_effect = lambda _b, cod, _a: {101: 0, 102: 10}.get(cod, 0)
+
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {
+                "codigo_movimiento_pedido": 101,
+                "cantidad_pedida": 5,
+                "fecha": "2026-01-01",
+                "nro_pedido": "PED-1",
+                "nombre_cliente": "A",
+            },
+            {
+                "codigo_movimiento_pedido": 102,
+                "cantidad_pedida": 10,
+                "fecha": "2026-01-02",
+                "nro_pedido": "PED-2",
+                "nombre_cliente": "B",
+            },
+        ]
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__.return_value = cursor
+        mock_ctx.__exit__.return_value = False
+
+        with patch("mpr.services.mysql_cursor", return_value=mock_ctx):
+            rows = _listar_demanda_ped_vivo_fifo("emp", 200, limit=10)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["codigo_movimiento_pedido"], 101)
+        self.assertEqual(rows[0]["cantidad_pendiente_prod"], 5)
+        self.assertIsNone(rows[0]["id_lista_detalle"])
+
+    @patch("mpr.services._cantidad_imputada_pedido_pack", return_value=2)
+    @patch("mpr.services._cantidad_pedida_pack_en_pedido", return_value=10)
+    @patch("mpr.services._nombre_tabla", side_effect=lambda _c, t: t)
+    def test_pendiente_imputacion_resta_imputado(self, *_mocks):
+        from mpr.services import _pendiente_imputacion_pedido_pack
+
+        cursor = MagicMock()
+        pend = _pendiente_imputacion_pedido_pack("emp", 500, 300, cursor=cursor)
+        self.assertEqual(pend, 8)
 
 
 class DemandaDetallePkTest(SimpleTestCase):

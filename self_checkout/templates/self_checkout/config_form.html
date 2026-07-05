@@ -15,28 +15,6 @@
         El Punto de Venta (PV) se asocia con AFIP y determina la numeración de facturas.
       </p>
     </header>
-
-    {% if messages %}
-    <div class="mb-6 space-y-2" id="form-messages">
-      {% for message in messages %}
-      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}" data-message-text="{{ message|escape }}">
-        {{ message }}
-      </div>
-      {% endfor %}
-    </div>
-    <script>
-    (function() {
-      var container = document.getElementById('form-messages');
-      if (!container) return;
-      var seen = {}, nodes = container.querySelectorAll('[data-message-text]'), kept = 0;
-      nodes.forEach(function(n) {
-        var t = n.getAttribute('data-message-text');
-        if (seen[t]) { n.remove(); } else { seen[t] = true; kept++; }
-      });
-    })();
-    </script>
-    {% endif %}
-
     <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-6 md:p-8">
       <form method="post" class="space-y-6">
         {% csrf_token %}

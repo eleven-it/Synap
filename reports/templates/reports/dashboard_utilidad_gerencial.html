@@ -1,0 +1,318 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} - Synap{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-8"
+     data-api-url="{{ utilidad_api_url }}"
+     data-scope="{{ utilidad_scope }}"
+     id="ut-root">
+
+  <!-- Encabezado -->
+  <div class="mb-6">
+    <nav class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+      <a href="{% url 'reports:catalog' %}" class="hover:text-sky-600">Reportes</a>
+      <span class="mx-1">/</span>
+      <span class="text-slate-700 dark:text-slate-200">{{ report.name }}</span>
+    </nav>
+    <h1 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">{{ report.name }}</h1>
+    {% if report.description %}
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ report.description }}</p>
+    {% endif %}
+  </div>
+
+  <!-- Filtros -->
+  <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 sm:p-5 mb-6">
+    <div class="flex flex-col gap-4">
+      {% include "reports/includes/filters_period.html" %}
+
+      <div class="flex flex-wrap items-end gap-4">
+        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-[180px]">
+          Listar por
+          <select id="ut-listar"
+                  class="synap-input px-3 py-1.5 text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400">
+            <option value="cliente" selected>Cliente</option>
+            <option value="vendedor">Vendedor</option>
+            <option value="tipocliente">Tipo de cliente</option>
+            <option value="zona">Zona</option>
+            <option value="articulo">Artículo</option>
+            <option value="rubro">Rubro</option>
+            <option value="subrubro">Subrubro</option>
+            <option value="categoria">Categoría</option>
+            <option value="marca">Marca</option>
+            <option value="proveedor">Proveedor</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-[180px]">
+          Filtrar por
+          <select id="ut-filtro-dim"
+                  class="synap-input px-3 py-1.5 text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400">
+            <option value="">— Sin filtro —</option>
+            <option value="cliente">Cliente</option>
+            <option value="vendedor">Vendedor</option>
+            <option value="tipocliente">Tipo de cliente</option>
+            <option value="zona">Zona</option>
+            <option value="articulo">Artículo</option>
+            <option value="rubro">Rubro</option>
+            <option value="subrubro">Subrubro</option>
+            <option value="categoria">Categoría</option>
+            <option value="marca">Marca</option>
+            <option value="proveedor">Proveedor</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-[220px] hidden" id="ut-filtro-val-wrap">
+          Valor
+          <select id="ut-filtro-val"
+                  class="synap-input px-3 py-1.5 text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400">
+            <option value="">Todos</option>
+          </select>
+        </label>
+
+        <label class="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+          <input type="checkbox" id="ut-inflacion" class="rounded border-slate-300 text-sky-600 focus:ring-sky-400">
+          Con inflación
+        </label>
+
+        <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-[140px] hidden" id="ut-tipoinf-wrap">
+          Tipo inflación
+          <select id="ut-tipoinf"
+                  class="synap-input px-3 py-1.5 text-xs font-medium rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400">
+            <option value="mensual" selected>Mensual</option>
+            <option value="anual">Anual</option>
+          </select>
+        </label>
+
+        <button type="button" id="ut-generar"
+                class="ml-auto inline-flex items-center gap-2 px-4 py-2 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-sm transition-all">
+          <span class="material-icons text-sm">query_stats</span>
+          Generar informe
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ut-msg" class="hidden mb-4 text-sm rounded-xl px-4 py-3"></div>
+
+  <!-- Tarjetas resumen -->
+  <div id="ut-resumen" class="hidden mb-6 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="text-xs text-slate-500 dark:text-slate-400">Venta Neta</div>
+      <div id="ut-t-venta-neta" class="text-lg font-bold text-slate-800 dark:text-slate-100">$0,00</div>
+    </div>
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="text-xs text-slate-500 dark:text-slate-400">Costo</div>
+      <div id="ut-t-costo" class="text-lg font-bold text-slate-800 dark:text-slate-100">$0,00</div>
+    </div>
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-emerald-200 dark:border-emerald-800/50 p-4">
+      <div class="text-xs text-emerald-600 dark:text-emerald-400">Utilidad</div>
+      <div id="ut-t-utilidad" class="text-lg font-bold text-emerald-600 dark:text-emerald-400">$0,00</div>
+    </div>
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="text-xs text-slate-500 dark:text-slate-400">Utilidad %</div>
+      <div id="ut-t-pct" class="text-lg font-bold text-slate-800 dark:text-slate-100">0%</div>
+    </div>
+    <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 p-4">
+      <div class="text-xs text-slate-500 dark:text-slate-400">Descuentos</div>
+      <div id="ut-t-desc" class="text-lg font-bold text-slate-800 dark:text-slate-100">$0,00</div>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div id="ut-tabla-card" class="hidden bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+    <div class="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-slate-200 dark:border-slate-700">
+      <div class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+        Utilidad <span id="ut-total-count" class="text-slate-400 font-normal"></span>
+      </div>
+      <input type="search" id="ut-buscar" placeholder="Buscar…"
+             class="synap-input px-3 py-1.5 text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 min-w-[220px]">
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400">
+          <tr id="ut-thead"></tr>
+        </thead>
+        <tbody id="ut-tbody" class="divide-y divide-slate-100 dark:divide-slate-700/60"></tbody>
+        <tfoot class="bg-slate-50 dark:bg-slate-900/40 font-semibold text-slate-700 dark:text-slate-200">
+          <tr id="ut-tfoot"></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div id="ut-placeholder" class="text-center text-slate-400 dark:text-slate-500 py-16">
+    <span class="material-icons text-4xl mb-2 block">trending_up</span>
+    Elegí el período y presioná <strong>Generar informe</strong>.
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("ut-root");
+  if (!root) return;
+  var API_URL = root.getAttribute("data-api-url");
+
+  var el = function (id) { return document.getElementById(id); };
+  var elGenerar = el("ut-generar"), elListar = el("ut-listar");
+  var elFiltroDim = el("ut-filtro-dim"), elFiltroVal = el("ut-filtro-val"), elFiltroValWrap = el("ut-filtro-val-wrap");
+  var elInflacion = el("ut-inflacion"), elTipoInf = el("ut-tipoinf"), elTipoInfWrap = el("ut-tipoinf-wrap");
+  var elBuscar = el("ut-buscar"), elMsg = el("ut-msg"), elPlaceholder = el("ut-placeholder");
+  var elTablaCard = el("ut-tabla-card"), elResumen = el("ut-resumen");
+  var elThead = el("ut-thead"), elTbody = el("ut-tbody"), elTfoot = el("ut-tfoot"), elTotalCount = el("ut-total-count");
+
+  var fmtMoney = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
+  var fmtPct = new Intl.NumberFormat("es-AR", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  var fmtFactor = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  var estado = { columns: [], filas: [], totales: {} };
+
+  function getFechas() {
+    var fi = el("fecha_inicio"), ff = el("fecha_fin");
+    return { desde: fi ? fi.value : "", hasta: ff ? ff.value : "" };
+  }
+  function mostrarMsg(texto, tipo) {
+    elMsg.textContent = texto;
+    elMsg.className = "mb-4 text-sm rounded-xl px-4 py-3 " + (
+      tipo === "error"
+        ? "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/20 dark:text-rose-300"
+        : "bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-900/20 dark:text-sky-300");
+    elMsg.classList.remove("hidden");
+  }
+  function ocultarMsg() { elMsg.classList.add("hidden"); }
+
+  function fmtCelda(col, valor) {
+    if (valor == null) return "";
+    if (col.money) return fmtMoney.format(Number(valor || 0));
+    if (col.pct) return fmtPct.format(Number(valor || 0));
+    if (col.factor) return fmtFactor.format(Number(valor || 0));
+    return String(valor);
+  }
+  function alinearDerecha(col) { return !!(col.money || col.pct || col.factor); }
+
+  elInflacion.addEventListener("change", function () {
+    elTipoInfWrap.classList.toggle("hidden", !elInflacion.checked);
+  });
+
+  elFiltroDim.addEventListener("change", function () {
+    var dim = elFiltroDim.value;
+    elFiltroVal.innerHTML = '<option value="">Todos</option>';
+    if (!dim) { elFiltroValWrap.classList.add("hidden"); return; }
+    elFiltroValWrap.classList.remove("hidden");
+    fetch(API_URL + "?queInforme=seleccion&tabla=" + encodeURIComponent(dim), {
+      credentials: "same-origin", headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (payload) {
+        var lista = payload && payload.data ? payload.data : [];
+        lista.forEach(function (item) {
+          var partes = String(item.value || "").split("|");
+          var opt = document.createElement("option");
+          opt.value = partes[0] || "";
+          opt.textContent = item.label || "";
+          elFiltroVal.appendChild(opt);
+        });
+      })
+      .catch(function () { /* filtro opcional */ });
+  });
+
+  function generar() {
+    var f = getFechas();
+    if (!f.desde || !f.hasta) { mostrarMsg("Seleccioná fecha desde y hasta.", "error"); return; }
+    ocultarMsg();
+    elGenerar.disabled = true; elGenerar.classList.add("opacity-60");
+
+    var params = new URLSearchParams({ fechaDesde: f.desde, fechaHasta: f.hasta, listarPor: elListar.value || "cliente" });
+    if (elFiltroDim.value && elFiltroVal.value) {
+      params.set("filtrarPor", elFiltroDim.value + "|" + elFiltroVal.value);
+    }
+    if (elInflacion.checked) {
+      params.set("queInforme", "uti");
+      params.set("tipoInflacion", elTipoInf.value || "mensual");
+    }
+
+    fetch(API_URL + "?" + params.toString(), {
+      credentials: "same-origin", headers: { "X-Requested-With": "XMLHttpRequest" }
+    })
+      .then(function (r) {
+        if (!r.ok) { return r.json().then(function (j) { throw new Error(j.detail || "Error"); }); }
+        return r.json();
+      })
+      .then(function (payload) {
+        if (!payload) { throw new Error("Respuesta vacía."); }
+        estado.columns = payload.columns || [];
+        estado.filas = payload.filas || [];
+        estado.totales = payload.totales || {};
+        renderResumen(); renderTabla();
+        elPlaceholder.classList.add("hidden");
+        if (!estado.filas.length) { mostrarMsg("Sin resultados en el período seleccionado.", "info"); }
+      })
+      .catch(function (err) { mostrarMsg(err.message || "Error al generar el informe.", "error"); })
+      .finally(function () { elGenerar.disabled = false; elGenerar.classList.remove("opacity-60"); });
+  }
+
+  function renderResumen() {
+    var t = estado.totales || {};
+    el("ut-t-venta-neta").textContent = fmtMoney.format(Number(t.venta_neta || 0));
+    el("ut-t-costo").textContent = fmtMoney.format(Number(t.costo || 0));
+    el("ut-t-utilidad").textContent = fmtMoney.format(Number(t.utilidad || 0));
+    el("ut-t-pct").textContent = fmtPct.format(Number(t.utilidad_pct || 0));
+    el("ut-t-desc").textContent = fmtMoney.format(Number(t.desc || 0));
+    elResumen.classList.remove("hidden");
+  }
+
+  function renderTabla() {
+    elThead.innerHTML = "";
+    estado.columns.forEach(function (c) {
+      var th = document.createElement("th");
+      th.className = "font-semibold px-4 py-3 whitespace-nowrap " + (alinearDerecha(c) ? "text-right" : "text-left");
+      th.textContent = c.title;
+      elThead.appendChild(th);
+    });
+    aplicarFiltro();
+    renderPie();
+    elTablaCard.classList.remove("hidden");
+  }
+
+  function renderPie() {
+    elTfoot.innerHTML = "";
+    var t = estado.totales || {};
+    estado.columns.forEach(function (c, idx) {
+      var th = document.createElement("th");
+      th.className = "px-4 py-3 whitespace-nowrap " + (alinearDerecha(c) ? "text-right" : "text-left");
+      if (idx === 0) { th.textContent = t.nombre || "Total Gral"; }
+      else if (t[c.data] == null) { th.textContent = ""; }
+      else { th.textContent = fmtCelda(c, t[c.data]); }
+      elTfoot.appendChild(th);
+    });
+  }
+
+  function aplicarFiltro() {
+    var q = (elBuscar.value || "").trim().toLowerCase();
+    elTbody.innerHTML = "";
+    var visibles = 0;
+    estado.filas.forEach(function (fila) {
+      if (q && String(fila.nombre || "").toLowerCase().indexOf(q) === -1) return;
+      visibles++;
+      var tr = document.createElement("tr");
+      tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/30";
+      estado.columns.forEach(function (c) {
+        var td = document.createElement("td");
+        td.className = "px-4 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap " + (alinearDerecha(c) ? "text-right tabular-nums" : "text-left");
+        td.textContent = fmtCelda(c, fila[c.data]);
+        tr.appendChild(td);
+      });
+      elTbody.appendChild(tr);
+    });
+    elTotalCount.textContent = "(" + visibles + (q ? " de " + estado.filas.length : "") + ")";
+  }
+
+  elGenerar.addEventListener("click", generar);
+  elBuscar.addEventListener("input", aplicarFiltro);
+})();
+</script>
+{% endblock %}

@@ -3,6 +3,8 @@
 Documento de referencia para el módulo de Parte de producción en MPR.  
 Implementado en **Etapa 8**: parte por componente, conectado a la columna **Fabricando** del tablero.
 
+> **Persistencia MySQL:** el ledger vive en `mpr_parte`, `mpr_parte_linea` y `mpr_parte_ajuste` (MySQL). Ver `docs/mpr/PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md`.
+
 ---
 
 ## Índice
@@ -19,11 +21,15 @@ Implementado en **Etapa 8**: parte por componente, conectado a la columna **Fabr
 
 ## Fuente de datos — Fabricando (E7) {#fuente-de-datos}
 
-La grilla de captura muestra los **componentes con Fabricando > 0** según la fórmula E7:
+La grilla de captura muestra los **componentes con Fabricando > 0** según:
 
 ```
-Fabricando(comp) = max(0, Σ_MprEnvioProduccion[comp] − stock_deposito[comp, Produccion])
+Fabricando_parte(comp) = max(0, Σ_MprEnvioProduccion[comp] − stock_Producido[comp])
 ```
+
+Solo descuenta depósito **Producción** (destino del parte). El **tablero consolidado** usa fórmula distinta: `envíos − stock_pipeline` (Producido + Semi + 2da + Scrap + Terminado).
+
+La validación al guardar (`_fabricando_pre_snapshot`) usa la **misma** fórmula que la grilla de parte.
 
 | Término | Fuente |
 |---------|--------|
@@ -95,9 +101,33 @@ Si `MprParte.movimiento_fisico_ok = True`, el asiento **no se re-ejecuta**. Esta
 
 ## Validaciones y warning de tope {#validaciones}
 
-### Warning no bloqueante al superar Fabricando
+### Configuración por empresa (`MprEmpresaConfig`)
 
-Si la cantidad registrada para un componente supera el Fabricando disponible (calculado con pre-snapshot antes del `atomic()`), el sistema emite un **warning en español visible en UI**:
+En **Producción → Config. Depósitos** (`/mpr/config/depositos/`) hay un interruptor:
+
+| Estado | Comportamiento |
+|--------|----------------|
+| **Activo** (default) | **Rechaza** el guardado con `ValidationError` antes de crear el parte ni mover stock. |
+| **Inactivo** | Warning no bloqueante si la **suma por componente** (todos los operarios) supera Fabricando. |
+
+La suma considera **todas las celdas operario** de la misma fila (componente). Ej.: Fabricando=6 → Juan 4 + Luis 2 = OK; Juan 4 + Luis 4 = exceso.
+
+### Captura por docenas y unidades (paridad OPP)
+
+Cada celda **componente × operario** tiene dos campos:
+
+| Campo POST | Significado |
+|------------|-------------|
+| `parte_art_{id_art}_op_{id_op}_docenas` | Docenas completas (entero ≥ 0) |
+| `parte_art_{id_art}_op_{id_op}_unidades` | Unidades sueltas (entero ≥ 0) |
+
+**Unidades registradas** = `docenas × 12 + unidades` (misma regla que OPP por componente BOM).
+
+La columna **Fabricando** muestra el desglose «N docenas · M unidades».
+
+---
+
+Si la cantidad total registrada para un componente supera el Fabricando disponible (pre-snapshot antes del `atomic()`), el sistema emite un **warning en español visible en UI**:
 
 ```
 Atención: se registraron {qty:.1f} u. de {descripcion} ({codigo_manual})
@@ -107,6 +137,21 @@ pero solo {fabricando:.1f} u. estaban en Fabricando. El parte fue guardado.
 - El parte **sí se guarda** (no bloqueante).
 - El warning aparece en la siguiente carga de la grilla como mensaje de aviso.
 - Pre-snapshot batch: una sola round-trip SQL antes del `atomic()` (sin N+1).
+
+### Impacto en stock si se permite superar Fabricando {#impacto-stock-exceso}
+
+**Fabricando** = `max(0, Σ envíos tablero − stock_pipeline)`, con  
+`stock_pipeline = Producido + Semi + 2da + Scrap + Terminado`.
+
+Si se registra un parte con cantidad **mayor** que Fabricando (bloqueo inactivo):
+
+1. **MySQL legacy:** el asiento físico OPP-parte ingresa **toda** la cantidad registrada al depósito **Producción** (`stock` + `stock_deposito`), sin tope.
+2. **Ledger Synap:** `MprParteLinea` guarda las cantidades completas por operario.
+3. **Fabricando posterior:** al recargar tablero/grilla, `stock Producción` sube → Fabricando baja; si `stock ≥ enviado`, Fabricando queda en **0** aunque el envío ledger no haya crecido.
+4. **Desvío de control:** quedan unidades en Producción **no respaldadas** por envíos del tablero (`MprEnvioProduccion`). La clasificación posterior puede mover stock “de más” hacia Semi/2da/Scrap.
+5. **No hay rollback automático** del exceso; corrige con ajuste de parte o movimiento manual.
+
+Por eso el bloqueo es **activo por defecto**; puede desactivarse en Config. Depósitos si se acepta el riesgo de desvío entre ledger de envíos, parte y saldo físico.
 
 ---
 
@@ -154,16 +199,18 @@ Migración: `0015_mprpartelinea_id_articulo_componente.py` — `AlterField` help
 3. Vista construir_grilla_parte() carga:
    - Componentes con Fabricando > 0 (fuente: MprEnvioProduccion, no lista_produccion_agrupada)
    - Operarios del roster (fecha + turno)
-   - Cantidades previas (celdas precargadas)
+   - Inputs de captura **siempre en 0** al abrir (cada guardado es un parte nuevo; lo ya registrado en el turno se refleja en Fabricando/stock, no se precarga en la grilla)
 4. Columna "Fabricando" visible por fila (en unidades)
-5. Usuario completa cantidades y guarda → POST a /mpr/parte-produccion/registrar/
-6. registrar_parte_produccion():
+5. **Buscador predictivo** sobre la grilla: filtra filas por código o descripción (client-side, Alpine.js)
+6. Por celda operario: **Docenas** + **Unidades** (1 docena = 12 u.); columnas de operario con tono alternado para lectura rápida
+7. Usuario completa cantidades y guarda → POST a /mpr/parte-produccion/registrar/
+8. registrar_parte_produccion():
    a. Pre-snapshot Fabricando (batch, antes del atomic)
    b. Crea MprParte + MprParteLinea (componentes, no packs)
    c. parte.id_lista_produccion = None
    d. Asiento físico directo (ya_componentes=True) → stock sube
    e. Warnings si cantidad > Fabricando (no bloqueante)
-7. Redirect → grilla actualizada; Fabricando reducido en el próximo render
+9. Redirect → grilla actualizada; Fabricando reducido en el próximo render
 ```
 
 ---

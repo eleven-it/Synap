@@ -92,6 +92,8 @@ urlpatterns = [
     path("tablero-produccion/transicion/", views.TransicionLoteView.as_view(), name="transicion_lote"),
     # Etapa 7: Envío directo a producción desde el Tablero (ledger-componente, lote)
     path("tablero-produccion/enviar/", views.EnviarProduccionLoteView.as_view(), name="tablero_produccion_enviar"),
+    path("tablero-produccion/envios/", views.EnviosProduccionListView.as_view(), name="envios_produccion"),
+    path("tablero-produccion/envios/anular/", views.AnularEnviosProduccionView.as_view(), name="envios_produccion_anular"),
     # Etapa 10: Clasificación de Producción (pantalla única; reemplaza Inspección/Clasificación E9)
     path("tablero-produccion/clasificacion-produccion/", views.ClasificacionProduccionView.as_view(), name="clasificacion_produccion"),
     path("tablero-produccion/clasificacion-produccion/registrar/", views.RegistrarClasificacionProduccionView.as_view(), name="clasificacion_produccion_registrar"),

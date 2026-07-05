@@ -3,7 +3,13 @@ from django.views.generic import RedirectView
 
 from ecom import views
 from ecom.logistica_legacy_redirects import redirect_api_remito_legacy
-from ecom.mayoristapp_web_views import CompraMayoristaView, PresupuestosVendedorView
+from ecom.mayoristapp_web_views import (
+    AltaReciboMayoristappView,
+    CompraMayoristaView,
+    HubMayoristappView,
+    PedidosVendedorView,
+    PresupuestosVendedorView,
+)
 from ecom.logistica_estado_pedidos_views import (
     EstadoPedidosKanbanAPIView,
     EstadoPedidosPreparacionView,
@@ -82,14 +88,38 @@ from ecom.carrito_relay_views import (
 )
 from ecom.checkout_relay_views import CheckoutConfirmarRelayAPIView
 from ecom.lista_precio_pdf_relay_views import ExportarListaPreciosPDFRelayAPIView
+from ecom.api.v1.comprobantes.pedidos import (
+    PedidosDetalleV1APIView,
+    PedidosListV1APIView,
+    PedidosSugerenciasNumeroV1APIView,
+)
+from ecom.recibo_alta_relay_views import ReciboAltaRelayAPIView
+from ecom.recibo_alta_catalogos_views import ReciboAltaCatalogosRelayAPIView
+from ecom.articulo_remito_relay_views import ArticuloRemitoListadoRelayAPIView
+from ecom.mayoristapp_listado_urls import mayoristapp_listado_urlpatterns
 
 app_name = "ecom"
 
 urlpatterns = [
     path(
+        "mayoristapp/",
+        HubMayoristappView.as_view(),
+        name="mayoristapp_hub",
+    ),
+    path(
         "mayoristapp/presupuestos-vendedor/",
         PresupuestosVendedorView.as_view(),
         name="mayoristapp_presupuestos_vendedor",
+    ),
+    path(
+        "mayoristapp/pedidos-vendedor/",
+        PedidosVendedorView.as_view(),
+        name="mayoristapp_pedidos_vendedor",
+    ),
+    path(
+        "mayoristapp/recibos/alta/",
+        AltaReciboMayoristappView.as_view(),
+        name="mayoristapp_alta_recibo",
     ),
     path(
         "mayoristapp/compra/",
@@ -158,6 +188,27 @@ urlpatterns = [
     ),
     path("api/health/", views.health, name="health"),
     path("api/migration-info/", views.migration_info, name="migration_info"),
+    # --- API REST v1 (contrato canónico Synap) ---
+    path(
+        "api/v1/mayoristapp/comprobantes/pedidos/",
+        PedidosListV1APIView.as_view(),
+        name="v1_comprobantes_pedidos",
+    ),
+    path(
+        "api/v1/mayoristapp/comprobantes/pedidos/sugerencias-numero/",
+        PedidosSugerenciasNumeroV1APIView.as_view(),
+        name="v1_comprobantes_pedidos_sugerencias",
+    ),
+    path(
+        "api/v1/mayoristapp/comprobantes/pedidos/<int:cod_mov>/detalle/",
+        PedidosDetalleV1APIView.as_view(),
+        name="v1_comprobantes_pedidos_detalle",
+    ),
+    path(
+        "api/mayoristapp/articulo-remito/listado/",
+        ArticuloRemitoListadoRelayAPIView.as_view(),
+        name="mayoristapp_articulo_remito_listado",
+    ),
     path(
         "api/mayoristapp/relay-inventory/",
         views.mayoristapp_relay_inventory,
@@ -394,6 +445,16 @@ urlpatterns = [
         name="mayoristapp_fe_facturas_imputar_accion",
     ),
     path(
+        "api/mayoristapp/recibos/alta/accion/",
+        ReciboAltaRelayAPIView.as_view(),
+        name="mayoristapp_recibos_alta_accion",
+    ),
+    path(
+        "api/mayoristapp/recibos/alta/catalogos/",
+        ReciboAltaCatalogosRelayAPIView.as_view(),
+        name="mayoristapp_recibos_alta_catalogos",
+    ),
+    path(
         "api/mayoristapp/estadisticas/filtros/",
         FiltrosEstadisticasRelayAPIView.as_view(),
         name="mayoristapp_estadisticas_filtros",
@@ -441,4 +502,4 @@ urlpatterns = [
         ExportarListaPreciosPDFRelayAPIView.as_view(),
         name="mayoristapp_lista_precios_pdf",
     ),
-]
+] + mayoristapp_listado_urlpatterns()

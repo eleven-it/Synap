@@ -11,17 +11,6 @@
     </a>
   </p>
   <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6">Modificar usuario {% if usuario.nombre_usuario or usuario.cod_usuario %}<span class="text-purple-600 dark:text-purple-400">{{ usuario.nombre_usuario|default:usuario.cod_usuario }}</span>{% endif %}</h1>
-
-  {% if messages %}
-    <div class="mb-4">
-      {% for message in messages %}
-        <div class="p-3 rounded text-white {% if message.tags == 'error' %}bg-red-500{% elif message.tags == 'warning' %}bg-amber-500{% else %}bg-green-500{% endif %} text-xs">
-          {{ message }}
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
   <form method="post" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
     {% csrf_token %}
     {% if es_supervisor %}

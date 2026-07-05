@@ -1,0 +1,51 @@
+{% extends "base_app.html" %}
+
+{% block title %}Portal mayorista — Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-16">
+  <div class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 opacity-95"></div>
+    <div class="relative w-full px-4 sm:px-6 lg:px-12 py-10">
+      <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">E-commerce mayorista</p>
+      <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">Portal mayorista</h1>
+      <p class="mt-2 text-sm text-slate-300 max-w-3xl">
+        Acceso rápido a ventas, logística, clientes, stock, comprobantes e informes.
+        Equivalente al dashboard de módulos del portal PHP.
+      </p>
+    </div>
+  </div>
+
+  <div class="relative w-full px-4 sm:px-6 lg:px-12 -mt-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      {% for card in hub_cards %}
+      <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-900/5 overflow-hidden">
+        <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
+          <span class="material-symbols-outlined text-sky-600 dark:text-sky-400">{{ card.icon }}</span>
+          <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">{{ card.title }}</h2>
+        </div>
+        <ul class="px-6 py-4 space-y-2">
+          {% for link in card.links %}
+          <li>
+            {% if link.enabled and link.href %}
+            <a href="{{ link.href }}"
+               {% if link.external %}target="_blank" rel="noopener"{% endif %}
+               class="flex items-center gap-2 text-sm font-medium text-sky-700 dark:text-sky-300 hover:text-sky-900 dark:hover:text-sky-100 transition">
+              <span class="material-symbols-outlined text-base">chevron_right</span>
+              {{ link.label }}
+            </a>
+            {% else %}
+            <span class="flex items-center gap-2 text-sm text-slate-400 dark:text-slate-500">
+              <span class="material-symbols-outlined text-base">schedule</span>
+              {{ link.label }}{% if link.note %} — {{ link.note }}{% endif %}
+            </span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -180,14 +180,6 @@ APPS_MENU = [
                 ]
             },
             {
-                "seccion": _("Trazabilidad OPT (avanzado)"),
-                "items": [
-                    {"label": _("Listado de OPT"), "url": "mpr:opt_list", "icon": "list_alt", "permission": "mpr.ver", "menu_item_id": "mpr_op_list"},
-                    {"label": _("Crear OPT (demanda pack)"), "url": "mpr:ventana_pack", "icon": "playlist_add", "permission": "mpr.ver", "menu_item_id": "mpr_op_ventana_pack"},
-                    {"label": _("Asistente legacy"), "url": "mpr:wizard", "icon": "auto_awesome", "permission": "mpr.ver", "menu_item_id": "mpr_op_wizard"},
-                ]
-            },
-            {
                 "seccion": _("Armado y stock"),
                 "items": [
                     {"label": _("Armado"), "url": "mpr:armado", "icon": "build", "permission": "mpr.ver", "menu_item_id": "mpr_op_armado"},
@@ -204,6 +196,7 @@ APPS_MENU = [
             {
                 "seccion": _("Configuración"),
                 "items": [
+                    {"label": _("Turnos de producción"), "url": "mpr:turnos_list", "icon": "schedule", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_turnos"},
                     {"label": _("Config. Depósitos"), "url": "mpr:config_depositos", "icon": "warehouse", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_depositos"},
                     {"label": _("Operarios"), "url": "mpr:operarios_list", "icon": "engineering", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_operarios"},
                 ]
@@ -477,6 +470,114 @@ APPS_MENU = [
                 ]
             }
         ]
+    },
+    {
+        "id": "ecom",
+        "nombre": _("E-commerce"),
+        "permiso": "ecom.ver",
+        "url": "ecom:mayoristapp_hub",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z'/></svg>""",
+        "orden": 6.2,
+        "color": "sky",
+        "submenus": [
+            {
+                "seccion": _("Portal"),
+                "items": [
+                    {
+                        "label": _("Portal mayorista"),
+                        "url": "ecom:mayoristapp_hub",
+                        "icon": "storefront",
+                        "permission": "ecom.ver",
+                        "menu_item_id": "ecom_hub",
+                    },
+                    {
+                        "label": _("Compra mayorista"),
+                        "url": "ecom:mayoristapp_compra",
+                        "icon": "shopping_cart",
+                        "permission": "ecom.carrito.editar",
+                        "menu_item_id": "ecom_compra",
+                    },
+                ],
+            },
+            {
+                "seccion": _("Comprobantes"),
+                "items": [
+                    {
+                        "label": _("Presupuestos"),
+                        "url": "ecom:mayoristapp_presupuestos_vendedor",
+                        "icon": "description",
+                        "permission": "ecom.comprobantes.ver",
+                        "menu_item_id": "ecom_presupuestos",
+                    },
+                    {
+                        "label": _("Pedidos"),
+                        "url": "ecom:mayoristapp_pedidos_vendedor",
+                        "icon": "receipt_long",
+                        "permission": "ecom.comprobantes.ver",
+                        "menu_item_id": "ecom_pedidos",
+                    },
+                    {
+                        "label": _("Remitos"),
+                        "url": "ecom:mayoristapp_listado_remitos",
+                        "icon": "local_shipping",
+                        "permission": "ecom.comprobantes.ver",
+                        "menu_item_id": "ecom_remitos",
+                    },
+                    {
+                        "label": _("Recibos web"),
+                        "url": "ecom:mayoristapp_listado_recibos",
+                        "icon": "payments",
+                        "permission": "ecom.cobranzas.ver",
+                        "menu_item_id": "ecom_recibos",
+                    },
+                    {
+                        "label": _("Alta recibo"),
+                        "url": "ecom:mayoristapp_alta_recibo",
+                        "icon": "add_card",
+                        "permission": "ecom.cobranzas.editar",
+                        "menu_item_id": "ecom_alta_recibo",
+                    },
+                ],
+            },
+            {
+                "seccion": _("Clientes y catálogo"),
+                "items": [
+                    {
+                        "label": _("Clientes"),
+                        "url": "ecom:mayoristapp_clientes",
+                        "icon": "groups",
+                        "permission": "ecom.clientes.ver",
+                        "menu_item_id": "ecom_clientes",
+                    },
+                    {
+                        "label": _("Promociones"),
+                        "url": "ecom:mayoristapp_listado_promociones",
+                        "icon": "sell",
+                        "permission": "ecom.catalogo.ver",
+                        "menu_item_id": "ecom_promociones",
+                    },
+                ],
+            },
+            {
+                "seccion": _("Logística"),
+                "items": [
+                    {
+                        "label": _("Preparación de pedidos"),
+                        "url": "ecom:mayoristapp_estado_pedidos_preparacion",
+                        "icon": "inventory",
+                        "permission": "ecom.logistica.ver",
+                        "menu_item_id": "ecom_estado_pedidos",
+                    },
+                    {
+                        "label": _("Entregas en ruta"),
+                        "url": "logistica:entregas",
+                        "icon": "local_shipping",
+                        "permission": "ecom.logistica.ver",
+                        "menu_item_id": "ecom_logistica_entregas",
+                    },
+                ],
+            },
+        ],
     },
     {
         "id": "mercadopago",

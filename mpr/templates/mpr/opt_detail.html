@@ -15,18 +15,6 @@
                 <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">OPT {{ opt_numero }}</span></li>
             </ol>
         </nav>
-
-        {% if messages %}
-        {% for message in messages %}
-        <div class="mb-6 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm shadow-sm {% if message.tags == 'error' %}border-red-200 bg-red-500/10 text-red-800 dark:border-red-800 dark:bg-red-500/20 dark:text-red-200{% elif message.tags == 'success' %}border-emerald-200 bg-emerald-500/10 text-emerald-900 dark:border-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200{% else %}border-amber-200 bg-amber-500/10 text-amber-900 dark:border-amber-800 dark:bg-amber-500/20 dark:text-amber-200{% endif %}" role="alert">
-            <span>{{ message }}</span>
-            <button type="button" onclick="this.closest('[role=alert]').remove()" class="shrink-0 rounded-lg p-1 transition-colors hover:bg-black/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 dark:hover:bg-white/5" aria-label="Cerrar">
-                <span class="material-icons text-lg">close</span>
-            </button>
-        </div>
-        {% endfor %}
-        {% endif %}
-
         <div class="mb-8 rounded-2xl border border-slate-700/80 bg-slate-800 p-6 text-white shadow-lg dark:bg-slate-900 dark:border-slate-800 sm:p-8">
             <div class="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                 <div class="min-w-0">

@@ -1,15 +1,15 @@
 # Especificación: Reporte MPR — Producción por operario (tabla en Reportes MPR)
 
-**Estado: PENDIENTE**  
+**Estado: IMPLEMENTADO (hub Producción)**  
 **Prioridad: Media**  
 **Módulos afectados:** mpr (views, services, templates)  
-**Ubicación UI:** Menú MPR → Reportes → pestaña "Producción por operario"
+**Ubicación UI:** `/mpr/reportes/` → Grupo **Producción** → **Por operario**
 
 ---
 
 ## 1. Resumen
 
-Tabla de solo lectura en la sección **Reportes** del menú MPR. Muestra por **operario**: número de OPT asignadas y opcionalmente cantidad total de packs. Incluye filtro opcional por **fecha_desde** y **fecha_hasta** (período). No es reporte del módulo Reports.
+Ranking de productividad por operario desde **`mpr_parte_linea`** (flujo MPR diario).
 
 ---
 
@@ -17,11 +17,12 @@ Tabla de solo lectura en la sección **Reportes** del menú MPR. Muestra por **o
 
 | Origen | Uso |
 |--------|-----|
-| `lista_produccion_agrupada` | Campo `id_operario_opt` para agrupar por operario |
-| `sue_abm_empleado` | Nombre del operario |
-| `movimiento_stock` (opcional) | Para filtrar por período si se usa fecha de movimiento tipo OPT |
+| `mpr_parte_linea` + `mpr_parte` | Unidades, partes y componentes por operario en período |
+| `sue_abm_empleado` | Nombre del operario (fallback en `operario_nombre` de línea) |
 
-**Servicio MPR:** `reporte_mpr_produccion_por_operario(base_empresa, fecha_desde=None, fecha_hasta=None, limit=200)`.
+**Servicio MPR:** `reporte_mpr_operario_parte(base_empresa, fecha_desde, fecha_hasta, limit=200)`.
+
+**Nota:** `reporte_mpr_produccion_por_operario` (lista_produccion_historico / OPT) ya no se expone en `/mpr/reportes/`.
 
 ---
 

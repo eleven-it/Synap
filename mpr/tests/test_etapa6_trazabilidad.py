@@ -22,6 +22,7 @@ from django.urls import reverse
 
 from mpr.models import (
     MprArmadoSurtidoMovimiento,
+    MprEmpresaConfig,
     MprImputacionArmado,
     MprParte,
     MprParteAjuste,
@@ -47,6 +48,13 @@ def _crear_turno(nombre="Mañana"):
         hora_inicio=time(6, 0),
         hora_fin=time(14, 0),
         activo=True,
+    )
+
+
+def _config_sin_bloqueo_fabricando(empresa=EMPRESA):
+    MprEmpresaConfig.objects.update_or_create(
+        base_empresa=empresa,
+        defaults={"bloquear_parte_supera_fabricando": False},
     )
 
 
@@ -114,6 +122,7 @@ class TestIdListaPersistido(TestCase):
     """REQ-OPP-009: id_lista_produccion se captura y persiste al registrar parte."""
 
     def setUp(self):
+        _config_sin_bloqueo_fabricando()
         self.turno = _crear_turno()
 
     def _patched_registrar(self, mysql_rows, id_lista_esperado):

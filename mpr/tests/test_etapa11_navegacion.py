@@ -40,24 +40,38 @@ class TestMenuMprEtapa11(SimpleTestCase):
         self.assertIn("mpr:parte_produccion", urls)
         self.assertIn("mpr:clasificacion_produccion", urls)
 
-    def test_wizard_en_trazabilidad_avanzada(self):
+    def test_sin_seccion_trazabilidad_opt_legacy(self):
+        mpr = _mpr_menu()
+        secciones = {s["seccion"] for s in mpr["submenus"]}
+        self.assertNotIn("Trazabilidad OPT (avanzado)", secciones)
+
+    def test_configuracion_incluye_turnos(self):
         mpr = _mpr_menu()
         secciones = {s["seccion"]: s for s in mpr["submenus"]}
-        traz = secciones.get("Trazabilidad OPT (avanzado)")
-        self.assertIsNotNone(traz)
-        labels = [it["label"] for it in traz["items"]]
-        self.assertIn("Asistente legacy", labels)
-        self.assertIn("Crear OPT (demanda pack)", labels)
+        cfg = secciones.get("Configuración")
+        self.assertIsNotNone(cfg)
+        urls = [it["url"] for it in cfg["items"]]
+        self.assertIn("mpr:turnos_list", urls)
 
 
 class TestTemplatesNavegacionEtapa11(SimpleTestCase):
-    """Plantillas clave no promueven ventana pack como CTA principal."""
+    """Plantillas clave alineadas al flujo diario MPR."""
 
-    def test_tablero_produccion_enlace_opt_list(self):
+    def test_tablero_kpi_sin_enlaces_opt_legacy(self):
+        html = _read_template("templates", "mpr", "tablero.html")
+        self.assertIn("Tablero de producción", html)
+        self.assertIn("Componentes pendientes", html)
+        self.assertNotIn("opt_list", html)
+        self.assertNotIn("Trazabilidad OPT", html)
+        self.assertNotIn("Crear OPT", html)
+        self.assertNotIn("OPTs en proceso", html)
+
+    def test_tablero_produccion_sin_opt_list(self):
         html = _read_template("templates", "mpr", "tablero_produccion.html")
-        self.assertIn("opt_list_url", html)
-        self.assertIn("Trazabilidad OPT", html)
+        self.assertNotIn("opt_list_url", html)
+        self.assertNotIn("Trazabilidad OPT", html)
         self.assertNotIn("ventana_pack_url", html)
+        self.assertIn("mpr:armado", html)
 
     def test_ventana_pack_banner_legacy_sin_wizard(self):
         html = _read_template("templates", "mpr", "ventana_pack.html")
@@ -74,7 +88,7 @@ class TestTemplatesNavegacionEtapa11(SimpleTestCase):
         from mpr import views
 
         src = open(views.__file__, encoding="utf-8").read()
-        self.assertIn('"crear_opp_url": reverse("mpr:parte_produccion")', src)
+        self.assertIn('reverse("mpr:parte_produccion")', src)
         self.assertNotIn('reverse("mpr:wizard") + f"?paso=3', src)
 
     def test_urls_canonicas_resuelven(self):

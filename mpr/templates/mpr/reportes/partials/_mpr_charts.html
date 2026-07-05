@@ -1,0 +1,20 @@
+{% if mpr_charts and mpr_charts.blocks %}
+{{ mpr_charts|json_script:"mpr-charts-payload" }}
+<div class="mb-4 space-y-4" data-y-label="{{ etiqueta_cantidad|default:'unidades' }}" id="mpr-charts-root">
+    <div class="grid gap-4 {% if mpr_charts.blocks|length > 1 %}lg:grid-cols-2{% endif %}">
+        {% for block in mpr_charts.blocks %}
+        <div class="rounded-xl border border-gray-200/90 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-900/30 sm:p-4 {% if block.kind == 'line_multi' %}lg:col-span-2{% endif %}">
+            <div class="mb-3">
+                <h2 class="text-sm font-semibold text-gray-900 dark:text-gray-100">{{ block.title }}</h2>
+                {% if block.subtitle %}
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{{ block.subtitle }}</p>
+                {% endif %}
+            </div>
+            <div class="relative {% if block.kind == 'doughnut' %}h-[12rem]{% elif block.kind == 'line_multi' %}h-[14rem] sm:h-[16rem]{% else %}h-[11rem] sm:h-[12rem]{% endif %} w-full">
+                <canvas id="mpr-chart-{{ block.id }}" role="img" aria-label="{{ block.title }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}

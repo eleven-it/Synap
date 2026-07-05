@@ -27,9 +27,45 @@
             </div>
             <p class="mt-3 max-w-3xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">
                 Indique si cada depósito <strong class="font-semibold text-gray-800 dark:text-gray-200">suma al stock total</strong> y asigne un <strong class="font-semibold text-gray-800 dark:text-gray-200">tipo de uso</strong> único:
-                <strong class="text-purple-700 dark:text-purple-300">Producción</strong> (entrada al confirmar la OPT), Semi Elaborado / Scrap / 2da Selección (OPP), o Terminado (Armado).
+                <strong class="text-purple-700 dark:text-purple-300">Producción</strong>, Semi Elaborado, 2da Selección, Terminado (siempre suman stock), Scrap/Desperdicio (no suma), o depósitos auxiliares sin tipo.
             </p>
         </header>
+
+        <div class="mb-6 overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="border-b border-gray-200 px-4 py-3 dark:border-gray-700 sm:px-5">
+                <h2 class="text-sm font-bold text-gray-900 dark:text-white sm:text-base">Parte de producción</h2>
+                <p class="mt-1 text-xs leading-relaxed text-gray-600 dark:text-gray-400">
+                    Control de saldos: si está activo, la suma por componente (todos los operarios) no puede superar la columna <strong>Fabricando</strong> del tablero.
+                </p>
+            </div>
+            <div class="px-4 py-4 sm:px-5">
+                <form method="post" action="" class="mpr-post-loading flex flex-wrap items-center justify-between gap-3"
+                      data-mpr-loading-title="Guardando configuración"
+                      data-mpr-loading-subtitle="Actualizando control de parte de producción…">
+                    {% csrf_token %}
+                    <input type="hidden" name="bloquear_parte_supera_fabricando" id="valor-bloqueo-fabricando"
+                           value="{% if bloquear_parte_supera_fabricando %}1{% else %}0{% endif %}"/>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold text-gray-900 dark:text-white">Bloquear parte que supera Fabricando</p>
+                        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                            {% if bloquear_parte_supera_fabricando %}
+                            Activo — rechaza el guardado si la cantidad total supera lo enviado menos stock en Producción.
+                            {% else %}
+                            Inactivo — permite guardar con aviso (comportamiento anterior).
+                            {% endif %}
+                        </p>
+                    </div>
+                    <label class="relative inline-flex min-h-[44px] cursor-pointer items-center gap-2">
+                        <input type="checkbox" role="switch" class="peer sr-only"
+                               {% if bloquear_parte_supera_fabricando %}checked{% endif %}
+                               aria-label="Bloquear parte que supera Fabricando"
+                               onchange="(function(el){document.getElementById('valor-bloqueo-fabricando').value=el.checked?'1':'0';el.closest('form').submit();})(this);"/>
+                        <span class="relative inline-block h-7 w-12 shrink-0 rounded-full bg-red-500 transition-colors duration-200 peer-checked:bg-green-500 dark:bg-red-600 dark:peer-checked:bg-green-600 after:pointer-events-none after:absolute after:left-[3px] after:top-[3px] after:h-[22px] after:w-[22px] after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-5" aria-hidden="true"></span>
+                        <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">{% if bloquear_parte_supera_fabricando %}Activo{% else %}Inactivo{% endif %}</span>
+                    </label>
+                </form>
+            </div>
+        </div>
 
         <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="flex flex-col gap-2 border-b border-gray-200 px-4 py-3 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3">
@@ -61,6 +97,13 @@
                                 <span class="line-clamp-2 break-words sm:line-clamp-none" title="{{ dep.NombreDeposito|default:'' }}">{{ dep.NombreDeposito }}</span>
                             </td>
                             <td class="min-w-[6.5rem] px-2 py-2.5 text-center align-middle sm:min-w-[7.5rem] sm:px-4">
+                                {% if dep.suma_stock_obligatoria %}
+                                <div class="inline-flex min-h-[44px] items-center justify-center gap-1.5 py-1 sm:min-h-0"
+                                     title="Las etapas productivas del tablero siempre suman al Total.">
+                                    <span class="relative inline-block h-7 w-12 shrink-0 rounded-full bg-green-500 opacity-90 dark:bg-green-600 after:pointer-events-none after:absolute after:left-[3px] after:top-[3px] after:h-[22px] after:w-[22px] after:translate-x-5 after:rounded-full after:bg-white after:shadow" aria-hidden="true"></span>
+                                    <span class="hidden text-center text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 min-[400px]:inline sm:text-xs">Sí</span>
+                                </div>
+                                {% else %}
                                 <form method="post" action="" class="mpr-post-loading inline-flex w-full min-w-0 touch-manipulation items-center justify-center"
                                       data-mpr-loading-title="Guardando depósitos"
                                       data-mpr-loading-subtitle="Actualizando configuración MPR…">
@@ -82,6 +125,7 @@
                                         <span class="hidden w-6 shrink-0 text-center text-[11px] font-semibold tabular-nums text-gray-600 dark:text-gray-300 min-[400px]:inline sm:w-7 sm:text-xs" aria-hidden="true">{% if dep.suma_stock == 'Si' %}Sí{% else %}No{% endif %}</span>
                                     </label>
                                 </form>
+                                {% endif %}
                             </td>
                             <td class="min-w-0 px-2 py-2.5 sm:min-w-[12rem] sm:px-4">
                                 <form method="post" action="" class="mpr-post-loading flex w-full min-w-0 justify-end sm:justify-start" data-tipo-form="{{ dep.CodDeposito }}"

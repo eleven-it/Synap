@@ -76,6 +76,24 @@ class TestClienteBuscarRelayView(unittest.TestCase):
         resp = ClienteBuscarRelayAPIView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.data["clientes"]), 1)
+        self.assertEqual(len(resp.data["results"]), 1)
+        self.assertEqual(resp.data["results"][0]["id"], 2)
+
+    @patch("ecom.cliente_relay_views.buscar_clientes_relay")
+    def test_get_q_alias(self, mock_buscar):
+        mock_buscar.return_value = ([{"codigo": 9, "nombre_cliente": "Beta"}], None)
+        req = _req_get(
+            "/ecom/api/mayoristapp/clientes/buscar/",
+            {"ajax": "1", "q": "bet"},
+            {"base_empresa": "emp1", "id_vendedor_usr": 1, "todos_clientes": "Si"},
+        )
+        force_authenticate(req, user=self._user())
+        resp = ClienteBuscarRelayAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        mock_buscar.assert_called_once()
+        self.assertEqual(mock_buscar.call_args.kwargs["patron_texto"], "bet")
+        self.assertEqual(mock_buscar.call_args.kwargs["modo_busqueda"], "texto")
+        self.assertEqual(resp.data["results"][0]["text"], "Beta")
 
     @patch("ecom.cliente_relay_views.buscar_clientes_relay")
     def test_post_ok(self, mock_buscar):

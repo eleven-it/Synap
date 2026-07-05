@@ -1,79 +1,72 @@
-# Especificación: Reporte MPR — Movimientos de producción
+# Especificación: Reporte MPR — Movimientos del flujo diario
 
 **Estado: IMPLEMENTADO**  
 **Prioridad: Media**  
-**Módulos afectados:** reports (QueryRunnerService, widget), mpr (services)  
+**Módulos afectados:** mpr (services), hub `/mpr/reportes/` (Trazabilidad), reports (QueryRunner opcional)  
 **Slug reporte (Reports):** `mpr-movimientos-produccion`
 
 ---
 
 ## 1. Resumen
 
-Actividad reciente de producción en formato **tabla**: fecha, tipo de movimiento (OPT, OPP, OPA, Armado), código de movimiento, número de comprobante, detalle (resumido). Pensado para tiempo real. Consumo: catálogo Reports, dashboard_detail, API query. `base_empresa` desde sesión.
+Actividad del **flujo MPR diario** en formato tabla: envíos (`mpr_envio_produccion`), partes (`mpr_parte_linea` / `mpr_parte`) y clasificaciones (`mpr_transicion_lote`). **No** usa `lista_produccion_*` ni `movimiento_stock` legacy (OPT/OPP).
 
 ---
 
-## 2. Data sources
+## 2. Fuentes de datos
 
 | Origen | Uso |
 |--------|-----|
-| `movimiento_stock` | Filtro: `tipo_mov IN ('OPT', 'OPP', 'OPA', 'Armado')` o equivalente por `motivo_movimiento`. Campos: fecha, tipo_mov, codigo_movimiento, nro_comprobante, detalle, anulado. |
+| `mpr_envio_produccion` | Envío desde tablero consolidado |
+| `mpr_parte_linea` + `mpr_parte` | Partes de producción por operario |
+| `mpr_transicion_lote` | Clasificación / transición de lote |
+| `articulo` | Código y descripción del componente |
 
-**Servicio MPR:** `listar_movimientos_recientes_mpr(base_empresa, limit=200)` o `reporte_mpr_movimientos(base_empresa, limit=200)` con salida en formato tabla (columnas planas).
+**Servicio:** `reporte_mpr_movimientos(base_empresa, fecha_desde, fecha_hasta, limit=200)`  
+Helper interno: `_recolectar_eventos_ledgers_mpr`.
 
 ---
 
 ## 3. Entradas
 
-| Parámetro | Origen | Obligatorio | Descripción |
-|-----------|--------|-------------|-------------|
-| `base_empresa` | `payload.filters.base_empresa` | Sí | Base MySQL |
-| `limit` | config o payload | No | Default 200 |
+| Parámetro | Obligatorio | Descripción |
+|-----------|-------------|-------------|
+| `base_empresa` | Sí | Base MySQL |
+| `fecha_desde` / `fecha_hasta` | No | Default últimos 7 días (`_periodo_reporte_mpr`) |
+| `limit` | No | Default 200, máx. 500 |
 
 ---
 
 ## 4. Salidas
 
-**Tipo:** `QueryResult` (reports).
+| Campo | Descripción |
+|-------|-------------|
+| `fecha` | dd/MM/yyyy HH:mm |
+| `tipo_mov` | Envío a producción / Parte de producción / Clasificación |
+| `id_articulo`, `codigo_articulo`, `descripcion_articulo` | Componente |
+| `cantidad` | Unidades del evento |
+| `detalle` | Referencia ledger (id parte, destino, etc.) |
+| `operario` | Nombre en partes; «-» en envío/clasificación |
 
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `meta.slug` | str | `"mpr-movimientos-produccion"` |
-| `data` | list[dict] | Una fila por movimiento. Columnas: `fecha`, `tipo_mov`, `codigo_movimiento`, `nro_comprobante`, `detalle` (string corto). Orden: más reciente primero. |
-| `totals` | dict | `total_movimientos` (cantidad de filas) |
-| `notes` | list[str] | base_empresa; mensaje si falta base_empresa |
-
----
-
-## 5. Reglas de negocio
-
-- Solo movimientos **no anulados** (`COALESCE(anulado, 'No') = 'No'`).
-- Tipo normalizado a: OPT, OPP, OPA, Armado (mapear desde motivo si hace falta).
-- Orden: `codigo_movimiento` DESC o por fecha DESC (más reciente primero).
-- Sin `base_empresa` → data vacía o notes.
+Orden: más reciente primero.
 
 ---
 
-## 6. Criterios de aceptación
+## 5. Servicios legacy eliminados del hub
 
-| ID | Descripción |
-|----|-------------|
-| CA-MP-01 | Sin `base_empresa` → `data` vacía o `notes` con mensaje. |
-| CA-MP-02 | Cada fila tiene al menos `fecha`, `tipo_mov`, `codigo_movimiento`. |
-| CA-MP-03 | Número de filas <= `limit` (default 200). |
-| CA-MP-04 | `meta.slug = "mpr-movimientos-produccion"`. |
+Los siguientes servicios basados en `lista_produccion_*` **fueron retirados** de `mpr/services.py` (sustituidos por agregadores MPR diarios en `/mpr/reportes/`):
 
----
+- `reporte_mpr_pendiente` → usar `reporte_mpr_pendiente_componentes` (tablero consolidado)
+- `reporte_mpr_wip`
+- `reporte_mpr_produccion_por_operario` → usar `reporte_mpr_operario_parte`
+- `reporte_mpr_opt_cerradas`
 
-## 7. Casos borde
-
-- Sin movimientos: `data = []`.
-- Tabla `movimiento_stock` sin columna `tipo_mov`: usar solo `motivo_movimiento` y mapear a OPT/OPP/OPA/Armado según especificación MPR.
+Las tablas `lista_produccion_*` siguen existiendo para el módulo **OPT** (VB6/Synap); el hub de reportes ya no las consulta.
 
 ---
 
-## 8. Implementación
+## 6. Tests
 
-- **Servicio:** `mpr.services.reporte_mpr_movimientos(base_empresa, limit=200)` — consulta `movimiento_stock`, normaliza tipo (OPT/OPP/OPA/Armado), devuelve lista de dicts con `fecha`, `tipo_mov`, `codigo_movimiento`, `nro_comprobante`, `detalle`.
-- **Runner:** `QueryRunnerService._run_mpr_movimientos_produccion` — resuelve `base_empresa`, llama al servicio, devuelve `QueryResult` con `totals.total_movimientos`.
-- **Dashboard:** Widget `pivot-table` "Movimientos de producción" (migración 0033). Resumen con tarjeta "TOTAL MOVIMIENTOS" (entero).
+```bash
+docker exec Synap_app python manage.py test mpr.tests.test_reportes_mpr_services.TestReporteMprMovimientos --keepdb
+```

@@ -4,6 +4,18 @@ from .ventas_netas_relay_views import (
     VentasNetasGerenciaRelayAPIView,
     VentasNetasRelayAPIView,
 )
+from .clientes_sin_ventas_relay_views import (
+    ClientesSinVentasGerenciaRelayAPIView,
+    ClientesSinVentasRelayAPIView,
+)
+from .cobranzas_vendedor_relay_views import (
+    CobranzasVendedorGerenciaRelayAPIView,
+    CobranzasVendedorRelayAPIView,
+)
+from .utilidad_gerencial_relay_views import (
+    UtilidadGerencialGerenciaRelayAPIView,
+    UtilidadGerencialRelayAPIView,
+)
 from .logistica_lista_comprobantes_rutas_views import (
     LogisticaListaComprobantesClientesAutocompleteAPIView,
     LogisticaListaComprobantesEntregaAPIView,
@@ -74,6 +86,36 @@ urlpatterns = [
         "ventas-netas/relay/gerencia/",
         VentasNetasGerenciaRelayAPIView.as_view(),
         name="reports-ventas-netas-relay-gerencia",
+    ),
+    path(
+        "clientes-sin-ventas/relay/",
+        ClientesSinVentasRelayAPIView.as_view(),
+        name="reports-clientes-sin-ventas-relay",
+    ),
+    path(
+        "clientes-sin-ventas/relay/gerencia/",
+        ClientesSinVentasGerenciaRelayAPIView.as_view(),
+        name="reports-clientes-sin-ventas-relay-gerencia",
+    ),
+    path(
+        "cobranzas-vendedor/relay/",
+        CobranzasVendedorRelayAPIView.as_view(),
+        name="reports-cobranzas-vendedor-relay",
+    ),
+    path(
+        "cobranzas-vendedor/relay/gerencia/",
+        CobranzasVendedorGerenciaRelayAPIView.as_view(),
+        name="reports-cobranzas-vendedor-relay-gerencia",
+    ),
+    path(
+        "utilidad-gerencial/relay/",
+        UtilidadGerencialRelayAPIView.as_view(),
+        name="reports-utilidad-gerencial-relay",
+    ),
+    path(
+        "utilidad-gerencial/relay/gerencia/",
+        UtilidadGerencialGerenciaRelayAPIView.as_view(),
+        name="reports-utilidad-gerencial-relay-gerencia",
     ),
     path(
         "logistica/lista-comprobantes-rutas/clientes/autocomplete/",

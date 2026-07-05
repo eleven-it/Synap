@@ -20,16 +20,6 @@
     <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-6 md:p-8" x-data="feAfipBrowser()">
       <form method="post" enctype="multipart/form-data" class="space-y-6">
         {% csrf_token %}
-        {% if messages %}
-        <div class="space-y-2">
-          {% for message in messages %}
-          <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">
-            {{ message }}
-          </div>
-          {% endfor %}
-        </div>
-        {% endif %}
-
         <div>
           <label for="name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
           <input type="text" name="name" id="name" maxlength="64"

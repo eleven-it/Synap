@@ -119,9 +119,9 @@ Agrupación por artículo de demanda de producción (órdenes de producción).
 
 **Nota:** En **administranet89** esta tabla no existía; en **administranet92** sí existe con la estructura anterior.
 
-**Synap — herramienta global:** En bases donde aún no exista `lista_produccion_agrupada`, se puede crear y alinear columnas MPR desde **Archivo → Parámetros → Migración esquema MySQL (legacy)** con el proveedor **«MPR — tabla lista_produccion_agrupada»** (`core/services/legacy_mysql_schema/catalog.py`, id `mpr_lista_produccion_agrupada`). Requiere que exista la tabla `articulo` (no se crea desde Synap).
+**Synap — herramienta global (deprecado OPT):** Los proveedores que creaban/alteraban `lista_produccion_*` **ya no están** en **Archivo → Parámetros → Migración esquema MySQL (legacy)** (plan `mpr-mysql-fuente-unica`). Para ledgers MPR nuevos usar **«MPR — tablas core Synap (ledgers MySQL)»** (`mpr_core_tables`) o `manage.py apply_mpr_core_tables`. Mantenimiento legacy de trazabilidad detalle: CLI `apply_alter_detalle_trazabilidad` (solo bases con OPT antiguo).
 
-Para **`lista_produccion_detalle`** (falta frecuente al pulsar «Actualizar» o abrir demanda): proveedor **«MPR — tabla lista_produccion_detalle»** (`mpr_lista_produccion_detalle`), después **«MPR — trazabilidad lista producción (detalle)»** para FK e índice hacia agrupada.
+Para **`lista_produccion_detalle`** en bases heredadas con OPT activo: CLI `apply_alter_detalle_trazabilidad` (ya no expuesto en la herramienta web).
 
 ---
 
@@ -172,7 +172,7 @@ Detalle por pedido y artículo. Relación explícita con `lista_produccion_agrup
 | Fecha | DATE NULL | Opcional. Fecha de alta de la línea (`actualizar_pedidos_produccion`). |
 | **id_operario_opt** | **INT NULL** | **Opcional.** `sue_abm_empleado.id_sue_abm_empleado` del operario asociado al pedido/línea (Synap escribe al confirmar OPT, liberar, OPP y armado). Script: `sql/alter_mpr_id_operario_opt_detalle_historico_stock.sql`. |
 
-**Synap — herramienta global:** creación de la tabla en bases vacías: proveedor **«MPR — tabla lista_produccion_detalle»** (`mpr_lista_produccion_detalle`); en tablas ya existentes también intenta quitar una **FK heredada** `codigo_movimiento_pedido` → `comp_ped` si existe (impide el valor **0** usado por Synap para demanda por reserva). FK/índice hacia agrupada: **«MPR — trazabilidad lista producción (detalle)»**.
+**Synap — herramienta global (deprecado OPT):** creación de la tabla en bases vacías ya **no** se expone en la herramienta web; ver nota en §2.5. CLI legacy: `apply_alter_detalle_trazabilidad` para FK/índice hacia agrupada en instalaciones con OPT antiguo.
 
 **Relación:** `lista_produccion_detalle.id_lista_produccion` → `lista_produccion_agrupada.id_lista_produccion`. Al ejecutar «Actualizar» se asigna; al crear la OPT se marcan por `id_lista_produccion IN (...)` las filas de detalle que pasan a `en_proceso_produccion = 'Si'`.
 
@@ -316,15 +316,22 @@ Renglones de pedidos (cuerpo). MPR no usa cantidad_fab_pendiente_opt; el pendien
 
 ---
 
-### 2.13.1 Tablas Synap — armado surtido (Django)
+### 2.13.1 Tablas Synap MPR — ledgers en MySQL (`mpr_*`)
 
-No están en MySQL legacy; viven en la BD de Synap (`mpr` app).
+**Estado objetivo (change `mpr-mysql-fuente-unica`):** toda persistencia operativa MPR vive en la **base MySQL de la empresa** (una BD = una empresa; **sin** columna `base_empresa`). DDL: `docs/mpr/sql/001_mpr_core_tables.sql`; comando `apply_mpr_core_tables`; proveedor en herramienta global **«MPR — tablas core Synap (ledgers MySQL)»** (`mpr_core_tables`).
 
-| Modelo | Uso |
-|--------|-----|
-| **MprArticuloArmadoSurtido** | Packs terminados **habilitados** para `/mpr/armado-surtido/` (`base_empresa`, `id_articulo`, `activo`). |
-| **MprArmadoSurtidoMovimiento** | Cabecera por movimiento (`codigo_movimiento`, depósitos, `id_lista_produccion` opcional). |
-| **MprArmadoSurtidoLinea** | Componentes de cada armado (`id_articulo_componente`, `cantidad_por_pack`, `cantidad_total`). |
+| Tabla MySQL | Reemplaza (Postgres legacy) | Uso |
+|-------------|----------------------------|-----|
+| **mpr_config** | `mpr_empresa_config` | Singleton: bloqueo parte vs Fabricando |
+| **mpr_turno** / **mpr_roster_dia** | `MprTurno` / `MprRosterDia` | Turnos y planificación |
+| **mpr_envio_produccion** | `MprEnvioProduccion` | Envíos tablero (E7) |
+| **mpr_parte** / **mpr_parte_linea** / **mpr_parte_ajuste** | `MprParte*` | Parte de producción |
+| **mpr_transicion_lote** | `MprTransicionLote` | Transiciones entre etapas |
+| **mpr_articulo_armado_surtido** | `MprArticuloArmadoSurtido` | Packs habilitados armado surtido |
+| **mpr_armado_lote** / **mpr_armado_surtido_movimiento** / **mpr_armado_surtido_linea** | Modelos armado Django | Trazabilidad armado |
+| **mpr_imputacion_armado** | `MprImputacionArmado` | Imputación supervisor 1ra |
+
+Hasta completar cutover P3, Synap puede seguir leyendo Postgres; ver `docs/mpr/PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md`.
 
 ---
 

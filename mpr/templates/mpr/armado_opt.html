@@ -17,18 +17,6 @@
                 <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Armado</span></li>
             </ol>
         </nav>
-
-        {% if messages %}
-        {% for message in messages %}
-        <div class="mb-4 flex items-center justify-between gap-3 rounded-xl px-4 py-2.5 text-sm shadow-sm {% if message.tags == 'error' %}bg-red-500/10 dark:bg-red-500/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800{% else %}bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800{% endif %}" role="alert">
-            <span>{{ message }}</span>
-            <button type="button" onclick="this.closest('[role=alert]').remove()" class="shrink-0 rounded p-1 hover:bg-black/5 dark:hover:bg-white/5 transition-colors" aria-label="Cerrar">
-                <span class="material-icons text-lg">close</span>
-            </button>
-        </div>
-        {% endfor %}
-        {% endif %}
-
         <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
             <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Armado OPT {{ opt_numero }}</h1>
             <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Origen: <strong class="text-gray-900 dark:text-white">{{ nombre_deposito_semi|default:"Semi Elaborado" }}</strong>. Destino: <strong class="text-gray-900 dark:text-white">{{ nombre_deposito_terminado|default:"Terminado" }}</strong>. Indique cantidad por pack (solo packs completos con todos los componentes de la receta).</p>

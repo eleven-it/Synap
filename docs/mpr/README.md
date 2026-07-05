@@ -10,6 +10,7 @@ Documentación del módulo MPR en Synap: flujos, esquema de datos, manual de usu
 | [MPR_FLUJO_CREAR_OPT.md](MPR_FLUJO_CREAR_OPT.md) | Flujo detallado al crear la OPT (Generar OPT, liberar, OPP). |
 | [MPR_PASO3_LINEAS_OPP_ANALISIS.md](MPR_PASO3_LINEAS_OPP_ANALISIS.md) | Análisis: líneas de artículos en paso 3 del wizard (Crear OPP). |
 | [SCHEMA_MPR_ADMINISTRANET92.md](SCHEMA_MPR_ADMINISTRANET92.md) | Esquema de tablas MPR en base AdministraNET (lista_produccion_*, movimiento_stock, etc.). |
+| [PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md](PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md) | **Plan** — Migrar ledgers MPR de Postgres a MySQL (`mpr_*`), FK, utf8mb4, deprecación OPT/lista_produccion. OpenSpec: `openspec/changes/mpr-mysql-fuente-unica/`. |
 | [NORMALIZACION_TABLAS_MPR.md](NORMALIZACION_TABLAS_MPR.md) | Normalización de tablas DB (MPR / AdministraNET) y relaciones. |
 | [MANUAL_USUARIO_MPR.md](MANUAL_USUARIO_MPR.md) | Manual de usuario del módulo MPR (§4 Pack y componentes). |
 | [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md) | **Implementación:** cómo se identifican pack y componente (`articulo`, BOM, OPT, armado surtido). |
@@ -43,6 +44,7 @@ En la carpeta [sql/](sql/):
 
 | Script | Uso |
 |--------|-----|
+| [001_mpr_core_tables.sql](sql/001_mpr_core_tables.sql) | **Tablas core MPR Synap** (`mpr_*`): config, turnos, envíos, partes, transiciones, armado. Proveedor «MPR — tablas core Synap». |
 | [alter_lista_produccion_agrupada_mpr_opt.sql](sql/alter_lista_produccion_agrupada_mpr_opt.sql) | Columnas id_opt, codigo_movimiento_opt, id_operario_opt en lista_produccion_agrupada. |
 | [alter_lista_produccion_agrupada_cantidad_fabricada_acumulada.sql](sql/alter_lista_produccion_agrupada_cantidad_fabricada_acumulada.sql) | Columna cantidad_fabricada_acumulada (acumulado de armado OPA por línea de demanda). |
 | [backfill_cantidad_fabricada_acumulada_desde_historico.sql](sql/backfill_cantidad_fabricada_acumulada_desde_historico.sql) | Opcional: inicializar cantidad_fabricada_acumulada desde lista_produccion_historico (tipo_evento OPA). |

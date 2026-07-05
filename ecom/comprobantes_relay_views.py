@@ -8,6 +8,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ecom.mixins import DEPRECATION_REPLACEMENT_PEDIDOS, DeprecationHeaderMixin
 from ecom.permissions import EcomMayoristappSessionPermission
 from ecom.models import EcomMailQueue
 from ecom.services.comprobantes_anulacion import anular_pedido_relay
@@ -40,13 +41,15 @@ def _session_user(request: Request) -> dict:
     return (getattr(request, "session", None) or {}).get("user") or {}
 
 
-class ComprobantesPedidosRelayAPIView(APIView):
+class ComprobantesPedidosRelayAPIView(DeprecationHeaderMixin, APIView):
     """
     POST ``/ecom/api/mayoristapp/comprobantes/pedidos/?ajax=1``
 
     Paridad listado JSON (PHP devolvía HTML de tabla). Cuerpo: mismos campos que ``relay-pedidos.php`` (``vendedor``, ``campoBusca``, etc.).
+    **Deprecated:** usar ``POST /ecom/api/v1/mayoristapp/comprobantes/pedidos/``.
     """
 
+    deprecation_link = DEPRECATION_REPLACEMENT_PEDIDOS
     permission_classes = [EcomMayoristappSessionPermission]
 
     def post(self, request: Request) -> Response:

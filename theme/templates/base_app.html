@@ -214,6 +214,9 @@
     <header class="w-full fixed top-0 left-0 z-40 h-14 md:h-16 flex items-center bg-white dark:bg-gray-950 shadow-sm">
         {% include 'partials/navbar.html' %}
     </header>
+
+    {# Toasts globales: consumen messages aquí (no en bloques por pantalla) #}
+    {% include 'partials/synap_messages_toast.html' %}
     
     <div class="pt-14 md:pt-16 min-h-screen w-full flex pb-8 md:pb-12">
         <!-- Contenido principal -->
@@ -230,6 +233,12 @@
     </div>
 
     {% block extra_js %}{% endblock %}
+    <script src="{% static 'js/synap-messages.js' %}"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        if (window.SynapMessages) { window.SynapMessages.initFromDom(); }
+    });
+    </script>
     
     <script>
     // Soporte para dark mode (desktop y mobile: ambos switches sincronizados)

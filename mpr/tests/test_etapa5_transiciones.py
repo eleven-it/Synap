@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, call, patch
 from django.core.exceptions import ValidationError
 from django.test import TestCase, SimpleTestCase
 
-from mpr.models import MprParte, MprParteAjuste, MprParteLinea, MprTransicionLote, MprTurno
+from mpr.models import MprParte, MprParteAjuste, MprParteLinea, MprTransicionLote, MprTurno, MprEmpresaConfig
 
 EMPRESA = "EmpresaTestEtapa5"
 
@@ -59,6 +59,13 @@ def _crear_linea(parte, id_articulo=10, id_operario=5, cantidad=20):
         id_operario=id_operario,
         operario_nombre="Operario Test",
         cantidad=Decimal(str(cantidad)),
+    )
+
+
+def _config_sin_bloqueo_fabricando(empresa=EMPRESA):
+    MprEmpresaConfig.objects.update_or_create(
+        base_empresa=empresa,
+        defaults={"bloquear_parte_supera_fabricando": False},
     )
 
 
@@ -187,6 +194,7 @@ class TestAsientoFisicoOppParte(TestCase):
     """REQ-OPP-004: registrar_parte_produccion llama asiento físico y marca movimiento_fisico_ok."""
 
     def setUp(self):
+        _config_sin_bloqueo_fabricando()
         self.turno = _crear_turno()
 
     def test_registrar_parte_llama_asiento_fisico(self):
@@ -250,6 +258,7 @@ class TestIdempotenciaOppParte(TestCase):
     """REQ-OPP-004: si movimiento_fisico_ok=True, no se re-ejecuta el asiento físico."""
 
     def setUp(self):
+        _config_sin_bloqueo_fabricando()
         self.turno = _crear_turno()
 
     def test_no_llama_asiento_si_movimiento_fisico_ok_true(self):

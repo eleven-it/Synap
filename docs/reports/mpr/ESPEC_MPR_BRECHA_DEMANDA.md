@@ -1,15 +1,15 @@
 # Especificación: Reporte MPR — Demanda vs. stock (brecha)
 
-**Estado: PENDIENTE**  
+**Estado: IMPLEMENTADO (UI Demanda en /mpr/reportes/)**  
 **Prioridad: Alta**  
-**Módulos afectados:** reports (QueryRunnerService), mpr (services)  
-**Slug reporte (Reports):** `mpr-brecha-demanda`
+**Módulos afectados:** mpr (services, templates)  
+**Ubicación UI:** `/mpr/reportes/` → Grupo **Demanda** → **Brecha pack**
 
 ---
 
 ## 1. Resumen
 
-Por **artículo**: demanda pendiente, stock terminado, cantidad a fabricar (brecha) e indicador de **urgente**. Fuente de datos: lógica equivalente a `listar_ventana_pack` (lista_produccion_agrupada + stock por depósito). Pensado para panel de producción en tiempo real. Consumo: catálogo Reports, dashboard_detail, API query. `base_empresa` desde sesión.
+Por **pack terminado**: demanda PED en vivo, stock terminado, brecha e indicador **urgente**. Fuente: `listar_demanda_pack_desde_pedidos` (sin `lista_produccion_agrupada`).
 
 ---
 
@@ -17,9 +17,9 @@ Por **artículo**: demanda pendiente, stock terminado, cantidad a fabricar (brec
 
 | Origen | Uso |
 |--------|-----|
-| `lista_produccion_agrupada` | Demanda pendiente por artículo |
-| Stock por depósito / artículo | Stock terminado (depósitos de producto terminado) |
-| `articulo` | Código y descripción |
+| `stockp` + `comp_ped` (PED) | Demanda en vivo |
+| `stock_deposito` + `deposito` | Stock terminado |
+| `articulo` | Código y descripción (enriquecido en servicio) |
 
 **Servicio MPR:** `reporte_mpr_brecha_demanda(base_empresa, limit=200)`.
 

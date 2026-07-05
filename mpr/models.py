@@ -626,3 +626,31 @@ class MprEnvioProduccion(models.Model):
             f"Envío tablero art.{self.id_articulo} qty={self.cantidad}"
             f" ({self.base_empresa})"
         )
+
+
+class MprEmpresaConfig(models.Model):
+    """Parámetros operativos MPR por empresa (Synap/PostgreSQL)."""
+
+    base_empresa = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        help_text="Base MySQL AdministraNET (ej. administranet92).",
+    )
+    bloquear_parte_supera_fabricando = models.BooleanField(
+        default=True,
+        help_text=(
+            "Si está activo, rechaza el parte cuando la suma por componente "
+            "supera Fabricando (enviado − stock Producción)."
+        ),
+    )
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "mpr_empresa_config"
+        verbose_name = "Configuración MPR por empresa"
+        verbose_name_plural = "Configuraciones MPR por empresa"
+
+    def __str__(self):
+        estado = "bloqueo ON" if self.bloquear_parte_supera_fabricando else "bloqueo OFF"
+        return f"MPR config {self.base_empresa} ({estado})"

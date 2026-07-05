@@ -28,7 +28,7 @@ Login: `control.php` + `permiso_sistema_puesto` (no replicar AES en SQL en rutas
 ## Decisiones Fase B
 
 - **[DECISIÓN-B-F1]** Las nuevas API e-com/reportes **no** validan contraseña con AES en MySQL; asumen usuario ya autenticado vía flujo Synap existente.
-- **[DECISIÓN-B-F2]** Población de `vendedor_a_cargo`, `todos_clientes` y demás flags PHP en sesión: **pendiente de alinear** con `login`/`core` cuando un relay lo requiera (documentar en el spec del relay concreto).
+- **[DECISIÓN-B-F2]** Población de `vendedor_a_cargo`, `todos_clientes`, `usa_id_manual` y `id_vendedor_usr`: **`ecom/services/mayoristapp_sesion_contexto.py`** hidrata desde MySQL (usuarios + permiso_sistema_puesto) en cada API/vista mayoristapp; paridad `control.php`.
 - **[DECISIÓN-B-F3]** Permiso genérico catálogo: `EcomMayoristappSessionPermission` (sesión + `base_empresa`). Informes relay ventas netas: `OperationalReportsPermission` / `ManagerialReportsPermission` según [SPEC_VENTAS_NETAS.md](./SPEC_VENTAS_NETAS.md).
 
 ---

@@ -46,10 +46,10 @@
       {% csrf_token %}
       <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800">
         <form @submit.prevent="buscar(1)" class="flex flex-col sm:flex-row gap-3">
-          <input type="text" x-model="q" placeholder="Buscar por nombre, código o código manual…"
+          <input type="text" x-model="q" @input.debounce.400ms="buscar(1)" placeholder="Buscar por nombre, código o código manual…"
                  class="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm px-4 py-2.5 focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 outline-none" />
           <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-            <input type="checkbox" x-model="soloPromo" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500"> Solo promociones
+            <input type="checkbox" x-model="soloPromo" @change="buscar(1)" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500"> Solo promociones
           </label>
           <button type="submit" :disabled="cargandoCat"
                   class="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 transition">
@@ -230,6 +230,8 @@ document.addEventListener('alpine:init', () => {
 
     async buscar(pagina) {
       if (pagina < 1) return;
+      const term = this.q.trim();
+      if (term.length > 0 && term.length < 2) return;
       this.cargandoCat = true;
       const filtros = {};
       if (this.q.trim()) filtros.q = this.q.trim();

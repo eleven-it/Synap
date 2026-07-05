@@ -85,7 +85,7 @@ Reglas puras de solape de fechas y **Falta** están en [`reports/services/objeti
 
 ## Pruebas de integración
 
-Ver [`reports/tests/test_objetivos_ventas_informe_integration.py`](../../reports/tests/test_objetivos_ventas_informe_integration.py): quedan **omitidas** hasta existir slug, migración de tabla y `QueryRunner`.
+Ver [`reports/tests/test_objetivos_ventas_informe_integration.py`](../../reports/tests/test_objetivos_ventas_informe_integration.py). El slug `ventas-objetivos-vs-bo` ya está **registrado en `ReportDefinition`** vía [`reports/migrations/0036_add_ventas_objetivos_vs_bo_report.py`](../../reports/migrations/0036_add_ventas_objetivos_vs_bo_report.py) (categoría `operational`, sección catálogo «listados»); el test de slug pasa y el de `QueryRunner` corre contra MySQL (se omite solo si la base legacy no está disponible). Reconciliación del módulo objetivos PHP: ver `docs/ecom/DELTA_PHP_2026Q2.md` (decisión abierta #1, resuelta).
 
 ## UI / rendimiento (tabla jerárquica)
 

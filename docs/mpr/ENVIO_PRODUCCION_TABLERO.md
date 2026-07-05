@@ -9,14 +9,17 @@
 
 ## Propósito
 
-La Etapa 7 introduce la capacidad de **enviar componentes directamente a producción desde el Tablero de Demanda Consolidado**, sin pasar por el wizard/OPT. El registro es un ledger Postgres independiente (`MprEnvioProduccion`), desacoplado de las tablas MySQL legacy (no escribe en `stock_deposito` ni `movimiento_stock`).
+La Etapa 7 introduce la capacidad de **enviar componentes directamente a producción desde el Tablero de Demanda Consolidado**, sin pasar por el wizard/OPT. El ledger vive en **`mpr_envio_produccion` (MySQL)**. No escribe en `stock_deposito` ni `movimiento_stock`.
 
 El envío contribuye a la columna **Enviado** del tablero mediante la fórmula E7:
 
 ```
 Enviado[comp] = Enviado_OPT[comp] + Enviado_tablero[comp]
-Enviado_tablero[comp] = max(0, SUM(envíos_tablero) − stock_produccion[comp])
+Enviado_tablero[comp] = max(0, SUM(envíos_tablero) − stock_pipeline[comp])
+stock_pipeline = Producido + Semi + 2da + Scrap + Terminado
 ```
+
+Al clasificar desde Producido, el stock en Semi/2da/Scrap sigue acreditando envíos: **Fabricando no repunta** al vaciar Producido.
 
 ---
 
@@ -104,9 +107,9 @@ Los modales E5 conservan sus propios `<form method="post">` sin interferencia.
 
 ### Columna "Enviar" (col 11)
 
-- Input numérico (`type="number"`, `step="1"`) habilitado cuando `pendiente > 0`.
-- `disabled` si `pendiente <= 0` (sin demanda, no enviar).
-- `colspan` del empty-state: 12 (antes: 11).
+- Input numérico (`type="number"`, `step="1"`) editable en todas las filas; se prellena con `pendiente` cuando es > 0.
+- Al confirmar, JavaScript copia **todas** las filas con cantidad > 0 como campos ocultos dentro de `#form-enviar-lote` (evita pérdida de líneas con el atributo HTML5 `form=`).
+- El servidor omite cantidades ≤ 0; warning no bloqueante si cantidad > pendiente.
 
 ---
 
@@ -192,6 +195,62 @@ En Etapa 7, la anulación es solo vía **admin Django** (campo `anulado=True`). 
 
 - Vínculo envío↔parte (qué parte consumió qué envío tablero)
 - Comprobante MSTOCK para envíos tablero
-- UI de anulación (diferida a E8)
 - Parte component-level directo desde tablero
 - Deprecación del wizard/OPT para el flujo de envío
+
+---
+
+## Anulación de envíos (Opción A — supervisor)
+
+**Fecha:** 05/07/2026  
+**URLs:** `GET /mpr/tablero-produccion/envios/` · `POST /mpr/tablero-produccion/envios/anular/`
+
+### Propósito
+
+Permite a supervisores corregir envíos duplicados o erróneos del tablero marcando filas en `mpr_envio_produccion` como `anulado=1`. **No revierte stock físico** en depósitos; solo ajusta el ledger (Pendiente, Fabricando, Enviado).
+
+### Reglas de negocio
+
+| Condición | Requisito |
+|-----------|-----------|
+| `anulado = 0` | Sí |
+| `codigo_movimiento_mstock IS NULL` | Sí |
+| Permiso supervisor / admin MPR | Sí |
+| FIFO vs partes | Partes registradas **desde el primer envío tablero activo** consumen envíos más antiguos primero |
+| Anulación parcial por fila | **No** (MVP: fila completa o nada) |
+
+### Esquema MySQL (auditoría)
+
+Columnas añadidas idempotentemente por `run_mpr_core_tables_mysql`:
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| `anulado_en` | DATETIME NULL | Timestamp de anulación |
+| `id_usuario_anula` | INT NULL | Usuario que anuló |
+
+### Servicios
+
+- `listar_envios_produccion_anulables(base, limit=200, id_articulo=None, incluir_anulados=False)` — lista con saldo anulable FIFO.
+- `anular_envios_produccion_seleccionados(base, ids, id_usuario)` — valida y anula filas completas.
+
+### Tests
+
+`mpr/tests/test_envios_anulacion.py` — FIFO, agrupación por lote, integración MySQL.
+
+### UI
+
+- Enlace **Anular envíos** en el tablero (solo supervisores).
+- **Filtro obligatorio por fecha** del envío (`DATE(creado_en)`).
+- Lista de **lotes** (agrupados por `uuid_lote`; legacy por usuario + segundo).
+- Al expandir un lote, se muestran las **líneas** con checkbox para anular.
+
+### Esquema — uuid_lote
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| `uuid_lote` | CHAR(36) NULL | Mismo UUID para todas las líneas de un `crear_envios_lote` |
+
+### Servicios
+
+- `listar_lotes_envios_produccion_anulables(base, fecha, ...)` — lotes con líneas y saldo FIFO.
+- `anular_envios_produccion_seleccionados(base, ids, id_usuario)` — valida y anula filas completas.

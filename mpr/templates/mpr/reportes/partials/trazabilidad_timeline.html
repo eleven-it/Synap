@@ -1,0 +1,38 @@
+<form method="get" class="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+    <input type="hidden" name="grupo" value="trazabilidad">
+    <input type="hidden" name="reporte" value="timeline">
+    <input type="hidden" name="desde" value="{{ fecha_desde_iso }}">
+    <input type="hidden" name="hasta" value="{{ fecha_hasta_iso }}">
+    <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'unidades' }}">
+    <div>
+        <label for="id_articulo" class="mb-1 block text-xs font-semibold text-gray-600">ID componente</label>
+        <input type="number" name="id_articulo" id="id_articulo" value="{{ meta.id_articulo|default:'' }}" min="1"
+               class="min-h-10 w-40 rounded-lg border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+               placeholder="Ej. 1275">
+    </div>
+    <button type="submit" class="min-h-10 rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-700">Buscar trazabilidad</button>
+</form>
+
+{% if meta.id_articulo %}
+<p class="mb-4 text-sm text-gray-600 dark:text-gray-400">
+    Componente <strong>{{ meta.id_articulo }}</strong>
+    {% if meta.descripcion_articulo %}— {{ meta.descripcion_articulo }}{% endif %}
+</p>
+{% else %}
+<p class="mb-4 text-sm text-gray-500">Seleccioná un componente para ver la línea de tiempo.</p>
+{% endif %}
+
+{% if meta.id_articulo and not eventos %}
+{% include "mpr/reportes/partials/empty_state.html" with empty_titulo="Sin eventos MPR para este componente en el período" empty_cta_url="mpr:tablero_produccion" empty_cta_label="Ver tablero" %}
+{% elif eventos %}
+<ol class="relative ml-3 border-l-2 border-slate-200 dark:border-slate-600">
+    {% for ev in eventos %}
+    <li class="mb-6 ml-6">
+        <span class="absolute -left-[9px] flex h-4 w-4 items-center justify-center rounded-full {% if ev.tipo == 'envio' %}bg-slate-500{% elif ev.tipo == 'parte' %}bg-emerald-500{% else %}bg-purple-500{% endif %} ring-4 ring-white dark:ring-gray-800"></span>
+        <time class="text-xs font-semibold text-gray-500">{{ ev.fecha_display }}</time>
+        <h4 class="text-sm font-semibold text-gray-900 dark:text-white">{{ ev.tipo_label }} — {{ ev.cantidad_display|default:ev.cantidad }}</h4>
+        <p class="text-xs text-gray-600 dark:text-gray-400">{{ ev.detalle }}{% if ev.operario != "-" %} · {{ ev.operario }}{% endif %}</p>
+    </li>
+    {% endfor %}
+</ol>
+{% endif %}

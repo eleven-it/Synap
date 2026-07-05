@@ -270,6 +270,8 @@ def menu_context(request):
             current_app_id = 'ventas'
         elif app_name == 'self_checkout':
             current_app_id = 'self_checkout'
+        elif app_name == 'ecom':
+            current_app_id = 'ecom'
     
     # Obtener submenús de la app actual con permisos procesados
     current_sidebar_items = []

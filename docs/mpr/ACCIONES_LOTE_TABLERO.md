@@ -121,10 +121,17 @@ Todos los mensajes se consumen en la misma pantalla (no se filtran al tablero).
 
 ## Template
 
-`mpr/templates/mpr/clasificacion_produccion.html` extiende `base_mpr.html`
-(estética slate/dark del Tablero de producción). Alpine.js:
-- Componente `clasificacionProduccion()` a nivel form: fecha nativa → hidden `dd/MM/yyyy`,
-  seguimiento de filas excedidas (`hayExcedida`) y bloqueo de submit.
+`mpr/templates/mpr/clasificacion_produccion.html` extiende `base_mpr.html` con la misma
+estructura UX que **Parte de producción** (`parte_produccion.html`):
+
+- Migas de pan, contenedor `mpr-contenedor-pagina`, encabezado compacto (título | fecha de carga + botón **Tablero** amber).
+- Card blanca con **buscador predictivo** por código/descripción.
+- Columna **Artículo** sticky (código + descripción); badge **En producción** con feedback en vivo «Clasificado: X u.».
+- Columnas destino (**Semi elaborado**, **2da selección**, **Desperdicio**) con tintes alternados; captura **Docenas · Unidades** (1 docena = 12 u., igual que parte/OPP); validación `suma ≤ disponible`.
+- Un solo botón **Guardar clasificación** en el pie; overlay `mpr-post-loading` al enviar.
+
+Alpine.js:
+- `clasificacionProduccion()` a nivel form: fecha nativa → hidden `dd/MM/yyyy`, `busqueda`, `hayExcedida`.
 - `x-data` por fila con `cantSemi/cant2da/cantScrap`, `suma` y `excede`.
 
 ---

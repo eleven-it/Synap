@@ -399,7 +399,7 @@ Especificaciones técnicas: [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.m
 
 **Propósito:** Armar packs **1.ª** con **lista de materiales fija** (`en_abm_formula`): descuenta componentes del depósito **Semi elaborado** e ingresa el pack en **Terminado 1.ª**.
 
-**Packs elegibles:** artículos con `ensamblado = 'Si'`, BOM no vacío y habilitados para armado 1ra. El catálogo de packs se carga **bajo demanda** al buscar (API lazy).
+**Packs elegibles:** artículos con `ensamblado = 'Si'`, BOM no vacío y habilitados para armado 1ra. El catálogo de packs se carga **bajo demanda** al buscar (API lazy) y **solo lista packs con stock suficiente** de todos los componentes BOM en el depósito **origen** seleccionado (Semi elaborado).
 
 **Composición:** Precargada desde BOM; **solo lectura** (anti-manipulación). Solo edita **cantidad de packs** por ítem.
 
@@ -415,7 +415,7 @@ Especificaciones técnicas: [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.m
 
 **Ruta:** `/mpr/imputacion-armado-1ra/` (menú: **Imputación de pedido**)
 
-**Acciones rápidas (header):** **Lista de OPTs** (`/mpr/opt/`) y **Tablero** (`/mpr/`). Usuario con permiso **`mpr.imputar_armado_1ra`** (supervisor). Operarios sin permiso reciben **403**.
+**Acciones rápidas (header):** **Armado 1ra** (`/mpr/armado/?modo=1ra`) y **Tablero de producción** (`/mpr/tablero-produccion/`). Usuario con permiso **`mpr.imputar_armado_1ra`** (supervisor). Operarios sin permiso reciben **403**.
 
 **Qué muestra:**
 
@@ -434,7 +434,7 @@ Especificaciones técnicas: [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.m
 **Imputar un MSTOCK:**
 
 1. Pulse **Imputar** en la fila del comprobante.
-2. El sistema propone líneas **FIFO** sobre demanda abierta del mismo artículo (`lista_produccion_detalle` / pedidos PED): pedido más antiguo primero.
+2. El sistema propone líneas **FIFO** sobre demanda abierta del mismo artículo: pedidos **PED** en vivo (cantidad pedida − ya imputado), ordenados por fecha del comprobante (más antiguo primero). En bases con tablas OPT legacy aún presentes, puede usar `lista_produccion_detalle` como respaldo.
 3. Revise la tabla (pedido, cliente, fecha, **cant. imputar** editable, regla FIFO/MANUAL).
 4. Ajuste cantidades si hace falta (p. ej. imputación **parcial**: MSTOCK 10, pedido A demanda 6 → impute 6 y quedan 4 pendientes en ese MSTOCK).
 5. **Confirmar imputación.**
@@ -446,9 +446,9 @@ Especificaciones técnicas: [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.m
 
 **Efecto al confirmar:**
 
-- Registra trazabilidad en Synap (`MprImputacionArmado`).
-- Reduce demanda pendiente en legacy (`lista_produccion_detalle` / agrupada).
-- Actualiza `comp_ped.estado_pedido_opt` cuando corresponde (Parcial / Terminado según reglas MPR).
+- Registra trazabilidad en Synap (`mpr_imputacion_armado` en MySQL).
+- En bases con OPT legacy: reduce demanda pendiente en `lista_produccion_detalle` / agrupada.
+- Actualiza `comp_ped.estado_pedido_opt` cuando corresponde (Parcial / Terminado según demanda imputable restante).
 
 **Estado vacío:** Si no hay MSTOCK 1ra pendientes, la pantalla ofrece enlace a **Armado 1ra**.
 

@@ -86,6 +86,33 @@ Change OpenSpec `informe-clientes-sin-ventas-vendedor` (P0) **implementado**: `r
 - Migración: `reports/migrations/0032_add_clientes_sin_ventas_report.py` (ReportDefinition + checkpoint).
 - Tests: `reports/tests/test_clientes_sin_ventas_relay.py` (18/18 OK en `Synap_app`).
 
+## F0 Fundaciones Synap (04/07/2026) — change `ecom-migracion-completa`
+
+| Entregable | Estado |
+|------------|--------|
+| Módulo `ecom` en MODULE_CONFIGS + ModuleConfig (`0026`) | **Migrado** ✅ |
+| `menu_config.py` + permisos `ecom.*` | **Migrado** ✅ |
+| Hub `/ecom/mayoristapp/` (7 cards PHP) | **Migrado** ✅ |
+| API REST v1 piloto pedidos + deprecation legacy | **Migrado** ✅ |
+| Checkpoint `mayoristapp_modulo_shell` (`0027`) | **Migrado** ✅ |
+
+Docs: [INVENTARIO_HUB_MAYORISTAPP.md](./INVENTARIO_HUB_MAYORISTAPP.md), [API_REST_V1_MAPPING.md](./API_REST_V1_MAPPING.md).
+
+## F1 Piloto pedidos (04/07/2026)
+
+| Entregable | Estado |
+|------------|--------|
+| Matriz reutilización F1 | **Documentado** ✅ |
+| UI pedidos vendedor + API v1 | **Migrado** ✅ |
+| Framework listados genérico F1 | **Migrado** ✅ (`listado_mayoristapp`) |
+| UI: remitos, FE, NC, recibos, devoluciones, promociones | **Migrado** ✅ |
+| UI clientes (búsqueda/selección) | **Migrado** ✅ |
+| API artículo-remito + UI | **Migrado** ✅ |
+| API detalle pedido v1 + filtro `campoAnulado` | **Migrado** ✅ |
+| F2 portal: consumos, ctacte, no cancelados, pedidos cliente | **Migrado** ✅ (shell) |
+| Gaps: export PDF pedidos, alta recibo, IIBB DEV, pallet checkout | **Pendiente** |
+| F3: premios, inventario SPA, tmobile | **Pendiente** (decisión producto) |
+
 ## Mantenimiento de este documento
 
 Actualizar tras cada vertical/informe migrado (marcar estado → migrado, enlazar change OpenSpec y checkpoint `EcomMigrationCheckpoint`). Recalcular el diff base cuando el PHP avance: `git -C administraNET-ecom log --oneline -5`.

@@ -4,6 +4,8 @@
 **Fecha:** 2026-07-02
 **Estado:** Implementado
 
+> **Persistencia MySQL:** turnos y roster en `mpr_turno` y `mpr_roster_dia` (MySQL, una BD = una empresa).
+
 ---
 
 ## Propósito

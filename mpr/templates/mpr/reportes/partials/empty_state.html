@@ -1,0 +1,7 @@
+<div class="py-10 text-center">
+    <span class="material-icons mb-3 text-4xl text-gray-300 dark:text-gray-600" aria-hidden="true">analytics</span>
+    <p class="text-base font-medium text-gray-700 dark:text-gray-300">{{ empty_titulo|default:"Sin datos para mostrar" }}</p>
+    {% if empty_cta_url %}
+    <a href="{% url empty_cta_url %}" class="mt-4 inline-flex min-h-10 items-center rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-700">{{ empty_cta_label|default:"Continuar" }}</a>
+    {% endif %}
+</div>

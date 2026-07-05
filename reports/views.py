@@ -126,6 +126,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
     template_name = "reports/dashboard_detail.html"
     EXECUTIVE_SLUG = "resumen-ejecutivo-ventas"
     COMMAND_CENTER_SLUG = "command-center-gerencial"
+    CLIENTES_SIN_VENTAS_SLUG = "clientes-sin-ventas-vendedor"
+    COBRANZAS_VENDEDOR_SLUG = "cobranzas-por-vendedor"
+    UTILIDAD_GERENCIAL_SLUG = "utilidad-gerencial"
 
     def get_template_names(self):
         slug = self.kwargs.get("slug")
@@ -133,6 +136,12 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             return ["reports/executive_summary.html"]
         if slug == self.COMMAND_CENTER_SLUG:
             return ["reports/command_center.html"]
+        if slug == self.CLIENTES_SIN_VENTAS_SLUG:
+            return ["reports/dashboard_clientes_sin_ventas_vendedor.html"]
+        if slug == self.COBRANZAS_VENDEDOR_SLUG:
+            return ["reports/dashboard_cobranzas_por_vendedor.html"]
+        if slug == self.UTILIDAD_GERENCIAL_SLUG:
+            return ["reports/dashboard_utilidad_gerencial.html"]
         return [self.template_name]
 
     def get_report(self) -> ReportDefinition:
@@ -174,6 +183,30 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 "report_config_for_script": config if isinstance(config, dict) else {},
             }
         )
+        if report.slug == self.CLIENTES_SIN_VENTAS_SLUG:
+            es_gerencial = ManagerialReportsPermission().has_permission(self.request, self)
+            context["clientes_sin_ventas_api_url"] = reverse(
+                "reports-api:reports-clientes-sin-ventas-relay-gerencia"
+                if es_gerencial
+                else "reports-api:reports-clientes-sin-ventas-relay"
+            )
+            context["clientes_sin_ventas_scope"] = "gerencia" if es_gerencial else "operativo"
+        if report.slug == self.COBRANZAS_VENDEDOR_SLUG:
+            es_gerencial = ManagerialReportsPermission().has_permission(self.request, self)
+            context["cobranzas_api_url"] = reverse(
+                "reports-api:reports-cobranzas-vendedor-relay-gerencia"
+                if es_gerencial
+                else "reports-api:reports-cobranzas-vendedor-relay"
+            )
+            context["cobranzas_scope"] = "gerencia" if es_gerencial else "operativo"
+        if report.slug == self.UTILIDAD_GERENCIAL_SLUG:
+            es_gerencial = ManagerialReportsPermission().has_permission(self.request, self)
+            context["utilidad_api_url"] = reverse(
+                "reports-api:reports-utilidad-gerencial-relay-gerencia"
+                if es_gerencial
+                else "reports-api:reports-utilidad-gerencial-relay"
+            )
+            context["utilidad_scope"] = "gerencia" if es_gerencial else "operativo"
         if report.slug == self.EXECUTIVE_SLUG:
             context["executive_summary_api_url"] = reverse("reports-api:reports-executive-summary")
             context["sucursal_canal_api_url"] = reverse(

@@ -30,6 +30,7 @@ from unittest.mock import MagicMock, patch, ANY
 from django.test import TestCase
 
 from mpr.models import (
+    MprEmpresaConfig,
     MprEnvioProduccion,
     MprParte,
     MprParteLinea,
@@ -52,6 +53,13 @@ def _crear_turno(nombre="Mañana E8"):
         hora_inicio="07:00:00",
         hora_fin="15:00:00",
         activo=True,
+    )
+
+
+def _config_sin_bloqueo_fabricando(empresa=EMPRESA):
+    MprEmpresaConfig.objects.update_or_create(
+        base_empresa=empresa,
+        defaults={"bloquear_parte_supera_fabricando": False},
     )
 
 
@@ -168,9 +176,9 @@ class TestGrillaParteComponente(TestCase):
         self.assertTrue(resultado["roster_vacio"])
         self.assertEqual(resultado["operarios"], [])
 
-    # -- 7.7: celdas precargadas desde partes previos
-    def test_celdas_precargadas_desde_partes_previos(self):
-        """Parte existente para la misma fecha+turno → celdas contiene la cantidad."""
+    # -- 7.7: inputs en cero aunque existan partes previos del turno
+    def test_entrada_grilla_siempre_cero_con_partes_previos(self):
+        """Parte existente para la misma fecha+turno: celdas referencia, inputs en 0."""
         from mpr.services import construir_grilla_parte
 
         parte_prev = _crear_parte(self.turno, fecha=self.fecha, movimiento_fisico_ok=True)
@@ -185,6 +193,11 @@ class TestGrillaParteComponente(TestCase):
         clave = (5, 10)
         self.assertIn(clave, resultado["celdas"])
         self.assertEqual(resultado["celdas"][clave], Decimal("20"))
+        comp = next(c for c in resultado["componentes"] if c["id_articulo"] == 5)
+        cel = next(c for c in comp["celdas_ops"] if c["id_operario"] == 10)
+        self.assertEqual(cel["docenas"], 0)
+        self.assertEqual(cel["unidades_sueltas"], 0)
+        self.assertEqual(cel["cantidad_ya_registrada"], 20)
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +208,7 @@ class TestRegistroParteComponente(TestCase):
     """REQ Vista/Template: registro de parte crea MprParteLinea con id_articulo=componente."""
 
     def setUp(self):
+        _config_sin_bloqueo_fabricando()
         self.turno = _crear_turno()
 
     # -- 7.8: registro N líneas
@@ -256,6 +270,7 @@ class TestAsientoDirectoSinBOM(TestCase):
     """REQ Asiento Físico Componente Directo: ya_componentes=True no llama _explode_packs."""
 
     def setUp(self):
+        _config_sin_bloqueo_fabricando()
         self.turno = _crear_turno()
         self.parte = _crear_parte(self.turno)
 
@@ -392,6 +407,7 @@ class TestWarningFabricando(TestCase):
     """REQ Warning al Superar Fabricando: no bloqueante, mensaje en español."""
 
     def setUp(self):
+        _config_sin_bloqueo_fabricando()
         self.turno = _crear_turno()
 
     # -- 7.13: warning si cantidad > fabricando
@@ -522,6 +538,7 @@ class TestE6CompatibilidadIdLista(TestCase):
     """REQ Trazabilidad E6: partes E8 tienen id_lista=None; no rompen funciones E6."""
 
     def setUp(self):
+        _config_sin_bloqueo_fabricando()
         self.turno = _crear_turno()
 
     # -- 7.15: E6 compat id_lista=None

@@ -284,6 +284,31 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
 
     @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 3, "fallidas": 0, "errores": [], "comprobantes": ["A", "B", "C"]})
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
+    def test_reparto_docenas_unidades(self, mock_pivot, mock_lote):
+        """1 docena + 5 u. semi, 0 doc + 2 u. 2da → 17 y 2 unidades al lote."""
+        pivot = _pivot_con_produccion(id_art=42, saldo=20.0)
+        mock_pivot.return_value = (pivot, pivot)
+
+        data = {
+            "fecha": FECHA_OK,
+            "semi_42_docenas": "1",
+            "semi_42_unidades": "5",
+            "seg2da_42_docenas": "0",
+            "seg2da_42_unidades": "2",
+            "scrap_42_docenas": "0",
+            "scrap_42_unidades": "0",
+        }
+        resp = self._post(data)
+
+        self.assertEqual(resp.status_code, 302)
+        items = mock_lote.call_args.args[2]
+        self.assertEqual(len(items), 2)
+        por_destino = {i["tipo_destino"]: float(i["cantidad"]) for i in items}
+        self.assertEqual(por_destino[TIPO_MPR_SEMI_ELABORADO], 17.0)
+        self.assertEqual(por_destino[TIPO_MPR_2DA_SELECCION], 2.0)
+
+    @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 3, "fallidas": 0, "errores": [], "comprobantes": ["A", "B", "C"]})
+    @patch("mpr.services._pivot_stock_por_tipo_mpr")
     def test_reparto_valido_tres_destinos(self, mock_pivot, mock_lote):
         """semi=5, 2da=2, scrap=1, disponible=8 → 3 items enviados al lote."""
         pivot = _pivot_con_produccion(id_art=42, saldo=8.0)

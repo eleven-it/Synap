@@ -11,8 +11,8 @@
 
 | Origen | Mecanismo | Ejemplo |
 |--------|-----------|---------|
-| Catálogo único | `core/services/legacy_mysql_schema/catalog.py` + `PROVIDER_REGISTRY` | Tienda Nube, MPR (depósito, lista producción, trazabilidad), **Self-checkout tablas MySQL** (`self_checkout_kiosk`, carrito, sesión, …), objetivos ventas |
-| `core` | Comandos `manage.py` (`apply_schema_mpr`, `apply_alter_detalle_trazabilidad`) delegan en el catálogo | Misma lógica que la herramienta web |
+| Catálogo único | `core/services/legacy_mysql_schema/catalog.py` + `PROVIDER_REGISTRY` | Tienda Nube, MPR (depósito, **tablas core `mpr_*`**), Self-checkout tablas MySQL, objetivos ventas, asignación vendedores |
+| `core` | Comandos `manage.py` (`apply_schema_mpr`, `apply_mpr_core_tables`, …) delegan en el catálogo | Misma lógica que la herramienta web |
 | `tiendanube_administranet` | `AdministraNETService.verify_and_migrate_schema()` → `run_tiendanube_integration_mysql` | `id_tiendanube` en `cliente` / `articulo` |
 | UI supervisor | **Archivo → Parámetros → Migración esquema MySQL (legacy)** (`core:legacy_mysql_schema`) | Ejecutar proveedores sobre `base_empresa` de sesión |
 
@@ -70,6 +70,15 @@ Los módulos **registran** sus necesidades de esquema; el núcleo **orquesta** p
 3. Enlace opcional desde **Module Management** hacia la misma URL (si se desea).
 4. Añadir nuevos proveedores solo en `catalog.py` + documentación breve del caso de uso.
 
+## Proveedores MPR (estado 04/07/2026)
+
+| Proveedor (UI) | id | Notas |
+|----------------|-----|--------|
+| MPR — depósito y artículo | `mpr_deposito_articulo` | Columnas en `deposito` / `articulo` |
+| **MPR — tablas core Synap (ledgers MySQL)** | `mpr_core_tables` | 13 tablas `mpr_*` (`001_mpr_core_tables.sql`); **usar en instalaciones nuevas** |
+| **MPR — eliminar OPT legacy** | `mpr_drop_lista_produccion_legacy` | DROP `lista_produccion_*` (irreversible). CLI: `drop_mpr_lista_produccion_legacy <base> --confirm` |
+| *(retirados de la herramienta)* | `mpr_lista_produccion_*` | ~~Creación~~ de tablas OPT legacy. Solo funciones de emergencia en código; **no** recrear tras el DROP |
+
 ---
 
 ## Si la migración «no termina» y no hay error en el log
@@ -83,8 +92,8 @@ La herramienta web (`core:legacy_mysql_schema`) responve **solo cuando MySQL ter
 
 1. Tras actualizar Synap, vigilar el log de la app: deberían aparecer líneas `legacy_mysql_schema:` (inicio/fin por proveedor y duración) y, para ese proveedor, `MPR trazabilidad detalle:` antes de cada paso pesado.
 2. En MySQL, revisar `SHOW PROCESSLIST` (o `performance_schema.metadata_locks` en 8.0) para ver si la sesión está en «Waiting for table metadata lock».
-3. Para evitar timeout del **navegador o del proxy** delante de ALTER largos, ejecutar el mismo cambio por **CLI** en el contenedor, por ejemplo:
-   - `docker exec Synap_app python manage.py apply_alter_detalle_trazabilidad administranet92`
+3. Para evitar timeout del **navegador o del proxy** delante de DDL largos, ejecutar el mismo cambio por **CLI** en el contenedor, por ejemplo:
+   - `docker exec Synap_app python manage.py apply_mpr_core_tables administranet92`
    - (u otro `manage.py` que delegue en el mismo catálogo).
 
 ### Pocas filas y, aun así, «Waiting for table metadata lock»

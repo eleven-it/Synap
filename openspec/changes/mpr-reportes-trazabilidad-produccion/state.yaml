@@ -1,0 +1,14 @@
+change: mpr-reportes-trazabilidad-produccion
+status: apply-complete
+created: 2026-07-04
+phase: verify
+depends_on:
+  - mpr-mysql-fuente-unica
+  - mpr-pipeline-etapa2-tablero-consolidado
+artifacts:
+  exploration: complete
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete

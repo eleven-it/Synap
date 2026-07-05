@@ -33,17 +33,6 @@
         + Nuevo autoservicio
       </a>
     </nav>
-
-    {% if messages %}
-    <div class="mb-4 space-y-2" role="alert">
-      {% for message in messages %}
-      <div class="rounded-xl px-4 py-3 text-sm font-medium {% if message.tags == 'error' %}bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300{% endif %}">
-        {{ message }}
-      </div>
-      {% endfor %}
-    </div>
-    {% endif %}
-
     {% if kiosks %}
     <div class="space-y-3" role="list" aria-label="Autoservicios configurados">
       {% for k in kiosks %}
