@@ -13053,6 +13053,23 @@ def reporte_mpr_operario_parte(
     top = filas[0] if filas else None
     n_op = len(filas)
     promedio = int(total_u / n_op) if n_op else 0
+
+    from mpr.repositories.transicion_lote import sumar_clasificado_rendimiento_operario
+
+    clasif_map = sumar_clasificado_rendimiento_operario(base_empresa, fdesde, fhasta)
+    for fila in filas:
+        oid = fila.get("id_operario")
+        fab = fila.get("unidades") or 0
+        cdata = clasif_map.get(oid, {}) if oid is not None else {}
+        semi = int(float(cdata.get("semi") or 0))
+        segunda = int(float(cdata.get("segunda") or 0))
+        scrap = int(float(cdata.get("scrap") or 0))
+        fila["semi"] = semi
+        fila["segunda"] = segunda
+        fila["scrap"] = scrap
+        fila["pct_apto"] = round(semi / fab * 100.0, 1) if fab > 0 else None
+        fila["pct_scrap"] = round(scrap / fab * 100.0, 1) if fab > 0 else None
+
     return {
         "kpis": {
             "unidades_total": int(total_u),
@@ -15693,6 +15710,11 @@ def transferir_stock_entre_etapas(
     cantidad: Any,
     notas: str = "",
     fecha: "Optional[date]" = None,
+    *,
+    id_operario: Optional[int] = None,
+    operario_nombre: Optional[str] = None,
+    fecha_produccion: "Optional[date]" = None,
+    id_mpr_turno: Optional[int] = None,
 ) -> Tuple[bool, Optional[int], Optional[str], Optional[str]]:
     """Transfiere stock físico de un depósito MPR a otro (transición entre etapas).
 
@@ -15926,6 +15948,10 @@ def transferir_stock_entre_etapas(
                 cantidad_dec,
                 codigo_mov,
                 id_usuario,
+                id_operario=id_operario,
+                operario_nombre=operario_nombre,
+                fecha_produccion=fecha_produccion or fecha,
+                id_mpr_turno=id_mpr_turno,
             )
         if mpr_writes_postgres():
             from mpr.models import MprTransicionLote
@@ -16556,27 +16582,115 @@ def _construir_grilla_transicion_lote(
     return componentes
 
 
-def construir_grilla_clasificacion_produccion(base_empresa: str) -> Dict[str, Any]:
-    """Grilla de la pantalla 'Clasificación de producción' (Etapa 10).
+def construir_grilla_clasificacion_produccion(
+    base_empresa: str,
+    fecha: "Optional[date]" = None,
+    turno_id: Optional[int] = None,
+    *,
+    ver_roster_completo: bool = False,
+) -> Dict[str, Any]:
+    """Grilla clasificación por (artículo × operario fabricante).
 
-    Lista los componentes con saldo físico en Producción. La clasificación sale
-    directo de Producción hacia {Semi Elaborado | 2da Selección | Desperdicio}:
-    el planchado es un momento dentro de la producción y no deja stock.
-
-    Returns: {"componentes": [...], "componentes_vacio": bool}
-        donde cada componente expone ``disponible`` (saldo en Producción).
+    Si no hay fecha/turno, devuelve grilla vacía con metadatos para que la UI
+    solicite selección (comportamiento operativo docenas + rendimiento).
     """
-    componentes = _construir_grilla_transicion_lote(base_empresa, TIPO_MPR_PRODUCCION)
-    for comp in componentes:
-        try:
-            disp_int = int(round(float(comp.get("disponible") or 0)))
-        except (TypeError, ValueError):
-            disp_int = 0
+    vacio: Dict[str, Any] = {
+        "filas": [],
+        "filas_vacio": True,
+        "arrastre": [],
+        "bloqueos": [],
+        "requiere_fecha_turno": fecha is None or turno_id is None,
+    }
+    if not (base_empresa or "").strip():
+        return vacio
+    if fecha is None or turno_id is None:
+        from mpr.repositories.parte import listar_pares_fecha_turno_con_pendiente_clasificacion
+
+        vacio["arrastre"] = listar_pares_fecha_turno_con_pendiente_clasificacion(base_empresa)
+        return vacio
+
+    from mpr.repositories.parte import (
+        acumular_celdas_grilla_con_nombre,
+        listar_pares_fecha_turno_con_pendiente_clasificacion,
+    )
+    from mpr.repositories.transicion_lote import sumar_clasificado_por_operario_fecha_turno
+
+    celdas = acumular_celdas_grilla_con_nombre(base_empresa, fecha, int(turno_id))
+    clasificado = sumar_clasificado_por_operario_fecha_turno(
+        base_empresa, fecha, int(turno_id)
+    )
+    art_ids = sorted({clave[0] for clave in celdas})
+    stock_pivot, _ = _pivot_stock_por_tipo_mpr(base_empresa, art_ids) if art_ids else ({}, {})
+    descripciones = _fetch_descripciones_articulo(base_empresa, art_ids) if art_ids else {}
+
+    filas: List[Dict[str, Any]] = []
+    bloqueos: List[Dict[str, Any]] = []
+    parte_por_art: Dict[int, Decimal] = {}
+    for (aid, oid), datos in celdas.items():
+        parte_por_art[aid] = parte_por_art.get(aid, Decimal("0")) + (
+            to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+        )
+
+    for (aid, oid), datos in sorted(celdas.items(), key=lambda x: (x[0][0], x[0][1])):
+        fabricado = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+        if oid is None or int(oid) <= 0:
+            continue
+        cls = clasificado.get((aid, oid), Decimal("0"))
+        pendiente = fabricado - cls
+        solo_lectura = bool(ver_roster_completo and pendiente <= 0)
+        if pendiente <= 0 and not ver_roster_completo:
+            continue
+        codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
+        if solo_lectura:
+            disp_int = int(round(float(cls)))
+            disp_texto = (
+                f"Completo · {texto_docenas_unidades(disp_int, unidades_por_docena_fijo=12)} clasificado"
+            )
+        else:
+            disp_int = int(round(float(pendiente)))
+            disp_texto = texto_docenas_unidades(disp_int, unidades_por_docena_fijo=12)
         du = descomponer_docenas_unidades(disp_int, unidades_por_docena_fijo=12)
-        comp["disponible_texto"] = texto_docenas_unidades(disp_int, unidades_por_docena_fijo=12)
-        comp["disponible_docenas"] = du["docenas"]
-        comp["disponible_unidades"] = du["unidades"]
-    return {"componentes": componentes, "componentes_vacio": len(componentes) == 0}
+        filas.append({
+            "id_articulo": aid,
+            "id_operario": oid,
+            "operario_nombre": str_or_default(datos.get("operario_nombre"), "-"),
+            "codigo_manual": str_or_default(codigo_manual, "-"),
+            "descripcion": str_or_default(descripcion, "-"),
+            "fabricado": float(fabricado),
+            "clasificado": float(cls),
+            "disponible": float(pendiente if pendiente > 0 else Decimal("0")),
+            "disponible_texto": disp_texto,
+            "disponible_docenas": du["docenas"],
+            "disponible_unidades": du["unidades"],
+            "solo_lectura": solo_lectura,
+        })
+
+    for aid, total_parte in parte_por_art.items():
+        stock_prod = Decimal(str(stock_pivot.get(aid, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
+        if total_parte > 0 and not any(f["id_articulo"] == aid for f in filas):
+            codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
+            bloqueos.append({
+                "id_articulo": aid,
+                "codigo_manual": str_or_default(codigo_manual, "-"),
+                "descripcion": str_or_default(descripcion, "-"),
+                "mensaje": "Corregí el parte: falta desglose por operario para clasificar rendimiento.",
+            })
+
+    arrastre = listar_pares_fecha_turno_con_pendiente_clasificacion(
+        base_empresa,
+        excluir_fecha=fecha,
+        excluir_turno=int(turno_id),
+    )
+    return {
+        "filas": filas,
+        "filas_vacio": len(filas) == 0,
+        "arrastre": arrastre,
+        "bloqueos": bloqueos,
+        "requiere_fecha_turno": False,
+        # Compatibilidad tests legacy (componentes agregados)
+        "componentes": [],
+        "componentes_vacio": len(filas) == 0,
+    }
 
 
 def transferir_stock_lote(
@@ -16614,6 +16728,10 @@ def transferir_stock_lote(
                 tipo_destino=item.get("tipo_destino", ""),
                 cantidad=item.get("cantidad"),
                 fecha=fecha,
+                id_operario=item.get("id_operario"),
+                operario_nombre=item.get("operario_nombre"),
+                fecha_produccion=item.get("fecha_produccion") or fecha,
+                id_mpr_turno=item.get("id_mpr_turno"),
             )
             if ok:
                 resultado["exitosas"] += 1

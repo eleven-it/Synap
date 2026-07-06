@@ -69,7 +69,7 @@
             <span class="material-icons text-base" aria-hidden="true">refresh</span>
             Actualizar
         </button>
-        <a href="?grupo={{ grupo }}&reporte={{ reporte }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}{% if meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}&format=csv"
+        <a href="?grupo={{ grupo }}&reporte={{ reporte }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}{% if meta.id_articulo %}&id_articulo={{ meta.id_articulo }}{% endif %}&format=csv"
            class="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
             <span class="material-icons text-base" aria-hidden="true">download</span>
             Exportar CSV

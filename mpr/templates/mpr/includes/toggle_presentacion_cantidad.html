@@ -1,0 +1,13 @@
+{# Toggle Docenas / Unidades — pantallas operativas MPR #}
+<div class="inline-flex h-9 overflow-hidden rounded-lg border border-slate-500 bg-slate-700 p-0.5 shadow-sm dark:border-slate-600"
+     role="group"
+     aria-label="Presentación de cantidades">
+    <a href="?{% if query_base %}{{ query_base }}&{% endif %}presentacion=docenas"
+       class="inline-flex min-h-8 items-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo_presentacion == 'docenas' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-200 hover:bg-slate-600{% endif %}">
+        Docenas
+    </a>
+    <a href="?{% if query_base %}{{ query_base }}&{% endif %}presentacion=unidades"
+       class="inline-flex min-h-8 items-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo_presentacion == 'unidades' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-200 hover:bg-slate-600{% endif %}">
+        Unidades
+    </a>
+</div>

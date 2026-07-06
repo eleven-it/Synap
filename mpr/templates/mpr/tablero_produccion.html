@@ -45,6 +45,7 @@
                                            class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
                                 </label>
                                 <input type="hidden" name="solo_pendiente" value="{% if solo_pendiente %}1{% else %}0{% endif %}"/>
+                                <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}"/>
                                 <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                                     <span class="material-icons text-base" aria-hidden="true">filter_list</span>
                                     Filtrar
@@ -53,6 +54,7 @@
                         </div>
 
                         <div class="flex min-w-0 flex-wrap items-end justify-start gap-2 sm:justify-end sm:gap-2.5">
+                            {% include "mpr/includes/toggle_presentacion_cantidad.html" with modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
                             <form method="post" action="{% url 'mpr:tablero_produccion_actualizar' %}"
                                   class="mpr-post-loading"
                                   data-mpr-loading-title="Actualizando vista"
@@ -255,38 +257,51 @@
                             </td>
                             {# Col 2: Pendiente #}
                             <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums{% if fila.pendiente > 0 %} font-semibold text-red-600 dark:text-red-400{% else %} text-slate-500 dark:text-slate-400{% endif %}">
-                                {{ fila.pendiente|floatformat:1 }}
+                                {% if modo_presentacion == "docenas" %}
+                                <span class="block">{{ fila.pendiente_display }}</span>
+                                {% else %}
+                                {{ fila.pendiente|floatformat:0 }}
+                                {% endif %}
                             </td>
                             {# Col 3: Enviado #}
                             <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300" data-col="enviado">
-                                {{ fila.enviado|floatformat:1 }}
+                                {% if modo_presentacion == "docenas" %}{{ fila.enviado_display }}{% else %}{{ fila.enviado|floatformat:0 }}{% endif %}
                             </td>
                             {# Col 4: Producción #}
                             <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                                {{ fila.produccion|floatformat:1 }}
+                                {% if modo_presentacion == "docenas" %}{{ fila.produccion_display }}{% else %}{{ fila.produccion|floatformat:0 }}{% endif %}
                             </td>
                             {# Col 5: 2da Selección #}
                             <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                                {{ fila.segunda_seleccion|floatformat:1 }}
+                                {% if modo_presentacion == "docenas" %}{{ fila.segunda_seleccion_display }}{% else %}{{ fila.segunda_seleccion|floatformat:0 }}{% endif %}
                             </td>
                             {# Col 6: Semi Elaborado #}
                             <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                                {{ fila.semi_elaborado|floatformat:1 }}
+                                {% if modo_presentacion == "docenas" %}{{ fila.semi_elaborado_display }}{% else %}{{ fila.semi_elaborado|floatformat:0 }}{% endif %}
                             </td>
                             {# Col 7: Desperdicio (diferenciado, no suma al total) #}
                             <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums italic text-slate-400 dark:text-slate-500">
-                                {{ fila.desperdicio|floatformat:1 }}
+                                {% if modo_presentacion == "docenas" %}{{ fila.desperdicio_display }}{% else %}{{ fila.desperdicio|floatformat:0 }}{% endif %}
                             </td>
                             {# Col 8: Terminado #}
                             <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                                {{ fila.terminado|floatformat:1 }}
+                                {% if modo_presentacion == "docenas" %}{{ fila.terminado_display }}{% else %}{{ fila.terminado|floatformat:0 }}{% endif %}
                             </td>
                             {# Col 9: Total #}
                             <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums font-semibold text-green-700 dark:text-green-400">
-                                {{ fila.total|floatformat:1 }}
+                                {% if modo_presentacion == "docenas" %}{{ fila.total_display }}{% else %}{{ fila.total|floatformat:0 }}{% endif %}
                             </td>
-                            {# Col 10: Enviar — Etapa 7. Input del form fantasma anti-nesting. #}
+                            {# Col 10: Enviar #}
                             <td class="whitespace-nowrap px-3 py-2.5 text-right">
+                                {% if modo_presentacion == "docenas" %}
+                                <div class="inline-flex flex-col items-end gap-0.5">
+                                    <div class="flex overflow-hidden rounded border border-slate-300 dark:border-slate-600">
+                                        <input form="form-enviar-lote" type="number" name="envio_{{ fila.id_articulo }}_docenas" data-envio-doc min="0" step="1" value="{% if fila.pendiente_docenas > 0 %}{{ fila.pendiente_docenas }}{% endif %}" {% if fila.pendiente <= 0 %}disabled{% endif %} class="w-14 border-0 bg-white px-1 py-1 text-right text-xs tabular-nums dark:bg-slate-700 dark:text-slate-100 disabled:opacity-50" placeholder="doc" title="Docenas"/>
+                                        <input form="form-enviar-lote" type="number" name="envio_{{ fila.id_articulo }}_unidades" data-envio-uni min="0" step="1" value="{% if fila.pendiente_unidades_sueltas > 0 %}{{ fila.pendiente_unidades_sueltas }}{% endif %}" {% if fila.pendiente <= 0 %}disabled{% endif %} class="w-12 border-0 border-l border-slate-200 bg-white px-1 py-1 text-right text-xs tabular-nums dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 disabled:opacity-50" placeholder="u" title="Unidades sueltas"/>
+                                    </div>
+                                    <span class="text-[10px] text-slate-400" data-envio-hint="{{ fila.id_articulo }}"></span>
+                                </div>
+                                {% else %}
                                 <input form="form-enviar-lote"
                                        type="number"
                                        name="envio_{{ fila.id_articulo }}"
@@ -295,6 +310,7 @@
                                        value="{% if fila.pendiente > 0 %}{{ fila.pendiente|floatformat:0 }}{% endif %}"
                                        {% if fila.pendiente <= 0 %}disabled{% endif %}
                                        class="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:disabled:bg-slate-800 dark:disabled:text-slate-500">
+                                {% endif %}
                                 <input form="form-enviar-lote"
                                        type="hidden"
                                        name="pendiente_{{ fila.id_articulo }}"
@@ -346,8 +362,16 @@
         }
 
         function lineasEnvioConCantidad() {
-            return Array.from(document.querySelectorAll('[data-envio-qty]')).filter(function (el) {
+            var legacy = Array.from(document.querySelectorAll('[data-envio-qty]')).filter(function (el) {
                 return parseQty(el.value) > 0;
+            });
+            if (legacy.length) { return legacy; }
+            return Array.from(document.querySelectorAll('[data-envio-doc]')).filter(function (el) {
+                var id = el.name.replace(/^envio_(\d+)_docenas$/, '$1');
+                var doc = parseQty(el.value);
+                var uniEl = document.querySelector('[name="envio_' + id + '_unidades"]');
+                var uni = uniEl ? parseQty(uniEl.value) : 0;
+                return doc > 0 || uni > 0;
             });
         }
 
@@ -362,16 +386,39 @@
             if (!lineas.length) return;
 
             lineas.forEach(function (inp) {
-                var idArt = inp.name.replace(/^envio_/, '');
-                var qty = parseQty(inp.value);
-                if (qty <= 0 || !idArt) return;
-
-                var hQty = document.createElement('input');
-                hQty.type = 'hidden';
-                hQty.name = inp.name;
-                hQty.value = String(qty);
-                hQty.setAttribute('data-envio-sync', '1');
-                form.appendChild(hQty);
+                var idArt, qty;
+                if (inp.getAttribute('data-envio-doc') !== null) {
+                    idArt = inp.name.replace(/^envio_(\d+)_docenas$/, '$1');
+                    var doc = parseQty(inp.value);
+                    var uniEl = document.querySelector('[name="envio_' + idArt + '_unidades"]');
+                    var uni = uniEl ? parseQty(uniEl.value) : 0;
+                    qty = doc * 12 + uni;
+                    if (qty <= 0 || !idArt) return;
+                    var hDoc = document.createElement('input');
+                    hDoc.type = 'hidden';
+                    hDoc.name = 'envio_' + idArt + '_docenas';
+                    hDoc.value = String(doc);
+                    hDoc.setAttribute('data-envio-sync', '1');
+                    form.appendChild(hDoc);
+                    if (uniEl) {
+                        var hUni = document.createElement('input');
+                        hUni.type = 'hidden';
+                        hUni.name = 'envio_' + idArt + '_unidades';
+                        hUni.value = String(uni);
+                        hUni.setAttribute('data-envio-sync', '1');
+                        form.appendChild(hUni);
+                    }
+                } else {
+                    idArt = inp.name.replace(/^envio_/, '');
+                    qty = parseQty(inp.value);
+                    if (qty <= 0 || !idArt) return;
+                    var hQty = document.createElement('input');
+                    hQty.type = 'hidden';
+                    hQty.name = inp.name;
+                    hQty.value = String(qty);
+                    hQty.setAttribute('data-envio-sync', '1');
+                    form.appendChild(hQty);
+                }
 
                 var pendSrc = document.querySelector('[name="pendiente_' + idArt + '"]');
                 if (pendSrc) {

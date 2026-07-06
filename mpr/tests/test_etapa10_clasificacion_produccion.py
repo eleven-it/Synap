@@ -39,6 +39,24 @@ from mpr.services import (
 User = get_user_model()
 EMPRESA = "EmpresaTestEtapa10"
 FECHA_OK = "03/07/2026"
+FECHA_OBJ = date(2026, 7, 3)
+TURNO_ID = 1
+ID_OPERARIO = 9
+
+
+def _celdas_parte_mock(id_art=42, cantidad=15.0, id_op=ID_OPERARIO):
+    return {
+        (id_art, id_op): {
+            "cantidad": Decimal(str(cantidad)),
+            "operario_nombre": "Operario Test",
+        }
+    }
+
+
+def _post_clasif_base(**extra):
+    data = {"fecha": FECHA_OK, "turno_id": str(TURNO_ID)}
+    data.update(extra)
+    return data
 
 
 def _pivot_con_produccion(id_art=42, saldo=15.0):
@@ -81,85 +99,56 @@ def _add_messages(request):
 # ---------------------------------------------------------------------------
 
 class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
-    """La grilla lista componentes con saldo en Producción (origen único)."""
+    """La grilla lista filas (artículo × operario) con pendiente de clasificación."""
 
+    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
+    def test_sin_fecha_turno_requiere_seleccion(self, _arr):
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA)
+        self.assertTrue(resultado["requiere_fecha_turno"])
+        self.assertEqual(resultado["filas"], [])
+
+    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    @patch("mpr.services._nombre_tabla", return_value="stock_deposito")
-    @patch("mpr.services.mysql_cursor")
-    def test_retorna_componente_con_produccion(self, mock_cursor, mock_nombre, mock_pivot, mock_fetch):
-        """Con saldo Producción=15 retorna 1 componente con disponible=15."""
-        ctx = MagicMock()
-        ctx.__enter__ = MagicMock(return_value=ctx)
-        ctx.__exit__ = MagicMock(return_value=False)
-        ctx.fetchall.return_value = [{"id_articulo": 42}]
-        ctx.execute = MagicMock()
-        mock_cursor.return_value = ctx
+    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(), _pivot_con_produccion()))
+    def test_retorna_fila_con_pendiente_operario(self, _pivot, _fetch, mock_celdas, _cls, _arr):
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
+        self.assertFalse(resultado["filas_vacio"])
+        self.assertEqual(len(resultado["filas"]), 1)
+        fila = resultado["filas"][0]
+        self.assertEqual(fila["id_articulo"], 42)
+        self.assertEqual(fila["id_operario"], ID_OPERARIO)
+        self.assertAlmostEqual(fila["disponible"], 15.0)
 
-        pivot = _pivot_con_produccion(id_art=42, saldo=15.0)
-        mock_pivot.return_value = (pivot, pivot)
-
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA)
-
-        self.assertFalse(resultado["componentes_vacio"])
-        self.assertEqual(len(resultado["componentes"]), 1)
-        comp = resultado["componentes"][0]
-        self.assertEqual(comp["id_articulo"], 42)
-        self.assertAlmostEqual(comp["disponible"], 15.0)
-
-    @patch("mpr.services._fetch_descripciones_articulo", return_value={})
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({}, {}))
-    @patch("mpr.services._nombre_tabla", return_value="stock_deposito")
-    @patch("mpr.services.mysql_cursor")
-    def test_sin_stock_retorna_vacio(self, mock_cursor, mock_nombre, mock_pivot, mock_fetch):
-        """Sin candidatos con saldo>0 retorna componentes_vacio=True."""
-        ctx = MagicMock()
-        ctx.__enter__ = MagicMock(return_value=ctx)
-        ctx.__exit__ = MagicMock(return_value=False)
-        ctx.fetchall.return_value = []
-        ctx.execute = MagicMock()
-        mock_cursor.return_value = ctx
-
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA)
-
-        self.assertTrue(resultado["componentes_vacio"])
-        self.assertEqual(resultado["componentes"], [])
+    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre", return_value={})
+    def test_sin_parte_retorna_vacio(self, *_mocks):
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
+        self.assertTrue(resultado["filas_vacio"])
+        self.assertEqual(resultado["filas"], [])
 
     def test_base_empresa_vacia_retorna_vacio(self):
-        """base_empresa vacía retorna lista vacía sin llamar a MySQL."""
         resultado = construir_grilla_clasificacion_produccion("")
-        self.assertTrue(resultado["componentes_vacio"])
-        self.assertEqual(resultado["componentes"], [])
+        self.assertTrue(resultado["filas_vacio"])
+        self.assertEqual(resultado["filas"], [])
 
+    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
+    @patch(
+        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
+        return_value={(42, ID_OPERARIO): Decimal("6")},
+    )
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    @patch("mpr.services._nombre_tabla", return_value="stock_deposito")
-    @patch("mpr.services.mysql_cursor")
-    def test_aislacion_por_base_empresa(self, mock_cursor, mock_nombre, mock_pivot, mock_fetch):
-        """Solo se consulta el pivot con los ids de la empresa (scope del cursor)."""
-        ctx = MagicMock()
-        ctx.__enter__ = MagicMock(return_value=ctx)
-        ctx.__exit__ = MagicMock(return_value=False)
-        ctx.fetchall.return_value = [{"id_articulo": 42}]
-        ctx.execute = MagicMock()
-        mock_cursor.return_value = ctx
-
-        pivot = {
-            42: {TIPO_MPR_PRODUCCION: 15.0, TIPO_MPR_2DA_SELECCION: 0.0,
-                 TIPO_MPR_SEMI_ELABORADO: 0.0, TIPO_MPR_SCRAP: 0.0},
-            77: {TIPO_MPR_PRODUCCION: 99.0, TIPO_MPR_2DA_SELECCION: 0.0,
-                 TIPO_MPR_SEMI_ELABORADO: 0.0, TIPO_MPR_SCRAP: 0.0},
-        }
+    def test_pendiente_resta_clasificado_previo(self, mock_pivot, _fetch, mock_celdas, _cls, _arr):
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
+        pivot = _pivot_con_produccion(id_art=42, saldo=15.0)
         mock_pivot.return_value = (pivot, pivot)
-
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA)
-
-        self.assertEqual(mock_cursor.call_args.args[0], EMPRESA)
-        pivot_ids = mock_pivot.call_args.args[1]
-        self.assertIn(42, pivot_ids)
-        self.assertNotIn(77, pivot_ids)
-        ids_resultado = [c["id_articulo"] for c in resultado["componentes"]]
-        self.assertEqual(ids_resultado, [42])
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
+        self.assertAlmostEqual(resultado["filas"][0]["disponible"], 9.0)
 
 
 # ---------------------------------------------------------------------------
@@ -237,20 +226,9 @@ class TestClasificacionProduccionViewGet(TestCase):
         _add_messages(request)
         return ClasificacionProduccionView.as_view()(request)
 
-    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map())
-    @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    @patch("mpr.services._nombre_tabla", return_value="stock_deposito")
-    @patch("mpr.services.mysql_cursor")
-    def test_get_200_con_contexto(self, mock_cursor, mock_nombre, mock_pivot, mock_fetch):
-        ctx = MagicMock()
-        ctx.__enter__ = MagicMock(return_value=ctx)
-        ctx.__exit__ = MagicMock(return_value=False)
-        ctx.fetchall.return_value = [{"id_articulo": 42}]
-        ctx.execute = MagicMock()
-        mock_cursor.return_value = ctx
-        pivot = _pivot_con_produccion()
-        mock_pivot.return_value = (pivot, pivot)
-
+    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
+    @patch("mpr.services.listar_turnos", return_value=[])
+    def test_get_200_con_contexto(self, _turnos, _arr):
         resp = self._get()
         self.assertEqual(resp.status_code, 200)
 
@@ -283,21 +261,25 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
         return RegistrarClasificacionProduccionView.as_view()(request)
 
     @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 3, "fallidas": 0, "errores": [], "comprobantes": ["A", "B", "C"]})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_reparto_docenas_unidades(self, mock_pivot, mock_lote):
+    def test_reparto_docenas_unidades(self, mock_pivot, mock_celdas, _cls, mock_lote):
         """1 docena + 5 u. semi, 0 doc + 2 u. 2da → 17 y 2 unidades al lote."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=20.0)
         pivot = _pivot_con_produccion(id_art=42, saldo=20.0)
         mock_pivot.return_value = (pivot, pivot)
 
-        data = {
-            "fecha": FECHA_OK,
-            "semi_42_docenas": "1",
-            "semi_42_unidades": "5",
-            "seg2da_42_docenas": "0",
-            "seg2da_42_unidades": "2",
-            "scrap_42_docenas": "0",
-            "scrap_42_unidades": "0",
-        }
+        data = _post_clasif_base(
+            **{
+                f"semi_42_op_{ID_OPERARIO}_docenas": "1",
+                f"semi_42_op_{ID_OPERARIO}_unidades": "5",
+                f"seg2da_42_op_{ID_OPERARIO}_docenas": "0",
+                f"seg2da_42_op_{ID_OPERARIO}_unidades": "2",
+                f"scrap_42_op_{ID_OPERARIO}_docenas": "0",
+                f"scrap_42_op_{ID_OPERARIO}_unidades": "0",
+            }
+        )
         resp = self._post(data)
 
         self.assertEqual(resp.status_code, 302)
@@ -306,15 +288,25 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
         por_destino = {i["tipo_destino"]: float(i["cantidad"]) for i in items}
         self.assertEqual(por_destino[TIPO_MPR_SEMI_ELABORADO], 17.0)
         self.assertEqual(por_destino[TIPO_MPR_2DA_SELECCION], 2.0)
+        self.assertEqual(items[0]["id_operario"], ID_OPERARIO)
 
     @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 3, "fallidas": 0, "errores": [], "comprobantes": ["A", "B", "C"]})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_reparto_valido_tres_destinos(self, mock_pivot, mock_lote):
+    def test_reparto_valido_tres_destinos(self, mock_pivot, mock_celdas, _cls, mock_lote):
         """semi=5, 2da=2, scrap=1, disponible=8 → 3 items enviados al lote."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=8.0)
         pivot = _pivot_con_produccion(id_art=42, saldo=8.0)
         mock_pivot.return_value = (pivot, pivot)
 
-        data = {"fecha": FECHA_OK, "semi_42": "5", "seg2da_42": "2", "scrap_42": "1", "disponible_42": "8"}
+        data = _post_clasif_base(
+            **{
+                f"semi_42_op_{ID_OPERARIO}": "5",
+                f"seg2da_42_op_{ID_OPERARIO}": "2",
+                f"scrap_42_op_{ID_OPERARIO}": "1",
+            }
+        )
         resp = self._post(data)
 
         self.assertEqual(resp.status_code, 302)
@@ -325,39 +317,54 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
         self.assertEqual(destinos, {TIPO_MPR_SEMI_ELABORADO, TIPO_MPR_2DA_SELECCION, TIPO_MPR_SCRAP})
 
     @patch("mpr.services.transferir_stock_lote")
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_bloqueo_suma_excede_disponible(self, mock_pivot, mock_lote):
-        """semi=4, 2da=3, scrap=1 (=8) > disponible_real=5 → BLOQUEO, sin lote."""
+    def test_bloqueo_suma_excede_disponible(self, mock_pivot, mock_celdas, _cls, mock_lote):
+        """semi=4, 2da=3, scrap=1 (=8) > atribuible=5 → BLOQUEO, sin lote."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=5.0)
         pivot = _pivot_con_produccion(id_art=42, saldo=5.0)
         mock_pivot.return_value = (pivot, pivot)
 
-        data = {"fecha": FECHA_OK, "semi_42": "4", "seg2da_42": "3", "scrap_42": "1", "disponible_42": "5"}
+        data = _post_clasif_base(
+            **{
+                f"semi_42_op_{ID_OPERARIO}": "4",
+                f"seg2da_42_op_{ID_OPERARIO}": "3",
+                f"scrap_42_op_{ID_OPERARIO}": "1",
+            }
+        )
         resp = self._post(data)
 
         self.assertEqual(resp.status_code, 302)
         mock_lote.assert_not_called()
 
     @patch("mpr.services.transferir_stock_lote")
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_hidden_manipulado_server_revalida(self, mock_pivot, mock_lote):
-        """Hidden disponible_42=100 pero stock real=5 → bloqueo sin lote."""
+    def test_hidden_manipulado_server_revalida(self, mock_pivot, mock_celdas, _cls, mock_lote):
+        """Parte=5 pero POST pide 80 → bloqueo sin lote."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=5.0)
         pivot = _pivot_con_produccion(id_art=42, saldo=5.0)
         mock_pivot.return_value = (pivot, pivot)
 
-        data = {"fecha": FECHA_OK, "semi_42": "80", "disponible_42": "100"}
+        data = _post_clasif_base(**{f"semi_42_op_{ID_OPERARIO}": "80"})
         resp = self._post(data)
 
         self.assertEqual(resp.status_code, 302)
         mock_lote.assert_not_called()
 
     @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_fecha_se_propaga_al_lote(self, mock_pivot, mock_lote):
+    def test_fecha_se_propaga_al_lote(self, mock_pivot, mock_celdas, _cls, mock_lote):
         """La fecha dd/MM/yyyy se parsea y se pasa como date al servicio de lote."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
         pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
         mock_pivot.return_value = (pivot, pivot)
 
-        data = {"fecha": "03/07/2026", "semi_42": "5"}
+        data = _post_clasif_base(**{f"semi_42_op_{ID_OPERARIO}": "5"})
         resp = self._post(data)
 
         self.assertEqual(resp.status_code, 302)
@@ -382,10 +389,15 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
         self.assertEqual(resp.status_code, 302)
 
     @patch("mpr.services.transferir_stock_lote")
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({}, {}))
-    def test_cantidades_cero_ignoradas(self, mock_pivot, mock_lote):
+    def test_cantidades_cero_ignoradas(self, mock_lote):
         """Cantidades=0 → sin items → warning, sin lote."""
-        data = {"fecha": FECHA_OK, "semi_42": "0", "seg2da_42": "0", "scrap_42": "0"}
+        data = _post_clasif_base(
+            **{
+                f"semi_42_op_{ID_OPERARIO}": "0",
+                f"seg2da_42_op_{ID_OPERARIO}": "0",
+                f"scrap_42_op_{ID_OPERARIO}": "0",
+            }
+        )
         resp = self._post(data)
         self.assertEqual(resp.status_code, 302)
         mock_lote.assert_not_called()

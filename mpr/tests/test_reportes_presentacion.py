@@ -13,15 +13,29 @@ from mpr.views import ReportesMPRView
 
 
 class ParseModoPresentacionTest(SimpleTestCase):
-    def test_default_unidades(self):
-        self.assertEqual(parse_modo_presentacion(None), "unidades")
-        self.assertEqual(parse_modo_presentacion(""), "unidades")
+    def test_default_docenas(self):
+        self.assertEqual(parse_modo_presentacion(None), "docenas")
+        self.assertEqual(parse_modo_presentacion(""), "docenas")
 
     def test_docenas_valido(self):
         self.assertEqual(parse_modo_presentacion("docenas"), "docenas")
 
-    def test_valor_invalido_cae_a_unidades(self):
-        self.assertEqual(parse_modo_presentacion("invalido"), "unidades")
+    def test_valor_invalido_cae_a_docenas(self):
+        self.assertEqual(parse_modo_presentacion("invalido"), "docenas")
+
+    def test_resolver_usa_sesion_operativa(self):
+        from mpr.reportes_presentacion import resolver_modo_presentacion_reporte
+
+        request = RequestFactory().get("/mpr/reportes/")
+        request.session = {"mpr_presentacion_cantidad": "unidades"}
+        self.assertEqual(resolver_modo_presentacion_reporte(request), "unidades")
+
+    def test_resolver_get_prioriza_sobre_sesion(self):
+        from mpr.reportes_presentacion import resolver_modo_presentacion_reporte
+
+        request = RequestFactory().get("/mpr/reportes/?presentacion=docenas")
+        request.session = {"mpr_presentacion_cantidad": "unidades"}
+        self.assertEqual(resolver_modo_presentacion_reporte(request), "docenas")
 
 
 class FormatearCantidadReporteTest(SimpleTestCase):
@@ -96,6 +110,7 @@ class PrepararStockPorDepositoTest(SimpleTestCase):
         self.assertEqual(len(ctx["columnas_deposito"]), 2)
         fila = ctx["filas"][0]
         self.assertEqual(fila["codigo_articulo"], "1.1.1133")
+        self.assertEqual(fila["codigo_manual"], "1.1.1133")
         self.assertEqual(len(fila["depositos"]), 2)
         self.assertEqual(fila["depositos"][0]["docenas"], 1)
         self.assertEqual(fila["depositos"][0]["unidades"], 4)
@@ -129,6 +144,24 @@ class PrepararStockPorDepositoTest(SimpleTestCase):
         fila_a = next(f for f in ctx["filas"] if f["id_articulo"] == 10)
         self.assertEqual(fila_a["depositos"][0]["unidades"], 0)
         self.assertEqual(fila_a["depositos"][1]["unidades"], 5)
+
+    def test_prioriza_codigo_manual_sobre_codigo_articulo(self):
+        raw = [
+            {
+                "id_articulo": 1,
+                "id_deposito": 1,
+                "codigo_manual": "M-001",
+                "codigo_articulo": "1.1.999",
+                "descripcion_articulo": "Con manual",
+                "nombre_deposito": "Terminado",
+                "tipo_mpr": "Terminado",
+                "saldo": 12.0,
+            },
+        ]
+        ctx = preparar_stock_por_deposito(raw, "unidades")
+        fila = ctx["filas"][0]
+        self.assertEqual(fila["codigo_manual"], "M-001")
+        self.assertEqual(fila["codigo_articulo"], "M-001")
 
 
 class ColumnasCsvModoTest(SimpleTestCase):

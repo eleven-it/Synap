@@ -18,7 +18,7 @@
             {% for r in filas %}
             <tr>
                 <td class="px-4 py-3">
-                    <a href="?grupo=trazabilidad&reporte=timeline&id_articulo={{ r.id_articulo }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}" class="text-sm font-medium text-purple-600 hover:underline dark:text-purple-400">{{ r.codigo_manual|default:"-" }}</a>
+                    <a href="?grupo=trazabilidad&reporte=timeline&id_articulo={{ r.id_articulo }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}" class="text-sm font-medium text-purple-600 hover:underline dark:text-purple-400">{{ r.codigo_manual|default:"-" }}</a>
                     <p class="text-xs text-gray-500 truncate max-w-xs">{{ r.descripcion_articulo }}</p>
                 </td>
                 <td class="px-4 py-3 text-right text-sm tabular-nums">{{ r.enviado_display|default:r.enviado }}</td>

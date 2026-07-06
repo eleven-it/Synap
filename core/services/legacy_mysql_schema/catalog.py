@@ -753,6 +753,42 @@ def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
                 )
                 _append_migration(applied, failed, True, f"idx_mpr_ep_lote en {tbl_ep}")
 
+        tbl_tl = nombre_tabla_real(cursor, "mpr_transicion_lote")
+        if tbl_tl:
+            ttl = tbl_tl.replace("`", "``")
+            for col, ddl in (
+                (
+                    "id_operario",
+                    "INT NULL COMMENT 'Operario que fabricó (no el clasificador)'",
+                ),
+                (
+                    "operario_nombre",
+                    "VARCHAR(255) NOT NULL DEFAULT '-' "
+                    "COMMENT 'Snapshot nombre operario fabricante'",
+                ),
+                (
+                    "fecha_produccion",
+                    "DATE NULL COMMENT 'Fecha de carga del parte/clasificación'",
+                ),
+                (
+                    "id_mpr_turno",
+                    "BIGINT NULL COMMENT 'Turno de producción del parte/clasificación'",
+                ),
+            ):
+                if not columna_existe(cursor, tbl_tl, col):
+                    cursor.execute(
+                        "ALTER TABLE `{}` ADD COLUMN {} {}".format(ttl, col, ddl)
+                    )
+                    _append_migration(applied, failed, True, f"{tbl_tl}.{col}")
+            if not indice_existe(cursor, tbl_tl, "idx_mpr_tl_fecha_turno_art_op"):
+                cursor.execute(
+                    "CREATE INDEX `idx_mpr_tl_fecha_turno_art_op` ON `{}` "
+                    "(fecha_produccion, id_mpr_turno, id_articulo, id_operario)".format(ttl)
+                )
+                _append_migration(
+                    applied, failed, True, f"idx_mpr_tl_fecha_turno_art_op en {tbl_tl}"
+                )
+
         conn.commit()
     except Exception as e:
         conn.rollback()

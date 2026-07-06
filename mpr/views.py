@@ -255,11 +255,18 @@ def _opp_cantidad_unidades_desde_post(post, id_comp: int, cod_dep: int) -> int:
     return docenas * UNIDADES_POR_DOCENA_OPP + unidades_sueltas
 
 
-def _clasificacion_cantidad_unidades_desde_post(post, id_art: int, prefijo: str) -> int:
+def _clasificacion_cantidad_unidades_desde_post(
+    post, id_art: int, prefijo: str, id_operario: int | None = None,
+) -> int:
     """Cantidad en unidades por destino de clasificación: docenas × 12 + unidades sueltas."""
-    doc_key = f"{prefijo}_{id_art}_docenas"
-    uni_key = f"{prefijo}_{id_art}_unidades"
-    legacy_key = f"{prefijo}_{id_art}"
+    if id_operario is not None:
+        doc_key = f"{prefijo}_{id_art}_op_{id_operario}_docenas"
+        uni_key = f"{prefijo}_{id_art}_op_{id_operario}_unidades"
+        legacy_key = f"{prefijo}_{id_art}_op_{id_operario}"
+    else:
+        doc_key = f"{prefijo}_{id_art}_docenas"
+        uni_key = f"{prefijo}_{id_art}_unidades"
+        legacy_key = f"{prefijo}_{id_art}"
     if doc_key in post or uni_key in post:
         try:
             docenas = int((post.get(doc_key) or "0").strip())
@@ -276,6 +283,25 @@ def _clasificacion_cantidad_unidades_desde_post(post, id_art: int, prefijo: str)
     if d is None or d <= 0:
         return 0
     return int(d)
+
+
+def _clasificacion_filas_desde_post(post) -> List[tuple]:
+    """Pares (id_articulo, id_operario) presentes en POST de clasificación."""
+    import re
+
+    filas: set = set()
+    for key in post:
+        m = re.match(
+            r"^(semi|seg2da|scrap)_(\d+)_op_(\d+)(?:_(docenas|unidades))?$",
+            key,
+        )
+        if m:
+            filas.add((int(m.group(2)), int(m.group(3))))
+            continue
+        m2 = re.match(r"^(semi|seg2da|scrap)_(\d+)(?:_(docenas|unidades))?$", key)
+        if m2:
+            filas.add((int(m2.group(2)), 0))
+    return sorted(filas)
 
 
 def _clasificacion_ids_desde_post(post) -> set:
@@ -305,6 +331,27 @@ def _parte_cantidad_unidades_desde_post(post, id_art: int, id_op: int) -> int:
     docenas = max(0, docenas)
     unidades_sueltas = max(0, unidades_sueltas)
     return docenas * UNIDADES_POR_DOCENA_OPP + unidades_sueltas
+
+
+def _envio_cantidad_unidades_desde_post(post, id_art: int) -> int:
+    """Cantidad en unidades para envío tablero: docenas × 12 + unidades sueltas."""
+    doc_key = f"envio_{id_art}_docenas"
+    uni_key = f"envio_{id_art}_unidades"
+    legacy_key = f"envio_{id_art}"
+    if doc_key in post or uni_key in post:
+        try:
+            docenas = int((post.get(doc_key) or "0").strip())
+        except (ValueError, TypeError):
+            docenas = 0
+        try:
+            unidades_sueltas = int((post.get(uni_key) or "0").strip())
+        except (ValueError, TypeError):
+            unidades_sueltas = 0
+        return max(0, docenas) * UNIDADES_POR_DOCENA_OPP + max(0, unidades_sueltas)
+    d = to_decimal_or_none(post.get(legacy_key))
+    if d is None or d <= 0:
+        return 0
+    return int(d)
 
 
 def _parte_lineas_desde_post(post) -> List[Dict[str, Any]]:
@@ -3881,7 +3928,7 @@ class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
 
         grupo = context.get("grupo") or "produccion"
         reporte = context.get("reporte") or "resumen_diario"
-        modo = context.get("modo_presentacion") or "unidades"
+        modo = context.get("modo_presentacion") or "docenas"
         columnas = columnas_csv_para_modo(grupo, reporte, modo)
         if not columnas:
             return HttpResponse("Exportación no disponible para este reporte.", status=400)
@@ -3982,9 +4029,12 @@ class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
             filas = reporte_mpr_movimientos(base_empresa, fd_iso, fh_iso)
             kpis = {"eventos": len(filas)}
 
-        from mpr.reportes_presentacion import aplicar_presentacion_reporte, parse_modo_presentacion
+        from mpr.reportes_presentacion import (
+            aplicar_presentacion_reporte,
+            resolver_modo_presentacion_reporte,
+        )
 
-        modo_presentacion = parse_modo_presentacion(self.request.GET.get("presentacion"))
+        modo_presentacion = resolver_modo_presentacion_reporte(self.request)
 
         if grupo == "demanda" and reporte == "stock":
             from mpr.reportes_presentacion import preparar_stock_por_deposito
@@ -4504,6 +4554,20 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
         except Exception as e:
             logger.warning("TableroProduccionView error: %s", e, exc_info=True)
             filas = []
+        from mpr.presentacion_operativa import (
+            enriquecer_filas_tablero_presentacion,
+            resolver_modo_presentacion_operativa,
+        )
+
+        modo_presentacion = resolver_modo_presentacion_operativa(request)
+        filas = enriquecer_filas_tablero_presentacion(filas, modo_presentacion)
+        qs_params = {}
+        if fecha_desde_str:
+            qs_params["fecha_desde"] = fecha_desde_str
+        if fecha_hasta_str:
+            qs_params["fecha_hasta"] = fecha_hasta_str
+        qs_params["solo_pendiente"] = "1" if solo_pendiente else "0"
+        presentacion_query_base = urlencode(qs_params)
         ultima_act = request.session.get("tablero_produccion_ultima_actualizacion", None)
         return self.render_to_response({
             "filas": filas,
@@ -4513,6 +4577,9 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
             "ultima_actualizacion": ultima_act,
             "tablero_url": reverse("mpr:tablero"),
             "puede_anular_envios": _usuario_puede_anular_envios(request.user),
+            "modo_presentacion": modo_presentacion,
+            "presentacion_query_base": presentacion_query_base,
+            "unidades_por_docena_tablero": UNIDADES_POR_DOCENA_OPP,
         })
 
 
@@ -4817,6 +4884,9 @@ class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
         )
         context["unidades_por_docena_parte"] = UNIDADES_POR_DOCENA_OPP
         context["turnos_activos"] = listar_turnos(base_empresa, solo_activos=True)
+        from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
+
+        context["modo_presentacion"] = resolver_modo_presentacion_operativa(self.request)
 
         fecha_str = (self.request.GET.get("fecha") or "").strip()
         turno_id_raw = (self.request.GET.get("turno_id") or "").strip()
@@ -5184,13 +5254,19 @@ class EnviarProduccionLoteView(MprLoginRequiredMixin, View):
 
         items = []
         pendientes = {}
+        id_arts_envio: set = set()
+        import re as _re_env
+
+        for key in request.POST:
+            m = _re_env.match(r"^envio_(\d+)(?:_(docenas|unidades))?$", key)
+            if m:
+                id_arts_envio.add(int(m.group(1)))
+        for id_art in sorted(id_arts_envio):
+            qty_u = _envio_cantidad_unidades_desde_post(request.POST, id_art)
+            if qty_u > 0:
+                items.append((id_art, Decimal(qty_u)))
         for key, value in request.POST.items():
-            if key.startswith("envio_"):
-                id_art = to_int_or_none(key[6:])
-                qty = to_decimal_or_none(value)
-                if id_art is not None and qty is not None:
-                    items.append((id_art, qty))
-            elif key.startswith("pendiente_"):
+            if key.startswith("pendiente_"):
                 id_art = to_int_or_none(key[10:])
                 pend = to_decimal_or_none(value)
                 if id_art is not None and pend is not None:
@@ -5245,14 +5321,46 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from datetime import date as _date
-        from mpr.services import construir_grilla_clasificacion_produccion, TIPO_MPR_PRODUCCION
+        from datetime import date as _date, datetime as _dt
+        from mpr.services import construir_grilla_clasificacion_produccion, listar_turnos, TIPO_MPR_PRODUCCION
+        from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
 
         base_empresa = _get_base_empresa(self.request)
+        modo_presentacion = resolver_modo_presentacion_operativa(self.request)
+        fecha_str = (self.request.GET.get("fecha") or "").strip()
+        turno_id_raw = (self.request.GET.get("turno_id") or "").strip()
+        ver_roster = (self.request.GET.get("ver_roster") or "").strip() == "1"
+
+        fecha_obj = None
+        turno_id = None
+        if fecha_str:
+            try:
+                fecha_obj = _dt.strptime(fecha_str, "%d/%m/%Y").date()
+            except ValueError:
+                pass
+        if turno_id_raw:
+            try:
+                turno_id = int(turno_id_raw)
+            except (TypeError, ValueError):
+                turno_id = None
+
         grilla = (
-            construir_grilla_clasificacion_produccion(base_empresa)
+            construir_grilla_clasificacion_produccion(
+                base_empresa,
+                fecha_obj,
+                turno_id,
+                ver_roster_completo=ver_roster,
+            )
             if base_empresa
-            else {"componentes": [], "componentes_vacio": True}
+            else {
+                "filas": [],
+                "filas_vacio": True,
+                "arrastre": [],
+                "bloqueos": [],
+                "requiere_fecha_turno": True,
+                "componentes": [],
+                "componentes_vacio": True,
+            }
         )
 
         context.update({
@@ -5260,9 +5368,27 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
             "tipo_origen": TIPO_MPR_PRODUCCION,
             "url_registrar": reverse("mpr:clasificacion_produccion_registrar"),
             "fecha_hoy": _date.today().strftime("%d/%m/%Y"),
-            "componentes": grilla["componentes"],
-            "componentes_vacio": grilla["componentes_vacio"],
+            "fecha_str": fecha_str,
+            "turno_id": turno_id_raw,
+            "turnos_activos": listar_turnos(base_empresa, solo_activos=True) if base_empresa else [],
+            "filas": grilla.get("filas", []),
+            "filas_vacio": grilla.get("filas_vacio", True),
+            "arrastre": grilla.get("arrastre", []),
+            "bloqueos": grilla.get("bloqueos", []),
+            "requiere_fecha_turno": grilla.get("requiere_fecha_turno", True),
+            "ver_roster": ver_roster,
+            "puede_ver_roster_completo": _usuario_puede_anular_envios(self.request.user),
+            "componentes": grilla.get("componentes", grilla.get("filas", [])),
+            "componentes_vacio": grilla.get("componentes_vacio", grilla.get("filas_vacio", True)),
             "unidades_por_docena_clasificacion": UNIDADES_POR_DOCENA_OPP,
+            "modo_presentacion": modo_presentacion,
+            "presentacion_query_base": urlencode({
+                k: v for k, v in (
+                    ("fecha", fecha_str),
+                    ("turno_id", turno_id_raw),
+                    ("ver_roster", "1" if ver_roster else ""),
+                ) if v
+            }),
         })
         return context
 
@@ -5310,31 +5436,92 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
             dj_messages.error(request, err_fecha or "Fecha de carga inválida.")
             return redirect("mpr:clasificacion_produccion")
 
-        ids_post = _clasificacion_ids_desde_post(request.POST)
+        turno_id_raw = (request.POST.get("turno_id") or "").strip()
+        try:
+            turno_id = int(turno_id_raw)
+        except (TypeError, ValueError):
+            dj_messages.error(request, "Turno inválido.")
+            return redirect("mpr:clasificacion_produccion")
 
-        if not ids_post:
+        filas_post = _clasificacion_filas_desde_post(request.POST)
+
+        if not filas_post:
             dj_messages.warning(request, "No se enviaron cantidades.")
             return redirect("mpr:clasificacion_produccion")
 
-        # Re-validación server-side del stock real (ignora hidden disponible_{id})
+        tiene_cantidad = False
+        for id_art, id_operario in filas_post:
+            id_op = id_operario if id_operario > 0 else None
+            for pref in ("semi", "seg2da", "scrap"):
+                if _clasificacion_cantidad_unidades_desde_post(request.POST, id_art, pref, id_op) > 0:
+                    tiene_cantidad = True
+                    break
+            if tiene_cantidad:
+                break
+        if not tiene_cantidad:
+            dj_messages.warning(request, "No se enviaron cantidades.")
+            return redirect("mpr:clasificacion_produccion")
+
+        ids_post = {f[0] for f in filas_post if f[1] > 0}
+
+        from mpr.repositories.parte import acumular_celdas_grilla_con_nombre
+        from mpr.repositories.transicion_lote import sumar_clasificado_por_operario_fecha_turno
+
+        celdas_parte = acumular_celdas_grilla_con_nombre(base_empresa, fecha_obj, turno_id)
+        clasificado_prev = sumar_clasificado_por_operario_fecha_turno(
+            base_empresa, fecha_obj, turno_id
+        )
+
         stock_real, _ = _pivot_stock_por_tipo_mpr(base_empresa, list(ids_post))
 
         items = []
-        for id_art in ids_post:
-            cant_semi = Decimal(_clasificacion_cantidad_unidades_desde_post(request.POST, id_art, "semi"))
-            cant_2da = Decimal(_clasificacion_cantidad_unidades_desde_post(request.POST, id_art, "seg2da"))
-            cant_scrap = Decimal(_clasificacion_cantidad_unidades_desde_post(request.POST, id_art, "scrap"))
-            if cant_semi <= 0 and cant_2da <= 0 and cant_scrap <= 0:
-                continue
-            disponible_real = Decimal(str(stock_real.get(id_art, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
-            suma = cant_semi + cant_2da + cant_scrap
-            if suma > disponible_real:
+        clasificado_turno_por_art: Dict[int, Decimal] = {}
+
+        for id_art, id_operario in filas_post:
+            if id_operario <= 0:
                 dj_messages.error(
                     request,
-                    f"Producción insuficiente para artículo {id_art}: "
-                    f"disponible {disponible_real:g}, solicitado {suma:g}. Fila ignorada.",
+                    f"Artículo {id_art}: clasificación por rendimiento requiere operario. Corregí el parte.",
                 )
                 continue
+            cant_semi = Decimal(
+                _clasificacion_cantidad_unidades_desde_post(request.POST, id_art, "semi", id_operario)
+            )
+            cant_2da = Decimal(
+                _clasificacion_cantidad_unidades_desde_post(request.POST, id_art, "seg2da", id_operario)
+            )
+            cant_scrap = Decimal(
+                _clasificacion_cantidad_unidades_desde_post(request.POST, id_art, "scrap", id_operario)
+            )
+            if cant_semi <= 0 and cant_2da <= 0 and cant_scrap <= 0:
+                continue
+
+            fabricado = to_decimal_or_none(
+                (celdas_parte.get((id_art, id_operario)) or {}).get("cantidad")
+            ) or Decimal("0")
+            if fabricado <= 0:
+                dj_messages.error(
+                    request,
+                    f"Sin producción en parte para artículo {id_art} y operario {id_operario}.",
+                )
+                continue
+
+            ya_cls = clasificado_prev.get((id_art, id_operario), Decimal("0"))
+            atribuible = fabricado - ya_cls
+            suma = cant_semi + cant_2da + cant_scrap
+            if suma > atribuible:
+                dj_messages.error(
+                    request,
+                    f"Exceso operario {id_operario} artículo {id_art}: "
+                    f"atribuible {atribuible:g}, solicitado {suma:g}. Fila ignorada.",
+                )
+                continue
+
+            operario_nombre = str_or_default(
+                (celdas_parte.get((id_art, id_operario)) or {}).get("operario_nombre"),
+                "-",
+            )
+
             for cant, destino in (
                 (cant_semi, TIPO_MPR_SEMI_ELABORADO),
                 (cant_2da, TIPO_MPR_2DA_SELECCION),
@@ -5346,7 +5533,27 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
                         "tipo_origen": TIPO_MPR_PRODUCCION,
                         "tipo_destino": destino,
                         "cantidad": cant,
+                        "id_operario": id_operario,
+                        "operario_nombre": operario_nombre,
+                        "fecha_produccion": fecha_obj,
+                        "id_mpr_turno": turno_id,
                     })
+                    clasificado_turno_por_art[id_art] = (
+                        clasificado_turno_por_art.get(id_art, Decimal("0")) + cant
+                    )
+
+        for id_art, total_cls in clasificado_turno_por_art.items():
+            disponible_real = Decimal(str(stock_real.get(id_art, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
+            prev_cls_art = sum(
+                v for (aid, _), v in clasificado_prev.items() if aid == id_art
+            )
+            if prev_cls_art + total_cls > disponible_real:
+                dj_messages.error(
+                    request,
+                    f"Stock Producción insuficiente para artículo {id_art}: "
+                    f"disponible {disponible_real:g}.",
+                )
+                items = [it for it in items if it.get("id_articulo") != id_art]
 
         if items:
             resultado = transferir_stock_lote(base_empresa, id_usuario, items, fecha=fecha_obj)

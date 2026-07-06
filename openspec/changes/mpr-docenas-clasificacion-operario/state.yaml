@@ -1,0 +1,12 @@
+change: mpr-docenas-clasificacion-operario
+status: spec-complete
+created: 2026-07-08
+phase: apply-pending
+depends_on: []
+artifacts:
+  exploration: complete
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: pending

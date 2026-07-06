@@ -155,6 +155,29 @@
         });
     }
 
+    function renderHbarStacked(canvas, block, yLabel) {
+        var opts = baseOptions(yLabel);
+        opts.indexAxis = 'y';
+        opts.plugins.legend = { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } };
+        opts.scales.x.stacked = true;
+        opts.scales.y.stacked = true;
+        opts.scales.x.title = { display: true, text: yLabel || 'unidades', color: theme().tick, font: { size: 11 } };
+        delete opts.scales.y.title;
+        var datasets = (block.datasets || []).map(function (ds) {
+            return {
+                label: ds.label,
+                data: ds.values,
+                backgroundColor: ds.color,
+                borderRadius: 2,
+            };
+        });
+        return new global.Chart(canvas, {
+            type: 'bar',
+            data: { labels: block.labels || [], datasets: datasets },
+            options: opts,
+        });
+    }
+
     function renderGroupedBar(canvas, block, yLabel) {
         var ds0 = (block.datasets || [])[0];
         var colors = (ds0 && ds0.colors) || ['#64748b', '#059669', '#7c3aed'];
@@ -219,6 +242,9 @@
                 break;
             case 'hbar_grouped':
                 chart = renderHbarGrouped(canvas, block, yLabel);
+                break;
+            case 'hbar_stacked':
+                chart = renderHbarStacked(canvas, block, yLabel);
                 break;
             case 'grouped_bar':
                 chart = renderGroupedBar(canvas, block, yLabel);

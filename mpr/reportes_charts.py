@@ -74,23 +74,53 @@ def _chart_operario(filas: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         return None
     top = filas[:MAX_RANKED_BARS]
     total = len(filas)
+    blocks: List[Dict[str, Any]] = [
+        {
+            "id": "operario-hbar",
+            "kind": "hbar",
+            "title": "Ranking por unidades producidas",
+            "subtitle": (
+                f"Top {len(top)} operarios"
+                + (f" de {total}" if total > len(top) else "")
+                + " · barras horizontales para comparar productividad"
+            ),
+            "labels": [_trunc_label(f.get("operario") or "-") for f in top],
+            "values": [int(f.get("unidades") or 0) for f in top],
+            "color": "#7c3aed",
+        }
+    ]
+    tiene_calidad = any(
+        int(f.get("semi") or 0) + int(f.get("segunda") or 0) + int(f.get("scrap") or 0) > 0
+        for f in top
+    )
+    if tiene_calidad:
+        blocks.append({
+            "id": "operario-calidad-stacked",
+            "kind": "hbar_stacked",
+            "title": "Calidad por operario fabricante",
+            "subtitle": "Apilado: semi elaborado · 2da selección · desperdicio (mismo top del ranking)",
+            "labels": [_trunc_label(f.get("operario") or "-") for f in top],
+            "datasets": [
+                {
+                    "label": "Semi elaborado",
+                    "values": [int(f.get("semi") or 0) for f in top],
+                    "color": "#059669",
+                },
+                {
+                    "label": "2da selección",
+                    "values": [int(f.get("segunda") or 0) for f in top],
+                    "color": "#0ea5e9",
+                },
+                {
+                    "label": "Scrap",
+                    "values": [int(f.get("scrap") or 0) for f in top],
+                    "color": "#d97706",
+                },
+            ],
+        })
     return {
         "reporte": "operario",
-        "blocks": [
-            {
-                "id": "operario-hbar",
-                "kind": "hbar",
-                "title": "Ranking por unidades producidas",
-                "subtitle": (
-                    f"Top {len(top)} operarios"
-                    + (f" de {total}" if total > len(top) else "")
-                    + " · barras horizontales para comparar productividad"
-                ),
-                "labels": [_trunc_label(f.get("operario") or "-") for f in top],
-                "values": [int(f.get("unidades") or 0) for f in top],
-                "color": "#7c3aed",
-            }
-        ],
+        "blocks": blocks,
     }
 
 

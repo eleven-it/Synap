@@ -7,7 +7,7 @@ from mpr.services import bulk_cantidad_promedio_bulto, descomponer_docenas_unida
 from core.utils.administranet_types import str_codigo_manual_articulo
 
 MODOS_PRESENTACION = frozenset({"unidades", "docenas"})
-DEFAULT_MODO_PRESENTACION = "unidades"
+DEFAULT_MODO_PRESENTACION = "docenas"
 UNIDADES_POR_DOCENA_COMPONENTE = 12
 
 # Campos numéricos de cantidad (no contadores ni porcentajes).
@@ -31,12 +31,36 @@ CAMPOS_CANTIDAD: Set[str] = {
     "saldo",
     "saldo_total",
     "stock_minimo",
+    "semi",
+    "segunda",
+    "scrap",
 }
 
 
 def parse_modo_presentacion(raw: Optional[str]) -> str:
     modo = (raw or DEFAULT_MODO_PRESENTACION).strip().lower()
     return modo if modo in MODOS_PRESENTACION else DEFAULT_MODO_PRESENTACION
+
+
+def resolver_modo_presentacion_reporte(request) -> str:
+    """GET ?presentacion= tiene prioridad; si no, sesión operativa MPR; default docenas."""
+    raw_get = request.GET.get("presentacion")
+    if raw_get is not None and str(raw_get).strip():
+        return parse_modo_presentacion(raw_get)
+    try:
+        from mpr.presentacion_operativa import (
+            SESSION_KEY,
+            parse_modo_presentacion_operativa,
+        )
+
+        ses = parse_modo_presentacion_operativa(
+            request.session.get(SESSION_KEY) if hasattr(request, "session") else None
+        )
+        if ses in MODOS_PRESENTACION:
+            return ses
+    except Exception:
+        pass
+    return DEFAULT_MODO_PRESENTACION
 
 
 def _to_int_cantidad(val: Any) -> int:
@@ -248,10 +272,18 @@ def preparar_stock_por_deposito(
                 "clave": clave,
             }
         if aid_int not in articulos:
+            codigo_manual = str_codigo_manual_articulo(
+                r.get("codigo_manual") or r.get("id_manual")
+            )
+            codigo_articulo = str(r.get("codigo_articulo") or "-")
+            codigo_mostrable = (
+                codigo_manual if codigo_manual != "-" else codigo_articulo
+            )
             articulos[aid_int] = {
                 "id_articulo": aid_int,
-                "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
-                "codigo_articulo": str(r.get("codigo_articulo") or "-"),
+                "codigo_manual": codigo_mostrable,
+                "codigo_articulo": codigo_articulo,
+                "codigo_mostrable": codigo_mostrable,
                 "descripcion_articulo": str(r.get("descripcion_articulo") or "-"),
                 "saldos": {},
             }
@@ -277,7 +309,7 @@ def preparar_stock_por_deposito(
     filas_out: List[Dict[str, Any]] = []
     for aid_int in sorted(
         articulos.keys(),
-        key=lambda a: (articulos[a].get("codigo_manual") or "", a),
+        key=lambda a: (articulos[a].get("codigo_mostrable") or "", a),
     ):
         art = articulos[aid_int]
         bulto = bulto_map.get(aid_int) if modo == "docenas" else None
@@ -289,8 +321,8 @@ def preparar_stock_por_deposito(
             )
         filas_out.append({
             "id_articulo": aid_int,
-            "codigo_manual": art["codigo_manual"],
-            "codigo_articulo": art["codigo_manual"],
+            "codigo_manual": art["codigo_mostrable"],
+            "codigo_articulo": art["codigo_mostrable"],
             "descripcion_articulo": art["descripcion_articulo"],
             "depositos": depositos_celdas,
         })

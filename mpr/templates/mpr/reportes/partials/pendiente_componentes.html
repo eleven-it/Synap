@@ -18,7 +18,7 @@
             {% for r in filas %}
             <tr class="{% if r.critico %}border-l-4 border-amber-500 bg-amber-50/50 dark:bg-amber-950/20{% endif %}">
                 <td class="px-4 py-3 text-sm font-medium">
-                    <a href="?grupo=trazabilidad&reporte=timeline&id_articulo={{ r.id_articulo }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}" class="text-purple-600 hover:underline">{{ r.codigo_manual }}</a>
+                    <a href="?grupo=trazabilidad&reporte=timeline&id_articulo={{ r.id_articulo }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}" class="text-purple-600 hover:underline">{{ r.codigo_manual }}</a>
                 </td>
                 <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ r.descripcion_articulo }}</td>
                 <td class="px-4 py-3 text-right text-sm tabular-nums">{{ r.demanda_display|default:r.demanda }}</td>
