@@ -143,6 +143,11 @@ PERMISOS_POR_MODULO = {
         ("mpr.ver", "Ver módulo Producción (MPR)"),
         ("mpr.imputar_armado_1ra", "Imputación de pedido — Armado 1ra (supervisor)"),
     ],
+    "Migración Odoo": [
+        ("odoo_migracion.ver", "Ver módulo Migración Odoo (solo usuario supervisor en menú)"),
+        ("odoo_migracion.conexiones", "Gestionar conexiones Odoo"),
+        ("odoo_migracion.jobs", "Ejecutar y consultar jobs de migración"),
+    ],
     "Self-Checkout / TPV": [
         ("self_checkout.ver", "Ver Self-Checkout / TPV"),
         ("self_checkout.kiosk", "Operar kiosco / TPV"),

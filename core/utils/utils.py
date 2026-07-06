@@ -70,13 +70,13 @@ APPS_MENU = [
                     {"label": _("Remito de Compra"), "url": "compras:remito_compra_form", "icon": "receipt", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_remito_compra"},
                     {"label": _("Remito de Venta"), "url": "stock:alta_movimiento", "icon": "receipt_long", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_remito_venta"},
                     {"label": _("Pedido interno a depósito / compras"), "url": "stock:alta_movimiento", "icon": "swap_horiz", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_pedido_interno"},
-                    {"label": _("Inventario"), "url": "stock:consulta_ficha_stock", "icon": "inventory_2", "permission": "stock.consultas", "menu_item_id": "stock_mov_inventario"},
+                    {"label": _("Inventario"), "url": "stock:inventario", "icon": "inventory_2", "permission": "stock.consultas", "menu_item_id": "stock_mov_inventario"},
                 ]
             },
             {
                 "seccion": _("Consultas"),
                 "items": [
-                    {"label": _("Consulta Ficha de Stock"), "url": "stock:consulta_ficha_stock", "icon": "description", "permission": "stock.consultas", "menu_item_id": "stock_cons_ficha"},
+                    {"label": _("Inventario por etapa"), "url": "stock:inventario", "icon": "description", "permission": "stock.consultas", "menu_item_id": "stock_cons_ficha"},
                     {"label": _("Consultas y Anulaciones"), "url": "stock:visualiza_movimientos", "icon": "list_alt", "permission": "stock.consultas", "menu_item_id": "stock_cons_anulaciones"},
                     {"label": _("Informes"), "url": "stock:visualiza_movimientos", "icon": "assessment", "permission": "stock.informes", "menu_item_id": "stock_cons_informes"},
                 ]
@@ -388,6 +388,30 @@ APPS_MENU = [
                         "permission": "fe_afip.view_afipconfig",
                         "menu_item_id": "sc_tpv_fe_afip",
                     },
+                ]
+            }
+        ]
+    },
+    {
+        "id": "odoo_migracion",
+        "nombre": _("Migración Odoo"),
+        "permiso": "odoo_migracion.ver",
+        "url": "odoo_migracion:dashboard",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z'/><path stroke-linecap='round' stroke-linejoin='round' d='M8 12h8M12 8v8'/></svg>""",
+        "orden": 95,
+        "color": "indigo",
+        "superuser_only": True,
+        "submenus": [
+            {
+                "seccion": _("Migración"),
+                "items": [
+                    {"label": _("Panel"), "url": "odoo_migracion:dashboard", "icon": "dashboard", "permission": "odoo_migracion.ver", "menu_item_id": "odoo_mig_panel"},
+                    {"label": _("Inventario"), "url": "odoo_migracion:discovery", "icon": "inventory", "permission": "odoo_migracion.ver", "menu_item_id": "odoo_mig_inventario"},
+                    {"label": _("Wizard migración"), "url": "odoo_migracion:wizard", "icon": "play_arrow", "permission": "odoo_migracion.jobs", "menu_item_id": "odoo_mig_wizard"},
+                    {"label": _("Conexiones Odoo"), "url": "odoo_migracion:conexion_list", "icon": "link", "permission": "odoo_migracion.conexiones", "menu_item_id": "odoo_mig_conexiones"},
+                    {"label": _("Jobs"), "url": "odoo_migracion:job_list", "icon": "sync", "permission": "odoo_migracion.jobs", "menu_item_id": "odoo_mig_jobs"},
+                    {"label": _("Validación / cuadre"), "url": "odoo_migracion:validacion", "icon": "fact_check", "permission": "odoo_migracion.ver", "menu_item_id": "odoo_mig_validacion"},
+                    {"label": _("Mapeos"), "url": "odoo_migracion:mapping_list", "icon": "compare_arrows", "permission": "odoo_migracion.ver", "menu_item_id": "odoo_mig_mapeos"},
                 ]
             }
         ]
@@ -1202,7 +1226,7 @@ def apps_visibles_sin_filtro_pwa(
 
         # REGLA 1: Archivo, Module Management y Settings solo visibles para el usuario 'supervisor' (superuser)
         # NOTA: El puesto/rol "Supervisor" NO puede ver estos módulos
-        if app_id in ["archivo", "module_management", "settings"]:
+        if app_id in ["archivo", "module_management", "settings", "odoo_migracion"]:
             # Solo el usuario 'supervisor' (por cod_usuario) es superuser
             if es_supervisor_usuario or user.is_superuser:
                 app_copy = app.copy()

@@ -1,0 +1,72 @@
+{% extends "odoo_migracion/base_odoo_migracion.html" %}
+{% load i18n odoo_migracion_ui %}
+
+{% block odoo_migracion_content %}
+{% with hero_title=_("Jobs de migración") hero_subtitle=_("Historial y progreso por lote") %}
+{% include "odoo_migracion/includes/hero.html" %}
+{% endwith %}
+
+{% include "odoo_migracion/includes/conexion_selector.html" %}
+
+{% if overview %}
+<div class="mb-6 grid grid-cols-3 gap-3 sm:grid-cols-3">
+  <div class="rounded-lg border border-sky-200 bg-sky-50 p-3 text-center dark:border-sky-800 dark:bg-sky-900/20">
+    <p class="text-2xl font-bold text-sky-700 dark:text-sky-300">{{ overview.kpis.jobs_activos }}</p>
+    <p class="text-xs text-sky-800 dark:text-sky-400">{% trans "Activos" %}</p>
+  </div>
+  <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center dark:border-emerald-800 dark:bg-emerald-900/20">
+    <p class="text-2xl font-bold text-emerald-700">{{ overview.kpis.dominios_completos }}</p>
+    <p class="text-xs text-emerald-800">{% trans "Dominios OK" %}</p>
+  </div>
+  <div class="rounded-lg border border-red-200 bg-red-50 p-3 text-center dark:border-red-800 dark:bg-red-900/20">
+    <p class="text-2xl font-bold text-red-700">{{ overview.kpis.dominios_error }}</p>
+    <p class="text-xs text-red-800">{% trans "Con error" %}</p>
+  </div>
+</div>
+{% endif %}
+
+<div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-gray-900">
+      <tr>
+        <th class="px-4 py-3">{% trans "Dominio" %}</th>
+        <th class="px-4 py-3">{% trans "Conexión" %}</th>
+        <th class="px-4 py-3">{% trans "Estado" %}</th>
+        <th class="px-4 py-3">{% trans "Progreso" %}</th>
+        <th class="px-4 py-3">{% trans "Proc. / Err." %}</th>
+        <th class="px-4 py-3">{% trans "Mensaje" %}</th>
+        <th class="px-4 py-3">{% trans "Inicio" %}</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+      {% for row in job_rows %}
+      <tr class="align-top hover:bg-gray-50/80 dark:hover:bg-gray-900/40">
+        <td class="px-4 py-3">
+          <span class="font-medium">{{ row.label }}</span>
+          <span class="block text-xs text-gray-500">{{ row.fase }}</span>
+        </td>
+        <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ row.job.conexion.nombre }}</td>
+        <td class="px-4 py-3">
+          <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset {{ row.tone|odoo_mig_badge_class }}">{{ row.job.get_estado_display }}</span>
+        </td>
+        <td class="px-4 py-3">
+          <div class="min-w-[100px]">
+            <div class="mb-1 flex justify-between text-xs text-gray-500">
+              <span>{% if row.origen_count %}{{ row.job.offset }}/{{ row.origen_count }}{% else %}{{ row.progress_pct }}%{% endif %}</span>
+            </div>
+            <div class="h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
+              <div class="h-full rounded-full {{ row.tone|odoo_mig_bar_class }}" style="width: {{ row.progress_pct }}%"></div>
+            </div>
+          </div>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">{{ row.job.total_procesados }} / <span class="{% if row.job.total_errores %}text-red-600 font-medium{% endif %}">{{ row.job.total_errores }}</span></td>
+        <td class="max-w-xs px-4 py-3 text-xs text-gray-500 truncate" title="{{ row.job.mensaje }}">{{ row.job.mensaje|default:"—"|truncatechars:80 }}</td>
+        <td class="px-4 py-3 whitespace-nowrap text-gray-500">{{ row.job.iniciado_at|date:"d/m/Y H:i"|default:row.job.created_at|date:"d/m/Y H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="px-4 py-10 text-center text-gray-500">{% trans "Sin jobs." %} <a href="{% url 'odoo_migracion:wizard' %}" class="text-violet-600 hover:underline">{% trans "Ejecutar migración" %}</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

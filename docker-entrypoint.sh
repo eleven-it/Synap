@@ -106,7 +106,10 @@ else
     python manage.py bootstrap_instalacion 2>&1 || true
 fi
 
-# Recolectar archivos estáticos
+    # Sincronizar módulos nuevos del registro (ej. odoo_migracion) sin resetear DB
+    python manage.py setup_modules --sync 2>&1 || true
+
+    # Recolectar archivos estáticos
 if [ "$COLLECTSTATIC" != "false" ]; then
     echo ""
     echo "📁 Recolectando archivos estáticos..."

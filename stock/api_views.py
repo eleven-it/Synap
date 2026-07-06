@@ -12,6 +12,47 @@ from core.services import administranet_stock as svc
 logger = logging.getLogger(__name__)
 
 
+def _session_base_empresa(request):
+    base_empresa = (request.session.get("user", {}) or {}).get("base_empresa")
+    if not base_empresa:
+        return None, JsonResponse({"error": "Sesión inválida o sin empresa."}, status=400)
+    return base_empresa, None
+
+
+@tiene_permiso("stock.consultas")
+@require_http_methods(["GET"])
+def api_inventario_articulos(request):
+    """GET ?q=: búsqueda predictiva inventario (universo completo, sin paginación de tabla)."""
+    base_empresa, err = _session_base_empresa(request)
+    if err:
+        return err
+    from stock.services.inventario_tabla import buscar_articulos_inventario
+
+    q = request.GET.get("q", "").strip()
+    limit = min(int(request.GET.get("limit", 15) or 15), 50)
+    marcas = []
+    for m in request.GET.getlist("marcas_incluidos"):
+        try:
+            marcas.append(int(str(m).strip()))
+        except (TypeError, ValueError):
+            continue
+    incluir_ceros = str(request.GET.get("incluir_ceros") or "0").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "si",
+        "sí",
+    )
+    items = buscar_articulos_inventario(
+        base_empresa,
+        q,
+        marcas_incluidos=marcas,
+        incluir_ceros=incluir_ceros,
+        limit=limit,
+    )
+    return JsonResponse({"articulos": items})
+
+
 def _session_context(request):
     """Obtiene base_empresa, id_usuario, id_puesto, id_punto_venta desde sesión. Devuelve (ctx, error_response)."""
     session_user = request.session.get("user", {})

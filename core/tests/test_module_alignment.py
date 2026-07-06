@@ -64,8 +64,14 @@ class ModuleAlignmentTest(TestCase):
     def test_mpr_en_skip_urls_principales(self):
         self.assertIn("mpr", SKIP_MODULES_IN_MAIN_URLS)
 
+    def test_odoo_migracion_en_skip_urls_principales(self):
+        self.assertIn("odoo_migracion", SKIP_MODULES_IN_MAIN_URLS)
+
     def test_modulos_montados_en_urls_principales_en_skip(self):
-        montados_en_main = {"reports", "ia", "stock", "ventas", "compras", "mpr", "self_checkout", "logistica"}
+        montados_en_main = {
+            "reports", "ia", "stock", "ventas", "compras", "mpr",
+            "self_checkout", "logistica", "odoo_migracion",
+        }
         faltantes = montados_en_main - set(SKIP_MODULES_IN_MAIN_URLS)
         self.assertEqual(
             faltantes,

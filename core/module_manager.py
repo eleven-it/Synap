@@ -349,6 +349,68 @@ class ModuleManager:
         for key in cache_keys:
             cache.delete(key)
     
+    def sync_registry_to_db(self) -> tuple[int, int]:
+        """
+        Sincroniza MODULE_CONFIGS → ModuleConfig (altas y metadatos).
+        No desactiva ni elimina módulos existentes; preserva is_active.
+        Omite apps no instaladas en INSTALLED_APPS.
+        """
+        created = 0
+        updated = 0
+        metadata_fields = (
+            "display_name",
+            "description",
+            "version",
+            "author",
+            "is_required",
+            "is_core",
+            "dependencies",
+            "optional_dependencies",
+            "settings",
+            "permissions",
+            "hooks",
+        )
+
+        for module_name, config in MODULE_CONFIGS.items():
+            if not self._django_app_installed(module_name):
+                continue
+
+            values = {
+                "display_name": config["display_name"],
+                "description": config.get("description", ""),
+                "version": config.get("version", "1.0.0"),
+                "author": config.get("author", ""),
+                "is_required": config.get("is_required", False),
+                "is_core": config.get("is_core", False),
+                "dependencies": config.get("dependencies", []),
+                "optional_dependencies": config.get("optional_dependencies", []),
+                "settings": config.get("settings", {}),
+                "permissions": config.get("permissions", []),
+                "hooks": config.get("hooks", []),
+            }
+
+            existing = ModuleConfig.objects.filter(name=module_name).first()
+            if existing:
+                changed = False
+                for field in metadata_fields:
+                    new_val = values[field]
+                    if getattr(existing, field) != new_val:
+                        setattr(existing, field, new_val)
+                        changed = True
+                if changed:
+                    existing.save()
+                    updated += 1
+            else:
+                ModuleConfig.objects.create(
+                    name=module_name,
+                    is_active=config.get("is_required", False),
+                    **values,
+                )
+                created += 1
+
+        self._refresh_active_modules_from_cache_or_db(force=True)
+        return created, updated
+
     def get_modules_summary(self):
         """Obtiene un resumen de todos los módulos"""
         summary = {

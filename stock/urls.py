@@ -13,9 +13,10 @@ urlpatterns = [
     path("referencias/", views.ref_movstock_list_view, name="ref_movstock_list"),
     path("referencias/nueva/", views.ref_movstock_create_view, name="ref_movstock_create"),
     path("referencias/<int:pk>/editar/", views.ref_movstock_edit_view, name="ref_movstock_edit"),
-    path("consulta-ficha/", views.consulta_ficha_stock_view, name="consulta_ficha_stock"),
+    path("inventario/", views.inventario_view, name="inventario"),
     path("consulta-avanzada/", views.consulta_avanzada_view, name="consulta_avanzada"),
     # API para formulario Ingreso Mov. Stock
+    path("api/inventario/articulos/", api_views.api_inventario_articulos, name="api_inventario_articulos"),
     path("api/ingreso/datos-iniciales/", api_views.api_ingreso_datos_iniciales, name="api_ingreso_datos"),
     path("api/ingreso/articulos/", api_views.api_ingreso_articulos, name="api_ingreso_articulos"),
     path("api/ingreso/articulos-por-codigo/", api_views.api_ingreso_articulos_por_codigo, name="api_ingreso_articulos_por_codigo"),

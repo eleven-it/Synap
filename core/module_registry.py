@@ -404,6 +404,33 @@ MODULE_CONFIGS = {
         'hooks': [],
     },
 
+    'odoo_migracion': {
+        'name': 'odoo_migracion',
+        'display_name': 'Migración Odoo',
+        'description': (
+            'Migración y sincronización de datos AdministraNET (MySQL) hacia Odoo 19 '
+            'con API JSON-2. Solo usuario supervisor.'
+        ),
+        'version': '1.0.0',
+        'author': 'Synap Team',
+        'is_required': False,
+        'is_core': False,
+        'dependencies': ['core', 'dashboard'],
+        'optional_dependencies': ['reports'],
+        'settings': {
+            'batch_size': 100,
+            'api_key_alert_days': 7,
+        },
+        'url_prefix': 'odoo-migracion',
+        'permissions': [
+            'odoo_migracion.ver',
+            'odoo_migracion.conexiones',
+            'odoo_migracion.jobs',
+            'odoo_migracion.*',
+        ],
+        'hooks': [],
+    },
+
     'ecom': {
         'name': 'ecom',
         'display_name': 'E-commerce Mayorista',
@@ -441,4 +468,23 @@ MODULE_CONFIGS = {
         'hooks': [],
     },
     # self_checkout: app core (siempre instalada), URLs en django_project/urls.py, permisos en PERMISOS_POR_MODULO + sync.
-} 
+}
+
+
+def module_url_prefixes(module_name: str) -> list[str]:
+    """Prefijos de URL que identifican rutas de un módulo (nombre app y url_prefix opcional)."""
+    config = MODULE_CONFIGS.get(module_name, {})
+    prefixes = [module_name]
+    extra = (config.get("url_prefix") or "").strip()
+    if extra and extra not in prefixes:
+        prefixes.append(extra)
+    return prefixes
+
+
+def path_belongs_to_module(path: str, module_name: str) -> bool:
+    """True si path (sin slash inicial) pertenece al módulo."""
+    path = (path or "").lstrip("/")
+    for prefix in module_url_prefixes(module_name):
+        if path.startswith(f"{prefix}/") or path in (prefix, f"{prefix}/"):
+            return True
+    return False 

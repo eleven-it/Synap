@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.contrib import messages
 from django.utils.translation import gettext_lazy as _
 from core.module_manager import module_manager
-from core.module_registry import MODULE_CONFIGS
+from core.module_registry import MODULE_CONFIGS, path_belongs_to_module
 from core.utils.permissions import get_user_permission_set, user_has_full_access
 
 
@@ -54,7 +54,7 @@ class ModuleMiddleware:
         
         # Verificar módulos inactivos
         for module_name in MODULE_CONFIGS.keys():
-            if path.startswith(f'{module_name}/'):
+            if path_belongs_to_module(path, module_name):
                 is_active = module_manager.is_module_active(module_name)
                 logger.info(f"🔍 ModuleMiddleware: Módulo '{module_name}' - Path: {path}, Activo: {is_active}")
                 if not is_active:
@@ -121,14 +121,7 @@ class ModulePermissionMiddleware:
         # Verificar permisos por módulo
         # También verificar si el path es exactamente el nombre del módulo (sin barra final)
         for module_name in MODULE_CONFIGS.keys():
-            # Verificar si el path coincide con el módulo (con o sin barra final)
-            path_matches = (
-                path.startswith(f'{module_name}/') or 
-                path == module_name or 
-                path == f'{module_name}/'
-            )
-            
-            if path_matches:
+            if path_belongs_to_module(path, module_name):
                 logger.info(f"🔍 Verificando acceso al módulo '{module_name}' para usuario '{user_info}' (path: '{path}')")
                 
                 # Verificar si el usuario tiene acceso al módulo
