@@ -174,15 +174,53 @@ def ref_movstock_edit_view(request, pk):
 
 
 @tiene_permiso("stock.consultas")
-def consulta_ficha_stock_view(request):
-    """Consulta ficha de stock por artículo/depósito."""
+def inventario_view(request):
+    """Inventario por etapa MPR: tabla pivote Producción → Terminado + consolidado."""
     session_user = request.session.get("user", {})
     base_empresa = session_user.get("base_empresa")
     if not base_empresa:
         messages.error(request, "No se pudo determinar la empresa activa.")
         return redirect("core:dashboard")
-    context = {"base_empresa": base_empresa}
-    return render(request, "stock/consulta_ficha_stock.html", context)
+
+    from stock.services.inventario_tabla import (
+        ETAPAS_INVENTARIO,
+        build_inventario_query_string,
+        consultar_inventario_tabla,
+        listar_marcas_catalogo,
+        parse_inventario_filtros,
+        preparar_filas_inventario_presentacion,
+    )
+
+    filtros = parse_inventario_filtros(
+        request.GET,
+        marcas_getlist=request.GET.getlist("marcas_incluidos"),
+    )
+    resultado = consultar_inventario_tabla(base_empresa, filtros)
+    filas = preparar_filas_inventario_presentacion(
+        resultado.get("filas") or [],
+        filtros.presentacion,
+        base_empresa=base_empresa,
+    )
+    page = resultado.get("page", 1)
+    total_pages = resultado.get("total_pages", 0)
+
+    context = {
+        "base_empresa": base_empresa,
+        "filas": filas,
+        "etapas_columnas": ETAPAS_INVENTARIO,
+        "filtros": filtros,
+        "marcas_catalogo": listar_marcas_catalogo(base_empresa),
+        "total_registros": resultado.get("total_registros", 0),
+        "page": page,
+        "page_size": resultado.get("page_size", 150),
+        "total_pages": total_pages,
+        "sin_config_mpr": resultado.get("sin_config_mpr", False),
+        "modo_presentacion": filtros.presentacion,
+        "pagination_prev_qs": build_inventario_query_string(filtros, page=page - 1) if page > 1 else "",
+        "pagination_next_qs": build_inventario_query_string(filtros, page=page + 1) if page < total_pages else "",
+        "limpiar_qs": build_inventario_query_string(filtros, clear_search=True, page=1),
+    }
+    return render(request, "stock/inventario.html", context)
 
 
 @tiene_permiso("stock.consultas")

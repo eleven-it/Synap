@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'factura_compra_captura',  # Expediente captura/workflow factura compra (PostgreSQL)
     'legacy_db',  # Capa escritura compatible VB6 (tablas MySQL administraNET)
     'mpr',  # MPR - Manufacturing / Producción (plan ANALISIS_MPR_PROPUESTA_MVP)
+    'odoo_migracion',  # Migración/sincronización AdministraNET → Odoo 19
     'ecom',  # Migración administraNET-ecom (mayorista B2B / relays PHP)
     'tiendanube_administranet',  # Integración Tienda Nube ↔ AdministraNET (MySQL vía pool Synap)
     # Módulos eliminados para instalación mínima de Reportes

@@ -18,9 +18,9 @@ class StockURLTests(TestCase):
         url = reverse("stock:ref_movstock_list")
         self.assertEqual(url, "/stock/referencias/")
 
-    def test_consulta_ficha_stock_url_resolves(self):
-        url = reverse("stock:consulta_ficha_stock")
-        self.assertEqual(url, "/stock/consulta-ficha/")
+    def test_inventario_url_resolves(self):
+        url = reverse("stock:inventario")
+        self.assertEqual(url, "/stock/inventario/")
 
     def test_movimiento_pdf_url_resolves(self):
         url = reverse("stock:movimiento_pdf", kwargs={"codigo_movimiento": 1})

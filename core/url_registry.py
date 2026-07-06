@@ -20,6 +20,7 @@ SKIP_MODULES_IN_MAIN_URLS = frozenset(
         "tiendanube_administranet",
         "mpr",
         "ecom",
+        "odoo_migracion",
     )
 )
 

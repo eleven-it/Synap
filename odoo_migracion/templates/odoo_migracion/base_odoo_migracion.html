@@ -1,0 +1,13 @@
+{% extends "base_app.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Migración Odoo" %}{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-6 transition-colors duration-300 dark:bg-gray-900 sm:py-8">
+  {% include "odoo_migracion/includes/subnav.html" %}
+  <div class="odoo-mig-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+    {% block odoo_migracion_content %}{% endblock %}
+  </div>
+</section>
+{% endblock %}

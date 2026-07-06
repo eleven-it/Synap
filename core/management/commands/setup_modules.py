@@ -59,6 +59,11 @@ class Command(BaseCommand):
             help='Initialize default module configuration'
         )
         parser.add_argument(
+            '--sync',
+            action='store_true',
+            help='Sincronizar MODULE_CONFIGS con ModuleConfig (altas/metadatos, sin borrar)',
+        )
+        parser.add_argument(
             '--menus',
             action='store_true',
             help='Show menu information for modules'
@@ -145,6 +150,9 @@ class Command(BaseCommand):
         
         if options['init']:
             self.init_modules()
+
+        if options['sync']:
+            self.sync_modules()
         
         if options['activate']:
             self.activate_modules(options['activate'])
@@ -186,7 +194,7 @@ class Command(BaseCommand):
             self.test_hooks()
         
         # Si no se especificó ninguna opción, mostrar ayuda
-        if not any([options['reset'], options['init'], options['activate'], 
+        if not any([options['reset'], options['init'], options['sync'], options['activate'], 
                    options['deactivate'], options['list'], options['info'], 
                    options['validate'], options['menus'], options['validate_menus'],
                    options['reload_menus'], options['hooks'], options['validate_hooks'],
@@ -264,6 +272,20 @@ class Command(BaseCommand):
         
         self.stdout.write(
             self.style.SUCCESS('Default module configuration initialized successfully')
+        )
+
+    def sync_modules(self):
+        """Sincroniza el registro de código con filas ModuleConfig en PostgreSQL."""
+        self.stdout.write('Sincronizando MODULE_CONFIGS → ModuleConfig...')
+        created, updated = module_manager.sync_registry_to_db()
+        menu_manager.reload_module_menus()
+        hook_manager.reload_hooks()
+        hook_registry.reload_registry()
+        event_listener_manager.reload_listeners()
+        self.stdout.write(
+            self.style.SUCCESS(
+                f'Sincronización OK: {created} módulo(s) nuevo(s), {updated} actualizado(s).'
+            )
         )
     
     def activate_modules(self, modules):

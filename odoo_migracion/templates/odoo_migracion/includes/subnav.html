@@ -1,0 +1,42 @@
+{% load i18n %}
+<nav class="border-b border-gray-100 bg-white dark:border-gray-800 dark:bg-gray-950 print:hidden" aria-label="{% trans 'Navegación migración Odoo' %}">
+  <div class="odoo-mig-contenedor-pagina flex flex-wrap items-center gap-1 overflow-x-auto py-1.5">
+    {% with current=request.resolver_match.url_name %}
+    <a href="{% url 'odoo_migracion:dashboard' %}"
+       class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors {% if current == 'dashboard' %}bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200{% else %}text-gray-600 hover:bg-violet-50 hover:text-violet-700 dark:text-gray-400 dark:hover:bg-violet-900/20 dark:hover:text-violet-300{% endif %}">
+      <span class="material-icons text-sm" aria-hidden="true">dashboard</span>
+      {% trans "Panel" %}
+    </a>
+    <a href="{% url 'odoo_migracion:discovery' %}"
+       class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors {% if current == 'discovery' %}bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200{% else %}text-gray-600 hover:bg-violet-50 hover:text-violet-700 dark:text-gray-400 dark:hover:bg-violet-900/20 dark:hover:text-violet-300{% endif %}">
+      <span class="material-icons text-sm" aria-hidden="true">inventory_2</span>
+      {% trans "Inventario F0" %}
+    </a>
+    <a href="{% url 'odoo_migracion:wizard' %}"
+       class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors {% if current == 'wizard' %}bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200{% else %}text-gray-600 hover:bg-violet-50 hover:text-violet-700 dark:text-gray-400 dark:hover:bg-violet-900/20 dark:hover:text-violet-300{% endif %}">
+      <span class="material-icons text-sm" aria-hidden="true">play_circle</span>
+      {% trans "Ejecutar migración" %}
+    </a>
+    <a href="{% url 'odoo_migracion:job_list' %}"
+       class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors {% if current == 'job_list' %}bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200{% else %}text-gray-600 hover:bg-violet-50 hover:text-violet-700 dark:text-gray-400 dark:hover:bg-violet-900/20 dark:hover:text-violet-300{% endif %}">
+      <span class="material-icons text-sm" aria-hidden="true">sync</span>
+      {% trans "Jobs" %}
+    </a>
+    <a href="{% url 'odoo_migracion:validacion' %}"
+       class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors {% if current == 'validacion' %}bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200{% else %}text-gray-600 hover:bg-violet-50 hover:text-violet-700 dark:text-gray-400 dark:hover:bg-violet-900/20 dark:hover:text-violet-300{% endif %}">
+      <span class="material-icons text-sm" aria-hidden="true">fact_check</span>
+      {% trans "Cuadre" %}
+    </a>
+    <a href="{% url 'odoo_migracion:mapping_list' %}"
+       class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors {% if current == 'mapping_list' %}bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200{% else %}text-gray-600 hover:bg-violet-50 hover:text-violet-700 dark:text-gray-400 dark:hover:bg-violet-900/20 dark:hover:text-violet-300{% endif %}">
+      <span class="material-icons text-sm" aria-hidden="true">compare_arrows</span>
+      {% trans "Mapeos" %}
+    </a>
+    <a href="{% url 'odoo_migracion:conexion_list' %}"
+       class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors {% if current == 'conexion_list' or current == 'conexion_create' or current == 'conexion_edit' %}bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-200{% else %}text-gray-600 hover:bg-violet-50 hover:text-violet-700 dark:text-gray-400 dark:hover:bg-violet-900/20 dark:hover:text-violet-300{% endif %}">
+      <span class="material-icons text-sm" aria-hidden="true">link</span>
+      {% trans "Conexiones" %}
+    </a>
+    {% endwith %}
+  </div>
+</nav>

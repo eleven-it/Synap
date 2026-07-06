@@ -1,0 +1,58 @@
+{% extends "odoo_migracion/base_odoo_migracion.html" %}
+{% load i18n %}
+
+{% block odoo_migracion_content %}
+{% url 'odoo_migracion:conexion_create' as create_url %}
+{% with hero_title=_("Conexiones Odoo") hero_subtitle=_("Destino JSON-2 y credenciales API") hero_action_url=create_url hero_action_label=_("Nueva conexión") %}
+{% include "odoo_migracion/includes/hero.html" %}
+{% endwith %}
+
+<div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+  <table class="min-w-full text-sm">
+    <thead class="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:bg-gray-900">
+      <tr>
+        <th class="px-4 py-3">{% trans "Nombre" %}</th>
+        <th class="px-4 py-3">{% trans "Base empresa" %}</th>
+        <th class="px-4 py-3">{% trans "URL" %}</th>
+        <th class="px-4 py-3">{% trans "Estado" %}</th>
+        <th class="px-4 py-3">{% trans "API key" %}</th>
+        <th class="px-4 py-3">{% trans "Vence" %}</th>
+        <th class="px-4 py-3">{% trans "Acciones" %}</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+      {% for c in conexiones %}
+      <tr class="hover:bg-gray-50/80 dark:hover:bg-gray-900/40">
+        <td class="px-4 py-3 font-medium text-gray-900 dark:text-white">{{ c.nombre }}</td>
+        <td class="px-4 py-3 font-mono text-xs">{{ c.base_empresa }}</td>
+        <td class="px-4 py-3 max-w-[200px] truncate text-gray-600" title="{{ c.base_url }}">{{ c.base_url }}</td>
+        <td class="px-4 py-3">
+          {% if c.activo %}
+          <span class="inline-flex items-center gap-1 text-emerald-600 text-xs font-medium"><span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>{% trans "Activa" %}</span>
+          {% else %}
+          <span class="text-gray-400 text-xs">{% trans "Inactiva" %}</span>
+          {% endif %}
+          {% if c.last_test_ok_at %}
+          <span class="block text-xs text-emerald-600 mt-0.5">{% trans "Probada" %} {{ c.last_test_ok_at|date:"d/m/Y H:i" }}</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ c.api_key_masked|default:"—" }}</td>
+        <td class="px-4 py-3 {% if c.api_key_proxima_a_vencer %}text-amber-600 font-medium{% endif %}">
+          {% if c.api_key_expires_at %}{{ c.api_key_expires_at|date:"d/m/Y" }}{% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3">
+          <div class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+            <a href="{% url 'odoo_migracion:conexion_edit' c.pk %}" class="font-medium text-violet-600 hover:underline">{% trans "Editar" %}</a>
+            <form method="post" action="{% url 'odoo_migracion:conexion_test' c.pk %}" class="inline">{% csrf_token %}<button type="submit" class="text-gray-600 hover:underline">{% trans "Probar" %}</button></form>
+            <form method="post" action="{% url 'odoo_migracion:conexion_rotate_key' c.pk %}" class="inline" onsubmit="return confirm('{% trans "¿Rotar API key en Odoo?" %}');">{% csrf_token %}<button type="submit" class="text-amber-700 hover:underline">{% trans "Rotar" %}</button></form>
+            <a href="{% url 'odoo_migracion:dashboard' %}?conexion_id={{ c.pk }}" class="text-sky-600 hover:underline">{% trans "Panel" %}</a>
+          </div>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="px-4 py-10 text-center text-gray-500">{% trans "Sin conexiones." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
