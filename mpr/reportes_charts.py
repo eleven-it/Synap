@@ -147,7 +147,7 @@ def _chart_cadena(
 
     top_gap = sorted(
         filas,
-        key=lambda x: (-int(x.get("gap_envio_parte") or 0), str(x.get("codigo_articulo") or "")),
+        key=lambda x: (-int(x.get("gap_envio_parte") or 0), str(x.get("codigo_manual") or x.get("codigo_articulo") or "")),
     )[:MAX_CADENA_GAP]
     top_gap = [f for f in top_gap if int(f.get("gap_envio_parte") or 0) > 0]
     if top_gap:
@@ -156,7 +156,7 @@ def _chart_cadena(
             "kind": "hbar_grouped",
             "title": "Mayor brecha envío → parte",
             "subtitle": f"Top {len(top_gap)} componentes con gap (detalle en tabla)",
-            "labels": [_trunc_label(f.get("codigo_articulo") or "-", 20) for f in top_gap],
+            "labels": [_trunc_label(f.get("codigo_manual") or f.get("codigo_articulo") or "-", 20) for f in top_gap],
             "datasets": [
                 {
                     "label": "Enviado",

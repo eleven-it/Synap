@@ -8,7 +8,7 @@
         </tr></thead>
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             {% for r in filas %}
-            <tr><td class="px-4 py-3 text-sm font-medium">{{ r.codigo_articulo }}</td><td class="px-4 py-3 text-sm">{{ r.descripcion_articulo }}</td><td class="px-4 py-3 text-right tabular-nums">{{ r.saldo_total_display|default:r.saldo_total }}</td><td class="px-4 py-3 text-right tabular-nums text-red-600">{{ r.stock_minimo_display|default:r.stock_minimo }}</td></tr>
+            <tr><td class="px-4 py-3 text-sm font-medium">{{ r.codigo_manual|default:"-" }}</td><td class="px-4 py-3 text-sm">{{ r.descripcion_articulo }}</td><td class="px-4 py-3 text-right tabular-nums">{{ r.saldo_total_display|default:r.saldo_total }}</td><td class="px-4 py-3 text-right tabular-nums text-red-600">{{ r.stock_minimo_display|default:r.stock_minimo }}</td></tr>
             {% empty %}<tr><td colspan="4" class="px-4 py-8 text-center text-gray-500">Sin artículos bajo mínimo.</td></tr>{% endfor %}
         </tbody>
     </table>

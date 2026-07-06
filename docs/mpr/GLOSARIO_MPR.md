@@ -4,6 +4,8 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 
 **Identificación pack / componente en datos:** ver [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md).
 
+**Código visible en pantallas MPR:** en tablas, selectores, reportes y mensajes al usuario se muestra **`articulo.id_manual`** (campo de contexto `codigo_manual`), normalizado con `str_codigo_manual_articulo`. No se usa `CodigoArticulo` ni `CodigoArticuloT` como sustituto cuando `id_manual` está vacío (variantes pueden compartir el mismo talón). Si no hay código manual, la UI muestra `-`.
+
 ---
 
 ## Pack y componente (datos)

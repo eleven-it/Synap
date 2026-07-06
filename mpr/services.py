@@ -206,7 +206,9 @@ def bulk_cantidad_promedio_bulto(
 
 
 def _etiqueta_linea_opt(linea: Dict[str, Any]) -> str:
-    cod = (linea.get("codigo_manual") or linea.get("codigo_articulo") or "").strip()
+    cod = str_codigo_manual_articulo(linea.get("codigo_manual") or linea.get("id_manual"))
+    if cod == "-":
+        cod = ""
     desc = (linea.get("descripcion_articulo") or "").strip()
     if cod and desc:
         return f"{cod} {desc}"[:80]
@@ -681,6 +683,70 @@ def _incrementar_cantidad_fabricada_acumulada_agrupada(
 # ---------------------------------------------------------------------------
 # Helpers bulk: evitar N+1 al consultar BOM, artículos armados, id_en_abm
 # ---------------------------------------------------------------------------
+
+def bulk_codigo_manual_articulo(
+    base_empresa: str,
+    ids_articulo: List[int],
+) -> Dict[int, str]:
+    """Devuelve {id_articulo: id_manual normalizado} para etiquetas en UI MPR."""
+    ids = sorted({x for x in (to_int_or_none(i) for i in (ids_articulo or [])) if x is not None})
+    if not ids or not (base_empresa or "").strip():
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl:
+                return {}
+            ph = ",".join(["%s"] * len(ids))
+            cursor.execute(
+                f"""
+                SELECT IDArt AS id_articulo, COALESCE(id_manual, '') AS codigo_manual
+                FROM {tbl}
+                WHERE IDArt IN ({ph})
+                """,
+                ids,
+            )
+            return {
+                to_int_or_none(r.get("id_articulo")): str_codigo_manual_articulo(r.get("codigo_manual"))
+                for r in (cursor.fetchall() or [])
+                if to_int_or_none(r.get("id_articulo")) is not None
+            }
+    except Exception as e:
+        logger.warning("bulk_codigo_manual_articulo error: %s", e)
+        return {}
+
+
+def enriquecer_codigo_manual_en_filas(
+    base_empresa: str,
+    filas: List[Dict[str, Any]],
+    *,
+    campo_id: str = "id_articulo",
+) -> List[Dict[str, Any]]:
+    """Asegura ``codigo_manual`` (articulo.id_manual) en filas de UI cuando falta."""
+    if not filas or not (base_empresa or "").strip():
+        return filas
+    faltantes: List[int] = []
+    for fila in filas:
+        if not isinstance(fila, dict):
+            continue
+        aid = to_int_or_none(fila.get(campo_id))
+        if aid is None:
+            continue
+        if str_or_default(fila.get("codigo_manual"), "") in ("", "-"):
+            faltantes.append(aid)
+    if not faltantes:
+        return filas
+    cmap = bulk_codigo_manual_articulo(base_empresa, faltantes)
+    for fila in filas:
+        if not isinstance(fila, dict):
+            continue
+        aid = to_int_or_none(fila.get(campo_id))
+        if aid is None:
+            continue
+        if str_or_default(fila.get("codigo_manual"), "") in ("", "-"):
+            fila["codigo_manual"] = cmap.get(aid, "-")
+    return filas
+
 
 def bulk_id_en_abm(
     base_empresa: str,
@@ -5875,6 +5941,7 @@ def get_bom_detalle(
                 cursor.execute(
                     f"""
                     SELECT f.id_en_abm_formula, f.id_articulo, f.cantidad_articulo, COALESCE(f.tipo_unidad, '') AS tipo_unidad,
+                           COALESCE(a.id_manual, '') AS codigo_manual,
                            COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                            COALESCE(a.NombreArticulo, '') AS descripcion_articulo
                     FROM {tbl_formula} f
@@ -5888,6 +5955,7 @@ def get_bom_detalle(
                     componentes.append({
                         "id_en_abm_formula": to_int_or_none(r.get("id_en_abm_formula")),
                         "id_articulo": to_int_or_none(r.get("id_articulo")),
+                        "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
                         "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
                         "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
                         "cantidad_articulo": float(r.get("cantidad_articulo") or 0),
@@ -5943,6 +6011,7 @@ def get_articulo_armado_por_bom(base_empresa: str, id_en_abm: int) -> Optional[D
             cursor.execute(
                 f"""
                 SELECT a.IDArt AS id_articulo,
+                       COALESCE(a.id_manual, '') AS codigo_manual,
                        COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                        COALESCE(a.NombreArticulo, '') AS descripcion_articulo
                 FROM {tbl_articulo} a
@@ -5956,6 +6025,7 @@ def get_articulo_armado_por_bom(base_empresa: str, id_en_abm: int) -> Optional[D
                 return None
             return {
                 "id_articulo": to_int_or_none(row.get("id_articulo")),
+                "codigo_manual": str_codigo_manual_articulo(row.get("codigo_manual")),
                 "codigo_articulo": str_or_default(row.get("codigo_articulo"), "-"),
                 "descripcion_articulo": str_or_default(row.get("descripcion_articulo"), "-"),
             }
@@ -7556,10 +7626,11 @@ def listar_articulos_para_op(
             cursor.execute(
                 f"""
                 SELECT a.IDArt AS id_articulo,
+                       COALESCE(a.id_manual, '') AS codigo_manual,
                        COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                        COALESCE(a.NombreArticulo, '') AS descripcion_articulo
                 FROM {tbl_articulo} a
-                ORDER BY a.CodigoArticuloT, a.IDArt
+                ORDER BY COALESCE(NULLIF(TRIM(a.id_manual), ''), a.CodigoArticuloT), a.IDArt
                 LIMIT %s
                 """,
                 [limit],
@@ -7568,6 +7639,7 @@ def listar_articulos_para_op(
         return [
             {
                 "id_articulo": to_int_or_none(r.get("id_articulo")),
+                "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
                 "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
                 "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
             }
@@ -10253,10 +10325,11 @@ def listar_packs_armado_catalogo(
     filtro_busqueda = ""
     if q and not id_filtro:
         like = f"%{q}%"
-        like_params = [like, like, like]
+        like_params = [like, like, like, like]
         filtro_busqueda = """
           AND (
-                COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') LIKE %s
+                COALESCE(a.id_manual, '') LIKE %s
+             OR COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') LIKE %s
              OR COALESCE(a.NombreArticulo, '') LIKE %s
              OR CAST(a.IDArt AS CHAR) LIKE %s
           )
@@ -10280,6 +10353,7 @@ def listar_packs_armado_catalogo(
                 cursor.execute(
                     f"""
                     SELECT a.IDArt AS id_articulo,
+                           COALESCE(a.id_manual, '') AS codigo_manual,
                            COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                            COALESCE(a.NombreArticulo, '') AS descripcion_articulo{bulto_sql}
                     FROM {tbl} a
@@ -10308,6 +10382,7 @@ def listar_packs_armado_catalogo(
                 cursor.execute(
                     f"""
                     SELECT DISTINCT a.IDArt AS id_articulo,
+                           COALESCE(a.id_manual, '') AS codigo_manual,
                            COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                            COALESCE(a.NombreArticulo, '') AS descripcion_articulo{bulto_sql}
                     FROM {tbl_art} a
@@ -10337,6 +10412,7 @@ def listar_packs_armado_catalogo(
                 bulto = 0.0
             out.append({
                 "id_articulo": id_a,
+                "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
                 "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
                 "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
                 "cantidad_promedio_bulto": bulto if bulto > 0 else 12,
@@ -10380,6 +10456,7 @@ def lineas_bom_pack_1ra(base_empresa: str, id_articulo_pack: int) -> List[Dict[s
             lineas.append({
                 "id_articulo": id_c,
                 "cantidad_por_pack": qty,
+                "codigo_manual": str_codigo_manual_articulo(comp.get("codigo_manual") or comp.get("id_manual")),
                 "codigo_articulo": str_or_default(comp.get("codigo_articulo"), "-"),
                 "descripcion_articulo": str_or_default(comp.get("descripcion_articulo"), "-"),
             })
@@ -10548,14 +10625,15 @@ def listar_articulos_stock_deposito(
             if busqueda and (busqueda or "").strip():
                 q = f"%{(busqueda or '').strip()}%"
                 filtro_q = (
-                    " AND (a.CodigoArticuloT LIKE %s OR CAST(a.CodigoArticulo AS CHAR) LIKE %s "
+                    " AND (COALESCE(a.id_manual, '') LIKE %s OR a.CodigoArticuloT LIKE %s OR CAST(a.CodigoArticulo AS CHAR) LIKE %s "
                     "OR a.NombreArticulo LIKE %s)"
                 )
-                params.extend([q, q, q])
+                params.extend([q, q, q, q])
             params.append(lim)
             cursor.execute(
                 f"""
                 SELECT a.IDArt AS id_articulo,
+                       COALESCE(a.id_manual, '') AS codigo_manual,
                        COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                        COALESCE(a.NombreArticulo, '') AS descripcion_articulo,
                        sd.saldo AS saldo
@@ -10572,6 +10650,7 @@ def listar_articulos_stock_deposito(
         return [
             {
                 "id_articulo": to_int_or_none(r.get("id_articulo")),
+                "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
                 "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
                 "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
                 "saldo": float(r.get("saldo") or 0),
@@ -10606,6 +10685,7 @@ def _fetch_articulos_map(cursor, tbl_articulo: str, ids: List[int]) -> Dict[int,
     cursor.execute(
         f"""
         SELECT IDArt,
+               COALESCE(id_manual, '') AS codigo_manual,
                COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo,
                COALESCE(NombreArticulo, '') AS nombre,
                {precio_sel} AS precio_costo
@@ -10621,6 +10701,7 @@ def _fetch_articulos_map(cursor, tbl_articulo: str, ids: List[int]) -> Dict[int,
             if not id_a:
                 continue
             out[int(id_a)] = {
+                "codigo_manual": str_codigo_manual_articulo(row.get("codigo_manual")),
                 "codigo_articulo": str_or_default(row.get("codigo"), "-"),
                 "descripcion_articulo": str_or_default(row.get("nombre"), "-"),
                 "precio_costo": to_decimal_or_none(row.get("precio_costo")) or Decimal(0),
@@ -10628,9 +10709,10 @@ def _fetch_articulos_map(cursor, tbl_articulo: str, ids: List[int]) -> Dict[int,
         else:
             id_a = int(row[0])
             out[id_a] = {
-                "codigo_articulo": str_or_default(row[1], "-"),
-                "descripcion_articulo": str_or_default(row[2], "-"),
-                "precio_costo": to_decimal_or_none(row[3]) or Decimal(0),
+                "codigo_manual": str_codigo_manual_articulo(row[1] if len(row) > 1 else None),
+                "codigo_articulo": str_or_default(row[2], "-"),
+                "descripcion_articulo": str_or_default(row[3], "-"),
+                "precio_costo": to_decimal_or_none(row[4]) or Decimal(0),
             }
     return out
 
@@ -13075,6 +13157,7 @@ def reporte_mpr_cadena_pipeline(
         max_bar = max(enviado, parte, clasificado, 1)
         filas.append({
             "id_articulo": aid,
+            "codigo_manual": codigo,
             "codigo_articulo": codigo,
             "descripcion_articulo": descripcion,
             "enviado": enviado,
@@ -13364,6 +13447,7 @@ def reporte_mpr_stock(base_empresa: str, limit: int = 500) -> List[Dict[str, Any
             join_dep = f"LEFT JOIN {tbl_dep} d ON d.CodDeposito = sd.id_deposito" if tbl_dep else ""
             sql = f"""
                 SELECT sd.id_articulo, sd.id_deposito, COALESCE(sd.saldo, 0) AS saldo,
+                       COALESCE(a.id_manual, '') AS codigo_manual,
                        COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                        COALESCE(a.NombreArticulo, '') AS descripcion_articulo,
                        COALESCE(d.NombreDeposito, '') AS nombre_deposito,
@@ -13372,7 +13456,7 @@ def reporte_mpr_stock(base_empresa: str, limit: int = 500) -> List[Dict[str, Any
                 INNER JOIN {tbl_art} a ON a.IDArt = sd.id_articulo
                 {join_dep}
                 WHERE COALESCE(sd.saldo, 0) != 0
-                ORDER BY a.CodigoArticuloT, sd.id_deposito
+                ORDER BY COALESCE(NULLIF(TRIM(a.id_manual), ''), a.CodigoArticuloT), sd.id_deposito
                 LIMIT %s
             """
             cursor.execute(sql, [limit])
@@ -13381,6 +13465,7 @@ def reporte_mpr_stock(base_empresa: str, limit: int = 500) -> List[Dict[str, Any
             {
                 "id_articulo": to_int_or_none(r.get("id_articulo")),
                 "id_deposito": to_int_or_none(r.get("id_deposito")),
+                "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
                 "codigo_articulo": str_or_default(r.get("codigo_articulo"), "-"),
                 "descripcion_articulo": str_or_default(r.get("descripcion_articulo"), "-"),
                 "saldo": float(r.get("saldo") or 0),
@@ -13451,7 +13536,7 @@ def reporte_mpr_bajo_minimo(base_empresa: str, limit: int = 200) -> List[Dict[st
             if not minimos:
                 return []
             cursor.execute(
-                f"SELECT IDArt, COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo_articulo, COALESCE(NombreArticulo, '') AS descripcion_articulo FROM {tbl_art} WHERE IDArt IN (%s)"
+                f"SELECT IDArt, COALESCE(id_manual, '') AS codigo_manual, COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo_articulo, COALESCE(NombreArticulo, '') AS descripcion_articulo FROM {tbl_art} WHERE IDArt IN (%s)"
                 % ",".join(["%s"] * len(minimos)),
                 list(minimos.keys()),
             )
@@ -13463,6 +13548,7 @@ def reporte_mpr_bajo_minimo(base_empresa: str, limit: int = 200) -> List[Dict[st
                 a = arts.get(id_art) or {}
                 result.append({
                     "id_articulo": id_art,
+                    "codigo_manual": str_codigo_manual_articulo(a.get("codigo_manual")),
                     "codigo_articulo": str_or_default(a.get("codigo_articulo"), "-"),
                     "descripcion_articulo": str_or_default(a.get("descripcion_articulo"), "-"),
                     "saldo_total": saldo,
@@ -13530,6 +13616,7 @@ def reporte_mpr_brecha_demanda(
             urgente_abs = float(r.get("cantidad_urgente_abs") or r.get("cantidad_urgente") or 0)
             result.append({
                 "id_articulo": aid,
+                "codigo_manual": codigo,
                 "codigo_articulo": codigo,
                 "descripcion_articulo": descripcion,
                 "demanda_pendiente": demanda,
@@ -13573,6 +13660,7 @@ def reporte_mpr_movimientos(
             "tipo_mov": ev.get("tipo_label") or "-",
             "tipo": ev.get("tipo"),
             "id_articulo": aid,
+            "codigo_manual": codigo,
             "codigo_articulo": codigo,
             "descripcion_articulo": descripcion,
             "cantidad": ev.get("cantidad") or 0,
@@ -13875,7 +13963,7 @@ def _fetch_descripciones_articulo(
             cursor.execute(
                 f"""
                 SELECT IDArt AS id_articulo,
-                       COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS id_manual,
+                       COALESCE(id_manual, '') AS codigo_manual,
                        COALESCE(NombreArticulo, '') AS descripcion
                 FROM {tbl}
                 WHERE IDArt IN ({ph})
@@ -13887,7 +13975,7 @@ def _fetch_descripciones_articulo(
                 aid = to_int_or_none(r.get("id_articulo"))
                 if aid is not None:
                     result[aid] = (
-                        str_or_default(r.get("id_manual"), "-"),
+                        str_codigo_manual_articulo(r.get("codigo_manual")),
                         str_or_default(r.get("descripcion"), "-"),
                     )
             return result
@@ -16028,7 +16116,7 @@ def construir_trazabilidad_opt(
             cabecera = {
                 "id_lista": id_lista,
                 "id_articulo": to_int_or_none(r0.get("id_articulo")),
-                "codigo_manual": str_or_default(r0.get("codigo_manual") or r0.get("codigo_articulo"), "-"),
+                "codigo_manual": str_codigo_manual_articulo(r0.get("codigo_manual") or r0.get("id_manual")),
                 "descripcion": str_or_default(r0.get("descripcion_articulo"), "-"),
                 "cantidad_pedida": to_int_or_none(r0.get("cantidad_pedida")) or 0,
                 "estado": "en_proceso" if (r0.get("en_proceso_produccion") or "No").strip().lower() == "si" else "cerrada",

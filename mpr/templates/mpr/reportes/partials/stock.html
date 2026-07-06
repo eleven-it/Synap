@@ -28,10 +28,10 @@
         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             {% for r in filas %}
             <tr class="mpr-reporte-fila-articulo transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-800/40"
-                data-descripcion="{{ r.codigo_articulo|lower }} {{ r.descripcion_articulo|lower }}"
+                data-descripcion="{{ r.codigo_manual|lower }} {{ r.descripcion_articulo|lower }}"
                 x-show="!busquedaTabla.trim() || $el.dataset.descripcion.includes(busquedaTabla.toLowerCase().trim())">
                 <td class="sticky left-0 z-10 bg-white px-4 py-3 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)] dark:bg-gray-900 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">
-                    <span class="block text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ r.codigo_articulo }}</span>
+                    <span class="block text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-100">{{ r.codigo_manual|default:"-" }}</span>
                     <span class="mt-0.5 block text-xs leading-snug text-gray-600 dark:text-gray-400">{{ r.descripcion_articulo }}</span>
                 </td>
                 {% for celda in r.depositos %}

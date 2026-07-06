@@ -339,7 +339,7 @@
                                                         :class="packHighlightIndex === pIdx
                                                             ? 'bg-purple-50 text-purple-900 dark:bg-purple-950/40 dark:text-purple-100'
                                                             : 'text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700/50'">
-                                                    <span class="font-medium tabular-nums" x-text="p.codigo_articulo"></span>
+                                                    <span class="font-medium tabular-nums" x-text="p.codigo_manual || '-'"></span>
                                                     <span class="truncate text-xs text-gray-500 dark:text-gray-400" x-text="p.descripcion_articulo"></span>
                                                 </button>
                                             </template>
@@ -429,7 +429,7 @@
                                                               x-show="estaCompSeleccionado(art.id_articulo) && !lineaYaEnComposicion(art.id_articulo)">check</span>
                                                     </span>
                                                     <span class="min-w-0 flex-1">
-                                                        <span class="font-medium" x-text="art.codigo_articulo"></span>
+                                                        <span class="font-medium" x-text="art.codigo_manual || '-'"></span>
                                                         <span> — </span>
                                                         <span x-text="art.descripcion_articulo"></span>
                                                     </span>
@@ -470,7 +470,7 @@
                                             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                                                 <template x-for="(ln, idx) in lineas" :key="ln.id_articulo">
                                                     <tr>
-                                                        <td class="truncate px-2 py-2 tabular-nums text-gray-700 dark:text-gray-300 sm:px-3" x-text="ln.codigo_articulo"></td>
+                                                        <td class="truncate px-2 py-2 tabular-nums text-gray-700 dark:text-gray-300 sm:px-3" x-text="ln.codigo_manual || '-'"></td>
                                                         <td class="truncate px-2 py-2 text-gray-900 dark:text-white sm:px-3" x-text="ln.descripcion_articulo" :title="ln.descripcion_articulo"></td>
                                                         <td class="whitespace-nowrap px-2 py-2 text-right tabular-nums text-gray-600 dark:text-gray-400 sm:px-3" x-text="ln.saldo"></td>
                                                         <td class="px-2 py-2 text-right sm:px-3">
@@ -565,7 +565,7 @@
                                                 <div class="flex items-start justify-between gap-2">
                                                     <div class="min-w-0">
                                                         <p class="truncate text-sm font-semibold tabular-nums text-gray-900 dark:text-white"
-                                                           x-text="item.codigo_articulo_pack || item.id_articulo_pack"></p>
+                                                           x-text="item.codigo_manual_pack || item.codigo_articulo_pack || item.id_articulo_pack"></p>
                                                         <p class="truncate text-xs text-gray-500 dark:text-gray-400"
                                                            x-text="item.descripcion_articulo_pack || ''"></p>
                                                     </div>
@@ -588,7 +588,7 @@
                                                 <ul x-show="carritoExpandidoUid === item._uid" x-cloak class="mt-2 space-y-1 border-t border-gray-100 pt-2 dark:border-gray-700">
                                                     <template x-for="ln in (item.lineas || [])" :key="ln.id_articulo">
                                                         <li class="flex justify-between gap-2 text-xs text-gray-600 dark:text-gray-400">
-                                                            <span class="truncate"><span class="font-medium tabular-nums" x-text="ln.codigo_articulo"></span> — <span x-text="ln.descripcion_articulo"></span></span>
+                                                            <span class="truncate"><span class="font-medium tabular-nums" x-text="ln.codigo_manual || '-'"></span> — <span x-text="ln.descripcion_articulo"></span></span>
                                                             <span class="shrink-0 tabular-nums"><span x-text="ln.cantidad_por_pack"></span>/pack</span>
                                                         </li>
                                                     </template>
@@ -638,7 +638,7 @@
                                         <template x-for="row in resumenConsumo" :key="row.id_articulo">
                                             <tr :class="row.insuficiente ? 'text-red-700 dark:text-red-300' : 'text-gray-700 dark:text-gray-300'">
                                                 <td class="py-1 pr-2">
-                                                    <span class="font-medium" x-text="row.descripcion_articulo || row.codigo_articulo"></span>
+                                                    <span class="font-medium" x-text="row.descripcion_articulo || row.codigo_manual || '-'"></span>
                                                 </td>
                                                 <td class="py-1 text-right tabular-nums font-medium" x-text="row.total"></td>
                                                 <td class="py-1 text-right tabular-nums" x-text="row.saldo != null ? row.saldo : '—'"></td>
@@ -714,14 +714,16 @@ function armadoSurtidoForm() {
             return {
                 _uid: nextUid(),
                 id_articulo_pack: parseInt(item.id_articulo_pack, 10),
-                codigo_articulo_pack: item.codigo_articulo_pack || meta.codigo_articulo,
+                codigo_manual_pack: item.codigo_manual_pack || item.codigo_articulo_pack || meta.codigo_manual || meta.codigo_articulo,
+                codigo_articulo_pack: item.codigo_manual_pack || item.codigo_articulo_pack || meta.codigo_manual || meta.codigo_articulo,
                 descripcion_articulo_pack: item.descripcion_articulo_pack || meta.descripcion_articulo,
                 cantidad_packs: parseInt(item.cantidad_packs, 10) || 1,
                 lineas: (item.lineas || []).map(function (ln) {
                     return {
                         id_articulo: parseInt(ln.id_articulo, 10),
                         cantidad_por_pack: parseInt(ln.cantidad_por_pack, 10) || 1,
-                        codigo_articulo: ln.codigo_articulo || String(ln.id_articulo),
+                        codigo_manual: ln.codigo_manual || ln.codigo_articulo || String(ln.id_articulo),
+                        codigo_articulo: ln.codigo_manual || ln.codigo_articulo || String(ln.id_articulo),
                         descripcion_articulo: ln.descripcion_articulo || '',
                         saldo: ln.saldo != null ? ln.saldo : null,
                     };
@@ -740,7 +742,7 @@ function armadoSurtidoForm() {
         if (packsCatalogCache[key]) {
             return packsCatalogCache[key];
         }
-        return { id_articulo: id, codigo_articulo: String(id), descripcion_articulo: '' };
+        return { id_articulo: id, codigo_manual: String(id), codigo_articulo: String(id), descripcion_articulo: '' };
     }
 
     function depositoPorCodigo(cod) {
@@ -1320,7 +1322,7 @@ function armadoSurtidoForm() {
 
         mensajeDesdeConflicto: function (c) {
             var msg = (c && c.mensaje) ? c.mensaje : 'Stock insuficiente para agregar al lote.';
-            var cod = c && c.codigo_articulo;
+            var cod = (c && (c.codigo_manual || c.codigo_articulo));
             if (cod && cod !== '-' && c.necesario != null && c.disponible != null) {
                 msg += ' (' + cod + ': necesita ' + c.necesario + ', disponible ' + c.disponible + ' u.)';
             }
@@ -1349,7 +1351,7 @@ function armadoSurtidoForm() {
 
         packEtiqueta: function (p) {
             if (!p) return '';
-            var cod = p.codigo_articulo || String(p.id_articulo || '');
+            var cod = p.codigo_manual || p.codigo_articulo || String(p.id_articulo || '');
             var desc = p.descripcion_articulo || '';
             return desc ? (cod + ' — ' + desc) : cod;
         },
@@ -1489,7 +1491,8 @@ function armadoSurtidoForm() {
                             self.lineas = lineas.map(function (ln) {
                                 return {
                                     id_articulo: parseInt(ln.id_articulo, 10),
-                                    codigo_articulo: ln.codigo_articulo || String(ln.id_articulo),
+                                    codigo_manual: ln.codigo_manual || ln.codigo_articulo || String(ln.id_articulo),
+                        codigo_articulo: ln.codigo_manual || ln.codigo_articulo || String(ln.id_articulo),
                                     descripcion_articulo: ln.descripcion_articulo || '',
                                     cantidad_por_pack: parseInt(ln.cantidad_por_pack, 10) || 1,
                                     saldo: saldos[ln.id_articulo] != null ? saldos[ln.id_articulo] : '—',
@@ -1626,7 +1629,8 @@ function armadoSurtidoForm() {
             this.saldosCache[art.id_articulo] = saldo;
             this.lineas.push({
                 id_articulo: art.id_articulo,
-                codigo_articulo: art.codigo_articulo,
+                codigo_manual: art.codigo_manual || art.codigo_articulo || '-',
+                codigo_articulo: art.codigo_manual || art.codigo_articulo || '-',
                 descripcion_articulo: art.descripcion_articulo,
                 saldo: saldo,
                 cantidad_por_pack: 1
@@ -1697,7 +1701,8 @@ function armadoSurtidoForm() {
                     demanda[id] = (demanda[id] || 0) + qty * packs;
                     if (!meta[id]) {
                         meta[id] = {
-                            codigo_articulo: ln.codigo_articulo || String(id),
+                            codigo_manual: ln.codigo_manual || ln.codigo_articulo || String(id),
+                            codigo_articulo: ln.codigo_manual || ln.codigo_articulo || String(id),
                             descripcion_articulo: ln.descripcion_articulo || '',
                         };
                     }
@@ -1749,7 +1754,7 @@ function armadoSurtidoForm() {
                     });
                 }
                 if (saldo != null && necesario > saldo) {
-                    var cod = (calc.meta[idArt] && calc.meta[idArt].codigo_articulo) || idArt;
+                    var cod = (calc.meta[idArt] && (calc.meta[idArt].codigo_manual || calc.meta[idArt].codigo_articulo)) || idArt;
                     return 'Stock insuficiente de ' + cod + ': necesita ' + necesario + ' u., disponible ' + saldo + ' u. en origen.';
                 }
             }
@@ -1859,14 +1864,16 @@ function armadoSurtidoForm() {
             var meta = packMeta(idPack);
             var candidato = {
                 id_articulo_pack: idPack,
-                codigo_articulo_pack: meta.codigo_articulo,
+                codigo_manual_pack: meta.codigo_manual || meta.codigo_articulo,
+                codigo_articulo_pack: meta.codigo_manual || meta.codigo_articulo,
                 descripcion_articulo_pack: meta.descripcion_articulo,
                 cantidad_packs: cantPacks,
                 lineas: this.lineas.map(function (ln) {
                     return {
                         id_articulo: ln.id_articulo,
                         cantidad_por_pack: ln.cantidad_por_pack || 1,
-                        codigo_articulo: ln.codigo_articulo,
+                        codigo_manual: ln.codigo_manual || ln.codigo_articulo,
+                        codigo_articulo: ln.codigo_manual || ln.codigo_articulo,
                         descripcion_articulo: ln.descripcion_articulo,
                         saldo: ln.saldo,
                     };
@@ -1966,7 +1973,8 @@ function armadoSurtidoForm() {
                 var m = calc.meta[idArt] || {};
                 rows.push({
                     id_articulo: parseInt(idArt, 10),
-                    codigo_articulo: m.codigo_articulo || idArt,
+                    codigo_manual: m.codigo_manual || m.codigo_articulo || idArt,
+                    codigo_articulo: m.codigo_manual || m.codigo_articulo || idArt,
                     descripcion_articulo: m.descripcion_articulo || '',
                     total: total,
                     saldo: saldo != null ? saldo : null,
@@ -1974,8 +1982,8 @@ function armadoSurtidoForm() {
                 });
             }
             rows.sort(function (a, b) {
-                var la = String(a.descripcion_articulo || a.codigo_articulo || '');
-                var lb = String(b.descripcion_articulo || b.codigo_articulo || '');
+                var la = String(a.descripcion_articulo || a.codigo_manual || a.codigo_articulo || '');
+                var lb = String(b.descripcion_articulo || b.codigo_manual || b.codigo_articulo || '');
                 return la.localeCompare(lb);
             });
             this.resumenConsumo = rows;

@@ -6,7 +6,20 @@ from datetime import date, datetime
 
 from django import template
 
+from core.utils.administranet_types import str_codigo_manual_articulo
+
 register = template.Library()
+
+
+@register.filter
+def codigo_mpr(value):
+    """
+    Código de artículo para UI MPR: articulo.id_manual (nunca CodigoArticuloT).
+    Acepta dict con codigo_manual/id_manual o valor escalar.
+    """
+    if isinstance(value, dict):
+        return str_codigo_manual_articulo(value.get("codigo_manual") or value.get("id_manual"))
+    return str_codigo_manual_articulo(value)
 
 
 @register.filter

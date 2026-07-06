@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
+from core.utils.administranet_types import str_or_default, str_codigo_manual_articulo, to_decimal_or_none, to_int_or_none
 
 from mpr.db import mysql_cursor
 
@@ -199,6 +199,7 @@ def listar_envios_por_fecha(
                 e.uuid_lote,
                 e.codigo_movimiento_mstock,
                 e.creado_en,
+                COALESCE(a.id_manual, '') AS codigo_manual,
                 COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                 COALESCE(a.NombreArticulo, '') AS descripcion_articulo
             FROM mpr_envio_produccion e
@@ -208,7 +209,13 @@ def listar_envios_por_fecha(
             """,
             params,
         )
-        return [dict(r) for r in (cursor.fetchall() or [])]
+        return [_normalizar_fila_envio(dict(r)) for r in (cursor.fetchall() or [])]
+
+
+def _normalizar_fila_envio(row: Dict[str, Any]) -> Dict[str, Any]:
+    d = dict(row)
+    d["codigo_manual"] = str_codigo_manual_articulo(d.get("codigo_manual"))
+    return d
 
 
 def agrupar_filas_en_lotes(filas: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -302,6 +309,7 @@ def listar_envios_recientes(
                 e.uuid_lote,
                 e.codigo_movimiento_mstock,
                 e.creado_en,
+                COALESCE(a.id_manual, '') AS codigo_manual,
                 COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo,
                 COALESCE(a.NombreArticulo, '') AS descripcion_articulo
             FROM mpr_envio_produccion e
@@ -312,7 +320,7 @@ def listar_envios_recientes(
             """,
             params,
         )
-        return [dict(r) for r in (cursor.fetchall() or [])]
+        return [_normalizar_fila_envio(dict(r)) for r in (cursor.fetchall() or [])]
 
 
 def obtener_envios_por_ids(
@@ -339,7 +347,7 @@ def obtener_envios_por_ids(
             """,
             ids,
         )
-        return [dict(r) for r in (cursor.fetchall() or [])]
+        return [_normalizar_fila_envio(dict(r)) for r in (cursor.fetchall() or [])]
 
 
 def anular_envios_por_ids(

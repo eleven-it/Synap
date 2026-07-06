@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Set
 
 from mpr.services import bulk_cantidad_promedio_bulto, descomponer_docenas_unidades, texto_docenas_unidades
+from core.utils.administranet_types import str_codigo_manual_articulo
 
 MODOS_PRESENTACION = frozenset({"unidades", "docenas"})
 DEFAULT_MODO_PRESENTACION = "unidades"
@@ -249,6 +250,7 @@ def preparar_stock_por_deposito(
         if aid_int not in articulos:
             articulos[aid_int] = {
                 "id_articulo": aid_int,
+                "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
                 "codigo_articulo": str(r.get("codigo_articulo") or "-"),
                 "descripcion_articulo": str(r.get("descripcion_articulo") or "-"),
                 "saldos": {},
@@ -275,7 +277,7 @@ def preparar_stock_por_deposito(
     filas_out: List[Dict[str, Any]] = []
     for aid_int in sorted(
         articulos.keys(),
-        key=lambda a: (articulos[a].get("codigo_articulo") or "", a),
+        key=lambda a: (articulos[a].get("codigo_manual") or "", a),
     ):
         art = articulos[aid_int]
         bulto = bulto_map.get(aid_int) if modo == "docenas" else None
@@ -287,7 +289,8 @@ def preparar_stock_por_deposito(
             )
         filas_out.append({
             "id_articulo": aid_int,
-            "codigo_articulo": art["codigo_articulo"],
+            "codigo_manual": art["codigo_manual"],
+            "codigo_articulo": art["codigo_manual"],
             "descripcion_articulo": art["descripcion_articulo"],
             "depositos": depositos_celdas,
         })

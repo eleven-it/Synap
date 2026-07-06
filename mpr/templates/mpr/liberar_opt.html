@@ -31,7 +31,7 @@
             <ul class="mt-4 divide-y divide-gray-200 text-sm dark:divide-gray-700">
                 {% for linea in lineas %}
                 <li class="flex justify-between gap-3 py-3">
-                    <span class="text-gray-700 dark:text-gray-300">{{ linea.codigo_articulo }} · {{ linea.descripcion_articulo|truncatewords:6 }}</span>
+                    <span class="text-gray-700 dark:text-gray-300">{{ linea.codigo_manual|default:"-" }} · {{ linea.descripcion_articulo|truncatewords:6 }}</span>
                     <span class="shrink-0 font-semibold text-amber-700 dark:text-amber-300">{{ linea.cantidad_pendiente_prod }} pend.</span>
                 </li>
                 {% endfor %}

@@ -44,7 +44,7 @@
                 </div>
             </div>
             {% if articulo_armado %}
-            <p class="mt-6 border-t border-gray-200 pt-6 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-300">Artículo armado: <strong>{{ articulo_armado.codigo_articulo }}</strong>{% if articulo_armado.descripcion_articulo != bom.cabecera.nombre_en_abm %} — {{ articulo_armado.descripcion_articulo }}{% endif %}</p>
+            <p class="mt-6 border-t border-gray-200 pt-6 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-300">Artículo armado: <strong>{{ articulo_armado.codigo_manual|default:"-" }}</strong>{% if articulo_armado.descripcion_articulo != bom.cabecera.nombre_en_abm %} — {{ articulo_armado.descripcion_articulo }}{% endif %}</p>
             {% else %}
             <p class="mt-6 border-t border-amber-200/80 pt-6 text-sm font-medium text-amber-800 dark:border-amber-900/40 dark:text-amber-200">Artículo armado: no asignado. Editá el conjunto para asignar uno.</p>
             {% endif %}
@@ -69,7 +69,7 @@
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         {% for comp in bom.componentes %}
                         <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40">
-                            <td class="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-5">{{ comp.codigo_articulo }}</td>
+                            <td class="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-5">{{ comp.codigo_manual|default:"-" }}</td>
                             <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">{{ comp.descripcion_articulo }}</td>
                             <td class="whitespace-nowrap px-4 py-3.5 text-right text-sm tabular-nums text-gray-800 dark:text-gray-200 sm:px-5">{{ comp.cantidad_articulo }}</td>
                             <td class="whitespace-nowrap px-4 py-3.5 text-sm text-gray-500 dark:text-gray-400 sm:px-5">{{ comp.tipo_unidad|default:"—" }}</td>
