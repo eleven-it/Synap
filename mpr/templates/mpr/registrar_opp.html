@@ -92,7 +92,7 @@
                             <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors" data-id-art="{{ comp.id_articulo }}" data-pendiente="{{ comp.max_distribuible_unidades|default:0 }}">
                                 <td class="px-4 py-3 text-right text-gray-700 dark:text-gray-300 tabular-nums text-sm">{{ comp.id_articulo }}</td>
                                 <td class="px-4 py-3">
-                                    <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ comp.codigo_articulo|default:"" }}</span>
+                                    <span class="font-semibold text-gray-900 dark:text-white text-sm">{{ comp.codigo_manual|default:"-" }}</span>
                                     <span class="block text-xs text-gray-500 dark:text-gray-400">{{ comp.descripcion_articulo|truncatewords:12|default:"" }}</span>
                                 </td>
                                 <td class="px-4 py-3 text-right tabular-nums text-sm font-medium text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20"><span class="opp-pendiente-display" data-pendiente-inicial="{{ comp.max_distribuible_unidades|default:0 }}">{{ comp.pendiente_texto_du|default:"0 docenas · 0 unidades" }}</span></td>

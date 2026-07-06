@@ -182,7 +182,7 @@
                                                     {% for ln in opt.lineas %}
                                                     <tr class="hover:bg-white/60 dark:hover:bg-slate-900/40">
                                                         <td class="w-24 px-4 py-2 pl-10 font-semibold tabular-nums sm:px-5">{{ ln.id_lista_produccion }}</td>
-                                                        <td class="px-4 py-2">{{ ln.codigo_articulo }}</td>
+                                                        <td class="px-4 py-2">{{ ln.codigo_manual|default:"-" }}</td>
                                                         <td class="max-w-xs truncate px-4 py-2 text-slate-600 dark:text-slate-400" title="{{ ln.descripcion_articulo }}">{{ ln.descripcion_articulo|truncatewords:8 }}</td>
                                                         <td class="px-4 py-2 text-right tabular-nums">{{ ln.cantidad_pendiente_prod }}</td>
                                                         <td class="px-4 py-2">{% include "mpr/includes/opt_list_acciones.html" with opt=ln %}</td>
@@ -199,10 +199,10 @@
                             </tr>
                             {% else %}
                             <tr class="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-700/40"
-                                data-search-text="{{ opt.id_lista_produccion|default:'' }} {{ opt.codigo_articulo|default:'' }} {{ opt.descripcion_articulo|default:''|escape }} {{ opt.origen_demanda_etiqueta|default:''|escape }} {{ opt.etiqueta_fase|default:'' }} {{ opt.fase_clave|default:'' }} OPP armado imputación cerrar {{ opt.cantidad_pedida|default:'' }} {{ opt.cantidad_pendiente_prod|default:'' }} {{ opt.cantidad_pendiente_mostrar|default:'' }} {{ opt.porcentaje_progreso|default:'' }} {{ opt.id_articulo|default:'' }} {{ opt.restante_armar|default:'' }}"
+                                data-search-text="{{ opt.id_lista_produccion|default:'' }} {{ opt.codigo_manual|default:'' }} {{ opt.descripcion_articulo|default:''|escape }} {{ opt.origen_demanda_etiqueta|default:''|escape }} {{ opt.etiqueta_fase|default:'' }} {{ opt.fase_clave|default:'' }} OPP armado imputación cerrar {{ opt.cantidad_pedida|default:'' }} {{ opt.cantidad_pendiente_prod|default:'' }} {{ opt.cantidad_pendiente_mostrar|default:'' }} {{ opt.porcentaje_progreso|default:'' }} {{ opt.id_articulo|default:'' }} {{ opt.restante_armar|default:'' }}"
                                 x-show="!query || $el.dataset.searchText.toLowerCase().includes(query.toLowerCase().trim())">
                                 <td class="whitespace-nowrap px-4 py-2.5 text-sm font-semibold text-slate-900 dark:text-white sm:px-5">{{ opt.id_lista_produccion|default:"-" }}</td>
-                                <td class="whitespace-nowrap px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 sm:px-5">{{ opt.codigo_articulo }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 sm:px-5">{{ opt.codigo_manual|default:"-" }}</td>
                                 <td class="max-w-xs px-4 py-2.5 text-sm text-slate-600 dark:text-slate-400 sm:max-w-md sm:px-5">
                                     <span class="block truncate" title="{{ opt.descripcion_articulo }}">{{ opt.descripcion_articulo|truncatewords:10 }}</span>
                                 </td>

@@ -76,7 +76,7 @@
                 <p class="mb-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Artículo armado</p>
                 <p class="mb-4 max-w-xl text-sm leading-relaxed text-gray-600 dark:text-gray-400">Producto resultante al ejecutar esta lista de materiales. Debe tener <code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-gray-700">ensamblado=Si</code> y <code class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs dark:bg-gray-700">id_en_abm={{ id_en_abm }}</code>.</p>
                 {% if articulo_armado %}
-                <p class="mb-4 text-sm text-gray-700 dark:text-gray-300">Actual: <strong>{{ articulo_armado.codigo_articulo }}</strong> — {{ articulo_armado.descripcion_articulo }}</p>
+                <p class="mb-4 text-sm text-gray-700 dark:text-gray-300">Actual: <strong>{{ articulo_armado.codigo_manual|default:"-" }}</strong> — {{ articulo_armado.descripcion_articulo }}</p>
                 {% else %}
                 <p class="mb-4 text-sm font-medium text-amber-800 dark:text-amber-200">Ningún artículo asignado. Asigne uno para poder ejecutar armados desde esta lista.</p>
                 {% endif %}
@@ -90,7 +90,7 @@
                         <select id="id_articulo_armado" name="id_articulo_armado" class="bom-input h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                             <option value="">— Sin asignar —</option>
                             {% for a in articulos %}
-                            <option value="{{ a.id_articulo }}" {% if articulo_armado and articulo_armado.id_articulo == a.id_articulo %}selected{% endif %}>{{ a.codigo_articulo }} — {{ a.descripcion_articulo|truncatewords:6 }}</option>
+                            <option value="{{ a.id_articulo }}" {% if articulo_armado and articulo_armado.id_articulo == a.id_articulo %}selected{% endif %}>{{ a.codigo_manual|default:"-" }} — {{ a.descripcion_articulo|truncatewords:6 }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -120,7 +120,7 @@
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700/80">
                             {% for comp in bom.componentes %}
                             <tr class="bom-table-row">
-                                <td class="px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-6">{{ comp.codigo_articulo }}</td>
+                                <td class="px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-6">{{ comp.codigo_manual|default:"-" }}</td>
                                 <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-6">{{ comp.descripcion_articulo }}</td>
                                 <td class="px-4 py-3.5 text-right text-sm tabular-nums text-gray-800 dark:text-gray-200 sm:px-6">{{ comp.cantidad_articulo }}</td>
                                 <td class="px-4 py-3.5 text-sm text-gray-500 dark:text-gray-400 sm:px-6">{{ comp.tipo_unidad|default:"—" }}</td>
@@ -155,7 +155,7 @@
                             <select id="id_articulo" name="id_articulo" required class="bom-input h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                                 <option value="">Seleccione</option>
                                 {% for a in articulos %}
-                                <option value="{{ a.id_articulo }}">{{ a.codigo_articulo }} — {{ a.descripcion_articulo|truncatewords:6 }}</option>
+                                <option value="{{ a.id_articulo }}">{{ a.codigo_manual|default:"-" }} — {{ a.descripcion_articulo|truncatewords:6 }}</option>
                                 {% endfor %}
                             </select>
                         </div>

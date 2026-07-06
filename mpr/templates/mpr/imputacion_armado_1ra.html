@@ -223,7 +223,7 @@
                             <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/50">
                                 <td class="whitespace-nowrap px-4 py-3 tabular-nums text-slate-800 dark:text-slate-200">{{ m.nro_comprobante }}</td>
                                 <td class="px-4 py-3">
-                                    <span class="font-medium text-slate-900 dark:text-white">{{ m.codigo_articulo_pack }}</span>
+                                    <span class="font-medium text-slate-900 dark:text-white">{{ m.codigo_manual_pack|default:m.codigo_articulo_pack|default:"-" }}</span>
                                     <span class="block max-w-xs truncate text-xs text-slate-500 dark:text-slate-400">{{ m.descripcion_articulo_pack }}</span>
                                 </td>
                                 <td class="px-4 py-3 text-right tabular-nums">{{ m.cantidad_armada }}</td>

@@ -18,8 +18,8 @@
                 <td class="px-3 py-2 text-sm tabular-nums text-gray-600">{{ r.fecha|default:"-" }}</td>
                 <td class="px-3 py-2 text-sm">
                     {% if r.id_articulo %}
-                    <a href="?grupo=trazabilidad&reporte=timeline&id_articulo={{ r.id_articulo }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}" class="font-medium text-purple-600 hover:underline">{{ r.codigo_articulo|default:"-" }}</a>
-                    {% else %}{{ r.codigo_articulo|default:"-" }}{% endif %}
+                    <a href="?grupo=trazabilidad&reporte=timeline&id_articulo={{ r.id_articulo }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}" class="font-medium text-purple-600 hover:underline">{{ r.codigo_manual|default:"-" }}</a>
+                    {% else %}{{ r.codigo_manual|default:"-" }}{% endif %}
                 </td>
                 <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 max-w-[12rem] truncate" title="{{ r.descripcion_articulo|default:'' }}">{{ r.descripcion_articulo|default:"-" }}</td>
                 <td class="px-3 py-2 text-right text-sm tabular-nums">{{ r.cantidad_display|default:r.cantidad|default:"-" }}</td>

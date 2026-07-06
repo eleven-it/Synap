@@ -18,7 +18,7 @@ from django.views.generic import TemplateView
 logger = logging.getLogger(__name__)
 
 from core.services.administranet_stock import get_depositos, obtener_renglones_movimiento_bulk
-from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
+from core.utils.administranet_types import str_or_default, str_codigo_manual_articulo, to_decimal_or_none, to_int_or_none
 
 from .exceptions import MprSchemaError
 from .services import (
@@ -776,14 +776,14 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                     por_deposito[cod_dep].append((id_comp, qty))
                 suma_comp += qty
             if suma_comp > disponible:
-                codigo = comp.get("codigo_articulo") or id_comp
+                codigo = str_codigo_manual_articulo(comp.get("codigo_manual") or comp.get("id_manual")) or str(id_comp)
                 messages.error(request, f"Componente {codigo}: la suma por depósitos ({suma_comp}) no puede superar el disponible ({disponible} unidades).")
                 return redirect("mpr:wizard")
             if suma_comp > 0:
                 id_operario_raw = (request.POST.get(f"operario_{id_comp}") or "").strip()
                 id_operario_comp = to_int_or_none(id_operario_raw)
                 if id_operario_comp is None:
-                    codigo = comp.get("codigo_articulo") or id_comp
+                    codigo = str_codigo_manual_articulo(comp.get("codigo_manual") or comp.get("id_manual")) or str(id_comp)
                     messages.error(request, f"Seleccione un operario para el componente {codigo}.")
                     return redirect("mpr:wizard")
                 id_operario_por_componente[id_comp] = id_operario_comp
@@ -864,7 +864,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
                 arts = listar_articulos_para_op(base_empresa, limit=2000)
                 for a in arts:
                     if a.get("id_articulo") == id_articulo:
-                        articulo_nombre = (a.get("codigo_articulo") or "") + " · " + (a.get("descripcion_articulo") or "")[:50]
+                        articulo_nombre = (a.get("codigo_manual") or "-") + " · " + (a.get("descripcion_articulo") or "")[:50]
                         break
             context["id_articulo"] = id_articulo
             context["articulo_nombre"] = articulo_nombre or str(id_articulo)
@@ -1611,14 +1611,14 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
                 if cid == id_comp
             )
             if suma_comp > disponible:
-                codigo = comp.get("codigo_articulo") or id_comp
+                codigo = str_codigo_manual_articulo(comp.get("codigo_manual") or comp.get("id_manual")) or str(id_comp)
                 messages.error(request, f"Componente {codigo}: la suma por depósitos ({suma_comp}) no puede superar el disponible ({disponible} unidades).")
                 return redirect("mpr:registrar_opp", id_lista=id_lista)
             if suma_comp > 0:
                 id_operario_raw = (request.POST.get(f"operario_{id_comp}") or "").strip()
                 id_operario_comp = to_int_or_none(id_operario_raw)
                 if id_operario_comp is None:
-                    codigo = comp.get("codigo_articulo") or id_comp
+                    codigo = str_codigo_manual_articulo(comp.get("codigo_manual") or comp.get("id_manual")) or str(id_comp)
                     messages.error(request, f"Seleccione un operario para el componente {codigo}.")
                     return redirect("mpr:registrar_opp", id_lista=id_lista)
                 id_operario_por_componente[id_comp] = id_operario_comp
@@ -1746,7 +1746,7 @@ class _ArmadoOptViewLegacy(MprLoginRequiredMixin, TemplateView):
                 if id_operario_linea is None:
                     messages.error(
                         request,
-                        f"Seleccione operario para el pack {linea.get('codigo_articulo') or id_art}.",
+                        f"Seleccione operario para el pack {linea.get('codigo_manual') or id_art}.",
                     )
                     return redirect("mpr:armado_opt", id_lista=id_lista)
                 cantidades.append((linea, qty, id_operario_linea))
@@ -1771,7 +1771,7 @@ class _ArmadoOptViewLegacy(MprLoginRequiredMixin, TemplateView):
                 for linea, _qty, _id_operario_linea in cantidades:
                     for comp in linea.get("bom", {}).get("componentes") or []:
                         if to_int_or_none(comp.get("id_articulo")) == cid:
-                            codigo_comp = comp.get("codigo_articulo") or cid
+                            codigo_comp = str_codigo_manual_articulo(comp.get("codigo_manual") or comp.get("id_manual")) or str(cid)
                             break
                     if codigo_comp is not None:
                         break
@@ -2193,7 +2193,7 @@ def _opt_comprobante_pdf(request, id_lista):
                     p.setFont("Helvetica", 10)
 
                 y_top_grupo = y_content
-                cod_txt = str_or_default(grupo.get("codigo_articulo"), "—")[:28]
+                cod_txt = str_or_default(grupo.get("codigo_manual") or grupo.get("codigo_articulo"), "—")[:28]
                 desc_txt = str_or_default(grupo.get("descripcion"), "—")[:52]
                 p.setFont("Helvetica", 9)
                 p.drawString(margin + 2 * mm, y_top_grupo - 3.5 * mm, cod_txt)
@@ -2929,7 +2929,7 @@ class ArmadoLegacyView(MprLoginRequiredMixin, TemplateView):
             cantidad_ya_armada = cantidades_armadas.get(id_art, 0)
             cantidad_disponible_armar = equiv_semi.get(id_art, 0)
             cantidad_restante_armar = max(0, cantidad_disponible_armar - cantidad_ya_armada)
-            producto_label = f"{l.get('codigo_articulo') or '-'} — {l.get('descripcion_articulo') or '-'}"
+            producto_label = f"{l.get('codigo_manual') or '-'} — {l.get('descripcion_articulo') or '-'}"
             lineas_armado.append({
                 "producto_label": producto_label,
                 "cantidad": cantidad_restante_armar,
@@ -3002,7 +3002,7 @@ class ArmadoLegacyView(MprLoginRequiredMixin, TemplateView):
                 continue
             id_operario_linea = to_int_or_none(request.POST.get(f"operario_armado_{id_art}"))
             if id_operario_linea is None:
-                messages.error(request, f"Seleccione operario para el pack {l.get('codigo_articulo') or id_art}.")
+                messages.error(request, f"Seleccione operario para el pack {l.get('codigo_manual') or id_art}.")
                 return redirect(f"{reverse('mpr:armado')}?id_lista={id_lista}")
             try:
                 ok, codigo_mov, nro_comp, error = ejecutar_armado(
@@ -3995,7 +3995,7 @@ class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
             filas_stock = stock_ctx["filas"]
             filas_busqueda = [
                 {
-                    "codigo": str(f.get("codigo_articulo") or ""),
+                    "codigo": str(f.get("codigo_manual") or f.get("codigo_articulo") or ""),
                     "descripcion": str(f.get("descripcion_articulo") or ""),
                 }
                 for f in filas_stock
