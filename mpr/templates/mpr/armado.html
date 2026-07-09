@@ -42,12 +42,11 @@
                 <p class="mb-3 text-xs text-gray-500 dark:text-gray-400 md:hidden">Deslizá horizontalmente si hace falta</p>
                 <div class="overflow-x-auto" role="region" aria-label="Productos a armar">
                     <table class="min-w-[28rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
-                        <caption class="sr-only">Cantidades y operarios por producto</caption>
+                        <caption class="sr-only">Cantidades por producto</caption>
                         <thead class="bg-gray-50/90 dark:bg-gray-800/80">
                             <tr>
                                 <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Producto</th>
                                 <th scope="col" class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Cantidad</th>
-                                <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Operario</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -55,14 +54,6 @@
                             <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40">
                                 <td class="px-4 py-3.5 text-sm text-gray-900 dark:text-white sm:px-5">{{ item.producto_label }}</td>
                                 <td class="px-4 py-3.5 text-right text-sm tabular-nums text-gray-700 dark:text-gray-300 sm:px-5">{{ item.cantidad }}</td>
-                                <td class="px-4 py-3.5 sm:px-5">
-                                    <select name="operario_armado_{{ item.id_articulo }}" class="h-10 w-full min-w-[180px] rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
-                                        <option value="">Seleccione operario</option>
-                                        {% for op in operarios %}
-                                        <option value="{{ op.id }}">{{ op.label }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>

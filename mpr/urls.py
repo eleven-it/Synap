@@ -79,6 +79,22 @@ urlpatterns = [
     path("turnos/", views.TurnosListView.as_view(), name="turnos_list"),
     path("turnos/nuevo/", views.TurnoCreateView.as_view(), name="turno_create"),
     path("turnos/<int:id_turno>/editar/", views.TurnoUpdateView.as_view(), name="turno_edit"),
+    # Trazabilidad: catálogos de líneas y máquinas (+ asignación versionada)
+    path("lineas/", views.LineasListView.as_view(), name="lineas_list"),
+    path("lineas/nueva/", views.LineaCreateView.as_view(), name="linea_create"),
+    path("lineas/<int:id_linea>/editar/", views.LineaUpdateView.as_view(), name="linea_edit"),
+    path("maquinas/", views.MaquinasListView.as_view(), name="maquinas_list"),
+    path("maquinas/nueva/", views.MaquinaCreateView.as_view(), name="maquina_create"),
+    path("maquinas/<int:id_maquina>/editar/", views.MaquinaUpdateView.as_view(), name="maquina_edit"),
+    path("maquinas/<int:id_maquina>/articulos/", views.MaquinaArticulosView.as_view(), name="maquina_articulos"),
+    path("maquinas/asignar-linea/", views.MaquinaAsignarLineaView.as_view(), name="maquina_asignar_linea"),
+    path("operarios-usuarios/", views.OperarioUsuarioMapView.as_view(), name="operario_usuario_map"),
+    path("operarios-lineas/", views.OperarioLineaView.as_view(), name="operario_linea"),
+    # Carga móvil del operario
+    path("mi-parte/", views.ParteMovilOperarioView.as_view(), name="parte_movil_operario"),
+    # Bandeja de aprobación de partes (supervisor)
+    path("partes-pendientes/", views.PartesPendientesView.as_view(), name="partes_pendientes"),
+    path("partes-pendientes/<int:id_parte>/", views.PartePendienteDetailView.as_view(), name="parte_pendiente_detail"),
     path("planificacion-turnos/", views.PlanificacionTurnosView.as_view(), name="planificacion_turnos"),
     path("planificacion-turnos/asignar/", views.AsignarTurnoRosterView.as_view(), name="roster_asignar"),
     path("planificacion-turnos/eliminar/", views.EliminarAsignacionRosterView.as_view(), name="roster_eliminar"),

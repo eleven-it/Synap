@@ -56,6 +56,11 @@ urlpatterns = [
     # Asignación de permisos por puesto (solo usuario cod_usuario supervisor)
     path('permisos-puesto/', views.permisos_puesto_lista_view, name='permisos_puesto_lista'),
     path(
+        'permisos-puesto/backfill/',
+        views.permisos_puesto_backfill_view,
+        name='permisos_puesto_backfill',
+    ),
+    path(
         'permisos-puesto/<int:id_puesto>/',
         views.permisos_puesto_gestionar_view,
         name='permisos_puesto_gestionar',

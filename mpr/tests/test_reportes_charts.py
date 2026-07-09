@@ -7,14 +7,20 @@ from mpr.reportes_charts import build_charts_produccion, MAX_RANKED_BARS
 class BuildChartsProduccionTest(SimpleTestCase):
     def test_operario_hbar_top_n(self):
         filas = [
-            {"operario": f"Op {i}", "unidades": 100 - i}
+            {"operario": f"Op {i}", "unidades": 100 - i, "semi": 10, "segunda": 2, "scrap": 1}
             for i in range(20)
         ]
         charts = build_charts_produccion("operario", {"filas": filas})
         self.assertIsNotNone(charts)
-        block = charts["blocks"][0]
-        self.assertEqual(block["kind"], "hbar")
-        self.assertEqual(len(block["labels"]), MAX_RANKED_BARS)
+        self.assertEqual(charts["blocks"][0]["kind"], "hbar")
+        self.assertEqual(len(charts["blocks"][0]["labels"]), MAX_RANKED_BARS)
+        self.assertEqual(charts["blocks"][1]["kind"], "hbar_stacked")
+        self.assertEqual(len(charts["blocks"][1]["datasets"]), 3)
+
+    def test_operario_sin_calidad_un_solo_bloque(self):
+        filas = [{"operario": "Op A", "unidades": 50, "semi": 0, "segunda": 0, "scrap": 0}]
+        charts = build_charts_produccion("operario", {"filas": filas})
+        self.assertEqual(len(charts["blocks"]), 1)
 
     def test_operario_vacio_sin_grafico(self):
         self.assertIsNone(build_charts_produccion("operario", {"filas": []}))

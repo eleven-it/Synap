@@ -111,6 +111,20 @@ APPS_MENU = [
                         "permission": "ventas.presupuesto.ver",
                         "menu_item_id": "ventas_cb_presupuestos",
                     },
+                    {
+                        "label": _("Actualización de precios"),
+                        "url": "ventas:precios_terminados",
+                        "icon": "price_change",
+                        "permission": "ventas.precios_terminados.editar",
+                        "menu_item_id": "ventas_cb_precios_terminados",
+                    },
+                    {
+                        "label": _("Evolución de precios"),
+                        "url": "ventas:evolucion_precios",
+                        "icon": "timeline",
+                        "permission": "ventas.precios_historial.ver",
+                        "menu_item_id": "ventas_cb_evolucion_precios",
+                    },
                 ]
             },
             {
@@ -174,7 +188,8 @@ APPS_MENU = [
                 "items": [
                     {"label": _("Tablero de producción"), "url": "mpr:tablero_produccion", "icon": "table_chart", "permission": "mpr.ver", "menu_item_id": "mpr_prod_tablero"},
                     {"label": _("Parte de producción"), "url": "mpr:parte_produccion", "icon": "assignment", "permission": "mpr.ver", "menu_item_id": "mpr_prod_parte"},
-                    {"label": _("Clasificación de producción"), "url": "mpr:clasificacion_produccion", "icon": "category", "permission": "mpr.ver", "menu_item_id": "mpr_prod_clasificacion"},
+                    {"label": _("Partes pendientes (aprobación)"), "url": "mpr:partes_pendientes", "icon": "fact_check", "permission": "mpr.aprobar_parte", "menu_item_id": "mpr_prod_partes_pendientes"},
+                    {"label": _("Control de calidad"), "url": "mpr:clasificacion_produccion", "icon": "verified", "permission": "mpr.ver", "menu_item_id": "mpr_prod_clasificacion"},
                     {"label": _("Planificación de turnos"), "url": "mpr:planificacion_turnos", "icon": "calendar_month", "permission": "mpr.ver", "menu_item_id": "mpr_prod_planificacion"},
                     {"label": _("Tablero de control (KPIs)"), "url": "mpr:tablero", "icon": "dashboard", "permission": "mpr.ver", "menu_item_id": "mpr_prod_kpis"},
                 ]
@@ -199,6 +214,10 @@ APPS_MENU = [
                     {"label": _("Turnos de producción"), "url": "mpr:turnos_list", "icon": "schedule", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_turnos"},
                     {"label": _("Config. Depósitos"), "url": "mpr:config_depositos", "icon": "warehouse", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_depositos"},
                     {"label": _("Operarios"), "url": "mpr:operarios_list", "icon": "engineering", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_operarios"},
+                    {"label": _("Líneas"), "url": "mpr:lineas_list", "icon": "view_stream", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_cfg_lineas"},
+                    {"label": _("Máquinas"), "url": "mpr:maquinas_list", "icon": "precision_manufacturing", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_cfg_maquinas"},
+                    {"label": _("Operarios y usuarios"), "url": "mpr:operario_usuario_map", "icon": "badge", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_cfg_operario_usuario"},
+                    {"label": _("Línea habitual (operarios)"), "url": "mpr:operario_linea", "icon": "conveyor_belt", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_cfg_operario_linea"},
                 ]
             },
         ]

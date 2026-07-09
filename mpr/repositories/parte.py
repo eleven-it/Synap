@@ -468,6 +468,98 @@ def acumular_celdas_grilla(
     return celdas
 
 
+def acumular_celdas_grilla_con_nombre(
+    base_empresa: str,
+    fecha: date,
+    id_mpr_turno: int,
+) -> Dict[Tuple[int, int], Dict[str, Any]]:
+    """Cantidades y nombre por (id_articulo, id_operario) para fecha+turno."""
+    base = (base_empresa or "").strip()
+    resultado: Dict[Tuple[int, int], Dict[str, Any]] = {}
+    celdas = acumular_celdas_grilla(base_empresa, fecha, id_mpr_turno)
+    if not celdas:
+        return resultado
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT p.id_mpr_parte FROM mpr_parte p
+            WHERE p.fecha_produccion = %s AND p.id_mpr_turno = %s
+            """,
+            [fecha, int(id_mpr_turno)],
+        )
+        parte_ids = [int(r["id_mpr_parte"]) for r in (cursor.fetchall() or [])]
+        nombres: Dict[Tuple[int, int], str] = {}
+        for pid in parte_ids:
+            cursor.execute(
+                """
+                SELECT id_articulo, id_operario, operario_nombre
+                FROM mpr_parte_linea WHERE id_mpr_parte = %s
+                """,
+                [pid],
+            )
+            for ln in cursor.fetchall() or []:
+                clave = (int(ln["id_articulo"]), int(ln["id_operario"]))
+                nom = str_or_default(ln.get("operario_nombre"), "-").strip()
+                if nom and nom != "-":
+                    nombres[clave] = nom
+    for clave, cantidad in celdas.items():
+        resultado[clave] = {
+            "cantidad": cantidad,
+            "operario_nombre": nombres.get(clave, "-"),
+        }
+    return resultado
+
+
+def listar_pares_fecha_turno_con_pendiente_clasificacion(
+    base_empresa: str,
+    *,
+    excluir_fecha: Optional[date] = None,
+    excluir_turno: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Pares fecha+turno con parte registrado y clasificación pendiente (arrastre)."""
+    from mpr.repositories.transicion_lote import sumar_clasificado_por_operario_fecha_turno
+
+    base = (base_empresa or "").strip()
+    if not base:
+        return []
+    pares: List[Dict[str, Any]] = []
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT DISTINCT p.fecha_produccion, p.id_mpr_turno, t.nombre AS turno_nombre
+            FROM mpr_parte p
+            INNER JOIN mpr_turno t ON t.id_mpr_turno = p.id_mpr_turno
+            ORDER BY p.fecha_produccion DESC, p.id_mpr_turno DESC
+            """
+        )
+        rows = cursor.fetchall() or []
+    for row in rows:
+        f = to_date_or_none(row.get("fecha_produccion"))
+        tid = to_int_or_none(row.get("id_mpr_turno"))
+        if f is None or tid is None:
+            continue
+        if excluir_fecha == f and excluir_turno == tid:
+            continue
+        celdas = acumular_celdas_grilla(base, f, tid)
+        if not celdas:
+            continue
+        clasif = sumar_clasificado_por_operario_fecha_turno(base, f, tid)
+        pendiente_total = Decimal("0")
+        for clave, qty in celdas.items():
+            cls = clasif.get(clave, Decimal("0"))
+            resto = qty - cls
+            if resto > 0:
+                pendiente_total += resto
+        if pendiente_total > 0:
+            pares.append({
+                "fecha": f,
+                "id_mpr_turno": tid,
+                "turno_nombre": str_or_default(row.get("turno_nombre"), "-"),
+                "pendiente_unidades": float(pendiente_total),
+            })
+    return pares
+
+
 def listar_partes_trazabilidad(
     base_empresa: str,
     id_lista_produccion: int,

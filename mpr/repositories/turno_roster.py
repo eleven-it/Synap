@@ -150,9 +150,11 @@ def listar_roster_rango(
     with mysql_cursor(base, dict_cursor=True) as cursor:
         cursor.execute(
             """
-            SELECT r.fecha, r.id_operario, r.id_mpr_turno, t.nombre AS nombre_turno
+            SELECT r.fecha, r.id_operario, r.id_mpr_turno, t.nombre AS nombre_turno,
+                   r.id_mpr_linea, l.nombre AS nombre_linea
             FROM mpr_roster_dia r
             INNER JOIN mpr_turno t ON t.id_mpr_turno = r.id_mpr_turno
+            LEFT JOIN mpr_linea l ON l.id_mpr_linea = r.id_mpr_linea
             WHERE r.fecha >= %s AND r.fecha <= %s
             ORDER BY r.fecha, r.id_operario
             """,
@@ -188,17 +190,68 @@ def upsert_roster(
     fecha: date,
     id_operario: int,
     id_mpr_turno: int,
+    id_mpr_linea: Optional[int] = None,
 ) -> None:
+    """Alta/actualización de la asignación diaria. `id_mpr_linea` es el override
+    de línea (NULL = usar la habitual del operario)."""
     base = (base_empresa or "").strip()
+    linea = to_int_or_none(id_mpr_linea)
     with mysql_cursor(base) as cursor:
         cursor.execute(
             """
-            INSERT INTO mpr_roster_dia (fecha, id_operario, id_mpr_turno)
-            VALUES (%s, %s, %s)
-            ON DUPLICATE KEY UPDATE id_mpr_turno = VALUES(id_mpr_turno)
+            INSERT INTO mpr_roster_dia (fecha, id_operario, id_mpr_turno, id_mpr_linea)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE id_mpr_turno = VALUES(id_mpr_turno),
+                                    id_mpr_linea = VALUES(id_mpr_linea)
             """,
-            [fecha, int(id_operario), int(id_mpr_turno)],
+            [fecha, int(id_operario), int(id_mpr_turno), linea],
         )
+
+
+def turno_del_operario_dia(
+    base_empresa: str,
+    id_operario: int,
+    fecha: date,
+) -> Optional[int]:
+    """id_mpr_turno asignado al operario en `fecha` (roster), o None."""
+    base = (base_empresa or "").strip()
+    oid = to_int_or_none(id_operario)
+    if not base or oid is None:
+        return None
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT id_mpr_turno FROM mpr_roster_dia
+            WHERE fecha = %s AND id_operario = %s
+            LIMIT 1
+            """,
+            [fecha, oid],
+        )
+        row = cursor.fetchone()
+        return to_int_or_none(row.get("id_mpr_turno")) if row else None
+
+
+def override_linea_roster(
+    base_empresa: str,
+    fecha: date,
+    id_operario: int,
+) -> Optional[int]:
+    """Devuelve el override de línea del roster para ese día/operario, o None."""
+    base = (base_empresa or "").strip()
+    oid = to_int_or_none(id_operario)
+    if not base or oid is None:
+        return None
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT id_mpr_linea FROM mpr_roster_dia
+            WHERE fecha = %s AND id_operario = %s
+            LIMIT 1
+            """,
+            [fecha, oid],
+        )
+        row = cursor.fetchone()
+        return to_int_or_none(row.get("id_mpr_linea")) if row else None
 
 
 def eliminar_roster(

@@ -11,6 +11,7 @@ from mpr.views import (
     _fallidos_para_carrito_armado_surtido,
     _resolver_post_armado_surtido,
 )
+from mpr.services import construir_armados_desde_post_tablero
 
 
 class FallidosCarritoTest(SimpleTestCase):
@@ -50,6 +51,42 @@ class ResolverPostArmadoSurtidoTest(SimpleTestCase):
         self.assertEqual(len(armados), 1)
         self.assertEqual(armados[0]["id_articulo_pack"], 1342)
         self.assertEqual(armados[0]["cantidad_packs"], 2)
+
+    @patch(
+        "mpr.services.lineas_bom_pack_1ra",
+        return_value=[{"id_articulo": 813, "cantidad_por_pack": 12}],
+    )
+    @patch("mpr.views._get_base_empresa", return_value="empresa_test")
+    @patch("mpr.services.articulo_habilitado_armado_1ra", return_value=True)
+    def test_tablero_post_armar_columna(self, *_mocks):
+        request = self.factory.post(
+            "/mpr/armado/",
+            {
+                "vista": "tablero",
+                "modo": "1ra",
+                "deposito_origen": "3",
+                "deposito_destino": "5",
+                "armar_1342": "4",
+            },
+        )
+        cabecera, armados, err = _resolver_post_armado_surtido(request)
+        self.assertIsNone(err)
+        self.assertEqual(len(armados), 1)
+        self.assertEqual(armados[0]["id_articulo_pack"], 1342)
+        self.assertEqual(armados[0]["cantidad_packs"], 4)
+        self.assertEqual(armados[0]["lineas"][0]["cantidad_por_pack"], 12)
+
+
+class ConstruirArmadosTableroTest(SimpleTestCase):
+    @patch(
+        "mpr.services.lineas_bom_pack_1ra",
+        return_value=[{"id_articulo": 10, "cantidad_por_pack": 6}],
+    )
+    def test_solo_filas_con_cantidad_positiva(self, _bom):
+        post = {"armar_100": "2", "armar_200": "0", "armar_": "1"}
+        items = construir_armados_desde_post_tablero("emp", post, modo="1ra")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id_articulo_pack"], 100)
 
 
 class ArmadoSurtidoViewPostTest(SimpleTestCase):

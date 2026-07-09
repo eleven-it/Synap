@@ -13,11 +13,14 @@ from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 
 from core.decorators import solo_usuario_supervisor
-from core.services.administranet_permiso_sistema import AdministraNETPermisoSistemaService
 from core.services.administranet_permisos_menu import AdministraNETPermisosMenuService
 from core.services.administranet_permisos_sistema import AdministraNETPermisosSistemaService
 from core.services.administranet_puestos import AdministraNETPuestosService
-from core.services.sync_permisos_synap import sincronizar_permisos_synap_para_empresa
+from core.services.synap_permisos import (
+    SynapPermisosService,
+    backfill_synap_permisos_desde_legacy,
+)
+from core.services.synap_permisos_seed import asegurar_synap_schema_si_procede
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +74,8 @@ def permisos_puesto_lista_view(request):
     paginator = Paginator(puestos, 15)
     page_obj = paginator.get_page(request.GET.get("page"))
 
+    backfill_resultado = request.session.pop("synap_backfill_resultado", None)
+
     return render(
         request,
         "core/permisos_puesto_lista.html",
@@ -78,8 +83,50 @@ def permisos_puesto_lista_view(request):
             "puestos": page_obj,
             "q": q,
             "base_empresa": base_empresa,
+            "backfill_resultado": backfill_resultado,
         },
     )
+
+
+@solo_usuario_supervisor
+@require_POST
+@csrf_protect
+def permisos_puesto_backfill_view(request):
+    """
+    Ejecuta el backfill de permisos legacy → synap_* para la empresa logueada.
+
+    Con `dry_run` (checkbox) solo simula. Reutiliza la misma lógica que el comando
+    `backfill_synap_permisos_from_legacy`.
+    """
+    base_empresa = _base_empresa_desde_sesion(request)
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:permisos_puesto_lista")
+
+    dry_run = (request.POST.get("dry_run") or "").strip().lower() in ("1", "si", "true", "on")
+    force = (request.POST.get("force") or "").strip().lower() in ("1", "si", "true", "on")
+
+    resultado = backfill_synap_permisos_desde_legacy(base_empresa, dry_run=dry_run, force=force)
+
+    if resultado.get("success"):
+        messages.success(request, resultado.get("message", "Backfill completado."))
+    else:
+        messages.error(request, resultado.get("message", "No se pudo ejecutar el backfill."))
+
+    # Guardar el detalle por puesto para mostrarlo en el listado tras el redirect.
+    request.session["synap_backfill_resultado"] = {
+        "success": bool(resultado.get("success")),
+        "dry_run": bool(resultado.get("dry_run")),
+        "force": bool(resultado.get("force")),
+        "message": resultado.get("message", ""),
+        "detalles": list(resultado.get("detalles") or []),
+        "total_revisados": resultado.get("total_revisados", 0),
+        "total_puestos": resultado.get("total_puestos", 0),
+        "total_roles": resultado.get("total_roles", 0),
+        "total_asignaciones": resultado.get("total_asignaciones", 0),
+    }
+
+    return redirect("core:permisos_puesto_lista")
 
 
 @solo_usuario_supervisor
@@ -102,11 +149,11 @@ def permisos_puesto_gestionar_view(request, id_puesto: int):
         tab = TAB_SYNAP
 
     try:
-        sincronizar_permisos_synap_para_empresa(base_empresa)
+        asegurar_synap_schema_si_procede(base_empresa)
     except Exception as exc:
-        logger.warning("Sync permisos Synap al abrir gestión puesto: %s", exc)
+        logger.warning("Asegurar esquema Synap al abrir gestión puesto: %s", exc)
 
-    permiso_synap_svc = AdministraNETPermisoSistemaService()
+    permiso_synap_svc = SynapPermisosService()
     menu_svc = AdministraNETPermisosMenuService()
 
     if request.method == "POST":
@@ -142,6 +189,7 @@ def permisos_puesto_gestionar_view(request, id_puesto: int):
     permisos_agrupados = sorted(permisos_por_modulo.items(), key=lambda x: x[0])
 
     grupos = permiso_synap_svc.obtener_grupos(base_empresa)
+    rol_synap = permiso_synap_svc.obtener_resumen_rol_puesto(base_empresa, id_puesto)
     estructura_menu = menu_svc.obtener_estructura_menu()
     permisos_menu_actuales = menu_svc.obtener_permisos_puesto(base_empresa, id_puesto)
 
@@ -160,6 +208,7 @@ def permisos_puesto_gestionar_view(request, id_puesto: int):
             "q_synap": q_synap,
             "grupo_synap": grupo_synap or "",
             "grupos": grupos,
+            "rol_synap": rol_synap,
             "estructura_menu": estructura_menu,
             "permisos_actuales": permisos_menu_actuales,
             "modulos_atajo": MODULOS_ATAJO,
@@ -180,7 +229,8 @@ def permisos_puesto_toggle_synap_view(request, id_puesto: int):
             status=400,
         )
 
-    if not _obtener_puesto_o_redirect(base_empresa, id_puesto, request):
+    puesto = _obtener_puesto_o_redirect(base_empresa, id_puesto, request)
+    if not puesto:
         return JsonResponse({"success": False, "error": "Puesto no encontrado"}, status=404)
 
     try:
@@ -188,7 +238,7 @@ def permisos_puesto_toggle_synap_view(request, id_puesto: int):
     except json.JSONDecodeError:
         return JsonResponse({"success": False, "error": "JSON inválido"}, status=400)
 
-    id_permiso = data.get("id_permiso_sistema")
+    id_permiso = data.get("id_permiso")
     valor = (data.get("valor") or "").strip()
     if valor not in ("Si", "No"):
         return JsonResponse({"success": False, "error": 'Valor debe ser "Si" o "No"'}, status=400)
@@ -196,13 +246,13 @@ def permisos_puesto_toggle_synap_view(request, id_puesto: int):
         id_permiso_int = int(id_permiso)
     except (TypeError, ValueError):
         return JsonResponse(
-            {"success": False, "error": "id_permiso_sistema inválido"},
+            {"success": False, "error": "id_permiso inválido"},
             status=400,
         )
 
-    svc = AdministraNETPermisoSistemaService()
+    svc = SynapPermisosService()
     if svc.actualizar_valor_permiso(
-        base_empresa, id_permiso_int, valor, id_puesto
+        base_empresa, id_permiso_int, valor, id_puesto, puesto.get("nombre", "")
     ):
         return JsonResponse({"success": True, "valor": valor})
     return JsonResponse(
@@ -231,9 +281,9 @@ def permisos_puesto_modulo_synap_view(request, id_puesto: int):
     if not prefijo:
         messages.error(request, "Módulo no indicado.")
     else:
-        svc = AdministraNETPermisoSistemaService()
+        svc = SynapPermisosService()
         n = svc.establecer_modulo_para_puesto(
-            base_empresa, id_puesto, prefijo, activar
+            base_empresa, id_puesto, prefijo, activar, puesto.get("nombre", "")
         )
         accion_txt = "activados" if activar else "desactivados"
         messages.success(

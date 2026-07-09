@@ -1,5 +1,10 @@
 # core/constantes_permisos.py
 
+# Módulos que reciben un permiso comodín "modulo.*" (acceso total al módulo).
+# Centralizado aquí para que lo consuman tanto el catálogo Synap (synap_permiso)
+# como la sincronización legacy (sync_permisos_synap) sin duplicar la lista.
+MODULOS_CON_COMODIN = ("reports", "stock", "self_checkout", "logistica")
+
 # Mapeo Clavemenu (tabla permisos VB6/Principal) → key_permiso (permiso_sistema Synap).
 # Si el puesto tiene la Clavemenu en permisos con Permiso = '1', se otorga el key_permiso en Synap.
 # Equivalencia CargaMovStock / Ingreso Mov. Stock y resto del módulo Stock.
@@ -72,6 +77,8 @@ PERMISOS_POR_MODULO = {
         ("ventas.ver", "Ver ventas"),
         ("ventas.presupuesto.ver", "Ver presupuestos de venta"),
         ("ventas.presupuesto.editar", "Crear y editar presupuestos de venta"),
+        ("ventas.precios_terminados.editar", "Actualizar precios de productos terminados"),
+        ("ventas.precios_historial.ver", "Consultar histórico y evolución de precios"),
         ("ventas.crear", "Crear ventas"),
         ("ventas.editar", "Editar ventas"),
         ("ventas.eliminar", "Eliminar ventas"),
@@ -142,6 +149,9 @@ PERMISOS_POR_MODULO = {
     "Producción (MPR)": [
         ("mpr.ver", "Ver módulo Producción (MPR)"),
         ("mpr.imputar_armado_1ra", "Imputación de pedido — Armado 1ra (supervisor)"),
+        ("mpr.maquinas_lineas", "Gestionar líneas, máquinas y habilitación de artículos (supervisor)"),
+        ("mpr.aprobar_parte", "Aprobar partes de producción y registrar desvíos (supervisor)"),
+        ("mpr.parte_operario", "Carga de parte de producción desde el móvil (operario)"),
     ],
     "Migración Odoo": [
         ("odoo_migracion.ver", "Ver módulo Migración Odoo (solo usuario supervisor en menú)"),

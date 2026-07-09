@@ -1,0 +1,300 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}{{ modo_label }} — Armado — MPR — Synap{% endblock %}
+
+{% block content %}
+<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-3">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12"
+         x-data="armadoTableroState({{ resultado_lote_json|default:'null'|safe }})">
+
+        <div class="mb-2 flex-shrink-0">
+            <nav class="mb-1.5 text-[11px] text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
+                <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <li><a href="{% url 'mpr:tablero' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a></li>
+                    <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+                    <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">{{ modo_label }}</span></li>
+                </ol>
+            </nav>
+
+            <div class="rounded-lg border border-slate-700 bg-slate-800 p-2 shadow-md dark:bg-slate-900 sm:p-2.5">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex min-w-0 flex-wrap items-center gap-2">
+                        <div class="inline-flex rounded-lg border p-0.5 {% if modo == '1ra' %}border-emerald-500/60 bg-emerald-950/30{% else %}border-amber-500/60 bg-amber-950/25{% endif %}">
+                            <a href="?vista=tablero&amp;modo=1ra{% if not solo_resta %}&amp;solo_resta=0{% endif %}&amp;presentacion={{ modo_presentacion }}"
+                               class="inline-flex rounded-md px-2.5 py-1 text-[11px] font-bold {% if modo == '1ra' %}bg-emerald-600 text-white{% else %}text-emerald-300 hover:bg-emerald-900/40{% endif %}">1ra</a>
+                            <a href="?vista=tablero&amp;modo=2da{% if not solo_resta %}&amp;solo_resta=0{% endif %}&amp;presentacion={{ modo_presentacion }}"
+                               class="inline-flex rounded-md px-2.5 py-1 text-[11px] font-bold {% if modo != '1ra' %}bg-amber-500 text-amber-950{% else %}text-amber-300 hover:bg-amber-900/35{% endif %}">2da</a>
+                        </div>
+                        <div class="min-w-0">
+                            <h1 class="text-base font-bold leading-tight text-white sm:text-lg">{{ modo_label }}</h1>
+                            <p class="truncate text-[10px] text-slate-400">
+                                {{ nombre_deposito_origen }} → {{ nombre_deposito_destino }}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <a href="{% url 'mpr:tablero_produccion' %}" class="inline-flex min-h-7 items-center gap-1 rounded-md border border-slate-500 bg-slate-700 px-2 py-1 text-[11px] font-medium text-white hover:bg-slate-600" title="Tablero producción">
+                            <span class="material-icons text-sm" aria-hidden="true">grid_on</span>
+                            <span class="hidden sm:inline">Tablero</span>
+                        </a>
+                        {% if modo == '1ra' and puede_imputar_pedido %}
+                        <a href="{% url 'mpr:imputacion_armado_1ra' %}" class="inline-flex min-h-7 items-center gap-1 rounded-md border border-emerald-600/60 bg-emerald-900/40 px-2 py-1 text-[11px] font-medium text-emerald-100 hover:bg-emerald-900/60" title="Imputación pedido">
+                            <span class="material-icons text-sm" aria-hidden="true">link</span>
+                            <span class="hidden sm:inline">Imputación</span>
+                        </a>
+                        {% endif %}
+                        <a href="?vista=pos&amp;modo={{ modo }}" class="inline-flex min-h-7 items-center gap-1 rounded-md border border-slate-500 bg-slate-700 px-2 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-600" title="Vista carrito">
+                            <span class="material-icons text-sm" aria-hidden="true">shopping_cart</span>
+                            <span class="hidden sm:inline">Carrito</span>
+                        </a>
+                    </div>
+                </div>
+
+                <form method="get" class="mt-2 flex flex-wrap items-end gap-1.5 border-t border-slate-700/80 pt-2">
+                    <input type="hidden" name="vista" value="tablero">
+                    <input type="hidden" name="modo" value="{{ modo }}">
+                    <input type="hidden" name="presentacion" value="{{ modo_presentacion }}">
+                    <input type="hidden" name="solo_resta" value="{% if solo_resta %}1{% else %}0{% endif %}">
+                    <label class="flex items-center gap-1">
+                        <span class="text-[10px] text-slate-400">Desde</span>
+                        <input type="date" name="fecha_desde" value="{{ fecha_desde }}"
+                               class="h-7 rounded-md border border-slate-600 bg-slate-700 px-1.5 text-[11px] text-white focus:border-emerald-400 focus:ring-1 focus:ring-emerald-500/50"/>
+                    </label>
+                    <label class="flex items-center gap-1">
+                        <span class="text-[10px] text-slate-400">Hasta</span>
+                        <input type="date" name="fecha_hasta" value="{{ fecha_hasta }}"
+                               class="h-7 rounded-md border border-slate-600 bg-slate-700 px-1.5 text-[11px] text-white focus:border-emerald-400 focus:ring-1 focus:ring-emerald-500/50"/>
+                    </label>
+                    {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
+                    <button type="submit" class="inline-flex min-h-7 items-center gap-1 rounded-md {% if modo == '1ra' %}bg-emerald-600 hover:bg-emerald-500{% else %}bg-amber-500 hover:bg-amber-400 text-amber-950{% endif %} px-2.5 py-1 text-[11px] font-semibold text-white">
+                        <span class="material-icons text-sm">filter_list</span>
+                        Filtrar
+                    </button>
+                    {% if filas %}
+                    <div class="ml-1 flex flex-wrap items-center gap-3 border-l border-slate-600 pl-2 text-[11px]">
+                        <span class="text-slate-400">Resta armar <strong class="tabular-nums text-amber-300">{% if modo_presentacion == "docenas" %}{{ kpis_armado.resta_armar_docenas }}{% else %}{{ kpis_armado.resta_armar_pares }}{% endif %}</strong></span>
+                        <span class="text-slate-400">Filas <strong class="tabular-nums text-slate-200">{{ kpis_armado.n_filas }}</strong></span>
+                    </div>
+                    {% endif %}
+                    {% if solo_resta %}
+                    <a href="?vista=tablero&amp;modo={{ modo }}&amp;solo_resta=0&amp;fecha_desde={{ fecha_desde|urlencode }}&amp;fecha_hasta={{ fecha_hasta|urlencode }}&amp;presentacion={{ modo_presentacion }}"
+                       class="ml-auto inline-flex min-h-7 items-center rounded-md bg-amber-600 px-2 py-1 text-[10px] font-semibold text-white">Solo con resta</a>
+                    {% else %}
+                    <a href="?vista=tablero&amp;modo={{ modo }}&amp;solo_resta=1&amp;fecha_desde={{ fecha_desde|urlencode }}&amp;fecha_hasta={{ fecha_hasta|urlencode }}&amp;presentacion={{ modo_presentacion }}"
+                       class="ml-auto inline-flex min-h-7 items-center rounded-md border border-slate-600 px-2 py-1 text-[10px] text-slate-300">Solo con resta</a>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div class="mb-1.5 flex flex-shrink-0 flex-wrap items-center justify-between gap-2">
+                <div class="relative min-w-0 flex-1 max-w-lg">
+                    <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400">search</span>
+                    <input type="search" x-model="busqueda" placeholder="Buscar artículo…"
+                           class="h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"/>
+                </div>
+                <div class="flex flex-shrink-0 flex-wrap items-center gap-2">
+                    {% include "includes/toggle_docenas_pares.html" with interaction="link" variant="light" modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
+                    {% if modo == '1ra' %}
+                    <button type="button" @click="abrirModalArmado()"
+                            class="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">
+                        <span class="material-icons text-base">build</span>
+                        Ejecutar armado
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-200 shadow-sm dark:border-slate-700">
+                <table class="min-w-[78rem] w-full border-separate border-spacing-0">
+                    <thead>
+                        <tr class="bg-slate-100/90 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                            <th rowspan="2" class="sticky left-0 top-0 z-20 min-w-[16rem] border-b border-slate-200 bg-slate-100 px-3 py-1.5 text-left dark:border-slate-700 dark:bg-slate-800">Artículo pack</th>
+                            <th rowspan="2" class="sticky top-0 z-10 min-w-[6.5rem] border-b border-l border-slate-200 bg-slate-100 px-2 py-1.5 text-center text-slate-600 dark:border-slate-700 dark:bg-slate-800" title="MIN(FechaEntrega) en pedidos PED pendientes del artículo">1er fecha entrega</th>
+                            <th colspan="5" class="sticky top-0 z-10 border-b border-l-2 border-l-amber-300/80 bg-amber-50/90 px-2 py-1 text-center text-amber-900 dark:border-l-amber-800 dark:bg-amber-950/30 dark:text-amber-200">Demanda a armar</th>
+                            {% if modo == '1ra' %}
+                            <th rowspan="2" class="sticky top-0 z-10 border-b border-l border-violet-200 bg-violet-50/80 px-2 py-1.5 text-right dark:border-violet-900 dark:bg-violet-950/20">Máx. armable<br><span class="font-normal normal-case">(packs)</span></th>
+                            {% endif %}
+                            <th rowspan="2" class="sticky top-0 z-10 border-b border-l border-emerald-200 bg-emerald-50/80 px-2 py-1.5 text-right dark:border-emerald-900 dark:bg-emerald-950/20">Armar<br><span class="font-normal normal-case">(packs)</span></th>
+                        </tr>
+                        <tr class="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                            <th class="sticky top-[1.25rem] z-10 border-b border-l-2 border-l-amber-200 bg-amber-50/50 px-2 py-1 text-right dark:border-l-amber-900 dark:bg-amber-950/15">Pedido</th>
+                            <th class="sticky top-[1.25rem] z-10 border-b bg-amber-50/40 px-2 py-1 text-right dark:bg-amber-950/10">Terminado</th>
+                            <th class="sticky top-[1.25rem] z-10 border-b bg-amber-50/40 px-2 py-1 text-right dark:bg-amber-950/10">Reserva</th>
+                            <th class="sticky top-[1.25rem] z-10 border-b bg-amber-50/50 px-2 py-1 text-right dark:bg-amber-950/15">Resta urgente</th>
+                            <th class="sticky top-[1.25rem] z-10 border-b border-r border-amber-200/60 bg-amber-100/60 px-2 py-1 text-right font-bold text-amber-900 dark:bg-amber-950/25 dark:text-amber-200">Resta armar</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                        {% for fila in filas %}
+                        <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                            data-descripcion="{{ fila.descripcion_articulo|lower }} {{ fila.codigo_manual|lower }} {{ fila.marca_nombre|lower }}"
+                            x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase())">
+                            <td class="sticky left-0 z-10 bg-white px-3 py-2 dark:bg-slate-900">
+                                {% if fila.marca_nombre %}<span class="text-[10px] font-semibold uppercase text-slate-400">{{ fila.marca_nombre }}</span>{% endif %}
+                                <span class="block text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">{{ fila.codigo_manual }}</span>
+                                <span class="block text-xs text-slate-600 dark:text-slate-400">{{ fila.descripcion_articulo }}</span>
+                            </td>
+                            <td class="whitespace-nowrap border-l border-slate-200 px-2 py-2 text-center text-xs tabular-nums text-slate-700 dark:border-slate-700 dark:text-slate-300">
+                                {{ fila.primera_fecha_entrega_display|default:"—" }}
+                            </td>
+                            <td class="border-l-2 border-l-amber-100 px-2 py-2 text-right text-sm tabular-nums dark:border-l-amber-900/40">{{ fila.pedido_display }}</td>
+                            <td class="px-2 py-2 text-right text-sm tabular-nums text-slate-600">{{ fila.stock_terminado_display }}</td>
+                            <td class="px-2 py-2 text-right text-sm tabular-nums text-slate-600">{{ fila.stock_reserva_display }}</td>
+                            <td class="px-2 py-2 text-right text-sm tabular-nums{% if fila.resta_urgente > 0 %} text-rose-600 font-medium{% else %} text-slate-400{% endif %}">{{ fila.resta_urgente_display }}</td>
+                            <td class="px-2 py-2 text-right text-sm font-semibold tabular-nums{% if fila.resta_armar > 0 %} text-amber-700 dark:text-amber-300{% else %} text-slate-400{% endif %}">{{ fila.resta_armar_display }}</td>
+                            {% if modo == '1ra' %}
+                            <td class="border-l border-violet-100 px-2 py-2 text-right text-sm tabular-nums font-medium text-violet-800 dark:text-violet-300">{{ fila.max_armable }}</td>
+                            <td class="border-l border-emerald-100 bg-emerald-50/20 px-2 py-2 text-right dark:bg-emerald-950/10">
+                                <input type="number" name="armar_{{ fila.id_articulo }}" data-armar-qty data-id-articulo="{{ fila.id_articulo }}"
+                                       min="0" max="{{ fila.max_armable }}" step="1" inputmode="numeric"
+                                       value="{% if fila.a_armar > 0 %}{{ fila.a_armar }}{% endif %}"
+                                       {% if fila.max_armable <= 0 %}disabled{% endif %}
+                                       class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-emerald-800 dark:bg-slate-700 dark:disabled:bg-slate-800"/>
+                            </td>
+                            {% else %}
+                            <td class="border-l border-emerald-100 px-2 py-2 text-right">
+                                <a href="?vista=pos&amp;modo=2da&amp;id_articulo={{ fila.id_articulo }}"
+                                   class="inline-flex items-center gap-1 rounded-md border border-amber-400 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-200">
+                                    Componer
+                                </a>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="{% if modo == '1ra' %}9{% else %}8{% endif %}" class="px-4 py-10 text-center text-sm text-slate-500">
+                                {% if modo == '1ra' %}Sin packs armables con resta pendiente y stock en Semi elaborado.{% else %}Sin packs 2da con demanda pendiente.{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <p class="mt-1 flex-shrink-0 text-[10px] leading-snug text-slate-400">
+                Resta armar = pedido + reserva − terminado · Máx. armable = límite por semielaborados (BOM).
+                {% if modo == '2da' %}<strong>Componer</strong> abre el carrito con composición libre.{% endif %}
+            </p>
+        </div>
+
+        {% if modo == '1ra' %}
+        <form id="form-armar-lote" method="post" action="{% url 'mpr:armado' %}"
+              class="mpr-post-loading hidden"
+              data-mpr-loading-title="Ejecutando armado"
+              data-mpr-loading-subtitle="Registrando movimientos de stock…">
+            {% csrf_token %}
+            <input type="hidden" name="vista" value="tablero">
+            <input type="hidden" name="modo" value="1ra">
+            <input type="hidden" name="deposito_origen" value="{{ deposito_origen_default }}">
+            <input type="hidden" name="deposito_destino" value="{{ deposito_destino_default }}">
+            {% if id_lista %}<input type="hidden" name="id_lista" value="{{ id_lista }}">{% endif %}
+            <input type="hidden" name="filtros_qs" value="{{ filtros_qs }}">
+            <button type="submit" id="btn-armar-lote-submit" class="sr-only" tabindex="-1">Enviar</button>
+        </form>
+
+        <div x-show="armadoModalOpen" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4" @keydown.escape.window="armadoModalOpen = false">
+            <div class="fixed inset-0 bg-black/50" @click="armadoModalOpen = false"></div>
+            <div class="relative max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-800" @click.stop>
+                <div x-show="armadoEmpty">
+                    <p class="text-sm text-slate-600 dark:text-slate-300">Ingrese al menos una cantidad en la columna <strong>Armar</strong>.</p>
+                    <button type="button" @click="armadoModalOpen = false" class="mt-4 rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium dark:bg-slate-700">Cerrar</button>
+                </div>
+                <div x-show="!armadoEmpty">
+                    <p class="text-sm text-slate-700 dark:text-slate-200">¿Ejecutar armado de <strong x-text="armadoCount"></strong> línea(s) · <strong x-text="armadoTotalPacks"></strong> pack(s)?</p>
+                    <div class="mt-4 flex gap-2 justify-end">
+                        <button type="button" @click="armadoModalOpen = false" class="rounded-lg border px-4 py-2 text-sm">Cancelar</button>
+                        <button type="button" @click="ejecutarArmadoConfirmado()" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">Confirmar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div x-show="modalResultado.open" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/50" @click="modalResultado.open = false"></div>
+            <div class="relative max-w-lg rounded-xl border bg-white p-5 shadow-xl dark:bg-slate-800">
+                <h2 class="text-lg font-semibold">Resultado del armado</h2>
+                <p class="mt-2 text-sm"><span x-text="modalResultado.exitosos.length"></span> grabado(s), <span x-text="modalResultado.fallidos.length"></span> con error.</p>
+                {% if modo == '1ra' and puede_imputar_pedido %}
+                <a href="{% url 'mpr:imputacion_armado_1ra' %}" class="mt-3 inline-flex text-sm font-medium text-emerald-600">Imputación de pedido →</a>
+                {% endif %}
+                <button type="button" @click="modalResultado.open = false" class="mt-4 rounded-lg bg-slate-200 px-4 py-2 text-sm dark:bg-slate-700">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</section>
+<script type="module" src="{% static 'stock/js/filtro_marcas_tags.mjs' %}"></script>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+window.armadoTableroState = function (resultadoInicial) {
+    var r = resultadoInicial && typeof resultadoInicial === 'object' ? resultadoInicial : null;
+    var tiene = r && ((r.exitosos && r.exitosos.length) || (r.fallidos && r.fallidos.length));
+    return {
+        armadoModalOpen: false,
+        armadoCount: 0,
+        armadoTotalPacks: 0,
+        armadoEmpty: false,
+        busqueda: '',
+        modalResultado: {
+            open: !!tiene,
+            exitosos: (r && r.exitosos) || [],
+            fallidos: (r && r.fallidos) || []
+        },
+        abrirModalArmado: function () {
+            var lineas = 0;
+            var packs = 0;
+            document.querySelectorAll('[data-armar-qty]').forEach(function (el) {
+                if (el.disabled) return;
+                var qty = parseInt(String(el.value || '0'), 10);
+                if (isNaN(qty) || qty <= 0) return;
+                lineas += 1;
+                packs += qty;
+            });
+            this.armadoCount = lineas;
+            this.armadoTotalPacks = packs;
+            this.armadoEmpty = lineas === 0;
+            this.armadoModalOpen = true;
+        },
+        ejecutarArmadoConfirmado: function () {
+            this.armadoModalOpen = false;
+            window.confirmarArmadoTablero();
+        }
+    };
+};
+
+window.confirmarArmadoTablero = function () {
+    var form = document.getElementById('form-armar-lote');
+    if (!form) return;
+    form.querySelectorAll('[data-armar-sync]').forEach(function (el) { el.remove(); });
+    var tieneCantidad = false;
+    document.querySelectorAll('[data-armar-qty]').forEach(function (inp) {
+        if (inp.disabled) return;
+        var qty = parseInt(String(inp.value || '0'), 10);
+        if (isNaN(qty) || qty <= 0) return;
+        tieneCantidad = true;
+        var h = document.createElement('input');
+        h.type = 'hidden';
+        h.name = inp.name;
+        h.value = String(qty);
+        h.setAttribute('data-armar-sync', '1');
+        form.appendChild(h);
+    });
+    if (!tieneCantidad) return;
+    var submitBtn = document.getElementById('btn-armar-lote-submit');
+    if (submitBtn && typeof form.requestSubmit === 'function') {
+        form.requestSubmit(submitBtn);
+    } else if (submitBtn) {
+        submitBtn.click();
+    } else if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+    } else {
+        form.submit();
+    }
+};
+</script>
+{% endblock %}

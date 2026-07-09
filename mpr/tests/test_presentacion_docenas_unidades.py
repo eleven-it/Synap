@@ -12,6 +12,7 @@ from mpr.services import (
     lineas_texto_cantidad_opp,
     lineas_texto_cantidad_pack,
     texto_docenas_unidades,
+    texto_docenas_pares,
 )
 
 
@@ -37,6 +38,12 @@ class DescomponerDocenasUnidadesTest(SimpleTestCase):
     def test_bulto_cero_usa_doce(self):
         self.assertEqual(divisor_docena_pack(0), 12)
         self.assertEqual(texto_docenas_unidades(124, 0), "10 docenas · 4 unidades")
+
+    def test_texto_docenas_pares_best_sox(self):
+        self.assertEqual(
+            texto_docenas_pares(124, unidades_por_docena_fijo=12),
+            "10 docenas · 4 pares",
+        )
 
     def test_docenas_enteras_armado_sin_unidades_sueltas(self):
         self.assertEqual(docenas_enteras_desde_packs(41, 12), 3)

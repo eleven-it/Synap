@@ -333,6 +333,10 @@ class QueryRunnerService:
             from .presupuesto_ventas_runner import run_documento_presupuesto_ventas
 
             result = run_documento_presupuesto_ventas(report, payload, self.user)
+        elif report.slug == "evolucion-precios":
+            from .evolucion_precios_runner import run_evolucion_precios
+
+            result = run_evolucion_precios(report, payload, self.user)
         else:
             # Para otros reportes, usar datos de muestra por ahora
             meta, data, totals, notes = get_sample_data(report.slug, payload)

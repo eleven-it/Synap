@@ -130,12 +130,16 @@
                             </div>
                         </div>
 
+                        {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
+
                         <button type="submit"
                                 class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                             <span class="material-icons text-base" aria-hidden="true">search</span>
                             Cargar grilla
                         </button>
                     </form>
+
+                    {% include "mpr/includes/btn_control_calidad.html" with variant="solid" fecha_str=fecha_str turno_id=turno_id only %}
 
                     <a href="{% url 'mpr:tablero_produccion' %}"
                        class="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
@@ -178,23 +182,27 @@
         <div class="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-700/50 dark:bg-blue-900/20 sm:mb-4">
             <div class="flex items-start gap-3">
                 <span class="material-icons text-blue-600 dark:text-blue-400" aria-hidden="true">info</span>
-                <p class="text-sm font-medium text-blue-800 dark:text-blue-200">No hay componentes en Fabricando para la fecha y turno seleccionados.</p>
+                <div class="text-sm text-blue-800 dark:text-blue-200">
+                    <p class="font-medium">No hay componentes con cupo en Fabricando para esta fecha y turno.</p>
+                    <p class="mt-1 text-xs text-blue-700/90 dark:text-blue-300/90">
+                        Los envíos ya están cubiertos por stock en pipeline, clasificación de calidad o partes registrados.
+                        Si ves filas antiguas en pantalla, recargá la página (F5) antes de guardar.
+                    </p>
+                </div>
             </div>
         </div>
         {% else %}
 
-        {% if bloquear_parte_supera_fabricando %}
         <div class="mb-3 rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-700/50 dark:bg-purple-900/20 sm:mb-4">
             <p class="text-xs text-purple-900 dark:text-purple-100">
-                <strong>Bloqueo activo:</strong> la suma por fila (todos los operarios) no puede superar la columna Fabricando.
+                <strong>Validación activa:</strong> la suma por fila (todos los operarios) no puede superar la columna Fabricando ni el techo de envíos a fabricación. El guardado se rechaza si se excede cualquiera de esos topes.
             </p>
         </div>
-        {% endif %}
 
         {# Grilla de captura #}
         <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
             <form method="post" action="{% url 'mpr:parte_produccion_registrar' %}" class="mpr-post-loading" id="form-parte-produccion"
-                  data-bloquear-fabricando="{% if bloquear_parte_supera_fabricando %}1{% else %}0{% endif %}"
+                  data-bloquear-fabricando="1"
                   data-mpr-loading-title="Registrando parte..."
                   data-mpr-loading-subtitle="Guardando las cantidades ingresadas.">
                 {% csrf_token %}
@@ -241,7 +249,7 @@
                                 {% for op in grilla.operarios %}
                                 <th scope="col" class="parte-op-col min-w-[8.5rem] border-l-2 px-2 py-2.5 text-center parte-op-tint-{{ forloop.counter0 }}" data-op-idx="{{ forloop.counter0 }}">
                                     <span class="block text-xs font-semibold text-slate-800 dark:text-slate-100">{{ op.nombre }}</span>
-                                    <span class="mt-0.5 block text-[10px] font-normal text-slate-500 dark:text-slate-400">Docenas · Unidades</span>
+                                    <span class="mt-0.5 block text-[10px] font-normal text-slate-500 dark:text-slate-400">Docenas de pares · Pares</span>
                                 </th>
                                 {% endfor %}
                             </tr>
@@ -262,7 +270,7 @@
                                 <td class="px-3 py-3 align-middle text-center">
                                     <div class="parte-fabricando-badge inline-flex flex-col items-center gap-1 rounded-lg border border-emerald-200/90 bg-emerald-50 px-2.5 py-2 dark:border-emerald-800/60 dark:bg-emerald-950/30">
                                         <span class="text-xs font-semibold tabular-nums leading-tight text-emerald-800 dark:text-emerald-300">{{ comp.fabricando_texto }}</span>
-                                        <span class="parte-fila-ingresado text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400" aria-live="polite">Ingresado: 0 u.</span>
+                                        <span class="parte-fila-ingresado text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400" aria-live="polite">Ingresado: 0 pares</span>
                                     </div>
                                 </td>
                                 {% for cel in comp.celdas_ops %}
@@ -270,7 +278,7 @@
                                     <div class="parte-celda-cantidad mx-auto w-full max-w-[9rem]" data-id-art="{{ comp.id_articulo }}" data-id-op="{{ cel.id_operario }}">
                                         <div class="parte-qty-group flex overflow-hidden rounded-lg border border-slate-300/90 bg-white shadow-sm transition-shadow focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-500 dark:bg-slate-900 dark:focus-within:border-purple-400">
                                             <label class="flex min-w-0 flex-1 flex-col">
-                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Docenas</span>
+                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400" title="Docenas de pares (×12)">Docenas</span>
                                                 <input type="number"
                                                        name="parte_art_{{ comp.id_articulo }}_op_{{ cel.id_operario }}_docenas"
                                                        min="0" step="1" inputmode="numeric"
@@ -280,13 +288,13 @@
                                                        data-id-art="{{ comp.id_articulo }}"
                                                        data-id-op="{{ cel.id_operario }}"
                                                        class="parte-input-docenas h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 focus:outline-none focus:ring-0 dark:text-slate-100"
-                                                       aria-label="Docenas {{ comp.codigo_manual }} — {{ cel.nombre }}">
+                                                       aria-label="Docenas de pares {{ comp.codigo_manual }} — {{ cel.nombre }}">
                                             </label>
                                             <div class="flex w-5 shrink-0 flex-col items-center justify-center border-x border-slate-200 bg-slate-50/90 dark:border-slate-600 dark:bg-slate-800/80" aria-hidden="true">
                                                 <span class="text-[10px] font-bold leading-none text-slate-300 dark:text-slate-600">+</span>
                                             </div>
                                             <label class="flex min-w-0 flex-1 flex-col">
-                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Unidades</span>
+                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Pares</span>
                                                 <input type="number"
                                                        name="parte_art_{{ comp.id_articulo }}_op_{{ cel.id_operario }}_unidades"
                                                        min="0" step="1" inputmode="numeric"
@@ -296,7 +304,7 @@
                                                        data-id-art="{{ comp.id_articulo }}"
                                                        data-id-op="{{ cel.id_operario }}"
                                                        class="parte-input-unidades h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 focus:outline-none focus:ring-0 dark:text-slate-100"
-                                                       aria-label="Unidades sueltas {{ comp.codigo_manual }} — {{ cel.nombre }}">
+                                                       aria-label="Pares sueltos {{ comp.codigo_manual }} — {{ cel.nombre }}">
                                             </label>
                                         </div>
                                         <p class="parte-celda-subtotal mt-1 hidden text-center text-[10px] font-medium tabular-nums text-purple-600 dark:text-purple-400" aria-hidden="true"></p>
@@ -337,7 +345,7 @@
 
 <script>
 (function () {
-    var UNIDADES_POR_DOCENA = {{ unidades_por_docena_parte|default:12 }};
+    var PARES_POR_DOCENA = {{ unidades_por_docena_parte|default:12 }};
     var form = document.getElementById('form-parte-produccion');
     if (!form) { return; }
 
@@ -348,10 +356,10 @@
         return isNaN(n) || n < 0 ? 0 : n;
     }
 
-    function unidadesCelda(idArt, idOp) {
+    function paresCelda(idArt, idOp) {
         var docInp = form.querySelector('[data-parte-part="docenas"][data-id-art="' + idArt + '"][data-id-op="' + idOp + '"]');
-        var uniInp = form.querySelector('[data-parte-part="unidades"][data-id-art="' + idArt + '"][data-id-op="' + idOp + '"]');
-        return parseQty(docInp && docInp.value) * UNIDADES_POR_DOCENA + parseQty(uniInp && uniInp.value);
+        var parInp = form.querySelector('[data-parte-part="unidades"][data-id-art="' + idArt + '"][data-id-op="' + idOp + '"]');
+        return parseQty(docInp && docInp.value) * PARES_POR_DOCENA + parseQty(parInp && parInp.value);
     }
 
     function actualizarSubtotales(tr) {
@@ -360,12 +368,12 @@
         var sumaFila = 0;
         tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
             var idOp = cel.getAttribute('data-id-op');
-            var u = unidadesCelda(idArt, idOp);
+            var u = paresCelda(idArt, idOp);
             sumaFila += u;
             var sub = cel.querySelector('.parte-celda-subtotal');
             if (sub) {
                 if (u > 0) {
-                    sub.textContent = '= ' + u + ' u.';
+                    sub.textContent = '= ' + u + ' pares';
                     sub.classList.remove('hidden', 'text-slate-400', 'dark:text-slate-500');
                     sub.classList.add('text-purple-600', 'dark:text-purple-400');
                 } else {
@@ -378,7 +386,7 @@
         var badge = tr.querySelector('.parte-fabricando-badge');
         var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
         if (ing) {
-            ing.textContent = 'Ingresado: ' + sumaFila + ' u.';
+            ing.textContent = 'Ingresado: ' + sumaFila + ' pares';
             ing.classList.remove('text-red-600', 'dark:text-red-400', 'text-emerald-700', 'dark:text-emerald-400', 'text-slate-500', 'dark:text-slate-400');
             if (sumaFila > tope + 1e-9) {
                 ing.classList.add('text-red-600', 'dark:text-red-400');
@@ -453,11 +461,11 @@
         actualizarSubtotales(tr);
     });
 
-    function sumaFilaUnidades(tr) {
+    function sumaFilaPares(tr) {
         var idArt = tr.getAttribute('data-id-art');
         var suma = 0;
         tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
-            suma += unidadesCelda(idArt, cel.getAttribute('data-id-op'));
+            suma += paresCelda(idArt, cel.getAttribute('data-id-op'));
         });
         return suma;
     }
@@ -467,10 +475,10 @@
             var errores = [];
             form.querySelectorAll('tbody tr[data-fabricando]').forEach(function (tr) {
                 var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
-                var suma = sumaFilaUnidades(tr);
+                var suma = sumaFilaPares(tr);
                 if (suma > tope + 1e-9) {
                     var cod = tr.querySelector('td span.font-semibold');
-                    errores.push((cod ? cod.textContent.trim() : 'Componente') + ': ' + suma + ' u. > ' + tope.toFixed(1) + ' u. en Fabricando');
+                    errores.push((cod ? cod.textContent.trim() : 'Componente') + ': ' + suma + ' pares > ' + tope.toFixed(1) + ' pares en Fabricando');
                 }
             });
             if (errores.length) {
@@ -557,4 +565,5 @@ document.addEventListener('alpine:init', function () {
     });
 });
 </script>
+<script type="module" src="{% static 'stock/js/filtro_marcas_tags.mjs' %}"></script>
 {% endblock %}

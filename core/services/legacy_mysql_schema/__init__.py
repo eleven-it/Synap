@@ -15,6 +15,7 @@ from .catalog import (
     run_mpr_core_tables_mysql,
     run_provider_by_id,
     run_self_checkout_core_tables_mysql,
+    run_synap_permisos_tables_mysql,
     run_tiendanube_integration_mysql,
 )
 
@@ -29,5 +30,6 @@ __all__ = [
     "run_mpr_core_tables_mysql",
     "run_provider_by_id",
     "run_self_checkout_core_tables_mysql",
+    "run_synap_permisos_tables_mysql",
     "run_tiendanube_integration_mysql",
 ]

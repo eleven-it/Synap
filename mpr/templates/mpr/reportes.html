@@ -71,7 +71,7 @@ function mprReportesHub() {
     return {
         desde: '{{ fecha_desde_iso }}',
         hasta: '{{ fecha_hasta_iso }}',
-        presentacion: '{{ modo_presentacion|default:"unidades" }}',
+        presentacion: '{{ modo_presentacion|default:"docenas" }}',
         presetActivo: null,
         busquedaTabla: '',
         sugerenciasAbiertas: false,
@@ -119,6 +119,8 @@ function mprReportesHub() {
             if (this.hasta) params.set('hasta', this.hasta);
             if (this.presentacion) params.set('presentacion', this.presentacion);
             if (idArt && idArt.value) params.set('id_articulo', idArt.value);
+            const opActual = new URLSearchParams(window.location.search).get('op');
+            if (opActual) params.set('op', opActual);
             window.location.search = '?' + params.toString();
         },
         cambiarPresentacion(modo) {

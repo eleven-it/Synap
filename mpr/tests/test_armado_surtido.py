@@ -36,7 +36,7 @@ class ValidarDatosArmadoSurtidoTest(SimpleTestCase):
         self.assertFalse(ok)
         self.assertIn("distintos", (err or "").lower())
 
-    def test_rechaza_sin_operario(self):
+    def test_acepta_sin_operario(self):
         ok, err = validar_datos_armado_surtido(
             1,
             10,
@@ -45,8 +45,8 @@ class ValidarDatosArmadoSurtidoTest(SimpleTestCase):
             id_operario=None,
             id_articulo_pack=100,
         )
-        self.assertFalse(ok)
-        self.assertIn("operario", (err or "").lower())
+        self.assertTrue(ok)
+        self.assertIsNone(err)
 
     def test_rechaza_articulo_duplicado(self):
         ok, err = validar_datos_armado_surtido(

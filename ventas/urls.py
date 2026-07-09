@@ -2,6 +2,8 @@ from django.urls import path
 
 from ventas import views
 from ventas import views_presupuesto
+from ventas import views_precios_terminados
+from ventas import views_precios_historial
 from ventas import views_vendedor_asignacion
 
 app_name = "ventas"
@@ -85,5 +87,41 @@ urlpatterns = [
         "api/presupuestos/",
         views_presupuesto.api_presupuesto_list,
         name="api_presupuesto_list",
+    ),
+    # Precios productos terminados (tabla masiva)
+    path(
+        "precios-terminados/",
+        views_precios_terminados.precios_terminados_view,
+        name="precios_terminados",
+    ),
+    path(
+        "precios-terminados/api/articulos-buscar/",
+        views_precios_terminados.api_precios_terminados_articulos_buscar,
+        name="api_precios_terminados_articulos_buscar",
+    ),
+    path(
+        "precios-terminados/guardar/",
+        views_precios_terminados.precios_terminados_guardar_view,
+        name="precios_terminados_guardar",
+    ),
+    path(
+        "precios-terminados/masivo/preview/",
+        views_precios_terminados.precios_terminados_masivo_preview_view,
+        name="precios_terminados_masivo_preview",
+    ),
+    path(
+        "precios-terminados/masivo/aplicar/",
+        views_precios_terminados.precios_terminados_masivo_aplicar_view,
+        name="precios_terminados_masivo_aplicar",
+    ),
+    path(
+        "precios-terminados/api/historial/<int:id_articulo>/",
+        views_precios_historial.api_precios_historial_articulo,
+        name="api_precios_historial_articulo",
+    ),
+    path(
+        "evolucion-precios/",
+        views_precios_historial.evolucion_precios_view,
+        name="evolucion_precios",
     ),
 ]

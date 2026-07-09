@@ -753,10 +753,206 @@ def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
                 )
                 _append_migration(applied, failed, True, f"idx_mpr_ep_lote en {tbl_ep}")
 
+        tbl_tl = nombre_tabla_real(cursor, "mpr_transicion_lote")
+        if tbl_tl:
+            ttl = tbl_tl.replace("`", "``")
+            for col, ddl in (
+                (
+                    "id_operario",
+                    "INT NULL COMMENT 'Operario que fabricó (no el clasificador)'",
+                ),
+                (
+                    "operario_nombre",
+                    "VARCHAR(255) NOT NULL DEFAULT '-' "
+                    "COMMENT 'Snapshot nombre operario fabricante'",
+                ),
+                (
+                    "fecha_produccion",
+                    "DATE NULL COMMENT 'Fecha de carga del parte/clasificación'",
+                ),
+                (
+                    "id_mpr_turno",
+                    "BIGINT NULL COMMENT 'Turno de producción del parte/clasificación'",
+                ),
+            ):
+                if not columna_existe(cursor, tbl_tl, col):
+                    cursor.execute(
+                        "ALTER TABLE `{}` ADD COLUMN {} {}".format(ttl, col, ddl)
+                    )
+                    _append_migration(applied, failed, True, f"{tbl_tl}.{col}")
+            if not indice_existe(cursor, tbl_tl, "idx_mpr_tl_fecha_turno_art_op"):
+                cursor.execute(
+                    "CREATE INDEX `idx_mpr_tl_fecha_turno_art_op` ON `{}` "
+                    "(fecha_produccion, id_mpr_turno, id_articulo, id_operario)".format(ttl)
+                )
+                _append_migration(
+                    applied, failed, True, f"idx_mpr_tl_fecha_turno_art_op en {tbl_tl}"
+                )
+
         conn.commit()
     except Exception as e:
         conn.rollback()
         logger.exception("run_mpr_core_tables_mysql: %s", e)
+        failed.append(str(e))
+    finally:
+        cursor.close()
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
+def run_mpr_maquina_linea_mysql(conn) -> Dict[str, Any]:
+    """
+    Trazabilidad MPR por máquina/línea/operario.
+
+    - Crea tablas nuevas (``003_mpr_maquina_linea_tables.sql``): mpr_linea, mpr_maquina,
+      mpr_maquina_linea, mpr_maquina_articulo, mpr_operario_linea, mpr_operario_usuario.
+    - Extiende el ledger de partes (estado/origen/gap/máquina) y el roster (override de línea)
+      de forma idempotente (equivalente a ``004_mpr_parte_maquina_gap.sql``).
+
+    Idempotente. Ver openspec/changes/mpr-trazabilidad-maquina-linea-operario/design.md.
+    """
+    from django.apps import apps
+
+    applied: List[str] = []
+    failed: List[str] = []
+    try:
+        app_path = Path(apps.get_app_config("mpr").path)
+    except LookupError:
+        msg = "La app Django «mpr» no está instalada."
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    sql_path = app_path / "sql" / "003_mpr_maquina_linea_tables.sql"
+    if not sql_path.is_file():
+        msg = f"No se encontró el archivo {sql_path}"
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    cursor = conn.cursor()
+    try:
+        # 1) Tablas nuevas (CREATE TABLE IF NOT EXISTS — idempotente)
+        sql_content = sql_path.read_text(encoding="utf-8")
+        raw_statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+        for stmt in raw_statements:
+            stmt = _sc_sql_strip_leading_comments(stmt)
+            if stmt:
+                cursor.execute(stmt)
+        _append_migration(
+            applied, failed, True, "DDL MPR máquina/línea (003_mpr_maquina_linea_tables.sql)"
+        )
+
+        # 2) mpr_parte — estado/origen/auditoría de aprobación
+        tbl_p = nombre_tabla_real(cursor, "mpr_parte")
+        if tbl_p:
+            tp = tbl_p.replace("`", "``")
+            for col, ddl in (
+                (
+                    "estado",
+                    "VARCHAR(12) NOT NULL DEFAULT 'aprobado' "
+                    "COMMENT 'borrador | pendiente | aprobado'",
+                ),
+                (
+                    "origen",
+                    "VARCHAR(20) NOT NULL DEFAULT 'directo_supervisor' "
+                    "COMMENT 'movil_operario | directo_supervisor'",
+                ),
+                ("id_usuario_supervisor", "INT NULL COMMENT 'Supervisor que aprobó'"),
+                ("aprobado_en", "DATETIME NULL COMMENT 'Timestamp de aprobación'"),
+            ):
+                if not columna_existe(cursor, tbl_p, col):
+                    cursor.execute("ALTER TABLE `{}` ADD COLUMN {} {}".format(tp, col, ddl))
+                    _append_migration(applied, failed, True, f"{tbl_p}.{col}")
+            if not indice_existe(cursor, tbl_p, "idx_mpr_parte_estado"):
+                cursor.execute("CREATE INDEX `idx_mpr_parte_estado` ON `{}`(estado)".format(tp))
+                _append_migration(applied, failed, True, f"idx_mpr_parte_estado en {tbl_p}")
+
+        # 3) mpr_parte_linea — máquina + gap declarado/aprobado
+        tbl_pl = nombre_tabla_real(cursor, "mpr_parte_linea")
+        if tbl_pl:
+            tpl = tbl_pl.replace("`", "``")
+            for col, ddl in (
+                (
+                    "id_mpr_maquina",
+                    "BIGINT NULL COMMENT 'FK lógica mpr_maquina.id_mpr_maquina'",
+                ),
+                (
+                    "maquina_nombre",
+                    "VARCHAR(100) NULL COMMENT 'Snapshot código/nombre máquina'",
+                ),
+                (
+                    "cantidad_declarada",
+                    "DECIMAL(15,2) NOT NULL DEFAULT 0 COMMENT 'Declarada por operario (pares)'",
+                ),
+                (
+                    "cantidad_aprobada",
+                    "DECIMAL(15,2) NULL COMMENT 'Aprobada por supervisor (pares)'",
+                ),
+                (
+                    "gap",
+                    "DECIMAL(15,2) NOT NULL DEFAULT 0 COMMENT 'aprobada - declarada'",
+                ),
+                ("motivo", "VARCHAR(255) NULL COMMENT 'Requerido si gap != 0'"),
+            ):
+                if not columna_existe(cursor, tbl_pl, col):
+                    cursor.execute("ALTER TABLE `{}` ADD COLUMN {} {}".format(tpl, col, ddl))
+                    _append_migration(applied, failed, True, f"{tbl_pl}.{col}")
+            # Backfill legacy: declarada/aprobada = cantidad
+            cursor.execute(
+                "UPDATE `{}` SET cantidad_declarada = cantidad, cantidad_aprobada = cantidad "
+                "WHERE cantidad_aprobada IS NULL".format(tpl)
+            )
+            if cursor.rowcount:
+                _append_migration(
+                    applied,
+                    failed,
+                    True,
+                    f"{tbl_pl}: backfill declarada/aprobada en {cursor.rowcount} línea(s)",
+                )
+            # Unicidad incluye máquina (una fila por parte×artículo×operario×máquina)
+            if indice_existe(cursor, tbl_pl, "uk_mpr_parte_linea") and not indice_existe(
+                cursor, tbl_pl, "uk_mpr_parte_linea_maq"
+            ):
+                # La FK a mpr_parte usa uk_mpr_parte_linea como índice; crear uno de respaldo
+                # sobre id_mpr_parte antes de poder eliminar la unique key.
+                if not indice_existe(cursor, tbl_pl, "idx_mpr_pl_parte"):
+                    cursor.execute(
+                        "CREATE INDEX `idx_mpr_pl_parte` ON `{}`(id_mpr_parte)".format(tpl)
+                    )
+                cursor.execute("ALTER TABLE `{}` DROP INDEX uk_mpr_parte_linea".format(tpl))
+                cursor.execute(
+                    "ALTER TABLE `{}` ADD UNIQUE KEY uk_mpr_parte_linea_maq "
+                    "(id_mpr_parte, id_articulo, id_operario, id_mpr_maquina)".format(tpl)
+                )
+                _append_migration(applied, failed, True, f"{tbl_pl}: unicidad incluye máquina")
+
+        # 4) mpr_roster_dia — override de línea
+        tbl_r = nombre_tabla_real(cursor, "mpr_roster_dia")
+        if tbl_r:
+            tr = tbl_r.replace("`", "``")
+            if not columna_existe(cursor, tbl_r, "id_mpr_linea"):
+                cursor.execute(
+                    "ALTER TABLE `{}` ADD COLUMN id_mpr_linea BIGINT NULL "
+                    "COMMENT 'Override de línea; NULL = habitual'".format(tr)
+                )
+                _append_migration(applied, failed, True, f"{tbl_r}.id_mpr_linea")
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_mpr_maquina_linea_mysql: %s", e)
         failed.append(str(e))
     finally:
         cursor.close()
@@ -852,6 +1048,80 @@ def run_self_checkout_core_tables_mysql(conn) -> Dict[str, Any]:
         failed.append(str(e))
     finally:
         cursor.close()
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
+def run_synap_permisos_tables_mysql(conn) -> Dict[str, Any]:
+    """
+    Crea las tablas ``synap_*`` (permisos y roles Synap independientes de
+    AdministraNET) si no existen y siembra el catálogo ``synap_permiso``.
+
+    NO escribe en ``permiso_sistema``/``permiso_sistema_puesto`` (tablas VB6).
+    Equivalente a ``manage.py apply_synap_permisos_tables``. Idempotente.
+    """
+    from django.apps import apps
+
+    applied: List[str] = []
+    failed: List[str] = []
+    try:
+        app_path = Path(apps.get_app_config("core").path)
+    except LookupError:
+        msg = "La app Django «core» no está instalada."
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    sql_path = app_path / "sql" / "001_synap_permisos_tables.sql"
+    if not sql_path.is_file():
+        msg = f"No se encontró el archivo {sql_path}"
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    cursor = conn.cursor()
+    try:
+        sql_content = sql_path.read_text(encoding="utf-8")
+        raw_statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+        statements: List[str] = []
+        for stmt in raw_statements:
+            stmt = _sc_sql_strip_leading_comments(stmt)
+            if stmt:
+                statements.append(stmt)
+
+        for stmt in statements:
+            cursor.execute(stmt)
+        _append_migration(applied, failed, True, "DDL Synap permisos (001_synap_permisos_tables.sql)")
+        cursor.close()
+
+        # Seed idempotente del catálogo (import diferido para evitar ciclo).
+        from core.services.synap_permisos_seed import seed_synap_permiso_catalog
+
+        seed_res = seed_synap_permiso_catalog(conn)
+        _append_migration(
+            applied, failed, bool(seed_res.get("success")), seed_res.get("message", "Seed synap_permiso")
+        )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_synap_permisos_tables_mysql: %s", e)
+        failed.append(str(e))
+        try:
+            cursor.close()
+        except Exception:
+            pass
 
     return {
         "success": len(failed) == 0,
@@ -1206,6 +1476,20 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         "run": run_mpr_core_tables_mysql,
     },
     {
+        "id": "mpr_maquina_linea_trazabilidad",
+        "title": "MPR — máquina/línea/trazabilidad",
+        "description": (
+            "Crea tablas de trazabilidad por máquina/línea/operario "
+            "(``003_mpr_maquina_linea_tables.sql``): mpr_linea, mpr_maquina, mpr_maquina_linea, "
+            "mpr_maquina_articulo, mpr_operario_linea, mpr_operario_usuario. Extiende el ledger de "
+            "partes (estado/origen/gap/máquina) y el roster (override de línea) de forma idempotente "
+            "(equivalente a ``004_mpr_parte_maquina_gap.sql``). "
+            "Ver openspec/changes/mpr-trazabilidad-maquina-linea-operario/design.md."
+        ),
+        "risk": "medio",
+        "run": run_mpr_maquina_linea_mysql,
+    },
+    {
         "id": "mpr_drop_lista_produccion_legacy",
         "title": "MPR — eliminar tablas OPT legacy (lista_produccion_*)",
         "description": (
@@ -1228,6 +1512,20 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "bajo",
         "run": run_self_checkout_core_tables_mysql,
+    },
+    {
+        "id": "synap_permisos_tables",
+        "title": "Synap — permisos y roles (synap_*)",
+        "description": (
+            "Crea las tablas synap_permiso, synap_rol, synap_rol_permiso y synap_puesto_rol "
+            "en la base de la empresa (``001_synap_permisos_tables.sql``) y siembra el catálogo "
+            "de permisos Synap desde PERMISOS_POR_MODULO. Independiza los permisos de Synap de "
+            "las tablas VB6 compartidas (permiso_sistema/permiso_sistema_puesto); no escribe en ellas. "
+            "Equivalente a ``manage.py apply_synap_permisos_tables``. "
+            "Ver openspec/changes/permisos-roles-synap-independientes/design.md."
+        ),
+        "risk": "bajo",
+        "run": run_synap_permisos_tables_mysql,
     },
     {
         "id": "viajantes_objetivos_ventas",

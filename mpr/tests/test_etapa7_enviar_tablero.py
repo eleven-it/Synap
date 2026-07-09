@@ -330,7 +330,7 @@ class TestQueryEnviadoTableroComponente(TestCase):
 class TestIntegracionEnviadoTablero(SimpleTestCase):
     """REQ: Columna Enviado dos fuentes — Spec 2 MODIFIED."""
 
-    def _patch_tablero(self, enviado_pack_map=None, envios_tablero=None,
+    def _patch_tablero(self, envios_tablero=None,
                        stock_produccion=0.0, enviado_opt_comp=0.0):
         """Configura todos los mocks para listar_tablero_por_articulo."""
         filas = _filas_pack(demanda=100.0)
@@ -338,20 +338,14 @@ class TestIntegracionEnviadoTablero(SimpleTestCase):
         bom = _bom_map()
         sp = _stock_pivot(produccion=stock_produccion)
         desc = _desc_map()
-        if enviado_pack_map is None:
-            enviado_pack_map = {}
-        # Mock de _enviado_produccion_por_componente para aislar enviado_opt
-        enviado_comp_mock = {42: enviado_opt_comp} if enviado_opt_comp else {}
 
         patches = [
-            patch("mpr.services.listar_ventana_pack", return_value=filas),
-            patch("mpr.services.mysql_cursor"),
-            patch("mpr.services._query_enviado_packs", return_value=enviado_pack_map),
+            patch("mpr.services.listar_demanda_pack_desde_pedidos", return_value=filas),
+            patch("mpr.services._query_enviados_todos_componentes", return_value={}),
             patch("mpr.services.bulk_id_en_abm", return_value=abm),
             patch("mpr.services.bulk_bom_detalle", return_value=bom),
             patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(sp, sp)),
             patch("mpr.services._fetch_descripciones_articulo", return_value=desc),
-            patch("mpr.services._enviado_produccion_por_componente", return_value=enviado_comp_mock),
             patch("mpr.services._query_enviado_tablero_componente",
                   return_value={42: Decimal(str(envios_tablero))} if envios_tablero else {}),
         ]
@@ -359,35 +353,28 @@ class TestIntegracionEnviadoTablero(SimpleTestCase):
 
     def _run(self, patches):
         activos = [p.start() for p in patches]
-        ctx_mock = MagicMock()
-        ctx_mock.__enter__ = MagicMock(return_value=MagicMock())
-        ctx_mock.__exit__ = MagicMock(return_value=False)
-        # mysql_cursor es el 2do patch
-        activos[1].return_value = ctx_mock
         try:
-            return listar_tablero_por_articulo(EMPRESA)
+            return listar_tablero_por_articulo(EMPRESA, solo_urgente=False)
         finally:
             for p in patches:
                 p.stop()
 
-    def test_enviado_es_opt_mas_tablero_sin_stock(self):
-        """Con envíos tablero=30 y stock_prod=0 → Enviado_tablero=30; Enviado=OPT+30."""
+    def test_enviado_es_solo_envios_tablero_sin_stock(self):
+        """Con envíos tablero=30 y stock_prod=0 → Fabricando=30."""
         patches = self._patch_tablero(envios_tablero=30.0, stock_produccion=0.0, enviado_opt_comp=5.0)
         filas = self._run(patches)
         self.assertTrue(len(filas) > 0)
         fila = next((r for r in filas if r["id_articulo"] == 42), None)
         self.assertIsNotNone(fila)
-        # enviado_opt=5, enviado_tablero=max(0,30-0)=30 → enviado=35
-        self.assertAlmostEqual(fila["enviado"], 35.0, places=1)
+        self.assertAlmostEqual(fila["enviado"], 30.0, places=1)
 
     def test_backward_safe_sin_envios_tablero(self):
-        """Sin envíos tablero (mock retorna {}) → Enviado = solo OPT (idéntico a E6)."""
+        """Sin envíos tablero → Fabricando=0."""
         patches = self._patch_tablero(envios_tablero=None, stock_produccion=0.0, enviado_opt_comp=10.0)
         filas = self._run(patches)
         fila = next((r for r in filas if r["id_articulo"] == 42), None)
         self.assertIsNotNone(fila)
-        # enviado_tablero = max(0, 0-0) = 0 → enviado = 10 (solo OPT)
-        self.assertAlmostEqual(fila["enviado"], 10.0, places=1)
+        self.assertAlmostEqual(fila["enviado"], 0.0, places=1)
 
     def test_enviado_tablero_con_stock_reduce_sin_doble_conteo(self):
         """SUM(envíos_tablero)=30, stock_prod=20 → Enviado_tablero=max(0,30-20)=10."""
@@ -407,16 +394,15 @@ class TestIntegracionEnviadoTablero(SimpleTestCase):
         # enviado_tablero = max(0, 10-15) = 0 → enviado >= 0
         self.assertGreaterEqual(fila["enviado"], 0.0)
 
-    def test_pendiente_coherente_con_enviado_e7(self):
-        """Pendiente = max(0, demanda - (enviado + total)) es coherente tras E7."""
+    def test_resta_total_pcp_sin_envios_ledger(self):
+        """resta_total = max(0, demanda − stock_proceso) — paridad PCP, sin envíos ledger."""
         patches = self._patch_tablero(envios_tablero=20.0, stock_produccion=0.0, enviado_opt_comp=0.0)
         filas = self._run(patches)
         fila = next((r for r in filas if r["id_articulo"] == 42), None)
         self.assertIsNotNone(fila)
-        # demanda=100, enviado=20, total=0 → pendiente=80
-        self.assertGreaterEqual(fila["pendiente"], 0.0)
-        expected = max(0.0, fila["demanda"] - (fila["enviado"] + fila["total"]))
-        self.assertAlmostEqual(fila["pendiente"], expected, places=1)
+        expected = max(0.0, fila["demanda"] - fila["stock_proceso"])
+        self.assertAlmostEqual(fila["resta_total"], expected, places=1)
+        self.assertAlmostEqual(fila["pendiente"], fila["resta_total"], places=1)
 
 
 # ===========================================================================

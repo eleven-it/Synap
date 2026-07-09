@@ -1,6 +1,6 @@
 {% if mpr_charts and mpr_charts.blocks %}
 {{ mpr_charts|json_script:"mpr-charts-payload" }}
-<div class="mb-4 space-y-4" data-y-label="{{ etiqueta_cantidad|default:'unidades' }}" id="mpr-charts-root">
+<div class="mb-4 space-y-4" data-y-label="{{ etiqueta_cantidad|default:'pares' }}" id="mpr-charts-root">
     <div class="grid gap-4 {% if mpr_charts.blocks|length > 1 %}lg:grid-cols-2{% endif %}">
         {% for block in mpr_charts.blocks %}
         <div class="rounded-xl border border-gray-200/90 bg-gray-50/50 p-3 dark:border-gray-700 dark:bg-gray-900/30 sm:p-4 {% if block.kind == 'line_multi' %}lg:col-span-2{% endif %}">

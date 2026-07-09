@@ -1,0 +1,69 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Línea habitual por operario - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li>
+                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a>
+                </li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Línea habitual por operario</span></li>
+            </ol>
+        </nav>
+
+        <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Línea habitual por operario</h1>
+            <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">La línea habitual se usa por defecto para la carga del operario. El roster puede sobrescribirla por día. Al cambiarla se registra la vigencia.</p>
+        </header>
+
+        <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="overflow-x-auto">
+                <table class="min-w-[40rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                    <thead class="bg-gray-50/90 dark:bg-gray-800/80">
+                        <tr>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Operario</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Línea habitual</th>
+                            <th scope="col" class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Cambiar</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for op in operarios %}
+                        <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40">
+                            <td class="px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-5">{{ op.nombre_empleado }}</td>
+                            <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">
+                                {% if op.linea_habitual_nombre %}{{ op.linea_habitual_nombre }}{% else %}<span class="text-gray-400 dark:text-gray-500">Sin asignar</span>{% endif %}
+                            </td>
+                            <td class="px-4 py-3.5 sm:px-5">
+                                <form method="post" class="flex flex-wrap items-center gap-2">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="id_operario" value="{{ op.id_sue_abm_empleado }}"/>
+                                    <select name="id_linea" class="min-h-9 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                                        <option value="">— Elegir línea —</option>
+                                        {% for linea in lineas %}
+                                        <option value="{{ linea.id }}" {% if linea.id == op.id_linea_habitual %}selected{% endif %}>{{ linea.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="inline-flex min-h-9 items-center gap-1 rounded-lg bg-purple-600 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+                                        <span class="material-icons text-sm" aria-hidden="true">save</span>
+                                        Guardar
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay operarios registrados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

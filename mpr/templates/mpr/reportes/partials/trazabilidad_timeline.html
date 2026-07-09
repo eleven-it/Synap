@@ -3,7 +3,7 @@
     <input type="hidden" name="reporte" value="timeline">
     <input type="hidden" name="desde" value="{{ fecha_desde_iso }}">
     <input type="hidden" name="hasta" value="{{ fecha_hasta_iso }}">
-    <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'unidades' }}">
+    <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}">
     <div>
         <label for="id_articulo" class="mb-1 block text-xs font-semibold text-gray-600">ID componente</label>
         <input type="number" name="id_articulo" id="id_articulo" value="{{ meta.id_articulo|default:'' }}" min="1"

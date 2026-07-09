@@ -6,7 +6,7 @@
                 <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600">Fecha</th>
                 <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600">Código</th>
                 <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600">Componente</th>
-                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600">Cantidad ({{ etiqueta_cantidad_corta|default:"u." }})</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600">Cantidad ({{ etiqueta_cantidad_corta|default:"p." }})</th>
                 <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600">Detalle</th>
                 <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600">Operario</th>
             </tr>
@@ -18,7 +18,7 @@
                 <td class="px-3 py-2 text-sm tabular-nums text-gray-600">{{ r.fecha|default:"-" }}</td>
                 <td class="px-3 py-2 text-sm">
                     {% if r.id_articulo %}
-                    <a href="?grupo=trazabilidad&reporte=timeline&id_articulo={{ r.id_articulo }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'unidades' }}" class="font-medium text-purple-600 hover:underline">{{ r.codigo_manual|default:"-" }}</a>
+                    <a href="?grupo=trazabilidad&reporte=timeline&id_articulo={{ r.id_articulo }}&desde={{ fecha_desde_iso }}&hasta={{ fecha_hasta_iso }}&presentacion={{ modo_presentacion|default:'docenas' }}" class="font-medium text-purple-600 hover:underline">{{ r.codigo_manual|default:"-" }}</a>
                     {% else %}{{ r.codigo_manual|default:"-" }}{% endif %}
                 </td>
                 <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300 max-w-[12rem] truncate" title="{{ r.descripcion_articulo|default:'' }}">{{ r.descripcion_articulo|default:"-" }}</td>

@@ -1,0 +1,114 @@
+{# Encabezado oscuro canónico — Control de calidad (siempre visible). #}
+<div class="mb-2 rounded-lg border border-slate-700 bg-slate-800 p-2 shadow-md dark:border-slate-800 dark:bg-slate-900 sm:mb-3 sm:p-3">
+    <header class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
+        <div class="min-w-0 shrink-0">
+            <h1 class="flex items-center gap-2 text-lg font-bold tracking-tight text-white sm:text-xl">
+                <span class="material-icons text-2xl text-teal-400" aria-hidden="true">verified</span>
+                {{ titulo_pantalla }}
+            </h1>
+        </div>
+
+        <div class="flex flex-wrap items-end gap-2 sm:gap-2.5 lg:shrink-0">
+            <form method="get"
+                  action="{% url 'mpr:clasificacion_produccion' %}"
+                  class="flex flex-wrap items-end gap-2"
+                  x-data="clasificacionFiltros()"
+                  x-init="init()"
+                  @submit="onSubmit($event)">
+
+                <label class="flex flex-col gap-0.5">
+                    <span class="text-[10px] font-medium text-slate-400">Fecha</span>
+                    <input type="date"
+                           x-model="fechaIso"
+                           required
+                           class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white [color-scheme:dark] focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50"/>
+                    <input type="hidden" name="fecha" :value="fechaDdmmyyyy">
+                </label>
+
+                <div class="relative flex flex-col gap-0.5" @click.outside="open = false">
+                    <span class="text-[10px] font-medium text-slate-400">Turno</span>
+                    <div class="relative">
+                        <span class="material-icons pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-slate-400" aria-hidden="true">schedule</span>
+                        <input type="text"
+                               x-model="query"
+                               @focus="open = true"
+                               @click="open = true"
+                               @input="onInput()"
+                               @keydown.arrow-down.prevent="move(1)"
+                               @keydown.arrow-up.prevent="move(-1)"
+                               @keydown.enter.prevent="enter()"
+                               @keydown.escape="open = false"
+                               role="combobox"
+                               aria-autocomplete="list"
+                               :aria-expanded="open"
+                               autocomplete="off"
+                               placeholder="Buscar turno…"
+                               class="w-44 rounded-md border border-slate-600 bg-slate-700 py-1.5 pl-8 pr-8 text-xs text-white placeholder:text-slate-400 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-500/50 sm:w-48"/>
+                        <button type="button"
+                                x-show="selectedId"
+                                x-cloak
+                                @click="clearSel()"
+                                aria-label="Limpiar turno"
+                                class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 transition-colors hover:text-white">
+                            <span class="material-icons text-sm" aria-hidden="true">close</span>
+                        </button>
+                        <input type="hidden" name="turno_id" :value="selectedId">
+                        <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}">
+                        {% if ver_roster %}<input type="hidden" name="ver_roster" value="1">{% endif %}
+
+                        <ul x-show="open"
+                            x-cloak
+                            x-transition.opacity.duration.150ms
+                            role="listbox"
+                            class="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                            <template x-for="(opt, idx) in filtered" :key="opt.id">
+                                <li role="option"
+                                    :aria-selected="String(opt.id) === String(selectedId)"
+                                    @click="select(opt)"
+                                    @mouseenter="highlight = idx"
+                                    :class="{
+                                        'bg-teal-50 dark:bg-teal-900/30': idx === highlight,
+                                        'font-semibold text-teal-700 dark:text-teal-300': String(opt.id) === String(selectedId)
+                                    }"
+                                    class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-slate-700 transition-colors dark:text-slate-200">
+                                    <span class="material-icons text-sm text-slate-400" aria-hidden="true">schedule</span>
+                                    <span x-text="opt.nombre"></span>
+                                </li>
+                            </template>
+                            <li x-show="filtered.length === 0"
+                                class="px-3 py-2 text-xs text-slate-400">
+                                Sin turnos que coincidan
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
+
+                <button type="submit"
+                        class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                    <span class="material-icons text-base" aria-hidden="true">search</span>
+                    Cargar grilla
+                </button>
+            </form>
+
+            {% if not requiere_fecha_turno %}
+            {% include "mpr/includes/toggle_presentacion_cantidad.html" with modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
+            {% endif %}
+
+            {% if fecha_str and turno_id %}
+            <a href="{% url 'mpr:parte_produccion' %}?fecha={{ fecha_str|urlencode }}&amp;turno_id={{ turno_id }}"
+               class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                <span class="material-icons text-base" aria-hidden="true">assignment</span>
+                Parte
+            </a>
+            {% endif %}
+
+            <a href="{% url 'mpr:tablero_produccion' %}"
+               class="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                <span class="material-icons text-base" aria-hidden="true">dashboard</span>
+                Tablero
+            </a>
+        </div>
+    </header>
+</div>

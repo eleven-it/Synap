@@ -86,8 +86,43 @@
                 },
                 scales: {
                     x: { grid: { color: t.grid }, ticks: { color: t.tick, maxRotation: 45, font: { size: 11 } } },
-                    y: { beginAtZero: true, position: 'left', grid: { color: t.grid }, ticks: { color: t.tick }, title: { display: true, text: yLabel || 'unidades', color: t.tick, font: { size: 11 } } },
+                    y: { beginAtZero: true, position: 'left', grid: { color: t.grid }, ticks: { color: t.tick }, title: { display: true, text: yLabel || 'pares', color: t.tick, font: { size: 11 } } },
                     y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#dc2626' }, title: { display: true, text: 'Scrap', color: '#dc2626', font: { size: 11 } } },
+                },
+            },
+        });
+    }
+
+    function renderLine(canvas, block, yLabel) {
+        var t = theme();
+        var color = block.color || '#059669';
+        return new global.Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: block.labels || [],
+                datasets: [{
+                    label: block.serie_label || 'Producción',
+                    data: block.values || [],
+                    borderColor: color,
+                    backgroundColor: 'rgba(5,150,105,0.10)',
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    pointBackgroundColor: color,
+                    tension: 0.25,
+                    fill: true,
+                }],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: function (ctx) { return (ctx.dataset.label ? ctx.dataset.label + ': ' : '') + fmtN(ctx.parsed.y); } } },
+                },
+                scales: {
+                    x: { grid: { color: t.grid }, ticks: { color: t.tick, maxRotation: 45, font: { size: 11 } } },
+                    y: { beginAtZero: true, grid: { color: t.grid }, ticks: { color: t.tick, font: { size: 11 } }, title: { display: true, text: yLabel || 'pares', color: t.tick, font: { size: 11 } } },
                 },
             },
         });
@@ -96,14 +131,14 @@
     function renderHbar(canvas, block, yLabel) {
         var opts = baseOptions(yLabel);
         opts.indexAxis = 'y';
-        opts.scales.x.title = { display: true, text: yLabel || 'unidades', color: theme().tick, font: { size: 11 } };
+        opts.scales.x.title = { display: true, text: yLabel || 'pares', color: theme().tick, font: { size: 11 } };
         delete opts.scales.y.title;
         return new global.Chart(canvas, {
             type: 'bar',
             data: {
                 labels: block.labels || [],
                 datasets: [{
-                    label: 'Unidades',
+                    label: 'Pares',
                     data: block.values || [],
                     backgroundColor: block.color || '#7c3aed',
                     borderRadius: 4,
@@ -117,7 +152,7 @@
         var opts = baseOptions(yLabel);
         opts.indexAxis = 'y';
         opts.plugins.legend = { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } };
-        opts.scales.x.title = { display: true, text: yLabel || 'unidades', color: theme().tick, font: { size: 11 } };
+        opts.scales.x.title = { display: true, text: yLabel || 'pares', color: theme().tick, font: { size: 11 } };
         delete opts.scales.y.title;
         return new global.Chart(canvas, {
             type: 'bar',
@@ -138,7 +173,7 @@
         var opts = baseOptions(yLabel);
         opts.indexAxis = 'y';
         opts.plugins.legend = { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } };
-        opts.scales.x.title = { display: true, text: yLabel || 'unidades', color: theme().tick, font: { size: 11 } };
+        opts.scales.x.title = { display: true, text: yLabel || 'pares', color: theme().tick, font: { size: 11 } };
         delete opts.scales.y.title;
         var datasets = (block.datasets || []).map(function (ds) {
             return {
@@ -146,6 +181,29 @@
                 data: ds.values,
                 backgroundColor: ds.color,
                 borderRadius: 3,
+            };
+        });
+        return new global.Chart(canvas, {
+            type: 'bar',
+            data: { labels: block.labels || [], datasets: datasets },
+            options: opts,
+        });
+    }
+
+    function renderHbarStacked(canvas, block, yLabel) {
+        var opts = baseOptions(yLabel);
+        opts.indexAxis = 'y';
+        opts.plugins.legend = { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } };
+        opts.scales.x.stacked = true;
+        opts.scales.y.stacked = true;
+        opts.scales.x.title = { display: true, text: yLabel || 'pares', color: theme().tick, font: { size: 11 } };
+        delete opts.scales.y.title;
+        var datasets = (block.datasets || []).map(function (ds) {
+            return {
+                label: ds.label,
+                data: ds.values,
+                backgroundColor: ds.color,
+                borderRadius: 2,
             };
         });
         return new global.Chart(canvas, {
@@ -163,7 +221,7 @@
             data: {
                 labels: block.labels || [],
                 datasets: [{
-                    label: (ds0 && ds0.label) || 'Unidades',
+                    label: (ds0 && ds0.label) || 'Pares',
                     data: (ds0 && ds0.values) || [],
                     backgroundColor: colors,
                     borderRadius: 6,
@@ -211,6 +269,9 @@
             case 'line_multi':
                 chart = renderLineMulti(canvas, block, yLabel);
                 break;
+            case 'line':
+                chart = renderLine(canvas, block, yLabel);
+                break;
             case 'hbar':
                 chart = renderHbar(canvas, block, yLabel);
                 break;
@@ -219,6 +280,9 @@
                 break;
             case 'hbar_grouped':
                 chart = renderHbarGrouped(canvas, block, yLabel);
+                break;
+            case 'hbar_stacked':
+                chart = renderHbarStacked(canvas, block, yLabel);
                 break;
             case 'grouped_bar':
                 chart = renderGroupedBar(canvas, block, yLabel);
@@ -236,7 +300,7 @@
         var el = document.getElementById('mpr-charts-payload');
         if (!el || typeof global.Chart === 'undefined') return;
         var root = document.getElementById('mpr-charts-root');
-        var yLabel = (root && root.getAttribute('data-y-label')) || 'unidades';
+        var yLabel = (root && root.getAttribute('data-y-label')) || 'pares';
         var payload;
         try {
             payload = JSON.parse(el.textContent);

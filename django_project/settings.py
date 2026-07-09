@@ -449,6 +449,24 @@ SYNAP_AUTO_SYNC_PERMISSIONS = config('SYNAP_AUTO_SYNC_PERMISSIONS', default=True
 # TTL en segundos para no repetir sync por empresa (default 24h)
 SYNAP_AUTO_SYNC_PERMISSIONS_TTL = config('SYNAP_AUTO_SYNC_PERMISSIONS_TTL', default=86400, cast=int)
 
+# Fuente de verdad para el cálculo de permisos Synap en runtime:
+#   'legacy' → permiso_sistema + permiso_sistema_puesto (comportamiento actual, default)
+#   'synap'  → tablas synap_* (con fallback a legacy si el puesto no tiene mapeo)
+#   'dual'   → unión de ambas fuentes; registra advertencia si difieren (validación de paridad)
+# Ver openspec/changes/permisos-roles-synap-independientes/design.md
+SYNAP_PERMISOS_SOURCE = config('SYNAP_PERMISOS_SOURCE', default='legacy')
+
+# Los puestos (puestos.idpuesto) son el ancla fija de AdministraNET: Synap no debe
+# crearlos (evita MAX(idpuesto)+1). Los puestos se crean en AdministraNET; en Synap
+# se gestionan roles/permisos sobre esos puestos. Poner en False solo si se requiere
+# temporalmente permitir la creación de puestos desde Synap.
+SYNAP_BLOQUEAR_CREAR_PUESTOS = config('SYNAP_BLOQUEAR_CREAR_PUESTOS', default=True, cast=bool)
+
+# Asegurar (crear si faltan) las tablas synap_* + catálogo tras login / al abrir la UI.
+# Independiente de SYNAP_AUTO_SYNC_PERMISSIONS (sync legacy en desuso). No escribe en VB6.
+SYNAP_AUTO_ENSURE_SCHEMA = config('SYNAP_AUTO_ENSURE_SCHEMA', default=True, cast=bool)
+SYNAP_AUTO_ENSURE_SCHEMA_TTL = config('SYNAP_AUTO_ENSURE_SCHEMA_TTL', default=86400, cast=int)
+
 # Configuración de logging - Sin módulos específicos
 LOGGING['loggers'] = {
     # Loggers específicos de módulos eliminados

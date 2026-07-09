@@ -10,24 +10,23 @@
 
         {# Encabezado fijo #}
         <div class="flex-shrink-0">
-            {# Migas de pan #}
             <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4" aria-label="Migas de pan">
                 <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <li><a href="{{ tablero_url }}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Producción</a></li>
                     <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
-                    <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Tablero de demanda consolidado</span></li>
+                    <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Tablero de producción</span></li>
                 </ol>
             </nav>
 
-            {# Frame de encabezado #}
             <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 dark:bg-slate-900 sm:mb-4 sm:p-4">
                 <header class="flex flex-col">
                     <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">
-                        Tablero de demanda consolidado
+                        Tablero de producción
                     </h1>
-                    <div class="mt-0.5 h-[1.125rem] sm:h-5" aria-hidden="true"></div>
+                    <p class="mt-1 text-[11px] text-slate-400 sm:text-xs">
+                        Demanda en vivo desde pedidos PED · unidad operativa = <strong class="font-medium text-slate-300">par</strong>
+                    </p>
 
-                    {# Una fila, dos columnas: filtros (izq.) | resto de acciones (der.) #}
                     <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-3">
                         <div class="flex min-w-0 flex-col gap-1">
                             <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400" id="filtro-fecha-pedido-label">
@@ -44,7 +43,9 @@
                                     <input type="date" name="fecha_hasta" value="{{ fecha_hasta|default:'' }}"
                                            class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
                                 </label>
-                                <input type="hidden" name="solo_pendiente" value="{% if solo_pendiente %}1{% else %}0{% endif %}"/>
+                                {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
+                                <input type="hidden" name="solo_urgente" value="{% if solo_urgente %}1{% else %}0{% endif %}"/>
+                                <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}"/>
                                 <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                                     <span class="material-icons text-base" aria-hidden="true">filter_list</span>
                                     Filtrar
@@ -58,7 +59,7 @@
                                   data-mpr-loading-title="Actualizando vista"
                                   data-mpr-loading-subtitle="Recalculando demanda desde pedidos PED…">
                                 {% csrf_token %}
-                                <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                                     <span class="material-icons text-base" aria-hidden="true">refresh</span>
                                     Actualizar vista
                                 </button>
@@ -71,10 +72,7 @@
                                 <span class="material-icons text-base" aria-hidden="true">assignment</span>
                                 Parte de producción
                             </a>
-                            <a href="{% url 'mpr:clasificacion_produccion' %}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                                <span class="material-icons text-base" aria-hidden="true">category</span>
-                                Clasificación de producción
-                            </a>
+                            {% include "mpr/includes/btn_control_calidad.html" with variant="solid" only %}
                             <a href="{% url 'mpr:armado' %}?modo=1ra" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                                 <span class="material-icons text-base" aria-hidden="true">build</span>
                                 Armado
@@ -89,30 +87,47 @@
                     </div>
                 </header>
 
-                {# Timestamp y controles adicionales #}
-                <div class="mt-2 flex flex-wrap items-center gap-3 border-t border-slate-700 pt-2">
+                <div class="mt-2 flex flex-col gap-2 border-t border-slate-700 pt-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                     <p class="text-xs text-slate-400">
                         Última actualización:
                         <span class="font-medium text-slate-300">{{ ultima_actualizacion|default:"—" }}</span>
                     </p>
+                    {% if filas %}
+                    <div class="flex flex-wrap gap-4 text-xs" role="status" aria-label="Totales del tablero">
+                        <div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{% if modo_presentacion == "docenas" %}Docenas{% else %}Pares{% endif %} resta urgente</span>
+                            <p class="text-sm font-bold tabular-nums text-rose-300">
+                                {% if modo_presentacion == "docenas" %}{{ kpis_tablero.docenas_resta_urgente }}{% else %}{{ kpis_tablero.pares_resta_urgente }}{% endif %}
+                                {% if modo_presentacion == "unidades" %}<span class="text-[10px] font-medium text-slate-500"> pares</span>{% endif %}
+                            </p>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{% if modo_presentacion == "docenas" %}Docenas{% else %}Pares{% endif %} resta total</span>
+                            <p class="text-sm font-semibold tabular-nums text-slate-200">
+                                {% if modo_presentacion == "docenas" %}{{ kpis_tablero.docenas_resta_total }}{% else %}{{ kpis_tablero.pares_resta_total }}{% endif %}
+                                {% if modo_presentacion == "unidades" %}<span class="text-[10px] font-medium text-slate-500"> pares</span>{% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="flex gap-2">
-                        {% if solo_pendiente %}
-                        <a href="?solo_pendiente=0&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}"
-                           class="inline-flex items-center gap-1 rounded-md bg-purple-700 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-purple-600">
-                            <span class="material-icons text-xs" aria-hidden="true">check_box</span>
-                            Solo pendientes
+                        {% if solo_urgente %}
+                        <a href="?solo_urgente=0&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}&amp;presentacion={{ modo_presentacion }}"
+                           class="inline-flex items-center gap-1 rounded-md bg-rose-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors hover:bg-rose-500">
+                            <span class="material-icons text-xs" aria-hidden="true">filter_alt</span>
+                            Solo urgentes
                         </a>
                         {% else %}
-                        <a href="?solo_pendiente=1&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}"
+                        <a href="?solo_urgente=1&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}&amp;presentacion={{ modo_presentacion }}"
                            class="inline-flex items-center gap-1 rounded-md border border-slate-600 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition-colors hover:bg-slate-700">
-                            <span class="material-icons text-xs" aria-hidden="true">check_box_outline_blank</span>
-                            Solo pendientes
+                            <span class="material-icons text-xs" aria-hidden="true">filter_alt</span>
+                            Solo urgentes
                         </a>
                         {% endif %}
                     </div>
                 </div>
 
-                {# Modal Synap — confirmación de envío a producción (reemplaza window.confirm/alert) #}
+                {# Modal confirmación envío #}
                 <div x-show="envioModalOpen"
                      x-cloak
                      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
@@ -120,7 +135,6 @@
                      x-transition.opacity>
                     <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-600 dark:bg-slate-800"
                          @click.stop>
-                        {# Estado 1: sin cantidades cargadas #}
                         <template x-if="envioEmpty">
                             <div>
                                 <div class="mb-3 flex items-center gap-2">
@@ -128,7 +142,7 @@
                                     <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Sin cantidades a enviar</h3>
                                 </div>
                                 <p class="mb-5 text-xs text-slate-500 dark:text-slate-400">
-                                    Ingrese al menos una cantidad en la columna <strong>Enviar</strong> antes de enviar a producción.
+                                    Ingrese al menos una cantidad en la columna <strong>{% if modo_presentacion == "docenas" %}Enviar docenas{% else %}Enviar pares{% endif %}</strong> antes de enviar a producción.
                                 </p>
                                 <div class="flex justify-end">
                                     <button type="button" @click="envioModalOpen = false"
@@ -138,7 +152,6 @@
                                 </div>
                             </div>
                         </template>
-                        {# Estado 2: confirmación de envío #}
                         <template x-if="!envioEmpty">
                             <div>
                                 <div class="mb-1 flex items-center gap-2">
@@ -168,26 +181,22 @@
                     </div>
                 </div>
             </div>
-        </div>{# fin encabezado #}
+        </div>
 
-        {# Zona de tabla con búsqueda Alpine y scroll #}
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-
-            {# Búsqueda client-side + envío a producción #}
             <div class="mb-2 flex flex-shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                <div class="flex items-center gap-1.5">
-                    <p class="text-[11px] text-slate-400 dark:text-slate-500 sm:text-xs">
-                        Deslizá horizontalmente para ver todas las columnas
-                    </p>
-                </div>
+                <p class="text-[11px] text-slate-400 dark:text-slate-500 sm:text-xs">
+                    Deslizá horizontalmente para ver todas las columnas
+                </p>
                 <div class="flex flex-wrap items-center justify-end gap-2">
                     <div class="relative min-w-0 sm:w-72">
                         <span class="material-icons absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
                         <input type="text"
                                x-model="busqueda"
                                placeholder="Buscar artículo…"
-                               class="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-purple-500"/>
+                               class="h-9 w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-purple-500"/>
                     </div>
+                    {% include "includes/toggle_docenas_pares.html" with interaction="link" variant="light" modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
                     <button type="button"
                             @click="
                                 const filas = window.mprLineasEnvioConCantidad();
@@ -202,116 +211,153 @@
                 </div>
             </div>
 
-            {# Tabla principal — scroll interno; thead fijo #}
-            <div class="relative z-0 min-h-0 flex-1 overflow-auto overscroll-contain rounded-lg border border-slate-200 shadow-sm dark:border-slate-700"
-                 role="region" aria-label="Tablero de demanda consolidado">
-                <table class="min-w-[72rem] w-full border-separate border-spacing-0 divide-y divide-slate-200 dark:divide-slate-700">
-                    <caption class="sr-only">Tablero de demanda consolidada por artículo/componente — pipeline MPR</caption>
+            <div class="relative z-0 min-h-0 flex-1 overflow-auto overscroll-contain rounded-lg border border-slate-200 shadow-sm dark:border-slate-700 h-[min(28rem,52vh)] min-h-[14rem]"
+                 role="region" aria-label="Tablero de producción por componente">
+                <table class="min-w-[88rem] w-full border-separate border-spacing-0">
+                    <caption class="sr-only">Tablero de producción — demanda PCP y stock por etapa MPR</caption>
                     <thead>
                         <tr>
-                            {# Col 1: Artículo — fijo al scroll vertical y horizontal #}
-                            <th scope="col"
-                                class="sticky left-0 top-0 z-20 min-w-[18rem] border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-xs font-semibold text-slate-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)] sm:min-w-[20rem] sm:px-5">
+                            <th scope="colgroup" colspan="1"
+                                class="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                 Artículo
                             </th>
-                            {# Col 2: Pendiente #}
-                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                Pendiente
+                            <th scope="colgroup" colspan="4"
+                                class="sticky top-0 z-10 border-b border-l border-rose-200/80 bg-rose-50/90 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                                Demanda a producir{% if modo_presentacion == "docenas" %} (docenas){% else %} (pares){% endif %}
                             </th>
-                            {# Col 3: Fabricando (antes "Enviado") #}
-                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                            <th scope="colgroup" colspan="1"
+                                class="sticky top-0 z-10 border-b border-l border-violet-200/80 bg-violet-50/70 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-violet-800 dark:border-violet-900/40 dark:bg-violet-950/25 dark:text-violet-200">
+                                En curso
+                            </th>
+                            <th scope="colgroup" colspan="5"
+                                class="sticky top-0 z-10 border-b border-l border-slate-200 bg-slate-100 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                                Stock en pipeline
+                            </th>
+                            <th scope="colgroup" colspan="1"
+                                class="sticky top-0 z-10 border-b border-l border-emerald-200/80 bg-emerald-50/70 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-200">
+                                Acción
+                            </th>
+                        </tr>
+                        <tr>
+                            <th scope="col"
+                                class="sticky left-0 top-[1.6rem] z-20 min-w-[18rem] border-b border-slate-200 bg-slate-50 px-4 py-2 text-left text-xs font-semibold text-slate-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)] sm:min-w-[20rem]">
+                                Código / descripción
+                            </th>
+                            <th scope="col"
+                                class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-l-2 border-l-rose-200/80 bg-rose-50/50 px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:border-l-rose-900/50 dark:bg-rose-950/15 dark:text-slate-300"
+                                title="Demanda atribuible a pedidos.">
+                                Pedido
+                            </th>
+                            <th scope="col"
+                                class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-rose-50/40 px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-rose-950/10 dark:text-slate-300"
+                                title="Demanda atribuible a reserva pack (explosión BOM).">
+                                Reserva
+                            </th>
+                            <th scope="col"
+                                class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-rose-50/40 px-2 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-rose-950/10 dark:text-slate-300"
+                                title="max(0, Demanda − stock en proceso). Incluye reserva pack. Paridad PCP.">
+                                Resta total
+                            </th>
+                            <th scope="col"
+                                class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-rose-50/60 px-2 py-2 text-right text-xs font-semibold text-rose-900 dark:border-slate-700 dark:bg-rose-950/20 dark:text-rose-200"
+                                title="max(0, Dem. pedido − stock en proceso). Base del envío. Paridad PCP.">
+                                Resta urgente
+                            </th>
+                            <th scope="col"
+                                class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-l border-violet-200/60 bg-violet-50/50 px-3 py-2 text-right text-xs font-semibold text-violet-900 dark:border-violet-900/40 dark:bg-violet-950/20 dark:text-violet-200">
                                 Fabricando
                             </th>
-                            {# Col 4: Producido (antes "Producción") #}
-                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Producido</th>
-                            {# Col 5: 2da Selección #}
-                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">2da Selección</th>
-                            {# Col 6: Semi Elaborado #}
-                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Semi Elaborado</th>
-                            {# Col 7: Desperdicio (no suma al total) #}
-                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold italic text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500">
-                                Desperdicio
-                                <span title="No se incluye en el Total" class="cursor-help">·</span>
+                            <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-l border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-400">Producido</th>
+                            <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-400">2da Selección</th>
+                            <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-400">Semi Elaborado</th>
+                            <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs font-semibold italic text-slate-400 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-500" title="No suma al Total">Desperdicio</th>
+                            <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800/90 dark:text-slate-300">Total</th>
+                            <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-l border-emerald-200/60 bg-emerald-50/50 px-3 py-2 text-right text-xs font-semibold text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200">
+                                Enviar {% if modo_presentacion == "docenas" %}docenas{% else %}pares{% endif %}
                             </th>
-                            {# Col 8: Terminado #}
-                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Terminado</th>
-                            {# Col 9: Total #}
-                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Total</th>
-                            {# Col 10: Enviar (envío directo a producción) #}
-                            <th scope="col" class="sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Enviar</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
                         {% for fila in filas %}
-                        <tr class="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
+                        <tr class="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40{% if fila.resta_urgente <= 0 and fila.resta_total > 0 %} opacity-90{% endif %}"
                             data-descripcion="{{ fila.descripcion_articulo|lower }} {{ fila.codigo_manual|lower }}"
                             x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase())">
-                            {# Col 1: Artículo sticky-left #}
                             <td class="sticky left-0 z-10 min-w-[18rem] max-w-[28rem] bg-white px-4 py-2.5 dark:bg-slate-900 sm:min-w-[20rem]">
-                                <div class="flex flex-col gap-1">
+                                <div class="flex flex-col gap-0.5">
                                     <span class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">{{ fila.codigo_manual }}</span>
-                                    <span class="text-sm leading-snug text-slate-600 dark:text-slate-300">{{ fila.descripcion_articulo }}</span>
+                                    <span class="text-xs leading-snug text-slate-600 dark:text-slate-300 sm:text-sm">{{ fila.descripcion_articulo }}</span>
                                 </div>
                             </td>
-                            {# Col 2: Pendiente #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums{% if fila.pendiente > 0 %} font-semibold text-red-600 dark:text-red-400{% else %} text-slate-500 dark:text-slate-400{% endif %}">
-                                {{ fila.pendiente|floatformat:1 }}
+                            <td class="whitespace-nowrap border-l-2 border-l-rose-200/80 bg-rose-50/30 px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:border-l-rose-900/50 dark:bg-rose-950/10 dark:text-slate-300">
+                                {% if modo_presentacion == "docenas" %}{{ fila.pedido_docenas_pcp }}{% else %}{{ fila.pedido_pares }}{% endif %}
                             </td>
-                            {# Col 3: Enviado #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300" data-col="enviado">
-                                {{ fila.enviado|floatformat:1 }}
+                            <td class="whitespace-nowrap bg-rose-50/20 px-3 py-2.5 text-right text-sm tabular-nums{% if fila.reserva_pares > 0 %} font-medium text-slate-700 dark:text-slate-300{% else %} text-slate-400 dark:text-slate-500{% endif %} dark:bg-rose-950/5">
+                                {% if modo_presentacion == "docenas" %}{{ fila.reserva_docenas_pcp }}{% else %}{{ fila.reserva_pares }}{% endif %}
                             </td>
-                            {# Col 4: Producción #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                                {{ fila.produccion|floatformat:1 }}
+                            <td class="whitespace-nowrap px-2 py-2.5 text-right text-sm tabular-nums{% if fila.resta_total_pares > 0 %} font-medium text-slate-700 dark:text-slate-300{% else %} text-slate-400 dark:text-slate-500{% endif %}">
+                                {% if modo_presentacion == "docenas" %}{{ fila.resta_total_docenas_pcp }}{% else %}{{ fila.resta_total_pares }}{% endif %}
                             </td>
-                            {# Col 5: 2da Selección #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                                {{ fila.segunda_seleccion|floatformat:1 }}
+                            <td class="whitespace-nowrap border-l-2 border-l-rose-300/70 px-2 py-2.5 text-right text-sm tabular-nums dark:border-l-rose-800/50{% if fila.resta_urgente_pares > 0 %} bg-rose-50/40 font-semibold text-red-600 dark:bg-rose-950/20 dark:text-red-400{% else %} bg-slate-50/50 text-slate-400 dark:bg-slate-800/30 dark:text-slate-500{% endif %}">
+                                {% if modo_presentacion == "docenas" %}{{ fila.resta_urgente_docenas_pcp }}{% else %}{{ fila.resta_urgente_pares }}{% endif %}
                             </td>
-                            {# Col 6: Semi Elaborado #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                                {{ fila.semi_elaborado|floatformat:1 }}
+                            <td class="whitespace-nowrap border-l border-violet-100 px-3 py-2 text-right text-xs tabular-nums sm:text-sm{% if fila.enviado > 0 %} font-medium text-violet-700 dark:text-violet-300{% else %} text-slate-600 dark:text-slate-400{% endif %}" data-col="enviado">
+                                {{ fila.enviado_display }}
                             </td>
-                            {# Col 7: Desperdicio (diferenciado, no suma al total) #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums italic text-slate-400 dark:text-slate-500">
-                                {{ fila.desperdicio|floatformat:1 }}
+                            <td class="whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums text-slate-600 dark:text-slate-400 sm:text-sm">
+                                {{ fila.produccion_display }}
                             </td>
-                            {# Col 8: Terminado #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:text-slate-300">
-                                {{ fila.terminado|floatformat:1 }}
+                            <td class="whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums text-slate-600 dark:text-slate-400 sm:text-sm">
+                                {{ fila.segunda_seleccion_display }}
                             </td>
-                            {# Col 9: Total #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right text-sm tabular-nums font-semibold text-green-700 dark:text-green-400">
-                                {{ fila.total|floatformat:1 }}
+                            <td class="whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums text-slate-600 dark:text-slate-400 sm:text-sm">
+                                {{ fila.semi_elaborado_display }}
                             </td>
-                            {# Col 10: Enviar — Etapa 7. Input del form fantasma anti-nesting. #}
-                            <td class="whitespace-nowrap px-3 py-2.5 text-right">
+                            <td class="whitespace-nowrap px-2 py-2 text-right text-xs tabular-nums italic text-slate-400 dark:text-slate-500 sm:text-sm">
+                                {{ fila.desperdicio_display }}
+                            </td>
+                            <td class="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums text-slate-800 dark:text-slate-200 sm:text-sm">
+                                {{ fila.total_display }}
+                            </td>
+                            <td class="whitespace-nowrap border-l border-emerald-100 bg-emerald-50/20 px-3 py-2.5 text-right dark:border-emerald-900/30 dark:bg-emerald-950/10">
+                                {% if modo_presentacion == "docenas" %}
+                                <input form="form-enviar-lote"
+                                       type="number"
+                                       name="envio_{{ fila.id_articulo }}_docenas"
+                                       data-envio-doc
+                                       min="0" step="1" inputmode="numeric"
+                                       value="{% if fila.a_enviar_docenas_pcp > 0 %}{{ fila.a_enviar_docenas_pcp }}{% endif %}"
+                                       {% if fila.a_enviar <= 0 %}disabled{% endif %}
+                                       aria-label="Docenas a enviar para {{ fila.codigo_manual }}"
+                                       class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-emerald-800 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+                                       placeholder="0"
+                                       title="Docenas de pares (enteras)">
+                                {% else %}
                                 <input form="form-enviar-lote"
                                        type="number"
                                        name="envio_{{ fila.id_articulo }}"
                                        data-envio-qty
-                                       min="0" step="1"
-                                       value="{% if fila.pendiente > 0 %}{{ fila.pendiente|floatformat:0 }}{% endif %}"
-                                       {% if fila.pendiente <= 0 %}disabled{% endif %}
-                                       class="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-right text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-100 dark:disabled:bg-slate-800 dark:disabled:text-slate-500">
-                                <input form="form-enviar-lote"
-                                       type="hidden"
-                                       name="pendiente_{{ fila.id_articulo }}"
-                                       value="{{ fila.pendiente }}">
+                                       min="0" step="1" inputmode="numeric"
+                                       value="{% if fila.a_enviar > 0 %}{{ fila.a_enviar|floatformat:0 }}{% endif %}"
+                                       {% if fila.a_enviar <= 0 %}disabled{% endif %}
+                                       aria-label="Pares a enviar para {{ fila.codigo_manual }}"
+                                       class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-emerald-800 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+                                       placeholder="0"
+                                       title="Pares (enteros)">
+                                {% endif %}
+                                <input form="form-enviar-lote" type="hidden" name="resta_urgente_{{ fila.id_articulo }}" value="{{ fila.a_enviar }}">
+                                <input form="form-enviar-lote" type="hidden" name="pendiente_{{ fila.id_articulo }}" value="{{ fila.a_enviar }}">
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="10" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
-                                Sin artículos con demanda en el rango especificado
+                            <td colspan="12" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
+                                {% if solo_urgente %}Sin artículos con resta urgente en el rango especificado{% else %}Sin artículos con demanda en el rango especificado{% endif %}
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
 
-                {# Mensaje sin resultados en búsqueda client-side #}
                 {% if filas %}
                 <div class="hidden px-4 py-6 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5"
                      x-show="busqueda.trim() !== '' && Array.from($root.querySelectorAll('tbody tr[data-descripcion]')).every(function(el) { return !el.offsetParent; })">
@@ -320,33 +366,37 @@
                 {% endif %}
             </div>
 
-            {# Nota al pie — Fabricando #}
-            <p class="mt-2 flex-shrink-0 text-[11px] text-slate-400 dark:text-slate-500">
-                Columna <strong>Fabricando</strong>: max(0, Σ envíos − stock en pipeline MPR: Producido + Semi + 2da + Scrap + Terminado) por componente.
-                La demanda se calcula en vivo desde pedidos PED (sin lista de producción OPT/OPP).
+            <p class="mt-2 flex-shrink-0 text-[11px] leading-snug text-slate-400 dark:text-slate-500">
+                El toggle <strong>Docenas / Pares</strong> cambia la unidad mostrada en toda la tabla (docenas enteras = pares ÷ 12 redondeado).
+                En modo docenas el envío es en docenas enteras; en modo pares, en pares enteros (sin decimales).
+                El envío admite hasta <strong>a enviar</strong> = resta urgente − Fabricando (evita doble envío).
+                <strong>Fabricando</strong> = envíos no acreditados en stock del pipeline.
             </p>
         </div>
     </div>
 
-    {# Form fantasma Etapa 7 — fuera de la tabla para evitar forms anidados (HTML5 form= attribute) #}
     <form id="form-enviar-lote"
           method="post"
           action="{% url 'mpr:tablero_produccion_enviar' %}">
         {% csrf_token %}
-        {# Filtros actuales para preservar redirect tras envío #}
+        <input type="hidden" name="presentacion" value="{{ modo_presentacion }}">
         <input type="hidden" name="filtros_qs"
-               value="fecha_desde={{ fecha_desde|urlencode }}&amp;fecha_hasta={{ fecha_hasta|urlencode }}&amp;solo_pendiente={{ solo_pendiente|yesno:'1,0' }}">
+               value="fecha_desde={{ fecha_desde|urlencode }}&amp;fecha_hasta={{ fecha_hasta|urlencode }}&amp;solo_urgente={{ solo_urgente|yesno:'1,0' }}&amp;presentacion={{ modo_presentacion|urlencode }}">
     </form>
 
     <script>
     (function () {
         function parseQty(val) {
-            var n = parseFloat(String(val || '').replace(',', '.'));
-            return isNaN(n) ? 0 : n;
+            var n = parseInt(String(val || '').replace(',', '.'), 10);
+            return isNaN(n) ? 0 : Math.max(0, n);
         }
 
         function lineasEnvioConCantidad() {
-            return Array.from(document.querySelectorAll('[data-envio-qty]')).filter(function (el) {
+            var legacy = Array.from(document.querySelectorAll('[data-envio-qty]')).filter(function (el) {
+                return parseQty(el.value) > 0;
+            });
+            if (legacy.length) { return legacy; }
+            return Array.from(document.querySelectorAll('[data-envio-doc]')).filter(function (el) {
                 return parseQty(el.value) > 0;
             });
         }
@@ -362,25 +412,39 @@
             if (!lineas.length) return;
 
             lineas.forEach(function (inp) {
-                var idArt = inp.name.replace(/^envio_/, '');
-                var qty = parseQty(inp.value);
-                if (qty <= 0 || !idArt) return;
+                var idArt, qty;
+                if (inp.getAttribute('data-envio-doc') !== null) {
+                    idArt = inp.name.replace(/^envio_(\d+)_docenas$/, '$1');
+                    var doc = parseQty(inp.value);
+                    qty = doc * 12;
+                    if (qty <= 0 || !idArt) return;
+                    var hDoc = document.createElement('input');
+                    hDoc.type = 'hidden';
+                    hDoc.name = 'envio_' + idArt + '_docenas';
+                    hDoc.value = String(doc);
+                    hDoc.setAttribute('data-envio-sync', '1');
+                    form.appendChild(hDoc);
+                } else {
+                    idArt = inp.name.replace(/^envio_/, '');
+                    qty = parseQty(inp.value);
+                    if (qty <= 0 || !idArt) return;
+                    var hQty = document.createElement('input');
+                    hQty.type = 'hidden';
+                    hQty.name = inp.name;
+                    hQty.value = String(qty);
+                    hQty.setAttribute('data-envio-sync', '1');
+                    form.appendChild(hQty);
+                }
 
-                var hQty = document.createElement('input');
-                hQty.type = 'hidden';
-                hQty.name = inp.name;
-                hQty.value = String(qty);
-                hQty.setAttribute('data-envio-sync', '1');
-                form.appendChild(hQty);
-
-                var pendSrc = document.querySelector('[name="pendiente_' + idArt + '"]');
-                if (pendSrc) {
-                    var hPend = document.createElement('input');
-                    hPend.type = 'hidden';
-                    hPend.name = pendSrc.name;
-                    hPend.value = pendSrc.value;
-                    hPend.setAttribute('data-envio-sync', '1');
-                    form.appendChild(hPend);
+                var urgSrc = document.querySelector('[name="resta_urgente_' + idArt + '"]')
+                    || document.querySelector('[name="pendiente_' + idArt + '"]');
+                if (urgSrc) {
+                    var hUrg = document.createElement('input');
+                    hUrg.type = 'hidden';
+                    hUrg.name = 'resta_urgente_' + idArt;
+                    hUrg.value = urgSrc.value;
+                    hUrg.setAttribute('data-envio-sync', '1');
+                    form.appendChild(hUrg);
                 }
             });
 
@@ -392,5 +456,6 @@
         };
     })();
     </script>
+<script type="module" src="{% static 'stock/js/filtro_marcas_tags.mjs' %}"></script>
 </section>
 {% endblock %}

@@ -220,58 +220,7 @@
                                         Sin depósitos que coincidan con la búsqueda.
                                     </p>
                                 </div>
-                                <div class="relative min-w-0">
-                                    <label for="operario-busqueda" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Operario</label>
-                                    <input type="hidden" name="id_operario" id="id_operario" :value="operarioId"/>
-                                    <div class="relative">
-                                        <input type="text"
-                                               id="operario-busqueda"
-                                               x-model="busquedaOperario"
-                                               @input="onOperarioInput()"
-                                               @focus="abrirOperario()"
-                                               @blur="onComboBlur('operario')"
-                                               @keydown="onOperarioKeydown($event)"
-                                               placeholder="Buscar operario por nombre…"
-                                               autocomplete="off"
-                                               role="combobox"
-                                               aria-autocomplete="list"
-                                               aria-controls="operario-dropdown"
-                                               :aria-expanded="operarioDropdownOpen ? 'true' : 'false'"
-                                               class="h-11 w-full rounded-xl border border-gray-300 bg-white py-2 pl-3 pr-9 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white"/>
-                                        <button type="button"
-                                                x-show="operarioId || busquedaOperario"
-                                                x-cloak
-                                                @mousedown.prevent="limpiarOperario()"
-                                                class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-200"
-                                                aria-label="Limpiar operario">
-                                            <span class="material-icons text-lg" aria-hidden="true">close</span>
-                                        </button>
-                                    </div>
-                                    <div id="operario-dropdown"
-                                         x-show="operarioDropdownOpen && resultadosOperario.length"
-                                         x-cloak
-                                         @mousedown.prevent
-                                         class="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-600 dark:bg-gray-800"
-                                         role="listbox">
-                                        <template x-for="(o, oIdx) in resultadosOperario" :key="'op-' + o.id">
-                                            <button type="button"
-                                                    role="option"
-                                                    :aria-selected="operarioHighlightIndex === oIdx ? 'true' : 'false'"
-                                                    @click="seleccionarOperario(o)"
-                                                    @mouseenter="operarioHighlightIndex = oIdx"
-                                                    class="flex w-full px-3 py-2.5 text-left text-sm transition-colors"
-                                                    :class="operarioHighlightIndex === oIdx
-                                                        ? 'bg-purple-50 text-purple-900 dark:bg-purple-950/40 dark:text-purple-100'
-                                                        : 'text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-700/50'">
-                                                <span class="truncate" x-text="o.label"></span>
-                                            </button>
-                                        </template>
-                                    </div>
-                                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400" x-show="operarioDropdownOpen && !resultadosOperario.length && busquedaOperario.trim()" x-cloak>
-                                        Sin operarios que coincidan con la búsqueda.
-                                    </p>
-                                </div>
-                                <div>
+                                <div class="sm:col-span-2">
                                     <label for="detalle" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Detalle (opcional)</label>
                                     <input type="text" id="detalle" name="detalle" maxlength="200" placeholder="Observaciones del lote" x-model="detalleLote"
                                            class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white"/>
@@ -1679,10 +1628,6 @@ function armadoSurtidoForm() {
             }
             if (String(this.depositoOrigen) === String(this.depositoDestino)) {
                 this.mostrarMensaje('Origen y destino deben ser distintos.');
-                return false;
-            }
-            if (!parseInt(this.operarioId, 10)) {
-                this.mostrarMensaje('Seleccione operario.');
                 return false;
             }
             return true;

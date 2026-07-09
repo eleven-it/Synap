@@ -10,7 +10,7 @@
         </h1>
         <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
             Período {{ fecha_desde_display }} — {{ fecha_hasta_display }}
-            {% if modo_presentacion == "docenas" %} · Docenas · unidades{% else %} · Unidades{% endif %}
+            {% if modo_presentacion == "docenas" %} · Docenas · pares{% else %} · Pares{% endif %}
         </p>
     </div>
     <a href="{% url 'mpr:tablero' %}"

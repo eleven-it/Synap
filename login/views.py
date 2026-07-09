@@ -107,12 +107,23 @@ def login_view(request):
             except Exception as e:
                 logger.debug("Contexto mayoristapp post-login (no crítico): %s", e)
             
-            # Sincronización automática de permisos Synap → permiso_sistema (con cache por empresa)
+            # Asegurar esquema de permisos Synap (synap_*) + catálogo, con cache por empresa.
+            # NO inyecta en permiso_sistema (tablas VB6); reemplaza el sync legacy.
             try:
-                from core.services.sync_permisos_synap import asegurar_permisos_synap_si_procede
-                asegurar_permisos_synap_si_procede(base_empresa)
+                from core.services.synap_permisos_seed import asegurar_synap_schema_si_procede
+                asegurar_synap_schema_si_procede(base_empresa)
             except Exception as e:
-                logger.debug("Sync permisos post-login (no crítico): %s", e)
+                logger.debug("Asegurar esquema Synap post-login (no crítico): %s", e)
+
+            # MPR: resolver operario asociado al usuario (si existe mapeo) y guardarlo en sesión.
+            try:
+                from mpr.repositories.operario_usuario import resolver_operario_por_usuario
+                id_operario = resolver_operario_por_usuario(base_empresa, user_data['id_usuario'])
+                if id_operario:
+                    request.session["user"]["id_operario"] = id_operario
+                    request.session.modified = True
+            except Exception as e:
+                logger.debug("Resolver operario MPR post-login (no crítico): %s", e)
             
             logger.info(f"✅ Login exitoso: {cod_usuario} en empresa {base_empresa}")
             

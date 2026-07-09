@@ -1,0 +1,278 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Mi parte · Synap{% endblock %}
+
+{% block content %}
+<section class="mx-auto w-full max-w-lg pb-32"
+         x-data="parteMovil()"
+         x-init="recalc(); filtrar()">
+
+    {% if ok_msg %}
+    <div class="mb-4 flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+        <span class="material-icons text-base" aria-hidden="true">check_circle</span>
+        <span>{{ ok_msg }}</span>
+    </div>
+    {% endif %}
+    {% if error_msg %}
+    <div class="mb-4 flex items-center gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+        <span class="material-icons text-base" aria-hidden="true">error</span>
+        <span>{{ error_msg }}</span>
+    </div>
+    {% endif %}
+
+    <header class="mb-4">
+        <p class="text-sm text-gray-500 dark:text-gray-400">Hola{% if nombre_usuario %}, {{ nombre_usuario }}{% endif %}</p>
+        <h1 class="mt-0.5 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Carga de producción</h1>
+    </header>
+
+    {% if estado_borde == "sin_operario" %}
+        {% include "mpr/mobile/_parte_borde.html" with icono="badge" titulo="Sin operario asociado" detalle="Pedile a tu supervisor que vincule tu usuario con tu legajo de operario." %}
+    {% elif estado_borde == "sin_turno" %}
+        {% include "mpr/mobile/_parte_borde.html" with icono="event_busy" titulo="Sin turno asignado hoy" detalle="No tenés un turno en el roster de hoy. Contactá a tu supervisor." %}
+    {% elif estado_borde == "sin_linea" %}
+        {% include "mpr/mobile/_parte_borde.html" with icono="linear_scale" titulo="Sin línea asignada" detalle="No tenés una línea habitual ni override para hoy. Contactá a tu supervisor." %}
+    {% elif estado_borde == "sin_maquinas" %}
+        {% include "mpr/mobile/_parte_borde.html" with icono="precision_manufacturing" titulo="Sin máquinas en tu línea" detalle="Tu línea no tiene máquinas activas asignadas. Contactá a tu supervisor." %}
+    {% else %}
+
+    <div class="mb-4 grid grid-cols-3 gap-2 rounded-2xl border border-gray-200 bg-white p-3 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div>
+            <p class="text-[11px] uppercase tracking-wide text-gray-400">Línea</p>
+            <p class="mt-0.5 truncate text-sm font-semibold text-gray-900 dark:text-white">{{ linea_nombre|default:"-" }}</p>
+        </div>
+        <div class="border-x border-gray-100 dark:border-gray-700">
+            <p class="text-[11px] uppercase tracking-wide text-gray-400">Turno</p>
+            <p class="mt-0.5 truncate text-sm font-semibold text-gray-900 dark:text-white">{{ turno_nombre|default:"-" }}</p>
+        </div>
+        <div>
+            <p class="text-[11px] uppercase tracking-wide text-gray-400">Fecha</p>
+            <p class="mt-0.5 text-sm font-semibold text-gray-900 dark:text-white">{{ fecha|date:"d/m/Y" }}</p>
+        </div>
+    </div>
+
+    {% if estado_parte == "pendiente" %}
+    <div class="mb-4 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+        <span class="material-icons text-base" aria-hidden="true">hourglass_top</span>
+        <span>Parte pendiente de aprobación. Podés editarlo y reenviarlo.</span>
+    </div>
+    {% elif estado_parte == "borrador" %}
+    <div class="mb-4 flex items-center gap-2 rounded-xl border border-sky-300 bg-sky-50 px-4 py-2.5 text-sm text-sky-800 dark:border-sky-800 dark:bg-sky-900/20 dark:text-sky-200">
+        <span class="material-icons text-base" aria-hidden="true">edit_note</span>
+        <span>Tenés un borrador guardado.</span>
+    </div>
+    {% endif %}
+
+    <div class="sticky top-0 z-10 -mx-1 mb-3 bg-gray-50/95 px-1 pb-2 pt-1 backdrop-blur dark:bg-gray-900/95">
+        <div class="relative">
+            <span class="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xl text-gray-400" aria-hidden="true">search</span>
+            <input type="search" inputmode="search" autocomplete="off"
+                   x-model="q" @input="filtrar()"
+                   placeholder="Buscar máquina o artículo…"
+                   aria-label="Buscar máquina o artículo"
+                   class="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-10 text-base text-gray-900 shadow-sm focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <button type="button" x-show="q" x-cloak @click="q=''; filtrar()"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full text-gray-400 active:scale-90 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    aria-label="Limpiar búsqueda">
+                <span class="material-icons text-xl" aria-hidden="true">close</span>
+            </button>
+        </div>
+        <div class="mt-2 flex items-center justify-between gap-2">
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+                Mostrando <span class="font-semibold text-gray-700 dark:text-gray-200" x-text="visibles"></span> de {{ maquinas_total }} máquinas
+            </p>
+            <label class="flex cursor-pointer items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300">
+                <input type="checkbox" x-model="ocultarVacias" @change="filtrar()"
+                       class="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800">
+                Ocultar sin artículos
+            </label>
+        </div>
+    </div>
+
+    <form method="post" x-ref="form">
+        {% csrf_token %}
+        <input type="hidden" name="accion" x-ref="accion" value="enviar">
+
+        <div class="space-y-3">
+            {% for maq in maquinas %}
+            <input type="hidden" name="maqnombre_{{ maq.id_maquina }}" value="{{ maq.nombre }}">
+            <details class="group rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                     data-maquina
+                     data-codigo="{{ maq.codigo|lower }}"
+                     data-nombre="{{ maq.nombre|default:maq.codigo|lower }}"
+                     data-vacia="{% if maq.sin_articulos %}1{% else %}0{% endif %}"
+                     {% if maq.cargada %}open{% endif %}>
+                <summary class="flex cursor-pointer list-none items-center justify-between gap-3 p-4">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-100 text-sm font-bold text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">{{ maq.codigo }}</span>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-900 dark:text-white">{{ maq.nombre|default:maq.codigo }}</p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                {% if maq.sin_articulos %}Sin artículos habilitados{% else %}{{ maq.articulos|length }} artículo{{ maq.articulos|length|pluralize }}{% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <span class="material-icons text-gray-400 transition group-open:rotate-180" aria-hidden="true">expand_more</span>
+                </summary>
+
+                <div class="space-y-3 border-t border-gray-100 p-4 dark:border-gray-700">
+                    {% if maq.sin_articulos %}
+                    <p class="text-sm text-gray-500 dark:text-gray-400">Esta máquina no tiene artículos habilitados vigentes.</p>
+                    {% else %}
+                        {% for art in maq.articulos %}
+                        <div class="rounded-xl bg-gray-50 p-3 dark:bg-gray-900/40"
+                             data-art
+                             data-search="{{ art.codigo|lower }} {{ art.descripcion|default:''|lower }}">
+                            <p class="text-sm font-medium text-gray-900 dark:text-white">{{ art.descripcion|default:art.codigo }}</p>
+                            <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">{{ art.codigo }}</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="block">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Docenas</span>
+                                    <input type="number" inputmode="numeric" min="0" step="1"
+                                           name="doc_{{ maq.id_maquina }}_{{ art.id_articulo }}"
+                                           value="{{ art.docenas|default:0 }}"
+                                           @input="recalc()"
+                                           class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-center text-lg font-semibold text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                                </label>
+                                <label class="block">
+                                    <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Pares</span>
+                                    <input type="number" inputmode="numeric" min="0" step="1"
+                                           name="par_{{ maq.id_maquina }}_{{ art.id_articulo }}"
+                                           value="{{ art.pares|default:0 }}"
+                                           @input="recalc()"
+                                           class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-center text-lg font-semibold text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+                                </label>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </details>
+            {% endfor %}
+        </div>
+
+        <div x-show="visibles === 0" x-cloak
+             class="mt-6 flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-white/60 px-6 py-10 text-center dark:border-gray-700 dark:bg-gray-800/40">
+            <span class="material-icons text-4xl text-gray-300 dark:text-gray-600" aria-hidden="true">search_off</span>
+            <p class="mt-2 text-sm font-medium text-gray-700 dark:text-gray-200">Sin resultados</p>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400" x-show="q">
+                No hay máquinas ni artículos que coincidan con “<span x-text="q"></span>”.
+            </p>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400" x-show="!q && ocultarVacias">
+                Ninguna máquina de tu línea tiene artículos habilitados. Desmarcá “Ocultar sin artículos” para verlas.
+            </p>
+        </div>
+
+        <div class="fixed inset-x-0 bottom-8 z-20 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
+            <div class="mx-auto flex max-w-lg items-center justify-between gap-3">
+                <div class="text-sm">
+                    <p class="font-bold text-gray-900 dark:text-white"><span x-text="totalDocenas"></span> docenas</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400"><span x-text="maquinasCargadas"></span>/{{ maquinas_total }} máquinas</p>
+                </div>
+                <div class="flex gap-2">
+                    <button type="button" @click="guardar('borrador')"
+                            class="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 active:scale-95 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
+                        Borrador
+                    </button>
+                    <button type="button" @click="abrirConfirmacion()"
+                            class="rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-95">
+                        Revisar y enviar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="confirmar" x-cloak
+             class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
+             @click.self="confirmar = false">
+            <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-800">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white">Confirmar envío</h2>
+                <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                    Vas a enviar <span class="font-semibold" x-text="totalDocenas"></span> docenas en
+                    <span class="font-semibold" x-text="maquinasCargadas"></span> máquina(s).
+                    Quedará pendiente de aprobación del supervisor.
+                </p>
+                <div class="mt-5 flex justify-end gap-2">
+                    <button type="button" @click="confirmar = false"
+                            class="rounded-xl border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-200">
+                        Volver
+                    </button>
+                    <button type="button" @click="guardar('enviar')"
+                            class="rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white">
+                        Enviar parte
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+    {% endif %}
+</section>
+
+<script>
+function parteMovil() {
+    return {
+        totalDocenas: 0,
+        maquinasCargadas: 0,
+        confirmar: false,
+        q: '',
+        ocultarVacias: true,
+        visibles: 0,
+        filtrar() {
+            const q = (this.q || '').trim().toLowerCase();
+            const ocultar = this.ocultarVacias;
+            let visibles = 0;
+            this.$root.querySelectorAll('[data-maquina]').forEach(det => {
+                const codigo = det.getAttribute('data-codigo') || '';
+                const nombre = det.getAttribute('data-nombre') || '';
+                const vacia = det.getAttribute('data-vacia') === '1';
+                const maqMatch = !q || codigo.includes(q) || nombre.includes(q);
+
+                let artMatch = false;
+                const arts = det.querySelectorAll('[data-art]');
+                arts.forEach(a => {
+                    const hay = a.getAttribute('data-search') || '';
+                    // Si la máquina coincide por código/nombre, mostrar todos sus artículos.
+                    const show = !q || maqMatch || hay.includes(q);
+                    a.style.display = show ? '' : 'none';
+                    if (q && !maqMatch && hay.includes(q)) artMatch = true;
+                });
+
+                let visible = maqMatch || artMatch;
+                if (ocultar && vacia) visible = false;
+                det.style.display = visible ? '' : 'none';
+                if (visible) {
+                    visibles++;
+                    // Al buscar por artículo, abrir la tarjeta para revelar la coincidencia.
+                    if (q && artMatch) det.open = true;
+                }
+            });
+            this.visibles = visibles;
+        },
+        recalc() {
+            const root = this.$root;
+            let totalPares = 0;
+            const porMaquina = {};
+            root.querySelectorAll('input[type=number]').forEach(el => {
+                const m = el.name.match(/^(doc|par)_(\d+)_(\d+)$/);
+                if (!m) return;
+                const n = parseInt(el.value || '0', 10) || 0;
+                const pares = m[1] === 'doc' ? n * 12 : n;
+                totalPares += pares;
+                porMaquina[m[2]] = (porMaquina[m[2]] || 0) + pares;
+            });
+            this.totalDocenas = Math.round((totalPares / 12) * 100) / 100;
+            this.maquinasCargadas = Object.values(porMaquina).filter(v => v > 0).length;
+        },
+        abrirConfirmacion() {
+            this.recalc();
+            this.confirmar = true;
+        },
+        guardar(accion) {
+            this.$refs.accion.value = accion;
+            this.confirmar = false;
+            this.$refs.form.submit();
+        }
+    };
+}
+</script>
+{% endblock %}

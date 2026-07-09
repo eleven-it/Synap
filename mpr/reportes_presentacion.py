@@ -1,13 +1,13 @@
-"""Presentación unidades vs docenas en reportes MPR."""
+"""Presentación pares vs docenas en reportes MPR."""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Set
 
-from mpr.services import bulk_cantidad_promedio_bulto, descomponer_docenas_unidades, texto_docenas_unidades
+from mpr.services import bulk_cantidad_promedio_bulto, descomponer_docenas_unidades, texto_docenas_pares
 from core.utils.administranet_types import str_codigo_manual_articulo
 
 MODOS_PRESENTACION = frozenset({"unidades", "docenas"})
-DEFAULT_MODO_PRESENTACION = "unidades"
+DEFAULT_MODO_PRESENTACION = "docenas"
 UNIDADES_POR_DOCENA_COMPONENTE = 12
 
 # Campos numéricos de cantidad (no contadores ni porcentajes).
@@ -23,6 +23,9 @@ CAMPOS_CANTIDAD: Set[str] = {
     "promedio",
     "demanda",
     "pendiente",
+    "resta_urgente",
+    "resta_total",
+    "stock_proceso",
     "total",
     "stock_terminado",
     "cantidad_a_fabricar",
@@ -31,12 +34,38 @@ CAMPOS_CANTIDAD: Set[str] = {
     "saldo",
     "saldo_total",
     "stock_minimo",
+    "semi",
+    "segunda",
+    "scrap",
 }
 
 
 def parse_modo_presentacion(raw: Optional[str]) -> str:
     modo = (raw or DEFAULT_MODO_PRESENTACION).strip().lower()
+    if modo == "pares":
+        return "unidades"
     return modo if modo in MODOS_PRESENTACION else DEFAULT_MODO_PRESENTACION
+
+
+def resolver_modo_presentacion_reporte(request) -> str:
+    """GET ?presentacion= tiene prioridad; si no, sesión operativa MPR; default docenas."""
+    raw_get = request.GET.get("presentacion")
+    if raw_get is not None and str(raw_get).strip():
+        return parse_modo_presentacion(raw_get)
+    try:
+        from mpr.presentacion_operativa import (
+            SESSION_KEY,
+            parse_modo_presentacion_operativa,
+        )
+
+        ses = parse_modo_presentacion_operativa(
+            request.session.get(SESSION_KEY) if hasattr(request, "session") else None
+        )
+        if ses in MODOS_PRESENTACION:
+            return ses
+    except Exception:
+        pass
+    return DEFAULT_MODO_PRESENTACION
 
 
 def _to_int_cantidad(val: Any) -> int:
@@ -52,12 +81,12 @@ def formatear_cantidad_reporte(
     *,
     cantidad_promedio_bulto: Any = None,
 ) -> str:
-    """Unidades: entero. Docenas: «N docenas · M unidades» (divisor 12 o bulto pack)."""
+    """Pares: entero. Docenas: «N docenas · M pares» (divisor 12 o bulto pack)."""
     n = _to_int_cantidad(cantidad)
     if modo == "docenas":
         if cantidad_promedio_bulto is not None:
-            return texto_docenas_unidades(n, cantidad_promedio_bulto)
-        return texto_docenas_unidades(n, unidades_por_docena_fijo=UNIDADES_POR_DOCENA_COMPONENTE)
+            return texto_docenas_pares(n, cantidad_promedio_bulto)
+        return texto_docenas_pares(n, unidades_por_docena_fijo=UNIDADES_POR_DOCENA_COMPONENTE)
     return str(n)
 
 
@@ -156,9 +185,9 @@ def aplicar_presentacion_reporte(
 
     context["modo_presentacion"] = modo
     context["etiqueta_cantidad"] = (
-        "docenas · unidades" if modo == "docenas" else "unidades"
+        "docenas · pares" if modo == "docenas" else "pares"
     )
-    context["etiqueta_cantidad_corta"] = "doc. · u." if modo == "docenas" else "u."
+    context["etiqueta_cantidad_corta"] = "doc. · p." if modo == "docenas" else "p."
     context["filas"] = _map_list(context.get("filas"))
     context["dias"] = _map_list(context.get("dias"))
     context["eventos"] = _map_eventos(context.get("eventos"))
@@ -185,7 +214,7 @@ def _celda_stock_deposito(
     *,
     cantidad_promedio_bulto: Any = None,
 ) -> Dict[str, Any]:
-    """Celda pivote: docenas arriba y unidades abajo (modo docenas) o solo unidades."""
+    """Celda pivote: docenas arriba y pares abajo (modo docenas) o solo pares."""
     try:
         total = int(float(saldo or 0))
     except (TypeError, ValueError):
@@ -220,7 +249,7 @@ def preparar_stock_por_deposito(
 ) -> Dict[str, Any]:
     """
     Pivotea filas planas (artículo × depósito) a una fila por artículo con columnas de depósito.
-    Cada celda expone docenas/unidades para apilar en la plantilla.
+    Cada celda expone docenas/pares para apilar en la plantilla.
     """
     from mpr.pipeline import ORDEN_ETAPAS_MPR
 
@@ -248,10 +277,18 @@ def preparar_stock_por_deposito(
                 "clave": clave,
             }
         if aid_int not in articulos:
+            codigo_manual = str_codigo_manual_articulo(
+                r.get("codigo_manual") or r.get("id_manual")
+            )
+            codigo_articulo = str(r.get("codigo_articulo") or "-")
+            codigo_mostrable = (
+                codigo_manual if codigo_manual != "-" else codigo_articulo
+            )
             articulos[aid_int] = {
                 "id_articulo": aid_int,
-                "codigo_manual": str_codigo_manual_articulo(r.get("codigo_manual")),
-                "codigo_articulo": str(r.get("codigo_articulo") or "-"),
+                "codigo_manual": codigo_mostrable,
+                "codigo_articulo": codigo_articulo,
+                "codigo_mostrable": codigo_mostrable,
                 "descripcion_articulo": str(r.get("descripcion_articulo") or "-"),
                 "saldos": {},
             }
@@ -277,7 +314,7 @@ def preparar_stock_por_deposito(
     filas_out: List[Dict[str, Any]] = []
     for aid_int in sorted(
         articulos.keys(),
-        key=lambda a: (articulos[a].get("codigo_manual") or "", a),
+        key=lambda a: (articulos[a].get("codigo_mostrable") or "", a),
     ):
         art = articulos[aid_int]
         bulto = bulto_map.get(aid_int) if modo == "docenas" else None
@@ -289,8 +326,8 @@ def preparar_stock_por_deposito(
             )
         filas_out.append({
             "id_articulo": aid_int,
-            "codigo_manual": art["codigo_manual"],
-            "codigo_articulo": art["codigo_manual"],
+            "codigo_manual": art["codigo_mostrable"],
+            "codigo_articulo": art["codigo_mostrable"],
             "descripcion_articulo": art["descripcion_articulo"],
             "depositos": depositos_celdas,
         })
