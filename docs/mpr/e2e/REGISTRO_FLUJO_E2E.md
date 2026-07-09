@@ -2,6 +2,8 @@
 
 > Manual visual HTML: [MANUAL_USUARIO_MPR.html](MANUAL_USUARIO_MPR.html)
 
+> **Flujo diario (tablero → imputación):** ver [REGISTRO_FLUJO_DIARIO_E2E.md](REGISTRO_FLUJO_DIARIO_E2E.md) y comando `e2e_mpr_trazabilidad`.
+
 Generado: 29/6/2026, 09:11:21
 
 | Paso | Pantalla | Validación | Captura |

@@ -56,6 +56,41 @@ Asignación de turno a un operario en una fecha específica.
 
 ---
 
+## Override de línea por día {#override-de-línea-por-día}
+
+**Change:** `mpr-trazabilidad-maquina-linea-operario`.
+
+El roster permite fijar, para un día puntual (rotación, refuerzo), una **línea distinta** a la
+habitual del operario. Se implementa con una columna nueva en `mpr_roster_dia` (MySQL):
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id_mpr_linea` | `BIGINT` NULL | Override de línea del día; **NULL = usar la línea habitual** |
+
+La línea habitual del operario vive versionada en `mpr_operario_linea`
+(`vigencia_desde`/`vigencia_hasta`, NULL = vigente).
+
+**Resolución override > habitual** (`resolver_linea_operario`):
+
+```
+resolver_linea_operario(id_operario, fecha, id_turno):
+    override = mpr_roster_dia(fecha, id_operario).id_mpr_linea
+    return override or mpr_operario_linea.vigente(id_operario, fecha).id_mpr_linea
+```
+
+- Si el roster del día trae `id_mpr_linea`, **manda** (override).
+- Si es NULL, se usa la **línea habitual** vigente a esa fecha.
+
+Con la línea resuelta, la carga móvil del operario lista las máquinas vigentes de esa línea y
+sus artículos habilitados. Detalle del circuito:
+[TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md#línea-habitual--override-de-roster).
+
+> DDL aplicado por el proveedor `mpr_maquina_linea_trazabilidad`
+> (`core/services/legacy_mysql_schema/catalog.py`), idempotente. Ver
+> [../general/HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md](../general/HERRAMIENTA_GLOBAL_MIGRACION_ESQUEMA_MYSQL.md).
+
+---
+
 ## Servicios (`mpr/services.py`)
 
 ### Helpers de fecha

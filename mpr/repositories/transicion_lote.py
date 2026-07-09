@@ -145,6 +145,46 @@ def sumar_clasificado_por_operario_fecha_turno(
     return acum
 
 
+def sumar_salidas_desde_produccion_por_articulo(
+    base_empresa: str,
+    id_articulos: Optional[List[int]] = None,
+) -> Dict[int, Decimal]:
+    """Suma clasificación registrada con origen Producción por id_articulo.
+
+    Incluye unidades ya movidas a Semi/2da/Scrap aunque el stock físico haya salido
+    del pipeline (p. ej. consumidas en armado del pack BOM).
+    """
+    base = (base_empresa or "").strip()
+    if not base:
+        return {}
+    params: List[Any] = ["Produccion"]
+    filtro_art = ""
+    if id_articulos is not None:
+        if not id_articulos:
+            return {}
+        clean = [int(a) for a in id_articulos]
+        filtro_art = f" AND id_articulo IN ({','.join(['%s'] * len(clean))})"
+        params.extend(clean)
+    acum: Dict[int, Decimal] = {}
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            f"""
+            SELECT id_articulo, COALESCE(SUM(cantidad), 0) AS total
+            FROM mpr_transicion_lote
+            WHERE tipo_origen = %s
+              {filtro_art}
+            GROUP BY id_articulo
+            """,
+            params,
+        )
+        for row in cursor.fetchall() or []:
+            aid = to_int_or_none(row.get("id_articulo"))
+            if aid is None:
+                continue
+            acum[aid] = to_decimal_or_none(row.get("total")) or Decimal("0")
+    return acum
+
+
 def sumar_clasificado_rendimiento_operario(
     base_empresa: str,
     fecha_desde: date,

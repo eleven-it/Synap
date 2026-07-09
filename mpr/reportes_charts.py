@@ -44,26 +44,21 @@ def build_charts_produccion(
 
 
 def _chart_resumen_diario(dias: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    if not dias:
+    con_datos = [d for d in (dias or []) if int(d.get("parte") or 0) > 0]
+    if not con_datos:
         return None
     return {
         "reporte": "resumen_diario",
         "blocks": [
             {
-                "id": "resumen-lineas",
-                "kind": "line_multi",
-                "title": "Evolución diaria del pipeline",
-                "subtitle": "Líneas: volumen por etapa · Scrap en eje derecho",
-                "rows": [
-                    {
-                        "label": str(d.get("fecha_display") or ""),
-                        "enviado": int(d.get("enviado") or 0),
-                        "parte": int(d.get("parte") or 0),
-                        "clasificado": int(d.get("clasificado") or 0),
-                        "scrap": int(d.get("scrap") or 0),
-                    }
-                    for d in dias
-                ],
+                "id": "resumen-produccion",
+                "kind": "line",
+                "title": "Producción registrada por día",
+                "subtitle": "Cantidad consolidada de partes registrados por día (pares)",
+                "serie_label": "Producción",
+                "color": "#059669",
+                "labels": [str(d.get("fecha_display") or "") for d in con_datos],
+                "values": [int(d.get("parte") or 0) for d in con_datos],
             }
         ],
     }
@@ -78,7 +73,7 @@ def _chart_operario(filas: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         {
             "id": "operario-hbar",
             "kind": "hbar",
-            "title": "Ranking por unidades producidas",
+            "title": "Ranking por pares producidos",
             "subtitle": (
                 f"Top {len(top)} operarios"
                 + (f" de {total}" if total > len(top) else "")
@@ -135,17 +130,18 @@ def _chart_cadena(
             "id": "cadena-funnel",
             "kind": "grouped_bar",
             "title": "Totales de planta en el período",
-            "subtitle": "Embudo agregado: envío → parte → clasificación (no es serie temporal)",
-            "labels": ["Enviado", "Parte", "Clasificado"],
+            "subtitle": "Embudo agregado: en fabricación → producido → semi elaborado → 2da selección (no es serie temporal)",
+            "labels": ["En fabricación", "Producido", "Semi elaborado", "2da selección"],
             "datasets": [
                 {
-                    "label": "Unidades",
+                    "label": "Pares",
                     "values": [
                         int(kpis.get("enviado") or 0),
                         int(kpis.get("parte") or 0),
-                        int(kpis.get("clasificado") or 0),
+                        int(kpis.get("semi") or 0),
+                        int(kpis.get("segunda") or 0),
                     ],
-                    "colors": ["#64748b", "#059669", "#7c3aed"],
+                    "colors": ["#64748b", "#059669", "#0ea5e9", "#d97706"],
                 }
             ],
         },
@@ -184,17 +180,17 @@ def _chart_cadena(
         blocks.append({
             "id": "cadena-gap-hbar",
             "kind": "hbar_grouped",
-            "title": "Mayor brecha envío → parte",
+            "title": "Mayor brecha en fabricación → producido",
             "subtitle": f"Top {len(top_gap)} componentes con gap (detalle en tabla)",
             "labels": [_trunc_label(f.get("codigo_manual") or f.get("codigo_articulo") or "-", 20) for f in top_gap],
             "datasets": [
                 {
-                    "label": "Enviado",
+                    "label": "En fabricación",
                     "values": [int(f.get("enviado") or 0) for f in top_gap],
                     "color": "#64748b",
                 },
                 {
-                    "label": "Parte",
+                    "label": "Producido",
                     "values": [int(f.get("parte") or 0) for f in top_gap],
                     "color": "#059669",
                 },
@@ -219,8 +215,8 @@ def _chart_pendiente(filas: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
                 "kind": "hbar_colored",
                 "title": "Mayor pendiente por componente",
                 "subtitle": (
-                    f"Top {len(top)} por unidades pendientes"
-                    + " · rojo = crítico (≥50 u.)"
+                    f"Top {len(top)} por pares pendientes"
+                    + " · rojo = crítico (≥50 p.)"
                 ),
                 "labels": [_trunc_label(f.get("codigo_manual") or "-", 20) for f in top],
                 "values": [int(float(f.get("pendiente") or 0)) for f in top],

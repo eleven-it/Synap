@@ -26,7 +26,9 @@ Solo se suman depósitos con `suma_stock = 'Si'`.
 | `q` | Búsqueda texto (≥ 2 caracteres), universo completo |
 | `id_articulo` | Una fila concreta |
 | `incluir_ceros=1` | Incluye artículos con consolidado ≤ 0 |
-| `presentacion` | `unidades` (default) o `docenas` |
+| `presentacion` | `unidades` (pares, default) o `docenas` (docenas de pares) |
+
+Componentes UI compartidos con MPR operativo: `templates/includes/filtro_marcas_tags.html` (variant `light`), `templates/includes/toggle_docenas_pares.html` (toggle **Docenas | Pares**), JS `stock/static/stock/js/filtro_marcas_tags.mjs`.
 | `page` | Paginación (150 filas) |
 
 ## API

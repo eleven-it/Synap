@@ -1,13 +1,27 @@
 """
 Permisos de usuario según AdministraNET (MySQL).
-Fuentes: permiso_sistema + permiso_sistema_puesto; y tabla permisos (Clavemenu) mapeada a key_permiso.
+
+Fachada de la fuente de verdad de permisos. Según ``settings.SYNAP_PERMISOS_SOURCE``
+resuelve los permisos desde las tablas propias de Synap (``synap_*``) o desde las
+tablas legacy compartidas con VB6 (``permiso_sistema`` + ``permiso_sistema_puesto``),
+o ambas (modo ``dual`` para validar paridad).
+
+Siempre suma los permisos complementarios de la tabla ``permisos`` (Clavemenu VB6),
+que es lectura genuinamente legacy y no se migra.
+
 Usado por middleware (request.user.get_permisos_totales) y self_checkout (has_permission).
 """
 import logging
 from typing import Optional, Set
 
-from core.constantes_permisos import MAPEO_MENU_A_PERMISO
-from core.mysql_pool import mysql_cursor
+from django.conf import settings
+
+from core.services.synap_permisos import (
+    get_permisos_complementarios_legacy,
+    get_permisos_desde_synap_store,
+    get_permisos_legacy_synap,
+    puesto_tiene_mapeo_synap,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +38,43 @@ REPORTS_PERMISSIONS_FOR_SUPERVISOR = {
 }
 
 
+def _resolver_permisos_base(base_empresa: str, id_puesto: Optional[int]) -> Set[str]:
+    """
+    Resuelve el set base de permisos del puesto según ``settings.SYNAP_PERMISOS_SOURCE``:
+    - ``legacy`` (default): permiso_sistema + permiso_sistema_puesto.
+    - ``synap``: tablas synap_*; si el puesto no tiene mapeo, fallback a legacy.
+    - ``dual``: unión de ambas; registra advertencia si difieren (validación de paridad).
+    NO incluye complementarios (Clavemenu) ni permisos de supervisor: eso lo hace la fachada.
+    """
+    source = str(getattr(settings, "SYNAP_PERMISOS_SOURCE", "legacy") or "legacy").strip().lower()
+
+    if source == "synap":
+        permisos = get_permisos_desde_synap_store(base_empresa, id_puesto)
+        if not permisos and not puesto_tiene_mapeo_synap(base_empresa, id_puesto):
+            logger.info(
+                "SYNAP_PERMISOS_SOURCE=synap: puesto %s sin mapeo en synap_*; fallback a legacy.",
+                id_puesto,
+            )
+            return get_permisos_legacy_synap(base_empresa, id_puesto)
+        return permisos
+
+    if source == "dual":
+        permisos_synap = get_permisos_desde_synap_store(base_empresa, id_puesto)
+        permisos_legacy = get_permisos_legacy_synap(base_empresa, id_puesto)
+        if permisos_synap != permisos_legacy:
+            solo_synap = permisos_synap - permisos_legacy
+            solo_legacy = permisos_legacy - permisos_synap
+            logger.warning(
+                "SYNAP_PERMISOS_SOURCE=dual: divergencia de permisos puesto %s (%s). "
+                "solo_synap=%s solo_legacy=%s",
+                id_puesto, base_empresa, sorted(solo_synap), sorted(solo_legacy),
+            )
+        return permisos_synap | permisos_legacy
+
+    # 'legacy' (default) y cualquier valor desconocido
+    return get_permisos_legacy_synap(base_empresa, id_puesto)
+
+
 def get_permisos_totales_administranet(
     base_empresa: str,
     id_puesto: Optional[int],
@@ -31,13 +82,16 @@ def get_permisos_totales_administranet(
     nombre_puesto: Optional[str] = None,
 ) -> Set[str]:
     """
-    Obtiene el set de key_permiso (valor_permiso = 'Si') para el puesto en MySQL.
-    Reglas AdministraNET:
+    Obtiene el set de key_permiso efectivos del puesto/usuario.
+
+    Reglas AdministraNET (invariantes en todas las fuentes):
     - Usuario con cod_usuario == 'supervisor' tiene todos los permisos ("*").
     - Puesto/usuario con nombre_puesto == 'Supervisor' o cod_usuario == 'supervisor'
       recibe además los permisos de Reports (reports.ver, reports.*, etc.).
-    - Resto: solo los key_permiso con valor_permiso = 'Si' en permiso_sistema_puesto
-      (valor más reciente por id_permiso_sistema_puesto por permiso).
+    - Se suman siempre los permisos complementarios de la tabla ``permisos`` (Clavemenu VB6).
+
+    El set base (permisos por puesto) proviene de ``synap_*`` o legacy según
+    ``settings.SYNAP_PERMISOS_SOURCE`` (ver ``_resolver_permisos_base``).
     """
     cod_usuario_lower = (cod_usuario or "").strip().lower()
     nombre_puesto_lower = (nombre_puesto or "").strip().lower()
@@ -45,62 +99,12 @@ def get_permisos_totales_administranet(
     if cod_usuario_lower == "supervisor":
         return {"*"}
 
-    permisos = set()
+    permisos: Set[str] = set()
 
     if base_empresa and id_puesto:
-        try:
-            with mysql_cursor(base_empresa, dict_cursor=False) as cursor:
-                cursor.execute(
-                    """
-                    SELECT ps.key_permiso, psp.valor_permiso
-                    FROM permiso_sistema ps
-                    INNER JOIN (
-                        SELECT psp1.id_permiso_sistema, psp1.valor_permiso
-                        FROM permiso_sistema_puesto psp1
-                        INNER JOIN (
-                            SELECT id_permiso_sistema, MAX(id_permiso_sistema_puesto) AS max_id
-                            FROM permiso_sistema_puesto
-                            WHERE id_puesto = %s
-                            GROUP BY id_permiso_sistema
-                        ) psp2 ON psp1.id_permiso_sistema = psp2.id_permiso_sistema
-                               AND psp1.id_permiso_sistema_puesto = psp2.max_id
-                        WHERE psp1.id_puesto = %s
-                    ) psp ON ps.id_permiso_sistema = psp.id_permiso_sistema
-                    WHERE psp.valor_permiso = 'Si'
-                    """,
-                    [id_puesto, id_puesto],
-                )
-                for row in cursor.fetchall():
-                    key_permiso = row[0] if row else None
-                    if key_permiso:
-                        permisos.add(key_permiso)
-
-                # Incluir permisos mapeados desde tabla permisos (Clavemenu VB6)
-                # para que keyCompStock etc. otorguen stock.crear_movimiento en Synap
-                try:
-                    cursor.execute(
-                        """
-                        SELECT Clavemenu FROM permisos
-                        WHERE IDpuesto = %s AND (Permiso = '1' OR Permiso = 'Si')
-                        """,
-                        [str(id_puesto)],
-                    )
-                    for row in cursor.fetchall():
-                        clavemenu = row[0] if row else None
-                        if clavemenu and clavemenu in MAPEO_MENU_A_PERMISO:
-                            permisos.add(MAPEO_MENU_A_PERMISO[clavemenu])
-                except Exception as e_permisos:
-                    logger.debug(
-                        "No se pudo leer tabla permisos para puesto %s (puede no existir): %s",
-                        id_puesto,
-                        e_permisos,
-                    )
-        except Exception as e:
-            logger.warning(
-                "Error al obtener permisos desde MySQL para puesto %s: %s",
-                id_puesto,
-                e,
-            )
+        permisos |= _resolver_permisos_base(base_empresa, id_puesto)
+        # Complementarios legacy (Clavemenu VB6): siempre se suman.
+        permisos |= get_permisos_complementarios_legacy(base_empresa, id_puesto)
 
     if cod_usuario_lower == "supervisor" or nombre_puesto_lower == "supervisor":
         permisos.update(REPORTS_PERMISSIONS_FOR_SUPERVISOR)

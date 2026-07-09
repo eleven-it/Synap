@@ -10,7 +10,7 @@ import logging
 import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from core.mysql_pool import get_connection, mysql_cursor
 from core.services.administranet_stock import get_depositos as _get_depositos_core
@@ -154,6 +154,21 @@ def texto_docenas_unidades(
         unidades_por_docena_fijo=unidades_por_docena_fijo,
     )
     return f"{partes['docenas']} docenas · {partes['unidades']} unidades"
+
+
+def texto_docenas_pares(
+    cantidad: Any,
+    cantidad_promedio_bulto: Any = None,
+    *,
+    unidades_por_docena_fijo: Optional[int] = None,
+) -> str:
+    """Texto UI Best Sox (pares): «N docenas · M pares» (1 docena = 12 pares)."""
+    partes = descomponer_docenas_unidades(
+        cantidad,
+        cantidad_promedio_bulto,
+        unidades_por_docena_fijo=unidades_por_docena_fijo,
+    )
+    return f"{partes['docenas']} docenas · {partes['unidades']} pares"
 
 
 def docenas_enteras_desde_packs(cantidad_packs: Any, cantidad_promedio_bulto: Any) -> int:
@@ -1702,6 +1717,21 @@ def _formatear_fecha_dd_mm_yyyy(value) -> str:
             dt = datetime.strptime(s, "%Y-%m-%d")
             return dt.strftime("%d-%m-%Y")
         except (ValueError, TypeError):
+            pass
+    return "—"
+
+
+def _formatear_fecha_entrega_ui(value) -> str:
+    """Fecha entrega PCP Armado: dd/MM/yyyy (convención español Synap)."""
+    if value is None:
+        return "—"
+    if isinstance(value, (date, datetime)):
+        return value.strftime("%d/%m/%Y")
+    parsed = to_date_or_none(value)
+    if parsed is not None:
+        try:
+            return datetime.strptime(parsed, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except ValueError:
             pass
     return "—"
 
@@ -3478,6 +3508,7 @@ def listar_demanda_pack_desde_pedidos(
     fecha_hasta: Optional[date] = None,
     *,
     modo_ligero: bool = False,
+    marcas_incluidos: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Demanda de packs terminados calculada en vivo desde pedidos PED (stockp + comp_ped + articulo),
@@ -3488,8 +3519,12 @@ def listar_demanda_pack_desde_pedidos(
     S = stock terminado (depósitos suma_stock='Si').
     cantidad_a_fabricar = max(0, P_ped + R − S); solo devuelve filas con cantidad_a_fabricar > 0.
 
+    primera_fecha_entrega: MIN(comp_ped.FechaEntrega) por artículo en las mismas líneas PED
+    (paridad PCP Armado col E / vista BEST REP_PCP_ARMADO).
+
     Shape compatible con _explosion_demanda_componentes_pedido_reserva_pack:
-    id_articulo, cantidad_a_fabricar, cantidad_pedida_pedido, stock_terminado, stock_reserva.
+    id_articulo, cantidad_a_fabricar, cantidad_pedida_pedido, stock_terminado, stock_reserva,
+    primera_fecha_entrega (YYYY-MM-DD o None).
     """
     if not (base_empresa or "").strip():
         return []
@@ -3503,9 +3538,14 @@ def listar_demanda_pack_desde_pedidos(
             if not all([tbl_stockp, tbl_cp, tbl_articulo]):
                 return []
 
+            col_fecha_entrega = ""
+            if columna_existe(cursor, tbl_cp, "FechaEntrega"):
+                col_fecha_entrega = ", cp.FechaEntrega AS fecha_entrega"
+
             sql_origin = f"""
                 SELECT sp.IDArt AS id_articulo,
                        COALESCE(sp.cantidad, sp.cantidad_pendiente, sp.Cantidad, 0) AS cantidad
+                       {col_fecha_entrega}
                 FROM {tbl_stockp} sp
                 INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
                 INNER JOIN {tbl_articulo} a ON a.IDArt = sp.IDArt
@@ -3529,9 +3569,18 @@ def listar_demanda_pack_desde_pedidos(
             if fecha_hasta:
                 sql_origin += " AND cp.Fecha <= %s"
                 params_origin.append(to_date_or_none(fecha_hasta) or str(fecha_hasta)[:10])
+            if marcas_incluidos:
+                marcas_vals = [
+                    int(m) for m in marcas_incluidos if to_int_or_none(m) is not None
+                ]
+                if marcas_vals:
+                    ph_m = ",".join(["%s"] * len(marcas_vals))
+                    sql_origin += f" AND a.CodigoMarca IN ({ph_m})"
+                    params_origin.extend(marcas_vals)
 
             cursor.execute(sql_origin, params_origin)
             p_ped_map: Dict[int, float] = {}
+            fecha_entrega_min: Dict[int, str] = {}
             for row in cursor.fetchall() or []:
                 id_art = to_int_or_none(row.get("id_articulo"))
                 if id_art is None:
@@ -3543,6 +3592,12 @@ def listar_demanda_pack_desde_pedidos(
                 if qty <= 0:
                     continue
                 p_ped_map[id_art] = p_ped_map.get(id_art, 0.0) + qty
+                if col_fecha_entrega:
+                    fe = to_date_or_none(row.get("fecha_entrega"))
+                    if fe is not None:
+                        prev = fecha_entrega_min.get(id_art)
+                        if prev is None or fe < prev:
+                            fecha_entrega_min[id_art] = fe
 
             if not p_ped_map:
                 return []
@@ -3582,6 +3637,7 @@ def listar_demanda_pack_desde_pedidos(
                     "stock_reserva": reserva,
                     "cantidad_a_fabricar": cf,
                     "cantidad_urgente_abs": max(0.0, p_ped - st),
+                    "primera_fecha_entrega": fecha_entrega_min.get(id_art),
                 })
 
             filas.sort(key=lambda x: -float(x.get("cantidad_a_fabricar") or 0))
@@ -10113,8 +10169,6 @@ def validar_datos_armado_surtido(
         return False, "Seleccione el pack terminado."
     if not cantidad_packs or cantidad_packs < 1:
         return False, "Indique cantidad de packs (entero ≥ 1)."
-    if not id_operario:
-        return False, "Seleccione operario."
     dep_o = to_int_or_none(deposito_origen)
     dep_d = to_int_or_none(deposito_destino)
     if not dep_o or not dep_d:
@@ -10599,6 +10653,177 @@ def _max_packs_armado_1ra_bulk(
             exc_info=True,
         )
     return resultado
+
+
+def listar_tablero_armado(
+    base_empresa: str,
+    *,
+    modo: str = "1ra",
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    solo_resta: bool = True,
+    marcas_incluidos: Optional[Sequence[int]] = None,
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """
+    Grilla Armado alineada a PCP Armado: packs terminados con demanda y capacidad de armado.
+
+    resta_armar = max(0, pedido + stock_reserva − stock_terminado)  (paridad PCP col L)
+    resta_urgente = max(0, pedido − stock_terminado)               (paridad PCP col J)
+    max_armable: solo modo 1ra (BOM × stock Semi elaborado).
+    """
+    if not (base_empresa or "").strip():
+        return []
+    modo_n = _normalizar_modo_armado(modo, default="1ra")
+    filas_demanda = listar_demanda_pack_desde_pedidos(
+        base_empresa,
+        limit=limit * 2,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        marcas_incluidos=marcas_incluidos,
+    )
+    if modo_n == "1ra":
+        packs_ok = {
+            int(p["id_articulo"]): p
+            for p in (listar_packs_armado_1ra(base_empresa) or [])
+            if to_int_or_none(p.get("id_articulo")) is not None
+        }
+        dep_origen = get_deposito_semi_elaborado_mpr(base_empresa)
+    else:
+        packs_ok = {
+            int(p["id_articulo"]): p
+            for p in (listar_packs_armado_surtido(base_empresa) or [])
+            if to_int_or_none(p.get("id_articulo")) is not None
+        }
+        dep_origen = get_deposito_2da_seleccion_mpr(base_empresa)
+
+    ids_pack = [
+        int(d["id_articulo"])
+        for d in filas_demanda
+        if to_int_or_none(d.get("id_articulo")) in packs_ok
+    ]
+    if not ids_pack:
+        return []
+
+    max_map: Dict[int, int] = {}
+    if modo_n == "1ra" and dep_origen:
+        max_map = _max_packs_armado_1ra_bulk(base_empresa, ids_pack, int(dep_origen))
+
+    marca_map = _fetch_codigo_marca_articulo(base_empresa, ids_pack)
+    dem_por_id = {int(d["id_articulo"]): d for d in filas_demanda}
+
+    filas: List[Dict[str, Any]] = []
+    for id_art in ids_pack:
+        dem = dem_por_id.get(id_art) or {}
+        pack_meta = packs_ok.get(id_art) or {}
+        try:
+            pedido = int(round(float(dem.get("cantidad_pedida_pedido") or 0)))
+        except (TypeError, ValueError):
+            pedido = 0
+        try:
+            stock_terminado = int(round(float(dem.get("stock_terminado") or 0)))
+        except (TypeError, ValueError):
+            stock_terminado = 0
+        try:
+            stock_reserva = int(round(float(dem.get("stock_reserva") or 0)))
+        except (TypeError, ValueError):
+            stock_reserva = 0
+        try:
+            resta_armar = int(round(float(dem.get("cantidad_a_fabricar") or 0)))
+        except (TypeError, ValueError):
+            resta_armar = max(0, pedido + stock_reserva - stock_terminado)
+        resta_urgente = max(0, pedido - stock_terminado)
+        max_armable = int(max_map.get(id_art, 0) or 0) if modo_n == "1ra" else 0
+
+        if solo_resta and resta_armar <= 0:
+            continue
+        if modo_n == "1ra" and max_armable <= 0:
+            continue
+
+        a_armar = 0
+        if modo_n == "1ra" and max_armable > 0 and resta_armar > 0:
+            a_armar = min(resta_armar, max_armable)
+
+        filas.append({
+            "id_articulo": id_art,
+            "codigo_manual": str_codigo_manual_articulo(
+                pack_meta.get("codigo_articulo") or dem.get("codigo_manual")
+            ),
+            "codigo_articulo": str_or_default(pack_meta.get("codigo_articulo"), "-"),
+            "descripcion_articulo": str_or_default(
+                pack_meta.get("descripcion_articulo"), "-"
+            ),
+            "codigo_marca": marca_map.get(id_art),
+            "pedido": pedido,
+            "stock_terminado": stock_terminado,
+            "stock_reserva": stock_reserva,
+            "resta_urgente": resta_urgente,
+            "resta_armar": resta_armar,
+            "max_armable": max_armable,
+            "a_armar": a_armar,
+            "modo_armado": modo_n,
+            "primera_fecha_entrega": dem.get("primera_fecha_entrega"),
+            "primera_fecha_entrega_display": _formatear_fecha_entrega_ui(
+                dem.get("primera_fecha_entrega")
+            ),
+        })
+
+    filas.sort(key=lambda x: (-int(x.get("resta_armar") or 0), str(x.get("codigo_manual") or "")))
+    return filas[:limit]
+
+
+def calcular_kpis_tablero_armado(filas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Totales para cabecera (pares y docenas enteras PCP)."""
+    resta_pares = sum(int(f.get("resta_armar") or 0) for f in (filas or []))
+    urgente_pares = sum(int(f.get("resta_urgente") or 0) for f in (filas or []))
+    from mpr.presentacion_operativa import docenas_enteras_pcp
+
+    return {
+        "resta_armar_pares": resta_pares,
+        "resta_armar_docenas": docenas_enteras_pcp(resta_pares),
+        "resta_urgente_pares": urgente_pares,
+        "resta_urgente_docenas": docenas_enteras_pcp(urgente_pares),
+        "n_filas": len(filas or []),
+    }
+
+
+def construir_armados_desde_post_tablero(
+    base_empresa: str,
+    post,
+    *,
+    modo: str = "1ra",
+) -> List[Dict[str, Any]]:
+    """Arma ítems de lote desde inputs armar_{id_articulo} de la grilla tabla."""
+    if not (base_empresa or "").strip():
+        return []
+    modo_n = _normalizar_modo_armado(modo, default="1ra")
+    armados: List[Dict[str, Any]] = []
+    for key, raw in (post or {}).items():
+        if not str(key).startswith("armar_"):
+            continue
+        id_pack = to_int_or_none(str(key)[6:])
+        try:
+            qty = int(str(raw or "0").strip())
+        except (TypeError, ValueError):
+            qty = 0
+        if id_pack is None or qty <= 0:
+            continue
+        if modo_n == "1ra":
+            lineas = lineas_bom_pack_1ra(base_empresa, int(id_pack))
+            if not lineas:
+                continue
+            armados.append({
+                "id_articulo_pack": int(id_pack),
+                "cantidad_packs": qty,
+                "lineas": [
+                    {
+                        "id_articulo": int(ln["id_articulo"]),
+                        "cantidad_por_pack": int(ln["cantidad_por_pack"]),
+                    }
+                    for ln in lineas
+                ],
+            })
+    return armados
 
 
 def listar_articulos_stock_deposito(
@@ -12979,12 +13204,14 @@ def reporte_mpr_resumen_diario(
         tot_gap += gap
 
     scrap_pct_tot = round((tot_scrap / tot_clas * 100.0), 1) if tot_clas > 0 else 0.0
+    dias_con_parte = sum(1 for d in dias_out if d["parte"] > 0)
     return {
         "kpis": {
             "enviado": int(tot_env),
             "parte": int(tot_parte),
             "clasificado": int(tot_clas),
             "scrap_pct": scrap_pct_tot,
+            "dias_con_parte": dias_con_parte,
         },
         "dias": dias_out,
         "totales": {
@@ -13082,6 +13309,417 @@ def reporte_mpr_operario_parte(
     }
 
 
+_MESES_ABBR_ES = [
+    "", "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+]
+
+
+def reporte_mpr_operario_mensual(
+    base_empresa: str,
+    fecha_desde: Optional[Any] = None,
+    fecha_hasta: Optional[Any] = None,
+    seleccionados: Optional[List[int]] = None,
+    modo: str = "docenas",
+    max_operarios: int = 40,
+) -> Dict[str, Any]:
+    """Producción por operario (tejedor) con dimensión temporal Año/Mes.
+
+    Replica la tabla dinámica «Producción x Tejedor» del Excel de fábrica:
+    filas por Año→Mes, columnas por operario, con subtotales por año y total
+    general. Permite filtrar/comparar 1 o 2 operarios (columna Δ cuando son 2).
+    Fuente nativa: `mpr_parte_linea` (pares) unida a `mpr_parte.fecha_produccion`.
+    """
+    sel = []
+    for x in (seleccionados or []):
+        v = to_int_or_none(x)
+        if v is not None and v not in sel:
+            sel.append(v)
+    sel = sel[:2]
+    dos = len(sel) == 2
+
+    vacio = {
+        "kpis": {
+            "total_display": "0",
+            "operarios_activos": 0,
+            "meses_con_datos": 0,
+            "top_operario": "-",
+            "top_display": "0",
+        },
+        "filas": [],
+        "operarios": [],
+        "seleccionados": sel,
+        "columnas": [],
+        "grupos": [],
+        "totales_columna": [],
+        "total_general": 0,
+        "dos": dos,
+        "modo": modo,
+        "sin_datos": True,
+    }
+    if not (base_empresa or "").strip():
+        return vacio
+    fdesde, fhasta = _periodo_reporte_mpr(fecha_desde, fecha_hasta)
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                """
+                SELECT pl.id_operario,
+                       MAX(NULLIF(TRIM(pl.operario_nombre), '')) AS operario_nombre,
+                       YEAR(p.fecha_produccion) AS anio,
+                       MONTH(p.fecha_produccion) AS mes,
+                       COALESCE(SUM(pl.cantidad), 0) AS unidades
+                FROM mpr_parte_linea pl
+                INNER JOIN mpr_parte p ON p.id_mpr_parte = pl.id_mpr_parte
+                WHERE p.fecha_produccion BETWEEN %s AND %s
+                GROUP BY pl.id_operario, anio, mes
+                ORDER BY anio, mes
+                """,
+                [fdesde, fhasta],
+            )
+            rows = cursor.fetchall() or []
+    except Exception as exc:
+        logger.warning("reporte_mpr_operario_mensual %s: %s", base_empresa, exc, exc_info=True)
+        return vacio
+
+    if not rows:
+        return vacio
+
+    # Estructuras base (todo en pares).
+    nombres: Dict[int, str] = {}
+    total_por_op: Dict[int, float] = {}
+    celdas_raw: Dict[Tuple[int, int, int], float] = {}  # (oid, anio, mes) -> pares
+    meses_set: set = set()
+    for r in rows:
+        oid = to_int_or_none(r.get("id_operario"))
+        if oid is None:
+            continue
+        anio = to_int_or_none(r.get("anio"))
+        mes = to_int_or_none(r.get("mes"))
+        pares = float(r.get("unidades") or 0)
+        nombre = str_or_default(r.get("operario_nombre"), "").strip() or f"Operario {oid}"
+        nombres[oid] = nombre
+        total_por_op[oid] = total_por_op.get(oid, 0.0) + pares
+        if anio is not None and mes is not None:
+            celdas_raw[(oid, anio, mes)] = celdas_raw.get((oid, anio, mes), 0.0) + pares
+            meses_set.add((anio, mes))
+
+    # Catálogo completo para el selector (orden alfabético).
+    catalogo = [
+        {"id": oid, "nombre": nombres[oid]}
+        for oid in sorted(nombres, key=lambda o: nombres[o].lower())
+    ]
+
+    # Columnas visibles: seleccionadas (en orden) o todas por producción desc.
+    if sel:
+        columnas = [{"id": oid, "nombre": nombres.get(oid, f"Operario {oid}")} for oid in sel]
+    else:
+        columnas = [
+            {"id": oid, "nombre": nombres[oid]}
+            for oid in sorted(total_por_op, key=lambda o: total_por_op[o], reverse=True)[:max_operarios]
+        ]
+    col_ids = [c["id"] for c in columnas]
+
+    def _conv(pares: float) -> float:
+        if modo == "docenas":
+            return round(pares / 12.0, 1)
+        return float(int(round(pares)))
+
+    def _fmt(v: float) -> str:
+        if v is None:
+            return ""
+        try:
+            fv = float(v)
+        except (TypeError, ValueError):
+            return ""
+        if fv == 0:
+            return ""
+        if fv.is_integer():
+            return f"{int(fv):,}".replace(",", ".")
+        return f"{fv:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    meses_orden = sorted(meses_set)
+    anios_orden: List[int] = []
+    for (a, _m) in meses_orden:
+        if a not in anios_orden:
+            anios_orden.append(a)
+
+    grupos: List[Dict[str, Any]] = []
+    totales_col = {oid: 0.0 for oid in col_ids}
+    total_general = 0.0
+    filas_csv: List[Dict[str, Any]] = []
+
+    for anio in anios_orden:
+        filas_mes: List[Dict[str, Any]] = []
+        subtotal_col = {oid: 0.0 for oid in col_ids}
+        for (a, mes) in meses_orden:
+            if a != anio:
+                continue
+            celdas = []
+            fila_total = 0.0
+            for oid in col_ids:
+                pares = celdas_raw.get((oid, anio, mes), 0.0)
+                val = _conv(pares)
+                celdas.append({"id": oid, "valor": val, "txt": _fmt(val)})
+                fila_total += val
+                subtotal_col[oid] += val
+                totales_col[oid] += val
+                if pares:
+                    filas_csv.append({
+                        "operario": nombres.get(oid, f"Operario {oid}"),
+                        "anio": anio,
+                        "mes": _MESES_ABBR_ES[mes] if 1 <= mes <= 12 else str(mes),
+                        "valor": val,
+                    })
+            delta_txt = ""
+            if dos:
+                d = celdas[0]["valor"] - celdas[1]["valor"]
+                delta_txt = ("+" if d > 0 else "") + _fmt(abs(d)) if d != 0 else "0"
+                if d < 0:
+                    delta_txt = "-" + _fmt(abs(d))
+            filas_mes.append({
+                "mes": mes,
+                "mes_label": _MESES_ABBR_ES[mes] if 1 <= mes <= 12 else str(mes),
+                "celdas": celdas,
+                "total": fila_total,
+                "total_txt": _fmt(fila_total),
+                "delta": (celdas[0]["valor"] - celdas[1]["valor"]) if dos else None,
+                "delta_txt": delta_txt,
+            })
+            total_general += fila_total
+        subtotal_celdas = [
+            {"id": oid, "valor": subtotal_col[oid], "txt": _fmt(subtotal_col[oid])}
+            for oid in col_ids
+        ]
+        sub_total = sum(subtotal_col.values())
+        grupos.append({
+            "anio": anio,
+            "filas": filas_mes,
+            "subtotal_celdas": subtotal_celdas,
+            "subtotal_total": sub_total,
+            "subtotal_total_txt": _fmt(sub_total),
+            "subtotal_delta_txt": (
+                (lambda d: ("-" if d < 0 else ("+" if d > 0 else "")) + _fmt(abs(d)) if d else "0")(
+                    subtotal_col[col_ids[0]] - subtotal_col[col_ids[1]]
+                ) if dos else ""
+            ),
+        })
+
+    totales_columna = [
+        {"id": oid, "nombre": nombres.get(oid, f"Operario {oid}"),
+         "valor": totales_col[oid], "txt": _fmt(totales_col[oid])}
+        for oid in col_ids
+    ]
+    total_delta_txt = ""
+    if dos:
+        d = totales_col[col_ids[0]] - totales_col[col_ids[1]]
+        total_delta_txt = (
+            (("-" if d < 0 else ("+" if d > 0 else "")) + _fmt(abs(d))) if d else "0"
+        )
+
+    top_oid = max(total_por_op, key=lambda o: total_por_op[o]) if total_por_op else None
+    kpis = {
+        "total_display": _fmt(_conv(sum(total_por_op.values()))) or "0",
+        "operarios_activos": len(total_por_op),
+        "meses_con_datos": len(meses_set),
+        "top_operario": nombres.get(top_oid, "-") if top_oid is not None else "-",
+        "top_display": _fmt(_conv(total_por_op.get(top_oid, 0.0))) if top_oid is not None else "0",
+    }
+
+    return {
+        "kpis": kpis,
+        "filas": filas_csv,
+        "operarios": catalogo,
+        "seleccionados": sel,
+        "columnas": columnas,
+        "grupos": grupos,
+        "totales_columna": totales_columna,
+        "total_general": total_general,
+        "total_general_txt": _fmt(total_general),
+        "total_delta_txt": total_delta_txt,
+        "dos": dos,
+        "modo": modo,
+        "sin_datos": False,
+    }
+
+
+def reporte_mpr_operario_maquina(
+    base_empresa: str,
+    fecha_desde: Optional[Any] = None,
+    fecha_hasta: Optional[Any] = None,
+    limit: int = 300,
+) -> Dict[str, Any]:
+    """Producción por operario y máquina/línea, con gap (declarada vs aprobada).
+
+    Dimensión de trazabilidad de la Fase 8.2: cada fila es (operario, máquina) con
+    su línea vigente, sumando `cantidad_declarada`, `cantidad_aprobada` y `gap`.
+    """
+    vacio = {
+        "kpis": {"unidades_total": 0, "maquinas_activas": 0, "gap_total": 0, "operarios": 0},
+        "filas": [],
+    }
+    if not (base_empresa or "").strip():
+        return vacio
+    fdesde, fhasta = _periodo_reporte_mpr(fecha_desde, fecha_hasta)
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                """
+                SELECT pl.id_operario,
+                       MAX(NULLIF(TRIM(pl.operario_nombre), '')) AS operario_nombre,
+                       pl.id_mpr_maquina,
+                       MAX(pl.maquina_nombre) AS maquina_nombre,
+                       MAX(l.nombre) AS linea_nombre,
+                       COALESCE(SUM(pl.cantidad_declarada), 0) AS declarada,
+                       COALESCE(SUM(pl.cantidad_aprobada), 0) AS aprobada,
+                       COALESCE(SUM(pl.gap), 0) AS gap,
+                       COUNT(DISTINCT pl.id_mpr_parte) AS partes
+                FROM mpr_parte_linea pl
+                INNER JOIN mpr_parte p ON p.id_mpr_parte = pl.id_mpr_parte
+                LEFT JOIN mpr_maquina_linea ml
+                    ON ml.id_mpr_maquina = pl.id_mpr_maquina AND ml.vigencia_hasta IS NULL
+                LEFT JOIN mpr_linea l ON l.id_mpr_linea = ml.id_mpr_linea
+                WHERE p.fecha_produccion BETWEEN %s AND %s
+                GROUP BY pl.id_operario, pl.id_mpr_maquina
+                ORDER BY declarada DESC
+                LIMIT %s
+                """,
+                [fdesde, fhasta, limit],
+            )
+            rows = cursor.fetchall() or []
+    except Exception as exc:
+        logger.warning("reporte_mpr_operario_maquina %s: %s", base_empresa, exc, exc_info=True)
+        return vacio
+
+    filas: List[Dict[str, Any]] = []
+    total_aprob = 0.0
+    gap_total = 0.0
+    operarios: set = set()
+    maquinas: set = set()
+    for i, r in enumerate(rows, start=1):
+        oid = to_int_or_none(r.get("id_operario"))
+        mid = to_int_or_none(r.get("id_mpr_maquina"))
+        declarada = int(float(r.get("declarada") or 0))
+        aprobada = int(float(r.get("aprobada") or 0))
+        gap = int(float(r.get("gap") or 0))
+        total_aprob += aprobada
+        gap_total += gap
+        if oid is not None:
+            operarios.add(oid)
+        if mid is not None:
+            maquinas.add(mid)
+        filas.append({
+            "rank": i,
+            "id_operario": oid,
+            "operario": str_or_default(r.get("operario_nombre"), "").strip() or f"Operario {oid or '-'}",
+            "id_mpr_maquina": mid,
+            "maquina": str_or_default(r.get("maquina_nombre"), "").strip() or (f"Máquina {mid}" if mid else "Sin máquina"),
+            "linea": str_or_default(r.get("linea_nombre"), "").strip() or "—",
+            "declarada": declarada,
+            "aprobada": aprobada,
+            "gap": gap,
+            "partes": int(r.get("partes") or 0),
+        })
+    return {
+        "kpis": {
+            "unidades_total": int(total_aprob),
+            "maquinas_activas": len(maquinas),
+            "gap_total": int(gap_total),
+            "operarios": len(operarios),
+        },
+        "filas": filas,
+    }
+
+
+def reporte_mpr_conciliacion_envios_produccion(
+    base_empresa: str,
+    fecha_desde: Optional[Any] = None,
+    fecha_hasta: Optional[Any] = None,
+    limit: int = 500,
+) -> Dict[str, Any]:
+    """Conciliación envíos↔producción: producción aprobada no respaldada por envíos.
+
+    Fase 8.1. Por componente compara lo enviado a fabricación (`mpr_envio_produccion`)
+    contra lo producido aprobado (`mpr_parte_linea` de partes `aprobado`) en el período.
+    `no_respaldado = max(0, producido − enviado)`.
+    """
+    vacio = {
+        "kpis": {"componentes_sin_respaldo": 0, "no_respaldado_total": 0, "enviado_total": 0, "producido_total": 0},
+        "filas": [],
+    }
+    if not (base_empresa or "").strip():
+        return vacio
+    fdesde, fhasta = _periodo_reporte_mpr(fecha_desde, fecha_hasta)
+    env_art: Dict[int, float] = {}
+    prod_art: Dict[int, float] = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(
+                """
+                SELECT id_articulo, COALESCE(SUM(cantidad), 0) AS total
+                FROM mpr_envio_produccion
+                WHERE anulado = 0 AND DATE(creado_en) BETWEEN %s AND %s
+                GROUP BY id_articulo
+                """,
+                [fdesde, fhasta],
+            )
+            for row in cursor.fetchall() or []:
+                aid = to_int_or_none(row.get("id_articulo"))
+                if aid is not None:
+                    env_art[aid] = float(row.get("total") or 0)
+            cursor.execute(
+                """
+                SELECT pl.id_articulo, COALESCE(SUM(pl.cantidad), 0) AS total
+                FROM mpr_parte_linea pl
+                INNER JOIN mpr_parte p ON p.id_mpr_parte = pl.id_mpr_parte
+                WHERE p.estado = 'aprobado' AND p.fecha_produccion BETWEEN %s AND %s
+                GROUP BY pl.id_articulo
+                """,
+                [fdesde, fhasta],
+            )
+            for row in cursor.fetchall() or []:
+                aid = to_int_or_none(row.get("id_articulo"))
+                if aid is not None:
+                    prod_art[aid] = float(row.get("total") or 0)
+    except Exception as exc:
+        logger.warning("reporte_mpr_conciliacion_envios_produccion %s: %s", base_empresa, exc, exc_info=True)
+        return vacio
+
+    ids = sorted(set(env_art) | set(prod_art))
+    descripciones = _fetch_descripciones_articulo(base_empresa, ids) if ids else {}
+    filas: List[Dict[str, Any]] = []
+    no_resp_total = 0.0
+    for aid in ids:
+        enviado = env_art.get(aid, 0.0)
+        producido = prod_art.get(aid, 0.0)
+        no_respaldado = producido - enviado
+        cod, desc = descripciones.get(aid, ("-", "-"))
+        filas.append({
+            "id_articulo": aid,
+            "codigo_articulo": cod,
+            "descripcion_articulo": desc,
+            "enviado": int(enviado),
+            "producido": int(producido),
+            "no_respaldado": int(no_respaldado) if no_respaldado > 0 else 0,
+            "diferencia": int(no_respaldado),
+            "sin_respaldo": no_respaldado > 1e-9,
+        })
+        if no_respaldado > 0:
+            no_resp_total += no_respaldado
+    filas.sort(key=lambda f: f["diferencia"], reverse=True)
+    if limit:
+        filas = filas[:limit]
+    return {
+        "kpis": {
+            "componentes_sin_respaldo": sum(1 for f in filas if f["sin_respaldo"]),
+            "no_respaldado_total": int(no_resp_total),
+            "enviado_total": int(sum(env_art.values())),
+            "producido_total": int(sum(prod_art.values())),
+        },
+        "filas": filas,
+    }
+
+
 def _estado_cadena_pipeline(enviado: float, parte: float, clasificado: float) -> Tuple[str, str]:
     if enviado <= 0:
         return "sin_envio", "Sin envío"
@@ -13109,6 +13747,8 @@ def reporte_mpr_cadena_pipeline(
     env_art: Dict[int, float] = {}
     parte_art: Dict[int, float] = {}
     clas_art: Dict[int, float] = {}
+    semi_art: Dict[int, float] = {}
+    segunda_art: Dict[int, float] = {}
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(
@@ -13140,17 +13780,22 @@ def reporte_mpr_cadena_pipeline(
                     parte_art[aid] = float(row.get("total") or 0)
             cursor.execute(
                 """
-                SELECT id_articulo, COALESCE(SUM(cantidad), 0) AS total
+                SELECT id_articulo,
+                       COALESCE(SUM(cantidad), 0) AS total,
+                       COALESCE(SUM(CASE WHEN tipo_destino = %s THEN cantidad ELSE 0 END), 0) AS semi,
+                       COALESCE(SUM(CASE WHEN tipo_destino = %s THEN cantidad ELSE 0 END), 0) AS segunda
                 FROM mpr_transicion_lote
                 WHERE tipo_origen = %s AND DATE(creado_en) BETWEEN %s AND %s
                 GROUP BY id_articulo
                 """,
-                [TIPO_MPR_PRODUCCION, fdesde, fhasta],
+                [TIPO_MPR_SEMI_ELABORADO, TIPO_MPR_2DA_SELECCION, TIPO_MPR_PRODUCCION, fdesde, fhasta],
             )
             for row in cursor.fetchall() or []:
                 aid = to_int_or_none(row.get("id_articulo"))
                 if aid is not None:
                     clas_art[aid] = float(row.get("total") or 0)
+                    semi_art[aid] = float(row.get("semi") or 0)
+                    segunda_art[aid] = float(row.get("segunda") or 0)
     except Exception as exc:
         logger.warning("reporte_mpr_cadena_pipeline %s: %s", base_empresa, exc, exc_info=True)
         return vacio
@@ -13160,18 +13805,20 @@ def reporte_mpr_cadena_pipeline(
         return vacio
     desc_map = _fetch_descripciones_articulo(base_empresa, list(art_ids))
     filas: List[Dict[str, Any]] = []
-    tot_env = tot_parte = tot_clas = 0.0
+    tot_env = tot_parte = tot_clas = tot_semi = tot_segunda = 0.0
     gaps = 0
     for aid in art_ids:
         enviado = int(env_art.get(aid, 0))
         parte = int(parte_art.get(aid, 0))
         clasificado = int(clas_art.get(aid, 0))
+        semi = int(semi_art.get(aid, 0))
+        segunda = int(segunda_art.get(aid, 0))
         estado, estado_label = _estado_cadena_pipeline(enviado, parte, clasificado)
         codigo, descripcion = desc_map.get(aid, ("-", "-"))
         gap = max(0, enviado - parte)
         if gap > 0:
             gaps += 1
-        max_bar = max(enviado, parte, clasificado, 1)
+        total_bar = max(enviado + parte + semi + segunda, 1)
         filas.append({
             "id_articulo": aid,
             "codigo_manual": codigo,
@@ -13180,16 +13827,21 @@ def reporte_mpr_cadena_pipeline(
             "enviado": enviado,
             "parte": parte,
             "clasificado": clasificado,
+            "semi": semi,
+            "segunda": segunda,
             "estado": estado,
             "estado_label": estado_label,
             "gap_envio_parte": gap,
-            "pct_enviado": round(enviado / max_bar * 100, 1),
-            "pct_parte": round(parte / max_bar * 100, 1),
-            "pct_clasificado": round(clasificado / max_bar * 100, 1),
+            "pct_enviado": round(enviado / total_bar * 100, 1),
+            "pct_parte": round(parte / total_bar * 100, 1),
+            "pct_semi": round(semi / total_bar * 100, 1),
+            "pct_segunda": round(segunda / total_bar * 100, 1),
         })
         tot_env += enviado
         tot_parte += parte
         tot_clas += clasificado
+        tot_semi += semi
+        tot_segunda += segunda
     filas.sort(key=lambda r: (-r["gap_envio_parte"], r["descripcion_articulo"]))
     return {
         "kpis": {
@@ -13197,6 +13849,8 @@ def reporte_mpr_cadena_pipeline(
             "enviado": int(tot_env),
             "parte": int(tot_parte),
             "clasificado": int(tot_clas),
+            "semi": int(tot_semi),
+            "segunda": int(tot_segunda),
         },
         "filas": filas[:limit],
     }
@@ -13215,12 +13869,12 @@ def reporte_mpr_pendiente_componentes(
         return vacio
     UMBRAL_PENDIENTE_CRITICO = 50
 
-    filas_raw = listar_tablero_por_articulo(base_empresa, solo_pendiente=True, limit=limit)
+    filas_raw = listar_tablero_por_articulo(base_empresa, solo_urgente=True, limit=limit)
     filas: List[Dict[str, Any]] = []
     unidades = 0.0
     criticos = 0
     for r in filas_raw:
-        pend = float(r.get("pendiente") or 0)
+        pend = float(r.get("resta_total") or r.get("pendiente") or 0)
         unidades += pend
         critico = pend >= UMBRAL_PENDIENTE_CRITICO
         if critico:
@@ -14001,6 +14655,60 @@ def _fetch_descripciones_articulo(
         return {}
 
 
+def _fetch_codigo_marca_articulo(
+    base_empresa: str,
+    ids_articulo: List[int],
+) -> Dict[int, int]:
+    """Retorna {id_articulo: CodigoMarca} para los artículos dados."""
+    ids = [x for x in (to_int_or_none(i) for i in (ids_articulo or [])) if x is not None]
+    if not ids or not (base_empresa or "").strip():
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl = _nombre_tabla(cursor, "articulo")
+            if not tbl:
+                return {}
+            ph = ",".join(["%s"] * len(ids))
+            cursor.execute(
+                f"""
+                SELECT IDArt AS id_articulo, CodigoMarca AS codigo_marca
+                FROM {tbl}
+                WHERE IDArt IN ({ph})
+                """,
+                ids,
+            )
+            result: Dict[int, int] = {}
+            for r in cursor.fetchall() or []:
+                aid = to_int_or_none(r.get("id_articulo"))
+                cm = to_int_or_none(r.get("codigo_marca"))
+                if aid is not None and cm is not None:
+                    result[aid] = cm
+            return result
+    except Exception as e:
+        logger.warning("_fetch_codigo_marca_articulo error: %s", e)
+        return {}
+
+
+def _filtrar_ids_por_marcas(
+    base_empresa: str,
+    ids_articulo: Iterable[int],
+    marcas_incluidos: Optional[Sequence[int]],
+) -> Set[int]:
+    """Filtra IDs de artículo por CodigoMarca. Sin marcas seleccionadas → todos."""
+    ids = [int(i) for i in ids_articulo if to_int_or_none(i) is not None]
+    if not ids:
+        return set()
+    if not marcas_incluidos:
+        return set(ids)
+    marcas_set = {
+        int(m) for m in marcas_incluidos if to_int_or_none(m) is not None
+    }
+    if not marcas_set:
+        return set(ids)
+    marca_map = _fetch_codigo_marca_articulo(base_empresa, ids)
+    return {i for i in ids if marca_map.get(i) in marcas_set}
+
+
 # =============================================================================
 # Etapa 7: Envío directo a producción desde el Tablero (ledger-componente)
 # =============================================================================
@@ -14032,35 +14740,135 @@ def _query_enviados_todos_componentes(
 def _calcular_fabricando_componente(
     envios_dir: float,
     stock_comp: Dict[str, Any],
+    *,
+    clasificado_desde_produccion: float = 0.0,
+    parte_acumulado: float = 0.0,
 ) -> float:
     """
-    Fabricando = envíos ledger no cubiertos por stock ya ingresado al pipeline MPR.
+    Fabricando = envíos ledger no cubiertos por unidades ya acreditadas al pipeline.
 
-    Descuenta todo stock físico posterior al envío (Producido, Semi, 2da, Scrap, Terminado).
-    Una unidad que salió de Producido hacia otro depósito no vuelve a Fabricando.
+    Acreditado = max(stock físico en etapas de componente, clasificación desde Producción,
+    partes ya registrados en ledger).
+
+    Los componentes del tablero no usan depósito Terminado (el armado mueve el pack).
+    La trazabilidad ``mpr_transicion_lote`` cubre unidades ya clasificadas aunque el
+    semi haya salido por armado y ya no figure en stock_deposito.
     """
-    acreditado = (
+    acreditado_fisico = (
         float(stock_comp.get(TIPO_MPR_PRODUCCION, 0.0) or 0)
         + float(stock_comp.get(TIPO_MPR_SEMI_ELABORADO, 0.0) or 0)
         + float(stock_comp.get(TIPO_MPR_2DA_SELECCION, 0.0) or 0)
         + float(stock_comp.get(TIPO_MPR_SCRAP, 0.0) or 0)
-        + float(stock_comp.get(TIPO_MPR_TERMINADO, 0.0) or 0)
+    )
+    acreditado = max(
+        acreditado_fisico,
+        float(clasificado_desde_produccion or 0),
+        float(parte_acumulado or 0),
     )
     return max(0.0, float(envios_dir or 0) - acreditado)
+
+
+def _fabricando_por_componentes(
+    base_empresa: str,
+    comp_ids: List[int],
+    envios_map: Dict[int, Any],
+    stock_pivot: Dict[int, Dict[str, Any]],
+) -> Dict[int, float]:
+    """Mapa id_articulo → Fabricando (envíos − acreditado) en lote."""
+    if not comp_ids:
+        return {}
+    from mpr.repositories.parte import opp_acumulado_por_pack
+    from mpr.repositories.transicion_lote import sumar_salidas_desde_produccion_por_articulo
+
+    clasif_map: Dict[int, Decimal] = {}
+    parte_map: Dict[int, Decimal] = {}
+    try:
+        clasif_map = sumar_salidas_desde_produccion_por_articulo(base_empresa, comp_ids)
+    except Exception as exc:
+        logger.debug("_fabricando_por_componentes clasificación: %s", exc)
+    try:
+        parte_map = opp_acumulado_por_pack(base_empresa, comp_ids)
+    except Exception as exc:
+        logger.debug("_fabricando_por_componentes partes acumulados: %s", exc)
+
+    resultado: Dict[int, float] = {}
+    for comp in comp_ids:
+        enviado = float(envios_map.get(comp, 0) or 0)
+        resultado[comp] = _calcular_fabricando_componente(
+            enviado,
+            stock_pivot.get(comp, {}),
+            clasificado_desde_produccion=float(clasif_map.get(comp, 0) or 0),
+            parte_acumulado=float(parte_map.get(comp, 0) or 0),
+        )
+    return resultado
 
 
 def _calcular_fabricando_para_parte(
     envios_dir: float,
     stock_comp: Dict[str, Any],
+    *,
+    clasificado_desde_produccion: float = 0.0,
 ) -> float:
     """
     Tope de registración en parte de producción.
 
-    Solo descuenta stock en depósito Producción: el parte ingresa ahí.
-    Debe coincidir con construir_grilla_parte (no usar pipeline Semi/2da/Scrap).
+    Mismo criterio que el tablero (``_calcular_fabricando_componente``).
     """
-    stock_prod = float(stock_comp.get(TIPO_MPR_PRODUCCION, 0.0) or 0)
-    return max(0.0, float(envios_dir or 0) - stock_prod)
+    return _calcular_fabricando_componente(
+        envios_dir,
+        stock_comp,
+        clasificado_desde_produccion=clasificado_desde_produccion,
+    )
+
+
+def _validar_parte_contra_cupo_fabricando(
+    cantidad_por_comp: Dict[int, Decimal],
+    fab_pre: Dict[int, float],
+    desc_pre: Dict[int, Tuple[str, str]],
+) -> List[str]:
+    """Errores si algún componente supera el cupo Fabricando (pares)."""
+    errores: List[str] = []
+    for comp, qty_raw in cantidad_por_comp.items():
+        qty = float(qty_raw or 0)
+        if qty <= 0:
+            continue
+        fab = float(fab_pre.get(comp, 0.0) or 0)
+        if qty > fab + 1e-9:
+            cod, desc = desc_pre.get(comp, ("-", "-"))
+            errores.append(
+                f"{desc} ({cod}): {qty:.1f} pares a registrar, cupo Fabricando {fab:.1f} pares "
+                f"(envíos menos stock ya acreditado en pipeline)."
+            )
+    return errores
+
+
+def _validar_parte_contra_techo_envios(
+    base_empresa: str,
+    cantidad_por_comp: Dict[int, Decimal],
+    desc_pre: Dict[int, Tuple[str, str]],
+) -> List[str]:
+    """Errores si partes acumulados + nuevo registro superan envíos ledger activos."""
+    from mpr.repositories.parte import opp_acumulado_por_pack
+
+    comp_ids = list(cantidad_por_comp.keys())
+    if not comp_ids:
+        return []
+    acum = opp_acumulado_por_pack(base_empresa, comp_ids)
+    envios = _query_enviado_tablero_componente(base_empresa, comp_ids)
+    errores: List[str] = []
+    for comp in comp_ids:
+        qty = float(cantidad_por_comp.get(comp, Decimal("0")) or 0)
+        if qty <= 0:
+            continue
+        acumulado = float(acum.get(comp, Decimal("0")) or 0)
+        envio_total = float(envios.get(comp, Decimal("0")) or 0)
+        if acumulado + qty > envio_total + 1e-9:
+            cod, desc = desc_pre.get(comp, ("-", "-"))
+            errores.append(
+                f"{desc} ({cod}): partes acumulados {acumulado:.1f} + {qty:.1f} pares nuevos "
+                f"superan envíos a fabricación ({envio_total:.1f} pares)."
+            )
+    return errores
 
 
 def _calcular_pendiente_componente(
@@ -14069,13 +14877,70 @@ def _calcular_pendiente_componente(
     envios_dir: float,
 ) -> float:
     """
-    Pendiente = brecha de demanda no cubierta por stock físico ni envíos ledger.
+    Pendiente legacy = brecha con stock completo (total incluye terminado) menos envíos.
 
-    Los envíos en mpr_envio_produccion cuentan como compromiso aunque aún no haya parte
-    (stock en Producido); evita reenvíos indefinidos con pendiente congelado.
+    Obsoleto para tablero: usar ``_calcular_resta_total_componente`` (PCP, sin envíos).
     """
     brecha = max(0.0, float(demanda or 0) - float(total or 0))
     return max(0.0, brecha - float(envios_dir or 0))
+
+
+def _calcular_stock_proceso_componente(
+    suma_comp: Dict[str, Any],
+    tipos_suma: frozenset,
+) -> float:
+    """Stock en pipeline sin Terminado (paridad PCP col G / stock PP)."""
+    from mpr.pipeline import TIPO_MPR_TERMINADO
+
+    return sum(
+        float(suma_comp.get(t, 0.0) or 0)
+        for t in tipos_suma
+        if t != TIPO_MPR_TERMINADO
+    )
+
+
+def _calcular_a_enviar_componente(
+    resta_urgente: float,
+    fabricando: float,
+) -> float:
+    """Tope de Enviar: resta urgente (PCP) menos unidades ya comprometidas en Fabricando."""
+    return max(0.0, float(resta_urgente or 0) - float(fabricando or 0))
+
+
+def _calcular_resta_brecha_componente(
+    demanda: float,
+    stock_proceso: float,
+) -> float:
+    """Brecha PCP: max(0, demanda − stock_en_proceso). Sin envíos ledger (paridad Excel)."""
+    return max(0.0, float(demanda or 0) - float(stock_proceso or 0))
+
+
+def _calcular_resta_urgente_componente(
+    dem_ped: float,
+    stock_proceso: float,
+) -> float:
+    return _calcular_resta_brecha_componente(dem_ped, stock_proceso)
+
+
+def _calcular_resta_total_componente(
+    demanda: float,
+    stock_proceso: float,
+) -> float:
+    return _calcular_resta_brecha_componente(demanda, stock_proceso)
+
+
+def calcular_kpis_tablero_produccion(filas: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Totales PCP-style para cabecera del tablero (pares y docenas)."""
+    suma_urgente = sum(float(r.get("resta_urgente") or 0) for r in (filas or []))
+    suma_total = sum(float(r.get("resta_total") or 0) for r in (filas or []))
+    divisor = 12.0
+    return {
+        "pares_resta_urgente": int(round(suma_urgente)),
+        "pares_resta_total": int(round(suma_total)),
+        "docenas_resta_urgente": int(round(suma_urgente / divisor)),
+        "docenas_resta_total": int(round(suma_total / divisor)),
+        "filas_count": len(filas or []),
+    }
 
 
 def enviar_a_produccion_lote(
@@ -14087,14 +14952,14 @@ def enviar_a_produccion_lote(
     """Crea envíos directos al tablero en mpr_envio_produccion (MySQL).
 
     - Omite filas con cantidad <= 0 (warning, no error).
-    - Warning no-bloqueante si cantidad > pendiente (si pendientes provisto).
+    - Warning no-bloqueante si cantidad > resta urgente / pendiente (si mapa provisto).
     - NO escribe en tablas MySQL legacy de stock (movimiento_stock / stock_deposito).
 
     Args:
         base_empresa: Scope de empresa.
         id_usuario: ID usuario AdministraNET.
         items: Lista de (id_articulo, cantidad).
-        pendientes: Mapa {id_articulo: pendiente} para warnings de sobreenvío.
+        pendientes: Mapa {id_articulo: resta_urgente} para warnings de sobreenvío.
 
     Returns:
         (ok, n_creados, warnings, error|None)
@@ -14118,7 +14983,7 @@ def enviar_a_produccion_lote(
             pend_dec = to_decimal_or_none(pend)
             if pend_dec is not None and qty > pend_dec:
                 warnings_list.append(
-                    f"Artículo {id_art_int}: cantidad {qty} supera pendiente"
+                    f"Artículo {id_art_int}: cantidad {qty} supera resta urgente"
                     f" {pend_dec} — enviado igual."
                 )
         to_create_mysql.append((id_art_int, qty))
@@ -14346,8 +15211,10 @@ def listar_tablero_por_articulo(
     *,
     fecha_desde: Optional[date] = None,
     fecha_hasta: Optional[date] = None,
-    solo_pendiente: bool = False,
+    solo_urgente: bool = False,
+    solo_pendiente: Optional[bool] = None,
     limit: int = 200,
+    marcas_incluidos: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Tablero de demanda consolidado por artículo/componente. Pipeline MPR sin OPT/OPP legacy.
@@ -14358,8 +15225,9 @@ def listar_tablero_por_articulo(
     3.  Explosión BOM de demanda pack → componentes (dem_ped, dem_res)
     4.  comp_ids = demanda ∪ envíos directos
     5.  Enviado/Fabricando = max(0, Σ envíos − stock pipeline MPR) por componente
-        (Producido + Semi + 2da + Scrap + Terminado; ver _calcular_fabricando_componente)
-    6.  Pendiente = max(0, (demanda − total) − Σ envíos ledger); ver _calcular_pendiente_componente
+    6.  stock_proceso = total sin Terminado; resta_urgente / resta_total (PCP, sin envíos ledger)
+
+    ``solo_pendiente`` (legacy) se interpreta como ``solo_urgente`` si se pasa explícitamente.
 
     No lee lista_produccion_* ni OPT/OPP liberadas.
     """
@@ -14368,11 +15236,15 @@ def listar_tablero_por_articulo(
     if not (base_empresa or "").strip():
         return []
 
+    if solo_pendiente is not None:
+        solo_urgente = bool(solo_pendiente)
+
     filas_pack = listar_demanda_pack_desde_pedidos(
         base_empresa,
         limit=limit * 2,
         fecha_desde=fecha_desde,
         fecha_hasta=fecha_hasta,
+        marcas_incluidos=marcas_incluidos,
     )
 
     enviados_all: Dict[int, Decimal] = {}
@@ -14403,6 +15275,8 @@ def listar_tablero_por_articulo(
         )
 
     comp_ids: Set[int] = set(dem_ped.keys()) | set(dem_res.keys()) | set(enviados_all.keys())
+    if marcas_incluidos:
+        comp_ids = _filtrar_ids_por_marcas(base_empresa, comp_ids, marcas_incluidos)
     if not comp_ids:
         return []
 
@@ -14418,49 +15292,63 @@ def listar_tablero_por_articulo(
     # Paso 10: descripciones de artículos componentes
     desc_map = _fetch_descripciones_articulo(base_empresa, list(comp_ids))
 
+    comp_ids_list = list(comp_ids)
+    fabricando_map = _fabricando_por_componentes(
+        base_empresa, comp_ids_list, envios_tablero, stock_pivot
+    )
+
     # Paso 11: construir filas
     filas: List[Dict[str, Any]] = []
     tipos_suma = TIPOS_QUE_SUMAN_STOCK
     for comp_id in comp_ids:
         demanda = dem_ped.get(comp_id, 0.0) + dem_res.get(comp_id, 0.0)
-        urgente = dem_ped.get(comp_id, 0.0)
         stock_comp = stock_pivot.get(comp_id, {})
         suma_comp = stock_suma_pivot.get(comp_id, {})
         produccion = stock_comp.get(TIPO_MPR_PRODUCCION, 0.0)
         segunda_seleccion = stock_comp.get(TIPO_MPR_2DA_SELECCION, 0.0)
         semi_elaborado = stock_comp.get(TIPO_MPR_SEMI_ELABORADO, 0.0)
         desperdicio = stock_comp.get(TIPO_MPR_SCRAP, 0.0)
-        terminado = stock_comp.get(TIPO_MPR_TERMINADO, 0.0)
         total = sum(
             suma_comp.get(t, 0.0)
             for t in tipos_suma
+            if t != TIPO_MPR_TERMINADO
         )
-        envios_dir = float(envios_tablero.get(comp_id, Decimal("0")))
-        enviado = _calcular_fabricando_componente(envios_dir, stock_comp)
-        pendiente = _calcular_pendiente_componente(demanda, total, envios_dir)
+        stock_proceso = _calcular_stock_proceso_componente(suma_comp, tipos_suma)
+        enviado = fabricando_map.get(comp_id, 0.0)
+        dem_ped_val = dem_ped.get(comp_id, 0.0)
+        resta_urgente = _calcular_resta_urgente_componente(dem_ped_val, stock_proceso)
+        resta_total = _calcular_resta_total_componente(demanda, stock_proceso)
+        pendiente = resta_total
+        a_enviar = _calcular_a_enviar_componente(resta_urgente, enviado)
         codigo_manual, descripcion = desc_map.get(comp_id, ("-", "-"))
         filas.append({
             "id_articulo": comp_id,
             "codigo_manual": codigo_manual,
             "descripcion_articulo": descripcion,
             "demanda": demanda,
-            "urgente": urgente,
+            "dem_ped": dem_ped_val,
+            "dem_res": dem_res.get(comp_id, 0.0),
+            "urgente": dem_ped_val,
+            "stock_proceso": stock_proceso,
+            "resta_urgente": resta_urgente,
+            "resta_total": resta_total,
+            "a_enviar": a_enviar,
             "pendiente": pendiente,
             "enviado": enviado,
             "produccion": produccion,
             "segunda_seleccion": segunda_seleccion,
             "semi_elaborado": semi_elaborado,
             "desperdicio": desperdicio,
-            "terminado": terminado,
+            "terminado": 0.0,
             "total": total,
         })
 
-    # Paso 12: ordenar por pendiente descendente (más críticos primero)
-    filas.sort(key=lambda r: -r["pendiente"])
+    # Paso 12: ordenar por resta urgente descendente (más críticos primero)
+    filas.sort(key=lambda r: -float(r.get("resta_urgente") or 0))
 
-    # Paso 13: filtro opcional solo con pendiente
-    if solo_pendiente:
-        filas = [r for r in filas if r["pendiente"] > 0]
+    # Paso 13: filtro opcional solo con brecha urgente
+    if solo_urgente:
+        filas = [r for r in filas if float(r.get("resta_urgente") or 0) > 0]
 
     # Paso 14: limit
     return filas[:limit]
@@ -14484,6 +15372,7 @@ def construir_resumen_tablero_kpi(
         "kpi_packs_demanda": 0,
         "kpi_urgent_items": 0,
         "componentes_pendientes": [],
+        "top_packs_pendientes": [],
         "top_urgencias": [],
     }
     if not (base_empresa or "").strip():
@@ -14491,39 +15380,51 @@ def construir_resumen_tablero_kpi(
 
     packs = listar_demanda_pack_desde_pedidos(base_empresa, limit=limite_kpi)
     filas_tablero = listar_tablero_por_articulo(
-        base_empresa, solo_pendiente=True, limit=limite_kpi
+        base_empresa, solo_urgente=True, limit=limite_kpi
     )
 
-    kpi_pending_units = int(round(sum(float(r.get("pendiente") or 0) for r in filas_tablero)))
+    kpi_pending_units = int(round(sum(float(r.get("resta_urgente") or 0) for r in filas_tablero)))
     kpi_urgent_items = sum(
         1 for p in packs if float(p.get("cantidad_urgente_abs") or 0) > 0
     )
 
     componentes_pendientes: List[Dict[str, Any]] = []
     for r in filas_tablero[:limite_panel]:
+        resta_u = float(r.get("resta_urgente") or 0)
         componentes_pendientes.append({
+            "id_articulo": r.get("id_articulo"),
             "codigo": r.get("codigo_manual") or "-",
             "descripcion": r.get("descripcion_articulo") or "-",
-            "pendiente": r.get("pendiente") or 0,
-            "fabricando": r.get("enviado") or 0,
+            "resta_urgente": int(round(resta_u)),
+            "fabricando": int(round(float(r.get("enviado") or 0))),
         })
 
-    top_urgencias: List[Dict[str, Any]] = []
-    for r in filas_tablero[:10]:
-        pend = float(r.get("pendiente") or 0)
-        top_urgencias.append({
-            "id_articulo": r.get("id_articulo"),
-            "article_id": r.get("codigo_manual") or "-",
-            "description": (r.get("descripcion_articulo") or "-")[:50],
-            "stock": int(round(float(r.get("total") or 0))),
-            "demand": int(round(pend)),
-            "status": "Pendiente" if pend > 0 else "Ok",
-            "status_class": (
-                "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
-                if pend > 0
-                else "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300"
-            ),
+    pack_ids = [
+        to_int_or_none(p.get("id_articulo"))
+        for p in packs
+        if to_int_or_none(p.get("id_articulo")) is not None
+    ]
+    desc_pack_map = (
+        _fetch_descripciones_articulo(base_empresa, pack_ids) if pack_ids else {}
+    )
+
+    top_packs_pendientes: List[Dict[str, Any]] = []
+    for p in packs[:10]:
+        aid = to_int_or_none(p.get("id_articulo"))
+        codigo, descripcion = desc_pack_map.get(aid, ("-", "-")) if aid else ("-", "-")
+        urgente = float(p.get("cantidad_urgente_abs") or 0)
+        a_fabricar = float(p.get("cantidad_a_fabricar") or 0)
+        top_packs_pendientes.append({
+            "id_articulo": aid,
+            "codigo": str_codigo_manual_articulo(codigo),
+            "descripcion": str_or_default(descripcion, "-")[:80],
+            "stock_terminado": int(round(float(p.get("stock_terminado") or 0))),
+            "resta_urgente": int(round(urgente)),
+            "a_fabricar": int(round(a_fabricar)),
         })
+
+    # Alias legacy (tests / consumidores antiguos)
+    top_urgencias = top_packs_pendientes
 
     return {
         "kpi_componentes_pendientes": len(filas_tablero),
@@ -14531,6 +15432,7 @@ def construir_resumen_tablero_kpi(
         "kpi_packs_demanda": len(packs),
         "kpi_urgent_items": kpi_urgent_items,
         "componentes_pendientes": componentes_pendientes,
+        "top_packs_pendientes": top_packs_pendientes,
         "top_urgencias": top_urgencias,
     }
 
@@ -14760,11 +15662,13 @@ def asignar_turno_roster(
     fecha_str: str,
     id_operario: int,
     id_turno: int,
+    id_linea: Optional[int] = None,
 ) -> Tuple[bool, Optional[str]]:
     """
     Asigna (o reasigna) un turno a un operario en una fecha.
     Usa update_or_create para garantizar constraint único (no duplica).
     Validaciones: fecha >= hoy, turno existe, operario existe.
+    `id_linea` es el override de línea del día (None = usar la habitual).
     Returns:
         (ok, mensaje_error)
     """
@@ -14783,10 +15687,19 @@ def asignar_turno_roster(
     operario_data = obtener_operario(base_empresa, id_operario)
     if not operario_data:
         return False, "Operario no encontrado."
+    id_linea_norm = to_int_or_none(id_linea)
+    if id_linea_norm is not None:
+        from mpr.repositories.maquina_linea import obtener_linea
+
+        linea = obtener_linea(base_empresa, id_linea_norm)
+        if not linea:
+            return False, "Línea de override no encontrada."
+        if not linea.get("activo"):
+            return False, "La línea de override está inactiva."
     try:
         from mpr.repositories.turno_roster import upsert_roster
 
-        upsert_roster(base_empresa, fecha_obj, id_operario, id_turno)
+        upsert_roster(base_empresa, fecha_obj, id_operario, id_turno, id_mpr_linea=id_linea_norm)
         return True, None
     except IntegrityError as e:
         logger.error("IntegrityError al asignar turno roster en %s: %s", base_empresa, e, exc_info=True)
@@ -14870,7 +15783,9 @@ def _fabricando_pre_snapshot(
     base_empresa: str,
     comp_ids: List[int],
 ) -> Tuple[Dict[int, float], Dict[int, tuple]]:
-    """Fabricando tope para parte: envíos − stock en depósito Producción (igual que la grilla)."""
+    """
+    Fabricando tope para parte: envíos − stock acreditado en pipeline (igual que tablero).
+    """
     fab_pre: Dict[int, float] = {}
     desc_pre: Dict[int, tuple] = {}
     if not comp_ids:
@@ -14878,12 +15793,49 @@ def _fabricando_pre_snapshot(
     envios_pre = _query_enviado_tablero_componente(base_empresa, comp_ids)
     stock_pre, _ = _pivot_stock_por_tipo_mpr(base_empresa, comp_ids)
     desc_pre = _fetch_descripciones_articulo(base_empresa, comp_ids)
-    for comp in comp_ids:
-        enviado = float(envios_pre.get(comp, 0) or 0)
-        fab_pre[comp] = _calcular_fabricando_para_parte(
-            enviado, stock_pre.get(comp, {}),
-        )
+    fab_pre = _fabricando_por_componentes(base_empresa, comp_ids, envios_pre, stock_pre)
     return fab_pre, desc_pre
+
+
+def validar_cupo_parte(
+    base_empresa: str,
+    lineas: List[Dict[str, Any]],
+) -> List[str]:
+    """Valida cupo Fabricando + techo de envíos para las líneas de un parte.
+
+    `lineas`: [{id_articulo, cantidad}]. Devuelve la lista de errores (vacía si OK);
+    no levanta excepción. Reutilizada por el parte directo (al guardar) y por la
+    aprobación del supervisor (sobre `cantidad_aprobada`).
+    """
+    cantidad_por_comp = _sumar_cantidades_parte_por_componente(lineas)
+    comp_ids = list(cantidad_por_comp.keys())
+    if not comp_ids:
+        return []
+    fab_pre: Dict[int, float] = {}
+    desc_pre: Dict[int, tuple] = {}
+    try:
+        fab_pre, desc_pre = _fabricando_pre_snapshot(base_empresa, comp_ids)
+    except Exception as e:
+        logger.warning("validar_cupo_parte: error en pre-snapshot Fabricando: %s", e)
+    errores = _validar_parte_contra_cupo_fabricando(cantidad_por_comp, fab_pre, desc_pre)
+    errores += _validar_parte_contra_techo_envios(base_empresa, cantidad_por_comp, desc_pre)
+    return errores
+
+
+def cupo_fabricando_por_articulo(
+    base_empresa: str,
+    ids: List[int],
+) -> Dict[int, float]:
+    """Cupo Fabricando (pares) por artículo, de referencia para la aprobación."""
+    limpio = [i for i in (to_int_or_none(x) for x in (ids or [])) if i is not None]
+    if not limpio:
+        return {}
+    try:
+        fab, _desc = _fabricando_pre_snapshot(base_empresa, limpio)
+    except Exception as e:
+        logger.warning("cupo_fabricando_por_articulo: %s", e)
+        return {}
+    return {k: float(v or 0) for k, v in (fab or {}).items()}
 
 
 def obtener_config_mpr(base_empresa: str) -> Dict[str, Any]:
@@ -14936,34 +15888,12 @@ def registrar_parte_produccion(
         raise ValueError(f"Turno {turno_id} no encontrado.")
 
     deposito_produccion = get_deposito_produccion_mpr(base_empresa)
-    config_mpr = obtener_config_mpr(base_empresa)
 
-    cantidad_por_comp = _sumar_cantidades_parte_por_componente(lineas)
-    comp_ids_reg = list(cantidad_por_comp.keys())
-
-    fab_pre: Dict[int, float] = {}
-    desc_pre: Dict[int, tuple] = {}
-    try:
-        if comp_ids_reg:
-            fab_pre, desc_pre = _fabricando_pre_snapshot(base_empresa, comp_ids_reg)
-    except Exception as e:
-        logger.warning("registrar_parte_produccion: error en pre-snapshot Fabricando: %s", e)
-
-    if config_mpr.get("bloquear_parte_supera_fabricando") and comp_ids_reg:
-        errores_tope: List[str] = []
-        for comp in comp_ids_reg:
-            qty = float(cantidad_por_comp.get(comp, Decimal("0")) or 0)
-            fab = fab_pre.get(comp, 0.0)
-            if qty > fab + 1e-9:
-                cod, desc = desc_pre.get(comp, ("-", "-"))
-                errores_tope.append(
-                    f"{desc} ({cod}): {qty:.1f} u. registradas, máximo en Fabricando {fab:.1f} u."
-                )
-        if errores_tope:
-            raise DjValidationError(
-                "No se puede guardar el parte: la cantidad total por componente supera lo "
-                "fabricando. " + " ".join(errores_tope)
-            )
+    errores_tope = validar_cupo_parte(base_empresa, lineas)
+    if errores_tope:
+        raise DjValidationError(
+            "No se puede guardar el parte: " + " ".join(errores_tope)
+        )
 
     lineas_norm: List[Dict[str, Any]] = []
     for cel in (lineas or []):
@@ -15020,21 +15950,104 @@ def registrar_parte_produccion(
             parte.movimiento_fisico_ok = True
             parte.save(update_fields=["movimiento_fisico_ok"])
 
-    # Warnings no bloqueantes si se superó Fabricando disponible (español)
-    try:
-        for comp in comp_ids_reg:
-            qty = float(cantidad_por_comp.get(comp, Decimal("0")) or 0)
-            fab = fab_pre.get(comp, 0.0)
-            if qty > fab:
-                cod, desc = desc_pre.get(comp, ("-", "-"))
-                warnings.append(
-                    f"Atención: se registraron {qty:.1f} u. de {desc} ({cod}) "
-                    f"pero solo {fab:.1f} u. estaban en Fabricando. El parte fue guardado."
-                )
-    except Exception as e:
-        logger.warning("registrar_parte_produccion: error generando warnings: %s", e)
-
     return parte, warnings
+
+
+def aprobar_parte_produccion(
+    base_empresa: str,
+    id_parte: int,
+    correcciones: Optional[Dict[int, Dict[str, Any]]] = None,
+    id_usuario_supervisor: int = 0,
+    forzar_cupo: bool = False,
+) -> Tuple[bool, List[str], Optional[int]]:
+    """Aprueba un parte pendiente (flujo de dos etapas).
+
+    - Fija `cantidad_aprobada`/`gap`/`motivo` por línea (motivo obligatorio si gap != 0)
+      y sincroniza la `cantidad` física (= aprobada).
+    - Valida cupo Fabricando/techo de envíos sobre lo aprobado (bloquea salvo `forzar_cupo`).
+    - Ejecuta el asiento físico a depósito "Producción" (reutiliza el asiento OPP).
+    - Cierra el parte: `estado='aprobado'`, `id_usuario_supervisor`, `aprobado_en`,
+      `movimiento_fisico_ok=1`. Idempotente: si ya está aprobado, no re-ejecuta.
+
+    correcciones: {id_mpr_parte_linea: {"cantidad_aprobada": num, "motivo": str}}
+    Returns: (ok, errores, id_parte)
+    """
+    from mpr.db import mysql_cursor
+    from mpr.repositories import parte_movil as repo_pm
+    from mpr.repositories.parte import obtener_parte_por_pk
+
+    correcciones = correcciones or {}
+    base = (base_empresa or "").strip()
+    if not base:
+        return False, ["Empresa inválida."], None
+
+    cab = repo_pm.obtener_cabecera_parte(base, id_parte)
+    if not cab:
+        return False, ["Parte no encontrado."], None
+    if cab["estado"] == "aprobado" or cab["movimiento_fisico_ok"]:
+        return True, [], cab["id_parte"]
+
+    lineas = repo_pm.listar_lineas_aprobacion(base, id_parte)
+    if not lineas:
+        return False, ["El parte no tiene líneas para aprobar."], None
+
+    aprobadas: List[Tuple[Dict[str, Any], Decimal, Decimal, Optional[str]]] = []
+    for ln in lineas:
+        declarada = ln["cantidad_declarada"] or Decimal("0")
+        corr = correcciones.get(ln["id_mpr_parte_linea"], {}) or {}
+        maq = ln.get("maquina_nombre") or "-"
+        if corr.get("cantidad_aprobada") is not None:
+            aprob = to_decimal_or_none(corr.get("cantidad_aprobada"))
+            if aprob is None or aprob < 0:
+                return False, [f"Cantidad aprobada inválida en máquina {maq}."], None
+        else:
+            aprob = declarada
+        gap = aprob - declarada
+        motivo = (corr.get("motivo") or ln.get("motivo") or "").strip()
+        if gap != 0 and not motivo:
+            return False, [
+                f"Falta el motivo del ajuste (gap {gap}) en máquina {maq}, artículo {ln['id_articulo']}."
+            ], None
+        aprobadas.append((ln, aprob, gap, motivo or None))
+
+    lineas_cupo = [
+        {"id_articulo": ln["id_articulo"], "cantidad": aprob}
+        for ln, aprob, _g, _m in aprobadas
+        if aprob and aprob > 0
+    ]
+    errores_cupo = validar_cupo_parte(base, lineas_cupo)
+    if errores_cupo and not forzar_cupo:
+        return False, errores_cupo, None
+
+    deposito = get_deposito_produccion_mpr(base)
+    parte_obj = obtener_parte_por_pk(base, str(id_parte))
+    id_sup = to_int_or_none(id_usuario_supervisor) or 0
+
+    with mysql_cursor(base) as cursor:
+        for ln, aprob, gap, motivo in aprobadas:
+            repo_pm.actualizar_linea_aprobacion(
+                cursor, ln["id_mpr_parte_linea"], aprob, gap, motivo
+            )
+
+    lineas_pack = [
+        ({"id_articulo": ln["id_articulo"]}, aprob)
+        for ln, aprob, _g, _m in aprobadas
+        if aprob and aprob > 0
+    ]
+    if not cab["movimiento_fisico_ok"] and deposito and lineas_pack and parte_obj is not None:
+        _registrar_asiento_fisico_opp_parte(
+            base_empresa=base,
+            id_usuario=id_sup,
+            parte=parte_obj,
+            lineas_pack_qty=lineas_pack,
+            deposito_produccion=deposito,
+            ya_componentes=True,
+        )
+
+    with mysql_cursor(base) as cursor:
+        repo_pm.marcar_parte_aprobado(cursor, id_parte, id_sup)
+
+    return True, [], cab["id_parte"]
 
 
 def agregar_ajuste_parte(
@@ -15124,12 +16137,15 @@ def construir_grilla_parte(
     base_empresa: str,
     fecha,
     turno_id: int,
+    *,
+    marcas_incluidos: Optional[Sequence[int]] = None,
 ) -> Dict[str, Any]:
     """
     Construye la grilla componentes × operarios para la pantalla de captura (E8).
 
     Fuente de filas: componentes con Fabricando > 0 desde MprEnvioProduccion (E7).
-    Fabricando(comp) = max(0, Σ_envíos(comp) − stock Producido) — ver _calcular_fabricando_para_parte.
+    Fabricando(comp) = max(0, Σ_envíos(comp) − stock acreditado en pipeline) — ver
+    ``_calcular_fabricando_para_parte`` (mismo criterio que tablero).
 
     Returns:
       {
@@ -15190,14 +16206,16 @@ def construir_grilla_parte(
             comp_ids = list(envios_map.keys())
             stock_pivot, _ = _pivot_stock_por_tipo_mpr(base_empresa, comp_ids)
 
-            fabricando_map: Dict[int, float] = {}
-            for comp in comp_ids:
-                enviado = float(envios_map.get(comp) or 0)
-                fabricando_map[comp] = _calcular_fabricando_para_parte(
-                    enviado, stock_pivot.get(comp, {}),
-                )
+            fabricando_map = _fabricando_por_componentes(
+                base_empresa, comp_ids, envios_map, stock_pivot
+            )
 
             comp_activos = [c for c in comp_ids if fabricando_map.get(c, 0.0) > 0]
+            if marcas_incluidos:
+                permitidos = _filtrar_ids_por_marcas(
+                    base_empresa, comp_activos, marcas_incluidos
+                )
+                comp_activos = [c for c in comp_activos if c in permitidos]
 
             if not comp_activos:
                 resultado["componentes_vacio"] = True
@@ -15216,7 +16234,7 @@ def construir_grilla_parte(
                         "codigo_manual": str_codigo_manual_articulo(cod),
                         "descripcion": str_or_default(desc, "-"),
                         "fabricando": fab,
-                        "fabricando_texto": texto_docenas_unidades(
+                        "fabricando_texto": texto_docenas_pares(
                             fab_int, unidades_por_docena_fijo=12
                         ),
                         "fabricando_docenas": fab_du["docenas"],
@@ -16588,6 +17606,7 @@ def construir_grilla_clasificacion_produccion(
     turno_id: Optional[int] = None,
     *,
     ver_roster_completo: bool = False,
+    marcas_incluidos: Optional[Sequence[int]] = None,
 ) -> Dict[str, Any]:
     """Grilla clasificación por (artículo × operario fabricante).
 
@@ -16616,11 +17635,16 @@ def construir_grilla_clasificacion_produccion(
     from mpr.repositories.transicion_lote import sumar_clasificado_por_operario_fecha_turno
 
     celdas = acumular_celdas_grilla_con_nombre(base_empresa, fecha, int(turno_id))
+    if marcas_incluidos:
+        art_ids_celdas = sorted({clave[0] for clave in celdas})
+        permitidos = _filtrar_ids_por_marcas(
+            base_empresa, art_ids_celdas, marcas_incluidos
+        )
+        celdas = {k: v for k, v in celdas.items() if k[0] in permitidos}
     clasificado = sumar_clasificado_por_operario_fecha_turno(
         base_empresa, fecha, int(turno_id)
     )
     art_ids = sorted({clave[0] for clave in celdas})
-    stock_pivot, _ = _pivot_stock_por_tipo_mpr(base_empresa, art_ids) if art_ids else ({}, {})
     descripciones = _fetch_descripciones_articulo(base_empresa, art_ids) if art_ids else {}
 
     filas: List[Dict[str, Any]] = []
@@ -16666,8 +17690,28 @@ def construir_grilla_clasificacion_produccion(
         })
 
     for aid, total_parte in parte_por_art.items():
-        stock_prod = Decimal(str(stock_pivot.get(aid, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
-        if total_parte > 0 and not any(f["id_articulo"] == aid for f in filas):
+        if total_parte <= 0:
+            continue
+        sin_operario = Decimal("0")
+        pendiente_con_operario = Decimal("0")
+        for (a, oid), datos in celdas.items():
+            if a != aid:
+                continue
+            qty = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+            if oid is None or int(oid) <= 0:
+                sin_operario += qty
+                continue
+            cls_op = clasificado.get((a, oid), Decimal("0"))
+            pendiente_con_operario += max(Decimal("0"), qty - cls_op)
+
+        if sin_operario > 0:
+            motivo = True
+        elif pendiente_con_operario > 0 and not any(f["id_articulo"] == aid for f in filas):
+            motivo = True
+        else:
+            motivo = False
+
+        if motivo:
             codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
             bloqueos.append({
                 "id_articulo": aid,

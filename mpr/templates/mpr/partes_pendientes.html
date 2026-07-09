@@ -1,0 +1,98 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Partes pendientes - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'mpr:tablero' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a></li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Partes pendientes</span></li>
+            </ol>
+        </nav>
+
+        <header class="mb-6 border-b border-gray-200/80 pb-6 dark:border-gray-700/80">
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Partes pendientes de aprobación</h1>
+            <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Revisá los partes cargados por los operarios, corregí desvíos (gap) y aprobalos. La aprobación ingresa el stock al depósito de Producción.</p>
+        </header>
+
+        {% if ok_msg %}
+        <div class="mb-4 flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+            <span class="material-icons text-base" aria-hidden="true">check_circle</span><span>{{ ok_msg }}</span>
+        </div>
+        {% endif %}
+        {% if error_msgs %}
+        <div class="mb-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+            {% for e in error_msgs %}<p class="flex items-start gap-2"><span class="material-icons text-base" aria-hidden="true">error</span><span>{{ e }}</span></p>{% endfor %}
+        </div>
+        {% endif %}
+
+        <form method="get" class="mb-5 flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200/90 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <label class="text-sm">
+                <span class="mb-1 block font-medium text-gray-600 dark:text-gray-300">Fecha</span>
+                <input type="date" name="fecha" value="{{ f_fecha }}" class="min-h-10 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+            </label>
+            <label class="text-sm">
+                <span class="mb-1 block font-medium text-gray-600 dark:text-gray-300">Turno</span>
+                <select name="turno" class="min-h-10 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                    <option value="">Todos</option>
+                    {% for t in turnos %}<option value="{{ t.id_mpr_turno }}" {% if t.id_mpr_turno == f_turno %}selected{% endif %}>{{ t.nombre }}</option>{% endfor %}
+                </select>
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                <input type="checkbox" name="borradores" value="1" {% if f_borradores %}checked{% endif %} class="h-4 w-4 rounded border-gray-300 text-purple-600">
+                Incluir borradores
+            </label>
+            <button type="submit" class="inline-flex min-h-10 items-center gap-2 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-purple-700">
+                <span class="material-icons text-base" aria-hidden="true">filter_alt</span>Filtrar
+            </button>
+        </form>
+
+        <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div class="overflow-x-auto">
+                <table class="min-w-[52rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                    <thead class="bg-gray-50/90 dark:bg-gray-800/80">
+                        <tr>
+                            <th class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Fecha</th>
+                            <th class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Turno</th>
+                            <th class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Operario</th>
+                            <th class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Origen</th>
+                            <th class="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">Líneas</th>
+                            <th class="px-4 py-3.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">Docenas</th>
+                            <th class="px-4 py-3.5 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">Estado</th>
+                            <th class="px-4 py-3.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        {% for p in partes %}
+                        <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40">
+                            <td class="px-4 py-3.5 text-sm text-gray-900 dark:text-white">{{ p.fecha_produccion|date:"d/m/Y" }}</td>
+                            <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300">{{ p.turno_nombre }}</td>
+                            <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300">{{ p.operario_nombre }}</td>
+                            <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300">
+                                {% if p.origen == "movil_operario" %}<span class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-900/40 dark:text-purple-300"><span class="material-icons text-xs">smartphone</span>Móvil</span>{% else %}{{ p.origen }}{% endif %}
+                            </td>
+                            <td class="px-4 py-3.5 text-center text-sm text-gray-700 dark:text-gray-300">{{ p.lineas }}</td>
+                            <td class="px-4 py-3.5 text-right text-sm font-semibold text-gray-900 dark:text-white">{{ p.total_docenas }}</td>
+                            <td class="px-4 py-3.5 text-center">
+                                {% if p.estado == "pendiente" %}<span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Pendiente</span>{% else %}<span class="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-900/40 dark:text-sky-300">Borrador</span>{% endif %}
+                            </td>
+                            <td class="px-4 py-3.5">
+                                <a href="{% url 'mpr:parte_pendiente_detail' id_parte=p.id_parte %}" class="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-700">
+                                    <span class="material-icons text-sm" aria-hidden="true">fact_check</span>Revisar
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="8" class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">No hay partes pendientes con los filtros seleccionados.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

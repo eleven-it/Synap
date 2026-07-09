@@ -12,10 +12,11 @@ Implementado en **Etapa 8**: parte por componente, conectado a la columna **Fabr
 1. [Fuente de datos — Fabricando (E7)](#fuente-de-datos)
 2. [Registro por componente](#registro-por-componente)
 3. [Asiento físico directo (sin explosión BOM)](#asiento-físico)
-4. [Validaciones y warning de tope](#validaciones)
-5. [Limitaciones — compatibilidad E6 (trazabilidad OPT)](#limitaciones-e6)
-6. [Modelo de datos](#modelo-de-datos)
-7. [Flujo de pantalla](#flujo-de-pantalla)
+4. [Validaciones fuertes al guardar](#validaciones)
+5. [Flujo de dos etapas (estado/origen/asiento diferido)](#flujo-de-dos-etapas)
+6. [Limitaciones — compatibilidad E6 (trazabilidad OPT)](#limitaciones-e6)
+7. [Modelo de datos](#modelo-de-datos)
+8. [Flujo de pantalla](#flujo-de-pantalla)
 
 ---
 
@@ -23,22 +24,32 @@ Implementado en **Etapa 8**: parte por componente, conectado a la columna **Fabr
 
 La grilla de captura muestra los **componentes con Fabricando > 0** según:
 
-```
-Fabricando_parte(comp) = max(0, Σ_MprEnvioProduccion[comp] − stock_Producido[comp])
+```text
+Fabricando(comp) = max(0, Σ_MprEnvioProduccion[comp] − acreditado(comp))
+
+acreditado(comp) = max(
+  stock_físico_componente,     # Producido + Semi + 2da + Scrap (sin Terminado)
+  clasificado_desde_Producción,  # SUM(mpr_transicion_lote WHERE tipo_origen = 'Produccion')
+  partes_acumulados              # SUM(mpr_parte_linea + ajustes por id_articulo)
+)
 ```
 
-Solo descuenta depósito **Producción** (destino del parte). El **tablero consolidado** usa fórmula distinta: `envíos − stock_pipeline` (Producido + Semi + 2da + Scrap + Terminado).
+**Misma fórmula** que el tablero consolidado (`_fabricando_por_componentes` / `_calcular_fabricando_componente`). Tras clasificar en control de calidad — o si el semi salió por armado del pack — el cupo Fabricando baja a **0** aunque el stock físico del componente sea 0.
 
 La validación al guardar (`_fabricando_pre_snapshot`) usa la **misma** fórmula que la grilla de parte.
 
 | Término | Fuente |
 |---------|--------|
-| `Σ_MprEnvioProduccion[comp]` | Ledger ORM Synap (`MprEnvioProduccion.filter(anulado=False).annotate(Sum('cantidad'))`) |
-| `stock_deposito[comp, Produccion]` | MySQL legacy, tabla `stock_deposito` vía `_pivot_stock_por_tipo_mpr` |
+| `Σ_MprEnvioProduccion[comp]` | Ledger MySQL `mpr_envio_produccion` (`anulado = 0`) |
+| Stock físico pipeline | `stock_deposito` vía `_pivot_stock_por_tipo_mpr` |
+| Clasificado desde Producción | `mpr_transicion_lote` (`sumar_salidas_desde_produccion_por_articulo`) |
+| Partes acumulados | `mpr_parte_linea` + ajustes (`opp_acumulado_por_pack`) |
 
 **Componentes excluidos de la grilla:**  
-- Componentes cuyo `Fabricando = 0` (producción ya igualó o superó lo enviado).  
-- Packs en `lista_produccion_agrupada` con `en_proceso='Si'` sin envío tablero: no aparecen en E8 (la fuente es exclusivamente `MprEnvioProduccion`).
+- Componentes cuyo `Fabricando = 0` (envíos ya acreditados por stock, CC o partes previos).  
+- Packs en `lista_produccion_agrupada` sin envío tablero: no aparecen en E8 (fuente exclusiva `mpr_envio_produccion`).
+
+**Grilla vacía:** si no hay cupo, la pantalla muestra aviso informativo (recargar si quedan filas obsoletas en el navegador).
 
 Función responsable: `construir_grilla_parte(base_empresa, fecha, turno_id)` → `mpr/services.py`.
 
@@ -99,18 +110,29 @@ Si `MprParte.movimiento_fisico_ok = True`, el asiento **no se re-ejecuta**. Esta
 
 ---
 
-## Validaciones y warning de tope {#validaciones}
+## Validaciones fuertes al guardar {#validaciones}
 
-### Configuración por empresa (`MprEmpresaConfig`)
+Antes de crear el parte o mover stock, `registrar_parte_produccion` ejecuta **siempre** (sin bypass por configuración) dos controles:
 
-En **Producción → Config. Depósitos** (`/mpr/config/depositos/`) hay un interruptor:
+| Control | Regla | Función |
+|---------|-------|---------|
+| **Cupo Fabricando** | Suma por componente (todos los operarios) ≤ Fabricando pre-snapshot | `_validar_parte_contra_cupo_fabricando` |
+| **Techo envíos ledger** | Partes acumulados (`opp_acumulado_por_pack`) + cantidad nueva ≤ envíos activos (`MprEnvioProduccion`) | `_validar_parte_contra_techo_envios` |
 
-| Estado | Comportamiento |
-|--------|----------------|
-| **Activo** (default) | **Rechaza** el guardado con `ValidationError` antes de crear el parte ni mover stock. |
-| **Inactivo** | Warning no bloqueante si la **suma por componente** (todos los operarios) supera Fabricando. |
+Si cualquier control falla → `ValidationError` con mensaje en español; **no** se crea `mpr_parte` ni asiento físico.
 
-La suma considera **todas las celdas operario** de la misma fila (componente). Ej.: Fabricando=6 → Juan 4 + Luis 2 = OK; Juan 4 + Luis 4 = exceso.
+### Caso típico evitado (artículo 1904 / ID 1275)
+
+1. Envío 12 pares → parte 12 → clasificación CC a Semi 12.
+2. Stock Producción = 0, Semi = 0 (consumido en armado del pack).
+3. `clasificado_desde_Producción = 12` y `partes_acumulados = 12` → Fabricando = **0**.
+4. Un segundo parte de 12 pares se **rechaza** (cupo Fabricando y techo envíos).
+
+### Configuración legacy (`MprEmpresaConfig.bloquear_parte_supera_fabricando`)
+
+El interruptor en **Producción → Config. Depósitos** se conserva por compatibilidad de UI, pero **ya no desactiva** el bloqueo en backend: las validaciones fuertes están siempre activas.
+
+La suma considera **todas las celdas operario** de la misma fila (componente). Ej.: Fabricando=6 → Juan 4 + Luis 2 = OK; Juan 4 + Luis 4 = exceso rechazado.
 
 ### Captura por docenas y unidades (paridad OPP)
 
@@ -118,32 +140,25 @@ Cada celda **componente × operario** tiene dos campos:
 
 | Campo POST | Significado |
 |------------|-------------|
-| `parte_art_{id_art}_op_{id_op}_docenas` | Docenas completas (entero ≥ 0) |
-| `parte_art_{id_art}_op_{id_op}_unidades` | Unidades sueltas (entero ≥ 0) |
+| `parte_art_{id_art}_op_{id_op}_docenas` | Docenas de pares (entero ≥ 0; 1 docena = 12 pares) |
+| `parte_art_{id_art}_op_{id_op}_unidades` | Pares sueltos (entero ≥ 0) |
 
-**Unidades registradas** = `docenas × 12 + unidades` (misma regla que OPP por componente BOM).
+**Pares registrados** = `docenas × 12 + pares sueltos` (misma regla que OPP por componente BOM).
 
-La columna **Fabricando** muestra el desglose «N docenas · M unidades».
+La columna **Fabricando** muestra el desglose «N docenas · M pares».
+
+### Validación en cliente (JavaScript)
+
+Al enviar el formulario, la UI valida que la suma por fila no supere `data-fabricando` (mismo cupo que la grilla). El backend aplica además el techo de envíos ledger.
 
 ---
 
-Si la cantidad total registrada para un componente supera el Fabricando disponible (pre-snapshot antes del `atomic()`), el sistema emite un **warning en español visible en UI**:
+## Impacto si se intentara superar topes (histórico) {#impacto-stock-exceso}
 
-```
-Atención: se registraron {qty:.1f} u. de {descripcion} ({codigo_manual})
-pero solo {fabricando:.1f} u. estaban en Fabricando. El parte fue guardado.
-```
+**Fabricando** = `max(0, Σ envíos tablero − acreditado)` (ver fórmula en [fuente de datos](#fuente-de-datos)).  
+**Acreditado** incluye stock físico de componente, clasificación CC (`mpr_transicion_lote`) y partes acumulados — **no** Terminado del componente.
 
-- El parte **sí se guarda** (no bloqueante).
-- El warning aparece en la siguiente carga de la grilla como mensaje de aviso.
-- Pre-snapshot batch: una sola round-trip SQL antes del `atomic()` (sin N+1).
-
-### Impacto en stock si se permite superar Fabricando {#impacto-stock-exceso}
-
-**Fabricando** = `max(0, Σ envíos tablero − stock_pipeline)`, con  
-`stock_pipeline = Producido + Semi + 2da + Scrap + Terminado`.
-
-Si se registra un parte con cantidad **mayor** que Fabricando (bloqueo inactivo):
+Si se registrara un parte con cantidad **mayor** que los topes (comportamiento anterior con bloqueo OFF):
 
 1. **MySQL legacy:** el asiento físico OPP-parte ingresa **toda** la cantidad registrada al depósito **Producción** (`stock` + `stock_deposito`), sin tope.
 2. **Ledger Synap:** `MprParteLinea` guarda las cantidades completas por operario.
@@ -151,7 +166,50 @@ Si se registra un parte con cantidad **mayor** que Fabricando (bloqueo inactivo)
 4. **Desvío de control:** quedan unidades en Producción **no respaldadas** por envíos del tablero (`MprEnvioProduccion`). La clasificación posterior puede mover stock “de más” hacia Semi/2da/Scrap.
 5. **No hay rollback automático** del exceso; corrige con ajuste de parte o movimiento manual.
 
-Por eso el bloqueo es **activo por defecto**; puede desactivarse en Config. Depósitos si se acepta el riesgo de desvío entre ledger de envíos, parte y saldo físico.
+Por eso las validaciones fuertes están **siempre activas** desde 07/07/2026; evitan desvío entre ledger de envíos, partes acumulados y saldo físico.
+
+---
+
+## Flujo de dos etapas (estado/origen/asiento diferido) {#flujo-de-dos-etapas}
+
+Con el change `mpr-trazabilidad-maquina-linea-operario`, el parte incorpora un flujo de
+**dos etapas** para la carga móvil del operario. El comportamiento se controla con dos columnas
+nuevas de `mpr_parte`:
+
+| Columna | Valores | Significado |
+|---------|---------|-------------|
+| `estado` | `borrador` \| `pendiente` \| `aprobado` (default `aprobado`) | Etapa del parte en el circuito de aprobación |
+| `origen` | `movil_operario` \| `directo_supervisor` (default `directo_supervisor`) | Quién originó el parte |
+
+Además se agregan `id_usuario_supervisor` y `aprobado_en` (auditoría de aprobación) y, en
+`mpr_parte_linea`, la dimensión máquina (`id_mpr_maquina`, `maquina_nombre`) y el gap
+(`cantidad_declarada`, `cantidad_aprobada`, `gap`, `motivo`).
+
+### Parte móvil del operario (asiento diferido)
+
+- El operario carga desde `/mpr/mi-parte/` (`registrar_parte_movil`). El parte queda
+  `estado='pendiente'`, `origen='movil_operario'` y **no mueve stock**: `cantidad = 0`,
+  `cantidad_declarada = docenas × 12 + pares`, sin asiento físico ni validación de cupo.
+- Como las líneas `pendiente` guardan `cantidad = 0`, **no** contaminan los acumulados
+  (OPP acumulado, cupo Fabricando).
+- La **aprobación del supervisor** (`aprobar_parte_produccion`) es la que ejecuta el asiento:
+  fija `cantidad_aprobada` por línea, calcula `gap = aprobada − declarada` (con `motivo`
+  obligatorio si `gap != 0`), valida cupo sobre lo aprobado (`validar_cupo_parte`), sincroniza
+  `cantidad = cantidad_aprobada`, mueve stock al depósito «Producción» reutilizando
+  `_registrar_asiento_fisico_opp_parte` y cierra el parte (`estado='aprobado'`,
+  `id_usuario_supervisor`, `aprobado_en`, `movimiento_fisico_ok=1`). Es **idempotente**.
+
+### Parte directo del supervisor (comportamiento actual)
+
+El parte directo (`registrar_parte_produccion`, esta pantalla) **conserva el comportamiento
+descrito en el resto de este documento**: nace `estado='aprobado'`, `origen='directo_supervisor'`
+(defaults del ALTER) y **mueve stock en el acto** al guardar, con las validaciones fuertes
+siempre activas. La única lógica compartida extraída es la validación de cupo
+(`validar_cupo_parte`), reutilizada por ambos caminos.
+
+Circuito completo y modelo de datos: ver
+[TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md) y
+[CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md).
 
 ---
 
@@ -200,9 +258,9 @@ Migración: `0015_mprpartelinea_id_articulo_componente.py` — `AlterField` help
    - Componentes con Fabricando > 0 (fuente: MprEnvioProduccion, no lista_produccion_agrupada)
    - Operarios del roster (fecha + turno)
    - Inputs de captura **siempre en 0** al abrir (cada guardado es un parte nuevo; lo ya registrado en el turno se refleja en Fabricando/stock, no se precarga en la grilla)
-4. Columna "Fabricando" visible por fila (en unidades)
+4. Columna "Fabricando" visible por fila (en pares)
 5. **Buscador predictivo** sobre la grilla: filtra filas por código o descripción (client-side, Alpine.js)
-6. Por celda operario: **Docenas** + **Unidades** (1 docena = 12 u.); columnas de operario con tono alternado para lectura rápida
+6. Por celda operario: **Docenas de pares** + **Pares sueltos** (1 docena = 12 pares); columnas de operario con tono alternado para lectura rápida
 7. Usuario completa cantidades y guarda → POST a /mpr/parte-produccion/registrar/
 8. registrar_parte_produccion():
    a. Pre-snapshot Fabricando (batch, antes del atomic)

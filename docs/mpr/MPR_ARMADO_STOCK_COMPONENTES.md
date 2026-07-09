@@ -16,7 +16,7 @@
 
 En el paso **Armado** (paso 4 del asistente o pantalla **Armado OPT** desde el detalle de la OPT), el sistema calcula **Máx. armable** a partir del **stock de los componentes de la receta (BOM)** en el depósito configurado como **Semi elaborado** (`deposito.tipo_mpr = 'SemiElaborado'`).
 
-**Operario por pack (OPA):** en el asistente (paso 4) y en **Armado OPT** (`mpr/armado_opt.html`), cada fila con **Cant. a armar** mayor a cero debe tener **Operario** seleccionado (`operario_armado_{id_articulo}`), igual que en OPT por línea (`id_operario_opt`) y en OPP por componente. Se persiste con `ejecutar_armado(..., id_operario=...)` en `movimiento_stock` / `lista_produccion_historico`.
+**Operario en armado (OPA):** no se solicita en la UI de Armado 1ra/2da ni en vistas legacy OPT. El operario fabricante se registra en **parte de producción** y **OPP**; el armado solo mueve stock pack/componentes. Si en el futuro se indica operario, se persiste opcionalmente en `id_operario_opt` vía `ejecutar_armado(..., id_operario=...)`.
 
 - Si los **componentes** no tienen saldo en ese depósito, **Máx. armable** será 0 y se mostrará «Sin stock».
 - En **Armado OPT** (`/mpr/opt/<id>/armado/`) la columna **Máx. armable** muestra **docenas enteras** del pack (packs ÷ `cantidad_promedio_bulto`, divisor 12 si no hay bulto) y debajo la cantidad en **packs**; no hay tooltip por depósito ni unidades sueltas, porque solo se arman packs completos.

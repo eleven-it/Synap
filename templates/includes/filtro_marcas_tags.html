@@ -1,0 +1,35 @@
+{# Filtro multi-marca — tags + búsqueda predictiva (tags_filter.mjs). variant: light | dark #}
+{% with fid=field_id|default:"marcas_incluidos" %}
+{% with v=variant|default:"light" %}
+<div class="relative z-20 flex min-w-0 flex-col gap-0.5 overflow-visible {% if equal %}w-full{% else %}min-w-[10rem] sm:min-w-[12rem] sm:max-w-xs md:max-w-sm{% endif %}">
+    {% if v == "dark" %}
+    <span class="text-[10px] font-medium text-slate-400">Marcas</span>
+    {% else %}
+    <label for="{{ fid }}_search" class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Marcas</label>
+    {% endif %}
+    <div class="relative overflow-visible">
+        <select name="{{ fid }}" id="{{ fid }}" multiple class="hidden" data-tags-field="{{ fid }}">
+            {% for m in marcas_catalogo %}
+            <option value="{{ m.value }}" {% if m.value in marcas_incluidos %}selected{% endif %}>{{ m.label }}</option>
+            {% endfor %}
+        </select>
+        <div id="{{ fid }}_tags_container"
+             class="tags-filter-container relative flex min-h-9 flex-wrap items-center gap-1 overflow-visible rounded-lg px-2 py-1.5 shadow-sm focus-within:ring-2 {% if equal %}w-full{% endif %} {% if v == 'dark' %}border border-slate-600 bg-slate-700 focus-within:border-purple-400 focus-within:ring-purple-500/40{% else %}border border-gray-300 bg-white focus-within:border-purple-500 focus-within:ring-purple-500/25 dark:border-gray-600 dark:bg-gray-900{% endif %}">
+            <div class="tags-chips flex min-w-0 flex-1 flex-wrap items-center gap-1"></div>
+            <input type="text"
+                   id="{{ fid }}_search"
+                   class="tags-input min-w-[5rem] flex-1 basis-[5.5rem] border-none bg-transparent text-xs outline-none {% if v == 'dark' %}text-white placeholder:text-slate-400{% else %}text-gray-800 placeholder:text-gray-400 dark:text-gray-100 dark:placeholder:text-gray-500{% endif %}"
+                   placeholder="Buscar marca…"
+                   autocomplete="off"
+                   aria-label="Buscar marca"
+                   aria-controls="{{ fid }}_dropdown"
+                   aria-expanded="false">
+            <div id="{{ fid }}_dropdown"
+                 role="listbox"
+                 class="tags-dropdown synap-filtro-marcas-dropdown absolute left-0 right-0 top-[calc(100%+0.25rem)] z-[250] hidden max-h-60 overflow-y-auto rounded-md border shadow-lg {% if v == 'dark' %}border-slate-600 bg-slate-800 text-slate-100{% else %}border-slate-200 bg-white text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100{% endif %}"
+                 {% if v == 'dark' %}data-tags-theme="dark"{% endif %}></div>
+        </div>
+    </div>
+</div>
+{% endwith %}
+{% endwith %}

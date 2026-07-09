@@ -17,10 +17,11 @@ Entrada en menú: **Archivo → Parámetros → Asignar permisos por puesto** (v
 
 ### 1. Permisos Synap
 
-- Tablas: `permiso_sistema`, `permiso_sistema_puesto`.
-- Catálogo sincronizado desde `core/constantes_permisos.PERMISOS_POR_MODULO` al abrir la pantalla (y tras login).
-- Toggle por permiso (guardado inmediato).
-- Atajos **+ / −** por módulo (`ventas`, `reports`, `stock`, etc.): activan o desactivan todos los `key_permiso` del prefijo y el comodín `modulo.*`.
+- **Tablas: `synap_permiso`, `synap_rol`, `synap_rol_permiso`, `synap_puesto_rol`** (almacén propio Synap, independiente de VB6). Ver **[PERMISOS_SYNAP_STORE.md](PERMISOS_SYNAP_STORE.md)**.
+- **Modelo:** rol dedicado por puesto (`synap_rol` `es_sistema=1` mapeado a `idpuesto`). El toggle asigna/quita permisos de ese rol; **no** escribe en `permiso_sistema*`.
+- Catálogo `synap_permiso` asegurado desde `core/constantes_permisos.PERMISOS_POR_MODULO` al abrir la pantalla (y tras login) vía `asegurar_synap_schema_si_procede`.
+- Toggle por permiso (guardado inmediato; payload JSON `id_permiso`).
+- Atajos **+ / −** por módulo (`ventas`, `reports`, `stock`, etc.): activan/desactivan todos los `key_permiso` del prefijo y el comodín `modulo.*`.
 
 ### 2. Menú AdministraNET
 
@@ -49,5 +50,5 @@ Entrada en menú: **Archivo → Parámetros → Asignar permisos por puesto** (v
 ## Implementación
 
 - Vistas: `core/views/views_permisos_puesto.py`
-- Servicio atajos módulo: `AdministraNETPermisoSistemaService.establecer_modulo_para_puesto`
-- Tests: `core/tests/test_permisos_puesto_supervisor.py`
+- Servicio Synap (toggle/atajo/listado): `core/services/synap_permisos.py::SynapPermisosService`
+- Tests: `core/tests/test_permisos_puesto_supervisor.py`, `core/tests/test_synap_permisos.py`

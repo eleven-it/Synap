@@ -399,6 +399,9 @@ MODULE_CONFIGS = {
         'permissions': [
             'mpr.ver',
             'mpr.imputar_armado_1ra',
+            'mpr.parte_operario',
+            'mpr.maquinas_lineas',
+            'mpr.aprobar_parte',
             'mpr.*',
         ],
         'hooks': [],

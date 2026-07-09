@@ -4,6 +4,16 @@
 **Estado:** Implementado en Desarrollo — aplicar migración MySQL en cada base empresa.  
 **Fecha:** 08/07/2026
 
+### Prerrequisito esquema MySQL
+
+Control de calidad (clasificación por operario) requiere columnas en `mpr_transicion_lote`: `id_operario`, `operario_nombre`, `fecha_produccion`, `id_mpr_turno`. Si falta alguna:
+
+```bash
+docker exec Synap_app python manage.py apply_mpr_core_tables <base_empresa>
+```
+
+DDL: `mpr/sql/002_mpr_transicion_lote_operario.sql` (vía `catalog.run_mpr_core_tables_mysql`).
+
 ---
 
 ## Resumen ejecutivo
@@ -73,3 +83,6 @@ Migración vía `core/services/legacy_mysql_schema/catalog.py`.
 - Toggle supervisor **Ver roster completo** en clasificación (filas completadas solo lectura).
 - Hub reportes MPR: default **docenas** (GET, sesión operativa o fallback).
 - Reporte operario: gráfico apilado **semi · 2da · scrap** (`hbar_stacked`).
+- **Bloqueos CC (08/07/2026):** no bloquear fila si ya está 100 % clasificada o sin cantidad sin operario asignado (`construir_grilla_clasificacion_produccion`).
+- **Fabricando unificado (08/07/2026):** tablero, parte y reporte pendientes usan `acreditado = max(stock, clasificado CC, partes acumulados)`; componentes sin columna Terminado. Ver [REPORTES_MPR.md](REPORTES_MPR.md), [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md).
+- **Guarda física CC corregida (08/07/2026):** al guardar Control de calidad, la validación agregada de stock ahora compara **solo lo que se clasifica ahora** contra el **saldo vivo de Producción** (`total_cls > disponible_real`). Antes sumaba el acumulado ya clasificado del turno (`prev_cls_art + total_cls`), lo que **duplicaba el descuento** y bloqueaba falsamente con "Stock Producción insuficiente" cuando parte del stock clasificado ya había salido del pipeline (p. ej. Semi Elaborado consumido en el armado del pack BOM). El tope por operario (`atribuible = fabricado − ya_clasificado`) se mantiene. Ref: `mpr/views.py::RegistrarClasificacionProduccionView.post`; tests `test_clasificado_previo_consumido_no_bloquea` y `test_bloqueo_si_supera_saldo_vivo_produccion` en `mpr/tests/test_etapa10_clasificacion_produccion.py`.

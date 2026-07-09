@@ -1,0 +1,128 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Evolución de precios — Ventas — Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-[calc(100dvh-4.5rem)] flex-col bg-slate-50 py-3 dark:bg-slate-900 sm:py-4">
+    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+
+        <nav class="mb-2 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li><a href="{% url 'ventas:presupuesto_list' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Ventas</a></li>
+                <li class="text-slate-300" aria-hidden="true">/</li>
+                <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Evolución de precios</span></li>
+            </ol>
+        </nav>
+
+        <div class="mb-4 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:bg-slate-900 sm:p-4">
+            <header class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h1 class="text-lg font-bold text-white sm:text-xl">Ranking de variación de precios</h1>
+                    <p class="mt-1 text-[11px] text-slate-400">
+                        Lista {{ lista_label }} · período
+                        {% if fecha_desde %}{{ fecha_desde|date:"d/m/Y" }}{% else %}—{% endif %}
+                        —
+                        {% if fecha_hasta %}{{ fecha_hasta|date:"d/m/Y" }}{% else %}—{% endif %}
+                    </p>
+                </div>
+                <a href="{{ url_precios_terminados }}"
+                   class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700">
+                    <span class="material-icons text-base">price_change</span>
+                    Precios terminados
+                </a>
+            </header>
+
+            <form method="get" class="flex flex-col gap-2">
+                <div class="grid w-full grid-cols-2 items-end gap-2 md:grid-cols-4 lg:grid-cols-5">
+                    <label class="block">
+                        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Desde</span>
+                        <input type="date" name="fecha_desde" value="{{ fecha_desde|date:'Y-m-d' }}"
+                               class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-1.5 text-xs text-white"/>
+                    </label>
+                    <label class="block">
+                        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Hasta</span>
+                        <input type="date" name="fecha_hasta" value="{{ fecha_hasta|date:'Y-m-d' }}"
+                               class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-1.5 text-xs text-white"/>
+                    </label>
+                    <label class="block">
+                        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Lista</span>
+                        <select name="lista" class="mt-1 w-full rounded-lg border border-slate-600 bg-slate-900 px-2 py-1.5 text-xs text-white">
+                            {% for n, nombre in listas_nombres.items %}
+                            <option value="{{ n }}" {% if filtros.lista == n %}selected{% endif %}>{{ nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos equal=1 only %}
+                    {% include "ventas/includes/filtro_tags_generico.html" with field_id="rubros_incluidos" label="Rubro" catalogo=rubros_catalogo incluidos=rubros_incluidos equal=1 only %}
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <label class="inline-flex items-center gap-2 text-xs text-slate-300">
+                        <input type="checkbox" name="solo_synap" value="1" {% if solo_synap %}checked{% endif %}
+                               class="rounded border-slate-500 text-purple-600"/>
+                        Solo cambios Synap
+                    </label>
+                    <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-500">
+                        <span class="material-icons text-base">filter_list</span>
+                        Filtrar
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Artículos en ranking</p>
+                <p class="mt-1 text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ totals.articulos_ranking|default:0 }}</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+                <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Variación % promedio</p>
+                <p class="mt-1 text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ totals.variacion_pct_promedio|default:"0" }}%</p>
+            </div>
+        </div>
+
+        <div class="overflow-auto rounded-lg border border-slate-200 shadow-sm dark:border-slate-700">
+            <table class="min-w-full text-sm">
+                <thead class="bg-slate-100 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                    <tr>
+                        <th class="px-3 py-2 text-left">#</th>
+                        <th class="px-3 py-2 text-left">ID</th>
+                        <th class="px-3 py-2 text-left">Código</th>
+                        <th class="px-3 py-2 text-left">Artículo</th>
+                        <th class="px-3 py-2 text-left">Rubro</th>
+                        <th class="px-3 py-2 text-left">Marca</th>
+                        <th class="px-3 py-2 text-right">Neto inicial</th>
+                        <th class="px-3 py-2 text-right">Neto final</th>
+                        <th class="px-3 py-2 text-right">Var. %</th>
+                        <th class="px-3 py-2 text-center">Registros</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                    {% for fila in filas %}
+                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                        <td class="px-3 py-2 text-xs text-slate-500">{{ forloop.counter }}</td>
+                        <td class="px-3 py-2 text-xs tabular-nums">{{ fila.id_articulo }}</td>
+                        <td class="px-3 py-2 text-xs font-semibold tabular-nums">{{ fila.id_manual }}</td>
+                        <td class="max-w-[14rem] truncate px-3 py-2 text-xs" title="{{ fila.nombre_articulo }}">{{ fila.nombre_articulo }}</td>
+                        <td class="px-3 py-2 text-xs">{{ fila.nombre_rubro }}</td>
+                        <td class="px-3 py-2 text-xs">{{ fila.nombre_marca }}</td>
+                        <td class="px-3 py-2 text-right text-xs tabular-nums">{{ fila.neto_inicial }}</td>
+                        <td class="px-3 py-2 text-right text-xs tabular-nums">{{ fila.neto_final }}</td>
+                        <td class="px-3 py-2 text-right text-xs font-semibold tabular-nums {% if fila.variacion_pct > 0 %}text-emerald-600{% elif fila.variacion_pct < 0 %}text-red-600{% endif %}">
+                            {{ fila.variacion_pct }}%
+                        </td>
+                        <td class="px-3 py-2 text-center text-xs tabular-nums">{{ fila.cantidad_registros }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" class="px-4 py-8 text-center text-sm text-slate-500">
+                            No hay variaciones de precio en el período seleccionado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+{% endblock %}

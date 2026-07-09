@@ -1,0 +1,36 @@
+change: permisos-roles-synap-independientes
+status: ready_for_apply
+updated: "2026-07-08"
+artifact_store: openspec
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: p3_code_complete
+notes: >
+  Independizar permisos/roles Synap de tablas VB6 compartidas (permiso_sistema*).
+  Opción A confirmada: tablas synap_* por empresa vía catalog.py; idpuesto como ancla fija.
+  Flag rollback: SYNAP_PERMISOS_SOURCE=legacy.
+  Tasks: 38 implementación + 7 criterios aceptación en tasks.md.
+  P0 completo: DDL core/sql/001_synap_permisos_tables.sql, proveedor synap_permisos_tables,
+  seed synap_permisos_seed.py, comando apply_synap_permisos_tables. Aplicado en administranet96.
+  P1 completo: capa lectura core/services/synap_permisos.py, flag SYNAP_PERMISOS_SOURCE
+  (default legacy), fachada refactorizada (legacy/synap/dual + fallback), backfill command,
+  login usa asegurar_synap_schema_si_procede. Backfill+paridad OK en administranet96.
+  P2 completo (code_only, decisión rol dedicado por puesto): SynapPermisosService (listar/toggle/
+  atajo módulo), views_permisos_puesto escribe synap_*, template payload id_permiso, guard
+  crear_puesto (SYNAP_BLOQUEAR_CREAR_PUESTOS default True) + mensaje en views_roles. 16 tests
+  verdes. Smoke administranet96: toggle/atajo NO tocan permiso_sistema_puesto (1865→1865).
+  Cutover (SYNAP_PERMISOS_SOURCE=synap) queda pendiente por env cuando se indique (3.7).
+  Paridad dual validada en administranet96: 8 puestos, 0 divergencias.
+  P3 (parte código) completo: comando purge_synap_legacy_permisos (dry-run default, --ejecutar),
+  flag SYNAP_AUTO_ENSURE_SCHEMA desacoplado del sync legacy, docs (PERMISOS_SYNAP_STORE.md nuevo +
+  3 docs actualizados). Tests verdes. CA-1..CA-7 cumplidos.
+  DIFERIDO hasta cutover real estable + confirmación: 4.2 borrar sync_permisos_synap.py y
+  sync_synap_permissions_to_adminet/bootstrap; 4.3 SYNAP_AUTO_SYNC_PERMISSIONS=False default;
+  4.4 ejecutar purge --ejecutar en bases. Motivo: runtime aún en legacy depende de permiso_sistema.
+  CONFIGURADO en dev (2026-07-08): .env con SYNAP_PERMISOS_SOURCE=dual, SYNAP_AUTO_ENSURE_SCHEMA=True,
+  SYNAP_BLOQUEAR_CREAR_PUESTOS=True; contenedor Synap_app recreado y verificado (settings=dual).
+  .env.example documentado (default legacy). Siguiente: observar logs de divergencia; si 0 → cutover a synap.

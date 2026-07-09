@@ -402,6 +402,51 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
         self.assertEqual(resp.status_code, 302)
         mock_lote.assert_not_called()
 
+    @patch(
+        "mpr.services.transferir_stock_lote",
+        return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]},
+    )
+    @patch(
+        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
+        return_value={(42, ID_OPERARIO): Decimal("190")},
+    )
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
+    @patch("mpr.services._pivot_stock_por_tipo_mpr")
+    def test_clasificado_previo_consumido_no_bloquea(self, mock_pivot, mock_celdas, _cls, mock_lote):
+        """Regresión: clasificaciones previas del turno (190) que ya salieron del pipeline
+        (Semi consumido en armado del pack) no deben sumarse al saldo vivo. Con Producción=10
+        y atribuible=10, clasificar 10 debe pasar (antes bloqueaba con 190+10 > 10)."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=200.0)
+        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
+        mock_pivot.return_value = (pivot, pivot)
+
+        data = _post_clasif_base(**{f"semi_42_op_{ID_OPERARIO}": "10"})
+        resp = self._post(data)
+
+        self.assertEqual(resp.status_code, 302)
+        mock_lote.assert_called_once()
+        items = mock_lote.call_args.args[2]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(float(items[0]["cantidad"]), 10.0)
+        self.assertEqual(items[0]["tipo_destino"], TIPO_MPR_SEMI_ELABORADO)
+
+    @patch("mpr.services.transferir_stock_lote")
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
+    @patch("mpr.services._pivot_stock_por_tipo_mpr")
+    def test_bloqueo_si_supera_saldo_vivo_produccion(self, mock_pivot, mock_celdas, _cls, mock_lote):
+        """La guarda física sigue vigente: aunque el parte permita 50 (atribuible=200), si el
+        saldo vivo de Producción es 10, clasificar 50 se rechaza y no se envía al lote."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=200.0)
+        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
+        mock_pivot.return_value = (pivot, pivot)
+
+        data = _post_clasif_base(**{f"semi_42_op_{ID_OPERARIO}": "50"})
+        resp = self._post(data)
+
+        self.assertEqual(resp.status_code, 302)
+        mock_lote.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # TestTableroSinPlanchado
@@ -410,14 +455,17 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
 class TestTableroSinPlanchado(SimpleTestCase):
     """Etapa 10: el tablero no muestra Planchado y expone el botón único."""
 
-    def _tablero_html(self):
+    def _tpl_html(self, *partes):
         import os
         tpl_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "templates", "mpr", "tablero_produccion.html",
+            "templates", *partes,
         )
         with open(tpl_path, encoding="utf-8") as f:
             return f.read()
+
+    def _tablero_html(self):
+        return self._tpl_html("mpr", "tablero_produccion.html")
 
     def test_tablero_sin_columna_planchado(self):
         """El tablero ya no renderiza la columna Planchado."""
@@ -425,13 +473,20 @@ class TestTableroSinPlanchado(SimpleTestCase):
         self.assertNotIn("fila.planchado", content)
 
     def test_tablero_boton_unico_clasificacion_produccion(self):
-        """El tablero expone el botón global 'Clasificación de producción'."""
+        """El tablero expone el botón global 'Control de calidad' vía el include canónico."""
         content = self._tablero_html()
-        self.assertIn("mpr:clasificacion_produccion", content)
-        self.assertIn("Clasificación de producción", content)
+        # El botón se refactorizó al include canónico btn_control_calidad.html.
+        self.assertIn("mpr/includes/btn_control_calidad.html", content)
         # Ya no existen los botones separados Inspección/Clasificación (E9).
         self.assertNotIn("mpr:inspeccion_lote", content)
         self.assertNotIn("mpr:clasificacion_lote'", content)
+
+    def test_include_control_calidad_canonico(self):
+        """El include canónico apunta a clasificacion_produccion con estilo teal 'Control de calidad'."""
+        include = self._tpl_html("mpr", "includes", "btn_control_calidad.html")
+        self.assertIn("mpr:clasificacion_produccion", include)
+        self.assertIn("Control de calidad", include)
+        self.assertIn("bg-teal-600", include)
 
     def test_url_clasificacion_produccion_resuelve(self):
         url = reverse("mpr:clasificacion_produccion")

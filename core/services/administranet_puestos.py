@@ -10,6 +10,17 @@ from typing import Optional, Dict, List
 logger = logging.getLogger(__name__)
 
 
+class CreacionPuestoBloqueadaError(Exception):
+    """
+    Se intentó crear un puesto desde Synap mientras la creación está bloqueada.
+
+    Los puestos (``puestos.idpuesto``) son el ancla fija de AdministraNET; Synap no
+    debe crearlos. Ver ``settings.SYNAP_BLOQUEAR_CREAR_PUESTOS`` y
+    openspec/changes/permisos-roles-synap-independientes/design.md.
+    """
+    pass
+
+
 class AdministraNETPuestosService:
     """Servicio para gestión de puestos (roles) en administraNET Gestión"""
     
@@ -132,7 +143,22 @@ class AdministraNETPuestosService:
             
         Returns:
             ID del puesto creado o None si hubo error
+
+        Raises:
+            CreacionPuestoBloqueadaError: si ``settings.SYNAP_BLOQUEAR_CREAR_PUESTOS`` está activo.
         """
+        if getattr(settings, "SYNAP_BLOQUEAR_CREAR_PUESTOS", True):
+            logger.warning(
+                "Creación de puesto bloqueada (SYNAP_BLOQUEAR_CREAR_PUESTOS). "
+                "Los puestos se crean en AdministraNET; en Synap se gestionan roles/permisos. "
+                "Intento en empresa %s con nombre '%s'.",
+                base_empresa, nombre,
+            )
+            raise CreacionPuestoBloqueadaError(
+                "La creación de puestos está deshabilitada en Synap. "
+                "Cree el puesto en AdministraNET y luego asigne sus permisos en "
+                "«Permisos por puesto»."
+            )
         try:
             conn = self._get_connection(base_empresa)
             cursor = conn.cursor()

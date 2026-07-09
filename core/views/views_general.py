@@ -35,7 +35,17 @@ def dashboard_view(request):
     session_user = request.session.get("user")
     if not session_user:
         return redirect("login:login")
-    
+
+    # Landing por rol: el operario "puro" (mpr.parte_operario sin mpr.ver) va
+    # directo a su carga móvil, sin acceso al dashboard general.
+    try:
+        from mpr.landing import landing_url_para_usuario
+        landing = landing_url_para_usuario(request.user)
+        if landing:
+            return redirect(landing)
+    except Exception:
+        pass
+
     # Obtener usuario extendido si existe, sino usar datos de sesión
     try:
         usuario = request.user

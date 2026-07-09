@@ -2,7 +2,10 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.core.paginator import Paginator
 from core.decorators import tiene_permiso
-from core.services.administranet_puestos import AdministraNETPuestosService
+from core.services.administranet_puestos import (
+    AdministraNETPuestosService,
+    CreacionPuestoBloqueadaError,
+)
 from core.services.administranet_permisos_menu import AdministraNETPermisosMenuService
 import logging
 
@@ -99,7 +102,11 @@ def crear_editar_rol_view(request, puesto_id=None):
                 else:
                     messages.error(request, "Error al actualizar el puesto. Verifique que el nombre no esté duplicado.")
             else:
-                nuevo_id = puestos_service.crear_puesto(base_empresa, nombre)
+                try:
+                    nuevo_id = puestos_service.crear_puesto(base_empresa, nombre)
+                except CreacionPuestoBloqueadaError as e:
+                    messages.error(request, str(e))
+                    return redirect("core:listar_roles")
                 if nuevo_id:
                     # Si se marcó heredar desde puesto base, heredar permisos
                     if heredar_desde_puesto and puesto_base_id:

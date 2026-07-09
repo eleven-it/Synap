@@ -1,0 +1,182 @@
+{% load static %}
+{% with piv=pivote_operario %}
+<div x-data="operarioComparador()" class="flex flex-col gap-3">
+
+    {# Selector predictivo con tags (comparar / filtrar 1-2 operarios) #}
+    <div class="rounded-xl border border-gray-200 bg-gray-50/70 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Comparar operarios</span>
+            <template x-for="op in seleccionados" :key="op.id">
+                <span class="inline-flex items-center gap-1 rounded-full bg-purple-100 py-1 pl-3 pr-1.5 text-xs font-semibold text-purple-700 dark:bg-purple-900/40 dark:text-purple-200">
+                    <span x-text="op.nombre"></span>
+                    <button type="button" @click="quitar(op.id)" class="flex h-4 w-4 items-center justify-center rounded-full text-purple-500 hover:bg-purple-200 dark:hover:bg-purple-800" aria-label="Quitar">
+                        <span class="material-icons" style="font-size:14px">close</span>
+                    </button>
+                </span>
+            </template>
+
+            <div class="relative min-w-[14rem] flex-1" @click.outside="abierto = false">
+                <div class="relative">
+                    <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" style="font-size:18px" aria-hidden="true">search</span>
+                    <input type="search" autocomplete="off"
+                           x-model="q"
+                           :disabled="seleccionados.length >= 2"
+                           @focus="abierto = true" @input="abierto = true"
+                           @keydown.arrow-down.prevent="mover(1)"
+                           @keydown.arrow-up.prevent="mover(-1)"
+                           @keydown.enter.prevent="elegirActivo()"
+                           @keydown.escape="abierto = false"
+                           :placeholder="seleccionados.length >= 2 ? 'Máximo 2 operarios' : 'Buscar operario…'"
+                           class="w-full rounded-lg border border-gray-300 bg-white py-1.5 pl-9 pr-3 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 disabled:cursor-not-allowed disabled:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:disabled:bg-gray-900"/>
+                </div>
+                <div x-show="abierto && sugerencias.length" x-cloak
+                     class="absolute z-40 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <template x-for="(op, i) in sugerencias" :key="op.id">
+                        <button type="button" @click="agregar(op)"
+                                :class="i === activo ? 'bg-purple-50 dark:bg-purple-900/30' : ''"
+                                class="flex w-full items-center justify-between px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-purple-50 dark:text-gray-200 dark:hover:bg-purple-900/30">
+                            <span x-text="op.nombre"></span>
+                            <span class="material-icons text-gray-400" style="font-size:16px">add</span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <button type="button" x-show="seleccionados.length" x-cloak @click="limpiar()"
+                    class="inline-flex items-center gap-1 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                <span class="material-icons" style="font-size:15px">filter_alt_off</span> Ver todos
+            </button>
+        </div>
+        <p class="mt-1.5 text-[11px] text-gray-400 dark:text-gray-500">
+            Elegí <strong>1</strong> para filtrar o <strong>2</strong> para comparar (columna Δ). Sin selección se muestran todos los operarios.
+        </p>
+    </div>
+
+    {% if piv.sin_datos %}
+    {% include "mpr/reportes/partials/empty_state.html" with empty_titulo="No hay producción por operario en el período" empty_cta_url="mpr:parte_produccion" empty_cta_label="Registrar parte de producción" %}
+    {% else %}
+    <div class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+        <table class="min-w-full border-collapse text-sm">
+            <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
+                <tr>
+                    <th class="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">Año / Mes</th>
+                    {% for col in piv.columnas %}
+                    <th class="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold text-gray-700 dark:text-gray-200" title="{{ col.nombre }}">{{ col.nombre }}</th>
+                    {% endfor %}
+                    {% if piv.dos %}
+                    <th class="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold text-indigo-600 dark:text-indigo-300">Δ</th>
+                    {% endif %}
+                    <th class="whitespace-nowrap px-3 py-2 text-right text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-gray-300">Total</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                {% for grupo in piv.grupos %}
+                <tr class="bg-purple-50/60 dark:bg-purple-900/20">
+                    <td colspan="99" class="px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-purple-700 dark:text-purple-300">{{ grupo.anio }}</td>
+                </tr>
+                {% for fila in grupo.filas %}
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                    <td class="whitespace-nowrap px-3 py-1.5 text-gray-600 dark:text-gray-300">{{ fila.mes_label }} {{ grupo.anio }}</td>
+                    {% for c in fila.celdas %}
+                    <td class="px-3 py-1.5 text-right tabular-nums text-gray-800 dark:text-gray-100">{{ c.txt|default:"—" }}</td>
+                    {% endfor %}
+                    {% if piv.dos %}
+                    <td class="px-3 py-1.5 text-right tabular-nums font-medium {% if fila.delta > 0 %}text-emerald-600 dark:text-emerald-400{% elif fila.delta < 0 %}text-rose-600 dark:text-rose-400{% else %}text-gray-400{% endif %}">{{ fila.delta_txt|default:"—" }}</td>
+                    {% endif %}
+                    <td class="px-3 py-1.5 text-right tabular-nums font-semibold text-gray-900 dark:text-white">{{ fila.total_txt|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+                <tr class="bg-gray-50 font-semibold dark:bg-gray-800/60">
+                    <td class="whitespace-nowrap px-3 py-1.5 text-gray-700 dark:text-gray-200">Total {{ grupo.anio }}</td>
+                    {% for c in grupo.subtotal_celdas %}
+                    <td class="px-3 py-1.5 text-right tabular-nums text-gray-800 dark:text-gray-100">{{ c.txt|default:"—" }}</td>
+                    {% endfor %}
+                    {% if piv.dos %}
+                    <td class="px-3 py-1.5 text-right tabular-nums text-indigo-600 dark:text-indigo-300">{{ grupo.subtotal_delta_txt|default:"—" }}</td>
+                    {% endif %}
+                    <td class="px-3 py-1.5 text-right tabular-nums text-gray-900 dark:text-white">{{ grupo.subtotal_total_txt|default:"—" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="border-t-2 border-gray-300 bg-purple-100/70 font-bold dark:border-gray-600 dark:bg-purple-900/30">
+                    <td class="whitespace-nowrap px-3 py-2 text-gray-800 dark:text-white">Total general</td>
+                    {% for c in piv.totales_columna %}
+                    <td class="px-3 py-2 text-right tabular-nums text-gray-900 dark:text-white">{{ c.txt|default:"—" }}</td>
+                    {% endfor %}
+                    {% if piv.dos %}
+                    <td class="px-3 py-2 text-right tabular-nums text-indigo-700 dark:text-indigo-300">{{ piv.total_delta_txt|default:"—" }}</td>
+                    {% endif %}
+                    <td class="px-3 py-2 text-right tabular-nums text-gray-900 dark:text-white">{{ piv.total_general_txt|default:"—" }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <p class="px-1 text-[11px] text-gray-400 dark:text-gray-500">
+        Unidad: {{ piv.modo|default:"docenas" }}. Fuente nativa MPR (partes de producción). El histórico previo al corte (BEST) se integrará en una fase posterior.
+    </p>
+    {% endif %}
+</div>
+
+{{ piv.operarios|json_script:"mpr-operarios-catalogo" }}
+{{ piv.seleccionados|json_script:"mpr-operarios-seleccionados" }}
+<script>
+function operarioComparador() {
+    return {
+        catalogo: [],
+        seleccionados: [],
+        q: '',
+        abierto: false,
+        activo: 0,
+        init() {
+            try { this.catalogo = JSON.parse(document.getElementById('mpr-operarios-catalogo').textContent) || []; } catch (e) { this.catalogo = []; }
+            let ids = [];
+            try { ids = JSON.parse(document.getElementById('mpr-operarios-seleccionados').textContent) || []; } catch (e) { ids = []; }
+            this.seleccionados = ids
+                .map((id) => this.catalogo.find((o) => o.id === id))
+                .filter(Boolean);
+            this.$watch('q', () => { this.activo = 0; });
+        },
+        get sugerencias() {
+            const q = (this.q || '').trim().toLowerCase();
+            const sel = new Set(this.seleccionados.map((o) => o.id));
+            return this.catalogo
+                .filter((o) => !sel.has(o.id) && (!q || (o.nombre || '').toLowerCase().includes(q)))
+                .slice(0, 8);
+        },
+        mover(delta) {
+            const n = this.sugerencias.length;
+            if (!n) return;
+            this.activo = (this.activo + delta + n) % n;
+        },
+        elegirActivo() {
+            const op = this.sugerencias[this.activo];
+            if (op) this.agregar(op);
+        },
+        agregar(op) {
+            if (this.seleccionados.length >= 2) return;
+            if (this.seleccionados.some((o) => o.id === op.id)) return;
+            this.seleccionados.push(op);
+            this.q = '';
+            this.abierto = false;
+            this.navegar();
+        },
+        quitar(id) {
+            this.seleccionados = this.seleccionados.filter((o) => o.id !== id);
+            this.navegar();
+        },
+        limpiar() {
+            this.seleccionados = [];
+            this.navegar();
+        },
+        navegar() {
+            const params = new URLSearchParams(window.location.search);
+            const ids = this.seleccionados.map((o) => o.id);
+            if (ids.length) params.set('op', ids.join(','));
+            else params.delete('op');
+            window.location.search = '?' + params.toString();
+        },
+    };
+}
+</script>
+{% endwith %}

@@ -48,11 +48,7 @@
                     <div class="min-w-0 flex-1">
                         <p class="text-sm font-semibold text-gray-900 dark:text-white">Bloquear parte que supera Fabricando</p>
                         <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                            {% if bloquear_parte_supera_fabricando %}
-                            Activo — rechaza el guardado si la cantidad total supera lo enviado menos stock en Producción.
-                            {% else %}
-                            Inactivo — permite guardar con aviso (comportamiento anterior).
-                            {% endif %}
+                            Preferencia histórica en UI. Desde 07/07/2026 el backend rechaza siempre partes que superen Fabricando o envíos ledger, con independencia de este interruptor.
                         </p>
                     </div>
                     <label class="relative inline-flex min-h-[44px] cursor-pointer items-center gap-2">

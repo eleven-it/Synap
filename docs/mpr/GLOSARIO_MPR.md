@@ -102,6 +102,30 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 
 ---
 
+## Flujo diario MPR (tablero, parte, control de calidad)
+
+| Término | Descripción |
+|--------|-------------|
+| **Tablero de producción** | Demanda consolidada por **componente** (explosión BOM desde packs PED). Columnas PCP: pedido, reserva, resta total/urgente, **Fabricando**, stock pipeline (sin Terminado en componentes), Enviar. Ruta: `/mpr/tablero-produccion/`. |
+| **Fabricando** | Cupo virtual: `max(0, envíos tablero − acreditado)`. Acreditado = max(stock físico componente, clasificación desde Producción, partes acumulados). No usa Terminado del componente. |
+| **Enviar a producción** | Registro en `mpr_envio_produccion` (ledger). No mueve stock hasta el parte. |
+| **Parte de producción (E8)** | Grilla componente × operario; solo filas con Fabricando > 0. Registra `mpr_parte_linea` e ingresa stock a **Producido**. |
+| **Control de calidad** | Clasificación desde **Producido** hacia Semi / 2da / Scrap, por **operario fabricante**. Ledger: `mpr_transicion_lote`. Ruta: `/mpr/clasificacion-produccion/`. |
+| **Clasificado (reportes)** | Suma de `mpr_transicion_lote` con `tipo_origen = Produccion` en el período. |
+| **Acreditado** | Unidades que cubren envíos sin contar como Fabricando pendiente: stock pipeline del componente, CC registrada o partes ya cargados. |
+| **Componente vs pack terminado** | El tablero y CC operan sobre **componentes** (semi). El **terminado** es del pack en armado; no se muestra en tablero de producción de componentes. |
+| **Línea de producción** | Agrupación de máquinas (`mpr_linea`). Cada operario tiene línea habitual y puede tener override por día en roster. |
+| **Máquina** | Equipo de planta (`mpr_maquina`) con pertenencia versionada a una línea y artículos habilitados versionados. |
+| **Parte móvil / declaración** | Carga del operario al fin de turno por máquina; `estado = pendiente`, `origen = movil_operario`; **no mueve stock** hasta aprobación. |
+| **Gap (brecha)** | Diferencia `cantidad_aprobada − cantidad_declarada` en una línea de parte; requiere motivo si ≠ 0. |
+| **Operario puro** | Usuario con `mpr.parte_operario` sin `mpr.ver`; solo accede a `/mpr/mi-parte/`. |
+| **En fabricación** | Sinónimo de reporte para envíos tablero (`mpr_envio_produccion`). |
+| **Producido** | Sinónimo de reporte para parte de producción acreditado (`mpr_parte_linea`). |
+
+Ver: [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md), [PARTE_PRODUCCION.md](PARTE_PRODUCCION.md), [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md), [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md), [DOCENAS_CLASIFICACION_OPERARIO_MPR.md](DOCENAS_CLASIFICACION_OPERARIO_MPR.md), [REPORTES_MPR.md](REPORTES_MPR.md).
+
+---
+
 ## Referencias
 
 - **ANALISIS_MPR_PROPUESTA_MVP.md** — Análisis del proceso y propuesta del módulo MPR.

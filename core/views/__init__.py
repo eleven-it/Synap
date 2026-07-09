@@ -20,6 +20,7 @@ from .views_permisos_puesto import (
     permisos_puesto_gestionar_view,
     permisos_puesto_toggle_synap_view,
     permisos_puesto_modulo_synap_view,
+    permisos_puesto_backfill_view,
 )
 from .views_legacy_mysql_schema import legacy_mysql_schema_tool
 from .views_uom import UoMListView, UoMCreateView, UoMUpdateView, UoMDeleteView

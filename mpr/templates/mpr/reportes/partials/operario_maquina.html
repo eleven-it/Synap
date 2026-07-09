@@ -1,0 +1,34 @@
+{% if not filas %}
+{% include "mpr/reportes/partials/empty_state.html" with empty_titulo="No hay producción por máquina en el período" empty_cta_url="mpr:parte_produccion" empty_cta_label="Registrar parte de producción" %}
+{% else %}
+<div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead class="bg-gray-50 dark:bg-gray-800/50">
+            <tr>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">#</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Operario</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Máquina</th>
+                <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600">Línea</th>
+                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Declarada</th>
+                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Aprobada</th>
+                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Gap</th>
+                <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600">Partes</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for r in filas %}
+            <tr>
+                <td class="px-4 py-3 text-sm text-gray-500">{{ r.rank }}</td>
+                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ r.operario }}</td>
+                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ r.maquina }}</td>
+                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ r.linea }}</td>
+                <td class="px-4 py-3 text-right text-sm tabular-nums">{{ r.declarada }}</td>
+                <td class="px-4 py-3 text-right text-sm tabular-nums font-semibold">{{ r.aprobada }}</td>
+                <td class="px-4 py-3 text-right text-sm tabular-nums {% if r.gap < 0 %}text-red-600{% elif r.gap > 0 %}text-emerald-600{% else %}text-gray-400{% endif %}">{{ r.gap }}</td>
+                <td class="px-4 py-3 text-right text-sm tabular-nums text-gray-500">{{ r.partes }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}

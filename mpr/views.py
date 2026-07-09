@@ -3,7 +3,7 @@ import json
 import logging
 import traceback
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
@@ -145,6 +145,9 @@ from .services import (
     reporte_mpr_pedidos_por_estado,
     reporte_mpr_movimientos,
     listar_tablero_por_articulo,
+    listar_tablero_armado,
+    calcular_kpis_tablero_armado,
+    construir_armados_desde_post_tablero,
     transferir_stock_entre_etapas,
     TIPO_MPR_2DA_SELECCION,
     TIPO_MPR_PLANCHADO,
@@ -196,7 +199,8 @@ def _usuario_tiene_permiso_mpr(user, permiso: str) -> bool:
         if (user.cod_usuario or "").strip().lower() == "supervisor":
             return True
     if hasattr(user, "roles"):
-        if any(rol.nombre.lower() == "administrador" for rol in user.roles.all()):
+        _roles_supervisores = {"administrador", "supervisor mpr", "supervisor de producción", "supervisor de produccion"}
+        if any((rol.nombre or "").strip().lower() in _roles_supervisores for rol in user.roles.all()):
             return True
     if hasattr(user, "tiene_permiso") and permiso:
         return user.tiene_permiso(permiso)
@@ -232,6 +236,54 @@ def _get_base_empresa(request):
     """Obtiene base_empresa desde la sesión. Devuelve None si no hay empresa activa."""
     session_user = request.session.get("user", {})
     return session_user.get("base_empresa") or None
+
+
+def _parse_marcas_incluidos(request) -> List[int]:
+    """Normaliza marcas_incluidos desde query string (repetido o único)."""
+    from stock.services.inventario_tabla import parse_inventario_filtros
+
+    filtros = parse_inventario_filtros(
+        request.GET,
+        marcas_getlist=request.GET.getlist("marcas_incluidos"),
+    )
+    return filtros.marcas_incluidos
+
+
+def _marcas_urlencode_pairs(marcas: List[int]) -> List[Tuple[str, str]]:
+    return [("marcas_incluidos", str(m)) for m in marcas]
+
+
+def _context_filtro_marcas(request, base_empresa: str | None) -> dict:
+    """Catálogo y selección actual para el filtro tags de marcas."""
+    from stock.services.inventario_tabla import listar_marcas_catalogo
+
+    marcas = _parse_marcas_incluidos(request)
+    return {
+        "marcas_catalogo": listar_marcas_catalogo(base_empresa) if base_empresa else [],
+        "marcas_incluidos": marcas,
+    }
+
+
+def _urlencode_con_marcas(params: dict, marcas: List[int]) -> str:
+    from urllib.parse import urlencode
+
+    pairs = [(k, v) for k, v in params.items() if v not in (None, "")]
+    pairs.extend(_marcas_urlencode_pairs(marcas))
+    return urlencode(pairs)
+
+
+def _redirect_clasificacion_produccion(
+    request,
+    *,
+    fecha_str: str = "",
+    turno_id_raw: str = "",
+):
+    url = reverse("mpr:clasificacion_produccion")
+    qs = _urlencode_con_marcas(
+        {"fecha": fecha_str, "turno_id": turno_id_raw},
+        _parse_marcas_incluidos(request),
+    )
+    return redirect(f"{url}?{qs}" if qs else url)
 
 
 # En formularios OPP (wizard y registrar), una docena son siempre 12 unidades (no cantidad_promedio_bulto).
@@ -334,24 +386,30 @@ def _parte_cantidad_unidades_desde_post(post, id_art: int, id_op: int) -> int:
 
 
 def _envio_cantidad_unidades_desde_post(post, id_art: int) -> int:
-    """Cantidad en unidades para envío tablero: docenas × 12 + unidades sueltas."""
+    """Cantidad en pares para envío tablero: docenas enteras × 12 o pares enteros."""
+    from mpr.presentacion_operativa import parse_modo_presentacion_operativa
+
     doc_key = f"envio_{id_art}_docenas"
     uni_key = f"envio_{id_art}_unidades"
     legacy_key = f"envio_{id_art}"
+    presentacion = parse_modo_presentacion_operativa(post.get("presentacion"))
     if doc_key in post or uni_key in post:
         try:
             docenas = int((post.get(doc_key) or "0").strip())
         except (ValueError, TypeError):
             docenas = 0
+        if presentacion == "docenas":
+            return max(0, docenas) * UNIDADES_POR_DOCENA_OPP
         try:
             unidades_sueltas = int((post.get(uni_key) or "0").strip())
         except (ValueError, TypeError):
             unidades_sueltas = 0
         return max(0, docenas) * UNIDADES_POR_DOCENA_OPP + max(0, unidades_sueltas)
-    d = to_decimal_or_none(post.get(legacy_key))
-    if d is None or d <= 0:
-        return 0
-    return int(d)
+    try:
+        pares = int(round(float((post.get(legacy_key) or "0").strip())))
+    except (ValueError, TypeError):
+        pares = 0
+    return max(0, pares)
 
 
 def _parte_lineas_desde_post(post) -> List[Dict[str, Any]]:
@@ -517,6 +575,7 @@ class TableroView(MprLoginRequiredMixin, TemplateView):
         context.setdefault("kpi_packs_demanda", 0)
         context.setdefault("kpi_urgent_items", 0)
         context.setdefault("componentes_pendientes", [])
+        context.setdefault("top_packs_pendientes", [])
         context.setdefault("top_urgencias", [])
 
         if not base_empresa:
@@ -1790,12 +1849,6 @@ class _ArmadoOptViewLegacy(MprLoginRequiredMixin, TemplateView):
             qty = max(0, qty)
             if qty > 0:
                 id_operario_linea = to_int_or_none(request.POST.get(f"operario_armado_{id_art}"))
-                if id_operario_linea is None:
-                    messages.error(
-                        request,
-                        f"Seleccione operario para el pack {linea.get('codigo_manual') or id_art}.",
-                    )
-                    return redirect("mpr:armado_opt", id_lista=id_lista)
                 cantidades.append((linea, qty, id_operario_linea))
         if not cantidades:
             messages.error(request, "Indique al menos una cantidad mayor a 0 en algún pack para ejecutar el armado.")
@@ -3048,9 +3101,6 @@ class ArmadoLegacyView(MprLoginRequiredMixin, TemplateView):
             if cantidad_restante_armar <= 0:
                 continue
             id_operario_linea = to_int_or_none(request.POST.get(f"operario_armado_{id_art}"))
-            if id_operario_linea is None:
-                messages.error(request, f"Seleccione operario para el pack {l.get('codigo_manual') or id_art}.")
-                return redirect(f"{reverse('mpr:armado')}?id_lista={id_lista}")
             try:
                 ok, codigo_mov, nro_comp, error = ejecutar_armado(
                     base_empresa,
@@ -3183,9 +3233,25 @@ def _fallidos_para_carrito_armado_surtido(fallidos: list) -> list:
 def _resolver_post_armado_surtido(request):
     """
     Cabecera + armados desde POST.
-    Prioriza lote_json; si no viene, arma un lote de un ítem (formulario single-pack MVP).
+    Prioriza lote_json; grilla tabla (vista=tablero); o un ítem single-pack MVP.
     Devuelve (cabecera, armados, error).
     """
+    modo = _modo_armado_desde_request(request)
+    vista = (request.POST.get("vista") or "").strip().lower()
+    if vista == "tablero" and modo == "1ra":
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            cabecera = parse_cabecera_lote_armado_surtido(request.POST)
+            return cabecera, None, "No se pudo determinar la empresa activa."
+        cabecera = parse_cabecera_lote_armado_surtido(request.POST)
+        cabecera["modo"] = modo
+        armados = construir_armados_desde_post_tablero(
+            base_empresa, request.POST, modo=modo
+        )
+        if not armados:
+            return cabecera, None, "Ingrese al menos una cantidad en la columna Armar."
+        return cabecera, armados, None
+
     raw_lote = (request.POST.get("lote_json") or "").strip()
     if raw_lote:
         return parse_lote_armado_surtido_post(request)
@@ -3216,10 +3282,33 @@ def _modo_armado_desde_request(request, default="1ra"):
     return modo if modo in ("1ra", "2da") else default
 
 
-def _redirect_armado(modo="2da", id_lista=None):
-    params = {"modo": modo}
+def _vista_armado_desde_request(request, default: str = "tablero") -> str:
+    v = (request.GET.get("vista") or request.POST.get("vista") or default).strip().lower()
+    return v if v in ("tablero", "pos") else default
+
+
+def _resolver_solo_resta_armado(request) -> bool:
+    raw = (request.GET.get("solo_resta") or request.POST.get("solo_resta") or "1").strip().lower()
+    return raw not in ("0", "false", "no")
+
+
+def _redirect_armado(modo="2da", id_lista=None, request=None):
+    filtros_qs = ""
+    if request is not None:
+        filtros_qs = (request.POST.get("filtros_qs") or "").strip()
+    if filtros_qs:
+        return redirect(f"{reverse('mpr:armado')}?{filtros_qs}")
+    params: Dict[str, Any] = {
+        "modo": modo,
+        "vista": _vista_armado_desde_request(request) if request else "tablero",
+    }
     if id_lista:
         params["id_lista"] = id_lista
+    if request is not None:
+        for key in ("fecha_desde", "fecha_hasta", "presentacion", "solo_resta"):
+            val = (request.GET.get(key) or request.POST.get(key) or "").strip()
+            if val:
+                params[key] = val
     return redirect(f"{reverse('mpr:armado')}?{urlencode(params)}")
 
 
@@ -3353,9 +3442,14 @@ class ArmadoSurtidoValidarItemLoteAPIView(MprLoginRequiredMixin, View):
 
 
 class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
-    """Armado unificado 1ra/2da (POS + carrito). Alias legacy: armado-surtido → ?modo=2da."""
+    """Armado unificado 1ra/2da: grilla tabla (default) o POS + carrito (?vista=pos)."""
 
     template_name = "mpr/armado_surtido.html"
+
+    def get_template_names(self):
+        if _vista_armado_desde_request(self.request) == "pos":
+            return [self.template_name]
+        return ["mpr/armado_tablero.html"]
 
     def get(self, request, *args, **kwargs):
         from django.contrib import messages
@@ -3365,12 +3459,112 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
             messages.error(request, "No se pudo determinar la empresa activa.")
             return redirect("core:dashboard")
         if not (request.GET.get("modo") or "").strip():
-            params = {"modo": "1ra"}
+            params = {
+                "modo": "1ra",
+                "vista": _vista_armado_desde_request(request),
+            }
             id_lista = request.GET.get("id_lista")
             if id_lista:
                 params["id_lista"] = id_lista
             return redirect(f"{reverse('mpr:armado')}?{urlencode(params)}")
         return super().get(request, *args, **kwargs)
+
+    def _context_armado_tablero(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        from core.utils.administranet_types import to_date_or_none
+        from mpr.presentacion_operativa import (
+            enriquecer_filas_tablero_armado,
+            resolver_modo_presentacion_operativa,
+        )
+
+        base_empresa = context.get("base_empresa") or _get_base_empresa(self.request)
+        modo = context.get("modo") or _modo_armado_desde_request(self.request)
+        fecha_desde_str = (self.request.GET.get("fecha_desde") or "").strip()
+        fecha_hasta_str = (self.request.GET.get("fecha_hasta") or "").strip()
+        solo_resta = _resolver_solo_resta_armado(self.request)
+        marcas_incluidos = _parse_marcas_incluidos(self.request)
+        modo_presentacion = resolver_modo_presentacion_operativa(self.request)
+
+        try:
+            filas = listar_tablero_armado(
+                base_empresa,
+                modo=modo,
+                fecha_desde=to_date_or_none(fecha_desde_str) if fecha_desde_str else None,
+                fecha_hasta=to_date_or_none(fecha_hasta_str) if fecha_hasta_str else None,
+                solo_resta=solo_resta,
+                marcas_incluidos=marcas_incluidos or None,
+            )
+        except Exception as e:
+            logger.warning("listar_tablero_armado: %s", e, exc_info=True)
+            filas = []
+
+        marcas_catalogo = _context_filtro_marcas(self.request, base_empresa).get(
+            "marcas_catalogo", []
+        )
+        marcas_etiqueta = {
+            int(m["value"]): str(m.get("label") or "")
+            for m in (marcas_catalogo or [])
+            if m.get("value") is not None
+        }
+        filas = enriquecer_filas_tablero_armado(
+            filas, modo_presentacion, marcas_etiqueta=marcas_etiqueta
+        )
+        kpis_armado = calcular_kpis_tablero_armado(filas)
+
+        dep_origen = (
+            get_deposito_semi_elaborado_mpr(base_empresa)
+            if modo == "1ra"
+            else get_deposito_2da_seleccion_mpr(base_empresa)
+        )
+        dep_dest = get_deposito_terminado_mpr(base_empresa)
+        depositos = get_depositos_con_suma_stock(
+            base_empresa, _get_id_puesto(self.request)
+        )
+
+        def _nom_dep(cod):
+            if cod is None:
+                return "—"
+            for d in depositos or []:
+                if d.get("CodDeposito") == cod:
+                    return str_or_default(d.get("NombreDeposito"), str(cod))
+            return str(cod)
+
+        qs_params = {
+            "vista": "tablero",
+            "modo": modo,
+            "solo_resta": "1" if solo_resta else "0",
+            "presentacion": modo_presentacion,
+        }
+        if fecha_desde_str:
+            qs_params["fecha_desde"] = fecha_desde_str
+        if fecha_hasta_str:
+            qs_params["fecha_hasta"] = fecha_hasta_str
+        presentacion_query_base = _urlencode_con_marcas(qs_params, marcas_incluidos)
+
+        resultado_lote = self.request.session.pop("armado_surtido_resultado_lote", None)
+        self.request.session.pop("armado_surtido_lote_fallidos", None)
+
+        context.update({
+            "vista": "tablero",
+            "filas": filas,
+            "fecha_desde": fecha_desde_str,
+            "fecha_hasta": fecha_hasta_str,
+            "solo_resta": solo_resta,
+            "kpis_armado": kpis_armado,
+            "modo_presentacion": modo_presentacion,
+            "presentacion_query_base": presentacion_query_base,
+            "deposito_origen_default": dep_origen,
+            "deposito_destino_default": dep_dest,
+            "nombre_deposito_origen": _nom_dep(dep_origen),
+            "nombre_deposito_destino": _nom_dep(dep_dest),
+            "filtros_qs": presentacion_query_base,
+            "resultado_lote_json": json.dumps(resultado_lote) if resultado_lote else "null",
+            "mostrar_modal_resultado_lote": bool(resultado_lote),
+            "puede_imputar_pedido": _usuario_puede_imputar_pedido(
+                getattr(self.request, "user", None)
+            ),
+            **_context_filtro_marcas(self.request, base_empresa),
+        })
+        return context
 
     def get_context_data(self, **kwargs):
         from django.contrib import messages
@@ -3381,8 +3575,13 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
         context["modo"] = modo
         context["modo_label"] = "Armado 1ra" if modo == "1ra" else "Armado 2da"
         context["base_empresa"] = base_empresa
+        context["vista"] = _vista_armado_desde_request(self.request)
         id_lista = to_int_or_none(self.request.GET.get("id_lista"))
         context["id_lista"] = id_lista
+
+        if context["vista"] == "tablero":
+            return self._context_armado_tablero(context)
+
         id_articulo_opt = to_int_or_none(self.request.GET.get("id_articulo"))
         context["id_articulo_opt"] = id_articulo_opt
         lote_fallidos_preview = self.request.session.get("armado_surtido_lote_fallidos")
@@ -3525,7 +3724,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
         modo = _modo_armado_desde_request(request)
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
-            return _redirect_armado(modo)
+            return _redirect_armado(modo, request=request)
         session_user = request.session.get("user", {})
         try:
             id_usuario = int(session_user.get("id_usuario")) if session_user.get("id_usuario") is not None else None
@@ -3533,7 +3732,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
             id_usuario = None
         if not id_usuario:
             messages.error(request, "Usuario no identificado en sesión.")
-            return _redirect_armado(modo)
+            return _redirect_armado(modo, request=request)
 
         cabecera, armados, err_parse = _resolver_post_armado_surtido(request)
         cabecera["modo"] = modo
@@ -3542,7 +3741,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
         )
         if err_parse:
             messages.error(request, err_parse)
-            return _redirect_armado(modo, id_lista)
+            return _redirect_armado(modo, id_lista, request=request)
 
         ok_reg, err_reg = validar_reglas_lote_armado(
             armados,
@@ -3555,7 +3754,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
         )
         if not ok_reg:
             messages.error(request, err_reg)
-            return _redirect_armado(modo, id_lista)
+            return _redirect_armado(modo, id_lista, request=request)
 
         try:
             resultado = ejecutar_lote_armado(
@@ -3567,7 +3766,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
         except MprSchemaError as e:
             _log_mpr_schema_error(e)
             messages.error(request, str(e))
-            return _redirect_armado(modo, id_lista)
+            return _redirect_armado(modo, id_lista, request=request)
 
         exitosos = resultado.get("exitosos") or []
         fallidos = resultado.get("fallidos") or []
@@ -3600,7 +3799,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
                 f"No se pudo grabar ningún armado ({n_fail} con error). Revise el detalle en el modal.",
             )
 
-        return _redirect_armado(modo, id_lista)
+        return _redirect_armado(modo, id_lista, request=request)
 
 
 # Vista canónica (menú Armado 1ra / 2da)
@@ -3907,6 +4106,40 @@ class ImputacionArmado1raView(MprLoginRequiredMixin, MprPermisoMixin, TemplateVi
         )
 
 
+_MESES_ES_LARGO = [
+    "", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
+
+def _agrupar_resumen_por_mes(dias: List[Dict[str, Any]], modo: str) -> List[Dict[str, Any]]:
+    """Agrupa el resumen diario por Año/Mes con subtotal de producción (parte).
+
+    Réplica del pivote «Produccion Diario» (Origen=Producción): filas por día con
+    subtotal por mes y total. Consolida la cantidad registrada (parte) por día.
+    """
+    from mpr.reportes_presentacion import formatear_cantidad_reporte
+
+    grupos: List[Dict[str, Any]] = []
+    actual: Optional[Dict[str, Any]] = None
+    for d in dias:
+        # Solo días con producción registrada (como el pivote «Produccion Diario»).
+        if int(d.get("parte") or 0) <= 0:
+            continue
+        f = d.get("fecha")
+        anio = getattr(f, "year", 0)
+        mes = getattr(f, "month", 0)
+        if actual is None or actual["anio"] != anio or actual["mes"] != mes:
+            etiqueta = f"{_MESES_ES_LARGO[mes]} {anio}" if 1 <= mes <= 12 else str(anio)
+            actual = {"anio": anio, "mes": mes, "mes_label": etiqueta, "dias": [], "subtotal": 0}
+            grupos.append(actual)
+        actual["dias"].append(d)
+        actual["subtotal"] += int(d.get("parte") or 0)
+    for g in grupos:
+        g["subtotal_display"] = formatear_cantidad_reporte(g["subtotal"], modo)
+    return grupos
+
+
 class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
     """Hub de reportes MPR: producción, demanda y trazabilidad (flujo MPR diario)."""
 
@@ -3990,6 +4223,28 @@ class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
             data = reporte_mpr_operario_parte(base_empresa, fd_iso, fh_iso)
             kpis = data.get("kpis") or {}
             filas = data.get("filas") or []
+        elif grupo == "produccion" and reporte == "operario_mensual":
+            from mpr.services import reporte_mpr_operario_mensual
+            from mpr.reportes_presentacion import resolver_modo_presentacion_reporte
+
+            modo_pivote = resolver_modo_presentacion_reporte(self.request)
+            sel_raw = self.request.GET.get("op") or ""
+            seleccionados = [
+                int(x) for x in sel_raw.split(",")
+                if x.strip().lstrip("-").isdigit()
+            ][:2]
+            data = reporte_mpr_operario_mensual(
+                base_empresa, fd_iso, fh_iso,
+                seleccionados=seleccionados, modo=modo_pivote,
+            )
+            kpis = data.get("kpis") or {}
+            filas = data.get("filas") or []
+            context["pivote_operario"] = data
+        elif grupo == "produccion" and reporte == "operario_maquina":
+            from mpr.services import reporte_mpr_operario_maquina
+            data = reporte_mpr_operario_maquina(base_empresa, fd_iso, fh_iso)
+            kpis = data.get("kpis") or {}
+            filas = data.get("filas") or []
         elif grupo == "produccion" and reporte == "cadena":
             data = reporte_mpr_cadena_pipeline(base_empresa, fd_iso, fh_iso)
             kpis = data.get("kpis") or {}
@@ -4028,6 +4283,11 @@ class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
         elif grupo == "trazabilidad" and reporte == "movimientos":
             filas = reporte_mpr_movimientos(base_empresa, fd_iso, fh_iso)
             kpis = {"eventos": len(filas)}
+        elif grupo == "trazabilidad" and reporte == "conciliacion":
+            from mpr.services import reporte_mpr_conciliacion_envios_produccion
+            data = reporte_mpr_conciliacion_envios_produccion(base_empresa, fd_iso, fh_iso)
+            kpis = data.get("kpis") or {}
+            filas = data.get("filas") or []
 
         from mpr.reportes_presentacion import (
             aplicar_presentacion_reporte,
@@ -4087,6 +4347,10 @@ class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
             if charts:
                 reporte_ctx["mpr_charts"] = charts
         context.update(reporte_ctx)
+        if grupo == "produccion" and reporte == "resumen_diario":
+            context["meses_resumen"] = _agrupar_resumen_por_mes(
+                context.get("dias") or [], modo_presentacion
+            )
         return context
 
 
@@ -4499,55 +4763,72 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
 # Tablero de demanda consolidado — preferencias de sesión
 # =============================================================================
 
-_TABLERO_SESSION_SOLO_PENDIENTE = "tablero_produccion_solo_pendiente"
+_TABLERO_SESSION_SOLO_URGENTE = "tablero_produccion_solo_urgente"
+_TABLERO_SESSION_SOLO_PENDIENTE_LEGACY = "tablero_produccion_solo_pendiente"
+
+
+def _resolver_solo_urgente_tablero(request) -> bool:
+    """Lee solo_urgente (o solo_pendiente legacy) de GET o sesión."""
+    raw = request.GET.get("solo_urgente")
+    if raw is None:
+        raw = request.GET.get("solo_pendiente")
+    if raw is not None:
+        valor = raw == "1"
+        request.session[_TABLERO_SESSION_SOLO_URGENTE] = valor
+        return valor
+    if _TABLERO_SESSION_SOLO_URGENTE in request.session:
+        return bool(request.session.get(_TABLERO_SESSION_SOLO_URGENTE, True))
+    return bool(request.session.get(_TABLERO_SESSION_SOLO_PENDIENTE_LEGACY, True))
 
 
 def _resolver_solo_pendiente_tablero(request) -> bool:
-    """Lee solo_pendiente de GET o sesión; persiste la elección del usuario."""
-    raw = request.GET.get("solo_pendiente")
-    if raw is not None:
-        valor = raw == "1"
-        request.session[_TABLERO_SESSION_SOLO_PENDIENTE] = valor
-        return valor
-    return bool(request.session.get(_TABLERO_SESSION_SOLO_PENDIENTE, True))
+    """Alias legacy — usar ``_resolver_solo_urgente_tablero``."""
+    return _resolver_solo_urgente_tablero(request)
 
 
 def _redirect_tablero_produccion(request, query_string: str | None = None):
-    """Redirect al tablero preservando solo_pendiente (y query opcional)."""
+    """Redirect al tablero preservando solo_urgente, marcas y query opcional."""
     from urllib.parse import parse_qsl, urlencode
 
     url = reverse("mpr:tablero_produccion")
     params = dict(parse_qsl(query_string, keep_blank_values=True)) if query_string else {}
-    if "solo_pendiente" not in params:
-        solo = bool(request.session.get(_TABLERO_SESSION_SOLO_PENDIENTE, True))
-        params["solo_pendiente"] = "1" if solo else "0"
-    if params:
-        url += "?" + urlencode(params)
+    if "solo_urgente" not in params and "solo_pendiente" not in params:
+        solo = _resolver_solo_urgente_tablero(request)
+        params["solo_urgente"] = "1" if solo else "0"
+    params.pop("marcas_incluidos", None)
+    pairs = [(k, v) for k, v in params.items()]
+    pairs.extend(_marcas_urlencode_pairs(_parse_marcas_incluidos(request)))
+    if pairs:
+        url += "?" + urlencode(pairs)
     return redirect(url)
 
 
 class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
-    """Tablero de demanda consolidado por artículo/componente (solo lectura). Etapa 2 MPR."""
+    """Tablero de producción por artículo/componente (PCP). Etapa 2 MPR."""
 
     template_name = "mpr/tablero_produccion.html"
 
     def get(self, request, *args, **kwargs):
         from django.contrib import messages
         from core.utils.administranet_types import to_date_or_none
+        from mpr.services import calcular_kpis_tablero_produccion
+
         base_empresa = _get_base_empresa(request)
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
             return redirect("core:dashboard")
         fecha_desde_str = (request.GET.get("fecha_desde") or "").strip() or None
         fecha_hasta_str = (request.GET.get("fecha_hasta") or "").strip() or None
-        solo_pendiente = _resolver_solo_pendiente_tablero(request)
+        solo_urgente = _resolver_solo_urgente_tablero(request)
+        marcas_incluidos = _parse_marcas_incluidos(request)
         try:
             filas = listar_tablero_por_articulo(
                 base_empresa,
                 fecha_desde=to_date_or_none(fecha_desde_str) if fecha_desde_str else None,
                 fecha_hasta=to_date_or_none(fecha_hasta_str) if fecha_hasta_str else None,
-                solo_pendiente=solo_pendiente,
+                solo_urgente=solo_urgente,
                 limit=200,
+                marcas_incluidos=marcas_incluidos or None,
             )
         except MprSchemaError as e:
             return _mpr_schema_error_redirect(request, e)
@@ -4561,25 +4842,30 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
 
         modo_presentacion = resolver_modo_presentacion_operativa(request)
         filas = enriquecer_filas_tablero_presentacion(filas, modo_presentacion)
+        kpis_tablero = calcular_kpis_tablero_produccion(filas)
         qs_params = {}
         if fecha_desde_str:
             qs_params["fecha_desde"] = fecha_desde_str
         if fecha_hasta_str:
             qs_params["fecha_hasta"] = fecha_hasta_str
-        qs_params["solo_pendiente"] = "1" if solo_pendiente else "0"
-        presentacion_query_base = urlencode(qs_params)
+        qs_params["solo_urgente"] = "1" if solo_urgente else "0"
+        presentacion_query_base = _urlencode_con_marcas(qs_params, marcas_incluidos)
         ultima_act = request.session.get("tablero_produccion_ultima_actualizacion", None)
+        ctx_marcas = _context_filtro_marcas(request, base_empresa)
         return self.render_to_response({
             "filas": filas,
             "fecha_desde": fecha_desde_str or "",
             "fecha_hasta": fecha_hasta_str or "",
-            "solo_pendiente": solo_pendiente,
+            "solo_urgente": solo_urgente,
+            "solo_pendiente": solo_urgente,
+            "kpis_tablero": kpis_tablero,
             "ultima_actualizacion": ultima_act,
             "tablero_url": reverse("mpr:tablero"),
             "puede_anular_envios": _usuario_puede_anular_envios(request.user),
             "modo_presentacion": modo_presentacion,
             "presentacion_query_base": presentacion_query_base,
             "unidades_por_docena_tablero": UNIDADES_POR_DOCENA_OPP,
+            **ctx_marcas,
         })
 
 
@@ -4746,6 +5032,643 @@ class TurnoUpdateView(MprLoginRequiredMixin, TemplateView):
         return self.render_to_response(context)
 
 
+# ---------------------------------------------------------------------------- #
+# Catálogos: Líneas de producción (CRUD + toggle)
+# ---------------------------------------------------------------------------- #
+class LineasListView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Listado de líneas de producción con toggle Activo/Inactivo."""
+
+    template_name = "mpr/lineas_list.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services_maquina_linea import listar_lineas
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        context["lineas"] = listar_lineas(base_empresa, solo_activas=False)
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import toggle_linea_activa
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:lineas_list")
+        try:
+            id_linea = int(request.POST.get("id_linea", ""))
+            activa = request.POST.get("activo", "") == "True"
+        except (ValueError, TypeError):
+            messages.error(request, "Datos inválidos.")
+            return redirect("mpr:lineas_list")
+        ok, error = toggle_linea_activa(base_empresa, id_linea, activa)
+        if ok:
+            messages.success(request, "Línea " + ("activada" if activa else "desactivada") + " exitosamente.")
+        else:
+            messages.error(request, error or "Error al cambiar estado de la línea.")
+        return redirect("mpr:lineas_list")
+
+
+class LineaCreateView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Alta de línea de producción."""
+
+    template_name = "mpr/linea_form.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["titulo"] = "Nueva línea"
+        context["accion"] = "Crear"
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import crear_linea
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:lineas_list")
+        nombre = (request.POST.get("nombre") or "").strip()
+        ok, _id, error = crear_linea(base_empresa, nombre)
+        if ok:
+            messages.success(request, f"Línea '{nombre}' creada exitosamente.")
+            return redirect("mpr:lineas_list")
+        messages.error(request, error or "Error al crear línea.")
+        context = self.get_context_data()
+        context["nombre"] = nombre
+        return self.render_to_response(context)
+
+
+class LineaUpdateView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Edición de línea de producción."""
+
+    template_name = "mpr/linea_form.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services_maquina_linea import obtener_linea
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        id_linea = kwargs.get("id_linea")
+        linea = obtener_linea(base_empresa, id_linea) if id_linea else None
+        context["accion"] = "Guardar cambios"
+        if not linea:
+            context["titulo"] = "Editar línea"
+            return context
+        context["titulo"] = f"Editar línea: {linea['nombre']}"
+        context["id_linea"] = linea["id"]
+        context["nombre"] = linea["nombre"]
+        return context
+
+    def get(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import obtener_linea
+        base_empresa = _get_base_empresa(request)
+        id_linea = kwargs.get("id_linea")
+        if not base_empresa or not obtener_linea(base_empresa, id_linea):
+            messages.error(request, "Línea no encontrada.")
+            return redirect("mpr:lineas_list")
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import actualizar_linea
+        base_empresa = _get_base_empresa(request)
+        id_linea = kwargs.get("id_linea")
+        if not base_empresa or not id_linea:
+            messages.error(request, "Parámetros inválidos.")
+            return redirect("mpr:lineas_list")
+        nombre = (request.POST.get("nombre") or "").strip()
+        ok, error = actualizar_linea(base_empresa, id_linea, nombre)
+        if ok:
+            messages.success(request, f"Línea '{nombre}' actualizada exitosamente.")
+            return redirect("mpr:lineas_list")
+        messages.error(request, error or "Error al actualizar línea.")
+        context = self.get_context_data(id_linea=id_linea)
+        context["nombre"] = nombre
+        return self.render_to_response(context)
+
+
+# ---------------------------------------------------------------------------- #
+# Catálogos: Máquinas (CRUD + toggle + asignación versionada a línea)
+# ---------------------------------------------------------------------------- #
+class MaquinasListView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Listado de máquinas con línea vigente, toggle y asignación de línea."""
+
+    template_name = "mpr/maquinas_list.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services_maquina_linea import listar_maquinas, listar_lineas
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        context["maquinas"] = listar_maquinas(base_empresa, solo_activas=False)
+        context["lineas"] = listar_lineas(base_empresa, solo_activas=True)
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import toggle_maquina_activa
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:maquinas_list")
+        try:
+            id_maquina = int(request.POST.get("id_maquina", ""))
+            activa = request.POST.get("activo", "") == "True"
+        except (ValueError, TypeError):
+            messages.error(request, "Datos inválidos.")
+            return redirect("mpr:maquinas_list")
+        ok, error = toggle_maquina_activa(base_empresa, id_maquina, activa)
+        if ok:
+            messages.success(request, "Máquina " + ("activada" if activa else "desactivada") + " exitosamente.")
+        else:
+            messages.error(request, error or "Error al cambiar estado de la máquina.")
+        return redirect("mpr:maquinas_list")
+
+
+class MaquinaCreateView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Alta de máquina."""
+
+    template_name = "mpr/maquina_form.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["titulo"] = "Nueva máquina"
+        context["accion"] = "Crear"
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import crear_maquina
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:maquinas_list")
+        codigo = (request.POST.get("codigo") or "").strip()
+        nombre = (request.POST.get("nombre") or "").strip()
+        ok, _id, error = crear_maquina(base_empresa, codigo, nombre)
+        if ok:
+            messages.success(request, f"Máquina '{codigo}' creada exitosamente.")
+            return redirect("mpr:maquinas_list")
+        messages.error(request, error or "Error al crear máquina.")
+        context = self.get_context_data()
+        context["codigo"] = codigo
+        context["nombre"] = nombre
+        return self.render_to_response(context)
+
+
+class MaquinaUpdateView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Edición de máquina + histórico de pertenencia a líneas."""
+
+    template_name = "mpr/maquina_form.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services_maquina_linea import (
+            obtener_maquina,
+            listar_historico_maquina_linea,
+        )
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        id_maquina = kwargs.get("id_maquina")
+        maquina = obtener_maquina(base_empresa, id_maquina) if id_maquina else None
+        context["accion"] = "Guardar cambios"
+        if not maquina:
+            context["titulo"] = "Editar máquina"
+            return context
+        context["titulo"] = f"Editar máquina: {maquina['codigo']}"
+        context["id_maquina"] = maquina["id"]
+        context["codigo"] = maquina["codigo"]
+        context["nombre"] = maquina["nombre"]
+        context["historico"] = listar_historico_maquina_linea(base_empresa, id_maquina)
+        return context
+
+    def get(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import obtener_maquina
+        base_empresa = _get_base_empresa(request)
+        id_maquina = kwargs.get("id_maquina")
+        if not base_empresa or not obtener_maquina(base_empresa, id_maquina):
+            messages.error(request, "Máquina no encontrada.")
+            return redirect("mpr:maquinas_list")
+        return super().get(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import actualizar_maquina
+        base_empresa = _get_base_empresa(request)
+        id_maquina = kwargs.get("id_maquina")
+        if not base_empresa or not id_maquina:
+            messages.error(request, "Parámetros inválidos.")
+            return redirect("mpr:maquinas_list")
+        codigo = (request.POST.get("codigo") or "").strip()
+        nombre = (request.POST.get("nombre") or "").strip()
+        ok, error = actualizar_maquina(base_empresa, id_maquina, codigo, nombre)
+        if ok:
+            messages.success(request, f"Máquina '{codigo}' actualizada exitosamente.")
+            return redirect("mpr:maquinas_list")
+        messages.error(request, error or "Error al actualizar máquina.")
+        context = self.get_context_data(id_maquina=id_maquina)
+        context["codigo"] = codigo
+        context["nombre"] = nombre
+        return self.render_to_response(context)
+
+
+class MaquinaAsignarLineaView(MprLoginRequiredMixin, MprPermisoMixin, View):
+    """Asigna (versionadamente) una máquina a una línea desde el listado."""
+
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import asignar_maquina_linea
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:maquinas_list")
+        try:
+            id_maquina = int(request.POST.get("id_maquina", ""))
+            id_linea = int(request.POST.get("id_linea", ""))
+        except (ValueError, TypeError):
+            messages.error(request, "Datos inválidos.")
+            return redirect("mpr:maquinas_list")
+        desde = None
+        desde_str = (request.POST.get("desde") or "").strip()
+        if desde_str:
+            try:
+                desde = date.fromisoformat(desde_str)
+            except ValueError:
+                messages.error(request, "Fecha de vigencia inválida.")
+                return redirect("mpr:maquinas_list")
+        ok, error = asignar_maquina_linea(base_empresa, id_maquina, id_linea, desde)
+        if ok:
+            messages.success(request, "Máquina asignada a la línea exitosamente.")
+        else:
+            messages.error(request, error or "Error al asignar la máquina a la línea.")
+        return redirect("mpr:maquinas_list")
+
+
+class MaquinaArticulosView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Gestión de artículos habilitados por máquina (varios vigentes + histórico).
+
+    GET  : lista vigentes, histórico y (opcional) resultados de búsqueda (?q=).
+    POST : accion=habilitar|deshabilitar sobre un id_articulo.
+    """
+
+    template_name = "mpr/maquina_articulos.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def _maquina(self):
+        from mpr.services_maquina_linea import obtener_maquina
+        base_empresa = _get_base_empresa(self.request)
+        id_maquina = self.kwargs.get("id_maquina")
+        return base_empresa, id_maquina, obtener_maquina(base_empresa, id_maquina)
+
+    def get(self, request, *args, **kwargs):
+        base_empresa, id_maquina, maquina = self._maquina()
+        if not base_empresa or not maquina:
+            messages.error(request, "Máquina no encontrada.")
+            return redirect("mpr:maquinas_list")
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        from mpr.services_maquina_linea import (
+            listar_articulos_vigentes_maquina,
+            historico_maquina_articulo,
+            buscar_articulos,
+        )
+        context = super().get_context_data(**kwargs)
+        base_empresa, id_maquina, maquina = self._maquina()
+        context["maquina"] = maquina
+        context["id_maquina"] = id_maquina
+        context["vigentes"] = listar_articulos_vigentes_maquina(base_empresa, id_maquina)
+        context["historico"] = historico_maquina_articulo(base_empresa, id_maquina)
+        q = (self.request.GET.get("q") or "").strip()
+        context["q"] = q
+        context["resultados"] = buscar_articulos(base_empresa, q) if q else []
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import (
+            habilitar_articulo_maquina,
+            deshabilitar_articulo_maquina,
+        )
+        base_empresa = _get_base_empresa(request)
+        id_maquina = kwargs.get("id_maquina")
+        if not base_empresa or not id_maquina:
+            messages.error(request, "Parámetros inválidos.")
+            return redirect("mpr:maquinas_list")
+        accion = (request.POST.get("accion") or "").strip()
+        try:
+            id_articulo = int(request.POST.get("id_articulo", ""))
+        except (ValueError, TypeError):
+            messages.error(request, "Artículo inválido.")
+            return redirect("mpr:maquina_articulos", id_maquina=id_maquina)
+        if accion == "habilitar":
+            ok, error = habilitar_articulo_maquina(base_empresa, id_maquina, id_articulo)
+            msg_ok = "Artículo habilitado exitosamente."
+        elif accion == "deshabilitar":
+            ok, error = deshabilitar_articulo_maquina(base_empresa, id_maquina, id_articulo)
+            msg_ok = "Artículo deshabilitado exitosamente."
+        else:
+            messages.error(request, "Acción inválida.")
+            return redirect("mpr:maquina_articulos", id_maquina=id_maquina)
+        if ok:
+            messages.success(request, msg_ok)
+        else:
+            messages.error(request, error or "No se pudo completar la acción.")
+        return redirect("mpr:maquina_articulos", id_maquina=id_maquina)
+
+
+class OperarioUsuarioMapView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Vincula operarios (legajo) con usuarios de login para la carga móvil."""
+
+    template_name = "mpr/operario_usuario_map.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services import listar_operarios_crud
+        from mpr.services_operario import listar_mapeos, listar_usuarios
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        context["operarios"] = listar_operarios_crud(base_empresa, incluir_anulados=False)
+        context["usuarios"] = listar_usuarios(base_empresa)
+        context["mapeos"] = listar_mapeos(base_empresa)
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_operario import map_operario_usuario, desmapear_usuario
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:operario_usuario_map")
+        accion = (request.POST.get("accion") or "").strip()
+        if accion == "desmapear":
+            try:
+                id_usuario = int(request.POST.get("id_usuario", ""))
+            except (ValueError, TypeError):
+                messages.error(request, "Usuario inválido.")
+                return redirect("mpr:operario_usuario_map")
+            ok, error = desmapear_usuario(base_empresa, id_usuario)
+            messages.success(request, "Vínculo eliminado.") if ok else messages.error(request, error or "No se pudo desvincular.")
+            return redirect("mpr:operario_usuario_map")
+        try:
+            id_operario = int(request.POST.get("id_operario", ""))
+            id_usuario = int(request.POST.get("id_usuario", ""))
+        except (ValueError, TypeError):
+            messages.error(request, "Seleccioná un operario y un usuario.")
+            return redirect("mpr:operario_usuario_map")
+        ok, error = map_operario_usuario(base_empresa, id_operario, id_usuario)
+        messages.success(request, "Operario vinculado al usuario.") if ok else messages.error(request, error or "No se pudo vincular.")
+        return redirect("mpr:operario_usuario_map")
+
+
+class OperarioLineaView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Asignación de la línea habitual (versionada) de cada operario."""
+
+    template_name = "mpr/operario_linea.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services import listar_operarios_crud
+        from mpr.services_maquina_linea import listar_lineas
+        from mpr.repositories.operario_linea import lineas_habituales_vigentes
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        operarios = listar_operarios_crud(base_empresa, incluir_anulados=False)
+        lineas = listar_lineas(base_empresa, solo_activas=True)
+        mapa = lineas_habituales_vigentes(base_empresa, date.today()) if base_empresa else {}
+        nombre_por_linea = {l["id"]: l["nombre"] for l in lineas}
+        for op in operarios:
+            lid = mapa.get(op.get("id_sue_abm_empleado"))
+            op["id_linea_habitual"] = lid
+            op["linea_habitual_nombre"] = nombre_por_linea.get(lid, "")
+        context["operarios"] = operarios
+        context["lineas"] = lineas
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from mpr.services_operario import set_linea_habitual_operario
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:operario_linea")
+        try:
+            id_operario = int(request.POST.get("id_operario", ""))
+            id_linea = int(request.POST.get("id_linea", ""))
+        except (ValueError, TypeError):
+            messages.error(request, "Seleccioná un operario y una línea.")
+            return redirect("mpr:operario_linea")
+        ok, error = set_linea_habitual_operario(base_empresa, id_operario, id_linea)
+        if ok:
+            messages.success(request, "Línea habitual actualizada.")
+        else:
+            messages.error(request, error or "No se pudo actualizar la línea habitual.")
+        return redirect("mpr:operario_linea")
+
+
+class ParteMovilOperarioView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Carga de parte de producción desde el móvil (operario).
+
+    Resuelve automáticamente operario, turno (roster del día) y línea (habitual u
+    override) y arma una grilla de máquinas -> artículos vigentes con captura en
+    docenas/pares. Guardar deja el parte `pendiente` (o `borrador`) con
+    `origen=movil_operario`, sin mover stock. Exige `mpr.parte_operario`.
+    """
+
+    permiso_requerido = "mpr.parte_operario"
+
+    def get_template_names(self):
+        from core.utils.template_selector import get_template_for_device
+        return [get_template_for_device(self.request, "mpr/parte_operario.html")]
+
+    def _resolver_operario(self, base_empresa, session_user):
+        from mpr.repositories.operario_usuario import resolver_operario_por_usuario
+        id_operario = session_user.get("id_operario")
+        if not id_operario and base_empresa:
+            id_operario = resolver_operario_por_usuario(
+                base_empresa, session_user.get("id_usuario")
+            )
+            if id_operario:
+                session_user["id_operario"] = id_operario
+                self.request.session["user"] = session_user
+                self.request.session.modified = True
+        return id_operario
+
+    def get_context_data(self, **kwargs):
+        from mpr.services_parte_movil import construir_grilla_carga_movil
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        session_user = self.request.session.get("user", {}) or {}
+        id_operario = self._resolver_operario(base_empresa, session_user)
+        id_usuario = session_user.get("id_usuario")
+        context["id_operario"] = id_operario
+        context["tiene_operario"] = bool(id_operario)
+        context["nombre_usuario"] = (
+            session_user.get("nombre_completo") or session_user.get("cod_usuario")
+        )
+        context["ok_msg"] = self.request.session.pop("parte_movil_ok", None)
+        context["error_msg"] = self.request.session.pop("parte_movil_error", None)
+        if not id_operario:
+            context["estado_borde"] = "sin_operario"
+            return context
+        grilla = construir_grilla_carga_movil(base_empresa, id_operario, id_usuario)
+        context.update(grilla)
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django.shortcuts import redirect
+        from mpr.services import obtener_operario
+        from mpr.services_parte_movil import registrar_parte_movil
+
+        base_empresa = _get_base_empresa(request)
+        session_user = request.session.get("user", {}) or {}
+        id_operario = self._resolver_operario(base_empresa, session_user)
+        id_usuario = session_user.get("id_usuario")
+        if not id_operario:
+            request.session["parte_movil_error"] = (
+                "Tu usuario no tiene un operario asociado. Contactá al supervisor."
+            )
+            return redirect("mpr:parte_movil_operario")
+
+        op = obtener_operario(base_empresa, id_operario) or {}
+        operario_nombre = (
+            op.get("nombre_empleado")
+            or session_user.get("nombre_completo")
+            or "-"
+        )
+        accion = (request.POST.get("accion") or "enviar").strip()
+        estado = "borrador" if accion == "borrador" else "pendiente"
+        celdas = self._parsear_celdas(request.POST)
+        ok, error, _id = registrar_parte_movil(
+            base_empresa,
+            id_operario,
+            operario_nombre,
+            id_usuario,
+            celdas,
+            estado=estado,
+        )
+        if ok:
+            request.session["parte_movil_ok"] = (
+                "Parte guardado como borrador."
+                if estado == "borrador"
+                else "Parte enviado. Queda pendiente de aprobación del supervisor."
+            )
+        else:
+            request.session["parte_movil_error"] = error or "No se pudo guardar el parte."
+        return redirect("mpr:parte_movil_operario")
+
+    @staticmethod
+    def _parsear_celdas(post):
+        """Extrae celdas desde inputs doc_<maquina>_<articulo> / par_<maquina>_<articulo>."""
+        import re
+
+        nombres = {
+            k[len("maqnombre_"):]: v
+            for k, v in post.items()
+            if k.startswith("maqnombre_")
+        }
+        patron = re.compile(r"^(doc|par)_(\d+)_(\d+)$")
+        celdas: dict = {}
+        for key, val in post.items():
+            m = patron.match(key)
+            if not m:
+                continue
+            tipo, maq, art = m.group(1), m.group(2), m.group(3)
+            cel = celdas.setdefault(
+                (maq, art),
+                {"id_maquina": int(maq), "id_articulo": int(art), "docenas": 0, "pares": 0},
+            )
+            try:
+                num = int(val or 0)
+            except (TypeError, ValueError):
+                num = 0
+            cel["docenas" if tipo == "doc" else "pares"] = num
+        out = []
+        for (maq, _art), cel in celdas.items():
+            cel["maquina_nombre"] = nombres.get(maq)
+            out.append(cel)
+        return out
+
+
+class PartesPendientesView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Bandeja de partes pendientes de aprobación (supervisor)."""
+
+    permiso_requerido = "mpr.aprobar_parte"
+    template_name = "mpr/partes_pendientes.html"
+
+    def get_context_data(self, **kwargs):
+        from datetime import date as _date
+        from mpr.services import listar_turnos
+        from mpr.services_parte_movil import listar_partes_pendientes
+
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        fecha = None
+        fecha_str = (self.request.GET.get("fecha") or "").strip()
+        if fecha_str:
+            try:
+                fecha = _date.fromisoformat(fecha_str)
+            except ValueError:
+                fecha = None
+        id_turno = to_int_or_none(self.request.GET.get("turno"))
+        incluir_borrador = self.request.GET.get("borradores") == "1"
+
+        context["partes"] = listar_partes_pendientes(
+            base_empresa, fecha=fecha, id_turno=id_turno, incluir_borrador=incluir_borrador
+        )
+        context["turnos"] = listar_turnos(base_empresa)
+        context["f_fecha"] = fecha_str
+        context["f_turno"] = id_turno
+        context["f_borradores"] = incluir_borrador
+        context["ok_msg"] = self.request.session.pop("aprobacion_ok", None)
+        context["error_msgs"] = self.request.session.pop("aprobacion_errores", None)
+        return context
+
+
+class PartePendienteDetailView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Detalle editable de un parte + acción de aprobación."""
+
+    permiso_requerido = "mpr.aprobar_parte"
+    template_name = "mpr/parte_pendiente_detail.html"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services_parte_movil import detalle_parte_para_aprobacion
+
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        id_parte = kwargs.get("id_parte")
+        detalle = detalle_parte_para_aprobacion(base_empresa, id_parte)
+        context["detalle"] = detalle
+        context["id_parte"] = id_parte
+        context["error_msgs"] = self.request.session.pop("aprobacion_errores", None)
+        return context
+
+    def post(self, request, *args, **kwargs):
+        from django.shortcuts import redirect
+        from mpr.services import aprobar_parte_produccion
+        from mpr.repositories import parte_movil as repo_pm
+
+        base_empresa = _get_base_empresa(request)
+        id_parte = kwargs.get("id_parte")
+        session_user = request.session.get("user", {}) or {}
+        id_sup = session_user.get("id_usuario") or 0
+        forzar = request.POST.get("forzar_cupo") == "1"
+
+        lineas = repo_pm.listar_lineas_aprobacion(base_empresa, id_parte)
+        correcciones = {}
+        for ln in lineas:
+            lid = ln["id_mpr_parte_linea"]
+            apr = request.POST.get(f"apr_{lid}")
+            motivo = request.POST.get(f"motivo_{lid}", "")
+            correcciones[lid] = {
+                "cantidad_aprobada": apr if apr not in (None, "") else None,
+                "motivo": motivo,
+            }
+
+        ok, errores, _idp = aprobar_parte_produccion(
+            base_empresa, id_parte, correcciones, id_sup, forzar_cupo=forzar
+        )
+        if ok:
+            request.session["aprobacion_ok"] = "Parte aprobado. Stock ingresado a Producción."
+            return redirect("mpr:partes_pendientes")
+        request.session["aprobacion_errores"] = errores
+        return redirect("mpr:parte_pendiente_detail", id_parte=id_parte)
+
+
 class PlanificacionTurnosView(MprLoginRequiredMixin, TemplateView):
     """
     Pantalla de planificación semanal (roster): grilla operadores × 7 días.
@@ -4817,7 +5740,15 @@ class AsignarTurnoRosterView(MprLoginRequiredMixin, View):
         except (ValueError, TypeError):
             messages.error(request, "Datos inválidos.")
             return redirect("mpr:planificacion_turnos")
-        ok, error = asignar_turno_roster(base_empresa, fecha_str, id_operario, id_turno)
+        id_linea_raw = (request.POST.get("id_linea") or "").strip()
+        id_linea = None
+        if id_linea_raw:
+            try:
+                id_linea = int(id_linea_raw)
+            except (ValueError, TypeError):
+                messages.error(request, "Línea de override inválida.")
+                return redirect("mpr:planificacion_turnos")
+        ok, error = asignar_turno_roster(base_empresa, fecha_str, id_operario, id_turno, id_linea=id_linea)
         if ok:
             messages.success(request, "Turno asignado exitosamente.")
         else:
@@ -4875,6 +5806,7 @@ class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
         from mpr.services import construir_grilla_parte, listar_turnos, obtener_config_mpr
 
         base_empresa = _get_base_empresa(self.request)
+        context.update(_context_filtro_marcas(self.request, base_empresa))
         if not base_empresa:
             return context
 
@@ -4887,6 +5819,7 @@ class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
         from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
 
         context["modo_presentacion"] = resolver_modo_presentacion_operativa(self.request)
+        marcas_incluidos = _parse_marcas_incluidos(self.request)
 
         fecha_str = (self.request.GET.get("fecha") or "").strip()
         turno_id_raw = (self.request.GET.get("turno_id") or "").strip()
@@ -4902,7 +5835,12 @@ class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
                 from datetime import datetime
                 fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
                 turno_id = int(turno_id_raw)
-                grilla = construir_grilla_parte(base_empresa, fecha_obj, turno_id)
+                grilla = construir_grilla_parte(
+                    base_empresa,
+                    fecha_obj,
+                    turno_id,
+                    marcas_incluidos=marcas_incluidos or None,
+                )
                 context["grilla"] = grilla
                 context["fecha_obj"] = fecha_obj
             except (ValueError, TypeError):
@@ -4957,7 +5895,11 @@ class RegistrarParteProduccionView(MprLoginRequiredMixin, View):
             messages.error(request, f"Error al registrar el parte: {e}")
 
         redirect_url = reverse("mpr:parte_produccion")
-        return redirect(f"{redirect_url}?fecha={fecha_str}&turno_id={turno_id_raw}")
+        qs = _urlencode_con_marcas(
+            {"fecha": fecha_str, "turno_id": turno_id_raw},
+            _parse_marcas_incluidos(request),
+        )
+        return redirect(f"{redirect_url}?{qs}")
 
 
 class AjusteParteView(MprLoginRequiredMixin, View):
@@ -5266,10 +6208,15 @@ class EnviarProduccionLoteView(MprLoginRequiredMixin, View):
             if qty_u > 0:
                 items.append((id_art, Decimal(qty_u)))
         for key, value in request.POST.items():
-            if key.startswith("pendiente_"):
-                id_art = to_int_or_none(key[10:])
+            if key.startswith("resta_urgente_"):
+                id_art = to_int_or_none(key[14:])
                 pend = to_decimal_or_none(value)
                 if id_art is not None and pend is not None:
+                    pendientes[id_art] = pend
+            elif key.startswith("pendiente_"):
+                id_art = to_int_or_none(key[10:])
+                pend = to_decimal_or_none(value)
+                if id_art is not None and pend is not None and id_art not in pendientes:
                     pendientes[id_art] = pend
 
         filtros_qs = (request.POST.get("filtros_qs") or "").strip()
@@ -5281,8 +6228,8 @@ class EnviarProduccionLoteView(MprLoginRequiredMixin, View):
         if filtros_qs:
             redirect_url += "?" + filtros_qs
         else:
-            solo = bool(request.session.get(_TABLERO_SESSION_SOLO_PENDIENTE, True))
-            redirect_url += f"?solo_pendiente={'1' if solo else '0'}"
+            solo = _resolver_solo_urgente_tablero(request)
+            redirect_url += f"?solo_urgente={'1' if solo else '0'}"
 
         if ok:
             if creados:
@@ -5327,6 +6274,7 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
 
         base_empresa = _get_base_empresa(self.request)
         modo_presentacion = resolver_modo_presentacion_operativa(self.request)
+        marcas_incluidos = _parse_marcas_incluidos(self.request)
         fecha_str = (self.request.GET.get("fecha") or "").strip()
         turno_id_raw = (self.request.GET.get("turno_id") or "").strip()
         ver_roster = (self.request.GET.get("ver_roster") or "").strip() == "1"
@@ -5344,32 +6292,54 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
             except (TypeError, ValueError):
                 turno_id = None
 
-        grilla = (
-            construir_grilla_clasificacion_produccion(
-                base_empresa,
-                fecha_obj,
-                turno_id,
-                ver_roster_completo=ver_roster,
+        grilla_vacia = {
+            "filas": [],
+            "filas_vacio": True,
+            "arrastre": [],
+            "bloqueos": [],
+            "requiere_fecha_turno": fecha_obj is None or turno_id is None,
+            "componentes": [],
+            "componentes_vacio": True,
+        }
+        try:
+            grilla = (
+                construir_grilla_clasificacion_produccion(
+                    base_empresa,
+                    fecha_obj,
+                    turno_id,
+                    ver_roster_completo=ver_roster,
+                    marcas_incluidos=marcas_incluidos or None,
+                )
+                if base_empresa
+                else {
+                    **grilla_vacia,
+                    "requiere_fecha_turno": True,
+                }
             )
-            if base_empresa
-            else {
-                "filas": [],
-                "filas_vacio": True,
-                "arrastre": [],
-                "bloqueos": [],
-                "requiere_fecha_turno": True,
-                "componentes": [],
-                "componentes_vacio": True,
-            }
-        )
+        except Exception as e:
+            _log_mpr_schema_error(e)
+            context["mpr_schema_error_modal"] = (
+                f"{e}\n\nSi falta id_operario en mpr_transicion_lote, ejecutá:\n"
+                f"docker exec Synap_app python manage.py apply_mpr_core_tables {base_empresa or '<base_empresa>'}"
+            )
+            grilla = grilla_vacia
+
+        turno_nombre = ""
+        if base_empresa and turno_id is not None:
+            from mpr.services import obtener_turno
+
+            turno_rec = obtener_turno(base_empresa, turno_id)
+            if turno_rec is not None:
+                turno_nombre = str(getattr(turno_rec, "nombre", "") or "")
 
         context.update({
-            "titulo_pantalla": "Clasificación de producción",
+            "titulo_pantalla": "Control de calidad",
             "tipo_origen": TIPO_MPR_PRODUCCION,
             "url_registrar": reverse("mpr:clasificacion_produccion_registrar"),
             "fecha_hoy": _date.today().strftime("%d/%m/%Y"),
             "fecha_str": fecha_str,
             "turno_id": turno_id_raw,
+            "turno_nombre": turno_nombre,
             "turnos_activos": listar_turnos(base_empresa, solo_activos=True) if base_empresa else [],
             "filas": grilla.get("filas", []),
             "filas_vacio": grilla.get("filas_vacio", True),
@@ -5382,13 +6352,17 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
             "componentes_vacio": grilla.get("componentes_vacio", grilla.get("filas_vacio", True)),
             "unidades_por_docena_clasificacion": UNIDADES_POR_DOCENA_OPP,
             "modo_presentacion": modo_presentacion,
-            "presentacion_query_base": urlencode({
-                k: v for k, v in (
-                    ("fecha", fecha_str),
-                    ("turno_id", turno_id_raw),
-                    ("ver_roster", "1" if ver_roster else ""),
-                ) if v
-            }),
+            "presentacion_query_base": _urlencode_con_marcas(
+                {
+                    k: v for k, v in (
+                        ("fecha", fecha_str),
+                        ("turno_id", turno_id_raw),
+                        ("ver_roster", "1" if ver_roster else ""),
+                    ) if v
+                },
+                marcas_incluidos,
+            ),
+            **_context_filtro_marcas(self.request, base_empresa),
         })
         return context
 
@@ -5421,7 +6395,7 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
         base_empresa = _get_base_empresa(request)
         if not base_empresa:
             dj_messages.error(request, "No se pudo determinar la empresa activa.")
-            return redirect("mpr:clasificacion_produccion")
+            return _redirect_clasificacion_produccion(request)
 
         session_user = request.session.get("user", {})
         try:
@@ -5434,20 +6408,24 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
         fecha_obj, err_fecha = _parse_fecha_ddmmaaaa(fecha_str)
         if err_fecha or fecha_obj is None:
             dj_messages.error(request, err_fecha or "Fecha de carga inválida.")
-            return redirect("mpr:clasificacion_produccion")
+            return _redirect_clasificacion_produccion(request, fecha_str=fecha_str)
 
         turno_id_raw = (request.POST.get("turno_id") or "").strip()
         try:
             turno_id = int(turno_id_raw)
         except (TypeError, ValueError):
             dj_messages.error(request, "Turno inválido.")
-            return redirect("mpr:clasificacion_produccion")
+            return _redirect_clasificacion_produccion(
+                request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
+            )
 
         filas_post = _clasificacion_filas_desde_post(request.POST)
 
         if not filas_post:
             dj_messages.warning(request, "No se enviaron cantidades.")
-            return redirect("mpr:clasificacion_produccion")
+            return _redirect_clasificacion_produccion(
+                request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
+            )
 
         tiene_cantidad = False
         for id_art, id_operario in filas_post:
@@ -5460,7 +6438,9 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
                 break
         if not tiene_cantidad:
             dj_messages.warning(request, "No se enviaron cantidades.")
-            return redirect("mpr:clasificacion_produccion")
+            return _redirect_clasificacion_produccion(
+                request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
+            )
 
         ids_post = {f[0] for f in filas_post if f[1] > 0}
 
@@ -5544,14 +6524,16 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
 
         for id_art, total_cls in clasificado_turno_por_art.items():
             disponible_real = Decimal(str(stock_real.get(id_art, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
-            prev_cls_art = sum(
-                v for (aid, _), v in clasificado_prev.items() if aid == id_art
-            )
-            if prev_cls_art + total_cls > disponible_real:
+            # La clasificación descuenta de Producción, y ``disponible_real`` es el saldo vivo
+            # (ya neto de las clasificaciones previas del turno). Solo se compara lo que se
+            # clasifica ahora contra ese saldo: sumar el acumulado previo duplicaría el descuento
+            # y bloquearía falsamente cuando parte del stock clasificado ya salió del pipeline
+            # (p. ej. Semi Elaborado consumido en el armado del pack BOM).
+            if total_cls > disponible_real:
                 dj_messages.error(
                     request,
                     f"Stock Producción insuficiente para artículo {id_art}: "
-                    f"disponible {disponible_real:g}.",
+                    f"disponible {disponible_real:g}, solicitado {total_cls:g}.",
                 )
                 items = [it for it in items if it.get("id_articulo") != id_art]
 
@@ -5568,4 +6550,6 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
             for id_art_err, msg_err in resultado["errores"]:
                 dj_messages.error(request, f"Error en artículo {id_art_err}: {msg_err}")
 
-        return redirect("mpr:clasificacion_produccion")
+        return _redirect_clasificacion_produccion(
+            request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
+        )

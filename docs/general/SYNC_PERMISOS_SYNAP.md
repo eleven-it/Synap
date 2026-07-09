@@ -1,5 +1,18 @@
 # Sincronización automática de permisos Synap → AdministraNET
 
+> **⚠️ EN DESUSO (deprecado).** Este mecanismo inyectaba los `key_permiso` de Synap en la
+> tabla VB6 compartida `permiso_sistema` («contaminando» tablas de AdministraNET). Fue
+> reemplazado por el **almacén propio Synap** (`synap_*`). Ver
+> **[PERMISOS_SYNAP_STORE.md](PERMISOS_SYNAP_STORE.md)**.
+>
+> - Runtime: `login/views.py` y la UI de permisos ya **no** llaman al sync; usan
+>   `asegurar_synap_schema_si_procede` (crea `synap_*` + siembra `synap_permiso`, sin tocar VB6).
+> - El seed del catálogo se hace con `manage.py apply_synap_permisos_tables <base>` y las
+>   asignaciones existentes se migran con `manage.py backfill_synap_permisos_from_legacy <base>`.
+> - Retirada final del sync y limpieza de `permiso_sistema` (`grupo_permiso='Synap'`) vía
+>   `manage.py purge_synap_legacy_permisos <base> --ejecutar`, **solo tras el cutover
+>   `SYNAP_PERMISOS_SOURCE=synap` estable** (fase P3).
+
 Los permisos que Synap usa para menú y vistas (`usuarios.ver`, `reports.ver`, etc.) deben existir en la tabla `permiso_sistema` de cada base de empresa en MySQL (AdministraNET). Así los puestos pueden tener asignados esos `key_permiso` y el usuario ve las pantallas correctas.
 
 ## Cuándo se ejecuta

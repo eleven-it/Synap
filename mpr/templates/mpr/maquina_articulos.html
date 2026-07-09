@@ -1,0 +1,152 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Artículos de máquina - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
+    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <li>
+                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a>
+                </li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li>
+                    <a href="{% url 'mpr:maquinas_list' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Máquinas</a>
+                </li>
+                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Artículos</span></li>
+            </ol>
+        </nav>
+
+        <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Artículos habilitados</h1>
+            <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Máquina <span class="font-semibold text-gray-900 dark:text-white">{{ maquina.codigo }}</span>{% if maquina.nombre %} — {{ maquina.nombre }}{% endif %}. Una máquina puede tener varios artículos habilitados a la vez. Al deshabilitar se cierra la vigencia para trazabilidad.</p>
+        </header>
+
+        <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
+            <!-- Buscador + alta -->
+            <div class="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <h2 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">Habilitar un artículo</h2>
+                <form method="get" class="mb-4 flex flex-wrap items-center gap-2">
+                    <input type="text" name="q" value="{{ q|default:'' }}" placeholder="Buscar por código o descripción"
+                           class="min-h-10 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"/>
+                    <button type="submit" class="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+                        <span class="material-icons text-base" aria-hidden="true">search</span>
+                        Buscar
+                    </button>
+                </form>
+                {% if q %}
+                <div class="max-h-96 overflow-y-auto rounded-lg border border-gray-100 dark:border-gray-700">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50/90 dark:bg-gray-800/80">
+                            <tr>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Código</th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Descripción</th>
+                                <th scope="col" class="px-3 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for art in resultados %}
+                            <tr>
+                                <td class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">{{ art.codigo_manual|default:art.codigo_articulo }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">{{ art.descripcion_articulo|default:"—" }}</td>
+                                <td class="px-3 py-2 text-right">
+                                    <form method="post">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="accion" value="habilitar"/>
+                                        <input type="hidden" name="id_articulo" value="{{ art.id_articulo }}"/>
+                                        <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-green-600 px-2.5 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-green-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500">
+                                            <span class="material-icons text-sm" aria-hidden="true">add</span>
+                                            Habilitar
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="3" class="px-3 py-6 text-center text-sm text-gray-500 dark:text-gray-400">Sin resultados para "{{ q }}".</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-sm text-gray-500 dark:text-gray-400">Escribí un código o descripción y pulsá Buscar para habilitar artículos.</p>
+                {% endif %}
+            </div>
+
+            <!-- Vigentes -->
+            <div class="rounded-2xl border border-gray-200/90 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <h2 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">Habilitados vigentes</h2>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50/90 dark:bg-gray-800/80">
+                            <tr>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Código</th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Descripción</th>
+                                <th scope="col" class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Desde</th>
+                                <th scope="col" class="px-3 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for art in vigentes %}
+                            <tr>
+                                <td class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">{{ art.codigo_manual|default:art.codigo_articulo }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">{{ art.descripcion_articulo|default:"—" }}</td>
+                                <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">{{ art.vigencia_desde|date:"d/m/Y" }}</td>
+                                <td class="px-3 py-2 text-right">
+                                    <form method="post" onsubmit="return confirm('¿Deshabilitar este artículo de la máquina?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="accion" value="deshabilitar"/>
+                                        <input type="hidden" name="id_articulo" value="{{ art.id_articulo }}"/>
+                                        <button type="submit" class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-red-300 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20">
+                                            <span class="material-icons text-sm" aria-hidden="true">block</span>
+                                            Deshabilitar
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="px-3 py-6 text-center text-sm text-gray-500 dark:text-gray-400">Esta máquina no tiene artículos habilitados.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Histórico -->
+        <div class="mt-8">
+            <h2 class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Histórico de habilitaciones</h2>
+            <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead class="bg-gray-50/90 dark:bg-gray-800/80">
+                            <tr>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Código</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Descripción</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Desde</th>
+                                <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Hasta</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for h in historico %}
+                            <tr>
+                                <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ h.codigo_manual|default:h.codigo_articulo }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ h.descripcion_articulo|default:"—" }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{{ h.vigencia_desde|date:"d/m/Y" }}</td>
+                                <td class="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                                    {% if h.vigencia_hasta %}{{ h.vigencia_hasta|date:"d/m/Y" }}{% else %}<span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">Vigente</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">Sin habilitaciones registradas.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -34,20 +34,40 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 
 ---
 
-## Las 10 Columnas Canónicas
+## Columnas del tablero (alineación PCP — 07/07/2026)
 
 | # | Columna | Tipo | Descripción |
 |---|---------|------|-------------|
-| 1 | **Artículo** | metadato | Código manual + descripción del artículo/componente. Sticky-left al hacer scroll horizontal. |
-| 2 | **Pendiente de producir** | virtual derivado | `max(0, Demanda − [Enviado + Total])`. Rojo si > 0. |
-| 3 | **Fabricando** | virtual | `max(0, Σ envíos directos al tablero − stock Producido)` por componente (`mpr_envio_produccion`). |
-| 4 | **Producción** | físico | Saldo en depósito `tipo_mpr = 'Produccion'`. |
-| 5 | **Planchado** | físico | Saldo en depósito `tipo_mpr = 'Planchado'`. |
-| 6 | **2da Selección** | físico | Saldo en depósito `tipo_mpr = '2daSeleccion'`. |
-| 7 | **Semi Elaborado** | físico | Saldo en depósito `tipo_mpr = 'SemiElaborado'`. |
-| 8 | **Desperdicio** | físico | Saldo en depósito `tipo_mpr = 'Scrap'`. **No suma al Total.** Mostrado en itálica/gris. |
-| 9 | **Terminado** | físico | Saldo en depósito `tipo_mpr = 'Terminado'`. |
-| 10 | **Total** | derivado | Suma del saldo de las etapas en `TIPOS_QUE_SUMAN_STOCK` (Producción, 2da Selección, Semi Elaborado, Terminado). **Scrap/Desperdicio no suma.** Los depósitos con esos tipos MPR tienen `suma_stock='Si'` obligatorio (Synap lo fuerza al asignar tipo y en migración de esquema). Depósitos sin tipo o auxiliares (p. ej. tránsito) pueden tener `suma_stock='No'`. Verde. |
+| 1 | **Artículo** | metadato | Código manual + descripción. Sticky-left. |
+| 2 | **Pedido** | `dem_ped` | Pares (entero) |
+| 3 | **Reserva** | `dem_res` | Pares (entero); explosión BOM reserva pack |
+| 4 | **Resta total** | `resta_total` | Pares + Docenas (÷12, decimal PCP) |
+| 5 | **Resta urgente** | `resta_urgente` | Pares + Docenas; base del **Enviar** |
+| 6 | **Fabricando** | virtual | `max(0, Σ envíos − acreditado)`. Acreditado = `max(stock físico, clasificado CC, partes acumulados)`. |
+| 7–10 | **Etapas stock** | físico | Producido, 2da, Semi, Desperdicio (no suma). **Sin Terminado** (componentes). |
+| 11 | **Total** | derivado | Suma etapas sin Desperdicio ni Terminado. |
+| 12 | **Enviar** | acción | Inputs docenas/pares; tope = `a_enviar`. |
+
+`stock_proceso` = total sin Terminado (paridad PCP col G).
+
+```
+resta_urgente = MAX(0, dem_ped − stock_proceso)      # PCP col L — sin envíos ledger
+resta_total   = MAX(0, demanda − stock_proceso)      # PCP col H — demanda = dem_ped + dem_res
+fabricando    = MAX(0, Σ envíos_tablero − acreditado)   # acreditado ver REPORTES_MPR.md
+a_enviar      = MAX(0, resta_urgente − fabricando)  # tope columna Enviar (evita doble envío)
+```
+
+La columna **Resta urgente** sigue mostrando la brecha PCP; **Enviar** usa `a_enviar` para precargar, deshabilitar inputs y validar el POST (hidden `pendiente_*` / `resta_urgente_*`).
+
+Filtro por defecto: **Solo urgentes** (`resta_urgente > 0`). Diseño UX: `docs/mpr/DISENO_TABLERO_PRODUCCION_REFACTOR_PCP.md`.
+
+---
+
+## Columnas legacy (referencia histórica)
+
+| # | Columna | Notas |
+|---|---------|-------|
+| — | **Pendiente** | Alias de `resta_total` en servicio/reportes. |
 
 ---
 
@@ -64,7 +84,9 @@ Paso 3:  Explosión BOM: dem_ped, dem_res desde filas_pack
 
 Paso 4:  comp_ids = demanda ∪ envíos directos
 
-Paso 5:  Enviado = max(0, Σ mpr_envio_produccion − stock Producido) por componente
+Paso 5:  Enviado (Fabricando) = _fabricando_por_componentes()
+         acreditado = max(stock físico, clasificado CC, partes acumulados)
+         Ver fórmula en § Columnas del tablero y ENVIO_PRODUCCION_TABLERO.md
 
 Paso 6:  stock_pivot, desc_map, construir filas, ordenar por pendiente
 ```
@@ -275,11 +297,13 @@ Ver [TRANSICIONES_LOTE.md](TRANSICIONES_LOTE.md) para detalles del servicio.
 Enviado[comp] = Enviado_OPT[comp] + Enviado_tablero[comp]
 
 Enviado_OPT[comp]     = max(0, OPT_liberado_acum − OPP_parte_acum)   ← E4, intacto
-Enviado_tablero[comp] = max(0, SUM(envíos_tablero[comp]) − stock_pipeline[comp])
-stock_pipeline = Producido + Semi + 2da + Scrap + Terminado
+Enviado_tablero[comp] = max(0, SUM(envíos_tablero[comp]) − acreditado[comp])
+acreditado = max(stock_componente, clasificado_desde_producción)
+stock_componente = Producido + Semi + 2da + Scrap
+clasificado_desde_producción = SUM(mpr_transicion_lote WHERE tipo_origen = 'Produccion')
 ```
 
-**Sin doble conteo:** al registrar parte o clasificar hacia Semi/2da/Scrap, el stock pipeline acredita envíos; Fabricando no repunta al vaciar Producido.
+**Sin doble conteo:** al clasificar hacia Semi/2da/Scrap, el stock físico acredita envíos. Si el semi ya salió por armado del pack, la trazabilidad en `mpr_transicion_lote` evita que Fabricando repunte.
 
 ### Paso 7b en el algoritmo
 
@@ -295,7 +319,7 @@ Paso 11 (por comp_id):
    enviado_opt         = enviado_comp.get(comp_id, 0.0)
    stock_prod          = stock_pivot[comp_id].get(TIPO_MPR_PRODUCCION, 0.0)
    envios_dir          = float(envios_tablero.get(comp_id, 0))
-   enviado_tablero_val = max(0.0, envios_dir - stock_pipeline)   # stock_pipeline = prod+semi+2da+scrap+term
+   enviado_tablero_val = max(0.0, envios_dir - acreditado)   # ver _calcular_fabricando_componente
    enviado             = enviado_opt + enviado_tablero_val
      pendiente           = max(0.0, (demanda - total) - envios_dir)
 ```

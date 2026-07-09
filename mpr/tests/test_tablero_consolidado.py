@@ -17,6 +17,7 @@ from mpr.services import (
     TIPO_MPR_SEMI_ELABORADO,
     TIPO_MPR_TERMINADO,
     _calcular_fabricando_componente,
+    _calcular_fabricando_para_parte,
     _calcular_pendiente_componente,
     _enviado_produccion_por_componente,
     listar_tablero_por_articulo,
@@ -90,9 +91,55 @@ class TestCalcularFabricandoComponente(SimpleTestCase):
         }
         self.assertAlmostEqual(_calcular_fabricando_componente(15.0, stock), 0.0)
 
+    def test_clasificado_desde_produccion_sin_stock_fisico(self):
+        """Semi consumido en armado: trazabilidad acredita envíos aunque stock semi=0."""
+        stock = {
+            TIPO_MPR_PRODUCCION: 0.0,
+            TIPO_MPR_SEMI_ELABORADO: 0.0,
+            TIPO_MPR_2DA_SELECCION: 12.0,
+            TIPO_MPR_SCRAP: 0.0,
+        }
+        self.assertAlmostEqual(
+            _calcular_fabricando_componente(2400.0, stock, clasificado_desde_produccion=2400.0),
+            0.0,
+        )
+
+    def test_terminado_no_acredita_componente(self):
+        stock = {
+            TIPO_MPR_PRODUCCION: 0.0,
+            TIPO_MPR_TERMINADO: 500.0,
+        }
+        self.assertAlmostEqual(_calcular_fabricando_componente(12.0, stock), 12.0)
+
+    def test_parte_acumulado_acredita_sin_stock(self):
+        stock = {TIPO_MPR_PRODUCCION: 0.0}
+        self.assertAlmostEqual(
+            _calcular_fabricando_componente(12.0, stock, parte_acumulado=12.0),
+            0.0,
+        )
+
+
+class TestCalcularFabricandoParaParte(SimpleTestCase):
+    """Parte usa el mismo cupo Fabricando que el tablero (incluye Semi/2da tras clasificar)."""
+
+    def test_igual_a_tablero_con_semi_acreditado(self):
+        stock = {
+            TIPO_MPR_PRODUCCION: 0.0,
+            TIPO_MPR_SEMI_ELABORADO: 12.0,
+        }
+        self.assertAlmostEqual(_calcular_fabricando_para_parte(12.0, stock), 0.0)
+        self.assertAlmostEqual(
+            _calcular_fabricando_para_parte(12.0, stock),
+            _calcular_fabricando_componente(12.0, stock),
+        )
+
+    def test_con_stock_solo_produccion(self):
+        stock = {TIPO_MPR_PRODUCCION: 4.0}
+        self.assertAlmostEqual(_calcular_fabricando_para_parte(12.0, stock), 8.0)
+
 
 class TestCalcularPendienteComponente(SimpleTestCase):
-    """Envíos ledger reducen pendiente aunque Fabricando sea 0."""
+    """Pendiente legacy con envíos ledger."""
 
     def test_envio_cubre_brecha(self):
         self.assertAlmostEqual(_calcular_pendiente_componente(12.0, 11.0, 1.0), 0.0)
@@ -102,6 +149,25 @@ class TestCalcularPendienteComponente(SimpleTestCase):
 
     def test_sobre_envio_no_negativo(self):
         self.assertAlmostEqual(_calcular_pendiente_componente(12.0, 11.0, 3.0), 0.0)
+
+
+class TestCalcularAEnviarComponente(SimpleTestCase):
+    """Tope Enviar = resta urgente − Fabricando."""
+
+    def test_resta_menos_fabricando(self):
+        from mpr.services import _calcular_a_enviar_componente
+
+        self.assertAlmostEqual(_calcular_a_enviar_componente(12.0, 12.0), 0.0)
+
+    def test_parcial_fabricando(self):
+        from mpr.services import _calcular_a_enviar_componente
+
+        self.assertAlmostEqual(_calcular_a_enviar_componente(12.0, 5.0), 7.0)
+
+    def test_sin_fabricando(self):
+        from mpr.services import _calcular_a_enviar_componente
+
+        self.assertAlmostEqual(_calcular_a_enviar_componente(12.0, 0.0), 12.0)
 
 
 class TestEnviadoProduccionPorComponente(SimpleTestCase):
@@ -222,6 +288,14 @@ class TestListarTableroPorArticulo(SimpleTestCase):
             patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(stock_pivot, stock_suma_pivot)),
             patch("mpr.services._fetch_descripciones_articulo", return_value=desc_map),
             patch("mpr.services._query_enviado_tablero_componente", return_value=enviado_tablero_map),
+            patch(
+                "mpr.repositories.transicion_lote.sumar_salidas_desde_produccion_por_articulo",
+                return_value={},
+            ),
+            patch(
+                "mpr.repositories.parte.opp_acumulado_por_pack",
+                return_value={},
+            ),
         ]
         return patches
 
@@ -268,8 +342,8 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         self.assertTrue(len(resultado) > 0, "Debe haber al menos una fila")
         fila = resultado[0]
         # stock_pivot_completo: Produccion=10, 2da=5, Semi=0, Scrap=8, Terminado=20
-        # Etapa 10: Planchado ya no suma. Total esperado = 10+5+0+20 = 35 (sin Scrap=8)
-        self.assertAlmostEqual(fila["total"], 35.0)
+        # Etapa 10: Planchado ya no suma. Total esperado = 10+5+0 = 15 (sin Scrap ni Terminado)
+        self.assertAlmostEqual(fila["total"], 15.0)
         self.assertAlmostEqual(fila["desperdicio"], 8.0)
 
     def test_total_respeta_suma_stock_por_deposito(self):
@@ -294,9 +368,9 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         resultado = self._call_con_parches(patches)
 
         fila = resultado[0]
-        # Columna Terminado conserva el saldo real
-        self.assertAlmostEqual(fila["terminado"], 20.0)
-        # Etapa 10: Planchado ya no suma. Total excluye Terminado (suma_stock='No'): 10+5+0 = 15
+        # Componentes: Terminado no aplica en tablero de producción
+        self.assertAlmostEqual(fila["terminado"], 0.0)
+        # Etapa 10: Planchado ya no suma. Total excluye Terminado: 10+5+0 = 15
         self.assertAlmostEqual(fila["total"], 15.0)
 
     def test_pendiente_derivado_sin_stock(self):
@@ -331,7 +405,7 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         self.assertAlmostEqual(fila["pendiente"], 8.0)
 
     def test_pendiente_reducido_por_enviado_y_stock(self):
-        """REQ-025 Esc.25.3: demanda=20, enviado=8, total=12 → pendiente=0."""
+        """REQ-025 Esc.25.3: resta PCP no descuenta envíos; Fabricando sí refleja envíos no acreditados."""
         stock_pivot = {
             10: {
                 TIPO_MPR_PRODUCCION: 5.0,
@@ -348,10 +422,11 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         resultado = self._call_con_parches(patches)
 
         fila = resultado[0]
-        # brecha=8, envios=13 → pendiente=0 (envíos ledger cubren la brecha)
+        # demanda=20, stock_proceso=12 → resta_total=8 (PCP); envíos no restan brecha
         self.assertAlmostEqual(fila["enviado"], 1.0)
         self.assertAlmostEqual(fila["total"], 12.0)
-        self.assertAlmostEqual(fila["pendiente"], 0.0)
+        self.assertAlmostEqual(fila["resta_total"], 8.0)
+        self.assertAlmostEqual(fila["pendiente"], 8.0)
 
     def test_enviado_diferente_de_produccion(self):
         """Enviado (virtual tablero) ≠ produccion (físico) por construcción."""
@@ -402,9 +477,8 @@ class TestListarTableroPorArticulo(SimpleTestCase):
 
         self.assertEqual(resultado, [])
 
-    def test_solo_pendiente_filtra_cero(self):
-        """REQ-031 Esc.31.1: solo_pendiente=True filtra filas con pendiente=0."""
-        # stock_pivot con total=20 y demanda=20 → pendiente=0
+    def test_solo_urgente_filtra_cero(self):
+        """Filas con resta_urgente=0 no aparecen cuando solo_urgente=True."""
         stock_pivot = {
             10: {
                 TIPO_MPR_PRODUCCION: 20.0,
@@ -416,12 +490,44 @@ class TestListarTableroPorArticulo(SimpleTestCase):
             }
         }
         patches = self._patch_servicio(stock_pivot=stock_pivot)
-        resultado = self._call_con_parches(patches, solo_pendiente=True)
+        resultado = self._call_con_parches(patches, solo_urgente=True)
 
-        # demanda=20, total=20, enviado=0 → pendiente=0 → debe ser filtrado
-        ids_con_pendiente = [r for r in resultado if r["pendiente"] > 0]
-        ids_filtrados = [r for r in resultado if r["pendiente"] <= 0]
-        self.assertEqual(len(ids_filtrados), 0, "No debe haber filas con pendiente=0 cuando solo_pendiente=True")
+        self.assertEqual(len(resultado), 0)
+
+    def test_solo_pendiente_legacy_alias(self):
+        """solo_pendiente=True se interpreta como solo_urgente."""
+        patches = self._patch_servicio()
+        resultado = self._call_con_parches(patches, solo_pendiente=True)
+        for r in resultado:
+            self.assertGreater(r["resta_urgente"], 0)
+
+    def test_resta_urgente_excluye_terminado_del_stock(self):
+        """stock_proceso no incluye Terminado — paridad PCP col G."""
+        stock_pivot = {
+            10: {
+                TIPO_MPR_PRODUCCION: 5.0,
+                TIPO_MPR_2DA_SELECCION: 0.0,
+                TIPO_MPR_SEMI_ELABORADO: 0.0,
+                TIPO_MPR_SCRAP: 0.0,
+                TIPO_MPR_TERMINADO: 100.0,
+            }
+        }
+        stock_suma = {
+            10: {
+                TIPO_MPR_PRODUCCION: 5.0,
+                TIPO_MPR_2DA_SELECCION: 0.0,
+                TIPO_MPR_SEMI_ELABORADO: 0.0,
+                TIPO_MPR_SCRAP: 0.0,
+                TIPO_MPR_TERMINADO: 100.0,
+            }
+        }
+        patches = self._patch_servicio(stock_pivot=stock_pivot, stock_suma_pivot=stock_suma)
+        resultado = self._call_con_parches(patches)
+        fila = resultado[0]
+        self.assertAlmostEqual(fila["stock_proceso"], 5.0)
+        # dem_ped=20, stock_proceso=5 → resta_urgente=15
+        self.assertAlmostEqual(fila["resta_urgente"], 15.0)
+        self.assertAlmostEqual(fila["total"], 5.0)
 
     def test_articulo_sin_bom_no_aparece(self):
         """REQ-021 Esc.21.3: pack sin BOM no aporta componentes → tablero vacío."""
@@ -430,8 +536,8 @@ class TestListarTableroPorArticulo(SimpleTestCase):
 
         self.assertEqual(resultado, [])
 
-    def test_orden_descendente_por_pendiente(self):
-        """REQ-030: filas ordenadas por pendiente descendente."""
+    def test_orden_descendente_por_resta_urgente(self):
+        """Filas ordenadas por resta_urgente descendente."""
         filas_pack = [
             {"id_articulo": 1, "cantidad_a_fabricar": 5.0, "cantidad_pedida_pedido": 5.0, "stock_terminado": 0.0},
             {"id_articulo": 2, "cantidad_a_fabricar": 20.0, "cantidad_pedida_pedido": 20.0, "stock_terminado": 0.0},

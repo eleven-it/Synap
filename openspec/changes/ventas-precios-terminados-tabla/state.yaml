@@ -1,0 +1,6 @@
+change: ventas-precios-terminados-tabla
+status: applied
+phase: verify
+created: "2026-07-09"
+updated: "2026-07-09"
+description: Tabla de actualización masiva de precios y reserva para productos terminados

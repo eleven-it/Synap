@@ -15,11 +15,15 @@ El envío contribuye a la columna **Enviado** del tablero mediante la fórmula E
 
 ```
 Enviado[comp] = Enviado_OPT[comp] + Enviado_tablero[comp]
-Enviado_tablero[comp] = max(0, SUM(envíos_tablero) − stock_pipeline[comp])
-stock_pipeline = Producido + Semi + 2da + Scrap + Terminado
+Enviado_tablero[comp] = max(0, SUM(envíos_tablero) − acreditado[comp])
+acreditado = max(stock_componente, clasificado_desde_producción, partes_acumulados)
+stock_componente = Producido + Semi + 2da + Scrap
+clasificado_desde_producción = SUM(mpr_transicion_lote.cantidad WHERE tipo_origen = 'Produccion')
 ```
 
-Al clasificar desde Producido, el stock en Semi/2da/Scrap sigue acreditando envíos: **Fabricando no repunta** al vaciar Producido.
+Los **componentes** del tablero no usan depósito **Terminado** (el armado mueve el pack). La columna Terminado no se muestra en el tablero de producción.
+
+Al clasificar desde Producido, el stock en Semi/2da/Scrap sigue acreditando envíos. Si el semi ya salió por armado del pack, la trazabilidad en `mpr_transicion_lote` evita que **Fabricando repunte** al vaciar el pipeline físico.
 
 ---
 
@@ -95,7 +99,7 @@ El tablero ya tiene `<form method="post">` dentro de cada `<td>` (modal transici
 
 {# En cada <tr> — input con atributo form= #}
 <input form="form-enviar-lote" type="number" name="envio_{{ fila.id_articulo }}" data-envio-qty ...>
-<input form="form-enviar-lote" type="hidden" name="pendiente_{{ fila.id_articulo }}" value="{{ fila.pendiente }}">
+<input form="form-enviar-lote" type="hidden" name="pendiente_{{ fila.id_articulo }}" value="{{ fila.a_enviar }}">
 
 {# Botón en barra de encabezado #}
 <button form="form-enviar-lote" type="submit" @click.prevent="...confirm...">
@@ -107,9 +111,13 @@ Los modales E5 conservan sus propios `<form method="post">` sin interferencia.
 
 ### Columna "Enviar" (col 11)
 
-- Input numérico (`type="number"`, `step="1"`) editable en todas las filas; se prellena con `pendiente` cuando es > 0.
+- Un solo input entero por fila (`type="number"`, `step="1"`, sin decimales).
+- **Modo docenas:** campo `envio_{id}_docenas`; se prellena con **`a_enviar_docenas_pcp`** (docenas enteras = pares ÷ 12 redondeado). El POST convierte a pares con `docenas × 12` (ignora pares sueltos).
+- **Modo pares:** campo `envio_{id}` con cantidad en pares enteros; se prellena con **`a_enviar`**.
+- Si `a_enviar = 0`, el input queda vacío y **deshabilitado** (evita doble envío aunque Resta urgente siga mostrando brecha PCP).
+- Hidden `presentacion`, `pendiente_*` / `resta_urgente_*` (este último con `a_enviar`) para parseo y warnings de sobreenvío en POST.
 - Al confirmar, JavaScript copia **todas** las filas con cantidad > 0 como campos ocultos dentro de `#form-enviar-lote` (evita pérdida de líneas con el atributo HTML5 `form=`).
-- El servidor omite cantidades ≤ 0; warning no bloqueante si cantidad > pendiente.
+- El servidor omite cantidades ≤ 0; warning no bloqueante si cantidad > `a_enviar`.
 
 ---
 
@@ -160,6 +168,17 @@ En Etapa 7, la anulación es solo vía **admin Django** (campo `anulado=True`). 
 
 **Archivo:** `mpr/tests/test_etapa7_enviar_tablero.py`  
 **Comando:** `docker exec Synap_app python manage.py test mpr.tests.test_etapa7_enviar_tablero --keepdb --noinput`
+
+### Limpiar entorno de pruebas (UAT / desarrollo)
+
+Para vaciar ledgers MPR y stock en depósitos `tipo_mpr` antes de una corrida de prueba:
+
+```bash
+docker exec Synap_app python manage.py limpiar_historico_mpr --base-empresa=administranet96 --dry-run
+docker exec Synap_app python manage.py limpiar_historico_mpr --base-empresa=administranet96 --confirm
+```
+
+Borra: `mpr_envio_produccion`, partes, transiciones, armado surtido, roster. **No** toca `mpr_config`, `mpr_turno` ni pedidos PED / demanda en vivo.
 
 | Clase | Descripción |
 |-------|-------------|

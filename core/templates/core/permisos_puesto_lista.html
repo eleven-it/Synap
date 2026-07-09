@@ -14,6 +14,84 @@
   </div>
 
   <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 mb-4 border border-gray-100 dark:border-gray-800">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="max-w-2xl">
+        <h2 class="text-sm font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-1.5">
+          <span class="material-icons text-base text-purple-600 dark:text-purple-400">sync_alt</span>
+          Migrar permisos legacy → Synap (esta empresa)
+        </h2>
+        <p class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+          Copia las asignaciones actuales de <code class="text-[11px]">permiso_sistema_puesto</code> hacia el
+          almacén propio <code class="text-[11px]">synap_*</code> (un rol dedicado por puesto). Es
+          <strong>idempotente</strong> y <strong>no modifica</strong> las tablas de AdministraNET.
+          Ejecutá primero la simulación para ver el impacto.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2 shrink-0">
+        <form method="post" action="{% url 'core:permisos_puesto_backfill' %}">
+          {% csrf_token %}
+          <input type="hidden" name="dry_run" value="1">
+          <button type="submit"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+            <span class="material-icons text-base">visibility</span>
+            Simular (dry-run)
+          </button>
+        </form>
+        <form method="post" action="{% url 'core:permisos_puesto_backfill' %}"
+              onsubmit="return confirm('¿Ejecutar la migración de permisos legacy → Synap para esta empresa? Es idempotente y no toca las tablas de AdministraNET.');">
+          {% csrf_token %}
+          <button type="submit"
+                  class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition">
+            <span class="material-icons text-base">play_arrow</span>
+            Ejecutar migración
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  {% if backfill_resultado %}
+  <div class="rounded-lg shadow-md p-4 mb-4 border
+              {% if backfill_resultado.success %}bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50{% else %}bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50{% endif %}">
+    <div class="flex items-start gap-2">
+      <span class="material-icons text-base {% if backfill_resultado.success %}text-emerald-600 dark:text-emerald-400{% else %}text-red-600 dark:text-red-400{% endif %}">
+        {% if backfill_resultado.dry_run %}visibility{% elif backfill_resultado.success %}check_circle{% else %}error{% endif %}
+      </span>
+      <div class="flex-1">
+        <p class="text-sm font-semibold text-gray-800 dark:text-gray-100">
+          {% if backfill_resultado.dry_run %}Simulación de migración (no se guardó nada){% else %}Resultado de la migración{% endif %}
+        </p>
+        <p class="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{{ backfill_resultado.message }}</p>
+        {% if backfill_resultado.detalles %}
+        <details class="mt-2" open>
+          <summary class="text-xs font-medium text-gray-600 dark:text-gray-400 cursor-pointer">
+            Detalle por puesto ({{ backfill_resultado.total_puestos }} con permisos / {{ backfill_resultado.total_revisados }} revisados)
+          </summary>
+          <ul class="mt-2 space-y-1 max-h-64 overflow-y-auto">
+            {% for detalle in backfill_resultado.detalles %}
+            {% if "sin permisos" in detalle %}
+            <li class="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
+              <span class="material-icons text-[14px] text-gray-300 dark:text-gray-600">remove_circle_outline</span>
+              {{ detalle }}
+            </li>
+            {% else %}
+            <li class="text-xs text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
+              <span class="material-icons text-[14px] text-emerald-500">badge</span>
+              {{ detalle }}
+            </li>
+            {% endif %}
+            {% endfor %}
+          </ul>
+        </details>
+        {% else %}
+        <p class="text-xs text-gray-500 mt-1">No se encontraron puestos con asignaciones en las tablas legacy.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 mb-4 border border-gray-100 dark:border-gray-800">
     <form method="get" class="flex gap-2">
       <input type="text" name="q" value="{{ q }}" placeholder="Buscar puesto…"
              class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-purple-500 focus:border-purple-500">

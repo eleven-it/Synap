@@ -356,6 +356,43 @@ El sistema NO MUST implementar consumo del roster en OPP en esta etapa.
 
 ---
 
+### Requirement: Override de línea por día en el roster
+
+La tabla `mpr_roster_dia` SHALL incluir una columna `id_mpr_linea` (BIGINT NULL) que permite **sobrescribir** la línea habitual del operario (`mpr_operario_linea`) para esa fecha/turno. `NULL` significa "usar la línea habitual".
+
+La unicidad `(base_empresa, fecha, id_operario)` SHALL mantenerse; el override no crea filas nuevas, solo agrega el dato a la asignación del día. La resolución de línea del operario SHALL priorizar el override del roster sobre la línea habitual (`resolver_linea_operario`).
+
+> Nota de implementación: la columna real es `mpr_roster_dia.id_mpr_linea` (el delta original la nombraba `id_linea`).
+
+#### Scenario: Asignación con override
+
+- **GIVEN** operario con línea habitual `Línea 1`
+- **WHEN** el supervisor asigna en el roster de hoy turno Noche con `id_mpr_linea = Línea 3`
+- **THEN** la resolución de línea del operario para hoy/Noche devuelve `Línea 3`
+
+#### Scenario: Asignación sin override
+
+- **WHEN** el supervisor asigna solo turno (sin `id_mpr_linea`)
+- **THEN** `id_mpr_linea=NULL` y la resolución usa la línea habitual del operario
+
+#### Scenario: Compatibilidad con roster existente
+
+- **GIVEN** filas de roster anteriores al cambio (sin `id_mpr_linea`)
+- **THEN** se interpretan como `id_mpr_linea=NULL` (usar habitual), sin romper la planificación
+
+---
+
+### Requirement: Persistencia del override vía catálogo central
+
+La columna `id_mpr_linea` en `mpr_roster_dia` SHALL agregarse mediante `core/services/legacy_mysql_schema/catalog.py` (proveedor `mpr_maquina_linea_trazabilidad`, función `run_mpr_maquina_linea_mysql`) con DDL en `mpr/sql/004_mpr_parte_maquina_gap.sql`, de forma idempotente.
+
+#### Scenario: Idempotencia
+
+- **WHEN** se ejecuta dos veces el ALTER
+- **THEN** no falla ni duplica la columna
+
+---
+
 ## Fuera de Alcance
 
 Los siguientes elementos NO están cubiertos por este spec y se abordarán en iteraciones posteriores:

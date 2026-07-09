@@ -4,14 +4,18 @@ Este manual describe el uso del módulo MPR en Synap: tablero, demanda, OPT (Ped
 
 **Requisitos:** Usuario con acceso al módulo MPR y **empresa activa** seleccionada en sesión (base de datos AdministraNET). Sin empresa activa, el sistema redirige al dashboard.
 
-**Referencias:** Glosario de términos en [GLOSARIO_MPR.md](GLOSARIO_MPR.md). Análisis y flujo en [ANALISIS_MPR_PROPUESTA_MVP.md](ANALISIS_MPR_PROPUESTA_MVP.md). **Pack vs componente (datos e implementación):** [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md).
+**Dos circuitos operativos:** (1) **Flujo diario de fábrica** — Tablero de producción → envío → parte → control de calidad → armado → imputación (sin OPT legacy). (2) **Flujo OPT / asistente** — demanda ventana pack, wizard y listado OPT (trazabilidad avanzada y bases con lista_produccion). Este manual cubre ambos; el flujo diario es la entrada principal desde 04/07/2026.
+
+**Referencias:** Glosario en [GLOSARIO_MPR.md](GLOSARIO_MPR.md). Pack vs componente: [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md). Trazabilidad máquina/línea/operario: [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md). Tablero consolidado: [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md).
 
 ---
 
 ## 1. Acceso al módulo
 
 - Desde el menú de Synap, ingresar a **Producción (MPR)**.
-- La pantalla inicial es el **Tablero** (`/mpr/`).
+- La pantalla inicial depende del rol:
+  - **Supervisor / usuario MPR completo:** **Tablero de producción** (`/mpr/tablero-produccion/`) o Tablero KPIs (`/mpr/`).
+  - **Operario puro** (permiso `mpr.parte_operario` sin `mpr.ver`): aterriza en **Mi parte** (`/mpr/mi-parte/`) tras el login.
 
 ---
 
@@ -45,6 +49,29 @@ Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Wa
 - **Armado:** Acceso al POS de armado unificado; al ingresar abre **Armado 1ra** por defecto (`/mpr/armado/?modo=1ra`). Dentro de la pantalla se puede cambiar a **Armado 2da** con el selector verde/amarillo.
 - **Armado (Lista de materiales):** Lleva al listado de conjuntos de armado (Lista de materiales).
 - **Ver demanda:** Lleva a la Pedido producción trabajo (OPT) (demanda por artículo con stock y cantidad a fabricar).
+
+### 2.1 Tablero de producción (operación diaria)
+
+**Ruta:** Producción → **Tablero de producción** (`/mpr/tablero-produccion/`). Es la **entrada principal** del flujo diario de fábrica.
+
+**Qué muestra:** Demanda consolidada por **componente** (explosión BOM desde packs en pedidos PED en vivo). Columnas alineadas a PCP:
+
+| Bloque | Columnas | Descripción |
+|--------|----------|-------------|
+| Demanda a producir | Pedido, Reserva, Resta total, Resta urgente | En **docenas** (toggle Docenas/Pares en cabecera). Pedido = demanda atribuible a PED; Resta urgente = base del envío. |
+| En curso | Fabricando | Compromiso virtual: envíos al tablero menos lo ya acreditado (stock pipeline + partes + clasificación). **No mueve stock.** |
+| Stock en pipeline | Producido, 2da selección, Semi elaborado, Desperdicio, Total | Saldos físicos del componente en depósitos MPR. **Sin Terminado** (el terminado es del pack en armado). |
+| Acción | Enviar docenas | Input para enviar a fabricación; tope = resta urgente. |
+
+**Acciones:**
+
+- **Buscar artículo:** filtro predictivo por código o descripción.
+- **Enviar a producción:** registra en `mpr_envio_produccion` (ledger). No mueve `stock_deposito` hasta el parte de producción.
+- **Anular envíos:** desde el menú o pantalla de anulación (permiso correspondiente).
+
+**Enlaces rápidos (header):** Parte de producción, Control de calidad, Armado, Tablero KPIs.
+
+Documentación técnica: [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md), [ENVIO_PRODUCCION_TABLERO.md](ENVIO_PRODUCCION_TABLERO.md).
 
 ---
 
@@ -85,7 +112,7 @@ Ejemplos: stock 0 con demanda 1260 → Warning; stock 540 con demanda 600 → Wa
 
 **Ruta:** Tras marcar artículos y pulsar **Continuar** en Pedido producción trabajo (OPT) (`/mpr/demanda/ventana-pack/agrupar/`).
 
-Se muestra una **única tabla Unidades**: componentes de las recetas (BOM) de los packs seleccionados, con columnas Cod. Sist, Artículo, Saldo (solo Semi elaborado), Reserva (0 en componentes), Cant. pedida, **Dem. pedido**, **Dem. reserva pack**, **Origen**, **Cant. a fabricar** (editable: unidades y docenas, precargadas según la cantidad a fabricar elegida en la pantalla anterior y la explosión BOM), Urgente. **No** se solicita operario en esta pantalla (el operario se asigna en OPP y en Armado). Si la base tiene la columna `fecha_objetivo` en lista_produccion_agrupada, se muestra además el campo **Fecha objetivo** (opcional): una sola fecha para toda la orden. Esa fecha se usa para el KPI **OPT atrasadas** en el tablero (OPTs con fecha objetivo vencida y pendiente &gt; 0) y para priorizar OPTs **vencidas** en rojo en Top urgencias (informativo; uso en estadísticas queda para más adelante). El usuario puede ajustar las cantidades, indicar la fecha objetivo si aplica, y pulsar **Generar OPT** para **crear** la OPT. Tras generarla, se redirige al **Detalle de la OP**. La **ejecución** del movimiento de stock (liberar a producción) se hace automáticamente si hay un depósito con tipo «Producción» en Config. Depósitos (véase 4.4 y sección 8).
+Se muestra una **única tabla Unidades**: componentes de las recetas (BOM) de los packs seleccionados, con columnas Cod. Sist, Artículo, Saldo (solo Semi elaborado), Reserva (0 en componentes), Cant. pedida, **Dem. pedido**, **Dem. reserva pack**, **Origen**, **Cant. a fabricar** (editable: unidades y docenas, precargadas según la cantidad a fabricar elegida en la pantalla anterior y la explosión BOM), Urgente. **No** se solicita operario en esta pantalla (el operario se asigna en OPP y en parte de producción). Si la base tiene la columna `fecha_objetivo` en lista_produccion_agrupada, se muestra además el campo **Fecha objetivo** (opcional): una sola fecha para toda la orden. Esa fecha se usa para el KPI **OPT atrasadas** en el tablero (OPTs con fecha objetivo vencida y pendiente &gt; 0) y para priorizar OPTs **vencidas** en rojo en Top urgencias (informativo; uso en estadísticas queda para más adelante). El usuario puede ajustar las cantidades, indicar la fecha objetivo si aplica, y pulsar **Generar OPT** para **crear** la OPT. Tras generarla, se redirige al **Detalle de la OP**. La **ejecución** del movimiento de stock (liberar a producción) se hace automáticamente si hay un depósito con tipo «Producción» en Config. Depósitos (véase 4.4 y sección 8).
 
 ### 3.2 Pedidos a fábrica
 
@@ -159,7 +186,7 @@ Los **componentes** de una receta **no** se marcan en `articulo`: están en la t
 **Asignación de operarios (trazabilidad por fase):**
 - En **Generar OPT** (Confirmar OPT / agrupar) **no** se muestra columna operario; la OPT se crea sin pedir operario en ese paso.
 - En **OPP** el operario es obligatorio por componente con cantidad > 0.
-- En **Armado** el operario es obligatorio por línea/pack con cantidad > 0.
+- En **Armado** no se solicita operario (la trazabilidad del fabricante queda en parte/OPP/clasificación).
 
 **Ruta:** Producción → Asistente de producción (`/mpr/wizard/`).
 
@@ -351,15 +378,19 @@ Muestra cabecera (nombre, ID, detalle, estado), **artículo armado** (si está a
 3. **Depósito origen:** Donde están los componentes (se descontará stock).
 4. **Depósito destino:** Donde entrará el producto armado.
 
-Al confirmar se genera un movimiento de stock tipo **Armado**: salidas de componentes desde origen y entrada del artículo armado en destino. La trazabilidad guarda operario por línea/pack armado. Debe haber stock suficiente de cada componente en el depósito origen.
+Al confirmar se genera un movimiento de stock tipo **Armado**: salidas de componentes desde origen y entrada del artículo armado en destino. No se pide operario en esta pantalla. Debe haber stock suficiente de cada componente en el depósito origen.
 
 ---
 
 ## 7. Armado unificado (1ra y 2da)
 
-**Ruta canónica:** Producción → **Armado** (`/mpr/armado/`). Al ingresar sin parámetro, el sistema redirige a **Armado 1ra** (`?modo=1ra`).
+**Ruta canónica:** Producción → **Armado** (`/mpr/armado/`). Al ingresar sin parámetro, el sistema redirige a **Armado 1ra** (`?modo=1ra`) en **vista tabla** (`?vista=tablero`, default).
 
-**Selector de modo:** En la cabecera de la pantalla alterne **Armado 1ra** (verde) y **Armado 2da** (ámbar). Si el carrito tiene ítems y cambia de modo, el sistema pide confirmación y vacía el carrito al aceptar.
+**Vista tabla (operativa):** Grilla alineada a PCP Armado: demanda (pedido, stock terminado, resta armar), **1er fecha entrega** (mínima `FechaEntrega` en PED abiertos del pack), máx. armable (1ra) y columna **Armar** para ejecución masiva. Ver `docs/mpr/DISENO_ARMADO_TABLERO_PCP.md`.
+
+**Vista carrito:** `?vista=pos` — flujo POS + carrito para composición libre (2da) o armado unitario.
+
+**Selector de modo:** En la cabecera alterne **Armado 1ra** (verde) y **Armado 2da** (ámbar). Si el carrito tiene ítems y cambia de modo, el sistema pide confirmación y vacía el carrito al aceptar.
 
 **Alias legacy (redirecciones):**
 
@@ -370,7 +401,7 @@ Al confirmar se genera un movimiento de stock tipo **Armado**: salidas de compon
 
 **Importante:** El armado **no** se ejecuta desde el detalle de la OPT ni desde tarjetas en el tablero por OPT. El cierre de OPT solo exige pendiente OPP = 0; no requiere armado previo.
 
-La pantalla POS comparte la misma disposición en ambos modos: **cabecera del lote** (origen, destino, operario), **columna izquierda** para armar un pack y **columna derecha** con el **carrito** (máximo 20 ítems por lote). Plantilla de referencia: `armado_surtido.html`.
+La pantalla POS comparte la misma disposición en ambos modos: **cabecera del lote** (origen, destino, detalle opcional), **columna izquierda** para armar un pack y **columna derecha** con el **carrito** (máximo 20 ítems por lote). Plantilla de referencia: `armado_surtido.html`.
 
 ### 7.1 Armado 2da (composición libre)
 
@@ -384,7 +415,7 @@ La pantalla POS comparte la misma disposición en ambos modos: **cabecera del lo
 
 **Flujo:** Igual que el POS multi-lote descrito históricamente en armado surtido:
 
-1. Complete cabecera (origen, destino, operario).
+1. Complete cabecera (origen, destino).
 2. Busque pack, cantidad y composición (componentes desde stock origen).
 3. **Agregar al carrito** (validación de stock y reglas de lote).
 4. **Ejecutar lote:** un MSTOCK por pack exitoso; modal con grabados y no grabados; fallidos permanecen en carrito.
@@ -393,7 +424,7 @@ Especificaciones técnicas: [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.m
 
 ### 7.2 Armado 1ra (BOM fija)
 
-**Precarga desde OPT:** Si ingresa con `?modo=1ra&id_lista=<n>&id_articulo=<id>` (botón **Armado** del listado o detalle OPT), el carrito se carga automáticamente con el pack y la cantidad pendiente de armar según semi elaborado − ya armado. Revise cabecera (depósitos, operario) y ejecute el lote.
+**Precarga desde OPT:** Si ingresa con `?modo=1ra&id_lista=<n>&id_articulo=<id>` (botón **Armado** del listado o detalle OPT), el carrito se carga automáticamente con el pack y la cantidad pendiente de armar según semi elaborado − ya armado. Revise depósitos y ejecute el lote.
 
 **Ruta:** `/mpr/armado/?modo=1ra`.
 
@@ -488,30 +519,107 @@ Al confirmar se genera movimiento de stock tipo Reclasificación (salida en orig
 
 **Ruta:** Producción → Reportes (`/mpr/reportes/`).
 
-Pestañas de solo lectura:
+Hub de analítica del **flujo diario por componente**: en fabricación (envío) → producido (parte) → control de calidad (semi / 2da) → armado del pack (terminado).
 
-- **Pendiente:** Órdenes/líneas con pendiente de producción (por OP, artículo, cantidades).
-- **WIP:** En progreso (en_proceso_produccion = 'Si' con pendiente > 0).
-- **Stock:** Stock por artículo y depósito (saldos).
-- **Bajo mínimo:** Artículos con stock total (en depósitos que suman) por debajo del mínimo configurado (deposito_reposicion o articulo.stock_minimo).
+Documentación técnica completa: [REPORTES_MPR.md](REPORTES_MPR.md).
+
+### Grupo Producción
+
+| Reporte | Qué muestra |
+|---------|-------------|
+| **Resumen diario** | Producción registrada (parte) por día, agrupada por mes con subtotales (estilo reportes BO). Solo días con producción > 0. Gráfico de línea. |
+| **Por operario** | Parte por tejedor + semi / 2da / scrap de clasificación CC en el período |
+| **Por operario (mensual)** | Pivot Año → Mes × operario; selector predictivo con tags (1 o 2 operarios); columna **Δ** al comparar dos tejedores |
+| **Por operario y máquina** | Producción declarada, aprobada y **gap** por operario y máquina (trazabilidad Fase 8) |
+| **Cadena pipeline** | Por componente: embudo **En fabricación → Producido → Semi elaborado → 2da selección**; barra de composición; buscador por código/descripción; estados Falta parte / Falta clasificar / Completo |
+| **Pendiente componentes** | Instantánea del tablero (resta, Fabricando, stock pipeline **sin Terminado** en componentes) |
+
+**Completo** en cadena pipeline = cerró envío, parte y CC en el período; **no** significa que el pack ya esté armado en terminado.
+
+### Grupo Demanda
+
+Brecha pack, pedidos por estado, stock por depósito, artículos bajo mínimo.
+
+### Grupo Trazabilidad
+
+- **Línea de tiempo** y **movimientos** desde ledgers `mpr_envio_produccion`, `mpr_parte_linea`, `mpr_transicion_lote`.
+- **Conciliación envíos ↔ producción:** enviado vs producido aprobado y producción «sin respaldo» de envío.
+
+### Presentación
+
+Selector **Docenas | Pares** (12 pares = 1 docena en componentes). Export CSV en UTF-8.
 
 ---
 
-## 11. Flujo resumido (proceso completo)
+## 11. Flujo resumido
+
+### 11.1 Flujo diario de fábrica (recomendado)
+
+1. **Tablero de producción:** Revisar demanda por componente (PED explotado por BOM). Enviar cantidades a fabricación.
+2. **Parte de producción:** Registrar lo producido (supervisor directo en `/mpr/parte-produccion/` **o** operario móvil en `/mpr/mi-parte/` + aprobación supervisor). Acredita stock en depósito **Producción**.
+3. **Control de calidad:** Clasificar desde Producción hacia Semi elaborado, 2da selección o Desperdicio (`/mpr/clasificacion-produccion/`).
+4. **Armado 1ra:** Consumir semi elaborado y crear pack terminado (`/mpr/armado/?modo=1ra`).
+5. **Imputación de pedido (supervisor):** Asignar MSTOCK de armado 1ra a pedidos PED (`/mpr/imputacion-armado-1ra/`).
+
+Validación E2E automatizada (saldos por fase): `docker exec Synap_app python manage.py e2e_mpr_trazabilidad --base <empresa>`.
+
+### 11.2 Flujo OPT / asistente (legacy avanzado)
 
 1. **Demanda:** Ver en Pedido producción trabajo (OPT) o Pedidos a fábrica qué hay que fabricar.
-2. **Crear OPT:** (a) **Asistente de producción:** Paso 1 Crear orden (artículo + cantidad) → Paso 2 Confirmar (crea OPT y libera si hay depósito tipo Producción) → Paso 3 Crear OPP (cantidades por depósito) → Paso 4 Cierre; o (b) Desde Pedido producción trabajo (OPT): marcar artículos, **Continuar** → Confirmar OPT (tabla Unidades) → **Generar OPT** (crea la OPT y lleva al detalle); o (c) **Nueva OPT** por artículo y cantidad.
-3. **Liberar (OPT):** En el asistente va incluido en “Confirmar”. Fuera del asistente, desde el detalle de la OPT con “Liberar (OPT)” (cantidad y depósito destino).
-4. **Armado (si aplica):** Desde menú **Armado** — modo **1ra** (BOM fija + imputación supervisor) o **2da** (composición libre). No desde detalle OPT.
-5. **Imputación de pedido (supervisor):** Tras Armado 1ra, asignar MSTOCK a pedidos en `/mpr/imputacion-armado-1ra/` (o usar **Imputar pedidos ahora** en el modal del lote).
-6. **Registrar OPP:** En el detalle de la OPT, “Registrar OPP” (docenas y unidades sueltas por celda; docena = 12 unidades). En el asistente, paso 3 usa la misma matriz (solo totales > 0 generan movimiento).
-7. **Cerrar OPT:** Cuando el pendiente total sea 0, “Cerrar OPT” desde el detalle o desde el tablero (OPT a cerrar).
+2. **Crear OPT:** Asistente, ventana pack o Nueva OPT.
+3. **Liberar (OPT):** En el asistente va incluido en “Confirmar”. Fuera del asistente, desde el detalle de la OPT.
+4. **Armado (si aplica):** Desde menú **Armado** — modo **1ra** o **2da**. No desde detalle OPT.
+5. **Imputación de pedido (supervisor):** Tras Armado 1ra.
+6. **Registrar OPP:** En el detalle de la OPT o asistente paso 3.
+7. **Cerrar OPT:** Cuando el pendiente total sea 0.
 
-Para mantener las listas de materiales actualizadas: usar **Lista de materiales** → listado, nuevo conjunto, editar (cabecera, **artículo armado**, componentes). Luego ejecutar armado desde **Armado** o desde el detalle de una OP con “Armado desde esta OP”.
+Para mantener las listas de materiales: **Lista de materiales** → conjunto, artículo armado, componentes.
 
 ---
 
-## 12. Mensajes y errores frecuentes
+## 12. Trazabilidad por máquina, línea y operario
+
+Documentación técnica: [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md), [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md).
+
+### 12.1 Configuración de planta (supervisor)
+
+Menú **Producción → Configuración** (permiso `mpr.maquinas_lineas`):
+
+| Pantalla | Ruta | Uso |
+|----------|------|-----|
+| **Líneas** | `/mpr/lineas/` | Alta/edición de líneas de producción (activo/inactivo). |
+| **Máquinas** | `/mpr/maquinas/` | Catálogo de máquinas; asignación versionada a línea; artículos habilitados por máquina con historial. |
+| **Operarios y usuarios** | `/mpr/operarios-usuarios/` | Vincular empleado (`sue_abm_empleado`) con usuario de login. Un usuario → un operario. |
+| **Turnos y roster** | `/mpr/turnos/`, `/mpr/roster/` | Turnos y planificación; override de línea por día en roster. Ver [TURNOS_Y_ROSTER.md](TURNOS_Y_ROSTER.md). |
+| **Línea habitual operario** | `/mpr/operarios/<id>/linea/` | Línea habitual versionada del operario. |
+
+### 12.2 Carga móvil del operario
+
+**Ruta:** `/mpr/mi-parte/` · **Permiso:** `mpr.parte_operario`.
+
+- Resuelve automáticamente operario, turno, línea y máquinas del día.
+- Grilla por máquina → artículos habilitados; captura en **docenas + pares** (persistencia en pares).
+- **Buscador predictivo** por máquina o artículo; toggle «ocultar máquinas sin artículos».
+- **Borrador** (guardar sin enviar) o **Enviar** (parte `pendiente` de aprobación).
+- **No mueve stock** hasta la aprobación del supervisor.
+
+El operario **puro** solo ve esta pantalla; no accede al resto del menú MPR.
+
+### 12.3 Aprobación de partes (supervisor)
+
+**Ruta bandeja:** `/mpr/partes-pendientes/` · **Permiso:** `mpr.aprobar_parte`.
+
+1. Filtrar por fecha/turno; opcional incluir borradores.
+2. Abrir detalle del parte: revisar cantidades **declaradas** vs **aprobadas** por línea (máquina × artículo).
+3. Si hay desvío (**gap**), indicar **motivo** obligatorio.
+4. Validación de cupo **Fabricando**; opción «forzar cupo» si el supervisor decide aprobar igual.
+5. Al aprobar: asiento físico a depósito **Producción**; parte pasa a `aprobado`.
+
+El **parte directo del supervisor** (`/mpr/parte-produccion/`) sigue disponible: nace aprobado y mueve stock en el acto.
+
+---
+
+## 13. Mensajes y errores frecuentes
 
 - **“No se pudo determinar la empresa activa.”** Seleccionar una empresa/base de datos antes de usar MPR.
 - **“No hay artículo armado asociado a este conjunto.”** En Editar conjunto, asignar el artículo armado (`ensamblado`/`id_en_abm`) antes de ejecutar armado. Ver §4 y [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md).
@@ -528,7 +636,13 @@ Para mantener las listas de materiales actualizadas: usar **Lista de materiales*
 - **“Stock en lotes insuficiente…”** Componente con `Lote='Si'`; revisar saldos por lote en el depósito origen.
 - **“Indique cantidad a liberar (entero positivo) y depósito destino.”** Completar cantidad y depósito en Liberar OPT (solo en wizard; la OPT ya se crea en producción).
 - Lista de OPT vacía con datos en la base: comprobar que la empresa activa sea la correcta y que existan filas con `cantidad_pendiente_prod > 0` en `lista_produccion_agrupada`.
+- **«Sin operario» en Mi parte:** El usuario no está mapeado en Operarios y usuarios; solicitar al supervisor el vínculo.
+- **«Sin turno» / «Sin línea»:** Completar roster del día o línea habitual del operario.
+- **«Sin máquinas»:** La línea resuelta no tiene máquinas vigentes o no hay artículos habilitados en las máquinas.
+- **403 en Partes pendientes o Configuración máquinas:** Solicitar permisos `mpr.aprobar_parte` o `mpr.maquinas_lineas`.
+- **Bucle de redirección al entrar a Mi parte:** Verificar que el usuario tenga `mpr.parte_operario` y que el módulo MPR reconozca ese permiso (catálogo `synap_permiso` actualizado).
+- **Parte móvil pendiente no suma en reportes:** Es correcto hasta aprobación; `cantidad = 0` en partes pendientes.
 
 ---
 
-*Documento: Manual de usuario MPR. Proyecto Synap. Actualizado según pantallas y flujos del módulo MPR.*
+*Documento: Manual de usuario MPR. Proyecto Synap. Actualizado 09/07/2026 (trazabilidad máquina/línea, flujo diario, reportes y E2E).*

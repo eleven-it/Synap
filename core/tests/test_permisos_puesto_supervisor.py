@@ -41,12 +41,12 @@ class PermisosPuestoSupervisorTests(TestCase):
         response = permisos_puesto_lista_view(request)
         self.assertEqual(response.status_code, 200)
 
-    @patch("core.views.views_permisos_puesto.sincronizar_permisos_synap_para_empresa")
+    @patch("core.views.views_permisos_puesto.asegurar_synap_schema_si_procede")
     @patch("core.views.views_permisos_puesto.AdministraNETPermisosMenuService")
-    @patch("core.views.views_permisos_puesto.AdministraNETPermisoSistemaService")
+    @patch("core.views.views_permisos_puesto.SynapPermisosService")
     @patch("core.views.views_permisos_puesto.AdministraNETPuestosService")
     def test_gestionar_ok_supervisor(
-        self, mock_puestos_cls, mock_perm_cls, mock_menu_cls, _mock_sync
+        self, mock_puestos_cls, mock_perm_cls, mock_menu_cls, _mock_ensure
     ):
         mock_puestos_cls.return_value.obtener_puesto.return_value = {
             "id": 2,
@@ -54,6 +54,11 @@ class PermisosPuestoSupervisorTests(TestCase):
         }
         mock_perm_cls.return_value.listar_permisos.return_value = []
         mock_perm_cls.return_value.obtener_grupos.return_value = ["Synap"]
+        mock_perm_cls.return_value.obtener_resumen_rol_puesto.return_value = {
+            "existe": False,
+            "nombre": None,
+            "total_activos": 0,
+        }
         mock_menu_cls.return_value.obtener_estructura_menu.return_value = {}
         mock_menu_cls.return_value.obtener_permisos_puesto.return_value = set()
 

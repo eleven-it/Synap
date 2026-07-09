@@ -7,11 +7,13 @@ from django.test import SimpleTestCase
 
 from mpr.presentacion_operativa import (
     DEFAULT_MODO,
+    enriquecer_fila_tablero_armado,
     enriquecer_fila_tablero_presentacion,
     parse_modo_presentacion_operativa,
     resolver_modo_presentacion_operativa,
 )
 from mpr.repositories.transicion_lote import crear_transicion_lote
+from mpr.views import _envio_cantidad_unidades_desde_post
 
 
 class PresentacionOperativaTests(SimpleTestCase):
@@ -28,12 +30,92 @@ class PresentacionOperativaTests(SimpleTestCase):
 
     def test_enriquecer_fila_tablero_docenas(self):
         fila = enriquecer_fila_tablero_presentacion(
-            {"pendiente": 6500, "enviado": 120},
+            {
+                "dem_ped": 120,
+                "dem_res": 24,
+                "resta_urgente": 120,
+                "resta_total": 144,
+                "pendiente": 144,
+                "enviado": 0,
+                "produccion": 0,
+            },
             "docenas",
         )
-        self.assertIn("docenas", fila["pendiente_display"])
-        self.assertEqual(fila["pendiente_docenas"], 541)
-        self.assertEqual(fila["pendiente_unidades_sueltas"], 8)
+        self.assertEqual(fila["pedido_pares"], 120)
+        self.assertEqual(fila["reserva_pares"], 24)
+        self.assertEqual(fila["resta_urgente_pares"], 120)
+        self.assertEqual(fila["resta_urgente_docenas_pcp"], 10)
+        self.assertEqual(fila["resta_total_pares"], 144)
+        self.assertEqual(fila["resta_total_docenas_pcp"], 12)
+        self.assertEqual(fila["enviado_display"], "0")
+        self.assertNotIn("pares", fila["produccion_display"].lower())
+
+    def test_a_enviar_descuenta_fabricando(self):
+        fila = enriquecer_fila_tablero_presentacion(
+            {
+                "dem_ped": 12,
+                "resta_urgente": 12,
+                "resta_total": 12,
+                "enviado": 12,
+                "produccion": 0,
+            },
+            "unidades",
+        )
+        self.assertEqual(fila["a_enviar"], 0)
+        self.assertEqual(fila["a_enviar_docenas"], 0)
+
+    def test_a_enviar_docenas_pcp_enteras(self):
+        fila = enriquecer_fila_tablero_presentacion(
+            {
+                "resta_urgente": 2405,
+                "enviado": 0,
+                "produccion": 0,
+            },
+            "docenas",
+        )
+        self.assertEqual(fila["a_enviar"], 2405)
+        self.assertEqual(fila["a_enviar_docenas"], 200)
+        self.assertEqual(fila["a_enviar_pares_sueltos"], 5)
+        self.assertEqual(fila["a_enviar_docenas_pcp"], 200)
+
+    def test_envio_cantidad_modo_docenas_solo_docenas(self):
+        post = {
+            "presentacion": "docenas",
+            "envio_42_docenas": "200",
+            "envio_42_unidades": "5",
+        }
+        self.assertEqual(_envio_cantidad_unidades_desde_post(post, 42), 2400)
+
+    def test_envio_cantidad_modo_pares_enteros(self):
+        post = {"presentacion": "unidades", "envio_42": "2405"}
+        self.assertEqual(_envio_cantidad_unidades_desde_post(post, 42), 2405)
+
+    def test_enriquecer_fila_tablero_armado(self):
+        fila = enriquecer_fila_tablero_armado(
+            {
+                "pedido": 120,
+                "stock_terminado": 24,
+                "stock_reserva": 0,
+                "resta_urgente": 96,
+                "resta_armar": 96,
+                "max_armable": 8,
+                "a_armar": 8,
+                "codigo_marca": 1,
+            },
+            "docenas",
+            marcas_etiqueta={1: "Atomik"},
+        )
+        self.assertEqual(fila["marca_nombre"], "Atomik")
+        self.assertEqual(fila["resta_armar_docenas_pcp"], 8)
+        self.assertEqual(fila["a_armar_docenas_pcp"], 1)
+
+    def test_enriquecer_fila_tablero_pares(self):
+        fila = enriquecer_fila_tablero_presentacion(
+            {"resta_urgente": 24, "produccion": 12, "enviado": 0},
+            "unidades",
+        )
+        self.assertEqual(fila["resta_urgente_display"], "24")
+        self.assertEqual(fila["produccion_display"], "12")
 
 
 class TransicionLoteOperarioTests(SimpleTestCase):
@@ -114,3 +196,44 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         self.assertEqual(len(grilla["filas"]), 1)
         self.assertTrue(grilla["filas"][0]["solo_lectura"])
         self.assertIn("Completo", grilla["filas"][0]["disponible_texto"])
+
+    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
+    @patch(
+        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
+        return_value={(10, 5): Decimal("48")},
+    )
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
+    @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
+    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 100.0}}, {}))
+    def test_grilla_sin_bloqueo_si_clasificacion_completa(
+        self, _pivot, _fetch, mock_celdas, _cls, _arr,
+    ):
+        from mpr.services import construir_grilla_clasificacion_produccion
+
+        mock_celdas.return_value = {
+            (10, 5): {"cantidad": Decimal("48"), "operario_nombre": "López"},
+        }
+        grilla = construir_grilla_clasificacion_produccion(
+            "empresa92", date(2026, 7, 8), 1,
+        )
+        self.assertEqual(grilla["filas"], [])
+        self.assertEqual(grilla["bloqueos"], [])
+
+    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
+    @patch("mpr.services._fetch_descripciones_articulo", return_value={99: ("X", "Sin operario")})
+    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({99: {"Produccion": 12.0}}, {}))
+    def test_grilla_bloqueo_cantidad_sin_operario(
+        self, _pivot, _fetch, mock_celdas, _cls, _arr,
+    ):
+        from mpr.services import construir_grilla_clasificacion_produccion
+
+        mock_celdas.return_value = {
+            (99, 0): {"cantidad": Decimal("12"), "operario_nombre": "-"},
+        }
+        grilla = construir_grilla_clasificacion_produccion(
+            "empresa92", date(2026, 7, 8), 1,
+        )
+        self.assertEqual(len(grilla["bloqueos"]), 1)
+        self.assertEqual(grilla["bloqueos"][0]["id_articulo"], 99)

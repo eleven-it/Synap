@@ -14,7 +14,7 @@ Priorizar el **tablero de producción consolidado** como entrada y flujo operati
 | Demanda / stock por componente | Tablero de producción | `/mpr/tablero-produccion/` |
 | Enviar a fabricar | Columna Enviar (tablero) | POST `/mpr/tablero-produccion/enviar/` |
 | Registrar producido | Parte de producción | `/mpr/parte-produccion/` |
-| Clasificar salida | Clasificación de producción | `/mpr/clasificacion-produccion/` |
+| Clasificar salida (control de calidad) | Control de calidad | `/mpr/clasificacion-produccion/` |
 | Armado | Armado | `/mpr/armado/` |
 | KPIs / urgencias | Tablero de control | `/mpr/tablero/` |
 | Reportes analítica | Reportes MPR (hub visual) | `/mpr/reportes/` |
@@ -48,16 +48,20 @@ Las URLs `/mpr/opt/`, `/mpr/wizard/` y `/mpr/demanda/ventana-pack/` pueden segui
 |-------------|--------|
 | Pedidos pendientes | `contar_pedidos_fabrica` |
 | Componentes pendientes | `listar_tablero_por_articulo(solo_pendiente=True)` |
-| Unidades pendientes | Suma `pendiente` por componente |
+| Pares resta urgente | Suma `resta_urgente` por componente (mismo dato que tablero de producción) |
 | Packs con brecha | `listar_demanda_pack_desde_pedidos` |
-| Panel izquierdo | Top componentes con pendiente |
-| Top pendientes | Misma fuente, enlace al tablero consolidado |
+| Panel izquierdo | Top componentes con **resta urgente** (sin botones; fila enlaza al tablero consolidado) |
+| Top pack pendientes | Demanda pack desde pedidos: stock terminado, resta urgente, a fabricar |
 
 Enlaces rápidos: tablero consolidado, parte, clasificación, armado, planificación. **Sin** Trazabilidad OPT ni ventana pack en el encabezado.
 
 ## Barra rápida MPR (`base_mpr.html`)
 
-Tablero consolidado · Parte · Clasificación · Planificación · KPIs · Armado · Reportes.
+Tablero consolidado · Parte · Control de calidad (teal) · Planificación · KPIs · Armado · Reportes.
+
+## Filtro de marcas (operación diaria)
+
+**Actualizado 07/07/2026:** tablero de producción, parte y control de calidad incluyen selector **Marcas** (tags + búsqueda predictiva local, patrón `tags_filter.mjs` / inventario MPR). Query param repetido `marcas_incluidos` (CodMarca). Filtra filas por `articulo.CodigoMarca` en `listar_tablero_por_articulo`, `construir_grilla_parte` y `construir_grilla_clasificacion_produccion`. Include: `mpr/includes/filtro_marcas_tags.html` → `templates/includes/filtro_marcas_tags.html` (variant `dark`). Toggle canónico **Docenas | Pares**: `templates/includes/toggle_docenas_pares.html`.
 
 ## Tests
 

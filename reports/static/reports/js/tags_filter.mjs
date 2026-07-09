@@ -194,6 +194,49 @@ export function initializeTagsFilter(
     }
   };
 
+  const isDarkDropdown = () =>
+    dropdown.dataset.tagsTheme === "dark" ||
+    dropdown.classList.contains("tags-dropdown--theme-dark");
+
+  const dropdownHintClass = () =>
+    isDarkDropdown()
+      ? "px-3 py-2 text-xs text-slate-400"
+      : "px-3 py-2 text-xs text-slate-500 dark:text-slate-400";
+
+  const dropdownItemClasses = (index, isSelected) => {
+    const dark = isDarkDropdown();
+    const base = "px-3 py-2 text-xs cursor-pointer transition-colors";
+    const hover =
+      index === selectedIndex
+        ? dark
+          ? "bg-sky-900/70"
+          : "bg-sky-100 dark:bg-sky-900"
+        : dark
+          ? "hover:bg-slate-700"
+          : "hover:bg-slate-100 dark:hover:bg-slate-700";
+    const selected = isSelected
+      ? dark
+        ? "bg-sky-950/60"
+        : "bg-sky-50 dark:bg-sky-950"
+      : "";
+    return `${base} ${hover} ${selected}`.trim();
+  };
+
+  const dropdownLabelClass = (isSelected) => {
+    const dark = isDarkDropdown();
+    if (isSelected) {
+      return dark
+        ? "font-medium text-sky-300"
+        : "font-medium text-sky-700 dark:text-sky-300";
+    }
+    return dark ? "text-slate-200" : "text-slate-700 dark:text-slate-300";
+  };
+
+  const dropdownCheckClass = () =>
+    isDarkDropdown()
+      ? "text-sky-400"
+      : "text-sky-600 dark:text-sky-400";
+
   const showDropdown = () => {
     dropdown.classList.remove("hidden");
   };
@@ -218,7 +261,7 @@ export function initializeTagsFilter(
 
     if (results.length === 0) {
       const noResults = document.createElement("div");
-      noResults.className = "px-3 py-2 text-xs text-slate-500 dark:text-slate-400";
+      noResults.className = dropdownHintClass();
       noResults.textContent = query ? "No se encontraron resultados" : "Escribe para buscar...";
       dropdown.appendChild(noResults);
       return;
@@ -228,26 +271,20 @@ export function initializeTagsFilter(
       const vKey = String(item.value);
       const isSelected = selectedValues.has(vKey);
       const itemDiv = document.createElement("div");
-      itemDiv.className = `px-3 py-2 text-xs cursor-pointer transition-colors ${
-        index === selectedIndex
-          ? "bg-sky-100 dark:bg-sky-900"
-          : "hover:bg-slate-100 dark:hover:bg-slate-700"
-      } ${isSelected ? "bg-sky-50 dark:bg-sky-950" : ""}`;
+      itemDiv.className = dropdownItemClasses(index, isSelected);
       itemDiv.dataset.value = vKey;
 
       const itemContent = document.createElement("div");
       itemContent.className = "flex items-center justify-between";
 
       const itemLabel = document.createElement("span");
-      itemLabel.className = isSelected
-        ? "font-medium text-sky-700 dark:text-sky-300"
-        : "text-slate-700 dark:text-slate-300";
+      itemLabel.className = dropdownLabelClass(isSelected);
       itemLabel.textContent = item.label;
       itemContent.appendChild(itemLabel);
 
       if (isSelected) {
         const checkIcon = document.createElement("span");
-        checkIcon.className = "text-sky-600 dark:text-sky-400";
+        checkIcon.className = dropdownCheckClass();
         checkIcon.textContent = "✓";
         itemContent.appendChild(checkIcon);
       }
@@ -305,7 +342,7 @@ export function initializeTagsFilter(
       if (q.length < minChars) {
         dropdown.innerHTML = "";
         const hint = document.createElement("div");
-        hint.className = "px-3 py-2 text-xs text-slate-500 dark:text-slate-400";
+        hint.className = dropdownHintClass();
         hint.textContent = `Escriba al menos ${minChars} caracteres...`;
         dropdown.appendChild(hint);
         showDropdown();
@@ -321,7 +358,7 @@ export function initializeTagsFilter(
       } else {
         dropdown.innerHTML = "";
         const hint = document.createElement("div");
-        hint.className = "px-3 py-2 text-xs text-slate-500 dark:text-slate-400";
+        hint.className = dropdownHintClass();
         hint.textContent = `Escriba al menos ${minChars} caracteres...`;
         dropdown.appendChild(hint);
         showDropdown();
@@ -390,7 +427,7 @@ export function initializeTagsFilter(
   });
 
   document.addEventListener("click", (e) => {
-    if (!container.contains(e.target)) {
+    if (!container.contains(e.target) && !dropdown.contains(e.target)) {
       hideDropdown();
     }
   });

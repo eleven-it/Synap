@@ -2,11 +2,21 @@
 
 Las apps **stock**, **compras** y **self_checkout** son **módulos core**: siempre instaladas y visibles en menú vía `core_modules` en `core/utils/utils.py` (sin fila en `ModuleConfig`). **MPR** está siempre en `INSTALLED_APPS` y en `django_project/urls.py`, pero su visibilidad en menú, URLs (`ModuleMiddleware`) y Command Center depende de **`ModuleConfig`** (`setup_modules --activate mpr`; registro en `core/module_registry.py`, migración `0013_moduleconfig_mpr`).
 
-## Permisos: única fuente AdministraNET
+## Permisos: almacén propio Synap (`synap_*`)
 
-- **Tablas:** `permiso_sistema` y `permiso_sistema_puesto` (MySQL por base empresa).
-- **Sincronización:** Tras el login se ejecuta `sync_permisos_synap` (si `SYNAP_AUTO_SYNC_PERMISSIONS` está activo), que crea en `permiso_sistema` los `key_permiso` definidos en **`core/constantes_permisos.py`** → **`PERMISOS_POR_MODULO`**.
-- **Comodines:** Para "acceso total" al módulo se sincronizan además `reports.*`, `stock.*`, `self_checkout.*` (véase `MODULOS_CON_COMODIN` en `core/services/sync_permisos_synap.py`).
+> **Actualización arquitectónica.** Los permisos/roles de Synap ahora viven en tablas propias
+> `synap_*` (independientes de VB6). La fuente de verdad en runtime la elige el flag
+> `SYNAP_PERMISOS_SOURCE` (`legacy` default / `synap` / `dual`). Detalle completo en
+> **[PERMISOS_SYNAP_STORE.md](PERMISOS_SYNAP_STORE.md)**.
+
+- **Fachada runtime:** `core/services/administranet_permisos_usuario.py::get_permisos_totales_administranet`
+  (firma estable; los consumidores no cambian).
+- **Tablas Synap:** `synap_permiso`, `synap_rol`, `synap_rol_permiso`, `synap_puesto_rol`.
+- **Tablas legacy (aún leídas en modo `legacy`/`dual`):** `permiso_sistema` y `permiso_sistema_puesto`.
+- **Catálogo:** se siembra desde **`core/constantes_permisos.py` → `PERMISOS_POR_MODULO`** + comodines
+  `MODULOS_CON_COMODIN` (centralizados en `core/constantes_permisos.py`).
+- **Sincronización legacy en `permiso_sistema` (`sync_permisos_synap`):** *en desuso*; reemplazada
+  por `apply_synap_permisos_tables` (seed) + `backfill_synap_permisos_from_legacy` (migración).
 
 ## Permisos por app (PERMISOS_POR_MODULO)
 

@@ -12,12 +12,11 @@ import MySQLdb
 from django.conf import settings
 from django.core.cache import cache
 
-from core.constantes_permisos import PERMISOS_POR_MODULO
+from core.constantes_permisos import PERMISOS_POR_MODULO, MODULOS_CON_COMODIN
 
 logger = logging.getLogger(__name__)
 
 CACHE_KEY_PREFIX = "synap_perm_sync:"
-MODULOS_CON_COMODIN = ("reports", "stock", "self_checkout", "logistica")
 
 
 def _lista_permisos_synap(grupo_permiso: str = "Synap") -> List[Dict]:

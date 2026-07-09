@@ -1,0 +1,381 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static l10n %}
+
+{% block title %}Precios terminados — Ventas — Synap{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'ventas/js/precios_terminados_historial.mjs' %}"></script>
+<script src="{% static 'ventas/js/precios_terminados_tabla.mjs' %}"></script>
+{{ block.super }}
+<script type="module" src="{% static 'ventas/js/precios_terminados_filtros.mjs' %}"></script>
+{% endblock %}
+
+{% block content %}
+<div id="precios-terminados-config" class="hidden"
+     data-api-articulos="{% url 'ventas:api_precios_terminados_articulos_buscar' %}"
+     data-tipo-producto="{{ tipo_producto }}"></div>
+{{ tabla_config|json_script:"precios-terminados-tabla-config" }}
+
+<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-3 dark:bg-slate-900 sm:py-4"
+         x-data="preciosTerminadosTabla(JSON.parse(document.getElementById('precios-terminados-tabla-config').textContent))"
+         x-init="init()">
+
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+
+        <div class="relative z-30 flex-shrink-0 overflow-visible" :class="filtrosExpandidos ? 'mb-3' : 'mb-2'">
+            <nav class="mb-2 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
+                <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <li><a href="{% url 'ventas:presupuesto_list' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Ventas</a></li>
+                    <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+                    <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Precios terminados</span></li>
+                </ol>
+            </nav>
+
+            <div class="relative z-30 overflow-visible rounded-lg border border-slate-200 bg-white shadow-md dark:border-slate-700 dark:bg-slate-800"
+                 :class="filtrosExpandidos ? 'p-3 sm:p-4' : 'px-3 py-2 sm:px-4'">
+                <header class="flex items-start justify-between gap-2" :class="filtrosExpandidos ? 'mb-3' : ''">
+                    <div class="min-w-0 flex-1">
+                        <h1 class="text-base font-bold text-slate-900 dark:text-white sm:text-lg" :class="filtrosExpandidos ? 'sm:text-xl' : ''">
+                            Actualización de precios — {{ tipo_label }}
+                        </h1>
+                        <p class="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                            {{ total_count }} artículo{{ total_count|pluralize }} en el universo filtrado
+                            {% if total_count %} · página {{ page }} de {{ total_pages }} ({{ page_size }} por página){% endif %}
+                        </p>
+                        <div x-show="!filtrosExpandidos" x-cloak class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <div class="inline-flex rounded-md border border-slate-300 p-0.5 dark:border-slate-600">
+                                <a href="?{{ qs_tipo_terminado }}&amp;cambio_tipo=1"
+                                   class="inline-flex rounded px-2 py-0.5 text-[10px] font-bold {% if tipo_producto == 'terminado' %}bg-purple-600 text-white{% else %}text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700{% endif %}">Terminado</a>
+                                <a href="?{{ qs_tipo_2da }}&amp;cambio_tipo=1"
+                                   class="inline-flex rounded px-2 py-0.5 text-[10px] font-bold {% if tipo_producto == '2da' %}bg-amber-500 text-amber-950{% else %}text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700{% endif %}">2da</a>
+                            </div>
+                            {% for m in marcas_catalogo %}
+                            {% if m.value in marcas_incluidos %}
+                            <span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-800 dark:bg-sky-900/60 dark:text-sky-200">{{ m.label }}</span>
+                            {% endif %}
+                            {% endfor %}
+                            {% if filtros.codigos_incluidos %}
+                            <span class="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-800 dark:bg-violet-900/50 dark:text-violet-200">{{ filtros.codigos_incluidos|length }} artículo{{ filtros.codigos_incluidos|length|pluralize }}</span>
+                            {% endif %}
+                            {% if proveedores_incluidos %}
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">{{ proveedores_incluidos|length }} proveedor{{ proveedores_incluidos|length|pluralize:"es" }}</span>
+                            {% endif %}
+                            {% if rubros_incluidos %}
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">{{ rubros_incluidos|length }} rubro{{ rubros_incluidos|length|pluralize }}</span>
+                            {% endif %}
+                            {% if subrubros_incluidos %}
+                            <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">{{ subrubros_incluidos|length }} subrubro{{ subrubros_incluidos|length|pluralize }}</span>
+                            {% endif %}
+                            {% for lh in listas_header %}
+                            <span class="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-800 dark:bg-purple-900/50 dark:text-purple-200">{{ lh.nombre }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <button type="button"
+                            @click="toggleFiltros()"
+                            :aria-expanded="filtrosExpandidos"
+                            aria-controls="precios-terminados-filtros-panel"
+                            class="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-200 dark:hover:bg-slate-700">
+                        <span class="material-icons text-base" aria-hidden="true" x-text="filtrosExpandidos ? 'unfold_less' : 'tune'"></span>
+                        <span x-text="filtrosExpandidos ? 'Compactar' : 'Filtros'"></span>
+                    </button>
+                </header>
+
+                <div id="precios-terminados-filtros-panel" x-show="filtrosExpandidos" x-cloak>
+                <div class="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-200 pb-3 dark:border-slate-700">
+                    <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Tipo de producto</span>
+                    <div class="inline-flex rounded-lg border border-slate-300 p-0.5 dark:border-slate-600">
+                        <a href="?{{ qs_tipo_terminado }}&amp;cambio_tipo=1"
+                           class="inline-flex rounded-md px-3 py-1 text-[11px] font-bold {% if tipo_producto == 'terminado' %}bg-purple-600 text-white{% else %}text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700{% endif %}">Terminado</a>
+                        <a href="?{{ qs_tipo_2da }}&amp;cambio_tipo=1"
+                           class="inline-flex rounded-md px-3 py-1 text-[11px] font-bold {% if tipo_producto == '2da' %}bg-amber-500 text-amber-950{% else %}text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700{% endif %}">2da selección</a>
+                    </div>
+                </div>
+
+                <form method="get" class="flex flex-col gap-2">
+                    <input type="hidden" name="tipo_producto" value="{{ tipo_producto }}">
+                    <div class="relative z-40 grid w-full grid-cols-2 items-end gap-2 overflow-visible md:grid-cols-4">
+                        {% include "mpr/includes/filtro_marcas_tags.html" with variant="light" marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos equal=1 only %}
+                        {% include "ventas/includes/filtro_tags_generico.html" with field_id="proveedores_incluidos" label="Proveedor" catalogo=proveedores_catalogo incluidos=proveedores_incluidos equal=1 only %}
+                        {% include "ventas/includes/filtro_tags_generico.html" with field_id="rubros_incluidos" label="Rubro" catalogo=rubros_catalogo incluidos=rubros_incluidos equal=1 only %}
+                        {% include "ventas/includes/filtro_tags_generico.html" with field_id="subrubros_incluidos" label="Subrubro" catalogo=subrubros_catalogo incluidos=subrubros_incluidos equal=1 only %}
+                    </div>
+                    <div class="relative z-50 w-full">
+                        {% include "ventas/includes/filtro_tags_generico.html" with field_id="codigos_incluidos" label="Artículo" catalogo=codigos_catalogo incluidos=filtros.codigos_incluidos placeholder="ID, código o nombre…" full=1 only %}
+                    </div>
+                    <div class="flex w-full items-end gap-2">
+                        <div class="min-w-0 flex-1">
+                            {% include "ventas/includes/filtro_tags_generico.html" with field_id="listas_incluidas" label="Listas de precios" catalogo=listas_catalogo incluidos=listas_incluidas_selected placeholder="Listas…" wide=1 only %}
+                        </div>
+                        <button type="submit" class="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-500">
+                            <span class="material-icons text-base">filter_list</span>
+                            Filtrar
+                        </button>
+                    </div>
+                </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-2 flex flex-shrink-0 flex-wrap items-center justify-between gap-2">
+            <div class="relative min-w-0 flex-1 max-w-md">
+                <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400">search</span>
+                <input type="search" x-model="busqueda" placeholder="Buscar en página…"
+                       class="h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"/>
+            </div>
+            <button type="button" @click="abrirMasivo()"
+                    class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                <span class="material-icons text-base">bolt</span>
+                Cambio masivo
+            </button>
+        </div>
+
+        <div class="relative z-0 min-h-0 flex-1 overflow-auto rounded-lg border border-slate-200 shadow-sm dark:border-slate-700">
+            <table id="tabla-precios-terminados" class="min-w-full w-full border-separate border-spacing-0 text-sm">
+                <thead class="[&_th]:bg-clip-padding">
+                    <tr class="text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
+                        <th class="sticky left-0 top-0 z-40 border-b border-slate-200 bg-slate-100 px-2 py-2 text-left shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-800 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">ID</th>
+                        <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-100 px-2 py-2 text-left dark:border-slate-700 dark:bg-slate-800">Código</th>
+                        <th class="sticky top-0 z-30 min-w-[12rem] border-b border-slate-200 bg-slate-100 px-2 py-2 text-left dark:border-slate-700 dark:bg-slate-800">Nombre</th>
+                        <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-100 px-2 py-2 text-right dark:border-slate-700 dark:bg-slate-800">Reserva</th>
+                        {% for lh in listas_header %}
+                        <th colspan="2" class="sticky top-0 z-30 border-b border-l-2 border-l-purple-200 bg-purple-100 px-2 py-1 text-center text-purple-900 dark:border-l-purple-900 dark:bg-purple-950 dark:text-purple-200">{{ lh.nombre }}</th>
+                        {% endfor %}
+                    </tr>
+                    <tr class="text-[10px] font-semibold uppercase tracking-wide text-purple-800 dark:text-purple-200">
+                        <th class="sticky left-0 top-[1.75rem] z-40 border-b border-slate-200 bg-slate-50 px-2 py-1 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]" colspan="3"></th>
+                        <th class="sticky top-[1.75rem] z-30 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900"></th>
+                        {% for lh in listas_header %}
+                        <th class="sticky top-[1.75rem] z-30 w-24 min-w-[6rem] border-b border-l-2 border-l-purple-200 bg-purple-50 px-1 py-1 text-center dark:border-l-purple-900 dark:bg-purple-950">Neto</th>
+                        <th class="sticky top-[1.75rem] z-30 w-24 min-w-[6rem] border-b border-slate-200 bg-purple-50 px-1 py-1 text-center dark:border-slate-700 dark:bg-purple-950">Final</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
+                    {% for fila in filas %}
+                    <tr data-id-art="{{ fila.id_articulo }}"
+                        data-alicuota="{{ fila.alicuota_iva|unlocalize }}"
+                        data-impuesto-interno="{{ fila.impuesto_interno|unlocalize }}"
+                        data-descripcion="{{ fila.id_manual|lower }} {{ fila.nombre_articulo|lower }}"
+                        x-show="matchesBusqueda($el.dataset.descripcion)"
+                        class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                        <td class="sticky left-0 z-20 bg-white px-2 py-1.5 tabular-nums text-xs text-slate-900 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)] dark:bg-slate-900 dark:text-slate-100 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.3)]">
+                            <div class="flex items-center gap-1">
+                                <span>{{ fila.id_articulo }}</span>
+                                {% if tabla_config.puedeVerHistorial %}
+                                <button type="button"
+                                        title="Ver historial de precios"
+                                        @click="abrirHistorial({{ fila.id_articulo }}, '{{ fila.id_manual|escapejs }}', '{{ fila.nombre_articulo|escapejs }}')"
+                                        class="inline-flex h-6 w-6 items-center justify-center rounded text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950/50">
+                                    <span class="material-icons text-base">history</span>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-2 py-1.5 text-xs font-semibold tabular-nums text-slate-900 dark:text-slate-100">{{ fila.id_manual }}</td>
+                        <td class="max-w-[14rem] truncate px-2 py-1.5 text-xs text-slate-800 dark:text-slate-200" title="{{ fila.nombre_articulo }}">{{ fila.nombre_articulo }}</td>
+                        <td class="px-1 py-1.5 text-right">
+                            <input type="number" step="1" min="0" name="stock_reserva"
+                                   value="{{ fila.stock_reserva|unlocalize }}"
+                                   data-original="{{ fila.stock_reserva|unlocalize }}"
+                                   data-dirty="0"
+                                   @input="onReservaInput($event)"
+                                   class="w-20 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"/>
+                        </td>
+                        {% for pl in fila.precios_por_lista %}
+                        <td class="border-l border-slate-100 px-1 py-1.5 dark:border-slate-800">
+                            <input type="number" step="0.01" min="0"
+                                   data-lista="{{ pl.lista }}" data-campo="neto"
+                                   value="{{ pl.neto|unlocalize }}"
+                                   data-original="{{ pl.neto|unlocalize }}"
+                                   data-dirty="0"
+                                   @input="onPrecioInput($event, {{ fila.id_articulo }}, {{ pl.lista }}, 'neto')"
+                                   class="w-24 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"/>
+                        </td>
+                        <td class="px-1 py-1.5">
+                            <input type="number" step="0.01" min="0"
+                                   data-lista="{{ pl.lista }}" data-campo="final"
+                                   value="{{ pl.final|unlocalize }}"
+                                   data-original="{{ pl.final|unlocalize }}"
+                                   data-dirty="0"
+                                   @input="onPrecioInput($event, {{ fila.id_articulo }}, {{ pl.lista }}, 'final')"
+                                   class="w-24 rounded border border-slate-300 bg-white px-1 py-0.5 text-right text-xs tabular-nums text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"/>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{{ num_columnas_tabla }}" class="px-4 py-8 text-center text-sm text-slate-500">No hay artículos para los filtros seleccionados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if total_pages > 1 %}
+        <nav class="mt-2 flex flex-wrap justify-center gap-2" aria-label="Paginación">
+            {% for p in pagination_pages %}
+            <a href="?{{ qs_base }}&amp;page={{ p }}"
+               class="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-md border px-2 text-xs font-semibold {% if p == page %}border-purple-600 bg-purple-600 text-white{% else %}border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700{% endif %}">{{ p }}</a>
+            {% endfor %}
+        </nav>
+        {% endif %}
+
+        <div x-show="dirtyCount > 0" x-cloak
+             class="sticky bottom-2 z-30 mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/60 bg-amber-50 px-4 py-2 shadow-lg dark:border-amber-700 dark:bg-amber-950/80">
+            <span class="text-sm font-medium text-amber-900 dark:text-amber-100">
+                <span x-text="dirtyCount"></span> artículo(s) con cambios pendientes
+            </span>
+            <div class="flex flex-wrap gap-2">
+                <button type="button" @click="deshacerPagina()" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white dark:border-slate-600 dark:text-slate-200">Deshacer página</button>
+                <button type="button" @click="guardarModalOpen = true" class="rounded-lg bg-purple-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-purple-500">Guardar cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="guardarModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @keydown.escape.window="guardarModalOpen = false">
+        <div class="w-full max-w-md rounded-xl bg-white p-5 shadow-xl dark:bg-slate-900">
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white">Confirmar guardado</h2>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Se actualizarán precios, utilidades e historial para <strong x-text="dirtyCount"></strong> artículo(s).</p>
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" @click="guardarModalOpen = false" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Cancelar</button>
+                <button type="button" @click="guardar()" :disabled="guardarLoading" class="rounded-lg bg-purple-600 px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-50">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="historialOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @keydown.escape.window="cerrarHistorial()">
+        <div class="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-xl dark:bg-slate-900">
+            <div class="flex items-start justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900 dark:text-white">Historial de precios</h2>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400" x-show="historialArticulo">
+                        <span x-text="historialArticulo && historialArticulo.codigo"></span>
+                        — <span x-text="historialArticulo && historialArticulo.nombre"></span>
+                    </p>
+                </div>
+                <button type="button" @click="cerrarHistorial()" class="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <span class="material-icons">close</span>
+                </button>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-5 py-2 dark:border-slate-800">
+                <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Lista</span>
+                <template x-for="li in listasIncluidas" :key="li">
+                    <button type="button"
+                            @click="historialLista = li; cargarHistorial()"
+                            :class="historialLista === li ? 'bg-purple-600 text-white' : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'"
+                            class="rounded-md px-2 py-0.5 text-xs font-semibold"
+                            x-text="'Lista ' + li"></button>
+                </template>
+            </div>
+            <div class="min-h-0 flex-1 overflow-auto px-5 py-3">
+                <p x-show="historialLoading" class="py-6 text-center text-sm text-slate-500">Cargando historial…</p>
+                <p x-show="historialError && !historialLoading" class="py-4 text-sm text-red-600" x-text="historialError"></p>
+                <div x-show="historialResumen && !historialLoading" class="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs dark:border-slate-700 dark:bg-slate-800/50">
+                        <span class="text-slate-500 dark:text-slate-400">Cambios</span>
+                        <p class="font-bold tabular-nums text-slate-900 dark:text-slate-100" x-text="historialResumen && historialResumen.cantidad_cambios"></p>
+                    </div>
+                    <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs dark:border-slate-700 dark:bg-slate-800/50">
+                        <span class="text-slate-500 dark:text-slate-400">Neto inicial</span>
+                        <p class="font-bold tabular-nums text-slate-900 dark:text-slate-100" x-text="historialResumen && historialResumen.neto_inicial"></p>
+                    </div>
+                    <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs dark:border-slate-700 dark:bg-slate-800/50">
+                        <span class="text-slate-500 dark:text-slate-400">Neto final</span>
+                        <p class="font-bold tabular-nums text-slate-900 dark:text-slate-100" x-text="historialResumen && historialResumen.neto_final"></p>
+                    </div>
+                    <div class="rounded border border-slate-200 bg-slate-50 p-2 text-xs dark:border-slate-700 dark:bg-slate-800/50">
+                        <span class="text-slate-500 dark:text-slate-400">Var. acumulada</span>
+                        <p class="font-bold tabular-nums text-slate-900 dark:text-slate-100" x-text="fmtPct(historialResumen && historialResumen.variacion_pct_acumulada)"></p>
+                    </div>
+                </div>
+                <table x-show="!historialLoading && historialFilas.length" class="min-w-full text-xs">
+                    <thead class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                        <tr>
+                            <th class="px-2 py-1 text-left">Fecha</th>
+                            <th class="px-2 py-1 text-right">Neto</th>
+                            <th class="px-2 py-1 text-right">Final</th>
+                            <th class="px-2 py-1 text-right">Δ neto</th>
+                            <th class="px-2 py-1 text-right">Δ %</th>
+                            <th class="px-2 py-1 text-left">Origen</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 text-slate-900 dark:divide-slate-800 dark:text-slate-100">
+                        <template x-for="row in historialFilas" :key="row.id_precios_historial">
+                            <tr>
+                                <td class="px-2 py-1.5" x-text="fmtFecha(row.fecha)"></td>
+                                <td class="px-2 py-1.5 text-right tabular-nums" x-text="row.neto"></td>
+                                <td class="px-2 py-1.5 text-right tabular-nums" x-text="row.final"></td>
+                                <td class="px-2 py-1.5 text-right tabular-nums" x-text="row.delta_neto != null ? row.delta_neto : '—'"></td>
+                                <td class="px-2 py-1.5 text-right tabular-nums" x-text="fmtPct(row.delta_pct)"></td>
+                                <td class="max-w-[10rem] truncate px-2 py-1.5" :title="row.tipo_modificacion" x-text="row.tipo_modificacion"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                <p x-show="!historialLoading && !historialError && historialFilas.length === 0" class="py-6 text-center text-sm text-slate-500">
+                    Sin registros de historial en el período.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="masivoModalOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-5 shadow-xl dark:bg-slate-900">
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white">Cambio masivo</h2>
+            <p class="mt-1 text-xs text-slate-500">
+                Aplica solo a los artículos <strong>visibles en la tabla</strong>
+                (<span x-text="countVisiblesEnTabla()"></span> en esta página
+                <span x-show="busqueda.trim()">con la búsqueda actual</span>).
+            </p>
+            <div class="mt-4 space-y-3 text-sm">
+                <label class="block">
+                    <span class="text-xs font-semibold text-slate-500">Ámbito</span>
+                    <select x-model="masivo.ambito" @change="masivoPreview = null" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                        <option value="precio_neto">Precio neto</option>
+                        <option value="precio_final">Precio final</option>
+                        <option value="reserva">Reserva</option>
+                    </select>
+                </label>
+                <div x-show="masivo.ambito === 'precio_neto' || masivo.ambito === 'precio_final'" x-cloak>
+                    <span class="text-xs font-semibold text-slate-500">Listas de precios</span>
+                    <div class="mt-1 flex flex-wrap gap-2">
+                        <template x-for="li in listasIncluidas" :key="'masivo-li-' + li">
+                            <button type="button"
+                                    @click="toggleListaMasivo(li)"
+                                    :class="isListaMasivoSelected(li) ? 'bg-purple-600 text-white border-purple-600' : 'border-slate-300 text-slate-700 dark:border-slate-600 dark:text-slate-300'"
+                                    class="rounded-lg border px-2.5 py-1 text-xs font-semibold"
+                                    x-text="nombreLista(li)"></button>
+                        </template>
+                    </div>
+                </div>
+                <label class="block">
+                    <span class="text-xs font-semibold text-slate-500">Operación</span>
+                    <select x-model="masivo.tipo_operacion" @change="masivoPreview = null" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
+                        <option value="porcentaje_mas">Incremento %</option>
+                        <option value="porcentaje_menos">Decremento %</option>
+                        <option value="sumar">Sumar monto</option>
+                        <option value="restar">Restar monto</option>
+                        <option value="establecer">Establecer valor</option>
+                        <option value="redondear">Redondear</option>
+                    </select>
+                </label>
+                <label class="block">
+                    <span class="text-xs font-semibold text-slate-500">Valor</span>
+                    <input type="number" step="any" x-model.number="masivo.valor" @input="masivoPreview = null" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"/>
+                </label>
+            </div>
+            <p x-show="masivoPreview" class="mt-3 text-sm text-slate-700 dark:text-slate-300">
+                Se actualizarán <strong x-text="masivoPreview && masivoPreview.total_articulos"></strong> artículos.
+            </p>
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" @click="masivoModalOpen = false" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800">Cancelar</button>
+                <button type="button" @click="previewMasivo()" :disabled="masivoLoading" class="rounded-lg border border-purple-600 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-950/40">Vista previa</button>
+                <button type="button" @click="aplicarMasivo()" :disabled="masivoLoading" class="rounded-lg bg-purple-600 px-4 py-1.5 text-sm font-semibold text-white">Aplicar</button>
+            </div>
+        </div>
+    </div>
+
+    {% csrf_token %}
+</section>
+{% endblock %}

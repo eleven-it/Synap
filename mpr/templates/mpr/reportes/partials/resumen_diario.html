@@ -1,47 +1,43 @@
-{% if not dias %}
-{% include "mpr/reportes/partials/empty_state.html" with empty_titulo="No hay movimientos MPR en este período" empty_cta_url="mpr:tablero_produccion" empty_cta_label="Ir al tablero consolidado" %}
+{% if not meses_resumen %}
+{% include "mpr/reportes/partials/empty_state.html" with empty_titulo="No hay producción registrada en este período" empty_cta_url="mpr:tablero_produccion" empty_cta_label="Ir al tablero consolidado" %}
 {% else %}
 {% include "mpr/reportes/partials/_mpr_charts.html" %}
-<div class="overflow-x-auto">
-    <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-        <thead class="sticky top-0 z-10 bg-gray-50 shadow-[0_1px_0_0_rgba(0,0,0,0.06)] dark:bg-gray-800 dark:shadow-[0_1px_0_0_rgba(255,255,255,0.06)]">
+<div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+    <table class="w-full border-collapse text-sm">
+        <thead class="sticky top-0 z-10">
             <tr>
-                <th class="px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Día</th>
-                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">Enviado ({{ etiqueta_cantidad_corta|default:"u." }})</th>
-                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">Parte ({{ etiqueta_cantidad_corta|default:"u." }})</th>
-                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">Clasificado ({{ etiqueta_cantidad_corta|default:"u." }})</th>
-                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">Scrap ({{ etiqueta_cantidad_corta|default:"u." }})</th>
-                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">Scrap %</th>
-                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-600 dark:text-gray-300">Gap envío→parte</th>
+                <th class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Día</th>
+                <th class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-400">Producción registrada ({{ etiqueta_cantidad_corta|default:"p." }})</th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            {% for d in dias %}
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/40">
-                <td class="px-3 py-2 text-sm font-medium text-gray-900 dark:text-white">{{ d.fecha_display }}</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">{{ d.enviado_display|default:d.enviado }}</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums text-emerald-600">{{ d.parte_display|default:d.parte }}</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">{{ d.clasificado_display|default:d.clasificado }}</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums text-red-600">{{ d.scrap_display|default:d.scrap }}</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">{{ d.scrap_pct }}%</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">
-                    {% if d.gap_envio_parte > 0 %}
-                    <span class="inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300">{{ d.gap_envio_parte_display|default:d.gap_envio_parte }}</span>
-                    {% else %}0{% endif %}
+        {% for mes in meses_resumen %}
+        <tbody x-data="{ abierto: true }">
+            {# Fila de grupo (mes) — estilo BO: colapsable con subtotal en la fila #}
+            <tr @click="abierto = !abierto"
+                class="cursor-pointer select-none bg-slate-100 hover:bg-slate-200/70 dark:bg-slate-800 dark:hover:bg-slate-700/70">
+                <td class="border-b border-slate-100 px-3 py-2 text-xs dark:border-slate-800">
+                    <svg class="mr-2 inline-block h-4 w-4 align-middle text-slate-500 transition-transform duration-200"
+                         :class="abierto ? 'rotate-90' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+                        <path d="M9 18l6-6-6-6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="font-medium text-slate-700 dark:text-slate-200">{{ mes.mes_label }}</span>
+                    <span class="ml-2 text-[11px] text-slate-400 dark:text-slate-500">({{ mes.dias|length }} día{{ mes.dias|length|pluralize }})</span>
                 </td>
+                <td class="border-b border-slate-100 px-3 py-2 text-right font-semibold tabular-nums text-sky-600 dark:border-slate-800 dark:text-sky-400">{{ mes.subtotal_display|default:mes.subtotal }}</td>
+            </tr>
+            {% for d in mes.dias %}
+            <tr x-show="abierto" x-cloak class="bo-detail-row hover:bg-slate-50 dark:hover:bg-slate-900/30">
+                <td class="border-b border-slate-100 px-3 py-2 text-xs text-slate-700 dark:border-slate-800 dark:text-slate-300" style="padding-left: 2.25rem;">{{ d.fecha_display }}</td>
+                <td class="border-b border-slate-100 px-3 py-2 text-right text-xs tabular-nums text-emerald-600 dark:border-slate-800 dark:text-emerald-400">{{ d.parte_display|default:d.parte }}</td>
             </tr>
             {% endfor %}
         </tbody>
+        {% endfor %}
         {% if totales %}
-        <tfoot class="sticky bottom-0 z-10 bg-slate-100 font-semibold dark:bg-slate-900/95">
-            <tr>
-                <td class="px-3 py-2 text-sm">Total</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">{{ totales.enviado_display|default:totales.enviado }}</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">{{ totales.parte_display|default:totales.parte }}</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">{{ totales.clasificado_display|default:totales.clasificado }}</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">{{ totales.scrap_display|default:totales.scrap }}</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">—</td>
-                <td class="px-3 py-2 text-right text-sm tabular-nums">{{ totales.gap_envio_parte_display|default:totales.gap_envio_parte }}</td>
+        <tfoot class="sticky bottom-0 z-10">
+            <tr class="bg-sky-50 font-bold dark:bg-sky-950/30">
+                <td class="border-t-2 border-slate-300 px-3 py-2 text-xs text-slate-800 dark:border-slate-600 dark:text-white">Total general</td>
+                <td class="border-t-2 border-slate-300 px-3 py-2 text-right text-xs tabular-nums text-slate-900 dark:border-slate-600 dark:text-white">{{ totales.parte_display|default:totales.parte }}</td>
             </tr>
         </tfoot>
         {% endif %}

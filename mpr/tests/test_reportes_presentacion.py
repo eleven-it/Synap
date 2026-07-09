@@ -1,4 +1,4 @@
-"""Tests: presentación unidades vs docenas en hub de reportes MPR."""
+"""Tests: presentación pares vs docenas en hub de reportes MPR."""
 from django.test import RequestFactory, SimpleTestCase
 
 from mpr.reportes_hub import columnas_csv_para_modo
@@ -39,19 +39,22 @@ class ParseModoPresentacionTest(SimpleTestCase):
 
 
 class FormatearCantidadReporteTest(SimpleTestCase):
+    def test_pares_alias_a_unidades(self):
+        self.assertEqual(parse_modo_presentacion("pares"), "unidades")
+
     def test_modo_unidades_entero(self):
         self.assertEqual(formatear_cantidad_reporte(124, "unidades"), "124")
 
     def test_modo_docenas_componente_divisor_12(self):
         self.assertEqual(
             formatear_cantidad_reporte(124, "docenas"),
-            "10 docenas · 4 unidades",
+            "10 docenas · 4 pares",
         )
 
     def test_modo_docenas_pack_con_bulto(self):
         self.assertEqual(
             formatear_cantidad_reporte(124, "docenas", cantidad_promedio_bulto=24),
-            "5 docenas · 4 unidades",
+            "5 docenas · 4 pares",
         )
 
 
@@ -65,8 +68,8 @@ class AplicarPresentacionReporteTest(SimpleTestCase):
             "docenas",
         )
         self.assertEqual(ctx["modo_presentacion"], "docenas")
-        self.assertEqual(ctx["filas"][0]["enviado_display"], "2 docenas · 0 unidades")
-        self.assertEqual(ctx["kpis"]["enviado_display"], "2 docenas · 0 unidades")
+        self.assertEqual(ctx["filas"][0]["enviado_display"], "2 docenas · 0 pares")
+        self.assertEqual(ctx["kpis"]["enviado_display"], "2 docenas · 0 pares")
 
     def test_eventos_timeline_reciben_id_articulo_meta(self):
         ctx = aplicar_presentacion_reporte(
@@ -76,7 +79,7 @@ class AplicarPresentacionReporteTest(SimpleTestCase):
             },
             "docenas",
         )
-        self.assertEqual(ctx["eventos"][0]["cantidad_display"], "2 docenas · 0 unidades")
+        self.assertEqual(ctx["eventos"][0]["cantidad_display"], "2 docenas · 0 pares")
 
     def test_pedidos_cantidad_no_es_campo_cantidad_fisica(self):
         fila = enriquecer_fila_cantidades({"cantidad": 5, "estado": "Pendiente"}, "docenas")
@@ -191,4 +194,4 @@ class ReportesMPRViewPresentacionTest(SimpleTestCase):
         view.setup(request)
         ctx = view.get_context_data()
         self.assertEqual(ctx["modo_presentacion"], "docenas")
-        self.assertEqual(ctx["etiqueta_cantidad"], "docenas · unidades")
+        self.assertEqual(ctx["etiqueta_cantidad"], "docenas · pares")

@@ -1,9 +1,9 @@
-"""Presentación docenas/unidades en pantallas operativas MPR."""
+"""Presentación docenas/pares en pantallas operativas MPR."""
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from mpr.services import descomponer_docenas_unidades, texto_docenas_unidades
+from mpr.services import descomponer_docenas_unidades, texto_docenas_pares, texto_docenas_unidades
 
 SESSION_KEY = "mpr_presentacion_cantidad"
 MODOS = frozenset({"docenas", "unidades"})
@@ -11,14 +11,16 @@ DEFAULT_MODO = "docenas"
 UNIDADES_POR_DOCENA = 12
 
 CAMPOS_TABLERO_CANTIDAD = (
+    "resta_urgente",
+    "resta_total",
     "pendiente",
     "enviado",
     "produccion",
     "segunda_seleccion",
     "semi_elaborado",
     "desperdicio",
-    "terminado",
     "total",
+    "stock_proceso",
 )
 
 
@@ -36,14 +38,84 @@ def resolver_modo_presentacion_operativa(request) -> str:
     return parse_modo_presentacion_operativa(request.session.get(SESSION_KEY))
 
 
-def _display_cantidad(val: Any, modo: str) -> str:
+def pcp_pares_y_docenas_decimal(cantidad: Any) -> Dict[str, Any]:
+    """Paridad PCP: columna Pares (entero) y Docenas = pares ÷ 12 (decimal)."""
+    try:
+        pares = int(round(float(cantidad or 0)))
+    except (TypeError, ValueError):
+        pares = 0
+    pares = max(0, pares)
+    return {
+        "pares": pares,
+        "docenas": round(pares / float(UNIDADES_POR_DOCENA), 2),
+    }
+
+
+def _enriquecer_bloque_demanda_pcp(out: Dict[str, Any]) -> None:
+    """Columnas Demanda a producir al estilo PCP (Pedido, Reserva, Resta total, Resta urgente)."""
+    pedido = out.get("dem_ped")
+    if pedido is None:
+        pedido = out.get("urgente", 0)
+    out["pedido_pares"] = pcp_pares_y_docenas_decimal(pedido)["pares"]
+    out["pedido_docenas_pcp"] = docenas_enteras_pcp(pedido)
+
+    reserva = out.get("dem_res", 0)
+    res_pcp = pcp_pares_y_docenas_decimal(reserva)
+    out["reserva_pares"] = res_pcp["pares"]
+    out["reserva_docenas_pcp"] = docenas_enteras_pcp(reserva)
+
+    rt = pcp_pares_y_docenas_decimal(out.get("resta_total", 0))
+    out["resta_total_pares"] = rt["pares"]
+    out["resta_total_docenas_pcp"] = docenas_enteras_pcp(out.get("resta_total", 0))
+
+    ru = pcp_pares_y_docenas_decimal(out.get("resta_urgente", 0))
+    out["resta_urgente_pares"] = ru["pares"]
+    out["resta_urgente_docenas_pcp"] = docenas_enteras_pcp(out.get("resta_urgente", 0))
+
+
+def docenas_enteras_pcp(cantidad: Any) -> int:
+    """Docenas para UI tablero: entero redondeado (pares ÷ 12)."""
+    return int(round(float(pcp_pares_y_docenas_decimal(cantidad)["docenas"])))
+
+
+def _display_cantidad_tablero(val: Any, modo: str) -> str:
+    """Solo docenas enteras o pares enteros — sin decimales."""
+    pcp = pcp_pares_y_docenas_decimal(val)
+    if modo == "docenas":
+        return str(docenas_enteras_pcp(val))
+    return str(pcp["pares"])
+
+
+def _display_cantidad(val: Any, modo: str, *, usar_pares: bool = True) -> str:
     try:
         n = int(round(float(val or 0)))
     except (TypeError, ValueError):
         n = 0
     if modo == "docenas":
+        if usar_pares:
+            return texto_docenas_pares(n, unidades_por_docena_fijo=UNIDADES_POR_DOCENA)
         return texto_docenas_unidades(n, unidades_por_docena_fijo=UNIDADES_POR_DOCENA)
     return str(n)
+
+
+def _enriquecer_cantidad_envio(
+    out: Dict[str, Any],
+    campo_base: str,
+    modo: str,
+) -> None:
+    """Docenas/pares sueltos para inputs de envío (prefijo según campo_base)."""
+    try:
+        cant = int(round(float(out.get(campo_base) or 0)))
+    except (TypeError, ValueError):
+        cant = 0
+    du = descomponer_docenas_unidades(cant, unidades_por_docena_fijo=UNIDADES_POR_DOCENA)
+    out[f"{campo_base}_docenas"] = du["docenas"]
+    out[f"{campo_base}_pares_sueltos"] = du["unidades"]
+    out[f"{campo_base}_docenas_pcp"] = docenas_enteras_pcp(cant)
+    # Alias legacy para plantillas en transición
+    if campo_base == "resta_urgente":
+        out["pendiente_docenas"] = du["docenas"]
+        out["pendiente_unidades_sueltas"] = du["unidades"]
 
 
 def enriquecer_fila_tablero_presentacion(
@@ -54,14 +126,23 @@ def enriquecer_fila_tablero_presentacion(
     out["presentacion_modo"] = modo
     for campo in CAMPOS_TABLERO_CANTIDAD:
         if campo in out:
-            out[f"{campo}_display"] = _display_cantidad(out[campo], modo)
-    try:
-        pend = int(round(float(out.get("pendiente") or 0)))
-    except (TypeError, ValueError):
-        pend = 0
-    du = descomponer_docenas_unidades(pend, unidades_por_docena_fijo=UNIDADES_POR_DOCENA)
-    out["pendiente_docenas"] = du["docenas"]
-    out["pendiente_unidades_sueltas"] = du["unidades"]
+            out[f"{campo}_display"] = _display_cantidad_tablero(out[campo], modo)
+            out[f"{campo}_docenas_pcp"] = docenas_enteras_pcp(out[campo])
+    _enriquecer_bloque_demanda_pcp(out)
+    if "a_enviar" not in out:
+        from mpr.services import _calcular_a_enviar_componente
+
+        out["a_enviar"] = _calcular_a_enviar_componente(
+            out.get("resta_urgente", 0),
+            out.get("enviado", 0),
+        )
+    _enriquecer_cantidad_envio(out, "a_enviar", modo)
+    # Alias legacy: inputs/docenas de envío leen a_enviar_*
+    if "a_enviar_docenas" in out:
+        out["resta_urgente_docenas"] = out["a_enviar_docenas"]
+        out["resta_urgente_pares_sueltos"] = out["a_enviar_pares_sueltos"]
+        out["pendiente_docenas"] = out["a_enviar_docenas"]
+        out["pendiente_unidades_sueltas"] = out["a_enviar_pares_sueltos"]
     return out
 
 
@@ -70,3 +151,47 @@ def enriquecer_filas_tablero_presentacion(
     modo: str,
 ) -> List[Dict[str, Any]]:
     return [enriquecer_fila_tablero_presentacion(f, modo) for f in (filas or [])]
+
+
+CAMPOS_TABLERO_ARMADO = (
+    "pedido",
+    "stock_terminado",
+    "stock_reserva",
+    "resta_urgente",
+    "resta_armar",
+    "max_armable",
+    "a_armar",
+)
+
+
+def enriquecer_fila_tablero_armado(
+    fila: Dict[str, Any],
+    modo: str,
+    *,
+    marcas_etiqueta: Optional[Dict[int, str]] = None,
+) -> Dict[str, Any]:
+    out = dict(fila)
+    out["presentacion_modo"] = modo
+    for campo in CAMPOS_TABLERO_ARMADO:
+        if campo in out:
+            out[f"{campo}_display"] = _display_cantidad_tablero(out[campo], modo)
+            out[f"{campo}_docenas_pcp"] = docenas_enteras_pcp(out[campo])
+    cm = out.get("codigo_marca")
+    if cm is not None and marcas_etiqueta:
+        out["marca_nombre"] = marcas_etiqueta.get(int(cm), "")
+    else:
+        out["marca_nombre"] = out.get("marca_nombre") or ""
+    out["a_armar_docenas_pcp"] = docenas_enteras_pcp(out.get("a_armar", 0))
+    return out
+
+
+def enriquecer_filas_tablero_armado(
+    filas: List[Dict[str, Any]],
+    modo: str,
+    *,
+    marcas_etiqueta: Optional[Dict[int, str]] = None,
+) -> List[Dict[str, Any]]:
+    return [
+        enriquecer_fila_tablero_armado(f, modo, marcas_etiqueta=marcas_etiqueta)
+        for f in (filas or [])
+    ]

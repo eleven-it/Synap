@@ -38,8 +38,19 @@
 
   {% if tab_activa == 'synap' %}
   <div class="bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 mb-4 border border-gray-100 dark:border-gray-800">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3 pb-3 border-b border-gray-100 dark:border-gray-800">
+      <div class="flex items-center gap-2">
+        <span class="material-icons text-base text-purple-600 dark:text-purple-400">badge</span>
+        <span class="text-sm font-semibold text-gray-800 dark:text-gray-100">
+          Rol: {{ rol_synap.nombre|default:"(se crea al asignar el primer permiso)" }}
+        </span>
+      </div>
+      <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-200">
+        {{ rol_synap.total_activos }} permiso(s) activo(s)
+      </span>
+    </div>
     <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
-      Permisos granulares de Synap (<code class="text-xs">permiso_sistema</code> / <code class="text-xs">permiso_sistema_puesto</code>).
+      Permisos granulares de Synap (<code class="text-xs">synap_permiso</code> / <code class="text-xs">synap_rol_permiso</code>, independientes de AdministraNET).
       Controlan acceso a módulos web, informes y APIs. Los cambios se guardan al instante.
     </p>
     <div class="flex flex-wrap gap-2 mb-4">
@@ -102,7 +113,7 @@
               {% if valor|lower == 'si' or valor == '1' %}
               <button type="button"
                       class="synap-toggle inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer"
-                      data-id="{{ permiso.id_permiso_sistema }}"
+                      data-id="{{ permiso.id_permiso }}"
                       data-next="No">
                 <span class="w-1.5 h-1.5 mr-1.5 bg-green-500 rounded-full"></span>
                 Activo
@@ -110,7 +121,7 @@
               {% else %}
               <button type="button"
                       class="synap-toggle inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer"
-                      data-id="{{ permiso.id_permiso_sistema }}"
+                      data-id="{{ permiso.id_permiso }}"
                       data-next="Si">
                 <span class="w-1.5 h-1.5 mr-1.5 bg-gray-500 rounded-full"></span>
                 Inactivo
@@ -209,7 +220,7 @@
           'Content-Type': 'application/json',
           'X-CSRFToken': getCookie('csrftoken')
         },
-        body: JSON.stringify({ id_permiso_sistema: idPerm, valor: valor })
+        body: JSON.stringify({ id_permiso: idPerm, valor: valor })
       })
         .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
         .then(function (res) {

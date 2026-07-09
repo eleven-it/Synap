@@ -16,11 +16,7 @@
             <span class="material-icons text-sm" aria-hidden="true">assignment</span>
             Parte de producción
         </a>
-        <a href="{% url 'mpr:clasificacion_produccion' %}"
-           class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-gray-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300">
-            <span class="material-icons text-sm" aria-hidden="true">category</span>
-            Clasificación
-        </a>
+        {% include "mpr/includes/btn_control_calidad.html" with variant="nav" only %}
         <a href="{% url 'mpr:planificacion_turnos' %}"
            class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-purple-50 hover:text-purple-700 dark:text-gray-400 dark:hover:bg-purple-900/20 dark:hover:text-purple-300">
             <span class="material-icons text-sm" aria-hidden="true">calendar_month</span>
