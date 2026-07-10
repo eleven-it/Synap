@@ -1,141 +1,152 @@
-{% extends "base_app.html" %}
+{% extends "ecom/base_pedidos.html" %}
 {% load static %}
 
-{% block title %}Compra mayorista — Synap{% endblock %}
+{% block pedidos_title %}Gestión de pedidos{% endblock %}
 
-{% block content %}
+{% block pedidos_section_attrs %}x-data="compraMayorista()" x-init="init()"{% endblock %}
+
+{% block pedidos_json_script %}
 {{ urls|json_script:"compra-mayorista-urls" }}
-<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24"
-         x-data="compraMayorista()" x-init="init()">
+{% endblock %}
 
-  <!-- Hero -->
-  <div class="relative overflow-hidden">
-    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 opacity-95"></div>
-    <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
-      <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-        <div>
-          <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">Portal mayorista</p>
-          <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">Compra mayorista</h1>
-          <p class="mt-2 text-sm text-slate-300 max-w-3xl">
-            Buscá artículos con precio del motor, armá el carrito y confirmá el comprobante
-            (pedido, presupuesto o devolución) sobre AdministraNET.
-          </p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-          <label class="text-[11px] uppercase tracking-wide text-slate-300 font-semibold">Comprobante</label>
-          <select x-model="tipo"
-                  class="rounded-full bg-white/10 border border-white/20 text-white text-xs font-semibold px-3 py-2 focus:ring-2 focus:ring-sky-400 outline-none">
-            <option class="text-slate-900" value="PED">Pedido</option>
-            <option class="text-slate-900" value="PRE">Presupuesto</option>
-            <option class="text-slate-900" value="DEV">Devolución</option>
-          </select>
-          <a :href="urls.lista_precios_pdf" target="_blank"
-             class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white bg-slate-900/60 hover:bg-slate-900 border border-white/20 transition">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Lista de precios PDF
-          </a>
-        </div>
+{% block pedidos_eyebrow_wrap %}{% endblock %}
+
+{% block pedidos_breadcrumb %}
+{% include "ecom/includes/pedidos_breadcrumb.html" with hub_url=urls.hub_pedidos current_label="Nuevo pedido" %}
+{% endblock %}
+
+{% block pedidos_heading %}Gestión de pedidos{% endblock %}
+
+{% block pedidos_hero_actions %}
+{% include "ecom/includes/pedidos_toggle_comprobante.html" %}
+{% endblock %}
+
+{% block pedidos_content %}
+<div class="compra-modo-shell space-y-4 sm:space-y-6" :class="modoShellClass" x-cloak>
+
+<div class="space-y-4 sm:space-y-6">
+
+  <!-- Cliente + marcas (vendedor) -->
+  <div class="grid grid-cols-1 gap-4" :class="!esCliente ? 'lg:grid-cols-2' : ''">
+
+    <div x-show="!esCliente" x-cloak class="pedidos-card p-4"
+         id="compra-cliente-panel"
+         data-buscar-url="{{ urls.clientes_buscar }}"
+         data-seleccionar-url="{{ urls.clientes_seleccionar }}"
+         data-seleccionado-url="{{ urls.clientes_seleccionado }}">
+      <label class="pedidos-filter-label" for="compra_cliente_search" x-text="clienteCampoLabel">Cliente para el pedido</label>
+      <div class="relative mt-2">
+        <input type="text"
+               id="compra_cliente_search"
+               autocomplete="off"
+               role="combobox"
+               aria-autocomplete="list"
+               aria-controls="compra_cliente_dropdown"
+               class="pedidos-input w-full"
+               placeholder="Nombre, código o CUIT (mín. 2 caracteres)…" />
+        <div id="compra_cliente_dropdown"
+             class="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+      </div>
+      <p class="mt-2 text-xs text-sky-700 dark:text-sky-300" x-show="!clienteActivo && !intentoSinCliente">
+        Elegí un cliente para aplicar su lista de precios y ver pedidos recientes.
+      </p>
+      <p class="mt-2 text-xs text-amber-700 dark:text-amber-400 font-medium" x-show="!clienteActivo && !esCliente && intentoSinCliente">
+        Debe seleccionar un cliente antes de agregar artículos o confirmar.
+      </p>
+      <div class="mt-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-3 text-sm" x-show="clienteActivo && creditoWidget" x-cloak>
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Crédito y cuenta</p>
+        <p class="text-slate-700 dark:text-slate-200">
+          Saldo CC: <span class="font-semibold tabular-nums" x-text="money(creditoWidget.saldo)"></span>
+          <span class="mx-2">·</span>
+          Límite crédito: <span x-text="creditoWidget.limite_dias + ' días'"></span>
+        </p>
+        <p class="mt-1" :class="creditoWidget.autorizado ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'">
+          <span x-text="creditoWidget.autorizado ? 'Autorizado para operar' : 'Requiere revisión de crédito (el pedido se registra igual)'"></span>
+          <span x-show="creditoWidget.dias_exceso > 0" x-text="` · ${creditoWidget.dias_exceso} días de exceso`"></span>
+        </p>
       </div>
     </div>
+
+    <div class="pedidos-card p-4"
+         id="compra-marcas-panel"
+         data-marcas-url="{{ urls.marcas }}">
+      {% include "includes/filtro_marcas_tags.html" with field_id="compra_marcas_incluidos" marcas_catalogo="" equal=True %}
+    </div>
+
   </div>
 
-  <div class="relative w-full px-4 sm:px-6 lg:px-12 -mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
 
-    <!-- Catálogo -->
-    <div class="xl:col-span-2 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden">
-      {% csrf_token %}
-      <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800">
-        <form @submit.prevent="buscar(1)" class="flex flex-col sm:flex-row gap-3">
-          <input type="text" x-model="q" @input.debounce.400ms="buscar(1)" placeholder="Buscar por nombre, código o código manual…"
-                 class="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm px-4 py-2.5 focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 outline-none" />
-          <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
-            <input type="checkbox" x-model="soloPromo" @change="buscar(1)" class="rounded border-slate-300 text-sky-600 focus:ring-sky-500"> Solo promociones
-          </label>
-          <button type="submit" :disabled="cargandoCat"
-                  class="inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 transition">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
-            Buscar
-          </button>
-        </form>
+    <!-- Pedidos recientes (solo modo pedido) -->
+    <div class="md:col-span-3 pedidos-card p-4" x-show="tipo === 'PED' && pedidosRecientes.length" x-cloak>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Pedidos recientes del cliente</h2>
+        <a :href="urls.listado_pedidos" class="text-xs font-semibold text-sky-600 hover:text-sky-500">Ver listado</a>
       </div>
-
-      <div class="px-6 py-6">
-        <template x-if="cargandoCat">
-          <p class="text-sm text-slate-500 py-10 text-center">Buscando artículos…</p>
-        </template>
-        <template x-if="!cargandoCat && articulos.length === 0">
-          <div class="rounded-xl border border-dashed border-slate-200 dark:border-slate-700 py-16 text-center text-sm text-slate-500 dark:text-slate-400">
-            Buscá un artículo para empezar. El precio y el stock disponible se calculan al momento.
-          </div>
-        </template>
-        <template x-if="!cargandoCat && articulos.length > 0">
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-sm text-left border-collapse">
-              <thead>
-                <tr class="border-b border-slate-200 dark:border-slate-700 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                  <th class="py-3 pr-3 font-semibold">Cód</th>
-                  <th class="py-3 pr-3 font-semibold min-w-[220px]">Artículo</th>
-                  <th class="py-3 pr-3 font-semibold text-right">Precio</th>
-                  <th class="py-3 pr-3 font-semibold text-right">Disp.</th>
-                  <th class="py-3 pr-3 font-semibold text-right">Cant.</th>
-                  <th class="py-3 pr-3 font-semibold"></th>
-                </tr>
-              </thead>
-              <tbody class="text-slate-800 dark:text-slate-200">
-                <template x-for="a in articulos" :key="a.id_articulo">
-                  <tr class="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                    <td class="py-2.5 pr-3 whitespace-nowrap text-xs text-slate-500" x-text="a.id_manual || a.codigo"></td>
-                    <td class="py-2.5 pr-3">
-                      <span x-text="a.nombre"></span>
-                      <span x-show="a.en_promocion" class="ml-1 inline-block rounded-full bg-amber-100 text-amber-700 text-[10px] font-semibold px-2 py-0.5">Promo</span>
-                    </td>
-                    <td class="py-2.5 pr-3 text-right font-semibold whitespace-nowrap" x-text="money(a.precio)"></td>
-                    <td class="py-2.5 pr-3 text-right whitespace-nowrap" :class="a.stock_disponible > 0 ? 'text-slate-600 dark:text-slate-300' : 'text-rose-500'" x-text="a.stock_disponible"></td>
-                    <td class="py-2.5 pr-3 text-right">
-                      <input type="number" min="1" step="1" x-model.number="a._cant"
-                             class="w-16 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-right text-sm px-2 py-1 focus:ring-2 focus:ring-sky-500/40 outline-none" />
-                    </td>
-                    <td class="py-2.5 pr-3 text-right">
-                      <button type="button" @click="agregar(a)"
-                              class="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500 transition">
-                        Agregar
-                      </button>
-                    </td>
-                  </tr>
-                </template>
-              </tbody>
-            </table>
-            <div class="flex items-center justify-between pt-4 text-xs text-slate-500">
-              <span x-text="`Página ${pagina} de ${totalPaginas} · ${total} artículos`"></span>
-              <div class="flex gap-2">
-                <button type="button" @click="buscar(pagina - 1)" :disabled="pagina <= 1"
-                        class="rounded-full px-3 py-1.5 font-semibold bg-slate-100 dark:bg-slate-800 disabled:opacity-40">Anterior</button>
-                <button type="button" @click="buscar(pagina + 1)" :disabled="pagina >= totalPaginas"
-                        class="rounded-full px-3 py-1.5 font-semibold bg-slate-100 dark:bg-slate-800 disabled:opacity-40">Siguiente</button>
-              </div>
-            </div>
-          </div>
+      <div class="flex flex-wrap gap-2">
+        <template x-for="p in pedidosRecientes" :key="p.codigo_movimiento">
+          <button type="button" @click="repetirPedido(p.codigo_movimiento)"
+                  class="pedidos-btn bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-sky-100 dark:hover:bg-sky-900/30">
+            <span x-text="`${p.nro_comprobante} · ${p.fecha}`"></span>
+            <span x-show="!esCliente && p.total" class="ml-1 text-slate-500" x-text="money(p.total)"></span>
+          </button>
         </template>
       </div>
     </div>
 
-    <!-- Carrito + checkout -->
-    <div class="rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl shadow-slate-900/10 overflow-hidden flex flex-col">
-      <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Carrito</h2>
+    <div class="md:col-span-3 rounded-2xl border p-5 sm:p-6 shadow-lg"
+         :class="ultimoTipo === 'PED' ? 'border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-900/20' : (ultimoTipo === 'PRE' ? 'border-amber-200 dark:border-amber-800/60 bg-amber-50 dark:bg-amber-900/20' : 'border-rose-200 dark:border-rose-800/60 bg-rose-50 dark:bg-rose-900/20')"
+         x-show="exitoCheckout" x-cloak>
+      <h2 class="text-lg font-semibold"
+          :class="ultimoTipo === 'PED' ? 'text-emerald-800 dark:text-emerald-200' : (ultimoTipo === 'PRE' ? 'text-amber-800 dark:text-amber-200' : 'text-rose-800 dark:text-rose-200')">
+        Comprobante confirmado
+      </h2>
+      <p class="mt-2 text-sm"
+         :class="ultimoTipo === 'PED' ? 'text-emerald-700 dark:text-emerald-300' : (ultimoTipo === 'PRE' ? 'text-amber-700 dark:text-amber-300' : 'text-rose-700 dark:text-rose-300')"
+         x-text="exitoCheckout"></p>
+      <div class="mt-4 flex flex-wrap gap-3">
+        <a x-show="ultimoCodMov" :href="detalleTrasExitoUrl(ultimoCodMov)"
+           class="rounded-full px-4 py-2.5 text-sm font-semibold text-white min-h-[2.75rem] inline-flex items-center"
+           :class="ultimoTipo === 'PED' ? 'bg-emerald-600 hover:bg-emerald-500' : (ultimoTipo === 'PRE' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-rose-600 hover:bg-rose-500')"
+           x-text="verDetalleLabel"></a>
+        <a x-show="ultimoCodMov && ultimoTipo === 'PRE'" :href="listadoTrasExitoUrl()"
+           class="rounded-full px-4 py-2.5 text-sm font-semibold border min-h-[2.75rem] inline-flex items-center"
+           :class="ultimoTipo === 'PRE' ? 'text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-900' : 'text-rose-800 dark:text-rose-200 border-rose-300 dark:border-rose-700 bg-white dark:bg-slate-900'"
+           x-text="verListadoLabel"></a>
+        <button type="button" @click="exitoCheckout=''; ultimoCodMov=null; _limpiarClienteUi()"
+                class="rounded-full px-4 py-2.5 text-sm font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 min-h-[2.75rem]">Nuevo comprobante</button>
+        <a :href="urls.hub_pedidos" class="rounded-full px-4 py-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:underline min-h-[2.75rem] inline-flex items-center">Ir al hub</a>
+      </div>
+    </div>
+
+    <!-- Catálogo (búsqueda estilo TPV) — izquierda -->
+    <div class="md:col-span-2 min-w-0">
+      {% csrf_token %}
+      {% include "ecom/includes/pedidos_busqueda_articulos_tpv.html" %}
+    </div>
+
+    <!-- Carrito + checkout — derecha -->
+    <div class="pedidos-workspace compra-carrito-panel flex flex-col min-w-0 md:col-span-1">
+      <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+        <h2 class="text-base sm:text-lg font-semibold text-slate-900 dark:text-white" x-text="`Carrito · ${tipoLabel}`"></h2>
         <button type="button" @click="vaciar()" x-show="cart.items && cart.items.length"
                 class="text-xs font-semibold text-rose-500 hover:text-rose-400">Vaciar</button>
       </div>
 
-      <div class="px-6 py-4 flex-1 overflow-y-auto max-h-[46vh]">
+      <div class="px-4 sm:px-6 py-4 flex-1 overflow-y-auto compra-carrito-scroll">
         <template x-if="!cart.items || cart.items.length === 0">
-          <p class="text-sm text-slate-500 py-8 text-center">El carrito está vacío.</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400 py-8 text-center" x-show="!cart.items || !cart.items.length">
+            <span class="block font-medium text-slate-600 dark:text-slate-300">El carrito está vacío</span>
+            <span class="block mt-1 text-xs text-slate-500 dark:text-slate-400">Buscá artículos y usá <strong class="text-slate-700 dark:text-slate-300">Enter</strong> o tocá la fila para agregar.</span>
+          </p>
         </template>
         <template x-for="it in (cart.items || [])" :key="it.id">
           <div class="py-3 border-b border-slate-100 dark:border-slate-800 flex items-start gap-3">
             <div class="flex-1 min-w-0">
               <p class="text-sm font-medium text-slate-800 dark:text-slate-100 truncate" x-text="it.descripcion"></p>
-              <p class="text-xs text-slate-500" x-text="`${money(it.precio_unitario_neto)} c/u · ${it.alicuota_iva}% IVA`"></p>
+              <p class="text-xs text-slate-500 dark:text-slate-400" x-text="`${money(it.precio_unitario_neto)} c/u · ${it.alicuota_iva}% IVA`"></p>
+              <p x-show="it.tipo_unidad && it.tipo_unidad !== 'Unidad'" class="text-[10px] text-slate-500 mt-0.5" x-text="`Embalaje: ${it.tipo_unidad}`"></p>
+              <p x-show="it.promocion_etiqueta" class="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5" x-text="it.promocion_etiqueta"></p>
             </div>
             <input type="number" min="1" step="1" :value="it.cantidad"
                    @change="cambiarCantidad(it.id, $event.target.value)"
@@ -149,12 +160,12 @@
       </div>
 
       <!-- Totales -->
-      <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-sm">
+      <div class="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-sm">
         <div class="flex justify-between text-slate-600 dark:text-slate-300"><span>Neto</span><span x-text="money(tot.subtotal_neto)"></span></div>
         <div class="flex justify-between text-slate-600 dark:text-slate-300"><span>IVA</span><span x-text="money(tot.iva_total)"></span></div>
         <div class="flex justify-between text-slate-600 dark:text-slate-300" x-show="tot.impuesto_interno_total > 0"><span>Imp. interno</span><span x-text="money(tot.impuesto_interno_total)"></span></div>
         <div class="flex items-center justify-between gap-2 pt-1">
-          <label class="text-xs text-slate-500">Desc. al pie %</label>
+          <label class="text-xs text-slate-500 dark:text-slate-400">Desc. al pie %</label>
           <input type="number" min="0" max="100" step="0.01" x-model.number="descPie" @change="aplicarDescuentoPie()"
                  class="w-20 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-right text-sm px-2 py-1 focus:ring-2 focus:ring-sky-500/40 outline-none" />
         </div>
@@ -164,59 +175,258 @@
       </div>
 
       <!-- Checkout -->
-      <div class="px-6 py-5 border-t border-slate-100 dark:border-slate-800 space-y-3">
-        <div class="grid grid-cols-2 gap-3">
+      <div class="px-4 sm:px-6 py-4 sm:py-5 border-t border-slate-100 dark:border-slate-800 space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-1">Punto de venta</label>
-            <input type="number" x-model.number="pv" placeholder="Sesión"
-                   class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none" />
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Punto de venta</label>
+            <select x-model.number="pv"
+                    class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none">
+              <option :value="null">Sesión</option>
+              <template x-for="p in puntosVenta" :key="p.id_punto_venta">
+                <option :value="p.id_punto_venta" x-text="`PV ${p.label}`"></option>
+              </template>
+            </select>
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-500 mb-1">Forma de entrega</label>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Forma de entrega</label>
             <input type="text" x-model="formaEntrega" placeholder="Retira / Envío"
                    class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none" />
           </div>
         </div>
         <div>
-          <label class="block text-xs font-semibold text-slate-500 mb-1">Observaciones</label>
+          <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Observaciones</label>
           <textarea x-model="observaciones" rows="2"
                     class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm px-3 py-2 focus:ring-2 focus:ring-sky-500/40 outline-none"></textarea>
         </div>
 
-        <p x-show="mensaje" x-text="mensaje" :class="mensajeOk ? 'text-emerald-600' : 'text-rose-600'" class="text-sm font-medium" x-cloak></p>
+        <p x-show="mensaje" x-text="mensaje" :class="mensajeOk ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'" class="text-sm font-medium" x-cloak></p>
 
-        <button type="button" @click="confirmar()"
+        <button type="button" @click="abrirResumen()"
                 :disabled="confirmando || !cart.items || cart.items.length === 0"
-                class="w-full inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold text-white bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 shadow-lg shadow-sky-500/30 hover:shadow-xl disabled:opacity-50 disabled:pointer-events-none transition">
-          <span x-show="!confirmando" x-text="`Confirmar ${tipoLabel}`"></span>
+                class="pedidos-btn w-full justify-center py-3.5 text-sm min-h-[3rem] touch-manipulation disabled:opacity-50 disabled:pointer-events-none"
+                :class="tipo === 'PED' ? 'pedidos-btn-gradient' : (tipo === 'PRE' ? 'bg-amber-600 hover:bg-amber-500 text-white rounded-full font-semibold' : 'bg-rose-600 hover:bg-rose-500 text-white rounded-full font-semibold')">
+          <span x-show="!confirmando" x-text="`Revisar y confirmar ${tipoLabel}`"></span>
           <span x-show="confirmando">Confirmando…</span>
         </button>
       </div>
     </div>
   </div>
-</section>
 
+  <!-- Modal pre-confirmación -->
+  <div class="fixed inset-0 z-40 flex items-center justify-center p-4" x-show="modalResumen" x-cloak>
+    <div class="absolute inset-0 bg-slate-900/50" @click="modalResumen=false"></div>
+    <div class="relative w-full max-w-lg pedidos-card p-6 shadow-2xl">
+      <h3 class="text-lg font-semibold text-slate-900 dark:text-white" x-text="`Resumen — ${tipoLabel}`"></h3>
+      <p class="mt-2 text-sm text-slate-500 dark:text-slate-400" x-text="`${cart.items ? cart.items.length : 0} renglón(es) · Total ${money(tot.total)}`"></p>
+      <ul class="mt-4 max-h-48 overflow-y-auto text-sm space-y-1 text-slate-700 dark:text-slate-200">
+        <template x-for="it in (cart.items || [])" :key="it.id">
+          <li class="flex justify-between gap-2">
+            <span class="truncate" x-text="it.descripcion"></span>
+            <span class="tabular-nums whitespace-nowrap text-slate-600 dark:text-slate-300" x-text="`${it.cantidad} × ${money(it.precio_unitario_neto)}`"></span>
+          </li>
+        </template>
+      </ul>
+      <div class="mt-6 flex justify-end gap-3">
+        <button type="button" @click="modalResumen=false" class="pedidos-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Volver</button>
+        <button type="button" @click="confirmar()" class="pedidos-btn pedidos-btn-primary">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}
+
+{% block pedidos_js %}
+<script src="{% static 'ecom/js/repetir_pedido_modal.js' %}"></script>
+<script type="module" src="{% static 'ecom/js/compra_mayorista_cliente.mjs' %}"></script>
+<script type="module" src="{% static 'ecom/js/compra_mayorista_marcas.mjs' %}"></script>
 <script>
 document.addEventListener('alpine:init', () => {
   Alpine.data('compraMayorista', () => ({
     urls: JSON.parse(document.getElementById('compra-mayorista-urls').textContent),
-    q: '', soloPromo: false,
-    articulos: [], pagina: 1, tam: 20, total: 0, totalPaginas: 0, cargandoCat: false,
+    esCliente: {{ es_cliente|yesno:"true,false" }},
+    searchProductos: '', soloPromo: false, marcasFiltro: [],
+    articulosGrid: [], articulosGridLoading: false, selectedSearchIndex: -1,
+    articulosBusquedaAbort: null,
     cart: { items: [] }, tot: {}, descPie: 0,
     tipo: 'PED', pv: null, formaEntrega: '', observaciones: '',
     confirmando: false, mensaje: '', mensajeOk: false,
+    pedidosRecientes: [], modalResumen: false,
+    exitoCheckout: '', ultimoCodMov: null, ultimoTipo: 'PED',
+    origenRepetir: null,
+    puntosVenta: [], clienteActivo: null, clienteActivoLabel: '',
+    creditoWidget: null, embalaje: {}, mostrarEmbalaje: false,
+    intentoSinCliente: false,
 
     get tipoLabel() { return { PED: 'pedido', PRE: 'presupuesto', DEV: 'devolución' }[this.tipo] || 'comprobante'; },
+    get clienteCampoLabel() {
+      return `Cliente para el ${this.tipoLabel}`;
+    },
+    get modoShellClass() {
+      return {
+        PED: 'compra-modo-ped',
+        PRE: 'compra-modo-pre',
+        DEV: 'compra-modo-dev',
+      }[this.tipo] || 'compra-modo-ped';
+    },
+    get verDetalleLabel() {
+      const t = this.ultimoTipo || this.tipo;
+      return { PED: 'Ver pedido', PRE: 'Ver presupuesto', DEV: 'Ver devolución' }[t] || 'Ver detalle';
+    },
+    get verListadoLabel() {
+      return 'Ver listado de presupuestos';
+    },
 
-    init() { this.refrescarCarrito(); },
+    init() {
+      SynapRepetirPedido.init({
+        previewTpl: this.urls.preview_tpl,
+        cargarUrl: this.urls.cargar_desde_pedido,
+        esCliente: this.esCliente,
+        onCargado: (data) => {
+          if (data.carrito) this.setCart(data.carrito);
+          this.origenRepetir = data.origen_nro_comprobante || data.origen_codigo_movimiento;
+          this.flash('Pedido cargado al carrito. Precios actualizados.', true);
+        },
+      });
+      window.addEventListener('compra-cliente-seleccionado', (e) => {
+        const d = e.detail || {};
+        if (!d.cod) return;
+        this.clienteActivo = d.cod;
+        this.clienteActivoLabel = d.label || String(d.cod);
+        this.intentoSinCliente = false;
+        if (!d.fromSession) {
+          this.refrescarCarrito();
+          this.cargarRecientes();
+          this.cargarContexto();
+          this.flash('Cliente seleccionado.', true);
+        }
+      });
+      window.addEventListener('compra-cliente-limpiado', () => {
+        this.clienteActivo = null;
+        this.clienteActivoLabel = '';
+        this.creditoWidget = null;
+        this.pedidosRecientes = [];
+      });
+      window.addEventListener('compra-cliente-error', (e) => {
+        this.flash((e.detail && e.detail.message) || 'No se pudo seleccionar el cliente.', false);
+      });
+      window.addEventListener('compra-marcas-cambiadas', (e) => {
+        const ids = (e.detail && e.detail.marcas) || [];
+        this.marcasFiltro = ids.map((id) => Number(id)).filter((n) => Number.isFinite(n));
+        this.recargarBusquedaConFiltros();
+      });
+      this.refrescarCarrito();
+      this.cargarContexto();
+    },
+
+    _limpiarClienteUi() {
+      this.clienteActivo = null;
+      this.clienteActivoLabel = '';
+      this.creditoWidget = null;
+      this.pedidosRecientes = [];
+      this.intentoSinCliente = false;
+      window.dispatchEvent(new CustomEvent('compra-cliente-limpiado'));
+    },
+
+    clienteLabel(c) {
+      const cod = c.Codigo != null ? c.Codigo : c.codigo;
+      const nombre = (c.nombre_cliente || c.nombre || '').trim();
+      return nombre && cod != null ? `${nombre} (#${cod})` : (nombre || String(cod || ''));
+    },
+
+    async cargarContexto() {
+      const { ok, data } = await this.api(this.urls.compra_contexto, 'GET');
+      if (!ok || !data) return;
+      this.puntosVenta = data.puntos_venta || [];
+      if (data.id_punto_venta_default) this.pv = data.id_punto_venta_default;
+      if (data.cliente) {
+        this.clienteActivo = data.idcliente;
+        this.clienteActivoLabel = this.clienteLabel(data.cliente);
+        this._setCreditoWidget(data.cliente, data.autoriza_credito);
+      } else {
+        this.clienteActivo = null;
+        this.clienteActivoLabel = '';
+        this.creditoWidget = null;
+        this.pedidosRecientes = [];
+      }
+      if (data.embalaje) {
+        this.embalaje = data.embalaje;
+        this.mostrarEmbalaje = data.embalaje.utiliza_bulto_cerrado === 'Si'
+          || data.embalaje.utiliza_display === 'Si'
+          || data.embalaje.utiliza_embalaje === 'Si';
+      }
+      if (data.idcliente) {
+        this.cargarRecientes();
+      }
+    },
+
+    _setCreditoWidget(cliente, autoriza) {
+      const saldo = Number(cliente.saldo || cliente.Saldo || 0);
+      const lim = Number(cliente.credito_limite_dias || cliente.Credito || 0);
+      const aut = autoriza || {};
+      const limTxt = (aut.limite_credito_dias || '').toString();
+      this.creditoWidget = {
+        saldo,
+        limite_dias: lim,
+        autorizado: limTxt.toLowerCase() !== 'no autorizado',
+        dias_exceso: Number(aut.dias_exceso_limite || 0),
+      };
+    },
+
+    detalleUrl(codMov) {
+      return (this.urls.detalle_tpl || '').replace(/\/0\/?$/, '/' + codMov + '/');
+    },
+    detalleTrasExitoUrl(codMov) {
+      const t = this.ultimoTipo || this.tipo;
+      if (t === 'PED') return this.detalleUrl(codMov);
+      return (this.urls.comprobante_detalle_tpl || '').replace(/\/0\/?$/, '/' + codMov + '/');
+    },
+    listadoTrasExitoUrl() {
+      const t = this.ultimoTipo || this.tipo;
+      if (t === 'PRE') return this.urls.listado_presupuestos;
+      return this.urls.listado_pedidos;
+    },
+
+    async cambiarTipo(nuevo) {
+      const t = String(nuevo || '').toUpperCase();
+      if (!t || t === this.tipo) return;
+      if (this.cart.items && this.cart.items.length) {
+        const ok = confirm('¿Cambiar el tipo de comprobante? El carrito actual se mantiene pero el comportamiento de stock y confirmación cambia.');
+        if (!ok) return;
+      }
+      const { ok, data } = await this.api(this.urls.carrito_tipo, 'PATCH', { tipo: t });
+      if (!ok) {
+        this.flash((data && data.detail) || 'No se pudo cambiar el tipo de comprobante.', false);
+        return;
+      }
+      this.setCart(data);
+      this.flash(`Modo ${this.tipoLabel} activado.`, true);
+    },
+
+    repetirPedido(codMov) { SynapRepetirPedido.abrir(codMov); },
+
+    async cargarRecientes() {
+      const { ok, data } = await this.api(this.urls.pedidos_recientes, 'GET');
+      if (ok && data && data.results) this.pedidosRecientes = data.results;
+    },
+
+    abrirResumen() {
+      if (!this._requiereCliente()) return;
+      if (!this.cart.items || !this.cart.items.length) {
+        this.flash('Agregá al menos un artículo al carrito.', false);
+        return;
+      }
+      this.modalResumen = true;
+    },
 
     csrf() {
       const el = document.querySelector('[name=csrfmiddlewaretoken]');
       return el ? el.value : '';
     },
-    async api(url, method = 'GET', body = null) {
+    async api(url, method = 'GET', body = null, signal = null) {
       const opts = { method, headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrf() } };
       if (body) opts.body = JSON.stringify(body);
+      if (signal) opts.signal = signal;
       const r = await fetch(url, opts);
       let data = null;
       try { data = await r.json(); } catch (e) { data = null; }
@@ -228,26 +438,228 @@ document.addEventListener('alpine:init', () => {
     },
     itemUrl(id) { return this.urls.carrito_item_tpl.replace(/0\/$/, id + '/'); },
 
-    async buscar(pagina) {
-      if (pagina < 1) return;
-      const term = this.q.trim();
-      if (term.length > 0 && term.length < 2) return;
-      this.cargandoCat = true;
-      const filtros = {};
-      if (this.q.trim()) filtros.q = this.q.trim();
+    articuloEtiqueta(a) {
+      const cod = a.id_manual || a.codigo || a.codigo_articulo || '';
+      const precio = this.money(a.precio);
+      const stock = a.stock_disponible != null ? ` · Disp. ${a.stock_disponible}` : '';
+      return `${cod} · ${precio}${stock}`;
+    },
+
+    _filtrosCatalogo() {
+      const filtros = { busqueda_tpv: true };
+      const term = (this.searchProductos || '').trim();
+      if (term) filtros.q = term;
       if (this.soloPromo) filtros.solo_promocion = true;
-      const { ok, data } = await this.api(this.urls.listado, 'POST', { filtros, pagina, tam: this.tam });
-      this.cargandoCat = false;
-      if (!ok || !data) { this.flash('No se pudo cargar el catálogo.', false); return; }
-      this.articulos = (data.items || []).map(a => ({ ...a, _cant: 1 }));
-      this.pagina = data.pagina || 1;
-      this.total = data.total || 0;
-      this.totalPaginas = data.total_paginas || 0;
+      if (this.marcasFiltro && this.marcasFiltro.length) filtros.marcas = this.marcasFiltro;
+      return filtros;
+    },
+
+    recargarBusquedaConFiltros() {
+      const q = (this.searchProductos || '').trim();
+      if (q.length) {
+        this.cargarArticulos();
+        return;
+      }
+      if (this.marcasFiltro.length || this.soloPromo) {
+        this.desplegarArticulosCompletos();
+        return;
+      }
+      this.articulosGrid = [];
+      this.selectedSearchIndex = -1;
+    },
+
+    _mapearArticuloGrid(item) {
+      return {
+        ...item,
+        codigo_articulo: item.id_manual || item.codigo || '',
+        descripcion: item.nombre || '',
+        _raw: item,
+      };
+    },
+
+    onBusquedaProductosInput() {
+      const q = (this.searchProductos || '').trim();
+      if (!q.length) {
+        if (this.articulosBusquedaAbort) {
+          try { this.articulosBusquedaAbort.abort(); } catch (e) {}
+          this.articulosBusquedaAbort = null;
+        }
+        this.articulosGrid = [];
+        this.articulosGridLoading = false;
+        this.selectedSearchIndex = -1;
+        return;
+      }
+      this.cargarArticulos();
+    },
+
+    async cargarArticulos() {
+      const search = (this.searchProductos || '').trim();
+      if (!search.length) {
+        this.articulosGrid = [];
+        this.selectedSearchIndex = -1;
+        return;
+      }
+      if (this.articulosBusquedaAbort) {
+        try { this.articulosBusquedaAbort.abort(); } catch (e) {}
+      }
+      this.articulosBusquedaAbort = new AbortController();
+      const ac = this.articulosBusquedaAbort;
+      this.articulosGridLoading = true;
+      const { ok, data } = await this.api(this.urls.listado, 'POST', {
+        filtros: this._filtrosCatalogo(),
+        pagina: 1,
+        tam: 25,
+      }, ac.signal);
+      if (ac.signal.aborted) return;
+      if ((this.searchProductos || '').trim() !== search) return;
+      if (!ok) {
+        this.articulosGrid = [];
+        this.articulosGridLoading = false;
+        this.selectedSearchIndex = -1;
+        this.flash((data && data.detail) || 'No se pudo buscar artículos.', false);
+        return;
+      }
+      const items = (data && data.items) ? data.items : [];
+      this.articulosGrid = items.map(a => this._mapearArticuloGrid(a));
+      this.articulosGridLoading = false;
+      this.selectedSearchIndex = this.articulosGrid.length > 0 ? 0 : -1;
+      this.$nextTick(() => this.scrollBusquedaSeleccionado());
+    },
+
+    async desplegarArticulosCompletos() {
+      if (this.articulosBusquedaAbort) {
+        try { this.articulosBusquedaAbort.abort(); } catch (e) {}
+      }
+      this.articulosBusquedaAbort = new AbortController();
+      const ac = this.articulosBusquedaAbort;
+      this.articulosGridLoading = true;
+      const { ok, data } = await this.api(this.urls.listado, 'POST', {
+        filtros: this._filtrosCatalogo(),
+        pagina: 1,
+        tam: 25,
+      }, ac.signal);
+      if (ac.signal.aborted) return;
+      if (!ok) {
+        this.articulosGrid = [];
+        this.articulosGridLoading = false;
+        this.selectedSearchIndex = -1;
+        this.flash((data && data.detail) || 'No se pudo cargar el catálogo.', false);
+        return;
+      }
+      const items = (data && data.items) ? data.items : [];
+      this.articulosGrid = items.map(a => this._mapearArticuloGrid(a));
+      this.articulosGridLoading = false;
+      this.selectedSearchIndex = this.articulosGrid.length > 0 ? 0 : -1;
+      this.$nextTick(() => this.scrollBusquedaSeleccionado());
+    },
+
+    onBusquedaProductosKeydown(e) {
+      const k = e.key;
+      if (k === 'ArrowDown') {
+        e.preventDefault();
+        if (!this.articulosGrid.length && !this.articulosGridLoading) {
+          const q = (this.searchProductos || '').trim();
+          if (q.length) this.cargarArticulos();
+          else this.desplegarArticulosCompletos();
+          return;
+        }
+        this.navegarBusqueda(1);
+        return;
+      }
+      if (k === 'ArrowUp') {
+        e.preventDefault();
+        this.navegarBusqueda(-1);
+      }
+    },
+
+    onTablaBusquedaKeydown(e) {
+      const k = e.key;
+      if (k === 'ArrowDown') {
+        e.preventDefault();
+        this.navegarBusqueda(1);
+        return;
+      }
+      if (k === 'ArrowUp') {
+        e.preventDefault();
+        this.navegarBusqueda(-1);
+        return;
+      }
+      if (k === 'Escape') {
+        e.preventDefault();
+        document.getElementById('pedidos-busqueda-producto')?.focus();
+      }
+    },
+
+    navegarBusqueda(delta) {
+      if (this.articulosGrid.length === 0) return;
+      let next = this.selectedSearchIndex + delta;
+      if (next < 0) next = 0;
+      if (next >= this.articulosGrid.length) next = this.articulosGrid.length - 1;
+      this.selectedSearchIndex = next;
+      this.$nextTick(() => this.scrollBusquedaSeleccionado());
+    },
+
+    onFocusTablaBusqueda() {
+      if (this.articulosGrid.length && this.selectedSearchIndex < 0) {
+        this.selectedSearchIndex = 0;
+        this.$nextTick(() => this.scrollBusquedaSeleccionado());
+      }
+    },
+
+    scrollBusquedaSeleccionado() {
+      const el = this.$refs.busquedaDropdownList;
+      if (!el || this.selectedSearchIndex < 0) return;
+      const row = el.querySelector('[data-search-index="' + this.selectedSearchIndex + '"]');
+      if (row) row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
+
+    async onBusquedaProductosEnter() {
+      const idx = this.selectedSearchIndex;
+      const hayResultados = this.articulosGrid && this.articulosGrid.length > 0;
+      const filaValida = hayResultados && idx >= 0 && idx < this.articulosGrid.length;
+      const art = filaValida ? this.articulosGrid[idx] : null;
+      if (art) {
+        await this.agregarDesdeBusqueda(art);
+        return;
+      }
+      const q = (this.searchProductos || '').trim();
+      if (q.length) await this.cargarArticulos();
+    },
+
+    async agregarDesdeBusqueda(art) {
+      const raw = art._raw || art;
+      const item = {
+        ...raw,
+        _cant: 1,
+        _tipo: (raw.presentacion && raw.presentacion.tipo_unidad_defecto) || 'Unidad',
+      };
+      await this.agregar(item);
+      this.searchProductos = '';
+      this.articulosGrid = [];
+      this.selectedSearchIndex = -1;
+      document.getElementById('pedidos-busqueda-producto')?.focus();
+    },
+
+    toggleSoloPromo() {
+      this.soloPromo = !this.soloPromo;
+      this.recargarBusquedaConFiltros();
+    },
+
+    _requiereCliente() {
+      if (this.esCliente || this.clienteActivo) return true;
+      this.intentoSinCliente = true;
+      this.flash('Seleccioná un cliente antes de continuar.', false);
+      return false;
     },
 
     async agregar(a) {
+      if (!this._requiereCliente()) return;
       const cantidad = Math.max(1, Number(a._cant || 1));
-      const { ok, data } = await this.api(this.urls.carrito, 'POST', { id_articulo: a.id_articulo, cantidad });
+      const tipo = a._tipo || 'Unidad';
+      const op = ((a.presentacion && a.presentacion.opciones) || []).find(o => o.tipo === tipo);
+      const body = { id_articulo: a.id_articulo, cantidad, tipo_unidad: tipo };
+      if (op && op.multiplicador) body.multiplicador = op.multiplicador;
+      const { ok, data } = await this.api(this.urls.carrito, 'POST', body);
       if (!ok) { this.flash((data && data.detail) || 'No se pudo agregar el artículo.', false); if (data && data.carrito) this.setCart(data.carrito); return; }
       this.setCart(data);
       this.flash('Artículo agregado.', true);
@@ -277,19 +689,27 @@ document.addEventListener('alpine:init', () => {
       this.cart = data || { items: [] };
       this.tot = (data && data.totales) || {};
       this.descPie = (data && data.descuento_pie_pct) || 0;
+      if (data && data.tipo_comprobante) this.tipo = data.tipo_comprobante;
     },
 
     async confirmar() {
+      this.modalResumen = false;
       this.confirmando = true; this.mensaje = '';
       const body = { tipo: this.tipo, forma_entrega: this.formaEntrega, observaciones: this.observaciones };
+      if (this.esCliente) body.es_cliente = true;
       if (this.pv) body.id_punto_venta = this.pv;
       const { ok, data } = await this.api(this.urls.checkout, 'POST', body);
       this.confirmando = false;
       if (!ok) { this.flash((data && data.detail) || 'No se pudo confirmar el comprobante.', false); return; }
       const nro = (data && data.nro_comprobante) ? data.nro_comprobante : '';
       const aut = (data && data.autorizacion) ? ` · ${data.autorizacion}` : '';
-      this.flash(`${this.tipoLabel[0].toUpperCase() + this.tipoLabel.slice(1)} confirmado: ${nro}${aut}`, true);
+      this.ultimoTipo = this.tipo;
+      this.ultimoCodMov = (data && data.codigo_movimiento) ? data.codigo_movimiento : null;
+      this.exitoCheckout = `${this.tipoLabel[0].toUpperCase() + this.tipoLabel.slice(1)} ${nro}${aut}`;
+      this.flash('', true);
+      this._limpiarClienteUi();
       this.refrescarCarrito();
+      this.cargarRecientes();
     },
 
     flash(msg, ok) { this.mensaje = msg; this.mensajeOk = ok; },

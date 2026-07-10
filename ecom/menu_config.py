@@ -16,20 +16,20 @@ MENU_CONFIG = [
             },
             {
                 "name": "ecom_compra",
-                "label": "Compra mayorista",
+                "label": "Nuevo pedido",
                 "url": "ecom:mayoristapp_compra",
-                "permission": "ecom.carrito.editar",
+                "permission": "ecom.pedidos.crear",
+            },
+            {
+                "name": "ecom_pedidos",
+                "label": "Pedidos",
+                "url": "ecom:mayoristapp_pedidos_hub",
+                "permission": "ecom.pedidos.ver",
             },
             {
                 "name": "ecom_presupuestos",
                 "label": "Presupuestos vendedor",
                 "url": "ecom:mayoristapp_presupuestos_vendedor",
-                "permission": "ecom.comprobantes.ver",
-            },
-            {
-                "name": "ecom_pedidos",
-                "label": "Pedidos vendedor",
-                "url": "ecom:mayoristapp_pedidos_vendedor",
                 "permission": "ecom.comprobantes.ver",
             },
             {

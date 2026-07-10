@@ -286,6 +286,10 @@ class ComprobantesAnularPedidoRelayAPIView(APIView):
             return Response({"detail": "Parámetro ajax requerido."}, status=400)
         if str(request.data.get("anularPedido") or "") != "1":
             return Response({"detail": "Parámetro anularPedido=1 requerido."}, status=400)
-        data = anular_pedido_relay(base, request.data.get("codMovPedido"))
+        data = anular_pedido_relay(
+            base,
+            request.data.get("codMovPedido"),
+            motivo=str(request.data.get("motivo") or request.data.get("motivoAnulacion") or ""),
+        )
         status_code = 200 if data.get("msg") == "ok" else 400
         return Response(data, status=status_code)

@@ -14,6 +14,7 @@ from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import to_int_or_none
 
 from ecom.services.cliente_relay import cod_viajante_desde_sesion_usuario
+from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 
 
 def _si_no(val: Any, default: str = "No") -> str:
@@ -125,10 +126,11 @@ def _where_pedidos(
             parts.append("comp_ped.CodViajante = %s")
             params.append(cv)
     else:
-        cv = cod_viajante_desde_sesion_usuario(sess_user)
-        if cv is not None:
-            parts.append("comp_ped.CodViajante = %s")
-            params.append(cv)
+        if not puede_ver_todos_pedidos(sess_user):
+            cv = cod_viajante_desde_sesion_usuario(sess_user)
+            if cv is not None:
+                parts.append("comp_ped.CodViajante = %s")
+                params.append(cv)
 
     if str(body.get("listaPed") or "").strip().lower() == "cliente" and idcliente is not None:
         parts.append("comp_ped.Codigo = %s")
@@ -210,7 +212,7 @@ def listar_pedidos_relay(
         SELECT
             comp_ped.CodigoMovimiento AS CodigoMovimiento,
             comp_ped.id_comp_ped AS id,
-            DATE_FORMAT(comp_ped.Fecha,'%d/%m/%Y') AS FechaB,
+            DATE_FORMAT(comp_ped.Fecha,'%%d/%%m/%%Y') AS FechaB,
             comp_ped.Fecha AS Fecha,
             comp_ped.NroComprobante AS NroComprobante,
             comp_ped.SubtotalDesc AS SubTotalDesc,
@@ -218,7 +220,7 @@ def listar_pedidos_relay(
             comp_ped.IVA2 AS IVA2,
             comp_ped.Exento AS Exento,
             comp_ped.CondVenta AS CondVenta,
-            DATE_FORMAT(comp_ped.FechaEntrega,'%d/%m/%Y') AS FechaEntrega,
+            DATE_FORMAT(comp_ped.FechaEntrega,'%%d/%%m/%%Y') AS FechaEntrega,
             comp_ped.FormaEntrega AS FormaEntrega,
             comp_ped.Estado AS Estado,
             cliente.nombre_cliente AS nombre_cliente,
@@ -261,7 +263,7 @@ def listar_presupuestos_relay(
         SELECT
             comp_ped.CodigoMovimiento AS CodigoMovimiento,
             comp_ped.id_comp_ped AS id,
-            DATE_FORMAT(comp_ped.Fecha,'%d/%m/%Y') AS FechaB,
+            DATE_FORMAT(comp_ped.Fecha,'%%d/%%m/%%Y') AS FechaB,
             comp_ped.Fecha AS Fecha,
             comp_ped.NroComprobante AS NroComprobante,
             comp_ped.SubtotalDesc AS SubTotalDesc,
@@ -269,7 +271,7 @@ def listar_presupuestos_relay(
             comp_ped.IVA2 AS IVA2,
             comp_ped.Exento AS Exento,
             comp_ped.CondVenta AS CondVenta,
-            DATE_FORMAT(comp_ped.FechaEntrega,'%d/%m/%Y') AS FechaEntrega,
+            DATE_FORMAT(comp_ped.FechaEntrega,'%%d/%%m/%%Y') AS FechaEntrega,
             comp_ped.FormaEntrega AS FormaEntrega,
             comp_ped.Estado AS Estado,
             cliente.nombre_cliente AS nombre_cliente,
@@ -314,15 +316,15 @@ def listar_remitos_relay(
         SELECT
             comp_ped.CodigoMovimiento AS CodigoMovimiento,
             comp_ped.id_comp_ped AS id,
-            DATE_FORMAT(comp_ped.Fecha,'%Y%m%d') AS FechaOrd,
-            DATE_FORMAT(comp_ped.Fecha,'%d/%m/%Y') AS FechaB,
+            DATE_FORMAT(comp_ped.Fecha,'%%Y%%m%%d') AS FechaOrd,
+            DATE_FORMAT(comp_ped.Fecha,'%%d/%%m/%%Y') AS FechaB,
             comp_ped.Fecha AS Fecha,
             comp_ped.NroComprobante AS NroComprobante,
             comp_ped.CondVenta AS CondVenta,
             comp_ped.SubTotalGral AS SubTotalGral,
             cliente.nombre_cliente AS nombre_cliente,
             viajantes.Nombre AS NombreViajante,
-            DATE_FORMAT(comp_ped.FechaEntrega,'%d/%m/%Y') AS FechaEntrega,
+            DATE_FORMAT(comp_ped.FechaEntrega,'%%d/%%m/%%Y') AS FechaEntrega,
             comp_ped.FormaEntrega AS FormaEntrega,
             comp_ped.Estado AS Estado,
             comp_ped.TipoPedido AS TipoPedido,

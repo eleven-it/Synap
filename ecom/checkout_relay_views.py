@@ -17,6 +17,7 @@ from ecom.models import EcomCart
 from ecom.permissions import EcomMayoristappSessionPermission
 from ecom.services import mayorista_checkout_service as checkout_svc
 from ecom.services.mayorista_checkout_service import CheckoutInput
+from ecom.services.mayoristapp_session import limpiar_cliente_seleccion_mayoristapp
 
 
 def _session_bag(request: Request) -> dict:
@@ -107,4 +108,6 @@ class CheckoutConfirmarRelayAPIView(APIView):
         if not ok:
             estado = 409 if error and "Stock insuficiente" in error else 400
             return Response({"detail": error}, status=estado)
+        if not datos.es_cliente:
+            limpiar_cliente_seleccion_mayoristapp(request)
         return Response(result, status=201)

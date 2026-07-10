@@ -73,6 +73,8 @@ class CheckoutInput:
     # IIBB configurable por implementación: 'Si'/'No' (sucursal agente de percepción).
     # Si es None, el servicio lo resuelve desde la sucursal del usuario (paridad legacy).
     agente_percep: Optional[str] = None
+    cod_mov_presupuesto_origen: Optional[int] = None
+    enviar_mail_cliente: bool = True
 
 
 def confirmar(
@@ -285,7 +287,21 @@ def confirmar(
                 cur.execute(_SQL_INSERT_STOCKP, _params_stockp(
                     it, orden, cart, tipo, nro_comp, cod_mov, cod_viajante,
                     id_usuario, cli, extras.get(it.id_articulo, {}),
+                    cod_mov_presupuesto=datos.cod_mov_presupuesto_origen if tipo == EcomCart.TIPO_PEDIDO else None,
                 ))
+
+            if (
+                datos.cod_mov_presupuesto_origen
+                and tipo == EcomCart.TIPO_PEDIDO
+                and cod_mov is not None
+            ):
+                from ecom.services.presupuesto_a_pedido_service import (
+                    finalizar_vinculo_presupuesto_pedido,
+                )
+
+                finalizar_vinculo_presupuesto_pedido(
+                    cur, int(datos.cod_mov_presupuesto_origen), int(cod_mov)
+                )
 
             conn.commit()
         except Exception:
@@ -309,12 +325,48 @@ def confirmar(
     cart.confirmed_at = timezone.now()
     cart.save(update_fields=["estado", "codigo_movimiento", "nro_comprobante", "autorizacion", "confirmed_at", "updated_at"])
 
+    if (
+        datos.enviar_mail_cliente
+        and tipo == EcomCart.TIPO_PEDIDO
+        and cod_mov is not None
+    ):
+        _encolar_mail_comprobante_si_correo(
+            cart.base_empresa,
+            int(cod_mov),
+            int(cart.idcliente),
+            cli,
+        )
+
     return True, None, _result_desde_cart(cart)
 
 
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
+
+def _encolar_mail_comprobante_si_correo(
+    base_empresa: str,
+    cod_mov: int,
+    id_cliente: int,
+    cli: Dict[str, Any],
+) -> None:
+    """Encola mail al cliente tras confirmar PED (no bloquea checkout)."""
+    email = str(cli.get("Email") or cli.get("email") or "").strip()
+    if not email or "@" not in email:
+        return
+    try:
+        from ecom.services.comprobante_mail_async import encolar_comprobante_mail
+
+        encolar_comprobante_mail(
+            base_empresa=base_empresa,
+            cod_mov=cod_mov,
+            tipo_comp=0,
+            to_email=email,
+            idcliente=id_cliente,
+        )
+    except Exception:
+        logger.exception("No se pudo encolar mail de comprobante cod_mov=%s", cod_mov)
+
 
 def _result_desde_cart(cart: EcomCart) -> Dict[str, Any]:
     return {
@@ -353,6 +405,10 @@ def _fetch_cliente(base_empresa: str, codigo_cliente: int) -> Optional[Dict[str,
             cliente.Codigo AS Codigo,
             cliente.id_sucursal AS id_sucursal,
             cliente.id_cv AS id_cv,
+            cliente.Email AS Email,
+            cliente.email AS email,
+            cliente.saldo AS saldo,
+            cliente.Credito AS Credito,
             cond_venta.Descripcion AS condVenta,
             cliente.credito_limite_dias AS credito_limite_dias,
             cliente.descuento_por_cli AS descRenglon
@@ -419,6 +475,8 @@ def _calcular_fecha_entrega(dias_entrega: int, dias_no_laborables: List[int]) ->
 def _params_stockp(
     it: Any, orden: int, cart: EcomCart, tipo: str, nro_comp: str, cod_mov: int,
     cod_viajante: Optional[int], id_usuario: int, cli: Dict[str, Any], extra: Dict[str, Any],
+    *,
+    cod_mov_presupuesto: Optional[int] = None,
 ) -> Dict[str, Any]:
     cant = _dec(it.cantidad)
     pu = _dec(it.precio_unitario_neto)
@@ -434,6 +492,10 @@ def _params_stockp(
         EcomCart.TIPO_DEVOLUCION: "Devolucion",
     }.get(tipo, "Pedido")
     tipo_iva = "Exento" if alic == 0 else "Gravado"
+    tipo_unidad = str_or_default(getattr(it, "tipo_unidad", None), "Unidad")
+    cant_div = _dec(getattr(it, "cantidad_dividir", None), "1")
+    if cant_div <= 0:
+        cant_div = Decimal("1")
     return {
         "IDArt": it.id_articulo,
         "CodigoArticulo": str_or_default(it.codigo, ""),
@@ -478,6 +540,11 @@ def _params_stockp(
         "promocion_por": _dec(it.promocion_por),
         "promocion_tipo": str_or_default(it.promocion_tipo, ""),
         "promocion_cant": to_int_or_none(it.promocion_cant) or 0,
+        "tipo_unidad": tipo_unidad,
+        "cantidad_dividir": cant_div,
+        "cantidad_unidad_display": cant_div,
+        "codmov_presupuesto": cod_mov_presupuesto or 0,
+        "NroPresupuesto": "",
     }
 
 
@@ -584,5 +651,10 @@ _SQL_INSERT_STOCKP = """
         promocion = %(promocion)s,
         promocion_por = %(promocion_por)s,
         promocion_tipo = %(promocion_tipo)s,
-        promocion_cant = %(promocion_cant)s
+        promocion_cant = %(promocion_cant)s,
+        tipo_unidad = %(tipo_unidad)s,
+        cantidad_dividir = %(cantidad_dividir)s,
+        cantidad_unidad_display = %(cantidad_unidad_display)s,
+        codmov_presupuesto = %(codmov_presupuesto)s,
+        NroPresupuesto = %(NroPresupuesto)s
 """

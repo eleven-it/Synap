@@ -26,6 +26,7 @@
 {% endblock %}
 
 {% block content %}
+{% if pedidos_acciones %}{% include "ecom/includes/repetir_pedido_modal.html" %}{% endif %}
 <section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
   <div class="relative overflow-hidden">
     <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 opacity-90 dark:opacity-95"></div>
@@ -107,6 +108,7 @@
       data-slug="{{ listado_slug }}"
       data-filter-mode="{{ filter_mode }}"
       data-usa-id-manual="{% if usa_id_manual_cliente %}1{% else %}0{% endif %}"
+      {% if pedidos_acciones %}data-pedidos-acciones="1" data-pedidos-urls="{{ pedidos_urls_json }}" data-es-cliente="{% if es_cliente_portal %}1{% else %}0{% endif %}"{% endif %}
       {% if sugerencias_api_url %}data-sugerencias-url="{{ sugerencias_api_url }}" data-sugerencias-key="{{ sugerencias_results_key }}"{% endif %}
     >
       {% csrf_token %}
@@ -223,6 +225,7 @@
 {% endblock %}
 
 {% block extra_js %}
+{% if pedidos_acciones %}<script src="{% static 'ecom/js/repetir_pedido_modal.js' %}"></script>{% endif %}
 <script src="{% static 'ecom/js/listado_mayoristapp.js' %}"></script>
 <script type="module" src="{% static 'ecom/js/ecom_predictive_boot.mjs' %}"></script>
 {% endblock %}

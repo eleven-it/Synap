@@ -253,12 +253,32 @@ def _json_safe_row(item: Dict[str, Any]) -> Dict[str, Any]:
     return item
 
 
-# Paridad ``seleccionarComprobante`` en PHP (rutas relativas al portal mayorista).
+# Paridad ``seleccionarComprobante`` en PHP.
+# Rutas legacy: nombre de archivo relativo al portal PHP.
+# Rutas Synap: prefijo ``@synap:`` + nombre Django ``app:url_name`` (ver ``resolver_url_formulario_comprobante``).
+SYNAP_FORMULARIO_URL_PREFIX = "@synap:"
+
 MAYORISTAPP_FORMULARIO_COMPROBANTE: Dict[int, tuple[str, str]] = {
-    0: ("pedido", "alta_pedido.php"),
+    0: ("pedido", "@synap:ecom:mayoristapp_compra"),
     1: ("remitoSistema", "lista-facturas-sin-stock.php"),
     2: ("remitoTalonario", "lista-facturas-sin-stock.php"),
     3: ("presupuesto", "alta_presupuesto.php"),
     4: ("recibo", "recibo/alta_recibo.php"),
     5: ("devolucion", "alta-devolucion.php"),
 }
+
+
+def resolver_url_formulario_comprobante(url: str, request: Any) -> str:
+    """
+    Convierte rutas Synap (``@synap:app:url_name``) en path web con ``reverse()``.
+    Las rutas PHP legacy se devuelven sin cambios.
+    """
+    if not url.startswith(SYNAP_FORMULARIO_URL_PREFIX):
+        return url
+    from django.urls import NoReverseMatch, reverse
+
+    url_name = url[len(SYNAP_FORMULARIO_URL_PREFIX) :]
+    try:
+        return reverse(url_name)
+    except NoReverseMatch:
+        return f"/ecom/mayoristapp/compra/" if "mayoristapp_compra" in url_name else url

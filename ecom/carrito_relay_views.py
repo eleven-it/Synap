@@ -95,7 +95,12 @@ class CarritoRelayAPIView(APIView):
 
         try:
             item, error = cart_svc.agregar_item(
-                cart, id_articulo, cantidad, descuento_cliente=descuento_cliente
+                cart,
+                id_articulo,
+                cantidad,
+                descuento_cliente=descuento_cliente,
+                tipo_unidad=str(body.get("tipo_unidad") or "Unidad"),
+                multiplicador=body.get("multiplicador"),
             )
         except Exception:
             return Response({"detail": "Error al agregar el artículo al carrito."}, status=500)
@@ -103,6 +108,23 @@ class CarritoRelayAPIView(APIView):
         if error:
             return Response({"detail": error, "carrito": cart_svc.serializar_carrito(cart)}, status=409)
         return Response(cart_svc.serializar_carrito(cart), status=201)
+
+
+class CarritoTipoComprobanteRelayAPIView(APIView):
+    """PATCH /ecom/api/mayoristapp/carrito/tipo-comprobante/ — Body: {tipo: PED|PRE|DEV}."""
+
+    permission_classes = [EcomMayoristappSessionPermission]
+
+    def patch(self, request: Request) -> Response:
+        ctx, err = _resolver_contexto(request)
+        if err is not None:
+            return err
+        _base, _uid, cart, _desc = ctx
+        tipo = str((request.data or {}).get("tipo") or "").strip().upper()
+        ok, error = cart_svc.actualizar_tipo_comprobante(cart, tipo)
+        if not ok:
+            return Response({"detail": error}, status=400)
+        return Response(cart_svc.serializar_carrito(cart))
 
 
 class CarritoItemRelayAPIView(APIView):

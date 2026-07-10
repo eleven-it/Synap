@@ -8,13 +8,26 @@ vía self_checkout.StockService.
 from __future__ import annotations
 
 import math
+from contextlib import contextmanager
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from core.mysql_pool import get_mysql_pool
+from core.mysql_pool import get_connection
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, str_or_default
-from ecom.services.price_rules_engine import calcular_precio_articulo_row
+from ecom.services.price_rules_engine import calcular_precio_articulo_row, resolver_reglas_precio_map
+from ecom.services.promocion_etiqueta import etiqueta_promocion_linea
+from ecom.services.presentacion_articulo import opciones_presentacion_articulo
 from self_checkout.services.stock_service import StockService
+
+
+@contextmanager
+def _mysql_conn(base_empresa: str, external: Any = None):
+    """Conexión MySQL del pool (o reutiliza la externa sin cerrarla)."""
+    if external is not None:
+        yield external
+    else:
+        with get_connection(base_empresa) as conn:
+            yield conn
 
 
 def _d(v: Any, default: str = "0") -> Decimal:
@@ -72,9 +85,52 @@ _FROM_JOINS_LISTADO = """
     LEFT JOIN marca ON marca.CodMarca = articulo.CodigoMarca
 """
 
+_SELECT_LISTADO_TPV_COLS = """
+    articulo.IDArt,
+    articulo.id_manual,
+    articulo.CodigoArticuloT,
+    articulo.NombreArticulo,
+    articulo.Precio1V,
+    articulo.Precio2V,
+    articulo.Precio3V,
+    articulo.Precio4V,
+    articulo.Precio5V,
+    articulo.PNOficial,
+    articulo.impuesto_interno,
+    articulo.CodigoProveedor,
+    articulo.CodigoRubro,
+    articulo.IDSubRubro,
+    articulo.promocion,
+    articulo.promocion_por,
+    articulo.promocion_cant,
+    articulo.promocion_tipo,
+    articulo.promocion_alcance,
+    articulo.promocion_lista1,
+    articulo.promocion_lista2,
+    articulo.promocion_lista3,
+    articulo.promocion_lista4,
+    articulo.promocion_lista5,
+    articulo.promocion_listaoficial,
+    articulo.promocion_vigencia_desde,
+    articulo.promocion_vigencia_hasta,
+    iva.Alicuota AS alic_iva
+"""
+
+_FROM_TPV = """
+    FROM articulo
+    LEFT JOIN iva ON iva.ID = articulo.Alicuota
+"""
+
+_PRESENTACION_DEFECTO_BUSQUEDA = {
+    "mostrar_embalaje": False,
+    "tipo_unidad_defecto": "Unidad",
+    "opciones": [{"tipo": "Unidad", "etiqueta": "Unidad", "multiplicador": 1}],
+}
+
 
 def _construir_where_catalogo(filtros: Dict[str, Any]) -> tuple:
     """Construye el WHERE parametrizado del catálogo ecommerce (compartido listado/export)."""
+    busqueda_tpv = bool(filtros.get("busqueda_tpv"))
     where_clauses = ["articulo.Discontinuo = 'No'", "articulo.ecommerce = 'Si'"]
     params: List[Any] = []
 
@@ -86,7 +142,14 @@ def _construir_where_catalogo(filtros: Dict[str, Any]) -> tuple:
         where_clauses.append("articulo.IDSubRubro = %s")
         params.append(to_int_or_none(filtros["subrubro"]))
 
-    if filtros.get("marca") is not None:
+    marcas = filtros.get("marcas")
+    if marcas:
+        ids_marca = [i for i in (to_int_or_none(x) for x in marcas) if i is not None]
+        if ids_marca:
+            placeholders = ",".join(["%s"] * len(ids_marca))
+            where_clauses.append(f"articulo.CodigoMarca IN ({placeholders})")
+            params.extend(ids_marca)
+    elif filtros.get("marca") is not None:
         where_clauses.append("articulo.CodigoMarca = %s")
         params.append(to_int_or_none(filtros["marca"]))
 
@@ -102,11 +165,20 @@ def _construir_where_catalogo(filtros: Dict[str, Any]) -> tuple:
         where_clauses.append("articulo.promocion = 'Si'")
 
     if filtros.get("q"):
-        q_term = f"%{filtros['q']}%"
-        where_clauses.append(
-            "(articulo.NombreArticulo LIKE %s OR articulo.CodigoArticuloT LIKE %s OR articulo.id_manual LIKE %s)"
-        )
-        params.extend([q_term, q_term, q_term])
+        q_raw = str(filtros["q"]).strip()
+        q_term = f"%{q_raw}%"
+        if busqueda_tpv:
+            where_clauses.append(
+                "(articulo.NombreArticulo LIKE %s OR articulo.CodigoArticuloT LIKE %s "
+                "OR articulo.id_manual LIKE %s OR CAST(articulo.IDArt AS CHAR) LIKE %s "
+                "OR articulo.NroCodBarra = %s OR articulo.NroCodBarra LIKE %s)"
+            )
+            params.extend([q_term, q_term, q_term, q_term, q_raw, q_term])
+        else:
+            where_clauses.append(
+                "(articulo.NombreArticulo LIKE %s OR articulo.CodigoArticuloT LIKE %s OR articulo.id_manual LIKE %s)"
+            )
+            params.extend([q_term, q_term, q_term])
 
     # Restricciones de catálogo por punto de venta (excluir artículos/rubros/subrubros).
     for clave, columna in (
@@ -132,17 +204,10 @@ def contar_articulos_catalogo(
     """Cuenta artículos del catálogo para un conjunto de filtros (guardrail de export)."""
     where_sql, params = _construir_where_catalogo(filtros or {})
     sql = f"SELECT COUNT(*) FROM articulo WHERE {where_sql}"
-    pool = get_mysql_pool()
-    use_external = conn is not None
-    if not use_external:
-        conn = pool.get_connection(base_empresa)
-    try:
-        cur = conn.cursor()
+    with _mysql_conn(base_empresa, conn) as c:
+        cur = c.cursor()
         cur.execute(sql, params)
         return _i(cur.fetchone()[0], 0)
-    finally:
-        if not use_external:
-            conn.close()
 
 
 def obtener_filas_catalogo(
@@ -162,18 +227,11 @@ def obtener_filas_catalogo(
         WHERE {where_sql}
         ORDER BY rubro.NombreRubro, subrubro.NombreSubRubro, articulo.NombreArticulo
     """
-    pool = get_mysql_pool()
-    use_external = conn is not None
-    if not use_external:
-        conn = pool.get_connection(base_empresa)
-    try:
-        cur = conn.cursor()
+    with _mysql_conn(base_empresa, conn) as c:
+        cur = c.cursor()
         cur.execute(sql, params)
         cols = [d[0] for d in cur.description] if cur.description else []
         return [dict(zip(cols, row)) for row in cur.fetchall()]
-    finally:
-        if not use_external:
-            conn.close()
 
 
 def listar_articulos_paginado(
@@ -194,7 +252,7 @@ def listar_articulos_paginado(
 
     Args:
         base_empresa: Base de datos de la empresa.
-        filtros: Dict con filtros opcionales (rubro, subrubro, marca, laboratorio, proveedor, q, solo_promocion).
+        filtros: Dict con filtros opcionales (rubro, subrubro, marca, marcas, laboratorio, proveedor, q, solo_promocion, busqueda_tpv).
         lista_id: ID de lista de precios (1..5 o 6).
         codigo_cliente: ID del cliente (None si no hay cliente).
         descuento_cliente: Descuento de renglón/cliente (%).
@@ -211,37 +269,49 @@ def listar_articulos_paginado(
     tam = min(max(1, tam), 100)
     pagina = max(1, pagina)
     offset = (pagina - 1) * tam
+    busqueda_tpv = bool(filtros.get("busqueda_tpv"))
 
     where_sql, params = _construir_where_catalogo(filtros)
 
-    sql_count = f"""
-        SELECT COUNT(*)
-        FROM articulo
-        WHERE {where_sql}
-    """
+    if busqueda_tpv:
+        sql_items = f"""
+            SELECT {_SELECT_LISTADO_TPV_COLS}
+            {_FROM_TPV}
+            WHERE {where_sql}
+            ORDER BY articulo.NombreArticulo
+            LIMIT %s OFFSET %s
+        """
+    else:
+        sql_count = f"""
+            SELECT COUNT(*)
+            FROM articulo
+            WHERE {where_sql}
+        """
+        sql_items = f"""
+            SELECT {_SELECT_LISTADO_COLS}
+            {_FROM_JOINS_LISTADO}
+            WHERE {where_sql}
+            ORDER BY articulo.NombreArticulo
+            LIMIT %s OFFSET %s
+        """
 
-    sql_items = f"""
-        SELECT {_SELECT_LISTADO_COLS}
-        {_FROM_JOINS_LISTADO}
-        WHERE {where_sql}
-        ORDER BY articulo.NombreArticulo
-        LIMIT %s OFFSET %s
-    """
+    with _mysql_conn(base_empresa, conn) as c:
+        cur = c.cursor()
 
-    pool = get_mysql_pool()
-    use_external_conn = conn is not None
-
-    if not use_external_conn:
-        conn = pool.get_connection(base_empresa)
-
-    try:
-        cur = conn.cursor()
-        cur.execute(sql_count, params)
-        total = _i(cur.fetchone()[0], 0)
+        if busqueda_tpv:
+            total = 0
+        else:
+            cur.execute(sql_count, params)
+            total = _i(cur.fetchone()[0], 0)
 
         cur.execute(sql_items, params + [tam, offset])
         cols = [d[0] for d in cur.description] if cur.description else []
         rows = cur.fetchall()
+
+        if busqueda_tpv:
+            total = offset + len(rows)
+            if len(rows) == tam:
+                total += 1
 
         ids_articulos = [_i(row[cols.index("IDArt")], 0) for row in rows]
         stock_map = {}
@@ -249,35 +319,57 @@ def listar_articulos_paginado(
             stock_service = StockService(base_empresa)
             stock_map = stock_service.get_disponible_map(ids_articulos, id_deposito)
 
+        art_dicts = [dict(zip(cols, row)) for row in rows]
+        regla_map = {}
+        if busqueda_tpv and codigo_cliente is not None and art_dicts:
+            try:
+                regla_map = resolver_reglas_precio_map(c, art_dicts, codigo_cliente)
+            except Exception:
+                regla_map = {}
+
         items = []
-        for row in rows:
-            art_dict = dict(zip(cols, row))
+        for art_dict in art_dicts:
             id_art = _i(art_dict.get("IDArt"), 0)
 
-            precio = calcular_precio_articulo_row(
-                art_dict,
-                lista_id=lista_id,
-                codigo_cliente=codigo_cliente,
-                descuento_cliente=descuento_cliente,
-                iva_incluido=iva_incluido,
-                conn=conn,
-            )
+            kwargs_precio = {
+                "lista_id": lista_id,
+                "codigo_cliente": codigo_cliente,
+                "descuento_cliente": descuento_cliente,
+                "iva_incluido": iva_incluido,
+                "conn": c,
+            }
+            if busqueda_tpv and codigo_cliente is not None:
+                kwargs_precio["regla_precio"] = regla_map.get(id_art)
+                kwargs_precio["resolver_regla"] = False
 
-            items.append(
-                {
-                    "id_articulo": id_art,
-                    "id_manual": _s(art_dict.get("id_manual"), ""),
-                    "codigo": _s(art_dict.get("CodigoArticuloT"), ""),
-                    "nombre": _s(art_dict.get("NombreArticulo"), ""),
-                    "rubro": _s(art_dict.get("NombreRubro"), ""),
-                    "subrubro": _s(art_dict.get("NombreSubRubro"), ""),
-                    "marca": _s(art_dict.get("NombreMarca"), ""),
-                    "precio": float(precio),
-                    "stock_disponible": float(stock_map.get(id_art, Decimal("0"))),
-                    "tiene_foto": False,
-                    "en_promocion": _s(art_dict.get("promocion"), "No").strip().lower() == "si",
-                }
-            )
+            precio = calcular_precio_articulo_row(art_dict, **kwargs_precio)
+
+            item = {
+                "id_articulo": id_art,
+                "id_manual": _s(art_dict.get("id_manual"), ""),
+                "codigo": _s(art_dict.get("CodigoArticuloT"), ""),
+                "nombre": _s(art_dict.get("NombreArticulo"), ""),
+                "precio": float(precio),
+                "stock_disponible": float(stock_map.get(id_art, Decimal("0"))),
+                "tiene_foto": False,
+                "en_promocion": _s(art_dict.get("promocion"), "No").strip().lower() == "si",
+                "promocion_tipo": _s(art_dict.get("promocion_tipo"), ""),
+                "promocion_por": float(to_decimal_or_none(art_dict.get("promocion_por")) or 0),
+                "promocion_cant": _i(art_dict.get("promocion_cant"), 0),
+                "promocion_etiqueta": etiqueta_promocion_linea(art_dict),
+            }
+            if busqueda_tpv:
+                item["rubro"] = ""
+                item["subrubro"] = ""
+                item["marca"] = ""
+                item["presentacion"] = _PRESENTACION_DEFECTO_BUSQUEDA
+            else:
+                item["rubro"] = _s(art_dict.get("NombreRubro"), "")
+                item["subrubro"] = _s(art_dict.get("NombreSubRubro"), "")
+                item["marca"] = _s(art_dict.get("NombreMarca"), "")
+                item["presentacion"] = opciones_presentacion_articulo(base_empresa, id_art)
+
+            items.append(item)
 
         total_paginas = math.ceil(total / tam) if tam > 0 else 0
 
@@ -288,9 +380,6 @@ def listar_articulos_paginado(
             "tam": tam,
             "total_paginas": total_paginas,
         }
-    finally:
-        if not use_external_conn:
-            conn.close()
 
 
 _COLUMNAS_PRECIO_ARTICULO = """
@@ -347,21 +436,14 @@ def obtener_articulo_row_precio(
           AND articulo.IDArt = %s
         LIMIT 1
     """
-    pool = get_mysql_pool()
-    use_external_conn = conn is not None
-    if not use_external_conn:
-        conn = pool.get_connection(base_empresa)
-    try:
-        cur = conn.cursor()
+    with _mysql_conn(base_empresa, conn) as c:
+        cur = c.cursor()
         cur.execute(sql, [idart])
         cols = [d[0] for d in cur.description] if cur.description else []
         row = cur.fetchone()
         if not row:
             return None
         return dict(zip(cols, row))
-    finally:
-        if not use_external_conn:
-            conn.close()
 
 
 def resolver_precio_articulo(
@@ -380,12 +462,8 @@ def resolver_precio_articulo(
     Fuente única de precio para carrito (P1) y checkout (P2): garantiza paridad con el
     listado/ficha del catálogo (P0). Devuelve None si el artículo no existe/está inactivo.
     """
-    pool = get_mysql_pool()
-    use_external_conn = conn is not None
-    if not use_external_conn:
-        conn = pool.get_connection(base_empresa)
-    try:
-        row = obtener_articulo_row_precio(base_empresa, id_articulo, conn=conn)
+    with _mysql_conn(base_empresa, conn) as c:
+        row = obtener_articulo_row_precio(base_empresa, id_articulo, conn=c)
         if row is None:
             return None
         precio = calcular_precio_articulo_row(
@@ -394,12 +472,9 @@ def resolver_precio_articulo(
             codigo_cliente=codigo_cliente,
             descuento_cliente=descuento_cliente,
             iva_incluido=iva_incluido,
-            conn=conn,
+            conn=c,
         )
         return precio, row
-    finally:
-        if not use_external_conn:
-            conn.close()
 
 
 def obtener_detalle_articulo(
@@ -488,14 +563,8 @@ def obtener_detalle_articulo(
         LIMIT 1
     """
 
-    pool = get_mysql_pool()
-    use_external_conn = conn is not None
-
-    if not use_external_conn:
-        conn = pool.get_connection(base_empresa)
-
-    try:
-        cur = conn.cursor()
+    with _mysql_conn(base_empresa, conn) as c:
+        cur = c.cursor()
         cur.execute(sql, params)
         cols = [d[0] for d in cur.description] if cur.description else []
         row = cur.fetchone()
@@ -512,7 +581,7 @@ def obtener_detalle_articulo(
             codigo_cliente=codigo_cliente,
             descuento_cliente=descuento_cliente,
             iva_incluido=iva_incluido,
-            conn=conn,
+            conn=c,
         )
 
         precio_neto = calcular_precio_articulo_row(
@@ -521,7 +590,7 @@ def obtener_detalle_articulo(
             codigo_cliente=codigo_cliente,
             descuento_cliente=descuento_cliente,
             iva_incluido=False,
-            conn=conn,
+            conn=c,
         )
 
         stock_service = StockService(base_empresa)
@@ -580,6 +649,3 @@ def obtener_detalle_articulo(
             "tiene_foto": False,
             "promocion": promo_data,
         }
-    finally:
-        if not use_external_conn:
-            conn.close()

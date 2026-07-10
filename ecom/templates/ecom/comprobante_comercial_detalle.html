@@ -1,0 +1,121 @@
+{% extends "ecom/base_pedidos.html" %}
+{% load static %}
+
+{% block pedidos_title %}Detalle de comprobante{% endblock %}
+
+{% block pedidos_section_attrs %}x-data="comprobanteComercialDetalle()" x-init="init()"{% endblock %}
+
+{% block pedidos_json_script %}
+{{ urls|json_script:"comprobante-detalle-urls" }}
+{% endblock %}
+
+{% block pedidos_breadcrumb %}
+{% include "ecom/includes/pedidos_breadcrumb.html" with hub_url=urls.hub current_label="Detalle" %}
+{% endblock %}
+
+{% block pedidos_heading %}<span x-text="titulo">Detalle de comprobante</span>{% endblock %}
+
+{% block pedidos_subheading %}
+<p class="pedidos-hero-desc" x-show="cabecera" x-text="subtitulo" x-cloak></p>
+{% endblock %}
+
+{% block pedidos_hero_actions %}
+<a :href="urls.compra" class="pedidos-btn pedidos-btn-outline-hero">Nuevo comprobante</a>
+<a :href="listadoUrl" class="pedidos-btn pedidos-btn-outline-hero" x-text="listadoLabel"></a>
+{% endblock %}
+
+{% block pedidos_content %}
+<div class="space-y-6">
+  <template x-if="cargando">
+    <p class="text-sm text-slate-500 py-8 text-center">Cargando comprobante…</p>
+  </template>
+  <template x-if="error">
+    <p class="text-sm text-rose-600 py-8 text-center" x-text="error"></p>
+  </template>
+
+  <template x-if="cabecera && !cargando">
+    <div class="pedidos-card p-5 space-y-4">
+      <div class="flex flex-wrap gap-4 text-sm">
+        <div><span class="text-slate-500">Número</span><p class="font-semibold" x-text="cabecera.nro_comprobante"></p></div>
+        <div><span class="text-slate-500">Fecha</span><p class="font-semibold" x-text="cabecera.fecha"></p></div>
+        <div><span class="text-slate-500">Cliente</span><p class="font-semibold" x-text="cabecera.nombre_cliente || '—'"></p></div>
+        <div><span class="text-slate-500">Estado</span><p class="font-semibold" x-text="cabecera.estado || '—'"></p></div>
+        <div><span class="text-slate-500">Total</span><p class="font-semibold tabular-nums" x-text="money(cabecera.total)"></p></div>
+      </div>
+      <div class="pedidos-table-shell overflow-x-auto">
+        <table class="pedidos-table min-w-[520px]">
+          <thead>
+            <tr><th>Código</th><th>Descripción</th><th class="text-right">Cant.</th><th class="text-right">Precio</th></tr>
+          </thead>
+          <tbody>
+            <template x-for="r in renglones" :key="r.IDArt + '-' + r.Descripcion">
+              <tr>
+                <td x-text="r.CodigoArticulo || r.IDArt"></td>
+                <td x-text="r.Descripcion"></td>
+                <td class="text-right tabular-nums" x-text="r.Salida"></td>
+                <td class="text-right tabular-nums" x-text="money(r.PrecioNetoxR || r.PrecioNetoxU)"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </template>
+</div>
+{% endblock %}
+
+{% block pedidos_js %}
+<script>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('comprobanteComercialDetalle', () => ({
+    urls: JSON.parse(document.getElementById('comprobante-detalle-urls').textContent),
+    codMov: {{ cod_mov|default:"null" }},
+    cabecera: null,
+    renglones: [],
+    cargando: true,
+    error: '',
+    get titulo() {
+      const t = (this.cabecera && this.cabecera.tipo_comprobante) || '';
+      const map = { PED: 'Detalle de pedido', PRE: 'Detalle de presupuesto', DEV: 'Detalle de devolución' };
+      return map[t] || 'Detalle de comprobante';
+    },
+    get subtitulo() {
+      if (!this.cabecera) return '';
+      return `${this.cabecera.nro_comprobante || ''} · ${this.cabecera.fecha || ''}`;
+    },
+    get listadoUrl() {
+      const t = (this.cabecera && this.cabecera.tipo_comprobante) || '';
+      if (t === 'PRE') return this.urls.listado_presupuestos;
+      return this.urls.listado_pedidos;
+    },
+    get listadoLabel() {
+      const t = (this.cabecera && this.cabecera.tipo_comprobante) || '';
+      if (t === 'PRE') return 'Ver presupuestos';
+      return 'Ver pedidos';
+    },
+    init() { this.cargar(); },
+    money(v) {
+      const n = Number(v || 0);
+      return '$' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+    async cargar() {
+      this.cargando = true;
+      this.error = '';
+      try {
+        const [cabR, detR] = await Promise.all([
+          fetch(this.urls.cabecera, { credentials: 'same-origin' }).then(r => r.json()),
+          fetch(this.urls.detalle, { credentials: 'same-origin' }).then(r => r.json()),
+        ]);
+        if (!cabR.ok) throw new Error(cabR.error || 'Comprobante no encontrado');
+        this.cabecera = cabR.cabecera;
+        this.renglones = detR.results || [];
+      } catch (e) {
+        this.error = e.message || 'Error al cargar';
+      } finally {
+        this.cargando = false;
+      }
+    },
+  }));
+});
+</script>
+{% endblock %}

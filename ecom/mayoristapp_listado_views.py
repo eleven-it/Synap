@@ -81,6 +81,20 @@ class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
                 "usa_id_manual_cliente": usa_manual,
                 "sugerencias_api_url": sugerencias_url,
                 "sugerencias_results_key": cfg.get("sugerencias_results_key") or "sugerencias",
+                "pedidos_acciones": bool(cfg.get("pedidos_acciones")),
+                "pedidos_urls_json": json.dumps(
+                    {
+                        "detalle_tpl": reverse("ecom:mayoristapp_pedido_detalle", args=[0]),
+                        "preview_tpl": reverse(
+                            "ecom:mayoristapp_carrito_desde_pedido_preview", args=[0]
+                        ),
+                        "cargar_desde_pedido": reverse("ecom:mayoristapp_carrito_desde_pedido"),
+                        "compra": reverse("ecom:mayoristapp_compra"),
+                    }
+                )
+                if cfg.get("pedidos_acciones")
+                else "",
+                "es_cliente_portal": bool(cfg.get("portal_cliente")),
             }
         )
         return context

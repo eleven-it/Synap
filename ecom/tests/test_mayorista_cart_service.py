@@ -13,7 +13,6 @@ from django.test import TestCase
 from ecom.models import EcomCart
 from ecom.services import mayorista_cart_service as svc
 
-
 def _row(alic="21", impint="0", nombre="Artículo", codigo="C1", idm="M1"):
     return {
         "CodigoArticuloT": codigo,
@@ -235,3 +234,59 @@ class TestSerializar(TestCase):
         self.assertEqual(data["totales"]["total"], 242.0)
         self.assertEqual(len(data["items"]), 1)
         self.assertEqual(data["items"][0]["id_articulo"], 1)
+
+
+class TestTipoComprobanteCarrito(TestCase):
+    def _cart(self, tipo=EcomCart.TIPO_PEDIDO):
+        return svc.obtener_o_crear_carrito(
+            "emp1", 5, idcliente=10, lista_id=2, id_deposito=1, tipo_comprobante=tipo
+        )
+
+    def test_actualizar_tipo_ok(self):
+        cart = self._cart()
+        ok, err = svc.actualizar_tipo_comprobante(cart, "PRE")
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+        cart.refresh_from_db()
+        self.assertEqual(cart.tipo_comprobante, EcomCart.TIPO_PRESUPUESTO)
+
+    def test_actualizar_tipo_invalido(self):
+        cart = self._cart()
+        ok, err = svc.actualizar_tipo_comprobante(cart, "XXX")
+        self.assertFalse(ok)
+        self.assertIn("no válido", err)
+
+    def test_actualizar_tipo_carrito_confirmado(self):
+        cart = self._cart()
+        cart.estado = EcomCart.ESTADO_CONFIRMADO
+        cart.save(update_fields=["estado"])
+        ok, err = svc.actualizar_tipo_comprobante(cart, "DEV")
+        self.assertFalse(ok)
+        self.assertIn("confirmado", err.lower())
+
+    @patch.object(svc, "StockService")
+    @patch.object(svc, "resolver_precio_articulo")
+    def test_devolucion_no_valida_stock(self, mock_precio, mock_stock):
+        mock_stock.return_value.validar_disponible_items.return_value = (False, {"disponible": 0})
+        mock_precio.return_value = (Decimal("100"), _row())
+        cart = self._cart(tipo=EcomCart.TIPO_DEVOLUCION)
+        item, err = svc.agregar_item(cart, 1, 99)
+        self.assertIsNone(err)
+        self.assertIsNotNone(item)
+        mock_stock.return_value.validar_disponible_items.assert_not_called()
+        self.assertEqual(cart.items.count(), 1)
+
+
+class TestReiniciarBorradorCompra(TestCase):
+    @patch.object(svc, "StockService")
+    @patch.object(svc, "resolver_precio_articulo")
+    def test_limpia_cliente_y_renglones(self, mock_precio, mock_stock):
+        _stock_ok(mock_stock)
+        mock_precio.return_value = (Decimal("100"), _row())
+        cart = svc.obtener_o_crear_carrito("emp1", 5, idcliente=10, lista_id=2, id_deposito=1)
+        svc.agregar_item(cart, 1, 2)
+        svc.reiniciar_borrador_compra_vendedor("emp1", 5)
+        cart.refresh_from_db()
+        self.assertIsNone(cart.idcliente)
+        self.assertEqual(cart.items.count(), 0)
+        self.assertEqual(cart.total, Decimal("0.00"))

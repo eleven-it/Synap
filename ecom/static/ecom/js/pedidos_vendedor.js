@@ -11,6 +11,39 @@
   var realtimeIntervalId = null;
   var filterDebounceId = null;
   var realtimeActive = false;
+  var pageUrls = {};
+
+  function loadUrls() {
+    var node = document.getElementById("pedidos-vendedor-urls");
+    if (!node) return {};
+    try {
+      return JSON.parse(node.textContent);
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function detalleUrl(codMov) {
+    return (pageUrls.detalle_tpl || "").replace(/\/0\/?$/, "/" + codMov + "/");
+  }
+
+  function pdfUrl(codMov) {
+    return (pageUrls.pdf_tpl || "").replace(/\/0\/pdf\/?$/, "/" + codMov + "/pdf/");
+  }
+
+  function badgeEstado(est) {
+    var e = String(est || "").toLowerCase();
+    if (e === "pendiente") return "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800";
+    if (e.indexOf("prepar") >= 0) return "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold bg-sky-100 text-sky-800";
+    if (e === "preparado") return "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-800";
+    return "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-700";
+  }
+
+  function badgeAutorizacion(val) {
+    var v = String(val || "").trim();
+    if (v === "Autorizado") return "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-800";
+    return "inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800";
+  }
 
   function getCookie(name) {
     var v = document.cookie.match("(^|;)\\s*" + name + "\\s*=\\s*([^;]+)");
@@ -93,6 +126,7 @@
   }
 
   function renderRow(r, idx, usaManual) {
+    var codMov = pick(r, "CodigoMovimiento");
     var cliente;
     if (usaManual) {
       cliente =
@@ -107,13 +141,25 @@
     }
     var viaj = pick(r, "NombViajante") || pick(r, "nombreViajante") || "";
     var anul = String(pick(r, "Anulado") || "").toLowerCase();
+    var estado = pick(r, "Estado") || "";
+    var aut = pick(r, "autorizacion_sistema") || "";
     var rowClass =
       anul === "si" || anul === "sí"
         ? "text-red-600 dark:text-red-400"
         : "";
+    var puedeAnular =
+      anul !== "si" &&
+      anul !== "sí" &&
+      String(estado).trim() === "Pendiente";
 
     var tr = document.createElement("tr");
-    tr.className = "border-b border-slate-100 dark:border-slate-800/80 " + rowClass;
+    tr.className =
+      "border-b border-slate-100 dark:border-slate-800/80 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/30 " +
+      rowClass;
+    tr.addEventListener("click", function (ev) {
+      if (ev.target.closest("[data-ped-accion]")) return;
+      if (codMov != null) window.location.href = detalleUrl(codMov);
+    });
     tr.innerHTML =
       "<td class=\"py-2.5 pr-3\">" +
       (idx + 1) +
@@ -143,10 +189,18 @@
       esc(pick(r, "TipoPedido") || "") +
       "</td>" +
       "<td class=\"py-2.5 pr-3\">" +
-      esc(pick(r, "Estado") || "") +
+      '<span class="' +
+      badgeEstado(estado) +
+      '">' +
+      esc(estado) +
+      "</span>" +
       "</td>" +
       "<td class=\"py-2.5 pr-3\">" +
-      esc(pick(r, "autorizacion_sistema") || "") +
+      '<span class="' +
+      badgeAutorizacion(aut) +
+      '">' +
+      esc(aut) +
+      "</span>" +
       "</td>" +
       "<td class=\"py-2.5 pr-3\">" +
       esc(pick(r, "FormaEntrega") || "") +
@@ -156,6 +210,27 @@
       "</td>" +
       "<td class=\"py-2.5 pr-3\">" +
       esc(pick(r, "Anulado") || "") +
+      "</td>" +
+      '<td class="py-2.5 pr-3 whitespace-nowrap" data-ped-accion>' +
+      '<button type="button" class="text-xs font-semibold text-sky-600 hover:text-sky-500 mr-2" data-ver-pedido="' +
+      esc(String(codMov || "")) +
+      '">Ver</button>' +
+      '<button type="button" class="text-xs font-semibold text-slate-600 hover:text-slate-800 mr-2" data-pdf-pedido="' +
+      esc(String(codMov || "")) +
+      '">PDF</button>' +
+      (anul !== "si" && anul !== "sí"
+        ? '<button type="button" class="text-xs font-semibold text-indigo-600 hover:text-indigo-500 mr-2" data-repetir-pedido="' +
+          esc(String(codMov || "")) +
+          '">Repetir</button>'
+        : "") +
+      (puedeAnular
+        ? '<button type="button" class="text-xs font-semibold text-rose-600 hover:text-rose-500 mr-2" data-anular-pedido="' +
+          esc(String(codMov || "")) +
+          '">Anular</button>'
+        : "") +
+      '<button type="button" class="text-xs font-semibold text-slate-500 hover:text-slate-700" data-mail-pedido="' +
+      esc(String(codMov || "")) +
+      '">Mail</button>' +
       "</td>";
     return tr;
   }
@@ -182,22 +257,76 @@
       '<td class="py-3 pr-3 text-right tabular-nums">' +
       fmtMoney(tot) +
       "</td>" +
-      '<td colspan="6"></td>' +
+      '<td colspan="7"></td>' +
       "</tr>";
   }
 
-  function textOfSelect(sel) {
-    if (!sel || sel.selectedIndex < 0) return "";
-    return sel.options[sel.selectedIndex].textContent.trim();
+  function textOfSelect(sel, defaultLabel) {
+    if (!sel || sel.selectedIndex < 0) return defaultLabel || "";
+    var t = sel.options[sel.selectedIndex].textContent.trim();
+    if (!t || t === "—") return defaultLabel || t;
+    return t;
+  }
+
+  function showTableLoading(show) {
+    var loading = el("pedidos-loading");
+    var emptyBox = el("pedidos-empty");
+    var wrap = el("pedidos-table-wrap");
+    if (show) {
+      if (loading) {
+        loading.classList.remove("hidden");
+        loading.setAttribute("aria-hidden", "false");
+      }
+      if (emptyBox) emptyBox.classList.add("hidden");
+      if (wrap) wrap.classList.add("hidden");
+    } else if (loading) {
+      loading.classList.add("hidden");
+      loading.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function setEmptyState(kind, message) {
+    var emptyBox = el("pedidos-empty");
+    if (!emptyBox) return;
+    emptyBox.classList.remove("hidden");
+    emptyBox.setAttribute("data-empty-kind", kind);
+    var title =
+      kind === "no-results"
+        ? "Sin resultados"
+        : kind === "error"
+          ? "Error al cargar"
+          : "Listado vacío";
+    var retryBtn =
+      kind === "error"
+        ? '<button type="button" id="pedidos-retry" class="mt-4 inline-flex items-center rounded-full px-4 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-500">Reintentar</button>'
+        : "";
+    emptyBox.innerHTML =
+      '<p class="font-semibold text-slate-700 dark:text-slate-300">' +
+      esc(title) +
+      "</p>" +
+      '<p class="mt-2 text-sm text-slate-500 dark:text-slate-400">' +
+      esc(message) +
+      "</p>" +
+      retryBtn;
+    var retry = el("pedidos-retry");
+    if (retry) {
+      retry.addEventListener("click", function () {
+        runSearch();
+      });
+    }
   }
 
   function updateFiltersSummary() {
     var sum = el("ped-filters-summary");
     if (!sum) return;
     var parts = [];
-    parts.push("Vendedor: " + textOfSelect(el("filtraVendedor")));
-    parts.push("Clientes: " + textOfSelect(el("listaTodos")));
-    parts.push("Estado: " + textOfSelect(el("estadoPedido")));
+    parts.push("Vendedor: " + textOfSelect(el("filtraVendedor"), "Todos"));
+    parts.push("Clientes: " + textOfSelect(el("listaTodos"), "Todos"));
+    parts.push("Estado: " + textOfSelect(el("estadoPedido"), "Todos los estados"));
+    var chkNoAut = el("filtroNoAutorizados");
+    if (chkNoAut && chkNoAut.checked) {
+      parts.push("Solo no autorizados");
+    }
     var cb = el("campoBusca").value;
     if (cb && cb !== "-") {
       parts.push("Buscar: " + cb);
@@ -253,6 +382,7 @@
 
     btn.disabled = true;
     status.textContent = "Buscando…";
+    showTableLoading(true);
 
     fetch(apiUrl, {
       method: "POST",
@@ -265,18 +395,32 @@
       body: JSON.stringify(buildPayload()),
     })
       .then(function (res) {
-        if (!res.ok) throw new Error("HTTP " + res.status);
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            var msg = body.error || body.detail || ("HTTP " + res.status);
+            throw new Error(msg);
+          });
+        }
         return res.json();
       })
       .then(function (data) {
         if (data.ok === false) {
           throw new Error(data.error || "Error en API");
         }
+        showTableLoading(false);
         var filas = data.results || data.filas || [];
+        var soloNoAut = el("filtroNoAutorizados") && el("filtroNoAutorizados").checked;
+        if (soloNoAut) {
+          filas = filas.filter(function (row) {
+            return String(pick(row, "autorizacion_sistema") || "").trim() !== "Autorizado";
+          });
+        }
         tbody.innerHTML = "";
         if (filas.length === 0) {
-          emptyBox.classList.remove("hidden");
-          emptyBox.textContent = "No se encontraron resultados para los filtros indicados.";
+          setEmptyState(
+            "no-results",
+            "No se encontraron pedidos para los filtros indicados. Probá ampliar el rango o quitar restricciones."
+          );
           wrap.classList.add("hidden");
           el("tabla-pedidos-foot").innerHTML = "";
           status.textContent = "0 resultados.";
@@ -293,9 +437,11 @@
         updateLastRefreshTime();
       })
       .catch(function (err) {
-        emptyBox.classList.remove("hidden");
-        emptyBox.textContent =
-          "No se pudo cargar el listado. Compruebe la sesión y la base de empresa.";
+        showTableLoading(false);
+        setEmptyState(
+          "error",
+          (err && err.message) || "No se pudo cargar el listado. Compruebe la sesión y la base de empresa."
+        );
         wrap.classList.add("hidden");
         status.textContent = "Error al buscar.";
         console.error(err);
@@ -383,19 +529,18 @@
         "dark:border-emerald-700"
       );
       realtimeButton.classList.add(
-        "text-rose-600",
-        "dark:text-rose-400",
-        "bg-rose-50",
-        "dark:bg-rose-900/20",
-        "hover:bg-rose-100",
-        "dark:hover:bg-rose-900/30",
-        "border-rose-300",
-        "dark:border-rose-700",
+        "text-slate-600",
+        "dark:text-slate-300",
+        "bg-white/10",
+        "dark:bg-slate-800/40",
+        "hover:bg-white/20",
+        "dark:hover:bg-slate-800/60",
+        "border-slate-300/60",
+        "dark:border-slate-600",
         "border"
       );
       if (indicator) {
         indicator.classList.add("opacity-0");
-        indicator.classList.add("bg-rose-500", "dark:bg-rose-400");
         indicator.classList.remove("bg-emerald-500", "dark:bg-emerald-400");
       }
       if (label) label.textContent = "Tiempo real";
@@ -403,7 +548,7 @@
         icon.innerHTML =
           '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
         icon.classList.remove("text-emerald-600", "dark:text-emerald-400");
-        icon.classList.add("text-rose-600", "dark:text-rose-400");
+        icon.classList.add("text-slate-500", "dark:text-slate-400");
       }
     }
     realtimeButton.setAttribute("data-realtime-active", String(active));
@@ -418,7 +563,6 @@
         realtimeActive = true;
         updateRealtimeUI(true);
         startRealtimeTimer();
-        runSearch();
       } else {
         updateRealtimeUI(false);
       }
@@ -442,75 +586,6 @@
     });
 
     window.addEventListener("beforeunload", stopRealtimeTimer);
-  }
-
-  function initFiltersToggle() {
-    var filtersToggleButton = document.querySelector("[data-filters-toggle]");
-    var filtersContainer = document.querySelector("[data-filters-container]");
-    var filtersWrapper = document.querySelector("[data-filters-wrapper]");
-    if (!filtersToggleButton || !filtersContainer) return;
-
-    var showLabel = filtersToggleButton.dataset.labelShow || "Mostrar filtros";
-    var hideLabel = filtersToggleButton.dataset.labelHide || "Ocultar filtros";
-
-    var newToggleButton = filtersToggleButton.cloneNode(true);
-    filtersToggleButton.parentNode.replaceChild(newToggleButton, filtersToggleButton);
-
-    function setState(visible) {
-      var labelElement = newToggleButton.querySelector("[data-toggle-label]");
-      if (labelElement) {
-        labelElement.textContent = visible ? hideLabel : showLabel;
-      }
-      newToggleButton.setAttribute("aria-expanded", String(visible));
-      if (filtersWrapper) {
-        if (visible) {
-          filtersWrapper.classList.remove("hidden");
-          window.dispatchEvent(new CustomEvent("reportPeriodFiltersReady"));
-        } else {
-          filtersWrapper.classList.add("hidden");
-        }
-      }
-    }
-
-    newToggleButton.addEventListener("click", function () {
-      var isHidden = filtersContainer.classList.toggle("hidden");
-      setState(!isHidden);
-    });
-
-    filtersContainer.classList.add("hidden");
-    if (filtersWrapper) {
-      filtersWrapper.classList.add("hidden");
-    }
-    setState(false);
-  }
-
-  function setFullscreenButtonState(isActive) {
-    var html = isActive
-      ? '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 9H5V5M5 19l4-4m6 0h4v4m0-14l-4 4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="hidden sm:inline">Salir de pantalla completa</span>'
-      : '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 8V4h4M4 4l5 5M20 16v4h-4m4 0l-5-5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="hidden sm:inline">Pantalla completa</span>';
-    document.querySelectorAll("[data-fullscreen-toggle]").forEach(function (btn) {
-      btn.innerHTML = html;
-    });
-  }
-
-  function syncFullscreenState() {
-    var active = Boolean(document.fullscreenElement);
-    document.body.classList.toggle("reports-fullscreen", active);
-    setFullscreenButtonState(active);
-  }
-
-  function initFullscreen() {
-    document.querySelectorAll("[data-fullscreen-toggle]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(function () {});
-        } else {
-          document.exitFullscreen().catch(function () {});
-        }
-      });
-    });
-    setFullscreenButtonState(false);
-    document.addEventListener("fullscreenchange", syncFullscreenState);
   }
 
   function setupRefreshIntervalButtons() {
@@ -653,9 +728,98 @@
     });
   }
 
+  function wirePedidoAcciones() {
+    var root = el("pedidos-app");
+    if (!root) return;
+    root.addEventListener("click", function (ev) {
+      var t = ev.target;
+      var ver = t.getAttribute && t.getAttribute("data-ver-pedido");
+      if (ver) {
+        ev.stopPropagation();
+        window.location.href = detalleUrl(ver);
+        return;
+      }
+      var pdf = t.getAttribute && t.getAttribute("data-pdf-pedido");
+      if (pdf) {
+        ev.stopPropagation();
+        window.open(pdfUrl(pdf), "_blank");
+        return;
+      }
+      var rep = t.getAttribute && t.getAttribute("data-repetir-pedido");
+      if (rep && window.SynapRepetirPedido) {
+        ev.stopPropagation();
+        SynapRepetirPedido.abrir(Number(rep));
+        return;
+      }
+      var an = t.getAttribute && t.getAttribute("data-anular-pedido");
+      if (an) {
+        ev.stopPropagation();
+        if (!confirm("¿Anular este pedido? Solo es posible en estado Pendiente.")) return;
+        var motivo = prompt("Indique el motivo de anulación (obligatorio):");
+        if (!motivo || !String(motivo).trim()) {
+          alert("Debe indicar el motivo de anulación.");
+          return;
+        }
+        fetch(pageUrls.anular, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: JSON.stringify({ anularPedido: "1", codMovPedido: Number(an), motivo: String(motivo).trim() }),
+        })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (data) {
+            if (data.msg !== "ok") alert(data.error || "No se pudo anular");
+            else runSearch();
+          });
+        return;
+      }
+      var mail = t.getAttribute && t.getAttribute("data-mail-pedido");
+      if (mail) {
+        ev.stopPropagation();
+        var email = prompt("Correo electrónico del destinatario:");
+        if (!email || !String(email).trim() || email.indexOf("@") < 1) {
+          alert("Debe indicar un correo electrónico válido.");
+          return;
+        }
+        fetch(pageUrls.mail_enqueue, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCookie("csrftoken"),
+          },
+          body: JSON.stringify({ codMov: Number(mail), tipocomprobante: 0, email: String(email).trim() }),
+        })
+          .then(function (res) {
+            return res.json();
+          })
+          .then(function (data) {
+            alert(
+              data.msg === "ok" || data.ok
+                ? "Solicitud de envío registrada."
+                : data.error || data.detail || "No se pudo encolar el mail"
+            );
+          });
+      }
+    });
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
-    initFiltersToggle();
-    initFullscreen();
+    pageUrls = loadUrls();
+    if (window.SynapRepetirPedido) {
+      SynapRepetirPedido.init({
+        previewTpl: pageUrls.preview_tpl,
+        cargarUrl: pageUrls.cargar_desde_pedido,
+        compraUrl: pageUrls.compra,
+        esCliente: false,
+      });
+    }
+    wirePedidoAcciones();
     setupRefreshIntervalButtons();
     initRealtimeToggle();
 
@@ -677,7 +841,24 @@
     syncBuscarPor();
     el("botonBuscar").addEventListener("click", runSearch);
 
+    var filtroNoAut = el("filtroNoAutorizados");
+    if (filtroNoAut) {
+      filtroNoAut.addEventListener("change", function () {
+        runSearch();
+      });
+    }
+
     updateFiltersSummary();
     wireFilterAutoRefresh();
+
+    try {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get("solo_no_autorizados") === "1") {
+        var chk = el("filtroNoAutorizados");
+        if (chk) chk.checked = true;
+      }
+    } catch (eUrl) {}
+
+    runSearch();
   });
 })();

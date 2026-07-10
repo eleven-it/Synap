@@ -1,0 +1,100 @@
+{% extends "ecom/base_pedidos.html" %}
+{% load static %}
+
+{% block pedidos_title %}Gestión de pedidos{% endblock %}
+
+{% block pedidos_json_script %}
+{{ urls|json_script:"pedidos-hub-urls" }}
+{% endblock %}
+
+{% block pedidos_hero_py %} lg:py-10{% endblock %}
+
+{% block pedidos_heading %}Gestión de pedidos{% endblock %}
+
+{% block pedidos_subheading %}
+<p class="pedidos-hero-desc">Alta, consulta y seguimiento comercial de pedidos (PED). La preparación y el remito continúan en AdministraNET desktop.</p>
+{% endblock %}
+
+{% block pedidos_content %}
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  <div class="pedidos-card pedidos-card-kpi">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Pedidos hoy</p>
+    <p class="mt-2 text-3xl font-bold text-slate-900 dark:text-white">{{ kpis.pedidos_hoy }}</p>
+    {% if kpis.pedidos_hoy == 0 %}
+    <p class="mt-1 text-xs text-slate-500">Sin pedidos registrados hoy</p>
+    {% endif %}
+  </div>
+  <a href="{{ urls.listado_no_autorizados }}" class="pedidos-card pedidos-card-kpi hover:border-amber-400 transition block" title="Ver pedidos sin autorizar">
+    <p class="text-xs font-semibold uppercase tracking-wide text-amber-600">Sin autorizar</p>
+    <p class="mt-2 text-3xl font-bold text-amber-700 dark:text-amber-400">{{ kpis.no_autorizados }}</p>
+    <p class="mt-1 text-xs text-amber-600">Ver listado →</p>
+  </a>
+  <div class="pedidos-card pedidos-card-kpi">
+    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total del día</p>
+    <p class="mt-2 text-2xl font-bold text-slate-900 dark:text-white tabular-nums" id="hub-total-monto"></p>
+  </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  <a href="{{ urls.nuevo_pedido }}" class="pedidos-card-cta block hover:shadow-xl transition">
+    <h2 class="text-lg font-semibold">Nuevo pedido</h2>
+    <p class="mt-2 text-sm text-sky-100">Catálogo, carrito y confirmación de alta PED.</p>
+  </a>
+  <a href="{{ urls.listado }}" class="pedidos-card pedidos-card-kpi hover:border-sky-400 transition block">
+    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Ver todos</h2>
+    <p class="mt-2 text-sm text-slate-500">Listado con filtros, exportación y acciones.</p>
+  </a>
+  <a href="{{ urls.kanban }}" class="pedidos-card pedidos-card-kpi hover:border-emerald-400 transition block relative">
+    <span class="absolute top-4 right-4 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold uppercase text-slate-500 px-2 py-0.5">Solo lectura</span>
+    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Tablero depósito</h2>
+    <p class="mt-2 text-sm text-slate-500">Estado de preparación en AdministraNET.</p>
+  </a>
+</div>
+
+{% if ultimo_pedido and not es_cliente %}
+<div class="pedidos-card p-5 border-indigo-200 dark:border-indigo-800">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Cliente seleccionado</p>
+      <p class="text-sm font-medium text-slate-900 dark:text-white mt-1">{{ cliente_label|default:"Cliente" }}</p>
+      <p class="text-sm text-slate-500 mt-1">
+        Último pedido: {{ ultimo_pedido.nro_comprobante }} · {{ ultimo_pedido.fecha }}
+        {% if ultimo_pedido.total %}<span class="tabular-nums">· ref. ${{ ultimo_pedido.total|floatformat:2 }}</span>{% endif %}
+      </p>
+    </div>
+    <button type="button" id="hub-repetir-ultimo" data-cod-mov="{{ ultimo_pedido.codigo_movimiento }}"
+            class="pedidos-btn pedidos-btn-primary whitespace-nowrap">
+      Repetir último pedido
+    </button>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block pedidos_js %}
+<script>
+(function () {
+  var monto = {{ kpis.total_monto|default:0 }};
+  var el = document.getElementById("hub-total-monto");
+  if (el) {
+    el.textContent = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 }).format(Number(monto) || 0);
+  }
+  var urls = JSON.parse(document.getElementById("pedidos-hub-urls").textContent);
+  if (window.SynapRepetirPedido) {
+    SynapRepetirPedido.init({
+      previewTpl: urls.preview_tpl,
+      cargarUrl: urls.cargar_desde_pedido,
+      compraUrl: urls.compra,
+      esCliente: {{ es_cliente|yesno:"true,false" }},
+    });
+    var btn = document.getElementById("hub-repetir-ultimo");
+    if (btn) {
+      btn.addEventListener("click", function () {
+        var cod = btn.getAttribute("data-cod-mov");
+        if (cod) SynapRepetirPedido.abrir(cod);
+      });
+    }
+  }
+})();
+</script>
+{% endblock %}

@@ -11,21 +11,34 @@ function esc(text) {
   return d.innerHTML;
 }
 
+function normalizeItem(item) {
+  if (item == null) return { value: "", label: "" };
+  if (typeof item === "string") return { value: item, label: item };
+  return {
+    value: String(item.value ?? item.label ?? ""),
+    label: String(item.label ?? item.value ?? ""),
+  };
+}
+
 /**
  * @param {object} opts
  * @param {HTMLInputElement} opts.input
  * @param {HTMLElement} opts.dropdown
  * @param {number} [opts.minChars=2]
  * @param {number} [opts.debounceMs=280]
- * @param {(query: string) => Promise<string[]>} opts.fetchItems
- * @param {(value: string) => void} [opts.onPick]
+ * @param {(query: string) => Promise<Array<string|{value: string, label: string}>>} opts.fetchItems
+ * @param {(query: string) => Promise<Array<string|{value: string, label: string}>>} [opts.fetchItemsExpanded]
+ * @param {(item: {value: string, label: string}) => void} [opts.onPick]
  * @param {string} [opts.emptyMessage]
  * @param {HTMLElement} [opts.boundary] — contenedor para cerrar al clic fuera
+ * @returns {{ destroy: () => void, setDisplay: (label: string) => void }}
  */
 export function initPredictiveInput(opts) {
   const input = opts.input;
   const dropdown = opts.dropdown;
-  if (!input || !dropdown) return () => {};
+  if (!input || !dropdown) {
+    return { destroy() {}, setDisplay() {} };
+  }
 
   const minChars = opts.minChars ?? 2;
   const debounceMs = opts.debounceMs ?? DEFAULT_DEBOUNCE_MS;
@@ -35,6 +48,7 @@ export function initPredictiveInput(opts) {
   let timer = null;
   let highlight = -1;
   let lastItems = [];
+  let expandedOnce = false;
 
   function hide() {
     dropdown.classList.add("hidden");
@@ -58,7 +72,8 @@ export function initPredictiveInput(opts) {
       return;
     }
 
-    lastItems.forEach((label, index) => {
+    lastItems.forEach((raw, index) => {
+      const item = normalizeItem(raw);
       const row = document.createElement("button");
       row.type = "button";
       row.className =
@@ -66,24 +81,30 @@ export function initPredictiveInput(opts) {
         (index === highlight
           ? "bg-sky-100 dark:bg-sky-900 text-sky-800 dark:text-sky-200"
           : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700");
-      row.innerHTML = esc(label);
+      row.innerHTML = esc(item.label);
       row.addEventListener("mousedown", (e) => e.preventDefault());
-      row.addEventListener("click", () => pick(label));
+      row.addEventListener("click", () => pick(item));
       dropdown.appendChild(row);
     });
     show();
   }
 
-  function pick(value) {
-    input.value = value;
+  function pick(item) {
+    const n = normalizeItem(item);
+    input.value = n.label;
     hide();
-    if (typeof opts.onPick === "function") opts.onPick(value);
+    if (typeof opts.onPick === "function") opts.onPick(n);
     input.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  async function runSearch(query) {
+  async function runSearch(query, expanded) {
     try {
-      const items = await opts.fetchItems(query);
+      const fetchFn =
+        expanded && typeof opts.fetchItemsExpanded === "function"
+          ? opts.fetchItemsExpanded
+          : opts.fetchItems;
+      const items = await fetchFn(query);
+      if (expanded) expandedOnce = true;
       render(Array.isArray(items) ? items : [], query);
     } catch {
       render([], query);
@@ -94,13 +115,14 @@ export function initPredictiveInput(opts) {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
-      runSearch(query);
+      runSearch(query, false);
     }, debounceMs);
   }
 
   function onInput() {
     const q = input.value.trim();
     highlight = -1;
+    expandedOnce = false;
     if (q.length < minChars) {
       render([], q);
       return;
@@ -108,7 +130,28 @@ export function initPredictiveInput(opts) {
     schedule(q);
   }
 
+  async function expandOnArrowDown(q) {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    const useExpanded = typeof opts.fetchItemsExpanded === "function" && !expandedOnce;
+    await runSearch(q, useExpanded);
+    if (lastItems.length) {
+      highlight = 0;
+      render(lastItems, q);
+    }
+  }
+
   function onKeydown(e) {
+    const q = input.value.trim();
+    if (e.key === "ArrowDown" && q.length >= minChars) {
+      if (dropdown.classList.contains("hidden") || highlight < 0) {
+        e.preventDefault();
+        expandOnArrowDown(q);
+        return;
+      }
+    }
     if (dropdown.classList.contains("hidden") && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
       onInput();
       return;
@@ -145,12 +188,17 @@ export function initPredictiveInput(opts) {
   };
   document.addEventListener("click", onDocClick);
 
-  return () => {
-    if (timer) clearTimeout(timer);
-    input.removeEventListener("input", onInput);
-    input.removeEventListener("focus", onInput);
-    input.removeEventListener("keydown", onKeydown);
-    document.removeEventListener("click", onDocClick);
+  return {
+    destroy() {
+      if (timer) clearTimeout(timer);
+      input.removeEventListener("input", onInput);
+      input.removeEventListener("focus", onInput);
+      input.removeEventListener("keydown", onKeydown);
+      document.removeEventListener("click", onDocClick);
+    },
+    setDisplay(label) {
+      input.value = label == null ? "" : String(label);
+    },
   };
 }
 
@@ -199,4 +247,113 @@ export function autoInitNumeroCompPredictive() {
   document
     .querySelectorAll("[data-sugerencias-url]")
     .forEach(wireNumeroCompPredictiveFromRoot);
+}
+
+/**
+ * Búsqueda predictiva de clientes mayoristapp (selección única, dropdown).
+ */
+export function fetchClientesMayoristapp(buscarUrl, limit) {
+  const lim = limit != null ? String(limit) : "15";
+  return async function (query) {
+    const params = new URLSearchParams({
+      ajax: "1",
+      modoBus: "texto",
+      patron: query,
+      q: query,
+      limit: lim,
+    });
+    const r = await fetch(`${buscarUrl}?${params}`, {
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+    const rows = data.results || data.clientes || [];
+    return rows.map((c) => {
+      const cod = c.id != null ? c.id : c.Codigo != null ? c.Codigo : c.codigo;
+      const nombre = (c.text || c.nombre_cliente || c.nombre || "").trim();
+      const label = nombre ? `${nombre} (#${cod})` : String(cod);
+      return { value: String(cod), label };
+    });
+  };
+}
+
+/**
+ * Conecta búsqueda predictiva de cliente en compra mayorista (`#compra-cliente-panel`).
+ */
+export function wireCompraClientePredictiveFromRoot(root) {
+  if (!root) return null;
+  const buscarUrl = root.getAttribute("data-buscar-url");
+  const seleccionarUrl = root.getAttribute("data-seleccionar-url");
+  if (!buscarUrl || !seleccionarUrl) return null;
+
+  const input = document.getElementById("compra_cliente_search");
+  const dropdown = document.getElementById("compra_cliente_dropdown");
+  if (!input || !dropdown || input.dataset.ecomPredictiveInit === "1") return null;
+  input.dataset.ecomPredictiveInit = "1";
+
+  let picking = false;
+
+  function getCsrf() {
+    const m = document.cookie.match("(^|;)\\s*csrftoken\\s*=\\s*([^;]+)");
+    return m ? m.pop() : "";
+  }
+
+  const api = initPredictiveInput({
+    input,
+    dropdown,
+    minChars: 2,
+    emptyMessage: "No se encontraron clientes",
+    fetchItems: fetchClientesMayoristapp(buscarUrl, 15),
+    fetchItemsExpanded: fetchClientesMayoristapp(buscarUrl, 50),
+    onPick(item) {
+      if (picking || !item.value) return;
+      picking = true;
+      root.dispatchEvent(
+        new CustomEvent("compra-cliente-pick", {
+          detail: { cod: item.value, label: item.label },
+          bubbles: true,
+        }),
+      );
+      fetch(`${seleccionarUrl}?ajax=1`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "X-CSRFToken": getCsrf(),
+        },
+        body: JSON.stringify({ codigo: item.value, Codigo: item.value }),
+      })
+        .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+        .then(({ ok }) => {
+          picking = false;
+          if (ok) {
+            window.dispatchEvent(
+              new CustomEvent("compra-cliente-seleccionado", {
+                detail: { cod: item.value, label: item.label, fromSession: false },
+              }),
+            );
+          } else {
+            api.setDisplay("");
+            window.dispatchEvent(
+              new CustomEvent("compra-cliente-error", {
+                detail: { message: "No se pudo seleccionar el cliente." },
+              }),
+            );
+          }
+        })
+        .catch(() => {
+          picking = false;
+          api.setDisplay("");
+          window.dispatchEvent(
+            new CustomEvent("compra-cliente-error", {
+              detail: { message: "No se pudo seleccionar el cliente." },
+            }),
+          );
+        });
+    },
+  });
+
+  return api;
 }

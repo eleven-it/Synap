@@ -1,0 +1,93 @@
+{% comment %}
+  Búsqueda de artículos estilo TPV para pedido de venta.
+  Contrato Alpine (compraMayorista): searchProductos, articulosGrid, articulosGridLoading,
+  selectedSearchIndex, soloPromo, $refs.busquedaDropdownList.
+{% endcomment %}
+<section class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm dark:border-slate-700/90 dark:bg-slate-900 md:p-5"
+         aria-label="Búsqueda de productos">
+  <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
+    <div class="relative flex-1 min-w-0">
+      <label class="sr-only" for="pedidos-busqueda-producto">Buscar por código o nombre</label>
+      <input id="pedidos-busqueda-producto"
+             type="text"
+             x-model="searchProductos"
+             placeholder="Código de barras, código o nombre… (↑↓ elegir, Enter agregar)"
+             class="min-h-[3rem] w-full rounded-xl border-2 border-slate-200 bg-white px-3.5 py-3 text-base text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400 dark:focus:ring-sky-400/25 touch-manipulation"
+             x-on:input.debounce.280ms="onBusquedaProductosInput()"
+             x-on:keydown="onBusquedaProductosKeydown($event)"
+             x-on:keydown.enter.prevent="onBusquedaProductosEnter()"
+             autocomplete="off" />
+      <div class="mt-2 hidden sm:flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-slate-500">
+        <span>↑↓ mover · Enter agregar</span>
+      </div>
+    </div>
+    <button type="button"
+            @click="toggleSoloPromo()"
+            class="pedidos-btn shrink-0 inline-flex items-center gap-1.5 transition-colors"
+            :class="soloPromo
+              ? 'bg-amber-600 text-white border border-amber-600 hover:bg-amber-500'
+              : 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'">
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+        <path d="M7 7h10M7 12h6m-6 5h10" stroke-linecap="round"/>
+      </svg>
+      Solo promociones
+    </button>
+  </div>
+
+  <div x-ref="busquedaDropdownList"
+       :tabindex="(articulosGrid.length > 0 && !articulosGridLoading) ? 0 : -1"
+       x-show="articulosGrid.length > 0 && !articulosGridLoading"
+       x-cloak
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       class="flex-1 min-h-0 overflow-auto rounded-xl border border-slate-200/90 bg-slate-50/40 shadow-inner focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:ring-inset dark:border-slate-600/80 dark:bg-slate-800/40 dark:focus:ring-sky-400/30"
+       role="listbox"
+       aria-label="Resultados de búsqueda. Flechas para mover, Enter para agregar."
+       x-on:focus="onFocusTablaBusqueda()"
+       x-on:keydown="onTablaBusquedaKeydown($event)"
+       x-on:keydown.enter.prevent.capture="onBusquedaProductosEnter()">
+    <table class="w-full text-left border-collapse" aria-label="Resultados de búsqueda">
+      <thead class="sticky top-0 bg-white dark:bg-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider z-10 border-b border-slate-100 dark:border-slate-700">
+        <tr>
+          <th class="py-2 px-2">Código</th>
+          <th class="py-2 px-2">Nombre</th>
+          <th class="py-2 px-2 text-right">Stock</th>
+          <th class="py-2 px-2 text-right">Precio</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="(art, index) in articulosGrid" :key="art.id_articulo">
+          <tr :data-search-index="index"
+              role="option"
+              :aria-selected="selectedSearchIndex === index"
+              class="border-b border-slate-100 dark:border-slate-700/50 cursor-pointer transition-colors"
+              :class="{
+                'bg-sky-100 border-l-4 border-sky-500 ring-1 ring-inset ring-sky-200 dark:bg-sky-950/55 dark:border-sky-400 dark:ring-sky-500/25': selectedSearchIndex === index,
+                'hover:bg-slate-50 dark:hover:bg-slate-700/50': selectedSearchIndex !== index
+              }"
+              x-on:click="selectedSearchIndex = index; agregarDesdeBusqueda(art)">
+            <td class="py-2.5 px-2 text-sm font-medium text-slate-900 dark:text-slate-100" x-text="art.codigo_articulo || art.id_articulo || '—'"></td>
+            <td class="py-2.5 px-2 text-sm text-slate-800 dark:text-slate-200" x-text="art.descripcion || '—'"></td>
+            <td class="py-2.5 px-2 text-sm text-right text-slate-600 dark:text-slate-300 tabular-nums" x-text="art.stock_disponible != null ? art.stock_disponible : '—'"></td>
+            <td class="py-2.5 px-2 text-sm font-semibold text-sky-700 dark:text-sky-300 text-right tabular-nums">
+              <span x-show="art.en_promocion" class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 mr-1">Promo</span>
+              <span x-text="money(art.precio || 0)"></span>
+            </td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="py-2.5 text-center text-sm text-slate-500 dark:text-slate-400" x-show="articulosGridLoading" x-cloak>Cargando…</p>
+  <p class="py-2.5 text-center text-sm text-slate-600 dark:text-slate-300"
+     x-show="!articulosGridLoading && searchProductos.length && articulosGrid.length === 0" x-cloak>
+    Sin resultados. Probá otro término o <strong class="text-sky-600 dark:text-sky-400">Enter</strong> si es código exacto.
+  </p>
+  <p class="py-2 text-center text-xs text-slate-400 dark:text-slate-500"
+     x-show="!articulosGridLoading && !searchProductos.length && articulosGrid.length === 0" x-cloak>
+    Escribí o escaneá para buscar<span x-show="marcasFiltro.length"> · filtrá por marca arriba</span>.
+    Con <strong>↓</strong> podés ver artículos disponibles.
+  </p>
+</section>
