@@ -40,7 +40,8 @@ class TestHubMayoristappView(TestCase):
         resp.render()
         html = resp.content.decode()
         self.assertIn("Portal mayorista", html)
-        self.assertIn("Compra mayorista", html)
+        self.assertIn("Nuevo pedido", html)
+        self.assertIn("Pedidos", html)
         self.assertIn("Estadísticas", html)
         self.assertIn("Premios", html)
 

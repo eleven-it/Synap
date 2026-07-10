@@ -38,6 +38,7 @@ from ecom.services.cliente_relay import (
     MAYORISTAPP_FORMULARIO_COMPROBANTE,
     buscar_clientes_relay,
     cliente_accesible_por_sesion,
+    resolver_url_formulario_comprobante,
 )
 from ecom.services.cliente_seleccion_relay import construir_payload_cliente_seleccionado
 from ecom.services.mayoristapp_session import (
@@ -221,6 +222,7 @@ class ClienteComprobanteFormularioRelayAPIView(APIView):
             return Response({"detail": "frm debe ser un entero entre 0 y 5."}, status=400)
 
         formulario, url = MAYORISTAPP_FORMULARIO_COMPROBANTE[frm]
+        url = resolver_url_formulario_comprobante(url, request)
         try:
             guardar_formulario_comprobante_mayoristapp(request, formulario, url)
         except Exception:

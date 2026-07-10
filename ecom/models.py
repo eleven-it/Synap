@@ -146,7 +146,12 @@ class EcomCartItem(models.Model):
 
     orden = models.IntegerField(default=0)
 
-    # Totales del renglón (con descuento de renglón, antes del descuento al pie)
+    tipo_unidad = models.CharField("tipo unidad", max_length=16, blank=True, default="Unidad")
+    cantidad_dividir = models.DecimalField(
+        "cantidad dividir", max_digits=14, decimal_places=3, default=Decimal("1")
+    )
+
+    # Totales del renglón
     neto = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     iva = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))
     total = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0"))

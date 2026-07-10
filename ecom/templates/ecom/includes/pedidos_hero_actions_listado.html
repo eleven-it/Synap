@@ -1,0 +1,41 @@
+{# Barra de acciones hero — listados tipo reporte Synap #}
+<a href="{{ nuevo_pedido_url }}" class="pedidos-btn pedidos-btn-primary">
+  + Nuevo pedido
+</a>
+<button type="button" data-refresh-pedidos class="pedidos-btn pedidos-btn-ghost-sky">
+  <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+    <path d="M10 14l2-2 2 2m-2-2v6m8-7a9 9 0 11-18 0 9 9 0 0118 0z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span class="hidden sm:inline">Actualizar</span>
+</button>
+<button type="button" data-export-excel-pedidos class="pedidos-btn pedidos-btn-ghost-green">
+  <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+    <path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span class="hidden sm:inline">Exportar Excel</span>
+</button>
+<button type="button" data-realtime-toggle
+        class="pedidos-btn pedidos-btn-outline-hero border"
+        data-realtime-active="false">
+  <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-realtime-icon aria-hidden="true">
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span data-realtime-label class="hidden sm:inline">Tiempo real</span>
+  <span class="ml-1 w-2 h-2 rounded-full bg-emerald-500 opacity-0 transition-opacity duration-300" data-realtime-indicator></span>
+</button>
+<button type="button" data-filters-toggle
+        class="pedidos-btn pedidos-btn-dark"
+        data-label-show="Mostrar filtros"
+        data-label-hide="Ocultar filtros"
+        aria-expanded="false">
+  <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+    <path d="M4 7h16M4 12h16M4 17h10" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span data-toggle-label class="hidden sm:inline">Mostrar filtros</span>
+</button>
+<button type="button" data-fullscreen-toggle class="pedidos-btn pedidos-btn-gradient">
+  <svg class="w-3.5 h-3.5 sm:w-4 sm:h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
+    <path d="M4 8V4h4M4 4l5 5M20 16v4h-4m4 0l-5-5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span class="hidden sm:inline">Pantalla completa</span>
+</button>

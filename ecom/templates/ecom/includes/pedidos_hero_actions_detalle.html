@@ -1,0 +1,17 @@
+{# Acciones hero — detalle de pedido (Alpine) #}
+<button type="button" @click="repetir()" x-show="puedeRepetir"
+        class="pedidos-btn pedidos-btn-primary">
+  Repetir pedido
+</button>
+<button type="button" @click="anular()" x-show="puedeAnular"
+        class="pedidos-btn pedidos-btn-danger">
+  Anular
+</button>
+<button type="button" @click="enviarMail()" x-show="cabecera"
+        class="pedidos-btn pedidos-btn-secondary-hero">
+  Enviar mail
+</button>
+<a :href="urls.pdf" target="_blank" rel="noopener" x-show="cabecera"
+   class="pedidos-btn pedidos-btn-secondary-hero border border-slate-200">
+  Ver PDF
+</a>

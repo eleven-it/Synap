@@ -9,10 +9,17 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.views.generic import TemplateView
 
+from core.utils.administranet_types import to_int_or_none
 from ecom.mayoristapp_listado_config import HUB_LISTADO_URLS
 from ecom.services.ecom_module_settings import ecom_cobranzas_write_enabled
-from ecom.services.mayoristapp_session import leer_cliente_seleccionado, leer_idcliente_mayoristapp
+from ecom.services.mayorista_cart_service import reiniciar_borrador_compra_vendedor
+from ecom.services.mayoristapp_session import (
+    leer_cliente_seleccionado,
+    leer_idcliente_mayoristapp,
+    limpiar_cliente_seleccion_mayoristapp,
+)
 from ecom.services.mayoristapp_sesion_contexto import asegurar_contexto_mayoristapp
+from ecom.services.viajantes_opciones import opciones_viajantes_para_filtro
 
 
 class MayoristappWebSessionMixin:
@@ -49,7 +56,8 @@ def _hub_cards():
             "title": "Ventas",
             "icon": "shopping_cart",
             "links": [
-                {"label": "Compra mayorista", "url_name": "ecom:mayoristapp_compra", "enabled": True},
+                {"label": "Nuevo pedido", "url_name": "ecom:mayoristapp_compra", "enabled": True},
+                {"label": "Pedidos", "url_name": "ecom:mayoristapp_pedidos_hub", "enabled": True},
                 {
                     "label": "Lista de precios PDF",
                     "url_name": "ecom:mayoristapp_lista_precios_pdf",
@@ -57,7 +65,6 @@ def _hub_cards():
                     "external": True,
                 },
                 _hub_link("Promociones"),
-                {"label": "Pedidos", "url_name": "ecom:mayoristapp_pedidos_vendedor", "enabled": True},
             ],
         },
         {
@@ -220,6 +227,10 @@ class PresupuestosVendedorView(MayoristappWebSessionMixin, TemplateView):
                 "viajantes_opciones": viajantes.get("opciones") or [],
                 "filtra_vendedor_default": viajantes.get("valor_por_defecto") or "todos",
                 "usa_id_manual_cliente": usa_manual,
+                "urls": {
+                    "hub": reverse("ecom:mayoristapp_pedidos_hub"),
+                    "convertir_tpl": reverse("ecom:mayoristapp_presupuesto_convertir_pedido", args=[0]),
+                },
             }
         )
         return context
@@ -259,6 +270,18 @@ class PedidosVendedorView(MayoristappWebSessionMixin, TemplateView):
                 "viajantes_opciones": viajantes.get("opciones") or [],
                 "filtra_vendedor_default": viajantes.get("valor_por_defecto") or "todos",
                 "usa_id_manual_cliente": usa_manual,
+                "urls": {
+                    "nuevo_pedido": reverse("ecom:mayoristapp_compra"),
+                    "hub": reverse("ecom:mayoristapp_pedidos_hub"),
+                    "detalle_tpl": reverse("ecom:mayoristapp_pedido_detalle", args=[0]),
+                    "pdf_tpl": reverse("ecom:mayoristapp_pedido_pdf", args=[0]),
+                    "anular": reverse("ecom:mayoristapp_comprobantes_anular_pedido") + "?ajax=1",
+                    "mail_enqueue": reverse("ecom:mayoristapp_comprobantes_comprobante_a_mail_enqueue")
+                    + "?ajax=1",
+                    "preview_tpl": reverse("ecom:mayoristapp_carrito_desde_pedido_preview", args=[0]),
+                    "cargar_desde_pedido": reverse("ecom:mayoristapp_carrito_desde_pedido"),
+                    "compra": reverse("ecom:mayoristapp_compra"),
+                },
             }
         )
         return context
@@ -273,11 +296,24 @@ class CompraMayoristaView(MayoristappWebSessionMixin, TemplateView):
 
     template_name = "ecom/compra_mayorista.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == "GET":
+            sess_user = request.session.get("user") or {}
+            if (sess_user.get("tipousuario") or "").strip().lower() != "cliente":
+                limpiar_cliente_seleccion_mayoristapp(request)
+                base = str(sess_user.get("base_empresa") or "").strip()
+                id_u = to_int_or_none(sess_user.get("id_usuario"))
+                if base and id_u is not None:
+                    reiniciar_borrador_compra_vendedor(base, id_u)
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        sess = self.request.session.get("user") or {}
         context.update(
             {
-                "page_title": "Compra mayorista",
+                "page_title": "Pedido de venta",
+                "es_cliente": (sess.get("tipousuario") or "").strip().lower() == "cliente",
                 "urls": {
                     "listado": reverse("ecom:mayoristapp_catalogo_articulos_listado"),
                     "carrito": reverse("ecom:mayoristapp_carrito"),
@@ -286,6 +322,21 @@ class CompraMayoristaView(MayoristappWebSessionMixin, TemplateView):
                     "checkout": reverse("ecom:mayoristapp_checkout_confirmar"),
                     "lista_precios_pdf": reverse("ecom:mayoristapp_lista_precios_pdf"),
                     "carrito_item_tpl": reverse("ecom:mayoristapp_carrito_item", args=[0]),
+                    "pedidos_recientes": reverse("ecom:mayoristapp_pedidos_recientes"),
+                    "preview_tpl": reverse("ecom:mayoristapp_carrito_desde_pedido_preview", args=[0]),
+                    "cargar_desde_pedido": reverse("ecom:mayoristapp_carrito_desde_pedido"),
+                    "detalle_tpl": reverse("ecom:mayoristapp_pedido_detalle", args=[0]),
+                    "listado_pedidos": reverse("ecom:mayoristapp_pedidos_vendedor"),
+                    "hub_pedidos": reverse("ecom:mayoristapp_pedidos_hub"),
+                    "clientes": reverse("ecom:mayoristapp_clientes"),
+                    "compra_contexto": reverse("ecom:mayoristapp_compra_contexto"),
+                    "clientes_buscar": reverse("ecom:mayoristapp_clientes_buscar"),
+                    "clientes_seleccionar": reverse("ecom:mayoristapp_clientes_seleccionar"),
+                    "clientes_seleccionado": reverse("ecom:mayoristapp_clientes_seleccionado"),
+                    "marcas": reverse("ecom:mayoristapp_catalogo_marcas"),
+                    "carrito_tipo": reverse("ecom:mayoristapp_carrito_tipo_comprobante"),
+                    "comprobante_detalle_tpl": reverse("ecom:mayoristapp_comprobante_detalle", args=[0]),
+                    "listado_presupuestos": reverse("ecom:mayoristapp_presupuestos_vendedor"),
                 },
             }
         )

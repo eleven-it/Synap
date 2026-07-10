@@ -86,7 +86,7 @@
     if (wt) wt.classList.toggle("hidden", v !== "TipoPedido");
   }
 
-  function renderHead(columns) {
+  function renderHead(columns, withAcciones) {
     var head = el("tabla-listado-head");
     if (!head) return;
     var ths = ['<th class="py-3 pr-3 font-semibold">#</th>'];
@@ -100,13 +100,28 @@
           "</th>"
       );
     });
+    if (withAcciones) {
+      ths.push('<th class="py-3 pr-3 font-semibold">Acciones</th>');
+    }
     head.innerHTML =
       '<tr class="border-b border-slate-200 dark:border-slate-700 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">' +
       ths.join("") +
       "</tr>";
   }
 
-  function renderRows(rows, columns) {
+  function pedidosAccionesCfg(root) {
+    if (!root || root.getAttribute("data-pedidos-acciones") !== "1") return null;
+    return {
+      urls: parseJsonAttr(root, "data-pedidos-urls", {}),
+      esCliente: root.getAttribute("data-es-cliente") === "1",
+    };
+  }
+
+  function detalleUrl(tpl, codMov) {
+    return (tpl || "").replace(/\/0\/?$/, "/" + codMov + "/");
+  }
+
+  function renderRows(rows, columns, accCfg) {
     var tbody = el("tabla-listado-body");
     if (!tbody) return;
     tbody.innerHTML = "";
@@ -123,6 +138,20 @@
         var cls = c.fmt === "money" ? " text-right tabular-nums" : "";
         tds.push('<td class="py-2.5 pr-3' + cls + '">' + txt + "</td>");
       });
+      if (accCfg) {
+        var codMov = pick(r, "CodigoMovimiento") || pick(r, "codigo_movimiento");
+        var btns =
+          '<button type="button" class="text-xs font-semibold text-sky-600 hover:text-sky-500 mr-2" data-ver-pedido="' +
+          esc(String(codMov || "")) +
+          '">Ver</button>';
+        if (anul !== "si" && anul !== "sí" && codMov) {
+          btns +=
+            '<button type="button" class="text-xs font-semibold text-indigo-600 hover:text-indigo-500" data-repetir-pedido="' +
+            esc(String(codMov)) +
+            '">Repetir</button>';
+        }
+        tds.push('<td class="py-2.5 pr-3 whitespace-nowrap">' + btns + "</td>");
+      }
       var tr = document.createElement("tr");
       tr.className =
         "border-b border-slate-100 dark:border-slate-800/80 " + rowClass;
@@ -139,6 +168,7 @@
     var resultsKey = root.getAttribute("data-results-key") || "filas";
     var columns = parseJsonAttr(root, "data-columns", []);
     var basePayload = parseJsonAttr(root, "data-payload-base", {});
+    var accCfg = pedidosAccionesCfg(root);
     var status = el("listado-status");
     var btn = el("botonBuscar");
     var emptyBox = el("listado-empty");
@@ -149,7 +179,7 @@
       return;
     }
 
-    renderHead(columns);
+    renderHead(columns, !!accCfg);
     if (btn) btn.disabled = true;
     if (status) status.textContent = "Buscando…";
 
@@ -185,7 +215,7 @@
         }
         if (emptyBox) emptyBox.classList.add("hidden");
         if (wrap) wrap.classList.remove("hidden");
-        renderRows(filas, columns);
+        renderRows(filas, columns, accCfg);
         if (status) status.textContent = filas.length + " resultado(s).";
         var lu = el("list-last-update");
         if (lu) {
@@ -233,6 +263,30 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
+    var root = el("listado-app");
+    var accCfg = pedidosAccionesCfg(root);
+    if (accCfg && window.SynapRepetirPedido) {
+      SynapRepetirPedido.init({
+        previewTpl: accCfg.urls.preview_tpl,
+        cargarUrl: accCfg.urls.cargar_desde_pedido,
+        compraUrl: accCfg.urls.compra,
+        esCliente: accCfg.esCliente,
+      });
+      document.addEventListener("click", function (ev) {
+        var t = ev.target;
+        var ver = t.getAttribute && t.getAttribute("data-ver-pedido");
+        if (ver) {
+          ev.preventDefault();
+          window.location.href = detalleUrl(accCfg.urls.detalle_tpl, ver);
+          return;
+        }
+        var rep = t.getAttribute && t.getAttribute("data-repetir-pedido");
+        if (rep) {
+          ev.preventDefault();
+          SynapRepetirPedido.abrir(rep);
+        }
+      });
+    }
     var cb = el("campoBusca");
     if (cb) cb.addEventListener("change", syncBuscarPor);
     syncBuscarPor();

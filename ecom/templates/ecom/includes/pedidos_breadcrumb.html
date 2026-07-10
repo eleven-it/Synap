@@ -1,0 +1,8 @@
+{# Breadcrumb unificado — Ventas · Gestión de pedidos #}
+<nav class="mb-2 text-xs text-slate-300 dark:text-slate-400" aria-label="Ruta de navegación">
+  <a href="{{ hub_url }}" class="hover:text-white transition">Gestión de pedidos</a>
+  {% if current_label %}
+  <span class="mx-1.5 opacity-60">/</span>
+  <span class="text-white dark:text-slate-100 font-medium">{{ current_label }}</span>
+  {% endif %}
+</nav>

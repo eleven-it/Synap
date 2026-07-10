@@ -1,0 +1,387 @@
+{# System Design Synap — módulo Gestión de pedidos (canon reportes slate/sky) #}
+<style>
+  /* Contenedor fluido (paridad mpr-contenedor-pagina) */
+  .pedidos-contenedor-pagina {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  @media (min-width: 640px) {
+    .pedidos-contenedor-pagina { padding-left: 1.5rem; padding-right: 1.5rem; }
+  }
+  @media (min-width: 1024px) {
+    .pedidos-contenedor-pagina { padding-left: 3rem; padding-right: 3rem; }
+  }
+
+  .pedidos-contenido {
+    margin-top: 1.5rem;
+  }
+  @media (min-width: 640px) {
+    .pedidos-contenido { margin-top: 2rem; }
+  }
+
+  /* Hero */
+  .pedidos-eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: rgb(203 213 225);
+    margin-bottom: 0.5rem;
+  }
+  .pedidos-hero-title {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: -0.025em;
+  }
+  @media (min-width: 768px) {
+    .pedidos-hero-title { font-size: 2.25rem; line-height: 2.5rem; }
+  }
+  .pedidos-hero-desc {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: rgb(203 213 225);
+    max-width: 48rem;
+  }
+
+  /* Botones pill (canon reportes) */
+  .pedidos-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 9999px;
+    padding: 0.375rem 0.75rem;
+    font-size: 10px;
+    font-weight: 600;
+    transition: all 0.3s;
+  }
+  @media (min-width: 640px) {
+    .pedidos-btn { gap: 0.5rem; padding: 0.375rem 1rem; font-size: 0.75rem; }
+  }
+  .pedidos-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(14 165 233);
+  }
+  .pedidos-btn-primary { color: #fff; background: rgb(2 132 199); }
+  .pedidos-btn-primary:hover { background: rgb(14 165 233); }
+  .pedidos-btn-ghost-sky { color: rgb(14 165 233); background: transparent; }
+  .pedidos-btn-ghost-sky:hover { color: rgb(56 189 248); }
+  .pedidos-btn-ghost-green { color: rgb(34 197 94); background: transparent; }
+  .pedidos-btn-ghost-green:hover { color: rgb(74 222 128); }
+  .pedidos-btn-dark { color: #fff; background: rgb(15 23 42); }
+  .pedidos-btn-dark:hover { background: rgb(51 65 85); }
+  .pedidos-btn-outline-hero {
+    color: rgb(71 85 105);
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(148,163,184,0.6);
+  }
+  .dark .pedidos-btn-outline-hero {
+    color: rgb(203 213 225);
+    background: rgba(30,41,59,0.4);
+  }
+  .pedidos-btn-gradient {
+    color: #fff;
+    background: linear-gradient(to right, rgb(14 165 233), rgb(99 102 241), rgb(168 85 247));
+    box-shadow: 0 10px 15px -3px rgba(14,165,233,0.3);
+  }
+  .pedidos-btn-danger { color: #fff; background: rgb(225 29 72); }
+  .pedidos-btn-danger:hover { background: rgb(244 63 94); }
+  .pedidos-btn-secondary-hero { color: rgb(15 23 42); background: #fff; }
+  .pedidos-btn-secondary-hero:hover { background: rgb(241 245 249); }
+  .pedidos-btn-search {
+    border-radius: 9999px;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+    background: rgb(15 23 42);
+  }
+
+  /* Cards */
+  .pedidos-card {
+    border-radius: 1rem;
+    border: 1px solid rgb(226 232 240);
+    background: #fff;
+    box-shadow: 0 10px 15px -3px rgba(15,23,42,0.08);
+  }
+  .dark .pedidos-card {
+    border-color: rgb(30 41 59);
+    background: rgb(15 23 42);
+  }
+  .pedidos-card-kpi { border-radius: 1rem; padding: 1.5rem; }
+  .pedidos-card-cta {
+    border-radius: 1rem;
+    padding: 1.5rem;
+    color: #fff;
+    background: linear-gradient(to bottom right, rgb(14 165 233), rgb(79 70 229));
+    box-shadow: 0 10px 15px -3px rgba(14,165,233,0.25);
+  }
+  .pedidos-workspace {
+    border-radius: 1.5rem;
+    border: 1px solid rgb(226 232 240);
+    background: #fff;
+    box-shadow: 0 25px 50px -12px rgba(15,23,42,0.15);
+    overflow: hidden;
+  }
+  .dark .pedidos-workspace {
+    border-color: rgb(30 41 59);
+    background: rgb(15 23 42);
+  }
+
+  /* Tabla (canon MPR/opt_list adaptado a pedidos) */
+  .pedidos-table-shell { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .pedidos-table {
+    width: 100%;
+    min-width: 100%;
+    font-size: 0.875rem;
+    text-align: left;
+    border-collapse: collapse;
+  }
+  .pedidos-table thead tr {
+    border-bottom: 1px solid rgb(226 232 240);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: rgb(100 116 139);
+  }
+  .dark .pedidos-table thead tr { border-color: rgb(51 65 85); color: rgb(148 163 184); }
+  .pedidos-table th { padding: 0.75rem 0.75rem 0.75rem 0; font-weight: 600; }
+  .pedidos-table tbody tr {
+    border-bottom: 1px solid rgb(241 245 249);
+    transition: background-color 0.15s;
+  }
+  .dark .pedidos-table tbody tr { border-color: rgb(30 41 59); }
+  .pedidos-table tbody tr:hover { background: rgba(248,250,252,0.8); }
+  .dark .pedidos-table tbody tr:hover { background: rgba(30,41,59,0.4); }
+  .pedidos-table td { padding: 0.625rem 0.75rem 0.625rem 0; }
+
+  /* Filtros */
+  .pedidos-filter-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgb(100 116 139);
+    margin-bottom: 0.375rem;
+  }
+  .dark .pedidos-filter-label {
+    color: rgb(148 163 184);
+  }
+  .pedidos-input,
+  .pedidos-select {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid rgb(226 232 240);
+    background: #fff;
+    font-size: 0.875rem;
+    padding: 0.625rem 0.75rem;
+  }
+  .pedidos-input:focus,
+  .pedidos-select:focus {
+    outline: none;
+    border-color: rgb(14 165 233);
+    box-shadow: 0 0 0 3px rgba(14,165,233,0.25);
+  }
+  .dark .pedidos-input,
+  .dark .pedidos-select {
+    border-color: rgb(51 65 85);
+    background: rgb(15 23 42);
+    color: rgb(241 245 249);
+  }
+
+  /* Alertas y empty */
+  .pedidos-alert-info {
+    border-radius: 0.75rem;
+    border: 1px solid rgb(186 230 253);
+    background: rgb(240 249 255);
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    color: rgb(7 89 133);
+  }
+  .dark .pedidos-alert-info {
+    border-color: rgb(30 58 138);
+    background: rgba(12,74,110,0.2);
+    color: rgb(186 230 253);
+  }
+  .pedidos-empty {
+    border-radius: 0.75rem;
+    border: 1px dashed rgb(226 232 240);
+    padding: 4rem 1.5rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: rgb(100 116 139);
+  }
+  .dark .pedidos-empty {
+    border-color: rgb(51 65 85);
+    color: rgb(148 163 184);
+  }
+
+  /* Stepper estado / flujo */
+  .pedidos-stepper-card {
+    border-radius: 1rem;
+    padding: 1rem;
+    overflow-x: auto;
+  }
+  .pedidos-stepper {
+    display: flex;
+    align-items: center;
+    min-width: max-content;
+    gap: 0;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .pedidos-stepper-label {
+    font-size: 10px;
+    text-align: center;
+    line-height: 1.25;
+    max-width: 5.5rem;
+  }
+  .pedidos-stepper-connector {
+    height: 2px;
+    width: 2rem;
+    margin: 0 0.25rem;
+    border-radius: 1px;
+  }
+  @media (min-width: 640px) {
+    .pedidos-stepper-connector { width: 3rem; }
+  }
+
+  /* Badges estado */
+  .pedidos-badge {
+    display: inline-block;
+    border-radius: 9999px;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  /* Fullscreen (compartido con reportes) */
+  body.reports-fullscreen { background-color: #020617; }
+  body.reports-fullscreen > header.w-full { display: none !important; }
+  body.reports-fullscreen .pt-16 { padding-top: 0 !important; }
+  body.reports-fullscreen .app-content .p-8 { padding: 1.5rem !important; }
+  body.reports-fullscreen .reports-fullscreen-shadow {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
+  /* Compra mayorista — toggle comprobante en hero (paridad armado MPR 1ra/2da) */
+  .compra-toggle-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    width: 100%;
+  }
+  @media (min-width: 640px) {
+    .compra-toggle-wrap { width: auto; }
+  }
+  .compra-toggle-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgb(203 213 225);
+  }
+  .compra-toggle-shell {
+    display: inline-flex;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    border-radius: 0.5rem;
+    border-width: 1px;
+    border-style: solid;
+    padding: 2px;
+    touch-action: manipulation;
+    -webkit-overflow-scrolling: touch;
+    border-color: rgb(14 165 233 / 0.6);
+    background: rgb(8 47 73 / 0.35);
+  }
+  @media (min-width: 640px) {
+    .compra-toggle-shell { width: auto; }
+  }
+  .compra-toggle-shell-pre {
+    border-color: rgb(245 158 11 / 0.6);
+    background: rgb(69 26 3 / 0.35);
+  }
+  .compra-toggle-shell-dev {
+    border-color: rgb(244 63 94 / 0.6);
+    background: rgb(76 5 25 / 0.35);
+  }
+  .compra-toggle-btn {
+    min-height: 2.25rem;
+    flex: 1 1 0;
+    white-space: nowrap;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.25;
+    transition: background-color 0.15s, color 0.15s;
+    border: none;
+    cursor: pointer;
+  }
+  @media (min-width: 640px) {
+    .compra-toggle-btn { flex: none; }
+  }
+  .compra-toggle-btn-ped-active { background: rgb(2 132 199); color: #fff; }
+  .compra-toggle-btn-ped-idle { background: transparent; color: rgb(125 211 252); }
+  .compra-toggle-btn-ped-idle:hover { background: rgb(12 74 110 / 0.45); }
+  /* Estado activo por defecto (antes de Alpine) */
+  .compra-toggle-btn[aria-selected="true"] { background: rgb(2 132 199); color: #fff; }
+  .compra-toggle-btn-pre-active { background: rgb(245 158 11); color: rgb(69 26 3); }
+  .compra-toggle-btn-pre-idle { background: transparent; color: rgb(253 230 138); }
+  .compra-toggle-btn-pre-idle:hover { background: rgb(120 53 15 / 0.4); }
+  .compra-toggle-btn-dev-active { background: rgb(244 63 94); color: #fff; }
+  .compra-toggle-btn-dev-idle { background: transparent; color: rgb(254 202 202); }
+  .compra-toggle-btn-dev-idle:hover { background: rgb(136 19 55 / 0.4); }
+
+  /* Compra mayorista — modos PED / PRE / DEV (contenido) */
+  .compra-modo-shell.compra-modo-ped .pedidos-workspace,
+  .compra-modo-shell.compra-modo-ped .pedidos-card {
+    border-color: rgb(186 230 253 / 0.9);
+  }
+  .dark .compra-modo-shell.compra-modo-ped .pedidos-workspace,
+  .dark .compra-modo-shell.compra-modo-ped .pedidos-card {
+    border-color: rgb(14 165 233 / 0.35);
+  }
+  .compra-modo-shell.compra-modo-pre .pedidos-workspace,
+  .compra-modo-shell.compra-modo-pre .pedidos-card {
+    border-color: rgb(253 230 138 / 0.95);
+  }
+  .dark .compra-modo-shell.compra-modo-pre .pedidos-workspace,
+  .dark .compra-modo-shell.compra-modo-pre .pedidos-card {
+    border-color: rgb(245 158 11 / 0.35);
+  }
+  .compra-modo-shell.compra-modo-dev .pedidos-workspace,
+  .compra-modo-shell.compra-modo-dev .pedidos-card {
+    border-color: rgb(254 202 202 / 0.95);
+  }
+  .dark .compra-modo-shell.compra-modo-dev .pedidos-workspace,
+  .dark .compra-modo-shell.compra-modo-dev .pedidos-card {
+    border-color: rgb(244 63 94 / 0.35);
+  }
+  .compra-carrito-panel {
+    min-height: 0;
+  }
+  @media (max-width: 767px) {
+    .compra-carrito-panel {
+      max-height: none;
+    }
+    .compra-carrito-scroll {
+      max-height: none !important;
+    }
+    .compra-modo-shell .pedidos-input,
+    .compra-modo-shell input[type="number"],
+    .compra-modo-shell select,
+    .compra-modo-shell textarea {
+      min-height: 2.75rem;
+      font-size: 1rem;
+    }
+  }
+  @media (min-width: 768px) {
+    .compra-carrito-scroll {
+      max-height: 46vh;
+    }
+  }
+</style>

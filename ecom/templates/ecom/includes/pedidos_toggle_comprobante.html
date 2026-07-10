@@ -1,0 +1,25 @@
+{% comment %}
+  Toggle PED / PRE / DEV (paridad visual armado MPR 1ra/2da).
+  Estilos en pedidos_page_styles.html (.compra-toggle-*).
+{% endcomment %}
+<div class="compra-toggle-wrap">
+  <span class="compra-toggle-label">Comprobante</span>
+  <div class="compra-toggle-shell"
+       :class="tipo === 'PRE' ? 'compra-toggle-shell-pre' : (tipo === 'DEV' ? 'compra-toggle-shell-dev' : '')"
+       role="tablist"
+       aria-label="Tipo de comprobante">
+    <button type="button" role="tab" aria-selected="true"
+            :aria-selected="tipo === 'PED'"
+            @click="cambiarTipo('PED')"
+            class="compra-toggle-btn compra-toggle-btn-ped-active"
+            :class="tipo === 'PED' ? 'compra-toggle-btn-ped-active' : 'compra-toggle-btn-ped-idle'">Pedido</button>
+    <button type="button" role="tab" :aria-selected="tipo === 'PRE'"
+            @click="cambiarTipo('PRE')"
+            class="compra-toggle-btn"
+            :class="tipo === 'PRE' ? 'compra-toggle-btn-pre-active' : 'compra-toggle-btn-pre-idle'">Presupuesto</button>
+    <button type="button" role="tab" :aria-selected="tipo === 'DEV'"
+            @click="cambiarTipo('DEV')"
+            class="compra-toggle-btn"
+            :class="tipo === 'DEV' ? 'compra-toggle-btn-dev-active' : 'compra-toggle-btn-dev-idle'">Devolución</button>
+  </div>
+</div>

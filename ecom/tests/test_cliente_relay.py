@@ -151,7 +151,11 @@ class TestClienteComprobanteFormularioRelayView(unittest.TestCase):
         resp = ClienteComprobanteFormularioRelayAPIView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data.get("estado"), "ok")
+        self.assertEqual(resp.data.get("formulario"), "pedido")
+        self.assertEqual(resp.data.get("url"), "/ecom/mayoristapp/compra/")
         mock_g.assert_called_once()
+        args = mock_g.call_args[0]
+        self.assertEqual(args[2], "/ecom/mayoristapp/compra/")
 
 
 class TestClienteRelayServicio(unittest.TestCase):

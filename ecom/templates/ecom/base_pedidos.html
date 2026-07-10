@@ -1,0 +1,52 @@
+{% extends "base_app.html" %}
+{% load static %}
+{#
+  Layout canónico Synap — Gestión de pedidos (Ventas · Pedidos).
+  Referencia: docs/general/FUENTE_VERDAD_UI_REPORTES_MPR.md (familia reportes slate/sky).
+#}
+
+{% block title %}{% block pedidos_title %}Gestión de pedidos{% endblock %} — Synap{% endblock %}
+
+{% block extra_css %}
+{% include "ecom/includes/pedidos_page_styles.html" %}
+{% block pedidos_extra_css %}{% endblock %}
+{% endblock %}
+
+{% block content %}
+{% block pedidos_json_script %}{% endblock %}
+{% block pedidos_modals %}
+  {% include "ecom/includes/repetir_pedido_modal.html" %}
+{% endblock %}
+
+<section class="pedidos-page min-h-screen bg-slate-50 dark:bg-slate-950 pb-24{% block pedidos_section_extra_class %}{% endblock %}"
+         {% block pedidos_section_attrs %}{% endblock %}>
+
+  <div class="relative overflow-hidden">
+    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 opacity-90 dark:opacity-95"></div>
+    <div class="pedidos-contenedor-pagina relative w-full py-8{% block pedidos_hero_py %}{% endblock %}">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div class="min-w-0">
+          {% block pedidos_eyebrow_wrap %}
+          <p class="pedidos-eyebrow">{% block pedidos_eyebrow %}Ventas · Pedidos{% endblock %}</p>
+          {% endblock %}
+          {% block pedidos_breadcrumb %}{% endblock %}
+          <h1 class="pedidos-hero-title">{% block pedidos_heading %}{% endblock %}</h1>
+          {% block pedidos_subheading %}{% endblock %}
+        </div>
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
+          {% block pedidos_hero_actions %}{% endblock %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pedidos-contenido pedidos-contenedor-pagina relative w-full{% block pedidos_content_extra_class %}{% endblock %}">
+    {% block pedidos_content %}{% endblock %}
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'ecom/js/pedidos_shell.js' %}"></script>
+{% block pedidos_js %}{% endblock %}
+{% endblock %}

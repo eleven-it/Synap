@@ -180,6 +180,9 @@ PERMISOS_POR_MODULO = {
         ("ecom.ver", "Acceder al módulo E-commerce mayorista"),
         ("ecom.catalogo.ver", "Ver catálogo y lista de precios"),
         ("ecom.carrito.editar", "Usar carrito y checkout mayorista"),
+        ("ecom.pedidos.crear", "Crear pedidos (compra mayorista / checkout)"),
+        ("ecom.pedidos.ver", "Ver listado y detalle de pedidos"),
+        ("ecom.pedidos.ver_todos", "Ver pedidos de todos los vendedores (listado gerencial)"),
         ("ecom.comprobantes.ver", "Ver listados de comprobantes (PED/PRE/REM/FE/NC)"),
         ("ecom.comprobantes.anular", "Anular pedidos desde el portal"),
         ("ecom.clientes.ver", "Ver clientes del portal"),
@@ -330,6 +333,7 @@ ROLES_PREDEFINIDOS = {
             "inventario.ver", "inventario.ver_stock",
             "reports.ver", "usuarios.perfil",
             "ecom.ver", "ecom.catalogo.ver", "ecom.carrito.editar",
+            "ecom.pedidos.crear", "ecom.pedidos.ver",
             "ecom.comprobantes.ver", "ecom.clientes.ver", "ecom.ctacte.ver",
             "ecom.logistica.ver", "ecom.informes.ver",
         ]

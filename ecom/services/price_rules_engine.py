@@ -172,6 +172,143 @@ def resolver_regla_precio(conn: Any, art: dict, codigo_cliente: int) -> Optional
     return None
 
 
+def _resolver_regla_desde_filas_catalogo(art: dict, filas: list) -> Optional[ReglaPrecio]:
+    """Aplica el mismo orden de prioridad que resolver_regla_precio (masivas / generales)."""
+    cod_prov = to_int_or_none(art.get("CodigoProveedor"))
+    cod_rubro = to_int_or_none(art.get("CodigoRubro"))
+    id_subr = to_int_or_none(art.get("IDSubRubro"))
+
+    def _coincide(cond_idx: int, fila: dict) -> bool:
+        p = to_int_or_none(fila.get("id_proveedor"))
+        r = to_int_or_none(fila.get("id_rubro"))
+        s = to_int_or_none(fila.get("id_sub_rubro"))
+        if cond_idx == 0:
+            return cod_prov is not None and id_subr is not None and p == cod_prov and s == id_subr
+        if cond_idx == 1:
+            return cod_prov is not None and cod_rubro is not None and p == cod_prov and r == cod_rubro
+        if cond_idx == 2:
+            return cod_prov is not None and p == cod_prov and r is None and s is None
+        if cond_idx == 3:
+            return id_subr is not None and s == id_subr and p is None and r is None
+        if cond_idx == 4:
+            return cod_rubro is not None and r == cod_rubro and p is None and s is None
+        return False
+
+    for cond_idx in range(5):
+        for fila in filas:
+            if _coincide(cond_idx, fila):
+                return ReglaPrecio(
+                    tipo_calculo=str(fila.get("tipo_calculo") or ""),
+                    importe_regla=_d(fila.get("importe_regla"), "0"),
+                    prioridad_regla=str(fila.get("prioridad_regla") or "Desc. Cliente"),
+                )
+    return None
+
+
+def resolver_reglas_precio_map(
+    conn: Any,
+    articulos: list,
+    codigo_cliente: int,
+) -> dict[int, ReglaPrecio]:
+    """
+    Resuelve reglas de precio para un lote de artículos con pocas consultas SQL
+    (particular + masivas + generales), en lugar de N×resolver_regla_precio.
+    """
+    ids_art = [
+        i
+        for i in (to_int_or_none(a.get("IDArt")) for a in articulos)
+        if i is not None
+    ]
+    if not ids_art:
+        return {}
+
+    hoy = date.today().isoformat()
+    cur = conn.cursor()
+    resultado: dict[int, ReglaPrecio] = {}
+
+    placeholders = ",".join(["%s"] * len(ids_art))
+    cur.execute(
+        f"""
+        SELECT id_articulo, tipo_calculo, importe_regla, promocion_por, promocion_cant
+        FROM reglas_precio
+        WHERE id_cliente = %s
+          AND id_articulo IN ({placeholders})
+          AND anulado = 'No'
+          AND %s BETWEEN vigencia_desde AND vigencia_hasta
+        """,
+        [codigo_cliente, *ids_art, hoy],
+    )
+    for row in cur.fetchall():
+        id_a = _i(row[0])
+        if id_a not in resultado:
+            resultado[id_a] = ReglaPrecio(
+                tipo_calculo=str(row[1] or ""),
+                importe_regla=_d(row[2], "0"),
+                promocion_por=_d(row[3], "0"),
+                promocion_cant=_i(row[4], 0),
+            )
+
+    pendientes = [a for a in articulos if to_int_or_none(a.get("IDArt")) not in resultado]
+    if not pendientes:
+        return resultado
+
+    cur.execute(
+        """
+        SELECT tipo_calculo, importe_regla, id_proveedor, id_rubro, id_sub_rubro
+        FROM reglas_precio_masivas
+        WHERE id_cliente = %s
+          AND anulado = 'No'
+          AND %s BETWEEN vigencia_desde AND vigencia_hasta
+        """,
+        [codigo_cliente, hoy],
+    )
+    masivas = [
+        {
+            "tipo_calculo": r[0],
+            "importe_regla": r[1],
+            "id_proveedor": r[2],
+            "id_rubro": r[3],
+            "id_sub_rubro": r[4],
+            "prioridad_regla": "Desc. Cliente",
+        }
+        for r in cur.fetchall()
+    ]
+
+    cur.execute(
+        """
+        SELECT tipo_calculo, importe_regla, id_proveedor, id_rubro, id_sub_rubro,
+               COALESCE(prioridad_regla, 'Desc. Cliente')
+        FROM reglas_precio_alta_art
+        WHERE anulado = 'No'
+          AND %s BETWEEN vigencia_desde AND vigencia_hasta
+        """,
+        [hoy],
+    )
+    generales = [
+        {
+            "tipo_calculo": r[0],
+            "importe_regla": r[1],
+            "id_proveedor": r[2],
+            "id_rubro": r[3],
+            "id_sub_rubro": r[4],
+            "prioridad_regla": r[5],
+        }
+        for r in cur.fetchall()
+    ]
+
+    for art in pendientes:
+        id_art = to_int_or_none(art.get("IDArt"))
+        if id_art is None or id_art in resultado:
+            continue
+        regla = _resolver_regla_desde_filas_catalogo(art, masivas)
+        if regla is None:
+            regla = _resolver_regla_desde_filas_catalogo(art, generales)
+        if regla is not None:
+            resultado[id_art] = regla
+
+    return resultado
+
+
 def calcular_precio_con_motor(
     *,
     precio_base: Decimal,
@@ -297,6 +434,8 @@ def calcular_precio_articulo_row(
     descuento_cliente: Decimal,
     iva_incluido: bool,
     conn: Any,
+    regla_precio: Optional[ReglaPrecio] = None,
+    resolver_regla: bool = True,
 ) -> Decimal:
     """
     Función integradora para calcular precio de un artículo (fuente única para listado/ficha/carrito).
@@ -312,6 +451,8 @@ def calcular_precio_articulo_row(
         descuento_cliente: Descuento de renglón/cliente (porcentaje 0-100).
         iva_incluido: Si True, devuelve precio con IVA; si False, neto.
         conn: Conexión MySQL para consultar reglas.
+        regla_precio: Regla ya resuelta (p. ej. lote TPV); si resolver_regla=False se usa tal cual.
+        resolver_regla: Si False, no consulta reglas_precio* (usar con regla_precio precalculada).
 
     Returns:
         Precio calculado (Decimal).
@@ -333,8 +474,8 @@ def calcular_precio_articulo_row(
 
     tipo_cliente = None if codigo_cliente is None else "C"
 
-    regla = None
-    if codigo_cliente is not None and conn is not None:
+    regla = regla_precio
+    if resolver_regla and codigo_cliente is not None and conn is not None:
         try:
             regla = resolver_regla_precio(conn, art, codigo_cliente)
         except Exception:

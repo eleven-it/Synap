@@ -50,6 +50,20 @@ def guardar_formulario_comprobante_mayoristapp(request: Any, formulario: str, u_
     request.session.modified = True
 
 
+def limpiar_cliente_seleccion_mayoristapp(request: Any) -> None:
+    """Quita el cliente activo de la sesión mayoristapp (nueva compra / post-checkout)."""
+    sess = getattr(request, "session", None)
+    if sess is None:
+        return
+    bag = dict(sess.get("mayoristapp") or {})
+    for key in ("cliente", "idcliente", "domicilios_cliente", "iva_incluido"):
+        bag.pop(key, None)
+    sess["mayoristapp"] = bag
+    for key in ("idcliente", "cliente", "domicilios_cliente", "ivaIncluido", "jcart"):
+        sess.pop(key, None)
+    sess.modified = True
+
+
 def guardar_cliente_seleccion_mayoristapp(
     request: Any,
     *,

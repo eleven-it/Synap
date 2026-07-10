@@ -112,6 +112,13 @@ APPS_MENU = [
                         "menu_item_id": "ventas_cb_presupuestos",
                     },
                     {
+                        "label": _("Pedidos"),
+                        "url": "ecom:mayoristapp_pedidos_hub",
+                        "icon": "receipt_long",
+                        "permission": "ecom.pedidos.ver",
+                        "menu_item_id": "ventas_cb_pedidos",
+                    },
+                    {
                         "label": _("Actualización de precios"),
                         "url": "ventas:precios_terminados",
                         "icon": "price_change",
@@ -534,7 +541,7 @@ APPS_MENU = [
                         "menu_item_id": "ecom_hub",
                     },
                     {
-                        "label": _("Compra mayorista"),
+                        "label": _("Pedido de venta"),
                         "url": "ecom:mayoristapp_compra",
                         "icon": "shopping_cart",
                         "permission": "ecom.carrito.editar",

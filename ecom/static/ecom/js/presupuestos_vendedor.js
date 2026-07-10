@@ -111,6 +111,8 @@
       " — " +
       (pick(r, "nombreViajante") || "");
     var anul = String(pick(r, "Anulado") || "").toLowerCase();
+    var estado = String(pick(r, "Estado") || "");
+    var codMov = pick(r, "CodigoMovimiento");
     var rowClass =
       anul === "si" || anul === "sí"
         ? "text-red-600 dark:text-red-400"
@@ -160,6 +162,13 @@
       "</td>" +
       "<td class=\"py-2.5 pr-3\">" +
       esc(pick(r, "Anulado") || "") +
+      "</td>" +
+      '<td class="py-2.5 pr-3 whitespace-nowrap">' +
+      (anul !== "si" && anul !== "sí" && estado.toLowerCase() !== "en pedido"
+        ? '<button type="button" class="text-xs font-semibold text-indigo-600 hover:text-indigo-500" data-convertir-pre="' +
+          esc(String(codMov || "")) +
+          '">Convertir a pedido</button>'
+        : "") +
       "</td>";
     return tr;
   }
@@ -447,75 +456,6 @@
     window.addEventListener("beforeunload", stopRealtimeTimer);
   }
 
-  function initFiltersToggle() {
-    var filtersToggleButton = document.querySelector("[data-filters-toggle]");
-    var filtersContainer = document.querySelector("[data-filters-container]");
-    var filtersWrapper = document.querySelector("[data-filters-wrapper]");
-    if (!filtersToggleButton || !filtersContainer) return;
-
-    var showLabel = filtersToggleButton.dataset.labelShow || "Mostrar filtros";
-    var hideLabel = filtersToggleButton.dataset.labelHide || "Ocultar filtros";
-
-    var newToggleButton = filtersToggleButton.cloneNode(true);
-    filtersToggleButton.parentNode.replaceChild(newToggleButton, filtersToggleButton);
-
-    function setState(visible) {
-      var labelElement = newToggleButton.querySelector("[data-toggle-label]");
-      if (labelElement) {
-        labelElement.textContent = visible ? hideLabel : showLabel;
-      }
-      newToggleButton.setAttribute("aria-expanded", String(visible));
-      if (filtersWrapper) {
-        if (visible) {
-          filtersWrapper.classList.remove("hidden");
-          window.dispatchEvent(new CustomEvent("reportPeriodFiltersReady"));
-        } else {
-          filtersWrapper.classList.add("hidden");
-        }
-      }
-    }
-
-    newToggleButton.addEventListener("click", function () {
-      var isHidden = filtersContainer.classList.toggle("hidden");
-      setState(!isHidden);
-    });
-
-    filtersContainer.classList.add("hidden");
-    if (filtersWrapper) {
-      filtersWrapper.classList.add("hidden");
-    }
-    setState(false);
-  }
-
-  function setFullscreenButtonState(isActive) {
-    var html = isActive
-      ? '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 9H5V5M5 19l4-4m6 0h4v4m0-14l-4 4" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="hidden sm:inline">Salir de pantalla completa</span>'
-      : '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 8V4h4M4 4l5 5M20 16v4h-4m4 0l-5-5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="hidden sm:inline">Pantalla completa</span>';
-    document.querySelectorAll("[data-fullscreen-toggle]").forEach(function (btn) {
-      btn.innerHTML = html;
-    });
-  }
-
-  function syncFullscreenState() {
-    var active = Boolean(document.fullscreenElement);
-    document.body.classList.toggle("reports-fullscreen", active);
-    setFullscreenButtonState(active);
-  }
-
-  function initFullscreen() {
-    document.querySelectorAll("[data-fullscreen-toggle]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(function () {});
-        } else {
-          document.exitFullscreen().catch(function () {});
-        }
-      });
-    });
-    setFullscreenButtonState(false);
-    document.addEventListener("fullscreenchange", syncFullscreenState);
-  }
-
   function setupRefreshIntervalButtons() {
     var buttons = document.querySelectorAll(".refresh-interval-btn");
     var hiddenSelect = el("refresh_interval");
@@ -657,8 +597,6 @@
   }
 
   document.addEventListener("DOMContentLoaded", function () {
-    initFiltersToggle();
-    initFullscreen();
     setupRefreshIntervalButtons();
     initRealtimeToggle();
 
@@ -682,5 +620,38 @@
 
     updateFiltersSummary();
     wireFilterAutoRefresh();
+
+    var root = el("presupuestos-app");
+    var convertTpl = root ? root.getAttribute("data-convertir-url-tpl") : "";
+    document.addEventListener("click", function (ev) {
+      var t = ev.target;
+      var cod = t.getAttribute && t.getAttribute("data-convertir-pre");
+      if (!cod || !convertTpl) return;
+      ev.stopPropagation();
+      if (!confirm("¿Convertir este presupuesto a pedido? Se recalcularán precios vigentes.")) return;
+      var url = convertTpl.replace(/\/0\/convertir-pedido\/?$/, "/" + cod + "/convertir-pedido/?ajax=1");
+      fetch(url, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken"),
+        },
+        body: JSON.stringify({}),
+      })
+        .then(function (res) {
+          return res.json();
+        })
+        .then(function (data) {
+          if (!data.ok) alert(data.error || data.detail || "No se pudo convertir.");
+          else {
+            alert("Pedido " + (data.nro_comprobante || "") + " creado correctamente.");
+            runSearch();
+          }
+        })
+        .catch(function () {
+          alert("Error al convertir el presupuesto.");
+        });
+    });
   });
 })();

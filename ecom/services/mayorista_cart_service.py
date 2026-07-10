@@ -18,6 +18,7 @@ from django.db import transaction
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, str_or_default
 from ecom.models import EcomCart, EcomCartItem
 from ecom.services.catalogo_producto import resolver_precio_articulo
+from ecom.services.promocion_etiqueta import etiqueta_promocion_linea
 from self_checkout.services.stock_service import StockService
 
 Q2 = Decimal("0.01")
@@ -100,6 +101,28 @@ def obtener_o_crear_carrito(
     return cart
 
 
+def reiniciar_borrador_compra_vendedor(base_empresa: str, id_usuario: int) -> None:
+    """
+    Vacía el carrito borrador y desvincula el cliente (nueva transacción / refresh compra).
+    No afecta carritos ya confirmados.
+    """
+    cart = (
+        EcomCart.objects.filter(
+            base_empresa=base_empresa,
+            id_usuario=id_usuario,
+            estado=EcomCart.ESTADO_BORRADOR,
+        )
+        .order_by("-updated_at")
+        .first()
+    )
+    if cart is None:
+        return
+    cart.items.all().delete()
+    cart.idcliente = None
+    recalcular_totales(cart)
+    cart.save(update_fields=["idcliente", "updated_at"])
+
+
 @transaction.atomic
 def agregar_item(
     cart: EcomCart,
@@ -107,22 +130,29 @@ def agregar_item(
     cantidad: Any,
     *,
     descuento_cliente: Any = Decimal("0"),
+    tipo_unidad: str = "Unidad",
+    multiplicador: Any = None,
 ) -> Tuple[Optional[EcomCartItem], Optional[str]]:
     """
     Agrega (o consolida) un artículo al carrito. Precio del renglón vía motor; valida stock
     disponible con la cantidad total del artículo. Devuelve (item, error).
     """
-    cantidad = _dec(cantidad)
-    if cantidad <= 0:
+    from ecom.services.presentacion_articulo import cantidad_base_desde_ui
+
+    cantidad_ui = _dec(cantidad)
+    if cantidad_ui <= 0:
         return None, "La cantidad debe ser mayor a 0."
 
     id_articulo = to_int_or_none(id_articulo)
     if id_articulo is None:
         return None, "Artículo inválido."
 
+    cant_base = cantidad_base_desde_ui(cantidad_ui, tipo_unidad, multiplicador=multiplicador)
+    mult = cant_base / cantidad_ui if cantidad_ui else Decimal("1")
+
     existing = cart.items.filter(id_articulo=id_articulo).first()
     cant_actual = existing.cantidad if existing else Decimal("0")
-    cant_total = cant_actual + cantidad
+    cant_total = cant_actual + cant_base
 
     ok, err = _validar_stock(cart, id_articulo, cant_total)
     if not ok:
@@ -143,6 +173,8 @@ def agregar_item(
     if existing is not None:
         existing.cantidad = cant_total
         existing.precio_unitario_neto = _dec(precio_neto)
+        existing.tipo_unidad = _s(tipo_unidad, "Unidad")
+        existing.cantidad_dividir = mult
         _aplicar_datos_articulo(existing, row)
         existing.save()
         item = existing
@@ -151,10 +183,12 @@ def agregar_item(
         item = EcomCartItem(
             cart=cart,
             id_articulo=id_articulo,
-            cantidad=cantidad,
+            cantidad=cant_base,
             precio_unitario_neto=_dec(precio_neto),
             lista_id=cart.lista_id,
             orden=orden,
+            tipo_unidad=_s(tipo_unidad, "Unidad"),
+            cantidad_dividir=mult,
         )
         _aplicar_datos_articulo(item, row)
         item.save()
@@ -207,6 +241,19 @@ def quitar_item(cart: EcomCart, item_id: int) -> bool:
         recalcular_totales(cart)
         return True
     return False
+
+
+def actualizar_tipo_comprobante(cart: EcomCart, tipo: str) -> Tuple[bool, Optional[str]]:
+    """Actualiza el tipo de comprobante del borrador (PED/PRE/DEV)."""
+    tipo_norm = str(tipo or "").strip().upper()
+    validos = (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_PRESUPUESTO, EcomCart.TIPO_DEVOLUCION)
+    if tipo_norm not in validos:
+        return False, "Tipo de comprobante no válido."
+    if cart.estado == EcomCart.ESTADO_CONFIRMADO:
+        return False, "El carrito ya fue confirmado."
+    cart.tipo_comprobante = tipo_norm
+    cart.save(update_fields=["tipo_comprobante", "updated_at"])
+    return True, None
 
 
 def limpiar(cart: EcomCart) -> None:
@@ -319,10 +366,22 @@ def serializar_carrito(cart: EcomCart) -> Dict[str, Any]:
             "porcentaje_descuento": float(item.porcentaje_descuento),
             "en_promocion": (item.promocion or "").strip().lower() == "si",
             "promocion_tipo": item.promocion_tipo,
+            "promocion_por": float(item.promocion_por),
+            "promocion_cant": item.promocion_cant,
+            "promocion_etiqueta": etiqueta_promocion_linea(
+                {
+                    "promocion": item.promocion,
+                    "promocion_tipo": item.promocion_tipo,
+                    "promocion_por": item.promocion_por,
+                    "promocion_cant": item.promocion_cant,
+                }
+            ),
             "neto": float(item.neto),
             "iva": float(item.iva),
             "total": float(item.total),
             "orden": item.orden,
+            "tipo_unidad": item.tipo_unidad or "Unidad",
+            "cantidad_dividir": float(item.cantidad_dividir or 1),
         }
         for item in cart.items.all()
     ]
@@ -357,6 +416,8 @@ def serializar_carrito(cart: EcomCart) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 def _validar_stock(cart: EcomCart, id_articulo: int, cantidad_total: Decimal) -> Tuple[bool, Optional[str]]:
+    if cart.tipo_comprobante == EcomCart.TIPO_DEVOLUCION:
+        return True, None
     stock = StockService(cart.base_empresa)
     ok, err = stock.validar_disponible_items(
         [{"id_articulo": id_articulo, "cantidad": cantidad_total}],

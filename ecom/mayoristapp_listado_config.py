@@ -197,6 +197,7 @@ PORTAL_CLIENTE_LISTADOS: dict[str, dict[str, Any]] = {
         "payload_base": {"ajax": "true"},
         "results_key": "filas",
         "portal_cliente": True,
+        "pedidos_acciones": True,
         "sugerencias_url_name": "ecom:mayoristapp_ctacte_pedidos_sugerencias_nro",
         "sugerencias_query": "ajax=1",
         "columns": _COLS_COMPROBANTE,

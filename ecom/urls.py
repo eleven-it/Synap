@@ -10,6 +10,21 @@ from ecom.mayoristapp_web_views import (
     PedidosVendedorView,
     PresupuestosVendedorView,
 )
+from ecom.pedido_gestion_views import (
+    CarritoDesdePedidoAPIView,
+    CarritoDesdePedidoPreviewAPIView,
+    CompraMayoristaContextoAPIView,
+    ComprobanteComercialCabeceraAPIView,
+    ComprobanteComercialDetalleAPIView,
+    ComprobanteComercialDetalleView,
+    PedidoCabeceraV1APIView,
+    PedidoComprobantePDFAPIView,
+    PedidoDetalleView,
+    PedidosHubView,
+    PedidosKpisAPIView,
+    PedidosRecientesAPIView,
+    PresupuestoConvertirPedidoAPIView,
+)
 from ecom.logistica_estado_pedidos_views import (
     EstadoPedidosKanbanAPIView,
     EstadoPedidosPreparacionView,
@@ -84,6 +99,7 @@ from ecom.carrito_relay_views import (
     CarritoDescuentoPieRelayAPIView,
     CarritoItemRelayAPIView,
     CarritoRelayAPIView,
+    CarritoTipoComprobanteRelayAPIView,
     CarritoVaciarRelayAPIView,
 )
 from ecom.checkout_relay_views import CheckoutConfirmarRelayAPIView
@@ -115,6 +131,21 @@ urlpatterns = [
         "mayoristapp/pedidos-vendedor/",
         PedidosVendedorView.as_view(),
         name="mayoristapp_pedidos_vendedor",
+    ),
+    path(
+        "mayoristapp/pedidos/",
+        PedidosHubView.as_view(),
+        name="mayoristapp_pedidos_hub",
+    ),
+    path(
+        "mayoristapp/pedidos/<int:cod_mov>/",
+        PedidoDetalleView.as_view(),
+        name="mayoristapp_pedido_detalle",
+    ),
+    path(
+        "mayoristapp/comprobantes/<int:cod_mov>/",
+        ComprobanteComercialDetalleView.as_view(),
+        name="mayoristapp_comprobante_detalle",
     ),
     path(
         "mayoristapp/recibos/alta/",
@@ -198,6 +229,11 @@ urlpatterns = [
         "api/v1/mayoristapp/comprobantes/pedidos/sugerencias-numero/",
         PedidosSugerenciasNumeroV1APIView.as_view(),
         name="v1_comprobantes_pedidos_sugerencias",
+    ),
+    path(
+        "api/v1/mayoristapp/comprobantes/pedidos/<int:cod_mov>/",
+        PedidoCabeceraV1APIView.as_view(),
+        name="v1_comprobantes_pedidos_cabecera",
     ),
     path(
         "api/v1/mayoristapp/comprobantes/pedidos/<int:cod_mov>/detalle/",
@@ -486,9 +522,59 @@ urlpatterns = [
         name="mayoristapp_carrito_vaciar",
     ),
     path(
+        "api/mayoristapp/carrito/tipo-comprobante/",
+        CarritoTipoComprobanteRelayAPIView.as_view(),
+        name="mayoristapp_carrito_tipo_comprobante",
+    ),
+    path(
         "api/mayoristapp/carrito/descuento-pie/",
         CarritoDescuentoPieRelayAPIView.as_view(),
         name="mayoristapp_carrito_descuento_pie",
+    ),
+    path(
+        "api/mayoristapp/carrito/desde-pedido/<int:cod_mov>/preview/",
+        CarritoDesdePedidoPreviewAPIView.as_view(),
+        name="mayoristapp_carrito_desde_pedido_preview",
+    ),
+    path(
+        "api/mayoristapp/carrito/desde-pedido/",
+        CarritoDesdePedidoAPIView.as_view(),
+        name="mayoristapp_carrito_desde_pedido",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/<int:cod_mov>/cabecera/",
+        ComprobanteComercialCabeceraAPIView.as_view(),
+        name="mayoristapp_comprobante_cabecera",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/<int:cod_mov>/detalle/",
+        ComprobanteComercialDetalleAPIView.as_view(),
+        name="mayoristapp_comprobante_detalle_api",
+    ),
+    path(
+        "api/mayoristapp/pedidos/recientes/",
+        PedidosRecientesAPIView.as_view(),
+        name="mayoristapp_pedidos_recientes",
+    ),
+    path(
+        "api/mayoristapp/pedidos/kpis/",
+        PedidosKpisAPIView.as_view(),
+        name="mayoristapp_pedidos_kpis",
+    ),
+    path(
+        "api/mayoristapp/comprobantes/pedidos/<int:cod_mov>/pdf/",
+        PedidoComprobantePDFAPIView.as_view(),
+        name="mayoristapp_pedido_pdf",
+    ),
+    path(
+        "api/mayoristapp/compra/contexto/",
+        CompraMayoristaContextoAPIView.as_view(),
+        name="mayoristapp_compra_contexto",
+    ),
+    path(
+        "api/mayoristapp/presupuestos/<int:cod_mov>/convertir-pedido/",
+        PresupuestoConvertirPedidoAPIView.as_view(),
+        name="mayoristapp_presupuesto_convertir_pedido",
     ),
     # --- Checkout mayorista (Fase P2) ---
     path(
