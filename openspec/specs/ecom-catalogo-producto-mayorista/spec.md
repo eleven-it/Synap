@@ -110,3 +110,15 @@ Escenario: Paridad de precio listado vs relay de precio
 - **Author role:** SDD (agente principal)
 - **Created:** 2026-07-02
 - **Status:** draft (pendiente validación de alcance con el usuario)
+
+---
+
+## Extensions — pedido masivo (2026-07-13)
+
+### REQ-CAT-MAS-01 — Filtro por ternas
+En el flujo de pedido masivo por sucursales, el listado/búsqueda de artículos MUST aplicar filtro `CodigoMarca IN marcas_asignadas(viajante, cliente)`. MUST NOT permitir override del vendedor para ver marcas no asignadas.
+
+#### Scenario: Marca no asignada oculta
+- **GIVEN** terna solo Marca A para el cliente
+- **WHEN** busca un artículo de Marca B
+- **THEN** MUST NOT aparecer en resultados del masivo

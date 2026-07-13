@@ -1,0 +1,33 @@
+name: ecom-pedidos-hub-kanban-masivo-sucursales
+created: 2026-07-13
+status: verified
+phases:
+  explore: done
+  propose: done
+  design: done
+  spec: done
+  tasks: done
+  apply: done
+  verify: done
+apply_progress:
+  phase_0: done
+  phase_1: done
+  phase_2: done
+  phase_3: done
+  phase_4: done
+  phase_5: done
+  phase_6: done
+artifacts:
+  - exploration.md
+  - proposal.md
+  - design.md
+  - tasks.md
+  - verify-report.md
+  - specs/ecom-pedidos-hub-kanban/spec.md
+  - specs/ecom-vendedor-cliente-marca/spec.md
+  - specs/ecom-pedido-masivo-sucursales/spec.md
+  - specs/ecom-catalogo-producto-mayorista/spec.md
+  - specs/ecom-checkout-mayorista/spec.md
+notes: |
+  Apply 0–5 + verify PASS WITH WARNINGS (26 tests change OK).
+  Pendiente opcional: sdd-archive + E2E manual en empresa con DDL.

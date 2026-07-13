@@ -212,3 +212,88 @@ class EcomCatalogoRestriccionPV(models.Model):
 
     def __str__(self) -> str:
         return f"PV {self.id_punto_venta} excluye {self.tipo}={self.valor_id}"
+
+
+class EcomPedidoMasivoDraft(models.Model):
+    """
+    Borrador de pedido masivo por sucursales (matriz packs × cliente_domicilio).
+
+    Persistido en Postgres `synap`. El checkout batch (Phase 5) genera 1 PED MySQL
+    por sucursal; ante fallo el draft vuelve a BORRADOR con ``ultimo_error``.
+    """
+
+    ESTADO_BORRADOR = "borrador"
+    ESTADO_CONFIRMANDO = "confirmando"
+    ESTADO_CONFIRMADO = "confirmado"
+    ESTADO_ARCHIVADO = "archivado"
+    ESTADO_CHOICES = (
+        (ESTADO_BORRADOR, "Borrador"),
+        (ESTADO_CONFIRMANDO, "Confirmando"),
+        (ESTADO_CONFIRMADO, "Confirmado"),
+        (ESTADO_ARCHIVADO, "Archivado"),
+    )
+
+    base_empresa = models.CharField("base empresa", max_length=64, db_index=True)
+    id_usuario = models.IntegerField("usuario", db_index=True)
+    cod_viajante = models.IntegerField("CodViajante", null=True, blank=True)
+    id_cliente = models.IntegerField("cliente", db_index=True)
+    estado = models.CharField(
+        "estado",
+        max_length=16,
+        choices=ESTADO_CHOICES,
+        default=ESTADO_BORRADOR,
+        db_index=True,
+    )
+    ultimo_error = models.JSONField("último error por sucursal", default=dict, blank=True)
+    codigos_movimiento = models.JSONField(
+        "CodigoMovimiento del lote",
+        default=list,
+        blank=True,
+        help_text="Lista de CodigoMovimiento PED creados al confirmar.",
+    )
+    created_at = models.DateTimeField("creado", auto_now_add=True)
+    updated_at = models.DateTimeField("actualizado", auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+        verbose_name = "borrador pedido masivo"
+        verbose_name_plural = "borradores pedido masivo"
+        indexes = [
+            models.Index(fields=["base_empresa", "id_usuario", "estado"]),
+            models.Index(fields=["base_empresa", "id_cliente", "estado"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"MasivoDraft #{self.pk} cliente={self.id_cliente} [{self.estado}]"
+
+
+class EcomPedidoMasivoDraftCelda(models.Model):
+    """Celda de la matriz: artículo × sucursal (cliente_domicilio) → cantidad en packs."""
+
+    draft = models.ForeignKey(
+        EcomPedidoMasivoDraft,
+        related_name="celdas",
+        on_delete=models.CASCADE,
+    )
+    id_articulo = models.IntegerField("artículo", db_index=True)
+    id_cliente_domicilio = models.IntegerField("cliente_domicilio", db_index=True)
+    cantidad_packs = models.DecimalField(
+        "cantidad packs",
+        max_digits=14,
+        decimal_places=3,
+        default=Decimal("0"),
+    )
+    updated_at = models.DateTimeField("actualizado", auto_now=True)
+
+    class Meta:
+        verbose_name = "celda pedido masivo"
+        verbose_name_plural = "celdas pedido masivo"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["draft", "id_articulo", "id_cliente_domicilio"],
+                name="uniq_ecom_masivo_celda_draft_art_dom",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"art={self.id_articulo} dom={self.id_cliente_domicilio} x{self.cantidad_packs}"

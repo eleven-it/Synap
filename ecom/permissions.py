@@ -101,3 +101,45 @@ class EcomCobranzasWritePermission(BasePermission):
         if getattr(user, "is_superuser", False):
             return True
         return _user_has_perm(request, "ecom.cobranzas.editar")
+
+
+class EcomConfigVendedorClienteMarcaPermission(BasePermission):
+    """Config territorio Vendedor→Cliente→Marca."""
+
+    message = "Se requiere permiso ecom.config_vendedor_cliente_marca."
+
+    def has_permission(self, request, view):
+        if not _session_base_empresa(request):
+            return False
+        user = getattr(request, "user", None)
+        if getattr(user, "is_superuser", False):
+            return True
+        return _user_has_perm(request, "ecom.config_vendedor_cliente_marca")
+
+
+class EcomPedidoMasivoUsarPermission(BasePermission):
+    """Matriz de pedido masivo por sucursales."""
+
+    message = "Se requiere permiso ecom.pedido_masivo.usar."
+
+    def has_permission(self, request, view):
+        if not _session_base_empresa(request):
+            return False
+        user = getattr(request, "user", None)
+        if getattr(user, "is_superuser", False):
+            return True
+        return _user_has_perm(request, "ecom.pedido_masivo.usar")
+
+
+class EcomPedidosVerPermission(BasePermission):
+    """Hub / listado de pedidos."""
+
+    message = "Se requiere permiso ecom.pedidos.ver."
+
+    def has_permission(self, request, view):
+        if not _session_base_empresa(request):
+            return False
+        user = getattr(request, "user", None)
+        if getattr(user, "is_superuser", False):
+            return True
+        return _user_has_perm(request, "ecom.pedidos.ver")

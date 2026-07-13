@@ -101,6 +101,14 @@ def _cargar_campos_mayoristapp_mysql(base_empresa: str, id_usuario: int, id_pues
                 out["supervisor_venta"] = sup
                 out["permiso_supervisor_venta_web"] = sup
 
+            # Complemento: mapeo explícito ecom_usuario_viajante (sobrescribe si existe)
+            from ecom.services.usuario_viajante import resolver_cod_viajante_usuario
+
+            cv_map = resolver_cod_viajante_usuario(base_empresa, id_usuario)
+            if cv_map is not None:
+                out["id_vendedor_usr"] = cv_map
+                out["CodViajante"] = cv_map
+
             if id_puesto:
                 todos = _valor_permiso_puesto(
                     cursor,
