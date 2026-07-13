@@ -17,7 +17,15 @@ from core.utils.administranet_types import to_int_or_none
 from ecom.carrito_relay_views import _resolver_contexto
 from ecom.catalogo_producto_relay_views import _session_base_empresa
 from ecom.mayoristapp_web_views import MayoristappWebSessionMixin
-from ecom.permissions import EcomComprobantesReadPermission, EcomMayoristappSessionPermission
+from ecom.permissions import (
+    EcomComprobantesReadPermission,
+    EcomMayoristappSessionPermission,
+    EcomPedidosVerPermission,
+)
+from ecom.services.pedidos_hub_pipeline import (
+    archivar_borrador_masivo,
+    construir_hub_pedidos,
+)
 from ecom.services.mayoristapp_session import leer_cliente_seleccionado, leer_idcliente_mayoristapp
 from ecom.services.pedido_cabecera_relay import (
     cabecera_comp_ped_relay,
@@ -287,7 +295,7 @@ class PresupuestoConvertirPedidoAPIView(APIView):
 
 
 class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
-    """Hub de gestión de pedidos — ``/ecom/mayoristapp/pedidos/``."""
+    """Hub Lista|Kanban de pedidos — ``/ecom/mayoristapp/pedidos/``."""
 
     template_name = "ecom/pedidos_hub.html"
 
@@ -295,58 +303,62 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         sess = self.request.session.get("user") or {}
         base = str(sess.get("base_empresa") or "").strip()
-        idc = leer_idcliente_mayoristapp(self.request)
-        kpis = {"pedidos_hoy": 0, "no_autorizados": 0, "total_monto": 0}
-        ultimo_pedido = None
-        cliente_label = ""
-        es_cliente = (sess.get("tipousuario") or "").strip().lower() == "cliente"
-        if base:
-            try:
-                kpis = pedidos_kpis_relay(base, sess, idcliente=idc)
-            except Exception:
-                pass
-            if idc is not None:
-                try:
-                    recientes = pedidos_recientes_relay(
-                        base,
-                        int(idc),
-                        limit=1,
-                        incluir_importe=not es_cliente,
-                    )
-                    if recientes:
-                        ultimo_pedido = recientes[0]
-                except Exception:
-                    pass
-                try:
-                    cli = leer_cliente_seleccionado(self.request)
-                    if cli:
-                        cliente_label = str(
-                            cli.get("nombre_cliente") or cli.get("Nombre") or ""
-                        ).strip()
-                except Exception:
-                    pass
+        vista = (self.request.GET.get("vista") or "kanban").strip().lower()
+        hub = construir_hub_pedidos(base, sess, vista=vista)
         context.update(
             {
-                "page_title": "Gestión de pedidos",
-                "kpis": kpis,
-                "es_cliente": es_cliente,
-                "ultimo_pedido": ultimo_pedido,
-                "cliente_label": cliente_label,
-                "idcliente": idc,
-                "urls": {
-                    "nuevo_pedido": reverse("ecom:mayoristapp_compra"),
-                    "listado": reverse("ecom:mayoristapp_pedidos_vendedor"),
-                    "listado_no_autorizados": reverse("ecom:mayoristapp_pedidos_vendedor")
-                    + "?solo_no_autorizados=1",
-                    "kanban": reverse("ecom:mayoristapp_estado_pedidos_preparacion"),
-                    "kpis_api": reverse("ecom:mayoristapp_pedidos_kpis"),
-                    "compra": reverse("ecom:mayoristapp_compra"),
-                    "preview_tpl": reverse("ecom:mayoristapp_carrito_desde_pedido_preview", args=[0]),
-                    "cargar_desde_pedido": reverse("ecom:mayoristapp_carrito_desde_pedido"),
+                "page_title": "Pedidos",
+                "hub_bootstrap": {
+                    "vista": hub.get("vista"),
+                    "hub": hub,
+                    "labels": hub.get("labels") or {},
+                    "urls": {
+                        "nuevo_simple": reverse("ecom:mayoristapp_compra"),
+                        "nuevo_masivo": reverse("ecom:mayoristapp_pedido_masivo_sucursales"),
+                        "kanban_deposito": reverse("ecom:mayoristapp_estado_pedidos_preparacion"),
+                        "api": reverse("ecom:mayoristapp_pedidos_hub_api"),
+                        "archivar_draft": reverse("ecom:mayoristapp_pedidos_hub_archivar_draft"),
+                        "listado_legacy": reverse("ecom:mayoristapp_pedidos_vendedor"),
+                    },
                 },
             }
         )
         return context
+
+
+class PedidosHubAPIView(APIView):
+    """GET JSON del tablero Lista|Kanban."""
+
+    permission_classes = [EcomPedidosVerPermission]
+
+    def get(self, request: Request) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        if not base:
+            return _error("Sin base_empresa.", "sin_base_empresa")
+        vista = str(request.query_params.get("vista") or "kanban").strip().lower()
+        dias = to_int_or_none(request.query_params.get("dias")) or 60
+        hub = construir_hub_pedidos(base, sess, vista=vista, dias=dias)
+        return Response({"ok": True, **hub})
+
+
+class PedidosHubArchivarDraftAPIView(APIView):
+    """POST archiva borrador masivo antes de crear uno nuevo."""
+
+    permission_classes = [EcomPedidosVerPermission]
+
+    def post(self, request: Request) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        id_u = to_int_or_none(sess.get("id_usuario"))
+        data = request.data if isinstance(request.data, dict) else {}
+        draft_id = to_int_or_none(data.get("draft_id"))
+        if not base or id_u is None or draft_id is None:
+            return _error("Parámetros inválidos.")
+        ok = archivar_borrador_masivo(draft_id, id_u, base)
+        if not ok:
+            return _error("Borrador no encontrado.", "no_encontrado", 404)
+        return Response({"ok": True})
 
 
 class PedidoDetalleView(MayoristappWebSessionMixin, TemplateView):

@@ -2,7 +2,7 @@
 """
 Tests de la fachada de permisos Synap (get_permisos_totales_administranet) y del
 catálogo de seed. Los lectores contra MySQL se mockean para probar el enrutado por
-``SYNAP_PERMISOS_SOURCE``, el fallback, el modo dual y las invariantes de supervisor.
+``SYNAP_PERMISOS_SOURCE``, el modo dual y las invariantes de supervisor.
 """
 from unittest import mock
 
@@ -20,14 +20,13 @@ from core.services.administranet_puestos import (
 from core.services.synap_permisos_seed import _filas_catalogo
 
 
-def _patch_lectores(synap=None, legacy=None, complementarios=None, tiene_mapeo=False):
-    """Devuelve un contexto que mockea los 4 lectores usados por la fachada."""
+def _patch_lectores():
+    """Devuelve un contexto que mockea los lectores usados por la fachada."""
     return mock.patch.multiple(
         facade,
         get_permisos_desde_synap_store=mock.DEFAULT,
         get_permisos_legacy_synap=mock.DEFAULT,
         get_permisos_complementarios_legacy=mock.DEFAULT,
-        puesto_tiene_mapeo_synap=mock.DEFAULT,
     )
 
 
@@ -53,34 +52,21 @@ class FachadaPermisosTests(SimpleTestCase):
         m["get_permisos_desde_synap_store"].assert_not_called()
 
     @override_settings(SYNAP_PERMISOS_SOURCE="synap")
-    def test_source_synap_con_mapeo(self):
+    def test_source_synap_solo_store(self):
         with _patch_lectores() as m:
-            m["get_permisos_desde_synap_store"].return_value = {"reports.ver"}
-            m["puesto_tiene_mapeo_synap"].return_value = True
+            m["get_permisos_desde_synap_store"].return_value = {"reports.ver", "mpr.ver"}
             m["get_permisos_complementarios_legacy"].return_value = set()
             m["get_permisos_legacy_synap"].return_value = {"NO_DEBE_USARSE"}
             result = get_permisos_totales_administranet("empresa", 5)
-        self.assertEqual(result, {"reports.ver"})
+        self.assertEqual(result, {"reports.ver", "mpr.ver"})
         m["get_permisos_legacy_synap"].assert_not_called()
 
     @override_settings(SYNAP_PERMISOS_SOURCE="synap")
-    def test_source_synap_fallback_a_legacy_sin_mapeo(self):
+    def test_source_synap_sin_permisos_no_usa_permiso_sistema(self):
+        # Store vacío (sin mapeo o sin keys): set vacío. Nunca lee permiso_sistema*.
         with _patch_lectores() as m:
             m["get_permisos_desde_synap_store"].return_value = set()
-            m["puesto_tiene_mapeo_synap"].return_value = False
             m["get_permisos_legacy_synap"].return_value = {"ventas.ver"}
-            m["get_permisos_complementarios_legacy"].return_value = set()
-            result = get_permisos_totales_administranet("empresa", 5)
-        self.assertEqual(result, {"ventas.ver"})
-        m["get_permisos_legacy_synap"].assert_called_once()
-
-    @override_settings(SYNAP_PERMISOS_SOURCE="synap")
-    def test_source_synap_mapeo_sin_permisos_no_fallback(self):
-        # Puesto mapeado pero sin permisos: set vacío, NO fallback a legacy.
-        with _patch_lectores() as m:
-            m["get_permisos_desde_synap_store"].return_value = set()
-            m["puesto_tiene_mapeo_synap"].return_value = True
-            m["get_permisos_legacy_synap"].return_value = {"NO_DEBE_USARSE"}
             m["get_permisos_complementarios_legacy"].return_value = set()
             result = get_permisos_totales_administranet("empresa", 5)
         self.assertEqual(result, set())

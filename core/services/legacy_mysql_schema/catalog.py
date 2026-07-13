@@ -1290,6 +1290,71 @@ def _insertar_ecom_config_si_falta(
     _append_migration(applied, failed, True, f"INSERT {tabla}.{key}")
 
 
+def run_ecom_vendedor_cliente_marca_mysql(conn) -> Dict[str, Any]:
+    """
+    Tablas ``ecom_vendedor_cliente_marca`` (terna + unique cliente+marca activos)
+    y ``ecom_usuario_viajante`` (mapeo usuario↔viajante).
+
+    Ver ``docs/ecom/VENDEDOR_CLIENTE_MARCA.md``.
+    """
+    from django.apps import apps
+
+    applied: List[str] = []
+    failed: List[str] = []
+    try:
+        app_path = Path(apps.get_app_config("ecom").path)
+    except LookupError:
+        msg = "La app Django «ecom» no está instalada."
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    sql_path = app_path / "sql" / "001_ecom_vendedor_cliente_marca.sql"
+    if not sql_path.is_file():
+        msg = f"No se encontró el archivo {sql_path}"
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    cursor = conn.cursor()
+    try:
+        sql_content = sql_path.read_text(encoding="utf-8")
+        raw_statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+        for stmt in raw_statements:
+            stmt = _sc_sql_strip_leading_comments(stmt)
+            if stmt:
+                cursor.execute(stmt)
+        _append_migration(
+            applied, failed, True, "DDL ecom vendedor-cliente-marca (001_ecom_vendedor_cliente_marca.sql)"
+        )
+        conn.commit()
+    except Exception as e:
+        logger.exception("run_ecom_vendedor_cliente_marca_mysql: %s", e)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        _append_migration(applied, failed, False, "DDL ecom_vendedor_cliente_marca", str(e))
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 def run_vendedores_asignacion_mysql(conn) -> Dict[str, Any]:
     """
     Tablas ``vendedores_clientes_asignacion`` y ``vendedores_marcas_asignacion``,
@@ -1547,6 +1612,17 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "bajo",
         "run": run_vendedores_asignacion_mysql,
+    },
+    {
+        "id": "ecom_vendedor_cliente_marca",
+        "title": "E-com — terna Vendedor→Cliente→Marca (+ usuario↔viajante)",
+        "description": (
+            "Tablas ``ecom_vendedor_cliente_marca`` (unique activo id_cliente+CodMarca) y "
+            "``ecom_usuario_viajante``. Pedido masivo por sucursales / filtro catálogo. "
+            "Ver docs/ecom/VENDEDOR_CLIENTE_MARCA.md."
+        ),
+        "risk": "bajo",
+        "run": run_ecom_vendedor_cliente_marca_mysql,
     },
 ]
 

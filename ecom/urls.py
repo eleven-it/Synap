@@ -20,10 +20,31 @@ from ecom.pedido_gestion_views import (
     PedidoCabeceraV1APIView,
     PedidoComprobantePDFAPIView,
     PedidoDetalleView,
+    PedidosHubAPIView,
+    PedidosHubArchivarDraftAPIView,
     PedidosHubView,
     PedidosKpisAPIView,
     PedidosRecientesAPIView,
     PresupuestoConvertirPedidoAPIView,
+)
+from ecom.vendedor_cliente_marca_views import (
+    ConfigVendedorClienteMarcaView,
+    VendedorClienteMarcaAnularAPIView,
+    VendedorClienteMarcaClientesAPIView,
+    VendedorClienteMarcaCrearAPIView,
+    VendedorClienteMarcaMarcasAPIView,
+    VendedorClienteMarcaTernasAPIView,
+    VendedorClienteMarcaVendedoresAPIView,
+)
+from ecom.pedido_masivo_views import (
+    PedidoMasivoAbrirAPIView,
+    PedidoMasivoArticulosAPIView,
+    PedidoMasivoCeldaAPIView,
+    PedidoMasivoClientesAPIView,
+    PedidoMasivoConfirmarAPIView,
+    PedidoMasivoMatrizAPIView,
+    PedidoMasivoSucursalesAPIView,
+    PedidoMasivoSucursalesView,
 )
 from ecom.logistica_estado_pedidos_views import (
     EstadoPedidosKanbanAPIView,
@@ -136,6 +157,91 @@ urlpatterns = [
         "mayoristapp/pedidos/",
         PedidosHubView.as_view(),
         name="mayoristapp_pedidos_hub",
+    ),
+    path(
+        "api/mayoristapp/pedidos/hub/",
+        PedidosHubAPIView.as_view(),
+        name="mayoristapp_pedidos_hub_api",
+    ),
+    path(
+        "api/mayoristapp/pedidos/hub/archivar-draft/",
+        PedidosHubArchivarDraftAPIView.as_view(),
+        name="mayoristapp_pedidos_hub_archivar_draft",
+    ),
+    path(
+        "mayoristapp/pedido-masivo-sucursales/",
+        PedidoMasivoSucursalesView.as_view(),
+        name="mayoristapp_pedido_masivo_sucursales",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/clientes/",
+        PedidoMasivoClientesAPIView.as_view(),
+        name="api_pedido_masivo_clientes",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/sucursales/",
+        PedidoMasivoSucursalesAPIView.as_view(),
+        name="api_pedido_masivo_sucursales",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/abrir/",
+        PedidoMasivoAbrirAPIView.as_view(),
+        name="api_pedido_masivo_abrir",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/matriz/",
+        PedidoMasivoMatrizAPIView.as_view(),
+        name="api_pedido_masivo_matriz",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/celda/",
+        PedidoMasivoCeldaAPIView.as_view(),
+        name="api_pedido_masivo_celda",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/articulos/",
+        PedidoMasivoArticulosAPIView.as_view(),
+        name="api_pedido_masivo_articulos",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/confirmar/",
+        PedidoMasivoConfirmarAPIView.as_view(),
+        name="api_pedido_masivo_confirmar",
+    ),
+    path(
+        "mayoristapp/config/vendedor-cliente-marca/",
+        ConfigVendedorClienteMarcaView.as_view(),
+        name="mayoristapp_config_vendedor_cliente_marca",
+    ),
+    path(
+        "api/mayoristapp/vendedor-cliente-marca/ternas/",
+        VendedorClienteMarcaTernasAPIView.as_view(),
+        name="api_vendedor_cliente_marca_ternas",
+    ),
+    path(
+        "api/mayoristapp/vendedor-cliente-marca/crear/",
+        VendedorClienteMarcaCrearAPIView.as_view(),
+        name="api_vendedor_cliente_marca_crear",
+    ),
+    path(
+        "api/mayoristapp/vendedor-cliente-marca/anular/",
+        VendedorClienteMarcaAnularAPIView.as_view(),
+        name="api_vendedor_cliente_marca_anular",
+    ),
+    path(
+        "api/mayoristapp/vendedor-cliente-marca/vendedores/",
+        VendedorClienteMarcaVendedoresAPIView.as_view(),
+        name="api_vendedor_cliente_marca_vendedores",
+    ),
+    path(
+        "api/mayoristapp/vendedor-cliente-marca/clientes/",
+        VendedorClienteMarcaClientesAPIView.as_view(),
+        name="api_vendedor_cliente_marca_clientes",
+    ),
+    path(
+        "api/mayoristapp/vendedor-cliente-marca/marcas/",
+        VendedorClienteMarcaMarcasAPIView.as_view(),
+        name="api_vendedor_cliente_marca_marcas",
     ),
     path(
         "mayoristapp/pedidos/<int:cod_mov>/",

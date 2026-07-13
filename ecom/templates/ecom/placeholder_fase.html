@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ titulo }} — Synap{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl px-4 py-10">
+  <p class="text-sm font-medium text-slate-500">{{ fase }} · en construcción</p>
+  <h1 class="mt-2 text-2xl font-semibold text-slate-900">{{ titulo }}</h1>
+  <p class="mt-3 text-slate-600">{{ descripcion }}</p>
+  <p class="mt-2 text-sm text-slate-400">Referencia: {{ doc_url }}</p>
+  <a href="{{ hub_url }}"
+     class="mt-6 inline-flex items-center rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700">
+    Volver a Pedidos
+  </a>
+</div>
+{% endblock %}

@@ -261,6 +261,7 @@ def match_open_order_skus(
     """
     best_rows: id_articulo, codigo, articulo, marca
     admin_arts: IDArt, id_manual, NombreArticulo, CodArtProv
+        (universo tipicamente filtrado a tipo_art_fab=Terminado por el caller)
     """
     by_model: dict[str, list[dict]] = defaultdict(list)
     by_variant: dict[str, list[dict]] = defaultdict(list)

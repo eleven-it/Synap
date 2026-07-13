@@ -1,15 +1,16 @@
 """
-Permisos de usuario según AdministraNET (MySQL).
+Permisos de usuario para Synap (menú, vistas, middleware).
 
-Fachada de la fuente de verdad de permisos. Según ``settings.SYNAP_PERMISOS_SOURCE``
-resuelve los permisos desde las tablas propias de Synap (``synap_*``) o desde las
-tablas legacy compartidas con VB6 (``permiso_sistema`` + ``permiso_sistema_puesto``),
-o ambas (modo ``dual`` para validar paridad).
+Política vigente:
+- El menú y el control de acceso Synap se arman desde el almacén propio ``synap_*``
+  cuando ``SYNAP_PERMISOS_SOURCE=synap`` (cutover).
+- ``permiso_sistema`` / ``permiso_sistema_puesto`` **no** alimentan el menú en modo
+  ``synap``; solo se leen vía ``get_permisos_legacy_synap`` en modos ``legacy``/``dual``
+  (migración/rollback) o desde funcionalidades que aún requieren paridad VB6/AdministraNET.
+- Se suman siempre los complementarios de la tabla ``permisos`` (Clavemenu VB6),
+  lectura genuinamente legacy distinta de ``permiso_sistema*``.
 
-Siempre suma los permisos complementarios de la tabla ``permisos`` (Clavemenu VB6),
-que es lectura genuinamente legacy y no se migra.
-
-Usado por middleware (request.user.get_permisos_totales) y self_checkout (has_permission).
+Usado por middleware (request.user.get_permisos_totales), menú y self_checkout.
 """
 import logging
 from typing import Optional, Set
@@ -20,7 +21,6 @@ from core.services.synap_permisos import (
     get_permisos_complementarios_legacy,
     get_permisos_desde_synap_store,
     get_permisos_legacy_synap,
-    puesto_tiene_mapeo_synap,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,22 +41,15 @@ REPORTS_PERMISSIONS_FOR_SUPERVISOR = {
 def _resolver_permisos_base(base_empresa: str, id_puesto: Optional[int]) -> Set[str]:
     """
     Resuelve el set base de permisos del puesto según ``settings.SYNAP_PERMISOS_SOURCE``:
-    - ``legacy`` (default): permiso_sistema + permiso_sistema_puesto.
-    - ``synap``: tablas synap_*; si el puesto no tiene mapeo, fallback a legacy.
+    - ``synap`` (cutover): solo tablas ``synap_*``. Sin fallback a ``permiso_sistema*``.
     - ``dual``: unión de ambas; registra advertencia si difieren (validación de paridad).
+    - ``legacy``: solo ``permiso_sistema`` + ``permiso_sistema_puesto`` (rollback/migración).
     NO incluye complementarios (Clavemenu) ni permisos de supervisor: eso lo hace la fachada.
     """
     source = str(getattr(settings, "SYNAP_PERMISOS_SOURCE", "legacy") or "legacy").strip().lower()
 
     if source == "synap":
-        permisos = get_permisos_desde_synap_store(base_empresa, id_puesto)
-        if not permisos and not puesto_tiene_mapeo_synap(base_empresa, id_puesto):
-            logger.info(
-                "SYNAP_PERMISOS_SOURCE=synap: puesto %s sin mapeo en synap_*; fallback a legacy.",
-                id_puesto,
-            )
-            return get_permisos_legacy_synap(base_empresa, id_puesto)
-        return permisos
+        return get_permisos_desde_synap_store(base_empresa, id_puesto)
 
     if source == "dual":
         permisos_synap = get_permisos_desde_synap_store(base_empresa, id_puesto)
@@ -71,7 +64,7 @@ def _resolver_permisos_base(base_empresa: str, id_puesto: Optional[int]) -> Set[
             )
         return permisos_synap | permisos_legacy
 
-    # 'legacy' (default) y cualquier valor desconocido
+    # 'legacy' (default en settings si no hay env) y cualquier valor desconocido
     return get_permisos_legacy_synap(base_empresa, id_puesto)
 
 
@@ -90,8 +83,9 @@ def get_permisos_totales_administranet(
       recibe además los permisos de Reports (reports.ver, reports.*, etc.).
     - Se suman siempre los permisos complementarios de la tabla ``permisos`` (Clavemenu VB6).
 
-    El set base (permisos por puesto) proviene de ``synap_*`` o legacy según
-    ``settings.SYNAP_PERMISOS_SOURCE`` (ver ``_resolver_permisos_base``).
+    El set base (permisos por puesto) proviene de ``synap_*`` o, solo en modos
+    ``legacy``/``dual``, también de ``permiso_sistema*`` (ver ``_resolver_permisos_base``).
+    En modo ``synap`` el menú y el acceso Synap **no** leen ``permiso_sistema*``.
     """
     cod_usuario_lower = (cod_usuario or "").strip().lower()
     nombre_puesto_lower = (nombre_puesto or "").strip().lower()

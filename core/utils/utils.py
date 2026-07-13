@@ -119,6 +119,20 @@ APPS_MENU = [
                         "menu_item_id": "ventas_cb_pedidos",
                     },
                     {
+                        "label": _("Pedido masivo sucursales"),
+                        "url": "ecom:mayoristapp_pedido_masivo_sucursales",
+                        "icon": "grid_on",
+                        "permission": "ecom.pedido_masivo.usar",
+                        "menu_item_id": "ventas_cb_pedido_masivo",
+                    },
+                    {
+                        "label": _("Vendedor · Cliente · Marca"),
+                        "url": "ecom:mayoristapp_config_vendedor_cliente_marca",
+                        "icon": "hub",
+                        "permission": "ecom.config_vendedor_cliente_marca",
+                        "menu_item_id": "ventas_cb_vendedor_cliente_marca",
+                    },
+                    {
                         "label": _("Actualización de precios"),
                         "url": "ventas:precios_terminados",
                         "icon": "price_change",

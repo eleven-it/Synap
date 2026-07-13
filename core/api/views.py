@@ -338,6 +338,7 @@ def articulo_search_api(request):
     """
     GET /core/api/articulos/search/?q=...
     Query opcional: lista_precio (0–6) para elegir el precio devuelto en PrecioLista (costo, oficial, listas 1–5).
+    Query opcional: tipo_art_fab (ej. Terminado) para filtrar por articulo.tipo_art_fab.
     Búsqueda predictiva de artículos por código, nombre o código de barras.
     Requiere sesión con base_empresa. Devuelve { results: [ { IDArt, CodigoArticulo, Descripcion, Alicuota, ImpuestoInterno, PrecioLista, ... }, ... ] }.
     Usado en Factura de Compra (tab Líneas) y otros formularios que necesiten autocompletado de artículo.
@@ -355,10 +356,15 @@ def articulo_search_api(request):
     except (TypeError, ValueError):
         lista_precio = 2
     lista_precio = max(0, min(6, lista_precio))
+    tipo_art_fab = (request.GET.get('tipo_art_fab') or '').strip() or None
     from core.services.administranet_stock import _buscar_articulos_con_precios
     try:
         items = _buscar_articulos_con_precios(
-            base_empresa, q, limit=limit, lista_precio=lista_precio,
+            base_empresa,
+            q,
+            limit=limit,
+            lista_precio=lista_precio,
+            tipo_art_fab=tipo_art_fab,
         )
     except Exception:
         items = []

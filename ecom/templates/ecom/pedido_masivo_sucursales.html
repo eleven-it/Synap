@@ -1,0 +1,343 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Pedido masivo por sucursales — Synap{% endblock %}
+
+{% block content %}
+<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-3 dark:bg-slate-900 sm:py-4"
+         x-data="pedidoMasivoApp()"
+         x-init="init()">
+  <div class="mx-auto flex h-full min-h-0 w-full flex-col px-3 sm:px-4 md:px-6 lg:px-8">
+    <div class="flex-shrink-0">
+      <nav class="mb-3 text-xs text-slate-500" aria-label="Migas de pan">
+        <ol class="flex flex-wrap items-center gap-x-2">
+          <li><a :href="urls.hub" class="font-medium text-purple-600 hover:text-purple-800">Pedidos</a></li>
+          <li class="text-slate-300" aria-hidden="true">/</li>
+          <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Pedido masivo</span></li>
+        </ol>
+      </nav>
+
+      <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md sm:p-4">
+        <header class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Pedido masivo por sucursales</h1>
+            <p class="mt-1 text-xs text-slate-300 sm:text-sm">
+              Packs por sucursal · autoguardado · un PED por domicilio al confirmar.
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span x-show="guardadoChip" x-cloak
+                  class="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"
+                  x-text="guardadoChip"></span>
+            <a :href="urls.hub"
+               class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
+              Hub pedidos
+            </a>
+            <button type="button" @click="confirmarLote()" :disabled="confirmando || !draftId"
+                    class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50">
+              <span x-text="confirmando ? 'Confirmando…' : 'Confirmar lote'"></span>
+            </button>
+          </div>
+        </header>
+      </div>
+    </div>
+
+    <div x-show="error" x-cloak class="mb-2 flex-shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900" x-text="error" role="alert"></div>
+    <div x-show="mensajeOk" x-cloak class="mb-2 flex-shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" x-text="mensajeOk" role="status"></div>
+    <div x-show="Object.keys(ultimoError).length" x-cloak
+         class="mb-2 flex-shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+      Hubo errores en un intento de confirmación anterior. Revisá las cantidades y reintentá cuando esté disponible confirmar.
+    </div>
+
+    {# Paso 1: elegir cliente #}
+    <div x-show="!draftId" class="flex-shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <h2 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">1. Elegí el cliente</h2>
+      <p class="mb-3 text-xs text-slate-500">Solo clientes con al menos una marca asignada a tu territorio.</p>
+      <div class="flex flex-wrap gap-2">
+        <input type="search" x-model="qCliente" @input.debounce.300ms="buscarClientes()"
+               placeholder="Buscar cliente…"
+               class="h-10 min-w-[16rem] flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+        <select x-model="clienteSel" class="h-10 min-w-[16rem] flex-1 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <option value="">— elegir —</option>
+          <template x-for="c in clientes" :key="c.id_cliente">
+            <option :value="c.id_cliente" x-text="c.etiqueta"></option>
+          </template>
+        </select>
+        <button type="button" @click="abrirCliente()" :disabled="!clienteSel || abriendo"
+                class="inline-flex h-10 items-center rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50">
+          Abrir matriz
+        </button>
+      </div>
+    </div>
+
+    {# Paso 2: matriz #}
+    <template x-if="draftId">
+      <div class="flex min-h-0 flex-1 flex-col gap-2">
+        <div class="flex flex-shrink-0 flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+          <div class="min-w-0 flex-1">
+            <p class="text-[10px] font-medium uppercase text-slate-500">Cliente</p>
+            <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="'#' + idCliente + (clienteNombre ? ' · ' + clienteNombre : '')"></p>
+            <p class="text-[11px] text-slate-400">Borrador #<span x-text="draftId"></span> · <span x-text="sucursales.length"></span> sucursales</p>
+          </div>
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">
+            Agregar artículo (marcas asignadas)
+            <div class="mt-1 flex gap-2">
+              <input type="search" x-model="qArt" @input.debounce.300ms="buscarArticulos()"
+                     placeholder="Código o descripción…"
+                     class="h-9 w-56 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+              <select x-model="artSel" class="h-9 w-64 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+                <option value="">— resultado —</option>
+                <template x-for="a in articulosBusqueda" :key="a.id_articulo || a.IDArt">
+                  <option :value="JSON.stringify({id: a.id_articulo || a.IDArt, codigo: a.codigo || a.id_manual || '', desc: a.descripcion || a.NombreArticulo || ''})"
+                          x-text="(a.codigo || a.id_manual || '') + ' — ' + (a.descripcion || a.NombreArticulo || '')"></option>
+                </template>
+              </select>
+              <button type="button" @click="agregarArticulo()"
+                      class="inline-flex h-9 items-center rounded-lg border border-purple-300 bg-purple-50 px-3 text-xs font-semibold text-purple-800 hover:bg-purple-100">
+                Agregar fila
+              </button>
+            </div>
+          </label>
+        </div>
+
+        <div x-show="!sucursales.length" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Este cliente no tiene sucursales (domicilios) activas.
+        </div>
+
+        <div class="relative z-0 min-h-0 flex-1 overflow-auto overscroll-contain rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700"
+             role="region" aria-label="Matriz packs por sucursal">
+          <table class="min-w-full border-separate border-spacing-0 text-sm">
+            <thead>
+              <tr>
+                <th class="sticky left-0 top-0 z-30 min-w-[14rem] border-b border-slate-200 bg-slate-100 px-3 py-2 text-left text-[10px] font-semibold uppercase text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 sm:min-w-[18rem]">
+                  Artículo
+                </th>
+                <template x-for="s in sucursales" :key="s.id_cliente_domicilio">
+                  <th class="sticky top-0 z-20 min-w-[6.5rem] border-b border-l border-slate-200 bg-slate-100 px-2 py-2 text-center text-[10px] font-semibold uppercase text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      :title="s.etiqueta">
+                    <span class="line-clamp-2" x-text="s.etiqueta"></span>
+                  </th>
+                </template>
+                <th class="sticky top-0 z-20 border-b border-l border-slate-200 bg-slate-100 px-2 py-2 text-right text-[10px] font-semibold uppercase text-slate-600 dark:border-slate-700 dark:bg-slate-800">Σ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-if="!articulos.length">
+                <tr>
+                  <td :colspan="sucursales.length + 2" class="px-4 py-10 text-center text-slate-500">
+                    Agregá artículos con el buscador. Solo se listan marcas de tu territorio para este cliente.
+                  </td>
+                </tr>
+              </template>
+              <template x-for="art in articulos" :key="art.id_articulo">
+                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
+                  <td class="sticky left-0 z-10 max-w-[20rem] border-b border-slate-100 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
+                    <p class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.codigo || ('#'+art.id_articulo)"></p>
+                    <p class="text-xs leading-snug text-slate-600 dark:text-slate-300" x-text="art.descripcion"></p>
+                  </td>
+                  <template x-for="s in sucursales" :key="art.id_articulo + '-' + s.id_cliente_domicilio">
+                    <td class="border-b border-l border-slate-100 px-1 py-1 dark:border-slate-700">
+                      <input type="number" min="0" step="0.001"
+                             class="h-9 w-full rounded-md border border-slate-300 bg-white px-1.5 text-right text-sm tabular-nums focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                             :value="celda(art.id_articulo, s.id_cliente_domicilio)"
+                             @change="onCelda(art.id_articulo, s.id_cliente_domicilio, $event.target.value)"
+                             @keydown.enter.prevent="$event.target.blur()"/>
+                    </td>
+                  </template>
+                  <td class="border-b border-l border-slate-100 px-2 py-2 text-right text-xs font-semibold tabular-nums text-slate-700 dark:border-slate-700 dark:text-slate-200"
+                      x-text="sumaFila(art.id_articulo)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </template>
+  </div>
+</section>
+
+{{ bootstrap|json_script:"pm-bootstrap" }}
+
+<script>
+function pedidoMasivoApp() {
+  return {
+    urls: {},
+    draftId: null,
+    idCliente: null,
+    clienteNombre: '',
+    clientes: [],
+    clienteSel: '',
+    qCliente: '',
+    sucursales: [],
+    articulos: [],
+    celdas: {},
+    ultimoError: {},
+    articulosBusqueda: [],
+    qArt: '',
+    artSel: '',
+    error: '',
+    abriendo: false,
+    guardadoChip: '',
+    confirmando: false,
+    mensajeOk: '',
+    _chipTimer: null,
+    init() {
+      const el = document.getElementById('pm-bootstrap');
+      const boot = el ? JSON.parse(el.textContent) : {};
+      this.urls = boot.urls || {};
+      this.buscarClientes();
+      if (boot.draft_id) {
+        this.abrirDraft(boot.draft_id);
+      }
+    },
+    csrf() {
+      const m = document.cookie.match(/csrftoken=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    },
+    async getJson(url) {
+      const r = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+      return r.json();
+    },
+    async postJson(url, body) {
+      const r = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-CSRFToken': this.csrf(),
+        },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({}));
+      return { status: r.status, data };
+    },
+    aplicarMatriz(m) {
+      this.draftId = m.draft_id;
+      this.idCliente = m.id_cliente;
+      this.sucursales = m.sucursales || [];
+      this.articulos = m.articulos || [];
+      this.celdas = m.celdas || {};
+      this.ultimoError = m.ultimo_error || {};
+      const c = this.clientes.find(x => String(x.id_cliente) === String(this.idCliente));
+      if (c) this.clienteNombre = c.nombre || '';
+    },
+    async buscarClientes() {
+      if (!this.urls.clientes) return;
+      const data = await this.getJson(this.urls.clientes + '?q=' + encodeURIComponent(this.qCliente || ''));
+      if (data.ok) this.clientes = data.items || [];
+      else this.error = data.error || '';
+    },
+    async abrirCliente() {
+      if (!this.clienteSel) return;
+      this.abriendo = true; this.error = ''; this.mensajeOk = '';
+      const { data } = await this.postJson(this.urls.abrir, { id_cliente: Number(this.clienteSel) });
+      this.abriendo = false;
+      if (!data.ok) { this.error = data.error || 'No se pudo abrir.'; return; }
+      this.aplicarMatriz(data.matriz);
+      const c = this.clientes.find(x => String(x.id_cliente) === String(this.clienteSel));
+      this.clienteNombre = c ? c.nombre : '';
+      history.replaceState(null, '', '?draft=' + this.draftId);
+    },
+    async abrirDraft(id) {
+      this.abriendo = true; this.error = '';
+      const { data } = await this.postJson(this.urls.abrir, { draft_id: Number(id) });
+      this.abriendo = false;
+      if (!data.ok) { this.error = data.error || 'No se pudo recuperar el borrador.'; return; }
+      this.aplicarMatriz(data.matriz);
+    },
+    celda(idArt, idDom) {
+      return this.celdas[idArt + ':' + idDom] || '';
+    },
+    sumaFila(idArt) {
+      let s = 0;
+      for (const su of this.sucursales) {
+        const v = parseFloat(this.celda(idArt, su.id_cliente_domicilio));
+        if (!isNaN(v)) s += v;
+      }
+      return s ? s.toLocaleString('es-AR', { maximumFractionDigits: 3 }) : '—';
+    },
+    async onCelda(idArt, idDom, raw) {
+      const key = idArt + ':' + idDom;
+      const val = String(raw || '').trim();
+      this.celdas[key] = val;
+      const { data } = await this.postJson(this.urls.celda, {
+        draft_id: this.draftId,
+        id_articulo: idArt,
+        id_cliente_domicilio: idDom,
+        cantidad_packs: val === '' ? 0 : val,
+      });
+      if (!data.ok) {
+        this.error = data.error || 'Error al guardar';
+        return;
+      }
+      if (data.celda && data.celda.eliminada) delete this.celdas[key];
+      else if (data.celda) this.celdas[key] = data.celda.cantidad_packs;
+      this.flashGuardado();
+    },
+    flashGuardado() {
+      this.guardadoChip = 'Guardado';
+      clearTimeout(this._chipTimer);
+      this._chipTimer = setTimeout(() => { this.guardadoChip = ''; }, 1500);
+    },
+    async buscarArticulos() {
+      if (!this.idCliente || !this.urls.articulos) return;
+      const u = this.urls.articulos + '?id_cliente=' + this.idCliente + '&q=' + encodeURIComponent(this.qArt || '');
+      const data = await this.getJson(u);
+      if (!data.ok) { this.error = data.error || ''; return; }
+      if (data.sin_marcas) {
+        this.error = 'No hay marcas asignadas para este cliente en tu territorio.';
+        this.articulosBusqueda = [];
+        return;
+      }
+      this.articulosBusqueda = (data.items || []).map(it => ({
+        id_articulo: it.id_articulo || it.IDArt,
+        codigo: it.codigo || it.id_manual || '',
+        descripcion: it.descripcion || it.NombreArticulo || '',
+        IDArt: it.IDArt,
+        id_manual: it.id_manual,
+        NombreArticulo: it.NombreArticulo,
+      }));
+    },
+    agregarArticulo() {
+      if (!this.artSel) return;
+      let payload;
+      try { payload = JSON.parse(this.artSel); } catch (e) { return; }
+      const id = Number(payload.id);
+      if (!id) return;
+      if (this.articulos.some(a => a.id_articulo === id)) {
+        this.artSel = '';
+        return;
+      }
+      this.articulos.push({
+        id_articulo: id,
+        codigo: payload.codigo || '',
+        descripcion: payload.desc || '',
+      });
+      this.artSel = '';
+      this.qArt = '';
+      this.articulosBusqueda = [];
+    },
+    async confirmarLote() {
+      if (!this.draftId || !this.urls.confirmar) return;
+      if (!confirm('¿Confirmar el lote? Se creará un PED por cada sucursal con cantidad.')) return;
+      this.confirmando = true;
+      this.error = '';
+      this.mensajeOk = '';
+      const { status, data } = await this.postJson(this.urls.confirmar, { draft_id: this.draftId });
+      this.confirmando = false;
+      if (data.matriz) this.aplicarMatriz(data.matriz);
+      if (!data.ok || status === 409) {
+        this.error = data.message || data.error || 'No se pudo confirmar el lote.';
+        return;
+      }
+      this.mensajeOk = data.message || 'Lote confirmado.';
+      const cods = data.codigos_movimiento || [];
+      if (cods.length) {
+        this.mensajeOk += ' PED: ' + cods.join(', ');
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

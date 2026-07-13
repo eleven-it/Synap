@@ -183,6 +183,8 @@ PERMISOS_POR_MODULO = {
         ("ecom.pedidos.crear", "Crear pedidos (compra mayorista / checkout)"),
         ("ecom.pedidos.ver", "Ver listado y detalle de pedidos"),
         ("ecom.pedidos.ver_todos", "Ver pedidos de todos los vendedores (listado gerencial)"),
+        ("ecom.pedido_masivo.usar", "Carga masiva de pedidos por sucursal (matriz)"),
+        ("ecom.config_vendedor_cliente_marca", "Configurar territorio Vendedor→Cliente→Marca"),
         ("ecom.comprobantes.ver", "Ver listados de comprobantes (PED/PRE/REM/FE/NC)"),
         ("ecom.comprobantes.anular", "Anular pedidos desde el portal"),
         ("ecom.clientes.ver", "Ver clientes del portal"),
