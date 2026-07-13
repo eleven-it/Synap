@@ -18,10 +18,10 @@ RUN apt-get update \
         default-libmysqlclient-dev \
         python3-dev \
         gettext \
-        # Node.js
+        # Node.js 20 LTS — pin npm 10 (npm@latest exige Node ≥22 y rompe el build)
         && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
         && apt-get install -y nodejs \
-        && npm install -g npm@latest \
+        && npm install -g npm@10 \
         && apt-get clean \
         && rm -rf /var/lib/apt/lists/* \
         && rm -rf /tmp/* \

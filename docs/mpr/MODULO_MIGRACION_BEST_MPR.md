@@ -156,7 +156,7 @@ Depósitos, stock inicial y operarios reutilizan `bestAsignarMaestro` / `bestAsi
 
 ## Conexión BEST
 
-Variables de entorno (recomendadas): `BEST_AZURE_SERVER`, `BEST_AZURE_DATABASE`, `BEST_AZURE_USER`, `BEST_AZURE_PASSWORD`, `BEST_AZURE_PORT`.  
+Variables de entorno (obligatorias para conectar): `BEST_AZURE_SERVER`, `BEST_AZURE_DATABASE`, `BEST_AZURE_USER`, `BEST_AZURE_PASSWORD`, `BEST_AZURE_PORT`. En `.env` de Docker Compose escapar `$` del usuario con `$$` (ej. `BEST_AZURE_USER=interfase$$bestsox`); si no, Compose avisa `bestsox variable is not set` y deja el user truncado.  
 Requiere `pymssql` en el entorno de la app.
 
 ## Relación con el cutover
