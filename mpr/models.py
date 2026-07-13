@@ -654,3 +654,11 @@ class MprEmpresaConfig(models.Model):
     def __str__(self):
         estado = "bloqueo ON" if self.bloquear_parte_supera_fabricando else "bloqueo OFF"
         return f"MPR config {self.base_empresa} ({estado})"
+
+
+# Migración BEST → MPR (paridad de maestros; modelos en PostgreSQL Synap)
+from mpr.best_migration.models import (  # noqa: E402
+    BestArticuloMap,
+    BestClienteMap,
+    BestMigrationParity,
+)

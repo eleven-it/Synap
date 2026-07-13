@@ -1,0 +1,22 @@
+{% comment %}
+  Stepper de cantidad reutilizable (tabla y cards).
+  Contrato: it.id, it.cantidad — métodos incrementarCantidad, decrementarCantidad, cambiarCantidad.
+{% endcomment %}
+<div class="pedidos-qty-stepper inline-flex items-center gap-0.5" role="group" :aria-label="`Cantidad de ${it.descripcion}`">
+  <button type="button"
+          class="pedidos-qty-stepper-btn"
+          :disabled="it.cantidad <= 1"
+          @click="decrementarCantidad(it.id, it.cantidad)"
+          aria-label="Disminuir cantidad">−</button>
+  <input type="number"
+         min="1"
+         step="1"
+         :value="it.cantidad"
+         @change="cambiarCantidad(it.id, $event.target.value)"
+         class="pedidos-input-qty pedidos-input-qty--stepper"
+         :aria-label="`Cantidad`" />
+  <button type="button"
+          class="pedidos-qty-stepper-btn"
+          @click="incrementarCantidad(it.id, it.cantidad)"
+          aria-label="Aumentar cantidad">+</button>
+</div>

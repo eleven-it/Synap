@@ -1,0 +1,80 @@
+{% comment %}
+  Fila de contexto del pedido: Cliente + Marcas en grid de 2 columnas (recupera espacio
+  vertical) + acciones rápidas. El toggle PED/PRE/DEV vive ahora en el hero (tablero).
+{% endcomment %}
+<header class="pedidos-order-header" aria-label="Contexto del pedido">
+  <div class="pedidos-order-header-grid grid grid-cols-1 lg:grid-cols-2 gap-3">
+
+    {# Panel cliente (solo vendedor) #}
+    <div class="pedidos-card p-3 sm:p-4 pedidos-order-header-cliente"
+         id="compra-cliente-panel"
+         x-show="!esCliente"
+         data-buscar-url="{{ urls.clientes_buscar }}"
+         data-seleccionar-url="{{ urls.clientes_seleccionar }}"
+         data-seleccionado-url="{{ urls.clientes_seleccionado }}">
+      <label class="pedidos-filter-label" for="compra_cliente_search" x-text="clienteCampoLabel">Cliente para el pedido</label>
+      <div class="relative mt-1.5">
+        <input type="text"
+               id="compra_cliente_search"
+               autocomplete="off"
+               role="combobox"
+               aria-autocomplete="list"
+               aria-haspopup="listbox"
+               aria-expanded="false"
+               aria-controls="compra_cliente_dropdown"
+               class="pedidos-input w-full"
+               placeholder="Nombre, código o CUIT (mín. 2 caracteres)…" />
+        <div id="compra_cliente_dropdown"
+             role="listbox"
+             aria-label="Resultados de búsqueda de cliente"
+             class="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+      </div>
+      <p class="mt-1.5 text-xs text-sky-700 dark:text-sky-300" x-show="!clienteActivo && !intentoSinCliente">
+        Elegí un cliente para cargar el pedido con su lista de precios y ver pedidos recientes.
+      </p>
+      <p class="mt-1.5 text-xs text-amber-700 dark:text-amber-400 font-medium"
+         x-show="!clienteActivo && !esCliente && intentoSinCliente"
+         role="alert"
+         aria-live="assertive">
+        Seleccioná un cliente antes de agregar líneas o confirmar el pedido.
+      </p>
+      <div class="mt-2 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-2.5 text-sm" x-show="clienteActivo && creditoWidget" x-cloak>
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Crédito y cuenta</p>
+        <p class="text-slate-700 dark:text-slate-200 text-xs sm:text-sm">
+          Saldo CC: <span class="font-semibold tabular-nums" x-text="money(creditoWidget.saldo)"></span>
+          <span class="mx-1.5">·</span>
+          Límite crédito: <span x-text="creditoWidget.limite_dias + ' días'"></span>
+        </p>
+        <p class="mt-0.5 text-xs" :class="creditoWidget.autorizado ? 'text-emerald-700 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-400'">
+          <span x-text="creditoWidget.autorizado ? 'Autorizado para operar' : 'Requiere revisión de crédito (el pedido se registra igual)'"></span>
+          <span x-show="creditoWidget.dias_exceso > 0" x-text="` · ${creditoWidget.dias_exceso} días de exceso`"></span>
+        </p>
+      </div>
+    </div>
+
+    {# Panel marcas (mismo alto de fila que cliente) #}
+    <div class="pedidos-card p-3 sm:p-4 pedidos-order-header-marcas"
+         id="compra-marcas-panel"
+         data-marcas-url="{{ urls.marcas }}">
+      {% include "includes/filtro_marcas_tags.html" with field_id="compra_marcas_incluidos" marcas_catalogo="" equal=True %}
+    </div>
+  </div>
+
+  {# Acciones rápidas de la fila de contexto #}
+  <div class="pedidos-order-header-actions mt-3"
+       x-show="(cart.items && cart.items.length) || exitoCheckout"
+       x-cloak>
+    <button type="button"
+            @click="solicitarVaciar()"
+            x-show="cart.items && cart.items.length"
+            class="pedidos-btn text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20">
+      Vaciar pedido
+    </button>
+    <button type="button"
+            @click="exitoCheckout=''; ultimoCodMov=null; _limpiarClienteUi()"
+            x-show="exitoCheckout"
+            class="pedidos-btn text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800">
+      Nuevo comprobante
+    </button>
+  </div>
+</header>

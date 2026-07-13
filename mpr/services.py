@@ -4311,6 +4311,33 @@ def _mpr_en_proceso_detalle_es_si(val: Any) -> bool:
     return s in ("si", "sí", "yes")
 
 
+def _agrupar_filas_pedidos_produccion(
+    filas_origen: Sequence[Sequence[Any]],
+) -> Tuple[Set[int], Dict[Tuple[int, int], int]]:
+    """
+    Acumula las líneas origen por (pedido, artículo) antes de reconciliarlas.
+
+    `stockp` puede contener más de una fila para el mismo artículo de un pedido.
+    La lista de producción, en cambio, mantiene una sola fila por ese par.
+    """
+    codigos_scope: Set[int] = set()
+    cantidades: Dict[Tuple[int, int], int] = {}
+    for row in filas_origen:
+        cod_ped = to_int_or_none(row[0])
+        id_art = to_int_or_none(row[1])
+        try:
+            qty = int(float(row[2] or 0))
+        except (TypeError, ValueError):
+            qty = 0
+        if cod_ped is not None:
+            codigos_scope.add(cod_ped)
+        if cod_ped is None or id_art is None:
+            continue
+        clave = (cod_ped, id_art)
+        cantidades[clave] = cantidades.get(clave, 0) + qty
+    return codigos_scope, cantidades
+
+
 def actualizar_pedidos_produccion(
     base_empresa: str,
     id_usuario: Optional[int],
@@ -4391,28 +4418,14 @@ def actualizar_pedidos_produccion(
             hoy = date.today().strftime("%Y-%m-%d")
             id_usuario_val = id_usuario if id_usuario is not None else 0
             # Alcance del SELECT origen: pedidos que entraron en el filtro (fecha/búsqueda). Solo reconciliar huérfanos ahí.
-            codigos_scope: Set[int] = set()
+            codigos_scope, cantidades_origen = _agrupar_filas_pedidos_produccion(filas_origen)
             pares_origen: Set[Tuple[int, int]] = set()
-            for row in filas_origen:
-                cod_ped = to_int_or_none(row[0])
-                id_art = to_int_or_none(row[1])
-                try:
-                    qty_scan = int(float(row[2] or 0))
-                except (TypeError, ValueError):
-                    qty_scan = 0
-                if cod_ped is not None:
-                    codigos_scope.add(cod_ped)
-                if cod_ped is not None and id_art is not None and qty_scan > 0:
-                    pares_origen.add((cod_ped, id_art))
+            for clave, qty_scan in cantidades_origen.items():
+                if qty_scan > 0:
+                    pares_origen.add(clave)
             # 1) lista_produccion_detalle: INSERT o UPDATE desde PED; no modifica cod_ped=0 ni líneas en_proceso Si
-            for row in filas_origen:
-                cod_ped = to_int_or_none(row[0])
-                id_art = to_int_or_none(row[1])
-                try:
-                    qty = int(float(row[2] or 0))
-                except (TypeError, ValueError):
-                    qty = 0
-                if cod_ped is None or id_art is None or qty <= 0:
+            for (cod_ped, id_art), qty in cantidades_origen.items():
+                if qty <= 0:
                     continue
                 ep_val = "No"
                 ex = None
@@ -15351,6 +15364,111 @@ def listar_tablero_por_articulo(
         filas = [r for r in filas if float(r.get("resta_urgente") or 0) > 0]
 
     # Paso 14: limit
+    return filas[:limit]
+
+
+def listar_tablero_pack(
+    base_empresa: str,
+    *,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    solo_urgente: bool = False,
+    solo_pendiente: Optional[bool] = None,
+    limit: int = 200,
+    marcas_incluidos: Optional[Sequence[int]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Tablero de demanda consolidado por artículo **pack terminado** (paridad BEST PCP
+    Producción). A diferencia de ``listar_tablero_por_articulo``, NO explota la BOM:
+    pedido/reserva/resta/stock se calculan a nivel del pack terminado.
+
+    Fuente: ``listar_demanda_pack_desde_pedidos`` (demanda en vivo desde pedidos PED).
+
+    Mapea al mismo shape de fila del tablero (para reutilizar la presentación
+    docenas/pares y la plantilla):
+
+    * ``dem_ped``       = cantidad_pedida_pedido (P_ped del pack)
+    * ``dem_res``       = cantidad_demanda_reserva (reserva efectiva del pack)
+    * ``resta_urgente`` = cantidad_urgente_abs   = max(0, P_ped − stock terminado)
+    * ``resta_total``   = cantidad_a_fabricar    = max(0, P_ped + reserva − stock)
+    * ``terminado``/``total`` = stock terminado del pack
+    * ``enviado`` (Fabricando) = 0: el envío a producción es por componente (modo Par),
+      no aplica a nivel pack.
+
+    ``solo_pendiente`` (legacy) se interpreta como ``solo_urgente`` si se pasa explícito.
+    """
+    if not (base_empresa or "").strip():
+        return []
+
+    if solo_pendiente is not None:
+        solo_urgente = bool(solo_pendiente)
+
+    filas_pack = listar_demanda_pack_desde_pedidos(
+        base_empresa,
+        limit=limit * 2,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        marcas_incluidos=marcas_incluidos,
+    )
+    if not filas_pack:
+        return []
+
+    pack_ids: List[int] = []
+    seen: Set[int] = set()
+    for fp in filas_pack:
+        aid = to_int_or_none(fp.get("id_articulo"))
+        if aid is not None and aid not in seen:
+            pack_ids.append(aid)
+            seen.add(aid)
+
+    desc_map = _fetch_descripciones_articulo(base_empresa, pack_ids)
+
+    filas: List[Dict[str, Any]] = []
+    for fp in filas_pack:
+        pack_id = to_int_or_none(fp.get("id_articulo"))
+        if pack_id is None:
+            continue
+        p_ped = float(fp.get("cantidad_pedida_pedido") or 0.0)
+        reserva = float(fp.get("cantidad_demanda_reserva") or 0.0)
+        stock_terminado = float(fp.get("stock_terminado") or 0.0)
+        resta_urgente = float(fp.get("cantidad_urgente_abs") or 0.0)
+        resta_total = float(fp.get("cantidad_a_fabricar") or 0.0)
+        demanda = p_ped + reserva
+        codigo_manual, descripcion = desc_map.get(pack_id, ("-", "-"))
+        filas.append({
+            "id_articulo": pack_id,
+            "codigo_manual": codigo_manual,
+            "descripcion_articulo": descripcion,
+            "demanda": demanda,
+            "dem_ped": p_ped,
+            "dem_res": reserva,
+            "urgente": p_ped,
+            "stock_proceso": 0.0,
+            "resta_urgente": resta_urgente,
+            "resta_total": resta_total,
+            # En modo Pack el envío a producción es por componente (modo Par):
+            # no se ofrece enviar a nivel pack.
+            "a_enviar": 0.0,
+            "pendiente": resta_total,
+            "enviado": 0.0,
+            "produccion": 0.0,
+            "segunda_seleccion": 0.0,
+            "semi_elaborado": 0.0,
+            "desperdicio": 0.0,
+            "terminado": stock_terminado,
+            "stock_terminado": stock_terminado,
+            "total": stock_terminado,
+            "primera_fecha_entrega": fp.get("primera_fecha_entrega"),
+            "primera_fecha_entrega_display": _formatear_fecha_entrega_ui(
+                fp.get("primera_fecha_entrega")
+            ),
+        })
+
+    filas.sort(key=lambda r: -float(r.get("resta_urgente") or 0))
+
+    if solo_urgente:
+        filas = [r for r in filas if float(r.get("resta_urgente") or 0) > 0]
+
     return filas[:limit]
 
 

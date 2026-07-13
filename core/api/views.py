@@ -262,6 +262,78 @@ def proveedor_search_api(request):
     return JsonResponse({'results': results})
 
 
+def cliente_search_api(request):
+    """
+    GET /core/api/clientes/search/?q=...&limit=15
+    Búsqueda predictiva de clientes por nombre, fantasia, código, CUIT o id_manual_cli.
+    Requiere sesión con base_empresa.
+    Devuelve { results: [ { Codigo, Nombre, CUIT, id_manual_cli, nombre_fantasia }, ... ] }.
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método no permitido.'}, status=405)
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    if not base_empresa:
+        return JsonResponse({'error': 'Sin empresa activa.', 'results': []}, status=400)
+    q = (request.GET.get('q') or '').strip()
+    try:
+        limit = min(int(request.GET.get('limit', 15)), 30)
+    except (TypeError, ValueError):
+        limit = 15
+    from core.services.administranet_stock import buscar_clientes_predictivo
+    try:
+        results = buscar_clientes_predictivo(base_empresa, q, limit=limit)
+    except Exception:
+        results = []
+    return JsonResponse({'results': results})
+
+
+def deposito_search_api(request):
+    """
+    GET /core/api/depositos/search/?q=...&limit=15
+    Búsqueda predictiva de depósitos por nombre o código.
+    Requiere sesión con base_empresa.
+    Devuelve { results: [ { CodDeposito, NombreDeposito, tipo_mpr }, ... ] }.
+    """
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Método no permitido.'}, status=405)
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    if not base_empresa:
+        return JsonResponse({'error': 'Sin empresa activa.', 'results': []}, status=400)
+    q = (request.GET.get('q') or '').strip().lower()
+    try:
+        limit = min(int(request.GET.get('limit', 15)), 30)
+    except (TypeError, ValueError):
+        limit = 15
+    from mpr.services import listar_depositos_config
+    try:
+        deps = listar_depositos_config(base_empresa)
+    except Exception:
+        deps = []
+    results = []
+    for d in deps:
+        cod = d.get("CodDeposito")
+        nombre = (d.get("NombreDeposito") or "").strip()
+        tipo = d.get("tipo_mpr") or ""
+        hay = not q
+        if q:
+            hay = (
+                q in str(cod).lower()
+                or q in nombre.lower()
+                or q in tipo.lower()
+            )
+        if hay:
+            results.append({
+                "CodDeposito": cod,
+                "NombreDeposito": nombre,
+                "tipo_mpr": tipo,
+            })
+        if len(results) >= limit:
+            break
+    return JsonResponse({'results': results})
+
+
 def articulo_search_api(request):
     """
     GET /core/api/articulos/search/?q=...

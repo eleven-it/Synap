@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 
 from mpr.services import (
+    _agrupar_filas_pedidos_produccion,
     _mpr_columna_pk_fila_lista_produccion_detalle,
     _mpr_en_proceso_detalle_es_si,
     actualizar_pedidos_produccion,
@@ -24,6 +25,23 @@ class MprEnProcesoDetalleSiTest(TestCase):
         self.assertFalse(_mpr_en_proceso_detalle_es_si("No"))
         self.assertFalse(_mpr_en_proceso_detalle_es_si(None))
         self.assertFalse(_mpr_en_proceso_detalle_es_si(""))
+
+
+class AgruparFilasPedidosProduccionTest(TestCase):
+    """Una fila detalle debe reflejar la suma de las líneas stockp del mismo par."""
+
+    def test_acumula_lineas_duplicadas_por_pedido_y_articulo(self):
+        codigos, cantidades = _agrupar_filas_pedidos_produccion(
+            [
+                (945, 38, 252),
+                (945, 38, 252),
+                (945, 36, 120),
+                (None, 99, 50),
+            ]
+        )
+
+        self.assertEqual(codigos, {945})
+        self.assertEqual(cantidades, {(945, 38): 504, (945, 36): 120})
 
 
 class ActualizarPedidosProduccionFiltroEstadoTest(TestCase):

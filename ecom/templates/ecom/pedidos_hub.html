@@ -38,7 +38,7 @@
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
   <a href="{{ urls.nuevo_pedido }}" class="pedidos-card-cta block hover:shadow-xl transition">
     <h2 class="text-lg font-semibold">Nuevo pedido</h2>
-    <p class="mt-2 text-sm text-sky-100">Catálogo, carrito y confirmación de alta PED.</p>
+    <p class="mt-2 text-sm text-sky-100">Catálogo, líneas del pedido y confirmación de alta PED.</p>
   </a>
   <a href="{{ urls.listado }}" class="pedidos-card pedidos-card-kpi hover:border-sky-400 transition block">
     <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Ver todos</h2>
@@ -52,10 +52,10 @@
 </div>
 
 {% if ultimo_pedido and not es_cliente %}
-<div class="pedidos-card p-5 border-indigo-200 dark:border-indigo-800">
+<div class="pedidos-card pedidos-hub-highlight p-5">
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
     <div>
-      <p class="text-xs font-semibold uppercase tracking-wide text-indigo-600">Cliente seleccionado</p>
+      <p class="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Cliente seleccionado</p>
       <p class="text-sm font-medium text-slate-900 dark:text-white mt-1">{{ cliente_label|default:"Cliente" }}</p>
       <p class="text-sm text-slate-500 mt-1">
         Último pedido: {{ ultimo_pedido.nro_comprobante }} · {{ ultimo_pedido.fecha }}

@@ -18,9 +18,10 @@
   {% include "ecom/includes/repetir_pedido_modal.html" %}
 {% endblock %}
 
-<section class="pedidos-page min-h-screen bg-slate-50 dark:bg-slate-950 pb-24{% block pedidos_section_extra_class %}{% endblock %}"
+<section class="pedidos-page min-h-screen bg-slate-50 dark:bg-slate-950 pb-28 lg:pb-12{% block pedidos_section_extra_class %}{% endblock %}"
          {% block pedidos_section_attrs %}{% endblock %}>
 
+  {% block pedidos_hero %}
   <div class="relative overflow-hidden">
     <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 opacity-90 dark:opacity-95"></div>
     <div class="pedidos-contenedor-pagina relative w-full py-8{% block pedidos_hero_py %}{% endblock %}">
@@ -39,6 +40,7 @@
       </div>
     </div>
   </div>
+  {% endblock %}
 
   <div class="pedidos-contenido pedidos-contenedor-pagina relative w-full{% block pedidos_content_extra_class %}{% endblock %}">
     {% block pedidos_content %}{% endblock %}

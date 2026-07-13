@@ -50,13 +50,30 @@ export function initPredictiveInput(opts) {
   let lastItems = [];
   let expandedOnce = false;
 
+  dropdown.setAttribute("role", "listbox");
+  input.setAttribute("aria-expanded", "false");
+  if (!input.getAttribute("aria-haspopup")) {
+    input.setAttribute("aria-haspopup", "listbox");
+  }
+
+  function syncComboboxAria(open) {
+    input.setAttribute("aria-expanded", open ? "true" : "false");
+    if (!open) {
+      input.removeAttribute("aria-activedescendant");
+    } else if (highlight >= 0) {
+      input.setAttribute("aria-activedescendant", `predictive-option-${highlight}`);
+    }
+  }
+
   function hide() {
     dropdown.classList.add("hidden");
     highlight = -1;
+    syncComboboxAria(false);
   }
 
   function show() {
     dropdown.classList.remove("hidden");
+    syncComboboxAria(true);
   }
 
   function render(items, query) {
@@ -76,8 +93,11 @@ export function initPredictiveInput(opts) {
       const item = normalizeItem(raw);
       const row = document.createElement("button");
       row.type = "button";
+      row.id = `predictive-option-${index}`;
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", index === highlight ? "true" : "false");
       row.className =
-        "w-full text-left px-3 py-2 text-xs transition-colors " +
+        "w-full text-left px-3 py-2 text-xs transition-colors min-h-[2.75rem] " +
         (index === highlight
           ? "bg-sky-100 dark:bg-sky-900 text-sky-800 dark:text-sky-200"
           : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700");
@@ -87,6 +107,9 @@ export function initPredictiveInput(opts) {
       dropdown.appendChild(row);
     });
     show();
+    if (highlight >= 0) {
+      input.setAttribute("aria-activedescendant", `predictive-option-${highlight}`);
+    }
   }
 
   function pick(item) {
@@ -175,7 +198,7 @@ export function initPredictiveInput(opts) {
       pick(lastItems[highlight]);
     } else if (e.key === "Escape") {
       hide();
-      input.blur();
+      input.focus();
     }
   }
 

@@ -1,40 +1,57 @@
 ---
-description: Selección de subagentes y modelos según complejidad (eficiencia de tokens)
+description: Orquestación Master/Workers y selección de modelos (Synap)
 alwaysApply: true
 ---
 
-# Subagentes y selección de modelos
+# Orquestación de agentes y modelos (Synap)
 
-Cuando la tarea lo permita, **delegar en subagentes** (`Task`, fases SDD, explore/review/CI) en lugar de hacer todo inline. Elegir el **modelo mínimo suficiente** para cumplir la tarea al 100%: ni infrautilizar capacidad ni usar modelos pesados en trabajo trivial.
+Cuando la tarea lo permita, **delegar en subagentes** (`Task`, fases SDD, explore/review/CI) en lugar de hacer todo inline. Usar la estructura de orquestación de abajo como **fuente de verdad** al elegir modelos.
+
+## Estructura de orquestación (obligatoria)
+
+| Rol | Modelo (pedido) | Slug Cursor |
+|-----|-----------------|-------------|
+| **Master Agent** (orquestador / agente principal) | Fable 5 Ultra High | `claude-fable-5-thinking-high` |
+| **Workers generales** (implementación, explore, shell, SDD mecánico) | Composer 2.5 | `composer-2.5-fast` |
+| **Workers de Remotion** (video / motion Remotion) | Fable 5 High | `claude-fable-5-thinking-high` |
+| **Workers de diseño / UI / Product Designer** | Opus 4.8 High | `claude-opus-4-8-thinking-high` |
+| **Workers de Debug / Fixes** | GPT 5.6 Terra | `gpt-5.6-terra-medium` |
+
+Notas de mapeo:
+
+- Si el usuario pide un modelo por nombre comercial, usar el **slug** de la tabla.
+- Si un slug no está en la lista permitida del runtime, **informar** y ofrecer el más cercano de la misma familia (no sustituir en silencio por otro rol).
+- «Fable 5 Ultra High» se mapea al slug disponible `claude-fable-5-thinking-high` hasta que exista un slug Ultra High explícito.
+
+## Cómo aplicar la estructura
+
+1. **Master (este chat / orquestador):** planificar, decidir, sintetizar, lanzar workers; no hacer trabajo masivo de implementación si se puede delegar.
+2. **Workers generales:** implementación multiarchivo rutinaria, greps/explores amplios, tests, docs, apply SDD de tareas mecánicas, shell aislado.
+3. **Workers Remotion:** cualquier tarea de composición Remotion, timelines, renders o assets de video.
+4. **Workers diseño/UI/Product Designer:** pantallas nuevas, refactors visuales, UX, canon UI Synap, critique/polish de interfaz.
+5. **Workers Debug/Fixes:** bugs, fallos de tests/CI, regresiones, investigación con evidencia y parches acotados.
 
 ## Cuándo lanzar subagentes
 
-- **Sí:** exploración amplia, tareas independientes en paralelo, implementación acotada por archivo/módulo, reviews (bugbot/security), fases SDD, comandos shell aislados.
-- **No:** preguntas puntuales, lectura de un archivo, diffs de 1–5 líneas, respuestas que caben en una sola tool call — resolver en el agente principal.
+- **Sí:** exploración amplia, tareas independientes en paralelo, implementación acotada por archivo/módulo, reviews (bugbot/security), fases SDD, comandos shell aislados, UI/diseño, debug no trivial.
+- **No:** preguntas puntuales, lectura de un archivo, diffs de 1–5 líneas, respuestas que caben en una sola tool call — resolver en el Master.
 
-Lanzar **varios subagentes en paralelo** cuando no haya dependencias entre ellos.
-
-## Matriz de modelos (usar el más barato que alcance)
-
-| Complejidad | Ejemplos | Modelo sugerido |
-|-------------|----------|-----------------|
-| **Baja** | grep/glob, inventario de rutas, docs lookup, fixes mecánicos, explore acotado | `composer-2.5-fast`, `claude-4.5-haiku-thinking` |
-| **Media** | implementación multiarchivo, propose/spec SDD, integraciones, tests unitarios | `claude-4.5-sonnet-thinking`, `gpt-5.5-medium` |
-| **Alta** | diseño/arquitectura, refactors grandes, seguridad, debugging profundo, apply SDD P0 | `claude-4.6-sonnet-medium-thinking`, `gpt-5.3-codex` |
-| **Crítica** | decisiones de arquitectura con alto riesgo, revisiones adversariales, cambios transversales | `claude-opus-4-8-thinking-high` (solo si media/alta no alcanza) |
+Lanzar **varios workers en paralelo** cuando no haya dependencias entre ellos.
 
 ## Reglas obligatorias
 
-1. **Suficiencia:** el modelo elegido debe poder completar la tarea sin atajos; si falla o queda incompleto, escalar un nivel — no repetir con el mismo modelo.
-2. **Eficiencia:** no usar Opus/Codex para tareas de la fila Baja; no usar Haiku/Composer para refactors o specs que exijan razonamiento profundo.
-3. **Paralelismo:** identificar correlativas vs independientes; solo encadenar lo que tenga dependencia real.
-4. **Prompt del subagente:** incluir contexto mínimo necesario (paths, criterios de éxito, restricciones del repo); evitar pegar conversaciones enteras.
+1. **Rol primero:** elegir el worker por **tipo de trabajo** (tabla de orquestación), no solo por “complejidad genérica”.
+2. **Suficiencia:** si un worker falla o queda incompleto, escalar al Master o al worker del rol superior adecuado — no repetir el mismo modelo sin cambio de enfoque.
+3. **Paralelismo:** correlativas vs independientes; solo encadenar lo que tenga dependencia real.
+4. **Prompt del worker:** contexto mínimo (paths, criterios de éxito, restricciones del repo); no pegar conversaciones enteras.
 5. **Modelo pedido por el usuario:** respetar el slug solicitado; si no está disponible, informar y ofrecer alternativas de la lista permitida.
-6. **Orquestador SDD:** explore/propose → modelos media/baja; spec/design/apply P0 → media/alta según alcance; verify → media.
+6. **Orquestador SDD:** explore/propose/tasks mecánicos → workers generales; design/UI → Opus 4.8 High; apply/debug de fallos → GPT 5.6 Terra o Composer según sea fix vs implementación; verify → workers generales salvo UI.
 
 ## Anti-patrones
 
-- Un solo subagente Opus para todo un change de 12 tareas mecánicas.
-- Hacer inline una exploración de 20+ archivos que un explore en Haiku resolvería.
-- Lanzar subagentes secuenciales cuando las tareas son independientes.
-- Omitir subagentes en `/sdd-new` u orquestación multi-fase cuando el skill lo exige.
+- Un solo worker Opus para todo un change de tareas mecánicas (usar Composer 2.5).
+- Hacer inline en el Master una exploración o implementación que un worker general resolvería.
+- Usar Opus 4.8 High para debug rutinario (usar GPT 5.6 Terra).
+- Usar Composer 2.5 para diseño/UI de pantallas nuevas (usar Opus 4.8 High).
+- Lanzar workers secuenciales cuando las tareas son independientes.
+- Omitir workers en `/sdd-new` u orquestación multi-fase cuando el skill lo exige.

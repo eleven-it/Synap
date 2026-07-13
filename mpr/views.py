@@ -4811,7 +4811,10 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
     def get(self, request, *args, **kwargs):
         from django.contrib import messages
         from core.utils.administranet_types import to_date_or_none
-        from mpr.services import calcular_kpis_tablero_produccion
+        from mpr.services import (
+            calcular_kpis_tablero_produccion,
+            listar_tablero_pack,
+        )
 
         base_empresa = _get_base_empresa(request)
         if not base_empresa:
@@ -4821,8 +4824,14 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
         fecha_hasta_str = (request.GET.get("fecha_hasta") or "").strip() or None
         solo_urgente = _resolver_solo_urgente_tablero(request)
         marcas_incluidos = _parse_marcas_incluidos(request)
+        # modo=par|pack — par (default) explota BOM por componente; pack consolida
+        # por artículo pack terminado (paridad BEST PCP Producción) sin explosión BOM.
+        modo_tablero = (request.GET.get("modo") or "").strip().lower()
+        if modo_tablero not in ("par", "pack"):
+            modo_tablero = "par"
+        listar_fn = listar_tablero_pack if modo_tablero == "pack" else listar_tablero_por_articulo
         try:
-            filas = listar_tablero_por_articulo(
+            filas = listar_fn(
                 base_empresa,
                 fecha_desde=to_date_or_none(fecha_desde_str) if fecha_desde_str else None,
                 fecha_hasta=to_date_or_none(fecha_hasta_str) if fecha_hasta_str else None,
@@ -4849,7 +4858,14 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
         if fecha_hasta_str:
             qs_params["fecha_hasta"] = fecha_hasta_str
         qs_params["solo_urgente"] = "1" if solo_urgente else "0"
-        presentacion_query_base = _urlencode_con_marcas(qs_params, marcas_incluidos)
+        # Base para el toggle Pack|Par: preserva filtros + presentación (sin modo).
+        modo_query_base = _urlencode_con_marcas(
+            {**qs_params, "presentacion": modo_presentacion}, marcas_incluidos
+        )
+        # Base para el toggle Docenas|Pares: preserva filtros + modo (sin presentacion).
+        presentacion_query_base = _urlencode_con_marcas(
+            {**qs_params, "modo": modo_tablero}, marcas_incluidos
+        )
         ultima_act = request.session.get("tablero_produccion_ultima_actualizacion", None)
         ctx_marcas = _context_filtro_marcas(request, base_empresa)
         return self.render_to_response({
@@ -4863,7 +4879,9 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
             "tablero_url": reverse("mpr:tablero"),
             "puede_anular_envios": _usuario_puede_anular_envios(request.user),
             "modo_presentacion": modo_presentacion,
+            "modo_tablero": modo_tablero,
             "presentacion_query_base": presentacion_query_base,
+            "modo_query_base": modo_query_base,
             "unidades_por_docena_tablero": UNIDADES_POR_DOCENA_OPP,
             **ctx_marcas,
         })

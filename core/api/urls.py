@@ -14,6 +14,8 @@ urlpatterns = [
     path('states/search/', views.state_search_api, name='state_search'),
     path('currency/search/', views.currency_search_api, name='currency_search'),
     path('proveedores/search/', views.proveedor_search_api, name='proveedor_search'),
+    path('clientes/search/', views.cliente_search_api, name='cliente_search'),
+    path('depositos/search/', views.deposito_search_api, name='deposito_search'),
     path('articulos/search/', views.articulo_search_api, name='articulo_search'),
     # APIs para administraNET Gestión
     path('provincias/', views.provincias_api, name='provincias_api'),

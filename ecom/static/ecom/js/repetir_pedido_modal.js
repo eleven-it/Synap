@@ -1,5 +1,5 @@
 /**
- * Modal compartido para repetir pedido (preview + carga al carrito).
+ * Modal compartido para repetir pedido (preview + carga en borrador del pedido).
  * window.SynapRepetirPedido.init({ previewTpl, cargarUrl, compraUrl, esCliente })
  */
 (function () {
@@ -168,7 +168,7 @@
       })
       .then(function (r) {
         if (!r.ok || !r.data || r.data.ok === false) {
-          throw new Error((r.data && r.data.error) || "No se pudo cargar al carrito.");
+          throw new Error((r.data && r.data.error) || "No se pudo cargar el pedido.");
         }
         cerrar();
         if (cfg.onCargado) cfg.onCargado(r.data);

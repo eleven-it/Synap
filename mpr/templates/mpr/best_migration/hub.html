@@ -1,0 +1,239 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Migración BEST → MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 dark:bg-gray-900 sm:py-10">
+  <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+    <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <li><a href="{% url 'mpr:tablero_produccion' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a></li>
+        <li class="text-gray-300" aria-hidden="true">/</li>
+        <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Migración BEST</span></li>
+      </ol>
+    </nav>
+
+    <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Migración BEST → MPR</h1>
+          <p class="mt-2 max-w-3xl text-base text-gray-600 dark:text-gray-300">
+            Primero resolvé la paridad 1:1 de maestros. La migración de pedidos solo se habilita cuando los dominios obligatorios están resueltos.
+            <strong>Solo bloquean el gate</strong> artículos y clientes en pedidos abiertos BEST (<code>Finalizada=0</code>, <code>Pendiente&gt;0</code>); el resto queda fuera de alcance o se descarta.
+            Empresa activa: <span class="font-semibold text-gray-900 dark:text-white">{{ base_empresa }}</span>
+          </p>
+        </div>
+        <div x-data="{ open: false, acepto: false }" class="relative shrink-0">
+          <button type="button"
+                  @click="open = true; acepto = false"
+                  class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 px-4 text-sm font-semibold text-rose-800 hover:bg-rose-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-200 dark:hover:bg-rose-950/70">
+            <span class="material-icons text-base" aria-hidden="true">restart_alt</span>
+            Reiniciar migración
+          </button>
+
+          <div x-show="open"
+               x-cloak
+               class="fixed inset-0 z-50 flex items-center justify-center p-4"
+               role="dialog"
+               aria-modal="true"
+               aria-labelledby="reiniciar-migracion-titulo"
+               @keydown.escape.window="open = false">
+            <div class="absolute inset-0 bg-slate-900/60" @click="open = false" aria-hidden="true"></div>
+            <div class="relative z-10 w-full max-w-lg rounded-2xl border border-rose-200 bg-white p-5 shadow-xl dark:border-rose-900 dark:bg-gray-900 sm:p-6"
+                 @click.stop>
+              <h2 id="reiniciar-migracion-titulo" class="text-lg font-bold text-rose-800 dark:text-rose-200">
+                ¿Reiniciar Migración BEST?
+              </h2>
+              <p class="mt-2 text-sm text-gray-700 dark:text-gray-200">
+                Esta acción borra el <strong>staging en Postgres (Synap)</strong> de la empresa
+                <strong>{{ base_empresa }}</strong> ({{ staging_total }} filas actuales).
+              </p>
+              <ul class="mt-3 list-disc space-y-1.5 pl-5 text-sm text-gray-700 dark:text-gray-300">
+                <li>Se eliminan mapeos de artículos, clientes, depósitos, stock inicial y el gate de paridad.</li>
+                <li><strong>No revierte</strong> movimientos ya grabados en MySQL AdministraNET (MSTOCK, PED, <code>stock_reserva</code>, etc.).</li>
+                <li><strong>No modifica</strong> Azure BEST (solo lectura).</li>
+                <li>El gate de pedidos volverá a <strong>bloqueado</strong> hasta recalcular y validar de nuevo.</li>
+              </ul>
+              {% if staging_conteos %}
+              <p class="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {% for etiqueta, n in staging_conteos.items %}
+                  {{ etiqueta }}: <strong>{{ n }}</strong>{% if not forloop.last %} · {% endif %}
+                {% endfor %}
+              </p>
+              {% endif %}
+
+              <form method="post"
+                    action="{% url 'mpr:migracion_best_reiniciar' %}"
+                    class="mpr-post-loading mt-5"
+                    data-mpr-loading-title="Reiniciando migración"
+                    data-mpr-loading-subtitle="Borrando mapas en Postgres. No cierres esta ventana."
+                    @submit="if (!acepto) { $event.preventDefault(); }">
+                {% csrf_token %}
+                <input type="hidden" name="confirmar" value="REINICIAR">
+                <input type="hidden" name="base_empresa" value="{{ base_empresa }}">
+                <label class="flex items-start gap-2 text-sm text-gray-800 dark:text-gray-100">
+                  <input type="checkbox"
+                         name="acepto_riesgos"
+                         value="1"
+                         class="mt-0.5 rounded border-rose-400 text-rose-600 focus:ring-rose-500"
+                         x-model="acepto">
+                  <span>Entiendo los riesgos y quiero borrar los mapeos de Synap para <strong>{{ base_empresa }}</strong>.</span>
+                </label>
+                <div class="mt-5 flex flex-wrap justify-end gap-2">
+                  <button type="button"
+                          @click="open = false"
+                          class="inline-flex min-h-10 items-center rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">
+                    Cancelar
+                  </button>
+                  <button type="submit"
+                          :disabled="!acepto"
+                          :class="acepto ? 'bg-rose-600 hover:bg-rose-700 text-white' : 'cursor-not-allowed bg-rose-200 text-rose-400 dark:bg-rose-950/50 dark:text-rose-700'"
+                          class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold">
+                    Sí, reiniciar migración
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    {% if migracion_habilitada %}
+    <div class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+      Paridad mínima completa: la migración de pedidos está <strong>habilitada</strong>.
+      <a href="{% url 'mpr:migracion_best_pedidos' %}" class="ml-2 font-semibold underline">Ir a pedidos</a>
+    </div>
+    {% else %}
+    <div class="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+      Migración de pedidos <strong>bloqueada</strong> hasta completar artículos y clientes <strong>requeridos</strong> (pedidos abiertos) y confirmación de unidades (pares).
+    </div>
+    {% endif %}
+
+    <div class="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Artículos (pedidos)</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{{ parity.articulos_resueltos }}/{{ parity.articulos_total }}</p>
+        <p class="text-xs text-gray-500">{{ articulos_resumen.necesarios_pendientes_pedido }} pendientes gate</p>
+        <p class="mt-0.5 text-[10px] text-sky-700 dark:text-sky-300">Stock opcional: {{ articulos_resumen.necesarios_pendientes_stock }} pendientes</p>
+      </div>
+      <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Clientes requeridos</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{{ parity.clientes_resueltos }}/{{ parity.clientes_total }}</p>
+        <p class="text-xs text-gray-500">{{ clientes_resumen.necesarios_pendientes }} pendientes</p>
+      </div>
+      <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Depósitos (opcional)</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{{ parity.depositos_resueltos }}/{{ parity.depositos_total }}</p>
+        <p class="text-xs text-gray-500">{{ depositos_resumen.necesarios_pendientes }} pendientes</p>
+      </div>
+      <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Stock inicial (opcional)</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{{ parity.stock_inicial_resueltos }}/{{ parity.stock_inicial_total }}</p>
+        <p class="text-xs text-gray-500">{{ stock_inicial_resumen.necesarios_pendientes }} pendientes</p>
+      </div>
+      <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Unidades</p>
+        <p class="mt-1 text-2xl font-bold text-gray-900 dark:text-white">{% if parity.unidades_ok %}OK{% else %}Pendiente{% endif %}</p>
+        <p class="text-xs text-gray-500">pares BEST → stockp</p>
+      </div>
+      <div class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Gate pedidos</p>
+        <p class="mt-1 text-2xl font-bold {% if migracion_habilitada %}text-emerald-600{% else %}text-amber-600{% endif %}">
+          {% if migracion_habilitada %}Habilitada{% else %}Bloqueada{% endif %}
+        </p>
+        <p class="text-xs text-gray-500">dict {{ dict_version }}</p>
+      </div>
+    </div>
+
+    <section class="mb-8 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div class="border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
+        <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Checklist de paridad</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-900/40">
+            <tr>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Dominio</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Obligatorio</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Estado</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Detalle</th>
+              <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Acción</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for d in domains %}
+            <tr class="hover:bg-gray-50/80 dark:hover:bg-gray-700/30">
+              <td class="px-4 py-3 text-sm font-medium text-gray-900 dark:text-white">
+                {{ d.nombre }}
+                <p class="mt-0.5 text-xs font-normal text-gray-500">{{ d.descripcion }}</p>
+              </td>
+              <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
+                {% if d.obligatorio %}<span class="text-amber-700 dark:text-amber-300">Sí</span>{% else %}No{% endif %}
+              </td>
+              <td class="px-4 py-3 text-sm">
+                {% if d.ok %}
+                <span class="inline-flex rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">OK</span>
+                {% elif d.estado_modulo == 'pendiente' %}
+                <span class="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">Módulo pendiente</span>
+                {% else %}
+                <span class="inline-flex rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Pendiente</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{{ d.detail }}</td>
+              <td class="px-4 py-3 text-sm">
+                {% if d.codigo == 'articulos' %}
+                <a href="{% url 'mpr:migracion_best_articulos' %}?necesarios=1" class="font-medium text-purple-600 hover:underline dark:text-purple-400">Resolver pedidos</a>
+                {% elif d.codigo == 'clientes' %}
+                <a href="{% url 'mpr:migracion_best_clientes' %}?necesarios=1" class="font-medium text-purple-600 hover:underline dark:text-purple-400">Resolver necesarios</a>
+                {% elif d.codigo == 'depositos' %}
+                <a href="{% url 'mpr:migracion_best_depositos' %}?necesarios=1" class="font-medium text-purple-600 hover:underline dark:text-purple-400">Resolver depósitos</a>
+                {% elif d.codigo == 'stock_inicial' %}
+                <a href="{% url 'mpr:migracion_best_stock_inicial' %}?necesarios=1" class="font-medium text-purple-600 hover:underline dark:text-purple-400">Resolver stock</a>
+                {% elif d.codigo == 'stock_reserva' %}
+                <div class="flex flex-col gap-1">
+                  <form method="post" action="{% url 'mpr:migracion_best_cargar_stock_reserva' %}" class="mpr-post-loading inline" data-mpr-loading-title="Ensayo stock de seguridad" data-mpr-loading-subtitle="Leyendo MC.MCSS desde BEST.">
+                    {% csrf_token %}
+                    <button type="submit" class="font-medium text-purple-600 hover:underline dark:text-purple-400">Ensayo</button>
+                  </form>
+                  <form method="post" action="{% url 'mpr:migracion_best_cargar_stock_reserva' %}" onsubmit="return confirm('¿Confirmás cargar MCSS BEST en articulo.stock_reserva?');" class="mpr-post-loading inline" data-mpr-loading-title="Cargando stock de seguridad" data-mpr-loading-subtitle="Actualizando articulo.stock_reserva.">
+                    {% csrf_token %}
+                    <input type="hidden" name="confirmar" value="1">
+                    <button type="submit" class="font-medium text-emerald-700 hover:underline dark:text-emerald-300">Confirmar carga</button>
+                  </form>
+                </div>
+                {% elif d.codigo == 'unidades' %}
+                <form method="post" action="{% url 'mpr:migracion_best_confirmar_unidades' %}" class="mpr-post-loading inline" data-mpr-loading-title="Actualizando unidades" data-mpr-loading-subtitle="Confirmando paridad de unidades.">
+                  {% csrf_token %}
+                  {% if parity.unidades_ok %}
+                  <input type="hidden" name="ok" value="0">
+                  <button type="submit" class="font-medium text-gray-600 hover:underline dark:text-gray-300">Revertir</button>
+                  {% else %}
+                  <input type="hidden" name="ok" value="1">
+                  <button type="submit" class="font-medium text-purple-600 hover:underline dark:text-purple-400">Confirmar pares</button>
+                  {% endif %}
+                </form>
+                {% elif d.estado_modulo == 'pendiente' %}
+                <span class="text-xs text-gray-400">Próxima iteración</span>
+                {% else %}
+                <span class="text-xs text-gray-400">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="flex flex-wrap gap-3">
+      <a href="{% url 'mpr:migracion_best_articulos' %}" class="inline-flex min-h-11 items-center rounded-xl bg-purple-600 px-5 text-sm font-semibold text-white hover:bg-purple-700">Artículos</a>
+      <a href="{% url 'mpr:migracion_best_clientes' %}" class="inline-flex min-h-11 items-center rounded-xl border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">Clientes</a>
+      <a href="{% url 'mpr:migracion_best_depositos' %}" class="inline-flex min-h-11 items-center rounded-xl border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">Depósitos</a>
+      <a href="{% url 'mpr:migracion_best_stock_inicial' %}" class="inline-flex min-h-11 items-center rounded-xl border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">Stock inicial</a>
+      <a href="{% url 'mpr:migracion_best_pedidos' %}" class="inline-flex min-h-11 items-center rounded-xl border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">Pedidos (gate)</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,40 +1,66 @@
 {% comment %}
   Búsqueda de artículos estilo TPV para pedido de venta.
   Contrato Alpine (compraMayorista): searchProductos, articulosGrid, articulosGridLoading,
-  selectedSearchIndex, soloPromo, $refs.busquedaDropdownList.
+  selectedSearchIndex, soloPromo, soloStock, $refs.busquedaDropdownList.
 {% endcomment %}
-<section class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm dark:border-slate-700/90 dark:bg-slate-900 md:p-5"
+<section class="pedidos-order-capture-panel pedidos-order-capture-panel--sticky flex min-h-0 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm dark:border-slate-700/90 dark:bg-slate-900 md:p-5"
          aria-label="Búsqueda de productos">
-  <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
+  <div class="flex flex-col sm:flex-row sm:items-start gap-3 mb-3">
     <div class="relative flex-1 min-w-0">
-      <label class="sr-only" for="pedidos-busqueda-producto">Buscar por código o nombre</label>
+      <label class="sr-only" for="pedidos-busqueda-producto">Buscar por código de barras, código o nombre</label>
       <input id="pedidos-busqueda-producto"
              type="text"
              x-model="searchProductos"
-             placeholder="Código de barras, código o nombre… (↑↓ elegir, Enter agregar)"
-             class="min-h-[3rem] w-full rounded-xl border-2 border-slate-200 bg-white px-3.5 py-3 text-base text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400 dark:focus:ring-sky-400/25 touch-manipulation"
+             placeholder="Escanear código de barras o buscar por nombre…"
+             role="combobox"
+             aria-autocomplete="list"
+             aria-haspopup="listbox"
+             :aria-expanded="articulosGrid.length > 0 && !articulosGridLoading"
+             aria-controls="pedidos-busqueda-listbox"
+             class="pedidos-capture-input min-h-[3.25rem] w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-3.5 text-lg text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-4 focus:ring-sky-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:focus:border-sky-400 dark:focus:ring-sky-400/25 touch-manipulation"
+             autofocus
              x-on:input.debounce.280ms="onBusquedaProductosInput()"
              x-on:keydown="onBusquedaProductosKeydown($event)"
              x-on:keydown.enter.prevent="onBusquedaProductosEnter()"
              autocomplete="off" />
-      <div class="mt-2 hidden sm:flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-slate-500">
-        <span>↑↓ mover · Enter agregar</span>
+      <div class="mt-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-slate-500">
+        <span class="hidden sm:inline">↑↓ elegir renglón · Enter agregar al pedido</span>
+        <span class="sm:hidden">Enter agrega al pedido</span>
       </div>
     </div>
-    <button type="button"
-            @click="toggleSoloPromo()"
-            class="pedidos-btn shrink-0 inline-flex items-center gap-1.5 transition-colors"
-            :class="soloPromo
-              ? 'bg-amber-600 text-white border border-amber-600 hover:bg-amber-500'
-              : 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'">
-      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-        <path d="M7 7h10M7 12h6m-6 5h10" stroke-linecap="round"/>
-      </svg>
-      Solo promociones
-    </button>
+    {# Misma altura total que el input (3.25rem); mismo ancho entre botones #}
+    <div class="pedidos-capture-filters flex flex-row sm:flex-col gap-1.5 shrink-0 w-full sm:w-[9.75rem] sm:h-[3.25rem]"
+         role="group"
+         aria-label="Filtros de búsqueda">
+      <button type="button"
+              @click="toggleSoloStock()"
+              class="pedidos-capture-filter-btn flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors touch-manipulation"
+              :class="soloStock
+                ? 'bg-emerald-600 text-white border border-emerald-600 hover:bg-emerald-500'
+                : 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'"
+              :aria-pressed="soloStock">
+        <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h10" stroke-linecap="round"/>
+        </svg>
+        Stock
+      </button>
+      <button type="button"
+              @click="toggleSoloPromo()"
+              class="pedidos-capture-filter-btn flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg px-2 text-xs font-semibold transition-colors touch-manipulation"
+              :class="soloPromo
+                ? 'bg-amber-600 text-white border border-amber-600 hover:bg-amber-500'
+                : 'border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'"
+              :aria-pressed="soloPromo">
+        <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M7 7h10M7 12h6m-6 5h10" stroke-linecap="round"/>
+        </svg>
+        Solo promociones
+      </button>
+    </div>
   </div>
 
-  <div x-ref="busquedaDropdownList"
+  <div id="pedidos-busqueda-listbox"
+       x-ref="busquedaDropdownList"
        :tabindex="(articulosGrid.length > 0 && !articulosGridLoading) ? 0 : -1"
        x-show="articulosGrid.length > 0 && !articulosGridLoading"
        x-cloak
@@ -83,11 +109,11 @@
   <p class="py-2.5 text-center text-sm text-slate-500 dark:text-slate-400" x-show="articulosGridLoading" x-cloak>Cargando…</p>
   <p class="py-2.5 text-center text-sm text-slate-600 dark:text-slate-300"
      x-show="!articulosGridLoading && searchProductos.length && articulosGrid.length === 0" x-cloak>
-    Sin resultados. Probá otro término o <strong class="text-sky-600 dark:text-sky-400">Enter</strong> si es código exacto.
+    Sin resultados para este término. Verificá el código o probá con otro nombre<span x-show="soloStock"> · filtro stock activo</span>.
   </p>
   <p class="py-2 text-center text-xs text-slate-400 dark:text-slate-500"
      x-show="!articulosGridLoading && !searchProductos.length && articulosGrid.length === 0" x-cloak>
-    Escribí o escaneá para buscar<span x-show="marcasFiltro.length"> · filtrá por marca arriba</span>.
-    Con <strong>↓</strong> podés ver artículos disponibles.
+    Escaneá un código de barras o escribí para buscar artículos<span x-show="marcasFiltro.length"> · filtro de marca activo</span><span x-show="soloStock"> · solo con stock</span>.
+    Con <strong>↓</strong> podés desplegar artículos disponibles.
   </p>
 </section>

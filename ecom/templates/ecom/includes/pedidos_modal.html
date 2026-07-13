@@ -1,0 +1,92 @@
+{% comment %}
+  Modal genérico del canon OrderShell.
+  Contrato Alpine: dialogAbierto, dialogKind, dialogTitulo, dialogMensaje,
+  dialogConfirmarTexto, dialogCancelarTexto, dialogVariante, confirmando,
+  cerrarDialogo, confirmarDialogo, onDialogEscape, tipoLabel, cart, tot, money.
+{% endcomment %}
+<div class="pedidos-modal-root"
+     x-show="dialogAbierto"
+     x-cloak
+     @keydown.escape.window="onDialogEscape()">
+  <div class="pedidos-modal-overlay"
+       @click="cerrarDialogo()"
+       aria-hidden="true"></div>
+
+  <div id="pedidos-dialog-panel"
+       class="pedidos-modal-panel pedidos-card p-6 shadow-2xl"
+       role="dialog"
+       aria-modal="true"
+       :aria-labelledby="dialogKind ? 'pedidos-dialog-title' : null"
+       @click.stop>
+
+    {# Cambio de tipo PED/PRE/DEV #}
+    <template x-if="dialogKind === 'cambio_tipo'">
+      <div>
+        <h3 id="pedidos-dialog-title" class="text-lg font-semibold text-slate-900 dark:text-white" x-text="dialogTitulo"></h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300" x-text="dialogMensaje"></p>
+        <div class="mt-6 flex flex-wrap justify-end gap-3">
+          <button type="button"
+                  @click="cerrarDialogo()"
+                  class="pedidos-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  x-text="dialogCancelarTexto"></button>
+          <button type="button"
+                  @click="confirmarDialogo()"
+                  class="pedidos-btn pedidos-btn-primary"
+                  x-text="dialogConfirmarTexto"></button>
+        </div>
+      </div>
+    </template>
+
+    {# Vaciar pedido #}
+    <template x-if="dialogKind === 'vaciar'">
+      <div>
+        <h3 id="pedidos-dialog-title" class="text-lg font-semibold text-slate-900 dark:text-white" x-text="dialogTitulo"></h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300" x-text="dialogMensaje"></p>
+        <div class="mt-6 flex flex-wrap justify-end gap-3">
+          <button type="button"
+                  @click="cerrarDialogo()"
+                  class="pedidos-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  x-text="dialogCancelarTexto"></button>
+          <button type="button"
+                  @click="confirmarDialogo()"
+                  class="pedidos-btn bg-rose-600 hover:bg-rose-500 text-white rounded-full font-semibold"
+                  x-text="dialogConfirmarTexto"></button>
+        </div>
+      </div>
+    </template>
+
+    {# Pre-confirmación checkout #}
+    <template x-if="dialogKind === 'resumen'">
+      <div>
+        <h3 id="pedidos-dialog-title" class="text-lg font-semibold text-slate-900 dark:text-white" x-text="dialogTitulo"></h3>
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400"
+           x-text="`${cart.items ? cart.items.length : 0} renglón(es) · Total ${money(tot.total)}`"></p>
+        <ul class="mt-4 max-h-48 overflow-y-auto text-sm space-y-1 text-slate-700 dark:text-slate-200"
+            aria-label="Líneas del pedido">
+          <template x-for="it in (cart.items || [])" :key="it.id">
+            <li class="flex justify-between gap-2">
+              <span class="truncate" x-text="it.descripcion"></span>
+              <span class="tabular-nums whitespace-nowrap text-slate-600 dark:text-slate-300"
+                    x-text="`${it.cantidad} × ${money(it.precio_unitario_neto)}`"></span>
+            </li>
+          </template>
+        </ul>
+        <div class="mt-6 flex flex-wrap justify-end gap-3">
+          <button type="button"
+                  @click="cerrarDialogo()"
+                  :disabled="confirmando"
+                  class="pedidos-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+                  x-text="dialogCancelarTexto"></button>
+          <button type="button"
+                  @click="confirmarDialogo()"
+                  :disabled="confirmando"
+                  class="pedidos-btn pedidos-btn-primary disabled:opacity-50 disabled:pointer-events-none"
+                  :class="tipo === 'PED' ? 'pedidos-btn-gradient' : (tipo === 'PRE' ? 'bg-amber-600 hover:bg-amber-500 text-white rounded-full font-semibold' : 'bg-rose-600 hover:bg-rose-500 text-white rounded-full font-semibold')">
+            <span x-show="!confirmando" x-text="dialogConfirmarTexto"></span>
+            <span x-show="confirmando">Confirmando…</span>
+          </button>
+        </div>
+      </div>
+    </template>
+  </div>
+</div>
