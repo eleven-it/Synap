@@ -127,7 +127,6 @@
                        @change="toggleAll($event)">
               </th>
               <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">BEST</th>
-              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Attrs</th>
               <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Alcance</th>
               <th class="min-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Candidato Admin</th>
               <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Acciones</th>
@@ -149,11 +148,7 @@
               </td>
               <td class="px-3 py-3 text-sm">
                 <div class="font-semibold text-gray-900 dark:text-white">{{ f.best_id_articulo }}</div>
-                <div class="text-xs text-gray-500" title="{{ f.best_articulo }}">{{ f.best_articulo|truncatechars:70 }}</div>
-              </td>
-              <td class="px-3 py-3 text-xs text-gray-600 dark:text-gray-300">
-                <div>{{ f.best_colores|default:"—" }} · t{{ f.best_talle|default:"?" }} · p{{ f.best_pack|default:"?" }}</div>
-                <div class="text-gray-400">{{ f.best_color_mode }} · score {{ f.score|default:"—" }}</div>
+                <div class="text-sm text-gray-600 dark:text-gray-300" title="{{ f.best_articulo }}">{{ f.best_articulo|truncatechars:70 }}</div>
               </td>
               <td class="px-3 py-3 text-sm">
                 {% if f.categoria_migracion == 'CUMPLE' %}
@@ -184,10 +179,9 @@
                   <input type="hidden" name="accion" value="asignar">
                   <input type="hidden" name="admin_idart" value="{{ f.admin_idart }}">
                   <button type="submit"
-                          class="max-w-full text-left font-medium text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
-                          title="Asignar candidato: IDArt {{ f.admin_idart }}">
-                    <span class="block text-sm">IDArt {{ f.admin_idart }}{% if f.admin_id_manual %} <span class="text-xs opacity-80">({{ f.admin_id_manual }})</span>{% endif %}{% if f.score %} <span class="text-xs opacity-80">({{ f.score }})</span>{% endif %}</span>
-                    <span class="mt-0.5 block whitespace-normal text-xs font-normal leading-snug no-underline">{{ f.admin_nombre }}</span>
+                          class="max-w-full text-left text-sm font-medium leading-snug text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
+                          title="Asignar candidato: {{ f.admin_nombre }}">
+                    {{ f.admin_nombre }}
                   </button>
                 </form>
                   {% if f.alt1_idart %}
@@ -201,9 +195,9 @@
                   <input type="hidden" name="accion" value="asignar">
                   <input type="hidden" name="admin_idart" value="{{ f.alt1_idart }}">
                   <button type="submit"
-                          class="max-w-full text-left text-[11px] font-medium leading-snug text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
-                          title="Asignar alternativa: IDArt {{ f.alt1_idart }}">
-                    Alt: {{ f.alt1_idart }} — {{ f.alt1_nombre }}{% if f.alt1_score %} ({{ f.alt1_score }}){% endif %}
+                          class="max-w-full text-left text-sm font-medium leading-snug text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
+                          title="Asignar alternativa: {{ f.alt1_nombre }}">
+                    {{ f.alt1_nombre }}
                   </button>
                 </form>
                   {% endif %}
@@ -218,17 +212,19 @@
                   <input type="hidden" name="accion" value="asignar">
                   <input type="hidden" name="admin_idart" value="{{ f.alt2_idart }}">
                   <button type="submit"
-                          class="max-w-full text-left text-[11px] font-medium leading-snug text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
-                          title="Asignar alternativa: IDArt {{ f.alt2_idart }}">
-                    Alt 2: {{ f.alt2_idart }} — {{ f.alt2_nombre }}{% if f.alt2_score %} ({{ f.alt2_score }}){% endif %}
+                          class="max-w-full text-left text-sm font-medium leading-snug text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
+                          title="Asignar alternativa: {{ f.alt2_nombre }}">
+                    {{ f.alt2_nombre }}
                   </button>
                 </form>
                   {% endif %}
                 {% else %}
-                <div class="font-medium">IDArt {{ f.admin_idart }} <span class="text-xs text-gray-400">({{ f.admin_id_manual }})</span></div>
-                <div class="whitespace-normal text-xs leading-snug text-gray-500">{{ f.admin_nombre }}</div>
+                <div class="whitespace-normal text-sm font-medium leading-snug">{{ f.admin_nombre }}</div>
                   {% if f.alt1_idart %}
-                <div class="mt-1 whitespace-normal text-[11px] leading-snug text-amber-700 dark:text-amber-300">Alt: {{ f.alt1_idart }} — {{ f.alt1_nombre }}{% if f.alt1_score %} ({{ f.alt1_score }}){% endif %}</div>
+                <div class="mt-1 whitespace-normal text-sm leading-snug text-amber-700 dark:text-amber-300">{{ f.alt1_nombre }}</div>
+                  {% endif %}
+                  {% if f.alt2_idart %}
+                <div class="mt-0.5 whitespace-normal text-sm leading-snug text-amber-700 dark:text-amber-300">{{ f.alt2_nombre }}</div>
                   {% endif %}
                 {% endif %}
                 {% else %}
@@ -238,20 +234,15 @@
               <td class="px-3 py-3 text-sm">
                 {% if f.estado != 'VALIDADO' and f.estado != 'DESCARTADO' %}
                 <div class="flex flex-col gap-2">
-                  {% if f.admin_idart %}
-                  <form method="post" action="{% url 'mpr:migracion_best_validar_articulo' %}" class="mpr-post-loading" data-mpr-loading-title="Procesando artículo" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
-                    {% csrf_token %}
-                    <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
-                    <input type="hidden" name="accion" value="aceptar">
-                    <button type="submit" class="text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-300">Aceptar inferido</button>
-                  </form>
-                  {% elif f.estado == 'SIN_CANDIDATO' or f.estado == 'SIN_MATCH' %}
+                  {% if f.estado == 'SIN_CANDIDATO' or f.estado == 'SIN_MATCH' %}
+                  {% if not f.admin_idart %}
                   <form method="post" action="{% url 'mpr:migracion_best_validar_articulo' %}" class="mpr-post-loading" data-mpr-loading-title="Alta en AdministraNET" data-mpr-loading-subtitle="Creando artículo y stock_deposito. No cierres esta ventana." onsubmit="return confirm('¿Dar de alta {{ f.best_id_articulo }} en AdministraNET con los datos BEST?');">
                     {% csrf_token %}
                     <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
                     <input type="hidden" name="accion" value="alta">
                     <button type="submit" class="text-xs font-semibold text-indigo-700 hover:underline dark:text-indigo-300">Dar de alta en Admin</button>
                   </form>
+                  {% endif %}
                   {% endif %}
                   <form method="post"
                         action="{% url 'mpr:migracion_best_validar_articulo' %}"
@@ -290,7 +281,7 @@
                                     :class="highlighted === i ? 'bg-purple-100 dark:bg-purple-900/40' : 'hover:bg-purple-50 dark:hover:bg-purple-900/20'"
                                     class="w-full border-b border-gray-100 px-3 py-2 text-left text-xs last:border-0 dark:border-gray-700">
                               <span class="block font-medium text-gray-900 dark:text-gray-100" x-text="a.Descripcion || '—'"></span>
-                              <span class="mt-0.5 block text-[10px] text-gray-500 dark:text-gray-400" x-text="metaDe(a)"></span>
+                              <span x-show="metaDe(a)" class="mt-0.5 block text-[10px] text-gray-500 dark:text-gray-400" x-text="metaDe(a)"></span>
                             </button>
                           </template>
                         </div>
@@ -332,7 +323,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">
+              <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500">
                 No hay filas. Ejecutá «Recalcular desde BEST».
               </td>
             </tr>
