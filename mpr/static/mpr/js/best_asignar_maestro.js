@@ -9,6 +9,7 @@ function bestAsignarMaestro(searchUrl, cfg) {
   const stateKey = cfg.stateKey || 'selectedId';
   const metaLine = typeof cfg.metaLine === 'function' ? cfg.metaLine : null;
   const emptyMsg = cfg.emptyMsg || 'Elegí un ítem de la lista.';
+  const queryParams = cfg.queryParams && typeof cfg.queryParams === 'object' ? cfg.queryParams : {};
   const MAX_PANEL_H = 280;
 
   const state = {
@@ -96,7 +97,15 @@ function bestAsignarMaestro(searchUrl, cfg) {
     this.error = false;
     this.actualizarPanel();
     try {
-      const r = await fetch(searchUrl + '?q=' + encodeURIComponent(termino) + '&limit=15');
+      const params = new URLSearchParams();
+      params.set('q', termino);
+      params.set('limit', '15');
+      Object.keys(queryParams).forEach(function (k) {
+        if (queryParams[k] != null && queryParams[k] !== '') {
+          params.set(k, String(queryParams[k]));
+        }
+      });
+      const r = await fetch(searchUrl + '?' + params.toString());
       const data = await r.json();
       this.resultados = data.results || [];
       this.dropdown = true;
@@ -175,6 +184,7 @@ function bestAsignarArticulo(searchUrl) {
     labelKey: 'Descripcion',
     stateKey: 'adminIdart',
     emptyMsg: 'Elegí un artículo de la lista.',
+    queryParams: { tipo_art_fab: 'Terminado' },
     metaLine: function (a) {
       var parts = ['IDArt ' + (a.IDArt != null ? a.IDArt : '—')];
       if (a.id_manual && a.id_manual !== '-') parts.push(a.id_manual);

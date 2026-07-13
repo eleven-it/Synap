@@ -833,6 +833,7 @@ def _buscar_articulos_con_precios(
     q: str,
     limit: int = 15,
     lista_precio: int = 2,
+    tipo_art_fab: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Búsqueda de artículos con campos de precios (paridad con ABMArticulo_seleccion grid).
@@ -840,14 +841,22 @@ def _buscar_articulos_con_precios(
     PrecioLista (precio efectivo según lista_precio),
     Alicuota (porcentaje desde iva), ImpuestoInterno (articulo.impuesto_interno %), Moneda.
     articulo.Alicuota es FK a iva.id; el porcentaje para mostrar está en iva.Alicuota (igual que reportes y TPV).
+    Si tipo_art_fab está definido (ej. «Terminado»), filtra por articulo.tipo_art_fab.
     """
     if not (q or "").strip():
         return []
     try:
         term = f"%{(q or '').strip()}%"
+        tipo_fab = str_or_default(tipo_art_fab, "").strip()
+        where_tipo = ""
+        params: List[Any] = [term, term, term, term]
+        if tipo_fab:
+            where_tipo = " AND COALESCE(TRIM(a.tipo_art_fab), '') = %s"
+            params.append(tipo_fab)
+        params.append(limit)
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(
-                """
+                f"""
                 SELECT a.IDArt,
                        COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS CodigoArticulo,
                        COALESCE(a.NombreArticulo, '') AS Descripcion,
@@ -869,11 +878,11 @@ def _buscar_articulos_con_precios(
                     OR a.CodigoArticuloT LIKE %s
                     OR a.NroCodBarra LIKE %s
                     OR CAST(a.CodigoArticulo AS CHAR) LIKE %s
-                  )
+                  ){where_tipo}
                 ORDER BY a.NombreArticulo
                 LIMIT %s
                 """,
-                [term, term, term, term, limit],
+                params,
             )
             rows = cursor.fetchall()
         result = []

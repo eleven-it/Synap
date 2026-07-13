@@ -451,9 +451,12 @@ SYNAP_AUTO_SYNC_PERMISSIONS_TTL = config('SYNAP_AUTO_SYNC_PERMISSIONS_TTL', defa
 
 # Fuente de verdad para el cálculo de permisos Synap en runtime:
 #   'legacy' → permiso_sistema + permiso_sistema_puesto (comportamiento actual, default)
-#   'synap'  → tablas synap_* (con fallback a legacy si el puesto no tiene mapeo)
-#   'dual'   → unión de ambas fuentes; registra advertencia si difieren (validación de paridad)
-# Ver openspec/changes/permisos-roles-synap-independientes/design.md
+# Fuente de permisos runtime (menú / get_permisos_totales):
+#   'synap'  → solo tablas synap_* (cutover; sin fallback a permiso_sistema*)
+#   'dual'   → unión de ambas; WARNING si difieren (validación de paridad)
+#   'legacy' → permiso_sistema + permiso_sistema_puesto (rollback)
+# permiso_sistema* no se usa para armar el menú en modo synap.
+# Ver docs/general/PERMISOS_SYNAP_STORE.md
 SYNAP_PERMISOS_SOURCE = config('SYNAP_PERMISOS_SOURCE', default='legacy')
 
 # Los puestos (puestos.idpuesto) son el ancla fija de AdministraNET: Synap no debe

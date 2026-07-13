@@ -36,6 +36,7 @@ from mpr.best_migration.services import (
     marcar_stock_conciliado,
     marcar_unidades_ok,
     recalcular_mapeo_articulos,
+    reabrir_articulo,
     sincronizar_clientes_abiertos,
     sincronizar_depositos_best,
     sincronizar_stock_inicial,
@@ -815,6 +816,16 @@ class MigracionBestValidarArticuloView(MprLoginRequiredMixin, View):
                         {"best_id": best_id, "accion": "asignar", "admin_idart": int(raw)}
                     )
                 messages.success(request, f"Asignado {best_id} → IDArt {raw}.")
+            elif accion == "reabrir":
+                reabrir_articulo(
+                    base_empresa=base, best_id=best_id, usuario=usuario, notas=notas
+                )
+                if wants_json:
+                    return _json_ok({"best_id": best_id, "accion": "reabrir"})
+                messages.success(
+                    request,
+                    f"Mapeo de {best_id} reabierto: podés asignar otro IDArt.",
+                )
             else:
                 raise ValueError("Acción no reconocida.")
         except BestArticuloMap.DoesNotExist:

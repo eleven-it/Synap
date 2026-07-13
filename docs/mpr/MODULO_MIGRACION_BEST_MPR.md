@@ -45,7 +45,7 @@ Luego en `/mpr/migracion-best/`: recalcular artículos → sincronizar clientes/
 ## Flujo
 
 1. **Hub** — checklist de dominios + gate.
-2. **Artículos** — recalcular inferencia 1:1 desde pedidos abiertos; al final (y antes de sync stock) se aseguran también SKUs con saldo en `REP_INVENTARIOS` vía `asegurar_articulos_desde_inventario`. Filtrar **necesarios pendientes** (default en la primera visita sin query); al pulsar **Filtrar** el form envía `filtrado=1` para persistir checkboxes destildados («Solo necesarios…», «Incluir stock…»). Destildar necesarios muestra todos los SKUs del mapeo (hasta 500). Aceptar inferido / asignar / descartar; badges de alcance.
+2. **Artículos** — recalcular inferencia 1:1 desde pedidos abiertos; al final (y antes de sync stock) se aseguran también SKUs con saldo en `REP_INVENTARIOS` vía `asegurar_articulos_desde_inventario`. El universo Admin del matcher y de la búsqueda **Asignar** es solo `articulo.tipo_art_fab = 'Terminado'`. Filtrar **necesarios pendientes** (default en la primera visita sin query); al pulsar **Filtrar** el form envía `filtrado=1` para persistir checkboxes destildados («Solo necesarios…», «Incluir stock…»). Destildar necesarios muestra todos los SKUs del mapeo (hasta 500). Aceptar inferido / asignar / descartar; badges de alcance.
 3. **Clientes** — sincronizar + inferir; misma semántica de alcance y filtros.
 4. **Unidades** — confirmar que BEST → `stockp.cantidad` se interpreta en **pares**.
 5. **Pedidos (gate)** — se habilita solo con artículos + clientes **requeridos** resueltos y unidades OK. Siembra PED vía `migrar_pedidos_best` (ensayo/confirmar).
@@ -120,7 +120,7 @@ Al **validar** un depósito se llama `actualizar_deposito_tipo_mpr` si `deposito
 
 Rutas: `/mpr/migracion-best/depositos/`, sincronizar, validar (aceptar / asignar / descartar / lote score / selección múltiple). Todos los POST de migración BEST usan el modal de espera MPR (`mpr-post-loading`).
 
-En artículos, clientes y depósitos la UI permite marcar filas con checkbox (o «seleccionar todas») y **Aceptar seleccionados (N)** (`accion=aceptar_seleccion`, `POST.getlist("sel")`). Solo aparecen checkboxes en filas no validadas/descartadas que ya tienen candidato Admin.
+En artículos, clientes y depósitos la UI permite marcar filas con checkbox (o «seleccionar todas») y **Aceptar seleccionados (N)** (`accion=aceptar_seleccion`, `POST.getlist("sel")`). Solo aparecen checkboxes en filas no validadas/descartadas que ya tienen candidato Admin. En artículos, el **candidato principal** y las alternativas Alt/Alt 2 son links de `accion=asignar` (mismo POST). La columna **Estado** no se muestra en la grilla (el filtro por estado y los badges del resumen siguen disponibles). Filas **VALIDADO** / **DESCARTADO** tienen **Cambiar mapeo** (`accion=reabrir`): vuelve el SKU a `AMBIGUO` (o `SIN_CANDIDATO` sin IDArt), conserva el candidato/alts y permite reasignar sin reiniciar la migración.
 
 ## Stock inicial
 
@@ -148,7 +148,7 @@ En artículos y clientes, la acción **Asignar** usa búsqueda predictiva Alpine
 
 | Dominio | API | Campo POST |
 |---------|-----|------------|
-| Artículos | `GET /core/api/articulos/search/` (`core_api:articulo_search`) | `admin_idart` |
+| Artículos | `GET /core/api/articulos/search/?tipo_art_fab=Terminado` (`core_api:articulo_search`) | `admin_idart` |
 | Clientes | `GET /core/api/clientes/search/` (`core_api:cliente_search`) | `admin_codigo` |
 | Depósitos | `GET /core/api/depositos/search/` (`core_api:deposito_search`) | `admin_cod_deposito` |
 

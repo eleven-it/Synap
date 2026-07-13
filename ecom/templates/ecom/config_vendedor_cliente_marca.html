@@ -11,7 +11,7 @@
     <div class="flex-shrink-0">
       <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
         <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <li><a href="{{ urls_api.hub }}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Pedidos</a></li>
+          <li><a :href="urls.hub" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Pedidos</a></li>
           <li class="text-slate-300" aria-hidden="true">/</li>
           <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Vendedor · Cliente · Marca</span></li>
         </ol>
@@ -23,7 +23,7 @@
             <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Vendedor · Cliente · Marca</h1>
             <p class="mt-1 text-xs text-slate-300 sm:text-sm">Territorio comercial: una marca por cliente solo puede pertenecer a un vendedor.</p>
           </div>
-          <a href="{{ urls_api.hub }}" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
+          <a :href="urls.hub" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
             <span class="material-icons text-base" aria-hidden="true">receipt_long</span>
             Hub pedidos
           </a>
@@ -37,42 +37,99 @@
     <div class="mb-3 flex-shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Nueva terna</h2>
       <div class="grid grid-cols-1 gap-3 md:grid-cols-4 md:items-end">
-        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">
-          Vendedor
-          <input type="search" x-model="qVend" @input.debounce.300ms="buscarVendedores()"
-                 placeholder="Buscar…"
+        {# Vendedor #}
+        <div class="relative" @click.outside="cerrarPanel('vend')">
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="vcm-vend">Vendedor</label>
+          <input id="vcm-vend" type="text" autocomplete="off" role="combobox"
+                 :aria-expanded="panel==='vend'"
+                 x-model="qVend"
+                 @focus="abrirPanel('vend'); buscarVendedores()"
+                 @input.debounce.280ms="buscarVendedores()"
+                 @keydown.arrow-down.prevent="moverSel('vend', 1)"
+                 @keydown.arrow-up.prevent="moverSel('vend', -1)"
+                 @keydown.enter.prevent="elegirResaltado('vend')"
+                 @keydown.escape="cerrarPanel('vend')"
+                 placeholder="Buscar vendedor…"
                  class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
-          <select x-model="form.CodViajante" class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
-            <option value="">— elegir —</option>
-            <template x-for="v in vendedores" :key="v.CodViajante">
-              <option :value="v.CodViajante" x-text="v.etiqueta"></option>
+          <ul x-show="panel==='vend' && vendedores.length" x-cloak
+              class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+              role="listbox">
+            <template x-for="(v, i) in vendedores" :key="v.CodViajante">
+              <li role="option"
+                  @mousedown.prevent="elegirVend(v)"
+                  :class="i === idxVend ? 'bg-purple-50 dark:bg-purple-950/40' : ''"
+                  class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
+                  x-text="v.nombre"></li>
             </template>
-          </select>
-        </label>
-        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">
-          Cliente
-          <input type="search" x-model="qCli" @input.debounce.300ms="buscarClientes()"
-                 placeholder="Buscar…"
+          </ul>
+          <p x-show="panel==='vend' && !cargandoVend && !vendedores.length" x-cloak
+             class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+            Sin vendedores
+          </p>
+        </div>
+
+        {# Cliente #}
+        <div class="relative" @click.outside="cerrarPanel('cli')">
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="vcm-cli">Cliente</label>
+          <input id="vcm-cli" type="text" autocomplete="off" role="combobox"
+                 :aria-expanded="panel==='cli'"
+                 x-model="qCli"
+                 @focus="abrirPanel('cli'); buscarClientes()"
+                 @input.debounce.280ms="buscarClientes()"
+                 @keydown.arrow-down.prevent="moverSel('cli', 1)"
+                 @keydown.arrow-up.prevent="moverSel('cli', -1)"
+                 @keydown.enter.prevent="elegirResaltado('cli')"
+                 @keydown.escape="cerrarPanel('cli')"
+                 placeholder="Buscar cliente…"
                  class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
-          <select x-model="form.id_cliente" class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
-            <option value="">— elegir —</option>
-            <template x-for="c in clientes" :key="c.id_cliente">
-              <option :value="c.id_cliente" x-text="c.etiqueta"></option>
+          <ul x-show="panel==='cli' && clientes.length" x-cloak
+              class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+              role="listbox">
+            <template x-for="(c, i) in clientes" :key="c.id_cliente">
+              <li role="option"
+                  @mousedown.prevent="elegirCli(c)"
+                  :class="i === idxCli ? 'bg-purple-50 dark:bg-purple-950/40' : ''"
+                  class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
+                  x-text="c.nombre"></li>
             </template>
-          </select>
-        </label>
-        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">
-          Marca
-          <input type="search" x-model="qMar" @input.debounce.300ms="buscarMarcas()"
-                 placeholder="Buscar…"
+          </ul>
+          <p x-show="panel==='cli' && !cargandoCli && !clientes.length" x-cloak
+             class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+            Sin clientes
+          </p>
+        </div>
+
+        {# Marca #}
+        <div class="relative" @click.outside="cerrarPanel('mar')">
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="vcm-mar">Marca</label>
+          <input id="vcm-mar" type="text" autocomplete="off" role="combobox"
+                 :aria-expanded="panel==='mar'"
+                 x-model="qMar"
+                 @focus="abrirPanel('mar'); buscarMarcas()"
+                 @input.debounce.280ms="buscarMarcas()"
+                 @keydown.arrow-down.prevent="moverSel('mar', 1)"
+                 @keydown.arrow-up.prevent="moverSel('mar', -1)"
+                 @keydown.enter.prevent="elegirResaltado('mar')"
+                 @keydown.escape="cerrarPanel('mar')"
+                 placeholder="Buscar marca…"
                  class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
-          <select x-model="form.CodMarca" class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
-            <option value="">— elegir —</option>
-            <template x-for="m in marcas" :key="m.CodMarca">
-              <option :value="m.CodMarca" x-text="m.etiqueta"></option>
+          <ul x-show="panel==='mar' && marcas.length" x-cloak
+              class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+              role="listbox">
+            <template x-for="(m, i) in marcas" :key="m.CodMarca">
+              <li role="option"
+                  @mousedown.prevent="elegirMar(m)"
+                  :class="i === idxMar ? 'bg-purple-50 dark:bg-purple-950/40' : ''"
+                  class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
+                  x-text="m.nombre"></li>
             </template>
-          </select>
-        </label>
+          </ul>
+          <p x-show="panel==='mar' && !cargandoMar && !marcas.length" x-cloak
+             class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+            Sin marcas
+          </p>
+        </div>
+
         <button type="button" @click="crear()" :disabled="guardando"
                 class="inline-flex h-10 items-center justify-center rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50">
           Asignar
@@ -81,15 +138,25 @@
     </div>
 
     <div class="mb-2 flex flex-shrink-0 flex-wrap items-end gap-2">
-      <label class="text-xs font-medium text-slate-600 dark:text-slate-300">
-        Filtrar vendedor
-        <select x-model="filtroViajante" @change="cargar()" class="ml-1 h-9 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
-          <option value="">Todos</option>
-          <template x-for="v in vendedores" :key="'f'+v.CodViajante">
-            <option :value="v.CodViajante" x-text="v.etiqueta"></option>
+      <div class="relative min-w-[16rem]" @click.outside="cerrarPanel('filtro')">
+        <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="vcm-filtro">Filtrar vendedor</label>
+        <input id="vcm-filtro" type="text" autocomplete="off"
+               x-model="qFiltro"
+               @focus="abrirPanel('filtro'); buscarVendedoresFiltro()"
+               @input.debounce.280ms="buscarVendedoresFiltro()"
+               placeholder="Todos (o buscar…)"
+               class="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+        <ul x-show="panel==='filtro'" x-cloak
+            class="absolute z-30 mt-1 max-h-48 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800">
+          <li @mousedown.prevent="filtroViajante=''; qFiltro=''; cerrarPanel('filtro'); cargar()"
+              class="cursor-pointer px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700">Todos</li>
+          <template x-for="v in vendedoresFiltro" :key="'f'+v.CodViajante">
+            <li @mousedown.prevent="filtroViajante=String(v.CodViajante); qFiltro=v.nombre; cerrarPanel('filtro'); cargar()"
+                class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
+                x-text="v.nombre"></li>
           </template>
-        </select>
-      </label>
+        </ul>
+      </div>
       <button type="button" @click="cargar()" class="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
         Actualizar
       </button>
@@ -130,32 +197,44 @@
   </div>
 </section>
 
+{{ urls_api|json_script:"vcm-urls" }}
 <script>
 function vcmApp() {
   return {
-    urls: null,
+    urls: {},
     ternas: [],
     vendedores: [],
+    vendedoresFiltro: [],
     clientes: [],
     marcas: [],
-    form: { CodViajante: '', id_cliente: '', CodMarca: '' },
+    selVend: null,
+    selCli: null,
+    selMar: null,
     filtroViajante: '',
-    qVend: '', qCli: '', qMar: '',
+    qVend: '', qCli: '', qMar: '', qFiltro: '',
+    panel: null,
+    idxVend: 0, idxCli: 0, idxMar: 0,
     mensaje: '', error: '',
     cargando: false, guardando: false,
+    cargandoVend: false, cargandoCli: false, cargandoMar: false,
     init() {
       const el = document.getElementById('vcm-urls');
       this.urls = el ? JSON.parse(el.textContent) : {};
-      this.buscarVendedores();
       this.cargar();
+      this.buscarVendedores();
+      this.buscarMarcas();
     },
+    abrirPanel(p) { this.panel = p; },
+    cerrarPanel(p) { if (this.panel === p) this.panel = null; },
     csrf() {
       const m = document.cookie.match(/csrftoken=([^;]+)/);
       return m ? decodeURIComponent(m[1]) : '';
     },
     async getJson(url) {
       const r = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
-      return r.json();
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok && !data.error) data.error = 'Error HTTP ' + r.status;
+      return data;
     },
     async postJson(url, body) {
       const r = await fetch(url, {
@@ -181,28 +260,77 @@ function vcmApp() {
       this.ternas = data.ternas || [];
     },
     async buscarVendedores() {
-      const data = await this.getJson(this.urls.vendedores + '?q=' + encodeURIComponent(this.qVend || ''));
-      if (data.ok) this.vendedores = data.items || [];
+      if (!this.urls.vendedores) return;
+      this.cargandoVend = true;
+      const data = await this.getJson(this.urls.vendedores + '?q=' + encodeURIComponent(this.qVend || '') + '&limit=40');
+      this.cargandoVend = false;
+      if (!data.ok) { this.error = data.error || 'No se pudieron buscar vendedores.'; this.vendedores = []; return; }
+      this.vendedores = data.items || [];
+      this.idxVend = 0;
+    },
+    async buscarVendedoresFiltro() {
+      if (!this.urls.vendedores) return;
+      const data = await this.getJson(this.urls.vendedores + '?q=' + encodeURIComponent(this.qFiltro || '') + '&limit=40');
+      if (data.ok) this.vendedoresFiltro = data.items || [];
     },
     async buscarClientes() {
-      const data = await this.getJson(this.urls.clientes + '?q=' + encodeURIComponent(this.qCli || ''));
-      if (data.ok) this.clientes = data.items || [];
+      if (!this.urls.clientes) return;
+      this.cargandoCli = true;
+      const data = await this.getJson(this.urls.clientes + '?q=' + encodeURIComponent(this.qCli || '') + '&limit=40');
+      this.cargandoCli = false;
+      if (!data.ok) { this.error = data.error || 'No se pudieron buscar clientes.'; this.clientes = []; return; }
+      this.clientes = data.items || [];
+      this.idxCli = 0;
     },
     async buscarMarcas() {
-      const data = await this.getJson(this.urls.marcas + '?q=' + encodeURIComponent(this.qMar || ''));
-      if (data.ok) this.marcas = data.items || [];
+      if (!this.urls.marcas) return;
+      this.cargandoMar = true;
+      const data = await this.getJson(this.urls.marcas + '?q=' + encodeURIComponent(this.qMar || '') + '&limit=40');
+      this.cargandoMar = false;
+      if (!data.ok) { this.error = data.error || 'No se pudieron buscar marcas.'; this.marcas = []; return; }
+      this.marcas = data.items || [];
+      this.idxMar = 0;
+    },
+    elegirVend(v) {
+      this.selVend = v;
+      this.qVend = v.nombre || '';
+      this.cerrarPanel('vend');
+    },
+    elegirCli(c) {
+      this.selCli = c;
+      this.qCli = c.nombre || '';
+      this.cerrarPanel('cli');
+    },
+    elegirMar(m) {
+      this.selMar = m;
+      this.qMar = m.nombre || '';
+      this.cerrarPanel('mar');
+    },
+    moverSel(tipo, delta) {
+      if (tipo === 'vend' && this.vendedores.length) {
+        this.idxVend = (this.idxVend + delta + this.vendedores.length) % this.vendedores.length;
+      } else if (tipo === 'cli' && this.clientes.length) {
+        this.idxCli = (this.idxCli + delta + this.clientes.length) % this.clientes.length;
+      } else if (tipo === 'mar' && this.marcas.length) {
+        this.idxMar = (this.idxMar + delta + this.marcas.length) % this.marcas.length;
+      }
+    },
+    elegirResaltado(tipo) {
+      if (tipo === 'vend' && this.vendedores[this.idxVend]) this.elegirVend(this.vendedores[this.idxVend]);
+      else if (tipo === 'cli' && this.clientes[this.idxCli]) this.elegirCli(this.clientes[this.idxCli]);
+      else if (tipo === 'mar' && this.marcas[this.idxMar]) this.elegirMar(this.marcas[this.idxMar]);
     },
     async crear() {
       this.mensaje = ''; this.error = '';
-      if (!this.form.CodViajante || !this.form.id_cliente || !this.form.CodMarca) {
-        this.error = 'Completá vendedor, cliente y marca.';
+      if (!this.selVend || !this.selCli || !this.selMar) {
+        this.error = 'Completá vendedor, cliente y marca con la búsqueda predictiva.';
         return;
       }
       this.guardando = true;
       const { status, data } = await this.postJson(this.urls.crear, {
-        CodViajante: Number(this.form.CodViajante),
-        id_cliente: Number(this.form.id_cliente),
-        CodMarca: Number(this.form.CodMarca),
+        CodViajante: Number(this.selVend.CodViajante),
+        id_cliente: Number(this.selCli.id_cliente),
+        CodMarca: Number(this.selMar.CodMarca),
       });
       this.guardando = false;
       if (status === 409) {
@@ -212,8 +340,11 @@ function vcmApp() {
       }
       if (!data.ok) { this.error = data.error || 'No se pudo crear.'; return; }
       this.mensaje = data.message || 'Terna creada.';
-      this.form.CodMarca = '';
+      this.selMar = null;
+      this.qMar = '';
+      this.marcas = [];
       await this.cargar();
+      this.buscarMarcas();
     },
     async anular(t) {
       if (!confirm('¿Anular la terna de ' + t.nombre_marca + ' para ' + t.nombre_cliente + '?')) return;
@@ -226,5 +357,4 @@ function vcmApp() {
   };
 }
 </script>
-{{ urls_api|json_script:"vcm-urls" }}
 {% endblock %}

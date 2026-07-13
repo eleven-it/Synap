@@ -21,7 +21,7 @@ En AdministraNET, el ingreso de renglón abre un modal "Selección de artículo"
 - **Servicio:** `core/services/administranet_stock.py`
   - `get_stock_por_deposito(base_empresa, id_articulo)`: lista depósitos con saldo para el artículo.
   - `get_stock_por_lote(base_empresa, id_articulo, id_deposito=None)`: lista lotes con cod_lote, fecha_vto_lote, stock_lote (opcionalmente filtrado por depósito).
-  - `_buscar_articulos_con_precios(base_empresa, q, limit)`: búsqueda con campos de precios.
+  - `_buscar_articulos_con_precios(base_empresa, q, limit, lista_precio=2, tipo_art_fab=None)`: búsqueda con campos de precios; `tipo_art_fab` opcional filtra por tipo de fabricación.
   - `buscar_articulos_para_movimiento(base_empresa, q, limit, id_deposito=None)`: orquesta búsqueda + stock por depósito + stock por lote por cada resultado.
   - `buscar_articulo_por_codigo_exacto(base_empresa, codigo, id_deposito=None)`: búsqueda exacta por id_manual, IDArt, NroCodBarra, NroCodBarraF, CodigoArticuloT, CodArtProv; devuelve un único artículo con stock_depositos y stock_lotes o None.
 

@@ -41,12 +41,18 @@ Controla la fuente de verdad en runtime (`django_project/settings.py`):
 
 | Valor | Comportamiento |
 |-------|----------------|
-| `legacy` (**default**) | Lee de `permiso_sistema` + `permiso_sistema_puesto`. |
-| `synap` | Lee de `synap_*`; **fallback a legacy** si el puesto no tiene mapeo en `synap_puesto_rol`. |
+| `synap` (**cutover / menú Synap**) | Lee **solo** `synap_*`. **Sin** fallback a `permiso_sistema*`. |
 | `dual` | Unión de ambas; registra `WARNING` si difieren (validación de paridad). |
+| `legacy` | Lee de `permiso_sistema` + `permiso_sistema_puesto` (rollback / entornos no migrados). |
+
+**Política de producto:** el menú y el control de acceso de pantallas Synap se arman con
+permisos del almacén `synap_*`. Las tablas `permiso_sistema` / `permiso_sistema_puesto`
+solo se leen cuando hace falta paridad con una funcionalidad legacy de AdministraNET
+(o en modos `legacy`/`dual` de migración), **nunca** para “completar” el menú en modo `synap`.
 
 Invariantes en los 3 modos: `cod_usuario='supervisor' → {"*"}`; permisos Reports para
-supervisor; suma de complementarios de la tabla `permisos` (Clavemenu VB6).
+supervisor; suma de complementarios de la tabla `permisos` (Clavemenu VB6; distinta de
+`permiso_sistema*`).
 
 **Rollback:** `SYNAP_PERMISOS_SOURCE=legacy` (sin DROP de tablas `synap_*`).
 
@@ -54,7 +60,7 @@ supervisor; suma de complementarios de la tabla `permisos` (Clavemenu VB6).
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
-| `SYNAP_PERMISOS_SOURCE` | `legacy` | Fuente de permisos runtime. |
+| `SYNAP_PERMISOS_SOURCE` | `legacy` (settings); en cutover usar `synap` | Fuente de permisos runtime. |
 | `SYNAP_AUTO_ENSURE_SCHEMA` | `True` | Crea `synap_*` + siembra catálogo tras login / al abrir la UI. No escribe en VB6. |
 | `SYNAP_AUTO_ENSURE_SCHEMA_TTL` | `86400` | TTL (s) del cache por empresa. |
 | `SYNAP_BLOQUEAR_CREAR_PUESTOS` | `True` | Bloquea `crear_puesto` (los puestos se crean en AdministraNET). |
@@ -93,8 +99,9 @@ Ambos reutilizan `core.services.synap_permisos.backfill_synap_permisos_desde_leg
 
 1. `apply_synap_permisos_tables <base>` y `backfill_synap_permisos_from_legacy <base>`.
 2. `SYNAP_PERMISOS_SOURCE=dual` → observar logs de divergencia (deben ser 0 en el subconjunto Synap).
-3. `SYNAP_PERMISOS_SOURCE=synap` (cutover). Verificar que login y `/core/permisos-puesto/`
-   **no** escriben en `permiso_sistema*`.
+3. `SYNAP_PERMISOS_SOURCE=synap` (cutover). El menú usa **solo** `synap_*` (sin fallback
+   a `permiso_sistema*`). Verificar que login y `/core/permisos-puesto/` **no** escriben
+   en `permiso_sistema*`.
 4. Estable → `purge_synap_legacy_permisos <base> --ejecutar` y `SYNAP_AUTO_SYNC_PERMISSIONS=False`.
 
 ## 8. Refresco de permisos en sesión
@@ -107,5 +114,9 @@ para refrescar su sesión.
 ## 9. Prohibiciones
 
 - Synap **no** escribe en `permiso_sistema` / `permiso_sistema_puesto`.
+- Con `SYNAP_PERMISOS_SOURCE=synap`, el menú y `get_permisos_totales_administranet`
+  **no** leen `permiso_sistema*` (ni como fallback).
 - Synap **no** crea `puestos` (`idpuesto` es ancla fija de AdministraNET).
-- Lecturas complementarias legacy (`permisos`/Clavemenu, `permisos_sistema` TPV) se conservan.
+- Lecturas complementarias legacy (`permisos`/Clavemenu) se conservan.
+- Lecturas puntuales de `permiso_sistema*` solo para funcionalidad legacy AdministraNET
+  (p. ej. paridad MayoristApp / TPV) fuera del armado del menú Synap.

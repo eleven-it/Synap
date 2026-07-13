@@ -111,6 +111,7 @@ def _conteo_categorias_migracion(qs) -> dict[str, int]:
 
 
 def _load_admin_articulos(base_empresa: str) -> list[dict]:
+    """Universo Admin para inferencia / enriquecimiento de candidatos: solo tipo_art_fab Terminado."""
     with mysql_cursor(base_empresa, dict_cursor=True) as cur:
         cur.execute(
             """
@@ -119,6 +120,7 @@ def _load_admin_articulos(base_empresa: str) -> list[dict]:
                    TRIM(COALESCE(NombreArticulo, '')) AS NombreArticulo,
                    TRIM(COALESCE(CodArtProv, '')) AS CodArtProv
             FROM articulo
+            WHERE COALESCE(TRIM(tipo_art_fab), '') = 'Terminado'
             """
         )
         return list(cur.fetchall())
@@ -761,6 +763,36 @@ def descartar_articulo(*, base_empresa: str, best_id: str, usuario: str, notas: 
     obj.validado_por = (usuario or "")[:64]
     obj.validado_en = timezone.now()
     obj.notas = notas or obj.notas
+    obj.save()
+    refresh_parity_counters(base_empresa).save()
+    return obj
+
+
+def reabrir_articulo(
+    *,
+    base_empresa: str,
+    best_id: str,
+    usuario: str,
+    notas: str = "",
+) -> BestArticuloMap:
+    """Quita VALIDADO/DESCARTADO para permitir reasignar el IDArt (conserva candidatos)."""
+    obj = BestArticuloMap.objects.get(base_empresa=base_empresa, best_id_articulo=best_id)
+    if obj.estado not in (
+        BestArticuloMap.Estado.VALIDADO,
+        BestArticuloMap.Estado.DESCARTADO,
+    ):
+        raise ValueError("Solo se puede reabrir un mapeo validado o descartado.")
+    estado_prev = obj.estado
+    if obj.admin_idart:
+        obj.estado = BestArticuloMap.Estado.AMBIGUO
+    else:
+        obj.estado = BestArticuloMap.Estado.SIN_CANDIDATO
+    obj.validado = False
+    obj.validado_por = ""
+    obj.validado_en = None
+    marca = (notas or "").strip() or f"Reabierto por {(usuario or '-')[:64]} (antes {estado_prev})."
+    prev = (obj.notas or "").strip()
+    obj.notas = f"{prev}\n{marca}".strip() if prev else marca
     obj.save()
     refresh_parity_counters(base_empresa).save()
     return obj

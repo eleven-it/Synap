@@ -43,3 +43,5 @@ Tabla opcional `ecom_usuario_viajante` (1 usuario → 1 `CodViajante`), patrón 
 | GET | `.../vendedores/`, `.../clientes/`, `.../marcas/` | Búsqueda predictiva `?q=` |
 
 UI: `/ecom/mayoristapp/config/vendedor-cliente-marca/` (canon tablero slate-800).
+
+**Formulario “Nueva terna”:** un solo campo de **búsqueda predictiva** (combobox Alpine) por Vendedor, Cliente y Marca — sin `<select>`. Al enfocar o tipear se listan sugerencias desde los GET `.../vendedores|clientes|marcas/?q=`. El filtro de vendedor de la grilla usa el mismo patrón.

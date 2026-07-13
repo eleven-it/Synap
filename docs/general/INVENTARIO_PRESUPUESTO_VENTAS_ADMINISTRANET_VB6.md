@@ -197,7 +197,7 @@ Form=Formularios\Visualiza_Presupuesto.frm
 - **Modal de espera** (`#pre-busy-modal`): se muestra al buscar clientes, al buscar artículos por código y al enviar **Guardar** (textos en español).
 - **Resumen** (pie compacto): **Importe base**; **Descuento global** con toggle **%** / **$** y campo visible — POST **`desc_global_pct_1`** oculto (porcentaje equivalente; modo `$` convierte desde importe); **`desc_global_pct_2`** oculto vacío; filas **IVA** / **impuestos internos** dinámicas (solo si hay importe; escalado si hay dto. global); bloque **percepciones** reservado oculto hasta motor; **Descuentos totales** (renglón + global); **Total**.
 - Lectura de renglones PRE en Synap (`listar_lineas_presupuesto_stockp`): además de ``CodigoMovimiento`` del PRE, deben resolverse líneas ya pasadas a pedido vía ``stockp.codmov_presupuesto`` y/o ``ped_presup`` (movimiento pedido ↔ presupuesto); si no, un PRE «En Pedido» puede mostrar cabecera con importe y tabla vacía.
-- API `GET /core/api/articulos/search/` (`_buscar_articulos_con_precios`): parámetro opcional **`lista_precio`** (0–6: costo, lista oficial, listas 1–5); devuelve **`PrecioLista`** y columnas de precio. También **`ImpuestoInterno`** (`articulo.impuesto_interno`).
+- API `GET /core/api/articulos/search/` (`_buscar_articulos_con_precios`): parámetro opcional **`lista_precio`** (0–6: costo, lista oficial, listas 1–5); devuelve **`PrecioLista`** y columnas de precio. También **`ImpuestoInterno`** (`articulo.impuesto_interno`). Parámetro opcional **`tipo_art_fab`** (ej. `Terminado`) para filtrar por tipo de fabricación.
 - POST: `_construir_lineas_desde_post` (`linea_*`) y `desc_global_pct_*`, más `linea_detalle` oculto por fila.
 
 ---
