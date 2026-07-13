@@ -423,7 +423,19 @@ export function initializeTagsFilter(
     } else if (e.key === "Escape") {
       hideDropdown();
       input.blur();
+    } else if (e.key === "Tab") {
+      // Al tabular sin elegir, cerrar el listado (no preventDefault: el foco sigue).
+      hideDropdown();
     }
+  });
+
+  input.addEventListener("blur", () => {
+    // Delay para permitir click/mousedown en una opción del dropdown.
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (container.contains(active) || dropdown.contains(active)) return;
+      hideDropdown();
+    }, 150);
   });
 
   document.addEventListener("click", (e) => {

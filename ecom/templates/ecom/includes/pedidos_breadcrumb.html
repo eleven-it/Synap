@@ -1,4 +1,18 @@
-{# Breadcrumb unificado — Ventas · Gestión de pedidos #}
+{% comment %}
+  Breadcrumb unificado — Ventas · Gestión de pedidos.
+  variant: "hero" (por defecto, sobre fondo oscuro) | "purple" (estilo tablero MPR sobre fondo claro)
+{% endcomment %}
+{% if variant == "purple" %}
+<nav class="mb-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Ruta de navegación">
+  <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <li><a href="{{ hub_url }}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Gestión de pedidos</a></li>
+    {% if current_label %}
+    <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
+    <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">{{ current_label }}</span></li>
+    {% endif %}
+  </ol>
+</nav>
+{% else %}
 <nav class="mb-2 text-xs text-slate-300 dark:text-slate-400" aria-label="Ruta de navegación">
   <a href="{{ hub_url }}" class="hover:text-white transition">Gestión de pedidos</a>
   {% if current_label %}
@@ -6,3 +20,4 @@
   <span class="text-white dark:text-slate-100 font-medium">{{ current_label }}</span>
   {% endif %}
 </nav>
+{% endif %}

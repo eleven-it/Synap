@@ -1,0 +1,275 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Clientes BEST - Migración MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 dark:bg-gray-900 sm:py-10">
+  <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+    <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <li><a href="{% url 'mpr:tablero_produccion' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a></li>
+        <li class="text-gray-300" aria-hidden="true">/</li>
+        <li><a href="{% url 'mpr:migracion_best_hub' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Migración BEST</a></li>
+        <li class="text-gray-300" aria-hidden="true">/</li>
+        <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Clientes</span></li>
+      </ol>
+    </nav>
+
+    <header class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Validación 1:1 de clientes</h1>
+        <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
+          Inferencia por CUIT, nombre, id_manual y base de campaña (ej. ATOMIK-FEBRERO → ATOMIK).
+          Asigná buscando por nombre o CUIT en AdministraNET.
+          Solo bloquean el gate los clientes en <strong>pedidos abiertos</strong> BEST.
+        </p>
+        <p class="mt-2 text-sm text-gray-700 dark:text-gray-200">
+          Necesarios pendientes: <strong class="text-amber-700 dark:text-amber-300">{{ clientes_resumen.necesarios_pendientes }}</strong>
+          · Cumplen: <strong class="text-emerald-700 dark:text-emerald-300">{{ clientes_resumen.cumplen }}</strong>
+          · Fuera de alcance: <strong class="text-gray-600 dark:text-gray-300">{{ clientes_resumen.fuera_alcance }}</strong>
+          · Excluidos: <strong>{{ clientes_resumen.excluidos }}</strong>
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <form method="post" action="{% url 'mpr:migracion_best_sincronizar_clientes' %}" class="mpr-post-loading" data-mpr-loading-title="Sincronizando clientes" data-mpr-loading-subtitle="Consultando BEST e inferiendo mapeos. Puede demorar.">
+          {% csrf_token %}
+          <button type="submit" class="inline-flex min-h-11 items-center rounded-xl bg-purple-600 px-5 text-sm font-semibold text-white hover:bg-purple-700">
+            Sincronizar + inferir
+          </button>
+        </form>
+        <form method="post" action="{% url 'mpr:migracion_best_validar_cliente' %}" class="mpr-post-loading" data-mpr-loading-title="Procesando cliente" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
+          {% csrf_token %}
+          <input type="hidden" name="accion" value="aceptar_lote">
+          <button type="submit" class="inline-flex min-h-11 items-center rounded-xl border border-emerald-300 bg-emerald-50 px-5 text-sm font-semibold text-emerald-800 hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200">
+            Aceptar inferidos ≥85
+          </button>
+        </form>
+      </div>
+    </header>
+
+    <div class="mb-4 flex flex-wrap gap-2 text-xs">
+      <span class="rounded-md bg-emerald-100 px-2 py-1 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Validados {{ clientes_resumen.validados }}</span>
+      <span class="rounded-md bg-blue-100 px-2 py-1 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">Inferidos {{ clientes_resumen.inferidos }}</span>
+      <span class="rounded-md bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Ambiguos {{ clientes_resumen.ambiguos }}</span>
+      <span class="rounded-md bg-rose-100 px-2 py-1 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200">Sin candidato {{ clientes_resumen.sin_candidato }}</span>
+    </div>
+
+    <form method="get" class="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <input type="hidden" name="filtrado" value="1">
+      <div class="flex flex-wrap items-end gap-3">
+        <div>
+          <label for="estado" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Estado</label>
+          <select name="estado" id="estado" class="h-11 rounded-xl border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+            <option value="">Todos</option>
+            {% for valor, etiqueta in opciones_estado %}
+            <option value="{{ valor }}" {% if filtro_estado == valor %}selected{% endif %}>{{ etiqueta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
+          <input type="checkbox" name="necesarios" value="1" {% if cola_trabajo %}checked{% endif %} class="rounded border-gray-300 text-purple-600">
+          Solo necesarios pendientes
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <input type="checkbox" name="todos" value="1" {% if not cola_trabajo and request.GET.todos == '1' %}checked{% endif %} class="rounded border-gray-300 text-purple-600">
+          Ver todos (incl. históricos)
+        </label>
+        <button type="submit" class="inline-flex min-h-11 items-center rounded-xl bg-gray-900 px-4 text-sm font-semibold text-white dark:bg-gray-100 dark:text-gray-900">Filtrar</button>
+      </div>
+    </form>
+
+    <div x-data="bestSeleccionLote()" @change="refresh()">
+    <form id="form-aceptar-sel-cli" method="post" action="{% url 'mpr:migracion_best_validar_cliente' %}" class="mpr-post-loading mb-3 flex flex-wrap items-center gap-3" data-mpr-loading-title="Procesando cliente" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
+      {% csrf_token %}
+      <input type="hidden" name="accion" value="aceptar_seleccion">
+      <button type="submit"
+              :disabled="n === 0"
+              :class="n > 0 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-700'"
+              class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold"
+              @click="if (n === 0) { $event.preventDefault(); }">
+        Aceptar seleccionados (<span x-text="n">0</span>)
+      </button>
+      <span class="text-xs text-gray-500">Marcá filas con candidato Admin para validarlas en lote.</span>
+    </form>
+
+    <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+      <div class="overflow-x-auto">
+        <table class="min-w-[64rem] w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead class="bg-gray-50 dark:bg-gray-900/40">
+            <tr>
+              <th class="w-10 px-3 py-3 text-left">
+                <input type="checkbox"
+                       class="rounded border-gray-300 text-purple-600"
+                       title="Seleccionar todas las filas con candidato"
+                       @change="toggleAll($event)">
+              </th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Cliente BEST</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">CUIT</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Órd.</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Alcance</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Estado</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Candidato Admin</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {% for f in filas %}
+            <tr class="align-top hover:bg-gray-50/70 dark:hover:bg-gray-700/30">
+              <td class="px-3 py-3">
+                {% if f.estado != 'VALIDADO' and f.estado != 'DESCARTADO' and f.admin_codigo %}
+                <input type="checkbox"
+                       class="best-sel-row rounded border-gray-300 text-purple-600"
+                       name="sel"
+                       value="{{ f.id }}"
+                       form="form-aceptar-sel-cli">
+                {% endif %}
+              </td>
+              <td class="px-3 py-3 text-sm font-medium text-gray-900 dark:text-white">{{ f.best_cliente }}</td>
+              <td class="px-3 py-3 text-sm text-gray-600 dark:text-gray-300">{{ f.best_cuit|default:"—" }}</td>
+              <td class="px-3 py-3 text-sm text-gray-600 dark:text-gray-300">{{ f.ordenes_abiertas }}</td>
+              <td class="px-3 py-3 text-sm">
+                {% if f.categoria_migracion == 'CUMPLE' %}
+                <span class="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Cumple</span>
+                {% elif f.categoria_migracion == 'NECESARIO_PENDIENTE' %}
+                <span class="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Necesario</span>
+                {% elif f.categoria_migracion == 'NO_NECESARIO' %}
+                <span class="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-300">Histórico</span>
+                {% elif f.categoria_migracion == 'EXCLUIDO' %}
+                <span class="rounded-md bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-600 dark:text-slate-200">Excluido</span>
+                {% endif %}
+              </td>
+              <td class="px-3 py-3 text-sm">
+                {% if f.estado == 'VALIDADO' %}
+                <span class="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Validado</span>
+                {% elif f.estado == 'AMBIGUO' %}
+                <span class="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Ambiguo</span>
+                {% elif f.estado == 'SIN_CANDIDATO' %}
+                <span class="rounded-md bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800 dark:bg-rose-900/40 dark:text-rose-200">Sin candidato</span>
+                {% elif f.estado == 'DESCARTADO' %}
+                <span class="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-200">Descartado</span>
+                {% else %}
+                <span class="rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">{{ f.get_estado_display }}</span>
+                {% endif %}
+                {% if f.estado == 'SIN_CANDIDATO' or f.estado == 'AMBIGUO' %}
+                <div class="mt-1 max-w-[14rem] text-[10px] text-gray-500 dark:text-gray-400">Sin alta Admin o ambiguo — si es histórico y no debe migrar, usá Descartar.</div>
+                {% elif f.score %}
+                <div class="mt-1 text-[10px] text-gray-400">score {{ f.score }} · {{ f.razon }}</div>
+                {% endif %}
+              </td>
+              <td class="px-3 py-3 text-sm text-gray-700 dark:text-gray-200">
+                {% if f.admin_codigo %}
+                <div class="font-medium">Código {{ f.admin_codigo }}</div>
+                <div class="text-xs text-gray-500">{{ f.admin_nombre|truncatechars:50 }}</div>
+                {% if f.alt1_codigo and f.estado != 'VALIDADO' and f.estado != 'DESCARTADO' %}
+                <form method="post"
+                      action="{% url 'mpr:migracion_best_validar_cliente' %}"
+                      class="mpr-post-loading mt-1"
+                      data-mpr-loading-title="Asignando alternativa"
+                      data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
+                  {% csrf_token %}
+                  <input type="hidden" name="map_id" value="{{ f.id }}">
+                  <input type="hidden" name="accion" value="asignar">
+                  <input type="hidden" name="admin_codigo" value="{{ f.alt1_codigo }}">
+                  <button type="submit"
+                          class="max-w-full text-left text-[11px] font-medium text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
+                          title="Asignar alternativa: Código {{ f.alt1_codigo }}">
+                    Alt: {{ f.alt1_codigo }} — {{ f.alt1_nombre|truncatechars:35 }}
+                  </button>
+                </form>
+                {% elif f.alt1_codigo %}
+                <div class="mt-1 text-[11px] text-amber-700 dark:text-amber-300">Alt: {{ f.alt1_codigo }} — {{ f.alt1_nombre|truncatechars:35 }}</div>
+                {% endif %}
+                {% else %}
+                <span class="text-xs text-gray-400">Sin candidato</span>
+                {% endif %}
+              </td>
+              <td class="px-3 py-3 text-sm">
+                {% if f.estado != 'VALIDADO' and f.estado != 'DESCARTADO' %}
+                <div class="flex flex-col gap-2">
+                  {% if f.admin_codigo %}
+                  <form method="post" action="{% url 'mpr:migracion_best_validar_cliente' %}" class="mpr-post-loading" data-mpr-loading-title="Procesando cliente" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
+                    {% csrf_token %}
+                    <input type="hidden" name="map_id" value="{{ f.id }}">
+                    <input type="hidden" name="accion" value="aceptar">
+                    <button type="submit" class="text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-300">Aceptar inferido</button>
+                  </form>
+                  {% endif %}
+                  <form method="post"
+                        action="{% url 'mpr:migracion_best_validar_cliente' %}"
+                        class="mpr-post-loading flex min-w-[16rem] max-w-sm flex-col gap-1"
+                        x-data="bestAsignarCliente('{% url 'core_api:cliente_search' %}')"
+                        @submit="validarSubmit($event)" data-mpr-loading-title="Procesando cliente" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
+                    {% csrf_token %}
+                    <input type="hidden" name="map_id" value="{{ f.id }}">
+                    <input type="hidden" name="accion" value="asignar">
+                    <input type="hidden" name="admin_codigo" :value="adminCodigo">
+                    <div class="relative" x-ref="wrap">
+                      <input type="text"
+                             x-model="q"
+                             @input.debounce.300ms="buscar()"
+                             @focus="if (q.trim()) buscar()"
+                             @keydown="onKeydown($event)"
+                             autocomplete="off"
+                             placeholder="Buscar por nombre o CUIT…"
+                             class="h-8 w-full rounded-lg border border-gray-300 px-2 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                      <span x-show="loading" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">…</span>
+                      <template x-teleport="body">
+                        <div x-show="dropdown"
+                             x-cloak
+                             x-transition
+                             x-ref="panel"
+                             class="fixed z-[200] overflow-y-auto overscroll-contain rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
+                             :style="panelStyle"
+                             @mousedown.outside="onOutside($event)">
+                          <p x-show="error" class="px-3 py-2 text-xs text-red-600 dark:text-red-400">Error al buscar. Reintentá.</p>
+                          <p x-show="!error && q.trim() && resultados.length === 0 && !loading" class="px-3 py-2 text-xs text-gray-500">Sin resultados.</p>
+                          <template x-for="(c, i) in resultados" :key="'bc-' + (c.Codigo || i)">
+                            <button type="button"
+                                    :data-best-opt-idx="i"
+                                    @mousedown.prevent="seleccionar(c)"
+                                    @mouseenter="highlighted = i"
+                                    :class="highlighted === i ? 'bg-purple-100 dark:bg-purple-900/40' : 'hover:bg-purple-50 dark:hover:bg-purple-900/20'"
+                                    class="w-full border-b border-gray-100 px-3 py-2 text-left text-xs last:border-0 dark:border-gray-700">
+                              <span class="block font-medium text-gray-900 dark:text-gray-100" x-text="c.Nombre || '—'"></span>
+                              <span class="mt-0.5 block text-[10px] text-gray-500 dark:text-gray-400" x-text="metaDe(c)"></span>
+                            </button>
+                          </template>
+                        </div>
+                      </template>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button type="submit"
+                              :disabled="!adminCodigo"
+                              :class="adminCodigo ? 'text-purple-700 hover:underline dark:text-purple-300' : 'cursor-not-allowed text-gray-400'"
+                              class="text-xs font-semibold">Asignar</button>
+                      <span x-show="adminCodigo" class="text-[10px] text-gray-500" x-text="'→ Código ' + adminCodigo"></span>
+                      <span x-show="errorMsg" class="text-[10px] text-red-600" x-text="errorMsg"></span>
+                    </div>
+                  </form>
+                  <form method="post" action="{% url 'mpr:migracion_best_validar_cliente' %}" class="mpr-post-loading" data-mpr-loading-title="Procesando cliente" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
+                    {% csrf_token %}
+                    <input type="hidden" name="map_id" value="{{ f.id }}">
+                    <input type="hidden" name="accion" value="descartar">
+                    <button type="submit" class="text-xs font-medium text-gray-500 hover:underline">Descartar</button>
+                  </form>
+                </div>
+                {% else %}
+                <span class="text-xs text-gray-400">{{ f.validado_por }}</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">Sin datos. Sincronizá desde BEST.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+  </div>
+</section>
+<script src="{% static 'mpr/js/best_asignar_maestro.js' %}"></script>
+{% endblock %}

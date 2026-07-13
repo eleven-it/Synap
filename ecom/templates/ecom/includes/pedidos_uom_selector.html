@@ -1,0 +1,20 @@
+{% comment %}
+  Selector UOM condicional (Unidad/Bulto/Display).
+  Visible solo si itemMuestraUom(it) — requiere presentacion.opciones en el ítem.
+  Contrato: cambiarUom(it.id, tipo)
+{% endcomment %}
+<div x-show="itemMuestraUom(it)" x-cloak class="min-w-[5.5rem]">
+  <label class="sr-only" :for="`uom-${it.id}`">Unidad de medida</label>
+  <select :id="`uom-${it.id}`"
+          :value="it.tipo_unidad || 'Unidad'"
+          @change="cambiarUom(it.id, $event.target.value)"
+          class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs px-2 py-1.5 focus:ring-2 focus:ring-sky-500/40 outline-none">
+    <template x-for="op in itemOpcionesUom(it)" :key="op.tipo">
+      <option :value="op.tipo" x-text="op.etiqueta || op.tipo"></option>
+    </template>
+  </select>
+</div>
+<span x-show="!itemMuestraUom(it) && it.tipo_unidad && it.tipo_unidad !== 'Unidad'"
+      class="text-[10px] text-slate-500 dark:text-slate-400"
+      x-text="it.tipo_unidad"
+      x-cloak></span>

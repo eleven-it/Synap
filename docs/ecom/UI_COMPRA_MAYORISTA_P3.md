@@ -62,6 +62,7 @@ ya migradas (P0/P1/P2/P3). Sigue la fuente de verdad de UI (`docs/general/FUENTE
 
 ## Notas / follow-up
 
+- **Rediseño OrderShell (10/07/2026):** la pantalla de compra migró a layout de cinco regiones (header sticky, captura TPV, líneas, summary sticky/bottom bar, checkout colapsable). Alpine extraído a módulos `.mjs`; modales del canon reemplazan `confirm()` en flujo compra. Documentación: `docs/order-ui-redesign/10-estado-implementacion.md`. Sin cambios de backend ni contratos API.
 - El **punto de venta** por defecto se toma de la sesión; el campo permite override manual.
 - Selector de **cliente** embebido (`compra_mayorista_cliente.mjs`) y filtro **marcas** al lado del cliente.
 - El cliente **no persiste** entre cargas de `/compra/` ni tras confirmar: al abrir/refrescar la pantalla o al terminar el checkout se limpia sesión y carrito borrador (vendedor).

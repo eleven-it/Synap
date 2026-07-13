@@ -335,6 +335,74 @@
   .compra-toggle-btn-dev-active { background: rgb(244 63 94); color: #fff; }
   .compra-toggle-btn-dev-idle { background: transparent; color: rgb(254 202 202); }
   .compra-toggle-btn-dev-idle:hover { background: rgb(136 19 55 / 0.4); }
+  .compra-toggle-btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(14 165 233);
+  }
+  .dark .compra-toggle-btn:focus-visible {
+    box-shadow: 0 0 0 2px rgb(15 23 42), 0 0 0 4px rgb(56 189 248);
+  }
+
+  /* Toggle grande (variant dark) — protagonista en el hero tipo tablero de producción.
+     PED activo purple-600 (CTA primario), PRE amber, DEV rose. Idle slate-300 + hover slate-700. */
+  .compra-toggle-wrap-lg {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    width: 100%;
+  }
+  @media (min-width: 640px) {
+    .compra-toggle-wrap-lg { width: auto; align-items: flex-end; }
+  }
+  .compra-toggle-label-lg {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgb(148 163 184); /* slate-400 */
+  }
+  .compra-toggle-shell-lg {
+    display: inline-flex;
+    width: 100%;
+    gap: 0.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgb(51 65 85); /* slate-700 */
+    background: rgb(15 23 42 / 0.6); /* slate-900/60 */
+    padding: 0.25rem;
+    touch-action: manipulation;
+  }
+  @media (min-width: 640px) {
+    .compra-toggle-shell-lg { width: auto; }
+  }
+  .compra-toggle-btn-lg {
+    min-height: 3rem;
+    flex: 1 1 0;
+    white-space: nowrap;
+    border-radius: 0.375rem;
+    padding: 0.5rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    line-height: 1.25;
+    border: none;
+    cursor: pointer;
+    background: transparent;
+    color: rgb(203 213 225); /* slate-300 */
+    transition: background-color 0.15s, color 0.15s;
+  }
+  @media (min-width: 640px) {
+    .compra-toggle-btn-lg { flex: none; font-size: 1rem; }
+  }
+  .compra-toggle-btn-lg-idle { background: transparent; color: rgb(203 213 225); }
+  .compra-toggle-btn-lg-idle:hover { background: rgb(51 65 85); color: #fff; } /* slate-700 */
+  .compra-toggle-btn-lg-ped-active { background: rgb(147 51 234); color: #fff; } /* purple-600 */
+  .compra-toggle-btn-lg-pre-active { background: rgb(245 158 11); color: rgb(69 26 3); } /* amber-500 */
+  .compra-toggle-btn-lg-dev-active { background: rgb(225 29 72); color: #fff; } /* rose-600 */
+  /* Estado activo por defecto (PED) antes de la hidratación de Alpine */
+  .compra-toggle-btn-lg[aria-selected="true"] { background: rgb(147 51 234); color: #fff; }
+  .compra-toggle-btn-lg:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgb(30 41 59), 0 0 0 4px rgb(168 85 247); /* purple-500 */
+  }
 
   /* Compra mayorista — modos PED / PRE / DEV (contenido) */
   .compra-modo-shell.compra-modo-ped .pedidos-workspace,
@@ -361,16 +429,7 @@
   .dark .compra-modo-shell.compra-modo-dev .pedidos-card {
     border-color: rgb(244 63 94 / 0.35);
   }
-  .compra-carrito-panel {
-    min-height: 0;
-  }
   @media (max-width: 767px) {
-    .compra-carrito-panel {
-      max-height: none;
-    }
-    .compra-carrito-scroll {
-      max-height: none !important;
-    }
     .compra-modo-shell .pedidos-input,
     .compra-modo-shell input[type="number"],
     .compra-modo-shell select,
@@ -379,9 +438,485 @@
       font-size: 1rem;
     }
   }
+
+  /* ── @deprecated F5: alias legacy carrito/checkout → OrderShell ──
+   * Sin referencias en templates desde F1; se mantienen alias una versión.
+   * Preferir: .pedidos-order-lines, .pedidos-order-lines-scroll, .pedidos-order-summary-panel
+   */
+  .compra-carrito-panel,
+  .pedidos-order-lines {
+    min-height: 0;
+  }
+  @media (max-width: 767px) {
+    .compra-carrito-panel,
+    .pedidos-order-lines {
+      max-height: none;
+    }
+    .compra-carrito-scroll,
+    .pedidos-order-lines-scroll {
+      max-height: none !important;
+    }
+  }
   @media (min-width: 768px) {
     .compra-carrito-scroll {
       max-height: 46vh;
+      overflow-y: auto;
     }
+  }
+  @media (min-width: 1024px) {
+    .compra-carrito-scroll {
+      max-height: none;
+      overflow-y: visible;
+    }
+  }
+
+  /* Coherencia hub / listados / detalle (tokens compartidos F5) */
+  .pedidos-surface-muted {
+    border-radius: 1rem;
+    border: 1px solid rgb(226 232 240);
+    background: rgb(248 250 252);
+  }
+  .dark .pedidos-surface-muted {
+    border-color: rgb(30 41 59);
+    background: rgb(15 23 42 / 0.6);
+  }
+  .pedidos-hub-highlight {
+    border-color: rgb(186 230 253);
+  }
+  .dark .pedidos-hub-highlight {
+    border-color: rgb(14 165 233 / 0.35);
+  }
+
+  /* ── OrderShell (rediseño toma de pedidos) ── */
+  .pedidos-order-shell {
+    --pedidos-header-offset: 0.5rem;
+  }
+
+  /* Fila de contexto cliente|marcas — no sticky para no competir con el hero oscuro fijo */
+  .pedidos-order-header {
+    position: static;
+    padding: 0;
+  }
+
+  .pedidos-order-header-cliente,
+  .pedidos-order-header-marcas {
+    min-width: 0;
+  }
+
+  .pedidos-order-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 0 1 auto;
+  }
+
+  .pedidos-order-main {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    align-items: start;
+  }
+  @media (min-width: 1024px) {
+    .pedidos-order-main {
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+      gap: 1.5rem;
+    }
+  }
+
+  .pedidos-order-primary {
+    min-width: 0;
+  }
+
+  .pedidos-order-capture {
+    min-width: 0;
+  }
+
+  .pedidos-order-lines {
+    min-width: 0;
+  }
+
+  .pedidos-order-lines-scroll {
+    max-height: none;
+  }
+  @media (min-width: 1024px) {
+    .pedidos-order-lines-scroll {
+      max-height: 42vh;
+      overflow-y: auto;
+    }
+  }
+
+  .pedidos-order-summary {
+    min-width: 0;
+  }
+  @media (min-width: 1024px) {
+    .pedidos-order-summary {
+      position: sticky;
+      top: calc(5.5rem + var(--pedidos-header-offset));
+      align-self: start;
+    }
+  }
+
+  .pedidos-order-summary-panel {
+    border-radius: 1.5rem;
+    border: 1px solid rgb(226 232 240);
+    background: #fff;
+    box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.12);
+    overflow: hidden;
+  }
+  .dark .pedidos-order-summary-panel {
+    border-color: rgb(30 41 59);
+    background: rgb(15 23 42);
+  }
+
+  .pedidos-order-summary-bar {
+    box-shadow: 0 -8px 20px -8px rgba(15, 23, 42, 0.15);
+  }
+  .dark .pedidos-order-summary-bar {
+    box-shadow: 0 -8px 20px -8px rgba(0, 0, 0, 0.35);
+  }
+  .pedidos-order-summary-bar--expanded {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  .pedidos-summary-total-toggle {
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 0.5rem;
+  }
+  .pedidos-summary-total-toggle:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(14 165 233);
+  }
+  .dark .pedidos-summary-total-toggle:focus-visible {
+    box-shadow: 0 0 0 2px rgb(15 23 42), 0 0 0 4px rgb(56 189 248);
+  }
+  .pedidos-summary-mobile-breakdown {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid rgb(226 232 240);
+  }
+  .dark .pedidos-summary-mobile-breakdown {
+    border-color: rgb(51 65 85);
+  }
+  @media (max-width: 1023px) {
+    .pedidos-order-summary-bar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 35;
+      border-top: 1px solid rgb(226 232 240);
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(8px);
+      padding: 0.75rem 1rem;
+      padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
+    .dark .pedidos-order-summary-bar {
+      border-color: rgb(30 41 59);
+      background: rgba(15, 23, 42, 0.96);
+    }
+    .pedidos-order-summary-panel--desktop {
+      display: none;
+    }
+  }
+  @media (min-width: 1024px) {
+    .pedidos-order-summary-bar {
+      display: none;
+    }
+  }
+
+  .pedidos-order-secondary {
+    border-radius: 1rem;
+    border: 1px solid rgb(226 232 240);
+    background: rgb(248 250 252);
+    overflow: hidden;
+  }
+  .dark .pedidos-order-secondary {
+    border-color: rgb(30 41 59);
+    background: rgb(15 23 42 / 0.6);
+  }
+
+  /* Tokens modo PED/PRE/DEV (botones shell) */
+  .pedidos-btn-modo-ped {
+    color: #fff;
+    background: rgb(2 132 199);
+  }
+  .pedidos-btn-modo-ped:hover { background: rgb(14 165 233); }
+  .dark .pedidos-btn-modo-ped { background: rgb(3 105 161); }
+  .dark .pedidos-btn-modo-ped:hover { background: rgb(14 165 233); }
+
+  .pedidos-btn-modo-pre {
+    color: rgb(69 26 3);
+    background: rgb(245 158 11);
+  }
+  .pedidos-btn-modo-pre:hover { background: rgb(251 191 36); }
+  .dark .pedidos-btn-modo-pre {
+    color: rgb(254 243 199);
+    background: rgb(180 83 9);
+  }
+  .dark .pedidos-btn-modo-pre:hover { background: rgb(217 119 6); }
+
+  .pedidos-btn-modo-dev {
+    color: #fff;
+    background: rgb(225 29 72);
+  }
+  .pedidos-btn-modo-dev:hover { background: rgb(244 63 94); }
+  .dark .pedidos-btn-modo-dev { background: rgb(190 18 60); }
+  .dark .pedidos-btn-modo-dev:hover { background: rgb(244 63 94); }
+
+  /* Input cantidad compacto */
+  .pedidos-input-qty {
+    width: 4rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgb(226 232 240);
+    background: #fff;
+    text-align: right;
+    font-size: 0.875rem;
+    padding: 0.375rem 0.5rem;
+    min-height: 2.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .pedidos-input-qty:focus {
+    outline: none;
+    border-color: rgb(14 165 233);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.25);
+  }
+  .dark .pedidos-input-qty {
+    border-color: rgb(51 65 85);
+    background: rgb(15 23 42);
+    color: rgb(241 245 249);
+  }
+
+  .pedidos-input-qty--stepper {
+    width: 2.75rem;
+    text-align: center;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+    -moz-appearance: textfield;
+  }
+  .pedidos-input-qty--stepper::-webkit-outer-spin-button,
+  .pedidos-input-qty--stepper::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .pedidos-qty-stepper-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgb(226 232 240);
+    background: rgb(248 250 252);
+    color: rgb(51 65 85);
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1;
+    transition: background 0.15s, border-color 0.15s;
+    touch-action: manipulation;
+  }
+  .pedidos-qty-stepper-btn:hover:not(:disabled) {
+    background: rgb(224 242 254);
+    border-color: rgb(125 211 252);
+    color: rgb(3 105 161);
+  }
+  .pedidos-qty-stepper-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .dark .pedidos-qty-stepper-btn {
+    border-color: rgb(51 65 85);
+    background: rgb(30 41 59);
+    color: rgb(226 232 240);
+  }
+  .dark .pedidos-qty-stepper-btn:hover:not(:disabled) {
+    background: rgb(12 74 110);
+    border-color: rgb(56 189 248);
+    color: rgb(186 230 253);
+  }
+
+  .pedidos-capture-input {
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .pedidos-capture-input:focus-visible {
+    outline: none;
+    border-color: rgb(14 165 233);
+    box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.2);
+  }
+  .dark .pedidos-capture-input:focus-visible {
+    border-color: rgb(56 189 248);
+    box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.25);
+  }
+
+  @media (max-width: 767px) {
+    .pedidos-order-capture-panel--sticky {
+      position: sticky;
+      top: 0.25rem;
+      z-index: 20;
+    }
+  }
+
+  /* Cards de línea (mobile) */
+  .pedidos-linea-card {
+    border-radius: 1rem;
+    border: 1px solid rgb(226 232 240);
+    background: rgb(248 250 252);
+    padding: 0.875rem 1rem;
+  }
+  .dark .pedidos-linea-card {
+    border-color: rgb(51 65 85);
+    background: rgb(30 41 59 / 0.5);
+  }
+  .pedidos-linea-card-quitar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+    padding: 0 0.75rem;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgb(225 29 72);
+    background: rgb(255 241 242);
+    border: 1px solid rgb(254 205 211);
+    transition: background 0.15s, color 0.15s;
+  }
+  .pedidos-linea-card-quitar:hover {
+    background: rgb(254 226 226);
+    color: rgb(190 18 60);
+  }
+  .pedidos-linea-card-quitar:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(244 63 94);
+  }
+  .dark .pedidos-linea-card-quitar {
+    color: rgb(251 113 133);
+    background: rgb(76 5 25 / 0.35);
+    border-color: rgb(190 18 60 / 0.5);
+  }
+  .dark .pedidos-linea-card-quitar:hover {
+    background: rgb(136 19 55 / 0.45);
+    color: rgb(254 202 202);
+  }
+
+  .pedidos-input:focus-visible,
+  .pedidos-select:focus-visible,
+  .pedidos-input-qty:focus-visible,
+  .pedidos-qty-stepper-btn:focus-visible {
+    outline: none;
+    border-color: rgb(14 165 233);
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(14 165 233);
+  }
+  .dark .pedidos-input:focus-visible,
+  .dark .pedidos-select:focus-visible,
+  .dark .pedidos-input-qty:focus-visible,
+  .dark .pedidos-qty-stepper-btn:focus-visible {
+    border-color: rgb(56 189 248);
+    box-shadow: 0 0 0 2px rgb(15 23 42), 0 0 0 4px rgb(56 189 248);
+  }
+
+  /* Badges operativos */
+  .pedidos-badge-borrador {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: rgb(7 89 133);
+    background: rgb(224 242 254);
+    border: 1px solid rgb(186 230 253);
+  }
+  .dark .pedidos-badge-borrador {
+    color: rgb(186 230 253);
+    background: rgb(12 74 110 / 0.35);
+    border-color: rgb(14 165 233 / 0.35);
+  }
+
+  .pedidos-badge-stock {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgb(21 128 61);
+    background: rgb(220 252 231);
+    border: 1px solid rgb(187 247 208);
+  }
+  .dark .pedidos-badge-stock {
+    color: rgb(134 239 172);
+    background: rgb(20 83 45 / 0.35);
+    border-color: rgb(34 197 94 / 0.35);
+  }
+
+  .compra-modo-shell.pedidos-order-shell.compra-modo-ped .pedidos-order-summary-panel,
+  .compra-modo-shell.pedidos-order-shell.compra-modo-ped .pedidos-order-lines {
+    border-color: rgb(186 230 253 / 0.9);
+  }
+  .dark .compra-modo-shell.pedidos-order-shell.compra-modo-ped .pedidos-order-summary-panel,
+  .dark .compra-modo-shell.pedidos-order-shell.compra-modo-ped .pedidos-order-lines {
+    border-color: rgb(14 165 233 / 0.35);
+  }
+  .compra-modo-shell.pedidos-order-shell.compra-modo-pre .pedidos-order-summary-panel,
+  .compra-modo-shell.pedidos-order-shell.compra-modo-pre .pedidos-order-lines {
+    border-color: rgb(253 230 138 / 0.95);
+  }
+  .dark .compra-modo-shell.pedidos-order-shell.compra-modo-pre .pedidos-order-summary-panel,
+  .dark .compra-modo-shell.pedidos-order-shell.compra-modo-pre .pedidos-order-lines {
+    border-color: rgb(245 158 11 / 0.35);
+  }
+  .compra-modo-shell.pedidos-order-shell.compra-modo-dev .pedidos-order-summary-panel,
+  .compra-modo-shell.pedidos-order-shell.compra-modo-dev .pedidos-order-lines {
+    border-color: rgb(254 202 202 / 0.95);
+  }
+  .dark .compra-modo-shell.pedidos-order-shell.compra-modo-dev .pedidos-order-summary-panel,
+  .dark .compra-modo-shell.pedidos-order-shell.compra-modo-dev .pedidos-order-lines {
+    border-color: rgb(244 63 94 / 0.35);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  /* Modales del canon OrderShell */
+  .pedidos-modal-root {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .pedidos-modal-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgb(15 23 42 / 0.5);
+  }
+  .dark .pedidos-modal-overlay {
+    background: rgb(2 6 23 / 0.65);
+  }
+  .pedidos-modal-panel {
+    position: relative;
+    width: 100%;
+    max-width: 32rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
   }
 </style>

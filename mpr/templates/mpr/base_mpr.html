@@ -46,20 +46,113 @@
 {% include "mpr/includes/mpr_post_loading_modal.html" %}
 <script>
 (function () {
-    window.mprShowPostLoading = function (form) {
+    function _modalEls() {
+        return {
+            modal: document.getElementById('mpr-post-loading-modal'),
+            titleEl: document.getElementById('mpr-post-loading-title'),
+            subEl: document.getElementById('mpr-post-loading-subtitle'),
+            barIndet: document.getElementById('mpr-post-loading-bar-indet'),
+            barDet: document.getElementById('mpr-post-loading-bar-det'),
+            barFill: document.getElementById('mpr-post-loading-progress-bar'),
+            progText: document.getElementById('mpr-post-loading-progress-text'),
+            currentEl: document.getElementById('mpr-post-loading-current'),
+        };
+    }
+
+    function _showModalShell(els) {
+        if (!els.modal) return;
+        els.modal.classList.remove('hidden');
+        els.modal.classList.add('flex', 'items-center', 'justify-center');
+        els.modal.setAttribute('aria-hidden', 'false');
+        els.modal.setAttribute('aria-busy', 'true');
+    }
+
+    window.mprHidePostLoading = function () {
+        var els = _modalEls();
+        if (!els.modal) return;
+        els.modal.classList.add('hidden');
+        els.modal.classList.remove('flex', 'items-center', 'justify-center');
+        els.modal.setAttribute('aria-hidden', 'true');
+        els.modal.setAttribute('aria-busy', 'false');
+        if (els.progText) els.progText.classList.add('hidden');
+        if (els.currentEl) {
+            els.currentEl.classList.add('hidden');
+            els.currentEl.textContent = '';
+        }
+        if (els.barIndet) els.barIndet.classList.remove('hidden');
+        if (els.barDet) els.barDet.classList.add('hidden');
+        if (els.barFill) els.barFill.style.width = '0%';
+    };
+
+    window.mprUpdatePostLoadingProgress = function (opts) {
+        opts = opts || {};
+        var els = _modalEls();
+        if (!els.modal) return;
+        var current = Number(opts.current) || 0;
+        var total = Number(opts.total) || 0;
+        var pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+        if (els.barIndet) els.barIndet.classList.add('hidden');
+        if (els.barDet) els.barDet.classList.remove('hidden');
+        if (els.barFill) els.barFill.style.width = pct + '%';
+        if (els.progText) {
+            els.progText.classList.remove('hidden');
+            els.progText.textContent = total > 0
+                ? (current + ' de ' + total + ' (' + pct + '%)')
+                : String(current);
+        }
+        if (els.currentEl) {
+            var label = opts.label || opts.item || '';
+            if (label) {
+                els.currentEl.classList.remove('hidden');
+                els.currentEl.textContent = label;
+                els.currentEl.setAttribute('title', label);
+            }
+        }
+        if (opts.title && els.titleEl) els.titleEl.textContent = opts.title;
+        if (opts.subtitle && els.subEl) els.subEl.textContent = opts.subtitle;
+    };
+
+    window.mprShowPostLoadingProgress = function (opts) {
+        opts = opts || {};
+        var els = _modalEls();
+        if (!els.modal) return;
+        if (els.titleEl) els.titleEl.textContent = opts.title || 'Procesando solicitud';
+        if (els.subEl) {
+            els.subEl.textContent = opts.subtitle || 'Esperá un momento. No cierres esta ventana.';
+        }
+        _showModalShell(els);
+        window.mprUpdatePostLoadingProgress({
+            current: opts.current || 0,
+            total: opts.total || 0,
+            label: opts.label || '',
+        });
+    };
+
+    window.mprShowPostLoading = function (form, submitter) {
         if (!form) return;
-        var modal = document.getElementById('mpr-post-loading-modal');
-        if (!modal) return;
-        var titleEl = document.getElementById('mpr-post-loading-title');
-        var subEl = document.getElementById('mpr-post-loading-subtitle');
+        var els = _modalEls();
+        if (!els.modal) return;
         var title = form.getAttribute('data-mpr-loading-title') || 'Procesando solicitud';
         var sub = form.getAttribute('data-mpr-loading-subtitle') || 'Esperá un momento. No cierres esta ventana.';
-        if (titleEl) titleEl.textContent = title;
-        if (subEl) subEl.textContent = sub;
-        modal.classList.remove('hidden');
-        modal.classList.add('flex', 'items-center', 'justify-center');
-        modal.setAttribute('aria-hidden', 'false');
-        modal.setAttribute('aria-busy', 'true');
+        if (els.titleEl) els.titleEl.textContent = title;
+        if (els.subEl) els.subEl.textContent = sub;
+        if (els.barIndet) els.barIndet.classList.remove('hidden');
+        if (els.barDet) els.barDet.classList.add('hidden');
+        if (els.progText) els.progText.classList.add('hidden');
+        if (els.currentEl) els.currentEl.classList.add('hidden');
+        _showModalShell(els);
+        // Los botones disabled no viajan en el POST: preservar name/value del submitter.
+        if (submitter && submitter.name) {
+            var preserve = form.querySelector('input[data-mpr-submitter-preserve="1"]');
+            if (!preserve) {
+                preserve = document.createElement('input');
+                preserve.type = 'hidden';
+                preserve.setAttribute('data-mpr-submitter-preserve', '1');
+                form.appendChild(preserve);
+            }
+            preserve.name = submitter.name;
+            preserve.value = submitter.value || '';
+        }
         form.querySelectorAll('button[type="submit"], button[type="button"], button:not([type])').forEach(function (btn) {
             btn.disabled = true;
             btn.setAttribute('aria-busy', 'true');
@@ -71,8 +164,11 @@
     document.addEventListener('submit', function (e) {
         var form = e.target;
         if (!form || form.tagName !== 'FORM') return;
+        if (e.defaultPrevented) return;
         if (!form.classList.contains('mpr-post-loading')) return;
-        window.mprShowPostLoading(form);
+        // Lotes con progreso AJAX: no usar el modal indeterminado del submit clásico.
+        if (form.getAttribute('data-mpr-progress-lote') === '1') return;
+        window.mprShowPostLoading(form, e.submitter || null);
     });
 })();
 </script>

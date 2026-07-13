@@ -7,18 +7,25 @@
 
 ---
 
-> ## ⛔ Suspensión (08/07/2026)
+> ## ⛔ Suspensión (08/07/2026) — actualización 10/07/2026
 >
-> **Esta migración queda SUSPENDIDA.** Motivos:
+> **Esta migración sigue SUSPENDIDA para go-live completo**, pero el bloqueo de mapeo ya no es total.
 >
-> 1. **No existe mapeo viable entre sistemas.** Los **SKU/artículos de Synap son nuevos** y no tienen correspondencia con los códigos de BEST (`OO`/`OOL`, MM/MYL). La clave de identidad de artículo (`código BEST → articulo.IDArt`), que este documento declara **bloqueante** (§7, §11 criterio 1, riesgo R1), **no puede construirse** → la demanda migrada sería incorrecta.
-> 2. **Synap MPR ya opera con el flujo OPT/OPP/OPA nativo en backend**, generando su propia demanda desde AdministraNET (PED → `lista_produccion_agrupada`). No depende de los pedidos de BEST para funcionar.
+> **Motivos originales:**
+> 1. Los SKU/artículos de Synap no comparten el mismo código que BEST (`MMID` ≠ `id_manual` variante).
+> 2. Synap MPR ya opera nativo con PED AdministraNET.
 >
-> **Consecuencia:** no se implementa la herramienta `migrar_pedidos_best` ni el corte de pedidos descrito abajo. BEST y Synap operan de forma independiente; la paridad de **reportes de fábrica** (no de pedidos) se sigue tratando en `BEST_SOX_GAP_PROCESOS_Y_CALCULOS.md` vía operación paralela.
+> **Avance 10/07/2026 (solo lectura, sin cambios en DBs):**
+> - Diccionario talle/color/pack + alias de modelo: `docs/mpr/best/diccionario_mapeo_articulos_best_admin_20260710_1107.md`
+> - Equivalencias usables (MATCH_ALTO/MEDIO) sobre SKUs de pedidos abiertos: **171/256 (66,8%)** en `docs/mpr/best/equivalencia_best_idart_usable_20260710_1107.csv`
+> - Reporte completo: `docs/mpr/best/mapeo_articulos_best_admin_resumen_20260710_1107.md`
 >
-> **Para reactivar** haría falta: (a) un catálogo de equivalencia SKU BEST ↔ artículo Synap validado, o (b) una regla de negocio determinística de correspondencia. El resto del análisis (topología, zona de aterrizaje PED nativo, plan de corte) queda como **referencia** si eso cambia.
+> **Para reactivar el corte:** (1) spot-check del CSV usable, (2) resolver cola residual (~85 SKUs SIN_*/AMBIGUO/BAJO; muchos sin variante 2P/3P en Admin o solo 1Par Logo), (3) ejecutar `migrar_pedidos_best` sembrando solo líneas con `IDArt` validado.
+>
+> **Actualización 10/07/2026 (tarde):** cargador `migrar_pedidos_best` **implementado** (`mpr/best_migration/pedido_loader.py`, comando `manage.py migrar_pedidos_best`, UI en gate `/mpr/migracion-best/pedidos/`). Ver `docs/mpr/MODULO_MIGRACION_BEST_MPR.md` § Siembra de pedidos.
 
 **Documentos que complementa / referencia:**
+- `docs/mpr/MODULO_MIGRACION_BEST_MPR.md` (UI de paridad + gate de pedidos)
 - `docs/mpr/BEST_SOX_GAP_PROCESOS_Y_CALCULOS.md` (catálogo Excel → MPR, mapeo de etapas)
 - `docs/mpr/BEST_SOX_PCP_PRODUCCION_ALINEACION.md` (fórmula PCP, unidad = par)
 - `docs/mpr/BEST_SOX_ITERACION1_VALIDACION.md` (conexión BEST, validación numérica)
@@ -258,6 +265,43 @@ FROM OO o JOIN OOL l ON l.<fk> = o.<pk>
 WHERE o.<estado> IN ('Pendiente','Parcial')
 GROUP BY l.<sku>;
 ```
+
+### 11.1 Control obligatorio por pedido y artículo
+
+Antes de aceptar el corte, además del total por artículo, comparar el origen
+`stockp` con `lista_produccion_detalle` por el par
+`(CodigoMovimiento, IDArt)`. Este control detecta pedidos con una misma
+referencia de artículo repartida en varias filas `stockp`: el detalle MPR
+debe guardar la **suma** de esas filas en una única línea.
+
+```sql
+SELECT cp.NroComprobante, o.codigo_movimiento, o.id_articulo,
+       o.pares_stockp, COALESCE(d.pares_detalle, 0) AS pares_detalle
+FROM (
+    SELECT sp.CodigoMovimiento AS codigo_movimiento, sp.IDArt AS id_articulo,
+           SUM(COALESCE(sp.Cantidad, sp.cantidad_pendiente, 0)) AS pares_stockp
+    FROM stockp sp
+    GROUP BY sp.CodigoMovimiento, sp.IDArt
+) o
+JOIN comp_ped cp ON cp.CodigoMovimiento = o.codigo_movimiento
+JOIN articulo a ON a.IDArt = o.id_articulo AND TRIM(a.tipo_art_fab) = 'Terminado'
+LEFT JOIN (
+    SELECT codigo_movimiento_pedido, id_articulo,
+           SUM(cantidad_pedida) AS pares_detalle
+    FROM lista_produccion_detalle
+    GROUP BY codigo_movimiento_pedido, id_articulo
+) d ON d.codigo_movimiento_pedido = o.codigo_movimiento
+   AND d.id_articulo = o.id_articulo
+WHERE cp.NroComprobante LIKE 'BEST-%'
+  AND COALESCE(cp.Anulado, 'No') = 'No'
+  AND COALESCE(d.pares_detalle, 0) <> o.pares_stockp;
+```
+
+**Criterio bloqueante:** la consulta debe devolver cero filas y la suma de
+ambos lados debe ser idéntica. Ejecutarla después de
+`migrar_pedidos_best --confirmar` y una segunda vez tras
+`actualizar_pedidos_produccion`; conservar ambos resultados en el acta del
+corte.
 
 ---
 

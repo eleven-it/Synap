@@ -1,25 +1,62 @@
 {% comment %}
-  Toggle PED / PRE / DEV (paridad visual armado MPR 1ra/2da).
-  Estilos en pedidos_page_styles.html (.compra-toggle-*).
+  Toggle PED / PRE / DEV.
+  variant:
+    - "hero" (por defecto): pill compacto sobre gradiente (paridad armado MPR 1ra/2da).
+    - "dark": versión grande y protagónica sobre card slate-800 (paridad tablero de producción).
+  Estilos en pedidos_page_styles.html (.compra-toggle-* / .compra-toggle-*-lg).
 {% endcomment %}
+{% if variant == "dark" %}
+<div class="compra-toggle-wrap-lg">
+  <span class="compra-toggle-label-lg">Comprobante</span>
+  <div class="compra-toggle-shell-lg"
+       role="tablist"
+       aria-label="Tipo de comprobante">
+    <button type="button" role="tab"
+            :aria-selected="tipo === 'PED'"
+            aria-selected="true"
+            :tabindex="tipo === 'PED' ? 0 : -1"
+            @click="solicitarCambiarTipo('PED')"
+            class="compra-toggle-btn-lg compra-toggle-btn-lg-ped-active"
+            :class="tipo === 'PED' ? 'compra-toggle-btn-lg-ped-active' : 'compra-toggle-btn-lg-idle'">Pedido</button>
+    <button type="button" role="tab"
+            :aria-selected="tipo === 'PRE'"
+            :tabindex="tipo === 'PRE' ? 0 : -1"
+            @click="solicitarCambiarTipo('PRE')"
+            class="compra-toggle-btn-lg"
+            :class="tipo === 'PRE' ? 'compra-toggle-btn-lg-pre-active' : 'compra-toggle-btn-lg-idle'">Presupuesto</button>
+    <button type="button" role="tab"
+            :aria-selected="tipo === 'DEV'"
+            :tabindex="tipo === 'DEV' ? 0 : -1"
+            @click="solicitarCambiarTipo('DEV')"
+            class="compra-toggle-btn-lg"
+            :class="tipo === 'DEV' ? 'compra-toggle-btn-lg-dev-active' : 'compra-toggle-btn-lg-idle'">Devolución</button>
+  </div>
+</div>
+{% else %}
 <div class="compra-toggle-wrap">
   <span class="compra-toggle-label">Comprobante</span>
   <div class="compra-toggle-shell"
        :class="tipo === 'PRE' ? 'compra-toggle-shell-pre' : (tipo === 'DEV' ? 'compra-toggle-shell-dev' : '')"
        role="tablist"
        aria-label="Tipo de comprobante">
-    <button type="button" role="tab" aria-selected="true"
+    <button type="button" role="tab"
             :aria-selected="tipo === 'PED'"
-            @click="cambiarTipo('PED')"
+            :tabindex="tipo === 'PED' ? 0 : -1"
+            @click="solicitarCambiarTipo('PED')"
             class="compra-toggle-btn compra-toggle-btn-ped-active"
             :class="tipo === 'PED' ? 'compra-toggle-btn-ped-active' : 'compra-toggle-btn-ped-idle'">Pedido</button>
-    <button type="button" role="tab" :aria-selected="tipo === 'PRE'"
-            @click="cambiarTipo('PRE')"
+    <button type="button" role="tab"
+            :aria-selected="tipo === 'PRE'"
+            :tabindex="tipo === 'PRE' ? 0 : -1"
+            @click="solicitarCambiarTipo('PRE')"
             class="compra-toggle-btn"
             :class="tipo === 'PRE' ? 'compra-toggle-btn-pre-active' : 'compra-toggle-btn-pre-idle'">Presupuesto</button>
-    <button type="button" role="tab" :aria-selected="tipo === 'DEV'"
-            @click="cambiarTipo('DEV')"
+    <button type="button" role="tab"
+            :aria-selected="tipo === 'DEV'"
+            :tabindex="tipo === 'DEV' ? 0 : -1"
+            @click="solicitarCambiarTipo('DEV')"
             class="compra-toggle-btn"
             :class="tipo === 'DEV' ? 'compra-toggle-btn-dev-active' : 'compra-toggle-btn-dev-idle'">Devolución</button>
   </div>
 </div>
+{% endif %}

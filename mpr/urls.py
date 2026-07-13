@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from mpr.best_migration import views as best_migration_views
 
 app_name = "mpr"
 
@@ -113,4 +114,25 @@ urlpatterns = [
     # Etapa 10: Clasificación de Producción (pantalla única; reemplaza Inspección/Clasificación E9)
     path("tablero-produccion/clasificacion-produccion/", views.ClasificacionProduccionView.as_view(), name="clasificacion_produccion"),
     path("tablero-produccion/clasificacion-produccion/registrar/", views.RegistrarClasificacionProduccionView.as_view(), name="clasificacion_produccion_registrar"),
+    # Migración BEST → MPR (paridad de maestros + gate de pedidos)
+    path("migracion-best/", best_migration_views.MigracionBestHubView.as_view(), name="migracion_best_hub"),
+    path("migracion-best/articulos/", best_migration_views.MigracionBestArticulosView.as_view(), name="migracion_best_articulos"),
+    path("migracion-best/articulos/recalcular/", best_migration_views.MigracionBestRecalcularArticulosView.as_view(), name="migracion_best_recalcular_articulos"),
+    path("migracion-best/articulos/aceptar-inferidos/", best_migration_views.MigracionBestAceptarInferidosArticulosView.as_view(), name="migracion_best_aceptar_inferidos_articulos"),
+    path("migracion-best/articulos/validar/", best_migration_views.MigracionBestValidarArticuloView.as_view(), name="migracion_best_validar_articulo"),
+    path("migracion-best/clientes/", best_migration_views.MigracionBestClientesView.as_view(), name="migracion_best_clientes"),
+    path("migracion-best/clientes/sincronizar/", best_migration_views.MigracionBestSincronizarClientesView.as_view(), name="migracion_best_sincronizar_clientes"),
+    path("migracion-best/clientes/validar/", best_migration_views.MigracionBestValidarClienteView.as_view(), name="migracion_best_validar_cliente"),
+    path("migracion-best/depositos/", best_migration_views.MigracionBestDepositosView.as_view(), name="migracion_best_depositos"),
+    path("migracion-best/depositos/sincronizar/", best_migration_views.MigracionBestSincronizarDepositosView.as_view(), name="migracion_best_sincronizar_depositos"),
+    path("migracion-best/depositos/validar/", best_migration_views.MigracionBestValidarDepositoView.as_view(), name="migracion_best_validar_deposito"),
+    path("migracion-best/stock-inicial/", best_migration_views.MigracionBestStockInicialView.as_view(), name="migracion_best_stock_inicial"),
+    path("migracion-best/stock-inicial/sincronizar/", best_migration_views.MigracionBestSincronizarStockInicialView.as_view(), name="migracion_best_sincronizar_stock_inicial"),
+    path("migracion-best/stock-inicial/validar/", best_migration_views.MigracionBestValidarStockInicialView.as_view(), name="migracion_best_validar_stock_inicial"),
+    path("migracion-best/stock-inicial/cargar/", best_migration_views.MigracionBestCargarStockInicialView.as_view(), name="migracion_best_cargar_stock_inicial"),
+    path("migracion-best/unidades/", best_migration_views.MigracionBestConfirmarUnidadesView.as_view(), name="migracion_best_confirmar_unidades"),
+    path("migracion-best/reiniciar/", best_migration_views.MigracionBestReiniciarView.as_view(), name="migracion_best_reiniciar"),
+    path("migracion-best/pedidos/", best_migration_views.MigracionBestPedidosGateView.as_view(), name="migracion_best_pedidos"),
+    path("migracion-best/pedidos/migrar/", best_migration_views.MigracionBestMigrarPedidosView.as_view(), name="migracion_best_migrar_pedidos"),
+    path("migracion-best/stock-reserva/cargar/", best_migration_views.MigracionBestCargarStockReservaView.as_view(), name="migracion_best_cargar_stock_reserva"),
 ]

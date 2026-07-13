@@ -225,6 +225,7 @@ APPS_MENU = [
                     {"label": _("Máquinas"), "url": "mpr:maquinas_list", "icon": "precision_manufacturing", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_cfg_maquinas"},
                     {"label": _("Operarios y usuarios"), "url": "mpr:operario_usuario_map", "icon": "badge", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_cfg_operario_usuario"},
                     {"label": _("Línea habitual (operarios)"), "url": "mpr:operario_linea", "icon": "conveyor_belt", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_cfg_operario_linea"},
+                    {"label": _("Migración BEST"), "url": "mpr:migracion_best_hub", "icon": "sync_alt", "permission": "mpr.ver", "menu_item_id": "mpr_cfg_migracion_best"},
                 ]
             },
         ]

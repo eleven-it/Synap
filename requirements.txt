@@ -11,6 +11,7 @@ PyJWT==2.8.0
 cryptography
 python-decouple
 mysqlclient==2.2.7  # Para conexión a MySQL de administraNET
+pymssql>=2.2.0,<3  # Azure SQL BEST (migración MPR, solo lectura)
 django-allauth
 django-redis
 django-crispy-forms==2.4

@@ -353,6 +353,85 @@ def get_clientes(
         return []
 
 
+def buscar_clientes_predictivo(
+    base_empresa: str,
+    q: str,
+    limit: int = 15,
+) -> List[Dict[str, Any]]:
+    """
+    Búsqueda predictiva de clientes por nombre, fantasia, código, CUIT o id_manual_cli.
+    Devuelve { Codigo, Nombre, CUIT, id_manual_cli, nombre_fantasia } para autocomplete.
+    """
+    q = (q or "").strip()
+    if not q:
+        return []
+    limit = max(1, min(int(limit or 15), 30))
+    term = f"%{q}%"
+    cuit_digits = "".join(ch for ch in q if ch.isdigit())
+    cuit_term = f"%{cuit_digits}%" if len(cuit_digits) >= 3 else None
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            if cuit_term:
+                cursor.execute(
+                    """
+                    SELECT Codigo,
+                           COALESCE(nombre_cliente, '') AS Nombre,
+                           COALESCE(CUIT, '') AS CUIT,
+                           COALESCE(id_manual_cli, '') AS id_manual_cli,
+                           COALESCE(nombre_fantasia, '') AS nombre_fantasia
+                    FROM cliente
+                    WHERE (
+                        CAST(Codigo AS CHAR) = %s
+                        OR CAST(Codigo AS CHAR) LIKE %s
+                        OR COALESCE(nombre_cliente, '') LIKE %s
+                        OR COALESCE(nombre_fantasia, '') LIKE %s
+                        OR COALESCE(id_manual_cli, '') LIKE %s
+                        OR COALESCE(CUIT, '') LIKE %s
+                        OR REPLACE(REPLACE(COALESCE(CUIT, ''), '-', ''), ' ', '') LIKE %s
+                    )
+                    ORDER BY nombre_cliente
+                    LIMIT %s
+                    """,
+                    [q, term, term, term, term, term, cuit_term, limit],
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT Codigo,
+                           COALESCE(nombre_cliente, '') AS Nombre,
+                           COALESCE(CUIT, '') AS CUIT,
+                           COALESCE(id_manual_cli, '') AS id_manual_cli,
+                           COALESCE(nombre_fantasia, '') AS nombre_fantasia
+                    FROM cliente
+                    WHERE (
+                        CAST(Codigo AS CHAR) = %s
+                        OR CAST(Codigo AS CHAR) LIKE %s
+                        OR COALESCE(nombre_cliente, '') LIKE %s
+                        OR COALESCE(nombre_fantasia, '') LIKE %s
+                        OR COALESCE(id_manual_cli, '') LIKE %s
+                        OR COALESCE(CUIT, '') LIKE %s
+                    )
+                    ORDER BY nombre_cliente
+                    LIMIT %s
+                    """,
+                    [q, term, term, term, term, term, limit],
+                )
+            rows = cursor.fetchall() or []
+        return [
+            {
+                "Codigo": to_int_or_none(r.get("Codigo")),
+                "Nombre": str_or_default(r.get("Nombre"), "-"),
+                "CUIT": str_or_default(r.get("CUIT"), "-"),
+                "id_manual_cli": str_or_default(r.get("id_manual_cli"), "-"),
+                "nombre_fantasia": str_or_default(r.get("nombre_fantasia"), "-"),
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        logger.warning("Error en buscar_clientes_predictivo %s: %s", base_empresa, e)
+        return []
+
+
 def listar_pedidos_pendientes(
     base_empresa: str,
     motivo: int,
@@ -1854,6 +1933,92 @@ def _validar_permisos_alta(
     return None
 
 
+def _enriquecer_renglones_desde_articulo(cursor: Any, renglones: List[Dict[str, Any]]) -> None:
+    """
+    Reemplaza código y descripción por los valores canónicos de ``articulo``.
+
+    Un renglón con IDArt no debe persistir un código provisto por el cliente:
+    ``stock.CodigoArticulo`` replica ``articulo.CodigoArticuloT`` y
+    ``stock.Descripcion`` replica ``articulo.NombreArticulo``.
+    """
+    ids_articulo = sorted(
+        {
+            id_art
+            for renglon in renglones
+            if (id_art := to_int_or_none(renglon.get("IDArt"))) is not None
+        }
+    )
+    if not ids_articulo:
+        return
+
+    placeholders = ", ".join(["%s"] * len(ids_articulo))
+    cursor.execute(
+        f"""
+        SELECT IDArt,
+               TRIM(COALESCE(CodigoArticuloT, '')) AS CodigoArticuloT,
+               TRIM(COALESCE(NombreArticulo, '')) AS NombreArticulo,
+               TRIM(COALESCE(id_manual, '')) AS id_manual,
+               PrecioCosto,
+               TRIM(COALESCE(TipoIVA, '')) AS TipoIVA,
+               Alicuota,
+               CodLaboratorio
+        FROM articulo
+        WHERE IDArt IN ({placeholders})
+        """,
+        ids_articulo,
+    )
+    articulos = {
+        to_int_or_none(id_art): (
+            str_or_default(codigo_articulo_t, ""),
+            str_or_default(nombre_articulo, ""),
+            str_or_default(id_manual, ""),
+            to_decimal_or_none(precio_costo, "0.000001"),
+            str_or_default(tipo_iva, ""),
+            to_decimal_or_none(alicuota, "0.000001"),
+            to_int_or_none(cod_laboratorio) or 1,
+        )
+        for (
+            id_art,
+            codigo_articulo_t,
+            nombre_articulo,
+            id_manual,
+            precio_costo,
+            tipo_iva,
+            alicuota,
+            cod_laboratorio,
+        ) in cursor.fetchall()
+        if to_int_or_none(id_art) is not None
+    }
+    for renglon in renglones:
+        articulo = articulos.get(to_int_or_none(renglon.get("IDArt")))
+        if not articulo:
+            continue
+        (
+            codigo_articulo,
+            nombre_articulo,
+            id_manual,
+            precio_costo,
+            tipo_iva,
+            alicuota,
+            cod_laboratorio,
+        ) = articulo
+        if codigo_articulo:
+            renglon["CodigoArticulo"] = codigo_articulo
+        if nombre_articulo:
+            renglon["Descripcion"] = nombre_articulo
+        if not (str_or_default(renglon.get("id_manual"), "") or "").strip() and id_manual:
+            renglon["id_manual"] = id_manual
+        if to_decimal_or_none(renglon.get("PrecioCostoxU"), "0.000001") is None:
+            costo_renglon = to_decimal_or_none(renglon.get("PrecioCosto"), "0.000001")
+            renglon["PrecioCostoxU"] = costo_renglon if costo_renglon is not None else precio_costo
+        if not (str_or_default(renglon.get("TipoIVA"), "") or "").strip() and tipo_iva:
+            renglon["TipoIVA"] = tipo_iva
+        if to_decimal_or_none(renglon.get("Alicuota"), "0.000001") is None:
+            renglon["Alicuota"] = alicuota
+        if to_int_or_none(renglon.get("CodLaboratorio")) is None:
+            renglon["CodLaboratorio"] = cod_laboratorio
+
+
 def alta_movimiento(
     base_empresa: str,
     id_usuario: int,
@@ -1921,6 +2086,9 @@ def alta_movimiento(
                     conn.rollback()
                     return False, None, None, err_series, None
 
+                # Con IDArt conocido, stock siempre conserva código/descripción del maestro.
+                _enriquecer_renglones_desde_articulo(cursor, renglones)
+
                 # Texto del motivo para movimiento_stock.motivo_movimiento y stock.TipoComp (paridad VB6: Motivo.Text).
                 motivo_num = to_int_or_none(cabecera.get("motivo_movimiento")) or 0
                 motivo_texto = MOTIVO_CODIGO_A_NOMBRE.get(motivo_num) or str(motivo_num)
@@ -1934,7 +2102,7 @@ def alta_movimiento(
                 if not fecha_mov:
                     from datetime import date
                     fecha_mov = date.today().isoformat()
-                id_ref_movstock = to_int_or_none(cabecera.get("id_ref_movstock"))
+                id_ref_movstock = to_int_or_none(cabecera.get("id_ref_movstock")) or 1
                 id_proyecto = to_int_or_none(cabecera.get("id_proyecto")) or 1
                 id_cliente = to_int_or_none(cabecera.get("id_cliente"))
                 id_vendedor = to_int_or_none(cabecera.get("id_vendedor"))
@@ -2022,6 +2190,69 @@ def alta_movimiento(
                             [id_art, cod_dep, delta],
                         )
 
+                def _insertar_stock(
+                    *,
+                    id_art: Optional[int],
+                    codigo_art: str,
+                    descripcion_art: str,
+                    entrada: Decimal,
+                    salida: Decimal,
+                    saldo: Decimal,
+                    cod_deposito: Optional[int],
+                    orden: int,
+                    cod_viajante: Optional[int],
+                    cantidad: Decimal,
+                    precio_costo_u: Decimal,
+                    id_manual: str,
+                    tipo_iva: str,
+                    alicuota: Optional[Decimal],
+                    cod_sucursal: int,
+                    cod_laboratorio: int,
+                ) -> None:
+                    """Inserta stock con los campos completos y conserva compatibilidad legacy."""
+                    precio_costo_r = precio_costo_u * cantidad
+                    params_completos = [
+                        codigo_mov, id_art, codigo_art, descripcion_art, cantidad,
+                        precio_costo_u, precio_costo_r, cod_sucursal, id_manual, tipo_iva,
+                        alicuota, fecha_mov, entrada, salida, saldo, cod_deposito,
+                        id_ref_movstock, orden, id_usuario, motivo_texto, nro_comprobante,
+                        cod_viajante, cod_laboratorio,
+                    ]
+                    try:
+                        cursor.execute(
+                            """
+                            INSERT INTO stock
+                            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Cantidad, PrecioCostoxU, PrecioCostoxR,
+                             CodSucursal, id_manual, TipoIVA, Alicuota, Fecha, Entrada, Salida, saldo, CodDeposito,
+                             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante,
+                             CodLaboratorio)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                                    'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s, %s)
+                            """,
+                            params_completos,
+                        )
+                    except Exception as insert_err:  # noqa: B902
+                        err_msg = str(insert_err)
+                        columnas_nuevas = (
+                            "Cantidad", "PrecioCostoxU", "PrecioCostoxR", "CodSucursal",
+                            "id_manual", "TipoIVA", "Alicuota", "CodLaboratorio",
+                        )
+                        if "1054" not in err_msg or not any(columna in err_msg for columna in columnas_nuevas):
+                            raise
+                        cursor.execute(
+                            """
+                            INSERT INTO stock
+                            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
+                             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
+                            """,
+                            [
+                                codigo_mov, id_art, codigo_art, descripcion_art, fecha_mov, entrada, salida,
+                                saldo, cod_deposito, id_ref_movstock, orden, id_usuario, motivo_texto,
+                                nro_comprobante, cod_viajante,
+                            ],
+                        )
+
                 # (4) Por cada renglón: INSERT stock y actualizar stock_deposito (transfer = dos filas por renglón)
                 for idx, reng in enumerate(renglones):
                     id_art = to_int_or_none(reng.get("IDArt"))
@@ -2032,6 +2263,23 @@ def alta_movimiento(
                     es = (str(reng.get("ES") or "E")).strip().upper()
                     codigo_art = str_or_default(reng.get("CodigoArticulo"), "")
                     descripcion_art = str_or_default(reng.get("Descripcion"), "")
+                    precio_costo_u = to_decimal_or_none(reng.get("PrecioCostoxU"), "0.000001")
+                    if precio_costo_u is None:
+                        precio_costo_u = to_decimal_or_none(reng.get("PrecioCosto"), "0.000001")
+                    if precio_costo_u is None:
+                        precio_costo_u = Decimal(0)
+                    id_manual = str_or_default(reng.get("id_manual"), "-")
+                    tipo_iva = str_or_default(reng.get("TipoIVA"), "-")
+                    alicuota = to_decimal_or_none(reng.get("Alicuota"), "0.000001")
+                    cod_laboratorio = to_int_or_none(reng.get("CodLaboratorio")) or 1
+                    cod_sucursal = (
+                        to_int_or_none(
+                            cabecera.get("CodSucursal")
+                            or cabecera.get("id_sucursal")
+                            or cabecera.get("cod_sucursal")
+                        )
+                        or 1
+                    )
 
                     cod_viajante = (
                         to_int_or_none(reng.get("CodViajante") or cabecera.get("id_vendedor"))
@@ -2066,18 +2314,13 @@ def alta_movimiento(
                             return False, None, None, f"Renglón {idx + 1}: saldo insuficiente en origen (disponible: {saldo_actual}).", None
                         saldo_origen_despues = saldo_actual - cantidad_transfer
                         # 1) Salida en origen
-                        cursor.execute(
-                            """
-                            INSERT INTO stock
-                            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
-                             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
-                            VALUES (%s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
-                            """,
-                            [
-                                codigo_mov, id_art, codigo_art, descripcion_art, fecha_mov,
-                                cantidad_transfer, saldo_origen_despues, deposito_origen, id_ref_movstock,
-                                idx * 2 + 1, id_usuario, motivo_texto, nro_comprobante, cod_viajante,
-                            ],
+                        _insertar_stock(
+                            id_art=id_art, codigo_art=codigo_art, descripcion_art=descripcion_art,
+                            entrada=Decimal(0), salida=cantidad_transfer, saldo=saldo_origen_despues,
+                            cod_deposito=deposito_origen, orden=idx * 2 + 1, cod_viajante=cod_viajante,
+                            cantidad=cantidad_transfer, precio_costo_u=precio_costo_u, id_manual=id_manual,
+                            tipo_iva=tipo_iva, alicuota=alicuota, cod_sucursal=cod_sucursal,
+                            cod_laboratorio=cod_laboratorio,
                         )
                         _actualizar_stock_deposito(cursor, id_art, deposito_origen, -cantidad_transfer)
                         # Lote salida en origen
@@ -2106,18 +2349,13 @@ def alta_movimiento(
                         saldo_dest_actual = Decimal(str(sd_dest[0] or 0)) if sd_dest else Decimal(0)
                         saldo_destino_despues = saldo_dest_actual + cantidad_transfer
                         # 2) Entrada en destino
-                        cursor.execute(
-                            """
-                            INSERT INTO stock
-                            (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
-                             id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
-                            VALUES (%s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
-                            """,
-                            [
-                                codigo_mov, id_art, codigo_art, descripcion_art, fecha_mov,
-                                cantidad_transfer, saldo_destino_despues, deposito_destino, id_ref_movstock,
-                                idx * 2 + 2, id_usuario, motivo_texto, nro_comprobante, cod_viajante,
-                            ],
+                        _insertar_stock(
+                            id_art=id_art, codigo_art=codigo_art, descripcion_art=descripcion_art,
+                            entrada=cantidad_transfer, salida=Decimal(0), saldo=saldo_destino_despues,
+                            cod_deposito=deposito_destino, orden=idx * 2 + 2, cod_viajante=cod_viajante,
+                            cantidad=cantidad_transfer, precio_costo_u=precio_costo_u, id_manual=id_manual,
+                            tipo_iva=tipo_iva, alicuota=alicuota, cod_sucursal=cod_sucursal,
+                            cod_laboratorio=cod_laboratorio,
                         )
                         _actualizar_stock_deposito(cursor, id_art, deposito_destino, cantidad_transfer)
                         # Lote entrada en destino (opcional: crear/actualizar si viene cod_lote o id_lote)
@@ -2187,18 +2425,14 @@ def alta_movimiento(
                             return False, None, None, f"Renglón {idx + 1}: saldo insuficiente (disponible: {saldo_actual}).", None
                     saldo_despues = saldo_actual + (entrada - salida)
 
-                    cursor.execute(
-                        """
-                        INSERT INTO stock
-                        (CodigoMovimiento, IDArt, CodigoArticulo, Descripcion, Fecha, Entrada, Salida, saldo, CodDeposito,
-                         id_ref_movstock, Orden, IdUsuario, Tipo, TipoComp, Comprobante, NroComprobante, anulado, CodViajante)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'Movimiento Stock', %s, 'MSTOCK', %s, 'No', %s)
-                        """,
-                        [
-                            codigo_mov, id_art, codigo_art, descripcion_art, fecha_mov,
-                            entrada, salida, saldo_despues, cod_dep, id_ref_movstock,
-                            idx + 1, id_usuario, motivo_texto, nro_comprobante, cod_viajante,
-                        ],
+                    cantidad_stock = cantidad or (entrada if entrada > 0 else salida)
+                    _insertar_stock(
+                        id_art=id_art, codigo_art=codigo_art, descripcion_art=descripcion_art,
+                        entrada=entrada, salida=salida, saldo=saldo_despues, cod_deposito=cod_dep,
+                        orden=idx + 1, cod_viajante=cod_viajante, cantidad=cantidad_stock,
+                        precio_costo_u=precio_costo_u, id_manual=id_manual, tipo_iva=tipo_iva,
+                        alicuota=alicuota, cod_sucursal=cod_sucursal,
+                        cod_laboratorio=cod_laboratorio,
                     )
                     _actualizar_stock_deposito(cursor, id_art, cod_dep, entrada - salida)
 

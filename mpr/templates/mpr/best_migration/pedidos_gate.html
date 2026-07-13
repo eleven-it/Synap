@@ -1,0 +1,93 @@
+{% extends "mpr/base_mpr.html" %}
+
+{% block title %}Migración de pedidos BEST - MPR - Synap{% endblock %}
+
+{% block content %}
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 dark:bg-gray-900 sm:py-10">
+  <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+    <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <li><a href="{% url 'mpr:tablero_produccion' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a></li>
+        <li class="text-gray-300" aria-hidden="true">/</li>
+        <li><a href="{% url 'mpr:migracion_best_hub' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Migración BEST</a></li>
+        <li class="text-gray-300" aria-hidden="true">/</li>
+        <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Pedidos</span></li>
+      </ol>
+    </nav>
+
+    <header class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Migración de pedidos</h1>
+        <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
+          Siembra de notas de pedido abiertas BEST como PED AdministraNET (<code>comp_ped</code> + <code>stockp</code>).
+          Solo se habilita la confirmación con paridad de artículos y clientes <strong>requeridos</strong> (pedidos abiertos) y unidades confirmadas.
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <form method="post" action="{% url 'mpr:migracion_best_migrar_pedidos' %}" class="mpr-post-loading" data-mpr-loading-title="Ensayo de siembra" data-mpr-loading-subtitle="Leyendo pedidos BEST y aplicando mapeos. Puede demorar.">
+          {% csrf_token %}
+          <button type="submit" class="inline-flex min-h-11 items-center rounded-xl border border-blue-300 bg-blue-50 px-5 text-sm font-semibold text-blue-800 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-200">
+            Ensayo de siembra
+          </button>
+        </form>
+        {% if migracion_habilitada %}
+        <form method="post" action="{% url 'mpr:migracion_best_migrar_pedidos' %}" onsubmit="return confirm('¿Confirmás sembrar los pedidos abiertos BEST como PED en AdministraNET? Se escribirá comp_ped + stockp y se ejecutará actualizar_pedidos_produccion.');" class="mpr-post-loading" data-mpr-loading-title="Siembra de pedidos" data-mpr-loading-subtitle="Grabando PED y actualizando demanda MPR. Puede demorar.">
+          {% csrf_token %}
+          <input type="hidden" name="confirmar" value="1">
+          <button type="submit" class="inline-flex min-h-11 items-center rounded-xl border border-amber-400 bg-amber-50 px-5 text-sm font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-100">
+            Confirmar siembra
+          </button>
+        </form>
+        {% endif %}
+      </div>
+    </header>
+
+    {% if migracion_habilitada %}
+    <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-800 dark:bg-emerald-950/30">
+      <h2 class="text-lg font-semibold text-emerald-900 dark:text-emerald-100">Gate abierto</h2>
+      <p class="mt-2 text-sm text-emerald-800 dark:text-emerald-200">
+        La paridad mínima está completa. Podés ejecutar <strong>Ensayo de siembra</strong> (sin escribir) o <strong>Confirmar siembra</strong>.
+        Idempotencia: <code>NroComprobante = BEST-&lt;orden&gt;</code>; si el PED ya existe y no está en producción, se actualiza cabecera y renglones.
+      </p>
+      <ul class="mt-4 list-disc space-y-1 pl-5 text-sm text-emerald-900 dark:text-emerald-100">
+        <li>Artículos requeridos: {{ parity.articulos_resueltos }}/{{ parity.articulos_total }} ({{ articulos_resumen.fuera_alcance }} fuera de alcance)</li>
+        <li>Clientes requeridos: {{ parity.clientes_resueltos }}/{{ parity.clientes_total }} ({{ clientes_resumen.fuera_alcance }} fuera de alcance)</li>
+        <li>Unidades (pares): confirmado</li>
+      </ul>
+    </div>
+    {% else %}
+    <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-800 dark:bg-amber-950/30">
+      <h2 class="text-lg font-semibold text-amber-950 dark:text-amber-100">Gate cerrado</h2>
+      <p class="mt-2 text-sm text-amber-900 dark:text-amber-200">
+        Podés ejecutar <strong>Ensayo de siembra</strong> para ver órdenes migrables y huérfanos.
+        La <strong>confirmación</strong> permanece bloqueada hasta completar los ítems obligatorios:
+      </p>
+      <ul class="mt-4 space-y-2 text-sm text-amber-950 dark:text-amber-100">
+        <li>
+          {% if parity.articulos_ok %}✓{% else %}○{% endif %}
+          Artículos requeridos {{ parity.articulos_resueltos }}/{{ parity.articulos_total }}
+          — <a class="underline" href="{% url 'mpr:migracion_best_articulos' %}?necesarios=1">resolver necesarios</a>
+        </li>
+        <li>
+          {% if parity.clientes_ok %}✓{% else %}○{% endif %}
+          Clientes requeridos {{ parity.clientes_resueltos }}/{{ parity.clientes_total }}
+          — <a class="underline" href="{% url 'mpr:migracion_best_clientes' %}?necesarios=1">resolver necesarios</a>
+        </li>
+        <li>
+          {% if parity.unidades_ok %}✓{% else %}○{% endif %}
+          Unidades en pares
+          — <a class="underline" href="{% url 'mpr:migracion_best_hub' %}">confirmar en hub</a>
+        </li>
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="mt-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-xs text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300">
+      <strong>CLI equivalente:</strong>
+      <code>docker exec Synap_app python manage.py migrar_pedidos_best --base-empresa={{ base_empresa }} --dry-run</code>
+      · confirmar:
+      <code>docker exec Synap_app python manage.py migrar_pedidos_best --base-empresa={{ base_empresa }} --confirmar --id-usuario=&lt;id&gt;</code>
+    </div>
+  </div>
+</section>
+{% endblock %}
