@@ -105,7 +105,16 @@ function bestAsignarMaestro(searchUrl, cfg) {
           params.set(k, String(queryParams[k]));
         }
       });
-      const r = await fetch(searchUrl + '?' + params.toString());
+      const r = await fetch(searchUrl + '?' + params.toString(), {
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+      if (!r.ok) {
+        throw new Error('HTTP ' + r.status);
+      }
       const data = await r.json();
       this.resultados = data.results || [];
       this.dropdown = true;
@@ -186,10 +195,8 @@ function bestAsignarArticulo(searchUrl) {
     emptyMsg: 'Elegí un artículo de la lista.',
     queryParams: { tipo_art_fab: 'Terminado' },
     metaLine: function (a) {
-      var parts = ['IDArt ' + (a.IDArt != null ? a.IDArt : '—')];
-      if (a.id_manual && a.id_manual !== '-') parts.push(a.id_manual);
-      if (a.CodigoArticulo) parts.push(a.CodigoArticulo);
-      return parts.join(' · ');
+      // Solo descripción visible en el listado; sin códigos en la línea principal.
+      return '';
     },
   });
 }

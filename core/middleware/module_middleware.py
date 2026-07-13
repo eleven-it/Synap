@@ -117,6 +117,14 @@ class ModulePermissionMiddleware:
             user_info = getattr(request.user, 'cod_usuario', getattr(request.user, 'email', 'unknown'))
         
         logger.info(f"🔍 ModulePermissionMiddleware: Usuario={user_info}, Path={path}")
+
+        # APIs JSON (p. ej. core/api/articulos/search/) se invocan desde pantallas de
+        # otros módulos (MPR, compras, ventas). No exigir permiso del módulo del path;
+        # la vista valida sesión/empresa.
+        if '/api/' in path or path.startswith('api/'):
+            logger.debug(f"✅ Permitiendo acceso a API {path} sin chequeo de módulo")
+            response = self.get_response(request)
+            return response
         
         # Verificar permisos por módulo
         # También verificar si el path es exactamente el nombre del módulo (sin barra final)
