@@ -10,8 +10,9 @@ from .exceptions import is_legacy_db_error, legacy_area_failure_payload
 from .inventory_metrics import fetch_inventario_resumen
 from .manufacturing_metrics import fetch_manufactura_resumen
 from .purchase_metrics import fetch_compras_resumen
-from .tesoreria_metrics import fetch_tesoreria_resumen
-from .ventas_cobros_metrics import fetch_ventas_cobros_resumen
+from .banco_metrics import fetch_tesoreria_banco_resumen
+from .tesoreria_metrics import fetch_tesoreria_resumen, list_movimientos_caja
+from .ventas_cobros_metrics import fetch_ventas_cobros_resumen, list_cobros_detalle
 from reports.services.executive_sales_summary import fetch_sucursales_ejecutivo
 
 from .ventas_metrics import fetch_ventas_resumen
@@ -29,7 +30,10 @@ ENDPOINTS_RELATIVOS = {
     "cruzados": "/api/reports/executive-dashboard/cruzados/resumen/",
     "cruzados_backorder": "/api/reports/executive-dashboard/cruzados/backorder/",
     "tesoreria": "/api/reports/executive-dashboard/tesoreria/resumen/",
+    "tesoreria_banco": "/api/reports/executive-dashboard/tesoreria/banco/resumen/",
+    "tesoreria_movimientos_caja": "/api/reports/executive-dashboard/tesoreria/movimientos-caja/",
     "ventas_cobros": "/api/reports/executive-dashboard/ventas/cobros/resumen/",
+    "ventas_cobros_detalle": "/api/reports/executive-dashboard/ventas/cobros/detalle/",
     "executive_summary_dia": "/api/reports/executive-summary/",
 }
 
@@ -67,7 +71,6 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
             ("inventario", fetch_inventario_resumen),
             ("compras", fetch_compras_resumen),
             ("cruzados", fetch_cruzados_resumen),
-            ("tesoreria", fetch_tesoreria_resumen),
             ("ventas_cobros", fetch_ventas_cobros_resumen),
         ):
             area_full = _safe_legacy_area(area_name, fetch_fn, cursor, filters)
@@ -75,6 +78,22 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
                 areas[area_name] = _area_sin_meta_interno(area_full)
             else:
                 areas[area_name] = area_full
+
+        tesoreria_full = _safe_legacy_area(
+            "tesoreria", fetch_tesoreria_resumen, cursor, filters
+        )
+        banco_full = _safe_legacy_area(
+            "tesoreria_banco", fetch_tesoreria_banco_resumen, cursor, filters
+        )
+        if tesoreria_full.get("disponible") is not False:
+            tesoreria_area = _area_sin_meta_interno(tesoreria_full)
+            if banco_full.get("disponible") is not False:
+                tesoreria_area["banco"] = _area_sin_meta_interno(banco_full)
+            else:
+                tesoreria_area["banco"] = banco_full
+            areas["tesoreria"] = tesoreria_area
+        else:
+            areas["tesoreria"] = tesoreria_full
 
         try:
             sucursales_disponibles = fetch_sucursales_ejecutivo(cursor)

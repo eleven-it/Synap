@@ -466,3 +466,68 @@ def match_open_order_skus(
             r.razon = (r.razon or "") + "+conflicto_IDArt"
 
     return results
+
+
+def match_admin_fabricados_to_best(
+    *,
+    admin_fabricados: list[dict],
+    best_rows: list[dict],
+    myl_by_mmid: dict[str, dict],
+) -> dict[int, MatchRow]:
+    """
+    Matcher inverso Admin Fabricado → SKU BEST.
+
+    Ejecuta match_open_order_skus sobre el catálogo BEST y, por cada IDArt Fabricado,
+    elige el SKU con mayor score que lo cite como candidato.
+    """
+    if not admin_fabricados:
+        return {}
+
+    fabricado_ids = {int(a["IDArt"]) for a in admin_fabricados if a.get("IDArt")}
+    all_rows = match_open_order_skus(
+        best_rows=best_rows, myl_by_mmid=myl_by_mmid, admin_arts=admin_fabricados
+    )
+    by_admin: dict[int, list[MatchRow]] = defaultdict(list)
+    for row in all_rows:
+        if row.admin_idart and int(row.admin_idart) in fabricado_ids:
+            by_admin[int(row.admin_idart)].append(row)
+
+    out: dict[int, MatchRow] = {}
+    for admin in admin_fabricados:
+        aid = int(admin["IDArt"])
+        candidates = by_admin.get(aid, [])
+        if not candidates:
+            out[aid] = MatchRow(
+                best_id_articulo="",
+                status=STATUS_SIN_CANDIDATO,
+                admin_idart=aid,
+                admin_id_manual=(admin.get("id_manual") or "").strip(),
+                admin_nombre=admin.get("NombreArticulo") or "",
+                admin_cod_art_prov=(admin.get("CodArtProv") or "").strip(),
+            )
+            continue
+        candidates.sort(key=lambda r: (-(r.score or 0), r.best_id_articulo))
+        top = candidates[0]
+        if len(candidates) > 1 and (candidates[1].score or 0) >= (top.score or 0) - 5:
+            top = MatchRow(
+                best_id_articulo=top.best_id_articulo,
+                best_codigo=top.best_codigo,
+                best_articulo=top.best_articulo,
+                best_marca=top.best_marca,
+                best_modelos=top.best_modelos,
+                best_colores=top.best_colores,
+                best_color_mode=top.best_color_mode,
+                best_talle=top.best_talle,
+                best_pack=top.best_pack,
+                best_variant_codes=top.best_variant_codes,
+                status=STATUS_AMBIGUO,
+                score=top.score,
+                razon=(top.razon or "") + "+inverso_ambiguo",
+                admin_idart=aid,
+                admin_id_manual=top.admin_id_manual,
+                admin_nombre=top.admin_nombre,
+                admin_cod_art_prov=top.admin_cod_art_prov,
+                candidatos_n=len(candidates),
+            )
+        out[aid] = top
+    return out

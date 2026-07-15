@@ -1,3 +1,9 @@
+# Arranque automático tras reinicio de Docker Desktop / WSL:
+# - restart: unless-stopped en todos los servicios
+# - healthchecks + depends_on condition para no levantar app antes de db/redis
+# Tras cambiar políticas: una vez `docker compose up -d` (recrea contenedores).
+# Si el bind mount WSL aún no está listo, el entrypoint falla y Docker reintenta.
+
 services:
   app:
     build: .
@@ -19,10 +25,22 @@ services:
       # SYNAP_MIGRATIONS_POSTGRES_ONLY: solo durante migrate (docker-entrypoint.sh).
       # No definir en runtime: settings.py quita DATABASES['mysql'] y rompe login/MySQL.
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     # El comando se ejecuta a través del entrypoint
     # El entrypoint ejecuta setup automático antes de iniciar el servidor
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5)\" || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     logging:
       driver: "json-file"
       options:
@@ -39,6 +57,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -54,6 +78,12 @@ services:
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --stop-writes-on-bgsave-error no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
     logging:
       driver: "json-file"
       options:

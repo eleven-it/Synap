@@ -118,7 +118,11 @@
   }
 
   function detalleUrl(tpl, codMov) {
-    return (tpl || "").replace(/\/0\/?$/, "/" + codMov + "/");
+    var t = tpl || "";
+    if (t.indexOf("cod_mov=") >= 0) {
+      return t.replace(/cod_mov=\d+/, "cod_mov=" + codMov);
+    }
+    return t.replace(/\/0\/?$/, "/" + codMov + "/");
   }
 
   function renderRows(rows, columns, accCfg) {

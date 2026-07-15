@@ -730,18 +730,20 @@
       icon: "account_balance_wallet",
       color: "teal",
       metrics: (a) => {
+        const banco = a.banco;
+        const bancoOk = banco && banco.disponible !== false;
         const notaBanco =
-          a.banco_disponible === false
-            ? [["Nota", "Sin datos bancarios (P1)"]]
+          !bancoOk && a.banco_disponible === false
+            ? [["Nota", "Sin datos bancarios"]]
             : [];
         const drift = Math.abs(Number(a.drift_sistema) || 0);
         const saldoSistema =
           drift > 1 && a.saldo_final_sistema != null
             ? [["Saldo final (sistema BD)", fmtMoney.format(a.saldo_final_sistema || 0)]]
             : [];
-        return [
-          ["Saldo inicial", fmtMoney.format(a.saldo_inicial || 0)],
-          ["Saldo final", fmtMoney.format(a.saldo_final || 0)],
+        const filasCaja = [
+          ["Saldo inicial (caja)", fmtMoney.format(a.saldo_inicial || 0)],
+          ["Saldo final (caja)", fmtMoney.format(a.saldo_final || 0)],
           ["Variación neta", fmtMoney.format(a.variacion_neta || 0)],
           ["Ingresos operativos", fmtMoney.format(a.ingresos_operativos || 0)],
           ["Egresos operativos", fmtMoney.format(a.egresos_operativos || 0)],
@@ -749,10 +751,23 @@
           ["Ingresos cobranzas", fmtMoney.format(a.ingresos_cobranzas || 0)],
           ["Egresos proveedores", fmtMoney.format(a.egresos_proveedores || 0)],
           ...saldoSistema,
-          ...notaBanco,
         ];
+        const filasBanco = bancoOk
+          ? [
+              ["— Libro banco —", "No sumar con caja"],
+              ["Saldo banco inicial", fmtMoney.format(banco.saldo_banco_inicial || 0)],
+              ["Saldo banco final", fmtMoney.format(banco.saldo_banco_final || 0)],
+              ["Créditos período", fmtMoney.format(banco.creditos_periodo || 0)],
+              ["Débitos período", fmtMoney.format(banco.debitos_periodo || 0)],
+              [
+                "Pend. conciliar",
+                fmtNum.format(banco.pendiente_conciliar || 0),
+              ],
+            ]
+          : notaBanco;
+        return [...filasCaja, ...filasBanco];
       },
-      details: [],
+      details: [{ label: "Movimientos caja", urlKey: "movimientos_caja" }],
       linkCashFlow: true,
     },
     {
@@ -774,7 +789,7 @@
           ["· Tarjeta", fmtMoney.format(c.tarjeta || 0)],
         ];
       },
-      details: [],
+      details: [{ label: "Detalle cobros", urlKey: "cobros_detalle" }],
     },
   ];
 
@@ -989,8 +1004,19 @@
     const tasks = visibleAreaDefs().map((def) => {
       const url = areaUrls[def.key];
       if (!url) return Promise.resolve(null);
-      return fetchArea(def.key, url, q, loadToken).then((result) => {
+      return fetchArea(def.key, url, q, loadToken).then(async (result) => {
         if (!result || loadToken !== dashboardLoadToken) return;
+        if (def.key === "tesoreria" && result.ok && cfg.tesoreriaBancoUrl) {
+          const bancoResult = await fetchArea(
+            "tesoreria_banco",
+            cfg.tesoreriaBancoUrl,
+            q,
+            loadToken,
+          );
+          if (bancoResult) {
+            result.data.banco = bancoResult.data;
+          }
+        }
         areasCache[result.key] = result.data;
         updateSingleAreaCard(result.key, result.data);
         renderGlobalKpis(areasCache, ventasDiaCache);

@@ -12,8 +12,9 @@ class TestReporteMprOperarioParte(SimpleTestCase):
         r = reporte_mpr_operario_parte("")
         self.assertEqual(r["filas"], [])
 
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_rendimiento_operario", return_value={})
     @patch("mpr.services.mysql_cursor")
-    def test_ranking_pct(self, mock_cursor_ctx):
+    def test_ranking_pct(self, mock_cursor_ctx, mock_rendimiento):
         mock_cursor = MagicMock()
         mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
@@ -25,3 +26,4 @@ class TestReporteMprOperarioParte(SimpleTestCase):
         self.assertEqual(len(r["filas"]), 2)
         self.assertEqual(r["filas"][0]["pct_total"], 60.0)
         self.assertEqual(r["kpis"]["unidades_total"], 100)
+        mock_rendimiento.assert_called_once()

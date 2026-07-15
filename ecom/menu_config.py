@@ -17,7 +17,7 @@ MENU_CONFIG = [
             {
                 "name": "ecom_compra",
                 "label": "Nuevo pedido",
-                "url": "ecom:mayoristapp_compra",
+                "url": "ecom:mayoristapp_venta",
                 "permission": "ecom.pedidos.crear",
             },
             {

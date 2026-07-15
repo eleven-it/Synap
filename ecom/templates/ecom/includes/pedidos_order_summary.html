@@ -27,8 +27,8 @@
       <div class="flex items-center justify-between gap-2 pt-1">
         <label for="pedidos-desc-pie" class="text-xs text-slate-500 dark:text-slate-400">Desc. al pie %</label>
         <input id="pedidos-desc-pie" type="number" min="0" max="100" step="0.01" x-model.number="descPie" @change="aplicarDescuentoPie()"
-               :class="descPieError ? 'border-rose-400 dark:border-rose-600' : 'border-slate-200 dark:border-slate-700'"
-               class="w-20 rounded-lg border bg-white dark:bg-slate-900 text-right text-sm px-2 py-1 focus:ring-2 focus:ring-sky-500/40 outline-none" />
+               :class="descPieError ? 'border-rose-400 dark:border-rose-600' : ''"
+               class="pedidos-input w-20 text-right text-sm" />
       </div>
       <p x-show="descPieError"
          x-text="descPieError"
@@ -41,6 +41,11 @@
       </div>
     </div>
 
+    {# Cabecera comercial (desktop) #}
+    <div class="hidden lg:block border-b border-slate-100 dark:border-slate-800">
+      {% include "ecom/includes/pedidos_cabecera_comercial.html" %}
+    </div>
+
     {# Secundario desktop: entrega/observaciones #}
     {% include "ecom/includes/pedidos_checkout_section.html" with checkout_wrapper_class="hidden lg:block border-0 border-t border-slate-100 dark:border-slate-800 rounded-none bg-transparent dark:bg-transparent" %}
 
@@ -49,7 +54,7 @@
       <button type="button" @click="abrirResumen()"
               :disabled="confirmando || !cart.items || cart.items.length === 0"
               class="pedidos-btn w-full justify-center py-3.5 text-sm min-h-[3rem] touch-manipulation disabled:opacity-50 disabled:pointer-events-none"
-              :class="tipo === 'PED' ? 'bg-purple-600 hover:bg-purple-500 text-white rounded-full font-semibold' : (tipo === 'PRE' ? 'bg-amber-600 hover:bg-amber-500 text-white rounded-full font-semibold' : 'bg-rose-600 hover:bg-rose-500 text-white rounded-full font-semibold')">
+              :class="tipo === 'PED' ? 'pedidos-btn-primary' : (tipo === 'PRE' ? 'bg-amber-600 hover:bg-amber-500 text-white rounded-full font-semibold' : 'bg-rose-600 hover:bg-rose-500 text-white rounded-full font-semibold')">
         <span x-show="!confirmando" x-text="`Revisar y confirmar ${tipoLabel}`">Revisar y confirmar pedido</span>
         <span x-show="confirmando">Confirmando…</span>
       </button>
@@ -80,7 +85,7 @@
       <button type="button" @click="abrirResumen()"
               :disabled="confirmando || !cart.items || cart.items.length === 0"
               class="pedidos-btn shrink-0 justify-center py-3 px-5 text-sm min-h-[3rem] touch-manipulation disabled:opacity-50 disabled:pointer-events-none"
-              :class="tipo === 'PED' ? 'bg-purple-600 hover:bg-purple-500 text-white rounded-full font-semibold' : (tipo === 'PRE' ? 'bg-amber-600 hover:bg-amber-500 text-white rounded-full font-semibold' : 'bg-rose-600 hover:bg-rose-500 text-white rounded-full font-semibold')">
+              :class="tipo === 'PED' ? 'pedidos-btn-primary' : (tipo === 'PRE' ? 'bg-amber-600 hover:bg-amber-500 text-white rounded-full font-semibold' : 'bg-rose-600 hover:bg-rose-500 text-white rounded-full font-semibold')">
         <span x-show="!confirmando" x-text="`Confirmar ${tipoLabel}`">Confirmar pedido</span>
         <span x-show="confirmando">…</span>
       </button>
@@ -98,6 +103,18 @@
         <div class="flex justify-between" x-show="tot.impuesto_interno_total > 0" x-cloak>
           <span>Imp. interno</span><span class="tabular-nums" x-text="money(tot.impuesto_interno_total)"></span>
         </div>
+        <div class="flex items-center justify-between gap-2 pt-1">
+          <label for="pedidos-desc-pie-mobile" class="text-xs text-slate-500 dark:text-slate-400">Desc. al pie %</label>
+          <input id="pedidos-desc-pie-mobile" type="number" min="0" max="100" step="0.01" x-model.number="descPie" @change="aplicarDescuentoPie()"
+                 :class="descPieError ? 'border-rose-400 dark:border-rose-600' : ''"
+                 class="pedidos-input w-20 text-right text-sm" />
+        </div>
+        <p x-show="descPieError"
+           x-text="descPieError"
+           class="text-xs text-rose-600 dark:text-rose-400 font-medium"
+           role="alert"
+           aria-live="assertive"
+           x-cloak></p>
         <div class="flex justify-between" x-show="tot.descuento_pie > 0" x-cloak>
           <span>Desc. al pie</span><span class="tabular-nums" x-text="money(tot.descuento_pie)"></span>
         </div>

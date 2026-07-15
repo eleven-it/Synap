@@ -1,7 +1,7 @@
 {% extends "mpr/base_mpr.html" %}
 {% load static %}
 
-{% block title %}Vendedor · Cliente · Marca — Synap{% endblock %}
+{% block title %}Vendedor · Cliente · Sucursal · Marca — Synap{% endblock %}
 
 {% block content %}
 <section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-3 dark:bg-slate-900 sm:py-4"
@@ -13,15 +13,15 @@
         <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
           <li><a :href="urls.hub" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Pedidos</a></li>
           <li class="text-slate-300" aria-hidden="true">/</li>
-          <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Vendedor · Cliente · Marca</span></li>
+          <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Vendedor · Cliente · Sucursal · Marca</span></li>
         </ol>
       </nav>
 
       <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md sm:p-4">
         <header class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Vendedor · Cliente · Marca</h1>
-            <p class="mt-1 text-xs text-slate-300 sm:text-sm">Territorio comercial: una marca por cliente solo puede pertenecer a un vendedor.</p>
+            <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Vendedor · Cliente · Sucursal · Marca</h1>
+            <p class="mt-1 text-xs text-slate-300 sm:text-sm">Territorio comercial (cuaterna): una marca por cliente y sucursal solo puede pertenecer a un vendedor.</p>
           </div>
           <a :href="urls.hub" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
             <span class="material-icons text-base" aria-hidden="true">receipt_long</span>
@@ -35,8 +35,8 @@
     <div x-show="error" x-cloak class="mb-2 flex-shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900" x-text="error" role="alert"></div>
 
     <div class="mb-3 flex-shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Nueva terna</h2>
-      <div class="grid grid-cols-1 gap-3 md:grid-cols-4 md:items-end">
+      <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Nueva cuaterna</h2>
+      <div class="grid grid-cols-1 gap-3 md:grid-cols-5 md:items-end">
         {# Vendedor #}
         <div class="relative" @click.outside="cerrarPanel('vend')">
           <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="vcm-vend">Vendedor</label>
@@ -99,6 +99,38 @@
           </p>
         </div>
 
+        {# Sucursal #}
+        <div class="relative" @click.outside="cerrarPanel('suc')">
+          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="vcm-suc">Sucursal</label>
+          <input id="vcm-suc" type="text" autocomplete="off" role="combobox"
+                 :aria-expanded="panel==='suc'"
+                 :disabled="!selCli"
+                 x-model="qSuc"
+                 @focus="abrirPanel('suc'); buscarSucursales()"
+                 @input.debounce.280ms="buscarSucursales()"
+                 @keydown.arrow-down.prevent="moverSel('suc', 1)"
+                 @keydown.arrow-up.prevent="moverSel('suc', -1)"
+                 @keydown.enter.prevent="elegirResaltado('suc')"
+                 @keydown.escape="cerrarPanel('suc')"
+                 placeholder="Elegí cliente primero…"
+                 class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+          <ul x-show="panel==='suc' && sucursales.length" x-cloak
+              class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+              role="listbox">
+            <template x-for="(s, i) in sucursales" :key="s.id_cliente_domicilio">
+              <li role="option"
+                  @mousedown.prevent="elegirSuc(s)"
+                  :class="i === idxSuc ? 'bg-purple-50 dark:bg-purple-950/40' : ''"
+                  class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
+                  x-text="s.etiqueta || s.nombre"></li>
+            </template>
+          </ul>
+          <p x-show="panel==='suc' && selCli && !cargandoSuc && !sucursales.length" x-cloak
+             class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+            Sin sucursales activas
+          </p>
+        </div>
+
         {# Marca #}
         <div class="relative" @click.outside="cerrarPanel('mar')">
           <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="vcm-mar">Marca</label>
@@ -130,7 +162,7 @@
           </p>
         </div>
 
-        <button type="button" @click="crear()" :disabled="guardando"
+        <button type="button" @click="pedirAsignar()" :disabled="guardando"
                 class="inline-flex h-10 items-center justify-center rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50">
           Asignar
         </button>
@@ -168,6 +200,7 @@
           <tr>
             <th class="px-3 py-2 font-semibold">Vendedor</th>
             <th class="px-3 py-2 font-semibold">Cliente</th>
+            <th class="px-3 py-2 font-semibold">Sucursal</th>
             <th class="px-3 py-2 font-semibold">Marca</th>
             <th class="px-3 py-2 font-semibold">Alta</th>
             <th class="px-3 py-2 font-semibold"></th>
@@ -175,7 +208,7 @@
         </thead>
         <tbody>
           <template x-if="!ternas.length && !cargando">
-            <tr><td colspan="5" class="px-3 py-8 text-center text-slate-500">Sin ternas activas. Creá la primera arriba.</td></tr>
+            <tr><td colspan="6" class="px-3 py-8 text-center text-slate-500">Sin cuaternas activas. Creá la primera arriba.</td></tr>
           </template>
           <template x-for="t in ternas" :key="t.id">
             <tr class="border-t border-slate-100 dark:border-slate-700">
@@ -184,10 +217,11 @@
                 <span class="text-xs text-slate-400" x-text="'#'+t.CodViajante"></span>
               </td>
               <td class="px-3 py-2" x-text="t.nombre_cliente + ' (' + t.id_cliente + ')'"></td>
+              <td class="px-3 py-2" x-text="(t.etiqueta_sucursal || t.nombre_sucursal || ('#' + t.id_cliente_domicilio))"></td>
               <td class="px-3 py-2" x-text="t.nombre_marca + ' (' + t.CodMarca + ')'"></td>
               <td class="px-3 py-2 tabular-nums text-slate-500" x-text="t.fecha_alta"></td>
               <td class="px-3 py-2 text-right">
-                <button type="button" @click="anular(t)" class="text-xs font-semibold text-red-600 hover:underline">Anular</button>
+                <button type="button" @click="pedirAnular(t)" class="text-xs font-semibold text-red-600 hover:underline">Anular</button>
               </td>
             </tr>
           </template>
@@ -195,34 +229,146 @@
       </table>
     </div>
   </div>
+
+  {# Modal Synap — confirmación (reemplaza window.confirm) #}
+  <div x-show="confirmOpen"
+       x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+       role="dialog"
+       aria-modal="true"
+       :aria-labelledby="confirmKind === 'anular' ? 'vcm-modal-anular-title' : 'vcm-modal-asignar-title'"
+       @keydown.escape.window="cerrarConfirm()"
+       @click.self="cerrarConfirm()"
+       x-transition.opacity>
+    <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-600 dark:bg-slate-800"
+         @click.stop>
+      <template x-if="confirmKind === 'asignar'">
+        <div>
+          <div class="mb-1 flex items-center gap-2">
+            <span class="material-icons text-purple-500" aria-hidden="true">link</span>
+            <h3 id="vcm-modal-asignar-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Asignar cuaterna</h3>
+          </div>
+          <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+            Se creará la relación vendedor · cliente · sucursal · marca. Una marca por cliente y sucursal solo puede pertenecer a un vendedor.
+          </p>
+          <ul class="mb-5 space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-800 dark:bg-slate-900/60 dark:text-slate-100">
+            <li><span class="text-slate-500 dark:text-slate-400">Vendedor:</span> <strong x-text="selVend && selVend.nombre"></strong></li>
+            <li><span class="text-slate-500 dark:text-slate-400">Cliente:</span> <strong x-text="selCli && selCli.nombre"></strong></li>
+            <li><span class="text-slate-500 dark:text-slate-400">Sucursal:</span> <strong x-text="selSuc && (selSuc.etiqueta || selSuc.nombre)"></strong></li>
+            <li><span class="text-slate-500 dark:text-slate-400">Marca:</span> <strong x-text="selMar && selMar.nombre"></strong></li>
+          </ul>
+          <div class="flex justify-end gap-2">
+            <button type="button" @click="cerrarConfirm()" :disabled="guardando"
+                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+              Cancelar
+            </button>
+            <button type="button" @click="ejecutarConfirm()" :disabled="guardando"
+                    class="inline-flex items-center gap-1 rounded-lg bg-purple-600 px-4 py-2 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2">
+              <span class="material-icons text-sm" aria-hidden="true">check</span>
+              <span x-show="!guardando">Confirmar asignación</span>
+              <span x-show="guardando" x-cloak>Procesando…</span>
+            </button>
+          </div>
+        </div>
+      </template>
+      <template x-if="confirmKind === 'anular'">
+        <div>
+          <div class="mb-1 flex items-center gap-2">
+            <span class="material-icons text-red-500" aria-hidden="true">delete_outline</span>
+            <h3 id="vcm-modal-anular-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Anular cuaterna</h3>
+          </div>
+          <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
+            ¿Confirmás anular la asignación de
+            <strong x-text="confirmTerna && confirmTerna.nombre_marca"></strong>
+            para
+            <strong x-text="confirmTerna && confirmTerna.nombre_cliente"></strong>?
+            Dejará de estar activa; podés crear otra después si hace falta.
+          </p>
+          <ul class="mb-5 space-y-1 rounded-lg bg-rose-50 px-3 py-2 text-xs text-slate-800 dark:bg-rose-950/40 dark:text-slate-100">
+            <li><span class="text-slate-500 dark:text-slate-400">Vendedor:</span> <strong x-text="confirmTerna && confirmTerna.nombre_viajante"></strong></li>
+            <li><span class="text-slate-500 dark:text-slate-400">Cliente:</span> <strong x-text="confirmTerna && confirmTerna.nombre_cliente"></strong></li>
+            <li><span class="text-slate-500 dark:text-slate-400">Sucursal:</span> <strong x-text="confirmTerna && (confirmTerna.etiqueta_sucursal || confirmTerna.nombre_sucursal)"></strong></li>
+            <li><span class="text-slate-500 dark:text-slate-400">Marca:</span> <strong x-text="confirmTerna && confirmTerna.nombre_marca"></strong></li>
+          </ul>
+          <div class="flex justify-end gap-2">
+            <button type="button" @click="cerrarConfirm()" :disabled="guardando"
+                    class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+              Cancelar
+            </button>
+            <button type="button" @click="ejecutarConfirm()" :disabled="guardando"
+                    class="inline-flex items-center gap-1 rounded-lg bg-red-600 px-4 py-2 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:bg-red-700 dark:hover:bg-red-600">
+              <span class="material-icons text-sm" aria-hidden="true">check</span>
+              <span x-show="!guardando">Confirmar anulación</span>
+              <span x-show="guardando" x-cloak>Procesando…</span>
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
 </section>
+<style>[x-cloak]{display:none!important}</style>
 
 {{ urls_api|json_script:"vcm-urls" }}
 <script>
-function vcmApp() {
+window.vcmApp = function vcmApp() {
   return {
     urls: {},
     ternas: [],
     vendedores: [],
     vendedoresFiltro: [],
     clientes: [],
+    sucursales: [],
     marcas: [],
     selVend: null,
     selCli: null,
+    selSuc: null,
     selMar: null,
     filtroViajante: '',
-    qVend: '', qCli: '', qMar: '', qFiltro: '',
+    qVend: '', qCli: '', qSuc: '', qMar: '', qFiltro: '',
     panel: null,
-    idxVend: 0, idxCli: 0, idxMar: 0,
+    idxVend: 0, idxCli: 0, idxSuc: 0, idxMar: 0,
     mensaje: '', error: '',
     cargando: false, guardando: false,
-    cargandoVend: false, cargandoCli: false, cargandoMar: false,
+    cargandoVend: false, cargandoCli: false, cargandoSuc: false, cargandoMar: false,
+    confirmOpen: false,
+    confirmKind: null,
+    confirmTerna: null,
     init() {
       const el = document.getElementById('vcm-urls');
       this.urls = el ? JSON.parse(el.textContent) : {};
       this.cargar();
       this.buscarVendedores();
       this.buscarMarcas();
+    },
+    cerrarConfirm() {
+      if (this.guardando) return;
+      this.confirmOpen = false;
+      this.confirmKind = null;
+      this.confirmTerna = null;
+    },
+    pedirAsignar() {
+      this.mensaje = ''; this.error = '';
+      if (!this.selVend || !this.selCli || !this.selSuc || !this.selMar) {
+        this.error = 'Completá vendedor, cliente, sucursal y marca con la búsqueda predictiva.';
+        return;
+      }
+      this.confirmKind = 'asignar';
+      this.confirmTerna = null;
+      this.confirmOpen = true;
+    },
+    pedirAnular(t) {
+      this.mensaje = ''; this.error = '';
+      this.confirmKind = 'anular';
+      this.confirmTerna = t;
+      this.confirmOpen = true;
+    },
+    async ejecutarConfirm() {
+      if (this.confirmKind === 'asignar') {
+        await this.crear();
+      } else if (this.confirmKind === 'anular' && this.confirmTerna) {
+        await this.anular(this.confirmTerna);
+      }
     },
     abrirPanel(p) { this.panel = p; },
     cerrarPanel(p) { if (this.panel === p) this.panel = null; },
@@ -282,6 +428,23 @@ function vcmApp() {
       this.clientes = data.items || [];
       this.idxCli = 0;
     },
+    async buscarSucursales() {
+      if (!this.urls.sucursales || !this.selCli) {
+        this.sucursales = [];
+        return;
+      }
+      this.cargandoSuc = true;
+      const data = await this.getJson(
+        this.urls.sucursales
+          + '?id_cliente=' + encodeURIComponent(this.selCli.id_cliente)
+          + '&q=' + encodeURIComponent(this.qSuc || '')
+          + '&limit=40'
+      );
+      this.cargandoSuc = false;
+      if (!data.ok) { this.error = data.error || 'No se pudieron buscar sucursales.'; this.sucursales = []; return; }
+      this.sucursales = data.items || [];
+      this.idxSuc = 0;
+    },
     async buscarMarcas() {
       if (!this.urls.marcas) return;
       this.cargandoMar = true;
@@ -299,7 +462,15 @@ function vcmApp() {
     elegirCli(c) {
       this.selCli = c;
       this.qCli = c.nombre || '';
+      this.selSuc = null;
+      this.qSuc = '';
+      this.sucursales = [];
       this.cerrarPanel('cli');
+    },
+    elegirSuc(s) {
+      this.selSuc = s;
+      this.qSuc = s.etiqueta || s.nombre || '';
+      this.cerrarPanel('suc');
     },
     elegirMar(m) {
       this.selMar = m;
@@ -311,6 +482,8 @@ function vcmApp() {
         this.idxVend = (this.idxVend + delta + this.vendedores.length) % this.vendedores.length;
       } else if (tipo === 'cli' && this.clientes.length) {
         this.idxCli = (this.idxCli + delta + this.clientes.length) % this.clientes.length;
+      } else if (tipo === 'suc' && this.sucursales.length) {
+        this.idxSuc = (this.idxSuc + delta + this.sucursales.length) % this.sucursales.length;
       } else if (tipo === 'mar' && this.marcas.length) {
         this.idxMar = (this.idxMar + delta + this.marcas.length) % this.marcas.length;
       }
@@ -318,28 +491,33 @@ function vcmApp() {
     elegirResaltado(tipo) {
       if (tipo === 'vend' && this.vendedores[this.idxVend]) this.elegirVend(this.vendedores[this.idxVend]);
       else if (tipo === 'cli' && this.clientes[this.idxCli]) this.elegirCli(this.clientes[this.idxCli]);
+      else if (tipo === 'suc' && this.sucursales[this.idxSuc]) this.elegirSuc(this.sucursales[this.idxSuc]);
       else if (tipo === 'mar' && this.marcas[this.idxMar]) this.elegirMar(this.marcas[this.idxMar]);
     },
     async crear() {
       this.mensaje = ''; this.error = '';
-      if (!this.selVend || !this.selCli || !this.selMar) {
-        this.error = 'Completá vendedor, cliente y marca con la búsqueda predictiva.';
+      if (!this.selVend || !this.selCli || !this.selSuc || !this.selMar) {
+        this.error = 'Completá vendedor, cliente, sucursal y marca con la búsqueda predictiva.';
+        this.cerrarConfirm();
         return;
       }
       this.guardando = true;
       const { status, data } = await this.postJson(this.urls.crear, {
         CodViajante: Number(this.selVend.CodViajante),
         id_cliente: Number(this.selCli.id_cliente),
+        id_cliente_domicilio: Number(this.selSuc.id_cliente_domicilio),
         CodMarca: Number(this.selMar.CodMarca),
       });
       this.guardando = false;
+      this.confirmOpen = false;
+      this.confirmKind = null;
       if (status === 409) {
         const d = data.dueno || {};
         this.error = data.message || data.error || ('Conflicto: dueño ' + (d.nombre_viajante || d.CodViajante));
         return;
       }
       if (!data.ok) { this.error = data.error || 'No se pudo crear.'; return; }
-      this.mensaje = data.message || 'Terna creada.';
+      this.mensaje = data.message || 'Cuaterna creada.';
       this.selMar = null;
       this.qMar = '';
       this.marcas = [];
@@ -347,11 +525,15 @@ function vcmApp() {
       this.buscarMarcas();
     },
     async anular(t) {
-      if (!confirm('¿Anular la terna de ' + t.nombre_marca + ' para ' + t.nombre_cliente + '?')) return;
       this.error = ''; this.mensaje = '';
+      this.guardando = true;
       const { data } = await this.postJson(this.urls.anular, { id: t.id });
+      this.guardando = false;
+      this.confirmOpen = false;
+      this.confirmKind = null;
+      this.confirmTerna = null;
       if (!data.ok) { this.error = data.error || 'No se pudo anular.'; return; }
-      this.mensaje = data.message || 'Terna anulada.';
+      this.mensaje = data.message || 'Cuaterna anulada.';
       await this.cargar();
     },
   };

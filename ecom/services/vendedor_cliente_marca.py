@@ -1,4 +1,4 @@
-"""CRUD MySQL de ternas ``ecom_vendedor_cliente_marca`` (territorio comercial)."""
+"""CRUD MySQL de cuaternas ``ecom_vendedor_cliente_marca`` (territorio comercial)."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class ConflictoMarcaCliente(Exception):
-    """La marca ya está asignada a otro viajante para el mismo cliente."""
+    """La marca ya está asignada a otro viajante para el mismo cliente y sucursal."""
 
     def __init__(self, message: str, dueno: Dict[str, Any]):
         super().__init__(message)
@@ -25,7 +25,7 @@ def _mensaje_tabla_ausente(exc: Exception) -> str:
     if "1146" in msg or "doesn't exist" in msg.lower():
         return (
             "Faltan las tablas ecom_vendedor_cliente_marca. "
-            "Ejecutá la migración «E-com — terna Vendedor→Cliente→Marca» "
+            "Ejecutá la migración «E-com — cuaterna Vendedor→Cliente→Sucursal→Marca» "
             "en Archivo → Migración esquema MySQL."
         )
     return msg
@@ -41,15 +41,62 @@ def _usuario_mod(sess_user: Optional[Dict[str, Any]]) -> str:
     return (raw or "-")[:60]
 
 
+def _etiqueta_sucursal(calle: str, nro: str, id_dom: int) -> Tuple[str, str]:
+    calle = (calle or "").strip()
+    nro = (nro or "").strip()
+    nombre_parts = [p for p in (calle, nro) if p and p != "-"]
+    nombre = " ".join(nombre_parts).strip()
+    etiqueta = nombre or f"Sucursal #{id_dom}"
+    return nombre, etiqueta
+
+
+def _domicilio_valido_cliente(
+    base_empresa: str,
+    id_cliente: int,
+    id_cliente_domicilio: int,
+) -> Tuple[bool, str]:
+    """Verifica que el domicilio pertenezca al cliente y esté activo."""
+    idc = to_int_or_none(id_cliente)
+    idd = to_int_or_none(id_cliente_domicilio)
+    if idc is None or idd is None or idd <= 0:
+        return False, "Sucursal (id_cliente_domicilio) inválida."
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    SELECT 1
+                    FROM cliente_domicilio
+                    WHERE id_cliente_domicilio = %s
+                      AND id_cliente = %s
+                      AND COALESCE(anulado, 'No') = 'No'
+                    LIMIT 1
+                    """,
+                    [idd, idc],
+                )
+                if cursor.fetchone():
+                    return True, ""
+                return False, "La sucursal no pertenece al cliente o está anulada."
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.warning("_domicilio_valido_cliente: %s", e)
+        return False, _mensaje_tabla_ausente(e)
+
+
 def buscar_dueno_marca_cliente(
     base_empresa: str,
     id_cliente: int,
     cod_marca: int,
+    id_cliente_domicilio: int,
 ) -> Optional[Dict[str, Any]]:
-    """Fila activa dueña de (cliente, marca), o None."""
+    """Fila activa dueña de (cliente, sucursal, marca), o None."""
     idc = to_int_or_none(id_cliente)
     cm = to_int_or_none(cod_marca)
-    if idc is None or cm is None:
+    idd = to_int_or_none(id_cliente_domicilio)
+    if idc is None or cm is None or idd is None:
         return None
     try:
         pool = get_mysql_pool()
@@ -62,16 +109,18 @@ def buscar_dueno_marca_cliente(
                         t.id,
                         t.CodViajante,
                         t.id_cliente,
+                        t.id_cliente_domicilio,
                         t.CodMarca,
                         COALESCE(v.Nombre, '') AS nombre_viajante
                     FROM ecom_vendedor_cliente_marca t
                     LEFT JOIN viajantes v ON v.CodViajante = t.CodViajante
                     WHERE t.id_cliente = %s
+                      AND t.id_cliente_domicilio = %s
                       AND t.CodMarca = %s
                       AND COALESCE(t.anulado, 'No') = 'No'
                     LIMIT 1
                     """,
-                    [idc, cm],
+                    [idc, idd, cm],
                 )
                 row = cursor.fetchone()
                 if not row:
@@ -80,8 +129,9 @@ def buscar_dueno_marca_cliente(
                     "id": int(row[0]),
                     "CodViajante": int(row[1]),
                     "id_cliente": int(row[2]),
-                    "CodMarca": int(row[3]),
-                    "nombre_viajante": (row[4] or "").strip(),
+                    "id_cliente_domicilio": int(row[3]),
+                    "CodMarca": int(row[4]),
+                    "nombre_viajante": (row[5] or "").strip(),
                 }
             finally:
                 cursor.close()
@@ -95,10 +145,11 @@ def listar_ternas(
     *,
     cod_viajante: Optional[int] = None,
     id_cliente: Optional[int] = None,
+    id_cliente_domicilio: Optional[int] = None,
     solo_activas: bool = True,
     limit: int = 200,
 ) -> Tuple[bool, str, List[Dict[str, Any]]]:
-    """Lista ternas con nombres de viajante / cliente / marca."""
+    """Lista cuaternas con nombres de viajante / cliente / sucursal / marca."""
     lim = max(1, min(int(limit), 500))
     where = ["1=1"]
     params: List[Any] = []
@@ -112,6 +163,10 @@ def listar_ternas(
     if idc is not None:
         where.append("t.id_cliente = %s")
         params.append(idc)
+    idd = to_int_or_none(id_cliente_domicilio)
+    if idd is not None:
+        where.append("t.id_cliente_domicilio = %s")
+        params.append(idd)
     params.append(lim)
     sql = f"""
         SELECT
@@ -120,6 +175,9 @@ def listar_ternas(
             COALESCE(v.Nombre, '') AS nombre_viajante,
             t.id_cliente,
             COALESCE(c.nombre_cliente, '') AS nombre_cliente,
+            t.id_cliente_domicilio,
+            COALESCE(cd.Calle, '') AS calle_sucursal,
+            COALESCE(cd.NroCalle, '') AS nro_sucursal,
             t.CodMarca,
             COALESCE(m.NombreMarca, '') AS nombre_marca,
             COALESCE(t.anulado, 'No') AS anulado,
@@ -127,9 +185,10 @@ def listar_ternas(
         FROM ecom_vendedor_cliente_marca t
         LEFT JOIN viajantes v ON v.CodViajante = t.CodViajante
         LEFT JOIN cliente c ON c.Codigo = t.id_cliente
+        LEFT JOIN cliente_domicilio cd ON cd.id_cliente_domicilio = t.id_cliente_domicilio
         LEFT JOIN marca m ON m.CodMarca = t.CodMarca
         WHERE {' AND '.join(where)}
-        ORDER BY v.Nombre ASC, c.nombre_cliente ASC, m.NombreMarca ASC
+        ORDER BY v.Nombre ASC, c.nombre_cliente ASC, cd.Calle ASC, m.NombreMarca ASC
         LIMIT %s
     """
     try:
@@ -140,6 +199,8 @@ def listar_ternas(
                 cursor.execute(sql, params)
                 rows = []
                 for r in cursor.fetchall():
+                    id_dom = int(r[5] or 0)
+                    nombre_suc, etiqueta_suc = _etiqueta_sucursal(r[6], r[7], id_dom)
                     rows.append(
                         {
                             "id": int(r[0]),
@@ -147,10 +208,13 @@ def listar_ternas(
                             "nombre_viajante": (r[2] or "").strip(),
                             "id_cliente": int(r[3]),
                             "nombre_cliente": (r[4] or "").strip(),
-                            "CodMarca": int(r[5]),
-                            "nombre_marca": (r[6] or "").strip(),
-                            "anulado": (r[7] or "No").strip(),
-                            "fecha_alta": r[8] or "",
+                            "id_cliente_domicilio": id_dom,
+                            "nombre_sucursal": nombre_suc,
+                            "etiqueta_sucursal": etiqueta_suc,
+                            "CodMarca": int(r[8]),
+                            "nombre_marca": (r[9] or "").strip(),
+                            "anulado": (r[10] or "No").strip(),
+                            "fecha_alta": r[11] or "",
                         }
                     )
                 return True, "", rows
@@ -166,31 +230,38 @@ def crear_terna(
     cod_viajante: int,
     id_cliente: int,
     cod_marca: int,
+    id_cliente_domicilio: int,
     *,
     usuario_mod: str = "-",
 ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
     """
-    Crea terna activa. Si (cliente, marca) ya tiene dueño distinto → ConflictoMarcaCliente.
+    Crea cuaterna activa. Si (cliente, sucursal, marca) ya tiene dueño distinto → ConflictoMarcaCliente.
     Si el mismo viajante ya la tiene → idempotente (devuelve la fila).
     """
     cv = to_int_or_none(cod_viajante)
     idc = to_int_or_none(id_cliente)
     cm = to_int_or_none(cod_marca)
-    if cv is None or idc is None or cm is None:
-        return False, "Faltan CodViajante, id_cliente o CodMarca válidos.", None
+    idd = to_int_or_none(id_cliente_domicilio)
+    if cv is None or idc is None or cm is None or idd is None or idd <= 0:
+        return False, "Faltan CodViajante, id_cliente, id_cliente_domicilio (>0) o CodMarca válidos.", None
     um = (usuario_mod or "-")[:60]
 
-    dueno = buscar_dueno_marca_cliente(base_empresa, idc, cm)
+    ok_dom, err_dom = _domicilio_valido_cliente(base_empresa, idc, idd)
+    if not ok_dom:
+        return False, err_dom, None
+
+    dueno = buscar_dueno_marca_cliente(base_empresa, idc, cm, idd)
     if dueno:
         if int(dueno["CodViajante"]) == cv:
-            return True, "La terna ya existía.", dueno
+            return True, "La cuaterna ya existía.", dueno
         nombre = dueno.get("nombre_viajante") or f"cod {dueno['CodViajante']}"
         raise ConflictoMarcaCliente(
-            f"La marca ya está asignada a {nombre} para este cliente.",
+            f"La marca ya está asignada a {nombre} para este cliente y sucursal.",
             {
                 "CodViajante": dueno["CodViajante"],
                 "nombre_viajante": dueno.get("nombre_viajante") or "",
                 "id": dueno.get("id"),
+                "id_cliente_domicilio": dueno.get("id_cliente_domicilio"),
             },
         )
 
@@ -202,35 +273,36 @@ def crear_terna(
                 cursor.execute(
                     """
                     INSERT INTO ecom_vendedor_cliente_marca
-                        (CodViajante, id_cliente, CodMarca, anulado, usuario_mod)
-                    VALUES (%s, %s, %s, 'No', %s)
+                        (CodViajante, id_cliente, id_cliente_domicilio, CodMarca, anulado, usuario_mod)
+                    VALUES (%s, %s, %s, %s, 'No', %s)
                     """,
-                    [cv, idc, cm, um],
+                    [cv, idc, idd, cm, um],
                 )
                 new_id = int(cursor.lastrowid)
                 conn.commit()
                 return (
                     True,
-                    "Terna creada.",
+                    "Cuaterna creada.",
                     {
                         "id": new_id,
                         "CodViajante": cv,
                         "id_cliente": idc,
+                        "id_cliente_domicilio": idd,
                         "CodMarca": cm,
                     },
                 )
             except Exception as e:
                 conn.rollback()
-                # Carrera: unique
-                dueno2 = buscar_dueno_marca_cliente(base_empresa, idc, cm)
+                dueno2 = buscar_dueno_marca_cliente(base_empresa, idc, cm, idd)
                 if dueno2 and int(dueno2["CodViajante"]) != cv:
                     nombre = dueno2.get("nombre_viajante") or f"cod {dueno2['CodViajante']}"
                     raise ConflictoMarcaCliente(
-                        f"La marca ya está asignada a {nombre} para este cliente.",
+                        f"La marca ya está asignada a {nombre} para este cliente y sucursal.",
                         {
                             "CodViajante": dueno2["CodViajante"],
                             "nombre_viajante": dueno2.get("nombre_viajante") or "",
                             "id": dueno2.get("id"),
+                            "id_cliente_domicilio": dueno2.get("id_cliente_domicilio"),
                         },
                     ) from e
                 logger.exception("crear_terna: %s", e)
@@ -253,7 +325,7 @@ def anular_terna(
     """Soft-delete: anulado = Si (libera unique activo)."""
     tid = to_int_or_none(id_terna)
     if tid is None:
-        return False, "Id de terna inválido."
+        return False, "Id de cuaterna inválido."
     um = (usuario_mod or "-")[:60]
     try:
         pool = get_mysql_pool()
@@ -271,8 +343,8 @@ def anular_terna(
                 affected = cursor.rowcount
                 conn.commit()
                 if affected < 1:
-                    return False, "Terna no encontrada o ya anulada."
-                return True, "Terna anulada."
+                    return False, "Cuaterna no encontrada o ya anulada."
+                return True, "Cuaterna anulada."
             except Exception as e:
                 conn.rollback()
                 logger.exception("anular_terna: %s", e)
@@ -282,6 +354,104 @@ def anular_terna(
     except Exception as e:
         logger.exception("anular_terna: %s", e)
         return False, _mensaje_tabla_ausente(e)
+
+
+def buscar_sucursales_cliente(
+    base_empresa: str,
+    id_cliente: int,
+    q: str = "",
+    limit: int = 30,
+) -> List[Dict[str, Any]]:
+    """Domicilios activos del cliente para predictivo de config (sin filtrar por cuaterna)."""
+    idc = to_int_or_none(id_cliente)
+    if idc is None:
+        return []
+    lim = max(1, min(int(limit), 100))
+    where = [
+        "cm.id_cliente = %s",
+        "COALESCE(cm.anulado, 'No') = 'No'",
+    ]
+    params: List[Any] = [idc]
+    q = (q or "").strip()
+    if q:
+        qi = to_int_or_none(q)
+        if qi is not None:
+            where.append(
+                "(cm.id_cliente_domicilio = %s OR cm.Calle LIKE %s OR cm.NroCalle LIKE %s)"
+            )
+            params.extend([qi, f"%{q}%", f"%{q}%"])
+        else:
+            where.append("(cm.Calle LIKE %s OR cm.NroCalle LIKE %s OR cm.Dpto LIKE %s)")
+            params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
+    params.append(lim)
+    sql = f"""
+        SELECT
+            cm.id_cliente_domicilio,
+            COALESCE(cm.Calle, '') AS calle,
+            COALESCE(cm.NroCalle, '') AS nro
+        FROM cliente_domicilio AS cm
+        WHERE {' AND '.join(where)}
+        ORDER BY cm.Calle ASC, cm.NroCalle ASC
+        LIMIT %s
+    """
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, params)
+                out = []
+                for r in cursor.fetchall():
+                    id_dom = int(r[0])
+                    nombre, etiqueta = _etiqueta_sucursal(r[1], r[2], id_dom)
+                    out.append(
+                        {
+                            "id_cliente_domicilio": id_dom,
+                            "nombre": nombre,
+                            "etiqueta": etiqueta,
+                        }
+                    )
+                return out
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.warning("buscar_sucursales_cliente: %s", e)
+        return []
+
+
+def sucursales_asignadas_viajante_cliente(
+    base_empresa: str,
+    cod_viajante: int,
+    id_cliente: int,
+) -> List[int]:
+    """Ids de sucursal con al menos una cuaterna activa para (viajante, cliente)."""
+    cv = to_int_or_none(cod_viajante)
+    idc = to_int_or_none(id_cliente)
+    if cv is None or idc is None:
+        return []
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT id_cliente_domicilio
+                    FROM ecom_vendedor_cliente_marca
+                    WHERE CodViajante = %s
+                      AND id_cliente = %s
+                      AND COALESCE(anulado, 'No') = 'No'
+                      AND COALESCE(id_cliente_domicilio, 0) > 0
+                    ORDER BY id_cliente_domicilio ASC
+                    """,
+                    [cv, idc],
+                )
+                return [int(r[0]) for r in cursor.fetchall() if r and r[0] is not None]
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.warning("sucursales_asignadas_viajante_cliente: %s", e)
+        return []
 
 
 def buscar_clientes_activos(

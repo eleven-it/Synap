@@ -3,7 +3,14 @@
   vertical) + acciones rápidas. El toggle PED/PRE/DEV vive ahora en el hero (tablero).
 {% endcomment %}
 <header class="pedidos-order-header" aria-label="Contexto del pedido">
-  <div class="pedidos-order-header-grid grid grid-cols-1 lg:grid-cols-2 gap-3">
+  {% include "ecom/includes/pedidos_selector_vendedor.html" %}
+
+  {# Lista de precios del cliente (solo lectura) — REQ-VTA-05 / UI-04 #}
+  <div class="pedidos-order-header-lista mt-3" x-show="listaPrecio" x-cloak>
+    {% include "ecom/includes/pedidos_lista_badge.html" %}
+  </div>
+
+  <div class="pedidos-order-header-grid grid grid-cols-1 lg:grid-cols-2 gap-3 mt-3">
 
     {# Panel cliente (solo vendedor) #}
     <div class="pedidos-card p-3 sm:p-4 pedidos-order-header-cliente"

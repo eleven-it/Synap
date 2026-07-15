@@ -4,10 +4,32 @@ Catálogos y consultas auxiliares para alta de recibo (paridad json_recibo.php).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Dict, List
 
 from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import to_int_or_none
+
+
+def _serializar_punto_venta(row: Any) -> Dict[str, Any]:
+    """Normaliza filas de cursores MySQL con o sin diccionario."""
+    if isinstance(row, Mapping):
+        id_punto_venta = row.get("id_punto_venta")
+        nro_punto_venta = row.get("nro_punto_venta")
+        cont = row.get("cont")
+    else:
+        id_punto_venta, nro_punto_venta, cont = row[0], row[1], row[2]
+
+    id_punto_venta = int(id_punto_venta)
+    nro_punto_venta = int(nro_punto_venta)
+    cont = cont or "no"
+    return {
+        "id_punto_venta": id_punto_venta,
+        "nro_punto_venta": nro_punto_venta,
+        "cont": cont,
+        "value": f"{id_punto_venta}|{nro_punto_venta}|{cont}",
+        "label": str(nro_punto_venta).zfill(4),
+    }
 
 
 def listar_puntos_venta_usuario(base_empresa: str, session_user: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -29,16 +51,7 @@ def listar_puntos_venta_usuario(base_empresa: str, session_user: Dict[str, Any])
             )
             rows = c.fetchall() or []
             if rows:
-                return [
-                    {
-                        "id_punto_venta": int(r["id_punto_venta"]),
-                        "nro_punto_venta": int(r["nro_punto_venta"]),
-                        "cont": r.get("cont") or "no",
-                        "value": f"{r['id_punto_venta']}|{r['nro_punto_venta']}|{r.get('cont') or 'no'}",
-                        "label": str(r["nro_punto_venta"]).zfill(4),
-                    }
-                    for r in rows
-                ]
+                return [_serializar_punto_venta(row) for row in rows]
         id_pv = to_int_or_none(session_user.get("id_punto_venta"))
         if id_pv:
             c.execute(
@@ -50,15 +63,7 @@ def listar_puntos_venta_usuario(base_empresa: str, session_user: Dict[str, Any])
             )
             r = c.fetchone()
             if r:
-                return [
-                    {
-                        "id_punto_venta": int(r["id_punto_venta"]),
-                        "nro_punto_venta": int(r["nro_punto_venta"]),
-                        "cont": r.get("cont") or "no",
-                        "value": f"{r['id_punto_venta']}|{r['nro_punto_venta']}|{r.get('cont') or 'no'}",
-                        "label": str(r["nro_punto_venta"]).zfill(4),
-                    }
-                ]
+                return [_serializar_punto_venta(r)]
     return []
 
 

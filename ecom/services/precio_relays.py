@@ -47,6 +47,37 @@ def columna_promocion_articulo(lista_precio_cliente: Optional[str]) -> Optional[
     return _PROMO_LISTA_ARTICULO.get(key)
 
 
+def condiciones_venta_relay_json(
+    base_empresa: str,
+    *,
+    id_condicion_cliente: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Catálogo ``cond_venta`` para desplegables de cabecera comercial.
+
+    Columnas legacy confirmadas: ``Codigo``, ``Descripcion``, ``Dias``.
+    """
+    pool = get_mysql_pool()
+    out: List[Dict[str, Any]] = []
+    cli_cv = to_int_or_none(id_condicion_cliente)
+    with pool.get_connection(base_empresa) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT Codigo, COALESCE(Descripcion, '') AS Descripcion, COALESCE(Dias, 0) AS Dias
+            FROM cond_venta
+            WHERE COALESCE(anulado, 'No') <> 'Si'
+            ORDER BY Codigo
+            """
+        )
+        cols = [d[0] for d in cursor.description] if cursor.description else []
+        for row in cursor.fetchall():
+            item = _json_safe(dict(zip(cols, row)))
+            item["selected"] = cli_cv is not None and int(item.get("Codigo") or 0) == cli_cv
+            out.append(item)
+    return out
+
+
 def lista_precio_relay_json(
     base_empresa: str,
     *,

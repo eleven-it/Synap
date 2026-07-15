@@ -11,7 +11,13 @@ from django.shortcuts import redirect
 from django.views import View
 from django.views.generic import TemplateView
 
-from mpr.best_migration.models import BestArticuloMap, BestClienteMap, BestDepositoMap, BestStockInicialMap
+from mpr.best_migration.models import (
+    BestArticuloMap,
+    BestClienteMap,
+    BestDepositoMap,
+    BestOperarioMap,
+    BestStockInicialMap,
+)
 from mpr.best_migration.pedido_loader import migrar_pedidos_best
 from mpr.best_migration.reset import contar_staging_best, reiniciar_staging_best
 from mpr.best_migration.stock_reserva_loader import migrar_stock_reserva_best
@@ -22,27 +28,37 @@ from mpr.best_migration.services import (
     aceptar_inferido,
     aceptar_inferido_cliente,
     aceptar_inferido_deposito,
+    aceptar_inferido_operario,
     aceptar_inferidos_altos_articulos,
     aceptar_inferidos_clientes,
     aceptar_inferidos_depositos,
+    aceptar_inferidos_operarios,
+    aceptar_operarios_seleccionados,
     alta_articulo_desde_best,
     alta_articulos_seleccionados,
     cargar_stock_inicial_best,
     descartar_articulo,
     descartar_cliente,
     descartar_deposito,
+    descartar_operario,
     descartar_stock_linea,
     hub_context,
     marcar_stock_conciliado,
     marcar_unidades_ok,
     recalcular_mapeo_articulos,
+    resolver_fabricados_desde_terminados,
+    aceptar_inferidos_altos_fabricados,
+    sincronizar_stock_fabricados_semi,
     reabrir_articulo,
+    reabrir_operario,
     sincronizar_clientes_abiertos,
     sincronizar_depositos_best,
+    sincronizar_operarios_best,
     sincronizar_stock_inicial,
     validar_articulo,
     validar_cliente,
     validar_deposito,
+    validar_operario,
 )
 from mpr.views import MprLoginRequiredMixin, _get_base_empresa, _usuario_tiene_permiso_mpr
 
@@ -229,7 +245,13 @@ class MigracionBestArticulosView(MprLoginRequiredMixin, TemplateView):
         if not _tiene_filtros_get(self.request):
             incluir_stock = False
 
-        qs = BestArticuloMap.objects.filter(base_empresa=base).order_by("estado", "best_id_articulo")
+        qs = (
+            BestArticuloMap.objects.filter(base_empresa=base)
+            .exclude(
+                origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO
+            )
+            .order_by("estado", "best_id_articulo")
+        )
         if estado:
             qs = qs.filter(estado=estado)
         qs = _aplicar_filtro_alcance_articulos(
@@ -357,14 +379,32 @@ class MigracionBestStockInicialView(MprLoginRequiredMixin, TemplateView):
         estado = (self.request.GET.get("estado") or "").strip()
         q = (self.request.GET.get("q") or "").strip()
         solo_delta = self.request.GET.get("solo_delta") == "1"
+        cola = (self.request.GET.get("cola") or "listos_carga").strip()
         cola_trabajo = _filtro_necesarios_pendientes(self.request)
 
         qs = BestStockInicialMap.objects.filter(base_empresa=base).order_by(
             "estado", "best_id_articulo", "best_id_deposito"
         )
+        if cola == "pendiente_mapeo":
+            qs = qs.filter(
+                estado__in=[
+                    BestStockInicialMap.Estado.SIN_MAPEO_ARTICULO,
+                    BestStockInicialMap.Estado.SIN_MAPEO_DEPOSITO,
+                ]
+            )
+        elif cola == "ya_cargados":
+            qs = qs.filter(estado=BestStockInicialMap.Estado.CARGADO)
+        else:
+            cola = "listos_carga"
+            qs = qs.filter(
+                estado__in=[
+                    BestStockInicialMap.Estado.LISTO,
+                    BestStockInicialMap.Estado.CONCILIADO,
+                ]
+            )
         if estado:
             qs = qs.filter(estado=estado)
-        if cola_trabajo:
+        if cola_trabajo and cola == "listos_carga":
             qs = qs.filter(requerido_migracion=True).exclude(
                 estado__in=[
                     BestStockInicialMap.Estado.CONCILIADO,
@@ -389,6 +429,7 @@ class MigracionBestStockInicialView(MprLoginRequiredMixin, TemplateView):
         ctx["filtro_q"] = q
         ctx["solo_delta"] = solo_delta
         ctx["cola_trabajo"] = cola_trabajo
+        ctx["cola_activa"] = cola
         ctx["solo_pendientes"] = cola_trabajo
         ctx["opciones_estado"] = BestStockInicialMap.Estado.choices
         ctx["total_filtrado"] = total_filtrado
@@ -543,6 +584,130 @@ class MigracionBestValidarDepositoView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_depositos")
 
 
+class MigracionBestOperariosView(MprLoginRequiredMixin, TemplateView):
+    template_name = "mpr/best_migration/operarios.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not _usuario_tiene_permiso_mpr(request.user, "mpr.ver"):
+            messages.error(request, "No tenés permiso para ver Migración BEST.")
+            return redirect("mpr:tablero_produccion")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        if not _require_base(request):
+            return redirect("core:dashboard")
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        base = _get_base_empresa(self.request)
+        estado = (self.request.GET.get("estado") or "").strip()
+        alcance = (self.request.GET.get("alcance") or "").strip()
+        cola_trabajo = _filtro_necesarios_pendientes(self.request)
+
+        qs = BestOperarioMap.objects.filter(base_empresa=base).order_by("estado", "best_codigo")
+        if estado:
+            qs = qs.filter(estado=estado)
+        qs = _aplicar_filtro_alcance(
+            qs, cola_trabajo=cola_trabajo, alcance=alcance, model_cls=BestOperarioMap
+        )
+        hub = hub_context(base)
+        ctx.update(hub)
+        ctx["base_empresa"] = base
+        ctx["filas"] = list(qs)
+        ctx["filtro_estado"] = estado
+        ctx["filtro_alcance"] = alcance
+        ctx["cola_trabajo"] = cola_trabajo
+        ctx["solo_pendientes"] = cola_trabajo
+        ctx["opciones_estado"] = BestOperarioMap.Estado.choices
+        return ctx
+
+
+class MigracionBestSincronizarOperariosView(MprLoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        base = _require_base(request)
+        if not base:
+            return redirect("core:dashboard")
+        try:
+            result = sincronizar_operarios_best(base)
+            messages.success(
+                request,
+                f"Operarios/tejedores sincronizados ({result.get('fuente')}): {result['total']} "
+                f"(nuevos {result['created']}, actualizados {result['updated']}, "
+                f"preservados {result['preserved']}).",
+            )
+        except Exception as exc:
+            logger.exception("Error sincronizando operarios BEST")
+            messages.error(request, f"No se pudieron sincronizar operarios: {exc}")
+        return redirect("mpr:migracion_best_operarios")
+
+
+class MigracionBestValidarOperarioView(MprLoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        base = _require_base(request)
+        if not base:
+            return redirect("core:dashboard")
+        map_id = (request.POST.get("map_id") or "").strip()
+        accion = (request.POST.get("accion") or "").strip()
+        notas = (request.POST.get("notas") or "").strip()
+        usuario = _usuario_label(request)
+        try:
+            if accion == "aceptar_lote":
+                result = aceptar_inferidos_operarios(base_empresa=base, usuario=usuario)
+                messages.success(
+                    request,
+                    f"Aceptados en lote {result['aceptados']} tejedores inferidos.",
+                )
+                return redirect("mpr:migracion_best_operarios")
+            if accion == "aceptar_seleccion":
+                ids = []
+                for raw in request.POST.getlist("sel"):
+                    if str(raw).isdigit():
+                        ids.append(int(raw))
+                if not ids:
+                    raise ValueError("Seleccioná al menos una fila con candidato.")
+                result = aceptar_operarios_seleccionados(
+                    base_empresa=base, map_ids=ids, usuario=usuario
+                )
+                messages.success(
+                    request,
+                    f"Aceptados {result['aceptados']} seleccionados"
+                    f" ({result['omitidos']} omitidos).",
+                )
+                return redirect("mpr:migracion_best_operarios")
+            if not map_id.isdigit():
+                raise ValueError("ID de mapeo inválido.")
+            mid = int(map_id)
+            if accion == "aceptar":
+                aceptar_inferido_operario(base_empresa=base, map_id=mid, usuario=usuario)
+                messages.success(request, "Tejedor validado con el operario inferido.")
+            elif accion == "descartar":
+                descartar_operario(base_empresa=base, map_id=mid, usuario=usuario, notas=notas)
+                messages.success(request, "Código tejedor descartado.")
+            elif accion == "reabrir":
+                reabrir_operario(base_empresa=base, map_id=mid, usuario=usuario, notas=notas)
+                messages.success(request, "Mapeo reabierto: podés asignar otro operario.")
+            elif accion == "asignar":
+                raw = (request.POST.get("admin_id_operario") or "").strip()
+                if not raw.isdigit():
+                    raise ValueError("Operario inválido.")
+                validar_operario(
+                    base_empresa=base,
+                    map_id=mid,
+                    admin_id_operario=int(raw),
+                    usuario=usuario,
+                    notas=notas,
+                )
+                messages.success(request, f"Asignado tejedor → operario {raw}.")
+            else:
+                raise ValueError("Acción no reconocida.")
+        except BestOperarioMap.DoesNotExist:
+            messages.error(request, "No existe ese mapeo de operario.")
+        except Exception as exc:
+            messages.error(request, str(exc))
+        return redirect("mpr:migracion_best_operarios")
+
+
 class MigracionBestSincronizarStockInicialView(MprLoginRequiredMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
@@ -615,12 +780,15 @@ class MigracionBestCargarStockInicialView(MprLoginRequiredMixin, View):
                 id_pv=id_pv,
             )
             if result.get("dry_run"):
+                preservados = result.get("ya_cargados_preservados", 0)
                 messages.info(
                     request,
-                    f"Ensayo (sin escribir): {result['escrituras']} líneas con delta>0 "
-                    f"→ ~{result.get('movimientos_estimados', 0)} MSTOCK «Stock Inicial» "
-                    f"(misma lógica que /stock/ingreso-movimiento/). "
-                    f"{result.get('omitidos', 0)} sin movimiento (Admin ≥ BEST).",
+                    f"Ensayo de ola (sin escribir MySQL): {result.get('candidatos', 0)} líneas "
+                    f"candidatas; {result['escrituras']} con delta>0 "
+                    f"→ ~{result.get('movimientos_estimados', 0)} MSTOCK «Stock Inicial». "
+                    f"{result.get('omitidos_admin_ge_best', result.get('omitidos', 0))} "
+                    f"sin movimiento (Admin ≥ BEST). "
+                    f"{preservados} ya CARGADO de olas previas no se reprocesan.",
                 )
             else:
                 movs = result.get("movimientos") or []
@@ -631,9 +799,14 @@ class MigracionBestCargarStockInicialView(MprLoginRequiredMixin, View):
                 extra = f" Comprobantes: {nros}." if nros else ""
                 if len(movs) > 8:
                     extra = f" Comprobantes: {nros}… ({len(movs)} en total)."
+                preservados = result.get("ya_cargados_preservados", 0)
                 msg = (
-                    f"Carga vía Stock Inicial: {result['escrituras']} renglones en "
-                    f"{len(movs)} movimiento(s) MSTOCK; {result['omitidos']} omitidas.{extra}"
+                    f"Ola confirmada: {result.get('candidatos', 0)} candidatas; "
+                    f"{result['escrituras']} renglones con delta>0 en "
+                    f"{len(movs)} movimiento(s) MSTOCK; "
+                    f"{result.get('omitidos_admin_ge_best', result.get('omitidos', 0))} "
+                    f"omitidas (Admin ≥ BEST). "
+                    f"{preservados} ya CARGADO de olas previas preservadas.{extra}"
                 )
                 if result.get("errores"):
                     messages.warning(
@@ -840,6 +1013,142 @@ class MigracionBestValidarArticuloView(MprLoginRequiredMixin, View):
         if next_url.startswith("/"):
             return redirect(next_url)
         return redirect(next_url)
+
+
+def _aplicar_filtro_alcance_fabricados(qs, *, cola_trabajo: bool, alcance: str):
+    estados_resueltos = [
+        BestArticuloMap.Estado.VALIDADO,
+        BestArticuloMap.Estado.DESCARTADO,
+    ]
+    if cola_trabajo:
+        return qs.exclude(estado__in=estados_resueltos)
+    if alcance == "necesarios":
+        return qs
+    return qs
+
+
+class MigracionBestArticulosFabricadosView(MprLoginRequiredMixin, TemplateView):
+    template_name = "mpr/best_migration/articulos_fabricados.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not _usuario_tiene_permiso_mpr(request.user, "mpr.ver"):
+            messages.error(request, "No tenés permiso para ver Migración BEST.")
+            return redirect("mpr:tablero_produccion")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        if not _require_base(request):
+            return redirect("core:dashboard")
+        return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        base = _get_base_empresa(self.request)
+        estado = (self.request.GET.get("estado") or "").strip()
+        q = (self.request.GET.get("q") or "").strip()
+        alcance = (self.request.GET.get("alcance") or "").strip()
+        cola_trabajo = _filtro_necesarios_pendientes(self.request)
+
+        qs = (
+            BestArticuloMap.objects.filter(
+                base_empresa=base,
+                origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+            )
+            .order_by("estado", "best_id_articulo")
+        )
+        if estado:
+            qs = qs.filter(estado=estado)
+        qs = _aplicar_filtro_alcance_fabricados(
+            qs, cola_trabajo=cola_trabajo, alcance=alcance
+        )
+        if q:
+            qs = qs.filter(
+                Q(best_id_articulo__icontains=q)
+                | Q(best_articulo__icontains=q)
+                | Q(admin_nombre__icontains=q)
+            )
+
+        hub = hub_context(base)
+        ctx.update(hub)
+        ctx["base_empresa"] = base
+        ctx["filas"] = list(qs[:500])
+        ctx["filtro_estado"] = estado
+        ctx["filtro_q"] = q
+        ctx["filtro_alcance"] = alcance
+        ctx["cola_trabajo"] = cola_trabajo
+        ctx["solo_pendientes"] = cola_trabajo
+        ctx["opciones_estado"] = BestArticuloMap.Estado.choices
+        ctx["articulos_resumen"] = hub.get("articulos_fabricados_resumen") or {}
+        return ctx
+
+
+class MigracionBestResolverFabricadosView(MprLoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        base = _require_base(request)
+        if not base:
+            return redirect("core:dashboard")
+        try:
+            result = resolver_fabricados_desde_terminados(base)
+            messages.success(
+                request,
+                (
+                    f"Fabricados resueltos desde BOM Admin: {result['fabricados_bom']} componentes "
+                    f"(terminados fuente: {result['terminados_fuente']}) — "
+                    f"nuevos {result['created']}, actualizados {result['updated']}, "
+                    f"preservados {result['preserved']}, sin SKU BEST {result['skipped_sin_best']}."
+                ),
+            )
+        except Exception as exc:
+            logger.exception("Error resolviendo fabricados desde terminados")
+            messages.error(request, f"No se pudieron resolver fabricados: {exc}")
+        return redirect("mpr:migracion_best_articulos_fabricados")
+
+
+class MigracionBestAceptarInferidosFabricadosView(MprLoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        base = _require_base(request)
+        if not base:
+            return redirect("core:dashboard")
+        try:
+            result = aceptar_inferidos_altos_fabricados(
+                base_empresa=base, usuario=_usuario_label(request)
+            )
+            messages.success(
+                request,
+                f"Aceptados en lote {result['aceptados']} fabricados con inferencia alta.",
+            )
+        except Exception as exc:
+            messages.error(request, str(exc))
+        return redirect("mpr:migracion_best_articulos_fabricados")
+
+
+class MigracionBestSincronizarStockFabricadosSemiView(MprLoginRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        base = _require_base(request)
+        if not base:
+            return redirect("core:dashboard")
+        try:
+            result = sincronizar_stock_fabricados_semi(base)
+            messages.success(
+                request,
+                f"Stock Semi-Embalado (4002) sincronizado para fabricados: {result['total']} líneas "
+                f"(nuevas {result['created']}, actualizadas {result['updated']}, "
+                f"preservadas {result['preserved']}).",
+            )
+        except Exception as exc:
+            logger.exception("Error sincronizando stock fabricados Semi")
+            messages.error(request, f"No se pudo sincronizar stock Semi: {exc}")
+        return redirect("mpr:migracion_best_stock_inicial")
+
+
+class MigracionBestValidarArticuloFabricadoView(MigracionBestValidarArticuloView):
+    """POST espejo de validar artículo; redirige a pantalla fabricados."""
+
+    def post(self, request, *args, **kwargs):
+        if not request.POST.get("next"):
+            request.POST = request.POST.copy()
+            request.POST["next"] = "mpr:migracion_best_articulos_fabricados"
+        return super().post(request, *args, **kwargs)
 
 
 class MigracionBestConfirmarUnidadesView(MprLoginRequiredMixin, View):

@@ -12,6 +12,7 @@ class BestArticuloMap(models.Model):
     class OrigenRequerimiento(models.TextChoices):
         PEDIDO_ABIERTO = "PEDIDO_ABIERTO", "Pedido abierto"
         STOCK_DEPOSITO = "STOCK_DEPOSITO", "Saldo en depósito"
+        BOM_FABRICADO = "BOM_FABRICADO", "BOM fabricado"
         HISTORICO = "HISTORICO", "Histórico / fuera de alcance"
 
     class Estado(models.TextChoices):
@@ -318,6 +319,82 @@ class BestStockInicialMap(models.Model):
         }:
             return True
         return False
+
+    @property
+    def categoria_migracion(self) -> str:
+        if self.estado == self.Estado.DESCARTADO:
+            return "EXCLUIDO"
+        if not self.requerido_migracion:
+            return "NO_NECESARIO"
+        if self.resuelto_para_migracion:
+            return "CUMPLE"
+        return "NECESARIO_PENDIENTE"
+
+
+class BestOperarioMap(models.Model):
+    """Diccionario letra/código tejedor BEST (TTNOTE) ↔ sue_abm_empleado."""
+
+    class OrigenRequerimiento(models.TextChoices):
+        REPORTE = "REPORTE", "Reportes / histórico"
+        CATALOGO = "CATALOGO", "Catálogo BEST"
+
+    class Estado(models.TextChoices):
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        INFERIDO = "INFERIDO", "Inferido"
+        AMBIGUO = "AMBIGUO", "Ambiguo"
+        VALIDADO = "VALIDADO", "Validado"
+        DESCARTADO = "DESCARTADO", "Descartado"
+        SIN_CANDIDATO = "SIN_CANDIDATO", "Sin candidato"
+
+    base_empresa = models.CharField(max_length=64, db_index=True)
+    best_codigo = models.CharField(max_length=16, db_index=True, help_text="Letra/código TTNOTE")
+    best_nombre = models.CharField(max_length=255, blank=True, default="")
+    movimientos_n = models.PositiveIntegerField(default=0)
+    admin_id_operario = models.IntegerField(null=True, blank=True, db_index=True)
+    admin_nombre = models.CharField(max_length=255, blank=True, default="")
+    estado = models.CharField(
+        max_length=24, choices=Estado.choices, default=Estado.PENDIENTE, db_index=True
+    )
+    score = models.IntegerField(null=True, blank=True)
+    razon = models.CharField(max_length=512, blank=True, default="")
+    alt1_id_operario = models.IntegerField(null=True, blank=True)
+    alt1_nombre = models.CharField(max_length=255, blank=True, default="")
+    requerido_migracion = models.BooleanField(default=True, db_index=True)
+    en_snapshot_abierto = models.BooleanField(default=True, db_index=True)
+    origen_requerimiento = models.CharField(
+        max_length=24,
+        choices=OrigenRequerimiento.choices,
+        default=OrigenRequerimiento.REPORTE,
+    )
+    validado = models.BooleanField(default=False)
+    validado_por = models.CharField(max_length=64, blank=True, default="")
+    validado_en = models.DateTimeField(null=True, blank=True)
+    notas = models.TextField(blank=True, default="")
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "mpr_best_operario_map"
+        verbose_name = "Mapeo operario/tejedor BEST"
+        verbose_name_plural = "Mapeos operarios/tejedores BEST"
+        unique_together = [("base_empresa", "best_codigo")]
+        indexes = [
+            models.Index(fields=["base_empresa", "estado"]),
+            models.Index(fields=["base_empresa", "validado"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.best_codigo} → {self.admin_id_operario} ({self.estado})"
+
+    @property
+    def resuelto_para_migracion(self) -> bool:
+        if self.estado == self.Estado.DESCARTADO:
+            return True
+        return (
+            self.validado
+            and self.estado == self.Estado.VALIDADO
+            and self.admin_id_operario is not None
+        )
 
     @property
     def categoria_migracion(self) -> str:

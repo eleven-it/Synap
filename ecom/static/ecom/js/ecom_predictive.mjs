@@ -349,12 +349,18 @@ export function wireCompraClientePredictiveFromRoot(root) {
         body: JSON.stringify({ codigo: item.value, Codigo: item.value }),
       })
         .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
-        .then(({ ok }) => {
+        .then(({ ok, data }) => {
           picking = false;
           if (ok) {
             window.dispatchEvent(
               new CustomEvent("compra-cliente-seleccionado", {
-                detail: { cod: item.value, label: item.label, fromSession: false },
+                detail: {
+                  cod: item.value,
+                  label: item.label,
+                  fromSession: false,
+                  listaPrecio: data && data.listaPrecio,
+                  lista_precio_pdf_url: data && data.lista_precio_pdf_url,
+                },
               }),
             );
           } else {

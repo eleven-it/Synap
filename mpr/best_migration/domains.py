@@ -19,15 +19,29 @@ class MigrationDomain:
 DOMAINS: tuple[MigrationDomain, ...] = (
     MigrationDomain(
         codigo="articulos",
-        nombre="Artículos",
+        nombre="Artículos terminados",
         obligatorio_para_pedidos=True,
         descripcion=(
-            "Correspondencia 1:1 best_id_articulo (MMID) → articulo.IDArt. "
-            "El gate solo exige SKUs en pedidos abiertos BEST (origen PEDIDO_ABIERTO). "
-            "Los SKUs con saldo en depósito (STOCK_DEPOSITO) se mapean aparte y no bloquean la migración de pedidos."
+            "Productos terminados: correspondencia 1:1 best_id_articulo (MMID) → articulo.IDArt "
+            "(tipo_art_fab=Terminado). El gate solo exige SKUs en pedidos abiertos BEST (origen PEDIDO_ABIERTO). "
+            "Los SKUs con saldo en depósito (STOCK_DEPOSITO) se mapean aparte y no bloquean la migración de pedidos. "
+            "Los artículos fabricados (componentes BOM) se gestionan en el dominio «Artículos fabricados»."
         ),
         fuente_best="MM / MYL / REP_ORDENES_* (Id Articulo, Codigo, Articulo)",
-        destino_admin="articulo (IDArt, id_manual, NombreArticulo)",
+        destino_admin="articulo (IDArt, id_manual, NombreArticulo, tipo_art_fab=Terminado)",
+        estado_modulo="implementado",
+    ),
+    MigrationDomain(
+        codigo="articulos_fabricados",
+        nombre="Artículos fabricados",
+        obligatorio_para_pedidos=False,
+        descripcion=(
+            "Componentes Fabricado detectados en BOM Admin (en_abm / en_abm_formula) desde terminados validados. "
+            "Matcher inverso Admin→BEST; origen BOM_FABRICADO. No bloquea el gate PED ni el cutover de terminados. "
+            "Stock Semi-Embalado (BEST 4002 → Semi-elaborado) es opcional post-cutover."
+        ),
+        fuente_best="Inferencia inversa desde MYL/MM (no REP_RECETAS)",
+        destino_admin="articulo (tipo_art_fab=Fabricado) vía explosión BOM Admin",
         estado_modulo="implementado",
     ),
     MigrationDomain(
@@ -98,7 +112,7 @@ DOMAINS: tuple[MigrationDomain, ...] = (
         descripcion="Diccionario letra/código BEST ↔ sue_abm_empleado (reportes, no demanda).",
         fuente_best="Responsable / catálogos operario BEST",
         destino_admin="sue_abm_empleado / mpr operarios",
-        estado_modulo="pendiente",
+        estado_modulo="implementado",
     ),
 )
 

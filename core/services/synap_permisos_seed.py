@@ -73,8 +73,7 @@ def asegurar_synap_schema_si_procede(base_empresa: str) -> None:
     Reemplazo directo de ``asegurar_permisos_synap_si_procede`` que NO inyecta en
     ``permiso_sistema``. Cualquier excepción se registra y se ignora (no rompe login).
 
-    Se controla con ``SYNAP_AUTO_ENSURE_SCHEMA`` (default True), independiente del flag
-    legacy ``SYNAP_AUTO_SYNC_PERMISSIONS`` (que gobierna la inyección legacy en desuso).
+    Se controla con ``SYNAP_AUTO_ENSURE_SCHEMA`` (default True).
     """
     if not getattr(settings, "SYNAP_AUTO_ENSURE_SCHEMA", True):
         return

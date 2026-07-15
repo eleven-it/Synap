@@ -4,340 +4,540 @@
 {% block title %}Pedido masivo por sucursales — Synap{% endblock %}
 
 {% block content %}
-<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-3 dark:bg-slate-900 sm:py-4"
+{# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
+{% include "ecom/includes/pedidos_page_styles.html" %}
+
+<section class="pm-matrix-viewport flex h-[calc(100dvh-4.5rem)] min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4"
          x-data="pedidoMasivoApp()"
          x-init="init()">
-  <div class="mx-auto flex h-full min-h-0 w-full flex-col px-3 sm:px-4 md:px-6 lg:px-8">
+  <div class="mx-auto flex h-full min-h-0 w-full min-w-0 flex-col px-3 sm:px-4 md:px-6 lg:px-8">
     <div class="flex-shrink-0">
       <nav class="mb-3 text-xs text-slate-500" aria-label="Migas de pan">
         <ol class="flex flex-wrap items-center gap-x-2">
-          <li><a :href="urls.hub" class="font-medium text-purple-600 hover:text-purple-800">Pedidos</a></li>
+          <li><a :href="urls.hub" class="font-medium text-sky-600 hover:text-sky-700">Pedidos</a></li>
           <li class="text-slate-300" aria-hidden="true">/</li>
           <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Pedido masivo</span></li>
         </ol>
       </nav>
 
-      <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md sm:p-4">
-        <header class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+      <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 shadow-md sm:px-4">
+        <header class="pm-hero-bar flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
             <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Pedido masivo por sucursales</h1>
-            <p class="mt-1 text-xs text-slate-300 sm:text-sm">
-              Packs por sucursal · autoguardado · un PED por domicilio al confirmar.
-            </p>
+            <span x-show="draftId" x-cloak
+                  class="pedidos-badge-borrador pedidos-badge-borrador--hero"
+                  x-text="etiquetaEstadoDraft"></span>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
+          <div class="pm-hero-actions ml-auto flex flex-wrap items-center gap-2">
             <span x-show="guardadoChip" x-cloak
                   class="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"
                   x-text="guardadoChip"></span>
+            {# Vendedor operativo — antes de Anular #}
+            <div class="pm-hero-vendedor" x-show="mostrarSelectorVendedor && !esCliente" x-cloak>
+              {% include "ecom/includes/pedidos_selector_vendedor.html" %}
+            </div>
+            <button type="button"
+                    x-show="puedeAnularBorrador"
+                    x-cloak
+                    @click="anularBorrador()"
+                    :disabled="anulando"
+                    class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-rose-400/70 bg-transparent px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50">
+              <span x-text="anulando ? 'Anulando…' : 'Anular'"></span>
+            </button>
             <a :href="urls.hub"
                class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
               Hub pedidos
             </a>
-            <button type="button" @click="confirmarLote()" :disabled="confirmando || !draftId"
-                    class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50">
-              <span x-text="confirmando ? 'Confirmando…' : 'Confirmar lote'"></span>
+            <button type="button" @click="confirmarLote()"
+                    :disabled="confirmando || previewCargando || !draftId || !esBorradorEditable"
+                    class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">
+              <span x-text="confirmando ? 'Confirmando…' : (previewCargando ? 'Validando…' : 'Confirmar pedido')"></span>
             </button>
           </div>
         </header>
       </div>
     </div>
 
-    <div x-show="error" x-cloak class="mb-2 flex-shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900" x-text="error" role="alert"></div>
-    <div x-show="mensajeOk" x-cloak class="mb-2 flex-shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" x-text="mensajeOk" role="status"></div>
-    <div x-show="Object.keys(ultimoError).length" x-cloak
-         class="mb-2 flex-shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-      Hubo errores en un intento de confirmación anterior. Revisá las cantidades y reintentá cuando esté disponible confirmar.
+    {# Alertas en encabezado (error / éxito / preview / último confirm) #}
+    <div class="mb-2 flex flex-shrink-0 flex-col gap-2" role="region" aria-label="Mensajes">
+      <div x-show="error" x-cloak
+           class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-100"
+           role="alert">
+        <p class="font-semibold">No se pudo confirmar</p>
+        <p class="mt-0.5 whitespace-pre-wrap break-words" x-text="error"></p>
+      </div>
+      <div x-show="mensajeOk" x-cloak class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-100" x-text="mensajeOk" role="status"></div>
+      <div x-show="previewWarningBloqueante" x-cloak
+           class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
+           x-text="previewWarningBloqueante" role="alert"></div>
+      <div x-show="alertasUltimoError.length" x-cloak
+           class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
+           role="alert">
+        <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Advertencias del lote</p>
+        <ul class="list-inside list-disc space-y-0.5 text-xs">
+          <template x-for="(msg, i) in alertasUltimoError" :key="'ue-' + i">
+            <li x-text="msg"></li>
+          </template>
+        </ul>
+      </div>
+      <div x-show="draftId && !sucursales.length" x-cloak
+           class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        Este cliente no tiene sucursales (domicilios) activas.
+      </div>
     </div>
 
-    {# Paso 1: elegir cliente #}
-    <div x-show="!draftId" class="flex-shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      <h2 class="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">1. Elegí el cliente</h2>
-      <p class="mb-3 text-xs text-slate-500">Solo clientes con al menos una marca asignada a tu territorio.</p>
-      <div class="flex flex-wrap gap-2">
-        <input type="search" x-model="qCliente" @input.debounce.300ms="buscarClientes()"
-               placeholder="Buscar cliente…"
-               class="h-10 min-w-[16rem] flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
-        <select x-model="clienteSel" class="h-10 min-w-[16rem] flex-1 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
-          <option value="">— elegir —</option>
-          <template x-for="c in clientes" :key="c.id_cliente">
-            <option :value="c.id_cliente" x-text="c.etiqueta"></option>
-          </template>
-        </select>
-        <button type="button" @click="abrirCliente()" :disabled="!clienteSel || abriendo"
-                class="inline-flex h-10 items-center rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50">
-          Abrir matriz
+    {# Tarjeta de contexto comercial — labels inline, densa, colapsable #}
+    <div class="pm-context-card mb-3 flex-shrink-0 rounded-xl border border-sky-200/80 bg-sky-50/80 px-3 py-2.5 shadow-sm dark:border-sky-900/50 dark:bg-slate-800/90">
+      {# Eyebrow + chevron expandir/compactar #}
+      <div class="flex items-center justify-between gap-2">
+        <p class="pm-context-eyebrow text-[10px] font-semibold uppercase tracking-wider text-sky-700/80 dark:text-sky-300/80">
+          Contexto comercial
+        </p>
+        <button type="button"
+                @click="toggleContexto()"
+                class="pm-context-toggle inline-flex h-6 w-6 items-center justify-center rounded-md text-sky-700 hover:bg-sky-100/70 dark:text-sky-300 dark:hover:bg-sky-900/40 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                :aria-expanded="contextoAbierto"
+                :title="contextoAbierto ? 'Compactar contexto' : 'Expandir contexto'"
+                aria-label="Expandir o compactar contexto comercial">
+          <span class="material-icons text-lg leading-none transition-transform"
+                :class="contextoAbierto ? '' : '-rotate-90'"
+                aria-hidden="true">expand_more</span>
         </button>
       </div>
-    </div>
 
-    {# Paso 2: matriz #}
-    <template x-if="draftId">
-      <div class="flex min-h-0 flex-1 flex-col gap-2">
-        <div class="flex flex-shrink-0 flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-          <div class="min-w-0 flex-1">
-            <p class="text-[10px] font-medium uppercase text-slate-500">Cliente</p>
-            <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="'#' + idCliente + (clienteNombre ? ' · ' + clienteNombre : '')"></p>
-            <p class="text-[11px] text-slate-400">Borrador #<span x-text="draftId"></span> · <span x-text="sucursales.length"></span> sucursales</p>
-          </div>
-          <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">
-            Agregar artículo (marcas asignadas)
-            <div class="mt-1 flex gap-2">
-              <input type="search" x-model="qArt" @input.debounce.300ms="buscarArticulos()"
-                     placeholder="Código o descripción…"
-                     class="h-9 w-56 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
-              <select x-model="artSel" class="h-9 w-64 rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
-                <option value="">— resultado —</option>
-                <template x-for="a in articulosBusqueda" :key="a.id_articulo || a.IDArt">
-                  <option :value="JSON.stringify({id: a.id_articulo || a.IDArt, codigo: a.codigo || a.id_manual || '', desc: a.descripcion || a.NombreArticulo || ''})"
-                          x-text="(a.codigo || a.id_manual || '') + ' — ' + (a.descripcion || a.NombreArticulo || '')"></option>
-                </template>
-              </select>
-              <button type="button" @click="agregarArticulo()"
-                      class="inline-flex h-9 items-center rounded-lg border border-purple-300 bg-purple-50 px-3 text-xs font-semibold text-purple-800 hover:bg-purple-100">
-                Agregar fila
-              </button>
+      {# Resumen corto (visible al compactar): cliente + fechas clave #}
+      <div x-show="!contextoAbierto && cabecera" x-cloak
+           class="pm-context-summary mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+        <span><span class="text-slate-500 dark:text-slate-400">Cliente:</span> <span class="font-semibold" x-text="clienteNombre || qCliente || '—'"></span></span>
+        <span><span class="text-slate-500 dark:text-slate-400">Pedido:</span> <span class="font-semibold tabular-nums" x-text="cabecera?.fecha_pedido_display || '—'"></span></span>
+        <span x-show="tipo === 'PED'"><span class="text-slate-500 dark:text-slate-400">Entrega:</span> <span class="font-semibold tabular-nums" x-text="cabecera?.fecha_entrega_display || '—'"></span></span>
+        <span><span class="text-slate-500 dark:text-slate-400">Vence:</span> <span class="font-semibold tabular-nums" x-text="cabecera?.vencimiento_display || '—'"></span></span>
+      </div>
+
+      {# Filtros densos (visible al expandir) — 2 columnas, label inline #}
+      <div x-show="contextoAbierto" x-cloak class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 lg:grid-cols-2">
+        <div class="pm-field-row" x-show="cabecera" x-cloak>
+          <label class="pm-label-inline" for="pm-fecha-pedido">Fecha pedido</label>
+          <input id="pm-fecha-pedido" type="date"
+                 x-model="cabecera.fecha_pedido"
+                 @change="onCabeceraFechaIso('fecha_pedido')"
+                 class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+        </div>
+
+        <div class="pm-field-row" x-show="cabecera && tipo === 'PED'" x-cloak>
+          <label class="pm-label-inline" for="pm-fecha-entrega">Fecha entrega</label>
+          <input id="pm-fecha-entrega" type="date"
+                 x-model="cabecera.fecha_entrega"
+                 @change="onCabeceraFechaIso('fecha_entrega')"
+                 class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+        </div>
+
+        <div class="pm-field-row" x-show="cabecera" x-cloak>
+          <label class="pm-label-inline" for="pm-vencimiento">Vencimiento</label>
+          <input id="pm-vencimiento" type="date"
+                 x-model="cabecera.vencimiento"
+                 @change="onCabeceraFechaIso('vencimiento')"
+                 :disabled="!puedeEditarCabecera"
+                 :class="!puedeEditarCabecera ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
+                 class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+        </div>
+
+        <div class="pm-field-row" x-show="cabecera" x-cloak>
+          <label class="pm-label-inline" for="pm-lista">Lista</label>
+          <template x-if="puedeEditarCabecera">
+            <select id="pm-lista" x-model.number="cabecera.lista_id"
+                    @change="onCabeceraListaChange()"
+                    class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+              <template x-for="lp in listasPrecio" :key="lp.id">
+                <option :value="lp.id" x-text="lp.name"></option>
+              </template>
+            </select>
+          </template>
+          <template x-if="!puedeEditarCabecera">
+            <div class="flex h-8 items-center">
+              {% include "ecom/includes/pedidos_lista_badge.html" %}
             </div>
-          </label>
+          </template>
         </div>
 
-        <div x-show="!sucursales.length" class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Este cliente no tiene sucursales (domicilios) activas.
+        <div class="pm-field-row" @click.outside="cerrarPanelCli()">
+          <label class="pm-label-inline" for="pm-cli">Cliente</label>
+          <div class="relative min-w-[12rem] flex-1">
+            <input id="pm-cli" type="text" autocomplete="off" role="combobox"
+                   :aria-expanded="panelCli"
+                   x-model="qCliente"
+                   @focus="abrirPanelCli(); buscarClientes()"
+                   @input="clienteSel = ''; clienteNombre = ''"
+                   @input.debounce.280ms="buscarClientes()"
+                   @keydown.arrow-down.prevent="moverSelCli(1)"
+                   @keydown.arrow-up.prevent="moverSelCli(-1)"
+                   @keydown.enter.prevent="elegirResaltadoCli()"
+                   @keydown.escape="cerrarPanelCli()"
+                   placeholder="Buscar cliente…"
+                   class="pm-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+            <ul x-show="panelCli && clientes.length" x-cloak
+                class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+                role="listbox">
+              <template x-for="(c, i) in clientes" :key="c.id_cliente">
+                <li role="option"
+                    @mousedown.prevent="elegirCliente(c)"
+                    :class="i === idxCli ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
+                    class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
+                    x-text="c.etiqueta || c.nombre"></li>
+              </template>
+            </ul>
+            <p x-show="panelCli && !cargandoCli && !clientes.length" x-cloak
+               class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+              Sin clientes
+            </p>
+          </div>
         </div>
 
-        <div class="relative z-0 min-h-0 flex-1 overflow-auto overscroll-contain rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700"
-             role="region" aria-label="Matriz packs por sucursal">
-          <table class="min-w-full border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                <th class="sticky left-0 top-0 z-30 min-w-[14rem] border-b border-slate-200 bg-slate-100 px-3 py-2 text-left text-[10px] font-semibold uppercase text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 sm:min-w-[18rem]">
-                  Artículo
-                </th>
-                <template x-for="s in sucursales" :key="s.id_cliente_domicilio">
-                  <th class="sticky top-0 z-20 min-w-[6.5rem] border-b border-l border-slate-200 bg-slate-100 px-2 py-2 text-center text-[10px] font-semibold uppercase text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                      :title="s.etiqueta">
-                    <span class="line-clamp-2" x-text="s.etiqueta"></span>
-                  </th>
-                </template>
-                <th class="sticky top-0 z-20 border-b border-l border-slate-200 bg-slate-100 px-2 py-2 text-right text-[10px] font-semibold uppercase text-slate-600 dark:border-slate-700 dark:bg-slate-800">Σ</th>
-              </tr>
-            </thead>
-            <tbody>
-              <template x-if="!articulos.length">
-                <tr>
-                  <td :colspan="sucursales.length + 2" class="px-4 py-10 text-center text-slate-500">
-                    Agregá artículos con el buscador. Solo se listan marcas de tu territorio para este cliente.
-                  </td>
-                </tr>
-              </template>
-              <template x-for="art in articulos" :key="art.id_articulo">
-                <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
-                  <td class="sticky left-0 z-10 max-w-[20rem] border-b border-slate-100 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-900">
-                    <p class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.codigo || ('#'+art.id_articulo)"></p>
-                    <p class="text-xs leading-snug text-slate-600 dark:text-slate-300" x-text="art.descripcion"></p>
-                  </td>
-                  <template x-for="s in sucursales" :key="art.id_articulo + '-' + s.id_cliente_domicilio">
-                    <td class="border-b border-l border-slate-100 px-1 py-1 dark:border-slate-700">
-                      <input type="number" min="0" step="0.001"
-                             class="h-9 w-full rounded-md border border-slate-300 bg-white px-1.5 text-right text-sm tabular-nums focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-                             :value="celda(art.id_articulo, s.id_cliente_domicilio)"
-                             @change="onCelda(art.id_articulo, s.id_cliente_domicilio, $event.target.value)"
-                             @keydown.enter.prevent="$event.target.blur()"/>
-                    </td>
-                  </template>
-                  <td class="border-b border-l border-slate-100 px-2 py-2 text-right text-xs font-semibold tabular-nums text-slate-700 dark:border-slate-700 dark:text-slate-200"
-                      x-text="sumaFila(art.id_articulo)"></td>
-                </tr>
-              </template>
-            </tbody>
-          </table>
+        <div class="pm-field-row" x-show="cabecera" x-cloak>
+          <label class="pm-label-inline" for="pm-condicion">Condición</label>
+          <select id="pm-condicion" x-model.number="cabecera.id_condventa"
+                  @change="onCabeceraCondicionChange()"
+                  :disabled="!puedeEditarCabecera"
+                  class="pm-input-dense h-8 w-[14rem] max-w-[16rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800">
+            <template x-for="cv in condicionesVenta" :key="cv.Codigo">
+              <option :value="cv.Codigo" x-text="`${cv.Descripcion} (${cv.Dias} días)`"></option>
+            </template>
+          </select>
         </div>
       </div>
-    </template>
+
+      <div x-show="abriendo" x-cloak
+           class="mt-2 inline-flex items-center gap-2 text-xs font-medium text-sky-700 dark:text-sky-300"
+           role="status" aria-live="polite">
+        <svg class="h-4 w-4 animate-spin text-sky-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+        Abriendo borrador…
+      </div>
+    </div>
+
+    {# Matriz always-on: shell visible desde el primer render #}
+    <div class="flex min-h-0 w-full min-w-0 flex-1 flex-col gap-2">
+      <p class="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400">
+        Solo artículos Terminado con e-commerce activo · marcas de tu territorio
+      </p>
+
+      {# Desktop (lg+): shell de 3 zonas — izq. fija · sucursales scroll-x · der. fija #}
+      <div class="pm-matrix-desktop hidden min-h-0 w-full min-w-0 flex-1 flex-col gap-2 lg:flex">
+        {# Empty-state (sin borrador) — mismo mensaje que móvil #}
+        <div x-show="!draftId" x-cloak
+             class="flex flex-1 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
+          Elegí un cliente en la barra de contexto para cargar sucursales y artículos.
+        </div>
+
+        {# Shell 3 zonas: filas alineadas por índice; última fila = buscador (línea nueva) #}
+        <div x-show="draftId && sucursales.length" x-cloak
+             class="pm-matrix-shell relative z-0 min-h-0 w-full max-w-full flex-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
+             :class="{ 'pm-matrix-shell--buscador-abierto': panelArt }"
+             role="region" aria-label="Matriz packs por sucursal">
+          {# Zona izquierda fija: Artículo · Precio · % Desc. #}
+          <div class="pm-zone pm-zone-left" x-ref="pmZoneLeft">
+            <table class="pm-ztable pm-ztable-left">
+              <thead>
+                <tr>
+                  <th class="pm-c-art pm-zhead text-left">Artículo</th>
+                  <th class="pm-c-precio pm-zhead">Precio</th>
+                  <th class="pm-c-desc pm-zhead">% Desc.</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="art in articulos" :key="'l-' + art.id_articulo">
+                  <tr class="pm-zrow">
+                    <td class="pm-c-art">
+                      <div class="pm-cell-art">
+                        <p class="whitespace-nowrap text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.id_manual || art.codigo || ('#'+art.id_articulo)"></p>
+                        <p class="pm-art-nombre text-xs leading-snug text-slate-600 dark:text-slate-300" x-text="art.nombre || art.descripcion"></p>
+                      </div>
+                    </td>
+                    <td class="pm-c-precio text-xs tabular-nums text-slate-700 dark:text-slate-200" x-text="fmtPrecio(art.precio_unitario_neto)"></td>
+                    <td class="pm-c-desc">
+                      <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                             class="pm-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                             :value="descFila(art.id_articulo)"
+                             placeholder="0"
+                             @change="onDescFila(art.id_articulo, $event.target.value)"/>
+                    </td>
+                  </tr>
+                </template>
+                {# Fila nueva: buscador (misma fila en mid/right) #}
+                <tr class="pm-zrow pm-zrow-buscador">
+                  <td class="pm-c-art" colspan="3">
+                    <div class="relative w-full overflow-visible"
+                         @focusout="onFocusOutBuscadorArt($event)" @click.outside="cerrarPanelArt()">
+                      <label class="sr-only" for="pm-art">Agregar artículo</label>
+                      <input id="pm-art" type="text" autocomplete="off" role="combobox"
+                             x-ref="pmArtInput"
+                             :aria-expanded="panelArt"
+                             x-model="qArt"
+                             @focus="abrirPanelArt(); scrollBuscadorIntoView()"
+                             @input.debounce.250ms="buscarArticulos()"
+                             @keydown.arrow-down.prevent="moverSelArt(1)"
+                             @keydown.arrow-up.prevent="moverSelArt(-1)"
+                             @keydown.enter.prevent="elegirResaltadoArt()"
+                             @keydown.escape="cerrarPanelArt()"
+                             placeholder="Buscar artículo…"
+                             class="pm-art-buscar pm-input-dense h-8 w-full rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:bg-slate-950 dark:text-white"/>
+                      <ul x-show="panelArt && articulosBusqueda.length" x-cloak
+                          x-ref="pmArtDropdown"
+                          class="pm-art-dropdown pm-art-dropdown--up absolute bottom-full left-0 z-[90] mb-1 max-h-56 min-w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+                          role="listbox">
+                        <template x-for="(a, i) in articulosBusqueda" :key="a.id_articulo">
+                          <li role="option"
+                              @mousedown.prevent="elegirArticulo(a)"
+                              :class="i === idxArt ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
+                              class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+                            <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
+                            <span class="text-slate-500"> — </span>
+                            <span x-text="a.nombre"></span>
+                          </li>
+                        </template>
+                      </ul>
+                      <p x-show="panelArt && cargandoArt" x-cloak
+                         class="pm-art-dropdown pm-art-dropdown--up absolute bottom-full left-0 z-[90] mb-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+                        Buscando…
+                      </p>
+                      <p x-show="panelArt && !cargandoArt && qArt.length >= 2 && !articulosBusqueda.length" x-cloak
+                         class="pm-art-dropdown pm-art-dropdown--up absolute bottom-full left-0 z-[90] mb-1 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+                        Sin artículos
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {# Zona media: solo sucursales (scroll-x + scroll-y maestro) #}
+          <div class="pm-zone pm-zone-mid" x-ref="pmZoneMid">
+            <table class="pm-ztable pm-ztable-mid">
+              <thead>
+                <tr>
+                  <template x-for="(s, si) in sucursales" :key="s.id_cliente_domicilio">
+                    <th class="pm-c-suc pm-zhead pm-zhead-suc"
+                        :class="'pm-matrix-suc-tone-' + (si % 4)"
+                        :title="s.nombre || s.etiqueta">
+                      <span class="line-clamp-2" x-text="s.nombre || s.etiqueta"></span>
+                    </th>
+                  </template>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="art in articulos" :key="'m-' + art.id_articulo">
+                  <tr class="pm-zrow">
+                    <template x-for="(s, si) in sucursales" :key="art.id_articulo + '-' + s.id_cliente_domicilio">
+                      <td class="pm-c-suc">
+                        <input type="number" min="0" step="0.001" inputmode="decimal"
+                               :data-pm-qty="art.id_articulo + ':' + s.id_cliente_domicilio"
+                               class="pm-qty-input pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                               :value="celda(art.id_articulo, s.id_cliente_domicilio)"
+                               @change="onCelda(art.id_articulo, s.id_cliente_domicilio, $event.target.value)"
+                               @keydown.enter.prevent="onEnterCantidad(art.id_articulo, si)"/>
+                      </td>
+                    </template>
+                  </tr>
+                </template>
+                <tr class="pm-zrow pm-zrow-buscador" aria-hidden="true">
+                  <template x-for="s in sucursales" :key="'nb-' + s.id_cliente_domicilio">
+                    <td class="pm-c-suc">
+                      <span class="pm-qty-placeholder block h-8"></span>
+                    </td>
+                  </template>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {# Zona derecha fija: Total · Eliminar #}
+          <div class="pm-zone pm-zone-right" x-ref="pmZoneRight">
+            <table class="pm-ztable pm-ztable-right">
+              <thead>
+                <tr>
+                  <th class="pm-c-total pm-zhead">Total</th>
+                  <th class="pm-c-delete pm-zhead" aria-label="Quitar">
+                    <span class="material-icons text-sm leading-none" aria-hidden="true">delete_outline</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <template x-for="art in articulos" :key="'r-' + art.id_articulo">
+                  <tr class="pm-zrow">
+                    <td class="pm-c-total text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200" x-text="sumaFila(art.id_articulo)"></td>
+                    <td class="pm-c-delete">
+                      <button type="button"
+                              @click="eliminarFila(art.id_articulo)"
+                              class="pm-btn-delete inline-flex h-7 w-7 items-center justify-center rounded-md text-rose-600 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-400/50 dark:hover:bg-rose-950/40 dark:text-rose-400"
+                              :title="'Quitar ' + (art.id_manual || art.codigo || ('#'+art.id_articulo))"
+                              :aria-label="'Quitar artículo ' + (art.id_manual || art.id_articulo)">
+                        <span class="material-icons text-base" aria-hidden="true">delete_outline</span>
+                      </button>
+                    </td>
+                  </tr>
+                </template>
+                <tr class="pm-zrow pm-zrow-buscador">
+                  <td class="pm-c-total text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Agregar
+                  </td>
+                  <td class="pm-c-delete" aria-hidden="true"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {# Móvil/tablet: acordeón por sucursal #}
+      <div class="pm-accordion min-h-0 flex-1 space-y-2 overflow-y-auto lg:hidden" role="region" aria-label="Matriz por sucursal">
+        <div x-show="!draftId" x-cloak
+             class="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
+          Elegí un cliente en la barra de contexto para cargar sucursales y artículos.
+        </div>
+
+        <div x-show="draftId && !sucursales.length" x-cloak class="hidden" aria-hidden="true"></div>
+
+        <div x-show="draftId && sucursales.length" x-cloak class="space-y-2">
+          <div class="relative overflow-visible rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800"
+               @focusout="onFocusOutBuscadorArt($event)"
+               @click.outside="cerrarPanelArt()">
+            <label class="sr-only" for="pm-art-mob">Agregar artículo</label>
+            <input id="pm-art-mob" type="text" autocomplete="off"
+                   x-model="qArt"
+                   @focus="abrirPanelArt()"
+                   @input.debounce.250ms="buscarArticulos()"
+                   @keydown.enter.prevent="elegirResaltadoArt()"
+                   @keydown.escape="cerrarPanelArt()"
+                   placeholder="Buscar artículo para agregar…"
+                   class="pm-input-dense h-8 w-full rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:bg-slate-950 dark:text-white"/>
+            <ul x-show="panelArt && articulosBusqueda.length" x-cloak
+                class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+                role="listbox">
+              <template x-for="(a, i) in articulosBusqueda" :key="'mob-' + a.id_articulo">
+                <li role="option"
+                    @mousedown.prevent="elegirArticulo(a)"
+                    :class="i === idxArt ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
+                    class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+                  <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
+                  <span class="text-slate-500"> — </span>
+                  <span x-text="a.nombre"></span>
+                </li>
+              </template>
+            </ul>
+            <p x-show="panelArt && !cargandoArt && qArt.length >= 2 && !articulosBusqueda.length" x-cloak
+               class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+              Sin artículos
+            </p>
+          </div>
+
+          <template x-for="s in sucursales" :key="'acc-' + s.id_cliente_domicilio">
+            <details class="pm-accordion-item group rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+              <summary class="pm-accordion-summary flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                <span class="min-w-0 flex-1 truncate" x-text="s.nombre || s.etiqueta"></span>
+                <span class="shrink-0 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300" x-text="totalSucursal(s.id_cliente_domicilio)"></span>
+              </summary>
+              <div class="border-t border-slate-100 px-3 py-2 dark:border-slate-700">
+                <template x-for="art in articulos" :key="s.id_cliente_domicilio + '-' + art.id_articulo">
+                  <div class="pm-accordion-row border-b border-slate-100 py-2 last:border-b-0 dark:border-slate-700">
+                    <div class="mb-1.5 flex items-start justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <p class="text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.id_manual || art.codigo || ('#'+art.id_articulo)"></p>
+                        <p class="text-xs leading-snug text-slate-600 dark:text-slate-300" x-text="art.nombre || art.descripcion"></p>
+                      </div>
+                      <div class="flex shrink-0 items-center gap-1">
+                        <span class="text-xs tabular-nums text-slate-500" x-text="fmtPrecio(art.precio_unitario_neto)"></span>
+                        <button type="button"
+                                @click="eliminarFila(art.id_articulo)"
+                                class="pm-btn-delete inline-flex h-7 w-7 items-center justify-center rounded-md text-rose-600 hover:bg-rose-50 dark:text-rose-400"
+                                title="Quitar artículo"
+                                :aria-label="'Quitar artículo ' + (art.id_manual || art.id_articulo)">
+                          <span class="material-icons text-base" aria-hidden="true">delete_outline</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <label class="sr-only" :for="'pm-desc-mob-' + art.id_articulo">% descuento</label>
+                      <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                             :id="'pm-desc-mob-' + art.id_articulo"
+                             class="pm-input-dense h-8 w-16 shrink-0 rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                             :value="descFila(art.id_articulo)"
+                             placeholder="%"
+                             title="% descuento fila"
+                             @change="onDescFila(art.id_articulo, $event.target.value)"/>
+                      <label class="sr-only" :for="'pm-qty-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio">Cantidad packs</label>
+                      <input type="number" min="0" step="0.001" inputmode="decimal"
+                             :id="'pm-qty-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio"
+                             :data-pm-qty="art.id_articulo + ':' + s.id_cliente_domicilio"
+                             class="pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                             :value="celda(art.id_articulo, s.id_cliente_domicilio)"
+                             placeholder="Packs"
+                             @change="onCelda(art.id_articulo, s.id_cliente_domicilio, $event.target.value)"/>
+                    </div>
+                  </div>
+                </template>
+                <p x-show="!articulos.length" class="py-2 text-xs text-slate-500">Sin artículos en el borrador.</p>
+              </div>
+            </details>
+          </template>
+        </div>
+      </div>
+
+      {# Pie: descuento de lote + preview híbrido (estimado FE + validación servidor) #}
+      <div class="pm-preview-panel flex flex-shrink-0 flex-col gap-3 rounded-xl border border-sky-200/80 bg-white p-3 shadow-sm dark:border-sky-900/40 dark:bg-slate-800"
+           x-show="draftId && sucursales.length" x-cloak>
+        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div class="min-w-[8rem]">
+            <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="pm-desc-pie">Descuento pie de lote (%)</label>
+            <input id="pm-desc-pie" type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                   class="pm-input-dense h-8 w-full max-w-[7rem] rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white sm:w-28"
+                   :value="descPiePct || ''"
+                   placeholder="0"
+                   @change="onDescPie($event.target.value)"/>
+          </div>
+          <button type="button" @click="refrescarPreview()" :disabled="previewCargando"
+                  class="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-3 text-xs font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300 sm:w-auto"
+                  title="Consulta opcional al servidor (puede demorar con muchas sucursales)">
+            <span x-text="previewCargando ? 'Validando…' : 'Validar totales'"></span>
+          </button>
+        </div>
+        <div class="pm-preview-totals grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 dark:border-slate-700 sm:grid-cols-3 sm:gap-x-6 sm:border-t-0 sm:pt-0">
+          <div class="flex items-center justify-between gap-2 sm:block sm:text-right">
+            <p class="text-[10px] font-medium uppercase text-slate-500">Neto</p>
+            <p class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="money(totalesPie.neto)"></p>
+          </div>
+          <div class="flex items-center justify-between gap-2 sm:block sm:text-right">
+            <p class="text-[10px] font-medium uppercase text-slate-500">IVA</p>
+            <p class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="money(totalesPie.iva)"></p>
+          </div>
+          <div class="flex items-center justify-between gap-2 sm:block sm:text-right">
+            <div class="flex items-center gap-2 sm:justify-end">
+              <p class="text-[10px] font-medium uppercase text-sky-600 dark:text-sky-400">Total del lote</p>
+              <span x-show="previewCargando" x-cloak
+                    class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                    role="status">Validando…</span>
+              <span x-show="!previewCargando && previewFuente === 'estimado'" x-cloak
+                    class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                    role="status">Estimado</span>
+              <span x-show="!previewCargando && previewFuente === 'servidor'" x-cloak
+                    class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                    role="status">Validado</span>
+            </div>
+            <p class="text-base font-bold tabular-nums text-slate-900 dark:text-white" x-text="money(totalesPie.total)"></p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
+
+  {# Modal canon Synap — reemplaza confirm() (D.5) #}
+  {% include "ecom/includes/pedidos_modal.html" %}
 </section>
 
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
-<script>
-function pedidoMasivoApp() {
-  return {
-    urls: {},
-    draftId: null,
-    idCliente: null,
-    clienteNombre: '',
-    clientes: [],
-    clienteSel: '',
-    qCliente: '',
-    sucursales: [],
-    articulos: [],
-    celdas: {},
-    ultimoError: {},
-    articulosBusqueda: [],
-    qArt: '',
-    artSel: '',
-    error: '',
-    abriendo: false,
-    guardadoChip: '',
-    confirmando: false,
-    mensajeOk: '',
-    _chipTimer: null,
-    init() {
-      const el = document.getElementById('pm-bootstrap');
-      const boot = el ? JSON.parse(el.textContent) : {};
-      this.urls = boot.urls || {};
-      this.buscarClientes();
-      if (boot.draft_id) {
-        this.abrirDraft(boot.draft_id);
-      }
-    },
-    csrf() {
-      const m = document.cookie.match(/csrftoken=([^;]+)/);
-      return m ? decodeURIComponent(m[1]) : '';
-    },
-    async getJson(url) {
-      const r = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
-      return r.json();
-    },
-    async postJson(url, body) {
-      const r = await fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRFToken': this.csrf(),
-        },
-        body: JSON.stringify(body),
-      });
-      const data = await r.json().catch(() => ({}));
-      return { status: r.status, data };
-    },
-    aplicarMatriz(m) {
-      this.draftId = m.draft_id;
-      this.idCliente = m.id_cliente;
-      this.sucursales = m.sucursales || [];
-      this.articulos = m.articulos || [];
-      this.celdas = m.celdas || {};
-      this.ultimoError = m.ultimo_error || {};
-      const c = this.clientes.find(x => String(x.id_cliente) === String(this.idCliente));
-      if (c) this.clienteNombre = c.nombre || '';
-    },
-    async buscarClientes() {
-      if (!this.urls.clientes) return;
-      const data = await this.getJson(this.urls.clientes + '?q=' + encodeURIComponent(this.qCliente || ''));
-      if (data.ok) this.clientes = data.items || [];
-      else this.error = data.error || '';
-    },
-    async abrirCliente() {
-      if (!this.clienteSel) return;
-      this.abriendo = true; this.error = ''; this.mensajeOk = '';
-      const { data } = await this.postJson(this.urls.abrir, { id_cliente: Number(this.clienteSel) });
-      this.abriendo = false;
-      if (!data.ok) { this.error = data.error || 'No se pudo abrir.'; return; }
-      this.aplicarMatriz(data.matriz);
-      const c = this.clientes.find(x => String(x.id_cliente) === String(this.clienteSel));
-      this.clienteNombre = c ? c.nombre : '';
-      history.replaceState(null, '', '?draft=' + this.draftId);
-    },
-    async abrirDraft(id) {
-      this.abriendo = true; this.error = '';
-      const { data } = await this.postJson(this.urls.abrir, { draft_id: Number(id) });
-      this.abriendo = false;
-      if (!data.ok) { this.error = data.error || 'No se pudo recuperar el borrador.'; return; }
-      this.aplicarMatriz(data.matriz);
-    },
-    celda(idArt, idDom) {
-      return this.celdas[idArt + ':' + idDom] || '';
-    },
-    sumaFila(idArt) {
-      let s = 0;
-      for (const su of this.sucursales) {
-        const v = parseFloat(this.celda(idArt, su.id_cliente_domicilio));
-        if (!isNaN(v)) s += v;
-      }
-      return s ? s.toLocaleString('es-AR', { maximumFractionDigits: 3 }) : '—';
-    },
-    async onCelda(idArt, idDom, raw) {
-      const key = idArt + ':' + idDom;
-      const val = String(raw || '').trim();
-      this.celdas[key] = val;
-      const { data } = await this.postJson(this.urls.celda, {
-        draft_id: this.draftId,
-        id_articulo: idArt,
-        id_cliente_domicilio: idDom,
-        cantidad_packs: val === '' ? 0 : val,
-      });
-      if (!data.ok) {
-        this.error = data.error || 'Error al guardar';
-        return;
-      }
-      if (data.celda && data.celda.eliminada) delete this.celdas[key];
-      else if (data.celda) this.celdas[key] = data.celda.cantidad_packs;
-      this.flashGuardado();
-    },
-    flashGuardado() {
-      this.guardadoChip = 'Guardado';
-      clearTimeout(this._chipTimer);
-      this._chipTimer = setTimeout(() => { this.guardadoChip = ''; }, 1500);
-    },
-    async buscarArticulos() {
-      if (!this.idCliente || !this.urls.articulos) return;
-      const u = this.urls.articulos + '?id_cliente=' + this.idCliente + '&q=' + encodeURIComponent(this.qArt || '');
-      const data = await this.getJson(u);
-      if (!data.ok) { this.error = data.error || ''; return; }
-      if (data.sin_marcas) {
-        this.error = 'No hay marcas asignadas para este cliente en tu territorio.';
-        this.articulosBusqueda = [];
-        return;
-      }
-      this.articulosBusqueda = (data.items || []).map(it => ({
-        id_articulo: it.id_articulo || it.IDArt,
-        codigo: it.codigo || it.id_manual || '',
-        descripcion: it.descripcion || it.NombreArticulo || '',
-        IDArt: it.IDArt,
-        id_manual: it.id_manual,
-        NombreArticulo: it.NombreArticulo,
-      }));
-    },
-    agregarArticulo() {
-      if (!this.artSel) return;
-      let payload;
-      try { payload = JSON.parse(this.artSel); } catch (e) { return; }
-      const id = Number(payload.id);
-      if (!id) return;
-      if (this.articulos.some(a => a.id_articulo === id)) {
-        this.artSel = '';
-        return;
-      }
-      this.articulos.push({
-        id_articulo: id,
-        codigo: payload.codigo || '',
-        descripcion: payload.desc || '',
-      });
-      this.artSel = '';
-      this.qArt = '';
-      this.articulosBusqueda = [];
-    },
-    async confirmarLote() {
-      if (!this.draftId || !this.urls.confirmar) return;
-      if (!confirm('¿Confirmar el lote? Se creará un PED por cada sucursal con cantidad.')) return;
-      this.confirmando = true;
-      this.error = '';
-      this.mensajeOk = '';
-      const { status, data } = await this.postJson(this.urls.confirmar, { draft_id: this.draftId });
-      this.confirmando = false;
-      if (data.matriz) this.aplicarMatriz(data.matriz);
-      if (!data.ok || status === 409) {
-        this.error = data.message || data.error || 'No se pudo confirmar el lote.';
-        return;
-      }
-      this.mensajeOk = data.message || 'Lote confirmado.';
-      const cods = data.codigos_movimiento || [];
-      if (cods.length) {
-        this.mensajeOk += ' PED: ' + cods.join(', ');
-      }
-    },
-  };
-}
-</script>
+<style>[x-cloak]{display:none!important}</style>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo16"></script>
 {% endblock %}

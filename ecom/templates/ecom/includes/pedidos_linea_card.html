@@ -1,6 +1,6 @@
 {% comment %}
   Card de línea del pedido — mobile (<md).
-  Contrato Alpine root: cart.items, money, cambiarCantidad, quitar, itemMuestraUom, cambiarUom.
+  Contrato Alpine root: cart.items, money, cambiarCantidad, quitar, itemMuestraUom, cambiarUom, cambiarDescuentoRenglon.
   Touch targets ≥44px (stepper y quitar).
 {% endcomment %}
 <div class="md:hidden space-y-3" aria-label="Líneas del pedido (vista móvil)">
@@ -29,6 +29,17 @@
 
       <div class="mt-3 flex items-center justify-between gap-3">
         {% include "ecom/includes/pedidos_qty_input.html" %}
+        <div class="flex items-center gap-2 shrink-0">
+          <label class="text-[10px] font-semibold uppercase tracking-wide text-slate-400" :for="`pedidos-desc-renglon-m-${it.id}`">% desc.</label>
+          <input :id="`pedidos-desc-renglon-m-${it.id}`"
+                 type="number"
+                 min="0"
+                 max="100"
+                 step="0.01"
+                 :value="it.porcentaje_descuento"
+                 @change="cambiarDescuentoRenglon(it.id, $event.target.value)"
+                 class="pedidos-input w-16 text-right text-sm px-2 py-1 tabular-nums min-h-[2.75rem]" />
+        </div>
         <div class="text-right shrink-0">
           <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total línea</p>
           <p class="text-base font-bold text-slate-900 dark:text-white tabular-nums" x-text="money(it.total)"></p>

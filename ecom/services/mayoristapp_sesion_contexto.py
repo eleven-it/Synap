@@ -13,6 +13,10 @@ from typing import Any, Dict, List, Optional
 
 from core.mysql_pool import mysql_cursor
 from core.utils.administranet_types import to_int_or_none
+from ecom.services.vendedor_operativo import (
+    leer_vendedores_a_cargo_config,
+    resolver_viajante_operativo,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +26,7 @@ _CLAVES_RAIZ_PHP = (
     "supervisor_venta",
     "permiso_supervisor_venta_web",
     "vendedor_a_cargo",
+    "cod_viajante_operativo",
     "tipousuario",
     "id_vendedor_usr",
     "CodViajante",
@@ -172,6 +177,7 @@ def _persistir_contexto(request: Any, ctx: dict) -> None:
         "permiso_supervisor_venta_web",
         "usa_id_manual",
         "vendedor_a_cargo",
+        "cod_viajante_operativo",
         "tipousuario",
     ):
         val = ctx.get(clave)
@@ -183,6 +189,13 @@ def _persistir_contexto(request: Any, ctx: dict) -> None:
         # Paridad PHP: también en raíz para lecturas legacy
         if sess.get(clave) != val and clave in _CLAVES_RAIZ_PHP:
             sess[clave] = val
+            cambio = True
+    op = ctx.get("cod_viajante_operativo")
+    if op is not None:
+        bag = dict(sess.get("mayoristapp") or {})
+        if bag.get("cod_viajante_operativo") != op:
+            bag["cod_viajante_operativo"] = op
+            sess["mayoristapp"] = bag
             cambio = True
     if cambio:
         sess["user"] = user
@@ -228,20 +241,37 @@ def contexto_usuario_mayoristapp(request: Any, *, persistir: bool = True) -> Dic
     if base.get("todos_clientes") is None:
         base["todos_clientes"] = "No"
 
-    cargo = base.get("vendedor_a_cargo")
-    if cargo is not None and not isinstance(cargo, list):
-        if isinstance(cargo, str) and cargo.strip().startswith("["):
-            try:
-                import json
+    cv_prop = to_int_or_none(base.get("id_vendedor_usr") or base.get("CodViajante"))
+    sup = _si_no(base.get("supervisor_venta") or base.get("permiso_supervisor_venta_web"), "No")
+    if sup == "Si" and base_empresa and cv_prop is not None:
+        base["vendedor_a_cargo"] = leer_vendedores_a_cargo_config(base_empresa, cv_prop)
+    elif sup != "Si":
+        base["vendedor_a_cargo"] = []
+    else:
+        cargo = base.get("vendedor_a_cargo")
+        if cargo is not None and not isinstance(cargo, list):
+            if isinstance(cargo, str) and cargo.strip().startswith("["):
+                try:
+                    import json
 
-                cargo = json.loads(cargo)
-            except Exception:
+                    cargo = json.loads(cargo)
+                except Exception:
+                    cargo = []
+            elif isinstance(cargo, str):
+                cargo = [x.strip() for x in cargo.split(",") if x.strip()]
+            else:
                 cargo = []
-        elif isinstance(cargo, str):
-            cargo = [x.strip() for x in cargo.split(",") if x.strip()]
-        else:
-            cargo = []
-        base["vendedor_a_cargo"] = cargo
+            base["vendedor_a_cargo"] = cargo
+
+    bag = sess.get("mayoristapp") or {}
+    if isinstance(bag, dict) and bag.get("cod_viajante_operativo") is not None:
+        base["cod_viajante_operativo"] = to_int_or_none(bag.get("cod_viajante_operativo"))
+    elif base.get("cod_viajante_operativo") is None and cv_prop is not None:
+        base["cod_viajante_operativo"] = cv_prop
+
+    operativo = resolver_viajante_operativo(base)
+    if operativo is not None:
+        base["cod_viajante_operativo"] = operativo
 
     if persistir:
         _persistir_contexto(request, base)

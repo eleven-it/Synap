@@ -18,7 +18,7 @@ class TestLimpiarClienteCompra(TestCase):
         self.factory = RequestFactory()
 
     def _request(self, session_data=None):
-        req = self.factory.get("/ecom/mayoristapp/compra/")
+        req = self.factory.get("/ecom/mayoristapp/venta/")
         req.session = SessionStore()
         for k, v in (session_data or {}).items():
             req.session[k] = v

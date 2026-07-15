@@ -23,13 +23,14 @@ def _es_cliente_sesion(sess_user: Dict[str, Any]) -> bool:
 
 
 def _descuento_cliente(base: str, idcliente: int) -> Decimal:
+    """Descuento de renglón del cliente (columna legacy ``descuento_por_cli``)."""
     from core.mysql_pool import get_mysql_pool
 
     pool = get_mysql_pool()
     with pool.get_connection(base) as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT descRenglon FROM cliente WHERE Codigo = %s LIMIT 1",
+            "SELECT descuento_por_cli FROM cliente WHERE Codigo = %s LIMIT 1",
             [idcliente],
         )
         row = cur.fetchone()
@@ -183,6 +184,7 @@ def cargar_desde_pedido(
     modo: str = "reemplazar",
     es_cliente: Optional[bool] = None,
     cantidades: Optional[Dict[int, Any]] = None,
+    omitir_validacion_stock: bool = False,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     """Carga renglones al carrito borrador."""
     if es_cliente is None:
@@ -216,7 +218,11 @@ def cargar_desde_pedido(
         id_art = int(fila["id_articulo"])
         cant = fila["cantidad"]
         _item, e = cart_svc.agregar_item(
-            cart, id_art, cant, descuento_cliente=desc_cli
+            cart,
+            id_art,
+            cant,
+            descuento_cliente=desc_cli,
+            validar_stock=not omitir_validacion_stock,
         )
         if e:
             errores.append(f"{fila.get('descripcion') or id_art}: {e}")

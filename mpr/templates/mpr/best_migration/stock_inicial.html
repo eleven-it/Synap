@@ -25,11 +25,14 @@
           <a href="{% url 'stock:alta_movimiento' %}" class="text-purple-600 underline dark:text-purple-400">/stock/ingreso-movimiento/</a>).
           Cantidades en <strong>pares</strong> (<code>Stock</code>, no docenas×12).
           Requiere artículos y depósitos validados.
+          <strong>Prioridad cutover:</strong> stock de artículos <strong>Terminados</strong> (dep. Terminado).
+          Fabricados / Semi-Embalado (4002) es opcional post-cutover.
         </p>
         <p class="mt-2 text-sm text-gray-700 dark:text-gray-200">
-          Necesarios pendientes: <strong class="text-amber-700 dark:text-amber-300">{{ stock_inicial_resumen.necesarios_pendientes }}</strong>
+          Pendiente mapeo: <strong class="text-rose-700 dark:text-rose-300">{{ stock_inicial_resumen.cola_pendiente_mapeo }}</strong>
+          · Listos carga: <strong class="text-blue-700 dark:text-blue-300">{{ stock_inicial_resumen.cola_listos_carga }}</strong>
+          · Ya cargados: <strong class="text-emerald-700 dark:text-emerald-300">{{ stock_inicial_resumen.cola_ya_cargados }}</strong>
           · Con delta: <strong>{{ stock_inicial_resumen.con_delta }}</strong>
-          · Listos: <strong class="text-blue-700 dark:text-blue-300">{{ stock_inicial_resumen.listos }}</strong>
         </p>
       </div>
       <div class="flex flex-wrap gap-2">
@@ -55,15 +58,41 @@
       </div>
     </header>
 
+    <div class="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-100">
+      <strong>Stock inicial por olas.</strong>
+      En el <strong>cutover</strong> (primera ola) se cargan todos los mapeados pendientes.
+      Después del cutover: mapear artículos/depósitos nuevos → <strong>Sincronizar</strong> →
+      <strong>Confirmar carga</strong> (cada confirmación solo procesa líneas LISTO/CONCILIADO;
+      las ya <strong>CARGADO</strong> de olas anteriores no se reprocesan).
+      El delta usa el saldo <em>live</em> de Admin, no un snapshot viejo.
+      Tras generar MSTOCK, <strong>no reinicies la migración</strong>: las olas siguientes suman pendientes.
+    </div>
+
     <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
       <strong>Ensayo de carga</strong> no escribe MySQL.
       <strong>Confirmar carga</strong> genera MSTOCK con motivo <em>Stock Inicial</em>
-      (entrada = delta BEST − saldo Admin) vía <code>alta_movimiento</code>, igual que
+      (entrada = delta BEST − saldo Admin live) vía <code>alta_movimiento</code>, igual que
       <code>/stock/ingreso-movimiento/</code>. Si Admin ≥ BEST, no mueve stock.
+    </div>
+
+    <div class="mb-4 flex flex-wrap gap-2 border-b border-gray-200 pb-3 dark:border-gray-700">
+      <a href="?cola=pendiente_mapeo&amp;filtrado=1"
+         class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold {% if cola_activa == 'pendiente_mapeo' %}bg-purple-600 text-white{% else %}border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100{% endif %}">
+        Pendiente mapeo ({{ stock_inicial_resumen.cola_pendiente_mapeo }})
+      </a>
+      <a href="?cola=listos_carga&amp;filtrado=1"
+         class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold {% if cola_activa == 'listos_carga' %}bg-purple-600 text-white{% else %}border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100{% endif %}">
+        Listos para carga ({{ stock_inicial_resumen.cola_listos_carga }})
+      </a>
+      <a href="?cola=ya_cargados&amp;filtrado=1"
+         class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold {% if cola_activa == 'ya_cargados' %}bg-purple-600 text-white{% else %}border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100{% endif %}">
+        Ya cargados ({{ stock_inicial_resumen.cola_ya_cargados }})
+      </a>
     </div>
 
     <form method="get" class="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <input type="hidden" name="filtrado" value="1">
+      <input type="hidden" name="cola" value="{{ cola_activa }}">
       <div class="flex flex-wrap items-end gap-3">
         <div>
           <label for="estado" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Estado</label>

@@ -2,7 +2,7 @@
 Bootstrap de primera instalación Synap (PostgreSQL vacío o sin módulos base activos).
 
 Activa la cadena mínima core → login → dashboard → reports, permisos en Postgres
-y sincronización opcional a MySQL AdministraNET.
+y esquema synap_* opcional en MySQL AdministraNET.
 """
 import logging
 
@@ -24,7 +24,7 @@ MODULOS_BOOTSTRAP = ['core', 'login', 'dashboard', 'reports']
 class Command(BaseCommand):
     help = (
         'Bootstrap de primera instalación: módulos core/login/dashboard/reports, '
-        'permisos Postgres y sync opcional a AdministraNET.'
+        'permisos Postgres y tablas synap_* opcionales en AdministraNET.'
     )
 
     def add_arguments(self, parser):
@@ -36,13 +36,13 @@ class Command(BaseCommand):
         parser.add_argument(
             '--skip-permisos-mysql',
             action='store_true',
-            help='No sincronizar permisos a permiso_sistema (MySQL)',
+            help='No crear tablas synap_* ni sembrar catálogo en MySQL (permiso_sistema no se toca)',
         )
         parser.add_argument(
             '--base-empresa',
             type=str,
             default='',
-            help='Base MySQL empresa para sync_synap_permissions_to_adminet (opcional)',
+            help='Base MySQL empresa para apply_synap_permisos_tables (requerida si no se omite MySQL)',
         )
 
     def handle(self, *args, **options):
@@ -102,16 +102,23 @@ class Command(BaseCommand):
 
     def _paso_permisos_mysql(self, base_empresa):
         self.stdout.write('')
-        self.stdout.write('Sincronizando permisos Synap → AdministraNET (MySQL)...')
-        args = []
-        if base_empresa:
-            args.extend(['--base-empresa', base_empresa])
-        try:
-            call_command('sync_synap_permissions_to_adminet', *args, verbosity=1)
-        except Exception as exc:
-            logger.warning('Bootstrap: sync permisos MySQL omitido: %s', exc)
+        if not base_empresa:
             self.stdout.write(
                 self.style.WARNING(
-                    f'  ⚠ Sync MySQL omitido (no bloquea el arranque): {exc}'
+                    '  ⚠ Omitiendo MySQL: indique --base-empresa para apply_synap_permisos_tables '
+                    '(o use --skip-permisos-mysql).'
+                )
+            )
+            return
+        self.stdout.write(
+            f'Creando tablas synap_* y sembrando catálogo en MySQL ({base_empresa})...'
+        )
+        try:
+            call_command('apply_synap_permisos_tables', base_empresa, verbosity=1)
+        except Exception as exc:
+            logger.warning('Bootstrap: apply_synap_permisos_tables omitido: %s', exc)
+            self.stdout.write(
+                self.style.WARNING(
+                    f'  ⚠ Esquema synap_* omitido (no bloquea el arranque): {exc}'
                 )
             )

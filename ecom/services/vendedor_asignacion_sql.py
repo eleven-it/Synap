@@ -1,14 +1,25 @@
 """
-Fragmentos SQL para filtrar por vendedor según fuente legacy o tabla de asignación.
+Fragmentos SQL para filtrar por vendedor según fuente legacy, tabla de asignación o ternas VCM.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, List, Tuple
 
+from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import to_int_or_none
 
-from ecom.services.ecom_config_mysql import FuenteVendedorAsignacion, fuente_vendedor_asignacion
+from ecom.services.ecom_config_mysql import (
+    FuenteVendedorAsignacion,
+    fuente_vendedor_asignacion,
+    leer_valor_configuracion_ecom,
+)
+
+logger = logging.getLogger(__name__)
+
+_CLAVE_USA_VCM = "ecom_usa_vcm_ternas"
+_vcm_disponible_cache: Dict[str, bool] = {}
 
 
 def _si_no(val: Any, default: str = "No") -> str:
@@ -20,11 +31,70 @@ def _si_no(val: Any, default: str = "No") -> str:
     return "No"
 
 
-def _cod_viajante_desde_sesion(sess_user: Dict[str, Any]) -> int | None:
-    return to_int_or_none(
-        sess_user.get("id_vendedor_usr")
-        or sess_user.get("CodViajante")
-        or sess_user.get("cod_viajante")
+def _cod_viajante_efectivo(sess_user: Dict[str, Any]) -> int | None:
+    """Viajante operativo (``resolver_viajante_operativo``) para filtros de pedido."""
+    from ecom.services.vendedor_operativo import resolver_viajante_operativo
+
+    return resolver_viajante_operativo(sess_user)
+
+
+def vcm_ternas_disponible(base_empresa: str) -> bool:
+    """
+    True si la empresa usa ternas VCM (``ecom_vendedor_cliente_marca``).
+
+    Config ``ecom_usa_vcm_ternas``: ``Si`` | ``No`` | ``auto`` (default).
+    En ``auto``, se activa si existe al menos una terna activa en MySQL.
+    """
+    base = (base_empresa or "").strip()
+    if not base:
+        return False
+    if base in _vcm_disponible_cache:
+        return _vcm_disponible_cache[base]
+    try:
+        cfg = (leer_valor_configuracion_ecom(base, _CLAVE_USA_VCM, "auto") or "auto").strip().lower()
+    except Exception as exc:
+        logger.debug("vcm_ternas_disponible cfg(%s): %s", base, exc)
+        cfg = "auto"
+    if cfg in ("si", "sí", "yes", "1", "true"):
+        _vcm_disponible_cache[base] = True
+        return True
+    if cfg in ("no", "0", "false"):
+        _vcm_disponible_cache[base] = False
+        return False
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """
+                    SELECT 1
+                    FROM ecom_vendedor_cliente_marca
+                    WHERE COALESCE(anulado, 'No') = 'No'
+                    LIMIT 1
+                    """
+                )
+                ok = cursor.fetchone() is not None
+            finally:
+                cursor.close()
+        _vcm_disponible_cache[base] = ok
+        return ok
+    except Exception as exc:
+        logger.debug("vcm_ternas_disponible(%s): %s", base, exc)
+        _vcm_disponible_cache[base] = False
+        return False
+
+
+def _where_cliente_terna_vcm(cod_viajante: int) -> Tuple[str, List[Any]]:
+    """Restricción por terna activa (paridad ``listar_clientes_con_ternas``)."""
+    return (
+        " AND EXISTS ("
+        "SELECT 1 FROM ecom_vendedor_cliente_marca vcm "
+        "WHERE vcm.id_cliente = cliente.Codigo "
+        "AND vcm.CodViajante = %s "
+        "AND COALESCE(vcm.anulado, 'No') = 'No'"
+        ") ",
+        [cod_viajante],
     )
 
 
@@ -73,6 +143,13 @@ def where_vendedor_cliente(
     if todos == "Si":
         return "", []
 
+    cv = _cod_viajante_efectivo(sess_user)
+    if cv is None:
+        return " AND 1=0 ", []
+
+    if vcm_ternas_disponible(base_empresa):
+        return _where_cliente_terna_vcm(cv)
+
     if fuente is None:
         fuente = fuente_vendedor_asignacion(
             base_empresa,
@@ -81,14 +158,15 @@ def where_vendedor_cliente(
         )
 
     sup = _si_no(sess_user.get("supervisor_venta") or sess_user.get("permiso_supervisor_venta_web"), "No")
-    cv = _cod_viajante_desde_sesion(sess_user)
-    if cv is None:
-        return " AND 1=0 ", []
-
+    cv_propio = to_int_or_none(
+        sess_user.get("id_vendedor_usr")
+        or sess_user.get("CodViajante")
+        or sess_user.get("cod_viajante")
+    )
     cargo = _vendedor_a_cargo_desde_sesion(sess_user)
     ids: List[int] = [cv]
-    if sup == "Si" and cargo:
-        ids = [cv] + [int(x) for x in cargo]
+    if sup == "Si" and cargo and cv_propio is not None and cv == cv_propio:
+        ids = [cv] + [int(x) for x in cargo if to_int_or_none(x) is not None]
 
     if fuente == "tabla":
         placeholders = ",".join(["%s"] * len(ids))

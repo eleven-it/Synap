@@ -2638,87 +2638,34 @@ class QueryRunnerService:
         sucursales: Optional[List[int]] = None, puntos_venta: Optional[List[int]] = None,
         clientes_excluidos: Optional[List] = None,
     ) -> float:
-        """Total ventas netas (Facturas - NC) para el período y filtros opcionales. Reutilizado por sales_summary y total_consolidado_operativo."""
-        where_conditions = [
-            "cc.Fecha >= %s", "cc.Fecha <= %s",
-            "cc.Anulado = 'No'", "cc.CodigoMovimiento <> 0",
-            "cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM', 'NCA', 'NCB', 'NCC', 'NCE', 'NCM')",
-        ]
-        params = [fecha_inicio, fecha_fin]
-        if puntos_venta:
-            placeholders = ",".join(["%s"] * len(puntos_venta))
-            where_conditions.append(f"cc.id_pv IN ({placeholders})")
-            params.extend(puntos_venta)
-        if sucursales:
-            placeholders = ",".join(["%s"] * len(sucursales))
-            where_conditions.append(f"cc.CodSucursal IN ({placeholders})")
-            params.extend(sucursales)
-        if clientes_excluidos:
-            clientes_vals = []
-            for c in clientes_excluidos:
-                try:
-                    c_str = str(c).strip()
-                    if c_str:
-                        clientes_vals.append(int(c_str) if c_str.isdigit() else c_str)
-                except (ValueError, TypeError):
-                    continue
-            if clientes_vals:
-                placeholders = ",".join(["%s"] * len(clientes_vals))
-                where_conditions.append(f"cc.Codigo NOT IN ({placeholders})")
-                params.extend(clientes_vals)
-        sql = f"""
-            SELECT SUM(CASE
-                WHEN cc.TipoComprobante IN ('FA', 'FB', 'FC', 'FE', 'FM') THEN COALESCE(cc.SubtotalDesc, 0)
-                WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM') THEN -COALESCE(cc.SubtotalDesc, 0)
-                ELSE 0
-            END) AS ventas_netas
-            FROM cuentacliente cc
-            WHERE {" AND ".join(where_conditions)}
-        """
-        cursor.execute(sql, params)
-        row = cursor.fetchone()
-        return float(row[0] or 0) if row else 0.0
+        """Total ventas netas (Facturas - NC). Delega en ventas_metrics (paridad legacy)."""
+        from .executive_dashboard.ventas_metrics import get_ventas_netas_total
+
+        return get_ventas_netas_total(
+            cursor,
+            fecha_inicio,
+            fecha_fin,
+            sucursales=sucursales,
+            puntos_venta=puntos_venta,
+            clientes_excluidos=clientes_excluidos,
+        )
 
     def _get_remitos_no_facturados_total(
         self, cursor, fecha_inicio: str, fecha_fin: str,
         sucursales: Optional[List[int]] = None, puntos_venta: Optional[List[int]] = None,
         clientes_excluidos: Optional[List] = None,
     ) -> float:
-        """Total remitos no facturados (comp_ped REM, Pendiente). Reutilizado por sales_summary y total_consolidado_operativo."""
-        where_conditions = [
-            "cp.Fecha >= %s", "cp.Fecha <= %s",
-            "cp.TipoComprobante = 'REM'", "cp.Anulado = 'No'", "cp.Estado = 'Pendiente'",
-        ]
-        params = [fecha_inicio, fecha_fin]
-        if puntos_venta:
-            placeholders = ",".join(["%s"] * len(puntos_venta))
-            where_conditions.append(f"cp.id_pv IN ({placeholders})")
-            params.extend(puntos_venta)
-        if sucursales:
-            placeholders = ",".join(["%s"] * len(sucursales))
-            where_conditions.append(f"cp.CodSucursal IN ({placeholders})")
-            params.extend(sucursales)
-        if clientes_excluidos:
-            clientes_vals = []
-            for c in clientes_excluidos:
-                try:
-                    c_str = str(c).strip()
-                    if c_str:
-                        clientes_vals.append(int(c_str) if c_str.isdigit() else c_str)
-                except (ValueError, TypeError):
-                    continue
-            if clientes_vals:
-                placeholders = ",".join(["%s"] * len(clientes_vals))
-                where_conditions.append(f"cp.Codigo NOT IN ({placeholders})")
-                params.extend(clientes_vals)
-        sql = f"""
-            SELECT SUM(COALESCE(cp.SubtotalDesc, 0)) AS total_remitos
-            FROM comp_ped cp
-            WHERE {" AND ".join(where_conditions)}
-        """
-        cursor.execute(sql, params)
-        row = cursor.fetchone()
-        return float(row[0] or 0) if row else 0.0
+        """Total remitos no facturados (REM Pendiente). Delega en ventas_metrics (paridad legacy)."""
+        from .executive_dashboard.ventas_metrics import get_remitos_no_facturados_total
+
+        return get_remitos_no_facturados_total(
+            cursor,
+            fecha_inicio,
+            fecha_fin,
+            sucursales=sucursales,
+            puntos_venta=puntos_venta,
+            clientes_excluidos=clientes_excluidos,
+        )
 
     def _get_pedidos_pendientes_total(
         self, cursor, fecha_inicio: str, fecha_fin: str,
@@ -2726,44 +2673,18 @@ class QueryRunnerService:
         clientes_excluidos: Optional[List] = None,
         filtrar_por_fecha: bool = True,
     ) -> float:
-        """Total pedidos pendientes de entrega (comp_ped PED, En preparación/Preparado). Reutilizado por sales_summary y total_consolidado_operativo. Si filtrar_por_fecha=False (solo en total_consolidado_operativo), no se aplica rango de fechas."""
-        where_conditions = [
-            "cp.TipoComprobante = 'PED'", "cp.Anulado = 'No'",
-            "cp.Estado IN ('En preparación', 'Preparado')",
-        ]
-        params = []
-        if filtrar_por_fecha:
-            where_conditions.extend(["cp.Fecha >= %s", "cp.Fecha <= %s"])
-            params.extend([fecha_inicio, fecha_fin])
-        if puntos_venta:
-            placeholders = ",".join(["%s"] * len(puntos_venta))
-            where_conditions.append(f"cp.id_pv IN ({placeholders})")
-            params.extend(puntos_venta)
-        if sucursales:
-            placeholders = ",".join(["%s"] * len(sucursales))
-            where_conditions.append(f"cp.CodSucursal IN ({placeholders})")
-            params.extend(sucursales)
-        if clientes_excluidos:
-            clientes_vals = []
-            for c in clientes_excluidos:
-                try:
-                    c_str = str(c).strip()
-                    if c_str:
-                        clientes_vals.append(int(c_str) if c_str.isdigit() else c_str)
-                except (ValueError, TypeError):
-                    continue
-            if clientes_vals:
-                placeholders = ",".join(["%s"] * len(clientes_vals))
-                where_conditions.append(f"cp.Codigo NOT IN ({placeholders})")
-                params.extend(clientes_vals)
-        sql = f"""
-            SELECT SUM(COALESCE(cp.SubtotalDesc, 0)) AS total_pedidos
-            FROM comp_ped cp
-            WHERE {" AND ".join(where_conditions)}
-        """
-        cursor.execute(sql, params)
-        row = cursor.fetchone()
-        return float(row[0] or 0) if row else 0.0
+        """Total pedidos pendientes (PED En preparación/Preparado). Delega en ventas_metrics."""
+        from .executive_dashboard.ventas_metrics import get_pedidos_pendientes_total
+
+        return get_pedidos_pendientes_total(
+            cursor,
+            fecha_inicio,
+            fecha_fin,
+            sucursales=sucursales,
+            puntos_venta=puntos_venta,
+            clientes_excluidos=clientes_excluidos,
+            filtrar_por_fecha=filtrar_por_fecha,
+        )
 
     def _run_sales_summary(self, report: ReportDefinition, payload: Dict) -> QueryResult:
         """

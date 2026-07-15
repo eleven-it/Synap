@@ -11,37 +11,198 @@ from django.db import transaction
 from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
-from ecom.services.catalogo_producto import listar_articulos_paginado
-from ecom.services.cliente_relay import cod_viajante_desde_sesion_usuario
+from ecom.services.catalogo_producto import resolver_precio_articulo
+from ecom.services.price_rules_engine import (
+    calcular_precio_articulo_row,
+    resolver_reglas_precio_map,
+)
+from ecom.services.vendedor_operativo import resolver_viajante_operativo
 
 logger = logging.getLogger(__name__)
+
+
+def _dec(v: Any, default: str = "0") -> Decimal:
+    r = to_decimal_or_none(v)
+    return r if r is not None else Decimal(default)
+
+
+def _clamp_pct(v: Any) -> Decimal:
+    pct = _dec(v)
+    if pct < 0:
+        return Decimal("0")
+    if pct > 100:
+        return Decimal("100")
+    return pct
+
+
+def leer_contexto_cliente_masivo(base_empresa: str, id_cliente: int) -> Dict[str, Any]:
+    """Descuentos y lista del cliente legacy (descRenglon, descPie, lista_id)."""
+    idc = to_int_or_none(id_cliente)
+    if idc is None:
+        return {"descRenglon": Decimal("0"), "descPie": Decimal("0"), "lista_id": 1}
+    sql = """
+        SELECT
+            cliente.descuento_por_cli AS descRenglon,
+            cliente.Descuento AS descPie,
+            SUBSTRING(cliente.ListaPrecio, 6) AS codListaPrecio
+        FROM cliente
+        WHERE cliente.Codigo = %s
+        LIMIT 1
+    """
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, [idc])
+                row = cursor.fetchone()
+                if not row:
+                    return {"descRenglon": Decimal("0"), "descPie": Decimal("0"), "lista_id": 1}
+                lista_id = to_int_or_none(row[2]) or 1
+                return {
+                    "descRenglon": _dec(row[0]),
+                    "descPie": _dec(row[1]),
+                    "lista_id": lista_id,
+                }
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.warning("leer_contexto_cliente_masivo: %s", e)
+        return {"descRenglon": Decimal("0"), "descPie": Decimal("0"), "lista_id": 1}
+
+
+def _precio_real_articulo(
+    base_empresa: str,
+    id_articulo: int,
+    *,
+    lista_id: int,
+    id_cliente: int,
+    descuento_cliente: Decimal,
+) -> Optional[Decimal]:
+    res = resolver_precio_articulo(
+        base_empresa,
+        id_articulo,
+        lista_id=lista_id,
+        codigo_cliente=id_cliente,
+        descuento_cliente=descuento_cliente,
+        iva_incluido=False,
+    )
+    if res is None:
+        return None
+    return _dec(res[0])
+
+
+def descuentos_fila_efectivos(
+    draft: EcomPedidoMasivoDraft,
+    base_empresa: str,
+) -> Dict[int, Decimal]:
+    """Mapa id_articulo → % descuento renglón (borrador o descRenglon del cliente)."""
+    ctx = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
+    default = _clamp_pct(ctx.get("descRenglon"))
+    stored = draft.descuentos_fila if isinstance(draft.descuentos_fila, dict) else {}
+    art_ids = {c.id_articulo for c in draft.celdas.all()}
+    out: Dict[int, Decimal] = {}
+    for aid in art_ids:
+        raw = stored.get(str(aid))
+        if raw is not None:
+            out[int(aid)] = _clamp_pct(raw)
+        else:
+            out[int(aid)] = default
+    return out
+
+
+def asegurar_descuento_fila_articulo(
+    draft: EcomPedidoMasivoDraft,
+    id_articulo: int,
+    base_empresa: str,
+) -> None:
+    """Precarga descRenglon del cliente al registrar un artículo en la matriz."""
+    aid = to_int_or_none(id_articulo)
+    if aid is None:
+        return
+    stored = dict(draft.descuentos_fila or {})
+    if str(aid) in stored:
+        return
+    ctx = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
+    stored[str(aid)] = float(_clamp_pct(ctx.get("descRenglon")))
+    draft.descuentos_fila = stored
+    draft.save(update_fields=["descuentos_fila", "updated_at"])
+
+
+def guardar_descuento_fila(
+    draft: EcomPedidoMasivoDraft,
+    *,
+    id_articulo: int,
+    porcentaje_descuento: Any,
+) -> Tuple[bool, str]:
+    if draft.estado not in (
+        EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+    ):
+        return False, "El borrador no es editable."
+    aid = to_int_or_none(id_articulo)
+    if aid is None:
+        return False, "Artículo inválido."
+    stored = dict(draft.descuentos_fila or {})
+    stored[str(aid)] = float(_clamp_pct(porcentaje_descuento))
+    draft.descuentos_fila = stored
+    draft.save(update_fields=["descuentos_fila", "updated_at"])
+    return True, "Descuento de fila guardado."
+
+
+def guardar_descuento_pie(
+    draft: EcomPedidoMasivoDraft,
+    *,
+    desc_pie_pct: Any,
+) -> Tuple[bool, str]:
+    if draft.estado not in (
+        EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+    ):
+        return False, "El borrador no es editable."
+    draft.descuento_pie_pct = _clamp_pct(desc_pie_pct)
+    draft.save(update_fields=["descuento_pie_pct", "updated_at"])
+    return True, "Descuento pie guardado."
 
 
 def marcas_asignadas_viajante_cliente(
     base_empresa: str,
     cod_viajante: int,
     id_cliente: int,
+    id_cliente_domicilio: Optional[int] = None,
 ) -> List[int]:
-    """CodMarca activos de la terna (vendedor, cliente)."""
+    """
+    CodMarca activos de la cuaterna (vendedor, cliente[, sucursal]).
+
+    Si ``id_cliente_domicilio`` es None o 0: unión de marcas en todas las sucursales del par.
+    Si > 0: solo marcas de esa sucursal.
+    """
     cv = to_int_or_none(cod_viajante)
     idc = to_int_or_none(id_cliente)
     if cv is None or idc is None:
         return []
+    idd = to_int_or_none(id_cliente_domicilio)
+    where = [
+        "CodViajante = %s",
+        "id_cliente = %s",
+        "COALESCE(anulado, 'No') = 'No'",
+    ]
+    params: List[Any] = [cv, idc]
+    if idd is not None and idd > 0:
+        where.append("id_cliente_domicilio = %s")
+        params.append(idd)
+    sql = f"""
+        SELECT DISTINCT CodMarca
+        FROM ecom_vendedor_cliente_marca
+        WHERE {' AND '.join(where)}
+        ORDER BY CodMarca ASC
+    """
     try:
         pool = get_mysql_pool()
         with pool.get_connection(base_empresa.strip()) as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute(
-                    """
-                    SELECT CodMarca
-                    FROM ecom_vendedor_cliente_marca
-                    WHERE CodViajante = %s
-                      AND id_cliente = %s
-                      AND COALESCE(anulado, 'No') = 'No'
-                    """,
-                    [cv, idc],
-                )
+                cursor.execute(sql, params)
                 return [int(r[0]) for r in cursor.fetchall() if r and r[0] is not None]
             finally:
                 cursor.close()
@@ -50,11 +211,22 @@ def marcas_asignadas_viajante_cliente(
         return []
 
 
-def listar_sucursales_cliente(base_empresa: str, id_cliente: int) -> List[Dict[str, Any]]:
-    """``cliente_domicilio`` no anulados → columnas de la matriz."""
+def listar_sucursales_cliente(
+    base_empresa: str,
+    id_cliente: int,
+    cod_viajante: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """``cliente_domicilio`` no anulados → columnas de la matriz.
+
+    Si VCM está activo y hay ``cod_viajante``, solo sucursales con ≥1 cuaterna activa.
+    """
+    from ecom.services.vendedor_asignacion_sql import vcm_ternas_disponible
+
     idc = to_int_or_none(id_cliente)
     if idc is None:
         return []
+    cv = to_int_or_none(cod_viajante)
+    filtrar_vcm = vcm_ternas_disponible(base_empresa) and cv is not None
     sql = """
         SELECT
             cm.id_cliente_domicilio AS id_cliente_domicilio,
@@ -70,24 +242,40 @@ def listar_sucursales_cliente(base_empresa: str, id_cliente: int) -> List[Dict[s
         LEFT JOIN erp_zona AS z ON z.id_zona = cm.id_zona
         WHERE cm.id_cliente = %s
           AND COALESCE(cm.anulado, 'No') = 'No'
-        ORDER BY cm.id_cliente_domicilio ASC
     """
+    params: List[Any] = [idc]
+    if filtrar_vcm:
+        sql += """
+          AND EXISTS (
+              SELECT 1 FROM ecom_vendedor_cliente_marca vcm
+              WHERE vcm.id_cliente = cm.id_cliente
+                AND vcm.id_cliente_domicilio = cm.id_cliente_domicilio
+                AND vcm.CodViajante = %s
+                AND COALESCE(vcm.anulado, 'No') = 'No'
+          )
+        """
+        params.append(cv)
+    sql += " ORDER BY cm.id_cliente_domicilio ASC"
     try:
         pool = get_mysql_pool()
         with pool.get_connection(base_empresa.strip()) as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute(sql, [idc])
+                cursor.execute(sql, params)
                 out = []
                 for r in cursor.fetchall():
                     calle = (r[1] or "").strip()
                     nro = (r[2] or "").strip()
                     dpto = (r[3] or "").strip()
+                    # En AdministraNET la «sucursal» del cliente suele vivir en Calle (+ NroCalle).
+                    nombre_parts = [p for p in (calle, nro) if p and p != "-"]
+                    nombre = " ".join(nombre_parts).strip()
                     dir_parts = [p for p in (calle, nro, dpto) if p and p != "-"]
-                    etiqueta = " ".join(dir_parts) or f"Sucursal #{int(r[0])}"
+                    etiqueta = nombre or " ".join(dir_parts) or f"Sucursal #{int(r[0])}"
                     out.append(
                         {
                             "id_cliente_domicilio": int(r[0]),
+                            "nombre": etiqueta,
                             "etiqueta": etiqueta,
                             "calle": calle,
                             "nro": nro,
@@ -103,6 +291,31 @@ def listar_sucursales_cliente(base_empresa: str, id_cliente: int) -> List[Dict[s
     except Exception as e:
         logger.warning("listar_sucursales_cliente: %s", e)
         return []
+
+
+def _nombre_cliente(base_empresa: str, id_cliente: int) -> str:
+    idc = to_int_or_none(id_cliente)
+    if idc is None:
+        return ""
+    sql = """
+        SELECT COALESCE(nombre_cliente, '')
+        FROM cliente
+        WHERE Codigo = %s
+        LIMIT 1
+    """
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, [idc])
+                row = cursor.fetchone()
+                return (row[0] or "").strip() if row else ""
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.warning("_nombre_cliente: %s", e)
+        return ""
 
 
 def listar_clientes_con_ternas(
@@ -168,53 +381,201 @@ def buscar_articulos_filtrados_ternas(
     *,
     cod_viajante: int,
     id_cliente: int,
+    id_cliente_domicilio: Optional[int] = None,
     q: str = "",
     lista_id: int = 1,
     id_deposito: int = 1,
     pagina: int = 1,
-    tam: int = 30,
+    tam: int = 20,
     iva_incluido: bool = True,
     descuento_cliente: Decimal = Decimal("0"),
 ) -> Dict[str, Any]:
-    """Catálogo restringido a marcas de la terna (vendedor, cliente)."""
-    marcas = marcas_asignadas_viajante_cliente(base_empresa, cod_viajante, id_cliente)
+    """
+    Autocomplete liviano para la matriz masiva.
+
+    Solo artículos que el motor de precios/carrito puede resolver: Terminado,
+    Discontinuo=No, ecommerce=Si y marcas de terna. Así no se ofrecen
+    sugerencias que luego fallen en preview/confirm con «no encontrado o inactivo».
+    No consulta stock ni presentación; precios/reglas en lote.
+    """
+    marcas = marcas_asignadas_viajante_cliente(
+        base_empresa, cod_viajante, id_cliente, id_cliente_domicilio
+    )
+    lim = max(1, min(int(tam or 20), 40))
     if not marcas:
         return {
             "items": [],
             "total": 0,
             "pagina": 1,
-            "tam": tam,
+            "tam": lim,
             "total_paginas": 0,
             "marcas": [],
             "sin_marcas": True,
         }
-    result = listar_articulos_paginado(
-        base_empresa,
-        filtros={"marcas": marcas, "q": q or ""},
-        lista_id=lista_id,
-        codigo_cliente=to_int_or_none(id_cliente),
-        descuento_cliente=descuento_cliente,
-        iva_incluido=iva_incluido,
-        id_deposito=id_deposito,
-        pagina=pagina,
-        tam=tam,
+
+    ctx_cli = leer_contexto_cliente_masivo(base_empresa, id_cliente)
+    lista_ef = int(lista_id or ctx_cli.get("lista_id") or 1)
+    desc_cli = _clamp_pct(descuento_cliente if descuento_cliente else ctx_cli.get("descRenglon"))
+
+    # Paridad con obtener_articulo_row_precio / agregar_item (activo + ecommerce).
+    where = [
+        "articulo.Discontinuo = 'No'",
+        "articulo.ecommerce = 'Si'",
+        "COALESCE(TRIM(articulo.tipo_art_fab), '') = 'Terminado'",
+    ]
+    params: List[Any] = []
+    placeholders = ",".join(["%s"] * len(marcas))
+    where.append(f"articulo.CodigoMarca IN ({placeholders})")
+    params.extend(marcas)
+
+    q = (q or "").strip()
+    if len(q) < 2:
+        return {
+            "items": [],
+            "total": 0,
+            "pagina": 1,
+            "tam": lim,
+            "total_paginas": 0,
+            "marcas": marcas,
+            "sin_marcas": False,
+        }
+    like = f"%{q}%"
+    where.append(
+        "(articulo.id_manual LIKE %s OR articulo.NombreArticulo LIKE %s "
+        "OR articulo.CodigoArticuloT LIKE %s OR CAST(articulo.IDArt AS CHAR) LIKE %s)"
     )
-    result["marcas"] = marcas
-    result["sin_marcas"] = False
-    return result
+    params.extend([like, like, like, like])
+
+    params.append(lim)
+    sql = f"""
+        SELECT
+            articulo.IDArt,
+            COALESCE(articulo.id_manual, '') AS id_manual,
+            COALESCE(articulo.NombreArticulo, '') AS nombre,
+            articulo.Precio1V,
+            articulo.Precio2V,
+            articulo.Precio3V,
+            articulo.Precio4V,
+            articulo.Precio5V,
+            articulo.PNOficial,
+            articulo.impuesto_interno,
+            articulo.CodigoProveedor,
+            articulo.CodigoRubro,
+            articulo.IDSubRubro,
+            articulo.promocion,
+            articulo.promocion_por,
+            articulo.promocion_cant,
+            articulo.promocion_tipo,
+            articulo.promocion_alcance,
+            articulo.promocion_lista1,
+            articulo.promocion_lista2,
+            articulo.promocion_lista3,
+            articulo.promocion_lista4,
+            articulo.promocion_lista5,
+            articulo.promocion_listaoficial,
+            articulo.promocion_vigencia_desde,
+            articulo.promocion_vigencia_hasta,
+            iva.Alicuota AS alic_iva
+        FROM articulo
+        LEFT JOIN iva ON iva.ID = articulo.Alicuota
+        WHERE {' AND '.join(where)}
+        ORDER BY
+            CASE
+                WHEN articulo.id_manual = %s THEN 0
+                WHEN articulo.id_manual LIKE %s THEN 1
+                ELSE 2
+            END,
+            articulo.NombreArticulo
+        LIMIT %s
+    """
+    # Prefijo de orden: exacto / empieza-con / resto
+    q_exact = q
+    q_prefix = f"{q}%" if q else "%"
+    # Reconstruir params: where params + order helpers + limit
+    params_order = params[:-1] + [q_exact, q_prefix, lim]
+
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, params_order)
+                cols = [d[0] for d in cursor.description] if cursor.description else []
+                articulos = [dict(zip(cols, row)) for row in cursor.fetchall()]
+                try:
+                    reglas = resolver_reglas_precio_map(conn, articulos, id_cliente)
+                except Exception:
+                    logger.warning(
+                        "buscar_articulos_filtrados_ternas: no se pudieron resolver reglas",
+                        exc_info=True,
+                    )
+                    reglas = {}
+                items = []
+                for articulo in articulos:
+                    id_art = int(articulo["IDArt"])
+                    precio = calcular_precio_articulo_row(
+                        articulo,
+                        lista_id=lista_ef,
+                        codigo_cliente=id_cliente,
+                        descuento_cliente=desc_cli,
+                        iva_incluido=False,
+                        conn=conn,
+                        regla_precio=reglas.get(id_art),
+                        resolver_regla=False,
+                    )
+                    alic = to_decimal_or_none(articulo.get("alic_iva"))
+                    items.append(
+                        {
+                            "id_articulo": id_art,
+                            "id_manual": str_or_default(articulo.get("id_manual"), ""),
+                            "codigo": str_or_default(articulo.get("id_manual"), ""),
+                            "nombre": str_or_default(articulo.get("nombre"), ""),
+                            "descripcion": str_or_default(articulo.get("nombre"), ""),
+                            "precio_unitario_neto": float(precio or 0),
+                            "precio_lista1": float(precio or 0),
+                            "alicuota_iva": float(alic if alic is not None else 21),
+                        }
+                    )
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.warning("buscar_articulos_filtrados_ternas: %s", e)
+        items = []
+
+    return {
+        "items": items,
+        "total": len(items),
+        "pagina": 1,
+        "tam": lim,
+        "total_paginas": 1 if items else 0,
+        "marcas": marcas,
+        "sin_marcas": False,
+    }
 
 
-def _nombres_articulos(base_empresa: str, ids: Sequence[int]) -> Dict[int, Dict[str, str]]:
+def _nombres_articulos(
+    base_empresa: str,
+    ids: Sequence[int],
+    *,
+    id_cliente: int,
+    lista_id: int = 1,
+    descuento_cliente: Decimal = Decimal("0"),
+) -> Dict[int, Dict[str, Any]]:
     ids_clean = [i for i in (to_int_or_none(x) for x in ids) if i is not None]
     if not ids_clean:
         return {}
     placeholders = ",".join(["%s"] * len(ids_clean))
     sql = f"""
-        SELECT IDArt, COALESCE(id_manual, ''), COALESCE(NombreArticulo, '')
+        SELECT
+            articulo.IDArt,
+            COALESCE(articulo.id_manual, ''),
+            COALESCE(articulo.NombreArticulo, ''),
+            COALESCE(iva.Alicuota, 21) AS alic_iva
         FROM articulo
-        WHERE IDArt IN ({placeholders})
+        LEFT JOIN iva ON iva.ID = articulo.Alicuota
+        WHERE articulo.IDArt IN ({placeholders})
     """
-    out: Dict[int, Dict[str, str]] = {}
+    out: Dict[int, Dict[str, Any]] = {}
     try:
         pool = get_mysql_pool()
         with pool.get_connection(base_empresa.strip()) as conn:
@@ -222,9 +583,21 @@ def _nombres_articulos(base_empresa: str, ids: Sequence[int]) -> Dict[int, Dict[
             try:
                 cursor.execute(sql, list(ids_clean))
                 for r in cursor.fetchall():
-                    out[int(r[0])] = {
+                    id_art = int(r[0])
+                    precio = _precio_real_articulo(
+                        base_empresa,
+                        id_art,
+                        lista_id=lista_id,
+                        id_cliente=id_cliente,
+                        descuento_cliente=descuento_cliente,
+                    )
+                    alic = to_decimal_or_none(r[3])
+                    out[id_art] = {
                         "codigo": str_or_default(r[1], ""),
                         "descripcion": str_or_default(r[2], ""),
+                        "precio_unitario_neto": float(precio or 0),
+                        "precio_lista1": float(precio or 0),
+                        "alicuota_iva": float(alic if alic is not None else 21),
                     }
             finally:
                 cursor.close()
@@ -262,6 +635,11 @@ def obtener_o_crear_draft(
             return None, "El borrador está archivado."
         if d.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMADO:
             return None, "El borrador ya fue confirmado."
+        if d.estado == EcomPedidoMasivoDraft.ESTADO_ANULADO:
+            reactivar_borrador_masivo(d)
+        elif d.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO:
+            d.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
+            d.save(update_fields=["estado", "updated_at"])
         return d, ""
 
     existente = (
@@ -289,6 +667,10 @@ def obtener_o_crear_draft(
         id_cliente=idc,
         cod_viajante=to_int_or_none(cod_viajante),
         estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        descuento_pie_pct=_clamp_pct(
+            leer_contexto_cliente_masivo(base_empresa, idc).get("descPie")
+        ),
+        descuentos_fila={},
     )
     return d, ""
 
@@ -297,10 +679,22 @@ def serializar_matriz(
     draft: EcomPedidoMasivoDraft,
     base_empresa: str,
 ) -> Dict[str, Any]:
-    sucursales = listar_sucursales_cliente(base_empresa, draft.id_cliente)
+    sucursales = listar_sucursales_cliente(
+        base_empresa, draft.id_cliente, cod_viajante=draft.cod_viajante
+    )
     celdas_qs = list(draft.celdas.all())
     art_ids = sorted({c.id_articulo for c in celdas_qs})
-    nombres = _nombres_articulos(base_empresa, art_ids)
+    ctx_cli = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
+    lista_id = int(ctx_cli.get("lista_id") or 1)
+    desc_cli = _clamp_pct(ctx_cli.get("descRenglon"))
+    desc_map = descuentos_fila_efectivos(draft, base_empresa)
+    nombres = _nombres_articulos(
+        base_empresa,
+        art_ids,
+        id_cliente=draft.id_cliente,
+        lista_id=lista_id,
+        descuento_cliente=desc_cli,
+    )
 
     celdas_map: Dict[str, str] = {}
     for c in celdas_qs:
@@ -315,24 +709,70 @@ def serializar_matriz(
     articulos = [
         {
             "id_articulo": aid,
+            "id_manual": nombres.get(aid, {}).get("codigo", ""),
             "codigo": nombres.get(aid, {}).get("codigo", ""),
+            "nombre": nombres.get(aid, {}).get("descripcion", f"Art. {aid}"),
             "descripcion": nombres.get(aid, {}).get("descripcion", f"Art. {aid}"),
+            "precio_unitario_neto": float(
+                nombres.get(aid, {}).get("precio_unitario_neto") or 0
+            ),
+            "precio_lista1": float(nombres.get(aid, {}).get("precio_lista1") or 0),
+            "alicuota_iva": float(nombres.get(aid, {}).get("alicuota_iva") or 21),
+            "porcentaje_descuento": float(desc_map.get(aid, desc_cli)),
         }
         for aid in art_ids
     ]
 
+    descuentos_fila_out = {
+        str(k): float(v) for k, v in desc_map.items()
+    }
+
     return {
         "draft_id": draft.pk,
         "id_cliente": draft.id_cliente,
+        "nombre_cliente": _nombre_cliente(base_empresa, draft.id_cliente),
         "cod_viajante": draft.cod_viajante,
         "estado": draft.estado,
         "ultimo_error": draft.ultimo_error or {},
         "codigos_movimiento": draft.codigos_movimiento or [],
+        "desc_pie_pct": float(draft.descuento_pie_pct or 0),
+        "descuentos_fila": descuentos_fila_out,
+        "lista_id": lista_id,
         "sucursales": sucursales,
         "articulos": articulos,
         "celdas": celdas_map,
         "updated_at": draft.updated_at.isoformat() if draft.updated_at else "",
     }
+
+
+def eliminar_fila_articulo(
+    draft: EcomPedidoMasivoDraft,
+    *,
+    id_articulo: int,
+) -> Tuple[bool, str]:
+    """Quita el artículo de la matriz: todas las celdas + descuento de fila."""
+    if draft.estado not in (
+        EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+    ):
+        return False, "El borrador no es editable."
+    if draft.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO:
+        draft.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
+        draft.save(update_fields=["estado", "updated_at"])
+
+    aid = to_int_or_none(id_articulo)
+    if aid is None:
+        return False, "Artículo inválido."
+
+    with transaction.atomic():
+        EcomPedidoMasivoDraftCelda.objects.filter(
+            draft=draft, id_articulo=aid
+        ).delete()
+        stored = dict(draft.descuentos_fila or {})
+        stored.pop(str(aid), None)
+        draft.descuentos_fila = stored
+        draft.save(update_fields=["descuentos_fila", "updated_at"])
+    return True, "Artículo quitado de la matriz."
 
 
 def guardar_celda(
@@ -376,6 +816,7 @@ def guardar_celda(
             id_cliente_domicilio=idd,
             defaults={"cantidad_packs": qty},
         )
+        asegurar_descuento_fila_articulo(draft, aid, draft.base_empresa)
         draft.save(update_fields=["updated_at"])
         if qty == qty.to_integral_value():
             qty_s = str(int(qty))
@@ -393,4 +834,46 @@ def guardar_celda(
 
 
 def cod_viajante_sesion(sess_user: Dict[str, Any]) -> Optional[int]:
-    return cod_viajante_desde_sesion_usuario(sess_user)
+    return resolver_viajante_operativo(sess_user)
+
+
+def reactivar_borrador_masivo(draft: EcomPedidoMasivoDraft) -> Tuple[bool, str]:
+    """Reactiva un borrador anulado (o confirmando) a estado editable."""
+    if draft.estado == EcomPedidoMasivoDraft.ESTADO_ANULADO:
+        draft.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
+        draft.save(update_fields=["estado", "updated_at"])
+        return True, "Borrador reactivado."
+    if draft.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO:
+        draft.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
+        draft.save(update_fields=["estado", "updated_at"])
+        return True, "Borrador reactivado."
+    if draft.estado == EcomPedidoMasivoDraft.ESTADO_BORRADOR:
+        return True, "Borrador activo."
+    return False, "El borrador no se puede reactivar."
+
+
+def anular_borrador_masivo_usuario(
+    draft_id: int,
+    id_usuario: int,
+    base_empresa: str,
+) -> Tuple[bool, str]:
+    """Anula un borrador masivo en edición (soft-delete recuperable vía hub)."""
+    id_u = to_int_or_none(id_usuario)
+    did = to_int_or_none(draft_id)
+    if id_u is None or did is None or not base_empresa:
+        return False, "Parámetros inválidos."
+    draft = EcomPedidoMasivoDraft.objects.filter(
+        pk=did,
+        base_empresa=base_empresa,
+        id_usuario=id_u,
+    ).first()
+    if not draft:
+        return False, "Borrador no encontrado."
+    if draft.estado not in (
+        EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+    ):
+        return False, "Solo se pueden anular borradores en edición."
+    draft.estado = EcomPedidoMasivoDraft.ESTADO_ANULADO
+    draft.save(update_fields=["estado", "updated_at"])
+    return True, "Borrador anulado."

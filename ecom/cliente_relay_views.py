@@ -4,6 +4,9 @@ Relays clientes mayoristapp (``relay-clientes.php``).
 
 from __future__ import annotations
 
+from typing import Any, Dict
+
+from django.urls import reverse
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -49,6 +52,8 @@ from ecom.services.mayoristapp_session import (
     leer_idcliente_mayoristapp,
 )
 from ecom.services.mayoristapp_sesion_contexto import asegurar_contexto_mayoristapp
+from ecom.services.precio_relays import lista_precio_relay_json
+from ecom.services.vendedor_operativo import resolver_viajante_operativo
 from core.utils.administranet_types import to_int_or_none
 
 
@@ -60,6 +65,34 @@ def _session_base_empresa(request: Request) -> str | None:
 
 def _session_user(request: Request) -> dict:
     return asegurar_contexto_mayoristapp(request)
+
+
+def _cod_lista_desde_cliente_datos(cliente_datos: Dict[str, Any]) -> int | None:
+    cod = to_int_or_none(cliente_datos.get("codListaPrecio"))
+    if cod is not None:
+        return cod
+    lp = str(cliente_datos.get("listaPrecio") or "").strip().lower().replace("lista", "").strip()
+    return to_int_or_none(lp)
+
+
+def _payload_lista_precio_cliente(base: str, cliente_datos: Dict[str, Any]) -> Dict[str, Any]:
+    """REQ-CAT-006: código, nombre legible y flag solo lectura."""
+    cod = _cod_lista_desde_cliente_datos(cliente_datos)
+    nombre = str(cliente_datos.get("listaPrecio") or "").strip()
+    if cod is not None:
+        for lst in lista_precio_relay_json(base, cod_lista_precio_cliente=cod):
+            if to_int_or_none(lst.get("id")) == cod:
+                nombre = str(lst.get("name") or nombre).strip() or nombre
+                break
+    return {
+        "codigo": cod,
+        "nombre": nombre or (f"Lista {cod}" if cod is not None else ""),
+        "solo_lectura": True,
+    }
+
+
+def _url_pdf_lista_precio(request: Request) -> str:
+    return request.build_absolute_uri(reverse("ecom:mayoristapp_lista_precios_pdf"))
 
 
 class ClienteBuscarRelayAPIView(APIView):
@@ -255,9 +288,7 @@ class ClienteSeleccionarRelayAPIView(APIView):
         sess_user = _session_user(request)
         if not cliente_accesible_por_sesion(base, cod, sess_user):
             return Response({"detail": "Cliente no disponible o sin permiso."}, status=403)
-        cv = to_int_or_none(
-            sess_user.get("id_vendedor_usr") or sess_user.get("CodViajante") or sess_user.get("cod_viajante")
-        )
+        cv = resolver_viajante_operativo(sess_user)
         cliente_datos, autoriza, domicilios, iva_inc = construir_payload_cliente_seleccionado(base, cod, cv)
         if not cliente_datos:
             return Response({"detail": "No se encontró el cliente."}, status=404)
@@ -269,7 +300,16 @@ class ClienteSeleccionarRelayAPIView(APIView):
             domicilios_cliente=domicilios,
             iva_incluido=iva_inc,
         )
-        return Response({"estado": "ok", "idcliente": cod, "ivaIncluido": iva_inc})
+        lista_payload = _payload_lista_precio_cliente(base, cliente_datos)
+        return Response(
+            {
+                "estado": "ok",
+                "idcliente": cod,
+                "ivaIncluido": iva_inc,
+                "listaPrecio": lista_payload,
+                "lista_precio_pdf_url": _url_pdf_lista_precio(request),
+            }
+        )
 
 
 class ClienteDomicilioRelayAPIView(APIView):
@@ -453,11 +493,7 @@ class ClienteRapidoRelayAPIView(APIView):
             if isinstance(resultado, dict):
                 return Response(resultado, status=400)
             cod = resultado
-            cv = to_int_or_none(
-                sess_user.get("id_vendedor_usr")
-                or sess_user.get("CodViajante")
-                or sess_user.get("cod_viajante")
-            )
+            cv = resolver_viajante_operativo(sess_user)
             cliente_datos, autoriza, domicilios, iva_inc = construir_payload_cliente_seleccionado(base, cod, cv)
             if cliente_datos:
                 guardar_cliente_seleccion_mayoristapp(
@@ -489,11 +525,7 @@ class ClienteRapidoRelayAPIView(APIView):
             if isinstance(resultado, dict):
                 return Response(resultado, status=400)
             cod = int(resultado)
-            cv = to_int_or_none(
-                sess_user.get("id_vendedor_usr")
-                or sess_user.get("CodViajante")
-                or sess_user.get("cod_viajante")
-            )
+            cv = resolver_viajante_operativo(sess_user)
             cliente_datos, autoriza, domicilios, iva_inc = construir_payload_cliente_seleccionado(base, cod, cv)
             if cliente_datos:
                 guardar_cliente_seleccion_mayoristapp(

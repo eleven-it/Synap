@@ -80,6 +80,9 @@
     color: rgb(203 213 225);
     background: rgba(30,41,59,0.4);
   }
+  /* @deprecated: único token que conserva acento purple (gradiente sky→indigo→purple).
+     Solo para acciones de hero en listados/presupuestos (pantalla completa); PROHIBIDO
+     como CTA de venta/masivo — usar .pedidos-btn-primary (sky). */
   .pedidos-btn-gradient {
     color: #fff;
     background: linear-gradient(to right, rgb(14 165 233), rgb(99 102 241), rgb(168 85 247));
@@ -344,7 +347,7 @@
   }
 
   /* Toggle grande (variant dark) — protagonista en el hero tipo tablero de producción.
-     PED activo purple-600 (CTA primario), PRE amber, DEV rose. Idle slate-300 + hover slate-700. */
+     PED activo sky-600 (CTA primario), PRE amber, DEV rose. Idle slate-300 + hover slate-700. */
   .compra-toggle-wrap-lg {
     display: flex;
     flex-direction: column;
@@ -394,14 +397,14 @@
   }
   .compra-toggle-btn-lg-idle { background: transparent; color: rgb(203 213 225); }
   .compra-toggle-btn-lg-idle:hover { background: rgb(51 65 85); color: #fff; } /* slate-700 */
-  .compra-toggle-btn-lg-ped-active { background: rgb(147 51 234); color: #fff; } /* purple-600 */
+  .compra-toggle-btn-lg-ped-active { background: rgb(2 132 199); color: #fff; } /* sky-600 */
   .compra-toggle-btn-lg-pre-active { background: rgb(245 158 11); color: rgb(69 26 3); } /* amber-500 */
   .compra-toggle-btn-lg-dev-active { background: rgb(225 29 72); color: #fff; } /* rose-600 */
   /* Estado activo por defecto (PED) antes de la hidratación de Alpine */
-  .compra-toggle-btn-lg[aria-selected="true"] { background: rgb(147 51 234); color: #fff; }
+  .compra-toggle-btn-lg[aria-selected="true"] { background: rgb(2 132 199); color: #fff; }
   .compra-toggle-btn-lg:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgb(30 41 59), 0 0 0 4px rgb(168 85 247); /* purple-500 */
+    box-shadow: 0 0 0 2px rgb(30 41 59), 0 0 0 4px rgb(56 189 248); /* sky-400 */
   }
 
   /* Compra mayorista — modos PED / PRE / DEV (contenido) */
@@ -839,6 +842,15 @@
     background: rgb(12 74 110 / 0.35);
     border-color: rgb(14 165 233 / 0.35);
   }
+  .pedidos-badge-borrador--hero {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: rgb(224 242 254);
+    background: rgb(14 165 233 / 0.25);
+    border-color: rgb(56 189 248 / 0.45);
+  }
 
   .pedidos-badge-stock {
     display: inline-flex;
@@ -855,6 +867,23 @@
     color: rgb(134 239 172);
     background: rgb(20 83 45 / 0.35);
     border-color: rgb(34 197 94 / 0.35);
+  }
+
+  /* Badge lista de precios (solo lectura) — token compartido simple + masivo (REQ-UI-04).
+     Slate/sky; sin purple. El chip "Solo lectura" y el link PDF usan sky. */
+  .pedidos-badge-lista {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding: 0.375rem 0.75rem;
+    border: 1px solid rgb(226 232 240);
+    background: rgb(248 250 252);
+  }
+  .dark .pedidos-badge-lista {
+    border-color: rgb(51 65 85);
+    background: rgb(30 41 59 / 0.6);
   }
 
   .compra-modo-shell.pedidos-order-shell.compra-modo-ped .pedidos-order-summary-panel,
@@ -892,6 +921,503 @@
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
     border-width: 0;
+  }
+
+  /* Matriz pedido masivo: Artículo absorbe el ancho sobrante; qty ~6 dígitos */
+  .pm-context-card {
+    background: linear-gradient(135deg, rgb(240 249 255 / 0.95), rgb(248 250 252 / 0.9));
+  }
+  .dark .pm-context-card {
+    background: linear-gradient(135deg, rgb(15 23 42 / 0.95), rgb(30 41 59 / 0.85));
+  }
+  .pm-matrix-sticky-sky {
+    background: rgb(224 242 254) !important;
+  }
+  .dark .pm-matrix-sticky-sky {
+    background: rgb(12 74 110 / 0.45) !important;
+  }
+  .pm-matrix-suc-tone-0 { background: rgb(224 242 254); }
+  .pm-matrix-suc-tone-1 { background: rgb(241 245 249); }
+  .pm-matrix-suc-tone-2 { background: rgb(236 254 255); }
+  .pm-matrix-suc-tone-3 { background: rgb(248 250 252); }
+  .dark .pm-matrix-suc-tone-0 { background: rgb(12 74 110 / 0.35); }
+  .dark .pm-matrix-suc-tone-1 { background: rgb(30 41 59 / 0.65); }
+  .dark .pm-matrix-suc-tone-2 { background: rgb(8 51 68 / 0.45); }
+  .dark .pm-matrix-suc-tone-3 { background: rgb(15 23 42 / 0.55); }
+  .pm-btn-delete {
+    color: rgb(225 29 72) !important;
+  }
+  .dark .pm-btn-delete {
+    color: rgb(251 113 133) !important;
+  }
+  .pm-preview-panel {
+    border-top: 3px solid rgb(14 165 233);
+  }
+  .dark .pm-preview-panel {
+    border-top-color: rgb(56 189 248);
+  }
+  /*
+   * Pedido masivo vive dentro del shell global: header fijo (4rem), padding
+   * vertical del contenido (4rem) y status bar desktop (2rem). Sin este
+   * descuento la sección supera el viewport y el navegador termina siendo el
+   * scroll container, lo que rompe tanto el pie fijo como los sticky de tabla.
+   */
+  html:has(.pm-matrix-viewport),
+  body:has(.pm-matrix-viewport) {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  /*
+   * Causa raíz del scroll-x en el body: `main.app-content` es un flex item con
+   * `min-width:auto`, así que el ancho de la matriz podía empujar `main` más
+   * ancho que el viewport y el scroll horizontal lo tomaba el body (los sticky
+   * quedaban recortados). Forzamos `min-width:0` SOLO en la rama que contiene la
+   * matriz para habilitar el overflow local de la zona media (scoped, no rompe
+   * otras páginas).
+   */
+  main.app-content:has(.pm-matrix-viewport),
+  main.app-content:has(.pm-matrix-viewport) > div {
+    min-width: 0;
+  }
+  .pm-matrix-viewport {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  @media (min-width: 768px) {
+    .pm-matrix-viewport {
+      height: calc(100dvh - 8rem) !important;
+    }
+  }
+  .pm-matrix-scroll {
+    --pm-left-precio: 20rem;
+    --pm-left-desc: 25.5rem;
+    --pm-col-art-min: 16rem;
+    --pm-col-precio: 5.5rem;
+    --pm-col-pct: 4.25rem;
+    --pm-col-suc: 4.5rem;   /* ~6 dígitos enteros + padding */
+    --pm-col-total: 5.5rem;
+    --pm-col-delete: 2.75rem;    /* columna eliminar (ícono trash) */
+    --pm-right-total: 2.75rem;   /* = ancho columna eliminar; medido en runtime */
+    min-width: 0;
+    max-width: 100%;
+    isolation: isolate;
+    scrollbar-gutter: stable both-edges;
+  }
+  .pm-matrix-table {
+    /* ≥ viewport: Artículo absorbe sobrante; con muchas sucursales crece y hace scroll-x */
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: auto;
+  }
+  /* Importancia 1: descripción — crece con el viewport; no cap rígido */
+  .pm-matrix-col-art {
+    position: sticky;
+    left: 0;
+    z-index: 12;
+    width: auto;
+    min-width: var(--pm-col-art-min);
+    vertical-align: top;
+    overflow: visible;
+  }
+  .pm-art-dropdown {
+    min-width: 16rem;
+    max-width: min(28rem, 70vw);
+  }
+  .pm-matrix-table tbody tr:first-child .pm-matrix-col-art {
+    z-index: 35;
+  }
+  /* Importancia 2: precio — ancho fijo numérico */
+  .pm-matrix-col-precio {
+    position: sticky;
+    left: var(--pm-left-precio);
+    z-index: 12;
+    width: var(--pm-col-precio);
+    min-width: var(--pm-col-precio);
+    max-width: var(--pm-col-precio);
+    white-space: nowrap;
+  }
+  /* Importancia 3: % desc. — más angosto */
+  .pm-matrix-col-desc {
+    position: sticky;
+    left: var(--pm-left-desc);
+    z-index: 12;
+    width: var(--pm-col-pct);
+    min-width: var(--pm-col-pct);
+    max-width: var(--pm-col-pct);
+    box-shadow: 4px 0 8px -4px rgba(15, 23, 42, 0.18);
+  }
+  .pm-matrix-col-art.pm-matrix-th,
+  .pm-matrix-col-precio.pm-matrix-th,
+  .pm-matrix-col-desc.pm-matrix-th {
+    top: 0;
+    z-index: 32;
+  }
+  .pm-matrix-col-art .pm-art-nombre {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  .pm-matrix-col-art .pm-art-buscar {
+    width: 100%;
+    max-width: 100%;
+  }
+  /* Cantidad por sucursal: fijo ~6 dígitos; el sobrante va a Artículo */
+  .pm-matrix-col-suc {
+    width: var(--pm-col-suc);
+    min-width: var(--pm-col-suc);
+    max-width: var(--pm-col-suc);
+    box-sizing: border-box;
+  }
+  .pm-matrix-col-suc.pm-matrix-th {
+    top: 0;
+    z-index: 20;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+    line-height: 1.15;
+    font-size: 10px;
+    font-weight: 600;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
+  .pm-matrix-col-suc .pm-qty-input,
+  .pm-matrix-col-suc .pm-qty-placeholder {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  /* Bloque derecho sticky: Total (junto a sucursales) + Eliminar (borde derecho). */
+  .pm-matrix-col-total {
+    position: sticky;
+    right: var(--pm-right-total);
+    z-index: 12;
+    width: var(--pm-col-total);
+    min-width: var(--pm-col-total);
+    max-width: var(--pm-col-total);
+    white-space: nowrap;
+    background-clip: padding-box;
+    /* Sombra a la izquierda del bloque derecho: separa de las sucursales al scrollear. */
+    box-shadow: -4px 0 8px -4px rgba(15, 23, 42, 0.18);
+  }
+  .pm-matrix-col-total.pm-matrix-th {
+    top: 0;
+    z-index: 22;
+  }
+  .pm-matrix-col-delete {
+    position: sticky;
+    right: 0;
+    z-index: 12;
+    width: var(--pm-col-delete);
+    min-width: var(--pm-col-delete);
+    max-width: var(--pm-col-delete);
+    text-align: center;
+    box-sizing: border-box;
+    background-clip: padding-box;
+  }
+  .pm-matrix-col-delete.pm-matrix-th {
+    top: 0;
+    z-index: 22;
+  }
+
+  /* ── Matriz masivo: shell de 3 zonas (desktop lg+) — robusto, sin sticky en <td> ──
+   * Zona izquierda (Artículo|Precio|%Desc) y derecha (Total|Eliminar) FIJAS; zona
+   * media con scroll-x solo en sucursales. Las 3 tablas se alinean por índice de
+   * fila con alto fijo (--pm-row-h). El scroll-y vive en la zona media y se espeja
+   * (JS) a izquierda/derecha para mantener las filas alineadas. */
+  .pm-matrix-shell {
+    --pm-row-h: 3.25rem;
+    --pm-head-h: 3rem;
+    --pm-col-art: 15rem;
+    --pm-col-precio: 5rem;
+    --pm-col-desc: 4.25rem;
+    --pm-col-suc: 4.5rem;
+    --pm-col-total: 5.5rem;
+    --pm-col-delete: 2.75rem;
+    display: flex;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 0;
+    isolation: isolate;
+  }
+  .pm-zone {
+    min-height: 0;
+    position: relative;
+  }
+  .pm-zone-left,
+  .pm-zone-right {
+    flex: 0 0 auto;
+    overflow: hidden;
+  }
+  .pm-zone-left { box-shadow: 4px 0 8px -4px rgba(15, 23, 42, 0.18); z-index: 1; }
+  .pm-zone-right { box-shadow: -4px 0 8px -4px rgba(15, 23, 42, 0.18); z-index: 1; }
+  /* Con el buscador abierto, la zona izq. deja ver el dropdown hacia arriba. */
+  .pm-matrix-shell--buscador-abierto .pm-zone-left {
+    overflow: visible;
+    z-index: 5;
+  }
+  .pm-zrow-buscador td {
+    background: rgb(248 250 252) !important;
+  }
+  .dark .pm-zrow-buscador td {
+    background: rgb(15 23 42 / 0.85) !important;
+  }
+  .pm-zrow-buscador .pm-c-art {
+    overflow: visible;
+  }
+  .pm-zone-mid {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .pm-ztable {
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    font-size: 0.875rem;
+  }
+  .pm-ztable-left { width: calc(var(--pm-col-art) + var(--pm-col-precio) + var(--pm-col-desc)); }
+  .pm-ztable-right { width: calc(var(--pm-col-total) + var(--pm-col-delete)); }
+  .pm-ztable-mid { width: max-content; min-width: 100%; }
+  .pm-zhead {
+    height: var(--pm-head-h);
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    border-bottom: 1px solid rgb(226 232 240);
+    padding: 0.25rem 0.5rem;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: rgb(71 85 105);
+    box-sizing: border-box;
+  }
+  .dark .pm-zhead { border-color: rgb(51 65 85); color: rgb(203 213 225); }
+  .pm-zone-left .pm-zhead,
+  .pm-zone-right .pm-zhead { background: rgb(248 250 252); }
+  .dark .pm-zone-left .pm-zhead,
+  .dark .pm-zone-right .pm-zhead { background: rgb(30 41 59); }
+  .pm-zhead-suc {
+    text-align: center;
+    line-height: 1.15;
+  }
+  .pm-ztable td {
+    height: var(--pm-row-h);
+    box-sizing: border-box;
+    border-bottom: 1px solid rgb(241 245 249);
+    padding: 0.25rem 0.5rem;
+    vertical-align: middle;
+    background: #fff;
+  }
+  .dark .pm-ztable td { border-color: rgb(30 41 59); background: rgb(15 23 42); }
+  .pm-ztable tbody tr:hover td { background: rgb(248 250 252); }
+  .dark .pm-ztable tbody tr:hover td { background: rgb(30 41 59 / 0.6); }
+  .pm-c-art { width: var(--pm-col-art); vertical-align: top; }
+  .pm-c-precio { width: var(--pm-col-precio); text-align: right; white-space: nowrap; }
+  .pm-c-desc { width: var(--pm-col-desc); }
+  .pm-c-suc { width: var(--pm-col-suc); padding-left: 0.125rem; padding-right: 0.125rem; }
+  .pm-c-total { width: var(--pm-col-total); text-align: right; white-space: nowrap; }
+  .pm-c-delete { width: var(--pm-col-delete); text-align: center; }
+  .pm-cell-art {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+    overflow: hidden;
+  }
+  .pm-cell-art .pm-art-nombre {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  .pm-c-suc .pm-qty-input {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Selector vendedor inline — barra contexto pedido masivo (REQ-MAS-12) */
+  .pedidos-vendedor-operativo--inline > div:first-child[x-show] {
+    margin-bottom: 0;
+  }
+  .pedidos-vendedor-operativo--inline .mt-2 {
+    margin-top: 0;
+  }
+  .pedidos-vendedor-operativo--inline .rounded-xl.border {
+    border: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  /* Inputs densos matriz masivo (REQ-MAS-16) */
+  .pm-input-dense {
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    min-height: 2rem;
+  }
+  .pm-input-dense:focus-visible {
+    outline: none;
+    border-color: rgb(14 165 233);
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(14 165 233);
+  }
+  .dark .pm-input-dense:focus-visible {
+    border-color: rgb(56 189 248);
+    box-shadow: 0 0 0 2px rgb(15 23 42), 0 0 0 4px rgb(56 189 248);
+  }
+
+  /* Contexto comercial denso: label + campo en la misma línea (horizontal) */
+  .pm-field-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .pm-label-inline {
+    flex-shrink: 0;
+    min-width: 5.5rem;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: rgb(71 85 105); /* slate-600 */
+    white-space: nowrap;
+  }
+  .dark .pm-label-inline { color: rgb(203 213 225); } /* slate-300 */
+
+  /* Input date nativo denso: mismo alto que el resto y calendario alineado */
+  .pm-input-date {
+    line-height: 1.1;
+  }
+  .pm-input-date::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.6;
+    padding: 0;
+    margin-left: 0.125rem;
+  }
+  .pm-input-date::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+  .dark .pm-input-date::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    opacity: 0.7;
+  }
+  .pm-input-date:disabled {
+    cursor: not-allowed;
+  }
+
+  /* Toggle expandir/compactar contexto */
+  .pm-context-toggle {
+    transition: background-color 0.15s;
+  }
+  .pm-context-summary span.font-semibold { color: rgb(30 41 59); }
+  .dark .pm-context-summary span.font-semibold { color: rgb(226 232 240); }
+
+  /* ── Selector vendedor operativo: variante hero (encabezado oscuro, 1 fila) ── */
+  .pm-hero-actions .pedidos-vendedor-operativo--hero {
+    display: flex;
+    align-items: center;
+  }
+  .pm-hero-actions .pedidos-vendedor-operativo--hero .pedidos-vendedor-banner {
+    display: none; /* En barra hero compacta: solo el select */
+  }
+  .pm-hero-actions .pedidos-vendedor-operativo--hero .pedidos-vendedor-field {
+    margin-top: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .pedidos-vendedor-operativo--hero .pedidos-vendedor-field {
+    margin-top: 0;
+  }
+  .pedidos-vendedor-operativo--hero .pedidos-vendedor-field-inner {
+    width: 12.5rem;
+    min-width: 0;
+    flex: none;
+  }
+  /* Solo el select en la barra; el label visible se oculta (queda accesible). */
+  .pm-hero-actions .pedidos-vendedor-operativo--hero .pedidos-vendedor-label,
+  .pm-hero-actions .pedidos-vendedor-operativo--hero .pedidos-filter-label {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border-width: 0 !important;
+  }
+  .pedidos-vendedor-operativo--hero .pedidos-vendedor-label {
+    margin-bottom: 0.25rem;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgb(148 163 184); /* slate-400 */
+  }
+  .pedidos-vendedor-operativo--hero .pedidos-vendedor-select {
+    margin-top: 0;
+    min-height: 2rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 0.5rem;
+    border-color: rgb(71 85 105); /* slate-600 */
+    background: rgb(15 23 42); /* slate-900 */
+    color: rgb(241 245 249);
+  }
+  .pedidos-vendedor-operativo--hero .pedidos-vendedor-select:focus {
+    border-color: rgb(56 189 248);
+    box-shadow: 0 0 0 3px rgb(56 189 248 / 0.3);
+  }
+  .pedidos-vendedor-operativo--hero .pedidos-vendedor-banner {
+    margin-bottom: 0.5rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 0.5rem;
+    border-color: rgb(56 189 248 / 0.4);
+    background: rgb(14 165 233 / 0.15);
+  }
+  .pedidos-vendedor-operativo--hero .pedidos-vendedor-banner-text {
+    font-size: 11px;
+    color: rgb(224 242 254); /* sky-100 */
+  }
+
+  /* Acordeón móvil por sucursal (REQ-MAS-18) */
+  .pm-accordion-item > summary::-webkit-details-marker {
+    display: none;
+  }
+  .pm-accordion-summary::after {
+    content: '';
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-left: 0.5rem;
+    border-right: 2px solid rgb(100 116 139);
+    border-bottom: 2px solid rgb(100 116 139);
+    transform: rotate(45deg);
+    transition: transform 0.15s;
+    flex-shrink: 0;
+  }
+  .pm-accordion-item[open] > .pm-accordion-summary::after {
+    transform: rotate(-135deg);
+  }
+  .pm-accordion-row:last-child {
+    border-bottom: none;
+  }
+
+  /* Preview/totales responsive (REQ-MAS-19) */
+  @media (max-width: 1023px) {
+    .pm-preview-panel {
+      margin-bottom: 0.5rem;
+    }
+    .pm-preview-totals {
+      width: 100%;
+    }
   }
 
   /* Modales del canon OrderShell */

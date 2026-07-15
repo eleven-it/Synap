@@ -24,7 +24,11 @@
   }
 
   function detalleUrl(codMov) {
-    return (pageUrls.detalle_tpl || "").replace(/\/0\/?$/, "/" + codMov + "/");
+    var tpl = pageUrls.detalle_tpl || "";
+    if (tpl.indexOf("cod_mov=") >= 0) {
+      return tpl.replace(/cod_mov=\d+/, "cod_mov=" + codMov);
+    }
+    return tpl.replace(/\/0\/?$/, "/" + codMov + "/");
   }
 
   function pdfUrl(codMov) {

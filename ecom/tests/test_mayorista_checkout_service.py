@@ -15,6 +15,7 @@ from django.test import TestCase
 from ecom.models import EcomCart, EcomCartItem
 from ecom.services import mayorista_checkout_service as checkout_svc
 from ecom.services.mayorista_checkout_service import CheckoutInput
+from ecom.services.pedido_cabecera_comercial import PedidoCabeceraComercial
 
 
 class FakeCursor:
@@ -36,6 +37,15 @@ class FakeCursor:
             self._last = self.state.get("talonario", {"Nro": 57, "PV": 3})
         elif "from usuarios" in low:
             self._last = {"agente_percep": self.state.get("agente_percep", "No")}
+        elif "from cotizacion" in low:
+            self._last = self.state.get(
+                "cotizacion",
+                {"ValorPesos": Decimal("1200"), "id_cotizacion": 1},
+            )
+        elif "from stock_deposito" in low and "saldo_pedido_cliente" in low:
+            self._last = {
+                "saldo": self.state.get("saldo_pedido_cliente", Decimal("2")),
+            }
         elif "from percep_cli_param" in low:
             self._last_all = list(self.state.get("percep_param", []))
         elif "from percep_cli_tipo" in low:
@@ -50,6 +60,7 @@ class FakeCursor:
             if self.state.get("raise_on_stockp"):
                 raise RuntimeError("fallo simulado en stockp")
             self.state["stockp_count"] = self.state.get("stockp_count", 0) + 1
+            self.state.setdefault("stockp_params", []).append(params)
         elif "insert into comp_ped" in low:
             self.state["comp_ped_count"] = self.state.get("comp_ped_count", 0) + 1
             self.state["comp_ped_params"] = params
@@ -114,19 +125,64 @@ class CheckoutTestBase(TestCase):
             "credito_limite_dias": credito_limite_dias, "descRenglon": 0,
         }
 
-    def _patch_all(self, conn, cli=None, alic="21"):
+    def _cabecera(self, lista_id=2):
+        fp = date(2026, 7, 5)
+        return PedidoCabeceraComercial(
+            fecha_pedido=fp,
+            fecha_entrega=fp + timedelta(days=2),
+            vencimiento=fp + timedelta(days=15),
+            id_condventa=3,
+            cond_venta="CTA CTE",
+            lista_id=lista_id,
+        )
+
+    def _articulo_extras(self):
+        return {
+            1: {
+                "IDArt": 1,
+                "PrecioCosto": 50,
+                "CodLaboratorio": 2,
+                "tipo_art": "N",
+                "Alicuota": 1,
+                "AlicuotaIB": 2,
+                "iibb_pct": Decimal("3.50"),
+            },
+            2: {
+                "IDArt": 2,
+                "PrecioCosto": 30,
+                "CodLaboratorio": 2,
+                "tipo_art": "N",
+                "Alicuota": 1,
+                "AlicuotaIB": 2,
+                "iibb_pct": Decimal("3.50"),
+            },
+        }
+
+    def _patch_all(self, conn, cli=None, alic="21", cabecera=None):
         row = {"alic_iva": alic, "impuesto_interno": "0"}
+        cab = cabecera or self._cabecera()
         return [
             patch.object(checkout_svc, "get_connection", _make_get_connection(conn)),
             patch.object(checkout_svc, "_fetch_cliente", return_value=cli or self._cli()),
             patch.object(
                 checkout_svc, "_fetch_articulo_extras",
-                return_value={1: {"IDArt": 1, "PrecioCosto": 50, "CodLaboratorio": 2, "tipo_art": "N"},
-                              2: {"IDArt": 2, "PrecioCosto": 30, "CodLaboratorio": 2, "tipo_art": "N"}},
+                return_value=self._articulo_extras(),
             ),
             patch.object(checkout_svc, "resolver_precio_articulo",
                          side_effect=lambda base, idart, **kw: (Decimal("100"), row)),
+            patch.object(
+                checkout_svc,
+                "resolver_cabecera_comercial",
+                return_value=(cab, None),
+            ),
+            patch.object(checkout_svc, "pedidos_validan_stock", return_value=True),
         ]
+
+    @contextmanager
+    def _with_patches(self, conn, **kwargs):
+        patches = self._patch_all(conn, **kwargs)
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
+            yield
 
 
 class TestCheckoutPedido(CheckoutTestBase):
@@ -134,7 +190,7 @@ class TestCheckoutPedido(CheckoutTestBase):
         state = {"codmov": 1000, "talonario": {"Nro": 57, "PV": 3}}
         conn = FakeConn(state)
         cart = self._cart(tipo="PED")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, result = checkout_svc.confirmar(cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5)
         self.assertTrue(ok, err)
         self.assertIsNone(err)
@@ -149,10 +205,75 @@ class TestCheckoutPedido(CheckoutTestBase):
         # total: neto 200 + iva 42 = 242
         self.assertEqual(cart.total, Decimal("242.00"))
 
+    def test_persiste_cabecera_en_comp_ped(self):
+        state = {"codmov": 1000, "talonario": {"Nro": 57, "PV": 3}}
+        conn = FakeConn(state)
+        cart = self._cart(tipo="PED")
+        cab = self._cabecera(lista_id=4)
+        with self._with_patches(conn, cabecera=cab):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(
+                    tipo="PED",
+                    id_punto_venta=3,
+                    fecha_pedido=cab.fecha_pedido,
+                    lista_id=4,
+                ),
+                id_usuario=5,
+            )
+        self.assertTrue(ok, err)
+        params = state.get("comp_ped_params") or {}
+        self.assertEqual(params.get("Fecha"), cab.fecha_pedido)
+        self.assertEqual(params.get("Vencimiento"), cab.vencimiento)
+        self.assertEqual(params.get("FechaEntrega"), cab.fecha_entrega)
+        self.assertEqual(params.get("id_condventa"), cab.id_condventa)
+        cart.refresh_from_db()
+        self.assertEqual(cart.lista_id, 4)
+
+    def test_paridad_comp_ped_y_stockp(self):
+        """Paridad AdministraNET: totales cabecera, alícuotas id/% y saldo en renglón."""
+        state = {
+            "codmov": 1000,
+            "talonario": {"Nro": 24, "PV": 1},
+            "cotizacion": {"ValorPesos": Decimal("1180.50"), "id_cotizacion": 1},
+            "saldo_pedido_cliente": Decimal("5"),
+        }
+        conn = FakeConn(state)
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart, CheckoutInput(tipo="PED", id_punto_venta=1), id_usuario=5
+            )
+        self.assertTrue(ok, err)
+        comp = state.get("comp_ped_params") or {}
+        # neto 200 + iva 42 = 242 (ImporteVenta bruto con IVA)
+        self.assertEqual(comp.get("ImporteVenta"), Decimal("242.00"))
+        self.assertEqual(comp.get("SubTotalDesc"), Decimal("200.00"))
+        self.assertEqual(comp.get("CotiDolar"), Decimal("1180.50"))
+        self.assertTrue(comp.get("ImporteVentaL"))
+        self.assertIn("PESOS", comp.get("ImporteVentaL", ""))
+        self.assertEqual(comp.get("cod_mov_ped_orginal"), 1001)
+        self.assertEqual(comp.get("Nro_Comp_PED_orginal"), "0001-00000024")
+        self.assertRegex(comp.get("fecha_control", ""), r"^\d{2}/\d{2}/\d{4} \d{2}:\d{2}:\d{2}$")
+
+        stockp = (state.get("stockp_params") or [])[0]
+        self.assertEqual(stockp.get("Alicuota"), 1)
+        self.assertEqual(stockp.get("imp_alicuota_iva"), Decimal("21"))
+        self.assertEqual(stockp.get("AlicuotaIB"), 2)
+        self.assertEqual(stockp.get("imp_alicuota_iibb"), Decimal("3.50"))
+        self.assertEqual(stockp.get("saldo"), Decimal("5"))
+        self.assertEqual(stockp.get("coti_dolar"), Decimal("1180.50"))
+        self.assertEqual(stockp.get("id_cotizacion"), 1)
+        self.assertEqual(stockp.get("cantidad_pendiente_opt"), Decimal("2"))
+        self.assertEqual(stockp.get("cantidad_fab_pendiente_opt"), Decimal("2"))
+        self.assertEqual(stockp.get("promocion"), "No")
+        self.assertEqual(stockp.get("promocion_tipo"), "")
+        self.assertEqual(stockp.get("promocion_cant"), 0)
+
     def test_actualiza_stock_deposito_en_pedido(self):
         conn = FakeConn({"codmov": 1000})
         cart = self._cart(tipo="PED")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             checkout_svc.confirmar(cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5)
         sqls = " ".join(s.lower() for s, _ in conn.cur.executed)
         self.assertIn("update stock_deposito", sqls)
@@ -161,7 +282,7 @@ class TestCheckoutPedido(CheckoutTestBase):
     def test_stock_insuficiente_rollback(self):
         conn = FakeConn({"codmov": 1000, "stock_rowcount": 0})
         cart = self._cart(tipo="PED")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, result = checkout_svc.confirmar(cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5)
         self.assertFalse(ok)
         self.assertIn("Stock insuficiente", err)
@@ -172,7 +293,7 @@ class TestCheckoutPedido(CheckoutTestBase):
     def test_rollback_ante_fallo_en_renglon(self):
         conn = FakeConn({"codmov": 1000, "raise_on_stockp": True})
         cart = self._cart(tipo="PED")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, result = checkout_svc.confirmar(cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5)
         self.assertFalse(ok)
         self.assertTrue(conn.rolled_back)
@@ -185,7 +306,7 @@ class TestCheckoutPresupuesto(CheckoutTestBase):
     def test_alta_presupuesto_no_toca_stock(self):
         conn = FakeConn({"codmov": 2000, "talonario": {"Nro": 10, "PV": 1}})
         cart = self._cart(tipo="PRE")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, result = checkout_svc.confirmar(cart, CheckoutInput(tipo="PRE", id_punto_venta=1), id_usuario=5)
         self.assertTrue(ok, err)
         self.assertEqual(result["codigo_movimiento"], 2001)
@@ -198,7 +319,7 @@ class TestCheckoutDevolucion(CheckoutTestBase):
     def test_alta_devolucion_ok(self):
         conn = FakeConn({"codmov": 3000, "talonario": {"Nro": 20, "PV": 2}})
         cart = self._cart(tipo="DEV")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, result = checkout_svc.confirmar(cart, CheckoutInput(tipo="DEV", id_punto_venta=2), id_usuario=5)
         self.assertTrue(ok, err)
         self.assertEqual(result["codigo_movimiento"], 3001)
@@ -212,7 +333,7 @@ class TestCheckoutDevolucion(CheckoutTestBase):
         # stock_rowcount 0 (no habría disponible): DEV NO valida → igual confirma.
         conn = FakeConn({"codmov": 3000, "stock_rowcount": 0})
         cart = self._cart(tipo="DEV")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, result = checkout_svc.confirmar(cart, CheckoutInput(tipo="DEV", id_punto_venta=2), id_usuario=5)
         self.assertTrue(ok, err)
         sqls = [" ".join(s.split()).lower() for s, _ in conn.cur.executed]
@@ -259,10 +380,7 @@ class TestCheckoutAutorizacion(CheckoutTestBase):
     def test_cliente_al_dia_autorizado(self):
         conn = FakeConn({"codmov": 1000, "ultimaf": None})
         cart = self._cart(tipo="PED")
-        with self._patch_all(conn, cli=self._cli(credito_limite_dias=30))[0], \
-             self._patch_all(conn, cli=self._cli(credito_limite_dias=30))[1], \
-             self._patch_all(conn, cli=self._cli(credito_limite_dias=30))[2], \
-             self._patch_all(conn, cli=self._cli(credito_limite_dias=30))[3]:
+        with self._with_patches(conn, cli=self._cli(credito_limite_dias=30)):
             ok, err, result = checkout_svc.confirmar(cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5)
         self.assertTrue(ok, err)
         self.assertEqual(result["autorizacion"], "Autorizado")
@@ -271,10 +389,7 @@ class TestCheckoutAutorizacion(CheckoutTestBase):
         vieja = date.today() - timedelta(days=45)
         conn = FakeConn({"codmov": 1000, "ultimaf": vieja})
         cart = self._cart(tipo="PED")
-        with self._patch_all(conn, cli=self._cli(credito_limite_dias=30))[0], \
-             self._patch_all(conn, cli=self._cli(credito_limite_dias=30))[1], \
-             self._patch_all(conn, cli=self._cli(credito_limite_dias=30))[2], \
-             self._patch_all(conn, cli=self._cli(credito_limite_dias=30))[3]:
+        with self._with_patches(conn, cli=self._cli(credito_limite_dias=30)):
             ok, err, result = checkout_svc.confirmar(cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5)
         self.assertTrue(ok, err)
         self.assertEqual(result["autorizacion"], "No Autorizado")
@@ -282,7 +397,7 @@ class TestCheckoutAutorizacion(CheckoutTestBase):
     def test_alta_por_cliente_no_autorizado(self):
         conn = FakeConn({"codmov": 1000, "ultimaf": None})
         cart = self._cart(tipo="PED")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, result = checkout_svc.confirmar(
                 cart, CheckoutInput(tipo="PED", id_punto_venta=3, es_cliente=True), id_usuario=5
             )
@@ -297,7 +412,7 @@ class TestCheckoutPercepcionesIIBB(CheckoutTestBase):
         state = {"codmov": 1000, "agente_percep": "No"}
         conn = FakeConn(state)
         cart = self._cart(tipo="PED")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, _ = checkout_svc.confirmar(cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5)
         self.assertTrue(ok, err)
         self.assertIsNone(state.get("percep_count"))
@@ -315,13 +430,14 @@ class TestCheckoutPercepcionesIIBB(CheckoutTestBase):
         }
         conn = FakeConn(state)
         cart = self._cart(tipo="PED")  # neto 2*100 = 200
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, _ = checkout_svc.confirmar(cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5)
         self.assertTrue(ok, err)
         self.assertTrue(conn.committed)
         self.assertEqual(state.get("percep_count"), 1)
-        # base 200 * 3% = 6
+        # base 200 * 3% = 6; ImporteVenta = 242 + 6 = 248
         self.assertEqual(state["comp_ped_params"]["total_percep"], Decimal("6.00"))
+        self.assertEqual(state["comp_ped_params"]["ImporteVenta"], Decimal("248.00"))
         row = state["percep_rows"][0]
         self.assertEqual(row["importe_percep_cli"], Decimal("6.00"))
         self.assertEqual(row["alicuota_percep_cli"], Decimal("3"))
@@ -339,7 +455,7 @@ class TestCheckoutPercepcionesIIBB(CheckoutTestBase):
         conn = FakeConn(state)
         cart = self._cart(tipo="PRE")
         # ...pero la sesión fuerza 'Si' (override)
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, _ = checkout_svc.confirmar(
                 cart, CheckoutInput(tipo="PRE", id_punto_venta=3, agente_percep="Si"), id_usuario=5
             )
@@ -351,7 +467,7 @@ class TestCheckoutPercepcionesIIBB(CheckoutTestBase):
         state = {"codmov": 1000, "agente_percep": "Si", "percep_param": []}
         conn = FakeConn(state)
         cart = self._cart(tipo="PED")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, result = checkout_svc.confirmar(cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5)
         self.assertFalse(ok)
         self.assertIn("percepciones", err.lower())
@@ -365,7 +481,7 @@ class TestCheckoutPercepcionesIIBB(CheckoutTestBase):
                  "percep_tipos": {7: {"id_percep_cli_tipo": 7, "alicuota_percep_cli_tipo": "3"}}}
         conn = FakeConn(state)
         cart = self._cart(tipo="DEV")
-        with self._patch_all(conn)[0], self._patch_all(conn)[1], self._patch_all(conn)[2], self._patch_all(conn)[3]:
+        with self._with_patches(conn):
             ok, err, _ = checkout_svc.confirmar(cart, CheckoutInput(tipo="DEV", id_punto_venta=3), id_usuario=5)
         self.assertTrue(ok, err)
         self.assertIsNone(state.get("percep_count"))

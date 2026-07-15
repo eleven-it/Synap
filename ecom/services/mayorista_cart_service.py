@@ -52,6 +52,7 @@ def obtener_o_crear_carrito(
     id_deposito: int = 1,
     iva_incluido: bool = True,
     tipo_comprobante: str = EcomCart.TIPO_PEDIDO,
+    desc_pie_cliente: Optional[Any] = None,
 ) -> EcomCart:
     """
     Devuelve el carrito borrador del vendedor (uno por base_empresa+id_usuario), creándolo si
@@ -79,15 +80,20 @@ def obtener_o_crear_carrito(
             tipo_comprobante=tipo_comprobante or EcomCart.TIPO_PEDIDO,
         )
 
+    prev_idcliente = cart.idcliente
     cliente_cambio = (
         idcliente is not None
-        and cart.idcliente is not None
-        and int(cart.idcliente) != int(idcliente)
+        and prev_idcliente is not None
+        and int(prev_idcliente) != int(idcliente)
     )
+    primera_seleccion = prev_idcliente is None and idcliente is not None
     if cliente_cambio:
         cart.items.all().delete()
     if idcliente is not None:
         cart.idcliente = idcliente
+
+    if (cliente_cambio or primera_seleccion) and desc_pie_cliente is not None:
+        cart.descuento_pie_pct = _dec(desc_pie_cliente)
 
     cart.lista_id = lista_id
     cart.id_deposito = id_deposito
@@ -96,7 +102,7 @@ def obtener_o_crear_carrito(
         cart.tipo_comprobante = tipo_comprobante
     cart.save()
 
-    if cliente_cambio:
+    if cliente_cambio or primera_seleccion:
         recalcular_totales(cart)
     return cart
 
@@ -132,10 +138,14 @@ def agregar_item(
     descuento_cliente: Any = Decimal("0"),
     tipo_unidad: str = "Unidad",
     multiplicador: Any = None,
+    validar_stock: bool = True,
+    cod_viajante: Optional[int] = None,
+    id_cliente_domicilio: Optional[int] = None,
 ) -> Tuple[Optional[EcomCartItem], Optional[str]]:
     """
     Agrega (o consolida) un artículo al carrito. Precio del renglón vía motor; valida stock
-    disponible con la cantidad total del artículo. Devuelve (item, error).
+    disponible con la cantidad total del artículo (salvo ``validar_stock=False``).
+    Devuelve (item, error).
     """
     from ecom.services.presentacion_articulo import cantidad_base_desde_ui
 
@@ -154,9 +164,10 @@ def agregar_item(
     cant_actual = existing.cantidad if existing else Decimal("0")
     cant_total = cant_actual + cant_base
 
-    ok, err = _validar_stock(cart, id_articulo, cant_total)
-    if not ok:
-        return None, err
+    if validar_stock:
+        ok, err = _validar_stock(cart, id_articulo, cant_total)
+        if not ok:
+            return None, err
 
     res = resolver_precio_articulo(
         cart.base_empresa,
@@ -170,6 +181,35 @@ def agregar_item(
         return None, "Artículo no encontrado o inactivo."
     precio_neto, row = res
 
+    from ecom.services.pedido_masivo_matriz import marcas_asignadas_viajante_cliente
+    from ecom.services.vendedor_asignacion_sql import vcm_ternas_disponible
+
+    if (
+        vcm_ternas_disponible(cart.base_empresa)
+        and cart.idcliente
+        and cod_viajante is not None
+    ):
+        cod_marca = to_int_or_none(row.get("CodigoMarca"))
+        marcas = marcas_asignadas_viajante_cliente(
+            cart.base_empresa,
+            cod_viajante,
+            cart.idcliente,
+            id_cliente_domicilio,
+        )
+        if marcas and cod_marca is not None and cod_marca not in marcas:
+            logger.info(
+                "agregar_item VCM rechazado: viajante=%s cliente=%s dom=%s marca=%s",
+                cod_viajante,
+                cart.idcliente,
+                id_cliente_domicilio,
+                cod_marca,
+            )
+            return (
+                None,
+                "La marca del artículo no está asignada a tu territorio para este cliente"
+                + (" y sucursal." if id_cliente_domicilio else "."),
+            )
+
     if existing is not None:
         existing.cantidad = cant_total
         existing.precio_unitario_neto = _dec(precio_neto)
@@ -180,6 +220,11 @@ def agregar_item(
         item = existing
     else:
         orden = (cart.items.count() or 0) + 1
+        pct_renglon = _dec(descuento_cliente)
+        if pct_renglon < 0:
+            pct_renglon = Decimal("0")
+        elif pct_renglon > 100:
+            pct_renglon = Decimal("100")
         item = EcomCartItem(
             cart=cart,
             id_articulo=id_articulo,
@@ -189,6 +234,7 @@ def agregar_item(
             orden=orden,
             tipo_unidad=_s(tipo_unidad, "Unidad"),
             cantidad_dividir=mult,
+            porcentaje_descuento=pct_renglon,
         )
         _aplicar_datos_articulo(item, row)
         item.save()
@@ -253,6 +299,40 @@ def actualizar_tipo_comprobante(cart: EcomCart, tipo: str) -> Tuple[bool, Option
         return False, "El carrito ya fue confirmado."
     cart.tipo_comprobante = tipo_norm
     cart.save(update_fields=["tipo_comprobante", "updated_at"])
+    return True, None
+
+
+def actualizar_lista_precio(
+    cart: EcomCart,
+    lista_id: int,
+    *,
+    descuento_cliente: Decimal = Decimal("0"),
+) -> Tuple[bool, Optional[str]]:
+    """Fija lista del carrito y repricing de todos los renglones (autoridad motor)."""
+    if cart.estado == EcomCart.ESTADO_CONFIRMADO:
+        return False, "El carrito ya fue confirmado."
+    lid = to_int_or_none(lista_id)
+    if lid is None or lid < 1 or lid > 5:
+        return False, "Lista de precios no válida."
+    cart.lista_id = int(lid)
+    cart.save(update_fields=["lista_id", "updated_at"])
+    for it in cart.items.all():
+        res = resolver_precio_articulo(
+            cart.base_empresa,
+            it.id_articulo,
+            lista_id=cart.lista_id,
+            codigo_cliente=cart.idcliente,
+            descuento_cliente=descuento_cliente,
+            iva_incluido=cart.iva_incluido,
+        )
+        if res is None:
+            return False, f"No se pudo calcular el precio del artículo {it.id_articulo}."
+        precio, row = res
+        it.precio_unitario_neto = _dec(precio)
+        it.alicuota_iva = _dec(row.get("alic_iva"), "21")
+        it.impuesto_interno_pct = _dec(row.get("impuesto_interno"), "0")
+        it.save(update_fields=["precio_unitario_neto", "alicuota_iva", "impuesto_interno_pct"])
+    recalcular_totales(cart)
     return True, None
 
 
@@ -417,6 +497,10 @@ def serializar_carrito(cart: EcomCart) -> Dict[str, Any]:
 
 def _validar_stock(cart: EcomCart, id_articulo: int, cantidad_total: Decimal) -> Tuple[bool, Optional[str]]:
     if cart.tipo_comprobante == EcomCart.TIPO_DEVOLUCION:
+        return True, None
+    from ecom.services.ecom_config_mysql import pedidos_validan_stock
+
+    if not pedidos_validan_stock(cart.base_empresa):
         return True, None
     stock = StockService(cart.base_empresa)
     ok, err = stock.validar_disponible_items(

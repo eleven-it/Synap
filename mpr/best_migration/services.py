@@ -9,20 +9,31 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from mpr.best_migration.article_matcher import match_open_order_skus
+from mpr.best_migration.article_matcher import match_admin_fabricados_to_best, match_open_order_skus
 from mpr.best_migration.client_matcher import match_clients
 from mpr.best_migration.connection import connect_best, fetch_dict
 from mpr.best_migration.dictionary import DICT_VERSION
 from mpr.best_migration.domains import DOMAINS, domains_required_for_orders
 from mpr.best_migration.deposit_matcher import BEST_DEPOSITO_TIPO_MPR, match_depositos, norm_text
+from mpr.best_migration.operario_matcher import (
+    FALLBACK_CODIGOS_TEJEDOR,
+    match_operarios,
+    normalizar_codigo_tejedor,
+)
 from mpr.best_migration.models import (
     BestArticuloMap,
     BestClienteMap,
     BestDepositoMap,
     BestMigrationParity,
+    BestOperarioMap,
     BestStockInicialMap,
 )
-from mpr.services import actualizar_deposito_tipo_mpr, listar_depositos_config
+from mpr.services import (
+    actualizar_deposito_tipo_mpr,
+    listar_depositos_config,
+    listar_empleados_operarios,
+    listar_operarios_crud,
+)
 from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 from mpr.db import mysql_cursor
 
@@ -61,6 +72,14 @@ _FLAGS_ALCANCE_HISTORICO_CLI = {
     "en_snapshot_abierto": False,
     "origen_requerimiento": BestClienteMap.OrigenRequerimiento.HISTORICO,
 }
+
+_FLAGS_ALCANCE_BOM_FABRICADO = {
+    "requerido_migracion": False,
+    "en_snapshot_abierto": False,
+    "origen_requerimiento": BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+}
+
+_BEST_DEPOSITO_SEMI_EMBALADO = 4002
 
 _FLAGS_ALCANCE_STOCK_DEP = {
     "requerido_migracion": True,
@@ -122,6 +141,111 @@ def _load_admin_articulos(base_empresa: str) -> list[dict]:
             FROM articulo
             WHERE COALESCE(TRIM(tipo_art_fab), '') = 'Terminado'
             """
+        )
+        return list(cur.fetchall())
+
+
+def _load_admin_fabricados(base_empresa: str) -> list[dict]:
+    """Universo Admin para matcher inverso / Asignar fabricados: tipo_art_fab=Fabricado."""
+    with mysql_cursor(base_empresa, dict_cursor=True) as cur:
+        cur.execute(
+            """
+            SELECT IDArt,
+                   TRIM(COALESCE(id_manual, '')) AS id_manual,
+                   TRIM(COALESCE(NombreArticulo, '')) AS NombreArticulo,
+                   TRIM(COALESCE(CodArtProv, '')) AS CodArtProv
+            FROM articulo
+            WHERE COALESCE(TRIM(tipo_art_fab), '') = 'Fabricado'
+            """
+        )
+        return list(cur.fetchall())
+
+
+def _fetch_best_catalog_skus() -> tuple[list[dict], dict[str, dict]]:
+    """Catálogo BEST para matcher inverso (inventario + pedidos abiertos, sin REP_RECETAS)."""
+    conn = connect_best()
+    try:
+        best_rows = fetch_dict(
+            conn,
+            """
+            SELECT DISTINCT id_articulo, codigo, articulo, marca FROM (
+                SELECT [Id Articulo] AS id_articulo, Codigo AS codigo,
+                       Articulo AS articulo, Marca AS marca
+                FROM REP_INVENTARIOS
+                WHERE COALESCE(Stock, 0) <> 0
+                UNION
+                SELECT c.[Id Articulo] AS id_articulo, c.Codigo AS codigo,
+                       c.Articulo AS articulo, c.Marca AS marca
+                FROM REP_ORDENES_COMBINADO c
+                WHERE c.Finalizada = 0 AND c.Pendiente > 0
+            ) u
+            WHERE id_articulo IS NOT NULL
+            """,
+        )
+        ids = [str(r.get("id_articulo") or "").strip() for r in best_rows if r.get("id_articulo")]
+        if not ids:
+            return [], {}
+        placeholders = ", ".join(["%s"] * len(ids))
+        myl_rows = fetch_dict(
+            conn,
+            f"""
+            SELECT MYMMID, CODIGO, COLOR, COLOR1, COLOR2, COLOR3, TALLE, PACK, MARCADS
+            FROM MYL
+            WHERE MYMMID IN ({placeholders})
+            """,
+            tuple(ids),
+        )
+        myl = {str(r["MYMMID"]): r for r in myl_rows}
+        return best_rows, myl
+    finally:
+        conn.close()
+
+
+def _fabricado_idarts_desde_bom_terminados(
+    base_empresa: str, terminado_idarts: list[int]
+) -> list[dict]:
+    """
+    Explosión primer nivel en_abm_formula desde terminados Admin.
+    Devuelve filas articulo Fabricado únicas (sin REP_RECETAS).
+    """
+    ids = sorted({to_int_or_none(x) for x in terminado_idarts if to_int_or_none(x)})
+    if not ids:
+        return []
+
+    from mpr.services import bulk_bom_detalle, bulk_id_en_abm
+
+    abm_map = bulk_id_en_abm(base_empresa, ids, requiere_ensamblado_si=False)
+    id_en_abms = sorted({v for v in abm_map.values() if v is not None})
+    if not id_en_abms:
+        return []
+
+    bom_map = bulk_bom_detalle(base_empresa, id_en_abms)
+    comp_ids: set[int] = set()
+    for idart in ids:
+        id_en_abm = abm_map.get(idart)
+        if not id_en_abm:
+            continue
+        bom = bom_map.get(id_en_abm) or {}
+        for comp in bom.get("componentes") or []:
+            cid = to_int_or_none(comp.get("id_articulo"))
+            if cid:
+                comp_ids.add(cid)
+    if not comp_ids:
+        return []
+
+    placeholders = ", ".join(["%s"] * len(comp_ids))
+    with mysql_cursor(base_empresa, dict_cursor=True) as cur:
+        cur.execute(
+            f"""
+            SELECT IDArt,
+                   TRIM(COALESCE(id_manual, '')) AS id_manual,
+                   TRIM(COALESCE(NombreArticulo, '')) AS NombreArticulo,
+                   TRIM(COALESCE(CodArtProv, '')) AS CodArtProv
+            FROM articulo
+            WHERE IDArt IN ({placeholders})
+              AND COALESCE(TRIM(tipo_art_fab), '') = 'Fabricado'
+            """,
+            list(comp_ids),
         )
         return list(cur.fetchall())
 
@@ -329,6 +453,8 @@ def recalcular_mapeo_articulos(base_empresa: str) -> dict[str, Any]:
                 BestArticuloMap.Estado.VALIDADO,
                 BestArticuloMap.Estado.DESCARTADO,
             ],
+        ).exclude(
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
         )
     }
 
@@ -412,6 +538,8 @@ def recalcular_mapeo_articulos(base_empresa: str) -> dict[str, Any]:
     ).exclude(
         origen_requerimiento=BestArticuloMap.OrigenRequerimiento.STOCK_DEPOSITO,
         requerido_migracion=True,
+    ).exclude(
+        origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
     ).delete()
 
     asegurar_articulos_desde_inventario(base_empresa)
@@ -579,11 +707,13 @@ def resumen_clientes(base_empresa: str) -> dict[str, Any]:
 
 def refresh_parity_counters(base_empresa: str) -> BestMigrationParity:
     parity, _ = BestMigrationParity.objects.get_or_create(base_empresa=base_empresa)
-    # Gate de pedidos: solo SKUs en pedidos abiertos (no stock en depósito).
+    # Gate de pedidos: solo SKUs en pedidos abiertos (no stock ni BOM fabricados).
     arts = BestArticuloMap.objects.filter(
         base_empresa=base_empresa,
         requerido_migracion=True,
         origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+    ).exclude(
+        origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
     )
     parity.articulos_total = arts.count()
     parity.articulos_resueltos = sum(1 for a in arts if a.resuelto_para_migracion)
@@ -599,6 +729,12 @@ def refresh_parity_counters(base_empresa: str) -> BestMigrationParity:
     stock = BestStockInicialMap.objects.filter(base_empresa=base_empresa, requerido_migracion=True)
     parity.stock_inicial_total = stock.count()
     parity.stock_inicial_resueltos = sum(1 for s in stock if s.resuelto_para_migracion)
+
+    ops = BestOperarioMap.objects.filter(base_empresa=base_empresa, requerido_migracion=True)
+    ops_total = ops.count()
+    ops_resueltos = sum(1 for o in ops if o.resuelto_para_migracion)
+    if ops_total > 0:
+        parity.operarios_ok = ops_resueltos >= ops_total
 
     parity.refresh_gate()
     return parity
@@ -645,6 +781,162 @@ def resumen_articulos(base_empresa: str) -> dict[str, Any]:
     }
 
 
+def resumen_articulos_fabricados(base_empresa: str) -> dict[str, Any]:
+    """Contadores del dominio fabricados (BOM_FABRICADO); no alimentan gate PED."""
+    qs = BestArticuloMap.objects.filter(
+        base_empresa=base_empresa,
+        origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+    )
+    by_estado = Counter(qs.values_list("estado", flat=True))
+    estados_resueltos = [
+        BestArticuloMap.Estado.VALIDADO,
+        BestArticuloMap.Estado.DESCARTADO,
+    ]
+    pendientes = qs.exclude(estado__in=estados_resueltos).count()
+    total = qs.count()
+    resueltos = sum(1 for a in qs if a.resuelto_para_migracion)
+    return {
+        "total": total,
+        "por_estado": dict(by_estado),
+        "pendientes": pendientes,
+        "validados": by_estado.get(BestArticuloMap.Estado.VALIDADO, 0),
+        "descartados": by_estado.get(BestArticuloMap.Estado.DESCARTADO, 0),
+        "requeridos_total": total,
+        "requeridos_resueltos": resueltos,
+        "requeridos_pendientes": pendientes,
+        "necesarios_pendientes": pendientes,
+    }
+
+
+@transaction.atomic
+def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
+    """
+    Terminados VALIDADO → explosión en_abm_formula → Fabricados únicos → inferir SKU BEST.
+    Upsert origen BOM_FABRICADO. No toca parity ni migracion_habilitada.
+    """
+    terminados = BestArticuloMap.objects.filter(
+        base_empresa=base_empresa,
+        estado=BestArticuloMap.Estado.VALIDADO,
+        admin_idart__isnull=False,
+    ).exclude(
+        origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+    )
+    terminado_idarts = [m.admin_idart for m in terminados if m.admin_idart]
+    fabricados_admin = _fabricado_idarts_desde_bom_terminados(base_empresa, terminado_idarts)
+    best_rows, myl = _fetch_best_catalog_skus()
+    inferidos = match_admin_fabricados_to_best(
+        admin_fabricados=fabricados_admin,
+        best_rows=best_rows,
+        myl_by_mmid=myl,
+    )
+
+    preservados = {
+        m.best_id_articulo: m
+        for m in BestArticuloMap.objects.filter(
+            base_empresa=base_empresa,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+            estado__in=[
+                BestArticuloMap.Estado.VALIDADO,
+                BestArticuloMap.Estado.DESCARTADO,
+            ],
+        )
+    }
+
+    created = updated = preserved = skipped = 0
+    for admin in fabricados_admin:
+        aid = int(admin["IDArt"])
+        row = inferidos.get(aid)
+        if not row or not (row.best_id_articulo or "").strip():
+            skipped += 1
+            continue
+        best_id = row.best_id_articulo.strip()
+        prev = preservados.get(best_id)
+        defaults = {
+            "best_codigo": row.best_codigo,
+            "best_articulo": (row.best_articulo or "")[:255],
+            "best_marca": (row.best_marca or "")[:64],
+            "best_modelos": (row.best_modelos or "")[:128],
+            "best_colores": (row.best_colores or "")[:64],
+            "best_color_mode": (row.best_color_mode or "")[:16],
+            "best_talle": (row.best_talle or "")[:8],
+            "best_pack": (row.best_pack or "")[:8],
+            "best_variant_codes": (row.best_variant_codes or "")[:128],
+            "dict_version": DICT_VERSION,
+            "candidatos_n": row.candidatos_n,
+            "alt1_idart": row.alt1_idart,
+            "alt1_nombre": (row.alt1_nombre or "")[:255],
+            "alt1_score": row.alt1_score,
+            "alt2_idart": row.alt2_idart,
+            "alt2_nombre": (row.alt2_nombre or "")[:255],
+            "alt2_score": row.alt2_score,
+            **_FLAGS_ALCANCE_BOM_FABRICADO,
+        }
+        if prev:
+            for k, v in defaults.items():
+                setattr(prev, k, v)
+            prev.save()
+            preserved += 1
+            continue
+
+        obj, was_created = BestArticuloMap.objects.update_or_create(
+            base_empresa=base_empresa,
+            best_id_articulo=best_id,
+            defaults={
+                **defaults,
+                "admin_idart": row.admin_idart or aid,
+                "admin_id_manual": (row.admin_id_manual or admin.get("id_manual") or "")[:64],
+                "admin_nombre": (row.admin_nombre or admin.get("NombreArticulo") or "")[:255],
+                "admin_cod_art_prov": (row.admin_cod_art_prov or admin.get("CodArtProv") or "")[:128],
+                "admin_pack": (row.admin_pack or "")[:8],
+                "admin_talle": (row.admin_talle or "")[:8],
+                "admin_color_mode": (row.admin_color_mode or "")[:16],
+                "estado": row.status,
+                "score": row.score,
+                "razon": (row.razon or "")[:512],
+                "validado": False,
+                "validado_por": "",
+                "validado_en": None,
+            },
+        )
+        if was_created:
+            created += 1
+        else:
+            updated += 1
+
+    return {
+        "terminados_fuente": len(terminado_idarts),
+        "fabricados_bom": len(fabricados_admin),
+        "created": created,
+        "updated": updated,
+        "preserved": preserved,
+        "skipped_sin_best": skipped,
+        "total": len(fabricados_admin),
+    }
+
+
+def aceptar_inferidos_altos_fabricados(
+    *, base_empresa: str, usuario: str
+) -> dict[str, int]:
+    """Acepta en lote inferencias altas del dominio fabricados."""
+    qs = BestArticuloMap.objects.filter(
+        base_empresa=base_empresa,
+        origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        estado=BestArticuloMap.Estado.INFERIDO_ALTO,
+        admin_idart__isnull=False,
+    )
+    aceptados = 0
+    for obj in qs:
+        validar_articulo_fabricado(
+            base_empresa=base_empresa,
+            best_id=obj.best_id_articulo,
+            admin_idart=obj.admin_idart,
+            usuario=usuario,
+            notas=obj.notas or "",
+        )
+        aceptados += 1
+    return {"aceptados": aceptados}
+
+
 def _detail_hub_dominio(resumen: dict[str, Any], parity_resueltos: int, parity_total: int) -> str:
     pendientes = resumen.get("requeridos_pendientes", 0)
     fuera = resumen.get("fuera_alcance", 0)
@@ -658,14 +950,21 @@ def hub_context(base_empresa: str) -> dict[str, Any]:
     parity = refresh_parity_counters(base_empresa)
     parity.save()
     art = resumen_articulos(base_empresa)
+    fab = resumen_articulos_fabricados(base_empresa)
     cli = resumen_clientes(base_empresa)
     dep = resumen_depositos(base_empresa)
     stk = resumen_stock_inicial(base_empresa)
+    ope = resumen_operarios(base_empresa)
     domains = []
     for d in DOMAINS:
         if d.codigo == "articulos":
             ok = parity.articulos_ok
             detail = _detail_hub_dominio(art, parity.articulos_resueltos, parity.articulos_total)
+        elif d.codigo == "articulos_fabricados":
+            ok = fab["requeridos_pendientes"] == 0 if fab["total"] else True
+            detail = _detail_hub_dominio(
+                fab, fab["requeridos_resueltos"], fab["requeridos_total"]
+            )
         elif d.codigo == "clientes":
             ok = parity.clientes_ok
             detail = _detail_hub_dominio(cli, parity.clientes_resueltos, parity.clientes_total)
@@ -687,7 +986,11 @@ def hub_context(base_empresa: str) -> dict[str, Any]:
             )
         elif d.codigo == "operarios":
             ok = parity.operarios_ok
-            detail = "Opcional para sembrar PED"
+            detail = _detail_hub_dominio(
+                ope,
+                ope.get("requeridos_resueltos", 0),
+                ope.get("requeridos_total", 0),
+            )
         else:
             ok = False
             detail = "—"
@@ -709,10 +1012,12 @@ def hub_context(base_empresa: str) -> dict[str, Any]:
     return {
         "parity": parity,
         "articulos_resumen": art,
+        "articulos_fabricados_resumen": fab,
         "clientes_resumen": cli,
         "depositos_resumen": dep,
         "stock_inicial_resumen": stk,
         "stock_reserva_resumen": res_reserva,
+        "operarios_resumen": ope,
         "domains": domains,
         "required_codes": [d.codigo for d in required],
         "migracion_habilitada": parity.migracion_habilitada,
@@ -734,8 +1039,14 @@ def validar_articulo(
     # enriquecer nombre desde Admin si es posible
     nombre = obj.admin_nombre
     id_manual = obj.admin_id_manual
+    loader = (
+        _load_admin_fabricados
+        if obj.origen_requerimiento
+        == BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO
+        else _load_admin_articulos
+    )
     try:
-        arts = _load_admin_articulos(base_empresa)
+        arts = loader(base_empresa)
         hit = next((a for a in arts if int(a["IDArt"]) == int(admin_idart)), None)
         if hit:
             nombre = hit.get("NombreArticulo") or nombre
@@ -1558,6 +1869,321 @@ def aceptar_inferidos_depositos(*, base_empresa: str, usuario: str) -> dict[str,
     return {"aceptados": n}
 
 
+def _fetch_best_tejedores() -> list[dict]:
+    """Códigos distintos TTNOTE / Tejedor desde movimientos BEST."""
+    sql_candidates = (
+        """
+        SELECT LTRIM(RTRIM(CAST(Tejedor AS NVARCHAR(16)))) AS codigo,
+               COUNT(*) AS movimientos_n
+        FROM REP_MOVIMIENTOS_TOTAL
+        WHERE Tejedor IS NOT NULL
+          AND LTRIM(RTRIM(CAST(Tejedor AS NVARCHAR(16)))) <> ''
+        GROUP BY LTRIM(RTRIM(CAST(Tejedor AS NVARCHAR(16))))
+        ORDER BY COUNT(*) DESC
+        """,
+        """
+        SELECT LTRIM(RTRIM(CAST(TTNOTE AS NVARCHAR(16)))) AS codigo,
+               COUNT(*) AS movimientos_n
+        FROM TT
+        WHERE TTNOTE IS NOT NULL
+          AND LTRIM(RTRIM(CAST(TTNOTE AS NVARCHAR(16)))) <> ''
+        GROUP BY LTRIM(RTRIM(CAST(TTNOTE AS NVARCHAR(16))))
+        ORDER BY COUNT(*) DESC
+        """,
+    )
+    conn = connect_best()
+    try:
+        last_err: Exception | None = None
+        for sql in sql_candidates:
+            try:
+                rows = fetch_dict(conn, sql)
+                out = []
+                for r in rows:
+                    cod = normalizar_codigo_tejedor(r.get("codigo"))
+                    if not cod:
+                        continue
+                    out.append(
+                        {
+                            "codigo": cod,
+                            "nombre": f"Tejedor {cod}",
+                            "movimientos_n": int(r.get("movimientos_n") or 0),
+                        }
+                    )
+                if out:
+                    return out
+            except Exception as e:
+                last_err = e
+                logger.warning("Consulta tejedores BEST falló: %s", e)
+        if last_err:
+            logger.warning("Usando catálogo fallback de letras tejedor: %s", last_err)
+    finally:
+        conn.close()
+    return [
+        {"codigo": c, "nombre": f"Tejedor {c}", "movimientos_n": 0}
+        for c in FALLBACK_CODIGOS_TEJEDOR
+    ]
+
+
+def _load_admin_empleados_operarios(base_empresa: str) -> list[dict]:
+    try:
+        rows = listar_operarios_crud(base_empresa, incluir_anulados=False)
+        if rows:
+            return [
+                {
+                    "id": r.get("id_sue_abm_empleado"),
+                    "id_sue_abm_empleado": r.get("id_sue_abm_empleado"),
+                    "nombre_empleado": r.get("nombre_empleado"),
+                    "label": r.get("nombre_empleado"),
+                }
+                for r in rows
+                if r.get("id_sue_abm_empleado") is not None
+            ]
+    except Exception:
+        logger.exception("listar_operarios_crud falló; fallback listar_empleados_operarios")
+    return listar_empleados_operarios(base_empresa, busqueda=None, limit=500)
+
+
+def resumen_operarios(base_empresa: str) -> dict[str, Any]:
+    qs = BestOperarioMap.objects.filter(base_empresa=base_empresa)
+    by_estado = Counter(qs.values_list("estado", flat=True))
+    req = qs.filter(requerido_migracion=True)
+    estados_res = [BestOperarioMap.Estado.VALIDADO, BestOperarioMap.Estado.DESCARTADO]
+    pendientes = req.exclude(estado__in=estados_res).count()
+    categorias = _conteo_categorias_migracion(qs)
+    return {
+        "total": qs.count(),
+        "por_estado": dict(by_estado),
+        "pendientes": pendientes,
+        "validados": by_estado.get(BestOperarioMap.Estado.VALIDADO, 0),
+        "inferidos": by_estado.get(BestOperarioMap.Estado.INFERIDO, 0),
+        "ambiguos": by_estado.get(BestOperarioMap.Estado.AMBIGUO, 0),
+        "sin_candidato": by_estado.get(BestOperarioMap.Estado.SIN_CANDIDATO, 0),
+        "descartados": by_estado.get(BestOperarioMap.Estado.DESCARTADO, 0),
+        **categorias,
+        "necesarios_pendientes": pendientes,
+        "requeridos_total": req.count(),
+        "requeridos_resueltos": sum(1 for o in req if o.resuelto_para_migracion),
+        "requeridos_pendientes": pendientes,
+        "fuera_alcance": categorias.get("no_necesarios", 0),
+    }
+
+
+@transaction.atomic
+def sincronizar_operarios_best(base_empresa: str) -> dict[str, Any]:
+    try:
+        best_rows = _fetch_best_tejedores()
+        fuente = "BEST"
+    except Exception as e:
+        logger.warning("BEST tejedores no disponible (%s); catálogo fallback", e)
+        best_rows = [
+            {"codigo": c, "nombre": f"Tejedor {c}", "movimientos_n": 0}
+            for c in FALLBACK_CODIGOS_TEJEDOR
+        ]
+        fuente = "fallback"
+
+    admin = _load_admin_empleados_operarios(base_empresa)
+    matches = match_operarios(best_rows=best_rows, admin_empleados=admin)
+    match_by = {m.best_codigo: m for m in matches}
+
+    preservados = {
+        m.best_codigo: m
+        for m in BestOperarioMap.objects.filter(
+            base_empresa=base_empresa,
+            estado__in=[BestOperarioMap.Estado.VALIDADO, BestOperarioMap.Estado.DESCARTADO],
+        )
+    }
+
+    created = updated = preserved = 0
+    vistos: set[str] = set()
+    for row in best_rows:
+        codigo = normalizar_codigo_tejedor(row.get("codigo"))
+        if not codigo:
+            continue
+        vistos.add(codigo)
+        prev = preservados.get(codigo)
+        if prev:
+            prev.best_nombre = (row.get("nombre") or prev.best_nombre or "")[:255]
+            prev.movimientos_n = int(row.get("movimientos_n") or prev.movimientos_n or 0)
+            prev.requerido_migracion = True
+            prev.en_snapshot_abierto = True
+            prev.save()
+            preserved += 1
+            continue
+
+        m = match_by.get(codigo)
+        if not m:
+            continue
+        estado_map = {
+            "INFERIDO": BestOperarioMap.Estado.INFERIDO,
+            "AMBIGUO": BestOperarioMap.Estado.AMBIGUO,
+            "SIN_CANDIDATO": BestOperarioMap.Estado.SIN_CANDIDATO,
+            "PENDIENTE": BestOperarioMap.Estado.PENDIENTE,
+        }
+        estado = estado_map.get(m.status, BestOperarioMap.Estado.PENDIENTE)
+        obj, was_created = BestOperarioMap.objects.update_or_create(
+            base_empresa=base_empresa,
+            best_codigo=codigo,
+            defaults={
+                "best_nombre": (m.best_nombre or row.get("nombre") or "")[:255],
+                "movimientos_n": int(row.get("movimientos_n") or m.movimientos_n or 0),
+                "estado": estado,
+                "score": m.score,
+                "razon": (m.razon or "")[:512],
+                "admin_id_operario": m.admin_id_operario,
+                "admin_nombre": (m.admin_nombre or "")[:255],
+                "alt1_id_operario": m.alt1_id_operario,
+                "alt1_nombre": (m.alt1_nombre or "")[:255],
+                "validado": False,
+                "validado_por": "",
+                "validado_en": None,
+                "requerido_migracion": True,
+                "en_snapshot_abierto": True,
+                "origen_requerimiento": BestOperarioMap.OrigenRequerimiento.REPORTE,
+            },
+        )
+        if was_created:
+            created += 1
+        else:
+            updated += 1
+
+    BestOperarioMap.objects.filter(base_empresa=base_empresa).exclude(
+        best_codigo__in=vistos
+    ).exclude(
+        estado__in=[BestOperarioMap.Estado.VALIDADO, BestOperarioMap.Estado.DESCARTADO]
+    ).delete()
+
+    for best_id, prev in preservados.items():
+        if best_id not in vistos:
+            prev.requerido_migracion = False
+            prev.en_snapshot_abierto = False
+            prev.save(update_fields=["requerido_migracion", "en_snapshot_abierto", "actualizado_en"])
+
+    refresh_parity_counters(base_empresa).save()
+    return {
+        "created": created,
+        "updated": updated,
+        "preserved": preserved,
+        "total": len(vistos),
+        "fuente": fuente,
+    }
+
+
+def validar_operario(
+    *,
+    base_empresa: str,
+    map_id: int,
+    admin_id_operario: int | None,
+    usuario: str,
+    notas: str = "",
+) -> BestOperarioMap:
+    obj = BestOperarioMap.objects.get(pk=map_id, base_empresa=base_empresa)
+    oid = to_int_or_none(admin_id_operario)
+    if oid is None:
+        raise ValueError("Debés indicar un operario de AdministraNET.")
+    nombre = obj.admin_nombre
+    try:
+        for e in _load_admin_empleados_operarios(base_empresa):
+            if to_int_or_none(e.get("id") or e.get("id_sue_abm_empleado")) == oid:
+                nombre = (e.get("label") or e.get("nombre_empleado") or nombre or "")[:255]
+                break
+    except Exception:
+        logger.exception("No se pudo enriquecer operario Admin %s", oid)
+    obj.admin_id_operario = oid
+    obj.admin_nombre = (nombre or "")[:255]
+    obj.estado = BestOperarioMap.Estado.VALIDADO
+    obj.validado = True
+    obj.validado_por = (usuario or "")[:64]
+    obj.validado_en = timezone.now()
+    obj.notas = notas or obj.notas
+    obj.save()
+    refresh_parity_counters(base_empresa).save()
+    return obj
+
+
+def aceptar_inferido_operario(*, base_empresa: str, map_id: int, usuario: str) -> BestOperarioMap:
+    obj = BestOperarioMap.objects.get(pk=map_id, base_empresa=base_empresa)
+    if not obj.admin_id_operario:
+        raise ValueError("El inferido no tiene operario candidato.")
+    return validar_operario(
+        base_empresa=base_empresa,
+        map_id=map_id,
+        admin_id_operario=obj.admin_id_operario,
+        usuario=usuario,
+        notas="Aceptado desde inferencia automática",
+    )
+
+
+def descartar_operario(*, base_empresa: str, map_id: int, usuario: str, notas: str = "") -> BestOperarioMap:
+    obj = BestOperarioMap.objects.get(pk=map_id, base_empresa=base_empresa)
+    obj.estado = BestOperarioMap.Estado.DESCARTADO
+    obj.validado = True
+    obj.validado_por = (usuario or "")[:64]
+    obj.validado_en = timezone.now()
+    obj.notas = notas or obj.notas
+    obj.save()
+    refresh_parity_counters(base_empresa).save()
+    return obj
+
+
+def reabrir_operario(*, base_empresa: str, map_id: int, usuario: str, notas: str = "") -> BestOperarioMap:
+    obj = BestOperarioMap.objects.get(pk=map_id, base_empresa=base_empresa)
+    if obj.estado not in (BestOperarioMap.Estado.VALIDADO, BestOperarioMap.Estado.DESCARTADO):
+        raise ValueError("Solo se puede reabrir un mapeo validado o descartado.")
+    estado_prev = obj.estado
+    if obj.admin_id_operario:
+        obj.estado = BestOperarioMap.Estado.AMBIGUO
+    else:
+        obj.estado = BestOperarioMap.Estado.SIN_CANDIDATO
+    obj.validado = False
+    obj.validado_por = ""
+    obj.validado_en = None
+    marca = (notas or "").strip() or f"Reabierto por {(usuario or '-')[:64]} (antes {estado_prev})."
+    prev = (obj.notas or "").strip()
+    obj.notas = f"{prev}\n{marca}".strip() if prev else marca
+    obj.save()
+    refresh_parity_counters(base_empresa).save()
+    return obj
+
+
+def aceptar_inferidos_operarios(*, base_empresa: str, usuario: str) -> dict[str, Any]:
+    qs = BestOperarioMap.objects.filter(
+        base_empresa=base_empresa,
+        requerido_migracion=True,
+        estado=BestOperarioMap.Estado.INFERIDO,
+        admin_id_operario__isnull=False,
+    )
+    n = 0
+    for obj in qs:
+        aceptar_inferido_operario(base_empresa=base_empresa, map_id=obj.pk, usuario=usuario)
+        n += 1
+    refresh_parity_counters(base_empresa).save()
+    return {"aceptados": n}
+
+
+def aceptar_operarios_seleccionados(
+    *, base_empresa: str, map_ids: list[int], usuario: str
+) -> dict[str, Any]:
+    aceptados = omitidos = 0
+    for mid in map_ids:
+        try:
+            obj = BestOperarioMap.objects.get(pk=mid, base_empresa=base_empresa)
+            if obj.estado in (
+                BestOperarioMap.Estado.VALIDADO,
+                BestOperarioMap.Estado.DESCARTADO,
+            ):
+                omitidos += 1
+                continue
+            if not obj.admin_id_operario:
+                omitidos += 1
+                continue
+            aceptar_inferido_operario(base_empresa=base_empresa, map_id=obj.pk, usuario=usuario)
+            aceptados += 1
+        except BestOperarioMap.DoesNotExist:
+            omitidos += 1
+    refresh_parity_counters(base_empresa).save()
+    return {"aceptados": aceptados, "omitidos": omitidos}
+
+
 def aceptar_depositos_seleccionados(
     *, base_empresa: str, map_ids: list[int], usuario: str
 ) -> dict[str, Any]:
@@ -1586,18 +2212,63 @@ def aceptar_depositos_seleccionados(
     return {"aceptados": aceptados, "omitidos": omitidos, "errores": errores}
 
 
+def validar_articulo_fabricado(
+    *,
+    base_empresa: str,
+    best_id: str,
+    admin_idart: int | None,
+    usuario: str,
+    notas: str = "",
+) -> BestArticuloMap:
+    """Valida mapeo fabricado (BOM_FABRICADO); no afecta gate PED."""
+    return validar_articulo(
+        base_empresa=base_empresa,
+        best_id=best_id,
+        admin_idart=admin_idart,
+        usuario=usuario,
+        notas=notas,
+    )
+
+
 @transaction.atomic
-def sincronizar_stock_inicial(base_empresa: str) -> dict[str, Any]:
-    articulos_inventario = asegurar_articulos_desde_inventario(base_empresa)
+def sincronizar_stock_inicial(
+    base_empresa: str, *, solo_fabricados_semi: bool = False
+) -> dict[str, Any]:
+    if solo_fabricados_semi:
+        articulos_inventario = {"skipped": "solo_fabricados_semi"}
+    else:
+        articulos_inventario = asegurar_articulos_desde_inventario(base_empresa)
     inv_rows = _fetch_best_inventario_agregado()
+    if solo_fabricados_semi:
+        inv_rows = [
+            r
+            for r in inv_rows
+            if to_int_or_none(r.get("id_dep")) == _BEST_DEPOSITO_SEMI_EMBALADO
+        ]
     arts_validados = {
         m.best_id_articulo: m
         for m in BestArticuloMap.objects.filter(
             base_empresa=base_empresa,
             estado=BestArticuloMap.Estado.VALIDADO,
             admin_idart__isnull=False,
+            **(
+                {
+                    "origen_requerimiento": (
+                        BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO
+                    )
+                }
+                if solo_fabricados_semi
+                else {}
+            ),
         )
     }
+    if solo_fabricados_semi:
+        allowed = set(arts_validados.keys())
+        inv_rows = [
+            r
+            for r in inv_rows
+            if str(r.get("id_art") or "").strip() in allowed
+        ]
     deps_validados = {
         m.best_id_deposito: m
         for m in BestDepositoMap.objects.filter(
@@ -1739,6 +2410,19 @@ def resumen_stock_inicial(base_empresa: str) -> dict[str, Any]:
     ).count()
     con_delta = qs.filter(delta_pares__isnull=False).exclude(delta_pares=0).count()
     categorias = _conteo_categorias_migracion(qs)
+    cola_pendiente_mapeo = qs.filter(
+        estado__in=[
+            BestStockInicialMap.Estado.SIN_MAPEO_ARTICULO,
+            BestStockInicialMap.Estado.SIN_MAPEO_DEPOSITO,
+        ]
+    ).count()
+    cola_listos_carga = qs.filter(
+        estado__in=[
+            BestStockInicialMap.Estado.LISTO,
+            BestStockInicialMap.Estado.CONCILIADO,
+        ]
+    ).count()
+    cola_ya_cargados = by_estado.get(BestStockInicialMap.Estado.CARGADO, 0)
     return {
         "total": qs.count(),
         "por_estado": dict(by_estado),
@@ -1749,8 +2433,16 @@ def resumen_stock_inicial(base_empresa: str) -> dict[str, Any]:
         "sin_mapeo_articulo": by_estado.get(BestStockInicialMap.Estado.SIN_MAPEO_ARTICULO, 0),
         "sin_mapeo_deposito": by_estado.get(BestStockInicialMap.Estado.SIN_MAPEO_DEPOSITO, 0),
         "con_delta": con_delta,
+        "cola_pendiente_mapeo": cola_pendiente_mapeo,
+        "cola_listos_carga": cola_listos_carga,
+        "cola_ya_cargados": cola_ya_cargados,
         **categorias,
     }
+
+
+def sincronizar_stock_fabricados_semi(base_empresa: str) -> dict[str, Any]:
+    """Sync stock BEST depósito 4002 (Semi-Embalado) para fabricados mapeados; olas inmutables."""
+    return sincronizar_stock_inicial(base_empresa, solo_fabricados_semi=True)
 
 
 def resumen_stock_reserva_admin(base_empresa: str) -> dict[str, Any]:
@@ -1809,6 +2501,29 @@ def descartar_stock_linea(
     return obj
 
 
+def _aplicar_saldo_live_stock(
+    obj: BestStockInicialMap,
+    admin_saldos: dict[tuple[int, int], Any],
+    *,
+    persistir: bool = False,
+) -> Any:
+    """Recalcula admin_saldo_actual y delta_pares desde stock_deposito live."""
+    from decimal import Decimal
+
+    best = to_decimal_or_none(obj.best_stock_pares) or Decimal(0)
+    admin_idart = to_int_or_none(obj.admin_idart)
+    admin_cod_dep = to_int_or_none(obj.admin_cod_deposito)
+    admin = Decimal(0)
+    if admin_idart and admin_cod_dep:
+        admin = to_decimal_or_none(admin_saldos.get((admin_idart, admin_cod_dep))) or Decimal(0)
+    delta = best - admin
+    obj.admin_saldo_actual = admin
+    obj.delta_pares = delta
+    if persistir:
+        obj.save(update_fields=["admin_saldo_actual", "delta_pares", "actualizado_en"])
+    return delta
+
+
 def cargar_stock_inicial_best(
     base_empresa: str,
     *,
@@ -1823,13 +2538,25 @@ def cargar_stock_inicial_best(
     misma lógica que /stock/ingreso-movimiento/.
 
     Por depósito genera uno o más MSTOCK con entradas (ES=E) por el delta
-    (BEST − saldo Admin). Si Admin ya tiene ≥ BEST, no mueve stock y marca CARGADO.
+    (BEST − saldo Admin live). Si Admin ya tiene ≥ BEST, no mueve stock y marca CARGADO.
+
+    Antes de ensayo o confirmación sincroniza inventario BEST y refresca saldos Admin
+    live (olas post-cutover: solo candidatas LISTO/CONCILIADO; CARGADO no se reprocesa).
     """
     from collections import defaultdict
     from datetime import date
     from decimal import Decimal
 
     from core.services.administranet_stock import alta_movimiento
+
+    ya_cargados_preservados = BestStockInicialMap.objects.filter(
+        base_empresa=base_empresa,
+        estado=BestStockInicialMap.Estado.CARGADO,
+    ).count()
+
+    sincronizar_stock_inicial(base_empresa)
+
+    admin_saldos = _load_admin_stock_deposito(base_empresa)
 
     qs = BestStockInicialMap.objects.filter(
         base_empresa=base_empresa,
@@ -1842,6 +2569,9 @@ def cargar_stock_inicial_best(
         admin_cod_deposito__isnull=False,
     )
     candidatos = list(qs)
+    for obj in candidatos:
+        _aplicar_saldo_live_stock(obj, admin_saldos, persistir=True)
+
     by_dep: dict[int, list[BestStockInicialMap]] = defaultdict(list)
     for obj in candidatos:
         dep = to_int_or_none(obj.admin_cod_deposito)
@@ -1853,13 +2583,19 @@ def cargar_stock_inicial_best(
     for objs in by_dep.values():
         n_delta = 0
         for obj in objs:
-            best = to_decimal_or_none(obj.best_stock_pares) or Decimal(0)
-            admin = to_decimal_or_none(obj.admin_saldo_actual) or Decimal(0)
-            if best - admin > 0:
+            delta = to_decimal_or_none(obj.delta_pares) or Decimal(0)
+            if delta > 0:
                 n_delta += 1
         lineas_con_delta += n_delta
         if n_delta:
             lotes_estimados += (n_delta + 99) // 100
+
+    omitidos_admin_ge_best = len(candidatos) - lineas_con_delta
+    metricas_olas = {
+        "sincronizado_previo": True,
+        "omitidos_admin_ge_best": omitidos_admin_ge_best,
+        "ya_cargados_preservados": ya_cargados_preservados,
+    }
 
     if dry_run:
         return {
@@ -1867,8 +2603,9 @@ def cargar_stock_inicial_best(
             "candidatos": len(candidatos),
             "escrituras": lineas_con_delta,
             "movimientos_estimados": lotes_estimados,
-            "omitidos": len(candidatos) - lineas_con_delta,
+            "omitidos": omitidos_admin_ge_best,
             "via": "alta_movimiento:Stock Inicial",
+            **metricas_olas,
         }
 
     uid = to_int_or_none(id_usuario)
@@ -1897,9 +2634,7 @@ def cargar_stock_inicial_best(
     for dep_id, objs in sorted(by_dep.items()):
         pendientes_mov: list[tuple[BestStockInicialMap, Decimal]] = []
         for obj in objs:
-            best = to_decimal_or_none(obj.best_stock_pares) or Decimal(0)
-            admin = to_decimal_or_none(obj.admin_saldo_actual) or Decimal(0)
-            delta = best - admin
+            delta = _aplicar_saldo_live_stock(obj, admin_saldos, persistir=False)
             if delta <= 0:
                 # Ya en o por encima del saldo BEST: sin movimiento.
                 obj.estado = BestStockInicialMap.Estado.CARGADO
@@ -1916,6 +2651,8 @@ def cargar_stock_inicial_best(
                         "validado_por",
                         "validado_en",
                         "notas",
+                        "admin_saldo_actual",
+                        "delta_pares",
                         "actualizado_en",
                     ]
                 )
@@ -2011,6 +2748,7 @@ def cargar_stock_inicial_best(
         "omitidos": omitidos,
         "movimientos": movimientos,
         "via": "alta_movimiento:Stock Inicial",
+        **metricas_olas,
     }
     if errores:
         result["errores"] = errores

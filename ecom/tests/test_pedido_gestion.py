@@ -203,15 +203,19 @@ class TestPedidoGestionAPIViews(TestCase):
         resp = CarritoDesdePedidoPreviewAPIView.as_view()(req, cod_mov=5)
         self.assertEqual(resp.status_code, 200)
 
+    @patch("ecom.pedido_gestion_views.cabecera_pedido_relay", return_value={"id_cliente": 10})
     @patch("ecom.pedido_gestion_views.cargar_desde_pedido")
     @patch("ecom.pedido_gestion_views._resolver_contexto")
-    def test_cargar_desde_pedido(self, mock_ctx, mock_cargar):
+    def test_cargar_desde_pedido(self, mock_ctx, mock_cargar, _cab):
         cart = MagicMock()
         mock_ctx.return_value = (("b", 1, cart, Decimal("0")), None)
         mock_cargar.return_value = ({"carrito": {}}, None)
         req = _req_post(
             "/ecom/api/mayoristapp/carrito/desde-pedido/",
-            {"codigo_movimiento": 5},
+            {"codigo_movimiento": 5, "origen": "edicion"},
         )
         resp = CarritoDesdePedidoAPIView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
+        kwargs = mock_cargar.call_args.kwargs
+        self.assertTrue(kwargs.get("omitir_validacion_stock"))
+        self.assertEqual(mock_cargar.call_args.args[3], 10)

@@ -3,19 +3,39 @@
 from __future__ import annotations
 
 import logging
+import time
+from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
 from ecom.models import EcomCart, EcomPedidoMasivoDraft
 from ecom.services.comprobantes_anulacion import anular_pedido_relay
-from ecom.services.mayorista_cart_service import agregar_item
+from ecom.services.mayorista_cart_service import agregar_item, recalcular_totales
 from ecom.services.mayorista_checkout_service import CheckoutInput, confirmar
+from ecom.services.pedido_cabecera_comercial import (
+    PedidoCabeceraComercial,
+    parsear_cabecera_desde_body,
+    resolver_cabecera_comercial,
+)
+from ecom.services.pedido_masivo_matriz import (
+    descuentos_fila_efectivos,
+    leer_contexto_cliente_masivo,
+    listar_sucursales_cliente,
+)
 from ecom.services.presentacion_articulo import opciones_presentacion_articulo
+from ecom.services.vendedor_operativo import resolver_viajante_operativo
 
 logger = logging.getLogger(__name__)
 
 _MOTIVO_COMPENSACION = "Compensación lote pedido masivo Synap (fallo parcial)"
+PREVIEW_CELDAS_LIMITE_BLANDO = 200
+PREVIEW_TIMEOUT_SEG = 8.0
+
+
+def _dec(v: Any, default: str = "0") -> Decimal:
+    r = to_decimal_or_none(v)
+    return r if r is not None else Decimal(default)
 
 
 def _pack_tipo_y_mult(base_empresa: str, id_articulo: int) -> Tuple[str, Decimal]:
@@ -72,18 +92,21 @@ def _cargar_lineas_sucursal(
     cart: EcomCart,
     lineas: List[Tuple[int, Decimal]],
     *,
-    descuento_cliente: Decimal = Decimal("0"),
+    descuentos_por_articulo: Dict[int, Decimal],
+    validar_stock: bool = True,
 ) -> Optional[str]:
     agregados = 0
     for id_art, packs in lineas:
         tipo, mult = _pack_tipo_y_mult(cart.base_empresa, id_art)
+        pct = descuentos_por_articulo.get(id_art, Decimal("0"))
         _item, err = agregar_item(
             cart,
             id_art,
             packs,
-            descuento_cliente=descuento_cliente,
+            descuento_cliente=pct,
             tipo_unidad=tipo,
             multiplicador=mult,
+            validar_stock=validar_stock,
         )
         if err:
             return f"Artículo {id_art}: {err}"
@@ -107,7 +130,227 @@ def _compensar_pedidos(base_empresa: str, creados: List[int]) -> List[str]:
     return avisos
 
 
-def confirmar_lote_masivo(
+def _resolver_cod_viajante_lote(
+    cod_viajante: Optional[int],
+    draft: EcomPedidoMasivoDraft,
+    sess_user: Optional[Dict[str, Any]] = None,
+) -> Optional[int]:
+    if cod_viajante is not None:
+        return cod_viajante
+    if sess_user:
+        cv = resolver_viajante_operativo(sess_user)
+        if cv is not None:
+            return cv
+    return draft.cod_viajante
+
+
+def _pie_efectivo(
+    draft: EcomPedidoMasivoDraft,
+    desc_pie_pct: Optional[Any] = None,
+) -> Decimal:
+    if desc_pie_pct is not None:
+        return _dec(desc_pie_pct)
+    return _dec(draft.descuento_pie_pct)
+
+
+def _limpiar_carritos_efimeros(carritos: List[EcomCart]) -> None:
+    for c in carritos:
+        try:
+            if c.estado == EcomCart.ESTADO_BORRADOR:
+                c.items.all().delete()
+                c.delete()
+        except Exception:
+            pass
+
+
+def _checkout_input_desde_cabecera(
+    cabecera: PedidoCabeceraComercial,
+    *,
+    id_punto_venta: int,
+    id_cliente_domicilio: int,
+    forma_entrega: str,
+    observaciones: str,
+    agente_percep: Optional[str],
+    es_supervisor: bool,
+    dias_entrega: int = 0,
+    dias_no_laborables: Optional[list] = None,
+) -> CheckoutInput:
+    return CheckoutInput(
+        tipo=EcomCart.TIPO_PEDIDO,
+        id_punto_venta=id_punto_venta,
+        id_cliente_domicilio=id_cliente_domicilio,
+        forma_entrega=forma_entrega or "",
+        observaciones=observaciones,
+        agente_percep=agente_percep,
+        es_supervisor=es_supervisor,
+        fecha_pedido=cabecera.fecha_pedido,
+        fecha_entrega=cabecera.fecha_entrega,
+        vencimiento=cabecera.vencimiento,
+        id_condventa=cabecera.id_condventa,
+        cond_venta=cabecera.cond_venta,
+        lista_id=cabecera.lista_id,
+        dias_entrega=dias_entrega,
+        dias_no_laborables=list(dias_no_laborables or []),
+    )
+
+
+def calcular_totales_lote_masivo(
+    draft: EcomPedidoMasivoDraft,
+    *,
+    id_usuario: int,
+    desc_pie_pct: Optional[Any] = None,
+    lista_id: Optional[int] = None,
+    id_deposito: int = 1,
+    timeout_seg: float = PREVIEW_TIMEOUT_SEG,
+    cabecera: Optional[PedidoCabeceraComercial] = None,
+) -> Dict[str, Any]:
+    """
+    Calcula totales por sucursal y lote usando el mismo flujo que checkout batch.
+
+    Respeta límite blando de celdas y timeout amigable (warning sin bloquear confirmación).
+    """
+    por_dom = _agrupar_por_sucursal(draft)
+    n_celdas = sum(len(v) for v in por_dom.values())
+    warnings: List[str] = []
+    if n_celdas > PREVIEW_CELDAS_LIMITE_BLANDO:
+        warnings.append(
+            f"La matriz tiene {n_celdas} celdas con cantidad (límite recomendado "
+            f"{PREVIEW_CELDAS_LIMITE_BLANDO}). El preview puede demorar."
+        )
+
+    if not por_dom:
+        return {
+            "ok": True,
+            "sucursales": [],
+            "total_lote": {"neto": 0.0, "iva": 0.0, "total": 0.0},
+            "warning": " ".join(warnings) if warnings else "",
+            "preview_incompleto": False,
+            "celdas_con_cantidad": 0,
+        }
+
+    ctx_cli = leer_contexto_cliente_masivo(draft.base_empresa, draft.id_cliente)
+    if cabecera is not None:
+        lista_ef = int(cabecera.lista_id)
+    else:
+        lista_ef = int(lista_id if lista_id is not None else ctx_cli.get("lista_id") or 1)
+    desc_map = descuentos_fila_efectivos(draft, draft.base_empresa)
+    pie = _pie_efectivo(draft, desc_pie_pct)
+
+    sucursales_out: List[Dict[str, Any]] = []
+    carritos_tmp: List[EcomCart] = []
+    t0 = time.monotonic()
+    preview_incompleto = False
+
+    try:
+        for id_dom, lineas in sorted(por_dom.items()):
+            if time.monotonic() - t0 > timeout_seg:
+                preview_incompleto = True
+                warnings.append(
+                    "El cálculo de preview superó el tiempo límite. "
+                    "Podés confirmar el lote igualmente."
+                )
+                break
+
+            cart = _crear_carrito_efimero(
+                base_empresa=draft.base_empresa,
+                id_usuario=id_usuario,
+                id_cliente=draft.id_cliente,
+                lista_id=lista_ef,
+                id_deposito=id_deposito,
+            )
+            carritos_tmp.append(cart)
+            err_load = _cargar_lineas_sucursal(
+                cart,
+                lineas,
+                descuentos_por_articulo=desc_map,
+                validar_stock=False,
+            )
+            if err_load:
+                warnings.append(f"Sucursal {id_dom}: {err_load}")
+                continue
+
+            cart.descuento_pie_pct = pie
+            recalcular_totales(cart)
+            iva_total = _dec(cart.iva_21) + _dec(cart.iva_105)
+            sucursales_out.append(
+                {
+                    "id_cliente_domicilio": id_dom,
+                    "neto": float(cart.subtotal_neto or 0),
+                    "iva": float(iva_total),
+                    "total": float(cart.total or 0),
+                }
+            )
+    finally:
+        _limpiar_carritos_efimeros(carritos_tmp)
+
+    neto_lote = sum(s["neto"] for s in sucursales_out)
+    iva_lote = sum(s["iva"] for s in sucursales_out)
+    total_lote = sum(s["total"] for s in sucursales_out)
+
+    return {
+        "ok": True,
+        "sucursales": sucursales_out,
+        "total_lote": {
+            "neto": round(neto_lote, 2),
+            "iva": round(iva_lote, 2),
+            "total": round(total_lote, 2),
+        },
+        "warning": " ".join(warnings).strip(),
+        "preview_incompleto": preview_incompleto,
+        "celdas_con_cantidad": n_celdas,
+    }
+
+
+def _mapa_nombres_sucursales(
+    draft: EcomPedidoMasivoDraft,
+    *,
+    nombres_sucursales: Optional[Dict[int, str]] = None,
+) -> Dict[int, str]:
+    if nombres_sucursales:
+        return {int(k): str(v) for k, v in nombres_sucursales.items()}
+    out: Dict[int, str] = {}
+    for su in listar_sucursales_cliente(
+        draft.base_empresa, draft.id_cliente, cod_viajante=draft.cod_viajante
+    ):
+        sid = to_int_or_none(su.get("id_cliente_domicilio"))
+        if sid is None:
+            continue
+        out[sid] = str(su.get("nombre") or su.get("etiqueta") or f"Sucursal #{sid}")
+    return out
+
+
+def _evento_fin(
+    *,
+    ok: bool,
+    message: str,
+    codigos_movimiento: Optional[List[int]] = None,
+    errores: Optional[Dict[str, str]] = None,
+    compensacion: Optional[List[str]] = None,
+    detalle: Optional[List[Dict[str, Any]]] = None,
+    cod_viajante: Optional[int] = None,
+    ya_confirmado: bool = False,
+    codigos_anulados_intento: Optional[List[int]] = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "event": "fin",
+        "ok": ok,
+        "message": message,
+        "codigos_movimiento": list(codigos_movimiento or []),
+        "errores": dict(errores or {}),
+        "compensacion": list(compensacion or []),
+    }
+    if detalle is not None:
+        payload["detalle"] = detalle
+    if cod_viajante is not None:
+        payload["cod_viajante"] = cod_viajante
+    if ya_confirmado:
+        payload["ya_confirmado"] = True
+    if codigos_anulados_intento is not None:
+        payload["codigos_anulados_intento"] = codigos_anulados_intento
+    return payload
+
+
+def confirmar_lote_masivo_stream(
     draft: EcomPedidoMasivoDraft,
     *,
     id_usuario: int,
@@ -115,36 +358,63 @@ def confirmar_lote_masivo(
     cod_viajante: Optional[int] = None,
     lista_id: int = 1,
     id_deposito: int = 1,
-    descuento_cliente: Decimal = Decimal("0"),
+    desc_pie_pct: Optional[Any] = None,
     forma_entrega: str = "",
     observaciones: str = "",
     agente_percep: Optional[str] = None,
-) -> Tuple[bool, str, Dict[str, Any]]:
+    sess_user: Optional[Dict[str, Any]] = None,
+    cabecera: Optional[PedidoCabeceraComercial] = None,
+    es_supervisor: bool = False,
+    dias_entrega: int = 0,
+    dias_no_laborables: Optional[list] = None,
+    nombres_sucursales: Optional[Dict[int, str]] = None,
+) -> Iterator[Dict[str, Any]]:
     """
-    Crea 1 PED por sucursal con Σ packs > 0.
+    Generador de eventos NDJSON para confirmación en lote (1 PED por sucursal).
 
-    Ante fallo: anula PEDs de la corrida, draft → BORRADOR + ``ultimo_error``,
-    celdas intactas.
+    Eventos: ``inicio``, ``sucursal`` (procesando | ok | error), ``fin``.
+    Ante fallo: compensación igual que ``confirmar_lote_masivo`` sync.
     """
     if draft.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMADO:
-        return True, "El lote ya estaba confirmado.", {
-            "codigos_movimiento": draft.codigos_movimiento or [],
-            "ya_confirmado": True,
-        }
+        yield _evento_fin(
+            ok=True,
+            message="El lote ya estaba confirmado.",
+            codigos_movimiento=draft.codigos_movimiento or [],
+            ya_confirmado=True,
+        )
+        return
     if draft.estado == EcomPedidoMasivoDraft.ESTADO_ARCHIVADO:
-        return False, "El borrador está archivado.", {}
+        yield _evento_fin(ok=False, message="El borrador está archivado.")
+        return
 
     pv = to_int_or_none(id_punto_venta)
     if pv is None:
-        return False, "Falta punto de venta.", {}
+        yield _evento_fin(ok=False, message="Falta punto de venta.")
+        return
 
     por_dom = _agrupar_por_sucursal(draft)
     if not por_dom:
-        return False, "No hay cantidades para confirmar.", {}
+        yield _evento_fin(ok=False, message="No hay cantidades para confirmar.")
+        return
+
+    nombres = _mapa_nombres_sucursales(draft, nombres_sucursales=nombres_sucursales)
+    doms_ordenados = sorted(por_dom.items())
+    total = len(doms_ordenados)
+
+    cv_efectivo = _resolver_cod_viajante_lote(cod_viajante, draft, sess_user)
+    ctx_cli = leer_contexto_cliente_masivo(draft.base_empresa, draft.id_cliente)
+    if cabecera is not None:
+        lista_ef = int(cabecera.lista_id)
+    else:
+        lista_ef = int(lista_id or ctx_cli.get("lista_id") or 1)
+    desc_map = descuentos_fila_efectivos(draft, draft.base_empresa)
+    pie = _pie_efectivo(draft, desc_pie_pct)
 
     draft.estado = EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO
     draft.ultimo_error = {}
     draft.save(update_fields=["estado", "ultimo_error", "updated_at"])
+
+    yield {"event": "inicio", "total": total}
 
     creados: List[int] = []
     carritos_tmp: List[EcomCart] = []
@@ -152,25 +422,60 @@ def confirmar_lote_masivo(
     detalle_ok: List[Dict[str, Any]] = []
 
     try:
-        for id_dom, lineas in sorted(por_dom.items()):
+        for idx, (id_dom, lineas) in enumerate(doms_ordenados, start=1):
+            nombre = nombres.get(id_dom) or f"Sucursal #{id_dom}"
+            yield {
+                "event": "sucursal",
+                "index": idx,
+                "total": total,
+                "id_cliente_domicilio": id_dom,
+                "nombre": nombre,
+                "estado": "procesando",
+            }
+
             cart = _crear_carrito_efimero(
                 base_empresa=draft.base_empresa,
                 id_usuario=id_usuario,
                 id_cliente=draft.id_cliente,
-                lista_id=lista_id,
+                lista_id=lista_ef,
                 id_deposito=id_deposito,
             )
             carritos_tmp.append(cart)
             err_load = _cargar_lineas_sucursal(
-                cart, lineas, descuento_cliente=descuento_cliente
+                cart, lineas, descuentos_por_articulo=desc_map
             )
             if err_load:
                 errores[str(id_dom)] = err_load
+                yield {
+                    "event": "sucursal",
+                    "index": idx,
+                    "total": total,
+                    "id_cliente_domicilio": id_dom,
+                    "nombre": nombre,
+                    "estado": "error",
+                    "error": err_load,
+                }
                 break
+
+            cart.descuento_pie_pct = pie
+            recalcular_totales(cart)
 
             ok, err, result = confirmar(
                 cart,
-                CheckoutInput(
+                _checkout_input_desde_cabecera(
+                    cabecera,
+                    id_punto_venta=pv,
+                    id_cliente_domicilio=id_dom,
+                    forma_entrega=forma_entrega or "",
+                    observaciones=observaciones
+                    or f"Pedido masivo Synap draft #{draft.pk} sucursal {id_dom}",
+                    agente_percep=agente_percep,
+                    es_supervisor=es_supervisor,
+                    dias_entrega=dias_entrega,
+                    dias_no_laborables=dias_no_laborables,
+                )
+                if cabecera is not None
+                else CheckoutInput(
                     tipo=EcomCart.TIPO_PEDIDO,
                     id_punto_venta=pv,
                     id_cliente_domicilio=id_dom,
@@ -178,33 +483,64 @@ def confirmar_lote_masivo(
                     observaciones=observaciones
                     or f"Pedido masivo Synap draft #{draft.pk} sucursal {id_dom}",
                     agente_percep=agente_percep,
+                    lista_id=lista_ef,
+                    es_supervisor=es_supervisor,
+                    dias_entrega=dias_entrega,
+                    dias_no_laborables=list(dias_no_laborables or []),
                 ),
                 id_usuario=id_usuario,
-                cod_viajante=cod_viajante if cod_viajante is not None else draft.cod_viajante,
+                cod_viajante=cv_efectivo,
             )
             if not ok:
-                errores[str(id_dom)] = err or "Error al confirmar PED."
+                msg_err = err or "Error al confirmar PED."
+                errores[str(id_dom)] = msg_err
+                yield {
+                    "event": "sucursal",
+                    "index": idx,
+                    "total": total,
+                    "id_cliente_domicilio": id_dom,
+                    "nombre": nombre,
+                    "estado": "error",
+                    "error": msg_err,
+                }
                 break
             cod = to_int_or_none((result or {}).get("codigo_movimiento"))
             if cod is None:
-                errores[str(id_dom)] = "Checkout OK sin CodigoMovimiento."
+                msg_err = "Checkout OK sin CodigoMovimiento."
+                errores[str(id_dom)] = msg_err
+                yield {
+                    "event": "sucursal",
+                    "index": idx,
+                    "total": total,
+                    "id_cliente_domicilio": id_dom,
+                    "nombre": nombre,
+                    "estado": "error",
+                    "error": msg_err,
+                }
                 break
             creados.append(cod)
+            nro = (result or {}).get("nro_comprobante") or ""
             detalle_ok.append(
                 {
                     "id_cliente_domicilio": id_dom,
                     "codigo_movimiento": cod,
-                    "nro_comprobante": (result or {}).get("nro_comprobante") or "",
+                    "nro_comprobante": nro,
                 }
             )
+            yield {
+                "event": "sucursal",
+                "index": idx,
+                "total": total,
+                "id_cliente_domicilio": id_dom,
+                "nombre": nombre,
+                "estado": "ok",
+                "codigo_movimiento": cod,
+                "nro_comprobante": nro,
+            }
 
         if errores:
             avisos = _compensar_pedidos(draft.base_empresa, creados)
-            # Limpiar carritos efímeros aún en borrador
-            for c in carritos_tmp:
-                if c.estado == EcomCart.ESTADO_BORRADOR:
-                    c.items.all().delete()
-                    c.delete()
+            _limpiar_carritos_efimeros(carritos_tmp)
             draft.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
             draft.ultimo_error = {
                 **errores,
@@ -215,11 +551,14 @@ def confirmar_lote_masivo(
                 update_fields=["estado", "ultimo_error", "codigos_movimiento", "updated_at"]
             )
             msg = next(iter(errores.values()))
-            return False, msg, {
-                "errores": errores,
-                "compensacion": avisos,
-                "codigos_anulados_intento": creados,
-            }
+            yield _evento_fin(
+                ok=False,
+                message=msg,
+                errores=errores,
+                compensacion=avisos,
+                codigos_anulados_intento=creados,
+            )
+            return
 
         draft.estado = EcomPedidoMasivoDraft.ESTADO_CONFIRMADO
         draft.ultimo_error = {}
@@ -227,24 +566,83 @@ def confirmar_lote_masivo(
         draft.save(
             update_fields=["estado", "ultimo_error", "codigos_movimiento", "updated_at"]
         )
-        return True, f"Se crearon {len(creados)} pedido(s).", {
-            "codigos_movimiento": creados,
-            "detalle": detalle_ok,
-        }
+        yield _evento_fin(
+            ok=True,
+            message=f"Se crearon {len(creados)} pedido(s).",
+            codigos_movimiento=creados,
+            detalle=detalle_ok,
+            cod_viajante=cv_efectivo,
+        )
     except Exception as exc:
-        logger.exception("confirmar_lote_masivo: %s", exc)
+        logger.exception("confirmar_lote_masivo_stream: %s", exc)
         avisos = _compensar_pedidos(draft.base_empresa, creados)
-        for c in carritos_tmp:
-            try:
-                if c.estado == EcomCart.ESTADO_BORRADOR:
-                    c.items.all().delete()
-                    c.delete()
-            except Exception:
-                pass
+        _limpiar_carritos_efimeros(carritos_tmp)
         draft.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
         draft.ultimo_error = {"_lote": str(exc)}
         draft.codigos_movimiento = []
         draft.save(
             update_fields=["estado", "ultimo_error", "codigos_movimiento", "updated_at"]
         )
-        return False, str(exc), {"compensacion": avisos}
+        yield _evento_fin(
+            ok=False,
+            message=str(exc),
+            errores={"_lote": str(exc)},
+            compensacion=avisos,
+            codigos_anulados_intento=creados,
+        )
+
+
+def confirmar_lote_masivo(
+    draft: EcomPedidoMasivoDraft,
+    *,
+    id_usuario: int,
+    id_punto_venta: int,
+    cod_viajante: Optional[int] = None,
+    lista_id: int = 1,
+    id_deposito: int = 1,
+    desc_pie_pct: Optional[Any] = None,
+    forma_entrega: str = "",
+    observaciones: str = "",
+    agente_percep: Optional[str] = None,
+    sess_user: Optional[Dict[str, Any]] = None,
+    cabecera: Optional[PedidoCabeceraComercial] = None,
+    es_supervisor: bool = False,
+    dias_entrega: int = 0,
+    dias_no_laborables: Optional[list] = None,
+) -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Crea 1 PED por sucursal con Σ packs > 0.
+
+    Ante fallo: anula PEDs de la corrida, draft → BORRADOR + ``ultimo_error``,
+    celdas intactas. Wrapper sync sobre ``confirmar_lote_masivo_stream``.
+    """
+    final: Optional[Dict[str, Any]] = None
+    for ev in confirmar_lote_masivo_stream(
+        draft,
+        id_usuario=id_usuario,
+        id_punto_venta=id_punto_venta,
+        cod_viajante=cod_viajante,
+        lista_id=lista_id,
+        id_deposito=id_deposito,
+        desc_pie_pct=desc_pie_pct,
+        forma_entrega=forma_entrega,
+        observaciones=observaciones,
+        agente_percep=agente_percep,
+        sess_user=sess_user,
+        cabecera=cabecera,
+        es_supervisor=es_supervisor,
+        dias_entrega=dias_entrega,
+        dias_no_laborables=dias_no_laborables,
+    ):
+        if ev.get("event") == "fin":
+            final = ev
+    if not final:
+        return False, "Sin respuesta del lote.", {}
+    ok = bool(final.get("ok"))
+    msg = str(final.get("message") or "")
+    payload = {
+        k: v
+        for k, v in final.items()
+        if k not in ("event", "ok", "message")
+    }
+    return ok, msg, payload

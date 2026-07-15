@@ -38,11 +38,17 @@ from core.mysql_pool import get_connection, get_mysql_pool
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, str_or_default
 from ecom.models import EcomCart
 from ecom.services.catalogo_producto import resolver_precio_articulo
+from ecom.services.ecom_config_mysql import pedidos_validan_stock
 from ecom.services.mayorista_cart_service import recalcular_totales
 from ecom.services.mayorista_credito import evaluar_autorizacion
 from ecom.services.mayorista_percepciones import (
     PercepcionesSinConfig,
     calcular_percepciones,
+)
+from ecom.services.numero_a_letras import numero_a_letras
+from ecom.services.pedido_cabecera_comercial import (
+    PedidoCabeceraComercial,
+    resolver_cabecera_comercial,
 )
 
 logger = logging.getLogger(__name__)
@@ -75,6 +81,14 @@ class CheckoutInput:
     agente_percep: Optional[str] = None
     cod_mov_presupuesto_origen: Optional[int] = None
     enviar_mail_cliente: bool = True
+    # Cabecera comercial (opcional; si no se envía, el resolver usa defaults del cliente)
+    es_supervisor: bool = False
+    fecha_pedido: Optional[date] = None
+    fecha_entrega: Optional[date] = None
+    vencimiento: Optional[date] = None
+    id_condventa: Optional[int] = None
+    cond_venta: Optional[str] = None
+    lista_id: Optional[int] = None
 
 
 def confirmar(
@@ -108,9 +122,28 @@ def confirmar(
     if not cli:
         return False, "Cliente no encontrado.", None
 
-    # Recalcular precios con el motor (autoridad) y totales antes de escribir.
+    cabecera, err_cab = resolver_cabecera_comercial(
+        cart.base_empresa,
+        int(cart.idcliente),
+        es_supervisor=bool(datos.es_supervisor),
+        fecha_pedido=datos.fecha_pedido,
+        fecha_entrega=datos.fecha_entrega,
+        vencimiento=datos.vencimiento,
+        id_condventa=datos.id_condventa,
+        lista_id=datos.lista_id,
+        dias_entrega=int(datos.dias_entrega or 0),
+        dias_no_laborables=datos.dias_no_laborables,
+        tipo_comprobante=tipo,
+    )
+    if not cabecera:
+        return False, err_cab or "Cabecera comercial inválida.", None
+
+    # Fijar lista efectiva y recalcular precios (autoridad) antes de escribir.
+    cart.lista_id = int(cabecera.lista_id)
+    cart.save(update_fields=["lista_id", "updated_at"])
     desc_renglon = _dec(cli.get("descRenglon"), "0")
-    _reprice_items(cart, items, desc_renglon)
+    if not _reprice_items(cart, items, desc_renglon):
+        return False, "No se pudieron recalcular los precios con la lista seleccionada.", None
     recalcular_totales(cart)
     items = list(cart.items.all())
 
@@ -162,12 +195,8 @@ def confirmar(
                 [pv, tipo],
             )
 
-            hoy = date.today()
-            fecha_entrega = (
-                _calcular_fecha_entrega(datos.dias_entrega, datos.dias_no_laborables)
-                if tipo == EcomCart.TIPO_PEDIDO
-                else None
-            )
+            hoy = cabecera.fecha_pedido
+            fecha_entrega = cabecera.fecha_entrega
 
             # Percepciones IIBB (P4) — configurable por implementación (sucursal agente).
             #  - PED/PRE: si la sucursal es agente, calcula sobre el neto con descuento.
@@ -207,8 +236,14 @@ def confirmar(
                 },
             )
 
+            # Cotización vigente (una lectura por transacción; paridad Principal.cotizacion).
+            coti = _fetch_cotizacion_vigente(cur)
+            coti_dolar = _dec(coti.get("ValorPesos"), "1")
+            id_cotizacion = to_int_or_none(coti.get("id_cotizacion")) or 1
+
             # comp_ped (cabecera) — totales recalculados
             neto_gravado = _q2(_dec(cart.neto_gravado_21) + _dec(cart.neto_gravado_105))
+            importe_venta = _q2(_dec(cart.total) + total_percep)
             cur.execute(_SQL_INSERT_COMP_PED, {
                 "Fecha": hoy,
                 "TipoComprobante": tipo,
@@ -222,7 +257,8 @@ def confirmar(
                 "CodViajante": to_int_or_none(cod_viajante) or 0,
                 "TipoPedido": "Ecom cliente" if datos.es_cliente else "Ecom vendedor",
                 "Detalle": str_or_default(datos.observaciones, ""),
-                "ImporteVenta": _dec(cart.subtotal_neto),
+                "ImporteVenta": importe_venta,
+                "ImporteVentaL": numero_a_letras(float(importe_venta)),
                 "IVA1": _dec(cart.iva_21),
                 "IVA2": _dec(cart.iva_105),
                 "Exento": _dec(cart.exento),
@@ -230,17 +266,20 @@ def confirmar(
                 "SubTotal2": _dec(cart.neto_gravado_105),
                 "SubTotalGral": neto_gravado,
                 "PorDesc": _dec(cart.descuento_pie_pct),
-                "SubTotalDesc": _dec(cart.total),
+                "SubTotalDesc": _dec(cart.subtotal_neto),
                 "impuesto_interno_total": _dec(cart.impuesto_interno_total),
                 "total_percep": total_percep,
+                "CotiDolar": coti_dolar,
+                "cod_mov_ped_orginal": cod_mov if tipo == EcomCart.TIPO_PEDIDO else 0,
+                "Nro_Comp_PED_orginal": nro_comp if tipo == EcomCart.TIPO_PEDIDO else "",
                 "autorizacion_sistema": autorizacion,
-                "Vencimiento": hoy + timedelta(days=30),
+                "Vencimiento": cabecera.vencimiento,
                 "FechaEntrega": fecha_entrega,
                 "FormaEntrega": str_or_default(datos.forma_entrega, ""),
                 "id_deposito_despacho": cart.id_deposito,
-                "CondVenta": str_or_default(cli.get("condVenta"), ""),
-                "id_condventa": to_int_or_none(cli.get("id_cv")),
-                "fecha_control": timezone.localtime().strftime("%d/%m/%Y %H:%M"),
+                "CondVenta": str_or_default(cabecera.cond_venta or datos.cond_venta or cli.get("condVenta"), ""),
+                "id_condventa": to_int_or_none(cabecera.id_condventa),
+                "fecha_control": timezone.localtime().strftime("%d/%m/%Y %H:%M:%S"),
             })
 
             # percep_cli — una fila por tipo de percepción (dentro de la transacción)
@@ -255,25 +294,38 @@ def confirmar(
                 })
 
             # Renglones stockp (+ stock_deposito según tipo)
-            #  - PED: reserva stock → incrementa saldo comprometido con validación de disponible.
+            #  - PED: reserva stock → incrementa saldo comprometido (con/sin validación según config).
             #  - DEV: incrementa saldo comprometido SIN validación (paridad legacy alta_devolucion).
             #  - PRE: no toca stock.
+            validar_stock_ped = (
+                tipo == EcomCart.TIPO_PEDIDO and pedidos_validan_stock(cart.base_empresa)
+            )
             for orden, it in enumerate(items, start=1):
                 cant = _dec(it.cantidad)
                 if tipo == EcomCart.TIPO_PEDIDO:
-                    cur.execute(
-                        """
-                        UPDATE stock_deposito
-                        SET saldo_pedido_cliente = COALESCE(saldo_pedido_cliente, 0) + %s
-                        WHERE id_articulo = %s AND id_deposito = %s
-                          AND (COALESCE(saldo, 0) - COALESCE(saldo_pedido_cliente, 0)) >= %s
-                        """,
-                        [cant, it.id_articulo, cart.id_deposito, cant],
-                    )
-                    if cur.rowcount == 0:
-                        conn.rollback()
-                        nombre = (it.descripcion or "").strip() or f"artículo {it.id_articulo}"
-                        return False, f"Stock insuficiente: {nombre}.", None
+                    if validar_stock_ped:
+                        cur.execute(
+                            """
+                            UPDATE stock_deposito
+                            SET saldo_pedido_cliente = COALESCE(saldo_pedido_cliente, 0) + %s
+                            WHERE id_articulo = %s AND id_deposito = %s
+                              AND (COALESCE(saldo, 0) - COALESCE(saldo_pedido_cliente, 0)) >= %s
+                            """,
+                            [cant, it.id_articulo, cart.id_deposito, cant],
+                        )
+                        if cur.rowcount == 0:
+                            conn.rollback()
+                            nombre = (it.descripcion or "").strip() or f"artículo {it.id_articulo}"
+                            return False, f"Stock insuficiente: {nombre}.", None
+                    else:
+                        cur.execute(
+                            """
+                            UPDATE stock_deposito
+                            SET saldo_pedido_cliente = COALESCE(saldo_pedido_cliente, 0) + %s
+                            WHERE id_articulo = %s AND id_deposito = %s
+                            """,
+                            [cant, it.id_articulo, cart.id_deposito],
+                        )
                 elif tipo == EcomCart.TIPO_DEVOLUCION:
                     cur.execute(
                         """
@@ -284,10 +336,17 @@ def confirmar(
                         [cant, it.id_articulo, cart.id_deposito],
                     )
 
+                saldo_renglon = _fetch_saldo_pedido_cliente(
+                    cur, it.id_articulo, cart.id_deposito, tipo
+                )
                 cur.execute(_SQL_INSERT_STOCKP, _params_stockp(
                     it, orden, cart, tipo, nro_comp, cod_mov, cod_viajante,
                     id_usuario, cli, extras.get(it.id_articulo, {}),
                     cod_mov_presupuesto=datos.cod_mov_presupuesto_origen if tipo == EcomCart.TIPO_PEDIDO else None,
+                    fecha_pedido=cabecera.fecha_pedido,
+                    coti_dolar=coti_dolar,
+                    id_cotizacion=id_cotizacion,
+                    saldo=saldo_renglon,
                 ))
 
             if (
@@ -379,7 +438,7 @@ def _result_desde_cart(cart: EcomCart) -> Dict[str, Any]:
     }
 
 
-def _reprice_items(cart: EcomCart, items: List[Any], descuento_cliente: Decimal) -> None:
+def _reprice_items(cart: EcomCart, items: List[Any], descuento_cliente: Decimal) -> bool:
     """Recalcula el precio de cada renglón con el motor (autoridad en el commit)."""
     for it in items:
         res = resolver_precio_articulo(
@@ -391,12 +450,13 @@ def _reprice_items(cart: EcomCart, items: List[Any], descuento_cliente: Decimal)
             iva_incluido=False,
         )
         if res is None:
-            continue
+            return False
         precio, row = res
         it.precio_unitario_neto = _dec(precio)
         it.alicuota_iva = _dec(row.get("alic_iva"), "21")
         it.impuesto_interno_pct = _dec(row.get("impuesto_interno"), "0")
         it.save(update_fields=["precio_unitario_neto", "alicuota_iva", "impuesto_interno_pct"])
+    return True
 
 
 def _fetch_cliente(base_empresa: str, codigo_cliente: int) -> Optional[Dict[str, Any]]:
@@ -444,14 +504,23 @@ def _fetch_agente_percep(cur, id_usuario: int) -> str:
 
 
 def _fetch_articulo_extras(base_empresa: str, ids: List[int]) -> Dict[int, Dict[str, Any]]:
-    """PrecioCosto/CodLaboratorio/tipo_art por artículo para poblar stockp."""
+    """PrecioCosto/CodLaboratorio/tipo_art y alícuotas (id IVA/IIBB) por artículo para stockp."""
     ids = [i for i in {int(x) for x in ids if x is not None}]
     if not ids:
         return {}
     placeholders = ",".join(["%s"] * len(ids))
     sql = f"""
-        SELECT IDArt, PrecioCosto, CodLaboratorio, tipo_art
-        FROM articulo WHERE IDArt IN ({placeholders})
+        SELECT
+            articulo.IDArt,
+            articulo.PrecioCosto,
+            articulo.CodLaboratorio,
+            articulo.tipo_art,
+            articulo.Alicuota,
+            articulo.AlicuotaIB,
+            activ_iibb.alicuota AS iibb_pct
+        FROM articulo
+        LEFT JOIN activ_iibb ON activ_iibb.id = articulo.AlicuotaIB
+        WHERE articulo.IDArt IN ({placeholders})
     """
     out: Dict[int, Dict[str, Any]] = {}
     pool = get_mysql_pool()
@@ -463,9 +532,47 @@ def _fetch_articulo_extras(base_empresa: str, ids: List[int]) -> Dict[int, Dict[
     return out
 
 
-def _calcular_fecha_entrega(dias_entrega: int, dias_no_laborables: List[int]) -> date:
+def _fetch_cotizacion_vigente(cur) -> Dict[str, Any]:
+    """Cotización vigente (ValorPesos / id_cotizacion) dentro de la transacción."""
+    cur.execute(
+        "SELECT ValorPesos, id_cotizacion FROM cotizacion ORDER BY id_cotizacion LIMIT 1"
+    )
+    row = cur.fetchone() or {}
+    return row if isinstance(row, dict) else {}
+
+
+def _fetch_saldo_pedido_cliente(
+    cur,
+    id_articulo: int,
+    id_deposito: int,
+    tipo: str,
+) -> Decimal:
+    """Saldo comprometido tras el UPDATE de reserva (PED/DEV); 0 en PRE o sin fila."""
+    if tipo not in (EcomCart.TIPO_PEDIDO, EcomCart.TIPO_DEVOLUCION):
+        return Decimal("0")
+    cur.execute(
+        """
+        SELECT COALESCE(saldo_pedido_cliente, 0) AS saldo
+        FROM stock_deposito
+        WHERE id_articulo = %s AND id_deposito = %s
+        LIMIT 1
+        """,
+        [id_articulo, id_deposito],
+    )
+    row = cur.fetchone() or {}
+    if not isinstance(row, dict) or row.get("saldo") is None:
+        return Decimal("0")
+    return _dec(row.get("saldo"))
+
+
+def _calcular_fecha_entrega(
+    dias_entrega: int,
+    dias_no_laborables: List[int],
+    *,
+    fecha_base: Optional[date] = None,
+) -> date:
     """Suma días de entrega y evita un día no laborable (paridad legacy)."""
-    base = date.today() + timedelta(days=int(dias_entrega or 0))
+    base = (fecha_base or date.today()) + timedelta(days=int(dias_entrega or 0))
     no_lab = {int(d) for d in (dias_no_laborables or [])}
     if base.isoweekday() in no_lab:
         base = base + timedelta(days=1)
@@ -477,13 +584,20 @@ def _params_stockp(
     cod_viajante: Optional[int], id_usuario: int, cli: Dict[str, Any], extra: Dict[str, Any],
     *,
     cod_mov_presupuesto: Optional[int] = None,
+    fecha_pedido: Optional[date] = None,
+    coti_dolar: Decimal = Decimal("1"),
+    id_cotizacion: int = 1,
+    saldo: Decimal = Decimal("0"),
 ) -> Dict[str, Any]:
     cant = _dec(it.cantidad)
     pu = _dec(it.precio_unitario_neto)
     desc = _dec(it.porcentaje_descuento)
-    alic = _dec(it.alicuota_iva)
+    alic_pct = _dec(it.alicuota_iva)
+    id_alic_iva = to_int_or_none(extra.get("Alicuota")) or 0
+    id_alic_iibb = to_int_or_none(extra.get("AlicuotaIB")) or 0
+    iibb_pct = _dec(extra.get("iibb_pct"), "0")
     neto_u = _q2(pu * (Decimal("100") - desc) / Decimal("100"))
-    iva_u = _q2(neto_u * alic / Decimal("100"))
+    iva_u = _q2(neto_u * alic_pct / Decimal("100"))
     bruto_u = _q2(neto_u + iva_u)
     costo_u = _dec(extra.get("PrecioCosto"), "0")
     tipo_comp_texto = {
@@ -491,22 +605,35 @@ def _params_stockp(
         EcomCart.TIPO_PRESUPUESTO: "Presupuesto",
         EcomCart.TIPO_DEVOLUCION: "Devolucion",
     }.get(tipo, "Pedido")
-    tipo_iva = "Exento" if alic == 0 else "Gravado"
+    tipo_iva = "Exento" if alic_pct == 0 else "Gravado"
     tipo_unidad = str_or_default(getattr(it, "tipo_unidad", None), "Unidad")
     cant_div = _dec(getattr(it, "cantidad_dividir", None), "1")
     if cant_div <= 0:
         cant_div = Decimal("1")
+    promocion = str_or_default(it.promocion, "No") or "No"
+    promocion_tipo = ""
+    promocion_cant = 0
+    promocion_por = Decimal("0")
+    if promocion == "Si":
+        promocion_tipo = str_or_default(it.promocion_tipo, "")
+        promocion_cant = to_int_or_none(it.promocion_cant) or 0
+        promocion_por = _dec(it.promocion_por)
     return {
         "IDArt": it.id_articulo,
         "CodigoArticulo": str_or_default(it.codigo, ""),
         "Descripcion": str_or_default(it.descripcion, ""),
         "id_manual": str_or_default(it.id_manual, ""),
         "CodigoMovimiento": cod_mov,
-        "Fecha": date.today(),
+        "Fecha": fecha_pedido or date.today(),
         "Salida": cant,
         "Cantidad": cant,
-        "Alicuota": alic,
-        "imp_alicuota_iva": alic,
+        "Alicuota": id_alic_iva,
+        "AlicuotaIB": id_alic_iibb,
+        "imp_alicuota_iva": alic_pct,
+        "imp_alicuota_iibb": iibb_pct,
+        "saldo": _dec(saldo),
+        "coti_dolar": _dec(coti_dolar),
+        "id_cotizacion": id_cotizacion,
         "PrecioVentaxU": pu,
         "PrecioNetoxU": neto_u,
         "PrecioIVAxU": iva_u,
@@ -536,10 +663,12 @@ def _params_stockp(
         "Orden": orden,
         "cantidad_entregada": cant,
         "cantidad_pendiente": cant,
-        "promocion": str_or_default(it.promocion, "No") or "No",
-        "promocion_por": _dec(it.promocion_por),
-        "promocion_tipo": str_or_default(it.promocion_tipo, ""),
-        "promocion_cant": to_int_or_none(it.promocion_cant) or 0,
+        "cantidad_pendiente_opt": cant,
+        "cantidad_fab_pendiente_opt": cant,
+        "promocion": promocion,
+        "promocion_por": promocion_por,
+        "promocion_tipo": promocion_tipo,
+        "promocion_cant": promocion_cant,
         "tipo_unidad": tipo_unidad,
         "cantidad_dividir": cant_div,
         "cantidad_unidad_display": cant_div,
@@ -580,6 +709,10 @@ _SQL_INSERT_COMP_PED = """
         SubtotalDesc = %(SubTotalDesc)s,
         impuesto_interno_total = %(impuesto_interno_total)s,
         total_percep = %(total_percep)s,
+        CotiDolar = %(CotiDolar)s,
+        ImporteVentaL = %(ImporteVentaL)s,
+        cod_mov_ped_orginal = %(cod_mov_ped_orginal)s,
+        Nro_Comp_PED_orginal = %(Nro_Comp_PED_orginal)s,
         autorizacion_sistema = %(autorizacion_sistema)s,
         Estado = 'Pendiente',
         Anulado = 'No',
@@ -615,8 +748,13 @@ _SQL_INSERT_STOCKP = """
         Fecha = %(Fecha)s,
         Salida = %(Salida)s,
         Cantidad = %(Cantidad)s,
+        saldo = %(saldo)s,
         Alicuota = %(Alicuota)s,
+        AlicuotaIB = %(AlicuotaIB)s,
         imp_alicuota_iva = %(imp_alicuota_iva)s,
+        imp_alicuota_iibb = %(imp_alicuota_iibb)s,
+        coti_dolar = %(coti_dolar)s,
+        id_cotizacion = %(id_cotizacion)s,
         PrecioVentaxU = %(PrecioVentaxU)s,
         PrecioNetoxU = %(PrecioNetoxU)s,
         PrecioIVAxU = %(PrecioIVAxU)s,
@@ -648,6 +786,8 @@ _SQL_INSERT_STOCKP = """
         Orden = %(Orden)s,
         cantidad_entregada = %(cantidad_entregada)s,
         cantidad_pendiente = %(cantidad_pendiente)s,
+        cantidad_pendiente_opt = %(cantidad_pendiente_opt)s,
+        cantidad_fab_pendiente_opt = %(cantidad_fab_pendiente_opt)s,
         promocion = %(promocion)s,
         promocion_por = %(promocion_por)s,
         promocion_tipo = %(promocion_tipo)s,

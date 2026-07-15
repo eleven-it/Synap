@@ -15,6 +15,7 @@ from .administranet_auth import AdministraNETAuth
 from core.models import Empresa
 from core.utils.template_selector import get_template_for_device
 from core.utils.rate_limit import check_rate_limit
+from ecom.services.vendedor_operativo import reset_cod_viajante_operativo
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +272,7 @@ def logout_view(request):
     # PASO 3: Limpiar sesión de Django completamente
     if hasattr(request, 'session') and request.session:
         try:
+            reset_cod_viajante_operativo(request)
             # Eliminar todas las claves de la sesión
             session_keys = list(request.session.keys())
             for key in session_keys:

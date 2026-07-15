@@ -19,8 +19,16 @@ from reports.services.executive_dashboard.inventory_metrics import (
 )
 from reports.services.executive_dashboard.manufacturing_metrics import fetch_manufactura_resumen
 from reports.services.executive_dashboard.purchase_metrics import fetch_compras_resumen
-from reports.services.executive_dashboard.tesoreria_metrics import fetch_tesoreria_resumen, _sum_saldo_cajas
-from reports.services.executive_dashboard.ventas_cobros_metrics import fetch_ventas_cobros_resumen
+from reports.services.executive_dashboard.banco_metrics import fetch_tesoreria_banco_resumen
+from reports.services.executive_dashboard.tesoreria_metrics import (
+    fetch_tesoreria_resumen,
+    list_movimientos_caja,
+    _sum_saldo_cajas,
+)
+from reports.services.executive_dashboard.ventas_cobros_metrics import (
+    fetch_ventas_cobros_resumen,
+    list_cobros_detalle,
+)
 from reports.services.executive_dashboard.ventas_metrics import (
     fetch_ventas_resumen,
     list_pedidos_pendientes,
@@ -188,7 +196,10 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertIn("endpoints", out["meta"])
         self.assertIn("tesoreria", out["meta"]["endpoints"])
         self.assertIn("ventas_cobros", out["meta"]["endpoints"])
+        self.assertIn("tesoreria_banco", out["meta"]["endpoints"])
         self.assertTrue(out["meta"]["modulos"]["mpr"])
+        tes = out["areas"].get("tesoreria") or {}
+        self.assertIn("banco", tes)
 
     @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=False)
     @patch("reports.services.executive_dashboard.command_center.fetch_manufactura_resumen")
@@ -434,3 +445,70 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
 
         f2 = resolve_filters_from_query_params(Q2(), base_empresa="x")
         self.assertEqual(f2.busqueda, "ab")
+
+    def test_fetch_tesoreria_banco_resumen_estructura(self):
+        cursor = MagicMock()
+        cursor.execute = MagicMock(return_value=None)
+        cursor.fetchone = MagicMock(
+            side_effect=[(500.0,), (600.0,), (100.0, 50.0), (3,)]
+        )
+        cursor.fetchall = MagicMock(return_value=[])
+        out = fetch_tesoreria_banco_resumen(cursor, _filters())
+        self.assertEqual(out["saldo_banco_inicial"], 500.0)
+        self.assertEqual(out["saldo_banco_final"], 600.0)
+        self.assertEqual(out["creditos_periodo"], 100.0)
+        self.assertEqual(out["debitos_periodo"], 50.0)
+        self.assertEqual(out["pendiente_conciliar"], 3)
+        self.assertTrue(out["disponible"])
+        self.assertIn("por_cuenta_banco", out)
+        self.assertEqual(out["meta"]["definicion"], "executive-dashboard-v1")
+
+    def test_list_cobros_detalle_paginado(self):
+        cursor = MagicMock()
+        cursor.execute = MagicMock(return_value=None)
+        cursor.fetchone = MagicMock(side_effect=[(1,), (0,)])
+        cursor.description = [
+            ("fecha",),
+            ("tipo",),
+            ("nro_comprobante",),
+            ("tipo_comprobante",),
+            ("importe",),
+            ("id_cliente",),
+            ("nombre_cliente",),
+            ("medio_mcp",),
+        ]
+        cursor.fetchall = MagicMock(
+            return_value=[
+                ("01/05/2026", "Cobranza Efectivo", "REC-1", "REC", 500.0, 10, "Cliente SA", None),
+            ]
+        )
+        out = list_cobros_detalle(cursor, _filters())
+        self.assertEqual(out["total_registros"], 1)
+        self.assertEqual(len(out["filas"]), 1)
+        self.assertEqual(out["filas"][0]["importe"], 500.0)
+        self.assertIn("medio", out["filas"][0])
+
+    def test_list_movimientos_caja_paginado(self):
+        cursor = MagicMock()
+        cursor.execute = MagicMock(return_value=None)
+        cursor.fetchone = MagicMock(return_value=(2,))
+        cursor.description = [
+            ("fecha",),
+            ("tipo",),
+            ("tipo_comprobante",),
+            ("nro_comprobante",),
+            ("ingreso",),
+            ("egreso",),
+            ("codigo_movimiento",),
+            ("cod_sucursal",),
+        ]
+        cursor.fetchall = MagicMock(
+            return_value=[
+                ("01/05/2026", "Cobranza", "REC", "R-1", 100.0, 0.0, 99, 1),
+            ]
+        )
+        out = list_movimientos_caja(cursor, _filters())
+        self.assertEqual(out["total_registros"], 2)
+        self.assertEqual(len(out["filas"]), 1)
+        sql_count = cursor.execute.call_args_list[0][0][0]
+        self.assertIn("Transferencia de Fondos", sql_count)

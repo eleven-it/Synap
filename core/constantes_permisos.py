@@ -1,8 +1,7 @@
 # core/constantes_permisos.py
 
 # Módulos que reciben un permiso comodín "modulo.*" (acceso total al módulo).
-# Centralizado aquí para que lo consuman tanto el catálogo Synap (synap_permiso)
-# como la sincronización legacy (sync_permisos_synap) sin duplicar la lista.
+# Centralizado aquí para el catálogo Synap (synap_permiso) y el seed en synap_permisos_seed.
 MODULOS_CON_COMODIN = ("reports", "stock", "self_checkout", "logistica")
 
 # Mapeo Clavemenu (tabla permisos VB6/Principal) → key_permiso (permiso_sistema Synap).
@@ -185,6 +184,7 @@ PERMISOS_POR_MODULO = {
         ("ecom.pedidos.ver_todos", "Ver pedidos de todos los vendedores (listado gerencial)"),
         ("ecom.pedido_masivo.usar", "Carga masiva de pedidos por sucursal (matriz)"),
         ("ecom.config_vendedor_cliente_marca", "Configurar territorio Vendedor→Cliente→Marca"),
+        ("ecom.config_ajustes_ventas", "Configurar ajustes de ventas (ecom)"),
         ("ecom.comprobantes.ver", "Ver listados de comprobantes (PED/PRE/REM/FE/NC)"),
         ("ecom.comprobantes.anular", "Anular pedidos desde el portal"),
         ("ecom.clientes.ver", "Ver clientes del portal"),
