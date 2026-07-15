@@ -849,7 +849,7 @@ def _buscar_articulos_con_precios(
         term = f"%{(q or '').strip()}%"
         tipo_fab = str_or_default(tipo_art_fab, "").strip()
         where_tipo = ""
-        params: List[Any] = [term, term, term, term]
+        params: List[Any] = [term, term, term, term, term]
         if tipo_fab:
             where_tipo = " AND COALESCE(TRIM(a.tipo_art_fab), '') = %s"
             params.append(tipo_fab)
@@ -878,6 +878,7 @@ def _buscar_articulos_con_precios(
                     OR a.CodigoArticuloT LIKE %s
                     OR a.NroCodBarra LIKE %s
                     OR CAST(a.CodigoArticulo AS CHAR) LIKE %s
+                    OR CAST(COALESCE(a.id_manual, '') AS CHAR) LIKE %s
                   ){where_tipo}
                 ORDER BY a.NombreArticulo
                 LIMIT %s
