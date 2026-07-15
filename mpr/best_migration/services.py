@@ -162,24 +162,19 @@ def _load_admin_fabricados(base_empresa: str) -> list[dict]:
 
 
 def _fetch_best_catalog_skus() -> tuple[list[dict], dict[str, dict]]:
-    """Catálogo BEST para matcher inverso (inventario + pedidos abiertos, sin REP_RECETAS)."""
+    """Catálogo BEST semi-elaborado para matcher inverso (sin REP_RECETAS)."""
     conn = connect_best()
     try:
         best_rows = fetch_dict(
             conn,
             """
-            SELECT DISTINCT id_articulo, codigo, articulo, marca FROM (
-                SELECT [Id Articulo] AS id_articulo, Codigo AS codigo,
-                       Articulo AS articulo, Marca AS marca
-                FROM REP_INVENTARIOS
-                WHERE COALESCE(Stock, 0) <> 0
-                UNION
-                SELECT c.[Id Articulo] AS id_articulo, c.Codigo AS codigo,
-                       c.Articulo AS articulo, c.Marca AS marca
-                FROM REP_ORDENES_COMBINADO c
-                WHERE c.Finalizada = 0 AND c.Pendiente > 0
-            ) u
-            WHERE id_articulo IS NOT NULL
+            SELECT DISTINCT [Id Articulo] AS id_articulo,
+                   Codigo AS codigo,
+                   Articulo AS articulo,
+                   Marca AS marca
+            FROM REP_INVENTARIOS
+            WHERE [Id Deposito] IN (4000, 4002)
+              AND [Id Articulo] IS NOT NULL
             """,
         )
         ids = [str(r.get("id_articulo") or "").strip() for r in best_rows if r.get("id_articulo")]
@@ -830,78 +825,157 @@ def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
         myl_by_mmid=myl,
     )
 
-    preservados = {
-        m.best_id_articulo: m
-        for m in BestArticuloMap.objects.filter(
-            base_empresa=base_empresa,
-            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
-            estado__in=[
-                BestArticuloMap.Estado.VALIDADO,
-                BestArticuloMap.Estado.DESCARTADO,
-            ],
-        )
-    }
+    bom_qs = BestArticuloMap.objects.filter(
+        base_empresa=base_empresa,
+        origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+    )
+    non_bom_ids = set(
+        BestArticuloMap.objects.filter(base_empresa=base_empresa)
+        .exclude(origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO)
+        .values_list("best_id_articulo", flat=True)
+    )
+    # La clave BEST es única por empresa. Si una instalación anterior permitió
+    # coexistencia, re-clavar la fila BOM evita que vuelva a competir con PT.
+    contaminadas = 0
+    for obj in bom_qs.filter(best_id_articulo__in=non_bom_ids):
+        obj.best_id_articulo = f"FAB:{obj.admin_idart}"
+        obj.best_codigo = ""
+        obj.best_articulo = (obj.admin_nombre or "")[:255]
+        obj.best_marca = ""
+        obj.best_modelos = ""
+        obj.best_colores = ""
+        obj.best_color_mode = ""
+        obj.best_talle = ""
+        obj.best_pack = ""
+        obj.best_variant_codes = ""
+        obj.estado = BestArticuloMap.Estado.SIN_CANDIDATO
+        obj.score = None
+        obj.razon = "SKU BEST ocupado por mapeo no BOM"
+        obj.validado = False
+        obj.validado_por = ""
+        obj.validado_en = None
+        obj.save()
+        contaminadas += 1
 
-    created = updated = preserved = skipped = 0
+    created = updated = preserved = sin_sku_best = 0
     for admin in fabricados_admin:
         aid = int(admin["IDArt"])
         row = inferidos.get(aid)
-        if not row or not (row.best_id_articulo or "").strip():
-            skipped += 1
-            continue
-        best_id = row.best_id_articulo.strip()
-        prev = preservados.get(best_id)
-        defaults = {
-            "best_codigo": row.best_codigo,
-            "best_articulo": (row.best_articulo or "")[:255],
-            "best_marca": (row.best_marca or "")[:64],
-            "best_modelos": (row.best_modelos or "")[:128],
-            "best_colores": (row.best_colores or "")[:64],
-            "best_color_mode": (row.best_color_mode or "")[:16],
-            "best_talle": (row.best_talle or "")[:8],
-            "best_pack": (row.best_pack or "")[:8],
-            "best_variant_codes": (row.best_variant_codes or "")[:128],
-            "dict_version": DICT_VERSION,
-            "candidatos_n": row.candidatos_n,
-            "alt1_idart": row.alt1_idart,
-            "alt1_nombre": (row.alt1_nombre or "")[:255],
-            "alt1_score": row.alt1_score,
-            "alt2_idart": row.alt2_idart,
-            "alt2_nombre": (row.alt2_nombre or "")[:255],
-            "alt2_score": row.alt2_score,
-            **_FLAGS_ALCANCE_BOM_FABRICADO,
-        }
-        if prev:
-            for k, v in defaults.items():
-                setattr(prev, k, v)
-            prev.save()
+        synthetic_id = f"FAB:{aid}"
+        proposed_id = (row.best_id_articulo or "").strip() if row else ""
+        best_id = proposed_id or synthetic_id
+        sku_ocupado = bool(proposed_id and proposed_id in non_bom_ids)
+        if sku_ocupado or not proposed_id:
+            best_id = synthetic_id
+            sin_sku_best += 1
+
+        prev = bom_qs.filter(admin_idart=aid).order_by("pk").first()
+        if prev and prev.estado in (
+            BestArticuloMap.Estado.VALIDADO,
+            BestArticuloMap.Estado.DESCARTADO,
+        ):
             preserved += 1
             continue
 
-        obj, was_created = BestArticuloMap.objects.update_or_create(
+        if prev and prev.best_id_articulo != best_id:
+            # Solo la fila BOM se reclava; nunca se actualiza una fila no-BOM
+            # por el Id Artículo BEST inferido.
+            if BestArticuloMap.objects.filter(
+                base_empresa=base_empresa, best_id_articulo=best_id
+            ).exclude(pk=prev.pk).exists():
+                best_id = synthetic_id
+                sin_sku_best += 1
+
+        if not row or sku_ocupado or not proposed_id:
+            estado = BestArticuloMap.Estado.SIN_CANDIDATO
+            razon = (
+                "SKU BEST ocupado por mapeo no BOM"
+                if sku_ocupado
+                else "Sin SKU BEST candidato en depósitos Producción/Semi-Embalado"
+            )
+            best_articulo = admin.get("NombreArticulo") or ""
+            best_codigo = best_marca = best_modelos = best_colores = ""
+            best_color_mode = best_talle = best_pack = best_variant_codes = ""
+            score = None
+            candidatos_n = 0
+            alt1_idart = alt1_nombre = alt1_score = None
+            alt2_idart = alt2_nombre = alt2_score = None
+        else:
+            estado = row.status
+            razon = row.razon
+            best_articulo = row.best_articulo
+            best_codigo = row.best_codigo
+            best_marca = row.best_marca
+            best_modelos = row.best_modelos
+            best_colores = row.best_colores
+            best_color_mode = row.best_color_mode
+            best_talle = row.best_talle
+            best_pack = row.best_pack
+            best_variant_codes = row.best_variant_codes
+            score = row.score
+            candidatos_n = row.candidatos_n
+            alt1_idart, alt1_nombre, alt1_score = row.alt1_idart, row.alt1_nombre, row.alt1_score
+            alt2_idart, alt2_nombre, alt2_score = row.alt2_idart, row.alt2_nombre, row.alt2_score
+        defaults = {
+            "best_codigo": (best_codigo or "")[:64],
+            "best_articulo": (best_articulo or "")[:255],
+            "best_marca": (best_marca or "")[:64],
+            "best_modelos": (best_modelos or "")[:128],
+            "best_colores": (best_colores or "")[:64],
+            "best_color_mode": (best_color_mode or "")[:16],
+            "best_talle": (best_talle or "")[:8],
+            "best_pack": (best_pack or "")[:8],
+            "best_variant_codes": (best_variant_codes or "")[:128],
+            "dict_version": DICT_VERSION,
+            "candidatos_n": candidatos_n,
+            "alt1_idart": alt1_idart,
+            "alt1_nombre": (alt1_nombre or "")[:255],
+            "alt1_score": alt1_score,
+            "alt2_idart": alt2_idart,
+            "alt2_nombre": (alt2_nombre or "")[:255],
+            "alt2_score": alt2_score,
+            **_FLAGS_ALCANCE_BOM_FABRICADO,
+        }
+        if prev:
+            prev.best_id_articulo = best_id
+            for k, v in defaults.items():
+                setattr(prev, k, v)
+            prev.admin_idart = aid
+            prev.admin_id_manual = (admin.get("id_manual") or "")[:64]
+            prev.admin_nombre = (admin.get("NombreArticulo") or "")[:255]
+            prev.admin_cod_art_prov = (admin.get("CodArtProv") or "")[:128]
+            prev.admin_pack = (row.admin_pack if row else "")[:8]
+            prev.admin_talle = (row.admin_talle if row else "")[:8]
+            prev.admin_color_mode = (row.admin_color_mode if row else "")[:16]
+            prev.estado = estado
+            prev.score = score
+            prev.razon = (razon or "")[:512]
+            prev.validado = False
+            prev.validado_por = ""
+            prev.validado_en = None
+            prev.save()
+            updated += 1
+            continue
+
+        BestArticuloMap.objects.create(
             base_empresa=base_empresa,
             best_id_articulo=best_id,
-            defaults={
-                **defaults,
-                "admin_idart": row.admin_idart or aid,
-                "admin_id_manual": (row.admin_id_manual or admin.get("id_manual") or "")[:64],
-                "admin_nombre": (row.admin_nombre or admin.get("NombreArticulo") or "")[:255],
-                "admin_cod_art_prov": (row.admin_cod_art_prov or admin.get("CodArtProv") or "")[:128],
-                "admin_pack": (row.admin_pack or "")[:8],
-                "admin_talle": (row.admin_talle or "")[:8],
-                "admin_color_mode": (row.admin_color_mode or "")[:16],
-                "estado": row.status,
-                "score": row.score,
-                "razon": (row.razon or "")[:512],
-                "validado": False,
-                "validado_por": "",
-                "validado_en": None,
-            },
+            **defaults,
+            admin_idart=aid,
+            admin_id_manual=(admin.get("id_manual") or "")[:64],
+            admin_nombre=(admin.get("NombreArticulo") or "")[:255],
+            admin_cod_art_prov=(admin.get("CodArtProv") or "")[:128],
+            admin_pack=(row.admin_pack if row else "")[:8],
+            admin_talle=(row.admin_talle if row else "")[:8],
+            admin_color_mode=(row.admin_color_mode if row else "")[:16],
+            estado=estado,
+            score=score,
+            razon=(razon or "")[:512],
+            validado=False,
+            validado_por="",
+            validado_en=None,
         )
-        if was_created:
-            created += 1
-        else:
-            updated += 1
+        created += 1
 
     return {
         "terminados_fuente": len(terminado_idarts),
@@ -909,7 +983,8 @@ def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
         "created": created,
         "updated": updated,
         "preserved": preserved,
-        "skipped_sin_best": skipped,
+        "skipped_sin_best": sin_sku_best,
+        "contaminadas_reclavadas": contaminadas,
         "total": len(fabricados_admin),
     }
 

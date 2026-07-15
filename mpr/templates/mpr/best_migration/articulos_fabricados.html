@@ -21,8 +21,9 @@
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Artículos fabricados (BOM Admin)</h1>
         <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
           Componentes <strong>Fabricado</strong> detectados en BOM AdministraNET (<code>en_abm</code> / <code>en_abm_formula</code>)
-          desde terminados validados. Matcher inverso Admin→BEST. <strong>No bloquea</strong> el gate PED ni el cutover de terminados.
-          Stock Semi-Embalado (dep. BEST 4002) es opcional post-cutover.
+          desde terminados validados. BEST se consulta solo desde inventario de Producción/Semi-Embalado
+          (depósitos 4000/4002), nunca desde Terminado 4003 ni pedidos abiertos. <strong>No bloquea</strong>
+          el gate PED ni el cutover de terminados.
         </p>
         <p class="mt-2 text-sm text-gray-700 dark:text-gray-200">
           Pendientes: <strong class="text-amber-700 dark:text-amber-300">{{ articulos_resumen.necesarios_pendientes }}</strong>
@@ -120,9 +121,10 @@
                        title="Seleccionar todas las filas con candidato"
                        @change="toggleAll($event)">
               </th>
-              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">BEST</th>
+              <th class="min-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Componente Admin</th>
+              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">SKU BEST (componente)</th>
               <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Alcance</th>
-              <th class="min-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Candidato Admin</th>
+              <th class="min-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Coincidencia Admin</th>
               <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Acciones</th>
             </tr>
           </thead>
@@ -141,8 +143,17 @@
                 {% endif %}
               </td>
               <td class="px-3 py-3 text-sm">
+                <div class="font-semibold text-gray-900 dark:text-white">IDArt {{ f.admin_idart }}</div>
+                {% if f.admin_id_manual %}<div class="text-xs text-gray-500 dark:text-gray-400">{{ f.admin_id_manual }}</div>{% endif %}
+                <div class="text-sm text-gray-600 dark:text-gray-300" title="{{ f.admin_nombre }}">{{ f.admin_nombre|truncatechars:70 }}</div>
+              </td>
+              <td class="px-3 py-3 text-sm">
+                {% if f.best_id_articulo|slice:":4" == "FAB:" %}
+                <span class="font-medium text-gray-500 dark:text-gray-400">Sin SKU BEST</span>
+                {% else %}
                 <div class="font-semibold text-gray-900 dark:text-white">{{ f.best_id_articulo }}</div>
                 <div class="text-sm text-gray-600 dark:text-gray-300" title="{{ f.best_articulo }}">{{ f.best_articulo|truncatechars:70 }}</div>
+                {% endif %}
               </td>
               <td class="px-3 py-3 text-sm">
                 {% if f.categoria_migracion == 'CUMPLE' %}
@@ -317,7 +328,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500">
+              <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">
                 No hay filas. Ejecutá «Resolver fabricados» desde terminados validados.
               </td>
             </tr>

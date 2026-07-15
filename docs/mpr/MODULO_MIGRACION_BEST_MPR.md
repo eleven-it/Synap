@@ -105,8 +105,12 @@ UI (`/mpr/migracion-best/articulos/`):
 ## Artículos fabricados (BOM Admin, no bloqueante)
 
 - **Fuente BOM:** solo AdministraNET (`en_abm` / `en_abm_formula`). **No** se lee `REP_RECETAS` en BEST.
-- **Flujo:** terminados `VALIDADO` → explosión primer nivel BOM → componentes `tipo_art_fab=Fabricado` → matcher inverso Admin→BEST → `BestArticuloMap` con `origen_requerimiento=BOM_FABRICADO`.
-- **UI:** `/mpr/migracion-best/articulos-fabricados/` — acción «Resolver fabricados», Asignar con búsqueda `tipo_art_fab=Fabricado`.
+- **Filas:** cada fila representa un componente Admin `tipo_art_fab=Fabricado` de la BOM, no un producto terminado BEST.
+- **Flujo:** terminados `VALIDADO` → explosión primer nivel BOM → componentes `tipo_art_fab=Fabricado` → matcher Admin→BEST → `BestArticuloMap` con `origen_requerimiento=BOM_FABRICADO`, identificado funcionalmente por `admin_idart`.
+- **Catálogo BEST aproximado:** solo `REP_INVENTARIOS` en depósitos **4000 Producción** y **4002 Semi-Embalado**. Se excluyen depósito **4003 Terminado** y pedidos abiertos, porque corresponden a productos terminados.
+- **Clave sin SKU:** si no hay coincidencia segura, o el SKU ya pertenece a un mapeo no BOM (`PEDIDO_ABIERTO`, `STOCK_DEPOSITO` o `HISTORICO`), la fila usa `FAB:{IDArt}` y queda `SIN_CANDIDATO`; la UI muestra «Sin SKU BEST».
+- **Limitación vigente:** `REP_RECETAS` aún no se lee. La relación esperada PT → PP → crudo está documentada, pero este catálogo semi es una aproximación hasta incorporar esas recetas.
+- **UI:** `/mpr/migracion-best/articulos-fabricados/` — acción «Resolver fabricados», con componente Admin y SKU BEST (componente) como primeras columnas.
 - **Gate:** dominio `articulos_fabricados` con `obligatorio_para_pedidos=False`; pendientes de fabricados no bloquean cutover ni siembra PED.
 - **Stock Semi opcional:** `sincronizar_stock_fabricados_semi` filtra inventario BEST depósito **4002** (Semi-Embalado) y SKUs fabricados validados; misma máquina de olas (`CARGADO` inmutable).
 
