@@ -14,6 +14,7 @@ from mpr.best_migration.models import (
     BestStockInicialMap,
 )
 from mpr.best_migration.services import (
+    asignar_best_a_fabricado,
     recalcular_mapeo_articulos,
     refresh_parity_counters,
     resolver_fabricados_desde_terminados,
@@ -331,3 +332,78 @@ class HubYColasStockTests(TestCase):
             reverse("mpr:migracion_best_articulos_fabricados"),
             "/mpr/migracion-best/articulos-fabricados/",
         )
+        self.assertEqual(
+            reverse("mpr:migracion_best_api_skus_componentes"),
+            "/mpr/migracion-best/api/skus-componentes/",
+        )
+
+
+class AsignarBestAFabricadoTests(TestCase):
+    @patch("mpr.best_migration.services._fetch_best_catalog_skus")
+    def test_asignar_reemplaza_fab_y_valida(self, mock_catalog):
+        mock_catalog.return_value = (
+            [
+                {
+                    "id_articulo": "SEMI-99",
+                    "codigo": "FAB99",
+                    "articulo": "Tejido semi",
+                    "marca": "MarcaX",
+                }
+            ],
+            {},
+        )
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="FAB:99",
+            estado=BestArticuloMap.Estado.SIN_CANDIDATO,
+            admin_idart=99,
+            admin_nombre="Componente 99",
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+
+        obj = asignar_best_a_fabricado(
+            base_empresa=BASE,
+            map_best_id="FAB:99",
+            nuevo_best_id="SEMI-99",
+            usuario="tester",
+        )
+
+        self.assertEqual(obj.best_id_articulo, "SEMI-99")
+        self.assertEqual(obj.estado, BestArticuloMap.Estado.VALIDADO)
+        self.assertTrue(obj.validado)
+        self.assertEqual(obj.admin_idart, 99)
+        self.assertEqual(obj.best_codigo, "FAB99")
+        self.assertEqual(obj.best_articulo, "Tejido semi")
+        self.assertFalse(
+            BestArticuloMap.objects.filter(
+                base_empresa=BASE, best_id_articulo="FAB:99"
+            ).exists()
+        )
+
+    def test_conflicto_con_pedido_abierto(self):
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="PT-OCUPADO",
+            estado=BestArticuloMap.Estado.VALIDADO,
+            admin_idart=10,
+            validado=True,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+        )
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="FAB:20",
+            estado=BestArticuloMap.Estado.SIN_CANDIDATO,
+            admin_idart=20,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            asignar_best_a_fabricado(
+                base_empresa=BASE,
+                map_best_id="FAB:20",
+                nuevo_best_id="PT-OCUPADO",
+                usuario="tester",
+            )
+        self.assertIn("Pedido abierto", str(ctx.exception))
+        fab = BestArticuloMap.objects.get(base_empresa=BASE, best_id_articulo="FAB:20")
+        self.assertEqual(fab.estado, BestArticuloMap.Estado.SIN_CANDIDATO)

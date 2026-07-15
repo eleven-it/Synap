@@ -108,9 +108,10 @@ UI (`/mpr/migracion-best/articulos/`):
 - **Filas:** cada fila representa un componente Admin `tipo_art_fab=Fabricado` de la BOM, no un producto terminado BEST.
 - **Flujo:** terminados `VALIDADO` → explosión primer nivel BOM → componentes `tipo_art_fab=Fabricado` → matcher Admin→BEST → `BestArticuloMap` con `origen_requerimiento=BOM_FABRICADO`, identificado funcionalmente por `admin_idart`.
 - **Catálogo BEST aproximado:** solo `REP_INVENTARIOS` en depósitos **4000 Producción** y **4002 Semi-Embalado**. Se excluyen depósito **4003 Terminado** y pedidos abiertos, porque corresponden a productos terminados.
-- **Clave sin SKU:** si no hay coincidencia segura, o el SKU ya pertenece a un mapeo no BOM (`PEDIDO_ABIERTO`, `STOCK_DEPOSITO` o `HISTORICO`), la fila usa `FAB:{IDArt}` y queda `SIN_CANDIDATO`; la UI muestra «Sin SKU BEST».
+- **Clave sin SKU:** si no hay coincidencia segura, o el SKU ya pertenece a un mapeo no BOM (`PEDIDO_ABIERTO`, `STOCK_DEPOSITO` o `HISTORICO`), la fila usa `FAB:{IDArt}` y queda `SIN_CANDIDATO`; la UI muestra «Sin sugerencia BEST».
+- **Persistencia:** `admin_idart` = componente Admin (fijo desde BOM); `best_id_articulo` = MMID BEST del componente (inferido o asignado manualmente). La clave temporal `FAB:{IDArt}` se reemplaza al validar/asignar un SKU real vía `asignar_best_a_fabricado`.
+- **UI:** `/mpr/migracion-best/articulos-fabricados/` — columnas: Componente Admin (solo lectura), Alcance, Sugerencia BEST (link ámbar `aceptar` si hay MMID real), Acciones (buscador SKU BEST + Asignar/Descartar). API `GET /mpr/migracion-best/api/skus-componentes/?q=` filtra inventario 4000/4002. **No** hay alta en Admin ni columna «Coincidencia Admin».
 - **Limitación vigente:** `REP_RECETAS` aún no se lee. La relación esperada PT → PP → crudo está documentada, pero este catálogo semi es una aproximación hasta incorporar esas recetas.
-- **UI:** `/mpr/migracion-best/articulos-fabricados/` — acción «Resolver fabricados», con componente Admin y SKU BEST (componente) como primeras columnas.
 - **Gate:** dominio `articulos_fabricados` con `obligatorio_para_pedidos=False`; pendientes de fabricados no bloquean cutover ni siembra PED.
 - **Stock Semi opcional:** `sincronizar_stock_fabricados_semi` filtra inventario BEST depósito **4002** (Semi-Embalado) y SKUs fabricados validados; misma máquina de olas (`CARGADO` inmutable).
 

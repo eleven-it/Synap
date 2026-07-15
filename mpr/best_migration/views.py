@@ -48,8 +48,11 @@ from mpr.best_migration.services import (
     recalcular_mapeo_articulos,
     resolver_fabricados_desde_terminados,
     aceptar_inferidos_altos_fabricados,
+    asignar_best_a_fabricado,
+    buscar_skus_best_componentes,
     sincronizar_stock_fabricados_semi,
     reabrir_articulo,
+    validar_articulo_fabricado,
     reabrir_operario,
     sincronizar_clientes_abiertos,
     sincronizar_depositos_best,
@@ -1141,14 +1144,151 @@ class MigracionBestSincronizarStockFabricadosSemiView(MprLoginRequiredMixin, Vie
         return redirect("mpr:migracion_best_stock_inicial")
 
 
-class MigracionBestValidarArticuloFabricadoView(MigracionBestValidarArticuloView):
-    """POST espejo de validar artículo; redirige a pantalla fabricados."""
+class MigracionBestSkuComponentesSearchView(MprLoginRequiredMixin, View):
+    """GET JSON: búsqueda de SKUs BEST (inventario 4000/4002) para componentes fabricados."""
+
+    def get(self, request, *args, **kwargs):
+        if not _usuario_tiene_permiso_mpr(request.user, "mpr.ver"):
+            return JsonResponse({"results": [], "error": "Sin permiso."}, status=403)
+        if not _get_base_empresa(request):
+            return JsonResponse({"results": [], "error": "Sin empresa activa."}, status=400)
+        q = (request.GET.get("q") or "").strip()
+        try:
+            limit = min(50, max(1, int(request.GET.get("limit") or 15)))
+        except ValueError:
+            limit = 15
+        results = buscar_skus_best_componentes(q, limit=limit)
+        return JsonResponse({"results": results})
+
+
+class MigracionBestValidarArticuloFabricadoView(MprLoginRequiredMixin, View):
+    """POST fabricados: asignar SKU BEST, aceptar sugerencia, descartar, reabrir."""
 
     def post(self, request, *args, **kwargs):
-        if not request.POST.get("next"):
-            request.POST = request.POST.copy()
-            request.POST["next"] = "mpr:migracion_best_articulos_fabricados"
-        return super().post(request, *args, **kwargs)
+        base = _require_base(request)
+        wants_json = (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or "application/json" in (request.headers.get("Accept") or "")
+        )
+        redirect_to = "mpr:migracion_best_articulos_fabricados"
+        if not base:
+            if wants_json:
+                return JsonResponse({"ok": False, "error": "Sin empresa activa."}, status=400)
+            return redirect("core:dashboard")
+
+        best_id = (request.POST.get("best_id_articulo") or "").strip()
+        accion = (request.POST.get("accion") or "").strip()
+        notas = (request.POST.get("notas") or "").strip()
+        usuario = _usuario_label(request)
+
+        def _json_ok(payload: dict):
+            return JsonResponse({"ok": True, **payload})
+
+        def _json_err(msg: str, status: int = 400):
+            return JsonResponse({"ok": False, "error": str(msg)}, status=status)
+
+        try:
+            if accion == "aceptar_seleccion":
+                ids = [x.strip() for x in request.POST.getlist("sel") if (x or "").strip()]
+                if not ids:
+                    raise ValueError("Seleccioná al menos una fila pendiente.")
+                aceptados = omitidos = 0
+                for clave in ids:
+                    try:
+                        obj = BestArticuloMap.objects.get(
+                            base_empresa=base,
+                            best_id_articulo=clave,
+                            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+                        )
+                        if obj.estado in (
+                            BestArticuloMap.Estado.VALIDADO,
+                            BestArticuloMap.Estado.DESCARTADO,
+                        ):
+                            omitidos += 1
+                            continue
+                        if not obj.admin_idart:
+                            omitidos += 1
+                            continue
+                        validar_articulo_fabricado(
+                            base_empresa=base,
+                            best_id=obj.best_id_articulo,
+                            admin_idart=obj.admin_idart,
+                            usuario=usuario,
+                            notas=obj.notas or "",
+                        )
+                        aceptados += 1
+                    except (BestArticuloMap.DoesNotExist, ValueError):
+                        omitidos += 1
+                messages.success(
+                    request,
+                    f"Aceptados {aceptados} fabricados seleccionados ({omitidos} omitidos).",
+                )
+                return redirect(redirect_to)
+            if accion == "aceptar":
+                obj = BestArticuloMap.objects.get(
+                    base_empresa=base,
+                    best_id_articulo=best_id,
+                    origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+                )
+                validar_articulo_fabricado(
+                    base_empresa=base,
+                    best_id=obj.best_id_articulo,
+                    admin_idart=obj.admin_idart,
+                    usuario=usuario,
+                    notas=notas or obj.notas or "",
+                )
+                if wants_json:
+                    return _json_ok({"best_id": best_id, "accion": "aceptar"})
+                messages.success(request, f"Validado {obj.best_id_articulo} con componente Admin.")
+            elif accion == "asignar":
+                nuevo = (request.POST.get("best_id_nuevo") or "").strip()
+                obj = asignar_best_a_fabricado(
+                    base_empresa=base,
+                    map_best_id=best_id,
+                    nuevo_best_id=nuevo,
+                    usuario=usuario,
+                    notas=notas,
+                )
+                if wants_json:
+                    return _json_ok(
+                        {
+                            "best_id": obj.best_id_articulo,
+                            "accion": "asignar",
+                            "admin_idart": obj.admin_idart,
+                        }
+                    )
+                messages.success(
+                    request,
+                    f"Asignado componente IDArt {obj.admin_idart} → SKU BEST {obj.best_id_articulo}.",
+                )
+            elif accion == "descartar":
+                descartar_articulo(
+                    base_empresa=base, best_id=best_id, usuario=usuario, notas=notas
+                )
+                if wants_json:
+                    return _json_ok({"best_id": best_id, "accion": "descartar"})
+                messages.success(request, f"Descartado {best_id} (no se migrará).")
+            elif accion == "reabrir":
+                reabrir_articulo(
+                    base_empresa=base, best_id=best_id, usuario=usuario, notas=notas
+                )
+                if wants_json:
+                    return _json_ok({"best_id": best_id, "accion": "reabrir"})
+                messages.success(
+                    request,
+                    f"Mapeo de {best_id} reabierto: podés asignar otro SKU BEST.",
+                )
+            else:
+                raise ValueError("Acción no reconocida.")
+        except BestArticuloMap.DoesNotExist:
+            if wants_json:
+                return _json_err("No existe ese SKU en el mapeo.", 404)
+            messages.error(request, "No existe ese SKU en el mapeo.")
+        except Exception as exc:
+            if wants_json:
+                return _json_err(str(exc))
+            messages.error(request, str(exc))
+        return redirect(redirect_to)
 
 
 class MigracionBestConfirmarUnidadesView(MprLoginRequiredMixin, View):
