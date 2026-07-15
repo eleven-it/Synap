@@ -7,6 +7,8 @@ import { orderDialogsMixin } from './order_dialogs.mjs';
 import { compraMayoristaCatalogoMixin } from './compra_mayorista_catalogo.mjs';
 import { compraMayoristaCarritoMixin } from './compra_mayorista_carrito.mjs';
 import { compraMayoristaCheckoutMixin } from './compra_mayorista_checkout.mjs';
+import { compraMayoristaPedidoMixin } from './compra_mayorista_pedido.mjs';
+import { compraMayoristaVendedorMixin } from './compra_mayorista_vendedor.mjs';
 
 /**
  * Compone mixins Alpine preservando getters (no usar spread/Object.assign).
@@ -57,6 +59,8 @@ function compraMayoristaCore() {
     clienteActivo: null,
     clienteActivoLabel: '',
     creditoWidget: null,
+    listaPrecio: '',
+    listaPrecioPdfUrl: '',
     embalaje: {},
     mostrarEmbalaje: false,
     intentoSinCliente: false,
@@ -99,6 +103,9 @@ function compraMayoristaCore() {
         this.clienteActivo = d.cod;
         this.clienteActivoLabel = d.label || String(d.cod);
         this.intentoSinCliente = false;
+        if (typeof this._setListaPrecio === 'function') {
+          this._setListaPrecio({}, d);
+        }
         if (!d.fromSession) {
           this.refrescarCarrito();
           this.cargarRecientes();
@@ -110,6 +117,8 @@ function compraMayoristaCore() {
         this.clienteActivo = null;
         this.clienteActivoLabel = '';
         this.creditoWidget = null;
+        this.listaPrecio = '';
+        this.listaPrecioPdfUrl = '';
         this.pedidosRecientes = [];
       });
       window.addEventListener('compra-cliente-error', (e) => {
@@ -120,8 +129,24 @@ function compraMayoristaCore() {
         this.marcasFiltro = ids.map((id) => Number(id)).filter((n) => Number.isFinite(n));
         this.recargarBusquedaConFiltros();
       });
-      this.refrescarCarrito();
-      this.cargarContexto();
+      this.cargarCarteraVendedor();
+      // Si hay ?cod_mov=, hidratar el PED antes del GET /carrito/
+      // (si corren en paralelo, el carrito vacío puede pisar las líneas).
+      const codInicial =
+        (typeof this._codMovDesdeQuery === 'function' && this._codMovDesdeQuery()) ||
+        this.codMov ||
+        null;
+      const arranque = codInicial
+        ? Promise.resolve(this.cargarPedidoDesdeQuery())
+        : Promise.resolve(this.refrescarCarrito()).then(() => this.cargarPedidoDesdeQuery());
+      arranque
+        .catch((e) => {
+          this.errorPedido = (e && e.message) || 'Error al cargar el pedido';
+        })
+        .finally(() => {
+          if (!this.codMov) this.cargarContexto();
+          else if (this.esEditarPendiente) this.cargarContexto();
+        });
       this.$nextTick(() => {
         if (!this.esCliente && !this.clienteActivo) {
           document.getElementById('compra_cliente_search')?.focus();
@@ -135,6 +160,8 @@ function compraMayoristaCore() {
       this.clienteActivo = null;
       this.clienteActivoLabel = '';
       this.creditoWidget = null;
+      this.listaPrecio = '';
+      this.listaPrecioPdfUrl = '';
       this.pedidosRecientes = [];
       this.intentoSinCliente = false;
       window.dispatchEvent(new CustomEvent('compra-cliente-limpiado'));
@@ -176,6 +203,8 @@ function register() {
     compraMayoristaCarritoMixin,
     compraMayoristaCatalogoMixin,
     compraMayoristaCheckoutMixin,
+    compraMayoristaPedidoMixin,
+    compraMayoristaVendedorMixin,
     compraMayoristaCore,
   ));
   window.__synapCompraMayoristaRegistered = true;

@@ -47,7 +47,8 @@ support_ai/
 debug_*.py
 test_*.py
 # Permitir tests Django dentro de paquetes de apps
-!*/tests/test_*.py
+!*!*/tests/test_*.py
+!**/tests/test_*.py
 !*/tests/**/test_*.py
 # Suite bajo tests/ en la raíz del proyecto (ej. tests/compras/)
 !tests/**/test_*.py
@@ -98,6 +99,7 @@ logs/
 
 # Archivos temporales
 .DS_Store
+**/.DS_Store
 *.swp
 *.swo
 

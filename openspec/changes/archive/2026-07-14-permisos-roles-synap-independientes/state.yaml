@@ -1,0 +1,23 @@
+change: permisos-roles-synap-independientes
+status: verified
+updated: "2026-07-14"
+artifact_store: hybrid
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+notes: >
+  Independizar permisos/roles Synap de tablas VB6 compartidas (permiso_sistema*).
+  Opción A confirmada: tablas synap_* por empresa vía catalog.py; idpuesto como ancla fija.
+  Flag rollback: SYNAP_PERMISOS_SOURCE=legacy.
+  Tasks: 38/38 implementación + 7/7 criterios aceptación.
+  Verificación 14/07/2026: PASS WITH WARNINGS.
+  Tests: 13/13 verdes (test_synap_permisos + test_permisos_puesto_supervisor).
+  sync_permisos_synap.py y sync_synap_permissions_to_adminet eliminados.
+  SYNAP_AUTO_SYNC_PERMISSIONS default False; .env SOURCE=synap.
+  Purge local administranet ejecutado; purge remoto 192.168.0.2 pendiente conectividad.
+  Listo para archive.

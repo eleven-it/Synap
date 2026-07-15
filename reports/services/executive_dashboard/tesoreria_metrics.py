@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from .base import DashboardFilters, build_meta, round_money
+from .base import DashboardFilters, build_meta, build_paginated_response, round_money
 from .caja_classification import (
     sql_es_flujo_operativo,
+    sql_excluir_interno_campo,
     sql_predicado_egresos_proveedores,
     sql_predicado_ingresos_cobranzas,
     sql_predicado_ingresos_ventas,
@@ -95,7 +96,7 @@ def fetch_tesoreria_resumen(cursor, filters: DashboardFilters) -> dict[str, Any]
         "Saldo final coherente = saldo inicial + variación neta del período.",
         "Saldo final sistema = último caja.Saldo en BD (puede diferir por drift legacy).",
         "Vista consolidada: excluye cierres, transferencias entre cajas e inversión/financiamiento.",
-        "No incluye libro banco (librobanco); endpoint tesoreria/banco previsto en P1.",
+        "No incluye libro banco en este endpoint; ver tesoreria/banco/resumen/ (independiente, no sumar).",
     ]
     if abs(drift_sistema) > 1.0:
         notas.append(
@@ -120,6 +121,63 @@ def fetch_tesoreria_resumen(cursor, filters: DashboardFilters) -> dict[str, Any]
         "disponible": True,
         "meta": build_meta(filters, notas_semanticas=notas),
     }
+
+
+def _where_movimientos_caja_operativos(filters: DashboardFilters) -> tuple[str, list]:
+    """Movimientos de caja en período excluyendo cierres y transferencias internas."""
+    where_base, params = _where_caja(filters)
+    op = sql_excluir_interno_campo("c.tipo")
+    return f"{where_base} AND {op} = 1", params
+
+
+def list_movimientos_caja(cursor, filters: DashboardFilters) -> dict[str, Any]:
+    """Detalle paginado de movimientos operativos de caja en el período."""
+    where_clause, params = _where_movimientos_caja_operativos(filters)
+    sql_count = f"SELECT COUNT(*) FROM caja c WHERE {where_clause}"
+    cursor.execute(sql_count, params)
+    row_count = cursor.fetchone()
+    total_registros = int(row_count[0] or 0) if row_count else 0
+
+    sql = f"""
+        SELECT
+            DATE_FORMAT(c.fecha, '%%d/%%m/%%Y') AS fecha,
+            COALESCE(c.tipo, '') AS tipo,
+            COALESCE(c.tipo_comprobante, '') AS tipo_comprobante,
+            COALESCE(c.nro_comprobante, '') AS nro_comprobante,
+            COALESCE(c.ingreso, 0) AS ingreso,
+            COALESCE(c.egreso, 0) AS egreso,
+            c.codigo_movimiento AS codigo_movimiento,
+            c.cod_sucursal AS cod_sucursal
+        FROM caja c
+        WHERE {where_clause}
+        ORDER BY c.fecha DESC, c.codigo_movimiento DESC
+        LIMIT %s OFFSET %s
+    """
+    cursor.execute(sql, params + [filters.limit, filters.offset])
+    cols = [d[0] for d in cursor.description]
+    filas = []
+    for raw in cursor.fetchall():
+        row = dict(zip(cols, raw))
+        filas.append(
+            {
+                "fecha": row.get("fecha") or "",
+                "tipo": row.get("tipo") or "",
+                "tipo_comprobante": row.get("tipo_comprobante") or "",
+                "nro_comprobante": row.get("nro_comprobante") or None,
+                "ingreso": round_money(float(row.get("ingreso") or 0)),
+                "egreso": round_money(float(row.get("egreso") or 0)),
+                "codigo_movimiento": row.get("codigo_movimiento"),
+                "cod_sucursal": row.get("cod_sucursal"),
+            }
+        )
+
+    notas = [
+        "Listado operativo: excluye cierres de caja y transferencias entre cajas.",
+        "Para saldos consolidados usar tesoreria/resumen/; no mezclar con libro banco.",
+    ]
+    return build_paginated_response(
+        filters, filas, total_registros, notas_semanticas=notas
+    )
 
 
 # Compatibilidad tests / imports legacy

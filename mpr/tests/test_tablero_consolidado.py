@@ -494,12 +494,12 @@ class TestListarTableroPorArticulo(SimpleTestCase):
 
         self.assertEqual(len(resultado), 0)
 
-    def test_solo_pendiente_legacy_alias(self):
-        """solo_pendiente=True se interpreta como solo_urgente."""
+    def test_solo_pendiente_filtra_demanda_total(self):
+        """solo_pendiente=True conserva filas con demanda total pendiente."""
         patches = self._patch_servicio()
         resultado = self._call_con_parches(patches, solo_pendiente=True)
         for r in resultado:
-            self.assertGreater(r["resta_urgente"], 0)
+            self.assertGreater(r["resta_total"], 0)
 
     def test_resta_urgente_excluye_terminado_del_stock(self):
         """stock_proceso no incluye Terminado — paridad PCP col G."""

@@ -81,7 +81,11 @@ export function orderDialogsMixin() {
     },
 
     cerrarDialogo() {
-      if (this.confirmando && this.dialogKind === 'resumen') return;
+      if (this.confirmando && (
+        this.dialogKind === 'resumen'
+        || this.dialogKind === 'confirmar_cambios'
+        || this.dialogKind === 'masivo_progreso'
+      )) return;
       this._desactivarFocusTrap();
       this.dialogKind = null;
       this._dialogCallback = null;
@@ -95,7 +99,11 @@ export function orderDialogsMixin() {
 
     async confirmarDialogo() {
       const cb = this._dialogCallback;
-      if (this.dialogKind === 'resumen') {
+      if (
+        this.dialogKind === 'resumen'
+        || this.dialogKind === 'confirmar_cambios'
+        || this.dialogKind === 'masivo_confirmar'
+      ) {
         if (cb) await cb();
         return;
       }

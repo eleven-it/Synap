@@ -1,0 +1,26 @@
+change: dashboard-gerencial-endpoints-legacy
+status: verified
+updated: "2026-07-14"
+artifact_store: hybrid
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+verify:
+  verdict: pass_with_warnings
+  tests_run: 30
+  tests_passed: 30
+  scenarios_compliant: 4
+  scenarios_total: 7
+notes: >
+  Endpoints GET lectura legacy + UI Command Center. Metodología adminnet-module-migration.
+  Auditoría: docs/audits/dashboard-administranet-gap-analysis.md
+  T13: QueryRunnerService._get_ventas_netas_total, _get_remitos_no_facturados_total y
+  _get_pedidos_pendientes_total delegan en executive_dashboard.ventas_metrics (sin duplicar SQL).
+  Apply 14/07/2026: migración 0032_add_command_center_gerencial_report creada y aplicada (slug
+  command-center-gerencial, category managerial, is_visible=true). Tests visibility+contract OK.
+  Warnings restantes: escenarios HTTP 403/503 y MprSchemaError sin test runtime.

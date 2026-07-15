@@ -45,6 +45,7 @@ def _tarjeta(
     url: str = "",
     id_ref: str = "",
     badge_error: bool = False,
+    sucursal: str = "",
     meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     return {
@@ -56,8 +57,53 @@ def _tarjeta(
         "url": url,
         "id_ref": id_ref,
         "badge_error": badge_error,
+        "sucursal": sucursal,
         "meta": meta or {},
     }
+
+
+def _nombres_clientes(base_empresa: str, ids: List[int]) -> Dict[int, str]:
+    """Resuelve nombres de cliente en un solo query batch."""
+    unicos = sorted({i for i in ids if to_int_or_none(i) is not None})
+    if not base_empresa or not unicos:
+        return {}
+    placeholders = ",".join(["%s"] * len(unicos))
+    sql = f"""
+        SELECT Codigo, COALESCE(nombre_cliente, '') AS nombre_cliente
+        FROM cliente
+        WHERE Codigo IN ({placeholders})
+    """
+    out: Dict[int, str] = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(sql, unicos)
+            for row in cursor.fetchall() or []:
+                cod = to_int_or_none(row.get("Codigo"))
+                if cod is not None:
+                    out[cod] = (row.get("nombre_cliente") or "").strip()
+    except Exception as e:
+        logger.warning("_nombres_clientes: %s", e)
+    return out
+
+
+def _etiqueta_cliente(nombre: str, id_cliente: Optional[int]) -> str:
+    nombre = (nombre or "").strip()
+    if nombre:
+        return nombre
+    idc = to_int_or_none(id_cliente)
+    return f"Cliente {idc}" if idc is not None else "Cliente —"
+
+
+def _etiqueta_sucursal(calle: str, nro: str, id_dom: Optional[int]) -> str:
+    """Misma convención que ``listar_sucursales_cliente`` en pedido_masivo_matriz."""
+    calle = (calle or "").strip()
+    nro = (nro or "").strip()
+    nombre_parts = [p for p in (calle, nro) if p and p != "-"]
+    nombre = " ".join(nombre_parts).strip()
+    if nombre:
+        return nombre
+    idd = to_int_or_none(id_dom)
+    return f"Sucursal #{idd}" if idd is not None else ""
 
 
 def _borradores_carrito(
@@ -74,19 +120,27 @@ def _borradores_carrito(
         .filter(n_items__gt=0)
         .order_by("-updated_at")[:50]
     )
+    ids_cliente = [c.idcliente for c in qs if c.idcliente]
+    nombres = _nombres_clientes(base_empresa, ids_cliente)
     out = []
     for c in qs:
         fecha = c.updated_at.strftime("%d/%m/%Y") if c.updated_at else ""
+        idc = to_int_or_none(c.idcliente)
+        nombre = _etiqueta_cliente(nombres.get(idc, "") if idc is not None else "", idc)
         out.append(
             _tarjeta(
                 tipo="carrito",
                 columna="borrador",
-                titulo=f"Pedido simple · cliente {c.idcliente or '—'}",
+                titulo=f"Pedido simple · {nombre}",
                 subtitulo=f"{c.n_items} ítems · total ${c.total}",
                 fecha=fecha,
-                url=reverse("ecom:mayoristapp_compra"),
+                url=reverse("ecom:mayoristapp_venta"),
                 id_ref=f"cart-{c.pk}",
-                meta={"cart_id": c.pk, "id_cliente": c.idcliente},
+                meta={
+                    "cart_id": c.pk,
+                    "id_cliente": c.idcliente,
+                    "nombre_cliente": nombres.get(idc, "") if idc is not None else "",
+                },
             )
         )
     return out
@@ -104,22 +158,66 @@ def _borradores_masivo(
             EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
         ),
     ).order_by("-updated_at")[:50]
+    ids_cliente = [d.id_cliente for d in qs if d.id_cliente]
+    nombres = _nombres_clientes(base_empresa, ids_cliente)
     out = []
     for d in qs:
         fecha = d.updated_at.strftime("%d/%m/%Y") if d.updated_at else ""
         err = bool(d.ultimo_error)
+        idc = to_int_or_none(d.id_cliente)
+        nombre = _etiqueta_cliente(nombres.get(idc, "") if idc is not None else "", idc)
         out.append(
             _tarjeta(
                 tipo="masivo",
                 columna="borrador",
-                titulo=f"Masivo · cliente {d.id_cliente}",
+                titulo=f"Masivo · {nombre}",
                 subtitulo="Error al confirmar" if err else "Matriz por sucursales",
                 fecha=fecha,
                 url=reverse("ecom:mayoristapp_pedido_masivo_sucursales")
                 + f"?draft={d.pk}",
                 id_ref=f"masivo-{d.pk}",
                 badge_error=err,
-                meta={"draft_id": d.pk, "id_cliente": d.id_cliente},
+                meta={
+                    "draft_id": d.pk,
+                    "id_cliente": d.id_cliente,
+                    "nombre_cliente": nombres.get(idc, "") if idc is not None else "",
+                },
+            )
+        )
+    return out
+
+
+def _masivos_anulados(
+    base_empresa: str,
+    id_usuario: int,
+) -> List[Dict[str, Any]]:
+    qs = EcomPedidoMasivoDraft.objects.filter(
+        base_empresa=base_empresa,
+        id_usuario=id_usuario,
+        estado=EcomPedidoMasivoDraft.ESTADO_ANULADO,
+    ).order_by("-updated_at")[:50]
+    ids_cliente = [d.id_cliente for d in qs if d.id_cliente]
+    nombres = _nombres_clientes(base_empresa, ids_cliente)
+    out = []
+    for d in qs:
+        fecha = d.updated_at.strftime("%d/%m/%Y") if d.updated_at else ""
+        idc = to_int_or_none(d.id_cliente)
+        nombre = _etiqueta_cliente(nombres.get(idc, "") if idc is not None else "", idc)
+        out.append(
+            _tarjeta(
+                tipo="masivo",
+                columna="anulado",
+                titulo=f"Masivo · {nombre}",
+                subtitulo="Borrador anulado · Recuperable",
+                fecha=fecha,
+                url=reverse("ecom:mayoristapp_pedido_masivo_sucursales")
+                + f"?draft={d.pk}",
+                id_ref=f"masivo-anulado-{d.pk}",
+                meta={
+                    "draft_id": d.pk,
+                    "id_cliente": d.id_cliente,
+                    "nombre_cliente": nombres.get(idc, "") if idc is not None else "",
+                },
             )
         )
     return out
@@ -177,9 +275,18 @@ def _pedidos_mysql(
             TRIM(COALESCE(cp.autorizacion_sistema, '')) AS autorizacion,
             cp.Codigo AS id_cliente,
             COALESCE(c.nombre_cliente, '') AS nombre_cliente,
-            (cp.SubtotalDesc + cp.IVA1 + cp.IVA2 + COALESCE(cp.total_percep, 0)) AS total
+            cp.ImporteVenta,
+            (cp.SubtotalDesc + cp.IVA1 + cp.IVA2 + COALESCE(cp.total_percep, 0)) AS total_calc,
+            cda.id_cliente_domicilio,
+            COALESCE(cd.Calle, '') AS calle_domicilio,
+            COALESCE(cd.NroCalle, '') AS nro_domicilio
         FROM comp_ped cp
         LEFT JOIN cliente c ON c.Codigo = cp.Codigo
+        LEFT JOIN cliente_datos_adicionales cda
+          ON cda.CodigoMovimiento = cp.CodigoMovimiento
+         AND cda.TipoComprobante = 'PED'
+        LEFT JOIN cliente_domicilio cd
+          ON cd.id_cliente_domicilio = cda.id_cliente_domicilio
         WHERE {' AND '.join(where)}
         ORDER BY cp.Fecha DESC, cp.CodigoMovimiento DESC
         LIMIT %s
@@ -196,8 +303,20 @@ def _pedidos_mysql(
                 )
                 cod = int(row["CodigoMovimiento"])
                 nro = str(row.get("NroComprobante") or cod)
-                cliente = (row.get("nombre_cliente") or "").strip() or f"Cliente {row.get('id_cliente')}"
-                total = float(row.get("total") or 0)
+                id_cliente = to_int_or_none(row.get("id_cliente"))
+                nombre_cliente = (row.get("nombre_cliente") or "").strip()
+                cliente = _etiqueta_cliente(nombre_cliente, id_cliente)
+                importe_venta = row.get("ImporteVenta")
+                if importe_venta is not None and float(importe_venta or 0) > 0:
+                    total = float(importe_venta)
+                else:
+                    total = float(row.get("total_calc") or 0)
+                id_dom = to_int_or_none(row.get("id_cliente_domicilio"))
+                sucursal = _etiqueta_sucursal(
+                    str(row.get("calle_domicilio") or ""),
+                    str(row.get("nro_domicilio") or ""),
+                    id_dom,
+                )
                 out.append(
                     _tarjeta(
                         tipo="ped",
@@ -205,12 +324,17 @@ def _pedidos_mysql(
                         titulo=f"PED {nro}",
                         subtitulo=f"{cliente} · ${total:,.2f}",
                         fecha=str(row.get("fecha") or ""),
-                        url=reverse("ecom:mayoristapp_pedido_detalle", args=[cod]),
+                        url=reverse("ecom:mayoristapp_venta") + f"?cod_mov={cod}",
                         id_ref=f"ped-{cod}",
+                        sucursal=sucursal,
                         meta={
                             "codigo_movimiento": cod,
                             "estado": row.get("Estado"),
                             "autorizacion": row.get("autorizacion"),
+                            "id_cliente": id_cliente,
+                            "nombre_cliente": nombre_cliente,
+                            "id_cliente_domicilio": id_dom,
+                            "sucursal": sucursal,
                         },
                     )
                 )
@@ -237,6 +361,7 @@ def construir_hub_pedidos(
     if id_u is not None and base_empresa:
         items.extend(_borradores_carrito(base_empresa, id_u))
         items.extend(_borradores_masivo(base_empresa, id_u))
+        items.extend(_masivos_anulados(base_empresa, id_u))
     if base_empresa:
         items.extend(_pedidos_mysql(base_empresa, sess_user, dias=dias))
 

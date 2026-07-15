@@ -1,0 +1,23 @@
+change: stock-inventario-tabla-mpr
+status: verify-complete
+created: 2026-07-06
+phase: archive
+depends_on: []
+artifacts:
+  exploration: complete
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+verify:
+  verdict: PASS WITH WARNINGS
+  tests_run: 23
+  tests_passed: 23
+  tests_failed: 0
+  scenarios_compliant: 2
+  scenarios_partial: 4
+  scenarios_untested: 14
+  scenarios_total: 20
+  executed_at: 2026-07-14

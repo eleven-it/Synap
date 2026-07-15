@@ -1,0 +1,33 @@
+{% comment %}
+  Badge de solo lectura con la lista de precios del cliente + link al PDF (si hay URL).
+  Sistema de diseño Synap slate/sky (sin purple). Solo presenta datos del backend; no
+  permite override de lista (producto fijó solo lectura — REQ-VTA-05 / UI-04).
+
+  Contrato Alpine (compartido por compra_mayorista y pedido_masivo_sucursales):
+    - listaPrecio         → texto de la lista (ej. "Lista 1"); vacío = no se muestra el badge.
+    - listaPrecioPdfUrl   → URL del PDF de la lista; vacío = no se muestra el link.
+{% endcomment %}
+<div class="pedidos-badge-lista"
+     x-show="listaPrecio"
+     x-cloak
+     role="status"
+     aria-live="polite">
+  <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Lista de precios</span>
+  <span class="text-sm font-semibold tabular-nums text-slate-900 dark:text-white" x-text="listaPrecio"></span>
+  <span class="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:bg-sky-950/40 dark:text-sky-300"
+        title="Solo lectura: la lista se determina por el cliente">Solo lectura</span>
+  <a x-show="listaPrecioPdfUrl"
+     x-cloak
+     :href="listaPrecioPdfUrl"
+     target="_blank"
+     rel="noopener"
+     class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold text-sky-700 hover:text-sky-600 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500 dark:text-sky-300 dark:hover:text-sky-200"
+     aria-label="Abrir PDF de la lista de precios en una pestaña nueva">
+    <span>PDF</span>
+    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+      <path d="M12 4h4v4" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M16 4l-7 7" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M8 4H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-3" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </a>
+</div>

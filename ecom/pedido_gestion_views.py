@@ -7,7 +7,9 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from django.http import HttpResponse
+from django.shortcuts import redirect
 from django.urls import reverse
+from django.views import View
 from django.views.generic import TemplateView
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -26,6 +28,12 @@ from ecom.services.pedidos_hub_pipeline import (
     archivar_borrador_masivo,
     construir_hub_pedidos,
 )
+from ecom.checkout_relay_views import _session_dias_no_laborables
+from ecom.services.pedido_cabecera_comercial import (
+    cabecera_defaults_json,
+    puede_editar_cabecera_comercial,
+)
+from ecom.services.vendedor_operativo import ctx_desde_request
 from ecom.services.mayoristapp_session import leer_cliente_seleccionado, leer_idcliente_mayoristapp
 from ecom.services.pedido_cabecera_relay import (
     cabecera_comp_ped_relay,
@@ -168,6 +176,20 @@ class CarritoDesdePedidoAPIView(APIView):
                 if ik is not None:
                     cantidades[ik] = v
         idc = leer_idcliente_mayoristapp(request)
+        # Al abrir un PED concreto: alinear cliente de sesión al del pedido si hace falta.
+        cab = None
+        try:
+            cab = cabecera_pedido_relay(base, int(cod))
+        except Exception:
+            cab = None
+        id_ped = to_int_or_none((cab or {}).get("id_cliente")) if cab else None
+        if id_ped is not None and (idc is None or int(idc) != int(id_ped)):
+            idc = int(id_ped)
+        raw_omit = request.data.get("omitir_validacion_stock")
+        omitir_stock = str(raw_omit or "").strip().lower() in ("1", "true", "si", "sí")
+        # Edición de PED Pendiente: el stock ya está reservado en saldo_pedido_cliente.
+        if str(request.data.get("origen") or "").strip().lower() == "edicion":
+            omitir_stock = True
         result, perr = cargar_desde_pedido(
             base,
             cod,
@@ -178,6 +200,7 @@ class CarritoDesdePedidoAPIView(APIView):
             modo=modo,
             es_cliente=_es_cliente_sesion(request),
             cantidades=cantidades or None,
+            omitir_validacion_stock=omitir_stock,
         )
         if perr:
             return _error(perr)
@@ -243,16 +266,43 @@ class CompraMayoristaContextoAPIView(APIView):
                 autoriza_credito = cliente_raw[1]
         embalaje_cfg = get_config_unidad_bulto_display(base)
         embalaje_cfg["utiliza_embalaje"] = "Si" if _fetch_utiliza_embalaje(base) else "No"
+        from ecom.cliente_relay_views import (
+            _payload_lista_precio_cliente,
+            _url_pdf_lista_precio,
+        )
+
+        lista_payload = (
+            _payload_lista_precio_cliente(base, cliente) if cliente else None
+        )
+        idcliente = leer_idcliente_mayoristapp(request)
+        ctx = ctx_desde_request(request)
+        puede_editar = puede_editar_cabecera_comercial(ctx)
+        bag = (getattr(request, "session", None) or {}).get("mayoristapp") or {}
+        dias_ent = to_int_or_none(bag.get("cant_dias_entrega")) or 0
+        cabecera_payload = None
+        if idcliente:
+            cabecera_payload = cabecera_defaults_json(
+                base,
+                int(idcliente),
+                es_supervisor=puede_editar,
+                dias_entrega=int(dias_ent),
+                dias_no_laborables=_session_dias_no_laborables(request),
+            )
         return Response(
             {
                 "ok": True,
                 "es_cliente": _es_cliente_sesion(request),
                 "id_punto_venta_default": id_pv,
                 "puntos_venta": puntos,
-                "idcliente": leer_idcliente_mayoristapp(request),
+                "idcliente": idcliente,
                 "cliente": cliente,
                 "autoriza_credito": autoriza_credito,
                 "embalaje": embalaje_cfg,
+                "listaPrecio": lista_payload,
+                "lista_precio_pdf_url": _url_pdf_lista_precio(request) if cliente else "",
+                "puede_editar_cabecera": puede_editar,
+                "es_supervisor": puede_editar,
+                "cabecera": cabecera_payload,
             }
         )
 
@@ -313,7 +363,7 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
                     "hub": hub,
                     "labels": hub.get("labels") or {},
                     "urls": {
-                        "nuevo_simple": reverse("ecom:mayoristapp_compra"),
+                        "nuevo_simple": reverse("ecom:mayoristapp_venta"),
                         "nuevo_masivo": reverse("ecom:mayoristapp_pedido_masivo_sucursales"),
                         "kanban_deposito": reverse("ecom:mayoristapp_estado_pedidos_preparacion"),
                         "api": reverse("ecom:mayoristapp_pedidos_hub_api"),
@@ -361,46 +411,12 @@ class PedidosHubArchivarDraftAPIView(APIView):
         return Response({"ok": True})
 
 
-class PedidoDetalleView(MayoristappWebSessionMixin, TemplateView):
-    """Detalle de pedido — ``/ecom/mayoristapp/pedidos/<cod_mov>/``."""
+class PedidoDetalleView(MayoristappWebSessionMixin, View):
+    """Deprecated: ``/pedidos/<cod_mov>/`` → shell ``/venta/?cod_mov=``."""
 
-    template_name = "ecom/pedido_detalle.html"
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        cod_mov = to_int_or_none(kwargs.get("cod_mov"))
-        sess = self.request.session.get("user") or {}
-        usa_manual = str(self.request.session.get("usa_id_manual") or "").strip().lower() in (
-            "si",
-            "sí",
-            "1",
-            "true",
-        )
-        context.update(
-            {
-                "page_title": "Detalle de pedido",
-                "cod_mov": cod_mov,
-                "es_cliente": (sess.get("tipousuario") or "").strip().lower() == "cliente",
-                "usa_id_manual": usa_manual,
-                "urls": {
-                    "cabecera": reverse("ecom:v1_comprobantes_pedidos_cabecera", args=[cod_mov or 0]),
-                    "detalle": reverse("ecom:v1_comprobantes_pedidos_detalle", args=[cod_mov or 0]),
-                    "anular": reverse("ecom:mayoristapp_comprobantes_anular_pedido") + "?ajax=1",
-                    "mail_enqueue": reverse("ecom:mayoristapp_comprobantes_comprobante_a_mail_enqueue")
-                    + "?ajax=1",
-                    "compra": reverse("ecom:mayoristapp_compra"),
-                    "listado": reverse("ecom:mayoristapp_pedidos_vendedor"),
-                    "hub": reverse("ecom:mayoristapp_pedidos_hub"),
-                    "kanban": reverse("ecom:mayoristapp_estado_pedidos_preparacion"),
-                    "preview_tpl": reverse(
-                        "ecom:mayoristapp_carrito_desde_pedido_preview", args=[cod_mov or 0]
-                    ),
-                    "cargar_desde_pedido": reverse("ecom:mayoristapp_carrito_desde_pedido"),
-                    "pdf": reverse("ecom:mayoristapp_pedido_pdf", args=[cod_mov or 0]),
-                },
-            }
-        )
-        return context
+    def get(self, request, cod_mov, *args, **kwargs):
+        base = reverse("ecom:mayoristapp_venta")
+        return redirect(f"{base}?cod_mov={int(cod_mov)}")
 
 
 class ComprobanteComercialCabeceraAPIView(APIView):
@@ -456,11 +472,11 @@ class ComprobanteComercialDetalleView(MayoristappWebSessionMixin, TemplateView):
                 "urls": {
                     "cabecera": reverse("ecom:mayoristapp_comprobante_cabecera", args=[cod_mov or 0]),
                     "detalle": reverse("ecom:mayoristapp_comprobante_detalle_api", args=[cod_mov or 0]),
-                    "compra": reverse("ecom:mayoristapp_compra"),
+                    "compra": reverse("ecom:mayoristapp_venta"),
                     "hub": reverse("ecom:mayoristapp_pedidos_hub"),
                     "listado_pedidos": reverse("ecom:mayoristapp_pedidos_vendedor"),
                     "listado_presupuestos": reverse("ecom:mayoristapp_presupuestos_vendedor"),
-                    "detalle_pedido_tpl": reverse("ecom:mayoristapp_pedido_detalle", args=[0]),
+                    "detalle_pedido_tpl": reverse("ecom:mayoristapp_venta") + "?cod_mov=0",
                 },
             }
         )

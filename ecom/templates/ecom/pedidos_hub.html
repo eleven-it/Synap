@@ -32,6 +32,15 @@
                       :class="vista==='kanban' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:text-white'"
                       class="rounded-md px-3 py-1.5 text-xs font-semibold">Kanban</button>
             </div>
+            <button type="button"
+                    @click="actualizar()"
+                    :disabled="cargando"
+                    class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600 disabled:cursor-wait disabled:opacity-60"
+                    title="Actualizar tablero">
+              <span class="material-icons text-base" aria-hidden="true"
+                    :class="cargando ? 'animate-spin' : ''">refresh</span>
+              Actualizar
+            </button>
             <div class="relative" x-data="{ open: false }">
               <button type="button" @click="open=!open"
                       class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-500">
@@ -75,6 +84,7 @@
                     <span x-show="it.badge_error" class="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-red-700">Error</span>
                   </div>
                   <p class="mt-0.5 text-xs text-slate-500" x-text="it.subtitulo"></p>
+                  <p x-show="it.sucursal" class="mt-0.5 text-xs font-medium text-slate-600 dark:text-slate-400" x-text="it.sucursal"></p>
                   <p class="mt-1 text-[11px] tabular-nums text-slate-400" x-text="it.fecha"></p>
                   <span x-show="it.tipo==='carrito' || it.tipo==='masivo'"
                         class="mt-1 inline-block text-[11px] font-semibold text-purple-600">Continuar →</span>
@@ -94,6 +104,7 @@
           <tr>
             <th class="px-3 py-2">Estado</th>
             <th class="px-3 py-2">Documento</th>
+            <th class="px-3 py-2">Sucursal</th>
             <th class="px-3 py-2">Detalle</th>
             <th class="px-3 py-2">Fecha</th>
           </tr>
@@ -106,12 +117,13 @@
                 <a :href="it.url" class="font-semibold text-purple-700 hover:underline dark:text-purple-400" x-text="it.titulo"></a>
                 <span x-show="it.badge_error" class="ml-1 text-[10px] font-bold text-red-600">Error</span>
               </td>
+              <td class="px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400" x-text="it.sucursal || '—'"></td>
               <td class="px-3 py-2 text-slate-600 dark:text-slate-300" x-text="it.subtitulo"></td>
               <td class="px-3 py-2 tabular-nums text-slate-500" x-text="it.fecha"></td>
             </tr>
           </template>
           <tr x-show="!itemsPlanos.length">
-            <td colspan="4" class="px-3 py-10 text-center text-slate-500">No hay pedidos en la ventana actual.</td>
+            <td colspan="5" class="px-3 py-10 text-center text-slate-500">No hay pedidos en la ventana actual.</td>
           </tr>
         </tbody>
       </table>
@@ -149,6 +161,7 @@ function pedidosHubApp() {
     modalBorrador: false,
     urlContinuarBorrador: '',
     draftMasivoId: null,
+    cargando: false,
     init() {
       const raw = document.getElementById('pedidos-hub-bootstrap');
       const data = raw ? JSON.parse(raw.textContent) : {};
@@ -168,6 +181,28 @@ function pedidosHubApp() {
       const masivo = borr.find(i => i.tipo === 'masivo');
       this.draftMasivoId = masivo && masivo.meta ? masivo.meta.draft_id : null;
       this.urlContinuarBorrador = masivo ? masivo.url : (this.urls.nuevo_masivo || '#');
+    },
+    async actualizar() {
+      if (this.cargando || !this.urls.api) return;
+      this.cargando = true;
+      try {
+        const qs = new URLSearchParams({ vista: this.vista || 'kanban', dias: '60' });
+        const resp = await fetch(`${this.urls.api}?${qs}`, {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: { Accept: 'application/json' },
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.ok === false) {
+          console.warn('No se pudo actualizar el hub de pedidos', data);
+          return;
+        }
+        this.aplicarPayload(data);
+      } catch (e) {
+        console.warn('Error al actualizar hub de pedidos', e);
+      } finally {
+        this.cargando = false;
+      }
     },
     setVista(v) {
       this.vista = v;

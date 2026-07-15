@@ -12,7 +12,7 @@
 | Paso | Actor | Pantalla / API Synap | Efecto |
 |------|-------|-------------------|--------|
 | 1 | Vendedor o cliente | Selección de cliente (`/ecom/mayoristapp/clientes/` o sesión autogestión) | `mayoristapp.idcliente`, datos de crédito |
-| 2 | Vendedor o cliente | **Nuevo pedido** → `/ecom/mayoristapp/compra/` (`frm=0` vía relay) | Catálogo + carrito borrador (`EcomCart` Postgres) |
+| 2 | Vendedor o cliente | **Pedido de venta** → `/ecom/mayoristapp/venta/` (`frm=0` vía relay) | Catálogo + carrito borrador (`EcomCart` Postgres) |
 | 3 | Vendedor o cliente | Confirmar checkout `POST /ecom/api/mayoristapp/checkout/confirmar/` | Alta transaccional legacy |
 | 4 | Sistema | — | Pedido en `comp_ped` con `Estado='Pendiente'`, `TipoPedido` según origen |
 | 5 | Depósito / VB6 | `Pedido_prep`, preparación | `Estado` → `En preparación` / `Preparado` |
@@ -20,7 +20,7 @@
 
 **Servicio de alta:** `ecom/services/mayorista_checkout_service.confirmar()`.
 
-**Wiring portal cliente:** `seleccionarComprobante` con `frm=0` ya no apunta a `alta_pedido.php`; devuelve la ruta Synap `/ecom/mayoristapp/compra/` (resuelta con `reverse('ecom:mayoristapp_compra')` en `ClienteComprobanteFormularioRelayAPIView`).
+**Wiring portal cliente:** `seleccionarComprobante` con `frm=0` ya no apunta a `alta_pedido.php`; devuelve la ruta Synap `/ecom/mayoristapp/venta/` (resuelta con `reverse('ecom:mayoristapp_venta')` en `ClienteComprobanteFormularioRelayAPIView`).
 
 ### 1.2 Flujo posterior (fuera de Synap e-com, VB6 / logística)
 
@@ -77,7 +77,7 @@ Referencias de estados: `reports/docs/VALIDACION_PEDIDOS_PENDIENTES.md` §3.1.
 
 | Aspecto | Vendedor | Cliente autogestión |
 |---------|----------|---------------------|
-| Entrada nuevo pedido | Hub → **Nuevo pedido** o menú Compra mayorista; `frm=0` tras elegir cliente | Misma ruta `/ecom/mayoristapp/compra/`; sesión con su `idcliente` |
+| Entrada nuevo pedido | Hub → **Pedido de venta** o menú; `frm=0` tras elegir cliente | Misma ruta `/ecom/mayoristapp/venta/`; sesión con su `idcliente` |
 | Checkout `es_cliente` | `false` | `true` |
 | `TipoPedido` | `Ecom vendedor` | `Ecom cliente` |
 | Autorización crédito | Evalúa límite de días (`mayorista_credito`) | Siempre `No Autorizado` (no bloquea alta) |
@@ -108,16 +108,15 @@ Los permisos `ecom.pedidos.*` se registran en `core/constantes_permisos.py` para
 - **Cliente (autogestión):** no ve precios históricos del pedido repetido; solo totales recalculados en carrito/checkout.
 - **Vendedor:** al repetir puede ver precios del pedido origen como **referencia informativa** (no vinculantes al commit).
 
-### 6.2 Pedido confirmado: no editar
+### 6.2 Pedido confirmado: editar vs consulta
 
-Un pedido ya confirmado (`comp_ped` persistido) **no se edita** en Synap ni en el portal cliente.
+| Estado | Shell `/venta/?cod_mov=` | Comportamiento |
+|--------|-------------------------|----------------|
+| `Pendiente` y no anulado | **Editar** | Líneas en carrito; al confirmar → modal Synap → anula origen + checkout nuevo (nuevo `CodigoMovimiento`) |
+| Otro estado / anulado | **Consulta** | Solo lectura; Repetir / PDF / mail; Anular solo si API `puede_anular` |
 
-Opciones permitidas:
-
-1. **Anular** + crear pedido nuevo (si negocio autoriza anulación).
-2. **Repetir pedido** (nuevo carrito con artículos/cantidades, precios actuales).
-
-No existe flujo de modificación de renglones sobre `CodigoMovimiento` existente.
+No hay UPDATE in-place de renglones sobre el mismo `CodigoMovimiento`.  
+`GET /ecom/mayoristapp/pedidos/<cod_mov>/` redirige a `/venta/?cod_mov=`.
 
 ---
 
@@ -134,6 +133,9 @@ No existe flujo de modificación de renglones sobre `CodigoMovimiento` existente
 | **Stepper estado en detalle** | Ciclo comercial solo lectura + remitos vinculados | Resuelto |
 | **Portal cliente repetir** | Acciones Ver/Repetir en listado `pedidos-cliente` | Resuelto |
 | **Hub repetir último** | Atajo con cliente seleccionado (vendedor) | Resuelto |
+| **Bloqueo anulación remito/factura** | PHP valida `ped_fact`/`rem_ped`; Synap solo `Estado=Pendiente` | Abierto P0 — ver RE `14-functional-equivalence-matrix.md` |
+| **Domicilio / hoja ruta en OrderShell** | Backend acepta; UI `/venta/` no envía | Abierto P1 |
+| **Filtro TipoPedido** | Opciones `Web`/`Sistema` vs persistido `Ecom vendedor`/`Ecom cliente` | Abierto P1 |
 
 ## 8. Backlog post-v1 (implementado)
 
@@ -175,7 +177,9 @@ Referencia visual: **docs/general/FUENTE_VERDAD_UI_REPORTES_MPR.md** (familia re
 | Acción | Ruta |
 |--------|------|
 | Hub gestión pedidos | `GET /ecom/mayoristapp/pedidos/` (menú **Ventas → Comprobantes → Pedidos**) |
-| Nuevo pedido (UI) | `GET /ecom/mayoristapp/compra/` |
+| Pedido de venta (UI) | `GET /ecom/mayoristapp/venta/` (`?cod_mov=` abre PED) |
+| Alias compra (redirect) | `GET /ecom/mayoristapp/compra/` → `/venta/` |
+| Detalle legacy (redirect) | `GET /ecom/mayoristapp/pedidos/<cod_mov>/` → `/venta/?cod_mov=` |
 | Confirmar alta | `POST /ecom/api/mayoristapp/checkout/confirmar/` |
 | Listado vendedor | `GET /ecom/mayoristapp/pedidos-vendedor/` |
 | API listado v1 | `POST /ecom/api/v1/mayoristapp/comprobantes/pedidos/` |

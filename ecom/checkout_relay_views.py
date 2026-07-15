@@ -18,25 +18,48 @@ from ecom.permissions import EcomMayoristappSessionPermission
 from ecom.services import mayorista_checkout_service as checkout_svc
 from ecom.services.mayorista_checkout_service import CheckoutInput
 from ecom.services.mayoristapp_session import limpiar_cliente_seleccion_mayoristapp
+from ecom.services.pedido_cabecera_comercial import (
+    es_supervisor_desde_ctx,
+    parsear_cabecera_desde_body,
+    resolver_cabecera_comercial,
+)
+from ecom.services.recibo_catalogos_service import listar_puntos_venta_usuario
+from ecom.services.vendedor_operativo import ctx_desde_request
 
 
 def _session_bag(request: Request) -> dict:
     return (getattr(request, "session", None) or {}).get("mayoristapp") or {}
 
 
+from ecom.services.vendedor_operativo import resolver_viajante_operativo_request
+
+
 def _session_cod_viajante(request: Request):
-    user = (getattr(request, "session", None) or {}).get("user") or {}
-    return to_int_or_none(user.get("cod_viajante") or user.get("codViajante"))
+    return resolver_viajante_operativo_request(request)
 
 
 def _session_pv(request: Request):
-    sess = getattr(request, "session", None) or {}
-    bag = _session_bag(request)
-    return to_int_or_none(
-        sess.get("id_punto_venta_activo")
-        or bag.get("id_punto_venta_activo")
-        or bag.get("id_punto_venta")
-    )
+    """Resuelve el PV como el checkout simple: sesión, usuario y catálogo disponible."""
+    try:
+        sess = getattr(request, "session", None) or {}
+        bag = _session_bag(request)
+        pv = to_int_or_none(
+            sess.get("id_punto_venta_activo")
+            or bag.get("id_punto_venta_activo")
+            or bag.get("id_punto_venta")
+            or (sess.get("user") or {}).get("id_punto_venta")
+        )
+        if pv is not None:
+            return pv
+
+        user = sess.get("user") or {}
+        base_empresa = user.get("base_empresa")
+        if not base_empresa:
+            return None
+        puntos = listar_puntos_venta_usuario(str(base_empresa), user)
+        return to_int_or_none((puntos[0] if puntos else {}).get("id_punto_venta"))
+    except Exception:
+        return None
 
 
 def _session_agente_percep(request: Request):
@@ -85,6 +108,9 @@ class CheckoutConfirmarRelayAPIView(APIView):
         pv = to_int_or_none(body.get("id_punto_venta")) or _session_pv(request)
 
         bag = _session_bag(request)
+        parsed = parsear_cabecera_desde_body(body)
+        ctx = ctx_desde_request(request)
+        es_sup = es_supervisor_desde_ctx(ctx)
         datos = CheckoutInput(
             tipo=tipo,
             id_punto_venta=pv,
@@ -93,9 +119,17 @@ class CheckoutConfirmarRelayAPIView(APIView):
             id_ruta=to_int_or_none(body.get("id_ruta")),
             observaciones=str(body.get("observaciones") or ""),
             es_cliente=bool(body.get("es_cliente", False)),
-            dias_entrega=to_int_or_none(bag.get("cant_dias_entrega")) or 0,
+            dias_entrega=to_int_or_none(body.get("dias_entrega"))
+            or to_int_or_none(bag.get("cant_dias_entrega"))
+            or 0,
             dias_no_laborables=_session_dias_no_laborables(request),
             agente_percep=_session_agente_percep(request),
+            es_supervisor=es_sup,
+            fecha_pedido=parsed.get("fecha_pedido"),
+            fecha_entrega=parsed.get("fecha_entrega"),
+            vencimiento=parsed.get("vencimiento"),
+            id_condventa=parsed.get("id_condventa"),
+            lista_id=parsed.get("lista_id"),
         )
 
         try:

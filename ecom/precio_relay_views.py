@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 
 from ecom.permissions import EcomMayoristappSessionPermission
 from ecom.services.precio_relays import (
+    condiciones_venta_relay_json,
     lista_precio_relay_json,
     parse_query_promociones,
     promociones_relay_payload,
@@ -79,6 +80,29 @@ class ListaPrecioRelayAPIView(APIView):
         except Exception:
             return Response({"detail": "Error al armar listas de precio."}, status=500)
 
+        return Response(data)
+
+
+class CondicionesVentaRelayAPIView(APIView):
+    """
+    GET /ecom/api/mayoristapp/precios/condiciones-venta/
+
+    Catálogo ``cond_venta`` para cabecera comercial (Codigo, Descripcion, Dias).
+    """
+
+    permission_classes = [EcomMayoristappSessionPermission]
+
+    def get(self, request: Request) -> Response:
+        base = _session_base_empresa(request)
+        if not base:
+            return Response({"detail": "No se encontró base_empresa en la sesión."}, status=400)
+        id_cv = to_int_or_none(request.query_params.get("id_condventa"))
+        if id_cv is None:
+            id_cv = to_int_or_none(request.query_params.get("id_condicion_cliente"))
+        try:
+            data = condiciones_venta_relay_json(base, id_condicion_cliente=id_cv)
+        except Exception:
+            return Response({"detail": "Error al armar condiciones de venta."}, status=500)
         return Response(data)
 
 

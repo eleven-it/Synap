@@ -32,6 +32,34 @@ En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente
 | GET | `/api/reports/executive-dashboard/tesoreria/resumen/` | Tesorería **caja** (saldos, flujos, subcategorías); `banco_disponible: false` en P0 |
 | GET | `/api/reports/executive-dashboard/ventas/cobros/resumen/` | Facturado por medio vs cobrado en caja |
 
+## Rutas P1 — Tesorería banco y detalle
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/reports/executive-dashboard/tesoreria/banco/resumen/` | Libro banco: saldos, créditos/débitos, por cuenta; **no sumar con caja** |
+| GET | `/api/reports/executive-dashboard/tesoreria/movimientos-caja/` | Movimientos operativos de caja paginados (excluye cierre/transferencia) |
+| GET | `/api/reports/executive-dashboard/ventas/cobros/detalle/` | Cobros en caja paginados; medio vía `medio_cobpag` (REC) o heurística |
+
+El orquestador incluye **`areas.tesoreria.banco`** (segunda consulta aislada). La tarjeta UI carga banco en paralelo vía `tesoreriaBancoUrl` sin mezclar KPIs de caja.
+
+### Tesorería banco (`librobanco`)
+
+- Saldos: último `librobanco.Saldo` por `CodCuenta` (fecha `COALESCE(FechaMov, Fecha)`).
+- Excluye `Anulado='Si'`. Filtro sucursal vía `CodSucursal`.
+- `pendiente_conciliar`: movimientos con `conciliado` distinto de `Si`/`si` hasta fin de período.
+- `por_cuenta_banco[]`: `{ cod_cuenta, nro_cuenta, banco_nombre, saldo_inicial, saldo_final, creditos, debitos }`.
+
+### Detalle cobros
+
+- Fuente: ingresos en `caja` del período.
+- Campos fila: `fecha`, `tipo`, `nro_comprobante`, `medio`, `importe`, `id_cliente`, `nombre`.
+- `meta.fuente_medio`: `caja_con_medio_cobpag_rec` o `caja_heuristica`.
+
+### Movimientos caja (detalle)
+
+- Excluye `Cierre de Caja` y `Transferencia de Fondos`.
+- Campos: `fecha`, `tipo`, `tipo_comprobante`, `nro_comprobante`, `ingreso`, `egreso`, `codigo_movimiento`, `cod_sucursal`.
+
 **Ventas del día (intradía):** `GET /api/reports/executive-summary/` — spec `docs/reports/SPEC_DASHBOARD_RESUMEN_EJECUTIVO_VENTAS.md`.
 
 ### Tesorería (caja)
@@ -66,6 +94,8 @@ Verificación: `python manage.py uat_tesoreria_cashflow --base <empresa> --fecha
 | GET | `/api/reports/executive-dashboard/ventas/remitos-no-facturados/` | Igual |
 | GET | `/api/reports/executive-dashboard/cruzados/backorder/` | Filas BO por artículo + `total_monto` (suma bo_importe) |
 | GET | `/api/reports/executive-dashboard/inventario/existencias/` | Filas stock por depósito (sin `total_monto`); búsqueda opcional |
+| GET | `/api/reports/executive-dashboard/tesoreria/movimientos-caja/` | Movimientos operativos caja |
+| GET | `/api/reports/executive-dashboard/ventas/cobros/detalle/` | Cobros en caja con medio |
 
 ## Query params comunes
 

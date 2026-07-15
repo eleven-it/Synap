@@ -13,6 +13,10 @@ function init() {
   window.addEventListener("compra-cliente-limpiado", () => {
     api.setDisplay("");
   });
+  window.addEventListener("compra-cliente-display", (e) => {
+    const label = e.detail && e.detail.label;
+    if (label) api.setDisplay(String(label));
+  });
 }
 
 if (document.readyState === "loading") {

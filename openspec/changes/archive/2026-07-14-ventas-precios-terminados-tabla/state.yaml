@@ -1,0 +1,13 @@
+change: ventas-precios-terminados-tabla
+status: applied
+phase: verify
+created: "2026-07-09"
+updated: "2026-07-14"
+description: Tabla de actualización masiva de precios y reserva para productos terminados
+verify:
+  date: "14/07/2026"
+  verdict: "PASS WITH WARNINGS (READY MVP P0)"
+  tests_run: 10
+  tests_passed: 10
+  tests_failed: 0
+  next: sdd-archive

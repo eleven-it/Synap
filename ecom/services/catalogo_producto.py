@@ -164,6 +164,11 @@ def _construir_where_catalogo(filtros: Dict[str, Any]) -> tuple:
     if filtros.get("solo_promocion"):
         where_clauses.append("articulo.promocion = 'Si'")
 
+    tipo_art_fab = str_or_default(filtros.get("tipo_art_fab"), "").strip()
+    if tipo_art_fab:
+        where_clauses.append("COALESCE(TRIM(articulo.tipo_art_fab), '') = %s")
+        params.append(tipo_art_fab)
+
     if filtros.get("q"):
         q_raw = str(filtros["q"]).strip()
         q_term = f"%{q_raw}%"
@@ -252,7 +257,7 @@ def listar_articulos_paginado(
 
     Args:
         base_empresa: Base de datos de la empresa.
-        filtros: Dict con filtros opcionales (rubro, subrubro, marca, marcas, laboratorio, proveedor, q, solo_promocion, busqueda_tpv).
+        filtros: Dict con filtros opcionales (rubro, subrubro, marca, marcas, laboratorio, proveedor, q, solo_promocion, busqueda_tpv, tipo_art_fab).
         lista_id: ID de lista de precios (1..5 o 6).
         codigo_cliente: ID del cliente (None si no hay cliente).
         descuento_cliente: Descuento de renglón/cliente (%).

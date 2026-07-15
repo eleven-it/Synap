@@ -9,6 +9,7 @@ from mpr.best_migration.models import (
     BestClienteMap,
     BestDepositoMap,
     BestMigrationParity,
+    BestOperarioMap,
     BestStockInicialMap,
 )
 
@@ -16,6 +17,7 @@ STAGING_TABLAS = (
     ("artículos", BestArticuloMap),
     ("clientes", BestClienteMap),
     ("depósitos", BestDepositoMap),
+    ("operarios / tejedores", BestOperarioMap),
     ("stock inicial", BestStockInicialMap),
     ("paridad / gate", BestMigrationParity),
 )

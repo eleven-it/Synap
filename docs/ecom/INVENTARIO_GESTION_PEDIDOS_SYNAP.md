@@ -9,7 +9,7 @@ Comparación breve de pantallas y flujos. Detalle campo a campo del listado vend
 | Flujo | PHP / VB6 | Synap | Estado |
 |-------|-----------|-------|--------|
 | Hub ventas — acceso pedidos | `componente-menu-card-dashboard.php` → `lista-pedidos-vendedor.php` | Hub `GET /ecom/mayoristapp/` → Pedidos + **Nuevo pedido** | ✅ |
-| Alta pedido (carrito) | `alta_pedido.php` + `jcart/` | `GET /ecom/mayoristapp/compra/` + APIs carrito/checkout | ✅ (relay `frm=0` → Synap) |
+| Alta pedido (carrito) | `alta_pedido.php` + `jcart/` | `GET /ecom/mayoristapp/venta/` + APIs carrito/checkout | ✅ (relay `frm=0` → Synap) |
 | Confirmación alta | `alta_pedido_confirmado.php` | `POST …/checkout/confirmar/` (`mayorista_checkout_service`) | ✅ |
 | Listado pedidos vendedor | `lista-pedidos-vendedor.php` + `relay-pedidos.php` | `pedidos_vendedor.html` + API v1 pedidos | ✅ (PDF/anular UI ⏳) |
 | Preparación depósito | `logistica_pantalla_preparacion.php` | `estado_pedidos_preparacion.html` + API Kanban | ✅ |
@@ -25,7 +25,7 @@ Comparación breve de pantallas y flujos. Detalle campo a campo del listado vend
 
 | PHP | Synap |
 |-----|--------|
-| `seleccionarComprobante` `frm=0` → `alta_pedido.php` | `frm=0` → `/ecom/mayoristapp/compra/` |
+| `seleccionarComprobante` `frm=0` → `alta_pedido.php` | `frm=0` → `/ecom/mayoristapp/venta/` |
 
 ---
 

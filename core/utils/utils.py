@@ -149,6 +149,18 @@ APPS_MENU = [
                 ]
             },
             {
+                "seccion": _("Ajustes"),
+                "items": [
+                    {
+                        "label": _("Ajustes de ventas"),
+                        "url": "ecom:mayoristapp_ajustes_ventas",
+                        "icon": "settings",
+                        "permission": "ecom.config_ajustes_ventas",
+                        "menu_item_id": "ventas_ajustes_ventas",
+                    },
+                ]
+            },
+            {
                 "seccion": _("Gestión"),
                 "items": [
                     {
@@ -557,7 +569,7 @@ APPS_MENU = [
                     },
                     {
                         "label": _("Pedido de venta"),
-                        "url": "ecom:mayoristapp_compra",
+                        "url": "ecom:mayoristapp_venta",
                         "icon": "shopping_cart",
                         "permission": "ecom.carrito.editar",
                         "menu_item_id": "ecom_compra",

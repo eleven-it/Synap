@@ -1,6 +1,6 @@
 {% comment %}
   Superficie de líneas del pedido — tabla desktop (md+).
-  Contrato Alpine root: cart.items, money, cambiarCantidad, quitar, itemMuestraUom, cambiarUom.
+  Contrato Alpine root: cart.items, money, cambiarCantidad, quitar, itemMuestraUom, cambiarUom, cambiarDescuentoRenglon.
 {% endcomment %}
 <div class="hidden md:block overflow-x-auto">
   <table class="w-full text-left border-collapse" aria-label="Líneas del pedido">
@@ -10,6 +10,7 @@
         <th class="py-2 px-2 font-semibold w-28">UOM</th>
         <th class="py-2 px-2 font-semibold w-32 text-center">Cant.</th>
         <th class="py-2 px-2 font-semibold text-right w-28">P. unit.</th>
+        <th class="py-2 px-2 font-semibold text-center w-24">% desc.</th>
         <th class="py-2 px-2 font-semibold text-right w-28">Total</th>
         <th class="py-2 pl-2 font-semibold w-16 text-center"><span class="sr-only">Quitar</span></th>
       </tr>
@@ -29,6 +30,17 @@
             {% include "ecom/includes/pedidos_qty_input.html" %}
           </td>
           <td class="py-3 px-2 text-right text-sm text-slate-600 dark:text-slate-300 tabular-nums" x-text="money(it.precio_unitario_neto)"></td>
+          <td class="py-3 px-2 text-center">
+            <label class="sr-only" :for="`pedidos-desc-renglon-${it.id}`">Descuento renglón %</label>
+            <input :id="`pedidos-desc-renglon-${it.id}`"
+                   type="number"
+                   min="0"
+                   max="100"
+                   step="0.01"
+                   :value="it.porcentaje_descuento"
+                   @change="cambiarDescuentoRenglon(it.id, $event.target.value)"
+                   class="pedidos-input w-16 text-right text-sm px-2 py-1 tabular-nums" />
+          </td>
           <td class="py-3 px-2 text-right text-sm font-semibold text-slate-900 dark:text-white tabular-nums" x-text="money(it.total)"></td>
           <td class="py-3 pl-2 text-center">
             <button type="button"

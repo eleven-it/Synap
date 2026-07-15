@@ -8,7 +8,7 @@
 
 Resolver la **paridad de maestros** antes de sembrar pedidos abiertos BEST como PED MPR. La migración de pedidos queda **bloqueada** hasta completar los dominios obligatorios.
 
-**Alcance del gate (cutover):** cuentan filas con `requerido_migracion=True`: artículos/clientes en pedidos abiertos BEST (`REP_ORDENES_COMBINADO` con `Finalizada=0` y `Pendiente>0`) y SKUs con saldo en depósito (`REP_INVENTARIOS`, `Stock ≠ 0`, `origen_requerimiento=STOCK_DEPOSITO`). El resto es histórico y no bloquea.
+**Alcance del gate (cutover):** cuentan filas con `requerido_migracion=True` en **pedidos abiertos** BEST (`REP_ORDENES_COMBINADO` con `Finalizada=0` y `Pendiente>0`): artículos y clientes de esas órdenes. Los SKUs con saldo en depósito (`REP_INVENTARIOS`, `STOCK_DEPOSITO`) se sincronizan para stock inicial coherente pero **no bloquean** el gate de pedidos. El resto es histórico y no bloquea.
 
 ## Categorías de migración (UI)
 
@@ -25,7 +25,9 @@ Campos de alcance en `BestArticuloMap` / `BestClienteMap`:
 
 - `requerido_migracion` (bool, indexado)
 - `en_snapshot_abierto` (bool, indexado)
-- `origen_requerimiento`: `PEDIDO_ABIERTO` \| `STOCK_DEPOSITO` \| `HISTORICO`
+- `origen_requerimiento`: `PEDIDO_ABIERTO` \| `STOCK_DEPOSITO` \| `BOM_FABRICADO` \| `HISTORICO`
+
+**Guard `BOM_FABRICADO`:** las filas con origen `BOM_FABRICADO` **nunca** entran en `refresh_parity_counters` / `migracion_habilitada` ni se borran en `recalcular_mapeo_articulos`.
 
 Al recalcular/sincronizar: SKUs o clientes fuera del snapshot abierto pero ya VALIDADO/DESCARTADO pasan a `requerido_migracion=False` y `origen_requerimiento=HISTORICO` (no se borran).
 
@@ -45,7 +47,7 @@ Luego en `/mpr/migracion-best/`: recalcular artículos → sincronizar clientes/
 ## Flujo
 
 1. **Hub** — checklist de dominios + gate.
-2. **Artículos** — recalcular inferencia 1:1 desde pedidos abiertos; al final (y antes de sync stock) se aseguran también SKUs con saldo en `REP_INVENTARIOS` vía `asegurar_articulos_desde_inventario`. El universo Admin del matcher y de la búsqueda **Asignar** es solo `articulo.tipo_art_fab = 'Terminado'`. Filtrar **necesarios pendientes** (default en la primera visita sin query); al pulsar **Filtrar** el form envía `filtrado=1` para persistir checkboxes destildados («Solo necesarios…», «Incluir stock…»). Destildar necesarios muestra todos los SKUs del mapeo (hasta 500). Clic en candidato / asignar / descartar; badges de alcance.
+2. **Artículos terminados** — recalcular inferencia 1:1 desde pedidos abiertos; universo Admin `tipo_art_fab=Terminado`. Los fabricados (BOM) viven en dominio aparte.
 3. **Clientes** — sincronizar + inferir; misma semántica de alcance y filtros.
 4. **Unidades** — confirmar que BEST → `stockp.cantidad` se interpreta en **pares**.
 5. **Pedidos (gate)** — se habilita solo con artículos + clientes **requeridos** resueltos y unidades OK. Siembra PED vía `migrar_pedidos_best` (ensayo/confirmar).
@@ -56,13 +58,14 @@ Contadores de gate en `BestMigrationParity`: `articulos_total` / `articulos_resu
 
 | Dominio | Obligatorio para pedidos | Estado módulo |
 |---------|--------------------------|---------------|
-| Artículos | Sí | Implementado (inferencia + validación UI + lote score + selección múltiple) |
+| Artículos terminados | Sí | Implementado (inferencia + validación UI + lote score + selección múltiple) |
+| Artículos fabricados | No | Implementado (BOM Admin → matcher inverso; no bloquea gate PED) |
 | Clientes | Sí | Implementado (inferencia CUIT/nombre/campaña + validación UI + lote + selección múltiple) |
 | Unidades (par) | Sí | Confirmación manual en hub |
 | Depósitos / etapas | No | Implementado (REP_INVENTARIOS + inferencia tipo_mpr) |
 | Stock inicial | No | Implementado (opening balance + dry-run) |
 | Stock de seguridad (reserva) | No | Implementado (`MC.MCSS` → `articulo.stock_reserva`) |
-| Operarios | No | Pendiente |
+| Operarios | No | Implementado (diccionario TTNOTE ↔ sue_abm_empleado) |
 
 ## Modelos (PostgreSQL Synap — no toca MySQL/Azure)
 
@@ -97,7 +100,15 @@ UI (`/mpr/migracion-best/articulos/`):
   - Rubro/subrubro/IVA desde plantilla Terminado con UM=1; `CodigoArticulo` = MAX+1; `tipo_art_fab=Terminado`.
   - Crea `stock_deposito` saldo 0 en todos los depósitos y valida el mapeo 1:1.
 
-`asegurar_articulos_desde_inventario` infiere mapeo con el mismo matcher. Preserva VALIDADO/DESCARTADO. Si el SKU ya tenía `PEDIDO_ABIERTO`, se conserva; si no, queda `STOCK_DEPOSITO`. El delete de recalcular **no** borra filas `STOCK_DEPOSITO` con `requerido_migracion=True`.
+`asegurar_articulos_desde_inventario` infiere mapeo con el mismo matcher. Preserva VALIDADO/DESCARTADO. Si el SKU ya tenía `PEDIDO_ABIERTO`, se conserva; si no, queda `STOCK_DEPOSITO`. El delete de recalcular **no** borra filas `STOCK_DEPOSITO` con `requerido_migracion=True` ni filas `BOM_FABRICADO`.
+
+## Artículos fabricados (BOM Admin, no bloqueante)
+
+- **Fuente BOM:** solo AdministraNET (`en_abm` / `en_abm_formula`). **No** se lee `REP_RECETAS` en BEST.
+- **Flujo:** terminados `VALIDADO` → explosión primer nivel BOM → componentes `tipo_art_fab=Fabricado` → matcher inverso Admin→BEST → `BestArticuloMap` con `origen_requerimiento=BOM_FABRICADO`.
+- **UI:** `/mpr/migracion-best/articulos-fabricados/` — acción «Resolver fabricados», Asignar con búsqueda `tipo_art_fab=Fabricado`.
+- **Gate:** dominio `articulos_fabricados` con `obligatorio_para_pedidos=False`; pendientes de fabricados no bloquean cutover ni siembra PED.
+- **Stock Semi opcional:** `sincronizar_stock_fabricados_semi` filtra inventario BEST depósito **4002** (Semi-Embalado) y SKUs fabricados validados; misma máquina de olas (`CARGADO` inmutable).
 
 ## Clientes (maestro 1:1)
 
@@ -140,7 +151,37 @@ Requiere `BestArticuloMap` y `BestDepositoMap` en estado VALIDADO. Estados de l�
 La confirmación **no** hace upsert directo a `stock_deposito`: llama a `core.services.administranet_stock.alta_movimiento` con **motivo 1 = Stock Inicial** (misma lógica que `/stock/ingreso-movimiento/`), agrupando por depósito (lotes de hasta 100 renglones). Cada renglón es entrada (`ES=E`) por el **delta** `BEST − saldo Admin`. Antes de grabar, el cargador obtiene `CodigoArticuloT` y `NombreArticulo` desde `articulo` por `IDArt`; `alta_movimiento` vuelve a canonizarlos dentro de su transacción, por lo que `stock.CodigoArticulo` siempre replica el código maestro aunque otro llamador entregue un valor erróneo. Además completa `Cantidad`, `PrecioCostoxU`, `PrecioCostoxR`, `CodSucursal`, `id_manual`, `TipoIVA` y `Alicuota` desde el renglón enriquecido y la cabecera: el costo, IVA e identificador manual provienen de `articulo` solo cuando el renglón no los aporta. Actualiza `movimiento_stock` + `stock` + `stock_deposito` en una transacción MySQL. El `detalle` del movimiento usa solo ASCII (`Cutover BEST -> stock inicial…`): el cliente MySQL legacy (charmap/cp1252) no acepta el carácter `→`.
 
 Las altas de stock inicial envían `id_ref_movstock=1` («Sin Referencia») y completan `stock.CodLaboratorio` desde `articulo`, con valor `1` si el maestro no lo define.
+
+### Stock inicial por olas
+
+La carga MSTOCK puede ejecutarse en **varias olas** (cutover y post-cutover):
+
+| Momento | Qué se procesa |
+|---------|----------------|
+| **Cutover (ola 1)** | Todas las líneas LISTO/CONCILIADO mapeadas con delta>0 |
+| **Post-cutover (ola 2+)** | Solo líneas nuevas que pasaron a LISTO/CONCILIADO tras mapear artículos/depósitos adicionales |
+
+**Ejemplo:** 100 SKUs con saldo BEST al cutover → confirmar carga mueve los que tengan delta>0. Semanas después aparecen 50 SKUs nuevos mapeados → **Sincronizar** + **Confirmar carga** procesa solo esos 50; los 100 ya **CARGADO** no vuelven a ser candidatos.
+
+**Guardrails en `cargar_stock_inicial_best`:**
+
+1. **Sync previo:** antes de ensayo o confirmación llama `sincronizar_stock_inicial` (refresca líneas desde `REP_INVENTARIOS`).
+2. **Saldo live:** recalcula delta con `_load_admin_stock_deposito` (MySQL `stock_deposito`), no confía solo en `admin_saldo_actual` del snapshot Postgres.
+3. **CARGADO inmutable:** `sincronizar_stock_inicial` no cambia estado ni campos de filas **CARGADO** / **DESCARTADO** (rama preservados); la carga solo considera LISTO/CONCILIADO.
+4. **Reconfirmación segura:** si Admin ya alcanzó BEST (delta ≤ 0), marca CARGADO sin `alta_movimiento`.
+5. **Sin reinicio:** tras MSTOCK no usar «Reiniciar migración» para olas siguientes; el reinicio no deshace MySQL.
+
 Rutas: `/mpr/migracion-best/stock-inicial/`, sincronizar, validar, cargar.
+
+**Colas UI (pestañas):**
+
+| Cola | Estados | Uso |
+|------|---------|-----|
+| Pendiente mapeo | `SIN_MAPEO_ARTICULO`, `SIN_MAPEO_DEPOSITO` | Maestros faltantes |
+| Listos para carga | `LISTO`, `CONCILIADO` | Ola actual — confirmar carga |
+| Ya cargados | `CARGADO` | Solo consulta; no reprocesar |
+
+Copy en pantalla: el stock **crítico al cutover** es Terminados (dep. Terminado); fabricados/Semi-Embalado es opcional post-cutover.
 
 ## Asignación manual (UI)
 
@@ -154,7 +195,14 @@ En artículos y clientes, la acción **Asignar** usa búsqueda predictiva Alpine
 
 Las rutas `*/api/*` no pasan por el chequeo de permiso de módulo del path (p. ej. un usuario MPR sin módulo Core puede buscar artículos Terminado). La vista sigue exigiendo sesión con `base_empresa`.
 
-Depósitos, stock inicial y operarios reutilizan `bestAsignarMaestro` / `bestAsignarDeposito`.
+Depósitos, stock inicial y operarios reutilizan `bestAsignarMaestro` / `bestAsignarDeposito` / `bestAsignarOperario` (`mpr:api_empleados`).
+
+## Operarios / tejedores
+
+**Ruta:** `/mpr/migracion-best/operarios/`  
+Rutas: sincronizar, validar (aceptar / asignar / descartar / lote / selección / reabrir).  
+**Modelo:** `BestOperarioMap` (`mpr_best_operario_map`).  
+Sincroniza letras/códigos desde BEST (`REP_MOVIMIENTOS_TOTAL.Tejedor` o `TT.TTNOTE`; fallback catálogo documentado). Infere contra `sue_abm_empleado`. Validar / asignar / descartar / reabrir. `parity.operarios_ok` cuando todos los requeridos están resueltos. No bloquea el gate de PED.
 
 ## Conexión BEST
 

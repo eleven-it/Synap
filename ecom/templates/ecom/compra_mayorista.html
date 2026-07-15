@@ -1,7 +1,7 @@
 {% extends "ecom/base_pedidos.html" %}
 {% load static %}
 
-{% block pedidos_title %}Gestión de pedidos{% endblock %}
+{% block pedidos_title %}Pedido de venta{% endblock %}
 
 {% block pedidos_section_attrs %}x-data="compraMayorista()" x-init="init()"{% endblock %}
 
@@ -9,25 +9,55 @@
 
 {% block pedidos_json_script %}
 {{ urls|json_script:"compra-mayorista-urls" }}
-<script type="application/json" id="compra-mayorista-config">{"esCliente":{{ es_cliente|yesno:"true,false" }}}</script>
+<script type="application/json" id="compra-mayorista-config">{"esCliente":{{ es_cliente|yesno:"true,false" }}{% if cod_mov_inicial %},"codMovInicial":{{ cod_mov_inicial }}{% endif %}}</script>
+{% if pedido_bootstrap %}
+{{ pedido_bootstrap|json_script:"compra-mayorista-pedido-bootstrap" }}
+{% else %}
+<script type="application/json" id="compra-mayorista-pedido-bootstrap">null</script>
+{% endif %}
 {% endblock %}
 
-{# Hero estilo tablero de producción MPR: card slate-800, título compacto,
-   breadcrumb purple y toggle grande protagónico a la derecha. #}
+{# Hero: pedido de venta — acciones PED cuando hay cod_mov. #}
 {% block pedidos_hero %}
 <div class="pedidos-contenedor-pagina relative w-full pt-4 pb-1 sm:pt-5">
-  {% include "ecom/includes/pedidos_breadcrumb.html" with hub_url=urls.hub_pedidos current_label="Nuevo pedido" variant="purple" %}
+  {% include "ecom/includes/pedidos_breadcrumb.html" with hub_url=urls.hub_pedidos current_label="Pedido de venta" variant="board" %}
 
   <div class="pedidos-hero-tablero rounded-lg border border-slate-700 bg-slate-800 p-3 sm:p-4 shadow-md dark:border-slate-800 dark:bg-slate-900">
     <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
       <div class="min-w-0">
-        <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">Gestión de pedidos</h1>
-        <p class="mt-1 text-[11px] text-slate-400 sm:text-xs">
-          Carga dinámica de pedidos · cliente, productos y confirmación
+        <div class="flex flex-wrap items-center gap-2">
+          <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">Pedido de venta</h1>
+          <span x-show="codMov && cabeceraPedido && estadoPedidoLabel" x-cloak
+                class="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+                :class="estadoPedidoBadgeClass"
+                x-text="estadoPedidoLabel"></span>
+        </div>
+        <p class="mt-1 text-[11px] text-slate-400 sm:text-xs" x-show="!codMov">
+          Carga dinámica · cliente, productos y confirmación
         </p>
+        <p class="mt-1 text-[11px] text-slate-300 sm:text-xs font-medium" x-show="codMov && cabeceraPedido" x-cloak
+           x-text="heroPedidoSub"></p>
+        <p class="mt-1 text-[11px] text-amber-300 sm:text-xs" x-show="codMov && !cabeceraPedido && cargandoPedido" x-cloak>
+          Cargando pedido…
+        </p>
+        <p class="mt-1 text-[11px] text-rose-300 sm:text-xs" x-show="errorPedido" x-text="errorPedido" x-cloak></p>
       </div>
-      <div class="shrink-0">
-        {% include "ecom/includes/pedidos_toggle_comprobante.html" with variant="dark" %}
+      <div class="flex flex-wrap items-center gap-2 shrink-0">
+        <template x-if="codMov && cabeceraPedido">
+          <div class="flex flex-wrap gap-2">
+            <button type="button" @click="repetirPedidoActual()" x-show="puedeRepetirPedido"
+                    class="pedidos-btn bg-sky-600 hover:bg-sky-500 text-white text-xs sm:text-sm">Repetir</button>
+            <button type="button" @click="solicitarAnularPedido()" x-show="puedeAnular"
+                    class="pedidos-btn bg-rose-600 hover:bg-rose-500 text-white text-xs sm:text-sm">Anular</button>
+            <button type="button" @click="solicitarEnviarMail()"
+                    class="pedidos-btn bg-slate-600 hover:bg-slate-500 text-white text-xs sm:text-sm">Mail</button>
+            <a :href="pdfPedidoUrl" target="_blank" rel="noopener"
+               class="pedidos-btn bg-slate-600 hover:bg-slate-500 text-white text-xs sm:text-sm inline-flex items-center">PDF</a>
+          </div>
+        </template>
+        <div x-show="!codMov">
+          {% include "ecom/includes/pedidos_toggle_comprobante.html" with variant="dark" %}
+        </div>
       </div>
     </div>
   </div>
@@ -37,11 +67,19 @@
 {% block pedidos_content %}
 <div class="compra-modo-shell pedidos-order-shell space-y-4 sm:space-y-6" :class="modoShellClass" x-cloak>
 
-  {# Región 1: fila de contexto — cliente | marcas + acciones (toggle vive en el hero) #}
-  {% include "ecom/includes/pedidos_order_header.html" %}
+  <p class="text-sm text-rose-600 text-center py-4" x-show="errorPedido" x-text="errorPedido" x-cloak></p>
+  <p class="text-sm text-slate-500 text-center py-4" x-show="cargandoPedido" x-cloak>Cargando pedido…</p>
 
-  {# Banners contextuales (recientes, éxito) #}
-  <div class="pedidos-card p-4" x-show="tipo === 'PED' && pedidosRecientes.length" x-cloak>
+  <div class="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 px-4 py-3 text-sm text-slate-700 dark:text-slate-200"
+       x-show="esConsulta && cabeceraPedido" x-cloak>
+    Solo lectura: el pedido ya no está en Pendiente (entró en producción o está anulado).
+  </div>
+
+  <div :class="esConsulta ? 'pointer-events-none opacity-70' : ''">
+    {% include "ecom/includes/pedidos_order_header.html" %}
+  </div>
+
+  <div class="pedidos-card p-4" x-show="tipo === 'PED' && pedidosRecientes.length && !codMov" x-cloak>
     <div class="flex items-center justify-between mb-3">
       <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Pedidos recientes del cliente</h2>
       <a :href="urls.listado_pedidos" class="text-xs font-semibold text-sky-600 hover:text-sky-500">Ver listado</a>
@@ -82,17 +120,16 @@
     </div>
   </div>
 
-  {# OrderShell: captura + líneas | resumen #}
-  <div class="pedidos-order-main">
+  <div class="pedidos-order-main" x-show="!cargandoPedido">
 
     <div class="pedidos-order-primary space-y-4 sm:space-y-6">
 
-      {# Región 2: captura de productos #}
       <section class="pedidos-order-capture transition-opacity"
-               :class="!esCliente && !clienteActivo ? 'opacity-60' : ''"
-               aria-label="Captura de productos">
+               :class="(!pedidoEditable || (!esCliente && !clienteActivo)) ? 'opacity-60' : ''"
+               aria-label="Captura de productos"
+               x-show="!esConsulta">
         {% csrf_token %}
-        <div :class="!esCliente && !clienteActivo ? 'pointer-events-none' : ''">
+        <div :class="(!pedidoEditable || (!esCliente && !clienteActivo)) ? 'pointer-events-none' : ''">
           {% include "ecom/includes/pedidos_busqueda_articulos_tpv.html" %}
         </div>
         <p class="mt-2 text-xs text-amber-700 dark:text-amber-400 font-medium"
@@ -101,8 +138,37 @@
         </p>
       </section>
 
-      {# Región 3: líneas del pedido #}
-      <section class="pedidos-order-lines pedidos-workspace" aria-label="Líneas del pedido">
+      <section class="pedidos-order-lines pedidos-workspace" aria-label="Renglones del pedido" x-show="esConsulta" x-cloak>
+        <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 dark:border-slate-800">
+          <h2 class="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Renglones</h2>
+        </div>
+        <div class="px-4 sm:px-6 py-4 overflow-x-auto">
+          <table class="w-full text-left text-sm">
+            <thead class="text-[10px] font-bold uppercase tracking-wider text-slate-400 border-b">
+              <tr>
+                <th class="py-2 pr-3">Cód.</th>
+                <th class="py-2 pr-3">Descripción</th>
+                <th class="py-2 text-right">Cant.</th>
+                <th class="py-2 text-right">P. neto</th>
+                <th class="py-2 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="r in renglonesConsulta" :key="(r.IDArt || r.id_art) + '-' + (r.Salida || r.salida)">
+                <tr class="border-b border-slate-100 dark:border-slate-800">
+                  <td class="py-2 pr-3" x-text="r.CodigoArticulo || r.codigo_articulo"></td>
+                  <td class="py-2 pr-3" x-text="r.Descripcion || r.descripcion"></td>
+                  <td class="py-2 text-right" x-text="r.Salida || r.salida"></td>
+                  <td class="py-2 text-right tabular-nums" x-text="money(r.PrecioNetoxU || r.precio_neto_u)"></td>
+                  <td class="py-2 text-right tabular-nums" x-text="money((r.PrecioNetoxR||0)+(r.PrecioIVAxR||0) || r.total)"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="pedidos-order-lines pedidos-workspace" aria-label="Líneas del pedido" x-show="!esConsulta">
         <div class="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
             <h2 class="text-base sm:text-lg font-semibold text-slate-900 dark:text-white truncate" x-text="`Líneas del ${tipoLabel}`"></h2>
@@ -113,7 +179,7 @@
                 x-text="`${cart.items.length} renglón(es)`"></span>
         </div>
 
-        <div class="px-4 sm:px-6 py-4 pedidos-order-lines-scroll">
+        <div class="px-4 sm:px-6 py-4 pedidos-order-lines-scroll" :class="!pedidoEditable ? 'pointer-events-none opacity-70' : ''">
           <template x-if="!cart.items || cart.items.length === 0">
             <div class="pedidos-empty py-8">
               <p class="font-medium text-slate-600 dark:text-slate-300">No hay líneas en el pedido</p>
@@ -134,25 +200,29 @@
         </div>
       </section>
 
-      {# Región 5: secundario (checkout) — visible en mobile dentro de columna principal #}
-      {% include "ecom/includes/pedidos_checkout_section.html" with checkout_wrapper_class="lg:hidden" %}
+      <div x-show="pedidoEditable">
+        {% include "ecom/includes/pedidos_checkout_section.html" with checkout_wrapper_class="lg:hidden" %}
+        {# Solo mobile/tablet: en desktop la cabecera vive en el resumen lateral #}
+        <div class="lg:hidden">
+          {% include "ecom/includes/pedidos_cabecera_comercial.html" %}
+        </div>
+      </div>
     </div>
 
-    {# Región 4: resumen sticky (desktop) + bottom bar (mobile) #}
-    {% include "ecom/includes/pedidos_order_summary.html" %}
+    <div x-show="pedidoEditable">
+      {% include "ecom/includes/pedidos_order_summary.html" %}
+    </div>
   </div>
 
-  {# Región aria-live persistente (flashes y anuncios de estado) #}
   <div id="pedidos-aria-live" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
-  {# Modales del canon (cambio tipo, vaciar, pre-confirmación) #}
   {% include "ecom/includes/pedidos_modal.html" %}
 </div>
 {% endblock %}
 
 {% block pedidos_js %}
-<script src="{% static 'ecom/js/repetir_pedido_modal.js' %}"></script>
-<script type="module" src="{% static 'ecom/js/compra_mayorista_cliente.mjs' %}"></script>
-<script type="module" src="{% static 'ecom/js/compra_mayorista_marcas.mjs' %}"></script>
-<script type="module" src="{% static 'ecom/js/compra_mayorista_app.mjs' %}"></script>
+<script src="{% static 'ecom/js/repetir_pedido_modal.js' %}?v=venta3"></script>
+<script type="module" src="{% static 'ecom/js/compra_mayorista_cliente.mjs' %}?v=venta3"></script>
+<script type="module" src="{% static 'ecom/js/compra_mayorista_marcas.mjs' %}?v=venta3"></script>
+<script type="module" src="{% static 'ecom/js/compra_mayorista_app.mjs' %}?v=venta5"></script>
 {% endblock %}

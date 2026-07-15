@@ -6,11 +6,13 @@ ya migradas (P0/P1/P2/P3). Sigue la fuente de verdad de UI (`docs/general/FUENTE
 
 ## Ruta y vista
 
-- **Ruta:** `/ecom/mayoristapp/compra/` (`ecom:mayoristapp_compra`).
+- **Ruta canónica:** `/ecom/mayoristapp/venta/` (`ecom:mayoristapp_venta`).
+- **Alias deprecado:** `/ecom/mayoristapp/compra/` redirige a `/venta/` (query preservada).
 - **Vista:** `CompraMayoristaView` (`ecom/mayoristapp_web_views.py`), con `MayoristappWebSessionMixin`
-  (requiere sesión `user` con `base_empresa`). Solo arma URLs con `reverse()` (sin MySQL).
+  (requiere sesión `user` con `base_empresa`). Solo arma URLs con `reverse()` (sin MySQL), salvo carga PED vía APIs en el cliente.
 - **Plantilla:** `ecom/templates/ecom/compra_mayorista.html` (extiende `base_pedidos.html`).
-- Título dinámico según modo: **Pedido de venta** / **Presupuesto de venta** / **Devolución de venta**.
+- Título: **Pedido de venta**. Con `?cod_mov=` abre el mismo shell en modo editar (Pendiente) o consulta.
+- Change SDD: `openspec/changes/ecom-venta-pedido-unificada/`.
 
 ## Diseño (patrones canónicos)
 
@@ -59,6 +61,18 @@ ya migradas (P0/P1/P2/P3). Sigue la fuente de verdad de UI (`docs/general/FUENTE
 | **PED** | Valida disponible | Reserva stock, fecha entrega | Detalle pedido + listado pedidos |
 | **PRE** | Valida disponible | No toca stock | Detalle comprobante + listado presupuestos |
 | **DEV** | Sin validación | Incrementa stock | Detalle comprobante (sin listado web dedicado) |
+
+## Change `ecom-pedidos-usabilidad-supervisor` — oleadas A–E (13/07/2026)
+
+Corte vertical de usabilidad de pedidos + supervisor operativo. Impacto en el **pedido simple** (`/venta/`):
+
+| Oleada | Qué aporta al pedido simple |
+|--------|------------------------------|
+| **A — Supervisor/vendedor operativo** | Selector "Operando como" (`pedidos_selector_vendedor.html`): el supervisor elige un `CodViajante` de su cartera; el PED se emite con ese viajante vía `resolver_viajante_operativo`. Cambiar operativo limpia cliente + carrito. |
+| **B — VCM + lista RO** | Clientes y catálogo por ternas del viajante efectivo; badge de lista de precios **solo lectura** (`.pedidos-badge-lista`) + link PDF, sin override de lista. |
+| **C — Descuentos** | Columna **% desc.** por renglón (`pedidos_lineas_tabla.html` → PATCH `porcentaje_descuento`); **desc. al pie** precargado y aplicado por `POST /carrito/descuento-pie/`. Totales siempre backend (`serializar_carrito`), sin recálculo JS. |
+| **D — Masivo** | (Ver `PEDIDO_MASIVO_SUCURSALES.md`.) Comparte selector de vendedor, badge de lista y modal canon. |
+| **E — Visual slate/sky** | Barrido de purple: CTA confirmar PED = `.pedidos-btn-primary` (sky), toggle grande y foco en sky, breadcrumb `variant="board"`. `.pedidos-btn-gradient` queda `@deprecated` (solo hero de listados/presupuestos). |
 
 ## Notas / follow-up
 

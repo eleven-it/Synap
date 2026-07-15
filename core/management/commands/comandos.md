@@ -37,7 +37,7 @@ En algunas carpetas existen archivos cuyo nombre termina en **` 2.py`** (copias 
 | Comando | Objetivo | Ejemplo / notas |
 |--------|-----------|-----------------|
 | `initial_setup` | Puesta en marcha inicial completa del sistema (migraciones, datos, módulos, etc.). | `python manage.py initial_setup --help` (muchas flags: `--skip-migrations`, `--dry-run`, nombre empresa, etc.). |
-| `bootstrap_instalacion` | **Primera instalación / staging:** activa `core`, `login`, `dashboard`, `reports`, permisos Postgres y sync MySQL (best-effort). Idempotente; lo invoca `docker-entrypoint.sh` en DB nueva. | `--force`, `--skip-permisos-mysql`, `--base-empresa`. |
+| `bootstrap_instalacion` | **Primera instalación / staging:** activa `core`, `login`, `dashboard`, `reports`, permisos Postgres y tablas `synap_*` en MySQL (best-effort). Idempotente; lo invoca `docker-entrypoint.sh` en DB nueva. | `--force`, `--skip-permisos-mysql`, `--base-empresa`. |
 | `load_initial_data` | Carga datos iniciales (geografía, unidades, medios de pago, categorías, impuestos, etc.). | Opciones `--skip-*` por bloque. |
 | `load_geographic_data` | Carga datos geográficos (AR, CL, UY, PY, BR, US, ES). | |
 | `populate_countries_states` | Puebla países y provincias/estados. | |
@@ -46,7 +46,9 @@ En algunas carpetas existen archivos cuyo nombre termina en **` 2.py`** (copias 
 | `crear_roles_base` | Crea permisos y roles base desde `core/constantes_permisos.py`. | `--solo-permisos`, `--solo-roles`, `--force`. |
 | `crear_usuario` | Crea usuario (autenticación AdministraNET; ver ayuda del comando). | |
 | `sincronizar_permisos` | Sincroniza permisos definidos en constantes con la tabla `Permiso` en PostgreSQL/Django. | Tras añadir códigos en `PERMISOS_POR_MODULO`. |
-| `sync_synap_permissions_to_adminet` | Sincroniza permisos Synap → `permiso_sistema` en MySQL AdministraNET. | `--base-empresa`, `--grupo`. |
+| `apply_synap_permisos_tables` | Crea tablas `synap_*` y siembra catálogo `synap_permiso` en MySQL (no escribe en VB6). | `<base_empresa>`, `--dry-run`. |
+| `backfill_synap_permisos_from_legacy` | Migra asignaciones de `permiso_sistema_puesto` → `synap_*` (rol dedicado por puesto). | `<base_empresa>`, `--dry-run`, `--force`. |
+| `purge_synap_legacy_permisos` | Elimina filas `grupo_permiso='Synap'` en `permiso_sistema*` (dry-run por defecto). | `<base_empresa>`, `--ejecutar`. |
 | `init_adminet_permissions` | Inicializa grupo y permisos para integración AdministraNET. | |
 | `asignar_rol` | Gestión de usuarios: roles, alta/baja, sincronización con Firebase (ver `--help`). | |
 | `asignar_roles_predeterminados` | Crea o actualiza roles predeterminados y sus permisos. | |

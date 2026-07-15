@@ -13882,7 +13882,7 @@ def reporte_mpr_pendiente_componentes(
         return vacio
     UMBRAL_PENDIENTE_CRITICO = 50
 
-    filas_raw = listar_tablero_por_articulo(base_empresa, solo_urgente=True, limit=limit)
+    filas_raw = listar_tablero_por_articulo(base_empresa, solo_pendiente=True, limit=limit)
     filas: List[Dict[str, Any]] = []
     unidades = 0.0
     criticos = 0
@@ -15240,7 +15240,8 @@ def listar_tablero_por_articulo(
     5.  Enviado/Fabricando = max(0, Σ envíos − stock pipeline MPR) por componente
     6.  stock_proceso = total sin Terminado; resta_urgente / resta_total (PCP, sin envíos ledger)
 
-    ``solo_pendiente`` (legacy) se interpreta como ``solo_urgente`` si se pasa explícitamente.
+    ``solo_pendiente`` filtra filas con demanda pendiente total; ``solo_urgente``
+    conserva el filtro más estricto por demanda urgente.
 
     No lee lista_produccion_* ni OPT/OPP liberadas.
     """
@@ -15249,8 +15250,7 @@ def listar_tablero_por_articulo(
     if not (base_empresa or "").strip():
         return []
 
-    if solo_pendiente is not None:
-        solo_urgente = bool(solo_pendiente)
+    filtrar_pendiente = bool(solo_pendiente)
 
     filas_pack = listar_demanda_pack_desde_pedidos(
         base_empresa,
@@ -15359,9 +15359,11 @@ def listar_tablero_por_articulo(
     # Paso 12: ordenar por resta urgente descendente (más críticos primero)
     filas.sort(key=lambda r: -float(r.get("resta_urgente") or 0))
 
-    # Paso 13: filtro opcional solo con brecha urgente
+    # Paso 13: filtro opcional por pendientes o, de forma más estricta, urgentes.
     if solo_urgente:
         filas = [r for r in filas if float(r.get("resta_urgente") or 0) > 0]
+    elif filtrar_pendiente:
+        filas = [r for r in filas if float(r.get("resta_total") or 0) > 0]
 
     # Paso 14: limit
     return filas[:limit]

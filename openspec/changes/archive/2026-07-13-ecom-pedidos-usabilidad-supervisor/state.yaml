@@ -1,0 +1,22 @@
+name: ecom-pedidos-usabilidad-supervisor
+created: 2026-07-13
+status: verify
+phases:
+  explore: done
+  propose: done
+  design: done
+  spec: done
+  tasks: done
+  apply: done
+  verify: done
+verify_result: PASS WITH WARNINGS
+apply_progress:
+  oleada_a: done
+  oleada_b: done
+  oleada_c: done
+  oleada_d: done
+  oleada_e: done
+notes: |
+  Verify 13/07/2026: 29/29 tareas [x]; 78/78 tests ecom OK; 38/53 escenarios COMPLIANT
+  (15 PARTIAL UI/estático). Warnings: latencia preview, seed configuracion_ecom, hub purple
+  fuera E.2. Informe: verify-report.md. Siguiente: sdd-archive.

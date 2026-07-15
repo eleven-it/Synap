@@ -1,0 +1,135 @@
+{% extends "mpr/base_mpr.html" %}
+{% load static %}
+
+{% block title %}Ajustes de ventas — Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-[calc(100dvh-4.5rem)] bg-slate-50 py-3 dark:bg-slate-900 sm:py-4"
+         x-data="ajustesVentasApp()"
+         x-init="init()">
+  <div class="mx-auto w-full max-w-3xl px-3 sm:px-4 md:px-6 lg:px-8">
+    <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <li><span class="font-medium text-slate-600 dark:text-slate-300">Ventas</span></li>
+        <li class="text-slate-300" aria-hidden="true">/</li>
+        <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Ajustes de ventas</span></li>
+      </ol>
+    </nav>
+
+    <div class="mb-4 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md sm:p-4">
+      <header>
+        <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Ajustes de ventas</h1>
+        <p class="mt-1 text-xs text-slate-300 sm:text-sm">Parámetros del flujo de pedidos mayorista (ecom).</p>
+      </header>
+    </div>
+
+    <div x-show="mensaje" x-cloak class="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" x-text="mensaje" role="status"></div>
+    <div x-show="error" x-cloak class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900" x-text="error" role="alert"></div>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+      <h2 class="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Validación de stock</h2>
+      <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">
+        Controla si los pedidos (simple y masivo) exigen stock disponible al agregar al carrito y al confirmar.
+      </p>
+
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Validar stock al confirmar pedidos</p>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Si no hay stock suficiente, en modo <strong>Inactivo</strong> se permite igualmente el PED;
+            el faltante puede fabricarse vía MPR.
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <input type="hidden" id="validar-stock-pedidos" x-model="validarStockSiNo" />
+          <button type="button"
+                  @click="toggleValidarStock()"
+                  :class="validarStockPedidos
+                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300'"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1"
+                  :aria-pressed="validarStockPedidos">
+            <span class="material-icons text-base" aria-hidden="true" x-text="validarStockPedidos ? 'check_circle' : 'cancel'"></span>
+            <span x-text="validarStockPedidos ? 'Activo' : 'Inactivo'"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end border-t border-slate-100 pt-4 dark:border-slate-700">
+        <button type="button"
+                @click="guardar()"
+                :disabled="guardando"
+                class="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60">
+          <span class="material-icons text-base" aria-hidden="true">save</span>
+          <span x-text="guardando ? 'Guardando…' : 'Guardar'"></span>
+        </button>
+      </div>
+    </div>
+
+    <p class="mt-4 text-center">
+      <a :href="urls.hub" class="text-xs font-medium text-sky-600 hover:text-sky-800 dark:text-sky-400">Volver al hub de pedidos</a>
+    </p>
+  </div>
+</section>
+
+{% csrf_token %}
+{{ bootstrap|json_script:"ajustes-ventas-bootstrap" }}
+<script>
+function ajustesVentasApp() {
+  const raw = document.getElementById('ajustes-ventas-bootstrap');
+  const boot = raw ? JSON.parse(raw.textContent) : {};
+  return {
+    validarStockPedidos: !!boot.validar_stock_pedidos,
+    urls: boot.urls || {},
+    mensaje: '',
+    error: '',
+    guardando: false,
+    get validarStockSiNo() {
+      return this.validarStockPedidos ? 'Si' : 'No';
+    },
+    init() {},
+    csrf() {
+      const m = document.cookie.match(/csrftoken=([^;]+)/);
+      if (m) return decodeURIComponent(m[1]);
+      const inp = document.querySelector('[name=csrfmiddlewaretoken]');
+      return inp ? inp.value : (window.csrftoken || '');
+    },
+    toggleValidarStock() {
+      this.validarStockPedidos = !this.validarStockPedidos;
+      this.mensaje = '';
+      this.error = '';
+    },
+    async guardar() {
+      if (!this.urls.guardar) return;
+      this.guardando = true;
+      this.mensaje = '';
+      this.error = '';
+      try {
+        const res = await fetch(this.urls.guardar, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRFToken': this.csrf(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ validar_stock_pedidos: this.validarStockPedidos }),
+        });
+        let data = {};
+        try { data = await res.json(); } catch (_) { data = {}; }
+        if (!res.ok || !data.ok) {
+          this.error = data.error || data.detail || ('No se pudo guardar (HTTP ' + res.status + ').');
+          return;
+        }
+        this.validarStockPedidos = !!data.validar_stock_pedidos;
+        this.mensaje = data.message || 'Ajustes guardados.';
+      } catch (e) {
+        this.error = 'Error de red al guardar.';
+      } finally {
+        this.guardando = false;
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

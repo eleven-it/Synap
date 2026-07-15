@@ -1,0 +1,44 @@
+change: best-articulos-terminados-fabricados-olas
+status: archived
+updated: "2026-07-15"
+artifact_store: hybrid
+phases:
+  explore: skipped
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+  archive: complete
+depends_on: []
+notes: >
+  Colas stock inicial por olas; rename Artículos terminados; dominio fabricados no bloqueante
+  (BOM_FABRICADO, matcher inverso BOM Admin, stock Semi opcional). Gate PED sin cambio.
+  Verificado 15/07/2026: PASS WITH WARNINGS (11/11 tests scope). Archivado en
+  openspec/changes/archive/2026-07-15-best-articulos-terminados-fabricados-olas/
+spec_summary:
+  new_capabilities:
+    - best-migracion-stock-inicial-colas
+    - best-migracion-articulos-terminados
+    - best-migracion-articulos-fabricados
+  modified_capabilities: []
+  requirements_total: 14
+  scenarios_total: 22
+verify_summary:
+  verdict: PASS_WITH_WARNINGS
+  tasks_complete: 26
+  tasks_total: 26
+  tests_scope_passed: 11
+  tests_scope_failed: 0
+  scenarios_compliant: 14
+  scenarios_partial: 3
+  scenarios_untested: 5
+archive_summary:
+  archived_at: "2026-07-15"
+  archive_path: openspec/changes/archive/2026-07-15-best-articulos-terminados-fabricados-olas/
+  main_specs_synced:
+    - openspec/specs/best-migracion-stock-inicial-colas/spec.md
+    - openspec/specs/best-migracion-articulos-terminados/spec.md
+    - openspec/specs/best-migracion-articulos-fabricados/spec.md
+  engram_artifacts_prior: none_found

@@ -2,6 +2,27 @@
 
 > **Revisar contra código actual.** Verificar que `Dockerfile` y `docker-compose.yml` coincidan con lo descrito; este doc puede reflejar optimizaciones parcialmente aplicadas o variantes (p. ej. Reports-AI no está en la instalación mínima).
 
+## Arranque automático (Docker Desktop / WSL)
+
+En `docker-compose.yml` (y MySQL local) los servicios usan `restart: unless-stopped` para que, al reiniciar Docker Desktop o WSL, los contenedores vuelvan solos.
+
+Además:
+
+- **healthchecks** en `db` y `redis`; `app` espera `condition: service_healthy` antes de arrancar (evita fallos en frío).
+- **healthcheck** de `app` contra `http://127.0.0.1:8000/` con `start_period` generoso (migrate/entrypoint).
+
+**Importante:** la política solo aplica a contenedores recreados. Después de cambiar el compose, en WSL:
+
+```bash
+docker compose up -d
+# Si también usás MySQL local:
+docker compose -f docker-compose.mysql.yml up -d
+```
+
+En Docker Desktop: Settings → General → “Start Docker Desktop when you sign in”. No detengas los contenedores a mano si querés que vuelvan tras el reboot (`unless-stopped` no reinicia los que el usuario paró con `docker stop`).
+
+Si el bind mount del proyecto WSL aún no está disponible al primer intento, el entrypoint falla y Docker reintenta por la política de restart.
+
 ## Resumen de Optimizaciones
 
 Este documento detalla las optimizaciones realizadas en la configuración Docker para reducir significativamente el tiempo de construcción y el tamaño de las imágenes.

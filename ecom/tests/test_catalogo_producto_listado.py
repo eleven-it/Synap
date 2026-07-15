@@ -36,7 +36,8 @@ class TestCatalogoArticulosListadoView(TestCase):
 
     @patch("ecom.catalogo_producto_relay_views.listar_articulos_paginado")
     @patch("ecom.catalogo_producto_relay_views.lista_precio_relay_json")
-    def test_listado_ok_con_cliente(self, mock_lista_precio, mock_listar):
+    @patch("ecom.catalogo_producto_relay_views.vcm_ternas_disponible", return_value=False)
+    def test_listado_ok_con_cliente(self, _vcm, mock_lista_precio, mock_listar):
         mock_lista_precio.return_value = [{"id": 2, "name": "Lista 2", "selected": True}]
         mock_listar.return_value = {
             "items": [
@@ -90,7 +91,8 @@ class TestCatalogoArticulosListadoView(TestCase):
 
     @patch("ecom.catalogo_producto_relay_views.listar_articulos_paginado")
     @patch("ecom.catalogo_producto_relay_views.lista_precio_relay_json")
-    def test_listado_sin_cliente_usa_default(self, mock_lista_precio, mock_listar):
+    @patch("ecom.catalogo_producto_relay_views.vcm_ternas_disponible", return_value=False)
+    def test_listado_sin_cliente_usa_default(self, _vcm, mock_lista_precio, mock_listar):
         mock_lista_precio.return_value = [{"id": 1, "name": "Lista 1", "selected": True}]
         mock_listar.return_value = {
             "items": [],
@@ -128,7 +130,8 @@ class TestCatalogoArticulosListadoView(TestCase):
 
     @patch("ecom.catalogo_producto_relay_views.listar_articulos_paginado")
     @patch("ecom.catalogo_producto_relay_views.lista_precio_relay_json")
-    def test_listado_paginacion_metadata(self, mock_lista_precio, mock_listar):
+    @patch("ecom.catalogo_producto_relay_views.vcm_ternas_disponible", return_value=False)
+    def test_listado_paginacion_metadata(self, _vcm, mock_lista_precio, mock_listar):
         mock_lista_precio.return_value = [{"id": 1, "name": "Lista 1", "selected": True}]
         mock_listar.return_value = {
             "items": [],
@@ -190,8 +193,9 @@ class TestCatalogoListadoBusquedaTpv(TestCase):
     @patch("ecom.catalogo_producto_relay_views.aplicar_restricciones_a_filtros")
     @patch("ecom.catalogo_producto_relay_views.listar_articulos_paginado")
     @patch("ecom.catalogo_producto_relay_views.lista_precio_relay_json")
+    @patch("ecom.catalogo_producto_relay_views.vcm_ternas_disponible", return_value=False)
     def test_listado_busqueda_tpv_aplica_restricciones_pv(
-        self, mock_lista_precio, mock_listar, mock_restricciones
+        self, _vcm, mock_lista_precio, mock_listar, mock_restricciones
     ):
         mock_lista_precio.return_value = [{"id": 1, "name": "Lista 1", "selected": True}]
         mock_listar.return_value = {"items": [], "total": 0, "pagina": 1, "tam": 25, "total_paginas": 0}

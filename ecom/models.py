@@ -226,11 +226,13 @@ class EcomPedidoMasivoDraft(models.Model):
     ESTADO_CONFIRMANDO = "confirmando"
     ESTADO_CONFIRMADO = "confirmado"
     ESTADO_ARCHIVADO = "archivado"
+    ESTADO_ANULADO = "anulado"
     ESTADO_CHOICES = (
         (ESTADO_BORRADOR, "Borrador"),
         (ESTADO_CONFIRMANDO, "Confirmando"),
         (ESTADO_CONFIRMADO, "Confirmado"),
         (ESTADO_ARCHIVADO, "Archivado"),
+        (ESTADO_ANULADO, "Anulado"),
     )
 
     base_empresa = models.CharField("base empresa", max_length=64, db_index=True)
@@ -250,6 +252,17 @@ class EcomPedidoMasivoDraft(models.Model):
         default=list,
         blank=True,
         help_text="Lista de CodigoMovimiento PED creados al confirmar.",
+    )
+    descuento_pie_pct = models.DecimalField(
+        "descuento pie lote %",
+        max_digits=6,
+        decimal_places=2,
+        default=Decimal("0"),
+    )
+    descuentos_fila = models.JSONField(
+        "descuentos % por artículo (id_articulo → pct)",
+        default=dict,
+        blank=True,
     )
     created_at = models.DateTimeField("creado", auto_now_add=True)
     updated_at = models.DateTimeField("actualizado", auto_now=True)

@@ -1,9 +1,11 @@
 # 05 · Design System — Pedidos
 
-- **Fecha:** 10/07/2026
+- **Fecha:** 13/07/2026 (Oleada E — barrido purple)
 - **Fuente de verdad de tokens:** `ecom/templates/ecom/includes/pedidos_page_styles.html` (clases `.pedidos-*` y `.compra-*`)
 - **Canon superior:** `docs/general/FUENTE_VERDAD_UI_REPORTES_MPR.md` (familia reportes/MPR slate/sky)
 - **Regla de oro:** **extender** los tokens `.pedidos-*` existentes. **No** inventar un sistema paralelo. Evitar el genérico purple-on-white de "AI"; mantener familia **slate / sky**.
+
+> **Oleada E (13/07/2026):** se completó el barrido de purple en el flujo de pedido (simple y masivo). El CTA de confirmar PED, el toggle grande `.compra-toggle-btn-lg-ped-active` y el anillo de foco pasaron de `purple-600/500` a `sky-600/400`. El breadcrumb sobre tablero claro usa `variant="board"` (sky/slate) en lugar del antiguo `variant="purple"`. El único remanente de violeta es el token `.pedidos-btn-gradient`, **acotado** a acciones de hero en listados/presupuestos (pantalla completa) y **prohibido** como CTA de venta/masivo. Se agregó el token compartido `.pedidos-badge-lista`.
 
 > Todos los valores citados provienen del `<style>` real de `pedidos_page_styles.html`. Las extensiones propuestas se marcan como **[nuevo]** y deben añadirse al mismo archivo de tokens, no a estilos sueltos por template.
 
@@ -13,7 +15,7 @@
 
 1. **Un solo sistema.** Los pedidos ya viven en el canon de reportes/MPR. El rediseño consolida, no reemplaza.
 2. **Tokens antes que utilidades sueltas.** Reemplazar inputs/botones inline (Tailwind ad hoc) por tokens `.pedidos-input`, `.pedidos-btn*`.
-3. **Slate como neutro, sky como acento.** El violeta solo aparece hoy en `.pedidos-btn-gradient`; se acota a un único uso opcional (CTA PED) y no se propaga.
+3. **Slate como neutro, sky como acento.** El violeta solo aparece en `.pedidos-btn-gradient`, acotado a acciones de hero en listados/presupuestos; **no** se usa como CTA de venta/masivo y no se propaga.
 4. **Color semántico por modo:** PED = sky, PRE = amber, DEV = rose.
 5. **Movimiento suave y funcional** (`.impeccable.md`): transiciones 150–300ms, sin animación decorativa.
 
@@ -130,7 +132,7 @@ Base: `.pedidos-btn` (pill, `9999px`, transición `0.3s`, foco de doble anillo).
 | Oscuro | `.pedidos-btn-dark` / `.pedidos-btn-search` | búsqueda/hero |
 | Peligro | `.pedidos-btn-danger` | vaciar, anular |
 | Outline hero | `.pedidos-btn-outline-hero` | acciones sobre hero |
-| Gradiente | `.pedidos-btn-gradient` | **solo** CTA PED (acota el violeta) |
+| Gradiente `@deprecated` | `.pedidos-btn-gradient` | **solo** acciones de hero en listados/presupuestos (pantalla completa); PROHIBIDO como CTA de venta/masivo (usar `.pedidos-btn-primary`) |
 
 **Botones por modo [nuevo]** (para el CTA de confirmar del summary), consolidando lo que hoy se hace inline (líneas 204–210 de `compra_mayorista.html`):
 
@@ -193,6 +195,7 @@ Base: `.pedidos-badge` (pill, `0.75rem`, 600).
 | Estado stock [nuevo] | slate/amber | "Sin stock" / "Bajo" informativo |
 | Autorizado | emerald | crédito autorizado |
 | Borrador [nuevo] | slate | "Borrador guardado" en summary |
+| Lista de precios | slate + chip sky | `.pedidos-badge-lista` (solo lectura + link PDF); **token compartido** por pedido simple y masivo (REQ-UI-04) |
 
 ---
 
@@ -231,7 +234,7 @@ Todos los tokens ya definen su par `.dark`. Regla: cualquier token nuevo **debe*
 
 ## 14. Anti-patrones (prohibido)
 
-- ❌ Introducir violeta/purple genérico fuera del único `.pedidos-btn-gradient` acotado.
+- ❌ Introducir violeta/purple genérico fuera del único `.pedidos-btn-gradient` acotado (y este último **no** debe usarse como CTA de venta/masivo).
 - ❌ Crear un archivo de estilos paralelo por template; todo va a `pedidos_page_styles.html`.
 - ❌ Inputs/botones con utilidades Tailwind sueltas cuando existe token.
 - ❌ Colores de modo cruzados (p. ej. DEV en sky).

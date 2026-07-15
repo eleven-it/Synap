@@ -1,0 +1,47 @@
+change: mpr-reportes-trazabilidad-produccion
+status: verify-complete
+created: 2026-07-04
+phase: verify
+depends_on:
+  - mpr-mysql-fuente-unica
+  - mpr-pipeline-etapa2-tablero-consolidado
+artifacts:
+  exploration: complete
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+verify:
+  verdict: PASS_WITH_WARNINGS
+  date: 2026-07-14
+  mode: Standard
+  build_check: passed
+  tests_run: 56
+  tests_passed: 56
+  tests_failed: 0
+  tests_errors: 0
+  tests_complementary_run: 14
+  tests_complementary_passed: 14
+  scenarios_total: 15
+  scenarios_compliant: 7
+  scenarios_failing: 0
+  scenarios_untested: 6
+  scenarios_partial: 2
+  tasks_mvp_complete: 35
+  tasks_mvp_total: 36
+  open_tasks:
+    - "5.6 verificación manual administranet96"
+    - "6.1-6.4 reportes P1 opcionales"
+  fixes_verified:
+    - "solo_pendiente en reporte_mpr_pendiente_componentes"
+    - "mock sumar_clasificado_rendimiento_operario en test_ranking_pct"
+    - "tarea 4.5 tests brecha PED con mocks MySQL"
+  next_recommended: sdd-archive
+notes: |
+  Re-verificación post-fixes: 56/56 tests OK en contenedor Synap_app --keepdb.
+  Fixes críticos cerrados (solo_pendiente, mock operario, tarea 4.5).
+  WARNING residual: tarea 5.6 manual obligatoria antes de release;
+  URL legacy tipo=pendiente opcional (no redirige a grupo legacy).
+  6 escenarios UI sin cobertura automatizada (no bloquean archive técnico).

@@ -1,0 +1,30 @@
+change: ecom-pedido-masivo-ux-contexto
+status: verify-pass-with-warnings
+created: 2026-07-14
+verified: 2026-07-14
+phase: verify-complete
+depends_on:
+  - ecom-pedidos-usabilidad-supervisor
+artifacts:
+  exploration: skipped
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: pass-with-warnings
+verify:
+  verdict: PASS WITH WARNINGS
+  tests_passed: 19
+  tests_failed: 0
+  criticals: 0
+  warnings: 7
+  manual_qa_pending:
+    - P1.1
+    - P2.3
+    - T.3
+    - T.4
+    - T.5
+    - T.6
+    - T.7
+  next_recommended: sdd-archive

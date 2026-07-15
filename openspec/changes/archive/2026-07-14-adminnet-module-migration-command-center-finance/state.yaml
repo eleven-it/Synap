@@ -1,0 +1,20 @@
+change: adminnet-module-migration-command-center-finance
+status: archived
+updated: "2026-07-14"
+artifact_store: hybrid
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply_p0: complete
+  verify_p0: complete
+  apply_p1: complete
+  verify_p1: complete
+  archive: complete
+notes: >
+  P0 tesorería caja + ventas cobros. P1 banco (librobanco), detalle cobros paginado,
+  movimientos caja paginado. Orquestador anida areas.tesoreria.banco sin sumar con caja.
+  Verificado 14/07/2026: 35/35 tests contrato. Archivado en
+  openspec/changes/archive/2026-07-14-adminnet-module-migration-command-center-finance/

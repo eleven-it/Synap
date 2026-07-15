@@ -1234,6 +1234,22 @@ _ECOM_FUENTE_VENDEDOR_CONFIG: Tuple[Dict[str, str], ...] = (
 )
 
 
+_ECOM_AJUSTES_VENTAS_CONFIG: Tuple[Dict[str, str], ...] = (
+    {
+        "key_permiso": "ecom_validar_stock_pedidos",
+        "nombre_permiso": "Validar stock en pedidos",
+        "detalle_permiso": (
+            "Si: bloquea PED sin stock disponible. "
+            "No: permite confirmar pedidos aunque falte stock (faltante fabricable vía MPR)."
+        ),
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Si/No",
+        "valor_permiso": "Si",
+        "detalle_valor_permiso": "Si-No",
+    },
+)
+
+
 def _tabla_existe(cursor, table_name: str) -> bool:
     cursor.execute(
         """
@@ -1290,10 +1306,154 @@ def _insertar_ecom_config_si_falta(
     _append_migration(applied, failed, True, f"INSERT {tabla}.{key}")
 
 
+def _columna_existe(cursor, table_name: str, column_name: str) -> bool:
+    return columna_existe(cursor, table_name, column_name)
+
+
+def _indice_existe(cursor, table_name: str, index_name: str) -> bool:
+    return indice_existe(cursor, table_name, index_name)
+
+
+def _aplicar_ddl_ecom_vcm_sucursal(cursor, applied: List[str], failed: List[str]) -> None:
+    """DDL 002: columna id_cliente_domicilio, unique cuaterna e índice (idempotente)."""
+    if not _tabla_existe(cursor, "ecom_vendedor_cliente_marca"):
+        _append_migration(applied, failed, True, "ecom_vendedor_cliente_marca ausente (omitido 002)")
+        return
+    tbl = nombre_tabla_real(cursor, "ecom_vendedor_cliente_marca") or "ecom_vendedor_cliente_marca"
+    tbl_esc = tbl.replace("`", "``")
+    try:
+        if not _columna_existe(cursor, tbl, "id_cliente_domicilio"):
+            cursor.execute(
+                f"""
+                ALTER TABLE `{tbl_esc}`
+                ADD COLUMN id_cliente_domicilio INT NOT NULL DEFAULT 0
+                    COMMENT 'cliente_domicilio.id_cliente_domicilio; 0 = sin sucursal'
+                    AFTER id_cliente
+                """
+            )
+            _append_migration(applied, failed, True, "ADD COLUMN id_cliente_domicilio (ecom_vendedor_cliente_marca)")
+        else:
+            _append_migration(applied, failed, True, "id_cliente_domicilio ya existe (omitido)")
+
+        if _indice_existe(cursor, tbl, "uk_evcm_cliente_marca_activo"):
+            cursor.execute(f"ALTER TABLE `{tbl_esc}` DROP INDEX uk_evcm_cliente_marca_activo")
+            _append_migration(applied, failed, True, "DROP INDEX uk_evcm_cliente_marca_activo")
+
+        if not _indice_existe(cursor, tbl, "uk_evcm_cliente_sucursal_marca_activo"):
+            cursor.execute(
+                f"""
+                ALTER TABLE `{tbl_esc}`
+                ADD UNIQUE KEY uk_evcm_cliente_sucursal_marca_activo (
+                    id_cliente, id_cliente_domicilio, CodMarca, anulado_activo
+                )
+                """
+            )
+            _append_migration(applied, failed, True, "ADD UNIQUE uk_evcm_cliente_sucursal_marca_activo")
+        else:
+            _append_migration(applied, failed, True, "uk_evcm_cliente_sucursal_marca_activo ya existe (omitido)")
+
+        if not _indice_existe(cursor, tbl, "idx_evcm_domicilio"):
+            cursor.execute(f"ALTER TABLE `{tbl_esc}` ADD KEY idx_evcm_domicilio (id_cliente_domicilio)")
+            _append_migration(applied, failed, True, "ADD INDEX idx_evcm_domicilio")
+        else:
+            _append_migration(applied, failed, True, "idx_evcm_domicilio ya existe (omitido)")
+    except Exception as e:
+        logger.exception("_aplicar_ddl_ecom_vcm_sucursal: %s", e)
+        _append_migration(applied, failed, False, "DDL 002 ecom_vendedor_cliente_marca_sucursal", str(e))
+
+
+def _migrar_ternas_vcm_a_cuaternas(cursor, applied: List[str], failed: List[str]) -> None:
+    """
+    Expande filas activas sin sucursal (id_cliente_domicilio=0) a una fila por domicilio activo.
+    Si el cliente no tiene domicilios, conserva id_cliente_domicilio=0 (edge case documentado).
+    """
+    if not _tabla_existe(cursor, "ecom_vendedor_cliente_marca"):
+        return
+    if not _columna_existe(cursor, "ecom_vendedor_cliente_marca", "id_cliente_domicilio"):
+        return
+    tbl = nombre_tabla_real(cursor, "ecom_vendedor_cliente_marca") or "ecom_vendedor_cliente_marca"
+    tbl_esc = tbl.replace("`", "``")
+    try:
+        cursor.execute(
+            f"""
+            SELECT id, CodViajante, id_cliente, CodMarca, COALESCE(usuario_mod, '-')
+            FROM `{tbl_esc}`
+            WHERE COALESCE(anulado, 'No') = 'No'
+              AND COALESCE(id_cliente_domicilio, 0) = 0
+            """
+        )
+        filas = cursor.fetchall() or []
+        expandidas = 0
+        anuladas = 0
+        sin_domicilio = 0
+        for row in filas:
+            id_terna, cv, idc, cm, um = row[0], row[1], row[2], row[3], row[4]
+            cursor.execute(
+                """
+                SELECT id_cliente_domicilio
+                FROM cliente_domicilio
+                WHERE id_cliente = %s
+                  AND COALESCE(anulado, 'No') = 'No'
+                ORDER BY id_cliente_domicilio ASC
+                """,
+                [idc],
+            )
+            domicilios = [int(r[0]) for r in (cursor.fetchall() or []) if r and r[0] is not None]
+            if not domicilios:
+                sin_domicilio += 1
+                continue
+            usuario = (um or "-")[:60]
+            for id_dom in domicilios:
+                cursor.execute(
+                    f"""
+                    SELECT 1 FROM `{tbl_esc}`
+                    WHERE CodViajante = %s
+                      AND id_cliente = %s
+                      AND CodMarca = %s
+                      AND id_cliente_domicilio = %s
+                      AND COALESCE(anulado, 'No') = 'No'
+                    LIMIT 1
+                    """,
+                    [cv, idc, cm, id_dom],
+                )
+                if cursor.fetchone():
+                    continue
+                cursor.execute(
+                    f"""
+                    INSERT INTO `{tbl_esc}`
+                        (CodViajante, id_cliente, id_cliente_domicilio, CodMarca, anulado, usuario_mod)
+                    VALUES (%s, %s, %s, %s, 'No', %s)
+                    """,
+                    [cv, idc, id_dom, cm, usuario],
+                )
+                expandidas += 1
+            cursor.execute(
+                f"""
+                UPDATE `{tbl_esc}`
+                SET anulado = 'Si', usuario_mod = %s
+                WHERE id = %s AND COALESCE(anulado, 'No') = 'No'
+                """,
+                [usuario, id_terna],
+            )
+            anuladas += 1
+        msg = (
+            f"Migración ternas→cuaternas: {expandidas} filas nuevas, "
+            f"{anuladas} ternas sin domicilio anuladas, "
+            f"{sin_domicilio} clientes sin domicilio (id_cliente_domicilio=0 conservado)"
+        )
+        _append_migration(applied, failed, True, msg)
+    except Exception as e:
+        logger.exception("_migrar_ternas_vcm_a_cuaternas: %s", e)
+        _append_migration(applied, failed, False, "Migración ternas→cuaternas VCM", str(e))
+
+
 def run_ecom_vendedor_cliente_marca_mysql(conn) -> Dict[str, Any]:
     """
-    Tablas ``ecom_vendedor_cliente_marca`` (terna + unique cliente+marca activos)
+    Tablas ``ecom_vendedor_cliente_marca`` (cuaterna + unique cliente+sucursal+marca activos)
     y ``ecom_usuario_viajante`` (mapeo usuario↔viajante).
+
+    Aplica ``001`` (CREATE IF NOT EXISTS), ``002`` (columna sucursal + unique) y migración de
+    ternas existentes sin domicilio.
 
     Ver ``docs/ecom/VENDEDOR_CLIENTE_MARCA.md``.
     """
@@ -1333,6 +1493,10 @@ def run_ecom_vendedor_cliente_marca_mysql(conn) -> Dict[str, Any]:
         _append_migration(
             applied, failed, True, "DDL ecom vendedor-cliente-marca (001_ecom_vendedor_cliente_marca.sql)"
         )
+
+        _aplicar_ddl_ecom_vcm_sucursal(cursor, applied, failed)
+        _migrar_ternas_vcm_a_cuaternas(cursor, applied, failed)
+
         conn.commit()
     except Exception as e:
         logger.exception("run_ecom_vendedor_cliente_marca_mysql: %s", e)
@@ -1414,6 +1578,10 @@ def run_vendedores_asignacion_mysql(conn) -> Dict[str, Any]:
             )
 
         for row in _ECOM_FUENTE_VENDEDOR_CONFIG:
+            _insertar_ecom_config_si_falta(cursor, "configuracion_ecom_conf", row, applied, failed)
+            _insertar_ecom_config_si_falta(cursor, "configuracion_ecom", row, applied, failed)
+
+        for row in _ECOM_AJUSTES_VENTAS_CONFIG:
             _insertar_ecom_config_si_falta(cursor, "configuracion_ecom_conf", row, applied, failed)
             _insertar_ecom_config_si_falta(cursor, "configuracion_ecom", row, applied, failed)
 
@@ -1615,11 +1783,11 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
     },
     {
         "id": "ecom_vendedor_cliente_marca",
-        "title": "E-com — terna Vendedor→Cliente→Marca (+ usuario↔viajante)",
+        "title": "E-com — cuaterna Vendedor→Cliente→Sucursal→Marca (+ usuario↔viajante)",
         "description": (
-            "Tablas ``ecom_vendedor_cliente_marca`` (unique activo id_cliente+CodMarca) y "
-            "``ecom_usuario_viajante``. Pedido masivo por sucursales / filtro catálogo. "
-            "Ver docs/ecom/VENDEDOR_CLIENTE_MARCA.md."
+            "Tablas ``ecom_vendedor_cliente_marca`` (unique activo id_cliente+id_cliente_domicilio+CodMarca) "
+            "y ``ecom_usuario_viajante``. Migra ternas sin sucursal a cuaternas por domicilio activo. "
+            "Pedido masivo por sucursales / filtro catálogo. Ver docs/ecom/VENDEDOR_CLIENTE_MARCA.md."
         ),
         "risk": "bajo",
         "run": run_ecom_vendedor_cliente_marca_mysql,

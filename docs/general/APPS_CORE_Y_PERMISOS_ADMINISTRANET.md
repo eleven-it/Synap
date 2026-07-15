@@ -18,7 +18,7 @@ Las apps **stock**, **compras** y **self_checkout** son **módulos core**: siemp
   o en features AdministraNET que aún las consultan; **no** para armar el menú en modo `synap`).
 - **Catálogo:** se siembra desde **`core/constantes_permisos.py` → `PERMISOS_POR_MODULO`** + comodines
   `MODULOS_CON_COMODIN` (centralizados en `core/constantes_permisos.py`).
-- **Sincronización legacy en `permiso_sistema` (`sync_permisos_synap`):** *en desuso*; reemplazada
+- **Sync legacy en `permiso_sistema` (`sync_permisos_synap`):** *retirado* (P3). Reemplazado
   por `apply_synap_permisos_tables` (seed) + `backfill_synap_permisos_from_legacy` (migración).
 
 ## Permisos por app (PERMISOS_POR_MODULO)

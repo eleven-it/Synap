@@ -28,6 +28,9 @@
 | Ternas territorio | `docs/ecom/VENDEDOR_CLIENTE_MARCA.md` |
 | Pedido masivo | `docs/ecom/PEDIDO_MASIVO_SUCURSALES.md` |
 
+**Actualización 14/07/2026:** borradores masivos anulados desde la UI aparecen en la columna **Anulado** del hub (`_masivos_anulados` en `pedidos_hub_pipeline.py`); Continuar reactiva a `borrador`. Ver `PEDIDO_MASIVO_SUCURSALES.md` § Anular borrador.
+**Corrección 14/07/2026:** la confirmación masiva normaliza filas MySQL de punto de venta en formato tupla o diccionario; los errores de resolución de PV responden JSON 400.
+
 ## Schema / permisos (Phase 0–1)
 
 - Permisos: `ecom.pedido_masivo.usar`, `ecom.config_vendedor_cliente_marca`

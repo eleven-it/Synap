@@ -1,9 +1,9 @@
 # Especificación — API Dashboard gerencial (legacy AdministraNET)
 
 **Capacidad:** `reports-executive-dashboard`  
-**Cambio:** `dashboard-gerencial-endpoints-legacy`  
+**Origen archivado:** `dashboard-gerencial-endpoints-legacy` (14/07/2026)  
 **Versión de contrato:** `executive-dashboard-v1`  
-**Alcance:** Solo lectura MySQL legacy (`base_empresa`). Sin UI en este cambio.
+**Alcance:** Solo lectura MySQL legacy (`base_empresa`). API P0/P1 bajo `/api/reports/executive-dashboard/` y UI Command Center (`command-center-gerencial`).
 
 Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/specs/reports-ejecutivo-ventas/spec.md` (ventas del día — endpoint separado).
 
@@ -72,16 +72,20 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 
 - **`areas.ventas`** **MUST** incluir los mismos campos que `GET .../ventas/resumen/` (subconjunto del área ventas).
 - **`areas.inventario`**, **`areas.compras`**, **`areas.manufactura`**, **`areas.cruzados`** **MUST** reflejar sus endpoints de resumen respectivos.
-- **`areas.crm`** **MUST** ser `{ "disponible": false, "motivo": "Módulo CRM no integrado en Synap v1" }` en v1 (sin KPIs inventados).
+- **`areas.tesoreria`** **MUST** incluir el mismo subconjunto de campos que `GET .../tesoreria/resumen/` (sin `meta` anidado duplicado), incluyendo **`areas.tesoreria.banco`** obtenido con segunda llamada `_safe_legacy_area` (KPIs `librobanco`; **MUST NOT** sumarse con saldos de caja).
+- **`areas.ventas_cobros`** **MUST** incluir `facturado_por_medio` y `cobrado_caja_por_medio` (ver `reports-executive-dashboard-ventas-cobros`).
+- **`areas.crm`** **MUST NOT** aparecer (CRM deprecado en Command Center v1+).
+- **`areas.impuestos`** **MUST NOT** aparecer.
 
 ### REQ-ED-ORCH-03 — Tolerancia a fallos parciales
 
-- Si un sub-servicio de área falla con error transitorio, el orquestador **MUST** marcar esa área con `disponible: false` y `error: { "tipo", "mensaje" }` sin fallar todo el payload (**degraded mode**).
+- Si un sub-servicio de área falla con error transitorio, el orquestador **MUST** marcar esa área con `disponible: false` y `error: { "tipo", "mensaje" }` sin fallar todo el payload (**degraded mode**). Aplica a **`areas.tesoreria`**, **`areas.ventas_cobros`** y demás áreas operativas.
 - Si falla ventas (área crítica P0), el orquestador **MAY** responder **503** completo (decisión de implementación documentada en design).
 
 ### REQ-ED-ORCH-04 — Enlaces
 
 - **`meta.endpoints`** **SHOULD** listar rutas relativas de cada sub-recurso para consumo granular.
+- **`meta.endpoints`** **MUST** incluir al menos: `tesoreria`, `ventas_cobros`, `tesoreria_banco`, `tesoreria_movimientos_caja`, `ventas_cobros_detalle`, con rutas bajo `/api/reports/executive-dashboard/`.
 
 ---
 
@@ -226,18 +230,36 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 
 ---
 
-## CRM (P2 — fuera de v1)
+## Tesorería (P0/P1)
 
-### REQ-ED-CRM-01 — Stub
+Ver spec dedicada: **`openspec/specs/reports-executive-dashboard-tesoreria/spec.md`**.
 
-- Hasta implementación, ningún endpoint CRM **MUST** inventar pipeline, forecast ni health score.
-- Orquestador **MUST** exponer stub según REQ-ED-ORCH-02.
+- P0: **`GET .../tesoreria/resumen/`** — saldos y flujos en caja (`caja`, `caja_abm`); `banco_disponible=false`.
+- P1: **`GET .../tesoreria/banco/resumen/`** — KPIs `librobanco` + `cuenta_banco` (anidado en orquestador, no sumado con caja).
+- P1: **`GET .../tesoreria/movimientos-caja/`** — listado paginado (excluye cierre/transferencia).
+
+---
+
+## Ventas por medio de cobro (P0/P1)
+
+Ver spec dedicada: **`openspec/specs/reports-executive-dashboard-ventas-cobros/spec.md`**.
+
+- P0: **`GET .../ventas/cobros/resumen/`** — `facturado_por_medio` y `cobrado_caja_por_medio`.
+- P1: **`GET .../ventas/cobros/detalle/`** — filas paginadas con fallback caja + `medio_cobpag` REC.
+
+---
+
+## CRM — deprecado
+
+- El módulo CRM AdministraNET **no** forma parte del Command Center.
+- El orquestador **MUST NOT** incluir `areas.crm` en respuestas v1+.
+- No implementar endpoints CRM salvo decisión explícita de producto.
 
 ---
 
 ## Escenarios de aceptación
 
-1. **Dado** usuario gerencial con `base_empresa` válida, **cuando** `GET /api/reports/executive-dashboard/?fecha=2026-05-11`, **entonces** respuesta 200 con `meta.definicion=executive-dashboard-v1` y cinco áreas operativas + CRM stub.
+1. **Dado** usuario gerencial con `base_empresa` válida, **cuando** `GET /api/reports/executive-dashboard/?fecha=2026-05-11`, **entonces** respuesta 200 con `meta.definicion=executive-dashboard-v1` y siete áreas operativas (`ventas`, `inventario`, `compras`, `manufactura`, `cruzados`, `tesoreria`, `ventas_cobros`) sin CRM ni `impuestos`.
 
 2. **Dado** período mayo 2026 y sucursal 3, **cuando** `GET .../ventas/resumen/?fecha_inicio=2026-05-01&fecha_fin=2026-05-11&sucursal=3`, **entonces** `meta.cod_sucursal_filtro=3` y montos ≥ 0.
 
@@ -255,8 +277,13 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 
 ## Fuera de alcance (v1)
 
-- UI Command Center, semáforos, Operational Health Score.
+- Semáforos, Operational Health Score.
 - Escritura legacy.
 - CRM con datos reales.
 - Sustitución de `POST /api/reports/query/`.
-- Refactor obligatorio de `query_runner` en la misma entrega (puede ser fase posterior).
+
+## Evolución post-spec (implementación)
+
+- **Tesorería y ventas por cobro (P0/P1):** implementado y archivado en `adminnet-module-migration-command-center-finance` (14/07/2026). Specs: `reports-executive-dashboard-tesoreria`, `reports-executive-dashboard-ventas-cobros`.
+- Refactor T13: delegación `query_runner` → `ventas_metrics` (completado en change `dashboard-gerencial-endpoints-legacy`).
+- Clasificación caja compartida: `reports/services/executive_dashboard/caja_classification.py` (REC→cobranzas, FA→ventas).

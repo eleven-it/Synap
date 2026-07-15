@@ -50,12 +50,14 @@ class TestMayoristappSesionContexto(unittest.TestCase):
         self.assertEqual(ctx["todos_clientes"], "Si")
 
     @patch("ecom.services.mayoristapp_sesion_contexto._cargar_campos_mayoristapp_mysql")
-    def test_sobrescribe_sesion_stale_con_mysql(self, mock_load):
+    @patch("ecom.services.mayoristapp_sesion_contexto.leer_vendedores_a_cargo_config")
+    def test_sobrescribe_sesion_stale_con_mysql(self, mock_cargo, mock_load):
         mock_load.return_value = {
             "id_vendedor_usr": 2,
             "todos_clientes": "Si",
             "supervisor_venta": "Si",
         }
+        mock_cargo.return_value = [2, 20]
         req = _request_con_sesion(
             {
                 "id_usuario": 1,
@@ -70,6 +72,22 @@ class TestMayoristappSesionContexto(unittest.TestCase):
         ctx = contexto_usuario_mayoristapp(req, persistir=False)
         self.assertEqual(ctx["id_vendedor_usr"], 2)
         self.assertEqual(ctx["todos_clientes"], "Si")
+
+    @patch("ecom.services.mayoristapp_sesion_contexto._cargar_campos_mayoristapp_mysql")
+    @patch("ecom.services.mayoristapp_sesion_contexto.leer_vendedores_a_cargo_config")
+    def test_supervisor_hidrata_cartera_y_operativo(self, mock_cargo, mock_load):
+        mock_load.return_value = {
+            "id_vendedor_usr": 16,
+            "supervisor_venta": "Si",
+        }
+        mock_cargo.return_value = [16, 10, 49, 46, 54]
+        req = _request_con_sesion(
+            {"id_usuario": 1, "id_puesto": 1, "base_empresa": "emp1", "cod_usuario": "sup1"}
+        )
+        ctx = contexto_usuario_mayoristapp(req, persistir=True)
+        self.assertEqual(ctx["vendedor_a_cargo"], [16, 10, 49, 46, 54])
+        self.assertEqual(ctx["cod_viajante_operativo"], 16)
+        mock_cargo.assert_called_once_with("emp1", 16)
 
     @patch("ecom.services.mayoristapp_sesion_contexto._cargar_campos_mayoristapp_mysql")
     def test_supervisor_cod_usuario_todos_clientes(self, mock_load):

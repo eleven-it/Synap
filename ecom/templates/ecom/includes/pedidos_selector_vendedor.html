@@ -1,0 +1,44 @@
+{% comment %}
+  Selector de vendedor operativo (supervisor).
+  Contrato Alpine: vendedorCartera, vendedorOperativo, vendedorOperativoNombre,
+  mostrarSelectorVendedor, operandoComoOtro, cargarCarteraVendedor,
+  solicitarCambioVendedor, confirmarCambioVendedor.
+  Variantes de layout (opcionales, aditivas):
+   - selectorVendedorInline → barra de contexto compacta (fondo claro).
+   - selectorVendedorHero   → encabezado oscuro (hero slate): badge/select pequeño.
+  Ambas por defecto están apagadas: sin flags conserva la tarjeta sky (compra mayorista).
+{% endcomment %}
+<div class="pedidos-vendedor-operativo"
+     :class="{
+       'pedidos-vendedor-operativo--inline': selectorVendedorInline,
+       'pedidos-vendedor-operativo--hero': selectorVendedorHero
+     }"
+     x-show="mostrarSelectorVendedor && !esCliente"
+     x-cloak>
+  <div class="pedidos-vendedor-banner rounded-xl border border-sky-200 dark:border-sky-800/60 bg-sky-50 dark:bg-sky-950/30 px-3 py-2.5 sm:px-4 sm:py-3"
+       x-show="operandoComoOtro"
+       role="status"
+       aria-live="polite">
+    <p class="pedidos-vendedor-banner-text text-xs sm:text-sm font-medium text-sky-900 dark:text-sky-100">
+      Operando como:
+      <span class="font-semibold" x-text="vendedorOperativoNombre || ('Vendedor ' + vendedorOperativo)"></span>
+    </p>
+  </div>
+
+  <div class="pedidos-vendedor-field mt-2 flex flex-wrap items-end gap-2" x-show="vendedorCartera.length">
+    <div class="pedidos-vendedor-field-inner"
+         :class="selectorVendedorInline ? 'w-56 shrink-0' : 'min-w-[12rem] flex-1'">
+      <label class="pedidos-filter-label pedidos-vendedor-label" for="pedidos_vendedor_operativo">Vendedor operativo</label>
+      <select id="pedidos_vendedor_operativo"
+              class="pedidos-input pedidos-vendedor-select w-full mt-1"
+              :value="String(vendedorOperativo || '')"
+              @change="solicitarCambioVendedor($event.target.value)">
+        <template x-for="v in vendedorCartera" :key="v.cod_viajante">
+          <option :value="String(v.cod_viajante)"
+                  :selected="v.cod_viajante === vendedorOperativo"
+                  x-text="v.nombre + (v.cod_viajante === vendedorPropio ? ' (usted)' : '')"></option>
+        </template>
+      </select>
+    </div>
+  </div>
+</div>

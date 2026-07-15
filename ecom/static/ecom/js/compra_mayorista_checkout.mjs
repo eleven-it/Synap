@@ -1,7 +1,29 @@
 /**
  * Checkout y contexto — compra mayorista (OrderShell F3).
- * Confirmación, tipo comprobante, contexto PV/entrega y pedidos recientes.
+ * Confirmación, tipo comprobante, contexto PV/entrega, cabecera comercial y pedidos recientes.
  */
+
+function isoToDisplay(iso) {
+  if (!iso) return '';
+  const parts = String(iso).split('-');
+  if (parts.length !== 3) return '';
+  const [y, m, d] = parts;
+  return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+}
+
+function displayToIso(display) {
+  const m = String(display || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
+function addDaysIso(iso, dias) {
+  if (!iso) return null;
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() + Number(dias || 0));
+  return d.toISOString().slice(0, 10);
+}
 
 /**
  * @returns {Record<string, unknown>}
@@ -19,6 +41,10 @@ export function compraMayoristaCheckoutMixin() {
     origenRepetir: null,
     puntosVenta: [],
     descPieError: '',
+    cabecera: null,
+    puedeEditarCabecera: false,
+    condicionesVenta: [],
+    listasPrecio: [],
 
     clienteLabel(c) {
       const cod = c.Codigo != null ? c.Codigo : c.codigo;
@@ -26,20 +52,143 @@ export function compraMayoristaCheckoutMixin() {
       return nombre && cod != null ? `${nombre} (#${cod})` : (nombre || String(cod || ''));
     },
 
+    _hidratarCabeceraDesdeApi(raw) {
+      if (!raw || raw.error) {
+        this.cabecera = null;
+        return;
+      }
+      this.puedeEditarCabecera = !!raw.puede_editar;
+      this.cabecera = {
+        fecha_pedido: raw.fecha_pedido,
+        fecha_entrega: raw.fecha_entrega,
+        vencimiento: raw.vencimiento,
+        fecha_pedido_display: isoToDisplay(raw.fecha_pedido),
+        fecha_entrega_display: isoToDisplay(raw.fecha_entrega),
+        vencimiento_display: isoToDisplay(raw.vencimiento),
+        id_condventa: raw.id_condventa,
+        cond_venta: raw.cond_venta,
+        lista_id: raw.lista_id,
+        dias_condicion: raw.dias_condicion || 0,
+      };
+    },
+
+    async _cargarCatalogosCabecera(idCondventa) {
+      const qCv = idCondventa != null ? `?id_condventa=${idCondventa}` : '';
+      const qLista = this.cabecera?.lista_id != null
+        ? `?cod_lista_cliente=${this.cabecera.lista_id}`
+        : '';
+      const [rCv, rLp] = await Promise.all([
+        this.urls.condiciones_venta
+          ? this.api(`${this.urls.condiciones_venta}${qCv}`, 'GET')
+          : { ok: false, data: [] },
+        this.urls.lista_precio
+          ? this.api(`${this.urls.lista_precio}${qLista}`, 'GET')
+          : { ok: false, data: [] },
+      ]);
+      if (rCv.ok && Array.isArray(rCv.data)) this.condicionesVenta = rCv.data;
+      if (rLp.ok && Array.isArray(rLp.data)) this.listasPrecio = rLp.data;
+    },
+
+    _recalcVencimientoDisplay() {
+      if (!this.cabecera) return;
+      const fp = this.cabecera.fecha_pedido || displayToIso(this.cabecera.fecha_pedido_display);
+      if (!fp) return;
+      this.cabecera.fecha_pedido = fp;
+      const cv = this.condicionesVenta.find(
+        (c) => Number(c.Codigo) === Number(this.cabecera.id_condventa),
+      );
+      const dias = cv ? Number(cv.Dias || 0) : Number(this.cabecera.dias_condicion || 0);
+      const ven = addDaysIso(fp, dias);
+      if (ven) {
+        this.cabecera.vencimiento = ven;
+        if (!this.puedeEditarCabecera) {
+          this.cabecera.vencimiento_display = isoToDisplay(ven);
+        }
+      }
+    },
+
+    onCabeceraFechaChange(campo) {
+      if (!this.cabecera) return;
+      const map = {
+        fecha_pedido: 'fecha_pedido_display',
+        fecha_entrega: 'fecha_entrega_display',
+        vencimiento: 'vencimiento_display',
+      };
+      const iso = displayToIso(this.cabecera[map[campo]]);
+      if (!iso) return;
+      this.cabecera[campo] = iso;
+      if (campo === 'fecha_pedido') this._recalcVencimientoDisplay();
+      if (campo === 'vencimiento' && !this.puedeEditarCabecera) {
+        this._recalcVencimientoDisplay();
+      }
+    },
+
+    onCabeceraCondicionChange() {
+      if (!this.cabecera) return;
+      const cv = this.condicionesVenta.find(
+        (c) => Number(c.Codigo) === Number(this.cabecera.id_condventa),
+      );
+      if (cv) {
+        this.cabecera.cond_venta = cv.Descripcion;
+        this.cabecera.dias_condicion = Number(cv.Dias || 0);
+      }
+      this._recalcVencimientoDisplay();
+    },
+
+    async onCabeceraListaChange() {
+      if (!this.cabecera || !this.puedeEditarCabecera) return;
+      if (!this.urls.carrito_lista) return;
+      const { ok, data } = await this.api(this.urls.carrito_lista, 'PATCH', {
+        lista_id: this.cabecera.lista_id,
+      });
+      if (!ok) {
+        this.flash((data && data.detail) || 'No se pudo recalcular precios con la nueva lista.', false);
+        return;
+      }
+      if (data) this.setCart(data);
+      this.agendarPreview?.();
+    },
+
+    _payloadCabeceraConfirmar() {
+      if (!this.cabecera) return {};
+      const fp = this.cabecera.fecha_pedido || displayToIso(this.cabecera.fecha_pedido_display);
+      const fe = this.cabecera.fecha_entrega || displayToIso(this.cabecera.fecha_entrega_display);
+      const ven = this.cabecera.vencimiento || displayToIso(this.cabecera.vencimiento_display);
+      const payload = {
+        fecha_pedido: fp,
+        fecha_entrega: fe || undefined,
+        vencimiento: ven,
+        id_condventa: this.cabecera.id_condventa,
+        lista_id: this.cabecera.lista_id,
+      };
+      if (this.puedeEditarCabecera) return payload;
+      return {
+        fecha_pedido: fp,
+        fecha_entrega: fe || undefined,
+      };
+    },
+
     async cargarContexto() {
       const { ok, data } = await this.api(this.urls.compra_contexto, 'GET');
       if (!ok || !data) return;
       this.puntosVenta = data.puntos_venta || [];
       if (data.id_punto_venta_default) this.pv = data.id_punto_venta_default;
+      this.puedeEditarCabecera = !!data.puede_editar_cabecera;
       if (data.cliente) {
         this.clienteActivo = data.idcliente;
         this.clienteActivoLabel = this.clienteLabel(data.cliente);
         this._setCreditoWidget(data.cliente, data.autoriza_credito);
+        this._setListaPrecio(data.cliente, data);
+        this._hidratarCabeceraDesdeApi(data.cabecera || {});
+        await this._cargarCatalogosCabecera(this.cabecera?.id_condventa);
       } else {
         this.clienteActivo = null;
         this.clienteActivoLabel = '';
         this.creditoWidget = null;
+        this.listaPrecio = '';
+        this.listaPrecioPdfUrl = '';
         this.pedidosRecientes = [];
+        this.cabecera = null;
       }
       if (data.embalaje) {
         this.embalaje = data.embalaje;
@@ -50,6 +199,25 @@ export function compraMayoristaCheckoutMixin() {
       if (data.idcliente) {
         this.cargarRecientes();
       }
+    },
+
+    _setListaPrecio(cliente, extras) {
+      const c = cliente || {};
+      const x = extras || {};
+      const lp = c.listaPrecio || c.lista_precio || x.listaPrecio || '';
+      if (lp && typeof lp === 'object') {
+        this.listaPrecio = String(lp.nombre || lp.name || (lp.codigo != null ? `Lista ${lp.codigo}` : '')).trim();
+      } else {
+        this.listaPrecio = String(lp || '').trim();
+      }
+      this.listaPrecioPdfUrl = String(
+        x.lista_precio_pdf_url
+        || c.lista_precio_pdf_url
+        || c.lista_precios_pdf
+        || c.listaPrecioPdf
+        || x.lista_precios_pdf
+        || '',
+      ).trim();
     },
 
     _setCreditoWidget(cliente, autoriza) {
@@ -66,7 +234,14 @@ export function compraMayoristaCheckoutMixin() {
     },
 
     detalleUrl(codMov) {
-      return (this.urls.detalle_tpl || '').replace(/\/0\/?$/, `/${codMov}/`);
+      const tpl = this.urls.detalle_tpl || this.urls.venta || '';
+      if (tpl.includes('cod_mov=')) {
+        return tpl.replace(/cod_mov=\d+/, `cod_mov=${codMov}`);
+      }
+      if (this.urls.venta) {
+        return `${this.urls.venta.replace(/\/?$/, '/')}?cod_mov=${codMov}`;
+      }
+      return tpl.replace(/\/0\/?$/, `/${codMov}/`);
     },
 
     detalleTrasExitoUrl(codMov) {
@@ -123,6 +298,7 @@ export function compraMayoristaCheckoutMixin() {
         tipo: this.tipo,
         forma_entrega: this.formaEntrega,
         observaciones: this.observaciones,
+        ...this._payloadCabeceraConfirmar(),
       };
       if (this.esCliente) body.es_cliente = true;
       if (this.pv) body.id_punto_venta = this.pv;

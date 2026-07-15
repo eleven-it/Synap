@@ -1,0 +1,25 @@
+change: ventas-analitica-precios-historial
+status: verified
+phase: verify
+verdict: PASS_WITH_WARNINGS
+verified_at: "2026-07-14"
+reverified_at: "2026-07-14"
+apply_gap_closed_at: "2026-07-14"
+tests:
+  command: "docker exec Synap_app python manage.py test ventas.tests.test_precios_historial --keepdb"
+  passed: 5
+  failed: 0
+  skipped: 0
+compliance:
+  scenarios_total: 4
+  compliant: 0
+  partial: 2
+  untested: 2
+blockers: []
+gap_closed:
+  - "Migración reports/migrations/0033_add_evolucion_precios_report.py (slug evolucion-precios, REQ-4)"
+  - "CRITICAL migración ReportDefinition ausente — cerrado en re-verify 2026-07-14"
+warnings:
+  - "Checklist manual pendiente (5 ítems)"
+  - "Sin tests integración API/ranking/runner"
+next: sdd-archive

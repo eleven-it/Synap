@@ -31,6 +31,19 @@ def _stock_ok(mock_stock):
     mock_stock.return_value.validar_disponible_items.return_value = (True, None)
 
 
+_patch_pedidos_validan_stock = patch(
+    "ecom.services.ecom_config_mysql.pedidos_validan_stock", return_value=True
+)
+
+
+def setUpModule():
+    _patch_pedidos_validan_stock.start()
+
+
+def tearDownModule():
+    _patch_pedidos_validan_stock.stop()
+
+
 class TestObtenerOCrearCarrito(TestCase):
     def test_crea_carrito_vacio(self):
         cart = svc.obtener_o_crear_carrito("emp1", 5, idcliente=10, lista_id=2, id_deposito=1)
@@ -263,6 +276,23 @@ class TestTipoComprobanteCarrito(TestCase):
         ok, err = svc.actualizar_tipo_comprobante(cart, "DEV")
         self.assertFalse(ok)
         self.assertIn("confirmado", err.lower())
+
+    @patch.object(svc, "StockService")
+    @patch.object(svc, "resolver_precio_articulo")
+    def test_pedido_no_valida_stock_si_config_off(self, mock_precio, mock_stock):
+        with patch(
+            "ecom.services.ecom_config_mysql.pedidos_validan_stock", return_value=False
+        ):
+            mock_stock.return_value.validar_disponible_items.return_value = (
+                False,
+                {"disponible": 0},
+            )
+            mock_precio.return_value = (Decimal("100"), _row())
+            cart = self._cart(tipo=EcomCart.TIPO_PEDIDO)
+            item, err = svc.agregar_item(cart, 1, 99)
+            self.assertIsNone(err)
+            self.assertIsNotNone(item)
+            mock_stock.return_value.validar_disponible_items.assert_not_called()
 
     @patch.object(svc, "StockService")
     @patch.object(svc, "resolver_precio_articulo")

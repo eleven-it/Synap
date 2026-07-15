@@ -444,8 +444,8 @@ CACHES = {
     }
 }
 
-# Sincronización automática de permisos Synap → permiso_sistema (AdministraNET) tras login
-SYNAP_AUTO_SYNC_PERMISSIONS = config('SYNAP_AUTO_SYNC_PERMISSIONS', default=True, cast=bool)
+# (Retirado) Sync legacy Synap → permiso_sistema. Mantener False; usar synap_* + apply/backfill.
+SYNAP_AUTO_SYNC_PERMISSIONS = config('SYNAP_AUTO_SYNC_PERMISSIONS', default=False, cast=bool)
 # TTL en segundos para no repetir sync por empresa (default 24h)
 SYNAP_AUTO_SYNC_PERMISSIONS_TTL = config('SYNAP_AUTO_SYNC_PERMISSIONS_TTL', default=86400, cast=int)
 

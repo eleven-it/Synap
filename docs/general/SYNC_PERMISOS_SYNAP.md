@@ -1,54 +1,44 @@
 # Sincronización automática de permisos Synap → AdministraNET
 
-> **⚠️ EN DESUSO (deprecado).** Este mecanismo inyectaba los `key_permiso` de Synap en la
-> tabla VB6 compartida `permiso_sistema` («contaminando» tablas de AdministraNET). Fue
-> reemplazado por el **almacén propio Synap** (`synap_*`). Ver
-> **[PERMISOS_SYNAP_STORE.md](PERMISOS_SYNAP_STORE.md)**.
->
-> - Runtime: `login/views.py` y la UI de permisos ya **no** llaman al sync; usan
->   `asegurar_synap_schema_si_procede` (crea `synap_*` + siembra `synap_permiso`, sin tocar VB6).
-> - El seed del catálogo se hace con `manage.py apply_synap_permisos_tables <base>` y las
->   asignaciones existentes se migran con `manage.py backfill_synap_permisos_from_legacy <base>`.
-> - Retirada final del sync y limpieza de `permiso_sistema` (`grupo_permiso='Synap'`) vía
->   `manage.py purge_synap_legacy_permisos <base> --ejecutar`, **solo tras el cutover
->   `SYNAP_PERMISOS_SOURCE=synap` estable** (fase P3).
+> **⛔ RETIRADO (2026-07).** Este mecanismo fue eliminado del código. Inyectaba los
+> `key_permiso` de Synap en la tabla VB6 compartida `permiso_sistema` («contaminando»
+> tablas de AdministraNET). Fue reemplazado por el **almacén propio Synap** (`synap_*`).
+> Ver **[PERMISOS_SYNAP_STORE.md](PERMISOS_SYNAP_STORE.md)**.
 
-Los permisos que Synap usa para menú y vistas (`usuarios.ver`, `reports.ver`, etc.) deben existir en la tabla `permiso_sistema` de cada base de empresa en MySQL (AdministraNET). Así los puestos pueden tener asignados esos `key_permiso` y el usuario ve las pantallas correctas.
+## Reemplazo actual
 
-## Cuándo se ejecuta
+| Antes (retirado) | Ahora |
+|------------------|-------|
+| `sync_permisos_synap.py` + `sync_synap_permissions_to_adminet` | `apply_synap_permisos_tables` (DDL + seed catálogo) |
+| Inyección en `permiso_sistema` tras login | `asegurar_synap_schema_si_procede` (solo `synap_*`, sin VB6) |
+| `SYNAP_AUTO_SYNC_PERMISSIONS=True` | `SYNAP_AUTO_SYNC_PERMISSIONS=False` (default); usar `SYNAP_AUTO_ENSURE_SCHEMA=True` |
+| Asignaciones en legacy | `backfill_synap_permisos_from_legacy` + UI `/core/permisos-puesto/` |
+| Limpieza manual | `purge_synap_legacy_permisos <base> --ejecutar` (tras cutover `synap` estable) |
 
-- **Automático:** Tras un **login exitoso** se llama a `asegurar_permisos_synap_si_procede(base_empresa)`. Solo sincroniza si:
-  - La opción está habilitada (`SYNAP_AUTO_SYNC_PERMISSIONS=True`, por defecto).
-  - No se ha sincronizado esa empresa recientemente (cache con TTL configurable, por defecto 24 h).
+## Comandos vigentes
 
-Ese punto (post-login) evita bloquear el arranque del servidor y solo toca la empresa que el usuario está usando. La cache evita repetir el mismo trabajo en cada login.
+```bash
+# Crear tablas synap_* + sembrar catálogo (idempotente)
+docker exec Synap_app python manage.py apply_synap_permisos_tables <base>
 
-- **Manual:** Sigue disponible el comando para todas las empresas o una en concreto:
+# Migrar asignaciones legacy → synap_*
+docker exec Synap_app python manage.py backfill_synap_permisos_from_legacy <base>
 
-  ```bash
-  docker exec Synap_app python manage.py sync_synap_permissions_to_adminet
-  docker exec Synap_app python manage.py sync_synap_permissions_to_adminet --base-empresa administranet89
-  ```
-
-## Configuración
-
-| Variable | Default | Descripción |
-|----------|---------|-------------|
-| `SYNAP_AUTO_SYNC_PERMISSIONS` | `True` | Activa o desactiva la sincronización automática tras login. |
-| `SYNAP_AUTO_SYNC_PERMISSIONS_TTL` | `86400` (24 h) | TTL en segundos del cache por empresa; mientras no expire no se vuelve a sincronizar esa base. |
-
-Para desactivar la sincronización automática (y usar solo el comando manual):
-
-```env
-SYNAP_AUTO_SYNC_PERMISSIONS=False
+# Limpiar filas grupo 'Synap' en permiso_sistema* (solo tras cutover synap estable)
+docker exec Synap_app python manage.py purge_synap_legacy_permisos <base> --ejecutar
 ```
 
-## Implementación
+## Archivos eliminados (P3)
 
-- Servicio: `core/services/sync_permisos_synap.py`  
-  - `sincronizar_permisos_synap_para_empresa(base_empresa, grupo_permiso)`  
-  - `asegurar_permisos_synap_si_procede(base_empresa)` (usa cache y settings).
-- Llamada post-login: `login/views.py` (tras guardar `request.session["user"]`).
-- El comando `sync_synap_permissions_to_adminet` reutiliza `sincronizar_permisos_synap_para_empresa`.
+- `core/services/sync_permisos_synap.py`
+- `core/management/commands/sync_synap_permissions_to_adminet.py`
 
-Si la sincronización falla (MySQL, cache, etc.), el login **no** falla: el error se registra y se ignora.
+El bootstrap (`bootstrap_instalacion`) invoca `apply_synap_permisos_tables` cuando se
+indica `--base-empresa` (o se omite con `--skip-permisos-mysql`).
+
+## Referencia histórica (comportamiento retirado)
+
+Los permisos que Synap usa para menú y vistas (`usuarios.ver`, `reports.ver`, etc.)
+**ya no** se insertan en `permiso_sistema`. Con `SYNAP_PERMISOS_SOURCE=synap` el runtime
+lee exclusivamente `synap_*`. Las tablas legacy solo intervienen en modos `legacy`/`dual`
+o en funcionalidades AdministraNET que aún las consultan directamente.

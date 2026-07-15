@@ -19,6 +19,7 @@ from ecom.services.vendedor_cliente_marca import (
     anular_terna,
     buscar_clientes_activos,
     buscar_marcas_activas,
+    buscar_sucursales_cliente,
     crear_terna,
     listar_ternas,
 )
@@ -50,6 +51,7 @@ class ConfigVendedorClienteMarcaView(_StubMayoristappPermisoView):
                     "anular": reverse("ecom:api_vendedor_cliente_marca_anular"),
                     "vendedores": reverse("ecom:api_vendedor_cliente_marca_vendedores"),
                     "clientes": reverse("ecom:api_vendedor_cliente_marca_clientes"),
+                    "sucursales": reverse("ecom:api_vendedor_cliente_marca_sucursales"),
                     "marcas": reverse("ecom:api_vendedor_cliente_marca_marcas"),
                     "hub": reverse("ecom:mayoristapp_pedidos_hub"),
                 },
@@ -69,6 +71,7 @@ class VendedorClienteMarcaTernasAPIView(APIView):
             base,
             cod_viajante=to_int_or_none(request.query_params.get("CodViajante")),
             id_cliente=to_int_or_none(request.query_params.get("id_cliente")),
+            id_cliente_domicilio=to_int_or_none(request.query_params.get("id_cliente_domicilio")),
             solo_activas=str(request.query_params.get("solo_activas", "1")).strip()
             not in ("0", "false", "False", "no", "No"),
             limit=to_int_or_none(request.query_params.get("limit")) or 200,
@@ -92,6 +95,7 @@ class VendedorClienteMarcaCrearAPIView(APIView):
                 to_int_or_none(data.get("CodViajante")),
                 to_int_or_none(data.get("id_cliente")),
                 to_int_or_none(data.get("CodMarca")),
+                to_int_or_none(data.get("id_cliente_domicilio")),
                 usuario_mod=_usuario_mod_from_request(request),
             )
         except ConflictoMarcaCliente as exc:
@@ -160,6 +164,25 @@ class VendedorClienteMarcaClientesAPIView(APIView):
             return Response({"ok": False, "error": "Sin base_empresa."}, status=400)
         rows = buscar_clientes_activos(
             base,
+            q=str(request.query_params.get("q") or ""),
+            limit=to_int_or_none(request.query_params.get("limit")) or 30,
+        )
+        return Response({"ok": True, "items": rows})
+
+
+class VendedorClienteMarcaSucursalesAPIView(APIView):
+    permission_classes = [EcomConfigVendedorClienteMarcaPermission]
+
+    def get(self, request: Request) -> Response:
+        base = _session_base_empresa(request)
+        if not base:
+            return Response({"ok": False, "error": "Sin base_empresa."}, status=400)
+        idc = to_int_or_none(request.query_params.get("id_cliente"))
+        if idc is None:
+            return Response({"ok": False, "error": "Falta id_cliente."}, status=400)
+        rows = buscar_sucursales_cliente(
+            base,
+            idc,
             q=str(request.query_params.get("q") or ""),
             limit=to_int_or_none(request.query_params.get("limit")) or 30,
         )

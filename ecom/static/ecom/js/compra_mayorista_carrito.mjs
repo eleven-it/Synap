@@ -89,6 +89,17 @@ export function compraMayoristaCarritoMixin() {
       }
     },
 
+    async cambiarDescuentoRenglon(itemId, porcentaje) {
+      const pct = Math.min(100, Math.max(0, Number(porcentaje) || 0));
+      const { ok, data } = await this.api(this.itemUrl(itemId), 'PATCH', { porcentaje_descuento: pct });
+      if (!ok) {
+        this.flash((data && data.detail) || 'No se pudo actualizar el descuento del renglón.', false);
+        if (data && data.carrito) this.setCart(data.carrito);
+        return;
+      }
+      this.setCart(data);
+    },
+
     async aplicarDescuentoPie() {
       this.descPieError = '';
       const { ok, data } = await this.api(

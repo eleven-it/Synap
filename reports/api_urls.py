@@ -40,6 +40,9 @@ from .executive_dashboard_api_views import (
     ExecutiveDashboardInventarioExistenciasAPIView,
     ExecutiveDashboardTesoreriaResumenAPIView,
     ExecutiveDashboardVentasCobrosResumenAPIView,
+    ExecutiveDashboardTesoreriaBancoResumenAPIView,
+    ExecutiveDashboardVentasCobrosDetalleAPIView,
+    ExecutiveDashboardTesoreriaMovimientosCajaAPIView,
 )
 from .api_views import (
     ReconciliacionMovimientoDetalleAPIView,
@@ -200,6 +203,21 @@ urlpatterns = [
         "executive-dashboard/ventas/cobros/resumen/",
         ExecutiveDashboardVentasCobrosResumenAPIView.as_view(),
         name="reports-executive-dashboard-ventas-cobros-resumen",
+    ),
+    path(
+        "executive-dashboard/tesoreria/banco/resumen/",
+        ExecutiveDashboardTesoreriaBancoResumenAPIView.as_view(),
+        name="reports-executive-dashboard-tesoreria-banco-resumen",
+    ),
+    path(
+        "executive-dashboard/ventas/cobros/detalle/",
+        ExecutiveDashboardVentasCobrosDetalleAPIView.as_view(),
+        name="reports-executive-dashboard-ventas-cobros-detalle",
+    ),
+    path(
+        "executive-dashboard/tesoreria/movimientos-caja/",
+        ExecutiveDashboardTesoreriaMovimientosCajaAPIView.as_view(),
+        name="reports-executive-dashboard-tesoreria-movimientos-caja",
     ),
     path("catalog/", ReportCatalogAPIView.as_view(), name="reports-catalog"),
     path("query/", ReportQueryAPIView.as_view(), name="reports-query"),

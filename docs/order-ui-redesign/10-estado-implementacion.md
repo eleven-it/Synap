@@ -21,10 +21,19 @@
 ### Ajuste visual post-F5 (10/07/2026)
 
 Pantalla compra alineada al **tablero de producción MPR**:
-- Hero card `slate-800` (sin gradient full-bleed) con toggle PED/PRE/DEV grande (PED activo purple-600).
+- Hero card `slate-800` (sin gradient full-bleed) con toggle PED/PRE/DEV grande.
 - Cliente | Marcas en la misma fila (`lg:grid-cols-2`) para recuperar altura.
-- Breadcrumb purple estilo MPR; CTA confirmar PED en purple.
 - Hub/listados/detalle conservan el hero gradient anterior.
+
+### Oleada E — barrido purple slate/sky (13/07/2026)
+
+Cierre del change `ecom-pedidos-usabilidad-supervisor` (oleadas A–E). Barrido de violeta en el flujo de pedido simple y masivo:
+- **PED = sky** en todos los CTAs: `pedidos_order_summary.html` (desktop + bottom bar) y `pedidos_modal.html` usan `.pedidos-btn-primary` (antes `bg-purple-600` / `.pedidos-btn-gradient`).
+- Toggle grande `.compra-toggle-btn-lg-ped-active` y anillo de foco → `sky-600` / `sky-400` (antes `purple-600` / `purple-500`).
+- Breadcrumb sobre tablero claro: `variant="board"` (sky/slate) en `compra_mayorista.html` (antes `variant="purple"`).
+- Nuevo token compartido `.pedidos-badge-lista` (pedido simple y masivo, REQ-UI-04).
+- `.pedidos-btn-gradient` queda `@deprecated`: único remanente de violeta, acotado a acciones de hero en listados/presupuestos; PROHIBIDO como CTA de venta/masivo.
+- Sin purple en `pedido_masivo_sucursales.html` (ya limpio en oleada D).
 
 ---
 
@@ -87,4 +96,4 @@ Ver también `09-checklist-regresion.md` (ítems marcados como verificados por c
 
 ---
 
-*Última actualización: 10/07/2026.*
+*Última actualización: 13/07/2026 (Oleada E — barrido purple slate/sky).*

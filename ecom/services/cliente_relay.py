@@ -26,12 +26,10 @@ def _si_no(val: Any, default: str = "No") -> str:
 
 
 def cod_viajante_desde_sesion_usuario(sess_user: Dict[str, Any]) -> Optional[int]:
-    """``CodViajante`` del vendedor logueado (Synap suele usar ``id_vendedor_usr``)."""
-    return to_int_or_none(
-        sess_user.get("id_vendedor_usr")
-        or sess_user.get("CodViajante")
-        or sess_user.get("cod_viajante")
-    )
+    """``CodViajante`` efectivo (operativo o propio) para relays de pedido."""
+    from ecom.services.vendedor_operativo import resolver_viajante_operativo
+
+    return resolver_viajante_operativo(sess_user)
 
 
 def vendedor_a_cargo_desde_sesion(sess_user: Dict[str, Any]) -> List[int]:
@@ -259,7 +257,7 @@ def _json_safe_row(item: Dict[str, Any]) -> Dict[str, Any]:
 SYNAP_FORMULARIO_URL_PREFIX = "@synap:"
 
 MAYORISTAPP_FORMULARIO_COMPROBANTE: Dict[int, tuple[str, str]] = {
-    0: ("pedido", "@synap:ecom:mayoristapp_compra"),
+    0: ("pedido", "@synap:ecom:mayoristapp_venta"),
     1: ("remitoSistema", "lista-facturas-sin-stock.php"),
     2: ("remitoTalonario", "lista-facturas-sin-stock.php"),
     3: ("presupuesto", "alta_presupuesto.php"),
@@ -281,4 +279,6 @@ def resolver_url_formulario_comprobante(url: str, request: Any) -> str:
     try:
         return reverse(url_name)
     except NoReverseMatch:
-        return f"/ecom/mayoristapp/compra/" if "mayoristapp_compra" in url_name else url
+        if "mayoristapp_venta" in url_name or "mayoristapp_compra" in url_name:
+            return "/ecom/mayoristapp/venta/"
+        return url

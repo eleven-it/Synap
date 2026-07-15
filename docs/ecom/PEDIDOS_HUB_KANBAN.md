@@ -55,3 +55,16 @@ Fechas UI: **dd/MM/yyyy**.
 - Pipeline: `ecom/services/pedidos_hub_pipeline.py`
 - API: `GET /ecom/api/mayoristapp/pedidos/hub/`, `POST .../hub/archivar-draft/`
 - Preferencia Lista/Kanban: `localStorage` clave `synap_pedidos_hub_vista`
+- Botón **Actualizar** en el hero: vuelve a pedir el JSON del hub (`urls.api`) sin recargar la página; icono `refresh` con spin mientras `cargando`
+
+## Tarjetas enriquecidas
+
+| Tipo | Título | Campo extra |
+|------|--------|-------------|
+| Borrador masivo / anulado | `Masivo · {nombre_cliente}` | `meta.nombre_cliente` |
+| Borrador carrito simple | `Pedido simple · {nombre_cliente}` | `meta.nombre_cliente` |
+| PED confirmado | `PED {nro}` | `sucursal` (domicilio de entrega vía `cliente_datos_adicionales` + `cliente_domicilio`) |
+
+Nombres de cliente: batch `_nombres_clientes` (un SQL). Sucursal: etiqueta `Calle Nro` o `Sucursal #{id}` (misma convención que pedido masivo). Total PED: preferir `ImporteVenta` (bruto); fallback fórmula IVA+percepciones.
+
+Vista **Lista**: columna **Sucursal** entre Documento y Detalle. Vista **Kanban**: línea de sucursal bajo el subtítulo en tarjetas PED.

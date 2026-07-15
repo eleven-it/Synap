@@ -1,0 +1,68 @@
+{% comment %}
+  Panel cabecera comercial (fechas dd/MM/yyyy, condición, lista).
+  Contrato Alpine: cabecera, puedeEditarCabecera, condicionesVenta, listasPrecio,
+  onCabeceraFechaChange, onCabeceraCondicionChange, onCabeceraListaChange, fmtFechaDisplay.
+{% endcomment %}
+<section class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-4"
+         aria-label="Cabecera comercial" x-show="cabecera" x-cloak>
+  <h2 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+    Cabecera comercial
+  </h2>
+  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div>
+      <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="cab-fecha-pedido">
+        Fecha pedido
+      </label>
+      <input id="cab-fecha-pedido" type="text" inputmode="numeric" placeholder="dd/MM/yyyy"
+             x-model="cabecera.fecha_pedido_display"
+             @change="onCabeceraFechaChange('fecha_pedido')"
+             class="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+    </div>
+    <div x-show="tipo === 'PED'" x-cloak>
+      <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="cab-fecha-entrega">
+        Fecha entrega
+      </label>
+      <input id="cab-fecha-entrega" type="text" inputmode="numeric" placeholder="dd/MM/yyyy"
+             x-model="cabecera.fecha_entrega_display"
+             @change="onCabeceraFechaChange('fecha_entrega')"
+             class="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+    </div>
+    <div>
+      <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="cab-vencimiento">
+        Vencimiento
+      </label>
+      <input id="cab-vencimiento" type="text" inputmode="numeric" placeholder="dd/MM/yyyy"
+             x-model="cabecera.vencimiento_display"
+             @change="onCabeceraFechaChange('vencimiento')"
+             :readonly="!puedeEditarCabecera"
+             :class="!puedeEditarCabecera ? 'bg-slate-100 dark:bg-slate-800 cursor-not-allowed' : ''"
+             class="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+    </div>
+    <div>
+      <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="cab-condicion">
+        Condición de pago
+      </label>
+      <select id="cab-condicion" x-model.number="cabecera.id_condventa"
+              @change="onCabeceraCondicionChange()"
+              :disabled="!puedeEditarCabecera"
+              class="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800">
+        <template x-for="cv in condicionesVenta" :key="cv.Codigo">
+          <option :value="cv.Codigo" x-text="`${cv.Descripcion} (${cv.Dias} días)`"></option>
+        </template>
+      </select>
+    </div>
+    <div>
+      <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="cab-lista">
+        Lista de precios
+      </label>
+      <select id="cab-lista" x-model.number="cabecera.lista_id"
+              @change="onCabeceraListaChange()"
+              :disabled="!puedeEditarCabecera"
+              class="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800">
+        <template x-for="lp in listasPrecio" :key="lp.id">
+          <option :value="lp.id" x-text="lp.name"></option>
+        </template>
+      </select>
+    </div>
+  </div>
+</section>

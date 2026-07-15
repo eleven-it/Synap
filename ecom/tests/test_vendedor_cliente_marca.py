@@ -1,4 +1,4 @@
-"""Tests servicio/API ternas Vendedor→Cliente→Marca."""
+"""Tests servicio/API cuaternas Vendedor→Cliente→Sucursal→Marca."""
 
 from unittest.mock import MagicMock, patch
 
@@ -25,32 +25,46 @@ class _User:
 
 
 class TestCrearTernaConflicto(SimpleTestCase):
+    @patch("ecom.services.vendedor_cliente_marca._domicilio_valido_cliente", return_value=(True, ""))
     @patch("ecom.services.vendedor_cliente_marca.buscar_dueno_marca_cliente")
-    def test_conflicto_otro_viajante(self, mock_dueno):
+    def test_conflicto_otro_viajante(self, mock_dueno, _dom):
         mock_dueno.return_value = {
             "id": 1,
             "CodViajante": 5,
             "id_cliente": 10,
+            "id_cliente_domicilio": 3,
             "CodMarca": 2,
             "nombre_viajante": "Pérez",
         }
         with self.assertRaises(ConflictoMarcaCliente) as ctx:
-            crear_terna("emp1", 9, 10, 2, usuario_mod="test")
+            crear_terna("emp1", 9, 10, 2, 3, usuario_mod="test")
         self.assertEqual(ctx.exception.dueno["CodViajante"], 5)
         self.assertIn("Pérez", ctx.exception.message)
+        mock_dueno.assert_called_once_with("emp1", 10, 2, 3)
 
+    @patch("ecom.services.vendedor_cliente_marca._domicilio_valido_cliente", return_value=(True, ""))
     @patch("ecom.services.vendedor_cliente_marca.buscar_dueno_marca_cliente")
-    def test_idempotente_mismo_viajante(self, mock_dueno):
+    def test_idempotente_mismo_viajante(self, mock_dueno, _dom):
         mock_dueno.return_value = {
             "id": 1,
             "CodViajante": 9,
             "id_cliente": 10,
+            "id_cliente_domicilio": 3,
             "CodMarca": 2,
             "nombre_viajante": "Yo",
         }
-        ok, msg, terna = crear_terna("emp1", 9, 10, 2)
+        ok, msg, terna = crear_terna("emp1", 9, 10, 2, 3)
         self.assertTrue(ok)
         self.assertEqual(terna["CodViajante"], 9)
+        self.assertEqual(terna["id_cliente_domicilio"], 3)
+
+    @patch("ecom.services.vendedor_cliente_marca.buscar_dueno_marca_cliente")
+    def test_rechaza_sin_sucursal(self, mock_dueno):
+        mock_dueno.return_value = None
+        ok, msg, terna = crear_terna("emp1", 9, 10, 2, 0)
+        self.assertFalse(ok)
+        self.assertIn("id_cliente_domicilio", msg.lower())
+        self.assertIsNone(terna)
 
 
 class TestAnularTerna(SimpleTestCase):
@@ -72,13 +86,13 @@ class TestApiCrear409(TestCase):
     @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
     def test_post_conflicto_409(self, _base, mock_crear):
         mock_crear.side_effect = ConflictoMarcaCliente(
-            "La marca ya está asignada a Pérez para este cliente.",
-            {"CodViajante": 5, "nombre_viajante": "Pérez", "id": 1},
+            "La marca ya está asignada a Pérez para este cliente y sucursal.",
+            {"CodViajante": 5, "nombre_viajante": "Pérez", "id": 1, "id_cliente_domicilio": 3},
         )
         factory = APIRequestFactory()
         req = factory.post(
             "/ecom/api/mayoristapp/vendedor-cliente-marca/crear/",
-            {"CodViajante": 9, "id_cliente": 10, "CodMarca": 2},
+            {"CodViajante": 9, "id_cliente": 10, "CodMarca": 2, "id_cliente_domicilio": 3},
             format="json",
         )
         req.session = {"user": {"base_empresa": "emp1"}}
@@ -88,7 +102,7 @@ class TestApiCrear409(TestCase):
         self.assertEqual(resp.data["code"], "conflicto_marca")
         self.assertEqual(resp.data["dueno"]["CodViajante"], 5)
 
-    @patch("ecom.vendedor_cliente_marca_views.anular_terna", return_value=(True, "Terna anulada."))
+    @patch("ecom.vendedor_cliente_marca_views.anular_terna", return_value=(True, "Cuaterna anulada."))
     @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
     def test_anular_ok(self, _base, _anular):
         factory = APIRequestFactory()

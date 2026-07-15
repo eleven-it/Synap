@@ -33,16 +33,23 @@ from ecom.vendedor_cliente_marca_views import (
     VendedorClienteMarcaClientesAPIView,
     VendedorClienteMarcaCrearAPIView,
     VendedorClienteMarcaMarcasAPIView,
+    VendedorClienteMarcaSucursalesAPIView,
     VendedorClienteMarcaTernasAPIView,
     VendedorClienteMarcaVendedoresAPIView,
 )
+from ecom.ajustes_ventas_views import AjustesVentasAPIView, AjustesVentasView
 from ecom.pedido_masivo_views import (
     PedidoMasivoAbrirAPIView,
     PedidoMasivoArticulosAPIView,
     PedidoMasivoCeldaAPIView,
     PedidoMasivoClientesAPIView,
     PedidoMasivoConfirmarAPIView,
+    PedidoMasivoAnularAPIView,
+    PedidoMasivoDescuentoFilaAPIView,
+    PedidoMasivoDescuentoPieAPIView,
+    PedidoMasivoEliminarFilaAPIView,
     PedidoMasivoMatrizAPIView,
+    PedidoMasivoPreviewAPIView,
     PedidoMasivoSucursalesAPIView,
     PedidoMasivoSucursalesView,
 )
@@ -60,7 +67,11 @@ from ecom.cliente_relay_views import (
     ClienteSeleccionadoRelayAPIView,
     ClienteSeleccionarRelayAPIView,
 )
-from ecom.precio_relay_views import ListaPrecioRelayAPIView, PromocionesRelayAPIView
+from ecom.precio_relay_views import (
+    CondicionesVentaRelayAPIView,
+    ListaPrecioRelayAPIView,
+    PromocionesRelayAPIView,
+)
 from ecom.comprobantes_relay_views import (
     ComprobantesAnularPedidoRelayAPIView,
     ComprobanteAMailRelayAPIView,
@@ -119,11 +130,16 @@ from ecom.catalogo_producto_relay_views import (
 from ecom.carrito_relay_views import (
     CarritoDescuentoPieRelayAPIView,
     CarritoItemRelayAPIView,
+    CarritoListaPrecioRelayAPIView,
     CarritoRelayAPIView,
     CarritoTipoComprobanteRelayAPIView,
     CarritoVaciarRelayAPIView,
 )
 from ecom.checkout_relay_views import CheckoutConfirmarRelayAPIView
+from ecom.vendedor_operativo_views import (
+    VendedorOperativoRelayAPIView,
+    VendedoresCarteraRelayAPIView,
+)
 from ecom.lista_precio_pdf_relay_views import ExportarListaPreciosPDFRelayAPIView
 from ecom.api.v1.comprobantes.pedidos import (
     PedidosDetalleV1APIView,
@@ -199,9 +215,29 @@ urlpatterns = [
         name="api_pedido_masivo_celda",
     ),
     path(
+        "api/mayoristapp/pedido-masivo/eliminar-fila/",
+        PedidoMasivoEliminarFilaAPIView.as_view(),
+        name="api_pedido_masivo_eliminar_fila",
+    ),
+    path(
         "api/mayoristapp/pedido-masivo/articulos/",
         PedidoMasivoArticulosAPIView.as_view(),
         name="api_pedido_masivo_articulos",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/preview/",
+        PedidoMasivoPreviewAPIView.as_view(),
+        name="api_pedido_masivo_preview",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/descuento-fila/",
+        PedidoMasivoDescuentoFilaAPIView.as_view(),
+        name="api_pedido_masivo_descuento_fila",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/descuento-pie/",
+        PedidoMasivoDescuentoPieAPIView.as_view(),
+        name="api_pedido_masivo_descuento_pie",
     ),
     path(
         "api/mayoristapp/pedido-masivo/confirmar/",
@@ -209,9 +245,24 @@ urlpatterns = [
         name="api_pedido_masivo_confirmar",
     ),
     path(
+        "api/mayoristapp/pedido-masivo/anular/",
+        PedidoMasivoAnularAPIView.as_view(),
+        name="api_pedido_masivo_anular",
+    ),
+    path(
         "mayoristapp/config/vendedor-cliente-marca/",
         ConfigVendedorClienteMarcaView.as_view(),
         name="mayoristapp_config_vendedor_cliente_marca",
+    ),
+    path(
+        "mayoristapp/ajustes-ventas/",
+        AjustesVentasView.as_view(),
+        name="mayoristapp_ajustes_ventas",
+    ),
+    path(
+        "api/mayoristapp/ajustes-ventas/",
+        AjustesVentasAPIView.as_view(),
+        name="api_ajustes_ventas",
     ),
     path(
         "api/mayoristapp/vendedor-cliente-marca/ternas/",
@@ -239,6 +290,11 @@ urlpatterns = [
         name="api_vendedor_cliente_marca_clientes",
     ),
     path(
+        "api/mayoristapp/vendedor-cliente-marca/sucursales/",
+        VendedorClienteMarcaSucursalesAPIView.as_view(),
+        name="api_vendedor_cliente_marca_sucursales",
+    ),
+    path(
         "api/mayoristapp/vendedor-cliente-marca/marcas/",
         VendedorClienteMarcaMarcasAPIView.as_view(),
         name="api_vendedor_cliente_marca_marcas",
@@ -259,8 +315,16 @@ urlpatterns = [
         name="mayoristapp_alta_recibo",
     ),
     path(
-        "mayoristapp/compra/",
+        "mayoristapp/venta/",
         CompraMayoristaView.as_view(),
+        name="mayoristapp_venta",
+    ),
+    # Alias deprecado: bookmarks /compra/ → /venta/
+    path(
+        "mayoristapp/compra/",
+        RedirectView.as_view(
+            pattern_name="ecom:mayoristapp_venta", permanent=False, query_string=True
+        ),
         name="mayoristapp_compra",
     ),
     # Logística operativa vive en la app ``logistica`` (/logistica/…). Redirecciones 301 por bookmarks.
@@ -425,6 +489,11 @@ urlpatterns = [
         "api/mayoristapp/precios/lista-precio/",
         ListaPrecioRelayAPIView.as_view(),
         name="mayoristapp_precios_lista_precio",
+    ),
+    path(
+        "api/mayoristapp/precios/condiciones-venta/",
+        CondicionesVentaRelayAPIView.as_view(),
+        name="mayoristapp_precios_condiciones_venta",
     ),
     path(
         "api/mayoristapp/precios/promociones/",
@@ -633,6 +702,11 @@ urlpatterns = [
         name="mayoristapp_carrito_tipo_comprobante",
     ),
     path(
+        "api/mayoristapp/carrito/lista-precio/",
+        CarritoListaPrecioRelayAPIView.as_view(),
+        name="mayoristapp_carrito_lista_precio",
+    ),
+    path(
         "api/mayoristapp/carrito/descuento-pie/",
         CarritoDescuentoPieRelayAPIView.as_view(),
         name="mayoristapp_carrito_descuento_pie",
@@ -673,6 +747,12 @@ urlpatterns = [
         name="mayoristapp_pedido_pdf",
     ),
     path(
+        "api/mayoristapp/venta/contexto/",
+        CompraMayoristaContextoAPIView.as_view(),
+        name="mayoristapp_venta_contexto",
+    ),
+    # Alias deprecado de contexto (misma vista)
+    path(
         "api/mayoristapp/compra/contexto/",
         CompraMayoristaContextoAPIView.as_view(),
         name="mayoristapp_compra_contexto",
@@ -681,6 +761,16 @@ urlpatterns = [
         "api/mayoristapp/presupuestos/<int:cod_mov>/convertir-pedido/",
         PresupuestoConvertirPedidoAPIView.as_view(),
         name="mayoristapp_presupuesto_convertir_pedido",
+    ),
+    path(
+        "api/mayoristapp/vendedores-cartera/",
+        VendedoresCarteraRelayAPIView.as_view(),
+        name="mayoristapp_vendedores_cartera",
+    ),
+    path(
+        "api/mayoristapp/vendedor-operativo/",
+        VendedorOperativoRelayAPIView.as_view(),
+        name="mayoristapp_vendedor_operativo",
     ),
     # --- Checkout mayorista (Fase P2) ---
     path(

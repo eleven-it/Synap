@@ -10,6 +10,7 @@ function bestAsignarMaestro(searchUrl, cfg) {
   const metaLine = typeof cfg.metaLine === 'function' ? cfg.metaLine : null;
   const emptyMsg = cfg.emptyMsg || 'Elegí un ítem de la lista.';
   const queryParams = cfg.queryParams && typeof cfg.queryParams === 'object' ? cfg.queryParams : {};
+  const resultsKey = cfg.resultsKey || 'results';
   const MAX_PANEL_H = 280;
 
   const state = {
@@ -116,7 +117,7 @@ function bestAsignarMaestro(searchUrl, cfg) {
         throw new Error('HTTP ' + r.status);
       }
       const data = await r.json();
-      this.resultados = data.results || [];
+      this.resultados = data[resultsKey] || data.results || data.empleados || [];
       this.dropdown = true;
       this.highlighted = this.resultados.length ? 0 : -1;
       this.$nextTick(() => {
@@ -226,6 +227,19 @@ function bestAsignarCliente(searchUrl) {
       if (c.CUIT && c.CUIT !== '-') parts.push(c.CUIT);
       if (c.id_manual_cli && c.id_manual_cli !== '-') parts.push(c.id_manual_cli);
       return parts.join(' · ');
+    },
+  });
+}
+
+function bestAsignarOperario(searchUrl) {
+  return bestAsignarMaestro(searchUrl, {
+    idKey: 'id',
+    labelKey: 'label',
+    stateKey: 'adminIdOperario',
+    emptyMsg: 'Elegí un operario de la lista.',
+    resultsKey: 'empleados',
+    metaLine: function () {
+      return '';
     },
   });
 }

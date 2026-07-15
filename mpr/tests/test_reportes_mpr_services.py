@@ -99,9 +99,39 @@ class TestReporteMprBrechaDemanda(TestCase):
         self.assertEqual(mpr_services.reporte_mpr_brecha_demanda(""), [])
         self.assertEqual(mpr_services.reporte_mpr_brecha_demanda(None, limit=100), [])
 
-    def test_retorna_lista_con_columnas_obligatorias(self):
+    @patch("mpr.services._fetch_descripciones_articulo")
+    @patch("mpr.services.listar_demanda_pack_desde_pedidos")
+    def test_retorna_lista_con_columnas_obligatorias(
+        self, mock_listar_demanda, mock_descripciones
+    ):
+        mock_listar_demanda.return_value = [
+            {
+                "id_articulo": 101,
+                "cantidad_pedida_pedido": 20,
+                "stock_terminado": 5,
+                "cantidad_a_fabricar": 15,
+                "cantidad_urgente_abs": 4,
+            },
+            {
+                "id_articulo": 102,
+                "cantidad_pedida_pedido": 8,
+                "stock_terminado": 8,
+                "cantidad_a_fabricar": 0,
+                "cantidad_urgente_abs": 0,
+            },
+        ]
+        mock_descripciones.return_value = {
+            101: ("PACK-101", "Pack urgente"),
+            102: ("PACK-102", "Pack cubierto"),
+        }
+
         result = mpr_services.reporte_mpr_brecha_demanda("empresa92", limit=10)
         self.assertIsInstance(result, list)
+        self.assertEqual(result[0]["codigo_articulo"], "PACK-101")
+        self.assertEqual(result[0]["cantidad_a_fabricar"], 15)
+        self.assertEqual(result[0]["urgente"], 1)
+        self.assertEqual(result[1]["cantidad_a_fabricar"], 0)
+        self.assertEqual(result[1]["urgente"], 0)
         columnas = ("codigo_articulo", "descripcion_articulo", "demanda_pendiente", "stock_terminado", "cantidad_a_fabricar", "urgente")
         for item in result:
             for col in columnas:
@@ -123,6 +153,26 @@ class TestReporteMprBrechaDemanda(TestCase):
         _, kwargs = mock_listar.call_args
         self.assertEqual(kwargs.get("fecha_desde"), "2026-06-29")
         self.assertEqual(kwargs.get("fecha_hasta"), "2026-07-05")
+
+
+class TestReporteMprPendienteComponentes(TestCase):
+    """REQ-PEND-01: pendientes totales del tablero consolidado."""
+
+    @patch("mpr.services.listar_tablero_por_articulo")
+    def test_solicita_pendientes_y_no_solo_urgentes(self, mock_tablero):
+        mock_tablero.return_value = [
+            {"id_articulo": 1, "resta_total": 15, "resta_urgente": 0},
+            {"id_articulo": 2, "resta_total": 70, "resta_urgente": 70},
+        ]
+
+        result = mpr_services.reporte_mpr_pendiente_componentes("empresa92")
+
+        mock_tablero.assert_called_once_with(
+            "empresa92", solo_pendiente=True, limit=200
+        )
+        self.assertEqual([fila["id_articulo"] for fila in result["filas"]], [1, 2])
+        self.assertEqual(result["kpis"]["componentes"], 2)
+        self.assertEqual(result["kpis"]["criticos"], 1)
 
 
 # --- Movimientos de producción ---

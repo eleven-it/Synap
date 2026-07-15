@@ -1,0 +1,41 @@
+name: ecom-venta-pedido-unificada
+created: 2026-07-13
+status: archived
+phases:
+  explore: done
+  propose: done
+  design: done
+  spec: done
+  tasks: done
+  apply: done
+  verify: done
+apply_progress:
+  phase_0_sdd: done
+  phase_1_rutas: done
+  phase_2_modos: done
+  phase_3_editar_pendiente: done
+  phase_4_deprecar_detalle: done
+  phase_5_docs_tests: done
+artifacts:
+  - exploration.md
+  - proposal.md
+  - design.md
+  - tasks.md
+  - specs/ecom-pedido-venta-shell/spec.md
+  - specs/ecom-gestion-pedidos-navegacion/spec.md
+  - verify-report.md
+verify:
+  verdict: PASS WITH WARNINGS
+  date: 2026-07-13
+  tests_run: 44
+  tests_passed: 44
+  scenarios_compliant: 3
+  scenarios_partial: 1
+  scenarios_untested: 5
+  next_recommended: sdd-archive
+notes: |
+  OrderShell canónico en /ecom/mayoristapp/venta/.
+  Depreca /compra/ y /pedidos/<cod_mov>/.
+  Pendiente editable (anular+nuevo); producción solo lectura.
+  Plan Cursor: venta_unificada_pedidos.
+  Verify: implementación completa; warnings por cobertura JS/modos sin tests E2E.

@@ -117,6 +117,20 @@ class EcomConfigVendedorClienteMarcaPermission(BasePermission):
         return _user_has_perm(request, "ecom.config_vendedor_cliente_marca")
 
 
+class EcomConfigAjustesVentasPermission(BasePermission):
+    """Config ajustes de ventas ecom (validación stock en pedidos)."""
+
+    message = "Se requiere permiso ecom.config_ajustes_ventas."
+
+    def has_permission(self, request, view):
+        if not _session_base_empresa(request):
+            return False
+        user = getattr(request, "user", None)
+        if getattr(user, "is_superuser", False):
+            return True
+        return _user_has_perm(request, "ecom.config_ajustes_ventas")
+
+
 class EcomPedidoMasivoUsarPermission(BasePermission):
     """Matriz de pedido masivo por sucursales."""
 

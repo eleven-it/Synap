@@ -1,0 +1,25 @@
+change: opt-bloqueo-pack-sin-receta
+status: verified
+updated: "2026-07-14"
+artifact_store: hybrid
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+verify:
+  verdict: pass_with_warnings
+  tests_run: 16
+  tests_passed: 16
+  scenarios_compliant: 3
+  scenarios_partial: 1
+  scenarios_untested: 2
+  scenarios_total: 6
+notes: >
+  Bloqueo de packs sin receta (BOM) en ventana pack OPT Pantalla 1→2.
+  Validación servidor en VentanaPackAgruparView.post; modal en ventana_pack.html;
+  sesión temporal ventana_pack_sin_receta. Tests: mpr.tests.test_ventana_pack_bloqueo_sin_receta.
+  Warnings: modal HTML sin test render; múltiples packs sin receta sin test; cierre modal sin test.

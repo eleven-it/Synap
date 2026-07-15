@@ -31,7 +31,8 @@ class TestEcomConfigMysql(unittest.TestCase):
 
 
 class TestWhereVendedorClienteTabla(unittest.TestCase):
-    def test_modo_tabla_supervisor_con_cargo(self):
+    @patch("ecom.services.vendedor_asignacion_sql.vcm_ternas_disponible", return_value=False)
+    def test_modo_tabla_supervisor_con_cargo(self, _vcm):
         sess = {
             "todos_clientes": "No",
             "supervisor_venta": "Si",
@@ -43,7 +44,8 @@ class TestWhereVendedorClienteTabla(unittest.TestCase):
         self.assertNotIn("cliente.CodViajante", sql)
         self.assertEqual(params, [5, 7, 9])
 
-    def test_modo_legacy_vendedor_simple(self):
+    @patch("ecom.services.vendedor_asignacion_sql.vcm_ternas_disponible", return_value=False)
+    def test_modo_legacy_vendedor_simple(self, _vcm):
         sess = {
             "todos_clientes": "No",
             "supervisor_venta": "No",

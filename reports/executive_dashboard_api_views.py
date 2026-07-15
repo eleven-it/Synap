@@ -27,8 +27,15 @@ from .services.executive_dashboard.inventory_metrics import (
 )
 from .services.executive_dashboard.manufacturing_metrics import fetch_manufactura_resumen
 from .services.executive_dashboard.purchase_metrics import fetch_compras_resumen
-from .services.executive_dashboard.tesoreria_metrics import fetch_tesoreria_resumen
-from .services.executive_dashboard.ventas_cobros_metrics import fetch_ventas_cobros_resumen
+from .services.executive_dashboard.banco_metrics import fetch_tesoreria_banco_resumen
+from .services.executive_dashboard.tesoreria_metrics import (
+    fetch_tesoreria_resumen,
+    list_movimientos_caja,
+)
+from .services.executive_dashboard.ventas_cobros_metrics import (
+    fetch_ventas_cobros_resumen,
+    list_cobros_detalle,
+)
 from .services.executive_dashboard.ventas_metrics import (
     fetch_ventas_resumen,
     list_pedidos_pendientes,
@@ -253,6 +260,45 @@ class ExecutiveDashboardVentasCobrosResumenAPIView(ExecutiveDashboardMixin, APIV
         try:
             with legacy_cursor(filters.base_empresa) as cursor:
                 payload = fetch_ventas_cobros_resumen(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardTesoreriaBancoResumenAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = fetch_tesoreria_banco_resumen(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardVentasCobrosDetalleAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_cobros_detalle(cursor, filters)
+        except LegacyReadError as exc:
+            return self._legacy_error_response(exc)
+        return Response(payload)
+
+
+class ExecutiveDashboardTesoreriaMovimientosCajaAPIView(ExecutiveDashboardMixin, APIView):
+    def get(self, request, *args, **kwargs):
+        filters, err = self._filters_or_error(request)
+        if err:
+            return err
+        try:
+            with legacy_cursor(filters.base_empresa) as cursor:
+                payload = list_movimientos_caja(cursor, filters)
         except LegacyReadError as exc:
             return self._legacy_error_response(exc)
         return Response(payload)

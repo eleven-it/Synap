@@ -84,12 +84,12 @@ class ListadoMayoristappView(MayoristappWebSessionMixin, TemplateView):
                 "pedidos_acciones": bool(cfg.get("pedidos_acciones")),
                 "pedidos_urls_json": json.dumps(
                     {
-                        "detalle_tpl": reverse("ecom:mayoristapp_pedido_detalle", args=[0]),
+                        "detalle_tpl": reverse("ecom:mayoristapp_venta") + "?cod_mov=0",
                         "preview_tpl": reverse(
                             "ecom:mayoristapp_carrito_desde_pedido_preview", args=[0]
                         ),
                         "cargar_desde_pedido": reverse("ecom:mayoristapp_carrito_desde_pedido"),
-                        "compra": reverse("ecom:mayoristapp_compra"),
+                        "compra": reverse("ecom:mayoristapp_venta"),
                     }
                 )
                 if cfg.get("pedidos_acciones")

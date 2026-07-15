@@ -248,6 +248,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                     "reports-api:reports-executive-dashboard-manufactura-resumen"
                 )
             context["area_urls"] = area_urls
+            context["tesoreria_banco_api_url"] = reverse(
+                "reports-api:reports-executive-dashboard-tesoreria-banco-resumen"
+            )
             context["detail_urls"] = {
                 "pedidos_pendientes": reverse(
                     "reports-api:reports-executive-dashboard-ventas-pedidos-pendientes"
@@ -260,6 +263,12 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 ),
                 "existencias": reverse(
                     "reports-api:reports-executive-dashboard-inventario-existencias"
+                ),
+                "cobros_detalle": reverse(
+                    "reports-api:reports-executive-dashboard-ventas-cobros-detalle"
+                ),
+                "movimientos_caja": reverse(
+                    "reports-api:reports-executive-dashboard-tesoreria-movimientos-caja"
                 ),
             }
         return context

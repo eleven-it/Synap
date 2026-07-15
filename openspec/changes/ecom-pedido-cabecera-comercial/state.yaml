@@ -1,0 +1,40 @@
+change: ecom-pedido-cabecera-comercial
+status: proposed
+created: 2026-07-14
+phase: apply-complete
+depends_on: []
+artifacts:
+  exploration: skipped
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: pending
+next_recommended:
+  - sdd-verify
+product_decisions_locked: 2026-07-14
+spec_summary:
+  new_capability: ecom-pedido-cabecera-comercial
+  modified_capabilities:
+    - ecom-checkout-mayorista
+    - ecom-pedido-masivo-sucursales
+  requirements:
+    new: 7
+    modified: 2
+    added_delta: 4
+  scenarios: 35
+task_summary:
+  phases: 9
+  tasks: 28
+  completed: 28
+  groups:
+    - spike
+    - core-service
+    - checkout
+    - masivo
+    - ui-simple
+    - ui-masivo
+    - permisos
+    - docs
+    - tests

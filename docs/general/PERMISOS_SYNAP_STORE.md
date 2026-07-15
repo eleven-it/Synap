@@ -64,7 +64,7 @@ supervisor; suma de complementarios de la tabla `permisos` (Clavemenu VB6; disti
 | `SYNAP_AUTO_ENSURE_SCHEMA` | `True` | Crea `synap_*` + siembra catálogo tras login / al abrir la UI. No escribe en VB6. |
 | `SYNAP_AUTO_ENSURE_SCHEMA_TTL` | `86400` | TTL (s) del cache por empresa. |
 | `SYNAP_BLOQUEAR_CREAR_PUESTOS` | `True` | Bloquea `crear_puesto` (los puestos se crean en AdministraNET). |
-| `SYNAP_AUTO_SYNC_PERMISSIONS` | `True` | *(Legacy, en desuso)* Sync que inyectaba en `permiso_sistema`. |
+| `SYNAP_AUTO_SYNC_PERMISSIONS` | `False` | *(Retirado)* Sync que inyectaba en `permiso_sistema`. Mantener en `False`. |
 
 ## 6. Comandos
 
@@ -93,7 +93,7 @@ Ambos reutilizan `core.services.synap_permisos.backfill_synap_permisos_desde_leg
 | **P0** | DDL `synap_*` + seed catálogo, sin cambio de runtime (`legacy`). | Completado (aplicado en `administranet96`). |
 | **P1** | Capa de lectura, flag `SYNAP_PERMISOS_SOURCE`, fachada, backfill, tests. | Completado. |
 | **P2** | UI escribe en `synap_*`; guard `crear_puesto`. | Completado (cutover por env pendiente). |
-| **P3** | Retiro del sync legacy, purge de `grupo_permiso='Synap'`, docs. | En curso (parte destructiva tras cutover estable). |
+| **P3** | Retiro del sync legacy, purge de `grupo_permiso='Synap'`, docs. | Sync retirado; cutover local/dev con `SOURCE=synap` confirmado; purge pendiente de ejecución explícita (4.4). |
 
 ### Procedimiento de cutover recomendado
 
@@ -102,7 +102,7 @@ Ambos reutilizan `core.services.synap_permisos.backfill_synap_permisos_desde_leg
 3. `SYNAP_PERMISOS_SOURCE=synap` (cutover). El menú usa **solo** `synap_*` (sin fallback
    a `permiso_sistema*`). Verificar que login y `/core/permisos-puesto/` **no** escriben
    en `permiso_sistema*`.
-4. Estable → `purge_synap_legacy_permisos <base> --ejecutar` y `SYNAP_AUTO_SYNC_PERMISSIONS=False`.
+4. Estable → `purge_synap_legacy_permisos <base> --ejecutar` (comando listo; ejecución manual tras validación).
 
 ## 8. Refresco de permisos en sesión
 
