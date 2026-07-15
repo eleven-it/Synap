@@ -2287,6 +2287,113 @@ def aceptar_depositos_seleccionados(
     return {"aceptados": aceptados, "omitidos": omitidos, "errores": errores}
 
 
+def buscar_skus_best_componentes(q: str, limit: int = 15) -> list[dict[str, Any]]:
+    """Búsqueda de SKUs BEST en inventario Producción/Semi (4000/4002) para componentes fabricados."""
+    term = (q or "").strip()
+    if not term:
+        return []
+    try:
+        limit = min(50, max(1, int(limit)))
+    except (TypeError, ValueError):
+        limit = 15
+    best_rows, _ = _fetch_best_catalog_skus()
+    term_lower = term.lower()
+    out: list[dict[str, Any]] = []
+    for row in best_rows:
+        bid = str(row.get("id_articulo") or "").strip()
+        codigo = str(row.get("codigo") or "").strip()
+        articulo = str(row.get("articulo") or "").strip()
+        marca = str(row.get("marca") or "").strip()
+        if not bid:
+            continue
+        if (
+            term_lower in bid.lower()
+            or term_lower in codigo.lower()
+            or term_lower in articulo.lower()
+        ):
+            out.append(
+                {
+                    "best_id_articulo": bid,
+                    "codigo": codigo,
+                    "articulo": articulo,
+                    "marca": marca,
+                }
+            )
+            if len(out) >= limit:
+                break
+    return out
+
+
+@transaction.atomic
+def asignar_best_a_fabricado(
+    *,
+    base_empresa: str,
+    map_best_id: str,
+    nuevo_best_id: str,
+    usuario: str,
+    notas: str = "",
+) -> BestArticuloMap:
+    """
+    Asigna un SKU BEST real a un componente fabricado (origen BOM_FABRICADO).
+    Reemplaza claves temporales FAB:{IDArt} por el MMID elegido.
+    """
+    clave_actual = (map_best_id or "").strip()
+    nuevo = (nuevo_best_id or "").strip()
+    if not clave_actual:
+        raise ValueError("Falta la clave de la fila de mapeo.")
+    if not nuevo:
+        raise ValueError("Debés elegir un SKU BEST.")
+    if nuevo.upper().startswith("FAB:"):
+        raise ValueError("El SKU BEST no puede ser una clave temporal FAB:.")
+
+    obj = BestArticuloMap.objects.get(
+        base_empresa=base_empresa,
+        best_id_articulo=clave_actual,
+        origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+    )
+    if not obj.admin_idart:
+        raise ValueError("La fila no tiene componente Admin asignado.")
+
+    conflicto = (
+        BestArticuloMap.objects.filter(
+            base_empresa=base_empresa,
+            best_id_articulo=nuevo,
+        )
+        .exclude(pk=obj.pk)
+        .first()
+    )
+    if conflicto:
+        origen = conflicto.get_origen_requerimiento_display()
+        raise ValueError(
+            f"El SKU BEST {nuevo} ya está mapeado en otra fila ({origen})."
+        )
+
+    best_rows, _ = _fetch_best_catalog_skus()
+    hit = next(
+        (
+            r
+            for r in best_rows
+            if str(r.get("id_articulo") or "").strip() == nuevo
+        ),
+        None,
+    )
+    if hit:
+        obj.best_codigo = (str(hit.get("codigo") or ""))[:64]
+        obj.best_articulo = (str(hit.get("articulo") or ""))[:255]
+        obj.best_marca = (str(hit.get("marca") or ""))[:64]
+
+    obj.best_id_articulo = nuevo
+    obj.estado = BestArticuloMap.Estado.VALIDADO
+    obj.validado = True
+    obj.validado_por = (usuario or "")[:64]
+    obj.validado_en = timezone.now()
+    if notas:
+        obj.notas = notas
+    obj.save()
+    refresh_parity_counters(base_empresa).save()
+    return obj
+
+
 def validar_articulo_fabricado(
     *,
     base_empresa: str,
@@ -2296,9 +2403,12 @@ def validar_articulo_fabricado(
     notas: str = "",
 ) -> BestArticuloMap:
     """Valida mapeo fabricado (BOM_FABRICADO); no afecta gate PED."""
+    bid = (best_id or "").strip()
+    if bid.upper().startswith("FAB:"):
+        raise ValueError("No hay sugerencia BEST para aceptar.")
     return validar_articulo(
         base_empresa=base_empresa,
-        best_id=best_id,
+        best_id=bid,
         admin_idart=admin_idart,
         usuario=usuario,
         notas=notas,

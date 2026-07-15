@@ -120,6 +120,7 @@ urlpatterns = [
     path("migracion-best/articulos/recalcular/", best_migration_views.MigracionBestRecalcularArticulosView.as_view(), name="migracion_best_recalcular_articulos"),
     path("migracion-best/articulos/aceptar-inferidos/", best_migration_views.MigracionBestAceptarInferidosArticulosView.as_view(), name="migracion_best_aceptar_inferidos_articulos"),
     path("migracion-best/articulos/validar/", best_migration_views.MigracionBestValidarArticuloView.as_view(), name="migracion_best_validar_articulo"),
+    path("migracion-best/api/skus-componentes/", best_migration_views.MigracionBestSkuComponentesSearchView.as_view(), name="migracion_best_api_skus_componentes"),
     path("migracion-best/articulos-fabricados/", best_migration_views.MigracionBestArticulosFabricadosView.as_view(), name="migracion_best_articulos_fabricados"),
     path("migracion-best/articulos-fabricados/resolver/", best_migration_views.MigracionBestResolverFabricadosView.as_view(), name="migracion_best_resolver_fabricados"),
     path("migracion-best/articulos-fabricados/aceptar-inferidos/", best_migration_views.MigracionBestAceptarInferidosFabricadosView.as_view(), name="migracion_best_aceptar_inferidos_fabricados"),

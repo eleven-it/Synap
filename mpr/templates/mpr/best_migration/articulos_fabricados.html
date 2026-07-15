@@ -21,9 +21,9 @@
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Artículos fabricados (BOM Admin)</h1>
         <p class="mt-2 max-w-3xl text-sm text-gray-600 dark:text-gray-300">
           Componentes <strong>Fabricado</strong> detectados en BOM AdministraNET (<code>en_abm</code> / <code>en_abm_formula</code>)
-          desde terminados validados. BEST se consulta solo desde inventario de Producción/Semi-Embalado
-          (depósitos 4000/4002), nunca desde Terminado 4003 ni pedidos abiertos. <strong>No bloquea</strong>
-          el gate PED ni el cutover de terminados.
+          desde terminados validados. El componente Admin es fijo; la <strong>sugerencia</strong> y la <strong>búsqueda manual</strong>
+          operan sobre <strong>SKU BEST</strong> del inventario Producción/Semi-Embalado (depósitos 4000/4002).
+          <strong>No bloquea</strong> el gate PED ni el cutover de terminados.
         </p>
         <p class="mt-2 text-sm text-gray-700 dark:text-gray-200">
           Pendientes: <strong class="text-amber-700 dark:text-amber-300">{{ articulos_resumen.necesarios_pendientes }}</strong>
@@ -49,10 +49,10 @@
 
     <div class="mb-6 flex flex-wrap gap-2 text-xs">
       <span class="rounded-md bg-emerald-100 px-2 py-1 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">Validados {{ articulos_resumen.validados }}</span>
-      <span class="rounded-md bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Ambiguos {{ articulos_resumen.ambiguos }}</span>
-      <span class="rounded-md bg-slate-100 px-2 py-1 text-slate-700 dark:bg-slate-700 dark:text-slate-200">Sin candidato {{ articulos_resumen.sin_candidato }}</span>
-      <span class="rounded-md bg-rose-100 px-2 py-1 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200">Conflictos {{ articulos_resumen.conflictos }}</span>
-      <span class="rounded-md bg-orange-100 px-2 py-1 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200">Sin match {{ articulos_resumen.sin_match }}</span>
+      <span class="rounded-md bg-amber-100 px-2 py-1 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Ambiguos {{ articulos_resumen.ambiguos|default:0 }}</span>
+      <span class="rounded-md bg-slate-100 px-2 py-1 text-slate-700 dark:bg-slate-700 dark:text-slate-200">Sin candidato {{ articulos_resumen.sin_candidato|default:0 }}</span>
+      <span class="rounded-md bg-rose-100 px-2 py-1 text-rose-800 dark:bg-rose-900/40 dark:text-rose-200">Conflictos {{ articulos_resumen.conflictos|default:0 }}</span>
+      <span class="rounded-md bg-orange-100 px-2 py-1 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200">Sin match {{ articulos_resumen.sin_match|default:0 }}</span>
     </div>
 
     <form method="get" class="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -69,7 +69,7 @@
         </div>
         <div class="min-w-[12rem] flex-1">
           <label for="q" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Buscar</label>
-          <input type="text" name="q" id="q" value="{{ filtro_q }}" placeholder="SKU BEST o nombre" class="h-11 w-full rounded-xl border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+          <input type="text" name="q" id="q" value="{{ filtro_q }}" placeholder="SKU BEST o nombre Admin" class="h-11 w-full rounded-xl border border-gray-300 px-3 text-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
         </div>
         <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-200">
           <input type="checkbox" name="necesarios" value="1" {% if cola_trabajo %}checked{% endif %} class="rounded border-gray-300 text-purple-600">
@@ -100,31 +100,23 @@
               @click="if (n === 0) { $event.preventDefault(); } else { document.getElementById('accion-sel-art').value = 'aceptar_seleccion'; }">
         Aceptar seleccionados (<span x-text="n">0</span>)
       </button>
-      <button type="submit"
-              :disabled="n === 0"
-              :class="n > 0 ? 'bg-indigo-600 hover:bg-indigo-700 text-white' : 'cursor-not-allowed bg-gray-200 text-gray-400 dark:bg-gray-700'"
-              class="inline-flex min-h-10 items-center rounded-xl px-4 text-sm font-semibold"
-              @click="if (n === 0) { $event.preventDefault(); } else if (!confirm('¿Dar de alta en AdministraNET los SKUs marcados sin candidato? Se crea el artículo (id_manual=MMID BEST) y stock_deposito en 0.')) { $event.preventDefault(); } else { document.getElementById('accion-sel-art').value = 'alta_seleccion'; }">
-        Dar de alta seleccionados (<span x-text="n">0</span>)
-      </button>
-      <span class="text-xs text-gray-500">Marcá filas con candidato para aceptar, o sin candidato para dar de alta en Admin.</span>
+      <span class="text-xs text-gray-500">Marcá filas pendientes con componente Admin para aceptar la sugerencia BEST.</span>
     </form>
 
     <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
       <div class="overflow-x-auto">
-        <table class="min-w-[72rem] w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <table class="min-w-[64rem] w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead class="bg-gray-50 dark:bg-gray-900/40">
             <tr>
               <th class="w-10 px-3 py-3 text-left">
                 <input type="checkbox"
                        class="rounded border-gray-300 text-purple-600"
-                       title="Seleccionar todas las filas con candidato"
+                       title="Seleccionar todas las filas pendientes"
                        @change="toggleAll($event)">
               </th>
               <th class="min-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Componente Admin</th>
-              <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">SKU BEST (componente)</th>
               <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Alcance</th>
-              <th class="min-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Coincidencia Admin</th>
+              <th class="min-w-[16rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Sugerencia BEST</th>
               <th class="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300">Acciones</th>
             </tr>
           </thead>
@@ -132,28 +124,18 @@
             {% for f in filas %}
             <tr class="align-top hover:bg-gray-50/70 dark:hover:bg-gray-700/30">
               <td class="px-3 py-3">
-                {% if f.estado != 'VALIDADO' and f.estado != 'DESCARTADO' %}
-                  {% if f.admin_idart or f.estado == 'SIN_CANDIDATO' or f.estado == 'SIN_MATCH' %}
+                {% if f.estado != 'VALIDADO' and f.estado != 'DESCARTADO' and f.admin_idart %}
                 <input type="checkbox"
                        class="best-sel-row rounded border-gray-300 text-purple-600"
                        name="sel"
                        value="{{ f.best_id_articulo }}"
                        form="form-sel-art">
-                  {% endif %}
                 {% endif %}
               </td>
               <td class="px-3 py-3 text-sm">
                 <div class="font-semibold text-gray-900 dark:text-white">IDArt {{ f.admin_idart }}</div>
                 {% if f.admin_id_manual %}<div class="text-xs text-gray-500 dark:text-gray-400">{{ f.admin_id_manual }}</div>{% endif %}
                 <div class="text-sm text-gray-600 dark:text-gray-300" title="{{ f.admin_nombre }}">{{ f.admin_nombre|truncatechars:70 }}</div>
-              </td>
-              <td class="px-3 py-3 text-sm">
-                {% if f.best_id_articulo|slice:":4" == "FAB:" %}
-                <span class="font-medium text-gray-500 dark:text-gray-400">Sin SKU BEST</span>
-                {% else %}
-                <div class="font-semibold text-gray-900 dark:text-white">{{ f.best_id_articulo }}</div>
-                <div class="text-sm text-gray-600 dark:text-gray-300" title="{{ f.best_articulo }}">{{ f.best_articulo|truncatechars:70 }}</div>
-                {% endif %}
               </td>
               <td class="px-3 py-3 text-sm">
                 {% if f.categoria_migracion == 'CUMPLE' %}
@@ -171,93 +153,45 @@
                 {% endif %}
                 <div class="mt-0.5 text-[10px] text-gray-400">{{ f.get_origen_requerimiento_display }}</div>
               </td>
-              <td class="min-w-[18rem] px-3 py-3 text-sm text-gray-700 dark:text-gray-200">
-                {% if f.admin_idart %}
-                {% if f.estado != 'VALIDADO' and f.estado != 'DESCARTADO' %}
+              <td class="min-w-[16rem] px-3 py-3 text-sm text-gray-700 dark:text-gray-200">
+                {% if f.best_id_articulo|slice:":4" == "FAB:" %}
+                <span class="text-xs text-gray-400">Sin sugerencia BEST</span>
+                {% else %}
+                  {% if f.estado != 'VALIDADO' and f.estado != 'DESCARTADO' %}
                 <form method="post"
                       action="{% url 'mpr:migracion_best_validar_articulo_fabricado' %}"
                       class="mpr-post-loading"
-                      data-mpr-loading-title="Asignando candidato"
-                      data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
+                      data-mpr-loading-title="Aceptando sugerencia"
+                      data-mpr-loading-subtitle="Validando SKU BEST inferido.">
                   {% csrf_token %}
                   <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
-                  <input type="hidden" name="accion" value="asignar">
-                  <input type="hidden" name="admin_idart" value="{{ f.admin_idart }}">
+                  <input type="hidden" name="accion" value="aceptar">
                   <button type="submit"
                           class="max-w-full text-left text-sm font-medium leading-snug text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
-                          title="Asignar candidato: {{ f.admin_nombre }}">
-                    {{ f.admin_nombre }}
+                          title="Aceptar sugerencia BEST: {{ f.best_articulo }}">
+                    <span class="font-semibold">{{ f.best_id_articulo }}</span>
+                    {% if f.best_articulo %}<span class="block text-gray-600 dark:text-gray-300">{{ f.best_articulo|truncatechars:60 }}</span>{% endif %}
                   </button>
                 </form>
-                  {% if f.alt1_idart %}
-                <form method="post"
-                      action="{% url 'mpr:migracion_best_validar_articulo_fabricado' %}"
-                      class="mpr-post-loading mt-1"
-                      data-mpr-loading-title="Asignando alternativa"
-                      data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
-                  {% csrf_token %}
-                  <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
-                  <input type="hidden" name="accion" value="asignar">
-                  <input type="hidden" name="admin_idart" value="{{ f.alt1_idart }}">
-                  <button type="submit"
-                          class="max-w-full text-left text-sm font-medium leading-snug text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
-                          title="Asignar alternativa: {{ f.alt1_nombre }}">
-                    {{ f.alt1_nombre }}
-                  </button>
-                </form>
+                  {% else %}
+                <div class="font-semibold text-gray-900 dark:text-white">{{ f.best_id_articulo }}</div>
+                {% if f.best_articulo %}<div class="text-sm text-gray-600 dark:text-gray-300">{{ f.best_articulo|truncatechars:60 }}</div>{% endif %}
                   {% endif %}
-                  {% if f.alt2_idart %}
-                <form method="post"
-                      action="{% url 'mpr:migracion_best_validar_articulo_fabricado' %}"
-                      class="mpr-post-loading mt-0.5"
-                      data-mpr-loading-title="Asignando alternativa"
-                      data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
-                  {% csrf_token %}
-                  <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
-                  <input type="hidden" name="accion" value="asignar">
-                  <input type="hidden" name="admin_idart" value="{{ f.alt2_idart }}">
-                  <button type="submit"
-                          class="max-w-full text-left text-sm font-medium leading-snug text-amber-700 underline decoration-amber-400/70 underline-offset-2 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100"
-                          title="Asignar alternativa: {{ f.alt2_nombre }}">
-                    {{ f.alt2_nombre }}
-                  </button>
-                </form>
-                  {% endif %}
-                {% else %}
-                <div class="whitespace-normal text-sm font-medium leading-snug">{{ f.admin_nombre }}</div>
-                  {% if f.alt1_idart %}
-                <div class="mt-1 whitespace-normal text-sm leading-snug text-amber-700 dark:text-amber-300">{{ f.alt1_nombre }}</div>
-                  {% endif %}
-                  {% if f.alt2_idart %}
-                <div class="mt-0.5 whitespace-normal text-sm leading-snug text-amber-700 dark:text-amber-300">{{ f.alt2_nombre }}</div>
-                  {% endif %}
-                {% endif %}
-                {% else %}
-                <span class="text-xs text-gray-400">Sin candidato</span>
                 {% endif %}
               </td>
               <td class="px-3 py-3 text-sm">
                 {% if f.estado != 'VALIDADO' and f.estado != 'DESCARTADO' %}
                 <div class="flex flex-col gap-2">
-                  {% if f.estado == 'SIN_CANDIDATO' or f.estado == 'SIN_MATCH' %}
-                  {% if not f.admin_idart %}
-                  <form method="post" action="{% url 'mpr:migracion_best_validar_articulo' %}" class="mpr-post-loading" data-mpr-loading-title="Alta en AdministraNET" data-mpr-loading-subtitle="Creando artículo y stock_deposito. No cierres esta ventana." onsubmit="return confirm('¿Dar de alta {{ f.best_id_articulo }} en AdministraNET con los datos BEST?');">
-                    {% csrf_token %}
-                    <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
-                    <input type="hidden" name="accion" value="alta">
-                    <button type="submit" class="text-xs font-semibold text-indigo-700 hover:underline dark:text-indigo-300">Dar de alta en Admin</button>
-                  </form>
-                  {% endif %}
-                  {% endif %}
                   <form method="post"
                         action="{% url 'mpr:migracion_best_validar_articulo_fabricado' %}"
                         class="mpr-post-loading flex min-w-[16rem] max-w-sm flex-col gap-1"
-                        x-data="bestAsignarArticuloFabricado('{% url 'core_api:articulo_search' %}')"
-                        @submit="validarSubmit($event)" data-mpr-loading-title="Procesando artículo" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
+                        x-data="bestAsignarSkuBest('{% url 'mpr:migracion_best_api_skus_componentes' %}')"
+                        @submit="validarSubmit($event)" data-mpr-loading-title="Asignando SKU BEST" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
                     {% csrf_token %}
                     <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
                     <input type="hidden" name="accion" value="asignar">
-                    <input type="hidden" name="admin_idart" :value="adminIdart">
+                    <input type="hidden" name="admin_idart" value="{{ f.admin_idart }}">
+                    <input type="hidden" name="best_id_nuevo" :value="bestIdSku">
                     <div class="relative" x-ref="wrap">
                       <input type="text"
                              x-model="q"
@@ -265,7 +199,7 @@
                              @focus="if (q.trim()) buscar()"
                              @keydown="onKeydown($event)"
                              autocomplete="off"
-                             placeholder="Buscar por descripción…"
+                             placeholder="Buscar SKU BEST…"
                              class="h-8 w-full rounded-lg border border-gray-300 px-2 text-xs dark:border-gray-600 dark:bg-gray-900 dark:text-white">
                       <span x-show="loading" class="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">…</span>
                       <template x-teleport="body">
@@ -278,15 +212,15 @@
                              @mousedown.outside="onOutside($event)">
                           <p x-show="error" class="px-3 py-2 text-xs text-red-600 dark:text-red-400">Error al buscar. Reintentá.</p>
                           <p x-show="!error && q.trim() && resultados.length === 0 && !loading" class="px-3 py-2 text-xs text-gray-500">Sin resultados.</p>
-                          <template x-for="(a, i) in resultados" :key="'ba-' + (a.IDArt || i)">
+                          <template x-for="(s, i) in resultados" :key="'bs-' + (s.best_id_articulo || i)">
                             <button type="button"
                                     :data-best-opt-idx="i"
-                                    @mousedown.prevent="seleccionar(a)"
+                                    @mousedown.prevent="seleccionar(s)"
                                     @mouseenter="highlighted = i"
                                     :class="highlighted === i ? 'bg-purple-100 dark:bg-purple-900/40' : 'hover:bg-purple-50 dark:hover:bg-purple-900/20'"
                                     class="w-full border-b border-gray-100 px-3 py-2 text-left text-xs last:border-0 dark:border-gray-700">
-                              <span class="block font-medium text-gray-900 dark:text-gray-100" x-text="a.Descripcion || '—'"></span>
-                              <span x-show="metaDe(a)" class="mt-0.5 block text-[10px] text-gray-500 dark:text-gray-400" x-text="metaDe(a)"></span>
+                              <span class="block font-medium text-gray-900 dark:text-gray-100" x-text="s.articulo || '—'"></span>
+                              <span x-show="metaDe(s)" class="mt-0.5 block text-[10px] text-gray-500 dark:text-gray-400" x-text="metaDe(s)"></span>
                             </button>
                           </template>
                         </div>
@@ -294,14 +228,18 @@
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                       <button type="submit"
-                              :disabled="!adminIdart"
-                              :class="adminIdart ? 'text-purple-700 hover:underline dark:text-purple-300' : 'cursor-not-allowed text-gray-400'"
+                              :disabled="!bestIdSku"
+                              :class="bestIdSku ? 'text-purple-700 hover:underline dark:text-purple-300' : 'cursor-not-allowed text-gray-400'"
                               class="text-xs font-semibold">Asignar</button>
-                      <span x-show="adminIdart" class="text-[10px] text-gray-500" x-text="'→ IDArt ' + adminIdart"></span>
+                      <span x-show="bestIdSku" class="text-[10px] text-gray-500" x-text="'→ ' + bestIdSku"></span>
                       <span x-show="errorMsg" class="text-[10px] text-red-600" x-text="errorMsg"></span>
                     </div>
                   </form>
-                  <form method="post" action="{% url 'mpr:migracion_best_validar_articulo' %}" class="mpr-post-loading" data-mpr-loading-title="Procesando artículo" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
+                  <form method="post"
+                        action="{% url 'mpr:migracion_best_validar_articulo_fabricado' %}"
+                        class="mpr-post-loading"
+                        data-mpr-loading-title="Procesando artículo"
+                        data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
                     {% csrf_token %}
                     <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
                     <input type="hidden" name="accion" value="descartar">
@@ -316,7 +254,7 @@
                         class="mpr-post-loading"
                         data-mpr-loading-title="Reabriendo mapeo"
                         data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana."
-                        onsubmit="return confirm('¿Reabrir el mapeo de {{ f.best_id_articulo }} para elegir otro IDArt?');">
+                        onsubmit="return confirm('¿Reabrir el mapeo de {{ f.best_id_articulo }} para elegir otro SKU BEST?');">
                     {% csrf_token %}
                     <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
                     <input type="hidden" name="accion" value="reabrir">
@@ -328,7 +266,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">
+              <td colspan="5" class="px-4 py-8 text-center text-sm text-gray-500">
                 No hay filas. Ejecutá «Resolver fabricados» desde terminados validados.
               </td>
             </tr>
@@ -340,7 +278,7 @@
     </div>
   </div>
 </section>
-<script src="{% static 'mpr/js/best_asignar_maestro.js' %}?v=fabricado2"></script>
+<script src="{% static 'mpr/js/best_asignar_maestro.js' %}?v=fabricado3"></script>
 <script>
 (function () {
   var form = document.getElementById('form-sel-art');
@@ -358,22 +296,9 @@
     ).filter(Boolean);
   }
 
-  function accionUnitaria(loteAccion) {
-    if (loteAccion === 'alta_seleccion') return 'alta';
-    if (loteAccion === 'aceptar_seleccion') return 'aceptar';
-    return '';
-  }
-
-  function tituloLote(loteAccion) {
-    if (loteAccion === 'alta_seleccion') return 'Dando de alta en Admin';
-    if (loteAccion === 'aceptar_seleccion') return 'Aceptando inferidos';
-    return 'Procesando artículos';
-  }
-
   form.addEventListener('submit', function (e) {
     var loteAccion = (document.getElementById('accion-sel-art') || {}).value || '';
-    var unit = accionUnitaria(loteAccion);
-    if (!unit) return;
+    if (loteAccion !== 'aceptar_seleccion') return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -390,7 +315,7 @@
 
     if (typeof window.mprShowPostLoadingProgress === 'function') {
       window.mprShowPostLoadingProgress({
-        title: tituloLote(loteAccion),
+        title: 'Aceptando inferidos',
         subtitle: 'Procesando de a uno. No cierres esta ventana.',
         current: 0,
         total: ids.length,
@@ -409,13 +334,13 @@
             current: i + 1,
             total: ids.length,
             label: bestId,
-            title: tituloLote(loteAccion),
+            title: 'Aceptando inferidos',
             subtitle: 'Procesando de a uno. No cierres esta ventana.',
           });
         }
         var body = new FormData();
         body.append('csrfmiddlewaretoken', csrfToken());
-        body.append('accion', unit);
+        body.append('accion', 'aceptar');
         body.append('best_id_articulo', bestId);
         try {
           var res = await fetch(url, {

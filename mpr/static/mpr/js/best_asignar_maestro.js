@@ -214,6 +214,22 @@ function bestAsignarArticulo(searchUrl, opts) {
   });
 }
 
+function bestAsignarSkuBest(searchUrl) {
+  return bestAsignarMaestro(searchUrl, {
+    idKey: 'best_id_articulo',
+    labelKey: 'articulo',
+    stateKey: 'bestIdSku',
+    emptyMsg: 'Elegí un SKU BEST de la lista.',
+    metaLine: function (s) {
+      var parts = [];
+      if (s.codigo) parts.push(s.codigo);
+      if (s.best_id_articulo) parts.push('ID ' + s.best_id_articulo);
+      if (s.marca) parts.push(s.marca);
+      return parts.join(' · ');
+    },
+  });
+}
+
 /** Asignar solo artículos Admin tipo_art_fab=Fabricado (BOM / componentes). */
 function bestAsignarArticuloFabricado(searchUrl) {
   return bestAsignarArticulo(searchUrl, { tipo_art_fab: 'Fabricado' });
