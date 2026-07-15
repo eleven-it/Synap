@@ -93,6 +93,31 @@ class RecalcularPreservaBomFabricadoTests(TestCase):
 
 
 class ResolverFabricadosDesdeTerminadosTests(TestCase):
+    def test_matcher_prioriza_id_manual_exacto_y_pack_un_par(self):
+        from mpr.best_migration.article_matcher import match_admin_fabricados_to_best
+
+        matches = match_admin_fabricados_to_best(
+            admin_fabricados=[
+                {
+                    "IDArt": 300,
+                    "id_manual": "FAB300",
+                    "NombreArticulo": "Componente 1Par",
+                    "CodArtProv": "",
+                }
+            ],
+            best_rows=[
+                {"id_articulo": "SEMI-OTRO", "codigo": "FAB300", "articulo": "Otro"},
+                {"id_articulo": "SEMI-1P", "codigo": "OTRO", "articulo": "Semi"},
+            ],
+            myl_by_mmid={
+                "SEMI-OTRO": {"CODIGO": "FAB300", "PACK": "3P"},
+                "SEMI-1P": {"CODIGO": "FAB300", "PACK": "1P"},
+            },
+        )
+
+        self.assertEqual(matches[300].best_id_articulo, "SEMI-1P")
+        self.assertEqual(matches[300].score, 100)
+
     @patch("mpr.best_migration.services.match_admin_fabricados_to_best")
     @patch("mpr.best_migration.services._fetch_best_catalog_skus")
     @patch("mpr.best_migration.services._fabricado_idarts_desde_bom_terminados")
@@ -136,6 +161,88 @@ class ResolverFabricadosDesdeTerminadosTests(TestCase):
             BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
         )
         self.assertEqual(fab.admin_idart, 301)
+
+    @patch("mpr.best_migration.services.match_admin_fabricados_to_best")
+    @patch("mpr.best_migration.services._fetch_best_catalog_skus")
+    @patch("mpr.best_migration.services._fabricado_idarts_desde_bom_terminados")
+    def test_no_pisa_mapeo_pedido_abierto_con_sku_inferido(
+        self, mock_bom, mock_catalog, mock_match
+    ):
+        from mpr.best_migration.article_matcher import MatchRow
+
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="PT-4003",
+            estado=BestArticuloMap.Estado.VALIDADO,
+            admin_idart=200,
+            validado=True,
+            requerido_migracion=True,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+        )
+        mock_bom.return_value = [
+            {
+                "IDArt": 302,
+                "id_manual": "FAB302",
+                "NombreArticulo": "Componente fabricado",
+                "CodArtProv": "",
+            }
+        ]
+        # El mock del catálogo representa solo Semi/Producción, no PT 4003.
+        mock_catalog.return_value = ([{"id_articulo": "SEMI-4002"}], {})
+        mock_match.return_value = {
+            302: MatchRow(
+                best_id_articulo="PT-4003",
+                status="INFERIDO_ALTO",
+                score=95,
+                admin_idart=302,
+            )
+        }
+
+        resolver_fabricados_desde_terminados(BASE)
+
+        terminado = BestArticuloMap.objects.get(base_empresa=BASE, best_id_articulo="PT-4003")
+        self.assertEqual(
+            terminado.origen_requerimiento,
+            BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+        )
+        fabricado = BestArticuloMap.objects.get(base_empresa=BASE, best_id_articulo="FAB:302")
+        self.assertEqual(
+            fabricado.origen_requerimiento,
+            BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+        self.assertEqual(fabricado.estado, BestArticuloMap.Estado.SIN_CANDIDATO)
+
+    @patch("mpr.best_migration.services.match_admin_fabricados_to_best")
+    @patch("mpr.best_migration.services._fetch_best_catalog_skus")
+    @patch("mpr.best_migration.services._fabricado_idarts_desde_bom_terminados")
+    def test_crea_clave_fab_cuando_no_hay_match(
+        self, mock_bom, mock_catalog, mock_match
+    ):
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="TERM-BOM",
+            estado=BestArticuloMap.Estado.VALIDADO,
+            admin_idart=200,
+            validado=True,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+        )
+        mock_bom.return_value = [
+            {
+                "IDArt": 303,
+                "id_manual": "FAB303",
+                "NombreArticulo": "Componente sin SKU",
+                "CodArtProv": "",
+            }
+        ]
+        mock_catalog.return_value = ([], {})
+        mock_match.return_value = {}
+
+        result = resolver_fabricados_desde_terminados(BASE)
+
+        fabricado = BestArticuloMap.objects.get(base_empresa=BASE, best_id_articulo="FAB:303")
+        self.assertEqual(fabricado.estado, BestArticuloMap.Estado.SIN_CANDIDATO)
+        self.assertEqual(fabricado.best_articulo, "Componente sin SKU")
+        self.assertEqual(result["skipped_sin_best"], 1)
 
 
 class StockFabricadosSemiTests(TestCase):
