@@ -98,7 +98,14 @@ function bestAsignarMaestro(searchUrl, cfg) {
     this.error = false;
     this.actualizarPanel();
     try {
-      const params = new URLSearchParams();
+      // Preservar query ya incluida en searchUrl (evitar "...?tipo=X?q=..." malformado).
+      let baseUrl = searchUrl || '';
+      let params = new URLSearchParams();
+      const qIdx = baseUrl.indexOf('?');
+      if (qIdx >= 0) {
+        params = new URLSearchParams(baseUrl.slice(qIdx + 1));
+        baseUrl = baseUrl.slice(0, qIdx);
+      }
       params.set('q', termino);
       params.set('limit', '15');
       Object.keys(queryParams).forEach(function (k) {
@@ -106,7 +113,7 @@ function bestAsignarMaestro(searchUrl, cfg) {
           params.set(k, String(queryParams[k]));
         }
       });
-      const r = await fetch(searchUrl + '?' + params.toString(), {
+      const r = await fetch(baseUrl + '?' + params.toString(), {
         credentials: 'same-origin',
         headers: {
           Accept: 'application/json',
@@ -188,18 +195,28 @@ function bestAsignarMaestro(searchUrl, cfg) {
   return state;
 }
 
-function bestAsignarArticulo(searchUrl) {
+function bestAsignarArticulo(searchUrl, opts) {
+  opts = opts || {};
+  const tipo =
+    opts.tipo_art_fab != null && String(opts.tipo_art_fab).trim() !== ''
+      ? String(opts.tipo_art_fab).trim()
+      : 'Terminado';
   return bestAsignarMaestro(searchUrl, {
     idKey: 'IDArt',
     labelKey: 'Descripcion',
     stateKey: 'adminIdart',
     emptyMsg: 'Elegí un artículo de la lista.',
-    queryParams: { tipo_art_fab: 'Terminado' },
+    queryParams: { tipo_art_fab: tipo },
     metaLine: function (a) {
       // Solo descripción visible en el listado; sin códigos en la línea principal.
       return '';
     },
   });
+}
+
+/** Asignar solo artículos Admin tipo_art_fab=Fabricado (BOM / componentes). */
+function bestAsignarArticuloFabricado(searchUrl) {
+  return bestAsignarArticulo(searchUrl, { tipo_art_fab: 'Fabricado' });
 }
 
 function bestAsignarDeposito(searchUrl) {

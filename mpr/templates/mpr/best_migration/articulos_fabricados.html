@@ -241,7 +241,7 @@
                   <form method="post"
                         action="{% url 'mpr:migracion_best_validar_articulo_fabricado' %}"
                         class="mpr-post-loading flex min-w-[16rem] max-w-sm flex-col gap-1"
-                        x-data="bestAsignarArticulo('{% url 'core_api:articulo_search' %}?tipo_art_fab=Fabricado')"
+                        x-data="bestAsignarArticuloFabricado('{% url 'core_api:articulo_search' %}')"
                         @submit="validarSubmit($event)" data-mpr-loading-title="Procesando artículo" data-mpr-loading-subtitle="Esperá un momento. No cierres esta ventana.">
                     {% csrf_token %}
                     <input type="hidden" name="best_id_articulo" value="{{ f.best_id_articulo }}">
@@ -329,7 +329,7 @@
     </div>
   </div>
 </section>
-<script src="{% static 'mpr/js/best_asignar_maestro.js' %}"></script>
+<script src="{% static 'mpr/js/best_asignar_maestro.js' %}?v=fabricado2"></script>
 <script>
 (function () {
   var form = document.getElementById('form-sel-art');
