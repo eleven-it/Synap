@@ -96,7 +96,7 @@
           </p>
         </div>
 
-        {# Sucursal #}
+        {# Sucursal (multi-select) #}
         <div class="relative" @click.outside="cerrarPanel('suc')">
           <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="vcm-suc">Sucursal</label>
           <input id="vcm-suc" type="text" autocomplete="off" role="combobox"
@@ -109,18 +109,43 @@
                  @keydown.arrow-up.prevent="moverSel('suc', -1)"
                  @keydown.enter.prevent="elegirResaltado('suc')"
                  @keydown.escape="cerrarPanel('suc')"
-                 placeholder="Elegí cliente primero…"
+                 :placeholder="selCli ? 'Marcá una o más sucursales…' : 'Elegí cliente primero…'"
                  class="mt-1 h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
+          <div x-show="selSucs.length" x-cloak class="mt-1.5 flex flex-wrap gap-1.5">
+            <template x-for="s in selSucs" :key="'chip-'+s.id_cliente_domicilio">
+              <span class="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-950/50 dark:text-purple-200">
+                <span x-text="s.etiqueta || s.nombre"></span>
+                <button type="button" @click="quitarSuc(s)" class="rounded-full p-0.5 hover:bg-purple-200 dark:hover:bg-purple-900" aria-label="Quitar sucursal">
+                  <span class="material-icons text-[14px]" aria-hidden="true">close</span>
+                </button>
+              </span>
+            </template>
+          </div>
           <ul x-show="panel==='suc' && sucursales.length" x-cloak
               class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
               role="listbox">
             <template x-for="(s, i) in sucursales" :key="s.id_cliente_domicilio">
               <li role="option"
-                  @mousedown.prevent="elegirSuc(s)"
+                  @mousedown.prevent="toggleSuc(s)"
                   :class="i === idxSuc ? 'bg-purple-50 dark:bg-purple-950/40' : ''"
-                  class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
-                  x-text="s.etiqueta || s.nombre"></li>
+                  class="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+                <span class="material-icons text-base"
+                      :class="sucSeleccionada(s) ? 'text-purple-600 dark:text-purple-400' : 'text-slate-300 dark:text-slate-600'"
+                      x-text="sucSeleccionada(s) ? 'check_box' : 'check_box_outline_blank'"
+                      aria-hidden="true"></span>
+                <span x-text="s.etiqueta || s.nombre"></span>
+              </li>
             </template>
+            <li class="sticky bottom-0 flex gap-2 border-t border-slate-200 bg-white px-3 py-2 dark:border-slate-600 dark:bg-slate-800">
+              <button type="button" @mousedown.prevent="seleccionarTodasSuc()"
+                      class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                Todas
+              </button>
+              <button type="button" @mousedown.prevent="limpiarSucs()"
+                      class="rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+                Ninguna
+              </button>
+            </li>
           </ul>
           <p x-show="panel==='suc' && selCli && !cargandoSuc && !sucursales.length" x-cloak
              class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
@@ -286,15 +311,24 @@
         <div>
           <div class="mb-1 flex items-center gap-2">
             <span class="material-icons text-purple-500" aria-hidden="true">link</span>
-            <h3 id="vcm-modal-asignar-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Asignar relación</h3>
+            <h3 id="vcm-modal-asignar-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Asignar relación(es)</h3>
           </div>
           <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
-            Se creará la relación vendedor · cliente · sucursal · marca. Una marca por cliente y sucursal solo puede pertenecer a un vendedor.
+            Se crearán relaciones vendedor · cliente · sucursal · marca para
+            <strong x-text="selSucs.length + (selSucs.length === 1 ? ' sucursal' : ' sucursales')"></strong>.
+            Una marca por cliente y sucursal solo puede pertenecer a un vendedor.
           </p>
           <ul class="mb-5 space-y-1 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-800 dark:bg-slate-900/60 dark:text-slate-100">
             <li><span class="text-slate-500 dark:text-slate-400">Vendedor:</span> <strong x-text="selVend && selVend.nombre"></strong></li>
             <li><span class="text-slate-500 dark:text-slate-400">Cliente:</span> <strong x-text="selCli && selCli.nombre"></strong></li>
-            <li><span class="text-slate-500 dark:text-slate-400">Sucursal:</span> <strong x-text="selSuc && (selSuc.etiqueta || selSuc.nombre)"></strong></li>
+            <li>
+              <span class="text-slate-500 dark:text-slate-400">Sucursal<span x-show="selSucs.length > 1" x-cloak>es</span>:</span>
+              <ul class="mt-0.5 list-inside list-disc pl-1">
+                <template x-for="s in selSucs" :key="'modal-'+s.id_cliente_domicilio">
+                  <li><strong x-text="s.etiqueta || s.nombre"></strong></li>
+                </template>
+              </ul>
+            </li>
             <li><span class="text-slate-500 dark:text-slate-400">Marca:</span> <strong x-text="selMar && selMar.nombre"></strong></li>
           </ul>
           <div class="flex justify-end gap-2">
@@ -362,7 +396,7 @@ window.vcmApp = function vcmApp() {
     marcas: [],
     selVend: null,
     selCli: null,
-    selSuc: null,
+    selSucs: [],
     selMar: null,
     filtroViajante: '',
     gruposColapsados: {},
@@ -397,8 +431,8 @@ window.vcmApp = function vcmApp() {
       }
     },
     pedirAsignar() {
-      if (!this.selVend || !this.selCli || !this.selSuc || !this.selMar) {
-        this.mostrarAviso('Completá vendedor, cliente, sucursal y marca con la búsqueda predictiva.', 'error');
+      if (!this.selVend || !this.selCli || !this.selSucs.length || !this.selMar) {
+        this.mostrarAviso('Completá vendedor, cliente, al menos una sucursal y marca con la búsqueda predictiva.', 'error');
         return;
       }
       this.confirmKind = 'asignar';
@@ -418,7 +452,46 @@ window.vcmApp = function vcmApp() {
       }
     },
     abrirPanel(p) { this.panel = p; },
-    cerrarPanel(p) { if (this.panel === p) this.panel = null; },
+    cerrarPanel(p) {
+      if (this.panel === p) {
+        if (p === 'suc') this.actualizarResumenSuc();
+        this.panel = null;
+      }
+    },
+    actualizarResumenSuc() {
+      const n = this.selSucs.length;
+      if (n === 0) {
+        this.qSuc = '';
+      } else if (n === 1) {
+        this.qSuc = this.selSucs[0].etiqueta || this.selSucs[0].nombre || '';
+      } else {
+        const first = this.selSucs[0].etiqueta || this.selSucs[0].nombre || '';
+        this.qSuc = first + ' +' + (n - 1);
+      }
+    },
+    sucSeleccionada(s) {
+      const id = Number(s.id_cliente_domicilio);
+      return this.selSucs.some((x) => Number(x.id_cliente_domicilio) === id);
+    },
+    toggleSuc(s) {
+      if (this.sucSeleccionada(s)) {
+        this.quitarSuc(s);
+      } else {
+        this.selSucs.push(s);
+      }
+    },
+    quitarSuc(s) {
+      const id = Number(s.id_cliente_domicilio);
+      this.selSucs = this.selSucs.filter((x) => Number(x.id_cliente_domicilio) !== id);
+    },
+    seleccionarTodasSuc() {
+      for (const s of this.sucursales) {
+        if (!this.sucSeleccionada(s)) this.selSucs.push(s);
+      }
+    },
+    limpiarSucs() {
+      this.selSucs = [];
+    },
     /** Comparador de orden natural en español (números embebidos ordenados numéricamente). */
     cmpNatural(a, b) {
       return String(a || '').localeCompare(String(b || ''), 'es', { numeric: true, sensitivity: 'base' });
@@ -561,12 +634,11 @@ window.vcmApp = function vcmApp() {
         this.buscarVendedores();
       } else if (tipo === 'cli') {
         if (this.selCli && this.qCli !== (this.selCli.nombre || '')) {
-          this.selCli = null; this.selSuc = null; this.qSuc = ''; this.sucursales = [];
+          this.selCli = null; this.selSucs = []; this.qSuc = ''; this.sucursales = [];
         }
         this.buscarClientes();
       } else if (tipo === 'suc') {
         if (!this.selCli) return;
-        if (this.selSuc && this.qSuc !== (this.selSuc.etiqueta || this.selSuc.nombre || '')) this.selSuc = null;
         this.buscarSucursales();
       } else if (tipo === 'mar') {
         if (this.selMar && this.qMar !== (this.selMar.nombre || '')) this.selMar = null;
@@ -590,11 +662,11 @@ window.vcmApp = function vcmApp() {
         this.qVend = ''; this.selVend = null; this.idxVend = 0;
         this.buscarVendedores(200);
       } else if (tipo === 'cli') {
-        this.qCli = ''; this.selCli = null; this.selSuc = null; this.qSuc = ''; this.sucursales = []; this.idxCli = 0;
+        this.qCli = ''; this.selCli = null; this.selSucs = []; this.qSuc = ''; this.sucursales = []; this.idxCli = 0;
         this.buscarClientes(200);
       } else if (tipo === 'suc') {
         if (!this.selCli) return;
-        this.qSuc = ''; this.selSuc = null; this.idxSuc = 0;
+        this.qSuc = ''; this.idxSuc = 0;
         this.buscarSucursales(200);
       } else if (tipo === 'mar') {
         this.qMar = ''; this.selMar = null; this.idxMar = 0;
@@ -744,15 +816,10 @@ window.vcmApp = function vcmApp() {
     elegirCli(c) {
       this.selCli = c;
       this.qCli = c.nombre || '';
-      this.selSuc = null;
+      this.selSucs = [];
       this.qSuc = '';
       this.sucursales = [];
       this.cerrarPanel('cli');
-    },
-    elegirSuc(s) {
-      this.selSuc = s;
-      this.qSuc = s.etiqueta || s.nombre || '';
-      this.cerrarPanel('suc');
     },
     elegirMar(m) {
       this.selMar = m;
@@ -773,37 +840,47 @@ window.vcmApp = function vcmApp() {
     elegirResaltado(tipo) {
       if (tipo === 'vend' && this.vendedores[this.idxVend]) this.elegirVend(this.vendedores[this.idxVend]);
       else if (tipo === 'cli' && this.clientes[this.idxCli]) this.elegirCli(this.clientes[this.idxCli]);
-      else if (tipo === 'suc' && this.sucursales[this.idxSuc]) this.elegirSuc(this.sucursales[this.idxSuc]);
+      else if (tipo === 'suc' && this.sucursales[this.idxSuc]) this.toggleSuc(this.sucursales[this.idxSuc]);
       else if (tipo === 'mar' && this.marcas[this.idxMar]) this.elegirMar(this.marcas[this.idxMar]);
     },
     async crear() {
-      if (!this.selVend || !this.selCli || !this.selSuc || !this.selMar) {
+      if (!this.selVend || !this.selCli || !this.selSucs.length || !this.selMar) {
         this.cerrarConfirm();
-        this.mostrarAviso('Completá vendedor, cliente, sucursal y marca con la búsqueda predictiva.', 'error');
+        this.mostrarAviso('Completá vendedor, cliente, al menos una sucursal y marca con la búsqueda predictiva.', 'error');
         return;
       }
       this.guardando = true;
-      const { status, data } = await this.postJson(this.urls.crear, {
+      const body = {
         CodViajante: Number(this.selVend.CodViajante),
         id_cliente: Number(this.selCli.id_cliente),
-        id_cliente_domicilio: Number(this.selSuc.id_cliente_domicilio),
         CodMarca: Number(this.selMar.CodMarca),
-      });
+      };
+      if (this.selSucs.length === 1) {
+        body.id_cliente_domicilio = Number(this.selSucs[0].id_cliente_domicilio);
+      } else {
+        body.ids_cliente_domicilio = this.selSucs.map((s) => Number(s.id_cliente_domicilio));
+      }
+      const { status, data } = await this.postJson(this.urls.crear, body);
       this.guardando = false;
       this.confirmOpen = false;
       this.confirmKind = null;
       if (status === 409) {
-        const d = data.dueno || {};
-        this.mostrarAviso(data.message || data.error || ('Conflicto: dueño ' + (d.nombre_viajante || d.CodViajante)), 'error');
+        this.mostrarAviso(data.message || data.error || 'Conflicto al asignar la marca.', 'error');
         return;
       }
-      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo crear.', 'error'); return; }
+      if (!data.ok) {
+        this.mostrarAviso(data.error || data.message || 'No se pudo crear.', 'error');
+        return;
+      }
+      this.selSucs = [];
+      this.qSuc = '';
       this.selMar = null;
       this.qMar = '';
       this.marcas = [];
       await this.cargar();
       this.buscarMarcas();
-      this.mostrarAviso(data.message || 'Relación creada.', 'success');
+      const tipoAviso = (status === 201 || status === 200) ? 'success' : 'error';
+      this.mostrarAviso(data.message || 'Relación creada.', tipoAviso);
     },
     async anular(t) {
       this.guardando = true;

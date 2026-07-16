@@ -316,6 +316,91 @@ def crear_terna(
         return False, _mensaje_tabla_ausente(e), None
 
 
+def _normalizar_ids_domicilio(ids_cliente_domicilio: List[Any]) -> List[int]:
+    """Ids únicos positivos, preservando el orden de primera aparición."""
+    vistos: set[int] = set()
+    resultado: List[int] = []
+    for raw in ids_cliente_domicilio or []:
+        n = to_int_or_none(raw)
+        if n is None or n <= 0 or n in vistos:
+            continue
+        vistos.add(n)
+        resultado.append(n)
+    return resultado
+
+
+def crear_ternas_lote(
+    base_empresa: str,
+    cod_viajante: int,
+    id_cliente: int,
+    cod_marca: int,
+    ids_cliente_domicilio: List[Any],
+    *,
+    usuario_mod: str = "-",
+) -> Dict[str, Any]:
+    """
+    Crea relaciones en lote (mismo vendedor, cliente y marca × cada sucursal).
+    No aborta ante el primer conflicto; devuelve resumen por categoría.
+    """
+    ids_norm = _normalizar_ids_domicilio(ids_cliente_domicilio)
+    vacio: Dict[str, Any] = {
+        "creadas": [],
+        "ya_existian": [],
+        "conflictos": [],
+        "errores": [],
+        "n_creadas": 0,
+        "n_ya_existian": 0,
+        "n_conflictos": 0,
+        "n_errores": 0,
+    }
+    if not ids_norm:
+        return vacio
+
+    creadas: List[Dict[str, Any]] = []
+    ya_existian: List[Dict[str, Any]] = []
+    conflictos: List[Dict[str, Any]] = []
+    errores: List[Dict[str, Any]] = []
+
+    for idd in ids_norm:
+        try:
+            ok, msg, terna = crear_terna(
+                base_empresa,
+                cod_viajante,
+                id_cliente,
+                cod_marca,
+                idd,
+                usuario_mod=usuario_mod,
+            )
+            if ok:
+                msg_lower = (msg or "").lower()
+                if "ya existía" in msg_lower or "ya existia" in msg_lower:
+                    if terna:
+                        ya_existian.append(terna)
+                elif terna:
+                    creadas.append(terna)
+            else:
+                errores.append({"id_cliente_domicilio": idd, "error": msg})
+        except ConflictoMarcaCliente as exc:
+            conflictos.append(
+                {
+                    "id_cliente_domicilio": idd,
+                    "error": exc.message,
+                    "dueno": exc.dueno,
+                }
+            )
+
+    return {
+        "creadas": creadas,
+        "ya_existian": ya_existian,
+        "conflictos": conflictos,
+        "errores": errores,
+        "n_creadas": len(creadas),
+        "n_ya_existian": len(ya_existian),
+        "n_conflictos": len(conflictos),
+        "n_errores": len(errores),
+    }
+
+
 def anular_terna(
     base_empresa: str,
     id_terna: int,
