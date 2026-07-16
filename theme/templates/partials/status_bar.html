@@ -1,25 +1,36 @@
 {% comment %}
 Barra de estado (paridad Principal.frm VB6 StatusBar).
-Muestra: fecha/hora servidor, empresa, sucursal, puesto, usuario. No expone id_sesion ni base_empresa.
+Izquierda: fecha/hora, razón social (DatosEmpresa), sucursal, puesto, usuario.
+Derecha: nombre de empresa del login (tabla empresas) — identifica la DB activa.
+No expone id_sesion ni base_empresa.
 {% endcomment %}
 {% if user and user.is_authenticated %}
-<footer id="status-bar" class="fixed bottom-0 left-0 right-0 z-30 h-8 flex items-center justify-between px-4 bg-slate-700 text-slate-200 text-xs shadow-inner">
-    <div class="flex items-center gap-4 flex-wrap">
-        <span id="status-fecha-hora" class="font-mono">
+{% with empresa_login=nombre_empresa_login|default:session_user.nombre_empresa %}
+<footer id="status-bar" class="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 px-4 py-1.5 bg-slate-700 text-slate-200 text-xs shadow-inner" style="min-height: 2rem;">
+    <div class="flex items-center gap-3 min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+        <span id="status-fecha-hora" class="font-mono shrink-0">
             {% if fecha_servidor %}{{ fecha_servidor.fecha }} {{ fecha_servidor.hora }}{% else %}--{% endif %}
         </span>
         {% if empresa_activa %}
-        <span>{{ empresa_activa.nombre|default:"—" }}</span>
+        <span class="truncate">{{ empresa_activa.nombre|default:"—" }}</span>
         {% endif %}
         {% if branch_activa %}
-        <span>{{ branch_activa.name|default:"—" }}</span>
+        <span class="truncate">{{ branch_activa.name|default:"—" }}</span>
         {% endif %}
         {% if user.nombre_puesto %}
-        <span>{{ user.nombre_puesto }}</span>
+        <span class="truncate">{{ user.nombre_puesto }}</span>
         {% endif %}
-        <span>{% if user.nombre_completo %}{{ user.nombre_completo }}{% elif user.cod_usuario %}{{ user.cod_usuario }}{% else %}{{ user.email|default:user.get_username|default:"—" }}{% endif %}</span>
+        <span class="truncate">{% if user.nombre_completo %}{{ user.nombre_completo }}{% elif user.cod_usuario %}{{ user.cod_usuario }}{% else %}{{ user.email|default:user.get_username|default:"—" }}{% endif %}</span>
     </div>
+    {% if empresa_login %}
+    <div id="status-empresa-login" class="ml-auto shrink-0" title="Empresa seleccionada en el login (base de datos activa)">
+        <span style="display:inline-block;background:#f59e0b;color:#0f172a;font-weight:700;padding:2px 10px;border-radius:9999px;white-space:nowrap;">
+            {{ empresa_login }}
+        </span>
+    </div>
+    {% endif %}
 </footer>
+{% endwith %}
 <script>
 (function() {
     var el = document.getElementById('status-fecha-hora');

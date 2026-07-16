@@ -124,6 +124,78 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                {% if vista_arbol_org %}
+                  {% for n1 in grupos %}
+                  {% if n1.tipo != 'vendedor' %}
+                  <tr class="vo-org-header bg-violet-50/90 dark:bg-violet-950/30">
+                    <td colspan="4" class="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-violet-900 dark:text-violet-200">
+                      {% if n1.tipo == 'gerente' %}Gerente{% else %}Supervisor{% endif %}: {{ n1.nombre_vendedor }}
+                    </td>
+                  </tr>
+                  {% for n2 in n1.children %}
+                    {% if n2.tipo != 'vendedor' %}
+                    <tr class="vo-org-header bg-sky-50/80 dark:bg-sky-950/25">
+                      <td colspan="4" class="px-3 py-1.5 pl-6 text-[11px] font-semibold uppercase tracking-wide text-sky-900 dark:text-sky-200">Supervisor: {{ n2.nombre_vendedor }}</td>
+                    </tr>
+                    {% for n3 in n2.children %}
+                    <tr class="vo-vendedor-header cursor-pointer select-none bg-slate-100/95 hover:bg-slate-200/90 dark:bg-slate-700/70 dark:hover:bg-slate-600/80"
+                        data-vo-search="{{ n3.nombre_vendedor|escape }} {{ n3.cod_viajante }}"
+                        data-grupo-id="v{{ n3.cod_viajante }}" data-grupo-expanded="0" role="button" tabindex="0" aria-expanded="false">
+                      <td colspan="4" class="px-2 py-2 pl-10 sm:px-3 sm:pl-12">
+                        <div class="flex w-full flex-wrap items-center justify-between gap-2">
+                          <div class="flex min-w-0 flex-1 items-center gap-2">
+                            <span class="vo-chevron inline-flex w-7 flex-shrink-0 justify-center text-slate-500 dark:text-slate-400" aria-hidden="true">▸</span>
+                            <span class="text-[13px] font-bold uppercase tracking-tight text-slate-900 dark:text-white">Vendedor: {{ n3.nombre_vendedor }}</span>
+                          </div>
+                          {% if puede_editar %}
+                          <input type="text" inputmode="decimal" autocomplete="off" lang="es" class="vo-obj-vendedor w-36 rounded-md border border-emerald-600 bg-slate-900/70 px-2 py-1 text-right font-mono text-xs tabular-nums text-emerald-200" data-cod-viajante="{{ n3.cod_viajante }}" data-obj-vendedor="{{ n3.clientes.0.objetivo_vendedor|default:0 }}" value="" />
+                          {% endif %}
+                        </div>
+                      </td>
+                    </tr>
+                    {% include "ventas/includes/objetivos_filas_vendedor.html" with vendedor=n3 %}
+                    {% endfor %}
+                    {% else %}
+                    <tr class="vo-vendedor-header cursor-pointer select-none bg-slate-100/95 hover:bg-slate-200/90 dark:bg-slate-700/70 dark:hover:bg-slate-600/80"
+                        data-vo-search="{{ n2.nombre_vendedor|escape }} {{ n2.cod_viajante }}"
+                        data-grupo-id="v{{ n2.cod_viajante }}" data-grupo-expanded="0" role="button" tabindex="0" aria-expanded="false">
+                      <td colspan="4" class="px-2 py-2 pl-8 sm:px-3 sm:pl-10">
+                        <div class="flex w-full flex-wrap items-center justify-between gap-2">
+                          <div class="flex min-w-0 flex-1 items-center gap-2">
+                            <span class="vo-chevron inline-flex w-7 flex-shrink-0 justify-center text-slate-500 dark:text-slate-400" aria-hidden="true">▸</span>
+                            <span class="text-[13px] font-bold uppercase tracking-tight text-slate-900 dark:text-white">Vendedor: {{ n2.nombre_vendedor }}</span>
+                          </div>
+                          {% if puede_editar %}
+                          <input type="text" inputmode="decimal" autocomplete="off" lang="es" class="vo-obj-vendedor w-36 rounded-md border border-emerald-600 bg-slate-900/70 px-2 py-1 text-right font-mono text-xs tabular-nums text-emerald-200" data-cod-viajante="{{ n2.cod_viajante }}" data-obj-vendedor="{{ n2.clientes.0.objetivo_vendedor|default:0 }}" value="" />
+                          {% endif %}
+                        </div>
+                      </td>
+                    </tr>
+                    {% include "ventas/includes/objetivos_filas_vendedor.html" with vendedor=n2 %}
+                    {% endif %}
+                  {% endfor %}
+                  {% else %}
+                  <tr class="vo-vendedor-header cursor-pointer select-none bg-slate-100/95 hover:bg-slate-200/90 dark:bg-slate-700/70 dark:hover:bg-slate-600/80"
+                      data-vo-search="{{ n1.nombre_vendedor|escape }} {{ n1.cod_viajante }}"
+                      data-grupo-id="v{{ n1.cod_viajante }}" data-grupo-expanded="0" role="button" tabindex="0" aria-expanded="false">
+                    <td colspan="4" class="px-2 py-2 sm:px-3">
+                      <div class="flex w-full flex-wrap items-center justify-between gap-2">
+                        <div class="flex min-w-0 flex-1 items-center gap-2">
+                          <span class="vo-chevron inline-flex w-7 flex-shrink-0 justify-center text-slate-500 dark:text-slate-400" aria-hidden="true">▸</span>
+                          <span class="text-[13px] font-bold uppercase tracking-tight text-slate-900 dark:text-white">{{ n1.nombre_vendedor }}</span>
+                        </div>
+                        {% if puede_editar %}
+                        <input type="text" inputmode="decimal" autocomplete="off" lang="es" class="vo-obj-vendedor w-36 rounded-md border border-emerald-600 bg-slate-900/70 px-2 py-1 text-right font-mono text-xs tabular-nums text-emerald-200" data-cod-viajante="{{ n1.cod_viajante }}" data-obj-vendedor="{{ n1.clientes.0.objetivo_vendedor|default:0 }}" value="" />
+                        {% endif %}
+                      </div>
+                    </td>
+                  </tr>
+                  {% include "ventas/includes/objetivos_filas_vendedor.html" with vendedor=n1 %}
+                  {% endif %}
+                  {% empty %}
+                  <tr><td colspan="4" class="px-4 py-10 text-center text-xs text-slate-500 dark:text-slate-400">No hay clientes en su alcance comercial.</td></tr>
+                  {% endfor %}
+                {% else %}
                 {% for g in grupos %}
                 <tr class="vo-vendedor-header cursor-pointer select-none bg-slate-100/95 hover:bg-slate-200/90 dark:bg-slate-700/70 dark:hover:bg-slate-600/80"
                     data-vo-search="{{ g.nombre_vendedor|escape }} {{ g.cod_viajante }}"
@@ -186,6 +258,7 @@
                   </td>
                 </tr>
                 {% endfor %}
+                {% endif %}
               </tbody>
             </table>
           </div>
@@ -216,7 +289,7 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                {% for g in grupos %}
+                {% for g in grupos_plano|default:grupos %}
                 {% for c in g.clientes %}
                 <tr class="vo-fila-plano hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                     data-cod-viajante="{{ c.cod_viajante }}"

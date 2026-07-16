@@ -9,7 +9,11 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from mpr.best_migration.article_matcher import match_admin_fabricados_to_best, match_open_order_skus
+from mpr.best_migration.article_matcher import (
+    MatchRow,
+    match_admin_fabricados_to_best,
+    match_open_order_skus,
+)
 from mpr.best_migration.client_matcher import match_clients
 from mpr.best_migration.connection import connect_best, fetch_dict
 from mpr.best_migration.dictionary import DICT_VERSION
@@ -819,20 +823,21 @@ def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
     terminado_idarts = [m.admin_idart for m in terminados if m.admin_idart]
     fabricados_admin = _fabricado_idarts_desde_bom_terminados(base_empresa, terminado_idarts)
     best_rows, myl = _fetch_best_catalog_skus()
+    non_bom_ids = set(
+        BestArticuloMap.objects.filter(base_empresa=base_empresa)
+        .exclude(origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO)
+        .values_list("best_id_articulo", flat=True)
+    )
     inferidos = match_admin_fabricados_to_best(
         admin_fabricados=fabricados_admin,
         best_rows=best_rows,
         myl_by_mmid=myl,
+        best_ids_ocupados=non_bom_ids,
     )
 
     bom_qs = BestArticuloMap.objects.filter(
         base_empresa=base_empresa,
         origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
-    )
-    non_bom_ids = set(
-        BestArticuloMap.objects.filter(base_empresa=base_empresa)
-        .exclude(origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO)
-        .values_list("best_id_articulo", flat=True)
     )
     # La clave BEST es única por empresa. Si una instalación anterior permitió
     # coexistencia, re-clavar la fila BOM evita que vuelva a competir con PT.
@@ -858,15 +863,52 @@ def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
         contaminadas += 1
 
     created = updated = preserved = sin_sku_best = 0
+    claimed_best: set[str] = set()
+
+    def _candidatos_best_desde_row(row: MatchRow | None) -> list[dict]:
+        if not row:
+            return []
+        vistos: set[str] = set()
+        out_cands: list[dict] = []
+        for cand in (row.extras or {}).get("cand_best") or []:
+            bid = str(cand.get("id") or "").strip()
+            if bid and bid not in vistos:
+                vistos.add(bid)
+                out_cands.append(cand)
+        proposed = (row.best_id_articulo or "").strip()
+        if proposed and proposed not in vistos:
+            out_cands.insert(
+                0,
+                {
+                    "id": proposed,
+                    "articulo": row.best_articulo,
+                    "codigo": row.best_codigo,
+                    "score": row.score,
+                    "pack": row.best_pack,
+                    "marca": row.best_marca,
+                    "razon": row.razon,
+                },
+            )
+        return out_cands
+
+    def _elegir_best_libre(row: MatchRow | None) -> tuple[str, dict | None]:
+        for cand in _candidatos_best_desde_row(row):
+            bid = str(cand.get("id") or "").strip()
+            if not bid or bid in non_bom_ids or bid in claimed_best:
+                continue
+            return bid, cand
+        return "", None
+
     for admin in fabricados_admin:
         aid = int(admin["IDArt"])
         row = inferidos.get(aid)
         synthetic_id = f"FAB:{aid}"
         proposed_id = (row.best_id_articulo or "").strip() if row else ""
-        best_id = proposed_id or synthetic_id
-        sku_ocupado = bool(proposed_id and proposed_id in non_bom_ids)
-        if sku_ocupado or not proposed_id:
-            best_id = synthetic_id
+        elegido_id, elegido_cand = _elegir_best_libre(row)
+        best_id = elegido_id or synthetic_id
+        sku_ocupado = bool(proposed_id and not elegido_id)
+
+        if not elegido_id:
             sin_sku_best += 1
 
         prev = bom_qs.filter(admin_idart=aid).order_by("pk").first()
@@ -886,7 +928,7 @@ def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
                 best_id = synthetic_id
                 sin_sku_best += 1
 
-        if not row or sku_ocupado or not proposed_id:
+        if not row or not elegido_id:
             estado = BestArticuloMap.Estado.SIN_CANDIDATO
             razon = (
                 "SKU BEST ocupado por mapeo no BOM"
@@ -903,19 +945,26 @@ def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
         else:
             estado = row.status
             razon = row.razon
-            best_articulo = row.best_articulo
-            best_codigo = row.best_codigo
-            best_marca = row.best_marca
+            if elegido_cand and elegido_cand.get("id") != proposed_id:
+                razon = (razon or "") + "+alternate_libre"
+            best_articulo = (
+                elegido_cand.get("articulo") if elegido_cand else row.best_articulo
+            )
+            best_codigo = elegido_cand.get("codigo") if elegido_cand else row.best_codigo
+            best_marca = elegido_cand.get("marca") if elegido_cand else row.best_marca
             best_modelos = row.best_modelos
             best_colores = row.best_colores
             best_color_mode = row.best_color_mode
             best_talle = row.best_talle
-            best_pack = row.best_pack
+            best_pack = (
+                elegido_cand.get("pack") if elegido_cand else row.best_pack
+            )
             best_variant_codes = row.best_variant_codes
             score = row.score
             candidatos_n = row.candidatos_n
             alt1_idart, alt1_nombre, alt1_score = row.alt1_idart, row.alt1_nombre, row.alt1_score
             alt2_idart, alt2_nombre, alt2_score = row.alt2_idart, row.alt2_nombre, row.alt2_score
+            claimed_best.add(best_id)
         defaults = {
             "best_codigo": (best_codigo or "")[:64],
             "best_articulo": (best_articulo or "")[:255],

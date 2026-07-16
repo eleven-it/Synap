@@ -141,6 +141,43 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
         self.assertTrue(mobile_path_allowed_for_level_a('/mpr/'))
         self.assertTrue(mobile_path_allowed_for_level_a('/mpr/opt/list/'))
 
+    def test_ecom_pedido_simple_venta_y_hub_permitidos(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/venta/'))
+        self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/compra/'))
+        self.assertTrue(mobile_path_allowed_for_level_a('/ecom/mayoristapp/pedidos/'))
+
+    def test_ecom_api_mayoristapp_permitido(self):
+        self.assertTrue(mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/carrito/'))
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/catalogo/articulos/listado/')
+        )
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/checkout/confirmar/')
+        )
+
+    def test_ecom_api_hub_y_jerarquia_permitidos(self):
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/pedidos/hub/')
+        )
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/pedidos/hub/archivar-draft/')
+        )
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/jerarquia/nodos/')
+        )
+        self.assertTrue(
+            mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/aprobacion/123/aprobar/')
+        )
+
+    def test_ecom_otras_pantallas_no_permitidas(self):
+        self.assertFalse(
+            mobile_path_allowed_for_level_a('/ecom/mayoristapp/pedido-masivo-sucursales/')
+        )
+        self.assertFalse(mobile_path_allowed_for_level_a('/ecom/mayoristapp/'))
+        self.assertFalse(
+            mobile_path_allowed_for_level_a('/ecom/mayoristapp/ajustes-ventas/')
+        )
+
 
 @override_settings(
     SESSION_ENGINE='django.contrib.sessions.backends.cache',
@@ -253,5 +290,58 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
     @patch('core.pwa_nivel_a.tpv_visible_en_movil', return_value=True)
     def test_movil_autenticado_self_checkout_con_tpv_sin_bloqueo(self, _mock):
         req = _build_request('GET', '/self_checkout/', MOBILE_UA, _minimal_session_user())
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_autenticado_pedido_simple_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/ecom/mayoristapp/venta/',
+            MOBILE_UA,
+            _minimal_session_user(),
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_autenticado_api_carrito_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/ecom/api/mayoristapp/carrito/',
+            MOBILE_UA,
+            _minimal_session_user(),
+            accept_json=True,
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_autenticado_pedido_masivo_403(self):
+        req = _build_request(
+            'GET',
+            '/ecom/mayoristapp/pedido-masivo-sucursales/',
+            MOBILE_UA,
+            _minimal_session_user(),
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNotNone(resp)
+        self.assertEqual(resp.status_code, 403)
+
+    def test_movil_autenticado_hub_pedidos_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/ecom/mayoristapp/pedidos/',
+            MOBILE_UA,
+            _minimal_session_user(),
+        )
+        resp = self.mw.process_request(req)
+        self.assertIsNone(resp)
+
+    def test_movil_autenticado_api_hub_pedidos_sin_bloqueo(self):
+        req = _build_request(
+            'GET',
+            '/ecom/api/mayoristapp/pedidos/hub/',
+            MOBILE_UA,
+            _minimal_session_user(),
+            accept_json=True,
+        )
         resp = self.mw.process_request(req)
         self.assertIsNone(resp)

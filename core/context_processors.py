@@ -218,6 +218,25 @@ def usuario_y_permisos(request):
         except Exception as e:
             logger.error(f"Error al obtener empresa/sucursal desde administraNET: {e}")
 
+    # Nombre del login (tabla empresas) para identificar la DB en el pie; no exponer base_empresa.
+    # Siempre re-resolver si falta en sesión (sesiones anteriores al cambio).
+    nombre_empresa_login = (session_user.get("nombre_empresa") or "").strip()
+    if base_empresa and not nombre_empresa_login:
+        try:
+            from login.administranet_auth import AdministraNETAuth
+            nombre_empresa_login = (AdministraNETAuth().nombre_empresa_por_base(base_empresa) or "").strip()
+            if nombre_empresa_login:
+                session_user["nombre_empresa"] = nombre_empresa_login
+                request.session["user"] = session_user
+                request.session.modified = True
+        except Exception as e:
+            logger.warning("No se pudo resolver nombre_empresa de login: %s", e)
+    if base_empresa and not nombre_empresa_login:
+        logger.warning(
+            "Pie sin nombre_empresa para base_empresa=%s (tabla empresas sin match)",
+            base_empresa,
+        )
+
     # Fecha/hora servidor para barra de estado (Principal, paridad VB6 Control_Fecha)
     from django.utils import timezone
     now = timezone.now()
@@ -238,6 +257,7 @@ def usuario_y_permisos(request):
         "empresas_disponibles": empresas_disponibles,
         "sucursales_disponibles": sucursales_disponibles,
         "session_user": session_user,
+        "nombre_empresa_login": nombre_empresa_login,
         "fecha_servidor": fecha_servidor,
     }
 
@@ -293,6 +313,10 @@ def menu_context(request):
         tpv_visible_movil = tpv_visible_en_movil(user, request)
         if not sidebar_visible_en_pwa(current_app_id, request, user):
             current_sidebar_items = []
+        elif current_app_id == "ecom":
+            from core.pwa_nivel_a import filtrar_submenus_ecom_para_pwa_movil
+
+            current_sidebar_items = filtrar_submenus_ecom_para_pwa_movil(current_sidebar_items)
 
     return {
         "apps_menu": apps_menu,

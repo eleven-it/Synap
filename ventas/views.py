@@ -14,13 +14,16 @@ from django.views.decorators.http import require_GET, require_POST
 from core.decorators import tiene_permiso
 from ventas.services.objetivos_mysql import (
     actualizar_descripcion_periodo_objetivos,
+    agrupar_grupos_arbol_org,
     anular_periodo_objetivos,
     buscar_vendedores,
     crear_periodo_objetivos,
+    ctx_desde_session_user,
     guardar_objetivos,
     listar_grupos_objetivos,
     listar_periodos_objetivos,
     obtener_periodo_objetivos,
+    usar_vista_arbol_org,
 )
 
 
@@ -31,6 +34,34 @@ def _usuario_puede_editar_objetivos(user) -> bool:
         return True
     fn = getattr(user, "tiene_permiso", None)
     return bool(fn and fn("ventas.editar"))
+
+
+def _session_ctx(request) -> Dict[str, Any]:
+    return ctx_desde_session_user(request.session.get("user", {}) or {})
+
+
+def _flatten_grupos_arbol(nodos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Aplana árbol org a lista de grupos vendedor (para panel plano y guardado)."""
+    out: List[Dict[str, Any]] = []
+
+    def _walk(items: List[Dict[str, Any]]) -> None:
+        for n in items or []:
+            if not isinstance(n, dict):
+                continue
+            tipo = (n.get("tipo") or "vendedor").strip().lower()
+            if tipo == "vendedor":
+                out.append(
+                    {
+                        "cod_viajante": n.get("cod_viajante"),
+                        "nombre_vendedor": n.get("nombre_vendedor"),
+                        "clientes": n.get("clientes") or [],
+                    }
+                )
+            else:
+                _walk(n.get("children") or [])
+
+    _walk(nodos)
+    return out
 
 
 def _base_empresa_session(request) -> str:
@@ -102,7 +133,7 @@ def objetivos_periodo_detalle_view(request, id_periodo: int):
         messages.error(request, "Período no encontrado.")
         return redirect("ventas:objetivos_periodos_list")
 
-    ok, err, rows = listar_grupos_objetivos(base_empresa, id_periodo)
+    ok, err, rows = listar_grupos_objetivos(base_empresa, id_periodo, ctx=_session_ctx(request))
     grupos: Dict[int, Dict[str, Any]] = {}
     for r in rows:
         cv = r["cod_viajante"]
@@ -115,6 +146,10 @@ def objetivos_periodo_detalle_view(request, id_periodo: int):
         grupos[cv]["clientes"].append(r)
 
     grupos_lista = sorted(grupos.values(), key=lambda g: (g["nombre_vendedor"] or "").upper())
+    ctx = _session_ctx(request)
+    vista_arbol_org = usar_vista_arbol_org(base_empresa, ctx)
+    grupos_arbol = agrupar_grupos_arbol_org(base_empresa, ctx, grupos_lista) if vista_arbol_org else grupos_lista
+    grupos_plano = _flatten_grupos_arbol(grupos_arbol) if vista_arbol_org else grupos_lista
     anulado = (periodo.get("anulado") or "No").strip() != "No"
     puede_editar = _usuario_puede_editar_objetivos(request.user) and not anulado
 
@@ -127,7 +162,9 @@ def objetivos_periodo_detalle_view(request, id_periodo: int):
             "periodo": periodo,
             "fecha_desde": periodo["fecha_desde"],
             "fecha_hasta": periodo["fecha_hasta"],
-            "grupos": grupos_lista,
+            "grupos": grupos_arbol,
+            "grupos_plano": grupos_plano,
+            "vista_arbol_org": vista_arbol_org,
             "error_carga": err if not ok else "",
             "puede_editar": puede_editar,
             "periodo_anulado": anulado,
@@ -172,7 +209,7 @@ def objetivos_venta_guardar_api(request):
     if not isinstance(filas, list):
         return JsonResponse({"ok": False, "error": "filas debe ser lista."}, status=400)
 
-    ok, err = guardar_objetivos(base_empresa, id_periodo_int, filas)
+    ok, err = guardar_objetivos(base_empresa, id_periodo_int, filas, ctx=_session_ctx(request))
     if not ok:
         return JsonResponse({"ok": False, "error": err}, status=400)
     return JsonResponse({"ok": True})
@@ -243,7 +280,7 @@ def api_vendedores_buscar(request):
     if not base_empresa:
         return JsonResponse({"results": [], "error": "Sin base empresa."}, status=400)
     q = request.GET.get("q", "")
-    ok, rows = buscar_vendedores(base_empresa, q)
+    ok, rows = buscar_vendedores(base_empresa, q, ctx=_session_ctx(request))
     if not ok:
         return JsonResponse({"results": [], "error": "No se pudo buscar."}, status=500)
     return JsonResponse({"results": rows})

@@ -99,8 +99,8 @@ def _operativo_desde_ctx(ctx: Dict[str, Any]) -> Optional[int]:
     return to_int_or_none(ctx.get("cod_viajante_operativo"))
 
 
-def cartera_permitida(ctx: Dict[str, Any]) -> List[int]:
-    """Conjunto permitido: propio viajante + ``vendedor_a_cargo``."""
+def cartera_permitida_legacy(ctx: Dict[str, Any]) -> List[int]:
+    """Conjunto permitido legacy: propio viajante + ``vendedor_a_cargo`` (sesión/JSON)."""
     cv = _id_vendedor_desde_ctx(ctx)
     if cv is None:
         return []
@@ -113,6 +113,23 @@ def cartera_permitida(ctx: Dict[str, Any]) -> List[int]:
             seen.add(n)
             out.append(n)
     return out
+
+
+def cartera_permitida(ctx: Dict[str, Any], base_empresa: str = "") -> List[int]:
+    """
+    Conjunto permitido de CodViajante.
+
+    Con workflow jerarquía ON delega a ``alcance_comercial``; si no, cartera legacy.
+    """
+    base = (base_empresa or ctx.get("base_empresa") or "").strip()
+    if base:
+        from ecom.services.ecom_config_mysql import workflow_jerarquia_comercial_activo
+
+        if workflow_jerarquia_comercial_activo(base):
+            from ecom.services.alcance_comercial import alcance_viajantes_comercial
+
+            return alcance_viajantes_comercial(base, ctx)
+    return cartera_permitida_legacy(ctx)
 
 
 def resolver_viajante_operativo(ctx: Dict[str, Any]) -> Optional[int]:
@@ -138,7 +155,7 @@ def ctx_desde_request(request: Any) -> Dict[str, Any]:
     bag = sess.get("mayoristapp") or {}
     if isinstance(bag, dict) and bag.get("cod_viajante_operativo") is not None:
         ctx["cod_viajante_operativo"] = bag["cod_viajante_operativo"]
-    for clave in ("vendedor_a_cargo", "supervisor_venta", "id_vendedor_usr", "CodViajante"):
+    for clave in ("vendedor_a_cargo", "supervisor_venta", "id_vendedor_usr", "CodViajante", "base_empresa"):
         if ctx.get(clave) is None and sess.get(clave) is not None:
             ctx[clave] = sess[clave]
     return ctx
@@ -196,16 +213,29 @@ def listar_cartera_operativa(
     """
     Payload para GET vendedores-cartera: vendedores, operativo, propio, mostrar_selector.
     """
-    cv = _id_vendedor_desde_ctx(ctx)
-    operativo = resolver_viajante_operativo(ctx)
-    es_supervisor = _si_no_supervisor(ctx.get("supervisor_venta") or ctx.get("permiso_supervisor_venta_web"))
-    cartera = cartera_permitida(ctx) if es_supervisor else ([cv] if cv is not None else [])
+    ctx_eff = dict(ctx)
+    if base_empresa:
+        ctx_eff["base_empresa"] = base_empresa
+    cv = _id_vendedor_desde_ctx(ctx_eff)
+    operativo = resolver_viajante_operativo(ctx_eff)
+    es_supervisor = _si_no_supervisor(
+        ctx_eff.get("supervisor_venta") or ctx_eff.get("permiso_supervisor_venta_web")
+    )
+    from ecom.services.ecom_config_mysql import workflow_jerarquia_comercial_activo
+
+    if workflow_jerarquia_comercial_activo(base_empresa):
+        cartera = cartera_permitida(ctx_eff, base_empresa)
+        mostrar = len(cartera) > 1
+    else:
+        cartera = cartera_permitida(ctx_eff, base_empresa) if es_supervisor else (
+            [cv] if cv is not None else []
+        )
+        mostrar = bool(es_supervisor and len(cartera) > 0)
     nombres = nombres_viajantes(base_empresa, cartera)
     vendedores = [
         {"cod_viajante": c, "nombre": nombres.get(c, f"Vendedor {c}")}
         for c in cartera
     ]
-    mostrar = bool(es_supervisor and len(cartera) > 0)
     return {
         "vendedores": vendedores,
         "operativo": operativo,

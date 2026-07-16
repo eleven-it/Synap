@@ -22,8 +22,10 @@ from ecom.mayoristapp_web_views import MayoristappWebSessionMixin
 from ecom.permissions import (
     EcomComprobantesReadPermission,
     EcomMayoristappSessionPermission,
+    EcomPedidosAprobarPermission,
     EcomPedidosVerPermission,
 )
+from ecom.services.aprobacion_pedidos import listar_pendientes_comerciales, resolver
 from ecom.services.pedidos_hub_pipeline import (
     archivar_borrador_masivo,
     construir_hub_pedidos,
@@ -369,6 +371,13 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
                         "api": reverse("ecom:mayoristapp_pedidos_hub_api"),
                         "archivar_draft": reverse("ecom:mayoristapp_pedidos_hub_archivar_draft"),
                         "listado_legacy": reverse("ecom:mayoristapp_pedidos_vendedor"),
+                        "aprobacion_pendientes": reverse("ecom:api_aprobacion_pendientes"),
+                        "aprobacion_aprobar": reverse(
+                            "ecom:api_aprobacion_pedido_aprobar", kwargs={"cod_mov": 0}
+                        ).replace("/0/", "/{cod_mov}/"),
+                        "aprobacion_rechazar": reverse(
+                            "ecom:api_aprobacion_pedido_rechazar", kwargs={"cod_mov": 0}
+                        ).replace("/0/", "/{cod_mov}/"),
                     },
                 },
             }
@@ -409,6 +418,75 @@ class PedidosHubArchivarDraftAPIView(APIView):
         if not ok:
             return _error("Borrador no encontrado.", "no_encontrado", 404)
         return Response({"ok": True})
+
+
+class AprobacionPendientesAPIView(APIView):
+    """GET ``/ecom/api/mayoristapp/aprobacion/pendientes/`` — cola comercial scoped."""
+
+    permission_classes = [EcomPedidosAprobarPermission]
+
+    def get(self, request: Request) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        if not base:
+            return _error("Sin base_empresa.", "sin_base_empresa")
+        dias = to_int_or_none(request.query_params.get("dias")) or 60
+        rows = listar_pendientes_comerciales(base, sess, dias=dias)
+        return Response({"ok": True, "total": len(rows), "results": rows})
+
+
+class AprobacionPedidoAprobarAPIView(APIView):
+    """POST ``/ecom/api/mayoristapp/aprobacion/<cod_mov>/aprobar/``"""
+
+    permission_classes = [EcomPedidosAprobarPermission]
+
+    def post(self, request: Request, cod_mov: int) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        if not base:
+            return _error("Sin base_empresa.", "sin_base_empresa")
+        ctx = ctx_desde_request(request)
+        aprobador = to_int_or_none(
+            ctx.get("id_vendedor_usr") or ctx.get("CodViajante") or ctx.get("cod_viajante")
+        )
+        if aprobador is None:
+            return _error("No se pudo resolver el vendedor aprobador.", "sin_vendedor")
+        data = request.data if isinstance(request.data, dict) else {}
+        motivo = str(data.get("motivo") or "").strip() or "Aprobado"
+        ok, msg, payload = resolver(
+            base, int(cod_mov), "aprobar", aprobador, motivo, sess_user=sess
+        )
+        if not ok:
+            return _error(msg, "aprobacion_fallida", 400)
+        return Response({"ok": True, "message": msg, **(payload or {})})
+
+
+class AprobacionPedidoRechazarAPIView(APIView):
+    """POST ``/ecom/api/mayoristapp/aprobacion/<cod_mov>/rechazar/``"""
+
+    permission_classes = [EcomPedidosAprobarPermission]
+
+    def post(self, request: Request, cod_mov: int) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        if not base:
+            return _error("Sin base_empresa.", "sin_base_empresa")
+        ctx = ctx_desde_request(request)
+        aprobador = to_int_or_none(
+            ctx.get("id_vendedor_usr") or ctx.get("CodViajante") or ctx.get("cod_viajante")
+        )
+        if aprobador is None:
+            return _error("No se pudo resolver el vendedor aprobador.", "sin_vendedor")
+        data = request.data if isinstance(request.data, dict) else {}
+        motivo = str(data.get("motivo") or "").strip()
+        if not motivo:
+            return _error("Indique el motivo del rechazo.", "motivo_requerido")
+        ok, msg, payload = resolver(
+            base, int(cod_mov), "rechazar", aprobador, motivo, sess_user=sess
+        )
+        if not ok:
+            return _error(msg, "aprobacion_fallida", 400)
+        return Response({"ok": True, "message": msg, **(payload or {})})
 
 
 class PedidoDetalleView(MayoristappWebSessionMixin, View):

@@ -454,8 +454,31 @@ class RequestUserMiddleware:
         # Si el usuario ya estaba autenticado, mantener referencia al request
         if hasattr(request, 'user') and request.user.is_authenticated:
             request.user._request = request
+            self._asegurar_nombre_empresa_login(request)
             
         return self.get_response(request)
+
+    @staticmethod
+    def _asegurar_nombre_empresa_login(request) -> None:
+        """Garantiza session['user']['nombre_empresa'] (etiqueta del combo de login)."""
+        session_user = request.session.get("user")
+        if not isinstance(session_user, dict):
+            return
+        if (session_user.get("nombre_empresa") or "").strip():
+            return
+        base = (session_user.get("base_empresa") or "").strip()
+        if not base:
+            return
+        try:
+            from login.administranet_auth import AdministraNETAuth
+            nombre = (AdministraNETAuth().nombre_empresa_por_base(base) or "").strip()
+        except Exception:
+            nombre = ""
+        if not nombre:
+            return
+        session_user["nombre_empresa"] = nombre
+        request.session["user"] = session_user
+        request.session.modified = True
 
 
 # --- Detección móvil en dos capas: cookie device_hint (cliente) + UA (servidor) ---

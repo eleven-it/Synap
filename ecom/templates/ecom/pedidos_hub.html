@@ -24,7 +24,7 @@
             <p class="mt-1 text-xs text-slate-300 sm:text-sm">Borradores, envíos y seguimiento comercial.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <div class="inline-flex rounded-lg border border-slate-600 bg-slate-700 p-0.5" role="group" aria-label="Vista">
+            <div class="hidden lg:inline-flex rounded-lg border border-slate-600 bg-slate-700 p-0.5" role="group" aria-label="Vista">
               <button type="button" @click="setVista('lista')"
                       :class="vista==='lista' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:text-white'"
                       class="rounded-md px-3 py-1.5 text-xs font-semibold">Lista</button>
@@ -66,8 +66,68 @@
       </div>
     </div>
 
-    {# Kanban #}
-    <div x-show="vista==='kanban'" class="min-h-0 flex-1 overflow-x-auto">
+    {# Móvil (< lg): chips de estado + tarjetas verticales sin scroll horizontal #}
+    <div class="flex min-h-0 flex-1 flex-col lg:hidden">
+      <div class="mb-3 flex-shrink-0 overflow-x-hidden">
+        <div class="flex flex-wrap gap-2" role="tablist" aria-label="Filtrar por estado">
+          <button type="button"
+                  @click="columnaMovil='todas'"
+                  :class="columnaMovil==='todas' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600'"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold">
+            Todas
+            <span class="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] tabular-nums" x-text="itemsPlanos.length"></span>
+          </button>
+          <template x-for="col in columnas" :key="'chip-'+col.id">
+            <button type="button"
+                    @click="columnaMovil=col.id"
+                    :class="columnaMovil===col.id ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600'"
+                    class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold">
+              <span x-text="col.label"></span>
+              <span class="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] tabular-nums" x-text="col.count"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+      <div class="min-h-0 flex-1 space-y-2 overflow-y-auto pb-2">
+        <template x-for="it in itemsMovilFiltrados()" :key="it.id_ref">
+          <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+            <a :href="it.url" class="block">
+              <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm font-semibold text-slate-900 dark:text-white" x-text="it.titulo"></p>
+                  <p class="mt-0.5 line-clamp-2 text-xs text-slate-500" x-text="it.subtitulo"></p>
+                  <p x-show="it.sucursal" class="mt-0.5 truncate text-xs font-medium text-slate-600 dark:text-slate-400" x-text="it.sucursal"></p>
+                </div>
+                <span class="flex-shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600 dark:bg-slate-900 dark:text-slate-300"
+                      x-text="labels[it.columna] || it.columna"></span>
+              </div>
+              <div class="mt-2 flex items-center justify-between gap-2">
+                <p class="text-[11px] tabular-nums text-slate-400" x-text="it.fecha"></p>
+                <span x-show="it.badge_error" class="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-red-700">Error</span>
+                <span x-show="it.tipo==='carrito' || it.tipo==='masivo'"
+                      class="text-[11px] font-semibold text-purple-600">Continuar →</span>
+              </div>
+            </a>
+            <div x-show="it.meta && it.meta.puede_aprobar" class="mt-2 flex flex-wrap gap-2 border-t border-slate-100 pt-2 dark:border-slate-700">
+              <button type="button" @click="aprobarPedido(it)"
+                      class="inline-flex min-h-8 flex-1 items-center justify-center rounded-lg bg-emerald-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500">
+                Aprobar
+              </button>
+              <button type="button" @click="rechazarPedido(it)"
+                      class="inline-flex min-h-8 flex-1 items-center justify-center rounded-lg border border-red-300 bg-red-50 px-2 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100">
+                Rechazar
+              </button>
+            </div>
+          </div>
+        </template>
+        <p x-show="!itemsMovilFiltrados().length" class="py-10 text-center text-sm text-slate-500">
+          No hay pedidos en este estado.
+        </p>
+      </div>
+    </div>
+
+    {# Kanban escritorio (≥ lg) #}
+    <div x-show="vista==='kanban'" class="hidden min-h-0 flex-1 overflow-x-auto lg:block">
       <div class="flex h-full min-h-0 gap-3 pb-2" style="min-width: max-content;">
         <template x-for="col in columnas" :key="col.id">
           <div class="flex w-64 flex-shrink-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:w-72">
@@ -77,18 +137,25 @@
             </div>
             <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
               <template x-for="it in col.items" :key="it.id_ref">
-                <a :href="it.url"
-                   class="block rounded-lg border border-slate-200 bg-slate-50 p-2.5 transition hover:border-purple-300 hover:bg-white dark:border-slate-600 dark:bg-slate-900/40 dark:hover:border-purple-500">
-                  <div class="flex items-start justify-between gap-1">
-                    <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="it.titulo"></p>
-                    <span x-show="it.badge_error" class="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-red-700">Error</span>
+                <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-600 dark:bg-slate-900/40">
+                  <a :href="it.url" class="block transition hover:border-purple-300 hover:bg-white dark:hover:border-purple-500">
+                    <div class="flex items-start justify-between gap-1">
+                      <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="it.titulo"></p>
+                      <span x-show="it.badge_error" class="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-red-700">Error</span>
+                    </div>
+                    <p class="mt-0.5 text-xs text-slate-500" x-text="it.subtitulo"></p>
+                    <p x-show="it.sucursal" class="mt-0.5 text-xs font-medium text-slate-600 dark:text-slate-400" x-text="it.sucursal"></p>
+                    <p class="mt-1 text-[11px] tabular-nums text-slate-400" x-text="it.fecha"></p>
+                    <span x-show="it.tipo==='carrito' || it.tipo==='masivo'"
+                          class="mt-1 inline-block text-[11px] font-semibold text-purple-600">Continuar →</span>
+                  </a>
+                  <div x-show="it.meta && it.meta.puede_aprobar" class="mt-2 flex gap-1 border-t border-slate-200 pt-2 dark:border-slate-600">
+                    <button type="button" @click="aprobarPedido(it)"
+                            class="flex-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500">Aprobar</button>
+                    <button type="button" @click="rechazarPedido(it)"
+                            class="flex-1 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 hover:bg-red-100">Rechazar</button>
                   </div>
-                  <p class="mt-0.5 text-xs text-slate-500" x-text="it.subtitulo"></p>
-                  <p x-show="it.sucursal" class="mt-0.5 text-xs font-medium text-slate-600 dark:text-slate-400" x-text="it.sucursal"></p>
-                  <p class="mt-1 text-[11px] tabular-nums text-slate-400" x-text="it.fecha"></p>
-                  <span x-show="it.tipo==='carrito' || it.tipo==='masivo'"
-                        class="mt-1 inline-block text-[11px] font-semibold text-purple-600">Continuar →</span>
-                </a>
+                </div>
               </template>
               <p x-show="!col.items.length" class="px-1 py-6 text-center text-xs text-slate-400">Vacío</p>
             </div>
@@ -97,8 +164,8 @@
       </div>
     </div>
 
-    {# Lista #}
-    <div x-show="vista==='lista'" x-cloak class="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    {# Lista escritorio (≥ lg) #}
+    <div x-show="vista==='lista'" x-cloak class="hidden min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 lg:block">
       <table class="min-w-full text-left text-sm">
         <thead class="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600 dark:bg-slate-900 dark:text-slate-400">
           <tr>
@@ -153,10 +220,12 @@
 function pedidosHubApp() {
   return {
     vista: 'kanban',
+    columnaMovil: 'todas',
     columnas: [],
     itemsPlanos: [],
     labels: {},
     urls: {},
+    aprobacionActiva: false,
     borradoresActivos: 0,
     modalBorrador: false,
     urlContinuarBorrador: '',
@@ -169,13 +238,20 @@ function pedidosHubApp() {
       this.labels = data.labels || {};
       this.aplicarPayload(data.hub || {});
       const saved = localStorage.getItem('synap_pedidos_hub_vista');
-      if (saved === 'lista' || saved === 'kanban') this.vista = saved;
-      else if (data.vista) this.vista = data.vista;
+      if (window.matchMedia('(min-width: 1024px)').matches) {
+        if (saved === 'lista' || saved === 'kanban') this.vista = saved;
+        else if (data.vista) this.vista = data.vista;
+      }
+    },
+    itemsMovilFiltrados() {
+      if (this.columnaMovil === 'todas') return this.itemsPlanos;
+      return this.itemsPlanos.filter((it) => it.columna === this.columnaMovil);
     },
     aplicarPayload(hub) {
       this.columnas = hub.columnas || [];
       this.itemsPlanos = hub.items || [];
       this.borradoresActivos = hub.borradores_activos || 0;
+      this.aprobacionActiva = !!hub.aprobacion_comercial_activa;
       this.labels = hub.labels || this.labels;
       const borr = (this.columnas.find(c => c.id === 'borrador') || {}).items || [];
       const masivo = borr.find(i => i.tipo === 'masivo');
@@ -205,6 +281,7 @@ function pedidosHubApp() {
       }
     },
     setVista(v) {
+      if (!window.matchMedia('(min-width: 1024px)').matches) return;
       this.vista = v;
       localStorage.setItem('synap_pedidos_hub_vista', v);
     },
@@ -229,6 +306,52 @@ function pedidosHubApp() {
         body: JSON.stringify({ draft_id: this.draftMasivoId }),
       });
       window.location.href = this.urls.nuevo_masivo;
+    },
+    _urlAprobacion(template, codMov) {
+      if (!template || !codMov) return '';
+      return String(template).replace('{cod_mov}', String(codMov));
+    },
+    _csrf() {
+      const m = document.cookie.match(/csrftoken=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    },
+    async aprobarPedido(it) {
+      const cod = it && it.meta ? it.meta.codigo_movimiento : null;
+      if (!cod) return;
+      const url = this._urlAprobacion(this.urls.aprobacion_aprobar, cod);
+      if (!url) return;
+      const resp = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
+        body: JSON.stringify({ motivo: 'Aprobado desde hub' }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.ok === false) {
+        alert(data.error || 'No se pudo aprobar el pedido.');
+        return;
+      }
+      await this.actualizar();
+    },
+    async rechazarPedido(it) {
+      const cod = it && it.meta ? it.meta.codigo_movimiento : null;
+      if (!cod) return;
+      const motivo = window.prompt('Motivo del rechazo (obligatorio):');
+      if (!motivo || !motivo.trim()) return;
+      const url = this._urlAprobacion(this.urls.aprobacion_rechazar, cod);
+      if (!url) return;
+      const resp = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
+        body: JSON.stringify({ motivo: motivo.trim() }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.ok === false) {
+        alert(data.error || 'No se pudo rechazar el pedido.');
+        return;
+      }
+      await this.actualizar();
     },
   };
 }

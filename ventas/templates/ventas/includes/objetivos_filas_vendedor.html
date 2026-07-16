@@ -1,0 +1,20 @@
+{% load l10n %}
+{% for c in vendedor.clientes %}
+<tr class="vo-fila-cliente vo-fila-grupo vo-grupo-child bg-white hover:bg-slate-50/90 dark:bg-slate-800 dark:hover:bg-slate-700/40 transition-colors"
+    style="display: none;"
+    data-parent-grupo="v{{ vendedor.cod_viajante }}"
+    data-cod-viajante="{{ c.cod_viajante }}"
+    data-codigo="{{ c.codigo }}"
+    data-vo-search="{{ vendedor.nombre_vendedor|escape }} {{ c.id_manual_cli|escape }} {{ c.codigo }} {{ c.nombre_cliente|escape }}">
+  <td class="px-4 py-2 pl-10 font-mono text-[11px] text-slate-500 dark:text-slate-400 tabular-nums sm:pl-12">{{ c.id_manual_cli }}</td>
+  <td class="vo-col-nombre px-4 py-2 text-[13px] text-slate-600 dark:text-slate-300">{{ c.nombre_cliente }}</td>
+  <td class="border-l border-slate-100 bg-slate-50/90 px-4 py-2 text-right dark:border-slate-700 dark:bg-slate-800/35">
+    <span class="vo-ponderacion font-mono text-sm tabular-nums text-slate-800 dark:text-slate-200"
+          data-base-ventas="{{ c.base_ventas|unlocalize }}"
+          data-ponderacion="{{ c.peso_prorrateo|unlocalize }}">{{ c.peso_prorrateo_pct|floatformat:2 }}%</span>
+  </td>
+  <td class="border-l border-slate-100 bg-slate-50/90 px-4 py-2 text-right dark:border-slate-700 dark:bg-slate-800/35">
+    <span class="vo-importe-cliente font-mono text-sm tabular-nums text-slate-800 dark:text-slate-200" data-vo-obj-sum="{{ c.objetivo_entero|unlocalize }}">{{ c.objetivo_entero|formato_entero_miles }}</span>
+  </td>
+</tr>
+{% endfor %}

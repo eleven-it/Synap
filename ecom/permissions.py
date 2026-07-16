@@ -157,3 +157,31 @@ class EcomPedidosVerPermission(BasePermission):
         if getattr(user, "is_superuser", False):
             return True
         return _user_has_perm(request, "ecom.pedidos.ver")
+
+
+class EcomJerarquiaEditarPermission(BasePermission):
+    """ABM organigrama comercial."""
+
+    message = "Se requiere permiso ecom.jerarquia.editar."
+
+    def has_permission(self, request, view):
+        if not _session_base_empresa(request):
+            return False
+        user = getattr(request, "user", None)
+        if getattr(user, "is_superuser", False):
+            return True
+        return _user_has_perm(request, "ecom.jerarquia.editar")
+
+
+class EcomPedidosAprobarPermission(BasePermission):
+    """Resolver cola de aprobación comercial."""
+
+    message = "Se requiere permiso ecom.pedidos.aprobar."
+
+    def has_permission(self, request, view):
+        if not _session_base_empresa(request):
+            return False
+        user = getattr(request, "user", None)
+        if getattr(user, "is_superuser", False):
+            return True
+        return _user_has_perm(request, "ecom.pedidos.aprobar")

@@ -197,6 +197,22 @@ def _score_pack(bp: str | None, ap: str | None) -> tuple[int, list[str]]:
     return -15, ["pack_diff"]
 
 
+def _score_pack_suave(bp: str | None, ap: str | None) -> tuple[int, list[str]]:
+    """Pack suave para componentes fabricados (1Par vs catálogo semi)."""
+    if not ap:
+        return 0, []
+    ap_s = str(ap).strip()
+    bp_raw = str(bp or "").strip().upper()
+    if not bp_raw or bp_raw in ("1", "1P"):
+        return 0, ["pack_admin_1par_sin_best"] if ap_s == "1" else []
+    bp_s = "1" if bp_raw in ("1", "1P") else bp_raw
+    if ap_s == bp_s:
+        return 15, ["pack_match"]
+    if ap_s == "1" and bp_s in ("2", "3"):
+        return -10, ["pack_mismatch_suave"]
+    return -5, ["pack_diff_suave"]
+
+
 def _score_talle(bt: str | None, at: str | None) -> tuple[int, list[str]]:
     if not bt or not at:
         return 0, []
@@ -468,23 +484,214 @@ def match_open_order_skus(
     return results
 
 
+def models_from_admin(admin: dict) -> list[str]:
+    """Modelos candidatos desde id_manual / NombreArticulo (mismo criterio que by_model)."""
+    models: list[str] = []
+
+    def add(x: str | None) -> None:
+        if x and x not in models:
+            models.append(x)
+
+    im = (admin.get("id_manual") or "").strip()
+    nom = admin.get("NombreArticulo") or ""
+    if re.fullmatch(r"\d{3,6}", im or ""):
+        add(im)
+    m = re.match(r"^(\d{3,6})\b", nom)
+    if m:
+        add(m.group(1))
+    if re.fullmatch(r"90\d{4}", im or ""):
+        add(im[2:])
+    for m in re.finditer(
+        r"\b(\d{3,6})-([A-Z0-9]{2,5})\b",
+        f"{nom} {admin.get('CodArtProv') or ''}",
+        flags=re.I,
+    ):
+        add(m.group(1))
+    return models
+
+
+def _score_admin_fabricado_a_best(
+    admin: dict,
+    best: dict,
+    attrs: dict,
+) -> tuple[int, list[str]]:
+    """Score directo Admin fabricado → SKU BEST (catálogo 4000/4002)."""
+    nom = admin.get("NombreArticulo") or ""
+    codprov = admin.get("CodArtProv") or ""
+    im = (admin.get("id_manual") or "").strip()
+
+    mmid = str(best.get("id_articulo") or "").strip()
+    codigo = best.get("codigo") or attrs.get("CODIGO")
+    articulo = str(best.get("articulo") or "")
+    model_mmid, cols, talle_mmid = parse_mmid(mmid)
+    best_models = models_from_best(codigo, mmid, articulo)
+    if model_mmid and model_mmid not in best_models:
+        best_models.insert(0, model_mmid)
+
+    admin_models = models_from_admin(admin)
+    score = 0
+    reasons: list[str] = []
+
+    bt = tokens(articulo)
+    atok = tokens(nom)
+
+    model_hit = any(
+        model in best_models
+        or nom.startswith(model)
+        or nom.startswith("90" + model)
+        or im in (model, "90" + model)
+        for model in admin_models
+    )
+    if model_hit:
+        score += 35
+        reasons.append("B_model")
+        score += 10
+        reasons.append("B_model_fab_base")
+        for model in admin_models:
+            if model in bt or model in atok:
+                score += 8
+                reasons.append("model_token")
+                break
+    elif admin_models and best_models and set(admin_models) & set(best_models):
+        score += 20
+        reasons.append("B_model_partial")
+    elif admin_models:
+        score += 10
+        reasons.append("B_model_weak")
+
+    variants = extract_variant_codes(articulo, codigo, mmid)
+    blob = f"{nom} {codprov}".upper()
+    for vc in variants:
+        if vc.upper() in blob or vc.replace("-", "") in norm(blob).replace(" ", ""):
+            score += 35
+            reasons.append("variant_code")
+            break
+
+    at = parse_admin_talle(nom, codprov)
+    ap = parse_admin_pack(nom)
+    aprof = parse_admin_color_profile(nom)
+    talle = str(attrs.get("TALLE") or talle_mmid or "").strip()
+    pack = str(attrs.get("PACK") or "").strip()
+    if not cols:
+        for k in ("COLOR", "COLOR1", "COLOR2", "COLOR3"):
+            v = attrs.get(k)
+            if v and str(v).strip():
+                cols.append(str(v).strip().upper())
+    bprof = best_color_profile(cols)
+
+    sc, rs = _score_talle(talle, at)
+    score += sc
+    reasons += rs
+    sc, rs = _score_pack_suave(pack, ap)
+    score += sc
+    reasons += rs
+    sc, rs = _score_color(bprof, aprof)
+    if model_hit and sc < 0:
+        sc = max(sc, -8)
+    score += sc
+    reasons += rs
+
+    marca = norm(best.get("marca") or attrs.get("MARCADS") or "")
+    if marca and marca in norm(nom):
+        score += 5
+        reasons.append("marca")
+
+    if bt and atok:
+        j = len(bt & atok) / len(bt | atok)
+        score += int(j * 15)
+        if j >= 0.4:
+            reasons.append(f"jaccard_{j:.2f}")
+
+    return score, reasons
+
+
+def _status_inferencia_fabricado(score: int, amb: bool) -> str:
+    if score >= 95 and not amb:
+        return STATUS_INFERIDO_ALTO
+    if score >= 75 and not amb:
+        return STATUS_INFERIDO_MEDIO
+    if amb:
+        return STATUS_AMBIGUO
+    if score >= 55:
+        return STATUS_INFERIDO_BAJO
+    if score >= 40:
+        return STATUS_INFERIDO_BAJO
+    return STATUS_SIN_CANDIDATO
+
+
+def _match_row_fabricado_desde_best(
+    admin: dict,
+    *,
+    best: dict,
+    attrs: dict,
+    score: int,
+    razon: str,
+    status: str,
+    candidatos_n: int,
+    cand_best: list[dict],
+) -> MatchRow:
+    aid = int(admin["IDArt"])
+    mmid = str(best.get("id_articulo") or "").strip()
+    codigo = str(best.get("codigo") or attrs.get("CODIGO") or "").strip()
+    articulo = str(best.get("articulo") or "").strip()
+    cols = [
+        str(attrs.get(key) or "").strip().upper()
+        for key in ("COLOR", "COLOR1", "COLOR2", "COLOR3")
+        if str(attrs.get(key) or "").strip()
+    ]
+    alt1 = cand_best[1] if len(cand_best) > 1 else None
+    alt2 = cand_best[2] if len(cand_best) > 2 else None
+    return MatchRow(
+        best_id_articulo=mmid,
+        best_codigo=codigo,
+        best_articulo=articulo,
+        best_marca=str(best.get("marca") or attrs.get("MARCADS") or ""),
+        best_modelos="|".join(models_from_best(codigo, mmid, articulo)),
+        best_colores="/".join(cols),
+        best_color_mode=best_color_profile(cols)["mode"],
+        best_talle=str(attrs.get("TALLE") or parse_mmid(mmid)[2] or "").strip(),
+        best_pack=str(attrs.get("PACK") or "").strip(),
+        best_variant_codes="|".join(
+            sorted(extract_variant_codes(articulo, codigo, mmid))
+        ),
+        status=status,
+        score=score,
+        razon=razon,
+        admin_idart=aid,
+        admin_id_manual=(admin.get("id_manual") or "").strip(),
+        admin_nombre=admin.get("NombreArticulo") or "",
+        admin_cod_art_prov=(admin.get("CodArtProv") or "").strip(),
+        admin_pack=parse_admin_pack(admin.get("NombreArticulo")) or "",
+        admin_talle=parse_admin_talle(admin.get("NombreArticulo"), admin.get("CodArtProv")) or "",
+        admin_color_mode=parse_admin_color_profile(admin.get("NombreArticulo"))["mode"],
+        candidatos_n=candidatos_n,
+        alt1_idart=None,
+        alt1_nombre=(alt1.get("articulo") or "") if alt1 else "",
+        alt1_score=alt1.get("score") if alt1 else None,
+        alt2_idart=None,
+        alt2_nombre=(alt2.get("articulo") or "") if alt2 else "",
+        alt2_score=alt2.get("score") if alt2 else None,
+        extras={"cand_best": cand_best},
+    )
+
+
 def match_admin_fabricados_to_best(
     *,
     admin_fabricados: list[dict],
     best_rows: list[dict],
     myl_by_mmid: dict[str, dict],
+    best_ids_ocupados: set[str] | None = None,
 ) -> dict[int, MatchRow]:
     """
-    Matcher inverso Admin Fabricado → SKU BEST.
+    Matcher Admin Fabricado → SKU BEST (directo sobre catálogo semi).
 
     Primero resuelve coincidencias exactas de ``id_manual`` contra MYL.CODIGO,
-    MYMMID o el código publicado por BEST. Luego aplica el scoring general.
-    En empates se prioriza PACK vacío/1/1P, propio de componentes 1Par.
+    MYMMID o el código publicado por BEST. Luego puntúa cada SKU BEST por
+    modelo/tokens/color/talle/pack suave. En empates se prioriza PACK vacío/1/1P.
     """
     if not admin_fabricados:
         return {}
 
-    fabricado_ids = {int(a["IDArt"]) for a in admin_fabricados if a.get("IDArt")}
     out: dict[int, MatchRow] = {}
     pendientes: list[dict] = []
 
@@ -548,18 +755,33 @@ def match_admin_fabricados_to_best(
     if not pendientes:
         return out
 
-    all_rows = match_open_order_skus(
-        best_rows=best_rows, myl_by_mmid=myl_by_mmid, admin_arts=pendientes
-    )
-    by_admin: dict[int, list[MatchRow]] = defaultdict(list)
-    for row in all_rows:
-        if row.admin_idart and int(row.admin_idart) in fabricado_ids:
-            by_admin[int(row.admin_idart)].append(row)
+    ocupados = best_ids_ocupados or set()
 
     for admin in pendientes:
         aid = int(admin["IDArt"])
-        candidates = by_admin.get(aid, [])
-        if not candidates:
+        scored: list[tuple[int, str, dict, dict]] = []
+        for best in best_rows:
+            mmid = str(best.get("id_articulo") or "").strip()
+            if not mmid:
+                continue
+            attrs = myl_by_mmid.get(mmid) or {}
+            sc, rs = _score_admin_fabricado_a_best(admin, best, attrs)
+            if mmid in ocupados:
+                sc -= 3
+                rs = list(rs) + ["ocupado_ext"]
+            scored.append((sc, "+".join(rs), best, attrs))
+
+        scored.sort(
+            key=lambda x: (
+                -x[0],
+                pack_rank((x[3] or {}).get("PACK")),
+                1 if str(x[2].get("id_articulo") or "") in ocupados else 0,
+                str(x[2].get("id_articulo") or ""),
+            )
+        )
+        aceptados = [s for s in scored if s[0] >= 40]
+
+        if not aceptados:
             out[aid] = MatchRow(
                 best_id_articulo="",
                 status=STATUS_SIN_CANDIDATO,
@@ -569,30 +791,56 @@ def match_admin_fabricados_to_best(
                 admin_cod_art_prov=(admin.get("CodArtProv") or "").strip(),
             )
             continue
-        candidates.sort(
-            key=lambda r: (-(r.score or 0), pack_rank(r.best_pack), r.best_id_articulo)
-        )
-        top = candidates[0]
-        if len(candidates) > 1 and (candidates[1].score or 0) >= (top.score or 0) - 5:
-            top = MatchRow(
-                best_id_articulo=top.best_id_articulo,
-                best_codigo=top.best_codigo,
-                best_articulo=top.best_articulo,
-                best_marca=top.best_marca,
-                best_modelos=top.best_modelos,
-                best_colores=top.best_colores,
-                best_color_mode=top.best_color_mode,
-                best_talle=top.best_talle,
-                best_pack=top.best_pack,
-                best_variant_codes=top.best_variant_codes,
-                status=STATUS_AMBIGUO,
-                score=top.score,
-                razon=(top.razon or "") + "+inverso_ambiguo",
+
+        top_score, top_reason, top_best, top_attrs = aceptados[0]
+        amb = False
+        if len(aceptados) > 1:
+            top_art = norm(top_best.get("articulo"))
+            for sc, _, b, _ in aceptados[1:5]:
+                if sc >= top_score - 5 and sc >= 55:
+                    if norm(b.get("articulo")) != top_art:
+                        amb = True
+                        break
+
+        status = _status_inferencia_fabricado(top_score, amb)
+        if status == STATUS_SIN_CANDIDATO:
+            out[aid] = MatchRow(
+                best_id_articulo="",
+                status=STATUS_SIN_CANDIDATO,
+                score=top_score,
+                razon=top_reason,
                 admin_idart=aid,
-                admin_id_manual=top.admin_id_manual,
-                admin_nombre=top.admin_nombre,
-                admin_cod_art_prov=top.admin_cod_art_prov,
-                candidatos_n=len(candidates),
+                admin_id_manual=(admin.get("id_manual") or "").strip(),
+                admin_nombre=admin.get("NombreArticulo") or "",
+                admin_cod_art_prov=(admin.get("CodArtProv") or "").strip(),
             )
-        out[aid] = top
+            continue
+
+        cand_best: list[dict] = []
+        for sc, rs, b, a in aceptados[:10]:
+            mmid = str(b.get("id_articulo") or "").strip()
+            codigo = str(b.get("codigo") or a.get("CODIGO") or "").strip()
+            articulo = str(b.get("articulo") or "").strip()
+            cand_best.append(
+                {
+                    "id": mmid,
+                    "articulo": articulo,
+                    "codigo": codigo,
+                    "score": sc,
+                    "pack": str(a.get("PACK") or "").strip(),
+                    "marca": str(b.get("marca") or a.get("MARCADS") or ""),
+                    "razon": rs,
+                }
+            )
+
+        out[aid] = _match_row_fabricado_desde_best(
+            admin,
+            best=top_best,
+            attrs=top_attrs,
+            score=top_score,
+            razon=top_reason + ("+ambiguo" if amb else ""),
+            status=status,
+            candidatos_n=len(aceptados),
+            cand_best=cand_best,
+        )
     return out

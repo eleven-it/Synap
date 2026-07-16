@@ -25,8 +25,20 @@ from reports.services.objetivos_ventas_contract import (
     calcular_total_consolidado_objetivos,
 )
 from reports.services.query_runner import QueryResult, QueryRunnerService, parse_fecha_bo_yyyymmdd
+from ventas.services.objetivos_mysql import (
+    agrupar_jerarquia_informe_arbol_org,
+    alcance_objetivos_cod_viajante,
+    ctx_desde_runner,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _sql_in_viajantes(alias: str, codigos: List[int]) -> Tuple[str, List[int]]:
+    if not codigos:
+        return "", []
+    ph = ",".join(["%s"] * len(codigos))
+    return f" AND {alias}.CodViajante IN ({ph})", list(codigos)
 
 
 def _usuario_es_supervisor_cod(user) -> bool:
@@ -1016,6 +1028,9 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
             notes=["No se pudo determinar la base de datos de la empresa."],
         )
 
+    alcance_ctx = ctx_desde_runner(user, str(base_empresa), filters)
+    alcance_cv = alcance_objetivos_cod_viajante(str(base_empresa), alcance_ctx)
+
     sucursales_ints, puntos_venta_ints = svc._parse_sucursales_pv(filters)
 
     depositos_incluidos = filters.get("depositos_incluidos", [])
@@ -1076,6 +1091,37 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
     # Reconciliación defensiva backend: si llega en ambos, prevalece "incluir".
     clientes_excluidos = [c for c in clientes_excluidos if int(c) not in set(clientes_incluir)]
     vendedores_excluidos = [v for v in vendedores_excluidos if int(v) not in set(vendedores_incluir)]
+
+    alcance_viaj_filtro: List[int] = []
+    if alcance_cv is not None:
+        if not alcance_cv:
+            return QueryResult(
+                meta={"slug": report.slug, "name": report.name, "category": report.category, "version": report.version},
+                data=[],
+                totals={},
+                notes=["Sin vendedores en el alcance comercial del usuario."],
+            )
+        alcance_set = set(int(x) for x in alcance_cv)
+        if vendedores_incluir:
+            alcance_viaj_filtro = [v for v in vendedores_incluir if v in alcance_set]
+            if not alcance_viaj_filtro:
+                return QueryResult(
+                    meta={"slug": report.slug, "name": report.name, "category": report.category, "version": report.version},
+                    data=[],
+                    totals={},
+                    notes=["Los vendedores solicitados no están en su alcance comercial."],
+                )
+        else:
+            alcance_viaj_filtro = sorted(alcance_set)
+        vendedores_excluidos = [v for v in vendedores_excluidos if int(v) not in set(alcance_viaj_filtro)]
+
+    alcance_sql_cl, alcance_params_cl = _sql_in_viajantes("cl", alcance_viaj_filtro)
+    alcance_sql_cl_bo, alcance_params_cl_bo = _sql_in_viajantes("cl_bo", alcance_viaj_filtro)
+    alcance_sql_cl_rem, alcance_params_cl_rem = _sql_in_viajantes("cl_rem", alcance_viaj_filtro)
+    alcance_sql_cl_ped, alcance_params_cl_ped = _sql_in_viajantes("cl_ped", alcance_viaj_filtro)
+    alcance_sql_cl_uni, alcance_params_cl_uni = _sql_in_viajantes("cl_uni", alcance_viaj_filtro)
+    alcance_sql_cl_res, alcance_params_cl_res = _sql_in_viajantes("cl_res", alcance_viaj_filtro)
+
     _mark_phase("parse_filtros")
 
     lista_precio = filters.get("lista_precio")
@@ -1105,6 +1151,8 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
         reservado_excl_clause = " AND cp_res.Codigo NOT IN (" + ",".join(str(c) for c in clientes_excluidos) + ")"
     if vendedores_excluidos:
         reservado_viaj_clause = " AND cl_res.CodViajante NOT IN (" + ",".join(str(x) for x in vendedores_excluidos) + ")"
+    if alcance_viaj_filtro:
+        reservado_viaj_clause += " AND cl_res.CodViajante IN (" + ",".join(str(x) for x in alcance_viaj_filtro) + ")"
     suc_bo_ph = ""
     if sucursales_ints:
         suc_bo_ph = " AND cp.CodSucursal IN (" + ",".join(["%s"] * len(sucursales_ints)) + ")"
@@ -1120,17 +1168,27 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
     bo_estados = "('Pendiente')"
 
     obj_viaj_extra = ""
+    obj_viaj_params: List[Any] = []
     if vendedores_excluidos:
         obj_viaj_extra = (
             " AND v.Codigo IN (SELECT cjx.Codigo FROM cliente cjx WHERE cjx.CodViajante NOT IN ("
             + ",".join(str(x) for x in vendedores_excluidos)
             + "))"
         )
+    if alcance_viaj_filtro:
+        pha = ",".join(["%s"] * len(alcance_viaj_filtro))
+        obj_viaj_extra += f" AND v.CodViajante IN ({pha})"
+        obj_viaj_params.extend(alcance_viaj_filtro)
 
     viaj_bo = ""
+    viaj_bo_params: List[Any] = []
     if vendedores_excluidos:
         phvb = ",".join(["%s"] * len(vendedores_excluidos))
         viaj_bo = f" AND cl_bo.CodViajante NOT IN ({phvb})"
+        viaj_bo_params.extend(vendedores_excluidos)
+    if alcance_viaj_filtro:
+        viaj_bo += alcance_sql_cl_bo
+        viaj_bo_params.extend(alcance_params_cl_bo)
 
     notes: List[str] = []
     try:
@@ -1166,7 +1224,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 phv = ",".join(["%s"] * len(vendedores_excluidos))
                 where_fac_cli.append(f"cl.CodViajante NOT IN ({phv})")
                 params_fac_cli.extend(vendedores_excluidos)
-            where_fac_cli_s = " AND ".join(where_fac_cli)
+            where_fac_cli_s = " AND ".join(where_fac_cli) + alcance_sql_cl
             sql_fac_cli = f"""
                 SELECT
                     cl.Codigo AS id_cliente,
@@ -1181,7 +1239,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 WHERE {where_fac_cli_s}
                 GROUP BY cl.Codigo
             """
-            cursor.execute(sql_fac_cli, params_fac_cli)
+            cursor.execute(sql_fac_cli, params_fac_cli + alcance_params_cl)
             fac_rows = cursor.fetchall()
             fact_map: Dict[int, Dict[str, Any]] = {}
             for r in fac_rows:
@@ -1210,7 +1268,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 phv = ",".join(["%s"] * len(vendedores_excluidos))
                 where_hist_cli.append(f"cl.CodViajante NOT IN ({phv})")
                 params_hist_cli.extend(vendedores_excluidos)
-            where_hist_cli_s = " AND ".join(where_hist_cli)
+            where_hist_cli_s = " AND ".join(where_hist_cli) + alcance_sql_cl
             sql_hist_cli = f"""
                 SELECT cl.Codigo
                 FROM cuentacliente cc
@@ -1223,7 +1281,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     - SUM(CASE WHEN cc.TipoComprobante IN ('NCA', 'NCB', 'NCC', 'NCE', 'NCM') THEN COALESCE(cc.SubtotalDesc, 0) ELSE 0 END)
                 ) > 0.000001
             """
-            cursor.execute(sql_hist_cli, params_hist_cli)
+            cursor.execute(sql_hist_cli, params_hist_cli + alcance_params_cl)
             ids_con_historico_ventas = {int(r[0]) for r in cursor.fetchall() if r and r[0] is not None}
             _mark_phase("query_historico")
 
@@ -1269,10 +1327,10 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     SELECT cp.Codigo, SUM(COALESCE(cp.SubtotalDesc, 0))
                     FROM comp_ped cp
                     INNER JOIN cliente cl_rem ON cl_rem.Codigo = cp.Codigo
-                    WHERE {" AND ".join(where_remitos)}
+                    WHERE {" AND ".join(where_remitos)}{alcance_sql_cl_rem}
                     GROUP BY cp.Codigo
                 """
-                cursor.execute(sql_rem_cli, params_rem)
+                cursor.execute(sql_rem_cli, params_rem + alcance_params_cl_rem)
                 for r in cursor.fetchall():
                     rem_map[int(r[0])] = float(r[1] or 0)
                 _mark_phase("query_remitos")
@@ -1304,10 +1362,10 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     SELECT cp.Codigo, SUM(COALESCE(cp.SubtotalDesc, 0))
                     FROM comp_ped cp
                     INNER JOIN cliente cl_ped ON cl_ped.Codigo = cp.Codigo
-                    WHERE {" AND ".join(where_ped_arm)}
+                    WHERE {" AND ".join(where_ped_arm)}{alcance_sql_cl_ped}
                     GROUP BY cp.Codigo
                 """
-                cursor.execute(sql_ped_arm, params_ped)
+                cursor.execute(sql_ped_arm, params_ped + alcance_params_cl_ped)
                 for r in cursor.fetchall():
                     ped_arm_map[int(r[0])] = float(r[1] or 0)
                 _mark_phase("query_pedidos_en_armado")
@@ -1435,19 +1493,19 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                 FROM stock st
                 INNER JOIN cuentacliente cc ON cc.CodigoMovimiento = st.CodigoMovimiento
                 INNER JOIN cliente cl_uni ON cl_uni.Codigo = cc.Codigo
-                WHERE {" AND ".join(where_uni)}
+                WHERE {" AND ".join(where_uni)}{alcance_sql_cl_uni}
                 GROUP BY cc.Codigo
             """
-            cursor.execute(sql_uni, params_uni)
+            cursor.execute(sql_uni, params_uni + alcance_params_cl_uni)
             uni_map: Dict[int, float] = {}
             for r in cursor.fetchall():
                 uni_map[int(r[0])] = float(r[1] or 0)
                 _mark_phase("query_unidades")
 
             # --- Detalle venta por línea (mismo rango y filtros que unidades) ---
-            where_uni_s = " AND ".join(where_uni)
+            where_uni_s = " AND ".join(where_uni) + alcance_sql_cl_uni
             filt_art_venta_det = ""
-            params_venta_art: List[Any] = list(params_uni)
+            params_venta_art: List[Any] = list(params_uni) + list(alcance_params_cl_uni)
             if vo_filtra_rubro:
                 filt_art_venta_det = f" AND art.IDArt IS NOT NULL{rub_sub_sql_art}"
                 params_venta_art.extend(rub_sub_params_art)
@@ -1609,7 +1667,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     """
                     ff = d_fac_fin.isoformat()
                     fi = d_fac_ini.isoformat()
-                    cursor.execute(sql_obj, [ff, fi, ff, fi])
+                    cursor.execute(sql_obj, [ff, fi, ff, fi] + obj_viaj_params)
                     for r in cursor.fetchall():
                         objetivos_map[int(r[0])] = Decimal(str(r[1] or 0))
                 except Exception as ex:
@@ -1687,8 +1745,7 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     _bo_params.extend(sucursales_ints)
                 if puntos_venta_ints:
                     _bo_params.extend(puntos_venta_ints)
-                if vendedores_excluidos:
-                    _bo_params.extend(vendedores_excluidos)
+                _bo_params.extend(viaj_bo_params)
                 _bo_params.extend([fecha_inicio_bo, fecha_fin_bo])
                 if vo_filtra_rubro:
                     _bo_params.extend(rub_sub_params_a)
@@ -1982,11 +2039,24 @@ def run_ventas_objetivos_vs_bo(report: ReportDefinition, payload: Dict, user) ->
                     ),
                 )
 
+                arbol = agrupar_jerarquia_informe_arbol_org(str(base_empresa), alcance_ctx, arbol)
+
                 rows_ordered: List[Dict[str, Any]] = []
-                for g in arbol:
-                    for estado in g["children"]:
-                        for ch in estado.get("children") or []:
-                            rows_ordered.append({k: v for k, v in ch.items() if k not in ("tipo", "venta_detalle")})
+
+                def _flatten_arbol_informe(nodos: List[Dict[str, Any]]) -> None:
+                    for n in nodos or []:
+                        if not isinstance(n, dict):
+                            continue
+                        if (n.get("tipo") or "vendedor") == "vendedor":
+                            for estado in n.get("children") or []:
+                                for ch in estado.get("children") or []:
+                                    rows_ordered.append(
+                                        {k: v for k, v in ch.items() if k not in ("tipo", "venta_detalle")}
+                                    )
+                        else:
+                            _flatten_arbol_informe(n.get("children") or [])
+
+                _flatten_arbol_informe(arbol)
                 rows_out = rows_ordered
                 _mark_phase("armado_jerarquia")
 

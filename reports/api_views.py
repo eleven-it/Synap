@@ -100,6 +100,12 @@ class ReportQueryAPIView(APIView):
                 if 'filters' not in payload:
                     payload['filters'] = {}
                 payload['filters']['base_empresa'] = session_user['base_empresa']
+                try:
+                    from ventas.services.objetivos_mysql import ctx_desde_session_user
+
+                    payload['filters']['_alcance_ctx'] = ctx_desde_session_user(session_user)
+                except Exception:
+                    pass
 
         try:
             result = QueryRunnerService(request.user).run(report, payload)
