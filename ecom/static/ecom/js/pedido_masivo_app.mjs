@@ -58,10 +58,14 @@ function pedidoMasivoCore() {
     panelArt: false,
     idxArt: 0,
     cargandoArt: false,
+    artBusquedaHecha: false,
     _artBusquedaSeq: 0,
     _articulosBusquedaAbort: null,
     artDropdownStyle: '',
     _blurArtTimer: null,
+    // Modal detalle sucursal (NroCalle / cliente_domicilio).
+    modalSucursalAbierto: false,
+    sucursalDetalle: null,
     error: '',
     abriendo: false,
     guardadoChip: '',
@@ -219,13 +223,20 @@ function pedidoMasivoCore() {
       const pdf = c?.lista_precio_pdf_url || c?.lista_precios_pdf || c?.listaPrecioPdf;
       if (pdf) this.listaPrecioPdfUrl = String(pdf).trim();
     },
+    /** Nombre visible del cliente sin sufijo «(cod: N)». */
+    _nombreClienteVisible(raw) {
+      const s = String(raw || '').trim();
+      if (!s) return '';
+      return s.replace(/\s*\(cod:\s*\d+\)\s*$/i, '').trim() || s;
+    },
     async elegirCliente(c) {
       const id = String(c.id_cliente);
       if (this.abriendo) return;
       if (this.draftId && String(this.idCliente) === id && this.clienteSel === id) return;
       this.clienteSel = id;
-      this.clienteNombre = c.nombre || c.etiqueta || '';
-      this.qCliente = c.etiqueta || c.nombre || '';
+      const nombre = this._nombreClienteVisible(c.nombre || c.etiqueta || '');
+      this.clienteNombre = nombre;
+      this.qCliente = nombre;
       this._aplicarListaDesdeCliente(c);
       this.cerrarPanelCli();
       await this.abrirCliente();
@@ -320,7 +331,8 @@ function pedidoMasivoCore() {
       this.draftId = m.draft_id;
       this.draftEstado = m.estado || 'borrador';
       this.idCliente = m.id_cliente;
-      this.clienteNombre = (m.nombre_cliente || this.clienteNombre || '').trim();
+      this.clienteNombre = this._nombreClienteVisible(m.nombre_cliente || this.clienteNombre || '');
+      this.qCliente = this.clienteNombre;
       if (m.cabecera) {
         this.puedeEditarCabecera = !!m.cabecera.puede_editar;
         this.cabecera = cabeceraConDisplay(m.cabecera);
@@ -358,7 +370,10 @@ function pedidoMasivoCore() {
       this.ultimoError = m.ultimo_error || {};
       if (!this.clienteNombre) {
         const c = this.clientes.find(x => String(x.id_cliente) === String(this.idCliente));
-        if (c) this.clienteNombre = c.nombre || c.etiqueta || '';
+        if (c) {
+          this.clienteNombre = this._nombreClienteVisible(c.nombre || c.etiqueta || '');
+          this.qCliente = this.clienteNombre;
+        }
       }
       this.marcarTotalesEstimados();
     },
@@ -485,7 +500,10 @@ function pedidoMasivoCore() {
       if (!data.ok) { this.error = data.error || 'No se pudo abrir.'; return; }
       this.aplicarMatriz(data.matriz);
       const c = this.clientes.find(x => String(x.id_cliente) === String(this.clienteSel));
-      if (c) this.clienteNombre = c.nombre || c.etiqueta || this.clienteNombre;
+      if (c) {
+        this.clienteNombre = this._nombreClienteVisible(c.nombre || c.etiqueta || this.clienteNombre);
+        this.qCliente = this.clienteNombre;
+      }
       history.replaceState(null, '', '?draft=' + this.draftId);
     },
     async abrirDraft(id) {
@@ -732,9 +750,22 @@ function pedidoMasivoCore() {
           this._articulosBusquedaAbort = null;
         }
         this.articulosBusqueda = [];
+        this.artBusquedaHecha = false;
         this.cargandoArt = false;
         return;
       }
+      await this._fetchArticulos({ q, todos: false, tam: 20 });
+    },
+    /**
+     * Catálogo completo filtrado (Terminado + e-commerce + marcas territorio).
+     * Disparado por flecha abajo / botón «ver todos» en desktop y móvil.
+     */
+    async listarTodosArticulos() {
+      if (!this.idCliente || !this.urls.articulos) return;
+      await this._fetchArticulos({ q: '', todos: true, tam: 5000 });
+    },
+    async _fetchArticulos({ q = '', todos = false, tam = 20 } = {}) {
+      if (!this.idCliente || !this.urls.articulos) return;
       if (this._articulosBusquedaAbort) {
         this._articulosBusquedaAbort.abort();
       }
@@ -743,18 +774,23 @@ function pedidoMasivoCore() {
       this._articulosBusquedaAbort = abortController;
       this.cargandoArt = true;
       this.abrirPanelArt();
-      const u = this.urls.articulos
+      let u = this.urls.articulos
         + '?id_cliente=' + this.idCliente
         + '&lista_id=' + (this.cabecera?.lista_id || this.listaId || 1)
-        + '&q=' + encodeURIComponent(q)
-        + '&tam=20';
+        + '&tam=' + encodeURIComponent(String(tam));
+      if (todos) {
+        u += '&todos=1';
+      } else {
+        u += '&q=' + encodeURIComponent(q || '');
+      }
       try {
         const data = await this.getJson(u, { signal: abortController.signal });
         if (seq !== this._artBusquedaSeq || abortController.signal.aborted) return;
-        if (!data.ok) { this.error = data.error || ''; this.articulosBusqueda = []; return; }
+        if (!data.ok) { this.error = data.error || ''; this.articulosBusqueda = []; this.artBusquedaHecha = true; return; }
         if (data.sin_marcas) {
           this.error = 'No hay marcas asignadas para este cliente en tu territorio.';
           this.articulosBusqueda = [];
+          this.artBusquedaHecha = true;
           return;
         }
         this.articulosBusqueda = (data.items || []).map(it => ({
@@ -768,10 +804,12 @@ function pedidoMasivoCore() {
           alicuota_iva: Number(it.alicuota_iva ?? 21),
         }));
         this.idxArt = 0;
+        this.artBusquedaHecha = true;
       } catch (error) {
         if (error?.name !== 'AbortError' && seq === this._artBusquedaSeq) {
           this.error = 'No se pudieron buscar artículos.';
           this.articulosBusqueda = [];
+          this.artBusquedaHecha = true;
         }
       } finally {
         if (seq === this._artBusquedaSeq) this.cargandoArt = false;
@@ -860,12 +898,54 @@ function pedidoMasivoCore() {
       // Fin de línea → buscador de la fila nueva
       this.focusBuscadorArt();
     },
+    /**
+     * Flecha abajo: si no hay lista abierta, trae todo el catálogo; si hay, navega.
+     */
+    async onArrowDownArt() {
+      if (this.articulosBusqueda.length) {
+        this.moverSelArt(1);
+        return;
+      }
+      await this.listarTodosArticulos();
+    },
     moverSelArt(delta) {
       if (!this.articulosBusqueda.length) return;
       this.idxArt = (this.idxArt + delta + this.articulosBusqueda.length) % this.articulosBusqueda.length;
     },
     elegirResaltadoArt() {
       if (this.articulosBusqueda[this.idxArt]) this.elegirArticulo(this.articulosBusqueda[this.idxArt]);
+    },
+    /** Nº de sucursal = cliente_domicilio.NroCalle (campo `nro` en la matriz). */
+    nroSucursal(s) {
+      if (!s) return '—';
+      const nro = String(s.nro || '').trim();
+      if (nro && nro !== '-') return nro;
+      return String(s.id_cliente_domicilio || '—');
+    },
+    etiquetaSucursalCompleta(s) {
+      if (!s) return '';
+      const parts = [s.calle, s.nro, s.dpto, s.distrito, s.provincia, s.zona]
+        .map(x => String(x || '').trim())
+        .filter(x => x && x !== '-');
+      return parts.join(' · ') || (s.nombre || s.etiqueta || '');
+    },
+    abrirDetalleSucursal(s) {
+      if (!s) return;
+      this.sucursalDetalle = {
+        id_cliente_domicilio: s.id_cliente_domicilio,
+        nro: this.nroSucursal(s),
+        calle: String(s.calle || '').trim(),
+        dpto: String(s.dpto || '').trim(),
+        distrito: String(s.distrito || '').trim(),
+        provincia: String(s.provincia || '').trim(),
+        zona: String(s.zona || '').trim(),
+        nombre: s.nombre || s.etiqueta || '',
+      };
+      this.modalSucursalAbierto = true;
+    },
+    cerrarDetalleSucursal() {
+      this.modalSucursalAbierto = false;
+      this.sucursalDetalle = null;
     },
     elegirArticulo(a) {
       if (this._blurArtTimer) {
@@ -890,6 +970,7 @@ function pedidoMasivoCore() {
       }
       this.qArt = '';
       this.articulosBusqueda = [];
+      this.artBusquedaHecha = false;
       this.cerrarPanelArt();
       if (!ya) this.marcarTotalesEstimados();
       if (ya || !this.sucursales.length) {
@@ -928,6 +1009,27 @@ function pedidoMasivoCore() {
       if (!this.draftId || !this.urls.confirmar || this.confirmando) return;
       this.error = '';
       this.mensajeOk = '';
+      const fe = (
+        this.cabecera?.fecha_entrega
+        || displayToIso(this.cabecera?.fecha_entrega_display)
+        || ''
+      ).toString().trim();
+      if (!fe) {
+        this.contextoAbierto = true;
+        this.$nextTick(() => {
+          const elFecha = document.getElementById('pm-fecha-entrega');
+          this.abrirDialogo('aviso', {
+            titulo: 'Fecha de entrega requerida',
+            mensaje: 'Completá la fecha de entrega antes de confirmar el pedido.',
+            confirmarTexto: 'Entendido',
+            variante: 'warning',
+            onConfirm: () => this.focusFechaEntrega(),
+          });
+          // Esc / cierre también deja el foco en el campo.
+          if (elFecha) this._dialogFocoPrevio = elFecha;
+        });
+        return;
+      }
       this.recalcularPreviewEstimado();
       // Abrir modal al instante; la validación servidor corre en paralelo (UI «Validando…»).
       this.abrirDialogo('masivo_confirmar', {
@@ -938,6 +1040,20 @@ function pedidoMasivoCore() {
         onConfirm: () => this._ejecutarConfirmarLote(),
       });
       this.refrescarPreview();
+    },
+    /** Abre el contexto comercial y enfoca el campo fecha de entrega. */
+    focusFechaEntrega() {
+      this.contextoAbierto = true;
+      this.$nextTick(() => {
+        const el = document.getElementById('pm-fecha-entrega');
+        if (!el) return;
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        el.focus();
+        el.classList.add('ring-2', 'ring-amber-500', 'border-amber-500');
+        setTimeout(() => {
+          el.classList.remove('ring-2', 'ring-amber-500', 'border-amber-500');
+        }, 2500);
+      });
     },
     /** Sucursales con al menos una celda con cantidad > 0 (orden id asc). */
     _sucursalesConCarga() {

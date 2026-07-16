@@ -31,6 +31,14 @@ MENU_CONFIG = [
                 "deep_link": "/ecom/mayoristapp/pedidos/",
             },
             {
+                "name": "ecom_pedido_masivo",
+                "label": "Pedido masivo",
+                "url": "ecom:mayoristapp_pedido_masivo_sucursales",
+                "permission": "ecom.pedido_masivo.usar",
+                "nivel_a": True,
+                "deep_link": "/ecom/mayoristapp/pedido-masivo-sucursales/",
+            },
+            {
                 "name": "ecom_presupuestos",
                 "label": "Presupuestos vendedor",
                 "url": "ecom:mayoristapp_presupuestos_vendedor",

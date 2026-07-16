@@ -18,6 +18,7 @@ PWA_ECOM_MENU_ITEM_IDS = frozenset(
     {
         "ecom_compra",  # Pedido de venta → /mayoristapp/venta/
         "ecom_pedidos",  # Hub pedidos → /mayoristapp/pedidos/
+        "ecom_pedido_masivo",  # Pedido masivo → /mayoristapp/pedido-masivo-sucursales/
     }
 )
 
@@ -26,6 +27,7 @@ PWA_ECOM_DEEP_LINKS = (
     "/ecom/mayoristapp/pedidos/",
     "/ecom/mayoristapp/venta/",
     "/ecom/mayoristapp/compra/",
+    "/ecom/mayoristapp/pedido-masivo-sucursales/",
 )
 
 
@@ -65,7 +67,7 @@ def ecom_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
 def filtrar_submenus_ecom_para_pwa_movil(
     submenus: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
-    """Deja solo entradas hub y venta del sidebar e-com en móvil."""
+    """Deja solo entradas hub, venta y pedido masivo del sidebar e-com en móvil."""
     resultado: List[Dict[str, Any]] = []
     for seccion in submenus or []:
         items = [

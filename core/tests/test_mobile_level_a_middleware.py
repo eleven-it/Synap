@@ -170,7 +170,7 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
         )
 
     def test_ecom_otras_pantallas_no_permitidas(self):
-        self.assertFalse(
+        self.assertTrue(
             mobile_path_allowed_for_level_a('/ecom/mayoristapp/pedido-masivo-sucursales/')
         )
         self.assertFalse(mobile_path_allowed_for_level_a('/ecom/mayoristapp/'))
@@ -314,7 +314,7 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
         resp = self.mw.process_request(req)
         self.assertIsNone(resp)
 
-    def test_movil_autenticado_pedido_masivo_403(self):
+    def test_movil_autenticado_pedido_masivo_sin_bloqueo(self):
         req = _build_request(
             'GET',
             '/ecom/mayoristapp/pedido-masivo-sucursales/',
@@ -322,8 +322,7 @@ class MobileLevelAMiddlewareRequestTests(SimpleTestCase):
             _minimal_session_user(),
         )
         resp = self.mw.process_request(req)
-        self.assertIsNotNone(resp)
-        self.assertEqual(resp.status_code, 403)
+        self.assertIsNone(resp)
 
     def test_movil_autenticado_hub_pedidos_sin_bloqueo(self):
         req = _build_request(

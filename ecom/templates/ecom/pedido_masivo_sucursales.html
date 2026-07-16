@@ -125,10 +125,11 @@
         </div>
 
         <div class="pm-field-row" x-show="cabecera && tipo === 'PED'" x-cloak>
-          <label class="pm-label-inline" for="pm-fecha-entrega">Fecha entrega</label>
-          <input id="pm-fecha-entrega" type="date"
+          <label class="pm-label-inline" for="pm-fecha-entrega">Fecha entrega <span class="text-rose-600" aria-hidden="true">*</span></label>
+          <input id="pm-fecha-entrega" type="date" required
                  x-model="cabecera.fecha_entrega"
                  @change="onCabeceraFechaIso('fecha_entrega')"
+                 aria-required="true"
                  class="pm-input-dense pm-input-date h-8 w-[9.5rem] max-w-[10rem] rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         </div>
 
@@ -183,7 +184,7 @@
                     @mousedown.prevent="elegirCliente(c)"
                     :class="i === idxCli ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
                     class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
-                    x-text="c.etiqueta || c.nombre"></li>
+                    x-text="_nombreClienteVisible(c.nombre || c.etiqueta)"></li>
               </template>
             </ul>
             <p x-show="panelCli && !cargandoCli && !clientes.length" x-cloak
@@ -271,18 +272,27 @@
                     <div class="relative w-full overflow-visible"
                          @focusout="onFocusOutBuscadorArt($event)" @click.outside="cerrarPanelArt()">
                       <label class="sr-only" for="pm-art">Agregar artículo</label>
-                      <input id="pm-art" type="text" autocomplete="off" role="combobox"
-                             x-ref="pmArtInput"
-                             :aria-expanded="panelArt"
-                             x-model="qArt"
-                             @focus="abrirPanelArt(); scrollBuscadorIntoView()"
-                             @input.debounce.250ms="buscarArticulos()"
-                             @keydown.arrow-down.prevent="moverSelArt(1)"
-                             @keydown.arrow-up.prevent="moverSelArt(-1)"
-                             @keydown.enter.prevent="elegirResaltadoArt()"
-                             @keydown.escape="cerrarPanelArt()"
-                             placeholder="Buscar artículo…"
-                             class="pm-art-buscar pm-input-dense h-8 w-full rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:bg-slate-950 dark:text-white"/>
+                      <div class="flex items-center gap-1">
+                        <input id="pm-art" type="text" autocomplete="off" role="combobox"
+                               x-ref="pmArtInput"
+                               :aria-expanded="panelArt"
+                               x-model="qArt"
+                               @focus="abrirPanelArt(); scrollBuscadorIntoView()"
+                               @input.debounce.250ms="buscarArticulos()"
+                               @keydown.arrow-down.prevent="onArrowDownArt()"
+                               @keydown.arrow-up.prevent="moverSelArt(-1)"
+                               @keydown.enter.prevent="elegirResaltadoArt()"
+                               @keydown.escape="cerrarPanelArt()"
+                               placeholder="Buscar artículo… (↓ todos)"
+                               class="pm-art-buscar pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:bg-slate-950 dark:text-white"/>
+                        <button type="button"
+                                @mousedown.prevent="listarTodosArticulos()"
+                                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                                title="Ver todos los artículos"
+                                aria-label="Ver todos los artículos disponibles">
+                          <span class="material-icons text-base leading-none" aria-hidden="true">expand_more</span>
+                        </button>
+                      </div>
                       <ul x-show="panelArt && articulosBusqueda.length" x-cloak
                           x-ref="pmArtDropdown"
                           class="pm-art-dropdown pm-art-dropdown--up absolute bottom-full left-0 z-[90] mb-1 max-h-56 min-w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
@@ -302,7 +312,7 @@
                          class="pm-art-dropdown pm-art-dropdown--up absolute bottom-full left-0 z-[90] mb-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
                         Buscando…
                       </p>
-                      <p x-show="panelArt && !cargandoArt && qArt.length >= 2 && !articulosBusqueda.length" x-cloak
+                      <p x-show="panelArt && !cargandoArt && artBusquedaHecha && !articulosBusqueda.length" x-cloak
                          class="pm-art-dropdown pm-art-dropdown--up absolute bottom-full left-0 z-[90] mb-1 whitespace-nowrap rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
                         Sin artículos
                       </p>
@@ -319,10 +329,16 @@
               <thead>
                 <tr>
                   <template x-for="(s, si) in sucursales" :key="s.id_cliente_domicilio">
-                    <th class="pm-c-suc pm-zhead pm-zhead-suc"
+                    <th class="pm-c-suc pm-zhead pm-zhead-suc cursor-pointer select-none"
                         :class="'pm-matrix-suc-tone-' + (si % 4)"
-                        :title="s.nombre || s.etiqueta">
-                      <span class="line-clamp-2" x-text="s.nombre || s.etiqueta"></span>
+                        role="button"
+                        tabindex="0"
+                        :title="etiquetaSucursalCompleta(s)"
+                        :aria-label="'Ver datos de sucursal ' + nroSucursal(s)"
+                        @click="abrirDetalleSucursal(s)"
+                        @keydown.enter.prevent="abrirDetalleSucursal(s)"
+                        @keydown.space.prevent="abrirDetalleSucursal(s)">
+                      <span class="line-clamp-2 tabular-nums" x-text="nroSucursal(s)"></span>
                     </th>
                   </template>
                 </tr>
@@ -405,14 +421,26 @@
                @focusout="onFocusOutBuscadorArt($event)"
                @click.outside="cerrarPanelArt()">
             <label class="sr-only" for="pm-art-mob">Agregar artículo</label>
-            <input id="pm-art-mob" type="text" autocomplete="off"
-                   x-model="qArt"
-                   @focus="abrirPanelArt()"
-                   @input.debounce.250ms="buscarArticulos()"
-                   @keydown.enter.prevent="elegirResaltadoArt()"
-                   @keydown.escape="cerrarPanelArt()"
-                   placeholder="Buscar artículo para agregar…"
-                   class="pm-input-dense h-8 w-full rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:bg-slate-950 dark:text-white"/>
+            <div class="flex items-center gap-1">
+              <input id="pm-art-mob" type="text" autocomplete="off" role="combobox"
+                     x-model="qArt"
+                     :aria-expanded="panelArt"
+                     @focus="abrirPanelArt()"
+                     @input.debounce.250ms="buscarArticulos()"
+                     @keydown.arrow-down.prevent="onArrowDownArt()"
+                     @keydown.arrow-up.prevent="moverSelArt(-1)"
+                     @keydown.enter.prevent="elegirResaltadoArt()"
+                     @keydown.escape="cerrarPanelArt()"
+                     placeholder="Buscar artículo… (↓ todos)"
+                     class="pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:bg-slate-950 dark:text-white"/>
+              <button type="button"
+                      @mousedown.prevent="listarTodosArticulos()"
+                      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                      title="Ver todos los artículos"
+                      aria-label="Ver todos los artículos disponibles">
+                <span class="material-icons text-base leading-none" aria-hidden="true">expand_more</span>
+              </button>
+            </div>
             <ul x-show="panelArt && articulosBusqueda.length" x-cloak
                 class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
                 role="listbox">
@@ -427,17 +455,37 @@
                 </li>
               </template>
             </ul>
-            <p x-show="panelArt && !cargandoArt && qArt.length >= 2 && !articulosBusqueda.length" x-cloak
+            <p x-show="panelArt && cargandoArt" x-cloak
+               class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+              Buscando…
+            </p>
+            <p x-show="panelArt && !cargandoArt && artBusquedaHecha && !articulosBusqueda.length" x-cloak
                class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
               Sin artículos
             </p>
           </div>
 
           <template x-for="s in sucursales" :key="'acc-' + s.id_cliente_domicilio">
-            <details class="pm-accordion-item group rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-              <summary class="pm-accordion-summary flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100">
-                <span class="min-w-0 flex-1 truncate" x-text="s.nombre || s.etiqueta"></span>
-                <span class="shrink-0 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300" x-text="totalSucursal(s.id_cliente_domicilio)"></span>
+            <details class="pm-accordion-item group rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
+                     x-data="{ abierto: false }"
+                     :open="abierto"
+                     @toggle="abierto = $event.target.open">
+              <summary class="pm-accordion-summary flex list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-slate-800 dark:text-slate-100"
+                       @click.prevent="abrirDetalleSucursal(s)">
+                <span class="min-w-0 flex-1 cursor-pointer truncate rounded-md px-1 py-1 tabular-nums"
+                      :title="etiquetaSucursalCompleta(s)"
+                      x-text="nroSucursal(s)"></span>
+                <span class="shrink-0 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300"
+                      x-text="totalSucursal(s.id_cliente_domicilio)"></span>
+                <button type="button"
+                        class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:hover:bg-slate-700"
+                        :aria-expanded="abierto"
+                        :aria-label="abierto ? 'Cerrar sucursal ' + nroSucursal(s) : 'Abrir sucursal ' + nroSucursal(s)"
+                        @click.stop.prevent="abierto = !abierto">
+                  <span class="material-icons text-base leading-none transition-transform"
+                        :class="abierto ? 'rotate-180' : ''"
+                        aria-hidden="true">expand_more</span>
+                </button>
               </summary>
               <div class="border-t border-slate-100 px-3 py-2 dark:border-slate-700">
                 <template x-for="art in articulos" :key="s.id_cliente_domicilio + '-' + art.id_articulo">
@@ -532,6 +580,59 @@
     </div>
   </div>
 
+  {# Modal detalle sucursal (NroCalle + domicilio) #}
+  <div x-show="modalSucursalAbierto" x-cloak
+       class="pedidos-modal-root"
+       @keydown.escape.window="cerrarDetalleSucursal()">
+    <div class="pedidos-modal-overlay" @click="cerrarDetalleSucursal()" aria-hidden="true"></div>
+    <div class="pedidos-modal-panel pedidos-card p-6 shadow-2xl"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="pm-sucursal-titulo"
+         @click.stop>
+      <template x-if="sucursalDetalle">
+        <div>
+          <h3 id="pm-sucursal-titulo" class="text-lg font-semibold text-slate-900 dark:text-white">
+            Sucursal <span class="tabular-nums" x-text="sucursalDetalle.nro"></span>
+          </h3>
+          <dl class="mt-4 space-y-2 text-sm">
+            <div class="flex justify-between gap-4 border-b border-slate-100 py-1.5 dark:border-slate-700">
+              <dt class="text-slate-500 dark:text-slate-400">Nº sucursal</dt>
+              <dd class="font-semibold tabular-nums text-slate-900 dark:text-white" x-text="sucursalDetalle.nro || '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 py-1.5 dark:border-slate-700">
+              <dt class="text-slate-500 dark:text-slate-400">Calle</dt>
+              <dd class="text-right text-slate-900 dark:text-white" x-text="sucursalDetalle.calle || '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 py-1.5 dark:border-slate-700">
+              <dt class="text-slate-500 dark:text-slate-400">Dpto</dt>
+              <dd class="text-right text-slate-900 dark:text-white" x-text="sucursalDetalle.dpto || '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 py-1.5 dark:border-slate-700">
+              <dt class="text-slate-500 dark:text-slate-400">Distrito</dt>
+              <dd class="text-right text-slate-900 dark:text-white" x-text="sucursalDetalle.distrito || '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-4 border-b border-slate-100 py-1.5 dark:border-slate-700">
+              <dt class="text-slate-500 dark:text-slate-400">Provincia</dt>
+              <dd class="text-right text-slate-900 dark:text-white" x-text="sucursalDetalle.provincia || '—'"></dd>
+            </div>
+            <div class="flex justify-between gap-4 py-1.5">
+              <dt class="text-slate-500 dark:text-slate-400">Zona</dt>
+              <dd class="text-right text-slate-900 dark:text-white" x-text="sucursalDetalle.zona || '—'"></dd>
+            </div>
+          </dl>
+          <div class="mt-6 flex justify-end">
+            <button type="button"
+                    @click="cerrarDetalleSucursal()"
+                    class="pedidos-btn pedidos-btn-primary">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
   {# Modal canon Synap — reemplaza confirm() (D.5) #}
   {% include "ecom/includes/pedidos_modal.html" %}
 </section>
@@ -539,5 +640,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo16"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo18"></script>
 {% endblock %}

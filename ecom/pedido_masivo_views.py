@@ -447,6 +447,9 @@ class PedidoMasivoArticulosAPIView(APIView):
             return _err("Se requieren viajante e id_cliente.")
         lista_id = to_int_or_none(request.query_params.get("lista_id")) or 1
         id_dep = to_int_or_none(request.query_params.get("id_deposito")) or 1
+        todos_raw = str(request.query_params.get("todos") or "").strip().lower()
+        listar_todos = todos_raw in ("1", "true", "si", "sí", "yes")
+        tam_default = 5000 if listar_todos else 20
         result = buscar_articulos_filtrados_ternas(
             base,
             cod_viajante=cv,
@@ -456,7 +459,8 @@ class PedidoMasivoArticulosAPIView(APIView):
             lista_id=lista_id,
             id_deposito=id_dep,
             pagina=to_int_or_none(request.query_params.get("pagina")) or 1,
-            tam=to_int_or_none(request.query_params.get("tam")) or 20,
+            tam=to_int_or_none(request.query_params.get("tam")) or tam_default,
+            listar_todos=listar_todos,
         )
         return Response({"ok": True, **result})
 

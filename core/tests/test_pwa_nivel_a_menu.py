@@ -49,7 +49,7 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
 
     @patch('core.pwa_nivel_a.usuario_tiene_ecom_en_menu', return_value=True)
     @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=False)
-    def test_movil_ecom_hub_y_venta_si_modulo_habilitado(self, _tpv, _ecom):
+    def test_movil_ecom_hub_venta_y_masivo_si_modulo_habilitado(self, _tpv, _ecom):
         request = _req(MOBILE_UA)
         apps = [
             {'id': 'reports'},
@@ -61,6 +61,7 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
                         'items': [
                             {'label': 'Venta', 'menu_item_id': 'ecom_compra'},
                             {'label': 'Pedidos', 'menu_item_id': 'ecom_pedidos'},
+                            {'label': 'Masivo', 'menu_item_id': 'ecom_pedido_masivo'},
                             {'label': 'Clientes', 'menu_item_id': 'ecom_clientes'},
                         ],
                     }
@@ -71,7 +72,7 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]['id'], 'ecom')
         ids = {i['menu_item_id'] for i in out[0]['submenus'][0]['items']}
-        self.assertEqual(ids, {'ecom_compra', 'ecom_pedidos'})
+        self.assertEqual(ids, {'ecom_compra', 'ecom_pedidos', 'ecom_pedido_masivo'})
 
     @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=False)
     def test_movil_sin_tpv_menu_vacio(self, _mock):
@@ -106,7 +107,7 @@ class SidebarPwaTests(SimpleTestCase):
     def test_sidebar_ecom_sin_modulo(self, _mock):
         self.assertFalse(sidebar_visible_en_pwa('ecom'))
 
-    def test_filtrar_submenus_ecom_solo_hub_venta(self):
+    def test_filtrar_submenus_ecom_solo_hub_venta_masivo(self):
         submenus = [
             {
                 'seccion': 'Portal',
@@ -119,6 +120,7 @@ class SidebarPwaTests(SimpleTestCase):
                 'seccion': 'Comprobantes',
                 'items': [
                     {'label': 'Pedidos', 'menu_item_id': 'ecom_pedidos'},
+                    {'label': 'Masivo', 'menu_item_id': 'ecom_pedido_masivo'},
                 ],
             },
         ]
