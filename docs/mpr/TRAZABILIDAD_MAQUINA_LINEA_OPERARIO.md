@@ -267,6 +267,9 @@ permiso (el operario no los ve):
 | `/mpr/operarios-usuarios/` | Mapeo operario ↔ usuario de login | `mpr.ver` |
 | `/mpr/operarios-lineas/` | Línea habitual por operario | `mpr.maquinas_lineas` |
 
+El listado de `/mpr/maquinas/` (y el de máquinas por línea) ordena por `codigo`
+en sentido **numérico descendente** (`CAST(codigo AS UNSIGNED) DESC`).
+
 El detalle de la carga y la aprobación (pantallas, bordes, borrador vs. envío) está en
 [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md).
 
