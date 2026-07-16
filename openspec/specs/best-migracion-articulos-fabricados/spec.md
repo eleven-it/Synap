@@ -80,6 +80,13 @@ Desde fabricados únicos detectados en BOM, el sistema MUST inferir SKU BEST 1:1
 - **THEN** puede elegir candidato Admin Fabricado
 - **AND** el mapeo queda con `origen_requerimiento=BOM_FABRICADO`
 
+#### Scenario: Reclamo confirmado de SKU no validado
+
+- **GIVEN** un SKU BEST ocupado por una fila no validada que no es `BOM_FABRICADO`
+- **WHEN** el operador confirma su reasignación desde un componente fabricado
+- **THEN** el sistema borra la fila conflictiva y valida el componente con ese SKU
+- **AND** nunca permite reclamar una fila `VALIDADO`, `validado=True` u otro `BOM_FABRICADO`
+
 ---
 
 ### Requirement: Stock Semi-Embalado opcional post-cutover

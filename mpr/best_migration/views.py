@@ -50,6 +50,7 @@ from mpr.best_migration.services import (
     aceptar_inferidos_altos_fabricados,
     asignar_best_a_fabricado,
     buscar_skus_best_componentes,
+    SkuBestOcupadoReclamable,
     sincronizar_stock_fabricados_semi,
     reabrir_articulo,
     validar_articulo_fabricado,
@@ -1042,6 +1043,10 @@ class MigracionBestArticulosFabricadosView(MprLoginRequiredMixin, TemplateView):
     def get(self, request, *args, **kwargs):
         if not _require_base(request):
             return redirect("core:dashboard")
+        if request.GET.get("cancelar_reclamo") == "1":
+            request.session.pop("best_fab_pendiente_reclamo", None)
+            messages.info(request, "Reasignación de SKU cancelada.")
+            return redirect("mpr:migracion_best_articulos_fabricados")
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -1082,6 +1087,7 @@ class MigracionBestArticulosFabricadosView(MprLoginRequiredMixin, TemplateView):
         ctx["solo_pendientes"] = cola_trabajo
         ctx["opciones_estado"] = BestArticuloMap.Estado.choices
         ctx["articulos_resumen"] = hub.get("articulos_fabricados_resumen") or {}
+        ctx["pendiente_reclamo"] = self.request.session.get("best_fab_pendiente_reclamo")
         return ctx
 
 
@@ -1157,7 +1163,9 @@ class MigracionBestSkuComponentesSearchView(MprLoginRequiredMixin, View):
             limit = min(50, max(1, int(request.GET.get("limit") or 15)))
         except ValueError:
             limit = 15
-        results = buscar_skus_best_componentes(q, limit=limit)
+        results = buscar_skus_best_componentes(
+            q, limit=limit, base_empresa=_get_base_empresa(request)
+        )
         return JsonResponse({"results": results})
 
 
@@ -1179,6 +1187,7 @@ class MigracionBestValidarArticuloFabricadoView(MprLoginRequiredMixin, View):
         best_id = (request.POST.get("best_id_articulo") or "").strip()
         accion = (request.POST.get("accion") or "").strip()
         notas = (request.POST.get("notas") or "").strip()
+        reclamar = request.POST.get("reclamar") in ("1", "true", "on")
         usuario = _usuario_label(request)
 
         def _json_ok(payload: dict):
@@ -1248,6 +1257,7 @@ class MigracionBestValidarArticuloFabricadoView(MprLoginRequiredMixin, View):
                     nuevo_best_id=nuevo,
                     usuario=usuario,
                     notas=notas,
+                    reclamar=reclamar,
                 )
                 if wants_json:
                     return _json_ok(
@@ -1280,6 +1290,24 @@ class MigracionBestValidarArticuloFabricadoView(MprLoginRequiredMixin, View):
                 )
             else:
                 raise ValueError("Acción no reconocida.")
+        except SkuBestOcupadoReclamable as exc:
+            if wants_json:
+                return JsonResponse(
+                    {
+                        "ok": False,
+                        "necesita_reclamo": True,
+                        "error": str(exc),
+                        "sku": exc.sku,
+                        "conflicto_id": exc.conflicto.pk,
+                    },
+                    status=409,
+                )
+            request.session["best_fab_pendiente_reclamo"] = {
+                "map_best_id": best_id,
+                "nuevo_best_id": (request.POST.get("best_id_nuevo") or "").strip(),
+                "mensaje": str(exc),
+            }
+            messages.warning(request, str(exc))
         except BestArticuloMap.DoesNotExist:
             if wants_json:
                 return _json_err("No existe ese SKU en el mapeo.", 404)
