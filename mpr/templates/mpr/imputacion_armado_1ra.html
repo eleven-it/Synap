@@ -97,7 +97,6 @@
                 </div>
                 {{ sugerencias_fifo|json_script:"sugerencias-data" }}
                 {% endif %}
-                <div id="imputacion-error-cliente" class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200" role="alert"></div>
                 <div class="flex flex-wrap gap-3">
                     <button type="submit" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-purple-700">
                         <span class="material-icons text-lg">check</span>
@@ -112,17 +111,15 @@
             var form = document.querySelector('#confirmar-imputacion form');
             var dataEl = document.getElementById('sugerencias-data');
             var hidden = document.getElementById('lineas-json-imputacion');
-            var errorBox = document.getElementById('imputacion-error-cliente');
             if (!form || !hidden) return;
 
             function mostrarErrorCliente(texto) {
-                if (!errorBox) {
+                // Feedback operativo en modal (fuente de verdad MPR: mprShowAviso).
+                if (typeof window.mprShowAviso === 'function') {
+                    window.mprShowAviso(texto, 'error');
+                } else {
                     window.alert(texto);
-                    return;
                 }
-                errorBox.textContent = texto;
-                errorBox.classList.remove('hidden');
-                errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
 
             function parseSugerenciasBase() {
@@ -139,10 +136,6 @@
             }
 
             form.addEventListener('submit', function (e) {
-                if (errorBox) {
-                    errorBox.classList.add('hidden');
-                    errorBox.textContent = '';
-                }
                 var base = parseSugerenciasBase();
                 var rows = document.querySelectorAll('#tbody-sugerencias tr[data-idx]');
                 var out = [];

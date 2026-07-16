@@ -87,13 +87,6 @@
         </div>
         {% endif %}
 
-        <div x-show="mensajeLote" x-cloak
-             class="mb-4 rounded-xl border px-4 py-3 text-sm"
-             :class="mensajeLoteTipo === 'error' ? 'border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200' : 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100'"
-             role="alert">
-            <span x-text="mensajeLote"></span>
-        </div>
-
         <form method="post" action="{% url 'mpr:armado' %}?modo={{ modo|default:'1ra' }}{% if id_lista %}&amp;id_lista={{ id_lista }}{% endif %}"
               id="form-armado-surtido"
               class="mpr-post-loading"
@@ -822,8 +815,6 @@ function armadoSurtidoForm() {
         packsCatalogApiUrl: packsCatalogApiUrl,
         validarItemLoteApiUrl: '{{ validar_item_lote_api_url }}',
         loteMaxItems: loteMaxItems,
-        mensajeLote: '',
-        mensajeLoteTipo: 'error',
         modalResultado: {
             open: false,
             exitosos: [],
@@ -1472,10 +1463,13 @@ function armadoSurtidoForm() {
         },
 
         mostrarMensaje: function (texto, tipo) {
-            this.mensajeLote = texto;
-            this.mensajeLoteTipo = tipo || 'error';
-            var self = this;
-            window.setTimeout(function () { self.mensajeLote = ''; }, 8000);
+            // Feedback operativo en modal (fuente de verdad MPR: mprShowAviso).
+            var tipoModal = tipo === 'ok' ? 'success' : (tipo === 'warn' ? 'warning' : (tipo || 'error'));
+            if (typeof window.mprShowAviso === 'function') {
+                window.mprShowAviso(texto, tipoModal);
+            } else {
+                window.alert(texto || '');
+            }
         },
 
         cerrarModalResultado: function () {

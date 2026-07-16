@@ -15,7 +15,7 @@
    - Sin borrador → guía «Elegí un cliente…»
    - Borrador sin sucursales → alerta amber
    - Borrador sin filas → guía «Agregá artículos…» + fila buscador al pie (solo con `draftId`)
-4. Columnas = `cliente_domicilio` no anulados con ≥1 **cuaterna** activa (vendedor operativo + cliente) cuando VCM está activo; si no, todos los domicilios activos. Encabezado = nombre de sucursal: Calle + NroCalle. Ver `docs/ecom/VENDEDOR_CLIENTE_MARCA.md`.  
+4. Columnas = `cliente_domicilio` no anulados con ≥1 **relación** activa (vendedor operativo + cliente) cuando VCM está activo; si no, todos los domicilios activos. Encabezado = nombre de sucursal: Calle + NroCalle. Ver `docs/ecom/VENDEDOR_CLIENTE_MARCA.md`.  
 5. Filas = artículos **Terminado** de marcas asignadas con **paridad carrito/precio**: `Discontinuo='No'` y `ecommerce='Si'` (mismo criterio que `obtener_articulo_row_precio` / `agregar_item`). El buscador predictivo (`buscar_articulos_filtrados_ternas`) no ofrece ítems que luego fallarían en preview/confirm con «Artículo no encontrado o inactivo».  
    Columna **Precio** = precio real del motor (lista del cliente).  
 6. Celdas = cantidad en **packs**. Columna de sumatoria: **Total packs**. Enter en la última sucursal vuelve al buscador.  

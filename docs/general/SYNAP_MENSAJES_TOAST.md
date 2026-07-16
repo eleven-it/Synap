@@ -39,4 +39,56 @@ Se quitaron bloques inline en MPR (tablero, parte, wizard, etc.), core, compras,
 
 ---
 
+## Feedback operativo MPR en modal — `mprShowAviso`
+
+En pantallas MPR (o que extienden `mpr/base_mpr.html`) el feedback de **acciones AJAX / validación en pantalla** (error de validación, conflicto, éxito de una acción hecha en la propia página) se muestra **siempre en modal**, no como banner inline.
+
+### Cuándo usar cada mecanismo
+
+| Caso | Mecanismo |
+|------|-----------|
+| Mensajes Django tras recarga/redirección (`messages.success/error`) | Toast global `SynapMessages` (partial `synap_messages_toast.html`) |
+| Feedback AJAX genérico sin recargar en cualquier pantalla | `SynapMessages.show('Texto', 'success')` |
+| Feedback operativo MPR en la propia página (validación, conflicto, éxito de acción AJAX) | **Modal `mprShowAviso`** |
+| Carga/progreso de un POST MPR largo | Modal de loading (`mprShowPostLoading` / `mpr_post_loading_modal.html`) |
+
+### API
+
+Partial: `mpr/templates/mpr/includes/mpr_aviso_modal.html`, incluido desde `mpr/base_mpr.html` en `{% block extra_js %}` (junto al modal de loading). Overlay `z-[90]` (por debajo del loading `z-100`).
+
+```js
+// Forma corta: mensaje + tipo (default 'error')
+window.mprShowAviso('La marca ya está asignada a otro vendedor.', 'error');
+window.mprShowAviso('Relación creada.', 'success');
+
+// Formas de tipo: 'error' (rojo) | 'success' (emerald) | 'warning' (ámbar) | 'info' (púrpura)
+
+// Forma con objeto (título personalizado)
+window.mprShowAviso('', { tipo: 'warning', titulo: 'Atención', mensaje: 'Revise las cantidades.' });
+
+// Cerrar programáticamente (también cierra con «Entendido», Escape o click en backdrop)
+window.mprHideAviso();
+```
+
+Degradación segura: si el partial no está presente, `mprShowAviso` cae a `window.alert`.
+
+### Patrón en Alpine
+
+En componentes Alpine (VCM, armado surtido, etc.) se expone un helper local `mostrarAviso(texto, tipo)` que delega en `window.mprShowAviso`, evitando estado `error`/`mensaje` con banners `x-show`.
+
+### Pantallas migradas a modal (2026-07-16)
+
+- `ecom/config_vendedor_cliente_marca.html` (VCM): se quitaron los banners `x-show="mensaje"` / `x-show="error"`; helper `mostrarAviso`.
+- `mpr/armado_surtido.html`: `mostrarMensaje` ahora usa `mprShowAviso` (mapea `ok`→`success`, `warn`→`warning`); se quitó el banner `mensajeLote`.
+- `mpr/imputacion_armado_1ra.html`: el banner `#imputacion-error-cliente` se reemplazó por `mprShowAviso`.
+
+### Leftovers intencionales (no migrados)
+
+Se dejaron por ser **ayuda contextual / estados de página o dropdown**, no feedback de acción:
+
+- `mpr/trazabilidad_opt.html`: banner ámbar server-rendered `{% if fuentes_fallidas %}` (aviso de disponibilidad de datos de la página).
+- `mpr/best_migration/*.html`: estados inline de dropdown de búsqueda («Error al buscar. Reintentá.», «Sin resultados») y errores de campo inline (`errorMsg`) junto a acciones.
+
+---
+
 _Ver también `docs/general/FUENTE_VERDAD_UI_REPORTES_MPR.md` para patrones UI MPR._

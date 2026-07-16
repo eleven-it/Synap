@@ -1578,14 +1578,14 @@ def _migrar_ternas_vcm_a_cuaternas(cursor, applied: List[str], failed: List[str]
             )
             anuladas += 1
         msg = (
-            f"Migración ternas→cuaternas: {expandidas} filas nuevas, "
+            f"Migración ternas→relaciones: {expandidas} filas nuevas, "
             f"{anuladas} ternas sin domicilio anuladas, "
             f"{sin_domicilio} clientes sin domicilio (id_cliente_domicilio=0 conservado)"
         )
         _append_migration(applied, failed, True, msg)
     except Exception as e:
         logger.exception("_migrar_ternas_vcm_a_cuaternas: %s", e)
-        _append_migration(applied, failed, False, "Migración ternas→cuaternas VCM", str(e))
+        _append_migration(applied, failed, False, "Migración ternas→relaciones VCM", str(e))
 
 
 def run_ecom_vendedor_cliente_marca_mysql(conn) -> Dict[str, Any]:
@@ -2109,10 +2109,10 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
     },
     {
         "id": "ecom_vendedor_cliente_marca",
-        "title": "E-com — cuaterna Vendedor→Cliente→Sucursal→Marca (+ usuario↔viajante)",
+        "title": "E-com — relación Vendedor→Cliente→Sucursal→Marca (+ usuario↔viajante)",
         "description": (
             "Tablas ``ecom_vendedor_cliente_marca`` (unique activo id_cliente+id_cliente_domicilio+CodMarca) "
-            "y ``ecom_usuario_viajante``. Migra ternas sin sucursal a cuaternas por domicilio activo. "
+            "y ``ecom_usuario_viajante``. Migra ternas sin sucursal a relaciones por domicilio activo. "
             "Pedido masivo por sucursales / filtro catálogo. Ver docs/ecom/VENDEDOR_CLIENTE_MARCA.md."
         ),
         "risk": "bajo",
