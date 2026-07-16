@@ -13,16 +13,20 @@ from ecom.services.pedidos_hub_pipeline import (
     _masivos_anulados,
     _pedidos_mysql,
     archivar_borrador_masivo,
+    columnas_hub_visibles,
     construir_hub_pedidos,
 )
 
 
 class TestColumnaPed(TestCase):
-    def test_clasificacion_legacy(self):
+    def test_clasificacion_sin_aprobacion(self):
         self.assertEqual(_columna_ped_mysql("Si", "No Autorizado", "Pendiente"), "anulado")
-        self.assertEqual(_columna_ped_mysql("No", "No Autorizado", "Pendiente"), "por_autorizar")
+        # Crédito "No Autorizado" no abre columna Por autorizar si aprobación off.
+        self.assertEqual(_columna_ped_mysql("No", "No Autorizado", "Pendiente"), "enviado")
         self.assertEqual(_columna_ped_mysql("No", "Autorizado", "Pendiente"), "enviado")
-        self.assertEqual(_columna_ped_mysql("No", "Autorizado", "En preparación"), "aprobado")
+        self.assertEqual(_columna_ped_mysql("No", "Autorizado", "En preparación"), "en_curso")
+        self.assertEqual(_columna_ped_mysql("No", "Autorizado", "Facturado"), "cerrado")
+        self.assertEqual(_columna_ped_mysql("No", "Autorizado", "Entregado"), "cerrado")
 
     def test_clasificacion_comercial_activa(self):
         self.assertEqual(
@@ -49,12 +53,50 @@ class TestColumnaPed(TestCase):
             _columna_ped_mysql(
                 "No",
                 "Autorizado",
+                "Pendiente",
+                estado_aprobacion_comercial="aprobado",
+                aprobacion_activa=True,
+            ),
+            "enviado",
+        )
+        self.assertEqual(
+            _columna_ped_mysql(
+                "No",
+                "Autorizado",
                 "En preparación",
                 estado_aprobacion_comercial="aprobado",
                 aprobacion_activa=True,
             ),
-            "aprobado",
+            "en_curso",
         )
+        self.assertEqual(
+            _columna_ped_mysql(
+                "No",
+                "Autorizado",
+                "Preparado",
+                estado_aprobacion_comercial="aprobado",
+                aprobacion_activa=True,
+            ),
+            "en_curso",
+        )
+
+
+class TestColumnasVisibles(TestCase):
+    def test_sin_aprobacion_oculta_por_autorizar_y_aprobado(self):
+        ids = columnas_hub_visibles(aprobacion_activa=False)
+        self.assertNotIn("por_autorizar", ids)
+        self.assertNotIn("aprobado", ids)
+        self.assertEqual(
+            list(ids),
+            ["borrador", "enviado", "en_curso", "cerrado", "anulado"],
+        )
+
+    def test_con_aprobacion_incluye_cola(self):
+        ids = columnas_hub_visibles(aprobacion_activa=True)
+        self.assertIn("por_autorizar", ids)
+        self.assertIn("aprobado", ids)
+        self.assertIn("en_curso", ids)
+        self.assertIn("cerrado", ids)
 
 
 class TestEtiquetaSucursal(TestCase):
@@ -265,3 +307,23 @@ class TestConstruirHubLayoutMovil(TestCase):
     def test_incluye_layout_movil(self, _mysql, _apr):
         hub = construir_hub_pedidos("emp_hub", {"id_usuario": 1, "todos_clientes": "Si"})
         self.assertEqual(hub.get("layout_movil"), "chips_cards")
+
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline._pedidos_mysql", return_value=[])
+    def test_columnas_sin_aprobacion(self, _mysql, _apr):
+        hub = construir_hub_pedidos("emp_hub", {"id_usuario": 1, "todos_clientes": "Si"})
+        ids = [c["id"] for c in hub["columnas"]]
+        self.assertEqual(ids, ["borrador", "enviado", "en_curso", "cerrado", "anulado"])
+        self.assertNotIn("por_autorizar", hub["labels"])
+        self.assertIn("cerrado", hub["labels"])
+        self.assertEqual(hub["labels"]["cerrado"], "Entregado / Cerrado")
+
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=True)
+    @patch("ecom.services.pedidos_hub_pipeline._pedidos_mysql", return_value=[])
+    def test_columnas_con_aprobacion(self, _mysql, _apr):
+        hub = construir_hub_pedidos("emp_hub", {"id_usuario": 1, "todos_clientes": "Si"})
+        ids = [c["id"] for c in hub["columnas"]]
+        self.assertIn("por_autorizar", ids)
+        self.assertIn("aprobado", ids)
+        self.assertIn("en_curso", ids)
+        self.assertIn("cerrado", ids)

@@ -19,9 +19,34 @@
 
       <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md sm:p-4">
         <header class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div>
+          <div class="min-w-0 flex-1">
             <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">Pedidos</h1>
             <p class="mt-1 text-xs text-slate-300 sm:text-sm">Borradores, envíos y seguimiento comercial.</p>
+            <div class="relative mt-3 max-w-xl">
+              <label class="sr-only" for="pedidos-hub-busqueda">Buscar pedidos</label>
+              <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400" aria-hidden="true">
+                <span class="material-icons text-lg">search</span>
+              </span>
+              <input id="pedidos-hub-busqueda"
+                     type="search"
+                     x-model.debounce.200ms="busqueda"
+                     placeholder="Buscar por PED, cliente o sucursal…"
+                     autocomplete="off"
+                     class="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-2 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
+              <button type="button"
+                      x-show="busqueda.trim()"
+                      x-cloak
+                      @click="busqueda=''"
+                      class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                      title="Limpiar búsqueda"
+                      aria-label="Limpiar búsqueda">
+                <span class="material-icons text-base">close</span>
+              </button>
+            </div>
+            <p x-show="busqueda.trim()" x-cloak class="mt-1.5 text-[11px] text-slate-400">
+              <span x-text="itemsFiltrados().length"></span> resultado<span x-text="itemsFiltrados().length===1 ? '' : 's'"></span>
+              de <span x-text="itemsPlanos.length"></span>
+            </p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <div class="hidden lg:inline-flex rounded-lg border border-slate-600 bg-slate-700 p-0.5" role="group" aria-label="Vista">
@@ -75,7 +100,7 @@
                   :class="columnaMovil==='todas' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600'"
                   class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold">
             Todas
-            <span class="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] tabular-nums" x-text="itemsPlanos.length"></span>
+            <span class="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] tabular-nums" x-text="itemsFiltrados().length"></span>
           </button>
           <template x-for="col in columnas" :key="'chip-'+col.id">
             <button type="button"
@@ -83,7 +108,7 @@
                     :class="columnaMovil===col.id ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600'"
                     class="inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold">
               <span x-text="col.label"></span>
-              <span class="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] tabular-nums" x-text="col.count"></span>
+              <span class="rounded-full bg-black/10 px-1.5 py-0.5 text-[10px] tabular-nums" x-text="countColumna(col)"></span>
             </button>
           </template>
         </div>
@@ -120,9 +145,8 @@
             </div>
           </div>
         </template>
-        <p x-show="!itemsMovilFiltrados().length" class="py-10 text-center text-sm text-slate-500">
-          No hay pedidos en este estado.
-        </p>
+        <p x-show="!itemsMovilFiltrados().length" class="py-10 text-center text-sm text-slate-500"
+           x-text="busqueda.trim() ? 'Ningún pedido coincide con la búsqueda.' : 'No hay pedidos en este estado.'"></p>
       </div>
     </div>
 
@@ -133,10 +157,10 @@
           <div class="flex w-64 flex-shrink-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:w-72">
             <div class="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700">
               <h2 class="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300" x-text="col.label"></h2>
-              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums text-slate-700 dark:bg-slate-900 dark:text-slate-200" x-text="col.count"></span>
+              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums text-slate-700 dark:bg-slate-900 dark:text-slate-200" x-text="countColumna(col)"></span>
             </div>
             <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
-              <template x-for="it in col.items" :key="it.id_ref">
+              <template x-for="it in itemsColumna(col)" :key="it.id_ref">
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-600 dark:bg-slate-900/40">
                   <a :href="it.url" class="block transition hover:border-purple-300 hover:bg-white dark:hover:border-purple-500">
                     <div class="flex items-start justify-between gap-1">
@@ -157,7 +181,7 @@
                   </div>
                 </div>
               </template>
-              <p x-show="!col.items.length" class="px-1 py-6 text-center text-xs text-slate-400">Vacío</p>
+              <p x-show="!itemsColumna(col).length" class="px-1 py-6 text-center text-xs text-slate-400">Vacío</p>
             </div>
           </div>
         </template>
@@ -177,7 +201,7 @@
           </tr>
         </thead>
         <tbody>
-          <template x-for="it in itemsPlanos" :key="it.id_ref">
+          <template x-for="it in itemsFiltrados()" :key="it.id_ref">
             <tr class="border-t border-slate-100 dark:border-slate-700">
               <td class="px-3 py-2 text-xs font-semibold uppercase text-slate-500" x-text="labels[it.columna] || it.columna"></td>
               <td class="px-3 py-2">
@@ -189,8 +213,9 @@
               <td class="px-3 py-2 tabular-nums text-slate-500" x-text="it.fecha"></td>
             </tr>
           </template>
-          <tr x-show="!itemsPlanos.length">
-            <td colspan="5" class="px-3 py-10 text-center text-slate-500">No hay pedidos en la ventana actual.</td>
+          <tr x-show="!itemsFiltrados().length">
+            <td colspan="5" class="px-3 py-10 text-center text-slate-500"
+                x-text="busqueda.trim() ? 'Ningún pedido coincide con la búsqueda.' : 'No hay pedidos en la ventana actual.'"></td>
           </tr>
         </tbody>
       </table>
@@ -221,6 +246,7 @@ function pedidosHubApp() {
   return {
     vista: 'kanban',
     columnaMovil: 'todas',
+    busqueda: '',
     columnas: [],
     itemsPlanos: [],
     labels: {},
@@ -243,9 +269,37 @@ function pedidosHubApp() {
         else if (data.vista) this.vista = data.vista;
       }
     },
+    coincideBusqueda(it) {
+      const q = (this.busqueda || '').trim().toLowerCase();
+      if (!q) return true;
+      const meta = it.meta || {};
+      const hay = [
+        it.titulo,
+        it.subtitulo,
+        it.sucursal,
+        it.fecha,
+        it.id_ref,
+        meta.nombre_cliente,
+        meta.codigo_movimiento,
+        meta.estado,
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    },
+    itemsFiltrados() {
+      return this.itemsPlanos.filter((it) => this.coincideBusqueda(it));
+    },
     itemsMovilFiltrados() {
-      if (this.columnaMovil === 'todas') return this.itemsPlanos;
-      return this.itemsPlanos.filter((it) => it.columna === this.columnaMovil);
+      let items = this.itemsFiltrados();
+      if (this.columnaMovil !== 'todas') {
+        items = items.filter((it) => it.columna === this.columnaMovil);
+      }
+      return items;
+    },
+    itemsColumna(col) {
+      return (col.items || []).filter((it) => this.coincideBusqueda(it));
+    },
+    countColumna(col) {
+      return this.itemsColumna(col).length;
     },
     aplicarPayload(hub) {
       this.columnas = hub.columnas || [];
@@ -253,6 +307,9 @@ function pedidosHubApp() {
       this.borradoresActivos = hub.borradores_activos || 0;
       this.aprobacionActiva = !!hub.aprobacion_comercial_activa;
       this.labels = hub.labels || this.labels;
+      if (this.columnaMovil !== 'todas' && !this.columnas.some((c) => c.id === this.columnaMovil)) {
+        this.columnaMovil = 'todas';
+      }
       const borr = (this.columnas.find(c => c.id === 'borrador') || {}).items || [];
       const masivo = borr.find(i => i.tipo === 'masivo');
       this.draftMasivoId = masivo && masivo.meta ? masivo.meta.draft_id : null;
