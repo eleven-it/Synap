@@ -14,7 +14,6 @@ from mpr.best_migration.models import (
     BestStockInicialMap,
 )
 from mpr.best_migration.services import (
-    SkuBestOcupadoReclamable,
     asignar_best_a_fabricado,
     buscar_skus_best_componentes,
     recalcular_mapeo_articulos,
@@ -547,7 +546,12 @@ class AsignarBestAFabricadoTests(TestCase):
         fab = BestArticuloMap.objects.get(base_empresa=BASE, best_id_articulo="FAB:20")
         self.assertEqual(fab.estado, BestArticuloMap.Estado.SIN_CANDIDATO)
 
-    def test_conflicto_no_validado_requiere_reclamo(self):
+    @patch("mpr.best_migration.services._fetch_best_catalog_skus")
+    def test_conflicto_no_validado_se_reasigna_automaticamente(self, mock_catalog):
+        mock_catalog.return_value = (
+            [{"id_articulo": "SEMI-OCUPADO", "codigo": "SEMI-20", "articulo": "Semi 20"}],
+            {},
+        )
         BestArticuloMap.objects.create(
             base_empresa=BASE,
             best_id_articulo="SEMI-OCUPADO",
@@ -565,61 +569,22 @@ class AsignarBestAFabricadoTests(TestCase):
             origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
         )
 
-        with self.assertRaises(SkuBestOcupadoReclamable) as ctx:
-            asignar_best_a_fabricado(
-                base_empresa=BASE,
-                map_best_id="FAB:20",
-                nuevo_best_id="SEMI-OCUPADO",
-                usuario="tester",
-            )
-
-        self.assertEqual(ctx.exception.sku, "SEMI-OCUPADO")
-        self.assertTrue(
-            BestArticuloMap.objects.filter(
-                base_empresa=BASE, best_id_articulo="SEMI-OCUPADO"
-            ).exists()
-        )
-
-    @patch("mpr.best_migration.services._fetch_best_catalog_skus")
-    def test_reclamar_pedido_abierto_no_validado(self, mock_catalog):
-        mock_catalog.return_value = (
-            [{"id_articulo": "SEMI-OCUPADO", "codigo": "SEMI-20", "articulo": "Semi 20"}],
-            {},
-        )
-        BestArticuloMap.objects.create(
-            base_empresa=BASE,
-            best_id_articulo="SEMI-OCUPADO",
-            estado=BestArticuloMap.Estado.INFERIDO_MEDIO,
-            admin_idart=10,
-            validado=False,
-            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
-        )
-        BestArticuloMap.objects.create(
-            base_empresa=BASE,
-            best_id_articulo="FAB:20",
-            estado=BestArticuloMap.Estado.SIN_CANDIDATO,
-            admin_idart=20,
-            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
-        )
-
         obj = asignar_best_a_fabricado(
             base_empresa=BASE,
             map_best_id="FAB:20",
             nuevo_best_id="SEMI-OCUPADO",
             usuario="tester",
-            reclamar=True,
         )
 
         self.assertEqual(obj.best_id_articulo, "SEMI-OCUPADO")
         self.assertEqual(obj.estado, BestArticuloMap.Estado.VALIDADO)
         self.assertTrue(obj.validado)
-        self.assertEqual(
+        self.assertFalse(
             BestArticuloMap.objects.filter(
                 base_empresa=BASE,
                 best_id_articulo="SEMI-OCUPADO",
                 origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
-            ).count(),
-            0,
+            ).exists()
         )
 
     def test_no_reclamar_otro_bom_fabricado(self):
@@ -645,7 +610,6 @@ class AsignarBestAFabricadoTests(TestCase):
                 map_best_id="FAB:20",
                 nuevo_best_id="SEMI-BOM",
                 usuario="tester",
-                reclamar=True,
             )
 
 

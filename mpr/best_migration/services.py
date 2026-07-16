@@ -103,23 +103,8 @@ _FLAGS_ALCANCE_PEDIDO_DEP = {
 }
 
 
-class SkuBestOcupadoReclamable(Exception):
-    """El SKU pertenece a un mapa no validado que requiere confirmación para reasignarse."""
-
-    def __init__(self, conflicto: BestArticuloMap, sku: str):
-        self.conflicto = conflicto
-        self.sku = sku
-        origen = conflicto.get_origen_requerimiento_display()
-        nombre = conflicto.admin_nombre or conflicto.best_articulo or "sin nombre"
-        super().__init__(
-            f"El SKU BEST {sku} está en otra fila no validada "
-            f"({origen} · IDArt {conflicto.admin_idart or '—'} · {nombre}). "
-            "Confirmá para reasignarlo a este componente fabricado."
-        )
-
-
 def _sku_best_mapa_es_reclamable(obj: BestArticuloMap) -> bool:
-    """Indica si un mapeo puede ceder su SKU BEST a un componente fabricado."""
+    """Indica si un mapeo cede automáticamente su SKU a un componente fabricado."""
     return (
         obj.estado != BestArticuloMap.Estado.VALIDADO
         and obj.validado is not True
@@ -2467,7 +2452,6 @@ def asignar_best_a_fabricado(
     nuevo_best_id: str,
     usuario: str,
     notas: str = "",
-    reclamar: bool = False,
 ) -> BestArticuloMap:
     """
     Asigna un SKU BEST real a un componente fabricado (origen BOM_FABRICADO).
@@ -2503,8 +2487,6 @@ def asignar_best_a_fabricado(
         origen = conflicto.get_origen_requerimiento_display()
         nombre = conflicto.admin_nombre or conflicto.best_articulo or "sin nombre"
         if _sku_best_mapa_es_reclamable(conflicto):
-            if not reclamar:
-                raise SkuBestOcupadoReclamable(conflicto, nuevo)
             conflicto.delete()
         else:
             validado = (

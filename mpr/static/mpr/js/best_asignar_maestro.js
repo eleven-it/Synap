@@ -225,7 +225,7 @@ function bestAsignarSkuBest(searchUrl) {
     metaLine: function (s) {
       var parts = [];
       if (s.reclamable) {
-        parts.push('Ocupado (reclamable)' + (s.origen_ocupado ? ' · ' + s.origen_ocupado : ''));
+        parts.push('Ocupado · se reasignará' + (s.origen_ocupado ? ' · ' + s.origen_ocupado : ''));
       }
       if (s.codigo) parts.push(s.codigo);
       if (s.best_id_articulo) parts.push('ID ' + s.best_id_articulo);
