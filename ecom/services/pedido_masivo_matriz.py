@@ -389,19 +389,28 @@ def buscar_articulos_filtrados_ternas(
     tam: int = 20,
     iva_incluido: bool = True,
     descuento_cliente: Decimal = Decimal("0"),
+    listar_todos: bool = False,
 ) -> Dict[str, Any]:
     """
     Autocomplete liviano para la matriz masiva.
 
     Solo artículos que el motor de precios/carrito puede resolver: Terminado,
     Discontinuo=No, ecommerce=Si y marcas de terna. Así no se ofrecen
-    sugerencias que luego fallen en preview/confirm con «no encontrado o inactivo».
+    sugerencias que luego fallarían en preview/confirm con «no encontrado o inactivo».
     No consulta stock ni presentación; precios/reglas en lote.
+
+    Con ``listar_todos=True`` (flecha abajo en UI) devuelve el catálogo filtrado
+    completo sin exigir ``q`` (tope alto de seguridad).
     """
     marcas = marcas_asignadas_viajante_cliente(
         base_empresa, cod_viajante, id_cliente, id_cliente_domicilio
     )
-    lim = max(1, min(int(tam or 20), 40))
+    q = (q or "").strip()
+    todos = bool(listar_todos)
+    if todos:
+        lim = max(1, min(int(tam or 5000), 5000))
+    else:
+        lim = max(1, min(int(tam or 20), 40))
     if not marcas:
         return {
             "items": [],
@@ -428,8 +437,7 @@ def buscar_articulos_filtrados_ternas(
     where.append(f"articulo.CodigoMarca IN ({placeholders})")
     params.extend(marcas)
 
-    q = (q or "").strip()
-    if len(q) < 2:
+    if not todos and len(q) < 2:
         return {
             "items": [],
             "total": 0,
@@ -439,16 +447,15 @@ def buscar_articulos_filtrados_ternas(
             "marcas": marcas,
             "sin_marcas": False,
         }
-    like = f"%{q}%"
-    where.append(
-        "(articulo.id_manual LIKE %s OR articulo.NombreArticulo LIKE %s "
-        "OR articulo.CodigoArticuloT LIKE %s OR CAST(articulo.IDArt AS CHAR) LIKE %s)"
-    )
-    params.extend([like, like, like, like])
+    if q:
+        like = f"%{q}%"
+        where.append(
+            "(articulo.id_manual LIKE %s OR articulo.NombreArticulo LIKE %s "
+            "OR articulo.CodigoArticuloT LIKE %s OR CAST(articulo.IDArt AS CHAR) LIKE %s)"
+        )
+        params.extend([like, like, like, like])
 
-    params.append(lim)
-    sql = f"""
-        SELECT
+    select_cols = """
             articulo.IDArt,
             COALESCE(articulo.id_manual, '') AS id_manual,
             COALESCE(articulo.NombreArticulo, '') AS nombre,
@@ -476,6 +483,10 @@ def buscar_articulos_filtrados_ternas(
             articulo.promocion_vigencia_desde,
             articulo.promocion_vigencia_hasta,
             iva.Alicuota AS alic_iva
+    """
+    if q:
+        sql = f"""
+        SELECT {select_cols}
         FROM articulo
         LEFT JOIN iva ON iva.ID = articulo.Alicuota
         WHERE {' AND '.join(where)}
@@ -487,12 +498,20 @@ def buscar_articulos_filtrados_ternas(
             END,
             articulo.NombreArticulo
         LIMIT %s
-    """
-    # Prefijo de orden: exacto / empieza-con / resto
-    q_exact = q
-    q_prefix = f"{q}%" if q else "%"
-    # Reconstruir params: where params + order helpers + limit
-    params_order = params[:-1] + [q_exact, q_prefix, lim]
+        """
+        q_exact = q
+        q_prefix = f"{q}%"
+        params_order = params + [q_exact, q_prefix, lim]
+    else:
+        sql = f"""
+        SELECT {select_cols}
+        FROM articulo
+        LEFT JOIN iva ON iva.ID = articulo.Alicuota
+        WHERE {' AND '.join(where)}
+        ORDER BY articulo.NombreArticulo
+        LIMIT %s
+        """
+        params_order = params + [lim]
 
     try:
         pool = get_mysql_pool()

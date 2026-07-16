@@ -189,6 +189,34 @@ class TestCatalogoFiltrado(TestCase):
 
     @patch(
         "ecom.services.pedido_masivo_matriz.marcas_asignadas_viajante_cliente",
+        return_value=[11],
+    )
+    @patch("ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo")
+    @patch("ecom.services.pedido_masivo_matriz.calcular_precio_articulo_row", return_value=Decimal("10"))
+    @patch("ecom.services.pedido_masivo_matriz.resolver_reglas_precio_map", return_value={})
+    @patch("ecom.services.pedido_masivo_matriz.get_mysql_pool")
+    def test_listar_todos_sin_q(
+        self, mock_pool, mock_reglas, _precio, mock_ctx, _marcas
+    ):
+        mock_ctx.return_value = {
+            "descRenglon": Decimal("0"),
+            "descPie": Decimal("0"),
+            "lista_id": 1,
+        }
+        cur = mock_pool.return_value.get_connection.return_value.__enter__.return_value.cursor.return_value
+        cur.fetchall.return_value = [(1, "100", "Art A"), (2, "200", "Art B")]
+        cur.description = [("IDArt",), ("id_manual",), ("nombre",)]
+        r = buscar_articulos_filtrados_ternas(
+            "emp_m", cod_viajante=1, id_cliente=2, q="", listar_todos=True, tam=5000
+        )
+        self.assertEqual(len(r["items"]), 2)
+        sql = cur.execute.call_args[0][0]
+        self.assertNotIn("id_manual LIKE", sql)
+        self.assertIn("LIMIT %s", sql)
+        self.assertEqual(cur.execute.call_args[0][1][-1], 5000)
+
+    @patch(
+        "ecom.services.pedido_masivo_matriz.marcas_asignadas_viajante_cliente",
         return_value=[],
     )
     def test_sin_marcas_vacio(self, _m):

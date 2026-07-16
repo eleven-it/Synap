@@ -594,6 +594,13 @@ APPS_MENU = [
                         "menu_item_id": "ecom_pedidos",
                     },
                     {
+                        "label": _("Pedido masivo sucursales"),
+                        "url": "ecom:mayoristapp_pedido_masivo_sucursales",
+                        "icon": "grid_on",
+                        "permission": "ecom.pedido_masivo.usar",
+                        "menu_item_id": "ecom_pedido_masivo",
+                    },
+                    {
                         "label": _("Remitos"),
                         "url": "ecom:mayoristapp_listado_remitos",
                         "icon": "local_shipping",
