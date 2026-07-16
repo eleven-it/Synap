@@ -1,0 +1,103 @@
+{# Modal de aviso compartido MPR — feedback operativo (validación, conflicto, éxito de acción). #}
+{# API global: window.mprShowAviso(mensaje, 'error'|'success'|'warning'|'info' | {tipo, titulo, mensaje}) y window.mprHideAviso(). #}
+{# Overlay z-[90]: por debajo del loading modal (z-100). #}
+<div id="mpr-aviso-modal"
+     class="fixed inset-0 z-[90] hidden overflow-y-auto"
+     role="dialog"
+     aria-modal="true"
+     aria-hidden="true"
+     aria-labelledby="mpr-aviso-title">
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div class="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity" aria-hidden="true" id="mpr-aviso-backdrop"></div>
+        <div class="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+            <div class="flex items-start gap-4">
+                <span id="mpr-aviso-icon-wrap" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/40" aria-hidden="true">
+                    <span id="mpr-aviso-icon" class="material-icons text-red-600 dark:text-red-400">error_outline</span>
+                </span>
+                <div class="min-w-0 flex-1">
+                    <h3 id="mpr-aviso-title" class="text-lg font-semibold text-gray-900 dark:text-white">Aviso</h3>
+                    <p id="mpr-aviso-message" class="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-gray-600 dark:text-gray-300"></p>
+                    <div class="mt-4 flex justify-end">
+                        <button type="button" id="mpr-aviso-close"
+                                class="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:focus-visible:ring-offset-gray-800">
+                            Entendido
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+    // Estilos por tipo: contenedor de icono + color + glyph material-icons.
+    var TIPOS = {
+        error:   { wrap: 'bg-red-100 dark:bg-red-900/40',       icon: 'text-red-600 dark:text-red-400',       glyph: 'error_outline', titulo: 'Aviso' },
+        success: { wrap: 'bg-emerald-100 dark:bg-emerald-900/40', icon: 'text-emerald-600 dark:text-emerald-400', glyph: 'check_circle', titulo: 'Listo' },
+        warning: { wrap: 'bg-amber-100 dark:bg-amber-900/40',   icon: 'text-amber-600 dark:text-amber-400',   glyph: 'warning',       titulo: 'Atención' },
+        info:    { wrap: 'bg-purple-100 dark:bg-purple-900/40', icon: 'text-purple-600 dark:text-purple-400', glyph: 'info',          titulo: 'Información' }
+    };
+
+    function els() {
+        return {
+            modal: document.getElementById('mpr-aviso-modal'),
+            iconWrap: document.getElementById('mpr-aviso-icon-wrap'),
+            icon: document.getElementById('mpr-aviso-icon'),
+            titleEl: document.getElementById('mpr-aviso-title'),
+            msgEl: document.getElementById('mpr-aviso-message'),
+            closeBtn: document.getElementById('mpr-aviso-close'),
+            backdrop: document.getElementById('mpr-aviso-backdrop')
+        };
+    }
+
+    window.mprHideAviso = function () {
+        var e = els();
+        if (!e.modal) return;
+        e.modal.classList.add('hidden');
+        e.modal.setAttribute('aria-hidden', 'true');
+    };
+
+    window.mprShowAviso = function (mensaje, tipoOrOpts) {
+        var e = els();
+        if (!e.modal) {
+            // Degradación segura si el partial no está presente.
+            window.alert(mensaje || '');
+            return;
+        }
+        var opts = {};
+        if (tipoOrOpts && typeof tipoOrOpts === 'object') {
+            opts = tipoOrOpts;
+        } else if (typeof tipoOrOpts === 'string') {
+            opts = { tipo: tipoOrOpts };
+        }
+        var tipo = opts.tipo || 'error';
+        var cfg = TIPOS[tipo] || TIPOS.error;
+        var texto = (opts.mensaje != null ? opts.mensaje : mensaje) || '';
+        var titulo = opts.titulo || cfg.titulo;
+
+        e.iconWrap.className = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full ' + cfg.wrap;
+        e.icon.className = 'material-icons ' + cfg.icon;
+        e.icon.textContent = cfg.glyph;
+        e.titleEl.textContent = titulo;
+        e.msgEl.textContent = texto;
+
+        e.modal.classList.remove('hidden');
+        e.modal.setAttribute('aria-hidden', 'false');
+        if (e.closeBtn) {
+            try { e.closeBtn.focus(); } catch (err) { /* noop */ }
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var e = els();
+        if (!e.modal) return;
+        if (e.closeBtn) e.closeBtn.addEventListener('click', window.mprHideAviso);
+        if (e.backdrop) e.backdrop.addEventListener('click', window.mprHideAviso);
+        document.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Escape' && e.modal && !e.modal.classList.contains('hidden')) {
+                window.mprHideAviso();
+            }
+        });
+    });
+})();
+</script>

@@ -1,4 +1,4 @@
-"""CRUD MySQL de cuaternas ``ecom_vendedor_cliente_marca`` (territorio comercial)."""
+"""CRUD MySQL de relaciones ``ecom_vendedor_cliente_marca`` (territorio comercial)."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def _mensaje_tabla_ausente(exc: Exception) -> str:
     if "1146" in msg or "doesn't exist" in msg.lower():
         return (
             "Faltan las tablas ecom_vendedor_cliente_marca. "
-            "Ejecutá la migración «E-com — cuaterna Vendedor→Cliente→Sucursal→Marca» "
+            "Ejecutá la migración «E-com — relación Vendedor→Cliente→Sucursal→Marca» "
             "en Archivo → Migración esquema MySQL."
         )
     return msg
@@ -149,7 +149,7 @@ def listar_ternas(
     solo_activas: bool = True,
     limit: int = 200,
 ) -> Tuple[bool, str, List[Dict[str, Any]]]:
-    """Lista cuaternas con nombres de viajante / cliente / sucursal / marca."""
+    """Lista relaciones con nombres de viajante / cliente / sucursal / marca."""
     lim = max(1, min(int(limit), 500))
     where = ["1=1"]
     params: List[Any] = []
@@ -235,7 +235,7 @@ def crear_terna(
     usuario_mod: str = "-",
 ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
     """
-    Crea cuaterna activa. Si (cliente, sucursal, marca) ya tiene dueño distinto → ConflictoMarcaCliente.
+    Crea relación activa. Si (cliente, sucursal, marca) ya tiene dueño distinto → ConflictoMarcaCliente.
     Si el mismo viajante ya la tiene → idempotente (devuelve la fila).
     """
     cv = to_int_or_none(cod_viajante)
@@ -253,7 +253,7 @@ def crear_terna(
     dueno = buscar_dueno_marca_cliente(base_empresa, idc, cm, idd)
     if dueno:
         if int(dueno["CodViajante"]) == cv:
-            return True, "La cuaterna ya existía.", dueno
+            return True, "La relación ya existía.", dueno
         nombre = dueno.get("nombre_viajante") or f"cod {dueno['CodViajante']}"
         raise ConflictoMarcaCliente(
             f"La marca ya está asignada a {nombre} para este cliente y sucursal.",
@@ -282,7 +282,7 @@ def crear_terna(
                 conn.commit()
                 return (
                     True,
-                    "Cuaterna creada.",
+                    "Relación creada.",
                     {
                         "id": new_id,
                         "CodViajante": cv,
@@ -325,7 +325,7 @@ def anular_terna(
     """Soft-delete: anulado = Si (libera unique activo)."""
     tid = to_int_or_none(id_terna)
     if tid is None:
-        return False, "Id de cuaterna inválido."
+        return False, "Id de relación inválido."
     um = (usuario_mod or "-")[:60]
     try:
         pool = get_mysql_pool()
@@ -343,8 +343,8 @@ def anular_terna(
                 affected = cursor.rowcount
                 conn.commit()
                 if affected < 1:
-                    return False, "Cuaterna no encontrada o ya anulada."
-                return True, "Cuaterna anulada."
+                    return False, "Relación no encontrada o ya anulada."
+                return True, "Relación anulada."
             except Exception as e:
                 conn.rollback()
                 logger.exception("anular_terna: %s", e)
@@ -362,7 +362,7 @@ def buscar_sucursales_cliente(
     q: str = "",
     limit: int = 30,
 ) -> List[Dict[str, Any]]:
-    """Domicilios activos del cliente para predictivo de config (sin filtrar por cuaterna)."""
+    """Domicilios activos del cliente para predictivo de config (sin filtrar por relación)."""
     idc = to_int_or_none(id_cliente)
     if idc is None:
         return []
@@ -374,15 +374,17 @@ def buscar_sucursales_cliente(
     params: List[Any] = [idc]
     q = (q or "").strip()
     if q:
-        qi = to_int_or_none(q)
-        if qi is not None:
-            where.append(
-                "(cm.id_cliente_domicilio = %s OR cm.Calle LIKE %s OR cm.NroCalle LIKE %s)"
-            )
-            params.extend([qi, f"%{q}%", f"%{q}%"])
-        else:
-            where.append("(cm.Calle LIKE %s OR cm.NroCalle LIKE %s OR cm.Dpto LIKE %s)")
-            params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
+        # Coincide id (exacto o parcial como texto), calle o nro — no devolver el listado completo.
+        where.append(
+            "("
+            "CAST(cm.id_cliente_domicilio AS CHAR) LIKE %s "
+            "OR cm.Calle LIKE %s "
+            "OR cm.NroCalle LIKE %s "
+            "OR CONCAT(COALESCE(cm.Calle,''), ' ', COALESCE(cm.NroCalle,'')) LIKE %s"
+            ")"
+        )
+        like = f"%{q}%"
+        params.extend([like, like, like, like])
     params.append(lim)
     sql = f"""
         SELECT
@@ -424,7 +426,7 @@ def sucursales_asignadas_viajante_cliente(
     cod_viajante: int,
     id_cliente: int,
 ) -> List[int]:
-    """Ids de sucursal con al menos una cuaterna activa para (viajante, cliente)."""
+    """Ids de sucursal con al menos una relación activa para (viajante, cliente)."""
     cv = to_int_or_none(cod_viajante)
     idc = to_int_or_none(id_cliente)
     if cv is None or idc is None:

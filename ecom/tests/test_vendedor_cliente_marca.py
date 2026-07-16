@@ -1,4 +1,4 @@
-"""Tests servicio/API cuaternas Vendedor→Cliente→Sucursal→Marca."""
+"""Tests servicio/API relaciones Vendedor→Cliente→Sucursal→Marca."""
 
 from unittest.mock import MagicMock, patch
 
@@ -102,7 +102,7 @@ class TestApiCrear409(TestCase):
         self.assertEqual(resp.data["code"], "conflicto_marca")
         self.assertEqual(resp.data["dueno"]["CodViajante"], 5)
 
-    @patch("ecom.vendedor_cliente_marca_views.anular_terna", return_value=(True, "Cuaterna anulada."))
+    @patch("ecom.vendedor_cliente_marca_views.anular_terna", return_value=(True, "Relación anulada."))
     @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
     def test_anular_ok(self, _base, _anular):
         factory = APIRequestFactory()

@@ -14,7 +14,9 @@ from mpr.best_migration.models import (
     BestStockInicialMap,
 )
 from mpr.best_migration.services import (
+    SkuBestOcupadoReclamable,
     asignar_best_a_fabricado,
+    buscar_skus_best_componentes,
     recalcular_mapeo_articulos,
     refresh_parity_counters,
     resolver_fabricados_desde_terminados,
@@ -517,7 +519,7 @@ class AsignarBestAFabricadoTests(TestCase):
             ).exists()
         )
 
-    def test_conflicto_con_pedido_abierto(self):
+    def test_conflicto_validado_con_pedido_abierto(self):
         BestArticuloMap.objects.create(
             base_empresa=BASE,
             best_id_articulo="PT-OCUPADO",
@@ -544,3 +546,165 @@ class AsignarBestAFabricadoTests(TestCase):
         self.assertIn("Pedido abierto", str(ctx.exception))
         fab = BestArticuloMap.objects.get(base_empresa=BASE, best_id_articulo="FAB:20")
         self.assertEqual(fab.estado, BestArticuloMap.Estado.SIN_CANDIDATO)
+
+    def test_conflicto_no_validado_requiere_reclamo(self):
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="SEMI-OCUPADO",
+            estado=BestArticuloMap.Estado.INFERIDO_MEDIO,
+            admin_idart=10,
+            admin_nombre="Terminado pendiente",
+            validado=False,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+        )
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="FAB:20",
+            estado=BestArticuloMap.Estado.SIN_CANDIDATO,
+            admin_idart=20,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+
+        with self.assertRaises(SkuBestOcupadoReclamable) as ctx:
+            asignar_best_a_fabricado(
+                base_empresa=BASE,
+                map_best_id="FAB:20",
+                nuevo_best_id="SEMI-OCUPADO",
+                usuario="tester",
+            )
+
+        self.assertEqual(ctx.exception.sku, "SEMI-OCUPADO")
+        self.assertTrue(
+            BestArticuloMap.objects.filter(
+                base_empresa=BASE, best_id_articulo="SEMI-OCUPADO"
+            ).exists()
+        )
+
+    @patch("mpr.best_migration.services._fetch_best_catalog_skus")
+    def test_reclamar_pedido_abierto_no_validado(self, mock_catalog):
+        mock_catalog.return_value = (
+            [{"id_articulo": "SEMI-OCUPADO", "codigo": "SEMI-20", "articulo": "Semi 20"}],
+            {},
+        )
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="SEMI-OCUPADO",
+            estado=BestArticuloMap.Estado.INFERIDO_MEDIO,
+            admin_idart=10,
+            validado=False,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+        )
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="FAB:20",
+            estado=BestArticuloMap.Estado.SIN_CANDIDATO,
+            admin_idart=20,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+
+        obj = asignar_best_a_fabricado(
+            base_empresa=BASE,
+            map_best_id="FAB:20",
+            nuevo_best_id="SEMI-OCUPADO",
+            usuario="tester",
+            reclamar=True,
+        )
+
+        self.assertEqual(obj.best_id_articulo, "SEMI-OCUPADO")
+        self.assertEqual(obj.estado, BestArticuloMap.Estado.VALIDADO)
+        self.assertTrue(obj.validado)
+        self.assertEqual(
+            BestArticuloMap.objects.filter(
+                base_empresa=BASE,
+                best_id_articulo="SEMI-OCUPADO",
+                origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+            ).count(),
+            0,
+        )
+
+    def test_no_reclamar_otro_bom_fabricado(self):
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="SEMI-BOM",
+            estado=BestArticuloMap.Estado.INFERIDO_MEDIO,
+            admin_idart=10,
+            validado=False,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="FAB:20",
+            estado=BestArticuloMap.Estado.SIN_CANDIDATO,
+            admin_idart=20,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+
+        with self.assertRaises(ValueError):
+            asignar_best_a_fabricado(
+                base_empresa=BASE,
+                map_best_id="FAB:20",
+                nuevo_best_id="SEMI-BOM",
+                usuario="tester",
+                reclamar=True,
+            )
+
+
+class BuscarSkusBestComponentesTests(TestCase):
+    @patch("mpr.best_migration.services._fetch_best_catalog_skus")
+    @patch("mpr.best_migration.services.fetch_dict")
+    @patch("mpr.best_migration.services.connect_best")
+    def test_busca_en_azure_muestra_ocupados_reclamables(
+        self, mock_connect, mock_fetch_dict, mock_catalog
+    ):
+        mock_fetch_dict.return_value = [
+            {
+                "id_articulo": "SEMI-OCUPADO",
+                "codigo": "SEMI-01",
+                "articulo": "Semi elaborado ocupado",
+                "marca": "Marca A",
+            },
+            {
+                "id_articulo": "SEMI-LIBRE",
+                "codigo": "SEMI-02",
+                "articulo": "Semi elaborado libre",
+                "marca": "Marca A",
+            },
+            {
+                "id_articulo": "SEMI-RECLAMABLE",
+                "codigo": "SEMI-03",
+                "articulo": "Semi elaborado reclamable",
+                "marca": "Marca A",
+            },
+        ]
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="SEMI-OCUPADO",
+            estado=BestArticuloMap.Estado.VALIDADO,
+            admin_idart=10,
+            validado=True,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+        )
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="SEMI-RECLAMABLE",
+            estado=BestArticuloMap.Estado.INFERIDO_MEDIO,
+            admin_idart=11,
+            validado=False,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+        )
+
+        results = buscar_skus_best_componentes("semi", limit=3, base_empresa=BASE)
+
+        self.assertEqual(
+            [row["best_id_articulo"] for row in results],
+            ["SEMI-LIBRE", "SEMI-RECLAMABLE"],
+        )
+        self.assertTrue(results[1]["reclamable"])
+        mock_catalog.assert_not_called()
+        mock_fetch_dict.assert_called_once()
+        self.assertIn("TOP (50)", mock_fetch_dict.call_args.args[1])
+        self.assertEqual(
+            mock_fetch_dict.call_args.args[2],
+            ("%semi%", "%semi%", "%semi%"),
+        )
+        mock_connect.return_value.close.assert_called_once()

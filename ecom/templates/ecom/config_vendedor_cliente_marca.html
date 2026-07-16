@@ -21,7 +21,7 @@
         <header class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Vendedor · Cliente · Sucursal · Marca</h1>
-            <p class="mt-1 text-xs text-slate-300 sm:text-sm">Territorio comercial (cuaterna): una marca por cliente y sucursal solo puede pertenecer a un vendedor.</p>
+            <p class="mt-1 text-xs text-slate-300 sm:text-sm">Territorio comercial (relación): una marca por cliente y sucursal solo puede pertenecer a un vendedor.</p>
           </div>
           <a :href="urls.hub" class="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
             <span class="material-icons text-base" aria-hidden="true">receipt_long</span>
@@ -31,11 +31,8 @@
       </div>
     </div>
 
-    <div x-show="mensaje" x-cloak class="mb-2 flex-shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" x-text="mensaje" role="status"></div>
-    <div x-show="error" x-cloak class="mb-2 flex-shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900" x-text="error" role="alert"></div>
-
     <div class="mb-3 flex-shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Nueva cuaterna</h2>
+      <h2 class="mb-3 text-sm font-semibold text-slate-800 dark:text-slate-100">Nueva relación</h2>
       <div class="grid grid-cols-1 gap-3 md:grid-cols-5 md:items-end">
         {# Vendedor #}
         <div class="relative" @click.outside="cerrarPanel('vend')">
@@ -44,8 +41,8 @@
                  :aria-expanded="panel==='vend'"
                  x-model="qVend"
                  @focus="abrirPanel('vend'); buscarVendedores()"
-                 @input.debounce.280ms="buscarVendedores()"
-                 @keydown.arrow-down.prevent="moverSel('vend', 1)"
+                 @input.debounce.280ms="onInput('vend')"
+                 @keydown.arrow-down.prevent="flechaAbajo('vend')"
                  @keydown.arrow-up.prevent="moverSel('vend', -1)"
                  @keydown.enter.prevent="elegirResaltado('vend')"
                  @keydown.escape="cerrarPanel('vend')"
@@ -75,8 +72,8 @@
                  :aria-expanded="panel==='cli'"
                  x-model="qCli"
                  @focus="abrirPanel('cli'); buscarClientes()"
-                 @input.debounce.280ms="buscarClientes()"
-                 @keydown.arrow-down.prevent="moverSel('cli', 1)"
+                 @input.debounce.280ms="onInput('cli')"
+                 @keydown.arrow-down.prevent="flechaAbajo('cli')"
                  @keydown.arrow-up.prevent="moverSel('cli', -1)"
                  @keydown.enter.prevent="elegirResaltado('cli')"
                  @keydown.escape="cerrarPanel('cli')"
@@ -107,8 +104,8 @@
                  :disabled="!selCli"
                  x-model="qSuc"
                  @focus="abrirPanel('suc'); buscarSucursales()"
-                 @input.debounce.280ms="buscarSucursales()"
-                 @keydown.arrow-down.prevent="moverSel('suc', 1)"
+                 @input.debounce.280ms="onInput('suc')"
+                 @keydown.arrow-down.prevent="flechaAbajo('suc')"
                  @keydown.arrow-up.prevent="moverSel('suc', -1)"
                  @keydown.enter.prevent="elegirResaltado('suc')"
                  @keydown.escape="cerrarPanel('suc')"
@@ -138,8 +135,8 @@
                  :aria-expanded="panel==='mar'"
                  x-model="qMar"
                  @focus="abrirPanel('mar'); buscarMarcas()"
-                 @input.debounce.280ms="buscarMarcas()"
-                 @keydown.arrow-down.prevent="moverSel('mar', 1)"
+                 @input.debounce.280ms="onInput('mar')"
+                 @keydown.arrow-down.prevent="flechaAbajo('mar')"
                  @keydown.arrow-up.prevent="moverSel('mar', -1)"
                  @keydown.enter.prevent="elegirResaltado('mar')"
                  @keydown.escape="cerrarPanel('mar')"
@@ -175,7 +172,9 @@
         <input id="vcm-filtro" type="text" autocomplete="off"
                x-model="qFiltro"
                @focus="abrirPanel('filtro'); buscarVendedoresFiltro()"
-               @input.debounce.280ms="buscarVendedoresFiltro()"
+               @input.debounce.280ms="onInput('filtro')"
+               @keydown.arrow-down.prevent="flechaAbajo('filtro')"
+               @keydown.escape="cerrarPanel('filtro')"
                placeholder="Todos (o buscar…)"
                class="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"/>
         <ul x-show="panel==='filtro'" x-cloak
@@ -192,37 +191,78 @@
       <button type="button" @click="cargar()" class="inline-flex h-9 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
         Actualizar
       </button>
+      <div class="ml-auto flex flex-wrap items-center gap-1.5" role="group" aria-label="Expandir o contraer árbol">
+        <button type="button" @click="expandirTodos()"
+                class="inline-flex min-h-8 items-center gap-0.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+          <span class="material-icons text-[15px]" aria-hidden="true">unfold_more</span>
+          Expandir todo
+        </button>
+        <button type="button" @click="contraerTodos()"
+                class="inline-flex min-h-8 items-center gap-0.5 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+          <span class="material-icons text-[15px]" aria-hidden="true">unfold_less</span>
+          Contraer todo
+        </button>
+      </div>
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
       <table class="min-w-full text-left text-sm">
-        <thead class="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+        <thead class="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600 dark:bg-slate-900 dark:text-slate-400">
           <tr>
-            <th class="px-3 py-2 font-semibold">Vendedor</th>
-            <th class="px-3 py-2 font-semibold">Cliente</th>
-            <th class="px-3 py-2 font-semibold">Sucursal</th>
             <th class="px-3 py-2 font-semibold">Marca</th>
             <th class="px-3 py-2 font-semibold">Alta</th>
             <th class="px-3 py-2 font-semibold"></th>
           </tr>
         </thead>
+        {# Árbol Vendedor → Cliente → Sucursal → Marca aplanado en filas; encabezados colapsables por nivel #}
         <tbody>
           <template x-if="!ternas.length && !cargando">
-            <tr><td colspan="6" class="px-3 py-8 text-center text-slate-500">Sin cuaternas activas. Creá la primera arriba.</td></tr>
+            <tr><td colspan="3" class="px-3 py-8 text-center text-slate-500">Sin relaciones activas. Creá la primera arriba.</td></tr>
           </template>
-          <template x-for="t in ternas" :key="t.id">
-            <tr class="border-t border-slate-100 dark:border-slate-700">
-              <td class="px-3 py-2 text-slate-900 dark:text-slate-100">
-                <span x-text="t.nombre_viajante"></span>
-                <span class="text-xs text-slate-400" x-text="'#'+t.CodViajante"></span>
-              </td>
-              <td class="px-3 py-2" x-text="t.nombre_cliente + ' (' + t.id_cliente + ')'"></td>
-              <td class="px-3 py-2" x-text="(t.etiqueta_sucursal || t.nombre_sucursal || ('#' + t.id_cliente_domicilio))"></td>
-              <td class="px-3 py-2" x-text="t.nombre_marca + ' (' + t.CodMarca + ')'"></td>
-              <td class="px-3 py-2 tabular-nums text-slate-500" x-text="t.fecha_alta"></td>
-              <td class="px-3 py-2 text-right">
-                <button type="button" @click="pedirAnular(t)" class="text-xs font-semibold text-red-600 hover:underline">Anular</button>
-              </td>
+          <template x-for="f in filasArbol()" :key="f.key">
+            <tr :class="[
+                  f.tipo === 'vend' ? 'cursor-pointer select-none bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-900 dark:hover:bg-slate-800' : '',
+                  f.tipo === 'cli' ? 'cursor-pointer select-none bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/70 dark:hover:bg-slate-800' : '',
+                  f.tipo === 'suc' ? 'cursor-pointer select-none bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700/60' : '',
+                  f.tipo === 'mar' ? 'border-t border-slate-100 dark:border-slate-700' : 'border-t border-slate-200 dark:border-slate-700'
+                ]"
+                :role="f.tipo !== 'mar' ? 'button' : null"
+                :aria-expanded="f.tipo !== 'mar' ? (f.abierto ? 'true' : 'false') : null"
+                @click="f.tipo !== 'mar' && toggleGrupo(f.key)">
+              {# Filas encabezado (vendedor / cliente / sucursal) #}
+              <template x-if="f.tipo !== 'mar'">
+                <td colspan="3" class="px-3 py-2">
+                  <div class="flex items-center gap-2"
+                       :class="f.tipo === 'cli' ? 'pl-6' : (f.tipo === 'suc' ? 'pl-9' : 'pl-3')">
+                    <span class="material-icons text-base text-slate-500 transition-transform dark:text-slate-400"
+                          :class="f.abierto ? 'rotate-90' : ''"
+                          aria-hidden="true">chevron_right</span>
+                    <span class="text-slate-900 dark:text-white"
+                          :class="f.tipo === 'vend' ? 'text-sm font-semibold' : (f.tipo === 'cli' ? 'text-sm font-medium' : 'text-sm')"
+                          x-text="f.nombre"></span>
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                          :class="f.tipo === 'vend' ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300' : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300'"
+                          x-text="f.count + (f.count === 1 ? ' relación' : ' relaciones')"></span>
+                  </div>
+                </td>
+              </template>
+              {# Fila hoja: Marca | Alta | acciones — mismo escalón visual que el texto de Sucursal (+ chevron fantasma) #}
+              <template x-if="f.tipo === 'mar'">
+                <td class="px-3 py-2 text-slate-900 dark:text-slate-100">
+                  <div class="flex items-center gap-2 pl-12">
+                    <span class="material-icons invisible text-base" aria-hidden="true">chevron_right</span>
+                    <span x-text="f.terna.nombre_marca"></span>
+                  </div>
+                </td>
+              </template>
+              <template x-if="f.tipo === 'mar'">
+                <td class="px-3 py-2 tabular-nums text-slate-500" x-text="f.terna.fecha_alta"></td>
+              </template>
+              <template x-if="f.tipo === 'mar'">
+                <td class="px-3 py-2 text-right">
+                  <button type="button" @click.stop="pedirAnular(f.terna)" class="text-xs font-semibold text-red-600 hover:underline">Anular</button>
+                </td>
+              </template>
             </tr>
           </template>
         </tbody>
@@ -246,7 +286,7 @@
         <div>
           <div class="mb-1 flex items-center gap-2">
             <span class="material-icons text-purple-500" aria-hidden="true">link</span>
-            <h3 id="vcm-modal-asignar-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Asignar cuaterna</h3>
+            <h3 id="vcm-modal-asignar-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Asignar relación</h3>
           </div>
           <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
             Se creará la relación vendedor · cliente · sucursal · marca. Una marca por cliente y sucursal solo puede pertenecer a un vendedor.
@@ -275,7 +315,7 @@
         <div>
           <div class="mb-1 flex items-center gap-2">
             <span class="material-icons text-red-500" aria-hidden="true">delete_outline</span>
-            <h3 id="vcm-modal-anular-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Anular cuaterna</h3>
+            <h3 id="vcm-modal-anular-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Anular relación</h3>
           </div>
           <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">
             ¿Confirmás anular la asignación de
@@ -325,10 +365,11 @@ window.vcmApp = function vcmApp() {
     selSuc: null,
     selMar: null,
     filtroViajante: '',
+    gruposColapsados: {},
     qVend: '', qCli: '', qSuc: '', qMar: '', qFiltro: '',
     panel: null,
     idxVend: 0, idxCli: 0, idxSuc: 0, idxMar: 0,
-    mensaje: '', error: '',
+    _reqVend: 0, _reqCli: 0, _reqSuc: 0, _reqMar: 0, _reqFiltro: 0,
     cargando: false, guardando: false,
     cargandoVend: false, cargandoCli: false, cargandoSuc: false, cargandoMar: false,
     confirmOpen: false,
@@ -347,10 +388,17 @@ window.vcmApp = function vcmApp() {
       this.confirmKind = null;
       this.confirmTerna = null;
     },
+    /** Feedback operativo al usuario en modal (fuente de verdad MPR: mprShowAviso). */
+    mostrarAviso(texto, tipo) {
+      if (typeof window.mprShowAviso === 'function') {
+        window.mprShowAviso(texto, tipo || 'error');
+      } else {
+        window.alert(texto || '');
+      }
+    },
     pedirAsignar() {
-      this.mensaje = ''; this.error = '';
       if (!this.selVend || !this.selCli || !this.selSuc || !this.selMar) {
-        this.error = 'Completá vendedor, cliente, sucursal y marca con la búsqueda predictiva.';
+        this.mostrarAviso('Completá vendedor, cliente, sucursal y marca con la búsqueda predictiva.', 'error');
         return;
       }
       this.confirmKind = 'asignar';
@@ -358,7 +406,6 @@ window.vcmApp = function vcmApp() {
       this.confirmOpen = true;
     },
     pedirAnular(t) {
-      this.mensaje = ''; this.error = '';
       this.confirmKind = 'anular';
       this.confirmTerna = t;
       this.confirmOpen = true;
@@ -372,6 +419,202 @@ window.vcmApp = function vcmApp() {
     },
     abrirPanel(p) { this.panel = p; },
     cerrarPanel(p) { if (this.panel === p) this.panel = null; },
+    /** Comparador de orden natural en español (números embebidos ordenados numéricamente). */
+    cmpNatural(a, b) {
+      return String(a || '').localeCompare(String(b || ''), 'es', { numeric: true, sensitivity: 'base' });
+    },
+    /**
+     * Filtro client-side de seguridad: el ítem debe contener q en etiqueta/nombre/id.
+     * Evita mostrar listados viejos si una request lenta (p. ej. flecha abajo) llega tarde.
+     */
+    filtrarPorQ(items, q, labelFn, idFn) {
+      const qq = String(q || '').trim().toLowerCase();
+      if (!qq) return items || [];
+      return (items || []).filter((it) => {
+        const label = String(labelFn(it) || '').toLowerCase();
+        const id = String(idFn ? idFn(it) : '');
+        return label.includes(qq) || id.toLowerCase().includes(qq);
+      });
+    },
+    /**
+     * Construye el árbol Vendedor → Cliente → Sucursal → Marca desde this.ternas.
+     * Cada nivel se ordena con orden natural; la hoja (marca) también.
+     */
+    arbolCuaternas() {
+      const vendMap = new Map();
+      for (const t of this.ternas) {
+        const cv = t.CodViajante;
+        let v = vendMap.get(cv);
+        if (!v) {
+          v = {
+            key: 'v:' + cv,
+            CodViajante: cv,
+            nombre: (t.nombre_viajante || '').trim() || ('Vendedor ' + cv),
+            count: 0,
+            clientesMap: new Map(),
+          };
+          vendMap.set(cv, v);
+        }
+        const ic = t.id_cliente;
+        let c = v.clientesMap.get(ic);
+        if (!c) {
+          c = {
+            key: v.key + ':c:' + ic,
+            id_cliente: ic,
+            nombre: (t.nombre_cliente || '').trim() || ('Cliente ' + ic),
+            count: 0,
+            sucursalesMap: new Map(),
+          };
+          v.clientesMap.set(ic, c);
+        }
+        const idd = Number(t.id_cliente_domicilio || 0);
+        let s = c.sucursalesMap.get(idd);
+        if (!s) {
+          s = {
+            key: c.key + ':s:' + idd,
+            id_cliente_domicilio: idd,
+            etiqueta: this.etiquetaSucursal(t),
+            count: 0,
+            marcas: [],
+          };
+          c.sucursalesMap.set(idd, s);
+        }
+        s.marcas.push(t);
+        s.count += 1;
+        c.count += 1;
+        v.count += 1;
+      }
+      const vendedores = [...vendMap.values()].map((v) => {
+        v.clientes = [...v.clientesMap.values()].map((c) => {
+          c.sucursales = [...c.sucursalesMap.values()].map((s) => {
+            s.marcas.sort((a, b) => this.cmpNatural(a.nombre_marca, b.nombre_marca));
+            return s;
+          }).sort((a, b) => this.cmpNatural(a.etiqueta, b.etiqueta));
+          return c;
+        }).sort((a, b) => this.cmpNatural(a.nombre, b.nombre));
+        return v;
+      }).sort((a, b) => this.cmpNatural(a.nombre, b.nombre));
+      return vendedores;
+    },
+    /** Aplana el árbol a filas visibles según el estado de colapso de cada nivel. */
+    filasArbol() {
+      const filas = [];
+      for (const v of this.arbolCuaternas()) {
+        filas.push({ tipo: 'vend', key: v.key, nombre: v.nombre, count: v.count, abierto: this.estaAbierto(v.key) });
+        if (!this.estaAbierto(v.key)) continue;
+        for (const c of v.clientes) {
+          filas.push({ tipo: 'cli', key: c.key, nombre: c.nombre, count: c.count, abierto: this.estaAbierto(c.key) });
+          if (!this.estaAbierto(c.key)) continue;
+          for (const s of c.sucursales) {
+            filas.push({ tipo: 'suc', key: s.key, nombre: s.etiqueta, count: s.count, abierto: this.estaAbierto(s.key) });
+            if (!this.estaAbierto(s.key)) continue;
+            for (const t of s.marcas) {
+              filas.push({ tipo: 'mar', key: 'm:' + t.id, terna: t });
+            }
+          }
+        }
+      }
+      return filas;
+    },
+    /** Niveles contraídos al cargar; expandirTodos() limpia el mapa. */
+    estaAbierto(key) {
+      return !this.gruposColapsados[key];
+    },
+    toggleGrupo(key) {
+      this.gruposColapsados = {
+        ...this.gruposColapsados,
+        [key]: !this.gruposColapsados[key],
+      };
+    },
+    /** Expande todos los niveles del árbol (patrón informes / objetivos). */
+    expandirTodos() {
+      this.gruposColapsados = {};
+    },
+    /** Contrae vendedor, cliente y sucursal en un solo paso. */
+    contraerTodos() {
+      const colapsados = {};
+      for (const v of this.arbolCuaternas()) {
+        colapsados[v.key] = true;
+        for (const c of v.clientes) {
+          colapsados[c.key] = true;
+          for (const s of c.sucursales) {
+            colapsados[s.key] = true;
+          }
+        }
+      }
+      this.gruposColapsados = colapsados;
+    },
+    /** Nombre de la lista reactiva asociada a cada campo predictivo. */
+    _listaDe(tipo) {
+      return {
+        vend: 'vendedores', cli: 'clientes', suc: 'sucursales', mar: 'marcas', filtro: 'vendedoresFiltro',
+      }[tipo];
+    },
+    /**
+     * @input de los campos predictivos: abre panel, invalida la selección si el
+     * texto ya no coincide y relanza la búsqueda (también con q vacío).
+     */
+    onInput(tipo) {
+      this.abrirPanel(tipo);
+      if (tipo === 'vend') {
+        if (this.selVend && this.qVend !== (this.selVend.nombre || '')) this.selVend = null;
+        this.buscarVendedores();
+      } else if (tipo === 'cli') {
+        if (this.selCli && this.qCli !== (this.selCli.nombre || '')) {
+          this.selCli = null; this.selSuc = null; this.qSuc = ''; this.sucursales = [];
+        }
+        this.buscarClientes();
+      } else if (tipo === 'suc') {
+        if (!this.selCli) return;
+        if (this.selSuc && this.qSuc !== (this.selSuc.etiqueta || this.selSuc.nombre || '')) this.selSuc = null;
+        this.buscarSucursales();
+      } else if (tipo === 'mar') {
+        if (this.selMar && this.qMar !== (this.selMar.nombre || '')) this.selMar = null;
+        this.buscarMarcas();
+      } else if (tipo === 'filtro') {
+        this.buscarVendedoresFiltro();
+      }
+    },
+    /**
+     * Flecha abajo: si el panel ya está abierto con resultados, navega; si no,
+     * abre el panel y trae TODO el catálogo (q vacío) tras limpiar la selección.
+     */
+    flechaAbajo(tipo) {
+      const lista = this[this._listaDe(tipo)] || [];
+      if (tipo !== 'filtro' && this.panel === tipo && lista.length) {
+        this.moverSel(tipo, 1);
+        return;
+      }
+      this.abrirPanel(tipo);
+      if (tipo === 'vend') {
+        this.qVend = ''; this.selVend = null; this.idxVend = 0;
+        this.buscarVendedores(200);
+      } else if (tipo === 'cli') {
+        this.qCli = ''; this.selCli = null; this.selSuc = null; this.qSuc = ''; this.sucursales = []; this.idxCli = 0;
+        this.buscarClientes(200);
+      } else if (tipo === 'suc') {
+        if (!this.selCli) return;
+        this.qSuc = ''; this.selSuc = null; this.idxSuc = 0;
+        this.buscarSucursales(200);
+      } else if (tipo === 'mar') {
+        this.qMar = ''; this.selMar = null; this.idxMar = 0;
+        this.buscarMarcas(200);
+      } else if (tipo === 'filtro') {
+        this.qFiltro = '';
+        this.buscarVendedoresFiltro(200);
+      }
+    },
+    /**
+     * Etiqueta legible de sucursal, sin exponer índices.
+     * Sin domicilio (id 0/vacío) o etiqueta que es solo un índice → «Sin sucursal».
+     */
+    etiquetaSucursal(t) {
+      const idd = Number(t.id_cliente_domicilio || 0);
+      if (!idd) return 'Sin sucursal';
+      const et = (t.etiqueta_sucursal || t.nombre_sucursal || '').trim();
+      if (!et || /^#?\d+$/.test(et) || /^sucursal\s*#?\s*\d+$/i.test(et)) return 'Sin sucursal';
+      return et;
+    },
     csrf() {
       const m = document.cookie.match(/csrftoken=([^;]+)/);
       return m ? decodeURIComponent(m[1]) : '';
@@ -397,61 +640,100 @@ window.vcmApp = function vcmApp() {
       return { status: r.status, data };
     },
     async cargar() {
-      this.cargando = true; this.error = '';
+      this.cargando = true;
       let u = this.urls.ternas + '?solo_activas=1';
       if (this.filtroViajante) u += '&CodViajante=' + encodeURIComponent(this.filtroViajante);
       const data = await this.getJson(u);
       this.cargando = false;
-      if (!data.ok) { this.error = data.error || 'No se pudieron cargar las ternas.'; return; }
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudieron cargar las ternas.', 'error'); return; }
       this.ternas = data.ternas || [];
+      this.contraerTodos();
     },
-    async buscarVendedores() {
+    async buscarVendedores(limit = 100) {
       if (!this.urls.vendedores) return;
+      const reqId = ++this._reqVend;
+      const q = this.qVend || '';
       this.cargandoVend = true;
-      const data = await this.getJson(this.urls.vendedores + '?q=' + encodeURIComponent(this.qVend || '') + '&limit=40');
+      const data = await this.getJson(this.urls.vendedores + '?q=' + encodeURIComponent(q) + '&limit=' + limit);
+      if (reqId !== this._reqVend) return;
       this.cargandoVend = false;
-      if (!data.ok) { this.error = data.error || 'No se pudieron buscar vendedores.'; this.vendedores = []; return; }
-      this.vendedores = data.items || [];
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudieron buscar vendedores.', 'error'); this.vendedores = []; return; }
+      const items = this.filtrarPorQ(
+        data.items || [], q,
+        (v) => v.nombre,
+        (v) => v.CodViajante
+      );
+      this.vendedores = items.sort((a, b) => this.cmpNatural(a.nombre, b.nombre));
       this.idxVend = 0;
     },
-    async buscarVendedoresFiltro() {
+    async buscarVendedoresFiltro(limit = 100) {
       if (!this.urls.vendedores) return;
-      const data = await this.getJson(this.urls.vendedores + '?q=' + encodeURIComponent(this.qFiltro || '') + '&limit=40');
-      if (data.ok) this.vendedoresFiltro = data.items || [];
+      const reqId = ++this._reqFiltro;
+      const q = this.qFiltro || '';
+      const data = await this.getJson(this.urls.vendedores + '?q=' + encodeURIComponent(q) + '&limit=' + limit);
+      if (reqId !== this._reqFiltro) return;
+      if (data.ok) {
+        this.vendedoresFiltro = this.filtrarPorQ(
+          data.items || [], q,
+          (v) => v.nombre,
+          (v) => v.CodViajante
+        ).sort((a, b) => this.cmpNatural(a.nombre, b.nombre));
+      }
     },
-    async buscarClientes() {
+    async buscarClientes(limit = 100) {
       if (!this.urls.clientes) return;
+      const reqId = ++this._reqCli;
+      const q = this.qCli || '';
       this.cargandoCli = true;
-      const data = await this.getJson(this.urls.clientes + '?q=' + encodeURIComponent(this.qCli || '') + '&limit=40');
+      const data = await this.getJson(this.urls.clientes + '?q=' + encodeURIComponent(q) + '&limit=' + limit);
+      if (reqId !== this._reqCli) return;
       this.cargandoCli = false;
-      if (!data.ok) { this.error = data.error || 'No se pudieron buscar clientes.'; this.clientes = []; return; }
-      this.clientes = data.items || [];
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudieron buscar clientes.', 'error'); this.clientes = []; return; }
+      this.clientes = this.filtrarPorQ(
+        data.items || [], q,
+        (c) => c.nombre,
+        (c) => c.id_cliente
+      ).sort((a, b) => this.cmpNatural(a.nombre, b.nombre));
       this.idxCli = 0;
     },
-    async buscarSucursales() {
+    async buscarSucursales(limit = 100) {
       if (!this.urls.sucursales || !this.selCli) {
         this.sucursales = [];
         return;
       }
+      const reqId = ++this._reqSuc;
+      const q = this.qSuc || '';
       this.cargandoSuc = true;
       const data = await this.getJson(
         this.urls.sucursales
           + '?id_cliente=' + encodeURIComponent(this.selCli.id_cliente)
-          + '&q=' + encodeURIComponent(this.qSuc || '')
-          + '&limit=40'
+          + '&q=' + encodeURIComponent(q)
+          + '&limit=' + limit
       );
+      if (reqId !== this._reqSuc) return;
       this.cargandoSuc = false;
-      if (!data.ok) { this.error = data.error || 'No se pudieron buscar sucursales.'; this.sucursales = []; return; }
-      this.sucursales = data.items || [];
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudieron buscar sucursales.', 'error'); this.sucursales = []; return; }
+      this.sucursales = this.filtrarPorQ(
+        data.items || [], q,
+        (s) => (s.etiqueta || s.nombre || ''),
+        (s) => s.id_cliente_domicilio
+      ).sort((a, b) => this.cmpNatural(a.etiqueta || a.nombre, b.etiqueta || b.nombre));
       this.idxSuc = 0;
     },
-    async buscarMarcas() {
+    async buscarMarcas(limit = 100) {
       if (!this.urls.marcas) return;
+      const reqId = ++this._reqMar;
+      const q = this.qMar || '';
       this.cargandoMar = true;
-      const data = await this.getJson(this.urls.marcas + '?q=' + encodeURIComponent(this.qMar || '') + '&limit=40');
+      const data = await this.getJson(this.urls.marcas + '?q=' + encodeURIComponent(q) + '&limit=' + limit);
+      if (reqId !== this._reqMar) return;
       this.cargandoMar = false;
-      if (!data.ok) { this.error = data.error || 'No se pudieron buscar marcas.'; this.marcas = []; return; }
-      this.marcas = data.items || [];
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudieron buscar marcas.', 'error'); this.marcas = []; return; }
+      this.marcas = this.filtrarPorQ(
+        data.items || [], q,
+        (m) => m.nombre,
+        (m) => m.CodMarca
+      ).sort((a, b) => this.cmpNatural(a.nombre, b.nombre));
       this.idxMar = 0;
     },
     elegirVend(v) {
@@ -495,10 +777,9 @@ window.vcmApp = function vcmApp() {
       else if (tipo === 'mar' && this.marcas[this.idxMar]) this.elegirMar(this.marcas[this.idxMar]);
     },
     async crear() {
-      this.mensaje = ''; this.error = '';
       if (!this.selVend || !this.selCli || !this.selSuc || !this.selMar) {
-        this.error = 'Completá vendedor, cliente, sucursal y marca con la búsqueda predictiva.';
         this.cerrarConfirm();
+        this.mostrarAviso('Completá vendedor, cliente, sucursal y marca con la búsqueda predictiva.', 'error');
         return;
       }
       this.guardando = true;
@@ -513,28 +794,27 @@ window.vcmApp = function vcmApp() {
       this.confirmKind = null;
       if (status === 409) {
         const d = data.dueno || {};
-        this.error = data.message || data.error || ('Conflicto: dueño ' + (d.nombre_viajante || d.CodViajante));
+        this.mostrarAviso(data.message || data.error || ('Conflicto: dueño ' + (d.nombre_viajante || d.CodViajante)), 'error');
         return;
       }
-      if (!data.ok) { this.error = data.error || 'No se pudo crear.'; return; }
-      this.mensaje = data.message || 'Cuaterna creada.';
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo crear.', 'error'); return; }
       this.selMar = null;
       this.qMar = '';
       this.marcas = [];
       await this.cargar();
       this.buscarMarcas();
+      this.mostrarAviso(data.message || 'Relación creada.', 'success');
     },
     async anular(t) {
-      this.error = ''; this.mensaje = '';
       this.guardando = true;
       const { data } = await this.postJson(this.urls.anular, { id: t.id });
       this.guardando = false;
       this.confirmOpen = false;
       this.confirmKind = null;
       this.confirmTerna = null;
-      if (!data.ok) { this.error = data.error || 'No se pudo anular.'; return; }
-      this.mensaje = data.message || 'Cuaterna anulada.';
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo anular.', 'error'); return; }
       await this.cargar();
+      this.mostrarAviso(data.message || 'Relación anulada.', 'success');
     },
   };
 }

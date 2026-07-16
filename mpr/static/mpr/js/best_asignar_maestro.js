@@ -11,6 +11,7 @@ function bestAsignarMaestro(searchUrl, cfg) {
   const emptyMsg = cfg.emptyMsg || 'Elegí un ítem de la lista.';
   const queryParams = cfg.queryParams && typeof cfg.queryParams === 'object' ? cfg.queryParams : {};
   const resultsKey = cfg.resultsKey || 'results';
+  const minSearchLength = Math.max(1, Number(cfg.minSearchLength) || 1);
   const MAX_PANEL_H = 280;
 
   const state = {
@@ -85,7 +86,7 @@ function bestAsignarMaestro(searchUrl, cfg) {
   state.buscar = async function () {
     const termino = this.q.trim();
     this.errorMsg = '';
-    if (!termino) {
+    if (termino.length < minSearchLength) {
       this.resultados = [];
       this.dropdown = false;
       this.highlighted = -1;
@@ -220,8 +221,12 @@ function bestAsignarSkuBest(searchUrl) {
     labelKey: 'articulo',
     stateKey: 'bestIdSku',
     emptyMsg: 'Elegí un SKU BEST de la lista.',
+    minSearchLength: 2,
     metaLine: function (s) {
       var parts = [];
+      if (s.reclamable) {
+        parts.push('Ocupado (reclamable)' + (s.origen_ocupado ? ' · ' + s.origen_ocupado : ''));
+      }
       if (s.codigo) parts.push(s.codigo);
       if (s.best_id_articulo) parts.push('ID ' + s.best_id_articulo);
       if (s.marca) parts.push(s.marca);

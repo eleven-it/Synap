@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import Counter
 from typing import Any
 
@@ -42,6 +43,10 @@ from core.utils.administranet_types import str_or_default, to_decimal_or_none, t
 from mpr.db import mysql_cursor
 
 logger = logging.getLogger(__name__)
+
+_BEST_CATALOG_SKUS_CACHE_TTL_SECONDS = 10 * 60
+_best_catalog_skus_cache: tuple[list[dict], dict[str, dict]] | None = None
+_best_catalog_skus_cache_at: float | None = None
 
 ESTADOS_PENDIENTES_ARTICULO = {
     BestArticuloMap.Estado.INFERIDO_ALTO,
@@ -96,6 +101,30 @@ _FLAGS_ALCANCE_PEDIDO_DEP = {
     "en_snapshot_abierto": True,
     "origen_requerimiento": BestDepositoMap.OrigenRequerimiento.PEDIDO_ABIERTO,
 }
+
+
+class SkuBestOcupadoReclamable(Exception):
+    """El SKU pertenece a un mapa no validado que requiere confirmación para reasignarse."""
+
+    def __init__(self, conflicto: BestArticuloMap, sku: str):
+        self.conflicto = conflicto
+        self.sku = sku
+        origen = conflicto.get_origen_requerimiento_display()
+        nombre = conflicto.admin_nombre or conflicto.best_articulo or "sin nombre"
+        super().__init__(
+            f"El SKU BEST {sku} está en otra fila no validada "
+            f"({origen} · IDArt {conflicto.admin_idart or '—'} · {nombre}). "
+            "Confirmá para reasignarlo a este componente fabricado."
+        )
+
+
+def _sku_best_mapa_es_reclamable(obj: BestArticuloMap) -> bool:
+    """Indica si un mapeo puede ceder su SKU BEST a un componente fabricado."""
+    return (
+        obj.estado != BestArticuloMap.Estado.VALIDADO
+        and obj.validado is not True
+        and obj.origen_requerimiento != BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO
+    )
 
 
 def _conteo_categorias_migracion(qs) -> dict[str, int]:
@@ -165,8 +194,24 @@ def _load_admin_fabricados(base_empresa: str) -> list[dict]:
         return list(cur.fetchall())
 
 
+def _invalidate_best_catalog_skus_cache() -> None:
+    """Invalida el catálogo BEST en memoria; útil para pruebas y refrescos explícitos."""
+    global _best_catalog_skus_cache, _best_catalog_skus_cache_at
+    _best_catalog_skus_cache = None
+    _best_catalog_skus_cache_at = None
+
+
 def _fetch_best_catalog_skus() -> tuple[list[dict], dict[str, dict]]:
     """Catálogo BEST semi-elaborado para matcher inverso (sin REP_RECETAS)."""
+    global _best_catalog_skus_cache, _best_catalog_skus_cache_at
+    now = time.monotonic()
+    if (
+        _best_catalog_skus_cache is not None
+        and _best_catalog_skus_cache_at is not None
+        and now - _best_catalog_skus_cache_at < _BEST_CATALOG_SKUS_CACHE_TTL_SECONDS
+    ):
+        return _best_catalog_skus_cache
+
     conn = connect_best()
     try:
         best_rows = fetch_dict(
@@ -195,7 +240,9 @@ def _fetch_best_catalog_skus() -> tuple[list[dict], dict[str, dict]]:
             tuple(ids),
         )
         myl = {str(r["MYMMID"]): r for r in myl_rows}
-        return best_rows, myl
+        _best_catalog_skus_cache = (best_rows, myl)
+        _best_catalog_skus_cache_at = now
+        return _best_catalog_skus_cache
     finally:
         conn.close()
 
@@ -2336,7 +2383,9 @@ def aceptar_depositos_seleccionados(
     return {"aceptados": aceptados, "omitidos": omitidos, "errores": errores}
 
 
-def buscar_skus_best_componentes(q: str, limit: int = 15) -> list[dict[str, Any]]:
+def buscar_skus_best_componentes(
+    q: str, limit: int = 15, base_empresa: str | None = None
+) -> list[dict[str, Any]]:
     """Búsqueda de SKUs BEST en inventario Producción/Semi (4000/4002) para componentes fabricados."""
     term = (q or "").strip()
     if not term:
@@ -2345,8 +2394,45 @@ def buscar_skus_best_componentes(q: str, limit: int = 15) -> list[dict[str, Any]
         limit = min(50, max(1, int(limit)))
     except (TypeError, ValueError):
         limit = 15
-    best_rows, _ = _fetch_best_catalog_skus()
-    term_lower = term.lower()
+    # TOP debe ir como literal entero (pymssql/Azure no siempre aceptan TOP (@n)).
+    sql_limit = max(50, limit * 4)
+    like_term = f"%{term}%"
+    try:
+        conn = connect_best()
+        try:
+            best_rows = fetch_dict(
+                conn,
+                f"""
+                SELECT DISTINCT TOP ({sql_limit})
+                       [Id Articulo] AS id_articulo,
+                       Codigo AS codigo,
+                       Articulo AS articulo,
+                       Marca AS marca
+                FROM REP_INVENTARIOS
+                WHERE [Id Deposito] IN (4000, 4002)
+                  AND [Id Articulo] IS NOT NULL
+                  AND (
+                      [Id Articulo] LIKE %s
+                      OR Codigo LIKE %s
+                      OR Articulo LIKE %s
+                  )
+                """,
+                (like_term, like_term, like_term),
+            )
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("Error buscando SKUs BEST para componentes")
+        return []
+
+    ocupados: dict[str, BestArticuloMap] = {}
+    if base_empresa:
+        ocupados = {
+            obj.best_id_articulo: obj
+            for obj in BestArticuloMap.objects.filter(base_empresa=base_empresa).only(
+                "best_id_articulo", "estado", "validado", "origen_requerimiento"
+            )
+        }
     out: list[dict[str, Any]] = []
     for row in best_rows:
         bid = str(row.get("id_articulo") or "").strip()
@@ -2355,21 +2441,21 @@ def buscar_skus_best_componentes(q: str, limit: int = 15) -> list[dict[str, Any]
         marca = str(row.get("marca") or "").strip()
         if not bid:
             continue
-        if (
-            term_lower in bid.lower()
-            or term_lower in codigo.lower()
-            or term_lower in articulo.lower()
-        ):
-            out.append(
-                {
-                    "best_id_articulo": bid,
-                    "codigo": codigo,
-                    "articulo": articulo,
-                    "marca": marca,
-                }
-            )
-            if len(out) >= limit:
-                break
+        conflicto = ocupados.get(bid)
+        if conflicto and not _sku_best_mapa_es_reclamable(conflicto):
+            continue
+        resultado = {
+            "best_id_articulo": bid,
+            "codigo": codigo,
+            "articulo": articulo,
+            "marca": marca,
+        }
+        if conflicto:
+            resultado["reclamable"] = True
+            resultado["origen_ocupado"] = conflicto.get_origen_requerimiento_display()
+        out.append(resultado)
+        if len(out) >= limit:
+            break
     return out
 
 
@@ -2381,6 +2467,7 @@ def asignar_best_a_fabricado(
     nuevo_best_id: str,
     usuario: str,
     notas: str = "",
+    reclamar: bool = False,
 ) -> BestArticuloMap:
     """
     Asigna un SKU BEST real a un componente fabricado (origen BOM_FABRICADO).
@@ -2404,7 +2491,8 @@ def asignar_best_a_fabricado(
         raise ValueError("La fila no tiene componente Admin asignado.")
 
     conflicto = (
-        BestArticuloMap.objects.filter(
+        BestArticuloMap.objects.select_for_update()
+        .filter(
             base_empresa=base_empresa,
             best_id_articulo=nuevo,
         )
@@ -2413,9 +2501,22 @@ def asignar_best_a_fabricado(
     )
     if conflicto:
         origen = conflicto.get_origen_requerimiento_display()
-        raise ValueError(
-            f"El SKU BEST {nuevo} ya está mapeado en otra fila ({origen})."
-        )
+        nombre = conflicto.admin_nombre or conflicto.best_articulo or "sin nombre"
+        if _sku_best_mapa_es_reclamable(conflicto):
+            if not reclamar:
+                raise SkuBestOcupadoReclamable(conflicto, nuevo)
+            conflicto.delete()
+        else:
+            validado = (
+                " Está validado."
+                if conflicto.estado == BestArticuloMap.Estado.VALIDADO or conflicto.validado is True
+                else ""
+            )
+            raise ValueError(
+                f"El SKU BEST {nuevo} ya está mapeado en otra fila "
+                f"({origen} · IDArt {conflicto.admin_idart or '—'} · {nombre})."
+                f"{validado} Elegí un semi-elaborado libre."
+            )
 
     best_rows, _ = _fetch_best_catalog_skus()
     hit = next(
