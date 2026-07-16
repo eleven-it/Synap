@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from django.urls import reverse
 from django.views.generic import TemplateView
@@ -16,11 +16,13 @@ from ecom.permissions import EcomConfigVendedorClienteMarcaPermission
 from ecom.pedido_masivo_stub_views import _StubMayoristappPermisoView
 from ecom.services.vendedor_cliente_marca import (
     ConflictoMarcaCliente,
+    _normalizar_ids_domicilio,
     anular_terna,
     buscar_clientes_activos,
     buscar_marcas_activas,
     buscar_sucursales_cliente,
     crear_terna,
+    crear_ternas_lote,
     listar_ternas,
 )
 from ventas.services.vendedor_asignacion_mysql import buscar_vendedores_activos
@@ -33,6 +35,38 @@ def _sess_user(request) -> Dict[str, Any]:
 def _usuario_mod_from_request(request) -> str:
     u = _sess_user(request)
     return str(u.get("cod_usuario") or u.get("nombre_usuario") or "-")[:60]
+
+
+def _extraer_ids_domicilio(data: Dict[str, Any]) -> List[int]:
+    """Lee ``ids_cliente_domicilio`` (lista) o un único ``id_cliente_domicilio`` (compat)."""
+    ids_raw = data.get("ids_cliente_domicilio")
+    if isinstance(ids_raw, list) and len(ids_raw) > 0:
+        return _normalizar_ids_domicilio(ids_raw)
+    single = to_int_or_none(data.get("id_cliente_domicilio"))
+    if single is not None and single > 0:
+        return [single]
+    return []
+
+
+def _mensaje_resumen_lote(resumen: Dict[str, Any]) -> str:
+    partes: List[str] = []
+    n_creadas = int(resumen.get("n_creadas") or 0)
+    n_ya = int(resumen.get("n_ya_existian") or 0)
+    n_conf = int(resumen.get("n_conflictos") or 0)
+    n_err = int(resumen.get("n_errores") or 0)
+    if n_creadas:
+        partes.append(
+            f"Se crearon {n_creadas} relación{'es' if n_creadas != 1 else ''}."
+        )
+    if n_ya:
+        partes.append(f"{n_ya} ya existía{'n' if n_ya != 1 else ''}.")
+    if n_conf:
+        partes.append(f"{n_conf} conflicto{'s' if n_conf != 1 else ''}.")
+    if n_err:
+        partes.append(f"{n_err} error{'es' if n_err != 1 else ''}.")
+    if not partes:
+        return "No se procesó ninguna sucursal."
+    return " ".join(partes)
 
 
 class ConfigVendedorClienteMarcaView(_StubMayoristappPermisoView):
@@ -89,29 +123,70 @@ class VendedorClienteMarcaCrearAPIView(APIView):
         if not base:
             return Response({"ok": False, "error": "Sin base_empresa."}, status=400)
         data = request.data if isinstance(request.data, dict) else {}
-        try:
-            ok, msg, terna = crear_terna(
-                base,
-                to_int_or_none(data.get("CodViajante")),
-                to_int_or_none(data.get("id_cliente")),
-                to_int_or_none(data.get("CodMarca")),
-                to_int_or_none(data.get("id_cliente_domicilio")),
-                usuario_mod=_usuario_mod_from_request(request),
-            )
-        except ConflictoMarcaCliente as exc:
+        cod_viajante = to_int_or_none(data.get("CodViajante"))
+        id_cliente = to_int_or_none(data.get("id_cliente"))
+        cod_marca = to_int_or_none(data.get("CodMarca"))
+        ids_domicilio = _extraer_ids_domicilio(data)
+        usuario_mod = _usuario_mod_from_request(request)
+
+        if not ids_domicilio:
             return Response(
-                {
-                    "ok": False,
-                    "code": "conflicto_marca",
-                    "error": exc.message,
-                    "message": exc.message,
-                    "dueno": exc.dueno,
-                },
-                status=409,
+                {"ok": False, "error": "Falta id_cliente_domicilio o ids_cliente_domicilio válidos."},
+                status=400,
             )
-        if not ok:
-            return Response({"ok": False, "error": msg}, status=400)
-        return Response({"ok": True, "message": msg, "terna": terna}, status=201)
+
+        if len(ids_domicilio) == 1:
+            try:
+                ok, msg, terna = crear_terna(
+                    base,
+                    cod_viajante,
+                    id_cliente,
+                    cod_marca,
+                    ids_domicilio[0],
+                    usuario_mod=usuario_mod,
+                )
+            except ConflictoMarcaCliente as exc:
+                return Response(
+                    {
+                        "ok": False,
+                        "code": "conflicto_marca",
+                        "error": exc.message,
+                        "message": exc.message,
+                        "dueno": exc.dueno,
+                    },
+                    status=409,
+                )
+            if not ok:
+                return Response({"ok": False, "error": msg}, status=400)
+            return Response({"ok": True, "message": msg, "terna": terna}, status=201)
+
+        resumen = crear_ternas_lote(
+            base,
+            cod_viajante,
+            id_cliente,
+            cod_marca,
+            ids_domicilio,
+            usuario_mod=usuario_mod,
+        )
+        ok_any = (resumen["n_creadas"] + resumen["n_ya_existian"]) > 0
+        mensaje = _mensaje_resumen_lote(resumen)
+        body: Dict[str, Any] = {
+            "ok": ok_any,
+            "message": mensaje,
+            "resumen": resumen,
+            "lote": True,
+        }
+
+        if not ok_any and resumen["n_conflictos"] > 0 and resumen["n_errores"] == 0:
+            body["code"] = "conflicto_marca"
+            body["error"] = mensaje
+            return Response(body, status=409)
+        if not ok_any:
+            body["error"] = mensaje
+            return Response(body, status=400)
+        if resumen["n_creadas"] > 0:
+            return Response(body, status=201)
+        return Response(body, status=200)
 
 
 class VendedorClienteMarcaAnularAPIView(APIView):

@@ -9,6 +9,7 @@ from ecom.services.vendedor_cliente_marca import (
     ConflictoMarcaCliente,
     anular_terna,
     crear_terna,
+    crear_ternas_lote,
 )
 from ecom.vendedor_cliente_marca_views import (
     VendedorClienteMarcaAnularAPIView,
@@ -67,6 +68,49 @@ class TestCrearTernaConflicto(SimpleTestCase):
         self.assertIsNone(terna)
 
 
+class TestCrearTernasLote(SimpleTestCase):
+    @patch("ecom.services.vendedor_cliente_marca.crear_terna")
+    def test_dos_ids_ambos_creados(self, mock_crear):
+        mock_crear.side_effect = [
+            (True, "Relación creada.", {"id": 1, "id_cliente_domicilio": 3}),
+            (True, "Relación creada.", {"id": 2, "id_cliente_domicilio": 4}),
+        ]
+        res = crear_ternas_lote("emp1", 9, 10, 2, [3, 4])
+        self.assertEqual(res["n_creadas"], 2)
+        self.assertEqual(res["n_ya_existian"], 0)
+        self.assertEqual(res["n_conflictos"], 0)
+        self.assertEqual(len(res["creadas"]), 2)
+        self.assertEqual(mock_crear.call_count, 2)
+
+    @patch("ecom.services.vendedor_cliente_marca.crear_terna")
+    def test_un_conflicto_un_creado(self, mock_crear):
+        def side_effect(base, cv, ic, cm, idd, **kwargs):
+            if idd == 3:
+                raise ConflictoMarcaCliente(
+                    "La marca ya está asignada a Pérez.",
+                    {"CodViajante": 5, "nombre_viajante": "Pérez", "id": 1, "id_cliente_domicilio": 3},
+                )
+            return (True, "Relación creada.", {"id": 2, "id_cliente_domicilio": 4})
+
+        mock_crear.side_effect = side_effect
+        res = crear_ternas_lote("emp1", 9, 10, 2, [3, 4])
+        self.assertEqual(res["n_creadas"], 1)
+        self.assertEqual(res["n_conflictos"], 1)
+        self.assertEqual(res["conflictos"][0]["id_cliente_domicilio"], 3)
+        self.assertEqual(res["creadas"][0]["id_cliente_domicilio"], 4)
+
+    @patch("ecom.services.vendedor_cliente_marca.crear_terna")
+    def test_idempotente_mix(self, mock_crear):
+        mock_crear.side_effect = [
+            (True, "La relación ya existía.", {"id": 1, "id_cliente_domicilio": 3}),
+            (True, "Relación creada.", {"id": 2, "id_cliente_domicilio": 4}),
+        ]
+        res = crear_ternas_lote("emp1", 9, 10, 2, [3, 4])
+        self.assertEqual(res["n_creadas"], 1)
+        self.assertEqual(res["n_ya_existian"], 1)
+        self.assertEqual(res["n_conflictos"], 0)
+
+
 class TestAnularTerna(SimpleTestCase):
     @patch("ecom.services.vendedor_cliente_marca.get_mysql_pool")
     def test_anular_ok(self, mock_pool):
@@ -101,6 +145,73 @@ class TestApiCrear409(TestCase):
         self.assertEqual(resp.status_code, 409)
         self.assertEqual(resp.data["code"], "conflicto_marca")
         self.assertEqual(resp.data["dueno"]["CodViajante"], 5)
+
+    @patch("ecom.vendedor_cliente_marca_views.crear_ternas_lote")
+    @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
+    def test_post_lote_dos_ok_201(self, _base, mock_lote):
+        mock_lote.return_value = {
+            "creadas": [{"id": 1}, {"id": 2}],
+            "ya_existian": [],
+            "conflictos": [],
+            "errores": [],
+            "n_creadas": 2,
+            "n_ya_existian": 0,
+            "n_conflictos": 0,
+            "n_errores": 0,
+        }
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/ecom/api/mayoristapp/vendedor-cliente-marca/crear/",
+            {
+                "CodViajante": 9,
+                "id_cliente": 10,
+                "CodMarca": 2,
+                "ids_cliente_domicilio": [3, 4],
+            },
+            format="json",
+        )
+        req.session = {"user": {"base_empresa": "emp1"}}
+        force_authenticate(req, user=_User())
+        resp = VendedorClienteMarcaCrearAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(resp.data["ok"])
+        self.assertTrue(resp.data["lote"])
+        self.assertIn("2", resp.data["message"])
+
+    @patch("ecom.vendedor_cliente_marca_views.crear_ternas_lote")
+    @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
+    def test_post_lote_todos_conflictos_409(self, _base, mock_lote):
+        mock_lote.return_value = {
+            "creadas": [],
+            "ya_existian": [],
+            "conflictos": [
+                {"id_cliente_domicilio": 3, "error": "Conflicto", "dueno": {"CodViajante": 5}},
+                {"id_cliente_domicilio": 4, "error": "Conflicto", "dueno": {"CodViajante": 5}},
+            ],
+            "errores": [],
+            "n_creadas": 0,
+            "n_ya_existian": 0,
+            "n_conflictos": 2,
+            "n_errores": 0,
+        }
+        factory = APIRequestFactory()
+        req = factory.post(
+            "/ecom/api/mayoristapp/vendedor-cliente-marca/crear/",
+            {
+                "CodViajante": 9,
+                "id_cliente": 10,
+                "CodMarca": 2,
+                "ids_cliente_domicilio": [3, 4],
+            },
+            format="json",
+        )
+        req.session = {"user": {"base_empresa": "emp1"}}
+        force_authenticate(req, user=_User())
+        resp = VendedorClienteMarcaCrearAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 409)
+        self.assertEqual(resp.data["code"], "conflicto_marca")
+        self.assertTrue(resp.data["lote"])
+        self.assertEqual(resp.data["resumen"]["n_conflictos"], 2)
 
     @patch("ecom.vendedor_cliente_marca_views.anular_terna", return_value=(True, "Relación anulada."))
     @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")

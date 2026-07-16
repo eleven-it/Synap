@@ -2,7 +2,7 @@
 
 **Change:** `ecom-pedidos-hub-kanban-masivo-sucursales` (+ extensión relación)  
 **Ruta config:** `/ecom/mayoristapp/config/vendedor-cliente-marca/`  
-**Fecha:** 14/07/2026
+**Fecha:** 16/07/2026
 
 ## Regla de negocio
 
@@ -55,11 +55,11 @@ Al ejecutar el proveedor en **Archivo → Migración esquema MySQL**:
 | Método | Path | Descripción |
 |--------|------|-------------|
 | GET | `/ecom/api/mayoristapp/vendedor-cliente-marca/ternas/` | Lista (filtros `CodViajante`, `id_cliente`, `id_cliente_domicilio`, `solo_activas`) |
-| POST | `/ecom/api/mayoristapp/vendedor-cliente-marca/crear/` | Alta con `id_cliente_domicilio` obligatorio; **409** `code=conflicto_marca` + `dueno` |
+| POST | `/ecom/api/mayoristapp/vendedor-cliente-marca/crear/` | Alta con `id_cliente_domicilio` (una sucursal) o `ids_cliente_domicilio` (array, lote); **409** `code=conflicto_marca` + `dueno` (simple) o `resumen` (lote); **201** si alguna creada; **200** si solo ya existían |
 | POST | `/ecom/api/mayoristapp/vendedor-cliente-marca/anular/` | Soft-delete `{id}` |
 | GET | `.../vendedores/`, `.../clientes/`, `.../sucursales/?id_cliente=`, `.../marcas/` | Búsqueda predictiva `?q=` |
 
-UI: `/ecom/mayoristapp/config/vendedor-cliente-marca/` — formulario con 4 combobox: Vendedor, Cliente, **Sucursal** (depende de cliente), Marca.
+UI: `/ecom/mayoristapp/config/vendedor-cliente-marca/` — formulario con 4 combobox: Vendedor, Cliente, **Sucursal** (multi-select: una o más sucursales del cliente; chips + checkboxes en listado; botones Todas/Ninguna), Marca (single). Un clic en **Asignar** crea N relaciones (mismo vendedor, cliente y marca × cada sucursal seleccionada).
 
 **Listado de relaciones:** árbol colapsable de 4 niveles `Vendedor → Cliente → Sucursal → Marca` (cada nivel con chevron y badge «N relaciones»; **inicia siempre contraído**; estado en `gruposColapsados` con claves string `v:<cod>`, `v:<cod>:c:<idc>`, `v:<cod>:c:<idc>:s:<idd>`), armado client-side con `arbolCuaternas()`/`filasArbol()` y orden natural (`cmpNatural`) en cada nivel; columnas de la hoja `Marca | Alta | (acciones)` con tabulación alineada al texto de Sucursal. Botones **Expandir todo** / **Contraer todo** (mismo patrón que informes VO). Se muestra solo el dato legible, **sin códigos entre paréntesis ni índices** (`nombre_viajante`, `nombre_cliente`, `nombre_marca`); en sucursal, si no hay domicilio (id 0/vacío) o la etiqueta es solo un índice, se muestra «Sin sucursal». Los 4 combobox y el filtro de vendedor usan búsqueda predictiva con orden natural, recarga al borrar el texto y flecha abajo para traer todo el catálogo (`onInput`/`flechaAbajo`).
 
