@@ -23,21 +23,61 @@ from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 
 logger = logging.getLogger(__name__)
 
-COLUMNAS = (
+COLUMNAS_SIN_APROBACION = (
+    "borrador",
+    "enviado",
+    "en_curso",
+    "cerrado",
+    "anulado",
+)
+
+COLUMNAS_CON_APROBACION = (
     "borrador",
     "enviado",
     "por_autorizar",
     "aprobado",
+    "en_curso",
+    "cerrado",
     "anulado",
 )
+
+# Compat: callers/tests que esperan el conjunto completo de ids.
+COLUMNAS = COLUMNAS_CON_APROBACION
 
 _LABELS = {
     "borrador": "Borrador",
     "enviado": "Enviado",
     "por_autorizar": "Por autorizar",
     "aprobado": "Aprobado",
+    "en_curso": "En curso",
+    "cerrado": "Entregado / Cerrado",
     "anulado": "Anulado",
 }
+
+_ESTADOS_CERRADOS = frozenset(
+    {
+        "cerrado",
+        "facturado",
+        "entregado",
+    }
+)
+
+_ESTADOS_EN_CURSO = frozenset(
+    {
+        "en preparación",
+        "en preparacion",
+        "preparado",
+        "en remito",
+        "parcial",
+    }
+)
+
+
+def columnas_hub_visibles(*, aprobacion_activa: bool) -> tuple:
+    """Columnas Kanban/Lista: sin Por autorizar/Aprobado si la aprobación comercial está off."""
+    if aprobacion_activa:
+        return COLUMNAS_CON_APROBACION
+    return COLUMNAS_SIN_APROBACION
 
 
 def _tarjeta(
@@ -238,6 +278,10 @@ def _columna_ped_mysql(
 ) -> str:
     if (anulado or "").strip().lower() in ("si", "sí"):
         return "anulado"
+    est = (estado or "").strip().lower()
+    if est in _ESTADOS_CERRADOS:
+        return "cerrado"
+
     est_com = (estado_aprobacion_comercial or "-").strip().lower()
     if aprobacion_activa:
         if est_com == "pendiente":
@@ -247,17 +291,18 @@ def _columna_ped_mysql(
         auth = (autorizacion or "").strip()
         if auth == "No Autorizado":
             return "por_autorizar"
-        est = (estado or "").strip().lower()
         if est in ("pendiente",):
             return "enviado"
+        if est in _ESTADOS_EN_CURSO:
+            return "en_curso"
         return "aprobado"
-    auth = (autorizacion or "").strip()
-    if auth == "No Autorizado":
-        return "por_autorizar"
-    est = (estado or "").strip().lower()
+
+    # Sin aprobación comercial: no usar columnas Por autorizar / Aprobado.
     if est in ("pendiente",):
         return "enviado"
-    return "aprobado"
+    if est in _ESTADOS_EN_CURSO:
+        return "en_curso"
+    return "enviado"
 
 
 def _pedidos_mysql(
@@ -429,14 +474,19 @@ def construir_hub_pedidos(
             )
         )
 
-    columnas: Dict[str, List[Dict[str, Any]]] = {k: [] for k in COLUMNAS}
+    ids_visibles = columnas_hub_visibles(aprobacion_activa=aprobacion_on)
+    columnas: Dict[str, List[Dict[str, Any]]] = {k: [] for k in ids_visibles}
     for it in items:
         col = it.get("columna") or "enviado"
         if col not in columnas:
-            col = "enviado"
+            # Pedidos mid-flow sin columna visible (p. ej. aprobación off) → Enviado.
+            col = "enviado" if "enviado" in columnas else ids_visibles[0]
+            it = {**it, "columna": col}
         columnas[col].append(it)
 
-    borradores_activos = len(columnas["borrador"])
+    items_visibles = [it for col_items in columnas.values() for it in col_items]
+    labels_visibles = {cid: _LABELS[cid] for cid in ids_visibles}
+    borradores_activos = len(columnas.get("borrador") or [])
     return {
         "vista": vista if vista in ("lista", "kanban") else "kanban",
         "layout_movil": "chips_cards",
@@ -448,11 +498,11 @@ def construir_hub_pedidos(
                 "count": len(columnas[cid]),
                 "items": columnas[cid],
             }
-            for cid in COLUMNAS
+            for cid in ids_visibles
         ],
-        "items": items,
+        "items": items_visibles,
         "borradores_activos": borradores_activos,
-        "labels": _LABELS,
+        "labels": labels_visibles,
     }
 
 

@@ -10,7 +10,8 @@
 Pantalla **inicial** del módulo Pedidos. Reemplaza el hub solo-KPI. El vendedor ve su trabajo y puede:
 
 - Continuar un **borrador** (pedido simple `EcomCart` o masivo por sucursales)
-- Ver PED **enviados / por autorizar / aprobados / anulados**
+- Ver PED **enviados / en curso / entregados-cerrados / anulados** (y cola de aprobación si el workflow lo habilita)
+- Buscar por **nro PED, cliente o sucursal** (filtro client-side sobre la ventana cargada)
 - Crear **Nuevo** → Simple | Masivo sucursales
 
 ## Vistas
@@ -18,24 +19,34 @@ Pantalla **inicial** del módulo Pedidos. Reemplaza el hub solo-KPI. El vendedor
 | Toggle / breakpoint | Uso |
 |---------------------|-----|
 | **&lt; lg (móvil)** | Chips de estado + tarjetas apiladas (sin scroll horizontal); tap abre `/mayoristapp/venta/?cod_mov=` |
-| **Lista** (≥ lg) | Tabla densa, filtros, paginación |
+| **Lista** (≥ lg) | Tabla densa; misma búsqueda que Kanban |
 | **Kanban** (≥ lg) | Columnas por estado (estilo Odoo; sin DnD de estados Admin) |
 
 Preferencia Lista/Kanban: `localStorage` clave `synap_pedidos_hub_vista`.
 
-Con **workflow comercial ON** y subflag aprobación activa, el hub expone cola **Por aprobar** con CTA aprobar/rechazar (permiso `ecom.pedidos.aprobar`, alcance org). Ver [JERARQUIA_COMERCIAL_APROBACION.md](JERARQUIA_COMERCIAL_APROBACION.md).
+Con **workflow comercial ON** y subflag aprobación activa (`aprobacion_pedidos_activa`), el hub expone columnas **Por autorizar** / **Aprobado** y CTA aprobar/rechazar (permiso `ecom.pedidos.aprobar`, alcance org). Si el master workflow o la aprobación están **off**, esas columnas **no** se muestran. Ver [JERARQUIA_COMERCIAL_APROBACION.md](JERARQUIA_COMERCIAL_APROBACION.md).
 
 ## Columnas / estados
 
-| Estado | Origen |
-|--------|--------|
-| Borrador | `EcomCart` con ítems + `EcomPedidoMasivoDraft` BORRADOR |
-| Enviado | PED confirmado reciente |
-| Por autorizar | PED pendiente autorización |
-| Aprobado | Autorizado / en preparación |
-| Anulado | Anulados (ventana reciente) |
+| Estado | Visible | Origen |
+|--------|---------|--------|
+| Borrador | siempre | `EcomCart` con ítems + `EcomPedidoMasivoDraft` BORRADOR |
+| Enviado | siempre | PED confirmado (`Pendiente`) o mid-flow sin etapa operativa |
+| Por autorizar | solo si aprobación comercial activa | Pendiente aprobación comercial o crédito `No Autorizado` |
+| Aprobado | solo si aprobación comercial activa | Autorizado comercialmente, aún no en preparación |
+| En curso | siempre | Preparación / preparado / remito / parcial |
+| Entregado / Cerrado | siempre | `Facturado`, `Entregado`, `Cerrado` |
+| Anulado | siempre | Anulados (ventana reciente) + drafts masivos anulados |
 
 Fechas UI: **dd/MM/yyyy**.
+
+### Prácticas de mercado aplicadas
+
+- Columnas = etapas del flujo; **ocultar etapas irrelevantes** a la config (sin Por autorizar/Aprobado si no hay workflow de aprobación).
+- **Lista y Kanban** comparten el mismo dataset y la misma búsqueda.
+- Etapa terminal **Entregado / Cerrado** separada del trabajo en curso.
+- Búsqueda rápida por identificadores operativos (PED, cliente, sucursal) con contador de resultados.
+- Ventana temporal acotada en pipeline (p. ej. 60 días) para no saturar el Kanban.
 
 ## Permisos
 
@@ -55,8 +66,8 @@ Fechas UI: **dd/MM/yyyy**.
 
 ## Implementación (Phase 3)
 
-- Template: `ecom/templates/ecom/pedidos_hub.html` (canon tablero slate-800)
-- Pipeline: `ecom/services/pedidos_hub_pipeline.py`
+- Template: `ecom/templates/ecom/pedidos_hub.html` (canon tablero slate-800; buscador en hero)
+- Pipeline: `ecom/services/pedidos_hub_pipeline.py` (`columnas_hub_visibles`, mapeo `en_curso` / `cerrado`)
 - API: `GET /ecom/api/mayoristapp/pedidos/hub/`, `POST .../hub/archivar-draft/`
 - Preferencia Lista/Kanban: `localStorage` clave `synap_pedidos_hub_vista`
 - Botón **Actualizar** en el hero: vuelve a pedir el JSON del hub (`urls.api`) sin recargar la página; icono `refresh` con spin mientras `cargando`
