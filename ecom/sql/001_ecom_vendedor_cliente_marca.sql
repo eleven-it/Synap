@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS ecom_vendedor_cliente_marca (
     id BIGINT NOT NULL AUTO_INCREMENT,
     CodViajante INT NOT NULL COMMENT 'viajantes.CodViajante',
     id_cliente INT NOT NULL COMMENT 'cliente.Codigo',
-    id_cliente_domicilio INT NOT NULL DEFAULT 0 COMMENT 'cliente_domicilio.id_cliente_domicilio; 0 = sin sucursal',
+    id_cliente_domicilio INT NOT NULL DEFAULT 0 COMMENT 'cliente_domicilio.id_cliente_domicilio — 0 = sin sucursal',
     CodMarca INT NOT NULL COMMENT 'marca.CodMarca',
     anulado CHAR(2) NOT NULL DEFAULT 'No' COMMENT 'Si | No',
     -- Unique parcial: solo filas activas (anulado=No). Varias anuladas pueden repetir cliente+sucursal+marca.
