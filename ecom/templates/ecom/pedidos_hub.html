@@ -4,10 +4,12 @@
 {% block title %}Pedidos — Synap{% endblock %}
 
 {% block content %}
-<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-3 dark:bg-slate-900 sm:py-4"
+{% include "ecom/includes/pedidos_page_styles.html" %}
+
+<section class="pedidos-hub-viewport flex h-[calc(100dvh-4.5rem)] min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4"
          x-data="pedidosHubApp()"
          x-init="init()">
-  <div class="mx-auto flex h-full min-h-0 w-full flex-col px-3 sm:px-4 md:px-6 lg:px-8">
+  <div class="mx-auto flex h-full min-h-0 w-full min-w-0 flex-col px-3 sm:px-4 md:px-6 lg:px-8">
     <div class="flex-shrink-0">
       <nav class="mb-3 text-xs text-slate-500" aria-label="Migas de pan">
         <ol class="flex flex-wrap items-center gap-x-2">
@@ -177,16 +179,17 @@
       </div>
     </div>
 
-    {# Kanban escritorio (≥ lg) #}
-    <div x-show="vista==='kanban'" class="hidden min-h-0 flex-1 overflow-x-auto lg:block">
-      <div class="flex h-full min-h-0 gap-3 pb-2" style="min-width: max-content;">
+    {# Kanban escritorio (≥ lg): hero fijo; scroll-x entre etapas, scroll-y solo dentro de cada columna #}
+    <div x-show="vista==='kanban'"
+         class="pedidos-hub-kanban-scroll hidden min-h-0 min-w-0 max-w-full flex-1 basis-0 lg:block">
+      <div class="pedidos-hub-kanban-row">
         <template x-for="col in columnas" :key="col.id">
-          <div class="flex w-64 flex-shrink-0 flex-col rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:w-72">
-            <div class="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700">
+          <div class="pedidos-hub-kanban-col flex h-full min-h-0 w-64 flex-shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:w-72">
+            <div class="flex flex-shrink-0 items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-700">
               <h2 class="text-xs font-bold uppercase tracking-wide text-slate-600 dark:text-slate-300" x-text="col.label"></h2>
               <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums text-slate-700 dark:bg-slate-900 dark:text-slate-200" x-text="countColumna(col)"></span>
             </div>
-            <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+            <div class="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2">
               <template x-for="it in itemsColumna(col)" :key="it.id_ref">
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-600 dark:bg-slate-900/40">
                   <template x-if="it.tipo!=='carrito_legacy'">

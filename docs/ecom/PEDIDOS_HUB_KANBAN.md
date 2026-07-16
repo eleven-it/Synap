@@ -72,6 +72,17 @@ Fechas UI: **dd/MM/yyyy**.
 - Preferencia Lista/Kanban: `localStorage` clave `synap_pedidos_hub_vista`
 - Botón **Actualizar** en el hero: vuelve a pedir el JSON del hub (`urls.api`) sin recargar la página; icono `refresh` con spin mientras `cargando`
 
+### Viewport fijo (hero + botones) — 16/07/2026
+
+Misma idea que pedido masivo (`.pm-matrix-viewport`): la página **no** scrollea el body. Clase `.pedidos-hub-viewport` + estilos en `pedidos_page_styles.html`.
+
+| Zona | Comportamiento |
+|------|----------------|
+| Migas + hero (búsqueda, Lista/Kanban, Actualizar, Nuevo, Depósito) | Fija (`flex-shrink-0`) |
+| Kanban (≥ lg) | Scrollport `.pedidos-hub-kanban-scroll` (`min-w-0` + `basis-0` + `overflow-x:auto`); fila `.pedidos-hub-kanban-row` con `width:max-content`; cada etapa `overflow-y` en tarjetas |
+| Lista (≥ lg) | `overflow` en el contenedor de tabla |
+| Móvil (&lt; lg) | Chips fijos; scroll vertical solo en la lista de tarjetas |
+
 ## Tarjetas enriquecidas
 
 | Tipo | Título | Campo extra |
