@@ -1,6 +1,7 @@
 # Tests integración migración JSON → org (REQ-JER-03): backfill idempotente.
 
 import json
+import inspect
 from io import StringIO
 from unittest.mock import MagicMock, patch
 
@@ -8,6 +9,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 
+from core.services.legacy_mysql_schema import catalog
 from ecom.services.jerarquia_comercial import backfill_carteras_desde_config
 
 
@@ -94,3 +96,23 @@ class TestComandoMigrarCarteras(SimpleTestCase):
         mock_backfill.return_value = {"ok": False, "error": "Sin conexión"}
         with self.assertRaises(CommandError):
             call_command("migrar_carteras_a_jerarquia", "administranet1")
+
+
+class TestProveedorJerarquiaComercialEncoding(SimpleTestCase):
+    def test_sql_mensajes_y_seed_ejecutados_son_ascii(self):
+        """Evita que Windows charmap falle al ejecutar este proveedor."""
+        source = inspect.getsource(catalog.run_ecom_jerarquia_aprobacion_mysql)
+        self.assertNotIn("\u2192", source)
+
+        claves_ejecutadas = {
+            "ecom_workflow_jerarquia_comercial",
+            "ecom_aprobacion_pedidos_activa",
+            "ecom_aprobacion_umbral_monto",
+            "ecom_aprobacion_umbral_desc_pie",
+            "ecom_aprobacion_umbral_desc_renglon",
+            "ecom_objetivos_en_pedidos",
+            "ecom_backorder_en_pedidos",
+        }
+        for row in catalog._ECOM_AJUSTES_VENTAS_CONFIG:
+            if row["key_permiso"] in claves_ejecutadas:
+                self.assertNotIn("\u2192", repr(row))
