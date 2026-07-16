@@ -1324,7 +1324,7 @@ _ECOM_AJUSTES_VENTAS_CONFIG: Tuple[Dict[str, str], ...] = (
         "key_permiso": "ecom_workflow_jerarquia_comercial",
         "nombre_permiso": "Workflow jerarquía comercial",
         "detalle_permiso": (
-            "Si: alcance comercial vía organigrama G→S→V. "
+            "Si: alcance comercial vía organigrama G->S->V. "
             "No: carteras JSON legacy (paridad actual)."
         ),
         "grupo_permiso": "Ecom Ventas",
@@ -1808,7 +1808,7 @@ def run_mpr_drop_lista_produccion_legacy_mysql(conn) -> Dict[str, Any]:
 
 def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
     """
-    Jerarquía comercial G→S→V, eventos de aprobación y columnas comerciales en ``comp_ped``.
+    Jerarquía comercial G->S->V, eventos de aprobación y columnas comerciales en ``comp_ped``.
 
     Ver change ecom-hub-movil-jerarquia-aprobacion (REQ-JER-01, REQ-APR-01 DDL).
     """
@@ -1831,7 +1831,7 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
                     INDEX idx_eogs_gerente (cod_gerente),
                     INDEX idx_eogs_supervisor (cod_supervisor)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                COMMENT='Jerarquía Gerente→Supervisor (Synap ecom)'
+                COMMENT='Jerarquía Gerente->Supervisor (Synap ecom)'
                 """
             )
             _append_migration(applied, failed, True, "CREATE TABLE ecom_org_gerente_supervisor")
@@ -1853,7 +1853,7 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
                     INDEX idx_eosv_supervisor (cod_supervisor),
                     INDEX idx_eosv_vendedor (cod_vendedor)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-                COMMENT='Jerarquía Supervisor→Vendedor (Synap ecom)'
+                COMMENT='Jerarquía Supervisor->Vendedor (Synap ecom)'
                 """
             )
             _append_migration(applied, failed, True, "CREATE TABLE ecom_org_supervisor_vendedor")
@@ -1944,7 +1944,7 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
 
         conn.commit()
 
-        # Backfill idempotente JSON→org (no borra claves legacy)
+        # Backfill idempotente JSON->org (no borra claves legacy)
         try:
             from ecom.services.jerarquia_comercial import backfill_carteras_desde_config
 
@@ -1962,19 +1962,19 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
                         applied,
                         failed,
                         True,
-                        f"backfill carteras JSON→org (sv={bf.get('vinculos_sv', 0)})",
+                        f"backfill carteras JSON->org (sv={bf.get('vinculos_sv', 0)})",
                     )
                 else:
                     _append_migration(
                         applied,
                         failed,
                         False,
-                        "backfill carteras JSON→org",
+                        "backfill carteras JSON->org",
                         str(bf.get("error") or "error"),
                     )
         except Exception as bf_exc:
             logger.warning("run_ecom_jerarquia_aprobacion: backfill omitido: %s", bf_exc)
-            _append_migration(applied, failed, True, "backfill carteras JSON→org (omitido)")
+            _append_migration(applied, failed, True, "backfill carteras JSON->org (omitido)")
 
     except Exception as e:
         conn.rollback()
