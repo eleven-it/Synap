@@ -1480,8 +1480,47 @@
     /** Un `<tbody>` solo con la fila cabecera del vendedor y otro con todo el subárbol: `hidden` en el segundo evita layout de miles de filas al colapsar (un solo nodo vs N× classList). */
     const tbClass = "divide-y divide-slate-200 dark:divide-slate-700";
     const parts = [];
-    jerarquia.forEach((vend) => {
+
+    function esNodoOrg(n) {
+      const t = n && n.tipo ? String(n.tipo).toLowerCase() : "";
+      return t === "gerente" || t === "supervisor";
+    }
+
+    function aplanarOrgDisplay(nodes, depth, acc) {
+      (nodes || []).forEach(function (n) {
+        if (!n || typeof n !== "object") return;
+        if (esNodoOrg(n)) {
+          acc.push({ __org: true, tipo: n.tipo, nombre_vendedor: n.nombre_vendedor, depth: depth, metrics: n });
+          aplanarOrgDisplay(n.children || [], depth + 1, acc);
+        } else {
+          acc.push(Object.assign({}, n, { __depth: depth }));
+        }
+      });
+      return acc;
+    }
+
+    const filasRender = aplanarOrgDisplay(jerarquia, 0, []);
+
+    filasRender.forEach(function (vend) {
       if (!vend || typeof vend !== "object") return;
+      if (vend.__org) {
+        const label = String(vend.tipo || "").toLowerCase() === "gerente" ? "Gerente" : "Supervisor";
+        parts.push(`<tbody class="${tbClass}">`);
+        parts.push(
+          `<tr class="bg-violet-50/90 dark:bg-violet-950/30">` +
+            treeNombreCell(
+              treeIndentPx(vend.depth || 0),
+              treeSpacerHtml(),
+              "text-xs font-bold uppercase tracking-tight text-violet-900 dark:text-violet-200",
+              escHtml(label + ": " + (vend.nombre_vendedor || ""))
+            ) +
+            metricRowCells(vend.metrics || {}) +
+            "</tr>"
+        );
+        parts.push("</tbody>");
+        return;
+      }
+      const depth = vend.__depth || 0;
       const codViajante = String(vend.cod_viajante || "");
       const gid = "vo-grp-v-" + codViajante;
       const expanded = isVendorExpanded(viewState, codViajante);
@@ -1497,7 +1536,7 @@
       parts.push(
         `<tr class="bg-slate-100 dark:bg-slate-800/90 cursor-pointer select-none hover:bg-slate-200/90 dark:hover:bg-slate-800"${voSearchDataAttr(vendSearch)} data-vo-toggle="${gid}" data-vo-vendor="${escHtml(codViajante)}" role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}">` +
           treeNombreCell(
-            treeIndentPx(0),
+            treeIndentPx(depth),
             treeToggleVendorHtml(gid, expanded),
             "text-xs font-bold uppercase tracking-tight text-slate-900 dark:text-white",
             nombreJerarquiaConContadorHtml(
@@ -1535,7 +1574,7 @@
           parts.push(
             `<tr class="vo-child-row bg-slate-50 dark:bg-slate-900/30"${voSearchDataAttr(estadoSearch)} data-parent="${escHtml(gid)}" data-vo-vendor-group="${escHtml(gid)}" data-vo-estado-head="1" data-vo-estado-key="${escHtml(estadoKey)}">` +
               treeNombreCell(
-                treeIndentPx(1),
+                treeIndentPx(depth + 1),
                 treeToggleHtml(estadoKey, expEstado),
                 "text-xs uppercase tracking-tight font-normal text-slate-800 dark:text-slate-200",
                 estadoNombreHtml
@@ -1566,7 +1605,7 @@
               parts.push(
                 `<tr class="vo-child-row hover:bg-slate-50 dark:hover:bg-slate-700/50 ${cliHidden ? "hidden" : ""} bg-white dark:bg-slate-900/30"${voSearchDataAttr(cliSearch)} data-parent="${escHtml(estadoKey)}" data-vo-vendor-group="${escHtml(gid)}" data-vo-client="${escHtml(cid)}">` +
                   treeNombreCell(
-                    treeIndentPx(2),
+                    treeIndentPx(depth + 2),
                     chevC,
                     "text-xs font-normal uppercase tracking-tight text-slate-800 dark:text-slate-200",
                     `${etiquetaJerarquia(1)}${escHtml(cli.nombre_cliente)}`

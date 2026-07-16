@@ -11,6 +11,9 @@ from ecom.mayoristapp_web_views import (
     PresupuestosVendedorView,
 )
 from ecom.pedido_gestion_views import (
+    AprobacionPedidoAprobarAPIView,
+    AprobacionPedidoRechazarAPIView,
+    AprobacionPendientesAPIView,
     CarritoDesdePedidoAPIView,
     CarritoDesdePedidoPreviewAPIView,
     CompraMayoristaContextoAPIView,
@@ -37,7 +40,8 @@ from ecom.vendedor_cliente_marca_views import (
     VendedorClienteMarcaTernasAPIView,
     VendedorClienteMarcaVendedoresAPIView,
 )
-from ecom.ajustes_ventas_views import AjustesVentasAPIView, AjustesVentasView
+from ecom.ajustes_ventas_views import AjustesVentasAPIView, AjustesVentasView, AjustesWorkflowAPIView
+from ecom.jerarquia_views import JerarquiaNodosAPIView
 from ecom.pedido_masivo_views import (
     PedidoMasivoAbrirAPIView,
     PedidoMasivoArticulosAPIView,
@@ -263,6 +267,31 @@ urlpatterns = [
         "api/mayoristapp/ajustes-ventas/",
         AjustesVentasAPIView.as_view(),
         name="api_ajustes_ventas",
+    ),
+    path(
+        "api/mayoristapp/ajustes/workflow/",
+        AjustesWorkflowAPIView.as_view(),
+        name="api_ajustes_workflow",
+    ),
+    path(
+        "api/mayoristapp/jerarquia/nodos/",
+        JerarquiaNodosAPIView.as_view(),
+        name="api_jerarquia_nodos",
+    ),
+    path(
+        "api/mayoristapp/aprobacion/pendientes/",
+        AprobacionPendientesAPIView.as_view(),
+        name="api_aprobacion_pendientes",
+    ),
+    path(
+        "api/mayoristapp/aprobacion/<int:cod_mov>/aprobar/",
+        AprobacionPedidoAprobarAPIView.as_view(),
+        name="api_aprobacion_pedido_aprobar",
+    ),
+    path(
+        "api/mayoristapp/aprobacion/<int:cod_mov>/rechazar/",
+        AprobacionPedidoRechazarAPIView.as_view(),
+        name="api_aprobacion_pedido_rechazar",
     ),
     path(
         "api/mayoristapp/vendedor-cliente-marca/ternas/",

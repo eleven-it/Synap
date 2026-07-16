@@ -38,7 +38,8 @@ from core.mysql_pool import get_connection, get_mysql_pool
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, str_or_default
 from ecom.models import EcomCart
 from ecom.services.catalogo_producto import resolver_precio_articulo
-from ecom.services.ecom_config_mysql import pedidos_validan_stock
+from ecom.services.aprobacion_pedidos import aplicar_estado_inicial_checkout, evaluar_reglas
+from ecom.services.ecom_config_mysql import aprobacion_pedidos_activa, pedidos_validan_stock
 from ecom.services.mayorista_cart_service import recalcular_totales
 from ecom.services.mayorista_credito import evaluar_autorizacion
 from ecom.services.mayorista_percepciones import (
@@ -360,6 +361,28 @@ def confirmar(
 
                 finalizar_vinculo_presupuesto_pedido(
                     cur, int(datos.cod_mov_presupuesto_origen), int(cod_mov)
+                )
+
+            if (
+                tipo == EcomCart.TIPO_PEDIDO
+                and cod_mov is not None
+                and aprobacion_pedidos_activa(cart.base_empresa)
+            ):
+                requiere_aprob, reglas = evaluar_reglas(
+                    cart.base_empresa,
+                    cart,
+                    cli,
+                    autorizacion_sistema=autorizacion,
+                    cursor=cur,
+                    cod_mov_excluir=int(cod_mov),
+                )
+                aplicar_estado_inicial_checkout(
+                    cur,
+                    cart.base_empresa,
+                    cod_mov=int(cod_mov),
+                    cod_viajante=to_int_or_none(cod_viajante),
+                    requiere=requiere_aprob,
+                    reglas=reglas,
                 )
 
             conn.commit()

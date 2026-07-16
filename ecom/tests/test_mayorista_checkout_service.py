@@ -64,6 +64,13 @@ class FakeCursor:
         elif "insert into comp_ped" in low:
             self.state["comp_ped_count"] = self.state.get("comp_ped_count", 0) + 1
             self.state["comp_ped_params"] = params
+        elif "update comp_ped" in low and "estado_aprobacion_comercial" in low:
+            self.state["aprobacion_update"] = params
+        elif "insert into ecom_aprobacion_evento" in low:
+            self.state["aprobacion_evento_count"] = self.state.get("aprobacion_evento_count", 0) + 1
+            self.state["aprobacion_evento_params"] = params
+        elif "from comp_ped" in low and "codigo =" in low:
+            self._last = None
         else:
             self.rowcount = 1
 
@@ -486,6 +493,39 @@ class TestCheckoutPercepcionesIIBB(CheckoutTestBase):
         self.assertTrue(ok, err)
         self.assertIsNone(state.get("percep_count"))
         self.assertEqual(state["comp_ped_params"]["total_percep"], Decimal("0"))
+
+
+class TestCheckoutAprobacionComercial(CheckoutTestBase):
+    @patch.object(checkout_svc, "aprobacion_pedidos_activa", return_value=False)
+    def test_flag_off_sin_hook_aprobacion(self, _flag):
+        state = {"codmov": 1000, "talonario": {"Nro": 57, "PV": 3}}
+        conn = FakeConn(state)
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart, CheckoutInput(tipo="PED", id_punto_venta=3), id_usuario=5
+            )
+        self.assertTrue(ok, err)
+        self.assertIsNone(state.get("aprobacion_update"))
+        self.assertIsNone(state.get("aprobacion_evento_count"))
+
+    @patch("ecom.services.aprobacion_pedidos.aprobacion_pedidos_activa", return_value=True)
+    @patch.object(checkout_svc, "aprobacion_pedidos_activa", return_value=True)
+    @patch.object(checkout_svc, "evaluar_reglas", return_value=(True, ["monto"]))
+    def test_flag_on_setea_pendiente(self, _eval, _flag_checkout, _flag_aprob):
+        state = {"codmov": 1000, "talonario": {"Nro": 57, "PV": 3}}
+        conn = FakeConn(state)
+        cart = self._cart(tipo="PED")
+        with self._with_patches(conn):
+            ok, err, _ = checkout_svc.confirmar(
+                cart,
+                CheckoutInput(tipo="PED", id_punto_venta=3),
+                id_usuario=5,
+                cod_viajante=42,
+            )
+        self.assertTrue(ok, err)
+        self.assertEqual(state.get("aprobacion_update"), ("pendiente", 1001))
+        self.assertEqual(state.get("aprobacion_evento_count"), 1)
 
 
 class TestCalcularFechaEntrega(TestCase):

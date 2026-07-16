@@ -5,8 +5,11 @@ from django.test import RequestFactory, SimpleTestCase
 
 from core.middleware.base_middleware import DeviceDetectionMiddleware
 from core.pwa_nivel_a import (
+    PWA_ECOM_MENU_ITEM_IDS,
     PWA_MENU_APP_IDS,
+    ecom_visible_en_movil,
     filtrar_apps_menu_para_pwa_movil,
+    filtrar_submenus_ecom_para_pwa_movil,
     sidebar_visible_en_pwa,
     tpv_visible_en_movil,
 )
@@ -44,6 +47,32 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
         self.assertEqual(len(out), 1)
         self.assertEqual(out[0]['id'], 'self_checkout')
 
+    @patch('core.pwa_nivel_a.usuario_tiene_ecom_en_menu', return_value=True)
+    @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=False)
+    def test_movil_ecom_hub_y_venta_si_modulo_habilitado(self, _tpv, _ecom):
+        request = _req(MOBILE_UA)
+        apps = [
+            {'id': 'reports'},
+            {
+                'id': 'ecom',
+                'submenus': [
+                    {
+                        'seccion': 'Portal',
+                        'items': [
+                            {'label': 'Venta', 'menu_item_id': 'ecom_compra'},
+                            {'label': 'Pedidos', 'menu_item_id': 'ecom_pedidos'},
+                            {'label': 'Clientes', 'menu_item_id': 'ecom_clientes'},
+                        ],
+                    }
+                ],
+            },
+        ]
+        out = filtrar_apps_menu_para_pwa_movil(apps, request)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['id'], 'ecom')
+        ids = {i['menu_item_id'] for i in out[0]['submenus'][0]['items']}
+        self.assertEqual(ids, {'ecom_compra', 'ecom_pedidos'})
+
     @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=False)
     def test_movil_sin_tpv_menu_vacio(self, _mock):
         request = _req(MOBILE_UA)
@@ -69,8 +98,38 @@ class SidebarPwaTests(SimpleTestCase):
     def test_sidebar_reports_no(self):
         self.assertFalse(sidebar_visible_en_pwa('reports'))
 
+    @patch('core.pwa_nivel_a.usuario_tiene_ecom_en_menu', return_value=True)
+    def test_sidebar_ecom_con_modulo(self, _mock):
+        self.assertTrue(sidebar_visible_en_pwa('ecom'))
+
+    @patch('core.pwa_nivel_a.usuario_tiene_ecom_en_menu', return_value=False)
+    def test_sidebar_ecom_sin_modulo(self, _mock):
+        self.assertFalse(sidebar_visible_en_pwa('ecom'))
+
+    def test_filtrar_submenus_ecom_solo_hub_venta(self):
+        submenus = [
+            {
+                'seccion': 'Portal',
+                'items': [
+                    {'label': 'Venta', 'menu_item_id': 'ecom_compra'},
+                    {'label': 'Clientes', 'menu_item_id': 'ecom_clientes'},
+                ],
+            },
+            {
+                'seccion': 'Comprobantes',
+                'items': [
+                    {'label': 'Pedidos', 'menu_item_id': 'ecom_pedidos'},
+                ],
+            },
+        ]
+        out = filtrar_submenus_ecom_para_pwa_movil(submenus)
+        self.assertEqual(len(out), 2)
+        ids = {i['menu_item_id'] for s in out for i in s['items']}
+        self.assertEqual(ids, PWA_ECOM_MENU_ITEM_IDS)
+
     def test_constantes(self):
         self.assertIn('self_checkout', PWA_MENU_APP_IDS)
+        self.assertIn('ecom', PWA_MENU_APP_IDS)
 
 
 class TpvVisibleEnMovilTests(SimpleTestCase):

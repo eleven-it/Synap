@@ -1247,6 +1247,74 @@ _ECOM_AJUSTES_VENTAS_CONFIG: Tuple[Dict[str, str], ...] = (
         "valor_permiso": "Si",
         "detalle_valor_permiso": "Si-No",
     },
+    {
+        "key_permiso": "ecom_workflow_jerarquia_comercial",
+        "nombre_permiso": "Workflow jerarquía comercial",
+        "detalle_permiso": (
+            "Si: alcance comercial vía organigrama G→S→V. "
+            "No: carteras JSON legacy (paridad actual)."
+        ),
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Si/No",
+        "valor_permiso": "No",
+        "detalle_valor_permiso": "Si-No",
+    },
+    {
+        "key_permiso": "ecom_aprobacion_pedidos_activa",
+        "nombre_permiso": "Aprobación comercial de pedidos",
+        "detalle_permiso": (
+            "Si: activa cola de aprobación comercial (requiere workflow jerarquía)."
+        ),
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Si/No",
+        "valor_permiso": "No",
+        "detalle_valor_permiso": "Si-No",
+    },
+    {
+        "key_permiso": "ecom_aprobacion_umbral_monto",
+        "nombre_permiso": "Umbral monto aprobación pedidos",
+        "detalle_permiso": "Monto total que dispara aprobación. Vacío = regla inactiva.",
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Numero",
+        "valor_permiso": "",
+        "detalle_valor_permiso": "",
+    },
+    {
+        "key_permiso": "ecom_aprobacion_umbral_desc_pie",
+        "nombre_permiso": "Umbral descuento pie aprobación",
+        "detalle_permiso": "Descuento pie (%) que dispara aprobación. Vacío = inactiva.",
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Numero",
+        "valor_permiso": "",
+        "detalle_valor_permiso": "",
+    },
+    {
+        "key_permiso": "ecom_aprobacion_umbral_desc_renglon",
+        "nombre_permiso": "Umbral descuento renglón aprobación",
+        "detalle_permiso": "Descuento renglón (%) que dispara aprobación. Vacío = inactiva.",
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Numero",
+        "valor_permiso": "",
+        "detalle_valor_permiso": "",
+    },
+    {
+        "key_permiso": "ecom_objetivos_en_pedidos",
+        "nombre_permiso": "Atajo objetivos en hub pedidos",
+        "detalle_permiso": "Si: muestra atajo a objetivos de venta desde el hub de pedidos.",
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Si/No",
+        "valor_permiso": "No",
+        "detalle_valor_permiso": "Si-No",
+    },
+    {
+        "key_permiso": "ecom_backorder_en_pedidos",
+        "nombre_permiso": "Atajo backorder en hub pedidos",
+        "detalle_permiso": "Si: habilita atajo backorder desde el hub de pedidos.",
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Si/No",
+        "valor_permiso": "No",
+        "detalle_valor_permiso": "Si-No",
+    },
 )
 
 
@@ -1665,6 +1733,191 @@ def run_mpr_drop_lista_produccion_legacy_mysql(conn) -> Dict[str, Any]:
     }
 
 
+def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
+    """
+    Jerarquía comercial G→S→V, eventos de aprobación y columnas comerciales en ``comp_ped``.
+
+    Ver change ecom-hub-movil-jerarquia-aprobacion (REQ-JER-01, REQ-APR-01 DDL).
+    """
+    applied: List[str] = []
+    failed: List[str] = []
+    cursor = conn.cursor()
+    try:
+        if not _tabla_existe(cursor, "ecom_org_gerente_supervisor"):
+            cursor.execute(
+                """
+                CREATE TABLE ecom_org_gerente_supervisor (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    cod_gerente INT NOT NULL COMMENT 'CodViajante gerente',
+                    cod_supervisor INT NOT NULL COMMENT 'CodViajante supervisor (único activo)',
+                    activo VARCHAR(3) NOT NULL DEFAULT 'Si' COMMENT 'Si / No',
+                    creado_en DATETIME NOT NULL,
+                    actualizado_en DATETIME NOT NULL,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uq_eogs_supervisor_activo (cod_supervisor, activo),
+                    INDEX idx_eogs_gerente (cod_gerente),
+                    INDEX idx_eogs_supervisor (cod_supervisor)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Jerarquía Gerente→Supervisor (Synap ecom)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE ecom_org_gerente_supervisor")
+        else:
+            _append_migration(applied, failed, True, "ecom_org_gerente_supervisor ya existe (omitido)")
+
+        if not _tabla_existe(cursor, "ecom_org_supervisor_vendedor"):
+            cursor.execute(
+                """
+                CREATE TABLE ecom_org_supervisor_vendedor (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    cod_supervisor INT NOT NULL COMMENT 'CodViajante supervisor',
+                    cod_vendedor INT NOT NULL COMMENT 'CodViajante vendedor (único activo)',
+                    activo VARCHAR(3) NOT NULL DEFAULT 'Si' COMMENT 'Si / No',
+                    creado_en DATETIME NOT NULL,
+                    actualizado_en DATETIME NOT NULL,
+                    PRIMARY KEY (id),
+                    UNIQUE KEY uq_eosv_vendedor_activo (cod_vendedor, activo),
+                    INDEX idx_eosv_supervisor (cod_supervisor),
+                    INDEX idx_eosv_vendedor (cod_vendedor)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Jerarquía Supervisor→Vendedor (Synap ecom)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE ecom_org_supervisor_vendedor")
+        else:
+            _append_migration(applied, failed, True, "ecom_org_supervisor_vendedor ya existe (omitido)")
+
+        if not _tabla_existe(cursor, "ecom_aprobacion_evento"):
+            cursor.execute(
+                """
+                CREATE TABLE ecom_aprobacion_evento (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    codigo_movimiento INT NOT NULL COMMENT 'comp_ped.CodigoMovimiento',
+                    accion VARCHAR(20) NOT NULL DEFAULT '-' COMMENT 'solicitud|aprobado|rechazado',
+                    regla_disparo VARCHAR(40) NOT NULL DEFAULT '-',
+                    cod_solicita INT NULL,
+                    cod_resuelve INT NULL,
+                    motivo VARCHAR(255) NOT NULL DEFAULT '-',
+                    creado_en DATETIME NOT NULL,
+                    PRIMARY KEY (id),
+                    INDEX idx_eae_cod_mov (codigo_movimiento),
+                    INDEX idx_eae_solicita (cod_solicita),
+                    INDEX idx_eae_resuelve (cod_resuelve)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Auditoría aprobación comercial de pedidos (Synap ecom)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE ecom_aprobacion_evento")
+        else:
+            _append_migration(applied, failed, True, "ecom_aprobacion_evento ya existe (omitido)")
+
+        tbl_cp = nombre_tabla_real(cursor, "comp_ped")
+        if tbl_cp:
+            t_cp = tbl_cp.replace("`", "``")
+            if not _columna_existe(cursor, tbl_cp, "estado_aprobacion_comercial"):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE `{t_cp}`
+                    ADD COLUMN estado_aprobacion_comercial VARCHAR(20) NOT NULL DEFAULT '-'
+                        COMMENT 'Comercial: -|pendiente|aprobado|rechazado'
+                    """
+                )
+                _append_migration(applied, failed, True, f"{tbl_cp}.estado_aprobacion_comercial")
+            if not _columna_existe(cursor, tbl_cp, "aprobador_codviajante"):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE `{t_cp}`
+                    ADD COLUMN aprobador_codviajante INT NULL
+                        COMMENT 'CodViajante que resolvió aprobación comercial'
+                    """
+                )
+                _append_migration(applied, failed, True, f"{tbl_cp}.aprobador_codviajante")
+            if not _columna_existe(cursor, tbl_cp, "aprobacion_fecha"):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE `{t_cp}`
+                    ADD COLUMN aprobacion_fecha DATETIME NULL
+                    """
+                )
+                _append_migration(applied, failed, True, f"{tbl_cp}.aprobacion_fecha")
+            if not _columna_existe(cursor, tbl_cp, "aprobacion_motivo"):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE `{t_cp}`
+                    ADD COLUMN aprobacion_motivo VARCHAR(255) NOT NULL DEFAULT '-'
+                    """
+                )
+                _append_migration(applied, failed, True, f"{tbl_cp}.aprobacion_motivo")
+
+        conn.commit()
+
+        for row in _ECOM_AJUSTES_VENTAS_CONFIG:
+            key = row.get("key_permiso", "")
+            if key in (
+                "ecom_workflow_jerarquia_comercial",
+                "ecom_aprobacion_pedidos_activa",
+                "ecom_aprobacion_umbral_monto",
+                "ecom_aprobacion_umbral_desc_pie",
+                "ecom_aprobacion_umbral_desc_renglon",
+                "ecom_objetivos_en_pedidos",
+                "ecom_backorder_en_pedidos",
+            ):
+                _insertar_ecom_config_si_falta(
+                    cursor, "configuracion_ecom_conf", row, applied, failed
+                )
+                _insertar_ecom_config_si_falta(
+                    cursor, "configuracion_ecom", row, applied, failed
+                )
+
+        conn.commit()
+
+        # Backfill idempotente JSON→org (no borra claves legacy)
+        try:
+            from ecom.services.jerarquia_comercial import backfill_carteras_desde_config
+
+            cursor.execute("SELECT DATABASE()")
+            db_row = cursor.fetchone()
+            base_name = ""
+            if db_row:
+                base_name = str(
+                    db_row[0] if not isinstance(db_row, dict) else list(db_row.values())[0] or ""
+                )
+            if base_name:
+                bf = backfill_carteras_desde_config(base_name, dry_run=False)
+                if bf.get("ok"):
+                    _append_migration(
+                        applied,
+                        failed,
+                        True,
+                        f"backfill carteras JSON→org (sv={bf.get('vinculos_sv', 0)})",
+                    )
+                else:
+                    _append_migration(
+                        applied,
+                        failed,
+                        False,
+                        "backfill carteras JSON→org",
+                        str(bf.get("error") or "error"),
+                    )
+        except Exception as bf_exc:
+            logger.warning("run_ecom_jerarquia_aprobacion: backfill omitido: %s", bf_exc)
+            _append_migration(applied, failed, True, "backfill carteras JSON→org (omitido)")
+
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_ecom_jerarquia_aprobacion_mysql: %s", e)
+        failed.append(str(e))
+    finally:
+        cursor.close()
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Registro para la UI y ejecución selectiva
 # ---------------------------------------------------------------------------
@@ -1791,6 +2044,17 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "bajo",
         "run": run_ecom_vendedor_cliente_marca_mysql,
+    },
+    {
+        "id": "ecom_jerarquia_aprobacion",
+        "title": "E-com — jerarquía comercial y aprobación de pedidos",
+        "description": (
+            "Tablas ``ecom_org_gerente_supervisor``, ``ecom_org_supervisor_vendedor``, "
+            "``ecom_aprobacion_evento``; columnas comerciales en ``comp_ped``; "
+            "backfill idempotente desde ``ecom_vendedores_a_cargo_*`` JSON."
+        ),
+        "risk": "bajo",
+        "run": run_ecom_jerarquia_aprobacion_mysql,
     },
 ]
 

@@ -1,9 +1,9 @@
 # Pedidos hub — Lista | Kanban
 
-**Change:** `ecom-pedidos-hub-kanban-masivo-sucursales`  
+**Change:** `ecom-pedidos-hub-kanban-masivo-sucursales` (+ `ecom-hub-movil-jerarquia-aprobacion`)  
 **Ruta:** `/ecom/mayoristapp/pedidos/` (`ecom:mayoristapp_pedidos_hub`)  
 **Canon UI:** Tablero de producción MPR (header `slate-800`, viewport flex).  
-**Fecha:** 13/07/2026
+**Fecha:** 16/07/2026
 
 ## Rol
 
@@ -15,12 +15,15 @@ Pantalla **inicial** del módulo Pedidos. Reemplaza el hub solo-KPI. El vendedor
 
 ## Vistas
 
-| Toggle | Uso |
-|--------|-----|
-| **Lista** | Tabla densa, filtros, paginación |
-| **Kanban** | Columnas por estado (estilo Odoo; sin DnD de estados Admin) |
+| Toggle / breakpoint | Uso |
+|---------------------|-----|
+| **&lt; lg (móvil)** | Chips de estado + tarjetas apiladas (sin scroll horizontal); tap abre `/mayoristapp/venta/?cod_mov=` |
+| **Lista** (≥ lg) | Tabla densa, filtros, paginación |
+| **Kanban** (≥ lg) | Columnas por estado (estilo Odoo; sin DnD de estados Admin) |
 
-Preferencia Lista/Kanban: `localStorage` o sesión.
+Preferencia Lista/Kanban: `localStorage` clave `synap_pedidos_hub_vista`.
+
+Con **workflow comercial ON** y subflag aprobación activa, el hub expone cola **Por aprobar** con CTA aprobar/rechazar (permiso `ecom.pedidos.aprobar`, alcance org). Ver [JERARQUIA_COMERCIAL_APROBACION.md](JERARQUIA_COMERCIAL_APROBACION.md).
 
 ## Columnas / estados
 
@@ -39,7 +42,8 @@ Fechas UI: **dd/MM/yyyy**.
 | Key | Uso |
 |-----|-----|
 | `ecom.pedidos.ver` | Ver hub |
-| `ecom.pedidos.ver_todos` | Ver todos los vendedores |
+| `ecom.pedidos.ver_todos` | Ver todos los vendedores (alcance org o legacy según master flag) |
+| `ecom.pedidos.aprobar` | Aprobar/rechazar cola comercial en hub |
 | `ecom.pedido_masivo.usar` | CTA / abrir masivo |
 | `ecom.pedidos.crear` / `ecom.carrito.editar` | Pedido simple |
 

@@ -119,6 +119,62 @@ class ResolverFabricadosDesdeTerminadosTests(TestCase):
         self.assertEqual(matches[300].best_id_articulo, "SEMI-1P")
         self.assertEqual(matches[300].score, 100)
 
+    def test_matcher_inferencia_directa_modelo_8020(self):
+        from mpr.best_migration.article_matcher import match_admin_fabricados_to_best
+
+        best_rows = [
+            {
+                "id_articulo": "PUMA8020GR",
+                "codigo": "8020-GR",
+                "articulo": "Puma 8020 Medias Gris T3",
+                "marca": "Puma",
+            },
+            {
+                "id_articulo": "PUMA8020RS",
+                "codigo": "8020-RS",
+                "articulo": "Puma 8020 Medias Rosa T3",
+                "marca": "Puma",
+            },
+            {
+                "id_articulo": "PUMA9010AZ",
+                "codigo": "9010-AZ",
+                "articulo": "Puma 9010 Medias Azul T3",
+                "marca": "Puma",
+            },
+        ]
+        myl = {
+            "PUMA8020GR": {"CODIGO": "8020-GR", "COLOR": "GM", "TALLE": "3"},
+            "PUMA8020RS": {"CODIGO": "8020-RS", "COLOR": "RS", "TALLE": "3"},
+            "PUMA9010AZ": {"CODIGO": "9010-AZ", "COLOR": "AZ", "TALLE": "3"},
+        }
+        matches = match_admin_fabricados_to_best(
+            admin_fabricados=[
+                {
+                    "IDArt": 401,
+                    "id_manual": "FAB401",
+                    "NombreArticulo": "8020 Blanco 1Par",
+                    "CodArtProv": "",
+                },
+                {
+                    "IDArt": 402,
+                    "id_manual": "FAB402",
+                    "NombreArticulo": "8020 Rosa 1Par",
+                    "CodArtProv": "",
+                },
+            ],
+            best_rows=best_rows,
+            myl_by_mmid=myl,
+        )
+
+        self.assertTrue(matches[401].best_id_articulo)
+        self.assertTrue(matches[402].best_id_articulo)
+        self.assertIn(matches[401].best_id_articulo, ("PUMA8020GR", "PUMA8020RS"))
+        self.assertIn(matches[402].best_id_articulo, ("PUMA8020GR", "PUMA8020RS"))
+        self.assertEqual(matches[402].best_id_articulo, "PUMA8020RS")
+        self.assertGreater(matches[402].score or 0, matches[401].score or 0)
+        self.assertIn("cand_best", matches[401].extras)
+        self.assertGreaterEqual(len(matches[401].extras["cand_best"]), 2)
+
     @patch("mpr.best_migration.services.match_admin_fabricados_to_best")
     @patch("mpr.best_migration.services._fetch_best_catalog_skus")
     @patch("mpr.best_migration.services._fabricado_idarts_desde_bom_terminados")
@@ -212,6 +268,87 @@ class ResolverFabricadosDesdeTerminadosTests(TestCase):
             BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
         )
         self.assertEqual(fabricado.estado, BestArticuloMap.Estado.SIN_CANDIDATO)
+
+    @patch("mpr.best_migration.services.match_admin_fabricados_to_best")
+    @patch("mpr.best_migration.services._fetch_best_catalog_skus")
+    @patch("mpr.best_migration.services._fabricado_idarts_desde_bom_terminados")
+    def test_resolver_usa_alternate_libre_en_cand_best(
+        self, mock_bom, mock_catalog, mock_match
+    ):
+        from mpr.best_migration.article_matcher import MatchRow
+
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="PT-4003",
+            estado=BestArticuloMap.Estado.VALIDADO,
+            admin_idart=200,
+            validado=True,
+            requerido_migracion=True,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.PEDIDO_ABIERTO,
+        )
+        mock_bom.return_value = [
+            {
+                "IDArt": 305,
+                "id_manual": "FAB305",
+                "NombreArticulo": "8020 Rosa 1Par",
+                "CodArtProv": "",
+            }
+        ]
+        mock_catalog.return_value = (
+            [
+                {"id_articulo": "PT-4003"},
+                {"id_articulo": "SEMI-8020RS"},
+            ],
+            {},
+        )
+        mock_match.return_value = {
+            305: MatchRow(
+                best_id_articulo="PT-4003",
+                best_codigo="8020-GR",
+                best_articulo="Puma 8020 Medias Gris",
+                best_marca="Puma",
+                best_pack="",
+                status="INFERIDO_MEDIO",
+                score=78,
+                razon="B_model+jaccard",
+                admin_idart=305,
+                admin_nombre="8020 Rosa 1Par",
+                candidatos_n=2,
+                extras={
+                    "cand_best": [
+                        {
+                            "id": "PT-4003",
+                            "articulo": "Puma 8020 Medias Gris",
+                            "codigo": "8020-GR",
+                            "score": 78,
+                            "pack": "",
+                            "marca": "Puma",
+                        },
+                        {
+                            "id": "SEMI-8020RS",
+                            "articulo": "Puma 8020 Medias Rosa",
+                            "codigo": "8020-RS",
+                            "score": 76,
+                            "pack": "1P",
+                            "marca": "Puma",
+                        },
+                    ]
+                },
+            )
+        }
+
+        resolver_fabricados_desde_terminados(BASE)
+
+        fabricado = BestArticuloMap.objects.get(
+            base_empresa=BASE, best_id_articulo="SEMI-8020RS"
+        )
+        self.assertEqual(
+            fabricado.origen_requerimiento,
+            BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+        self.assertEqual(fabricado.estado, BestArticuloMap.Estado.INFERIDO_MEDIO)
+        self.assertEqual(fabricado.admin_idart, 305)
+        self.assertIn("alternate_libre", fabricado.razon)
 
     @patch("mpr.best_migration.services.match_admin_fabricados_to_best")
     @patch("mpr.best_migration.services._fetch_best_catalog_skus")

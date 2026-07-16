@@ -2,7 +2,8 @@
 Restricción de navegación en dispositivos móviles (PWA / Synap móvil).
 
 Solo se permiten rutas del «Nivel A»: login, perfil, TPV (self_checkout) con
-plantillas mobile dedicadas, APIs necesarias para el TPV, PWA y estáticos.
+plantillas mobile dedicadas, APIs necesarias para el TPV, PWA y estáticos,
+informes/MPR/dashboard, y pedido simple mayorista (en adaptación móvil).
 
 Usuarios no autenticados: no se bloquea aquí (las vistas redirigen a login).
 Usuarios autenticados en móvil en rutas no permitidas: 403 con mensaje claro.
@@ -77,6 +78,28 @@ _CORE_MOBILE_PAGE_PATTERNS = tuple(
     )
 )
 
+# Pedido simple mayorista (UI en adaptación móvil; acceso habilitado para prueba).
+# Pantallas: venta (+ alias compra) y hub de pedidos como entrada.
+# APIs: prefijo /ecom/api/mayoristapp/ (carrito, catálogo, hub, jerarquía, aprobación, etc.).
+_ECOM_PEDIDO_SIMPLE_PAGE_PATTERNS = tuple(
+    re.compile(p)
+    for p in (
+        r'^/ecom/mayoristapp/venta/?$',
+        r'^/ecom/mayoristapp/compra/?$',
+        r'^/ecom/mayoristapp/pedidos/?$',
+    )
+)
+
+# Sub-rutas API mayoristapp explícitas para Nivel A (incluidas en el prefijo global).
+_ECOM_MAYORISTAPP_API_NIVEL_A_SUFFIXES = (
+    '/pedidos/hub/',
+    '/pedidos/hub/archivar-draft/',
+    '/jerarquia/nodos/',
+    '/aprobacion/',  # reservado fase aprobación comercial
+)
+
+_ECOM_PEDIDO_SIMPLE_API_PREFIX = '/ecom/api/mayoristapp/'
+
 
 def mobile_path_es_ruta_tpv(path: str) -> bool:
     """True si la ruta es HTML o API del módulo TPV / self_checkout."""
@@ -108,6 +131,11 @@ def mobile_path_allowed_for_level_a(path: str) -> bool:
         if rx.match(path):
             return True
     for rx in _CORE_MOBILE_PAGE_PATTERNS:
+        if rx.match(path):
+            return True
+    if path.startswith(_ECOM_PEDIDO_SIMPLE_API_PREFIX):
+        return True
+    for rx in _ECOM_PEDIDO_SIMPLE_PAGE_PATTERNS:
         if rx.match(path):
             return True
     return False

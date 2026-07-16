@@ -182,6 +182,8 @@ PERMISOS_POR_MODULO = {
         ("ecom.pedidos.crear", "Crear pedidos (compra mayorista / checkout)"),
         ("ecom.pedidos.ver", "Ver listado y detalle de pedidos"),
         ("ecom.pedidos.ver_todos", "Ver pedidos de todos los vendedores (listado gerencial)"),
+        ("ecom.pedidos.aprobar", "Aprobar o rechazar pedidos en cola comercial"),
+        ("ecom.jerarquia.editar", "Editar organigrama comercial Gerente→Supervisor→Vendedor"),
         ("ecom.pedido_masivo.usar", "Carga masiva de pedidos por sucursal (matriz)"),
         ("ecom.config_vendedor_cliente_marca", "Configurar territorio Vendedor→Cliente→Marca"),
         ("ecom.config_ajustes_ventas", "Configurar ajustes de ventas (ecom)"),
@@ -336,6 +338,7 @@ ROLES_PREDEFINIDOS = {
             "reports.ver", "usuarios.perfil",
             "ecom.ver", "ecom.catalogo.ver", "ecom.carrito.editar",
             "ecom.pedidos.crear", "ecom.pedidos.ver",
+            "ecom.pedidos.aprobar", "ecom.jerarquia.editar",
             "ecom.comprobantes.ver", "ecom.clientes.ver", "ecom.ctacte.ver",
             "ecom.logistica.ver", "ecom.informes.ver",
         ]

@@ -19,12 +19,16 @@ MENU_CONFIG = [
                 "label": "Nuevo pedido",
                 "url": "ecom:mayoristapp_venta",
                 "permission": "ecom.pedidos.crear",
+                "nivel_a": True,
+                "deep_link": "/ecom/mayoristapp/venta/",
             },
             {
                 "name": "ecom_pedidos",
                 "label": "Pedidos",
                 "url": "ecom:mayoristapp_pedidos_hub",
                 "permission": "ecom.pedidos.ver",
+                "nivel_a": True,
+                "deep_link": "/ecom/mayoristapp/pedidos/",
             },
             {
                 "name": "ecom_presupuestos",

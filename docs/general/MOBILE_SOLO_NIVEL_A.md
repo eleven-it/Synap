@@ -46,10 +46,18 @@ En dispositivos detectados como móvil (`request.is_mobile`), la aplicación web
 
 En pantallas &lt; `lg` (1024px), las tablas de informes muestran **tarjetas** (`reports/static/reports/js/reports_responsive.js`); en escritorio se mantiene la **tabla** existente sin cambios visuales.
 
+### Pedido simple mayorista (acceso móvil habilitado; UI en adaptación)
+
+- `/ecom/mayoristapp/venta/` — pantalla de pedido simple (y alias `/ecom/mayoristapp/compra/`).
+- `/ecom/mayoristapp/pedidos/` — hub de pedidos (chips + tarjetas en &lt; `lg`; kanban en escritorio).
+- APIs: prefijo `/ecom/api/mayoristapp/` (carrito, catálogo, clientes, checkout, hub, jerarquía comercial, aprobación comercial, etc.).
+
+**Fuera de alcance móvil por ahora** (siguen 403): pedido masivo, configuración VCM, ajustes de ventas, listados de comprobantes, logística y demás pantallas HTML de e-com no listadas arriba.
+
 ### Bloqueadas en móvil (ejemplos)
 
 - Formularios de configuración de kiosco, alta/edición de talonarios y PV: `/self_checkout/config/nuevo/`, `.../editar/`, `talonarios/nuevo-pv/`, `talonarios/agregar/`, `talonarios/.../editar/`
-- Módulos fuera de Nivel A: compras, e-com, Tienda Nube, administración Django `/admin/`, etc.
+- Módulos fuera de Nivel A: compras, e-com (salvo pedido simple / hub / APIs mayoristapp), Tienda Nube, administración Django `/admin/`, etc.
 
 ## Manifest PWA
 
@@ -57,8 +65,8 @@ En pantallas &lt; `lg` (1024px), las tablas de informes muestran **tarjetas** (`
 
 ## Menú y navegación
 
-- **`apps_visibles_para_usuario`** (`core/utils/utils.py`): tras resolver permisos y reglas habituales, se aplica `filtrar_apps_menu_para_pwa_movil` (`core/pwa_nivel_a.py`). En móvil solo permanecen entradas cuyo `id` está en `PWA_MENU_APP_IDS` (actualmente solo **`self_checkout`**) **y** el usuario tiene TPV en menú de escritorio (`usuario_tiene_tpv_en_menu`: permiso `self_checkout.ver`, submenús visibles, no oculto en navbar granular). Si el TPV no está «activado» para ese usuario, no aparece en menú móvil ni en enlaces (logo, perfil, 403).
-- **`menu_context`**: si `request.is_mobile`, el sidebar contextual solo se rellena para apps Nivel A (`sidebar_visible_en_pwa`); se añadió `current_app_id = 'self_checkout'` cuando la URL es del namespace `self_checkout`.
+- **`apps_visibles_para_usuario`** (`core/utils/utils.py`): tras resolver permisos y reglas habituales, se aplica `filtrar_apps_menu_para_pwa_movil` (`core/pwa_nivel_a.py`). En móvil solo permanecen entradas cuyo `id` está en `PWA_MENU_APP_IDS` (**`self_checkout`** y **`ecom`**, cada uno sujeto a permisos de menú de escritorio). TPV requiere `usuario_tiene_tpv_en_menu`; e-com hub+venta requiere `usuario_tiene_ecom_en_menu` y filtra submenús a `ecom_compra` (venta) y `ecom_pedidos` (hub). Deep links: `PWA_ECOM_DEEP_LINKS` en `core/pwa_nivel_a.py` y `deep_link` en `ecom/menu_config.py`.
+- **`menu_context`**: si `request.is_mobile`, el sidebar contextual solo se rellena para apps Nivel A (`sidebar_visible_en_pwa`); en e-com se aplica `filtrar_submenus_ecom_para_pwa_movil`. Se añadió `current_app_id = 'self_checkout'` cuando la URL es del namespace `self_checkout`.
 - En `partials/navbar.html`, el enlace «Mi perfil» usa `login:perfil` cuando `request.is_mobile` (o en el panel móvil), para coincidir con la plantilla móvil Nivel A. Historial y acceso a `/admin/` no se muestran en móvil desde ese menú (evitan 403 innecesarios).
 - El logo en móvil apunta al TPV (`self_checkout:index`) si hay sesión y `tpv_visible_movil`; si no, al dashboard (`core:dashboard`); sin sesión, al login.
 - **`MobileLevelAOnlyMiddleware`**: las rutas `/self_checkout/…` y APIs `/api/self-checkout/`, `/api/mercadopago/` devuelven **403** en móvil si el usuario autenticado no tiene TPV en menú.

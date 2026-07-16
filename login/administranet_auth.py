@@ -73,6 +73,38 @@ class AdministraNETAuth:
                 'nombre_empresa': f'Local ({base_default})',
                 'base_empresa': base_default,
             }]
+
+    def nombre_empresa_por_base(self, base_empresa: str) -> str:
+        """Nombre visible del login (tabla empresas) para la base seleccionada."""
+        base = (base_empresa or "").strip()
+        if not base:
+            return ""
+        try:
+            with pool_get_connection("empresas") as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT nombre_empresa
+                    FROM empresas
+                    WHERE base_empresa = %s
+                    LIMIT 1
+                    """,
+                    [base],
+                )
+                row = cursor.fetchone()
+                cursor.close()
+            if row and row[0]:
+                return str(row[0]).strip()
+        except Exception as e:
+            logger.warning("No se pudo resolver nombre_empresa para base %s: %s", base, e)
+        # Fallback: recorrer listado (misma fuente que el combo del login)
+        try:
+            for emp in self.get_empresas():
+                if (emp.get("base_empresa") or "").strip() == base:
+                    return (emp.get("nombre_empresa") or "").strip()
+        except Exception:
+            pass
+        return ""
     
     def validate_user(self, cod_usuario: str, password: str, base_empresa: str) -> Optional[Dict]:
         """

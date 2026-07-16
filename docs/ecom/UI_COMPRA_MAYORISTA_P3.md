@@ -34,6 +34,17 @@ ya migradas (P0/P1/P2/P3). Sigue la fuente de verdad de UI (`docs/general/FUENTE
 - Layout responsive: en **móvil/tablet** catálogo y carrito se apilan (`order-1` / `order-2`);
   en **desktop** búsqueda 2/3 y carrito 1/3. Inputs con `min-height` táctil en viewport &lt; 1024px.
 
+## Acceso móvil (Nivel A)
+
+Desde 16/07/2026, `MobileLevelAOnlyMiddleware` **permite** en celular:
+
+- `/ecom/mayoristapp/venta/` (y alias `/compra/`)
+- `/ecom/mayoristapp/pedidos/` (hub)
+- Prefijo API `/ecom/api/mayoristapp/`
+
+Política y exclusiones (masivo, config, etc.): `docs/general/MOBILE_SOLO_NIVEL_A.md`.
+La UI aún se adapta; el acceso está abierto para prueba en dispositivo.
+
 ## Flujo e integración con APIs
 
 | Acción UI | API |

@@ -86,6 +86,9 @@ def login_view(request):
             # Crear sesión en administraNET
             session_data = auth_service.create_session(user_data, base_empresa, ip_address)
             
+            # Nombre visible del combo Empresa (tabla empresas), no la razón social DatosEmpresa.
+            nombre_empresa_login = auth_service.nombre_empresa_por_base(base_empresa) or base_empresa
+
             # Guardar datos en sesión Django
             request.session["user"] = {
                 "id_usuario": user_data['id_usuario'],
@@ -98,6 +101,7 @@ def login_view(request):
                 "id_puesto": user_data['id_puesto'],
                 "nombre_puesto": user_data.get('nombre_puesto'),
                 "base_empresa": base_empresa,
+                "nombre_empresa": nombre_empresa_login,
                 "id_sesion": session_data['id_sesion'] if session_data else None
             }
 

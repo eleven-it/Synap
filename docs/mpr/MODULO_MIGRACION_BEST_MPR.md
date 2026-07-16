@@ -59,7 +59,7 @@ Contadores de gate en `BestMigrationParity`: `articulos_total` / `articulos_resu
 | Dominio | Obligatorio para pedidos | Estado módulo |
 |---------|--------------------------|---------------|
 | Artículos terminados | Sí | Implementado (inferencia + validación UI + lote score + selección múltiple) |
-| Artículos fabricados | No | Implementado (BOM Admin → matcher inverso; no bloquea gate PED) |
+| Artículos fabricados | No | Implementado (BOM Admin → matcher Admin→BEST directo; no bloquea gate PED) |
 | Clientes | Sí | Implementado (inferencia CUIT/nombre/campaña + validación UI + lote + selección múltiple) |
 | Unidades (par) | Sí | Confirmación manual en hub |
 | Depósitos / etapas | No | Implementado (REP_INVENTARIOS + inferencia tipo_mpr) |
@@ -106,7 +106,8 @@ UI (`/mpr/migracion-best/articulos/`):
 
 - **Fuente BOM:** solo AdministraNET (`en_abm` / `en_abm_formula`). **No** se lee `REP_RECETAS` en BEST.
 - **Filas:** cada fila representa un componente Admin `tipo_art_fab=Fabricado` de la BOM, no un producto terminado BEST.
-- **Flujo:** terminados `VALIDADO` → explosión primer nivel BOM → componentes `tipo_art_fab=Fabricado` → matcher Admin→BEST → `BestArticuloMap` con `origen_requerimiento=BOM_FABRICADO`, identificado funcionalmente por `admin_idart`.
+- **Flujo:** terminados `VALIDADO` → explosión primer nivel BOM → componentes `tipo_art_fab=Fabricado` → matcher **Admin→BEST directo** (modelo/tokens/color/talle sobre catálogo 4000/4002; no inversión del matcher de pedidos) → `BestArticuloMap` con `origen_requerimiento=BOM_FABRICADO`, identificado funcionalmente por `admin_idart`.
+- **Matcher fabricados:** `match_admin_fabricados_to_best` en `article_matcher.py` puntúa cada SKU BEST del catálogo semi por hit de modelo, Jaccard de tokens, marca, talle y pack suave (componentes 1Par no penalizan fuerte). Color distinto no bloquea: mismo modelo puede inferirse como `INFERIDO_BAJO`/`MEDIO`. Umbral mínimo ~40. Alternativas en `extras.cand_best` para el resolver cuando el top está ocupado por `PEDIDO_ABIERTO`/`STOCK_DEPOSITO`.
 - **Catálogo BEST aproximado:** solo `REP_INVENTARIOS` en depósitos **4000 Producción** y **4002 Semi-Embalado**. Se excluyen depósito **4003 Terminado** y pedidos abiertos, porque corresponden a productos terminados.
 - **Clave sin SKU:** si no hay coincidencia segura, o el SKU ya pertenece a un mapeo no BOM (`PEDIDO_ABIERTO`, `STOCK_DEPOSITO` o `HISTORICO`), la fila usa `FAB:{IDArt}` y queda `SIN_CANDIDATO`; la UI muestra «Sin sugerencia BEST».
 - **Persistencia:** `admin_idart` = componente Admin (fijo desde BOM); `best_id_articulo` = MMID BEST del componente (inferido o asignado manualmente). La clave temporal `FAB:{IDArt}` se reemplaza al validar/asignar un SKU real vía `asignar_best_a_fabricado`.

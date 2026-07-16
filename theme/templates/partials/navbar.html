@@ -170,6 +170,13 @@
         <span class="truncate max-w-[10rem]">{{ empresa_activa.nombre }}</span>
       </span>
       {% endif %}
+      {% with empresa_login=nombre_empresa_login|default:session_user.nombre_empresa %}
+      {% if empresa_login %}
+      <span class="hidden md:inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold" style="background:#f59e0b;color:#0f172a;" title="Empresa del login (DB activa)">
+        {{ empresa_login }}
+      </span>
+      {% endif %}
+      {% endwith %}
 
       {% if sucursales_disponibles %}
       <div class="relative hidden md:block">

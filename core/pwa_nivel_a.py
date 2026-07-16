@@ -11,7 +11,22 @@ from typing import Any, Dict, List, Optional
 from django.http import HttpRequest
 
 # IDs de `APPS_MENU` (`app["id"]`) que pueden mostrarse en el menú principal en móvil/PWA.
-PWA_MENU_APP_IDS = frozenset({"self_checkout"})
+PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom"})
+
+# Submenús e-com accesibles en Nivel A (`menu_item_id` en APPS_MENU / menu_config).
+PWA_ECOM_MENU_ITEM_IDS = frozenset(
+    {
+        "ecom_compra",  # Pedido de venta → /mayoristapp/venta/
+        "ecom_pedidos",  # Hub pedidos → /mayoristapp/pedidos/
+    }
+)
+
+# Deep links PWA e-com (rutas HTML Nivel A).
+PWA_ECOM_DEEP_LINKS = (
+    "/ecom/mayoristapp/pedidos/",
+    "/ecom/mayoristapp/venta/",
+    "/ecom/mayoristapp/compra/",
+)
 
 
 def usuario_tiene_tpv_en_menu(user, request: Optional[HttpRequest] = None) -> bool:
@@ -28,9 +43,41 @@ def usuario_tiene_tpv_en_menu(user, request: Optional[HttpRequest] = None) -> bo
     return any(a.get("id") == "self_checkout" for a in apps_visibles_sin_filtro_pwa(user, request))
 
 
+def usuario_tiene_ecom_en_menu(user, request: Optional[HttpRequest] = None) -> bool:
+    """True si E-commerce mayorista figuraría en el menú de escritorio."""
+    if not user or not getattr(user, "is_authenticated", False) or not user.is_authenticated:
+        return False
+    from core.utils.utils import apps_visibles_sin_filtro_pwa
+
+    return any(a.get("id") == "ecom" for a in apps_visibles_sin_filtro_pwa(user, request))
+
+
 def tpv_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
     """TPV accesible en móvil: el usuario tiene el módulo activo en menú (no solo PWA)."""
     return usuario_tiene_tpv_en_menu(user, request)
+
+
+def ecom_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
+    """E-com hub+venta accesible en móvil si el módulo está en menú de escritorio."""
+    return usuario_tiene_ecom_en_menu(user, request)
+
+
+def filtrar_submenus_ecom_para_pwa_movil(
+    submenus: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Deja solo entradas hub y venta del sidebar e-com en móvil."""
+    resultado: List[Dict[str, Any]] = []
+    for seccion in submenus or []:
+        items = [
+            item
+            for item in seccion.get("items") or []
+            if item.get("menu_item_id") in PWA_ECOM_MENU_ITEM_IDS
+        ]
+        if items:
+            copia = dict(seccion)
+            copia["items"] = items
+            resultado.append(copia)
+    return resultado
 
 
 def filtrar_apps_menu_para_pwa_movil(
@@ -43,7 +90,7 @@ def filtrar_apps_menu_para_pwa_movil(
 
     Los permisos por ítem ya debieron aplicarse en `apps_visibles_sin_filtro_pwa`;
     aquí solo se restringe el conjunto de módulos a los previstos para Nivel A y
-    se excluye TPV si el usuario no lo tiene habilitado en menú.
+    se excluye TPV/e-com si el usuario no los tiene habilitados en menú.
     """
     if not request or not getattr(request, "is_mobile", False):
         return apps_menu
@@ -55,7 +102,12 @@ def filtrar_apps_menu_para_pwa_movil(
             continue
         if app_id == "self_checkout" and not usuario_tiene_tpv_en_menu(usuario, request):
             continue
-        resultado.append(app)
+        if app_id == "ecom" and not usuario_tiene_ecom_en_menu(usuario, request):
+            continue
+        app_copy = dict(app)
+        if app_id == "ecom" and app_copy.get("submenus"):
+            app_copy["submenus"] = filtrar_submenus_ecom_para_pwa_movil(app_copy["submenus"])
+        resultado.append(app_copy)
     return resultado
 
 
@@ -70,4 +122,7 @@ def sidebar_visible_en_pwa(
     if current_app_id == "self_checkout":
         usuario = user or (getattr(request, "user", None) if request else None)
         return usuario_tiene_tpv_en_menu(usuario, request)
+    if current_app_id == "ecom":
+        usuario = user or (getattr(request, "user", None) if request else None)
+        return usuario_tiene_ecom_en_menu(usuario, request)
     return True

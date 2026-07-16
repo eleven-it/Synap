@@ -108,6 +108,12 @@ class Command(BaseCommand):
             return
 
         store = SessionStore()
+        nombre_empresa = ""
+        try:
+            from login.administranet_auth import AdministraNETAuth
+            nombre_empresa = AdministraNETAuth().nombre_empresa_por_base(base) or base
+        except Exception:
+            nombre_empresa = base
         store["user"] = {
             "id_usuario": user_data["id_usuario"],
             "cod_usuario": user_data["cod_usuario"],
@@ -119,6 +125,7 @@ class Command(BaseCommand):
             "id_puesto": user_data["id_puesto"],
             "nombre_puesto": user_data.get("nombre_puesto"),
             "base_empresa": base,
+            "nombre_empresa": nombre_empresa,
             "id_sesion": None,
         }
         store.save()

@@ -25,7 +25,8 @@ Referencia: [MIGRACION_ADMINISTRANET_VB6_ANALISIS.md](MIGRACION_ADMINISTRANET_VB
 ### 1. Modelo multi-empresa: una base por empresa
 
 - La multi-empresa se resuelve con **una base MySQL por empresa** (no varias empresas en una misma base).
-- En el login, el usuario elige una **empresa** desde la tabla `empresas` (base `empresas`), que devuelve `base_empresa` = nombre de la base de datos (ej. `administranet89`).
+- En el login, el usuario elige una **empresa** desde la tabla `empresas` (base `empresas`), que devuelve `base_empresa` = nombre de la base de datos (ej. `administranet89`) y `nombre_empresa` = etiqueta visible (ej. `Prueba`).
+- La sesión guarda `base_empresa` (uso interno) y `nombre_empresa` (pie de estado, margen derecho) para identificar con qué DB se trabaja **sin** mostrar el nombre técnico de la base.
 - La sesión queda asociada a esa única `base_empresa`; todo el trabajo se hace contra esa base.
 
 Referencia: [SYNAP_ALINEACION_ADMINISTRANET_Y_GAPS.md](SYNAP_ALINEACION_ADMINISTRANET_Y_GAPS.md) — "Multi-empresa por base: una base MySQL por empresa".

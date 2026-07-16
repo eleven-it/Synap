@@ -157,7 +157,7 @@ En VB6 el selector que abre la factura de compra **no son “tipos de factura”
 
 ### 7.2 Barra de estado
 
-- Ubicación: barra inferior en base_app o bloque en navbar. Contenido: fecha/hora vía GET `/api/core/fecha-servidor/`, empresa, sucursal, puesto, usuario, opcional "Cajero: X". Partial reutilizable (ej. `../../theme/templates/partials/status_bar.html`).
+- Ubicación: barra inferior en base_app o bloque en navbar. Contenido: fecha/hora vía GET `/api/core/fecha-servidor/`, empresa (razón social DatosEmpresa), sucursal, puesto, usuario; a la **derecha**, `nombre_empresa` del login (tabla `empresas`) para identificar la DB activa. Partial: `theme/templates/partials/status_bar.html`. No exponer `base_empresa` ni `id_sesion`.
 
 ### 7.3 Fecha del servidor
 

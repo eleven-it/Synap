@@ -10,6 +10,7 @@ from django.test import RequestFactory
 from ecom.checkout_relay_views import _session_cod_viajante
 from ecom.services.vendedor_operativo import (
     cartera_permitida,
+    cartera_permitida_legacy,
     guardar_cod_viajante_operativo,
     leer_vendedores_a_cargo_config,
     normalizar_lista_cod_viajantes,
@@ -53,6 +54,7 @@ class TestResolverViajanteOperativo(unittest.TestCase):
 
     def test_cartera_incluye_propio(self):
         ctx = {"id_vendedor_usr": 5, "vendedor_a_cargo": [7]}
+        self.assertEqual(cartera_permitida_legacy(ctx), [5, 7])
         self.assertEqual(cartera_permitida(ctx), [5, 7])
 
 

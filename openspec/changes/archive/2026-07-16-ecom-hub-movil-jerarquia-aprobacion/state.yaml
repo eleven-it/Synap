@@ -1,0 +1,61 @@
+change: ecom-hub-movil-jerarquia-aprobacion
+status: archived
+updated: "2026-07-16"
+artifact_store: engram
+phases:
+  explore: skipped
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+  archive: complete
+depends_on: []
+notes: >
+  Hub mobile-first; jerarquía G×S×V; aprobación comercial opcional; alcance unificado hub/objetivos/informe.
+  Master flag ecom_workflow_jerarquia_comercial default No preserva paridad JSON legacy.
+  Verificado 16/07/2026: PASS WITH WARNINGS (118/118 tests change-specific).
+  Archivado en openspec/changes/archive/2026-07-16-ecom-hub-movil-jerarquia-aprobacion/
+spec_summary:
+  new_capabilities:
+    - ecom-jerarquia-comercial
+    - ecom-aprobacion-pedidos
+    - ecom-hub-pedidos-mobile
+    - ecom-objetivos-alcance-jerarquia
+    - ecom-ajustes-workflow-comercial
+  modified_capabilities:
+    - ecom-pedidos-hub-kanban
+    - ecom-vendedor-operativo
+    - ecom-gestion-pedidos-navegacion
+  requirements_total: 21
+  scenarios_total: 21
+verify_summary:
+  verdict: PASS_WITH_WARNINGS
+  tasks_complete: 35
+  tasks_total: 35
+  tests_scope_passed: 118
+  tests_scope_failed: 0
+  scenarios_compliant: 15
+  scenarios_partial: 5
+  scenarios_untested: 1
+archive_summary:
+  archived_at: "2026-07-16"
+  archive_path: openspec/changes/archive/2026-07-16-ecom-hub-movil-jerarquia-aprobacion/
+  main_specs_synced:
+    - openspec/specs/ecom-jerarquia-comercial/spec.md
+    - openspec/specs/ecom-aprobacion-pedidos/spec.md
+    - openspec/specs/ecom-hub-pedidos-mobile/spec.md
+    - openspec/specs/ecom-objetivos-alcance-jerarquia/spec.md
+    - openspec/specs/ecom-ajustes-workflow-comercial/spec.md
+    - openspec/specs/ecom-pedidos-hub-kanban/spec.md
+    - openspec/specs/ecom-vendedor-operativo/spec.md
+    - openspec/specs/ecom-gestion-pedidos-navegacion/spec.md
+  engram_artifacts:
+    proposal: "#1838"
+    spec: "#1840"
+    design: "#1841"
+    tasks: "#1842"
+    apply_progress: "#1848"
+    verify_report: "#1858"
+    archive_report: "sdd/ecom-hub-movil-jerarquia-aprobacion/archive-report"

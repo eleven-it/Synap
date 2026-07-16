@@ -588,9 +588,9 @@ APPS_MENU = [
                     },
                     {
                         "label": _("Pedidos"),
-                        "url": "ecom:mayoristapp_pedidos_vendedor",
+                        "url": "ecom:mayoristapp_pedidos_hub",
                         "icon": "receipt_long",
-                        "permission": "ecom.comprobantes.ver",
+                        "permission": "ecom.pedidos.ver",
                         "menu_item_id": "ecom_pedidos",
                     },
                     {
@@ -1168,13 +1168,26 @@ def _resolver_url_item(item: Dict, request, permisos_usuario: Set[str]) -> Optio
             "url": url,
             "icon": item.get("icon", ""),
             "permission": item.get("permission", ""),
+            "menu_item_id": item.get("menu_item_id", ""),
         }
     except NoReverseMatch:
         logger.debug("NoReverseMatch para ítem de menú: %s", item.get("url", ""))
-        return {"label": str(item.get("label", "")), "url": "#", "icon": item.get("icon", ""), "permission": item.get("permission", "")}
+        return {
+            "label": str(item.get("label", "")),
+            "url": "#",
+            "icon": item.get("icon", ""),
+            "permission": item.get("permission", ""),
+            "menu_item_id": item.get("menu_item_id", ""),
+        }
     except Exception as e:
         logger.debug("Error resolviendo URL ítem %s: %s", item.get("url", ""), e)
-        return {"label": str(item.get("label", "")), "url": "#", "icon": item.get("icon", ""), "permission": item.get("permission", "")}
+        return {
+            "label": str(item.get("label", "")),
+            "url": "#",
+            "icon": item.get("icon", ""),
+            "permission": item.get("permission", ""),
+            "menu_item_id": item.get("menu_item_id", ""),
+        }
 
 
 def obtener_submenus_por_app(app_id: str, permisos_usuario: Set[str], request=None) -> List[Dict[str, Any]]:
