@@ -25,6 +25,8 @@ from ecom.pedido_gestion_views import (
     PedidoDetalleView,
     PedidosHubAPIView,
     PedidosHubArchivarDraftAPIView,
+    PedidosHubArchivarCarritoAPIView,
+    PedidosHubMigrarCarritoAPIView,
     PedidosHubView,
     PedidosKpisAPIView,
     PedidosRecientesAPIView,
@@ -44,6 +46,7 @@ from ecom.ajustes_ventas_views import AjustesVentasAPIView, AjustesVentasView, A
 from ecom.jerarquia_views import JerarquiaNodosAPIView
 from ecom.pedido_masivo_views import (
     PedidoMasivoAbrirAPIView,
+    PedidoMasivoAbrirPedidoAPIView,
     PedidoMasivoArticulosAPIView,
     PedidoMasivoCeldaAPIView,
     PedidoMasivoClientesAPIView,
@@ -189,6 +192,16 @@ urlpatterns = [
         name="mayoristapp_pedidos_hub_archivar_draft",
     ),
     path(
+        "api/mayoristapp/pedidos/hub/migrar-carrito/",
+        PedidosHubMigrarCarritoAPIView.as_view(),
+        name="mayoristapp_pedidos_hub_migrar_carrito",
+    ),
+    path(
+        "api/mayoristapp/pedidos/hub/archivar-carrito/",
+        PedidosHubArchivarCarritoAPIView.as_view(),
+        name="mayoristapp_pedidos_hub_archivar_carrito",
+    ),
+    path(
         "mayoristapp/pedido-masivo-sucursales/",
         PedidoMasivoSucursalesView.as_view(),
         name="mayoristapp_pedido_masivo_sucursales",
@@ -207,6 +220,11 @@ urlpatterns = [
         "api/mayoristapp/pedido-masivo/abrir/",
         PedidoMasivoAbrirAPIView.as_view(),
         name="api_pedido_masivo_abrir",
+    ),
+    path(
+        "api/mayoristapp/pedido-masivo/abrir-pedido/",
+        PedidoMasivoAbrirPedidoAPIView.as_view(),
+        name="api_pedido_masivo_abrir_pedido",
     ),
     path(
         "api/mayoristapp/pedido-masivo/matriz/",
@@ -348,12 +366,10 @@ urlpatterns = [
         CompraMayoristaView.as_view(),
         name="mayoristapp_venta",
     ),
-    # Alias deprecado: bookmarks /compra/ → /venta/
+    # Alias deprecado: bookmarks /compra/ → pedido simple masivo (mismo destino que /venta/)
     path(
         "mayoristapp/compra/",
-        RedirectView.as_view(
-            pattern_name="ecom:mayoristapp_venta", permanent=False, query_string=True
-        ),
+        CompraMayoristaView.as_view(),
         name="mayoristapp_compra",
     ),
     # Logística operativa vive en la app ``logistica`` (/logistica/…). Redirecciones 301 por bookmarks.

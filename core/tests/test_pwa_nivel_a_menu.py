@@ -4,7 +4,10 @@ from unittest.mock import patch
 from django.test import RequestFactory, SimpleTestCase
 
 from core.middleware.base_middleware import DeviceDetectionMiddleware
+from ecom.menu_config import MENU_CONFIG
+
 from core.pwa_nivel_a import (
+    PWA_ECOM_DEEP_LINKS,
     PWA_ECOM_MENU_ITEM_IDS,
     PWA_MENU_APP_IDS,
     ecom_visible_en_movil,
@@ -132,6 +135,25 @@ class SidebarPwaTests(SimpleTestCase):
     def test_constantes(self):
         self.assertIn('self_checkout', PWA_MENU_APP_IDS)
         self.assertIn('ecom', PWA_MENU_APP_IDS)
+
+    def test_ecom_compra_deep_link_masivo_simple(self):
+        items = [
+            c
+            for c in MENU_CONFIG[0]["children"]
+            if c.get("name") == "ecom_compra"
+        ]
+        self.assertEqual(len(items), 1)
+        compra = items[0]
+        self.assertIn("modo=simple", compra["deep_link"])
+        self.assertIn("/pedido-masivo-sucursales/", compra["deep_link"])
+        self.assertTrue(
+            any(
+                compra["deep_link"].startswith(dl.rstrip("/"))
+                or dl.rstrip("/") in compra["deep_link"]
+                for dl in PWA_ECOM_DEEP_LINKS
+                if "pedido-masivo-sucursales" in dl
+            )
+        )
 
 
 class TpvVisibleEnMovilTests(SimpleTestCase):

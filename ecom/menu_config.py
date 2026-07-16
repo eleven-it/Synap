@@ -17,10 +17,10 @@ MENU_CONFIG = [
             {
                 "name": "ecom_compra",
                 "label": "Nuevo pedido",
-                "url": "ecom:mayoristapp_venta",
+                "url": "ecom:mayoristapp_pedido_masivo_sucursales",
                 "permission": "ecom.pedidos.crear",
                 "nivel_a": True,
-                "deep_link": "/ecom/mayoristapp/venta/",
+                "deep_link": "/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple",
             },
             {
                 "name": "ecom_pedidos",

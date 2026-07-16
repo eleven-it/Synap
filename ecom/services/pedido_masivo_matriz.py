@@ -293,6 +293,45 @@ def listar_sucursales_cliente(
         return []
 
 
+def credito_cliente_masivo(base_empresa: str, id_cliente: int) -> Dict[str, Any]:
+    """
+    Datos de crédito/cuenta del cliente para el widget hero (REQ-PSU-07).
+
+    Reutiliza las columnas legacy ``cliente.Saldo`` y ``cliente.Credito`` (mismas
+    que usa OrderShell). No consulta autorización por pedido: eso vive en la
+    cabecera del PED cargado.
+    """
+    idc = to_int_or_none(id_cliente)
+    if idc is None:
+        return {"saldo": 0.0, "credito_limite_dias": 0}
+    sql = """
+        SELECT
+            COALESCE(cliente.Saldo, 0) AS saldo,
+            COALESCE(cliente.Credito, 0) AS credito
+        FROM cliente
+        WHERE cliente.Codigo = %s
+        LIMIT 1
+    """
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, [idc])
+                row = cursor.fetchone()
+                if not row:
+                    return {"saldo": 0.0, "credito_limite_dias": 0}
+                return {
+                    "saldo": float(_dec(row[0])),
+                    "credito_limite_dias": int(to_int_or_none(row[1]) or 0),
+                }
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.warning("credito_cliente_masivo: %s", e)
+        return {"saldo": 0.0, "credito_limite_dias": 0}
+
+
 def _nombre_cliente(base_empresa: str, id_cliente: int) -> str:
     idc = to_int_or_none(id_cliente)
     if idc is None:
@@ -632,15 +671,27 @@ def obtener_o_crear_draft(
     id_cliente: int,
     cod_viajante: Optional[int],
     draft_id: Optional[int] = None,
+    modo: str = EcomPedidoMasivoDraft.MODO_MASIVO,
+    id_domicilio_fijo: Optional[int] = None,
+    cod_mov_origen: Optional[int] = None,
 ) -> Tuple[Optional[EcomPedidoMasivoDraft], str]:
     """
     Si ``draft_id``: valida ownership y cliente.
-    Si no: reutiliza borrador activo del mismo usuario+cliente o crea uno nuevo.
+    Si no: reutiliza borrador activo del mismo usuario+cliente+modo o crea uno nuevo.
     """
     id_u = to_int_or_none(id_usuario)
     idc = to_int_or_none(id_cliente)
     if not base_empresa or id_u is None or idc is None:
         return None, "Parámetros inválidos."
+
+    modo_ef = (modo or EcomPedidoMasivoDraft.MODO_MASIVO).strip().lower()
+    if modo_ef not in (
+        EcomPedidoMasivoDraft.MODO_MASIVO,
+        EcomPedidoMasivoDraft.MODO_SIMPLE,
+    ):
+        modo_ef = EcomPedidoMasivoDraft.MODO_MASIVO
+    id_dom_fijo = to_int_or_none(id_domicilio_fijo)
+    cod_origen = to_int_or_none(cod_mov_origen)
 
     if draft_id is not None:
         d = EcomPedidoMasivoDraft.objects.filter(
@@ -661,11 +712,33 @@ def obtener_o_crear_draft(
             d.save(update_fields=["estado", "updated_at"])
         return d, ""
 
+    if cod_origen is not None:
+        existente_origen = (
+            EcomPedidoMasivoDraft.objects.filter(
+                base_empresa=base_empresa,
+                id_usuario=id_u,
+                cod_mov_origen=cod_origen,
+                modo=modo_ef,
+                estado__in=(
+                    EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+                    EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+                ),
+            )
+            .order_by("-updated_at")
+            .first()
+        )
+        if existente_origen:
+            if existente_origen.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO:
+                existente_origen.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
+                existente_origen.save(update_fields=["estado", "updated_at"])
+            return existente_origen, ""
+
     existente = (
         EcomPedidoMasivoDraft.objects.filter(
             base_empresa=base_empresa,
             id_usuario=id_u,
             id_cliente=idc,
+            modo=modo_ef,
             estado__in=(
                 EcomPedidoMasivoDraft.ESTADO_BORRADOR,
                 EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
@@ -686,6 +759,9 @@ def obtener_o_crear_draft(
         id_cliente=idc,
         cod_viajante=to_int_or_none(cod_viajante),
         estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        modo=modo_ef,
+        id_domicilio_fijo=id_dom_fijo,
+        cod_mov_origen=cod_origen,
         descuento_pie_pct=_clamp_pct(
             leer_contexto_cliente_masivo(base_empresa, idc).get("descPie")
         ),
@@ -701,6 +777,26 @@ def serializar_matriz(
     sucursales = listar_sucursales_cliente(
         base_empresa, draft.id_cliente, cod_viajante=draft.cod_viajante
     )
+    modo = (draft.modo or EcomPedidoMasivoDraft.MODO_MASIVO).strip().lower()
+    id_dom_fijo = to_int_or_none(draft.id_domicilio_fijo)
+    if modo == EcomPedidoMasivoDraft.MODO_SIMPLE and id_dom_fijo is not None:
+        sucursales = [
+            s for s in sucursales if int(s.get("id_cliente_domicilio") or 0) == id_dom_fijo
+        ]
+        if not sucursales:
+            sucursales = [
+                {
+                    "id_cliente_domicilio": id_dom_fijo,
+                    "nombre": f"Sucursal #{id_dom_fijo}",
+                    "etiqueta": f"Sucursal #{id_dom_fijo}",
+                    "calle": "",
+                    "nro": "",
+                    "dpto": "",
+                    "provincia": "",
+                    "distrito": "",
+                    "zona": "",
+                }
+            ]
     celdas_qs = list(draft.celdas.all())
     art_ids = sorted({c.id_articulo for c in celdas_qs})
     ctx_cli = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
@@ -752,6 +848,9 @@ def serializar_matriz(
         "nombre_cliente": _nombre_cliente(base_empresa, draft.id_cliente),
         "cod_viajante": draft.cod_viajante,
         "estado": draft.estado,
+        "modo": modo,
+        "cod_mov_origen": draft.cod_mov_origen,
+        "id_domicilio_fijo": id_dom_fijo,
         "ultimo_error": draft.ultimo_error or {},
         "codigos_movimiento": draft.codigos_movimiento or [],
         "desc_pie_pct": float(draft.descuento_pie_pct or 0),

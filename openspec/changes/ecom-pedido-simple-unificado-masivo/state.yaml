@@ -1,0 +1,16 @@
+change: ecom-pedido-simple-unificado-masivo
+status: proposed
+created: 2026-07-16
+phase: apply-complete
+depends_on:
+  - ecom-pedido-cabecera-comercial
+artifacts:
+  exploration: complete
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: pending
+next_recommended:
+  - sdd-verify

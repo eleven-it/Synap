@@ -157,7 +157,7 @@ class TestFlujoCheckoutPendienteAprobar(TestCheckoutAprobacionComercial):
 
 class TestRegresionMasterOFF(TestCase):
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
-    @patch("ecom.services.pedidos_hub_pipeline._borradores_carrito", return_value=[])
+    @patch("ecom.services.pedidos_hub_pipeline._borradores_carrito_legacy", return_value=[])
     @patch("ecom.services.pedidos_hub_pipeline._borradores_masivo", return_value=[])
     @patch("ecom.services.pedidos_hub_pipeline._pedidos_mysql", return_value=[])
     @patch("ecom.services.pedidos_hub_pipeline._masivos_anulados", return_value=[])

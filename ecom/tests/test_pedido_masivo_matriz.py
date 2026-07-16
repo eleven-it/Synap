@@ -290,6 +290,51 @@ class TestSerializarMatriz(TestCase):
         self.assertEqual(m["descuentos_fila"]["4"], 10.0)
         self.assertEqual(len(m["sucursales"]), 1)
 
+    @patch(
+        "ecom.services.pedido_masivo_matriz.listar_sucursales_cliente",
+        return_value=[
+            {"id_cliente_domicilio": 9, "etiqueta": "Suc A"},
+            {"id_cliente_domicilio": 12, "etiqueta": "Suc B"},
+        ],
+    )
+    @patch("ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo")
+    @patch("ecom.services.pedido_masivo_matriz._nombres_articulos")
+    def test_modo_simple_una_columna_fija(self, mock_n, mock_ctx, _s):
+        mock_ctx.return_value = {
+            "descRenglon": Decimal("0"),
+            "descPie": Decimal("0"),
+            "lista_id": 1,
+        }
+        mock_n.return_value = {
+            4: {
+                "codigo": "X",
+                "descripcion": "Art X",
+                "precio_unitario_neto": 10.0,
+                "precio_lista1": 10.0,
+            }
+        }
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=10,
+            modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
+            id_domicilio_fijo=9,
+            cod_mov_origen=7001,
+        )
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d,
+            id_articulo=4,
+            id_cliente_domicilio=9,
+            cantidad_packs=Decimal("1"),
+        )
+        m = serializar_matriz(d, "emp_m")
+        self.assertEqual(m["modo"], "simple")
+        self.assertEqual(m["cod_mov_origen"], 7001)
+        self.assertEqual(m["id_domicilio_fijo"], 9)
+        self.assertEqual(len(m["sucursales"]), 1)
+        self.assertEqual(m["sucursales"][0]["id_cliente_domicilio"], 9)
+        self.assertEqual(m["celdas"]["4:9"], "1")
+
 
 class TestApiCelda(TestCase):
     @patch("ecom.pedido_masivo_views._session_base_empresa", return_value="emp_m")

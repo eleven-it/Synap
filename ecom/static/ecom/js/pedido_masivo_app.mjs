@@ -99,6 +99,23 @@ function pedidoMasivoCore() {
     tipo: 'PED',
     // Contexto comercial compacto por defecto para reservar alto a la matriz.
     contextoAbierto: false,
+    // ── Pedido simple (masivo 1 columna) ──
+    modoSimple: false,
+    idDomicilioInicial: null,
+    codMovOrigen: null,
+    // PED cargado/consultado (acciones hero mail/repetir/PDF/anular).
+    pedidoCodMov: null,
+    pedidoNro: '',
+    pedidoEstado: '',
+    pedidoEditable: true,
+    pedidoRepetido: false,
+    puedeAnularPedido: false,
+    emailCliente: '',
+    credito: null,
+    advertenciasCarga: [],
+    // Input compartido para modales mail/anular (contrato pedidos_modal.html).
+    dialogInput: '',
+    dialogInputError: '',
 
     get totalesPie() {
       if (this.previewFuente === 'servidor') {
@@ -156,17 +173,49 @@ function pedidoMasivoCore() {
       return `${label} #${this.draftId}`;
     },
 
+    // ── Pedido simple: título, consulta/edición y acciones hero ──
+    get tituloPantalla() {
+      return this.modoSimple ? 'Pedido simple' : 'Pedido masivo por sucursales';
+    },
+    /** PED cargado que NO es editable (en producción/anulado) → solo lectura. */
+    get pedidoSoloConsulta() {
+      return Boolean(this.modoSimple && this.pedidoCodMov && !this.pedidoEditable);
+    },
+    /** La matriz acepta ediciones (borrador editable y no en consulta). */
+    get matrizEditable() {
+      return this.esBorradorEditable && !this.pedidoSoloConsulta;
+    },
+    get puedeConfirmar() {
+      return Boolean(this.draftId && this.matrizEditable);
+    },
+    /** Un PED está cargado o consultado → habilita PDF / repetir / mail. */
+    get pedidoCargado() {
+      return Boolean(this.modoSimple && this.pedidoCodMov);
+    },
+    get pdfPedidoUrl() {
+      if (!this.pedidoCodMov || !this.urls.pdf_tpl) return '#';
+      const t = String(this.urls.pdf_tpl);
+      if (t.includes('cod_mov=')) return t.replace(/cod_mov=\d+/, `cod_mov=${this.pedidoCodMov}`);
+      return t.replace(/\/0(\/|$)/, `/${this.pedidoCodMov}$1`);
+    },
+
     init() {
       const el = document.getElementById('pm-bootstrap');
       const boot = el ? JSON.parse(el.textContent) : {};
       this.urls = boot.urls || {};
+      this.modoSimple = String(boot.modo || '') === 'simple';
+      this.idDomicilioInicial = boot.id_domicilio || null;
       try {
         const guardado = sessionStorage.getItem('pm-contexto-abierto');
         if (guardado === '1') this.contextoAbierto = true;
       } catch { /* sessionStorage no disponible */ }
       this.cargarCarteraVendedor();
       this.buscarClientes();
-      if (boot.draft_id) {
+      // Prioridad: abrir PED (cod_mov) → recuperar borrador → nuevo simple.
+      if (boot.cod_mov) {
+        this.modoSimple = true;
+        this.abrirPedido(boot.cod_mov, !!boot.repetir);
+      } else if (boot.draft_id) {
         this.abrirDraft(boot.draft_id);
       }
       // Al hacer scroll de la matriz, cerrar el dropdown (evita menú desfasado).
@@ -368,6 +417,10 @@ function pedidoMasivoCore() {
       this.descuentosFila = m.descuentos_fila || {};
       this.descPiePct = Number(m.desc_pie_pct || 0);
       this.ultimoError = m.ultimo_error || {};
+      // Modo simple + metadata de origen (REQ-PSU-02/03) y crédito hero.
+      if (String(m.modo || '') === 'simple') this.modoSimple = true;
+      this.codMovOrigen = m.cod_mov_origen || null;
+      if (m.credito) this.credito = m.credito;
       if (!this.clienteNombre) {
         const c = this.clientes.find(x => String(x.id_cliente) === String(this.idCliente));
         if (c) {
@@ -495,23 +548,91 @@ function pedidoMasivoCore() {
       if (this.abriendo) return;
       if (this.draftId && String(this.idCliente) === String(this.clienteSel)) return;
       this.abriendo = true; this.error = ''; this.mensajeOk = '';
-      const { data } = await this.postJson(this.urls.abrir, { id_cliente: Number(this.clienteSel) });
+      const body = { id_cliente: Number(this.clienteSel) };
+      if (this.modoSimple) {
+        body.modo = 'simple';
+        if (this.idDomicilioInicial) body.id_domicilio = Number(this.idDomicilioInicial);
+      }
+      const { data } = await this.postJson(this.urls.abrir, body);
       this.abriendo = false;
       if (!data.ok) { this.error = data.error || 'No se pudo abrir.'; return; }
+      // Cliente nuevo elegido a mano: no arrastra PED cargado previo.
+      this._resetPedidoCargado();
       this.aplicarMatriz(data.matriz);
       const c = this.clientes.find(x => String(x.id_cliente) === String(this.clienteSel));
       if (c) {
         this.clienteNombre = this._nombreClienteVisible(c.nombre || c.etiqueta || this.clienteNombre);
         this.qCliente = this.clienteNombre;
       }
-      history.replaceState(null, '', '?draft=' + this.draftId);
+      this._replaceHistoryDraft();
     },
     async abrirDraft(id) {
       this.abriendo = true; this.error = '';
-      const { data } = await this.postJson(this.urls.abrir, { draft_id: Number(id) });
+      const body = { draft_id: Number(id) };
+      if (this.modoSimple) body.modo = 'simple';
+      const { data } = await this.postJson(this.urls.abrir, body);
       this.abriendo = false;
       if (!data.ok) { this.error = data.error || 'No se pudo recuperar el borrador.'; return; }
       this.aplicarMatriz(data.matriz);
+    },
+    /** Reemplaza la URL preservando modo=simple + draft para F5/bookmark. */
+    _replaceHistoryDraft() {
+      if (!this.draftId) return;
+      const modoQ = this.modoSimple ? 'modo=simple&' : '';
+      history.replaceState(null, '', `?${modoQ}draft=${this.draftId}`);
+    },
+    _resetPedidoCargado() {
+      this.pedidoCodMov = null;
+      this.pedidoNro = '';
+      this.pedidoEstado = '';
+      this.pedidoEditable = true;
+      this.pedidoRepetido = false;
+      this.puedeAnularPedido = false;
+      this.emailCliente = '';
+      this.advertenciasCarga = [];
+    },
+    /**
+     * Carga un PED (``cod_mov``) en un borrador simple. Con ``repetir`` copia las
+     * líneas a un borrador nuevo sin anular el origen (REQ-PSU-07/CAR-008).
+     */
+    async abrirPedido(cod, repetir = false) {
+      const codMov = Number(cod);
+      if (!Number.isFinite(codMov) || codMov <= 0 || !this.urls.abrir_pedido) return;
+      this.abriendo = true;
+      this.error = '';
+      this.mensajeOk = '';
+      const { data } = await this.postJson(this.urls.abrir_pedido, {
+        cod_mov: codMov,
+        repetir: !!repetir,
+      });
+      this.abriendo = false;
+      if (!data.ok) {
+        this.error = data.error || 'No se pudo cargar el pedido.';
+        return;
+      }
+      this.modoSimple = true;
+      this.aplicarMatriz(data.matriz);
+      this._aplicarPedidoInfo(data.pedido, data.advertencias);
+      if (this.draftId) {
+        const codQ = this.pedidoCodMov ? `&cod_mov=${this.pedidoCodMov}` : '';
+        history.replaceState(null, '', `?modo=simple&draft=${this.draftId}${codQ}`);
+      }
+    },
+    _aplicarPedidoInfo(info, advertencias) {
+      const p = info || {};
+      this.pedidoCodMov = p.cod_mov || null;
+      this.pedidoNro = String(p.nro_comprobante || '').trim();
+      this.pedidoEstado = String(p.estado || '').trim();
+      this.pedidoEditable = p.editable !== false;
+      this.pedidoRepetido = !!p.repetido;
+      this.puedeAnularPedido = !!p.puede_anular;
+      this.emailCliente = String(p.email_cliente || '').trim();
+      this.advertenciasCarga = Array.isArray(advertencias) ? advertencias : [];
+      if (p.repetido) {
+        this.mensajeOk = 'Pedido copiado a un borrador nuevo. Revisá y confirmá para generar un PED.';
+      } else if (this.pedidoSoloConsulta) {
+        this.mensajeOk = `PED ${this.pedidoNro || this.pedidoCodMov} en consulta (${this.pedidoEstado}).`;
+      }
     },
     celda(idArt, idDom) {
       return this.celdas[idArt + ':' + idDom] || '';
@@ -1005,8 +1126,102 @@ function pedidoMasivoCore() {
       if (data.matriz) this.aplicarMatriz(data.matriz);
       this.mensajeOk = data.message || 'Borrador anulado. Podés recuperarlo desde el hub.';
     },
+    // ── Acciones hero PED (mail / repetir / PDF / anular) — REQ-PSU-07 ──
+    verPdfPedido() {
+      const url = this.pdfPedidoUrl;
+      if (!url || url === '#') return;
+      window.open(url, '_blank', 'noopener');
+    },
+    repetirPedido() {
+      if (!this.pedidoCodMov) return;
+      this.abrirPedido(this.pedidoCodMov, true);
+    },
+    solicitarEnviarMail() {
+      if (!this.pedidoCodMov || !this.urls.mail_enqueue) return;
+      this.dialogInput = this.emailCliente || '';
+      this.dialogInputError = '';
+      this.abrirDialogo('enviar_mail', {
+        titulo: 'Enviar comprobante por mail',
+        mensaje: 'Correo del destinatario',
+        confirmarTexto: 'Encolar envío',
+        cancelarTexto: 'Cancelar',
+        onConfirm: () => this._ejecutarEnviarMail(),
+      });
+    },
+    async _ejecutarEnviarMail() {
+      const email = String(this.dialogInput || '').trim();
+      if (!email || email.indexOf('@') < 1) {
+        this.dialogInputError = 'Debe indicar un correo electrónico válido.';
+        this.abrirDialogo('enviar_mail', {
+          titulo: 'Enviar comprobante por mail',
+          mensaje: 'Correo del destinatario',
+          confirmarTexto: 'Encolar envío',
+          cancelarTexto: 'Cancelar',
+          onConfirm: () => this._ejecutarEnviarMail(),
+        });
+        return;
+      }
+      const { data } = await this.postJson(this.urls.mail_enqueue, {
+        codMov: this.pedidoCodMov,
+        tipocomprobante: 0,
+        email,
+      });
+      const okMsg = data && (data.msg === 'ok' || data.ok);
+      if (!okMsg) {
+        this.error = (data && (data.error || data.detail)) || 'No se pudo encolar el mail.';
+        return;
+      }
+      this.mensajeOk = 'Solicitud de envío registrada.';
+    },
+    solicitarAnularPedido() {
+      if (!this.puedeAnularPedido || !this.pedidoCodMov || !this.urls.anular_pedido) return;
+      this.dialogInput = '';
+      this.dialogInputError = '';
+      this.abrirDialogo('anular_pedido', {
+        titulo: 'Anular pedido',
+        mensaje: 'Solo es posible en estado Pendiente. Indicá el motivo (obligatorio).',
+        confirmarTexto: 'Anular pedido',
+        cancelarTexto: 'Cancelar',
+        variante: 'danger',
+        onConfirm: () => this._ejecutarAnularPedido(),
+      });
+    },
+    async _ejecutarAnularPedido() {
+      const motivo = String(this.dialogInput || '').trim();
+      if (!motivo) {
+        this.dialogInputError = 'Debe indicar el motivo de anulación.';
+        this.abrirDialogo('anular_pedido', {
+          titulo: 'Anular pedido',
+          mensaje: 'Solo es posible en estado Pendiente. Indicá el motivo (obligatorio).',
+          confirmarTexto: 'Anular pedido',
+          cancelarTexto: 'Cancelar',
+          variante: 'danger',
+          onConfirm: () => this._ejecutarAnularPedido(),
+        });
+        return;
+      }
+      const { data } = await this.postJson(this.urls.anular_pedido, {
+        anularPedido: '1',
+        codMovPedido: this.pedidoCodMov,
+        motivo,
+      });
+      const okMsg = data && (data.msg === 'ok' || data.ok);
+      if (!okMsg) {
+        this.error = (data && (data.error || data.detail)) || 'No se pudo anular el pedido.';
+        return;
+      }
+      this.mensajeOk = 'Pedido anulado.';
+      this.puedeAnularPedido = false;
+      this.pedidoEditable = false;
+      // Recargar el PED anulado en consulta (solo lectura).
+      this.abrirPedido(this.pedidoCodMov, false);
+    },
     async confirmarLote() {
       if (!this.draftId || !this.urls.confirmar || this.confirmando) return;
+      if (this.pedidoSoloConsulta) {
+        this.error = 'Este pedido no es editable (en producción o anulado). Solo consulta.';
+        return;
+      }
       this.error = '';
       this.mensajeOk = '';
       const fe = (
@@ -1031,12 +1246,29 @@ function pedidoMasivoCore() {
         return;
       }
       this.recalcularPreviewEstimado();
+      // Modo simple: mensaje según sea alta nueva o edición (anula+crea REQ-PSU-06).
+      let titulo = 'Confirmar pedido masivo';
+      let mensaje = 'Se creará un PED por cada sucursal con cantidad cargada.';
+      let confirmarTexto = 'Confirmar pedido';
+      let variante = 'primary';
+      if (this.modoSimple) {
+        if (this.codMovOrigen) {
+          titulo = 'Confirmar cambios del pedido simple';
+          mensaje = `Se anulará el PED ${this.pedidoNro || this.codMovOrigen} y se creará uno nuevo con las cantidades cargadas. El número de comprobante cambiará.`;
+          confirmarTexto = 'Anular y crear nuevo';
+          variante = 'danger';
+        } else {
+          titulo = 'Confirmar pedido simple';
+          mensaje = 'Se creará un PED con las cantidades cargadas para la sucursal seleccionada.';
+        }
+      }
       // Abrir modal al instante; la validación servidor corre en paralelo (UI «Validando…»).
       this.abrirDialogo('masivo_confirmar', {
-        titulo: 'Confirmar pedido masivo',
-        mensaje: 'Se creará un PED por cada sucursal con cantidad cargada.',
-        confirmarTexto: 'Confirmar pedido',
+        titulo,
+        mensaje,
+        confirmarTexto,
         cancelarTexto: 'Cancelar',
+        variante,
         onConfirm: () => this._ejecutarConfirmarLote(),
       });
       this.refrescarPreview();
@@ -1237,6 +1469,14 @@ function pedidoMasivoCore() {
       const cods = data.codigos_movimiento || [];
       if (cods.length) {
         this.mensajeOk += ' PED: ' + cods.join(', ');
+      }
+      // Modo simple: habilitar acciones hero (PDF/mail/anular) sobre el PED creado.
+      if (this.modoSimple && cods.length) {
+        this.pedidoCodMov = Number(cods[0]);
+        this.pedidoNro = '';
+        this.pedidoEditable = false;
+        this.puedeAnularPedido = true;
+        this.codMovOrigen = null;
       }
       this.flashGuardado();
       setTimeout(() => {

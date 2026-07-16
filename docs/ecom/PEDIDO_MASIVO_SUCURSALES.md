@@ -1,10 +1,36 @@
 # Pedido masivo por sucursales
 
 **Change:** `ecom-pedidos-hub-kanban-masivo-sucursales` · UX contexto: `ecom-pedido-masivo-ux-contexto`  
+**Unificación pedido simple:** `ecom-pedido-simple-unificado-masivo` (16/07/2026)  
 **Cabecera comercial (barra contexto):** `docs/ecom/PEDIDO_CABECERA_COMERCIAL.md`  
 **Ruta (Phase 4):** `/ecom/mayoristapp/pedido-masivo-sucursales/`  
+**Ruta canónica pedido simple:** `/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple` (+ `cod_mov`, `draft`, `id_domicilio`)  
 **Canon UI:** Tablero de producción (slate/sky)  
-**Fecha:** 14/07/2026
+**Fecha:** 16/07/2026
+
+## Modo simple (1 sucursal) — 16/07/2026
+
+El **pedido simple** dejó de usar `OrderShell` / `EcomCart` borrador y se unificó en la misma matriz masiva con **una columna**:
+
+| Aspecto | Comportamiento |
+|---------|----------------|
+| Parámetro | `?modo=simple` en la URL (sin ruta nueva) |
+| Borrador | `EcomPedidoMasivoDraft` con `modo=simple`, `id_domicilio_fijo`, `cod_mov_origen` |
+| Carga PED | `cargar_pedido_en_draft_masivo` copia `stockp` → celdas (packs Bulto>Display); UOM no estándar → redondeo + aviso |
+| Confirmar edición Pendiente | Anula PED origen + crea uno nuevo (`batch_checkout_masivo`, REQ-CHK-014) |
+| Hero modo simple | Crédito, Enviar mail, Repetir, Ver PDF, Anular (si `puede_anular`); título «Pedido simple» |
+| Solo consulta | Si el PED origen no está Pendiente, matriz read-only |
+| Legacy `/venta/` y `/compra/` | Redirect 302 a masivo `?modo=simple` preservando query (`cod_mov`, etc.) |
+| Hub | Tarjetas PED y «Nuevo simple» → `?modo=simple&cod_mov=` o `?modo=simple&draft=` |
+| Carrito legacy | `EcomCart` borrador aparece como tarjeta **Carrito legacy** con CTA migrar/archivar (no mezcla con draft masivo) |
+
+### Permisos (OR)
+
+| Key | Uso |
+|-----|-----|
+| `ecom.pedidos.crear` **o** `ecom.pedido_masivo.usar` | Captura en modo simple y APIs de matriz (`EcomPedidoCapturaPermission`) |
+| `ecom.pedido_masivo.usar` | Matriz **multi-columna** (modo masivo sin `modo=simple`) |
+| `ecom.pedidos.ver` | Ver borradores y PED en hub |
 
 ## Flujo (14/07/2026 — barra contexto + auto-apertura)
 
@@ -76,7 +102,8 @@ Para bajar costo de servidor (clientes con muchas sucursales / timeout de 8 s), 
 
 - Viewport `<lg`: tabla oculta; **acordeón** por `id_cliente_domicilio` reutilizando `celda()` / `onCelda()` / `descFila()`.
 - Panel preview/totales apilado verticalmente; botones alcanzables en pantalla estrecha.
-- **Nivel A / PWA (16/07/2026):** ruta HTML y APIs `/ecom/api/mayoristapp/` permitidas en móvil; menú e-com filtrado (`ecom_pedido_masivo`) y `PWA_ECOM_DEEP_LINKS`. Permiso `ecom.pedido_masivo.usar`. Ver `docs/general/MOBILE_SOLO_NIVEL_A.md`.
+- Encabezado de sucursal en móvil/PWA: solo nº + **un** botón expandir/contraer (sin chevron CSS duplicado; el total solo se muestra si hay importe).
+- **Nivel A / PWA (16/07/2026):** ruta HTML y APIs `/ecom/api/mayoristapp/` permitidas en móvil; menú e-com filtrado (`ecom_compra`, `ecom_pedidos`, `ecom_pedido_masivo`) y `PWA_ECOM_DEEP_LINKS`. Pedido simple: deep link `ecom_compra` → `/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple`. Permisos captura: `ecom.pedidos.crear` **o** `ecom.pedido_masivo.usar`. Ver `docs/general/MOBILE_SOLO_NIVEL_A.md`.
 
 ## Borrador (Postgres)
 
@@ -115,7 +142,8 @@ Modelos: `EcomPedidoMasivoDraft` + `EcomPedidoMasivoDraftCelda`.
 
 | Key | Uso |
 |-----|-----|
-| `ecom.pedido_masivo.usar` | Abrir y confirmar matriz |
+| `ecom.pedidos.crear` **o** `ecom.pedido_masivo.usar` | Captura pedido simple y APIs matriz (`EcomPedidoCapturaPermission`) |
+| `ecom.pedido_masivo.usar` | Abrir y confirmar matriz multi-columna |
 | `ecom.pedidos.ver` | Ver borradores en hub |
 
 ## Endpoints (Phase 4)
@@ -129,7 +157,8 @@ Modelos: `EcomPedidoMasivoDraft` + `EcomPedidoMasivoDraftCelda`.
 | POST | `/ecom/api/mayoristapp/pedido-masivo/celda/` | Autoguardado celda |
 | GET | `/ecom/api/mayoristapp/pedido-masivo/articulos/?id_cliente=&q=` | Catálogo filtrado por marcas terna |
 
-UI: `/ecom/mayoristapp/pedido-masivo-sucursales/?draft=<id>`
+UI: `/ecom/mayoristapp/pedido-masivo-sucursales/?draft=<id>`  
+UI modo simple: `/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple` (opcional `&cod_mov=`, `&draft=`, `&id_domicilio=`)
 
 **Confirmación de lote (1 PED/sucursal):** implementada (Phase 5). El PV se resuelve
 sin campo adicional en la UI: `id_punto_venta` recibido, PV activo de sesión,

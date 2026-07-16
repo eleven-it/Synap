@@ -1,20 +1,30 @@
 """
 Repetir pedido anterior: copia solo artículo + cantidad al carrito borrador.
 Precios siempre vía ``resolver_precio_articulo`` (nunca desde ``stockp`` histórico).
+
+Carga PED → borrador masivo (modo simple): ``cargar_pedido_en_draft_masivo``.
 """
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
-from ecom.models import EcomCart
+from django.db import transaction
+
+from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
+from ecom.models import EcomCart, EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
 from ecom.services import mayorista_cart_service as cart_svc
+from ecom.services.batch_checkout_masivo import _pack_tipo_y_mult
 from ecom.services.catalogo_producto import resolver_precio_articulo
 from ecom.services.cliente_relay import cliente_accesible_por_sesion
 from ecom.services.comprobantes_relay import detalle_pedido_relay
 from ecom.services.pedido_cabecera_relay import cabecera_pedido_relay
+from ecom.services.pedido_masivo_matriz import (
+    leer_contexto_cliente_masivo,
+    obtener_o_crear_draft,
+)
+from ecom.services.vendedor_operativo import resolver_viajante_operativo
 from self_checkout.services.stock_service import StockService
 
 
@@ -77,6 +87,181 @@ def validar_pedido_como_plantilla(
             return None, "No tiene permiso para operar con este cliente."
 
     return cab, None
+
+
+def _salida_a_packs_matriz(
+    base_empresa: str,
+    id_articulo: int,
+    salida_base: Decimal,
+    *,
+    tipo_unidad_linea: str = "",
+    descripcion: str = "",
+) -> Tuple[Decimal, Optional[str]]:
+    """
+    Convierte ``stockp.Salida`` (unidades base) a cantidad_packs de la matriz
+    (presentación preferida Bulto > Display > defecto). Redondea a 3 decimales.
+    """
+    tipo_pack, mult = _pack_tipo_y_mult(base_empresa, id_articulo)
+    if mult <= 0:
+        mult = Decimal("1")
+    packs_exact = salida_base / mult
+    packs = packs_exact.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+    avisos: List[str] = []
+    tu_linea = str_or_default(tipo_unidad_linea, "").strip()
+    tipos_estandar = {tipo_pack.lower(), "unidad", "bulto", "display"}
+    if tu_linea and tu_linea.lower() not in tipos_estandar:
+        etiqueta = descripcion or f"Art. {id_articulo}"
+        avisos.append(
+            f"{etiqueta}: unidad «{tu_linea}» convertida a packs «{tipo_pack}»."
+        )
+    if packs_exact != packs:
+        etiqueta = descripcion or f"Art. {id_articulo}"
+        avisos.append(
+            f"{etiqueta}: cantidad ajustada por redondeo "
+            f"({salida_base} u. → {packs} {tipo_pack})."
+        )
+    aviso = " ".join(avisos) if avisos else None
+    return packs, aviso
+
+
+def _pedido_origen_editable(cab: Dict[str, Any]) -> bool:
+    anulado = str(cab.get("anulado") or "").strip().lower() in ("si", "sí")
+    estado = str(cab.get("estado") or "").strip()
+    return not anulado and estado == "Pendiente"
+
+
+def cargar_pedido_en_draft_masivo(
+    base_empresa: str,
+    cod_mov: int,
+    sess_user: Dict[str, Any],
+    *,
+    id_usuario: int,
+    idcliente_contexto: Optional[int] = None,
+    es_cliente: Optional[bool] = None,
+    draft_id: Optional[int] = None,
+) -> Tuple[Optional[EcomPedidoMasivoDraft], Optional[str], Dict[str, Any]]:
+    """
+    Valida PED, resuelve domicilio, crea/reutiliza draft modo=simple y copia
+    renglones ``stockp`` a celdas (packs Bulto>Display). No muta MySQL.
+
+    Devuelve ``(draft, error, meta)`` donde ``meta`` incluye ``advertencias`` y
+    ``editable`` para la UI.
+    """
+    meta: Dict[str, Any] = {"advertencias": [], "editable": False}
+    cod = to_int_or_none(cod_mov)
+    id_u = to_int_or_none(id_usuario)
+    if cod is None or id_u is None or not base_empresa:
+        return None, "Parámetros inválidos.", meta
+
+    cab = cabecera_pedido_relay(base_empresa, cod)
+    if not cab:
+        return None, "Pedido no encontrado.", meta
+    if str(cab.get("tipo_comprobante") or "").strip().upper() != "PED":
+        return None, "Solo se pueden cargar pedidos (PED).", meta
+    if str(cab.get("anulado") or "").strip().lower() in ("si", "sí"):
+        return None, "No se puede cargar un pedido anulado.", meta
+
+    id_cliente = to_int_or_none(cab.get("id_cliente"))
+    if id_cliente is None:
+        return None, "Pedido sin cliente asociado.", meta
+
+    ctx_cliente = idcliente_contexto if idcliente_contexto is not None else id_cliente
+    _, err = validar_pedido_como_plantilla(
+        base_empresa,
+        cod,
+        sess_user,
+        ctx_cliente,
+        es_cliente=es_cliente,
+    )
+    if err:
+        return None, err, meta
+
+    id_domicilio = to_int_or_none(cab.get("id_cliente_domicilio"))
+    if id_domicilio is None or id_domicilio <= 0:
+        return None, "El pedido no tiene domicilio de entrega asociado.", meta
+
+    editable = _pedido_origen_editable(cab)
+    meta["editable"] = editable
+    meta["estado_origen"] = str(cab.get("estado") or "").strip()
+    meta["cod_mov_origen"] = cod
+    meta["id_domicilio_fijo"] = id_domicilio
+
+    cv = resolver_viajante_operativo(sess_user)
+    if cv is None:
+        cv = to_int_or_none(cab.get("cod_viajante"))
+
+    draft, err_draft = obtener_o_crear_draft(
+        base_empresa=base_empresa,
+        id_usuario=id_u,
+        id_cliente=id_cliente,
+        cod_viajante=cv,
+        draft_id=draft_id,
+        modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
+        id_domicilio_fijo=id_domicilio,
+        cod_mov_origen=cod,
+    )
+    if err_draft or draft is None:
+        return None, err_draft or "No se pudo crear el borrador.", meta
+
+    renglones = detalle_pedido_relay(base_empresa, cod)
+    advertencias: List[str] = []
+    celdas_nuevas: List[EcomPedidoMasivoDraftCelda] = []
+
+    for row in renglones:
+        id_art = to_int_or_none(row.get("IDArt"))
+        if id_art is None:
+            continue
+        salida = to_decimal_or_none(row.get("Salida")) or Decimal("0")
+        if salida <= 0:
+            continue
+        packs, aviso = _salida_a_packs_matriz(
+            base_empresa,
+            id_art,
+            salida,
+            tipo_unidad_linea=str_or_default(row.get("tipo_unidad"), ""),
+            descripcion=str_or_default(row.get("Descripcion"), ""),
+        )
+        if aviso:
+            advertencias.append(aviso)
+        if packs <= 0:
+            continue
+        celdas_nuevas.append(
+            EcomPedidoMasivoDraftCelda(
+                draft=draft,
+                id_articulo=id_art,
+                id_cliente_domicilio=id_domicilio,
+                cantidad_packs=packs,
+            )
+        )
+
+    ctx_cli = leer_contexto_cliente_masivo(base_empresa, id_cliente)
+    pie_pct = to_decimal_or_none(ctx_cli.get("descPie")) or Decimal("0")
+
+    with transaction.atomic():
+        draft.celdas.all().delete()
+        if celdas_nuevas:
+            EcomPedidoMasivoDraftCelda.objects.bulk_create(celdas_nuevas)
+        draft.modo = EcomPedidoMasivoDraft.MODO_SIMPLE
+        draft.cod_mov_origen = cod
+        draft.id_domicilio_fijo = id_domicilio
+        draft.id_cliente = id_cliente
+        if cv is not None:
+            draft.cod_viajante = cv
+        draft.descuento_pie_pct = pie_pct
+        draft.save(
+            update_fields=[
+                "modo",
+                "cod_mov_origen",
+                "id_domicilio_fijo",
+                "id_cliente",
+                "cod_viajante",
+                "descuento_pie_pct",
+                "updated_at",
+            ]
+        )
+
+    meta["advertencias"] = advertencias
+    return draft, None, meta
 
 
 def preview_desde_pedido(

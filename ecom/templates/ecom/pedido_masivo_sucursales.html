@@ -23,35 +23,77 @@
       <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 shadow-md sm:px-4">
         <header class="pm-hero-bar flex flex-wrap items-center gap-x-3 gap-y-2">
           <div class="flex min-w-0 flex-wrap items-center gap-2">
-            <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Pedido masivo por sucursales</h1>
-            <span x-show="draftId" x-cloak
+            <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl" x-text="tituloPantalla">Pedido masivo por sucursales</h1>
+            <span x-show="draftId && !pedidoCargado" x-cloak
                   class="pedidos-badge-borrador pedidos-badge-borrador--hero"
                   x-text="etiquetaEstadoDraft"></span>
+            {# Estado del PED cargado (consulta/edición) #}
+            <span x-show="pedidoCargado" x-cloak
+                  class="pedidos-badge-borrador pedidos-badge-borrador--hero"
+                  x-text="(pedidoNro ? ('PED ' + pedidoNro) : ('PED #' + pedidoCodMov)) + (pedidoEstado ? (' · ' + pedidoEstado) : '')"></span>
+            <span x-show="pedidoSoloConsulta" x-cloak
+                  class="rounded-full bg-slate-500/25 px-2.5 py-1 text-[11px] font-semibold text-slate-200">Solo consulta</span>
           </div>
           <div class="pm-hero-actions ml-auto flex flex-wrap items-center gap-2">
             <span x-show="guardadoChip" x-cloak
                   class="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"
                   x-text="guardadoChip"></span>
+            {# Crédito del cliente (modo simple) #}
+            <span x-show="modoSimple && credito && idCliente" x-cloak
+                  class="inline-flex items-center gap-1 rounded-lg bg-slate-700/70 px-2.5 py-1 text-[11px] font-semibold text-slate-200"
+                  :title="'Saldo CC: ' + money(credito ? credito.saldo : 0) + ' · Límite: ' + (credito ? credito.credito_limite_dias : 0) + ' días'">
+              <span class="material-icons text-sm leading-none" aria-hidden="true">account_balance_wallet</span>
+              <span x-text="'Crédito: ' + money(credito ? credito.saldo : 0)"></span>
+            </span>
+            {# Acciones hero PED: PDF · Mail · Repetir · Anular #}
+            <template x-if="pedidoCargado">
+              <span class="inline-flex flex-wrap items-center gap-2">
+                <a :href="pdfPedidoUrl" target="_blank" rel="noopener"
+                   class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
+                  <span class="material-icons text-sm leading-none" aria-hidden="true">picture_as_pdf</span>
+                  <span>Ver PDF</span>
+                </a>
+                <button type="button" @click="solicitarEnviarMail()"
+                        class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
+                  <span class="material-icons text-sm leading-none" aria-hidden="true">mail</span>
+                  <span>Enviar mail</span>
+                </button>
+                <button type="button" @click="repetirPedido()"
+                        class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
+                  <span class="material-icons text-sm leading-none" aria-hidden="true">content_copy</span>
+                  <span>Repetir</span>
+                </button>
+                <button type="button"
+                        x-show="puedeAnularPedido"
+                        x-cloak
+                        @click="solicitarAnularPedido()"
+                        class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-rose-400/70 bg-transparent px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/15">
+                  <span class="material-icons text-sm leading-none" aria-hidden="true">block</span>
+                  <span>Anular pedido</span>
+                </button>
+              </span>
+            </template>
             {# Vendedor operativo — antes de Anular #}
             <div class="pm-hero-vendedor" x-show="mostrarSelectorVendedor && !esCliente" x-cloak>
               {% include "ecom/includes/pedidos_selector_vendedor.html" %}
             </div>
             <button type="button"
-                    x-show="puedeAnularBorrador"
+                    x-show="puedeAnularBorrador && !pedidoSoloConsulta"
                     x-cloak
                     @click="anularBorrador()"
                     :disabled="anulando"
                     class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-rose-400/70 bg-transparent px-3 py-1.5 text-xs font-semibold text-rose-300 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50">
-              <span x-text="anulando ? 'Anulando…' : 'Anular'"></span>
+              <span x-text="anulando ? 'Anulando…' : 'Anular borrador'"></span>
             </button>
             <a :href="urls.hub"
                class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600">
               Hub pedidos
             </a>
             <button type="button" @click="confirmarLote()"
-                    :disabled="confirmando || previewCargando || !draftId || !esBorradorEditable"
+                    x-show="!pedidoSoloConsulta"
+                    :disabled="confirmando || previewCargando || !puedeConfirmar"
                     class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">
-              <span x-text="confirmando ? 'Confirmando…' : (previewCargando ? 'Validando…' : 'Confirmar pedido')"></span>
+              <span x-text="confirmando ? 'Confirmando…' : (previewCargando ? 'Validando…' : (codMovOrigen ? 'Anular y crear nuevo' : 'Confirmar pedido'))"></span>
             </button>
           </div>
         </header>
@@ -67,6 +109,17 @@
         <p class="mt-0.5 whitespace-pre-wrap break-words" x-text="error"></p>
       </div>
       <div x-show="mensajeOk" x-cloak class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-100" x-text="mensajeOk" role="status"></div>
+      {# Advertencias de carga del PED (conversión packs / redondeo) — REQ-PSU-04 #}
+      <div x-show="advertenciasCarga.length" x-cloak
+           class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
+           role="alert">
+        <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Avisos al cargar el pedido</p>
+        <ul class="list-inside list-disc space-y-0.5">
+          <template x-for="(msg, i) in advertenciasCarga" :key="'ac-' + i">
+            <li x-text="msg"></li>
+          </template>
+        </ul>
+      </div>
       <div x-show="previewWarningBloqueante" x-cloak
            class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
            x-text="previewWarningBloqueante" role="alert"></div>
@@ -259,9 +312,10 @@
                     <td class="pm-c-precio text-xs tabular-nums text-slate-700 dark:text-slate-200" x-text="fmtPrecio(art.precio_unitario_neto)"></td>
                     <td class="pm-c-desc">
                       <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                             class="pm-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                             class="pm-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
                              :value="descFila(art.id_articulo)"
                              placeholder="0"
+                             :disabled="!matrizEditable"
                              @change="onDescFila(art.id_articulo, $event.target.value)"/>
                     </td>
                   </tr>
@@ -277,6 +331,7 @@
                                x-ref="pmArtInput"
                                :aria-expanded="panelArt"
                                x-model="qArt"
+                               :disabled="!matrizEditable"
                                @focus="abrirPanelArt(); scrollBuscadorIntoView()"
                                @input.debounce.250ms="buscarArticulos()"
                                @keydown.arrow-down.prevent="onArrowDownArt()"
@@ -284,10 +339,11 @@
                                @keydown.enter.prevent="elegirResaltadoArt()"
                                @keydown.escape="cerrarPanelArt()"
                                placeholder="Buscar artículo… (↓ todos)"
-                               class="pm-art-buscar pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:bg-slate-950 dark:text-white"/>
+                               class="pm-art-buscar pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-sky-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800"/>
                         <button type="button"
                                 @mousedown.prevent="listarTodosArticulos()"
-                                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                                :disabled="!matrizEditable"
+                                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40"
                                 title="Ver todos los artículos"
                                 aria-label="Ver todos los artículos disponibles">
                           <span class="material-icons text-base leading-none" aria-hidden="true">expand_more</span>
@@ -350,8 +406,9 @@
                       <td class="pm-c-suc">
                         <input type="number" min="0" step="0.001" inputmode="decimal"
                                :data-pm-qty="art.id_articulo + ':' + s.id_cliente_domicilio"
-                               class="pm-qty-input pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                               class="pm-qty-input pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
                                :value="celda(art.id_articulo, s.id_cliente_domicilio)"
+                               :disabled="!matrizEditable"
                                @change="onCelda(art.id_articulo, s.id_cliente_domicilio, $event.target.value)"
                                @keydown.enter.prevent="onEnterCantidad(art.id_articulo, si)"/>
                       </td>
@@ -387,6 +444,7 @@
                     <td class="pm-c-delete">
                       <button type="button"
                               @click="eliminarFila(art.id_articulo)"
+                              x-show="matrizEditable"
                               class="pm-btn-delete inline-flex h-7 w-7 items-center justify-center rounded-md text-rose-600 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-400/50 dark:hover:bg-rose-950/40 dark:text-rose-400"
                               :title="'Quitar ' + (art.id_manual || art.codigo || ('#'+art.id_articulo))"
                               :aria-label="'Quitar artículo ' + (art.id_manual || art.id_articulo)">
@@ -425,6 +483,7 @@
               <input id="pm-art-mob" type="text" autocomplete="off" role="combobox"
                      x-model="qArt"
                      :aria-expanded="panelArt"
+                     :disabled="!matrizEditable"
                      @focus="abrirPanelArt()"
                      @input.debounce.250ms="buscarArticulos()"
                      @keydown.arrow-down.prevent="onArrowDownArt()"
@@ -432,10 +491,11 @@
                      @keydown.enter.prevent="elegirResaltadoArt()"
                      @keydown.escape="cerrarPanelArt()"
                      placeholder="Buscar artículo… (↓ todos)"
-                     class="pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:bg-slate-950 dark:text-white"/>
+                     class="pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-sky-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800"/>
               <button type="button"
                       @mousedown.prevent="listarTodosArticulos()"
-                      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                      :disabled="!matrizEditable"
+                      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40"
                       title="Ver todos los artículos"
                       aria-label="Ver todos los artículos disponibles">
                 <span class="material-icons text-base leading-none" aria-hidden="true">expand_more</span>
@@ -476,9 +536,11 @@
                       :title="etiquetaSucursalCompleta(s)"
                       x-text="nroSucursal(s)"></span>
                 <span class="shrink-0 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300"
+                      x-show="totalSucursal(s.id_cliente_domicilio) !== '—'"
+                      x-cloak
                       x-text="totalSucursal(s.id_cliente_domicilio)"></span>
                 <button type="button"
-                        class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:hover:bg-slate-700"
+                        class="pm-accordion-toggle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:hover:bg-slate-700"
                         :aria-expanded="abierto"
                         :aria-label="abierto ? 'Cerrar sucursal ' + nroSucursal(s) : 'Abrir sucursal ' + nroSucursal(s)"
                         @click.stop.prevent="abierto = !abierto">
@@ -499,6 +561,7 @@
                         <span class="text-xs tabular-nums text-slate-500" x-text="fmtPrecio(art.precio_unitario_neto)"></span>
                         <button type="button"
                                 @click="eliminarFila(art.id_articulo)"
+                                x-show="matrizEditable"
                                 class="pm-btn-delete inline-flex h-7 w-7 items-center justify-center rounded-md text-rose-600 hover:bg-rose-50 dark:text-rose-400"
                                 title="Quitar artículo"
                                 :aria-label="'Quitar artículo ' + (art.id_manual || art.id_articulo)">
@@ -510,18 +573,20 @@
                       <label class="sr-only" :for="'pm-desc-mob-' + art.id_articulo">% descuento</label>
                       <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
                              :id="'pm-desc-mob-' + art.id_articulo"
-                             class="pm-input-dense h-8 w-16 shrink-0 rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                             class="pm-input-dense h-8 w-16 shrink-0 rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
                              :value="descFila(art.id_articulo)"
                              placeholder="%"
                              title="% descuento fila"
+                             :disabled="!matrizEditable"
                              @change="onDescFila(art.id_articulo, $event.target.value)"/>
                       <label class="sr-only" :for="'pm-qty-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio">Cantidad packs</label>
                       <input type="number" min="0" step="0.001" inputmode="decimal"
                              :id="'pm-qty-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio"
                              :data-pm-qty="art.id_articulo + ':' + s.id_cliente_domicilio"
-                             class="pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                             class="pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
                              :value="celda(art.id_articulo, s.id_cliente_domicilio)"
                              placeholder="Packs"
+                             :disabled="!matrizEditable"
                              @change="onCelda(art.id_articulo, s.id_cliente_domicilio, $event.target.value)"/>
                     </div>
                   </div>
@@ -540,9 +605,10 @@
           <div class="min-w-[8rem]">
             <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="pm-desc-pie">Descuento pie de lote (%)</label>
             <input id="pm-desc-pie" type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                   class="pm-input-dense h-8 w-full max-w-[7rem] rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white sm:w-28"
+                   class="pm-input-dense h-8 w-full max-w-[7rem] rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800 sm:w-28"
                    :value="descPiePct || ''"
                    placeholder="0"
+                   :disabled="!matrizEditable"
                    @change="onDescPie($event.target.value)"/>
           </div>
           <button type="button" @click="refrescarPreview()" :disabled="previewCargando"
@@ -640,5 +706,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo18"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo20"></script>
 {% endblock %}

@@ -7,7 +7,9 @@ from __future__ import annotations
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.views import View
 from django.views.generic import TemplateView
+from urllib.parse import parse_qs, urlencode
 
 from core.utils.administranet_types import to_int_or_none
 from ecom.mayoristapp_listado_config import HUB_LISTADO_URLS
@@ -294,115 +296,18 @@ class PedidosVendedorView(MayoristappWebSessionMixin, TemplateView):
         return context
 
 
-class CompraMayoristaView(MayoristappWebSessionMixin, TemplateView):
+class CompraMayoristaView(MayoristappWebSessionMixin, View):
     """
-    OrderShell canónico de pedido de venta: ``/ecom/mayoristapp/venta/``.
-    Crea borrador, edita PED Pendiente o consulta PED en producción según ``?cod_mov=``.
+    Deprecated: OrderShell ya no se sirve activamente.
+    Redirect 302 a pedido masivo ``?modo=simple`` preservando query string.
     """
 
-    template_name = "ecom/compra_mayorista.html"
-
-    def dispatch(self, request, *args, **kwargs):
-        if request.method == "GET":
-            # Abrir PED existente: no reiniciar borrador ni limpiar cliente.
-            cod_q = to_int_or_none(request.GET.get("cod_mov"))
-            if cod_q is None:
-                sess_user = request.session.get("user") or {}
-                if (sess_user.get("tipousuario") or "").strip().lower() != "cliente":
-                    limpiar_cliente_seleccion_mayoristapp(request)
-                    base = str(sess_user.get("base_empresa") or "").strip()
-                    id_u = to_int_or_none(sess_user.get("id_usuario"))
-                    if base and id_u is not None:
-                        reiniciar_borrador_compra_vendedor(base, id_u)
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        sess = self.request.session.get("user") or {}
-        cod_mov = to_int_or_none(self.request.GET.get("cod_mov"))
-        venta_url = reverse("ecom:mayoristapp_venta")
-        base = str(sess.get("base_empresa") or "").strip()
-        pedido_bootstrap = None
-        if cod_mov is not None and base:
-            try:
-                cab = cabecera_pedido_relay(base, cod_mov)
-                if cab:
-                    ok_anular, _motivo = puede_anular_pedido_relay(base, cod_mov)
-                    usa_manual = str(self.request.session.get("usa_id_manual") or "").strip().lower() in (
-                        "si",
-                        "sí",
-                        "1",
-                        "true",
-                    )
-                    renglones = detalle_pedido_relay(base, cod_mov, usa_id_manual=usa_manual) or []
-                    estado = str(cab.get("estado") or "").strip()
-                    anulado = str(cab.get("anulado") or "").strip().lower() == "si"
-                    modo = (
-                        "consulta"
-                        if anulado or estado.lower() != "pendiente"
-                        else "editar_pendiente"
-                    )
-                    pedido_bootstrap = {
-                        "cod_mov": cod_mov,
-                        "modo": modo,
-                        "cabecera": cab,
-                        "vinculos": vinculos_pedido_relay(base, cod_mov) or [],
-                        "stepper": stepper_estados_pedido(estado),
-                        "puede_anular": bool(ok_anular),
-                        "renglones": renglones,
-                    }
-            except Exception:
-                pedido_bootstrap = {
-                    "cod_mov": cod_mov,
-                    "modo": "consulta",
-                    "error": "No se pudo cargar el pedido.",
-                }
-        context.update(
-            {
-                "page_title": "Pedido de venta",
-                "es_cliente": (sess.get("tipousuario") or "").strip().lower() == "cliente",
-                "cod_mov_inicial": cod_mov,
-                "pedido_bootstrap": pedido_bootstrap,
-                "urls": {
-                    "venta": venta_url,
-                    "listado": reverse("ecom:mayoristapp_catalogo_articulos_listado"),
-                    "carrito": reverse("ecom:mayoristapp_carrito"),
-                    "carrito_vaciar": reverse("ecom:mayoristapp_carrito_vaciar"),
-                    "carrito_descuento_pie": reverse("ecom:mayoristapp_carrito_descuento_pie"),
-                    "checkout": reverse("ecom:mayoristapp_checkout_confirmar"),
-                    "lista_precios_pdf": reverse("ecom:mayoristapp_lista_precios_pdf"),
-                    "carrito_item_tpl": reverse("ecom:mayoristapp_carrito_item", args=[0]),
-                    "pedidos_recientes": reverse("ecom:mayoristapp_pedidos_recientes"),
-                    "preview_tpl": reverse("ecom:mayoristapp_carrito_desde_pedido_preview", args=[0]),
-                    "cargar_desde_pedido": reverse("ecom:mayoristapp_carrito_desde_pedido"),
-                    "detalle_tpl": venta_url + "?cod_mov=0",
-                    "listado_pedidos": reverse("ecom:mayoristapp_pedidos_vendedor"),
-                    "hub_pedidos": reverse("ecom:mayoristapp_pedidos_hub"),
-                    "clientes": reverse("ecom:mayoristapp_clientes"),
-                    "compra_contexto": reverse("ecom:mayoristapp_venta_contexto"),
-                    "clientes_buscar": reverse("ecom:mayoristapp_clientes_buscar"),
-                    "clientes_seleccionar": reverse("ecom:mayoristapp_clientes_seleccionar"),
-                    "clientes_seleccionado": reverse("ecom:mayoristapp_clientes_seleccionado"),
-                    "marcas": reverse("ecom:mayoristapp_catalogo_marcas"),
-                    "carrito_tipo": reverse("ecom:mayoristapp_carrito_tipo_comprobante"),
-                    "carrito_lista": reverse("ecom:mayoristapp_carrito_lista_precio"),
-                    "lista_precio": reverse("ecom:mayoristapp_precios_lista_precio"),
-                    "condiciones_venta": reverse("ecom:mayoristapp_precios_condiciones_venta"),
-                    "comprobante_detalle_tpl": reverse("ecom:mayoristapp_comprobante_detalle", args=[0]),
-                    "listado_presupuestos": reverse("ecom:mayoristapp_presupuestos_vendedor"),
-                    "kanban": reverse("ecom:mayoristapp_estado_pedidos_preparacion"),
-                    "cabecera_tpl": reverse("ecom:v1_comprobantes_pedidos_cabecera", args=[0]),
-                    "renglones_tpl": reverse("ecom:v1_comprobantes_pedidos_detalle", args=[0]),
-                    "anular": reverse("ecom:mayoristapp_comprobantes_anular_pedido") + "?ajax=1",
-                    "mail_enqueue": reverse("ecom:mayoristapp_comprobantes_comprobante_a_mail_enqueue")
-                    + "?ajax=1",
-                    "pdf_tpl": reverse("ecom:mayoristapp_pedido_pdf", args=[0]),
-                    "vendedores_cartera": reverse("ecom:mayoristapp_vendedores_cartera"),
-                    "vendedor_operativo": reverse("ecom:mayoristapp_vendedor_operativo"),
-                },
-            }
-        )
-        return context
+    def get(self, request, *args, **kwargs):
+        destino = reverse("ecom:mayoristapp_pedido_masivo_sucursales")
+        params = parse_qs(request.META.get("QUERY_STRING", ""))
+        params["modo"] = ["simple"]
+        qs = urlencode(params, doseq=True)
+        return redirect(f"{destino}?{qs}")
 
 
 class AltaReciboMayoristappView(MayoristappWebSessionMixin, TemplateView):

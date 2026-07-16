@@ -18,6 +18,7 @@ from ecom.services.pedido_cabecera_comercial import (
     parsear_cabecera_desde_body,
     resolver_cabecera_comercial,
 )
+from ecom.services.pedido_cabecera_relay import puede_anular_pedido_relay
 from ecom.services.pedido_masivo_matriz import (
     descuentos_fila_efectivos,
     leer_contexto_cliente_masivo,
@@ -29,6 +30,7 @@ from ecom.services.vendedor_operativo import resolver_viajante_operativo
 logger = logging.getLogger(__name__)
 
 _MOTIVO_COMPENSACION = "Compensación lote pedido masivo Synap (fallo parcial)"
+_MOTIVO_ANULA_ORIGEN_SIMPLE = "Edición pedido simple Synap (anula y crea nuevo PED)"
 PREVIEW_CELDAS_LIMITE_BLANDO = 200
 PREVIEW_TIMEOUT_SEG = 8.0
 
@@ -330,6 +332,7 @@ def _evento_fin(
     cod_viajante: Optional[int] = None,
     ya_confirmado: bool = False,
     codigos_anulados_intento: Optional[List[int]] = None,
+    cod_mov_origen_anulado: Optional[int] = None,
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "event": "fin",
@@ -347,7 +350,32 @@ def _evento_fin(
         payload["ya_confirmado"] = True
     if codigos_anulados_intento is not None:
         payload["codigos_anulados_intento"] = codigos_anulados_intento
+    if cod_mov_origen_anulado is not None:
+        payload["cod_mov_origen_anulado"] = cod_mov_origen_anulado
     return payload
+
+
+def _anular_pedido_origen_simple(
+    draft: EcomPedidoMasivoDraft,
+) -> Tuple[Optional[int], Optional[str]]:
+    """
+    REQ-CHK-014: si el draft tiene ``cod_mov_origen``, anular el PED pendiente
+    antes de confirmar el lote (anula+crea).
+    """
+    cod_origen = to_int_or_none(getattr(draft, "cod_mov_origen", None))
+    if cod_origen is None:
+        return None, None
+    ok, err = puede_anular_pedido_relay(draft.base_empresa, cod_origen)
+    if not ok:
+        return None, err or "El pedido origen ya no se puede editar."
+    r = anular_pedido_relay(
+        draft.base_empresa,
+        cod_origen,
+        motivo=_MOTIVO_ANULA_ORIGEN_SIMPLE,
+    )
+    if r.get("msg") != "ok":
+        return None, r.get("error") or "No se pudo anular el pedido origen."
+    return cod_origen, None
 
 
 def confirmar_lote_masivo_stream(
@@ -409,6 +437,11 @@ def confirmar_lote_masivo_stream(
         lista_ef = int(lista_id or ctx_cli.get("lista_id") or 1)
     desc_map = descuentos_fila_efectivos(draft, draft.base_empresa)
     pie = _pie_efectivo(draft, desc_pie_pct)
+
+    cod_origen_anulado, err_origen = _anular_pedido_origen_simple(draft)
+    if err_origen:
+        yield _evento_fin(ok=False, message=err_origen)
+        return
 
     draft.estado = EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO
     draft.ultimo_error = {}
@@ -572,6 +605,7 @@ def confirmar_lote_masivo_stream(
             codigos_movimiento=creados,
             detalle=detalle_ok,
             cod_viajante=cv_efectivo,
+            cod_mov_origen_anulado=cod_origen_anulado,
         )
     except Exception as exc:
         logger.exception("confirmar_lote_masivo_stream: %s", exc)

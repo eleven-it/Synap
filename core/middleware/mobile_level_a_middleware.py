@@ -79,7 +79,7 @@ _CORE_MOBILE_PAGE_PATTERNS = tuple(
 )
 
 # Pedido simple + masivo mayorista (UI responsive; acceso móvil Nivel A).
-# Pantallas: venta (+ alias compra), hub de pedidos y pedido masivo por sucursales.
+# Pantallas: venta/compra (redirect legacy), hub de pedidos y pedido masivo (modo simple vía ?modo=simple).
 # APIs: prefijo /ecom/api/mayoristapp/ (carrito, catálogo, hub, jerarquía, masivo, etc.).
 _ECOM_PEDIDO_SIMPLE_PAGE_PATTERNS = tuple(
     re.compile(p)

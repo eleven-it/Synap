@@ -48,10 +48,12 @@ En pantallas &lt; `lg` (1024px), las tablas de informes muestran **tarjetas** (`
 
 ### Pedido mayorista (acceso móvil Nivel A; UI responsive)
 
-- `/ecom/mayoristapp/venta/` — pantalla de pedido simple (y alias `/ecom/mayoristapp/compra/`).
-- `/ecom/mayoristapp/pedidos/` — hub de pedidos (chips + tarjetas en &lt; `lg`; kanban en escritorio).
-- `/ecom/mayoristapp/pedido-masivo-sucursales/` — pedido masivo por sucursales (acordeón en &lt; `lg`; matriz en escritorio).
+- `/ecom/mayoristapp/venta/` y `/ecom/mayoristapp/compra/` — **redirect legacy** (302) a pedido simple canónico: `/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple` (preserva `cod_mov` y demás query).
+- `/ecom/mayoristapp/pedido-masivo-sucursales/` — captura pedido simple (`?modo=simple`, 1 columna) y pedido masivo multi-sucursal (acordeón en &lt; `lg`; matriz en escritorio).
+- `/ecom/mayoristapp/pedidos/` — hub de pedidos (chips + tarjetas en &lt; `lg`; kanban en escritorio). Tarjetas PED enlazan a `?modo=simple&cod_mov=`.
 - APIs: prefijo `/ecom/api/mayoristapp/` (carrito, catálogo, clientes, checkout, hub, jerarquía comercial, aprobación comercial, pedido masivo, etc.).
+
+**Menú PWA e-com:** `ecom_compra` (Nuevo pedido / pedido simple) apunta por `deep_link` a `/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple`; `ecom_pedidos` (hub); `ecom_pedido_masivo` (matriz sin `modo=simple`). Permiso captura simple: `ecom.pedidos.crear` **o** `ecom.pedido_masivo.usar` (`EcomPedidoCapturaPermission`).
 
 **Fuera de alcance móvil por ahora** (siguen 403): configuración VCM, ajustes de ventas, listados de comprobantes, logística y demás pantallas HTML de e-com no listadas arriba.
 
@@ -66,7 +68,7 @@ En pantallas &lt; `lg` (1024px), las tablas de informes muestran **tarjetas** (`
 
 ## Menú y navegación
 
-- **`apps_visibles_para_usuario`** (`core/utils/utils.py`): tras resolver permisos y reglas habituales, se aplica `filtrar_apps_menu_para_pwa_movil` (`core/pwa_nivel_a.py`). En móvil solo permanecen entradas cuyo `id` está en `PWA_MENU_APP_IDS` (**`self_checkout`** y **`ecom`**, cada uno sujeto a permisos de menú de escritorio). TPV requiere `usuario_tiene_tpv_en_menu`; e-com requiere `usuario_tiene_ecom_en_menu` y filtra submenús a `ecom_compra` (venta), `ecom_pedidos` (hub) y `ecom_pedido_masivo` (masivo). Deep links: `PWA_ECOM_DEEP_LINKS` en `core/pwa_nivel_a.py` y `deep_link` / `nivel_a` en `ecom/menu_config.py`.
+- **`apps_visibles_para_usuario`** (`core/utils/utils.py`): tras resolver permisos y reglas habituales, se aplica `filtrar_apps_menu_para_pwa_movil` (`core/pwa_nivel_a.py`). En móvil solo permanecen entradas cuyo `id` está en `PWA_MENU_APP_IDS` (**`self_checkout`** y **`ecom`**, cada uno sujeto a permisos de menú de escritorio). TPV requiere `usuario_tiene_tpv_en_menu`; e-com requiere `usuario_tiene_ecom_en_menu` y filtra submenús a `ecom_compra` (pedido simple → masivo `?modo=simple`), `ecom_pedidos` (hub) y `ecom_pedido_masivo` (masivo). Deep links: `PWA_ECOM_DEEP_LINKS` en `core/pwa_nivel_a.py` y `deep_link` / `nivel_a` en `ecom/menu_config.py` (`ecom_compra` → `/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple`).
 - **`menu_context`**: si `request.is_mobile`, el sidebar contextual solo se rellena para apps Nivel A (`sidebar_visible_en_pwa`); en e-com se aplica `filtrar_submenus_ecom_para_pwa_movil`. Se añadió `current_app_id = 'self_checkout'` cuando la URL es del namespace `self_checkout`.
 - En `partials/navbar.html`, el enlace «Mi perfil» usa `login:perfil` cuando `request.is_mobile` (o en el panel móvil), para coincidir con la plantilla móvil Nivel A. Historial y acceso a `/admin/` no se muestran en móvil desde ese menú (evitan 403 innecesarios).
 - El logo en móvil apunta al TPV (`self_checkout:index`) si hay sesión y `tpv_visible_movil`; si no, al dashboard (`core:dashboard`); sin sesión, al login.
@@ -77,3 +79,9 @@ En pantallas &lt; `lg` (1024px), las tablas de informes muestran **tarjetas** (`
 `core/tests/test_mobile_level_a_middleware.py` — ejecutar con:
 
 `docker exec Synap_app python manage.py test core.tests.test_mobile_level_a_middleware`
+
+`core/tests/test_pwa_nivel_a_menu.py` — deep link `ecom_compra` → masivo `?modo=simple`.
+
+`ecom/tests/test_pedido_simple_unificado.py` — carga PED, permisos OR, confirmación anula+crea.
+
+`ecom/tests/test_compra_mayorista_view.py` — redirect `/venta/?cod_mov=` → masivo simple.

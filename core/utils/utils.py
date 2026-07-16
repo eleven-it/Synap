@@ -569,7 +569,7 @@ APPS_MENU = [
                     },
                     {
                         "label": _("Pedido de venta"),
-                        "url": "ecom:mayoristapp_venta",
+                        "url": "ecom:mayoristapp_pedido_masivo_sucursales",
                         "icon": "shopping_cart",
                         "permission": "ecom.carrito.editar",
                         "menu_item_id": "ecom_compra",
