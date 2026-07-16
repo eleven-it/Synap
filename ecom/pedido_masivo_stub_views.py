@@ -28,6 +28,16 @@ class _StubMayoristappPermisoView(TemplateView):
     """Sesión mayorista + permiso Synap antes de renderizar."""
 
     permiso_requerido = ""
+    # Cualquiera de estos permisos habilita la pantalla (OR). Si está vacío se
+    # usa ``permiso_requerido``.
+    permisos_or: tuple = ()
+
+    def _tiene_permiso_acceso(self, request) -> bool:
+        if self.permisos_or:
+            return any(_usuario_tiene_permiso(request, p) for p in self.permisos_or)
+        if self.permiso_requerido:
+            return _usuario_tiene_permiso(request, self.permiso_requerido)
+        return True
 
     def dispatch(self, request, *args, **kwargs):
         if "user" not in request.session:
@@ -41,7 +51,7 @@ class _StubMayoristappPermisoView(TemplateView):
                 "Seleccione una empresa con base de datos para usar el portal mayorista.",
             )
             return redirect("core:dashboard")
-        if self.permiso_requerido and not _usuario_tiene_permiso(request, self.permiso_requerido):
+        if not self._tiene_permiso_acceso(request):
             messages.error(request, "No tiene permiso para acceder a esta pantalla.")
             return redirect("ecom:mayoristapp_pedidos_hub")
         asegurar_contexto_mayoristapp(request)

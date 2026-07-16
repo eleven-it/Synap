@@ -235,6 +235,13 @@ class EcomPedidoMasivoDraft(models.Model):
         (ESTADO_ANULADO, "Anulado"),
     )
 
+    MODO_MASIVO = "masivo"
+    MODO_SIMPLE = "simple"
+    MODO_CHOICES = (
+        (MODO_MASIVO, "Masivo"),
+        (MODO_SIMPLE, "Simple"),
+    )
+
     base_empresa = models.CharField("base empresa", max_length=64, db_index=True)
     id_usuario = models.IntegerField("usuario", db_index=True)
     cod_viajante = models.IntegerField("CodViajante", null=True, blank=True)
@@ -263,6 +270,25 @@ class EcomPedidoMasivoDraft(models.Model):
         "descuentos % por artículo (id_articulo → pct)",
         default=dict,
         blank=True,
+    )
+    cod_mov_origen = models.IntegerField(
+        "CodigoMovimiento PED origen",
+        null=True,
+        blank=True,
+        help_text="PED pendiente cargado para edición anula+crea (modo simple).",
+    )
+    modo = models.CharField(
+        "modo captura",
+        max_length=16,
+        choices=MODO_CHOICES,
+        default=MODO_MASIVO,
+        db_index=True,
+    )
+    id_domicilio_fijo = models.IntegerField(
+        "cliente_domicilio fijo",
+        null=True,
+        blank=True,
+        help_text="Única columna en modo simple (id_cliente_domicilio).",
     )
     created_at = models.DateTimeField("creado", auto_now_add=True)
     updated_at = models.DateTimeField("actualizado", auto_now=True)

@@ -28,7 +28,10 @@ from ecom.permissions import (
 from ecom.services.aprobacion_pedidos import listar_pendientes_comerciales, resolver
 from ecom.services.pedidos_hub_pipeline import (
     archivar_borrador_masivo,
+    archivar_carrito_legacy,
     construir_hub_pedidos,
+    migrar_carrito_legacy_a_draft,
+    url_pedido_masivo_modo_simple,
 )
 from ecom.checkout_relay_views import _session_dias_no_laborables
 from ecom.services.pedido_cabecera_comercial import (
@@ -365,11 +368,13 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
                     "hub": hub,
                     "labels": hub.get("labels") or {},
                     "urls": {
-                        "nuevo_simple": reverse("ecom:mayoristapp_venta"),
+                        "nuevo_simple": url_pedido_masivo_modo_simple(),
                         "nuevo_masivo": reverse("ecom:mayoristapp_pedido_masivo_sucursales"),
                         "kanban_deposito": reverse("ecom:mayoristapp_estado_pedidos_preparacion"),
                         "api": reverse("ecom:mayoristapp_pedidos_hub_api"),
                         "archivar_draft": reverse("ecom:mayoristapp_pedidos_hub_archivar_draft"),
+                        "migrar_carrito": reverse("ecom:mayoristapp_pedidos_hub_migrar_carrito"),
+                        "archivar_carrito": reverse("ecom:mayoristapp_pedidos_hub_archivar_carrito"),
                         "listado_legacy": reverse("ecom:mayoristapp_pedidos_vendedor"),
                         "aprobacion_pendientes": reverse("ecom:api_aprobacion_pendientes"),
                         "aprobacion_aprobar": reverse(
@@ -417,6 +422,53 @@ class PedidosHubArchivarDraftAPIView(APIView):
         ok = archivar_borrador_masivo(draft_id, id_u, base)
         if not ok:
             return _error("Borrador no encontrado.", "no_encontrado", 404)
+        return Response({"ok": True})
+
+
+class PedidosHubMigrarCarritoAPIView(APIView):
+    """POST migra borrador legacy ``EcomCart`` a draft masivo modo simple."""
+
+    permission_classes = [EcomPedidosVerPermission]
+
+    def post(self, request: Request) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        id_u = to_int_or_none(sess.get("id_usuario"))
+        data = request.data if isinstance(request.data, dict) else {}
+        cart_id = to_int_or_none(data.get("cart_id"))
+        if not base or id_u is None or cart_id is None:
+            return _error("Parámetros inválidos.")
+        cv = to_int_or_none(sess.get("cod_viajante") or sess.get("codViajante"))
+        draft_id, err = migrar_carrito_legacy_a_draft(
+            cart_id, id_u, base, cod_viajante=cv
+        )
+        if err or draft_id is None:
+            return _error(err or "No se pudo migrar el carrito.", "migracion_fallida", 400)
+        return Response(
+            {
+                "ok": True,
+                "draft_id": draft_id,
+                "url": url_pedido_masivo_modo_simple(draft=draft_id),
+            }
+        )
+
+
+class PedidosHubArchivarCarritoAPIView(APIView):
+    """POST descarta borrador legacy ``EcomCart``."""
+
+    permission_classes = [EcomPedidosVerPermission]
+
+    def post(self, request: Request) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        id_u = to_int_or_none(sess.get("id_usuario"))
+        data = request.data if isinstance(request.data, dict) else {}
+        cart_id = to_int_or_none(data.get("cart_id"))
+        if not base or id_u is None or cart_id is None:
+            return _error("Parámetros inválidos.")
+        ok = archivar_carrito_legacy(cart_id, id_u, base)
+        if not ok:
+            return _error("Carrito no encontrado.", "no_encontrado", 404)
         return Response({"ok": True})
 
 
@@ -490,11 +542,10 @@ class AprobacionPedidoRechazarAPIView(APIView):
 
 
 class PedidoDetalleView(MayoristappWebSessionMixin, View):
-    """Deprecated: ``/pedidos/<cod_mov>/`` → shell ``/venta/?cod_mov=``."""
+    """Deprecated: ``/pedidos/<cod_mov>/`` → masivo ``?modo=simple&cod_mov=``."""
 
     def get(self, request, cod_mov, *args, **kwargs):
-        base = reverse("ecom:mayoristapp_venta")
-        return redirect(f"{base}?cod_mov={int(cod_mov)}")
+        return redirect(url_pedido_masivo_modo_simple(cod_mov=int(cod_mov)))
 
 
 class ComprobanteComercialCabeceraAPIView(APIView):

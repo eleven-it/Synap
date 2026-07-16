@@ -145,6 +145,36 @@ class EcomPedidoMasivoUsarPermission(BasePermission):
         return _user_has_perm(request, "ecom.pedido_masivo.usar")
 
 
+class EcomPedidoCapturaPermission(BasePermission):
+    """
+    Captura de pedidos (simple o masivo): ``ecom.pedidos.crear`` **o**
+    ``ecom.pedido_masivo.usar``. La matriz multi-columna exige además
+    ``ecom.pedido_masivo.usar`` (ver ``usuario_puede_matriz_multi_columna``).
+    """
+
+    message = "Se requiere permiso ecom.pedidos.crear o ecom.pedido_masivo.usar."
+
+    def has_permission(self, request, view):
+        if not _session_base_empresa(request):
+            return False
+        user = getattr(request, "user", None)
+        if getattr(user, "is_superuser", False):
+            return True
+        return _user_has_perm(request, "ecom.pedidos.crear") or _user_has_perm(
+            request, "ecom.pedido_masivo.usar"
+        )
+
+
+def usuario_puede_matriz_multi_columna(request) -> bool:
+    """Matriz con más de una sucursal requiere ``ecom.pedido_masivo.usar``."""
+    user = getattr(request, "user", None)
+    if getattr(user, "is_superuser", False):
+        return True
+    if not _session_base_empresa(request):
+        return False
+    return _user_has_perm(request, "ecom.pedido_masivo.usar")
+
+
 class EcomPedidosVerPermission(BasePermission):
     """Hub / listado de pedidos."""
 

@@ -15,7 +15,63 @@ from ecom.services.pedidos_hub_pipeline import (
     archivar_borrador_masivo,
     columnas_hub_visibles,
     construir_hub_pedidos,
+    url_pedido_masivo_modo_simple,
 )
+
+
+class TestUrlPedidoMasivoModoSimple(TestCase):
+    def test_con_cod_mov(self):
+        url = url_pedido_masivo_modo_simple(cod_mov=12345)
+        self.assertIn("modo=simple", url)
+        self.assertIn("cod_mov=12345", url)
+        self.assertIn("/pedido-masivo-sucursales/", url)
+
+    def test_con_draft(self):
+        url = url_pedido_masivo_modo_simple(draft=99)
+        self.assertIn("modo=simple", url)
+        self.assertIn("draft=99", url)
+
+    def test_ped_mysql_url_modo_simple(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {
+                "CodigoMovimiento": 555,
+                "NroComprobante": "0001-00000555",
+                "fecha": "16/07/2026",
+                "Estado": "Pendiente",
+                "Anulado": "No",
+                "autorizacion": "Autorizado",
+                "id_cliente": 10,
+                "nombre_cliente": "Cliente X",
+                "ImporteVenta": Decimal("100"),
+                "total_calc": Decimal("100"),
+                "id_cliente_domicilio": 5,
+                "calle_domicilio": "Calle",
+                "nro_domicilio": "1",
+                "CodViajante": 1,
+                "estado_aprobacion_comercial": "-",
+            }
+        ]
+
+        @contextmanager
+        def _fake_cursor(*_a, **_kw):
+            yield cursor
+
+        with patch(
+            "ecom.services.pedidos_hub_pipeline.workflow_jerarquia_comercial_activo",
+            return_value=False,
+        ), patch(
+            "ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa",
+            return_value=False,
+        ), patch(
+            "ecom.services.pedidos_hub_pipeline.mysql_cursor",
+            side_effect=_fake_cursor,
+        ):
+            items = _pedidos_mysql("emp_hub", {"todos_clientes": "Si"})
+        self.assertEqual(len(items), 1)
+        url = items[0]["url"]
+        self.assertIn("modo=simple", url)
+        self.assertIn("cod_mov=555", url)
 
 
 class TestColumnaPed(TestCase):
@@ -178,8 +234,11 @@ class TestConstruirHub(TestCase):
         )
         borr = next(c for c in hub["columnas"] if c["id"] == "borrador")
         self.assertGreaterEqual(borr["count"], 2)
-        self.assertTrue(any(i.get("badge_error") for i in borr["items"]))
-        self.assertEqual(hub["borradores_activos"], borr["count"])
+        tipos = {i.get("tipo") for i in borr["items"]}
+        self.assertIn("masivo", tipos)
+        self.assertIn("carrito_legacy", tipos)
+        self.assertTrue(any(i.get("badge_error") for i in borr["items"] if i.get("tipo") == "masivo"))
+        self.assertEqual(hub["borradores_activos"], 1)
         titulos = [i["titulo"] for i in borr["items"]]
         self.assertTrue(any("Acme Mayorista" in t for t in titulos))
         self.assertFalse(any("cliente 5" in t for t in titulos))

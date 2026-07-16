@@ -41,52 +41,55 @@ class TestCompraMayoristaView(TestCase):
         resp = CompraMayoristaView.as_view()(req)
         self.assertEqual(resp.status_code, 302)
 
-    def test_render_ok_con_sesion(self):
+    def test_render_redirect_a_masivo_simple(self):
         req = self._request(self.user, {"user": {"base_empresa": "emp1", "id_usuario": 1}})
         resp = CompraMayoristaView.as_view()(req)
-        self.assertEqual(resp.status_code, 200)
-        resp.render()
-        html = resp.content.decode()
-        self.assertIn("Pedido de venta", html)
-        self.assertIn("compra-mayorista-urls", html)
-        self.assertIn("compra-mayorista-pedido-bootstrap", html)
-        self.assertIn("compraMayorista", html)
-        self.assertIn("ecom/js/compra_mayorista_app.mjs", html)
-        self.assertIn("heroPedidoSub", html)
-        self.assertIn('id="compra_cliente_search"', html)
-        self.assertIn(reverse("ecom:mayoristapp_catalogo_articulos_listado"), html)
-        self.assertIn(reverse("ecom:mayoristapp_checkout_confirmar"), html)
-        self.assertIn(reverse("ecom:mayoristapp_lista_precios_pdf"), html)
-        self.assertIn(reverse("ecom:mayoristapp_carrito_tipo_comprobante"), html)
-        self.assertIn(reverse("ecom:mayoristapp_comprobante_detalle", args=[0]), html)
-        self.assertIn(reverse("ecom:mayoristapp_venta_contexto"), html)
-        self.assertIn("solicitarCambiarTipo('PRE')", html)
-        self.assertIn("pedidos-dialog-panel", html)
-        self.assertIn("solicitarVaciar()", html)
-        self.assertIn("compra-toggle-shell", html)
-        self.assertIn("pedidos-linea-card", html)
-        self.assertIn("toggleSummaryMobile()", html)
-        self.assertIn("pedidos-aria-live", html)
-        self.assertIn('role="tablist"', html)
-        self.assertIn('aria-haspopup="listbox"', html)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/mayoristapp/pedido-masivo-sucursales/", resp["Location"])
+        self.assertIn("modo=simple", resp["Location"])
 
-    def test_redirect_compra_alias_a_venta(self):
-        from django.test import Client
+    def test_redirect_cod_mov_preserva_query(self):
+        req = self.factory.get(self.url + "?cod_mov=7")
+        req.user = self.user
+        req.session = SessionStore()
+        req.session["user"] = {"base_empresa": "emp1", "id_usuario": 1}
+        req._messages = FallbackStorage(req)
+        resp = CompraMayoristaView.as_view()(req)
+        self.assertEqual(resp.status_code, 302)
+        loc = resp["Location"]
+        self.assertIn("modo=simple", loc)
+        self.assertIn("cod_mov=7", loc)
 
-        c = Client()
-        resp = c.get(reverse("ecom:mayoristapp_compra"))
-        self.assertIn(resp.status_code, (301, 302))
-        self.assertIn("/mayoristapp/venta/", resp.url)
+    def test_redirect_compra_alias_a_masivo_simple(self):
+        req = self.factory.get(reverse("ecom:mayoristapp_compra"))
+        req.user = self.user
+        req.session = SessionStore()
+        req.session["user"] = {"base_empresa": "emp1", "id_usuario": 1}
+        req._messages = FallbackStorage(req)
+        resp = CompraMayoristaView.as_view()(req)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("/mayoristapp/pedido-masivo-sucursales/", resp["Location"])
+        self.assertIn("modo=simple", resp["Location"])
 
-    def test_redirect_detalle_a_venta_cod_mov(self):
-        from django.test import Client
-
-        c = Client()
-        # Sin sesión redirige a login vía mixin; usamos vista directa
+    def test_redirect_detalle_a_masivo_simple_cod_mov(self):
         req = self._request(self.user, {"user": {"base_empresa": "emp1", "id_usuario": 1}})
         from ecom.pedido_gestion_views import PedidoDetalleView
 
         resp = PedidoDetalleView.as_view()(req, cod_mov=7)
         self.assertEqual(resp.status_code, 302)
-        self.assertIn("/mayoristapp/venta/", resp["Location"])
+        self.assertIn("/mayoristapp/pedido-masivo-sucursales/", resp["Location"])
+        self.assertIn("modo=simple", resp["Location"])
         self.assertIn("cod_mov=7", resp["Location"])
+
+    def test_redirect_venta_url_follow_false_preserva_cod_mov(self):
+        req = self.factory.get(self.url + "?cod_mov=42")
+        req.user = self.user
+        req.session = SessionStore()
+        req.session["user"] = {"base_empresa": "emp1", "id_usuario": 1}
+        req._messages = FallbackStorage(req)
+        resp = CompraMayoristaView.as_view()(req)
+        self.assertEqual(resp.status_code, 302)
+        loc = resp["Location"]
+        self.assertIn("/mayoristapp/pedido-masivo-sucursales/", loc)
+        self.assertIn("modo=simple", loc)
+        self.assertIn("cod_mov=42", loc)

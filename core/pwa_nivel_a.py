@@ -16,7 +16,7 @@ PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom"})
 # Submenús e-com accesibles en Nivel A (`menu_item_id` en APPS_MENU / menu_config).
 PWA_ECOM_MENU_ITEM_IDS = frozenset(
     {
-        "ecom_compra",  # Pedido de venta → /mayoristapp/venta/
+        "ecom_compra",  # Pedido simple → /mayoristapp/pedido-masivo-sucursales/?modo=simple
         "ecom_pedidos",  # Hub pedidos → /mayoristapp/pedidos/
         "ecom_pedido_masivo",  # Pedido masivo → /mayoristapp/pedido-masivo-sucursales/
     }
@@ -25,9 +25,9 @@ PWA_ECOM_MENU_ITEM_IDS = frozenset(
 # Deep links PWA e-com (rutas HTML Nivel A).
 PWA_ECOM_DEEP_LINKS = (
     "/ecom/mayoristapp/pedidos/",
-    "/ecom/mayoristapp/venta/",
-    "/ecom/mayoristapp/compra/",
     "/ecom/mayoristapp/pedido-masivo-sucursales/",
+    "/ecom/mayoristapp/venta/",  # redirect legacy → masivo ?modo=simple
+    "/ecom/mayoristapp/compra/",  # alias redirect legacy
 )
 
 

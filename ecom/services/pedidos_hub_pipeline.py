@@ -5,15 +5,19 @@ Pipeline del hub Pedidos Lista|Kanban: unifica borradores Postgres + PED MySQL.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from decimal import Decimal
+from typing import Any, Dict, List, Optional, Tuple
 
+from django.db import transaction
 from django.db.models import Count
 from django.urls import reverse
 
 from core.mysql_pool import mysql_cursor
 from core.utils.administranet_types import to_int_or_none
-from ecom.models import EcomCart, EcomPedidoMasivoDraft
+from ecom.models import EcomCart, EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
 from ecom.services.alcance_comercial import alcance_viajantes_comercial
+from ecom.services.pedido_masivo_matriz import listar_sucursales_cliente, obtener_o_crear_draft
+from ecom.services.pedido_plantilla_service import _salida_a_packs_matriz
 from ecom.services.aprobacion_pedidos import puede_aprobar_pedido
 from ecom.services.ecom_config_mysql import (
     aprobacion_pedidos_activa,
@@ -139,6 +143,21 @@ def _etiqueta_cliente(nombre: str, id_cliente: Optional[int]) -> str:
     return f"Cliente {idc}" if idc is not None else "Cliente —"
 
 
+def url_pedido_masivo_modo_simple(
+    *,
+    cod_mov: Optional[int] = None,
+    draft: Optional[int] = None,
+) -> str:
+    """URL canónica de captura pedido simple (matriz 1 columna)."""
+    base = reverse("ecom:mayoristapp_pedido_masivo_sucursales")
+    params: List[str] = ["modo=simple"]
+    if draft is not None:
+        params.append(f"draft={int(draft)}")
+    if cod_mov is not None:
+        params.append(f"cod_mov={int(cod_mov)}")
+    return f"{base}?{'&'.join(params)}"
+
+
 def _etiqueta_sucursal(calle: str, nro: str, id_dom: Optional[int]) -> str:
     """Misma convención que ``listar_sucursales_cliente`` en pedido_masivo_matriz."""
     calle = (calle or "").strip()
@@ -151,19 +170,21 @@ def _etiqueta_sucursal(calle: str, nro: str, id_dom: Optional[int]) -> str:
     return f"Sucursal #{idd}" if idd is not None else ""
 
 
-def _borradores_carrito(
+def _borradores_carrito_legacy(
     base_empresa: str,
     id_usuario: int,
 ) -> List[Dict[str, Any]]:
+    """Tarjetas legacy `EcomCart` con CTA migrar/archivar (no borrador masivo estándar)."""
     qs = (
         EcomCart.objects.filter(
             base_empresa=base_empresa,
             id_usuario=id_usuario,
             estado=EcomCart.ESTADO_BORRADOR,
+            tipo_comprobante=EcomCart.TIPO_PEDIDO,
         )
         .annotate(n_items=Count("items"))
         .filter(n_items__gt=0)
-        .order_by("-updated_at")[:50]
+        .order_by("-updated_at")[:20]
     )
     ids_cliente = [c.idcliente for c in qs if c.idcliente]
     nombres = _nombres_clientes(base_empresa, ids_cliente)
@@ -174,17 +195,18 @@ def _borradores_carrito(
         nombre = _etiqueta_cliente(nombres.get(idc, "") if idc is not None else "", idc)
         out.append(
             _tarjeta(
-                tipo="carrito",
+                tipo="carrito_legacy",
                 columna="borrador",
-                titulo=f"Pedido simple · {nombre}",
-                subtitulo=f"{c.n_items} ítems · total ${c.total}",
+                titulo=f"Carrito legacy · {nombre}",
+                subtitulo=f"{c.n_items} ítems · migrar a borrador masivo",
                 fecha=fecha,
-                url=reverse("ecom:mayoristapp_venta"),
-                id_ref=f"cart-{c.pk}",
+                url="",
+                id_ref=f"cart-legacy-{c.pk}",
                 meta={
                     "cart_id": c.pk,
                     "id_cliente": c.idcliente,
                     "nombre_cliente": nombres.get(idc, "") if idc is not None else "",
+                    "legacy_carrito": True,
                 },
             )
         )
@@ -211,21 +233,30 @@ def _borradores_masivo(
         err = bool(d.ultimo_error)
         idc = to_int_or_none(d.id_cliente)
         nombre = _etiqueta_cliente(nombres.get(idc, "") if idc is not None else "", idc)
+        es_simple = (d.modo or "").strip().lower() == EcomPedidoMasivoDraft.MODO_SIMPLE
+        if es_simple:
+            url = url_pedido_masivo_modo_simple(draft=d.pk)
+            titulo = f"Pedido simple · {nombre}"
+            subtitulo = "Error al confirmar" if err else "Borrador pedido simple"
+        else:
+            url = reverse("ecom:mayoristapp_pedido_masivo_sucursales") + f"?draft={d.pk}"
+            titulo = f"Masivo · {nombre}"
+            subtitulo = "Error al confirmar" if err else "Matriz por sucursales"
         out.append(
             _tarjeta(
                 tipo="masivo",
                 columna="borrador",
-                titulo=f"Masivo · {nombre}",
-                subtitulo="Error al confirmar" if err else "Matriz por sucursales",
+                titulo=titulo,
+                subtitulo=subtitulo,
                 fecha=fecha,
-                url=reverse("ecom:mayoristapp_pedido_masivo_sucursales")
-                + f"?draft={d.pk}",
+                url=url,
                 id_ref=f"masivo-{d.pk}",
                 badge_error=err,
                 meta={
                     "draft_id": d.pk,
                     "id_cliente": d.id_cliente,
                     "nombre_cliente": nombres.get(idc, "") if idc is not None else "",
+                    "modo": d.modo,
                 },
             )
         )
@@ -421,7 +452,7 @@ def _pedidos_mysql(
                         titulo=f"PED {nro}",
                         subtitulo=f"{cliente} · ${total:,.2f}",
                         fecha=str(row.get("fecha") or ""),
-                        url=reverse("ecom:mayoristapp_venta") + f"?cod_mov={cod}",
+                        url=url_pedido_masivo_modo_simple(cod_mov=cod),
                         id_ref=f"ped-{cod}",
                         sucursal=sucursal,
                         meta={
@@ -461,8 +492,8 @@ def construir_hub_pedidos(
     aprobacion_on = aprobacion_pedidos_activa(base_empresa) if base_empresa else False
     items: List[Dict[str, Any]] = []
     if id_u is not None and base_empresa:
-        items.extend(_borradores_carrito(base_empresa, id_u))
         items.extend(_borradores_masivo(base_empresa, id_u))
+        items.extend(_borradores_carrito_legacy(base_empresa, id_u))
         items.extend(_masivos_anulados(base_empresa, id_u))
     if base_empresa:
         items.extend(
@@ -486,7 +517,13 @@ def construir_hub_pedidos(
 
     items_visibles = [it for col_items in columnas.values() for it in col_items]
     labels_visibles = {cid: _LABELS[cid] for cid in ids_visibles}
-    borradores_activos = len(columnas.get("borrador") or [])
+    borradores_activos = len(
+        [
+            it
+            for it in (columnas.get("borrador") or [])
+            if it.get("tipo") == "masivo"
+        ]
+    )
     return {
         "vista": vista if vista in ("lista", "kanban") else "kanban",
         "layout_movil": "chips_cards",
@@ -518,3 +555,120 @@ def archivar_borrador_masivo(draft_id: int, id_usuario: int, base_empresa: str) 
         ),
     ).update(estado=EcomPedidoMasivoDraft.ESTADO_ARCHIVADO)
     return n > 0
+
+
+def archivar_carrito_legacy(cart_id: int, id_usuario: int, base_empresa: str) -> bool:
+    """Descarta un borrador `EcomCart` legacy (ítems + carrito)."""
+    cart = (
+        EcomCart.objects.filter(
+            pk=cart_id,
+            id_usuario=id_usuario,
+            base_empresa=base_empresa,
+            estado=EcomCart.ESTADO_BORRADOR,
+        )
+        .first()
+    )
+    if not cart:
+        return False
+    with transaction.atomic():
+        cart.items.all().delete()
+        cart.delete()
+    return True
+
+
+def migrar_carrito_legacy_a_draft(
+    cart_id: int,
+    id_usuario: int,
+    base_empresa: str,
+    *,
+    cod_viajante: Optional[int] = None,
+) -> Tuple[Optional[int], Optional[str]]:
+    """
+    Convierte ítems de ``EcomCart`` borrador a celdas de draft masivo ``modo=simple``.
+    Devuelve ``(draft_id, error)``.
+    """
+    cart = (
+        EcomCart.objects.filter(
+            pk=cart_id,
+            id_usuario=id_usuario,
+            base_empresa=base_empresa,
+            estado=EcomCart.ESTADO_BORRADOR,
+        )
+        .prefetch_related("items")
+        .first()
+    )
+    if not cart:
+        return None, "Carrito no encontrado."
+    id_cliente = to_int_or_none(cart.idcliente)
+    if id_cliente is None:
+        return None, "El carrito no tiene cliente asociado."
+
+    sucursales = listar_sucursales_cliente(
+        base_empresa,
+        id_cliente,
+        to_int_or_none(cod_viajante),
+    )
+    if not sucursales:
+        return None, "El cliente no tiene sucursales activas para migrar el borrador."
+    id_domicilio = to_int_or_none(sucursales[0].get("id_cliente_domicilio"))
+    if id_domicilio is None:
+        return None, "No se pudo resolver el domicilio del cliente."
+
+    draft, err = obtener_o_crear_draft(
+        base_empresa=base_empresa,
+        id_usuario=id_usuario,
+        id_cliente=id_cliente,
+        cod_viajante=to_int_or_none(cod_viajante),
+        modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
+        id_domicilio_fijo=id_domicilio,
+    )
+    if err or draft is None:
+        return None, err or "No se pudo crear el borrador masivo."
+
+    celdas_nuevas: List[EcomPedidoMasivoDraftCelda] = []
+    for item in cart.items.all().order_by("orden", "id"):
+        salida = item.cantidad or Decimal("0")
+        if salida <= 0:
+            continue
+        packs, _aviso = _salida_a_packs_matriz(
+            base_empresa,
+            int(item.id_articulo),
+            salida,
+            tipo_unidad_linea=str(item.tipo_unidad or ""),
+            descripcion=str(item.descripcion or ""),
+        )
+        if packs <= 0:
+            continue
+        celdas_nuevas.append(
+            EcomPedidoMasivoDraftCelda(
+                draft=draft,
+                id_articulo=int(item.id_articulo),
+                id_cliente_domicilio=id_domicilio,
+                cantidad_packs=packs,
+            )
+        )
+
+    with transaction.atomic():
+        draft.celdas.all().delete()
+        if celdas_nuevas:
+            EcomPedidoMasivoDraftCelda.objects.bulk_create(celdas_nuevas)
+        draft.modo = EcomPedidoMasivoDraft.MODO_SIMPLE
+        draft.id_domicilio_fijo = id_domicilio
+        draft.id_cliente = id_cliente
+        draft.descuento_pie_pct = cart.descuento_pie_pct
+        if cod_viajante is not None:
+            draft.cod_viajante = cod_viajante
+        draft.save(
+            update_fields=[
+                "modo",
+                "id_domicilio_fijo",
+                "id_cliente",
+                "cod_viajante",
+                "descuento_pie_pct",
+                "updated_at",
+            ]
+        )
+        cart.items.all().delete()
+        cart.delete()
+
+    return draft.pk, None

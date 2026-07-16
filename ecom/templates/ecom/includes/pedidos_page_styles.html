@@ -1388,23 +1388,16 @@
   }
 
   /* Acordeón móvil por sucursal (REQ-MAS-18) */
+  .pm-accordion-item > summary {
+    list-style: none;
+  }
   .pm-accordion-item > summary::-webkit-details-marker {
     display: none;
   }
+  /* El chevron lo aporta el botón explícito de expandir (no ::after). */
   .pm-accordion-summary::after {
-    content: '';
-    display: inline-block;
-    width: 0.5rem;
-    height: 0.5rem;
-    margin-left: 0.5rem;
-    border-right: 2px solid rgb(100 116 139);
-    border-bottom: 2px solid rgb(100 116 139);
-    transform: rotate(45deg);
-    transition: transform 0.15s;
-    flex-shrink: 0;
-  }
-  .pm-accordion-item[open] > .pm-accordion-summary::after {
-    transform: rotate(-135deg);
+    content: none;
+    display: none;
   }
   .pm-accordion-row:last-child {
     border-bottom: none;
