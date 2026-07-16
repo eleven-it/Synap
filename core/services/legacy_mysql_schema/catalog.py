@@ -681,6 +681,79 @@ def _sc_sql_strip_leading_comments(stmt: str) -> str:
     return ""
 
 
+def _split_sql_statements(sql_content: str) -> List[str]:
+    """Separa sentencias SQL sin cortar delimitadores dentro de literales o comentarios."""
+    statements: List[str] = []
+    current: List[str] = []
+    quote: str | None = None
+    in_line_comment = False
+    in_block_comment = False
+    index = 0
+
+    while index < len(sql_content):
+        char = sql_content[index]
+        next_char = sql_content[index + 1] if index + 1 < len(sql_content) else ""
+
+        if in_line_comment:
+            current.append(char)
+            if char in "\r\n":
+                in_line_comment = False
+            index += 1
+            continue
+
+        if in_block_comment:
+            current.append(char)
+            if char == "*" and next_char == "/":
+                current.append(next_char)
+                index += 2
+                in_block_comment = False
+                continue
+            index += 1
+            continue
+
+        if quote:
+            current.append(char)
+            if char == "\\" and next_char:
+                current.append(next_char)
+                index += 2
+                continue
+            if char == quote:
+                if next_char == quote:
+                    current.append(next_char)
+                    index += 2
+                    continue
+                quote = None
+            index += 1
+            continue
+
+        if char in ("'", '"', "`"):
+            quote = char
+            current.append(char)
+        elif char == "-" and next_char == "-" and (
+            index + 2 >= len(sql_content) or sql_content[index + 2].isspace()
+        ):
+            current.extend((char, next_char))
+            index += 1
+            in_line_comment = True
+        elif char == "/" and next_char == "*":
+            current.extend((char, next_char))
+            index += 1
+            in_block_comment = True
+        elif char == ";":
+            statement = "".join(current).strip()
+            if statement:
+                statements.append(statement)
+            current = []
+        else:
+            current.append(char)
+        index += 1
+
+    statement = "".join(current).strip()
+    if statement:
+        statements.append(statement)
+    return statements
+
+
 def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
     """
     Crea tablas ``mpr_*`` (config, turnos, envíos, partes, transiciones, armado) si no existen.
@@ -715,7 +788,7 @@ def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
     cursor = conn.cursor()
     try:
         sql_content = sql_path.read_text(encoding="utf-8")
-        raw_statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+        raw_statements = _split_sql_statements(sql_content)
         statements: List[str] = []
         for stmt in raw_statements:
             stmt = _sc_sql_strip_leading_comments(stmt)
@@ -845,7 +918,7 @@ def run_mpr_maquina_linea_mysql(conn) -> Dict[str, Any]:
     try:
         # 1) Tablas nuevas (CREATE TABLE IF NOT EXISTS — idempotente)
         sql_content = sql_path.read_text(encoding="utf-8")
-        raw_statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+        raw_statements = _split_sql_statements(sql_content)
         for stmt in raw_statements:
             stmt = _sc_sql_strip_leading_comments(stmt)
             if stmt:
@@ -1000,7 +1073,7 @@ def run_self_checkout_core_tables_mysql(conn) -> Dict[str, Any]:
     cursor = conn.cursor()
     try:
         sql_content = sql_path.read_text(encoding="utf-8")
-        raw_statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+        raw_statements = _split_sql_statements(sql_content)
         statements: List[str] = []
         for stmt in raw_statements:
             stmt = _sc_sql_strip_leading_comments(stmt)
@@ -1093,7 +1166,7 @@ def run_synap_permisos_tables_mysql(conn) -> Dict[str, Any]:
     cursor = conn.cursor()
     try:
         sql_content = sql_path.read_text(encoding="utf-8")
-        raw_statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+        raw_statements = _split_sql_statements(sql_content)
         statements: List[str] = []
         for stmt in raw_statements:
             stmt = _sc_sql_strip_leading_comments(stmt)
@@ -1395,7 +1468,7 @@ def _aplicar_ddl_ecom_vcm_sucursal(cursor, applied: List[str], failed: List[str]
                 f"""
                 ALTER TABLE `{tbl_esc}`
                 ADD COLUMN id_cliente_domicilio INT NOT NULL DEFAULT 0
-                    COMMENT 'cliente_domicilio.id_cliente_domicilio; 0 = sin sucursal'
+                    COMMENT 'cliente_domicilio.id_cliente_domicilio — 0 = sin sucursal'
                     AFTER id_cliente
                 """
             )
@@ -1553,7 +1626,7 @@ def run_ecom_vendedor_cliente_marca_mysql(conn) -> Dict[str, Any]:
     cursor = conn.cursor()
     try:
         sql_content = sql_path.read_text(encoding="utf-8")
-        raw_statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+        raw_statements = _split_sql_statements(sql_content)
         for stmt in raw_statements:
             stmt = _sc_sql_strip_leading_comments(stmt)
             if stmt:

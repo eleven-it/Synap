@@ -5,7 +5,7 @@
 -- Columna sucursal (cliente_domicilio.id_cliente_domicilio). Idempotente vía catálogo.
 ALTER TABLE ecom_vendedor_cliente_marca
     ADD COLUMN id_cliente_domicilio INT NOT NULL DEFAULT 0
-        COMMENT 'cliente_domicilio.id_cliente_domicilio; 0 = sin sucursal (edge case)'
+        COMMENT 'cliente_domicilio.id_cliente_domicilio — 0 = sin sucursal (edge case)'
         AFTER id_cliente;
 
 -- Unique activo: (cliente, sucursal, marca) — la misma marca puede ir a otro vendedor en otra sucursal.

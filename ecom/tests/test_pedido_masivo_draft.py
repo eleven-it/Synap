@@ -83,9 +83,22 @@ class TestCatalogEcomVendedorClienteMarca(TestCase):
         self.assertTrue(sql_path.is_file())
         text = sql_path.read_text(encoding="utf-8")
         self.assertIn("ecom_vendedor_cliente_marca", text)
-        self.assertIn("uk_evcm_cliente_marca_activo", text)
+        self.assertIn("uk_evcm_cliente_sucursal_marca_activo", text)
         self.assertIn("ecom_usuario_viajante", text)
         self.assertIn("uk_euv_usuario", text)
+
+    def test_split_sql_no_corta_punto_y_coma_en_comment(self):
+        from core.services.legacy_mysql_schema.catalog import _split_sql_statements
+
+        statements = _split_sql_statements(
+            "CREATE TABLE ejemplo (detalle VARCHAR(255) COMMENT 'cliente; sin sucursal');\n"
+            "-- comentario; de línea\n"
+            "CREATE TABLE otro (id INT);"
+        )
+
+        self.assertEqual(len(statements), 2)
+        self.assertIn("COMMENT 'cliente; sin sucursal'", statements[0])
+        self.assertIn("CREATE TABLE otro", statements[1])
 
     def test_proveedor_registrado(self):
         from core.services.legacy_mysql_schema.catalog import PROVIDER_REGISTRY
@@ -107,6 +120,17 @@ class TestCatalogEcomVendedorClienteMarca(TestCase):
         result = run_ecom_vendedor_cliente_marca_mysql(conn)
         self.assertTrue(result["success"], result.get("message"))
         self.assertGreaterEqual(cursor.execute.call_count, 1)
+        statements = [call.args[0] for call in cursor.execute.call_args_list if call.args]
+        self.assertFalse(
+            any(statement.lstrip().startswith("0 = sin sucursal") for statement in statements)
+        )
+        self.assertTrue(
+            any(
+                "CREATE TABLE IF NOT EXISTS ecom_vendedor_cliente_marca" in statement
+                and "id_cliente_domicilio" in statement
+                for statement in statements
+            )
+        )
         conn.commit.assert_called()
 
 
