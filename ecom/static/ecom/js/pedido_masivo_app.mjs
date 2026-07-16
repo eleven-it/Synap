@@ -47,6 +47,12 @@ function pedidoMasivoCore() {
     panelCli: false,
     idxCli: 0,
     cargandoCli: false,
+    opcionesSucursal: [],
+    sucursalSel: null,
+    qSucursal: '',
+    panelSuc: false,
+    idxSuc: 0,
+    cargandoSuc: false,
     sucursales: [],
     articulos: [],
     celdas: {},
@@ -261,6 +267,68 @@ function pedidoMasivoCore() {
     },
     abrirPanelCli() { this.panelCli = true; },
     cerrarPanelCli() { this.panelCli = false; },
+    abrirPanelSuc() {
+      if (!this.clienteSel) return;
+      this.panelSuc = true;
+      if (!this.opcionesSucursal.length && !this.cargandoSuc) {
+        this.cargarOpcionesSucursal(this.clienteSel);
+      }
+    },
+    cerrarPanelSuc() { this.panelSuc = false; },
+    _etiquetaSucursal(s) {
+      return String(
+        s?.etiqueta || s?.nombre || s?.NroCalle || s?.nro || s?.id_cliente_domicilio || '',
+      ).trim();
+    },
+    get sucursalesFiltradas() {
+      const q = String(this.qSucursal || '').trim().toLowerCase();
+      if (!q) return this.opcionesSucursal;
+      return this.opcionesSucursal.filter((s) => this._etiquetaSucursal(s).toLowerCase().includes(q));
+    },
+    _aplicarSucursal(s) {
+      if (!s) return;
+      this.sucursalSel = s;
+      this.qSucursal = this._etiquetaSucursal(s);
+      this.idDomicilioInicial = Number(s.id_cliente_domicilio);
+    },
+    async cargarOpcionesSucursal(idCliente) {
+      if (!this.urls.sucursales || !idCliente) {
+        this.opcionesSucursal = [];
+        return [];
+      }
+      const id = String(idCliente);
+      this.cargandoSuc = true;
+      try {
+        const data = await this.getJson(
+          `${this.urls.sucursales}?id_cliente=${encodeURIComponent(id)}`,
+        );
+        if (String(this.clienteSel || '') !== id) return [];
+        if (!data.ok) {
+          this.error = data.error || 'No se pudieron cargar las sucursales.';
+          this.opcionesSucursal = [];
+          return [];
+        }
+        this.opcionesSucursal = data.sucursales || [];
+        this.idxSuc = 0;
+        return this.opcionesSucursal;
+      } finally {
+        if (String(this.clienteSel || '') === id) this.cargandoSuc = false;
+      }
+    },
+    async elegirSucursal(s) {
+      this._aplicarSucursal(s);
+      this.cerrarPanelSuc();
+      await this.abrirCliente();
+    },
+    moverSelSuc(delta) {
+      const items = this.sucursalesFiltradas;
+      if (!items.length) return;
+      this.idxSuc = (this.idxSuc + delta + items.length) % items.length;
+    },
+    elegirResaltadoSuc() {
+      const s = this.sucursalesFiltradas[this.idxSuc];
+      if (s) this.elegirSucursal(s);
+    },
     _aplicarListaDesdeCliente(c) {
       const lp = c?.lista_precio || c?.listaPrecio;
       if (!lp) return;
@@ -281,13 +349,31 @@ function pedidoMasivoCore() {
     async elegirCliente(c) {
       const id = String(c.id_cliente);
       if (this.abriendo) return;
-      if (this.draftId && String(this.idCliente) === id && this.clienteSel === id) return;
+      if (!this.modoSimple && this.draftId && String(this.idCliente) === id && this.clienteSel === id) return;
       this.clienteSel = id;
       const nombre = this._nombreClienteVisible(c.nombre || c.etiqueta || '');
       this.clienteNombre = nombre;
       this.qCliente = nombre;
       this._aplicarListaDesdeCliente(c);
       this.cerrarPanelCli();
+      if (this.modoSimple) {
+        this.opcionesSucursal = [];
+        this.sucursalSel = null;
+        this.qSucursal = '';
+        this.idDomicilioInicial = null;
+        const sucursales = await this.cargarOpcionesSucursal(id);
+        if (!sucursales.length) {
+          this.error = 'Este cliente no tiene sucursales activas.';
+          return;
+        }
+        if (sucursales.length === 1) {
+          this._aplicarSucursal(sucursales[0]);
+          await this.abrirCliente();
+          return;
+        }
+        this.panelSuc = true;
+        return;
+      }
       await this.abrirCliente();
     },
     moverSelCli(delta) {
@@ -380,6 +466,7 @@ function pedidoMasivoCore() {
       this.draftId = m.draft_id;
       this.draftEstado = m.estado || 'borrador';
       this.idCliente = m.id_cliente;
+      this.clienteSel = String(m.id_cliente || '');
       this.clienteNombre = this._nombreClienteVisible(m.nombre_cliente || this.clienteNombre || '');
       this.qCliente = this.clienteNombre;
       if (m.cabecera) {
@@ -419,6 +506,12 @@ function pedidoMasivoCore() {
       this.ultimoError = m.ultimo_error || {};
       // Modo simple + metadata de origen (REQ-PSU-02/03) y crédito hero.
       if (String(m.modo || '') === 'simple') this.modoSimple = true;
+      if (this.modoSimple && this.sucursales[0]) {
+        this._aplicarSucursal(this.sucursales[0]);
+        if (!this.opcionesSucursal.length && this.idCliente) {
+          this.cargarOpcionesSucursal(this.idCliente);
+        }
+      }
       this.codMovOrigen = m.cod_mov_origen || null;
       if (m.credito) this.credito = m.credito;
       if (!this.clienteNombre) {
@@ -546,12 +639,29 @@ function pedidoMasivoCore() {
     async abrirCliente() {
       if (!this.clienteSel) return;
       if (this.abriendo) return;
-      if (this.draftId && String(this.idCliente) === String(this.clienteSel)) return;
+      if (this.modoSimple && !this.idDomicilioInicial) {
+        const sucursales = this.opcionesSucursal.length
+          ? this.opcionesSucursal
+          : await this.cargarOpcionesSucursal(this.clienteSel);
+        if (!sucursales.length) {
+          this.error = 'Este cliente no tiene sucursales activas.';
+        } else {
+          this.error = 'Elegí la sucursal del pedido.';
+          this.panelSuc = sucursales.length > 1;
+        }
+        return;
+      }
+      const domicilioActual = this.sucursales[0]?.id_cliente_domicilio;
+      if (
+        this.draftId
+        && String(this.idCliente) === String(this.clienteSel)
+        && (!this.modoSimple || Number(domicilioActual) === Number(this.idDomicilioInicial))
+      ) return;
       this.abriendo = true; this.error = ''; this.mensajeOk = '';
       const body = { id_cliente: Number(this.clienteSel) };
       if (this.modoSimple) {
         body.modo = 'simple';
-        if (this.idDomicilioInicial) body.id_domicilio = Number(this.idDomicilioInicial);
+        body.id_domicilio = Number(this.idDomicilioInicial);
       }
       const { data } = await this.postJson(this.urls.abrir, body);
       this.abriendo = false;

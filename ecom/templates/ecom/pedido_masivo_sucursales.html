@@ -162,6 +162,7 @@
       <div x-show="!contextoAbierto && cabecera" x-cloak
            class="pm-context-summary mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
         <span><span class="text-slate-500 dark:text-slate-400">Cliente:</span> <span class="font-semibold" x-text="clienteNombre || qCliente || '—'"></span></span>
+        <span x-show="modoSimple"><span class="text-slate-500 dark:text-slate-400">Sucursal:</span> <span class="font-semibold" x-text="qSucursal || '—'"></span></span>
         <span><span class="text-slate-500 dark:text-slate-400">Pedido:</span> <span class="font-semibold tabular-nums" x-text="cabecera?.fecha_pedido_display || '—'"></span></span>
         <span x-show="tipo === 'PED'"><span class="text-slate-500 dark:text-slate-400">Entrega:</span> <span class="font-semibold tabular-nums" x-text="cabecera?.fecha_entrega_display || '—'"></span></span>
         <span><span class="text-slate-500 dark:text-slate-400">Vence:</span> <span class="font-semibold tabular-nums" x-text="cabecera?.vencimiento_display || '—'"></span></span>
@@ -243,6 +244,39 @@
             <p x-show="panelCli && !cargandoCli && !clientes.length" x-cloak
                class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
               Sin clientes
+            </p>
+          </div>
+        </div>
+
+        <div class="pm-field-row" x-show="modoSimple" x-cloak @click.outside="cerrarPanelSuc()">
+          <label class="pm-label-inline" for="pm-sucursal">Sucursal</label>
+          <div class="relative min-w-[12rem] flex-1">
+            <input id="pm-sucursal" type="text" autocomplete="off" role="combobox"
+                   :aria-expanded="panelSuc"
+                   x-model="qSucursal"
+                   :disabled="!clienteSel"
+                   @focus="abrirPanelSuc()"
+                   @input="sucursalSel = null; idDomicilioInicial = null; idxSuc = 0; panelSuc = true"
+                   @keydown.arrow-down.prevent="moverSelSuc(1)"
+                   @keydown.arrow-up.prevent="moverSelSuc(-1)"
+                   @keydown.enter.prevent="elegirResaltadoSuc()"
+                   @keydown.escape="cerrarPanelSuc()"
+                   placeholder="Elegí sucursal…"
+                   class="pm-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"/>
+            <ul x-show="panelSuc && sucursalesFiltradas.length" x-cloak
+                class="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+                role="listbox">
+              <template x-for="(s, i) in sucursalesFiltradas" :key="s.id_cliente_domicilio">
+                <li role="option"
+                    @mousedown.prevent="elegirSucursal(s)"
+                    :class="i === idxSuc ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
+                    class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700"
+                    x-text="_etiquetaSucursal(s)"></li>
+              </template>
+            </ul>
+            <p x-show="panelSuc && !cargandoSuc && !sucursalesFiltradas.length" x-cloak
+               class="absolute z-30 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+              Sin sucursales
             </p>
           </div>
         </div>
@@ -706,5 +740,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo20"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo21"></script>
 {% endblock %}

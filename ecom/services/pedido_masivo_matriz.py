@@ -748,6 +748,20 @@ def obtener_o_crear_draft(
         .first()
     )
     if existente:
+        if (
+            modo_ef == EcomPedidoMasivoDraft.MODO_SIMPLE
+            and id_dom_fijo is not None
+            and existente.id_domicilio_fijo != id_dom_fijo
+        ):
+            # Un simple solo opera sobre un domicilio. Al cambiarlo desde el
+            # selector, conservar sus cantidades y mover sus celdas a la nueva
+            # columna antes de devolver el borrador reutilizado.
+            with transaction.atomic():
+                EcomPedidoMasivoDraftCelda.objects.filter(draft=existente).update(
+                    id_cliente_domicilio=id_dom_fijo
+                )
+                existente.id_domicilio_fijo = id_dom_fijo
+                existente.save(update_fields=["id_domicilio_fijo", "updated_at"])
         if existente.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO:
             existente.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
             existente.save(update_fields=["estado", "updated_at"])

@@ -24,6 +24,16 @@ El **pedido simple** dejó de usar `OrderShell` / `EcomCart` borrador y se unifi
 | Hub | Tarjetas PED y «Nuevo simple» → `?modo=simple&cod_mov=` o `?modo=simple&draft=` |
 | Carrito legacy | `EcomCart` borrador aparece como tarjeta **Carrito legacy** con CTA migrar/archivar (no mezcla con draft masivo) |
 
+### Selección de sucursal en simple — 16/07/2026
+
+Al elegir cliente, la pantalla consulta sus domicilios operativos. Si existe uno solo,
+se selecciona automáticamente; si no existe ninguno, informa el error correspondiente;
+si hay más de uno, el usuario debe elegir la **Sucursal** antes de abrir el borrador.
+La API rechaza aperturas simples sin domicilio en este último caso con
+`code=requiere_sucursal`, por lo que nunca toma arbitrariamente la primera sucursal.
+Al cambiar la sucursal de un borrador simple existente, sus celdas se reasignan al nuevo
+domicilio para conservar las cantidades en la única columna del pedido.
+
 ### Permisos (OR)
 
 | Key | Uso |

@@ -7,9 +7,13 @@ from django.test import RequestFactory, TestCase
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
-from ecom.pedido_masivo_views import PedidoMasivoCeldaAPIView
+from ecom.pedido_masivo_views import (
+    PedidoMasivoAbrirAPIView,
+    PedidoMasivoCeldaAPIView,
+)
 from ecom.permissions import EcomPedidoCapturaPermission, usuario_puede_matriz_multi_columna
 from ecom.services.batch_checkout_masivo import confirmar_lote_masivo
+from ecom.services.pedido_masivo_matriz import obtener_o_crear_draft
 from ecom.services.pedido_plantilla_service import (
     _salida_a_packs_matriz,
     cargar_pedido_en_draft_masivo,
@@ -217,6 +221,100 @@ class TestEcomPedidoCapturaPermissionOR(TestCase):
         user2 = _PermUser(["ecom.pedido_masivo.usar"])
         req2 = self._req(user2)
         self.assertTrue(usuario_puede_matriz_multi_columna(req2))
+
+
+class TestAbrirPedidoSimpleSucursal(TestCase):
+    def setUp(self):
+        self.api = APIRequestFactory()
+        self.user = _PermUser(["ecom.pedidos.crear"])
+
+    def _request(self, body):
+        req = self.api.post(
+            "/ecom/api/mayoristapp/pedido-masivo/abrir/",
+            body,
+            format="json",
+        )
+        req.session = {
+            "user": {
+                "base_empresa": "emp_psu",
+                "id_usuario": 55,
+                "id_vendedor_usr": 3,
+            }
+        }
+        force_authenticate(req, user=self.user)
+        return req
+
+    @patch(
+        "ecom.pedido_masivo_views.listar_sucursales_cliente",
+        return_value=[
+            {"id_cliente_domicilio": 10, "etiqueta": "Casa central"},
+            {"id_cliente_domicilio": 20, "etiqueta": "Sucursal norte"},
+        ],
+    )
+    def test_requiere_sucursal_si_hay_mas_de_una(self, _mock_sucursales):
+        resp = PedidoMasivoAbrirAPIView.as_view()(
+            self._request({"id_cliente": 100, "modo": "simple"})
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data["code"], "requiere_sucursal")
+        self.assertEqual(len(resp.data["sucursales"]), 2)
+        self.assertEqual(resp.data["error"], "Elegí la sucursal del pedido.")
+
+    @patch("ecom.pedido_masivo_views.cabecera_defaults_json", return_value={})
+    @patch(
+        "ecom.pedido_masivo_views._serializar_matriz_ui",
+        return_value={"draft_id": 1, "sucursales": []},
+    )
+    @patch("ecom.pedido_masivo_views.obtener_o_crear_draft")
+    @patch(
+        "ecom.pedido_masivo_views.listar_sucursales_cliente",
+        return_value=[{"id_cliente_domicilio": 10, "etiqueta": "Casa central"}],
+    )
+    def test_autoselecciona_unica_sucursal(
+        self, _mock_sucursales, mock_obtener, _mock_serializar, _mock_cabecera
+    ):
+        draft = MagicMock(id_cliente=100)
+        mock_obtener.return_value = (draft, "")
+        resp = PedidoMasivoAbrirAPIView.as_view()(
+            self._request({"id_cliente": 100, "modo": "simple"})
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(mock_obtener.call_args.kwargs["id_domicilio_fijo"], 10)
+
+
+class TestReasignarSucursalDraftSimple(TestCase):
+    @patch("ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo")
+    def test_remapea_celdas_al_cambiar_domicilio_fijo(self, mock_contexto):
+        mock_contexto.return_value = {"descPie": Decimal("0")}
+        draft = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_psu",
+            id_usuario=9,
+            id_cliente=100,
+            modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
+            id_domicilio_fijo=10,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        )
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=draft,
+            id_articulo=1,
+            id_cliente_domicilio=10,
+            cantidad_packs=Decimal("2"),
+        )
+
+        abierto, err = obtener_o_crear_draft(
+            base_empresa="emp_psu",
+            id_usuario=9,
+            id_cliente=100,
+            cod_viajante=3,
+            modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
+            id_domicilio_fijo=20,
+        )
+
+        self.assertEqual(err, "")
+        self.assertEqual(abierto.pk, draft.pk)
+        abierto.refresh_from_db()
+        self.assertEqual(abierto.id_domicilio_fijo, 20)
+        self.assertEqual(abierto.celdas.get().id_cliente_domicilio, 20)
 
 
 class TestConfirmarAnulaOrigenSimple(TestCase):
