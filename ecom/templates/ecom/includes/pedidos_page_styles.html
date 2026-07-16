@@ -963,7 +963,9 @@
    * scroll container, lo que rompe tanto el pie fijo como los sticky de tabla.
    */
   html:has(.pm-matrix-viewport),
-  body:has(.pm-matrix-viewport) {
+  body:has(.pm-matrix-viewport),
+  html:has(.pedidos-hub-viewport),
+  body:has(.pedidos-hub-viewport) {
     max-width: 100%;
     overflow-x: hidden;
   }
@@ -972,22 +974,59 @@
    * `min-width:auto`, así que el ancho de la matriz podía empujar `main` más
    * ancho que el viewport y el scroll horizontal lo tomaba el body (los sticky
    * quedaban recortados). Forzamos `min-width:0` SOLO en la rama que contiene la
-   * matriz para habilitar el overflow local de la zona media (scoped, no rompe
-   * otras páginas).
+   * matriz / hub para habilitar el overflow local (scoped, no rompe otras páginas).
    */
   main.app-content:has(.pm-matrix-viewport),
-  main.app-content:has(.pm-matrix-viewport) > div {
+  main.app-content:has(.pm-matrix-viewport) > div,
+  main.app-content:has(.pedidos-hub-viewport),
+  main.app-content:has(.pedidos-hub-viewport) > div {
     min-width: 0;
+    min-height: 0;
   }
-  .pm-matrix-viewport {
+  .pm-matrix-viewport,
+  .pedidos-hub-viewport {
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
   }
   @media (min-width: 768px) {
-    .pm-matrix-viewport {
+    .pm-matrix-viewport,
+    .pedidos-hub-viewport {
       height: calc(100dvh - 8rem) !important;
     }
+  }
+  /* Hub Kanban: el body no scrollea; scroll-x en la franja de etapas, scroll-y en cada columna. */
+  html:has(.pedidos-hub-viewport),
+  body:has(.pedidos-hub-viewport) {
+    overflow: hidden;
+  }
+  main.app-content:has(.pedidos-hub-viewport) > div {
+    overflow: hidden;
+  }
+  /*
+   * Scrollport horizontal: el flex item DEBE poder encogerse (min-width:0 +
+   * flex-basis:0). Sin eso, el ancho intrínseco de las columnas expande el
+   * ancestro y overflow:hidden del viewport recorta sin barra de scroll.
+   */
+  .pedidos-hub-kanban-scroll {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .pedidos-hub-kanban-row {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    width: max-content;
+    gap: 0.75rem;
+    padding-bottom: 0.25rem;
+  }
+  .pedidos-hub-kanban-col {
+    flex: 0 0 auto;
   }
   .pm-matrix-scroll {
     --pm-left-precio: 20rem;
