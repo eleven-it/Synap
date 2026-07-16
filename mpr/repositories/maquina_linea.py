@@ -125,7 +125,8 @@ def listar_maquinas(base_empresa: str, solo_activas: bool = False) -> List[Dict[
     """
     if solo_activas:
         sql += " WHERE m.activo = 1"
-    sql += " ORDER BY m.codigo"
+    # Códigos numéricos (ej. 1..80): orden numérico DESC para la UI.
+    sql += " ORDER BY CAST(m.codigo AS UNSIGNED) DESC, m.codigo DESC"
     with mysql_cursor(base, dict_cursor=True) as cursor:
         cursor.execute(sql)
         out: List[Dict[str, Any]] = []
@@ -237,7 +238,7 @@ def maquinas_de_linea(base_empresa: str, id_linea: int, fecha: date) -> List[Dic
               AND ml.vigencia_desde <= %s
               AND (ml.vigencia_hasta IS NULL OR ml.vigencia_hasta > %s)
               AND m.activo = 1
-            ORDER BY m.codigo
+            ORDER BY CAST(m.codigo AS UNSIGNED) DESC, m.codigo DESC
             """,
             [lid, fecha, fecha],
         )
