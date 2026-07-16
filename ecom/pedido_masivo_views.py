@@ -389,7 +389,8 @@ class PedidoMasivoAbrirAPIView(APIView):
                 return _err("Borrador no encontrado.", "no_encontrado", 404)
             idc = d0.id_cliente
 
-        # Modo simple sin domicilio explícito: fijar la primera sucursal activa.
+        # Modo simple sin domicilio explícito: solo se infiere cuando el cliente
+        # tiene un único domicilio operativo. Con varios, la UI debe pedirlo.
         if (
             modo == EcomPedidoMasivoDraft.MODO_SIMPLE
             and id_domicilio is None
@@ -397,8 +398,24 @@ class PedidoMasivoAbrirAPIView(APIView):
             and idc is not None
         ):
             sucs = listar_sucursales_cliente(base, idc, cod_viajante=cv)
-            if sucs:
+            if not sucs:
+                return _err(
+                    "Este cliente no tiene sucursales activas.",
+                    "sin_sucursales",
+                    400,
+                )
+            if len(sucs) == 1:
                 id_domicilio = to_int_or_none(sucs[0].get("id_cliente_domicilio"))
+            else:
+                return Response(
+                    {
+                        "ok": False,
+                        "error": "Elegí la sucursal del pedido.",
+                        "code": "requiere_sucursal",
+                        "sucursales": sucs,
+                    },
+                    status=400,
+                )
 
         draft, err = obtener_o_crear_draft(
             base_empresa=base,
