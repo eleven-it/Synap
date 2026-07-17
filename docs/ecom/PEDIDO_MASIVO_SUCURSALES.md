@@ -41,8 +41,8 @@ patrón de tarjetas en móvil, pero el reparto de ancho difiere:
 
 | Modo | Desktop (lg+) | Móvil / PWA (<lg) |
 |------|---------------|-------------------|
-| **Simple** (1 sucursal) | Clase `pm-matrix-shell--simple`: la **descripción del artículo predomina** (zona izquierda `flex:1 1 auto`, columna Artículo `width:auto`) y la única columna de cantidad se fija a `--pm-col-suc: 4.75rem` (~6 dígitos), sin estirarse. La zona media deja de crecer (`flex:0 0 auto`, `overflow-x:visible`). | **Lista plana** de líneas (sin acordeón): nombre del artículo `flex-1` + `% desc` (`w-14`) + cantidad (`w-[4.75rem] shrink-0`, no ancho completo) + quitar. Empty state bajo el buscador: «Buscá un artículo para agregar la primera línea.» |
-| **Masivo** (N sucursales) | Distribución actual sin cambios: zona media con **scroll-x** en sucursales (`.pm-ztable-mid` `min-width:100%`). | **Acordeón** por sucursal; la **primera** sucursal (o cuando hay una sola) arranca **abierta** por defecto. |
+| **Simple** (1 sucursal) | Clase `pm-matrix-shell--simple`: la **descripción del artículo predomina**; cantidad fija `--pm-col-suc: 5.7rem` (~6 dígitos + 20%). Buscador en **primera fila**; dropdown abre **hacia abajo**. | **Lista plana** + buscador siempre visible. Viewport móvil con `height:auto` y `min-height` de matriz para que no colapse bajo el preview. |
+| **Masivo** (N sucursales) | Distribución actual: zona media con **scroll-x** en sucursales (`.pm-ztable-mid` `min-width:100%`). | **Acordeón** por sucursal (primera abierta). Mismo viewport scrollable en PWA. |
 
 **Foco (móvil + desktop):** los inputs de cantidad se duplican en el DOM (matriz
 desktop + acordeón/lista móvil) con el mismo `data-pm-qty`. `_qtyInputVisible()`
@@ -61,7 +61,7 @@ artículo, el foco cae en el campo realmente pintado y la carga fluye.
 ## Flujo (14/07/2026 — barra contexto + auto-apertura)
 
 1. **Tarjeta de contexto comercial** densa y colapsable (`.pm-context-card`): grid 2 columnas con **label + campo en la misma línea** (`.pm-field-row` + `.pm-label-inline`). Orden: fecha pedido | fecha entrega; vencimiento | lista; cliente | condición. Las fechas usan `input type="date"` nativo ligado al ISO del estado (`cabecera.fecha_pedido`/`fecha_entrega`/`vencimiento`) y sincronizan su espejo `*_display` (dd/MM/yyyy) vía `onCabeceraFechaIso`. Anchos semánticos: fechas `w-[9.5rem]/max-w-[10rem]`, cliente `flex-1 min-w-[12rem]`, lista/condición `w-[14rem]/max-w-[16rem]`. Chevron en el eyebrow expande/compacta (estado Alpine `contextoAbierto`, default `true`, persistido en `sessionStorage['pm-contexto-abierto']`); al compactar solo se muestra una fila resumen (cliente + fechas clave) para liberar alto a la matriz.
-2. **Hero oscuro (una fila):** título + badge «Borrador #N»; acciones a la derecha: **vendedor operativo** (antes de Anular), Anular, Hub y **Confirmar pedido** (`bg-orange-500`, mismo naranja CTA Synap del navbar). Sin subtítulo de packs/autoguardado.
+2. **Hero oscuro (una fila):** título + badge «Borrador #N»; acciones a la derecha: **vendedor operativo** (antes de Anular), Anular, Hub y **Confirmar pedido** (`bg-orange-500`, mismo naranja CTA Synap del navbar). Tras confirmar (o PED en solo consulta) aparece **Nuevo** (dropdown purple: Pedido simple | Masivo sucursales), igual que en el Hub. Sin subtítulo de packs/autoguardado.
 3. Al **elegir cliente** en el buscador predictivo, el front invoca automáticamente `POST …/abrir/` (misma semántica que antes tenía el botón). Spinner inline «Abriendo borrador…» durante la petición; guard anti doble POST.
 3. **Matriz siempre visible** desde el primer render: shell de tabla (desktop) o acordeón por sucursal (móvil). Estados vacíos:
    - Sin borrador → guía «Elegí un cliente…»

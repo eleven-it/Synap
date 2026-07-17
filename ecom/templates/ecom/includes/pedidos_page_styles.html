@@ -1194,7 +1194,7 @@
   }
   .pm-zone-left { box-shadow: 4px 0 8px -4px rgba(15, 23, 42, 0.18); z-index: 1; }
   .pm-zone-right { box-shadow: -4px 0 8px -4px rgba(15, 23, 42, 0.18); z-index: 1; }
-  /* Con el buscador abierto, la zona izq. deja ver el dropdown hacia arriba. */
+  /* Con el buscador abierto, la zona izq. deja ver el dropdown hacia abajo. */
   .pm-matrix-shell--buscador-abierto .pm-zone-left {
     overflow: visible;
     z-index: 5;
@@ -1287,7 +1287,7 @@
    * ancho; la única columna de cantidad se limita a ~6 dígitos y no se estira.
    * Masivo NO recibe esta variante: conserva mid con scroll-x (min-width:100%). */
   .pm-matrix-shell--simple {
-    --pm-col-suc: 4.75rem; /* ~6 dígitos + padding */
+    --pm-col-suc: 5.7rem; /* ~6 dígitos + 20% extra */
   }
   .pm-matrix-shell--simple .pm-zone-left {
     flex: 1 1 auto; /* la zona del artículo absorbe el sobrante */
@@ -1315,6 +1315,18 @@
   .pm-matrix-shell--simple .pm-c-suc .pm-qty-input {
     width: 100%;
     max-width: var(--pm-col-suc);
+  }
+
+  /* Dropdown del buscador de artículos: hacia abajo (no --up). */
+  .pm-art-dropdown--down {
+    top: 100%;
+    bottom: auto;
+    margin-top: 0.25rem;
+    margin-bottom: 0;
+  }
+  /* Con el panel abierto, el shell no debe recortar el listado hacia abajo. */
+  .pm-matrix-shell--buscador-abierto {
+    overflow: visible;
   }
 
   /* Selector vendedor inline — barra contexto pedido masivo (REQ-MAS-12) */
@@ -1478,8 +1490,29 @@
 
   /* Preview/totales responsive (REQ-MAS-19) */
   @media (max-width: 1023px) {
+    /*
+     * PWA/móvil: el viewport fijo + overflow:hidden hacía que hero+contexto+preview
+     * dejaran la matriz (buscador/líneas) en altura 0. Permitimos scroll de página
+     * y una altura mínima para la zona de carga.
+     */
+    .pm-matrix-viewport {
+      height: auto !important;
+      min-height: calc(100dvh - 4.5rem);
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .pm-matrix-viewport > div {
+      height: auto !important;
+      min-height: 0;
+    }
+    .pm-accordion {
+      flex: 1 0 auto; /* no encoger bajo el preview: buscador/líneas deben verse */
+      min-height: 16rem;
+    }
     .pm-preview-panel {
       margin-bottom: 0.5rem;
+      flex-shrink: 0;
     }
     .pm-preview-totals {
       width: 100%;
