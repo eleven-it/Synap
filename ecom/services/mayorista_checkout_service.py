@@ -412,12 +412,15 @@ def confirmar(
         and tipo == EcomCart.TIPO_PEDIDO
         and cod_mov is not None
     ):
-        _encolar_mail_comprobante_si_correo(
-            cart.base_empresa,
-            int(cod_mov),
-            int(cart.idcliente),
-            cli,
-        )
+        from ecom.services.ecom_config_mysql import pedidos_envian_mail_confirmacion
+
+        if pedidos_envian_mail_confirmacion(cart.base_empresa):
+            _encolar_mail_comprobante_si_correo(
+                cart.base_empresa,
+                int(cod_mov),
+                int(cart.idcliente),
+                cli,
+            )
 
     return True, None, _result_desde_cart(cart)
 

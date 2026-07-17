@@ -8,10 +8,13 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from ecom.ajustes_ventas_views import AjustesVentasAPIView, AjustesWorkflowAPIView
 from ecom.services.ecom_config_mysql import (
     KEY_APROBACION_PEDIDOS_ACTIVA,
+    KEY_ENVIAR_MAIL_CONFIRMAR_PEDIDO,
+    KEY_VALIDAR_STOCK_PEDIDOS,
     KEY_WORKFLOW_JERARQUIA_COMERCIAL,
     aprobacion_pedidos_activa,
     guardar_config_workflow_comercial,
     leer_config_workflow_comercial,
+    pedidos_envian_mail_confirmacion,
     pedidos_validan_stock,
     workflow_jerarquia_comercial_activo,
 )
@@ -35,6 +38,19 @@ class TestPedidosValidanStock(SimpleTestCase):
         for val in ("Si", "si", "1", "true", "Sí"):
             mock_leer.return_value = val
             self.assertTrue(pedidos_validan_stock("emp1"), msg=val)
+
+
+class TestPedidosEnvianMailConfirmacion(SimpleTestCase):
+    @patch("ecom.services.ecom_config_mysql.leer_valor_configuracion_ecom")
+    def test_default_si_si_falta_fila(self, mock_leer):
+        mock_leer.return_value = "Si"
+        self.assertTrue(pedidos_envian_mail_confirmacion("emp1"))
+        mock_leer.assert_called_once_with("emp1", KEY_ENVIAR_MAIL_CONFIRMAR_PEDIDO, "Si")
+
+    @patch("ecom.services.ecom_config_mysql.leer_valor_configuracion_ecom")
+    def test_normaliza_no(self, mock_leer):
+        mock_leer.return_value = "No"
+        self.assertFalse(pedidos_envian_mail_confirmacion("emp1"))
 
 
 class TestWorkflowJerarquiaComercial(SimpleTestCase):
@@ -139,14 +155,16 @@ class TestAjustesVentasAPI(SimpleTestCase):
         self.factory = APIRequestFactory()
 
     @patch("ecom.ajustes_ventas_views.pedidos_validan_stock", return_value=True)
+    @patch("ecom.ajustes_ventas_views.pedidos_envian_mail_confirmacion", return_value=True)
     @patch("ecom.ajustes_ventas_views._session_base_empresa", return_value="emp1")
-    def test_get_devuelve_flag(self, _base, _stock):
+    def test_get_devuelve_flags(self, _base, _mail, _stock):
         req = self.factory.get("/api/mayoristapp/ajustes-ventas/")
         force_authenticate(req, user=_UserConPermiso())
         req.session = {"user": {"base_empresa": "emp1"}}
         resp = AjustesVentasAPIView.as_view()(req)
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.data["validar_stock_pedidos"])
+        self.assertTrue(resp.data["enviar_mail_confirmar_pedido"])
 
     @patch("ecom.ajustes_ventas_views.escribir_valor_configuracion_ecom", return_value=True)
     @patch("ecom.ajustes_ventas_views._session_base_empresa", return_value="emp1")
@@ -162,6 +180,23 @@ class TestAjustesVentasAPI(SimpleTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.data["validar_stock_pedidos"])
         mock_escribir.assert_called_once_with("emp1", "ecom_validar_stock_pedidos", "No")
+
+    @patch("ecom.ajustes_ventas_views.escribir_valor_configuracion_ecom", return_value=True)
+    @patch("ecom.ajustes_ventas_views._session_base_empresa", return_value="emp1")
+    def test_post_desactiva_mail_confirmacion(self, _base, mock_escribir):
+        req = self.factory.post(
+            "/api/mayoristapp/ajustes-ventas/",
+            {"enviar_mail_confirmar_pedido": False},
+            format="json",
+        )
+        force_authenticate(req, user=_UserConPermiso())
+        req.session = {"user": {"base_empresa": "emp1"}}
+        resp = AjustesVentasAPIView.as_view()(req)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.data["enviar_mail_confirmar_pedido"])
+        mock_escribir.assert_called_once_with(
+            "emp1", KEY_ENVIAR_MAIL_CONFIRMAR_PEDIDO, "No"
+        )
 
 
 class TestAjustesWorkflowAPI(SimpleTestCase):

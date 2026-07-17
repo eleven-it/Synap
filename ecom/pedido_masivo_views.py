@@ -178,7 +178,8 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
                         # Acciones hero PED (reutilizan APIs mayoristas existentes).
                         "mail_enqueue": reverse(
                             "ecom:mayoristapp_comprobantes_comprobante_a_mail_enqueue"
-                        ),
+                        )
+                        + "?ajax=1",
                         "anular_pedido": reverse(
                             "ecom:mayoristapp_comprobantes_anular_pedido"
                         ),

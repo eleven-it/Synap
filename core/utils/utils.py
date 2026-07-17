@@ -401,6 +401,13 @@ APPS_MENU = [
                         "menu_item_id": "settings_sc_config",
                     },
                     {
+                        "label": _("Correo saliente"),
+                        "url": "core:outbound_email_config",
+                        "icon": "mail",
+                        "permission": "configuracion.sistema",
+                        "menu_item_id": "settings_sc_outbound_email",
+                    },
+                    {
                         "label": _("CDN Wizard"),
                         "url": "core:cdn_wizard",
                         "icon": "cloud",

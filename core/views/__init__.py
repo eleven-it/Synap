@@ -32,6 +32,11 @@ from .views_system_config import (
     SystemConfigurationListView, SystemConfigurationCreateView, 
     SystemConfigurationUpdateView, SystemConfigurationDeleteView
 )
+from .views_outbound_email import (
+    OutboundEmailConfigView,
+    OutboundEmailConfigAPIView,
+    OutboundEmailTestAPIView,
+)
 from .views_contacts import (
     ContactListView, ContactCreateView, ContactUpdateView, 
     ContactDetailView, ContactDeleteView, ContactRelationshipListView,
