@@ -28,7 +28,7 @@ Las URLs `/mpr/opt/`, `/mpr/wizard/` y `/mpr/demanda/ventana-pack/` pueden segui
 ## Cambios de menú (`core/utils/utils.py` → `APPS_MENU`)
 
 - **URL del módulo:** `mpr:tablero_produccion` (antes `mpr:tablero`).
-- **Sección «Producción diaria»:** tablero, carga de artículos (grilla), parte, clasificación, planificación, KPIs.
+- **Sección «Producción diaria»:** tablero, asignar artículo a máquina (grilla), parte, clasificación, planificación, KPIs.
 - **Sección «Armado y stock»:** armado, imputación, reclasificación.
 - **Sección «Reportes»:** hub Reportes MPR.
 - **Sección «Configuración»:** turnos de producción, depósitos, operarios.

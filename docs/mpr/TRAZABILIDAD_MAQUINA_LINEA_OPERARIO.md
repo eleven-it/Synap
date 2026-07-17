@@ -267,7 +267,7 @@ permiso (el operario no los ve):
 | `/mpr/partes-pendientes/<id>/` | Detalle de aprobación (declarada/aprobada/gap/motivo) | `mpr.aprobar_parte` |
 | `/mpr/lineas/` | CRUD de líneas de producción | `mpr.maquinas_lineas` |
 | `/mpr/maquinas/` | CRUD de máquinas y asignación máquina↔línea | `mpr.maquinas_lineas` |
-| `/mpr/maquinas/carga-articulos/` | Grilla de carga de artículos habilitados por máquina (MVP) | `mpr.maquinas_lineas` |
+| `/mpr/maquinas/carga-articulos/` | Asignar artículo a máquina (grilla) | `mpr.maquinas_lineas` |
 | `/mpr/maquinas/<id>/articulos/` | Histórico y detalle de artículos por máquina | `mpr.maquinas_lineas` |
 | `/mpr/maquinas/api/articulos/buscar/` | API JSON búsqueda predictiva (solo `tipo_art_fab = Fabricado`) | `mpr.maquinas_lineas` |
 | `/mpr/maquinas/api/articulos/accion/` | API JSON habilitar/deshabilitar artículo en máquina | `mpr.maquinas_lineas` |

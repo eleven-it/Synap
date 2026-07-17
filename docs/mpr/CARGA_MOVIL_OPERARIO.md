@@ -123,11 +123,12 @@ Los partes `pendiente` guardan `cantidad = 0`, por lo que **no** contaminan los 
 basados en `mpr_parte_linea.cantidad` (OPP acumulado, cupo). Al aprobar, `cantidad` pasa a
 `cantidad_aprobada` y recién ahí cuenta en el pipeline.
 
-## Carga de artículos por máquina (supervisor)
+## Asignar artículo a máquina (supervisor)
 
 Pantalla de escritorio para habilitar/deshabilitar artículos en la grilla de máquinas
 (antes de que el operario cargue producción en `/mpr/mi-parte/`):
 
+- Menú: **Producción diaria → Asignar artículo a máquina**.
 - Ruta: `/mpr/maquinas/carga-articulos/` (`mpr:maquinas_carga_articulos`). Permiso: `mpr.maquinas_lineas`.
 - Filtro MVP por línea: query `?id_linea=<id_mpr_linea>`.
 - Búsqueda predictiva de artículos (API GET `/mpr/maquinas/api/articulos/buscar/`): solo
