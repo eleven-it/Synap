@@ -8,6 +8,7 @@ from typing import Any, Dict, Iterator
 from django.http import StreamingHttpResponse
 from django.urls import reverse
 from rest_framework.request import Request
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -63,6 +64,21 @@ def _sess_user(request) -> Dict[str, Any]:
 
 def _err(msg: str, code: str = "error", status: int = 400) -> Response:
     return Response({"ok": False, "error": msg, "code": code}, status=status)
+
+
+class _NdjsonAcceptRenderer(BaseRenderer):
+    """Declara NDJSON para que DRF negocie la respuesta streaming correctamente."""
+
+    media_type = "application/x-ndjson"
+    format = "ndjson"
+    charset = "utf-8"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        if data is None:
+            return b""
+        if isinstance(data, (bytes, bytearray)):
+            return bytes(data)
+        return json.dumps(data, ensure_ascii=False).encode("utf-8")
 
 
 def _serializar_matriz_ui(draft: EcomPedidoMasivoDraft, base: str) -> Dict[str, Any]:
@@ -178,6 +194,7 @@ class PedidoMasivoConfirmarAPIView(APIView):
     """POST confirma el lote (1 PED por sucursal) con compensación ante fallo."""
 
     permission_classes = [EcomPedidoCapturaPermission]
+    renderer_classes = [JSONRenderer, _NdjsonAcceptRenderer]
 
     def _params_confirmar(
         self, request: Request, draft: EcomPedidoMasivoDraft, data: Dict[str, Any]

@@ -285,12 +285,26 @@ def listar_sucursales_cliente(
                             "zona": (r[6] or "").strip(),
                         }
                     )
+                out.sort(key=_clave_orden_nro_sucursal)
                 return out
             finally:
                 cursor.close()
     except Exception as e:
         logger.warning("listar_sucursales_cliente: %s", e)
         return []
+
+
+def _clave_orden_nro_sucursal(suc: Dict[str, Any]) -> tuple:
+    """Orden ascendente numérico por NroCalle (fallback id_cliente_domicilio)."""
+    nro = str(suc.get("nro") or "").strip()
+    digitos = "".join(ch for ch in nro if ch.isdigit())
+    id_dom = to_int_or_none(suc.get("id_cliente_domicilio")) or 0
+    if digitos:
+        try:
+            return (0, int(digitos), id_dom)
+        except ValueError:
+            pass
+    return (1, id_dom, 0)
 
 
 def credito_cliente_masivo(base_empresa: str, id_cliente: int) -> Dict[str, Any]:

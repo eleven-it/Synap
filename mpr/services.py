@@ -15829,6 +15829,183 @@ def asignar_turno_roster(
         return False, "Error al asignar turno."
 
 
+def _resumen_asignacion_masiva_vacio() -> Dict[str, Any]:
+    return {"aplicados": 0, "omitidos_pasados": 0, "errores": []}
+
+
+def _parse_fecha_roster_input(fecha_raw: Any) -> Tuple[Optional[date], Optional[str]]:
+    """
+    Parsea fecha desde date, datetime, ISO YYYY-MM-DD o dd/MM/yyyy.
+    Retorna (fecha_obj, None) si OK, (None, mensaje_error) si falla.
+    """
+    if fecha_raw is None:
+        return None, "Fecha vacía."
+    if isinstance(fecha_raw, date):
+        return fecha_raw, None
+    if isinstance(fecha_raw, datetime):
+        return fecha_raw.date(), None
+    s = str(fecha_raw).strip()
+    if not s:
+        return None, "Fecha vacía."
+    parsed_iso = to_date_or_none(s)
+    if parsed_iso is not None:
+        try:
+            return date.fromisoformat(parsed_iso), None
+        except ValueError:
+            pass
+    try:
+        return date.fromisoformat(s), None
+    except ValueError:
+        pass
+    return _parse_fecha_ddmmaaaa(s)
+
+
+def mensaje_flash_asignacion_masiva(resumen: Dict[str, Any]) -> str:
+    """Construye mensaje en español para flash messages de asignación masiva."""
+    aplicados = int(resumen.get("aplicados") or 0)
+    omitidos = int(resumen.get("omitidos_pasados") or 0)
+    errores = resumen.get("errores") or []
+    partes = [f"Se asignaron {aplicados} día(s)."]
+    if omitidos:
+        partes.append(f" Se omitieron {omitidos} fecha(s) pasada(s).")
+    if errores:
+        partes.append(f" {len(errores)} asignación(es) no se pudieron aplicar.")
+    return "".join(partes)
+
+
+def asignar_turno_roster_rango(
+    base_empresa: str,
+    ids_operario: List[Any],
+    id_turno: int,
+    fecha_desde: Any,
+    fecha_hasta: Any,
+    id_linea: Optional[int] = None,
+) -> Tuple[bool, Optional[str], Dict[str, Any]]:
+    """
+    Asigna un turno a varios operarios en un rango de fechas (upsert por celda).
+    Omite fechas pasadas. Retorna (ok, mensaje_error, resumen).
+    """
+    from django.db import IntegrityError
+
+    resumen = _resumen_asignacion_masiva_vacio()
+
+    if not (base_empresa or "").strip():
+        return False, "Empresa inválida.", resumen
+
+    ids_norm: List[int] = []
+    vistos: set = set()
+    for raw in ids_operario or []:
+        oid = to_int_or_none(raw)
+        if oid is not None and oid not in vistos:
+            vistos.add(oid)
+            ids_norm.append(oid)
+
+    if not ids_norm:
+        return False, "Debe seleccionar al menos un operario válido.", resumen
+
+    id_turno_norm = to_int_or_none(id_turno)
+    if id_turno_norm is None:
+        return False, "Turno inválido.", resumen
+
+    desde, err_desde = _parse_fecha_roster_input(fecha_desde)
+    if err_desde:
+        return False, f"Fecha desde inválida: {err_desde}", resumen
+
+    hasta, err_hasta = _parse_fecha_roster_input(fecha_hasta)
+    if err_hasta:
+        return False, f"Fecha hasta inválida: {err_hasta}", resumen
+
+    if desde > hasta:
+        return False, "La fecha desde no puede ser posterior a la fecha hasta.", resumen
+
+    turno = obtener_turno(base_empresa, id_turno_norm)
+    if not turno:
+        return False, "Turno no encontrado.", resumen
+
+    id_linea_norm = to_int_or_none(id_linea)
+    if id_linea_norm is not None:
+        from mpr.repositories.maquina_linea import obtener_linea
+
+        linea = obtener_linea(base_empresa, id_linea_norm)
+        if not linea:
+            return False, "Línea de override no encontrada.", resumen
+        if not linea.get("activo"):
+            return False, "La línea de override está inactiva.", resumen
+
+    operarios_validos: List[int] = []
+    for oid in ids_norm:
+        if obtener_operario(base_empresa, oid):
+            operarios_validos.append(oid)
+
+    if not operarios_validos:
+        return False, "Operario no encontrado.", resumen
+
+    hoy = date.today()
+
+    try:
+        from mpr.repositories.turno_roster import upsert_roster
+
+        for d in _iter_dias_rango(desde, hasta):
+            if d < hoy:
+                resumen["omitidos_pasados"] += 1
+                continue
+            for oid in operarios_validos:
+                try:
+                    upsert_roster(
+                        base_empresa, d, oid, id_turno_norm, id_mpr_linea=id_linea_norm
+                    )
+                    resumen["aplicados"] += 1
+                except IntegrityError as e:
+                    logger.error(
+                        "IntegrityError al asignar turno roster masivo en %s: %s",
+                        base_empresa,
+                        e,
+                        exc_info=True,
+                    )
+                    resumen["errores"].append(
+                        {
+                            "operario": oid,
+                            "fecha": _fmt_fecha_ddmmaaaa(d),
+                            "msg": "Error de integridad: el operario ya tiene un turno asignado para esta fecha.",
+                        }
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Error al asignar turno roster masivo en %s: %s",
+                        base_empresa,
+                        e,
+                        exc_info=True,
+                    )
+                    resumen["errores"].append(
+                        {
+                            "operario": oid,
+                            "fecha": _fmt_fecha_ddmmaaaa(d),
+                            "msg": "Error al asignar turno.",
+                        }
+                    )
+    except Exception as e:
+        logger.error(
+            "Error al procesar asignación masiva de roster en %s: %s",
+            base_empresa,
+            e,
+            exc_info=True,
+        )
+        return False, "Error al asignar turnos.", resumen
+
+    aplicados = resumen["aplicados"]
+    omitidos = resumen["omitidos_pasados"]
+    errores = resumen["errores"]
+
+    if aplicados == 0:
+        if omitidos > 0 and not errores:
+            return False, "No hay fechas editables en el rango (solo hoy o futuras).", resumen
+        if errores:
+            return False, errores[0]["msg"], resumen
+        return False, "No se aplicó ninguna asignación.", resumen
+
+    return True, None, resumen
+
+
 def eliminar_asignacion_roster(
     base_empresa: str,
     fecha_str: str,

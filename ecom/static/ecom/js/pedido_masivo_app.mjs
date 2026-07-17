@@ -308,7 +308,7 @@ function pedidoMasivoCore() {
           this.opcionesSucursal = [];
           return [];
         }
-        this.opcionesSucursal = data.sucursales || [];
+        this.opcionesSucursal = this._ordenarSucursalesAsc(data.sucursales || []);
         this.idxSuc = 0;
         return this.opcionesSucursal;
       } finally {
@@ -420,7 +420,7 @@ function pedidoMasivoCore() {
         credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
-          // DRF negocia Accept antes de la vista: application/x-ndjson provoca 406.
+          // Preferimos */*; la vista también declara renderer NDJSON como defensa.
           // La respuesta sigue siendo NDJSON vía StreamingHttpResponse.
           'Accept': '*/*',
           'X-CSRFToken': this.csrf(),
@@ -493,7 +493,7 @@ function pedidoMasivoCore() {
         m.lista_precio_pdf_url || m.lista_precios_pdf || m.listaPrecioPdf || '',
       ).trim();
       this.listaId = Number(m.lista_id || 1);
-      this.sucursales = m.sucursales || [];
+      this.sucursales = this._ordenarSucursalesAsc(m.sucursales || []);
       this.articulos = (m.articulos || []).map(a => ({
         id_articulo: a.id_articulo,
         id_manual: a.id_manual || a.codigo || '',
@@ -1103,12 +1103,39 @@ function pedidoMasivoCore() {
     focusBuscadorArt() {
       this.$nextTick(() => {
         this.scrollBuscadorIntoView();
-        const el = this.$refs.pmArtInput || document.getElementById('pm-art');
+        // En viewport <lg el buscador desktop está oculto: preferimos #pm-art-mob.
+        const esMovil = typeof window !== 'undefined'
+          && window.matchMedia
+          && window.matchMedia('(max-width: 1023px)').matches;
+        const desktop = this.$refs.pmArtInput || document.getElementById('pm-art');
+        const movil = document.getElementById('pm-art-mob');
+        let el;
+        if (esMovil && movil) {
+          el = movil;
+        } else if (desktop && desktop.offsetParent !== null) {
+          el = desktop;
+        } else {
+          el = movil || desktop;
+        }
         if (el) {
           el.focus();
           el.scrollIntoView({ block: 'nearest' });
         }
       });
+    },
+    /**
+     * Devuelve el input de cantidad VISIBLE para (idArt, idDom). El markup
+     * duplica los inputs (desktop matriz + móvil acordeón/lista) con el mismo
+     * `data-pm-qty`; enfocar a ciegas caía en el clon oculto. Elegimos el que
+     * está pintado (`offsetParent !== null`) según el viewport activo.
+     */
+    _qtyInputVisible(idArt, idDom) {
+      const sel = '[data-pm-qty="' + idArt + ':' + idDom + '"]';
+      const nodes = document.querySelectorAll(sel);
+      for (const el of nodes) {
+        if (el.offsetParent !== null) return el;
+      }
+      return nodes[0] || null;
     },
     focusPrimeraCantidad(idArt) {
       this.$nextTick(() => {
@@ -1117,7 +1144,7 @@ function pedidoMasivoCore() {
           return;
         }
         const idDom = this.sucursales[0].id_cliente_domicilio;
-        const el = document.querySelector('[data-pm-qty="' + idArt + ':' + idDom + '"]');
+        const el = this._qtyInputVisible(idArt, idDom);
         if (el) {
           el.focus();
           el.select && el.select();
@@ -1130,7 +1157,7 @@ function pedidoMasivoCore() {
       const next = si + 1;
       if (next < this.sucursales.length) {
         const idDom = this.sucursales[next].id_cliente_domicilio;
-        const el = document.querySelector('[data-pm-qty="' + idArt + ':' + idDom + '"]');
+        const el = this._qtyInputVisible(idArt, idDom);
         if (el) { el.focus(); el.select && el.select(); return; }
       }
       // Fin de línea → buscador de la fila nueva
@@ -1159,6 +1186,24 @@ function pedidoMasivoCore() {
       const nro = String(s.nro || '').trim();
       if (nro && nro !== '-') return nro;
       return String(s.id_cliente_domicilio || '—');
+    },
+    /** Orden ascendente numérico por NroCalle (fallback id domicilio). */
+    _nroSucursalSortKey(s) {
+      const raw = String(s?.nro || '').trim();
+      const m = raw.match(/\d+/);
+      const idDom = Number(s?.id_cliente_domicilio || 0);
+      if (m) return [0, Number(m[0]), idDom];
+      return [1, idDom, 0];
+    },
+    _ordenarSucursalesAsc(list) {
+      return [...(list || [])].sort((a, b) => {
+        const ka = this._nroSucursalSortKey(a);
+        const kb = this._nroSucursalSortKey(b);
+        for (let i = 0; i < ka.length; i += 1) {
+          if (ka[i] !== kb[i]) return ka[i] - kb[i];
+        }
+        return 0;
+      });
     },
     etiquetaSucursalCompleta(s) {
       if (!s) return '';
@@ -1414,9 +1459,9 @@ function pedidoMasivoCore() {
           if (parts[1]) ids.add(Number(parts[1]));
         }
       }
-      return (this.sucursales || [])
-        .filter((s) => ids.has(Number(s.id_cliente_domicilio)))
-        .sort((a, b) => Number(a.id_cliente_domicilio) - Number(b.id_cliente_domicilio));
+      return this._ordenarSucursalesAsc(
+        (this.sucursales || []).filter((s) => ids.has(Number(s.id_cliente_domicilio))),
+      );
     },
     _nombreSucursal(idDom) {
       const su = (this.sucursales || []).find(
@@ -1520,6 +1565,9 @@ function pedidoMasivoCore() {
       }
       if (primario) return primario;
       if (unidos.length) return unidos.join(' · ');
+      if (status === 406) {
+        return 'El servidor rechazó el formato de respuesta (406). Recargá la página con Ctrl+F5 e intentá de nuevo.';
+      }
       if (status && status >= 400) {
         return `No se pudo confirmar el pedido (error HTTP ${status}). Revisá permisos, sesión o reintentá.`;
       }
@@ -1561,7 +1609,8 @@ function pedidoMasivoCore() {
       this.confirmando = false;
       if (this.confirmProgreso) {
         this.confirmProgreso.finOk = !!data.ok;
-        this.confirmProgreso.finMessage = data.message || '';
+        this.confirmProgreso.finMessage = data.message
+          || ((!data.ok && status >= 400) ? this._formatoErrorConfirmacion(data, status) : '');
       }
 
       if (data.matriz) this.aplicarMatriz(data.matriz);

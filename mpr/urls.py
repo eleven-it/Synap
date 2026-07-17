@@ -98,6 +98,7 @@ urlpatterns = [
     path("partes-pendientes/<int:id_parte>/", views.PartePendienteDetailView.as_view(), name="parte_pendiente_detail"),
     path("planificacion-turnos/", views.PlanificacionTurnosView.as_view(), name="planificacion_turnos"),
     path("planificacion-turnos/asignar/", views.AsignarTurnoRosterView.as_view(), name="roster_asignar"),
+    path("planificacion-turnos/asignar-masivo/", views.AsignarTurnoRosterMasivoView.as_view(), name="roster_asignar_masivo"),
     path("planificacion-turnos/eliminar/", views.EliminarAsignacionRosterView.as_view(), name="roster_eliminar"),
     # Etapa 4: Parte de producción (ledger OPP-parte)
     path("parte-produccion/", views.ParteProduccionView.as_view(), name="parte_produccion"),
