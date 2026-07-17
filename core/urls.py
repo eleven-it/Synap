@@ -112,6 +112,9 @@ urlpatterns = [
     path('configuracion/crear/', views.SystemConfigurationCreateView.as_view(), name='system_config_create'),
     path('configuracion/<int:pk>/editar/', views.SystemConfigurationUpdateView.as_view(), name='system_config_update'),
     path('configuracion/<int:pk>/eliminar/', views.SystemConfigurationDeleteView.as_view(), name='system_config_delete'),
+    path('configuracion/correo-saliente/', views.OutboundEmailConfigView.as_view(), name='outbound_email_config'),
+    path('api/configuracion/correo-saliente/', views.OutboundEmailConfigAPIView.as_view(), name='api_outbound_email_save'),
+    path('api/configuracion/correo-saliente/probar/', views.OutboundEmailTestAPIView.as_view(), name='api_outbound_email_test'),
 
     # Gestión de Módulos
     path('modules/', ModuleListView.as_view(), name='module_list'),

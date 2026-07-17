@@ -11,13 +11,19 @@ from ecom.catalogo_producto_relay_views import _session_base_empresa
 from ecom.permissions import EcomConfigAjustesVentasPermission
 from ecom.pedido_masivo_stub_views import _StubMayoristappPermisoView
 from ecom.services.ecom_config_mysql import (
+    KEY_ENVIAR_MAIL_CONFIRMAR_PEDIDO,
     KEY_VALIDAR_STOCK_PEDIDOS,
     escribir_valor_configuracion_ecom,
     guardar_config_workflow_comercial,
     leer_config_workflow_comercial,
+    pedidos_envian_mail_confirmacion,
     pedidos_validan_stock,
     workflow_jerarquia_comercial_activo,
 )
+
+
+def _parse_bool_flag(raw) -> bool:
+    return raw in (True, "true", "True", 1, "1", "Si", "si", "Sí")
 
 
 class AjustesVentasView(_StubMayoristappPermisoView):
@@ -31,6 +37,7 @@ class AjustesVentasView(_StubMayoristappPermisoView):
         base = _session_base_empresa(self.request)
         ctx["bootstrap"] = {
             "validar_stock_pedidos": pedidos_validan_stock(base) if base else True,
+            "enviar_mail_confirmar_pedido": pedidos_envian_mail_confirmacion(base) if base else True,
             "workflow_jerarquia_activo": workflow_jerarquia_comercial_activo(base) if base else False,
             "workflow": leer_config_workflow_comercial(base) if base else {},
             "puede_editar_jerarquia": self._puede_editar_jerarquia(),
@@ -63,6 +70,7 @@ class AjustesVentasAPIView(APIView):
             {
                 "ok": True,
                 "validar_stock_pedidos": pedidos_validan_stock(base),
+                "enviar_mail_confirmar_pedido": pedidos_envian_mail_confirmacion(base),
             }
         )
 
@@ -71,41 +79,71 @@ class AjustesVentasAPIView(APIView):
         if not base:
             return Response({"ok": False, "error": "Sin base_empresa."}, status=400)
         data = request.data if isinstance(request.data, dict) else {}
-        raw = data.get("validar_stock_pedidos")
-        if raw is None:
+
+        raw_stock = data.get("validar_stock_pedidos")
+        raw_mail = data.get("enviar_mail_confirmar_pedido")
+        if raw_stock is None and raw_mail is None:
             return Response(
-                {"ok": False, "error": "Falta validar_stock_pedidos (true/false)."},
+                {
+                    "ok": False,
+                    "error": "Falta al menos un campo: validar_stock_pedidos o enviar_mail_confirmar_pedido.",
+                },
                 status=400,
             )
-        activo = raw in (True, "true", "True", 1, "1", "Si", "si", "Sí")
-        valor = "Si" if activo else "No"
-        try:
-            ok = escribir_valor_configuracion_ecom(
-                base, KEY_VALIDAR_STOCK_PEDIDOS, valor
-            )
-        except Exception as exc:
-            return Response(
-                {
-                    "ok": False,
-                    "error": f"No se pudo guardar en configuracion_ecom: {exc}",
-                },
-                status=500,
-            )
-        if not ok:
-            return Response(
-                {
-                    "ok": False,
-                    "error": "No se pudo guardar (base o clave inválida).",
-                },
-                status=500,
-            )
-        return Response(
-            {
-                "ok": True,
-                "validar_stock_pedidos": activo,
-                "message": "Ajustes guardados.",
-            }
-        )
+
+        resp_data = {"ok": True, "message": "Ajustes guardados."}
+
+        if raw_stock is not None:
+            activo_stock = _parse_bool_flag(raw_stock)
+            valor_stock = "Si" if activo_stock else "No"
+            try:
+                ok = escribir_valor_configuracion_ecom(
+                    base, KEY_VALIDAR_STOCK_PEDIDOS, valor_stock
+                )
+            except Exception as exc:
+                return Response(
+                    {
+                        "ok": False,
+                        "error": f"No se pudo guardar validar_stock_pedidos: {exc}",
+                    },
+                    status=500,
+                )
+            if not ok:
+                return Response(
+                    {
+                        "ok": False,
+                        "error": "No se pudo guardar validar_stock_pedidos (base o clave inválida).",
+                    },
+                    status=500,
+                )
+            resp_data["validar_stock_pedidos"] = activo_stock
+
+        if raw_mail is not None:
+            activo_mail = _parse_bool_flag(raw_mail)
+            valor_mail = "Si" if activo_mail else "No"
+            try:
+                ok = escribir_valor_configuracion_ecom(
+                    base, KEY_ENVIAR_MAIL_CONFIRMAR_PEDIDO, valor_mail
+                )
+            except Exception as exc:
+                return Response(
+                    {
+                        "ok": False,
+                        "error": f"No se pudo guardar enviar_mail_confirmar_pedido: {exc}",
+                    },
+                    status=500,
+                )
+            if not ok:
+                return Response(
+                    {
+                        "ok": False,
+                        "error": "No se pudo guardar enviar_mail_confirmar_pedido (base o clave inválida).",
+                    },
+                    status=500,
+                )
+            resp_data["enviar_mail_confirmar_pedido"] = activo_mail
+
+        return Response(resp_data)
 
 
 class AjustesWorkflowAPIView(APIView):

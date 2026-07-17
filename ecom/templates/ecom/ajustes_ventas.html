@@ -67,6 +67,46 @@
     </div>
 
     <div class="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+      <h2 class="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Correo al confirmar pedido</h2>
+      <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">
+        Controla el envío automático del comprobante al cliente cuando se confirma un pedido (PED).
+      </p>
+
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Enviar mail al confirmar pedido</p>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            En modo <strong>Activo</strong>, al confirmar un PED, si el cliente tiene email se encola el comprobante.
+            Requiere <strong>correo saliente configurado</strong> y el worker <code>process_ecom_mail_queue</code>.
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <input type="hidden" x-model="enviarMailSiNo" />
+          <button type="button"
+                  @click="toggleEnviarMail()"
+                  :class="enviarMailConfirmarPedido
+                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300'"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1"
+                  :aria-pressed="enviarMailConfirmarPedido">
+            <span class="material-icons text-base" aria-hidden="true" x-text="enviarMailConfirmarPedido ? 'check_circle' : 'cancel'"></span>
+            <span x-text="enviarMailConfirmarPedido ? 'Activo' : 'Inactivo'"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end border-t border-slate-100 pt-4 dark:border-slate-700">
+        <button type="button"
+                @click="guardar()"
+                :disabled="guardando"
+                class="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60">
+          <span class="material-icons text-base" aria-hidden="true">save</span>
+          <span x-text="guardando ? 'Guardando…' : 'Guardar'"></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
       <h2 class="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Workflow comercial</h2>
       <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">
         Jerarquía org, aprobación de pedidos y atajos del hub. El subflag de aprobación solo aplica con workflow activo.
@@ -280,6 +320,7 @@ function ajustesVentasApp() {
   const wf = boot.workflow || {};
   return {
     validarStockPedidos: !!boot.validar_stock_pedidos,
+    enviarMailConfirmarPedido: !!boot.enviar_mail_confirmar_pedido,
     workflowJerarquia: !!(wf.workflow_jerarquia_comercial ?? boot.workflow_jerarquia_activo),
     aprobacionPedidos: !!wf.aprobacion_pedidos_activa_raw,
     objetivosEnPedidos: !!wf.objetivos_en_pedidos,
@@ -298,6 +339,9 @@ function ajustesVentasApp() {
     jerarquiaGuardando: false,
     get validarStockSiNo() {
       return this.validarStockPedidos ? 'Si' : 'No';
+    },
+    get enviarMailSiNo() {
+      return this.enviarMailConfirmarPedido ? 'Si' : 'No';
     },
     get workflowJerarquiaSiNo() {
       return this.workflowJerarquia ? 'Si' : 'No';
@@ -321,6 +365,11 @@ function ajustesVentasApp() {
     },
     toggleValidarStock() {
       this.validarStockPedidos = !this.validarStockPedidos;
+      this.mensaje = '';
+      this.error = '';
+    },
+    toggleEnviarMail() {
+      this.enviarMailConfirmarPedido = !this.enviarMailConfirmarPedido;
       this.mensaje = '';
       this.error = '';
     },
@@ -352,7 +401,10 @@ function ajustesVentasApp() {
             'X-CSRFToken': this.csrf(),
           },
           credentials: 'same-origin',
-          body: JSON.stringify({ validar_stock_pedidos: this.validarStockPedidos }),
+          body: JSON.stringify({
+            validar_stock_pedidos: this.validarStockPedidos,
+            enviar_mail_confirmar_pedido: this.enviarMailConfirmarPedido,
+          }),
         });
         let data = {};
         try { data = await res.json(); } catch (_) { data = {}; }
@@ -360,7 +412,12 @@ function ajustesVentasApp() {
           this.error = data.error || data.detail || ('No se pudo guardar (HTTP ' + res.status + ').');
           return;
         }
-        this.validarStockPedidos = !!data.validar_stock_pedidos;
+        if (data.validar_stock_pedidos !== undefined) {
+          this.validarStockPedidos = !!data.validar_stock_pedidos;
+        }
+        if (data.enviar_mail_confirmar_pedido !== undefined) {
+          this.enviarMailConfirmarPedido = !!data.enviar_mail_confirmar_pedido;
+        }
         this.mensaje = data.message || 'Ajustes guardados.';
       } catch (e) {
         this.error = 'Error de red al guardar.';

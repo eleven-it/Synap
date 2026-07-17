@@ -20,6 +20,7 @@ _KEYS_FUENTE = {
 }
 
 KEY_VALIDAR_STOCK_PEDIDOS = "ecom_validar_stock_pedidos"
+KEY_ENVIAR_MAIL_CONFIRMAR_PEDIDO = "ecom_enviar_mail_confirmar_pedido"
 KEY_WORKFLOW_JERARQUIA_COMERCIAL = "ecom_workflow_jerarquia_comercial"
 KEY_APROBACION_PEDIDOS_ACTIVA = "ecom_aprobacion_pedidos_activa"
 KEY_APROBACION_UMBRAL_MONTO = "ecom_aprobacion_umbral_monto"
@@ -282,10 +283,23 @@ def pedidos_validan_stock(base_empresa: str) -> bool:
     return _normalizar_si_no(raw)
 
 
+def pedidos_envian_mail_confirmacion(base_empresa: str) -> bool:
+    """
+    Lee ``ecom_enviar_mail_confirmar_pedido`` en ``configuracion_ecom``.
+
+    Default **Si** si falta la fila (envío automático al confirmar PED).
+    """
+    raw = leer_valor_configuracion_ecom(
+        base_empresa, KEY_ENVIAR_MAIL_CONFIRMAR_PEDIDO, "Si"
+    )
+    return _normalizar_si_no(raw)
+
+
 def _meta_fila_config(key: str) -> dict:
     """Metadatos de fila para INSERT (respetar anchos típicos del schema legacy)."""
     nombres = {
         KEY_VALIDAR_STOCK_PEDIDOS: "Validar stock en pedidos",
+        KEY_ENVIAR_MAIL_CONFIRMAR_PEDIDO: "Enviar mail al confirmar pedido",
         KEY_WORKFLOW_JERARQUIA_COMERCIAL: "Workflow jerarquía comercial",
         KEY_APROBACION_PEDIDOS_ACTIVA: "Aprobación comercial de pedidos",
         KEY_APROBACION_UMBRAL_MONTO: "Umbral monto aprobación pedidos",
@@ -297,6 +311,9 @@ def _meta_fila_config(key: str) -> dict:
     detalles = {
         KEY_VALIDAR_STOCK_PEDIDOS: (
             "Si: bloquea PED sin disponible. No: permite PED sin stock (p.ej. fabricación MPR)."
+        ),
+        KEY_ENVIAR_MAIL_CONFIRMAR_PEDIDO: (
+            "Si: encola mail de confirmación al cliente al confirmar PED. No: no envía automáticamente."
         ),
         KEY_WORKFLOW_JERARQUIA_COMERCIAL: (
             "Si: alcance comercial vía organigrama G→S→V. No: carteras JSON legacy."

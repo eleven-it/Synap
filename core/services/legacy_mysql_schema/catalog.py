@@ -1321,6 +1321,18 @@ _ECOM_AJUSTES_VENTAS_CONFIG: Tuple[Dict[str, str], ...] = (
         "detalle_valor_permiso": "Si-No",
     },
     {
+        "key_permiso": "ecom_enviar_mail_confirmar_pedido",
+        "nombre_permiso": "Enviar mail al confirmar pedido",
+        "detalle_permiso": (
+            "Si: encola mail de confirmación al cliente al confirmar un pedido (PED). "
+            "No: no envía mail automático (el usuario puede encolar manualmente)."
+        ),
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Si/No",
+        "valor_permiso": "Si",
+        "detalle_valor_permiso": "Si-No",
+    },
+    {
         "key_permiso": "ecom_workflow_jerarquia_comercial",
         "nombre_permiso": "Workflow jerarquía comercial",
         "detalle_permiso": (
