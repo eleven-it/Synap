@@ -7,7 +7,7 @@
 <section class="min-h-[calc(100dvh-4.5rem)] bg-slate-50 py-3 dark:bg-slate-900 sm:py-4"
          x-data="ajustesVentasApp()"
          x-init="init()">
-  <div class="mx-auto w-full max-w-3xl px-3 sm:px-4 md:px-6 lg:px-8">
+  <div class="mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
     <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
       <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <li><span class="font-medium text-slate-600 dark:text-slate-300">Ventas</span></li>
@@ -235,24 +235,52 @@
         Organigrama Gerente → Supervisor → Vendedor. Gerente/Supervisor: usuarios con puesto Supervisor, Administrador o Ventas. Vendedor: catálogo de viajantes. Requiere workflow jerarquía activo para aplicar alcance en pedidos.
       </p>
 
-      <div class="mb-4 grid gap-3 sm:grid-cols-2">
+      <div class="mb-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <template x-for="campo in ['gerente','supervisor','vendedor']" :key="'pick-' + campo">
           <div class="relative" @click.outside="cerrarPick(campo)">
-            <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300"
-                   :for="'jerarquia-' + campo"
-                   x-text="campo === 'gerente' ? 'Gerente' : (campo === 'supervisor' ? 'Supervisor' : 'Vendedor')"></label>
+            <div class="mb-1 flex items-center gap-2">
+              <label class="block text-xs font-medium text-slate-600 dark:text-slate-300"
+                     :for="'jerarquia-' + campo"
+                     x-text="campo === 'gerente' ? 'Gerente' : (campo === 'supervisor' ? 'Supervisor' : 'Vendedor')"></label>
+              <span x-show="campo !== 'vendedor'"
+                    class="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[11px] font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+                <span class="material-icons text-[13px] leading-none" aria-hidden="true">badge</span>
+                Usuario
+              </span>
+              <span x-show="campo === 'vendedor'"
+                    class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                <span class="material-icons text-[13px] leading-none" aria-hidden="true">storefront</span>
+                Viajante
+              </span>
+            </div>
             <div class="flex items-center gap-1">
-              <input type="search" autocomplete="off"
-                     :id="'jerarquia-' + campo"
-                     :placeholder="campo === 'vendedor' ? 'Buscar vendedor…' : 'Buscar usuario…'"
-                     class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-                     x-model="pick[campo].q"
-                     @focus="abrirPick(campo)"
-                     @input.debounce.250ms="buscarUsuariosJerarquia(campo)"
-                     @keydown.arrow-down.prevent="moverPick(campo, 1)"
-                     @keydown.arrow-up.prevent="moverPick(campo, -1)"
-                     @keydown.enter.prevent="elegirPickResaltado(campo)"
-                     @keydown.escape="cerrarPick(campo)"/>
+              <div class="relative w-full">
+                <input type="search" autocomplete="off" role="combobox"
+                       :id="'jerarquia-' + campo"
+                       :placeholder="campo === 'vendedor' ? 'Buscar vendedor… (↓ todos)' : 'Buscar usuario… (↓ todos)'"
+                       class="w-full rounded-lg border border-slate-200 py-2.5 pl-3 pr-10 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                       x-model="pick[campo].q"
+                       aria-autocomplete="list"
+                       :aria-controls="'listbox-' + campo"
+                       :aria-expanded="pick[campo].abierto ? 'true' : 'false'"
+                       :aria-activedescendant="(pick[campo].abierto && pick[campo].resultados.length) ? ('opt-' + campo + '-' + pick[campo].idx) : null"
+                       @focus="abrirPick(campo)"
+                       @input.debounce.250ms="buscarUsuariosJerarquia(campo)"
+                       @keydown.arrow-down.prevent="onArrowDownPick(campo)"
+                       @keydown.arrow-up.prevent="onArrowUpPick(campo)"
+                       @keydown.enter.prevent="elegirPickResaltado(campo)"
+                       @keydown.escape="cerrarPick(campo)"/>
+                <button type="button"
+                        @click="togglePick(campo)"
+                        tabindex="-1"
+                        class="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        :aria-label="pick[campo].abierto ? 'Cerrar lista' : 'Ver todos'"
+                        :aria-expanded="pick[campo].abierto ? 'true' : 'false'"
+                        title="Ver todos">
+                  <span class="material-icons text-lg" aria-hidden="true"
+                        x-text="pick[campo].abierto ? 'expand_less' : 'expand_more'"></span>
+                </button>
+              </div>
               <button type="button" x-show="pick[campo].cod"
                       @click="limpiarPick(campo)"
                       class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700"
@@ -261,18 +289,18 @@
                 <span class="material-icons text-base" aria-hidden="true">close</span>
               </button>
             </div>
-            <p x-show="pick[campo].etiqueta" x-cloak
-               class="mt-1 truncate text-xs font-medium text-sky-700 dark:text-sky-300"
-               x-text="pick[campo].etiqueta"></p>
             <ul x-show="pick[campo].abierto && pick[campo].resultados.length" x-cloak
+                :id="'listbox-' + campo"
                 class="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
                 role="listbox">
               <template x-for="(u, i) in pick[campo].resultados" :key="campo + '-' + u.cod_viajante">
                 <li role="option"
+                    :id="'opt-' + campo + '-' + i"
+                    :aria-selected="i === pick[campo].idx ? 'true' : 'false'"
                     @mousedown.prevent="elegirPick(campo, u)"
                     :class="i === pick[campo].idx ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
                     class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
-                  <span class="font-medium" x-text="u.etiqueta"></span>
+                  <span class="font-medium" x-text="etiquetaVisible(campo, u)"></span>
                 </li>
               </template>
             </ul>
@@ -282,7 +310,7 @@
             </p>
             <p x-show="pick[campo].abierto && !pick[campo].buscando && pick[campo].buscado && !pick[campo].resultados.length" x-cloak
                class="absolute left-0 right-0 z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800"
-               x-text="campo === 'vendedor' ? 'Sin vendedores. Probá otro texto.' : 'Sin usuarios (puestos Supervisor, Administrador o Ventas).'">
+               x-text="campo === 'vendedor' ? 'Sin viajantes. Probá otro texto.' : 'Sin usuarios (puestos Supervisor, Administrador o Ventas).'">
             </p>
           </div>
         </template>
@@ -306,10 +334,13 @@
         </button>
       </div>
 
-      <div class="mt-4 space-y-3">
+      <div class="mt-4 grid gap-4 lg:grid-cols-2">
         <template x-if="arbol.vinculos_gs && arbol.vinculos_gs.length">
           <div>
-            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Gerente → Supervisor</h3>
+            <h3 class="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <span class="material-icons text-[15px] text-sky-500" aria-hidden="true">badge</span>
+              Gerente → Supervisor
+            </h3>
             <ul class="space-y-1">
               <template x-for="v in arbol.vinculos_gs" :key="'gs-' + v.id">
                 <li class="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-700">
@@ -323,7 +354,10 @@
         </template>
         <template x-if="arbol.vinculos_sv && arbol.vinculos_sv.length">
           <div>
-            <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Supervisor → Vendedor</h3>
+            <h3 class="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <span class="material-icons text-[15px] text-amber-500" aria-hidden="true">storefront</span>
+              Supervisor → Vendedor
+            </h3>
             <ul class="space-y-1">
               <template x-for="v in arbol.vinculos_sv" :key="'sv-' + v.id">
                 <li class="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-700">
@@ -335,9 +369,9 @@
             </ul>
           </div>
         </template>
-        <p x-show="!arbol.vinculos_gs?.length && !arbol.vinculos_sv?.length"
-           class="text-xs text-slate-500 dark:text-slate-400">Sin vínculos activos. Buscá usuarios y usá los botones para crear el árbol.</p>
       </div>
+      <p x-show="!arbol.vinculos_gs?.length && !arbol.vinculos_sv?.length"
+         class="mt-4 text-xs text-slate-500 dark:text-slate-400">Sin vínculos activos. Buscá y vinculá usuarios (Gerente/Supervisor) y viajantes (Vendedor) para armar el árbol.</p>
     </div>
 
     <p class="mt-4 text-center">
@@ -368,9 +402,9 @@ function ajustesVentasApp() {
     arbol: { vinculos_gs: [], vinculos_sv: [], gerentes: [] },
     formJerarquia: { cod_gerente: null, cod_supervisor: null, cod_vendedor: null },
     pick: {
-      gerente: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false },
-      supervisor: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false },
-      vendedor: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false },
+      gerente: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false, listadoCompleto: false },
+      supervisor: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false, listadoCompleto: false },
+      vendedor: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false, listadoCompleto: false },
     },
     mensaje: '',
     error: '',
@@ -533,8 +567,10 @@ function ajustesVentasApp() {
       const p = this.pick[campo];
       if (!p) return;
       p.abierto = true;
+      // Si ya hay selección, no filtrar por el texto del input: esperar ↓ / chevron / tipeo.
+      if (p.cod) return;
       if (!p.resultados.length && !p.buscando) {
-        this.buscarUsuariosJerarquia(campo);
+        this.buscarUsuariosJerarquia(campo, { todos: true });
       }
     },
     cerrarPick(campo) {
@@ -542,6 +578,7 @@ function ajustesVentasApp() {
       if (!p) return;
       p.abierto = false;
       p.idx = 0;
+      p.listadoCompleto = false;
     },
     limpiarPick(campo) {
       const p = this.pick[campo];
@@ -551,16 +588,42 @@ function ajustesVentasApp() {
       p.etiqueta = '';
       p.resultados = [];
       p.buscado = false;
+      p.listadoCompleto = false;
       this._syncFormDesdePick();
       this.cerrarPick(campo);
+    },
+    etiquetaVisible(campo, u) {
+      if (!u) return '';
+      if (campo === 'vendedor') {
+        return (u.nombre_viajante || u.etiqueta || u.text || '').trim();
+      }
+      const nom = (u.nombre_usuario || '').trim();
+      const ape = (u.apellido_usuario || '').trim();
+      const compuesto = [nom, ape].filter(Boolean).join(' ').trim();
+      if (compuesto) return compuesto;
+      return this._sanitizarEtiqueta(u.etiqueta || u.text || '');
+    },
+    _sanitizarEtiqueta(txt) {
+      return String(txt || '')
+        .replace(/@\S+/g, '')
+        .replace(/[·\-–—]\s*vía\.?\s*\S*/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    },
+    _scrollResaltado(campo) {
+      this.$nextTick(() => {
+        const el = document.getElementById('opt-' + campo + '-' + this.pick[campo].idx);
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+      });
     },
     elegirPick(campo, u) {
       const p = this.pick[campo];
       if (!p || !u) return;
       p.cod = u.cod_viajante;
-      p.etiqueta = u.etiqueta || u.text || String(u.cod_viajante);
+      p.etiqueta = this.etiquetaVisible(campo, u) || String(u.cod_viajante);
       p.q = p.etiqueta;
       p.resultados = [];
+      p.listadoCompleto = false;
       this._syncFormDesdePick();
       this.cerrarPick(campo);
     },
@@ -569,23 +632,54 @@ function ajustesVentasApp() {
       if (!p || !p.resultados.length) return;
       p.abierto = true;
       p.idx = (p.idx + delta + p.resultados.length) % p.resultados.length;
+      this._scrollResaltado(campo);
+    },
+    onArrowDownPick(campo) {
+      const p = this.pick[campo];
+      if (!p) return;
+      if (p.abierto && p.resultados.length) {
+        this.moverPick(campo, 1);
+        return;
+      }
+      // Sin lista abierta: ↓ trae el catálogo completo.
+      this.buscarUsuariosJerarquia(campo, { todos: true });
+    },
+    onArrowUpPick(campo) {
+      const p = this.pick[campo];
+      if (!p) return;
+      if (p.abierto && p.resultados.length) {
+        this.moverPick(campo, -1);
+        return;
+      }
+      this.buscarUsuariosJerarquia(campo, { todos: true });
+    },
+    togglePick(campo) {
+      const p = this.pick[campo];
+      if (!p) return;
+      if (p.abierto && p.listadoCompleto && p.resultados.length) {
+        this.cerrarPick(campo);
+      } else {
+        this.buscarUsuariosJerarquia(campo, { todos: true });
+      }
     },
     elegirPickResaltado(campo) {
       const p = this.pick[campo];
       if (!p || !p.resultados.length) return;
       this.elegirPick(campo, p.resultados[p.idx] || p.resultados[0]);
     },
-    async buscarUsuariosJerarquia(campo) {
+    async buscarUsuariosJerarquia(campo, opts = {}) {
       const p = this.pick[campo];
       if (!p || !this.urls.jerarquia_usuarios) return;
+      const todos = !!opts.todos;
       p.abierto = true;
       p.buscando = true;
       p.buscado = false;
       p.idx = 0;
+      p.listadoCompleto = todos;
       try {
         const url = new URL(this.urls.jerarquia_usuarios, window.location.origin);
-        url.searchParams.set('q', (p.q || '').trim());
-        url.searchParams.set('limit', '20');
+        url.searchParams.set('q', todos ? '' : (p.q || '').trim());
+        url.searchParams.set('limit', todos ? '50' : '20');
         url.searchParams.set('rol', campo === 'vendedor' ? 'vendedor' : campo);
         const res = await fetch(url.toString(), {
           headers: { Accept: 'application/json' },
