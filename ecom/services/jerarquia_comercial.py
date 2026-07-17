@@ -539,6 +539,49 @@ def vincular_supervisor_vendedores_batch(
     return True, f"{len(vendedores)} vendedor(es) vinculado(s) al supervisor."
 
 
+def desactivar_supervisor_vendedores_batch(
+    base_empresa: str,
+    cod_vendedores: Sequence[int],
+    *,
+    cod_supervisor: Optional[int] = None,
+    id_usuario_supervisor: Optional[int] = None,
+) -> Tuple[bool, str]:
+    """Desactiva varios vínculos S→V del mismo supervisor."""
+    vendedores: List[int] = []
+    vistos: set[int] = set()
+    for valor in cod_vendedores or []:
+        vendedor = to_int_or_none(valor)
+        if vendedor is not None and vendedor not in vistos:
+            vistos.add(vendedor)
+            vendedores.append(vendedor)
+    if not vendedores:
+        return False, "Debe indicar al menos un vendedor válido."
+    if to_int_or_none(id_usuario_supervisor) is None and to_int_or_none(cod_supervisor) is None:
+        return False, "Debe indicar el supervisor."
+
+    errores: List[str] = []
+    ok_count = 0
+    for vendedor in vendedores:
+        ok, mensaje = desactivar_vinculo_supervisor_vendedor(
+            base_empresa,
+            vendedor,
+            cod_supervisor,
+            id_usuario_supervisor=id_usuario_supervisor,
+        )
+        if ok:
+            ok_count += 1
+        else:
+            errores.append(f"{vendedor}: {mensaje}")
+    if ok_count == 0:
+        return False, "No se pudo quitar ningún vendedor: " + "; ".join(errores)
+    if errores:
+        return True, (
+            f"{ok_count} vendedor(es) quitado(s). "
+            f"Con observaciones: " + "; ".join(errores)
+        )
+    return True, f"{ok_count} vendedor(es) quitado(s) del supervisor."
+
+
 def desactivar_vinculo_gerente_supervisor(
     base_empresa: str,
     cod_supervisor: Optional[int] = None,

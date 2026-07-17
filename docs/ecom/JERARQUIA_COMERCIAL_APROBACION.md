@@ -11,6 +11,8 @@ Cuando el master flag está **activo**, Synap reemplaza las carteras JSON legacy
 Un vendedor puede tener más de un supervisor activo para cubrir vacaciones o turnos.
 La UI permite agregarlos en forma masiva con selección múltiple; cada vínculo se
 gestiona por su par Supervisor→Vendedor y quitar uno no afecta los demás.
+También se pueden quitar varios vendedores de un mismo supervisor de una vez
+(checkboxes + *Quitar seleccionados*).
 
 Con master **inactivo** (REQ-GLOB-01), el sistema conserva el comportamiento anterior: JSON `ecom_vendedores_a_cargo_*`, alcance propio del vendedor, hub sin cola comercial y checkout sin `estado_aprobacion_comercial`.
 

@@ -13,6 +13,7 @@ from ecom.catalogo_producto_relay_views import _session_base_empresa
 from ecom.permissions import EcomJerarquiaEditarPermission
 from ecom.services.jerarquia_comercial import (
     buscar_usuarios_jerarquia,
+    desactivar_supervisor_vendedores_batch,
     desactivar_vinculo_gerente_supervisor,
     desactivar_vinculo_supervisor_vendedor,
     listar_arbol_jerarquia,
@@ -75,12 +76,21 @@ class JerarquiaNodosAPIView(APIView):
                 id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
             )
         elif accion == "desactivar_supervisor_vendedor":
-            ok, msg = desactivar_vinculo_supervisor_vendedor(
-                base,
-                to_int_or_none(data.get("cod_vendedor")),
-                to_int_or_none(data.get("cod_supervisor")),
-                id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
-            )
+            vendedores = data.get("cod_vendedores")
+            if isinstance(vendedores, list):
+                ok, msg = desactivar_supervisor_vendedores_batch(
+                    base,
+                    vendedores,
+                    cod_supervisor=to_int_or_none(data.get("cod_supervisor")),
+                    id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
+                )
+            else:
+                ok, msg = desactivar_vinculo_supervisor_vendedor(
+                    base,
+                    to_int_or_none(data.get("cod_vendedor")),
+                    to_int_or_none(data.get("cod_supervisor")),
+                    id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
+                )
         else:
             return Response(
                 {

@@ -90,7 +90,7 @@ Orden de las tarjetas en `ecom/ajustes_ventas.html` (canon slate/sky, toggles Ac
 
    El **primer alta** siempre crea un G→S (no existe nodo gerente suelto): el modo `gerente` es un asistente de 2 pasos. Botones del panel: *Cancelar* / *Confirmar* (o *Siguiente* en el paso 1). Si la persona elegida **ya tiene padre** en otra rama, se pide confirmación para **mover** (`mover: true` en el POST) en lugar de fallar.
 
-   En modo `vendedor`, el picker permite seleccionar uno o más viajantes: cada click alterna un chip y *Confirmar* crea vínculos S→V para todos, sin mover ni quitar vínculos de otros supervisores. Un vendedor puede reportar a varios supervisores activos para cobertura de vacaciones o turnos. Quitar un vendedor desde un nodo desactiva únicamente el par Supervisor→Vendedor de ese nodo.
+   En modo `vendedor`, el picker permite seleccionar uno o más viajantes: cada click alterna un chip y *Confirmar* crea vínculos S→V para todos, sin mover ni quitar vínculos de otros supervisores. Un vendedor puede reportar a varios supervisores activos para cobertura de vacaciones o turnos. Quitar un vendedor desde un nodo desactiva únicamente el par Supervisor→Vendedor de ese nodo. En el árbol, cada fila de vendedor tiene checkbox; con más de un vendedor aparecen *Seleccionar todos* / *Deseleccionar* y el botón *Quitar seleccionados (N)* (POST `desactivar_supervisor_vendedor` con `cod_vendedores[]`).
 
    **Identidad de gerente/supervisor:** los vínculos se identifican por el
    `id_usuario` elegido (`id_usuario_gerente` e `id_usuario_supervisor`).
