@@ -471,6 +471,18 @@
           <ul x-show="pick.panel.abierto && pick.panel.resultados.length" x-cloak id="listbox-panel"
               class="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
               role="listbox">
+            <li x-show="altaJerarquia.modo === 'vendedor'" x-cloak
+                class="sticky top-0 z-10 border-b border-slate-100 bg-white px-2 py-1.5 dark:border-slate-700 dark:bg-slate-800"
+                role="presentation">
+              <button type="button"
+                      @mousedown.prevent="toggleTodosVendedoresVisibles()"
+                      class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-semibold text-amber-800 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/40">
+                <span class="material-icons text-base" aria-hidden="true"
+                      x-text="todosVendedoresVisiblesSeleccionados ? 'indeterminate_check_box' : 'library_add_check'"></span>
+                <span x-text="todosVendedoresVisiblesSeleccionados ? 'Deseleccionar todos' : 'Seleccionar todos'"></span>
+                <span class="ml-auto font-normal text-slate-400" x-text="'(' + pick.panel.resultados.length + ')'"></span>
+              </button>
+            </li>
             <template x-for="(u, i) in pick.panel.resultados" :key="'panel-' + (u.id_usuario ?? u.cod_viajante)">
               <li role="option" :id="'opt-panel-' + i"
                   :aria-selected="i === pick.panel.idx ? 'true' : 'false'"
@@ -896,6 +908,33 @@ function ajustesVentasApp() {
     esVendedorSeleccionado(cod) {
       const n = Number(cod);
       return (this.altaJerarquia.seleccionados || []).some((v) => Number(v.cod) === n);
+    },
+    get todosVendedoresVisiblesSeleccionados() {
+      const resultados = this.pick.panel.resultados || [];
+      if (!resultados.length) return false;
+      return resultados.every((u) => this.esVendedorSeleccionado(u.cod_viajante));
+    },
+    toggleTodosVendedoresVisibles() {
+      if (this.altaJerarquia.modo !== 'vendedor') return;
+      const resultados = this.pick.panel.resultados || [];
+      if (!resultados.length) return;
+      if (this.todosVendedoresVisiblesSeleccionados) {
+        const visibles = new Set(resultados.map((u) => Number(u.cod_viajante)));
+        this.altaJerarquia.seleccionados = this.altaJerarquia.seleccionados.filter(
+          (v) => !visibles.has(Number(v.cod))
+        );
+        return;
+      }
+      const ya = new Set(this.altaJerarquia.seleccionados.map((v) => Number(v.cod)));
+      resultados.forEach((u) => {
+        const cod = Number(u.cod_viajante);
+        if (ya.has(cod)) return;
+        this.altaJerarquia.seleccionados.push({
+          cod: u.cod_viajante,
+          etiqueta: this.etiquetaVisible('panel', u) || String(u.cod_viajante),
+        });
+        ya.add(cod);
+      });
     },
     moverPick(campo, delta) {
       const p = this.pick[campo];
