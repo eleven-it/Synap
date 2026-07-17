@@ -55,6 +55,40 @@ def user_handle(base_empresa: str, id_usuario: int) -> bytes:
     return f"{base_empresa}:{id_usuario}".encode("utf-8")
 
 
+def resolve_webauthn_rp(request=None) -> tuple[str, str]:
+    """
+    Resuelve (rp_id, origin) del contexto de navegación actual.
+
+    WebAuthn exige que rp_id coincida con el hostname de la página. Si el
+    cliente entra por IP LAN o un host distinto a SITE_URL, usar settings
+    fijos hace fallar create()/get() en el navegador sin llegar a verificar.
+
+    Usa HTTP_HOST del META (sin get_host()) para no depender de ALLOWED_HOSTS
+    en el cálculo del RP — el middleware de host ya validó la petición.
+    """
+    if request is not None:
+        host = (request.META.get("HTTP_HOST") or "").strip()
+        if not host and hasattr(request, "get_host"):
+            try:
+                host = (request.get_host() or "").strip()
+            except Exception:
+                host = ""
+        if host:
+            hostname = host.split(":")[0].lower()
+            forwarded = (request.META.get("HTTP_X_FORWARDED_PROTO") or "").split(",")[0].strip()
+            if forwarded:
+                scheme = forwarded
+            elif getattr(request, "is_secure", lambda: False)():
+                scheme = "https"
+            else:
+                scheme = getattr(request, "scheme", None) or "http"
+            return hostname, f"{scheme}://{host}"
+    return (
+        getattr(settings, "WEBAUTHN_RP_ID", "localhost"),
+        getattr(settings, "WEBAUTHN_ORIGIN", "http://localhost"),
+    )
+
+
 def _b64url_encode(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
@@ -141,6 +175,7 @@ def generate_register_options(
     cod_usuario: str,
     nombre_completo: str,
     device_label: str = "",
+    request=None,
 ) -> dict:
     if not get_user_quick_auth_enabled(base_empresa, id_usuario):
         raise WebAuthnServiceError(
@@ -161,16 +196,17 @@ def generate_register_options(
         for c in _active_credentials_qs(base_empresa, id_usuario).only("credential_id")
     ]
 
+    rp_id, origin = resolve_webauthn_rp(request)
     handle = user_handle(base_empresa, id_usuario)
     options = generate_registration_options(
-        rp_id=settings.WEBAUTHN_RP_ID,
+        rp_id=rp_id,
         rp_name=settings.WEBAUTHN_RP_NAME,
         user_name=f"{base_empresa}:{cod_usuario}",
         user_id=handle,
         user_display_name=nombre_completo or cod_usuario,
         authenticator_selection=AuthenticatorSelectionCriteria(
             resident_key=ResidentKeyRequirement.PREFERRED,
-            user_verification=UserVerificationRequirement.PREFERRED,
+            user_verification=UserVerificationRequirement.REQUIRED,
         ),
         exclude_credentials=exclude or None,
     )
@@ -184,6 +220,8 @@ def generate_register_options(
             "base_empresa": base_empresa,
             "id_usuario": id_usuario,
             "device_label": (device_label or "").strip()[:128],
+            "rp_id": rp_id,
+            "origin": origin,
         },
     )
     return json.loads(options_to_json(options))
@@ -194,6 +232,7 @@ def verify_register(
     session_key: str,
     credential_json: dict,
     auth_service: Optional[AdministraNETAuth] = None,
+    request=None,
 ) -> dict:
     stored = _pop_challenge("reg", session_key)
     if not stored:
@@ -208,6 +247,8 @@ def verify_register(
     base_empresa = stored["base_empresa"]
     id_usuario = stored["id_usuario"]
     device_label = stored.get("device_label") or "Dispositivo"
+    rp_id = stored.get("rp_id") or resolve_webauthn_rp(request)[0]
+    origin = stored.get("origin") or resolve_webauthn_rp(request)[1]
 
     if not get_user_quick_auth_enabled(base_empresa, id_usuario):
         raise WebAuthnServiceError(
@@ -227,8 +268,8 @@ def verify_register(
         verified = verify_registration_response(
             credential=credential_json,
             expected_challenge=challenge_bytes,
-            expected_rp_id=settings.WEBAUTHN_RP_ID,
-            expected_origin=settings.WEBAUTHN_ORIGIN,
+            expected_rp_id=rp_id,
+            expected_origin=origin,
             require_user_verification=True,
         )
     except Exception as e:
@@ -263,6 +304,7 @@ def generate_authenticate_options(
     base_empresa: str,
     cod_usuario: str,
     auth_service: Optional[AdministraNETAuth] = None,
+    request=None,
 ) -> dict:
     if auth_service is None:
         auth_service = AdministraNETAuth()
@@ -284,18 +326,20 @@ def generate_authenticate_options(
     creds = list(_active_credentials_qs(base_empresa, id_usuario))
     if not creds:
         raise WebAuthnServiceError(
-            "No hay desbloqueo biométrico registrado para este usuario.",
+            "No hay desbloqueo biométrico registrado para este usuario. "
+            "Activá la autenticación rápida en Perfil y registrá este dispositivo.",
             status=404,
         )
 
+    rp_id, origin = resolve_webauthn_rp(request)
     allow = [
         PublicKeyCredentialDescriptor(id=bytes(c.credential_id))
         for c in creds
     ]
     options = generate_authentication_options(
-        rp_id=settings.WEBAUTHN_RP_ID,
+        rp_id=rp_id,
         allow_credentials=allow,
-        user_verification=UserVerificationRequirement.PREFERRED,
+        user_verification=UserVerificationRequirement.REQUIRED,
     )
 
     challenge_b64 = json.loads(options_to_json(options))["challenge"]
@@ -306,6 +350,8 @@ def generate_authenticate_options(
             "challenge": challenge_b64,
             "base_empresa": base_empresa,
             "id_usuario": id_usuario,
+            "rp_id": rp_id,
+            "origin": origin,
         },
     )
     return json.loads(options_to_json(options))
@@ -330,6 +376,8 @@ def verify_authenticate(
 
     base_empresa = stored["base_empresa"]
     id_usuario = stored["id_usuario"]
+    rp_id = stored.get("rp_id") or resolve_webauthn_rp(request)[0]
+    origin = stored.get("origin") or resolve_webauthn_rp(request)[1]
     if not get_user_quick_auth_enabled(base_empresa, id_usuario):
         raise WebAuthnServiceError(
             "La autenticación rápida está desactivada para este usuario.",
@@ -355,8 +403,8 @@ def verify_authenticate(
         verified = verify_authentication_response(
             credential=credential_json,
             expected_challenge=challenge_bytes,
-            expected_rp_id=settings.WEBAUTHN_RP_ID,
-            expected_origin=settings.WEBAUTHN_ORIGIN,
+            expected_rp_id=rp_id,
+            expected_origin=origin,
             credential_public_key=bytes(db_cred.public_key),
             credential_current_sign_count=db_cred.sign_count,
             require_user_verification=True,

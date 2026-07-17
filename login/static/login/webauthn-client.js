@@ -150,6 +150,32 @@
     return apiPost('/preference/', { enabled: !!enabled });
   }
 
+  function mapDomError(err, action) {
+    if (!err) {
+      return new Error('Error WebAuthn');
+    }
+    var name = err.name || '';
+    if (name === 'NotAllowedError') {
+      return new Error(
+        action === 'register'
+          ? 'Registro cancelado o no permitido. Revisá Face ID / huella y volvé a intentar.'
+          : 'Desbloqueo cancelado o no permitido. Revisá Face ID / huella y volvé a intentar.'
+      );
+    }
+    if (name === 'InvalidStateError') {
+      return new Error('Este dispositivo ya está registrado. Si no aparece en la lista, revocá y volvé a activar.');
+    }
+    if (name === 'SecurityError' || name === 'NotSupportedError') {
+      return new Error(
+        'WebAuthn no disponible en este origen. Abrí Synap desde la app instalada (HTTPS) e intentá de nuevo.'
+      );
+    }
+    if (err.message) {
+      return err instanceof Error ? err : new Error(String(err.message));
+    }
+    return new Error('Error WebAuthn');
+  }
+
   function registerPasskey(deviceLabel) {
     if (!window.PublicKeyCredential) {
       return Promise.reject(new Error('WebAuthn no disponible en este navegador'));
@@ -161,7 +187,14 @@
         });
       })
       .then(function (credential) {
+        if (!credential) {
+          throw new Error('No se completó el registro biométrico');
+        }
         return apiPost('/register/verify/', { credential: credentialToJSON(credential) });
+      })
+      .catch(function (err) {
+        if (err && err.status) throw err;
+        throw mapDomError(err, 'register');
       });
   }
 
@@ -179,7 +212,14 @@
         });
       })
       .then(function (credential) {
+        if (!credential) {
+          throw new Error('No se completó el desbloqueo biométrico');
+        }
         return apiPost('/authenticate/verify/', { credential: credentialToJSON(credential) });
+      })
+      .catch(function (err) {
+        if (err && err.status) throw err;
+        throw mapDomError(err, 'authenticate');
       });
   }
 

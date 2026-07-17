@@ -193,12 +193,21 @@
       var devicesBlock = document.getElementById('webauthn-devices-block');
       var userPrefEnabled = false;
       var canUseDevices = false;
+      var enrollInFlight = false;
 
       function showMsg(text, isError) {
         if (!msgEl) return;
         msgEl.textContent = text;
         msgEl.classList.remove('hidden', 'bg-red-50', 'text-red-700', 'bg-emerald-50', 'text-emerald-700');
         msgEl.classList.add(isError ? 'bg-red-50' : 'bg-emerald-50', isError ? 'text-red-700' : 'text-emerald-700');
+      }
+
+      function webAuthnSurfaceOk() {
+        if (!SynapWebAuthn.isSupported()) return false;
+        if (window.SynapPwa && typeof SynapPwa.canUseWebAuthnSurface === 'function') {
+          return SynapPwa.canUseWebAuthnSurface();
+        }
+        return !!(window.SynapPwa && SynapPwa.isPwaStandalone());
       }
 
       function renderPrefToggle(enabled) {
@@ -214,9 +223,7 @@
       }
 
       function updateDevicesVisibility() {
-        canUseDevices = userPrefEnabled
-          && window.SynapPwa && SynapPwa.isPwaStandalone()
-          && SynapWebAuthn.isSupported();
+        canUseDevices = userPrefEnabled && webAuthnSurfaceOk();
         if (canUseDevices) {
           disabledMsg.classList.add('hidden');
           devicesBlock.classList.remove('hidden');
@@ -225,12 +232,15 @@
           if (!userPrefEnabled) {
             disabledMsg.classList.remove('hidden');
             summary.textContent = 'Autenticación rápida desactivada';
-          } else if (!window.SynapPwa || !SynapPwa.isPwaStandalone()) {
-            disabledMsg.classList.add('hidden');
-            summary.textContent = 'Disponible en la app instalada (PWA)';
-          } else {
+          } else if (!SynapWebAuthn.isSupported()) {
             disabledMsg.classList.add('hidden');
             summary.textContent = 'WebAuthn no disponible en este navegador';
+          } else if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+            disabledMsg.classList.add('hidden');
+            summary.textContent = 'Se necesita HTTPS (o localhost) para registrar el desbloqueo';
+          } else {
+            disabledMsg.classList.add('hidden');
+            summary.textContent = 'Abrí Synap desde la app instalada (PWA) para registrar el desbloqueo';
           }
         }
       }
@@ -239,7 +249,11 @@
         var creds = data.credentials || [];
         var max = data.max || 3;
         if (canUseDevices) {
-          summary.textContent = creds.length + ' de ' + max + ' dispositivo(s) registrado(s)';
+          if (creds.length === 0) {
+            summary.textContent = 'Preferencia activa — falta registrar este dispositivo';
+          } else {
+            summary.textContent = creds.length + ' de ' + max + ' dispositivo(s) registrado(s)';
+          }
         }
         listEl.innerHTML = '';
         creds.forEach(function(c) {
@@ -269,10 +283,45 @@
         }
       }
 
+      function doEnroll(auto) {
+        if (!canUseDevices || enrollInFlight) return Promise.resolve();
+        var labelInput = document.getElementById('webauthn-device-label');
+        var label = ((labelInput && labelInput.value) || '').trim() || 'Este dispositivo';
+        var btn = document.getElementById('btn-webauthn-enroll');
+        enrollInFlight = true;
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = 'Registrando...';
+        }
+        if (auto) {
+          showMsg('Completá Face ID / huella para registrar este dispositivo', false);
+        }
+        return SynapWebAuthn.registerPasskey(label)
+          .then(function() {
+            showMsg('Desbloqueo biométrico activado', false);
+            if (labelInput) labelInput.value = '';
+            return refresh();
+          })
+          .catch(function(e) {
+            showMsg(e.message, true);
+          })
+          .finally(function() {
+            enrollInFlight = false;
+            if (btn) {
+              btn.disabled = false;
+              btn.textContent = 'Activar desbloqueo en este dispositivo';
+            }
+          });
+      }
+
       function refresh() {
-        if (!canUseDevices) return Promise.resolve();
-        return SynapWebAuthn.listCredentials().then(renderList).catch(function(e) {
+        if (!canUseDevices) return Promise.resolve({ credentials: [] });
+        return SynapWebAuthn.listCredentials().then(function(data) {
+          renderList(data);
+          return data;
+        }).catch(function(e) {
           showMsg(e.message, true);
+          return { credentials: [] };
         });
       }
 
@@ -282,8 +331,17 @@
         SynapWebAuthn.setPreference(next)
           .then(function(data) {
             renderPrefToggle(data.enabled);
-            showMsg(data.enabled ? 'Autenticación rápida activada' : 'Autenticación rápida desactivada', false);
-            return refresh();
+            if (!data.enabled) {
+              showMsg('Autenticación rápida desactivada', false);
+              return null;
+            }
+            showMsg('Autenticación rápida activada. Registrá este dispositivo para poder desbloquear.', false);
+            return refresh().then(function(listData) {
+              var creds = (listData && listData.credentials) || [];
+              if (creds.length === 0 && canUseDevices) {
+                return doEnroll(true);
+              }
+            });
           })
           .catch(function(e) {
             showMsg(e.message, true);
@@ -294,23 +352,7 @@
       });
 
       document.getElementById('btn-webauthn-enroll').addEventListener('click', function() {
-        var label = (document.getElementById('webauthn-device-label').value || '').trim();
-        var btn = document.getElementById('btn-webauthn-enroll');
-        btn.disabled = true;
-        btn.textContent = 'Registrando...';
-        SynapWebAuthn.registerPasskey(label || 'Este dispositivo')
-          .then(function() {
-            showMsg('Desbloqueo biométrico activado', false);
-            document.getElementById('webauthn-device-label').value = '';
-            return refresh();
-          })
-          .catch(function(e) {
-            showMsg(e.message, true);
-          })
-          .finally(function() {
-            btn.disabled = false;
-            btn.textContent = 'Activar desbloqueo en este dispositivo';
-          });
+        doEnroll(false);
       });
 
       revokeAllBtn.addEventListener('click', function() {
@@ -324,7 +366,12 @@
       SynapWebAuthn.getPreference()
         .then(function(data) {
           renderPrefToggle(data.enabled);
-          return refresh();
+          return refresh().then(function(listData) {
+            var creds = (listData && listData.credentials) || [];
+            if (data.enabled && creds.length === 0 && canUseDevices) {
+              showMsg('Falta registrar este dispositivo para el desbloqueo biométrico', false);
+            }
+          });
         })
         .catch(function(e) {
           summary.textContent = 'No se pudo cargar la preferencia';
