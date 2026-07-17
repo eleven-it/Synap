@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from ecom.services.jerarquia_comercial import (
+    desactivar_supervisor_vendedores_batch,
     desactivar_vinculo_supervisor_vendedor,
     listar_arbol_jerarquia,
     rol_de,
@@ -254,6 +255,29 @@ class TestDesactivar(unittest.TestCase):
         sql, params = cursor.execute.call_args[0]
         self.assertIn("cod_supervisor = %s AND cod_vendedor = %s", sql)
         self.assertEqual(params[2:4], (10, 42))
+
+    @patch("ecom.services.jerarquia_comercial.desactivar_vinculo_supervisor_vendedor")
+    def test_desactivar_sv_batch(self, mock_desactivar):
+        mock_desactivar.side_effect = [
+            (True, "ok"),
+            (True, "ok"),
+            (False, "no activo"),
+        ]
+        ok, msg = desactivar_supervisor_vendedores_batch(
+            "emp1",
+            [42, 43, 42, 44],
+            id_usuario_supervisor=72,
+        )
+        self.assertTrue(ok)
+        self.assertIn("2 vendedor(es) quitado(s)", msg)
+        self.assertEqual(mock_desactivar.call_count, 3)
+        cods = [c.args[1] for c in mock_desactivar.call_args_list]
+        self.assertEqual(cods, [42, 43, 44])
+
+    def test_desactivar_sv_batch_sin_vendedores(self):
+        ok, msg = desactivar_supervisor_vendedores_batch("emp1", [], id_usuario_supervisor=1)
+        self.assertFalse(ok)
+        self.assertIn("al menos un vendedor", msg)
 
 
 class TestBuscarUsuariosJerarquia(unittest.TestCase):

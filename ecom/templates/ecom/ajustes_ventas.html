@@ -343,6 +343,13 @@
                         <span class="material-icons text-sm" aria-hidden="true">add</span>
                         Agregar vendedor
                       </button>
+                      <button type="button"
+                              x-show="cantidadSeleccionadosQuitar(sup) > 0"
+                              @click="quitarVendedoresSeleccionados(sup)"
+                              class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50">
+                        <span class="material-icons text-sm" aria-hidden="true">link_off</span>
+                        <span x-text="'Quitar seleccionados (' + cantidadSeleccionadosQuitar(sup) + ')'"></span>
+                      </button>
                       <button type="button" @click="quitarNodo('supervisor', sup, ger)"
                               class="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">
                         <span class="material-icons text-sm" aria-hidden="true">link_off</span>
@@ -352,8 +359,26 @@
                     <!-- Vendedores del supervisor -->
                     <div x-show="!supervisorColapsado(sup)" x-cloak
                          class="ml-5 border-l-2 border-slate-100 pl-2 dark:border-slate-700">
+                      <div x-show="sup.vendedores.length > 1"
+                           class="mt-1 flex flex-wrap items-center gap-2 px-3 py-1">
+                        <button type="button" @click="seleccionarTodosVendedoresQuitar(sup)"
+                                class="text-[11px] font-medium text-sky-700 hover:underline dark:text-sky-300">
+                          Seleccionar todos
+                        </button>
+                        <span class="text-[11px] text-slate-300 dark:text-slate-600" aria-hidden="true">·</span>
+                        <button type="button" @click="deseleccionarTodosVendedoresQuitar(sup)"
+                                class="text-[11px] font-medium text-slate-500 hover:underline dark:text-slate-400">
+                          Deseleccionar
+                        </button>
+                      </div>
                       <template x-for="ven in sup.vendedores" :key="'sv-' + (sup.id_usuario ?? sup.cod) + '-' + ven.cod">
-                        <div class="mt-1 flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40">
+                        <div class="mt-1 flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                             :class="vendedorMarcadoParaQuitar(sup, ven.cod) ? 'bg-slate-100 dark:bg-slate-900/60' : ''">
+                          <input type="checkbox"
+                                 class="h-3.5 w-3.5 shrink-0 rounded border-slate-300 text-sky-600 focus:ring-sky-500 dark:border-slate-600 dark:bg-slate-900"
+                                 :checked="vendedorMarcadoParaQuitar(sup, ven.cod)"
+                                 @change="toggleVendedorQuitar(sup, ven.cod)"
+                                 :aria-label="'Seleccionar ' + (ven.etiqueta || ('vendedor ' + ven.cod))">
                           <span class="material-icons text-[17px] text-amber-500 dark:text-amber-400" aria-hidden="true">storefront</span>
                           <span class="min-w-0 flex-1 truncate text-sm text-slate-600 dark:text-slate-300" x-text="ven.etiqueta"></span>
                           <button type="button" @click="quitarNodo('vendedor', ven, sup)"
@@ -401,11 +426,36 @@
                         <span class="material-icons text-sm" aria-hidden="true">add</span>
                         Agregar vendedor
                       </button>
+                      <button type="button"
+                              x-show="cantidadSeleccionadosQuitar(sup) > 0"
+                              @click="quitarVendedoresSeleccionados(sup)"
+                              class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300 dark:hover:bg-red-950/50">
+                        <span class="material-icons text-sm" aria-hidden="true">link_off</span>
+                        <span x-text="'Quitar seleccionados (' + cantidadSeleccionadosQuitar(sup) + ')'"></span>
+                      </button>
                     </div>
                     <div x-show="!supervisorColapsado(sup)" x-cloak
                          class="ml-5 border-l-2 border-slate-100 pl-2 dark:border-slate-700">
+                      <div x-show="sup.vendedores.length > 1"
+                           class="mt-1 flex flex-wrap items-center gap-2 px-3 py-1">
+                        <button type="button" @click="seleccionarTodosVendedoresQuitar(sup)"
+                                class="text-[11px] font-medium text-sky-700 hover:underline dark:text-sky-300">
+                          Seleccionar todos
+                        </button>
+                        <span class="text-[11px] text-slate-300 dark:text-slate-600" aria-hidden="true">·</span>
+                        <button type="button" @click="deseleccionarTodosVendedoresQuitar(sup)"
+                                class="text-[11px] font-medium text-slate-500 hover:underline dark:text-slate-400">
+                          Deseleccionar
+                        </button>
+                      </div>
                       <template x-for="ven in sup.vendedores" :key="'sgv-' + (sup.id_usuario ?? sup.cod) + '-' + ven.cod">
-                        <div class="mt-1 flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40">
+                        <div class="mt-1 flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40"
+                             :class="vendedorMarcadoParaQuitar(sup, ven.cod) ? 'bg-slate-100 dark:bg-slate-900/60' : ''">
+                          <input type="checkbox"
+                                 class="h-3.5 w-3.5 shrink-0 rounded border-slate-300 text-sky-600 focus:ring-sky-500 dark:border-slate-600 dark:bg-slate-900"
+                                 :checked="vendedorMarcadoParaQuitar(sup, ven.cod)"
+                                 @change="toggleVendedorQuitar(sup, ven.cod)"
+                                 :aria-label="'Seleccionar ' + (ven.etiqueta || ('vendedor ' + ven.cod))">
                           <span class="material-icons text-[17px] text-amber-500 dark:text-amber-400" aria-hidden="true">storefront</span>
                           <span class="min-w-0 flex-1 truncate text-sm text-slate-600 dark:text-slate-300" x-text="ven.etiqueta"></span>
                           <button type="button" @click="quitarNodo('vendedor', ven, sup)"
@@ -602,6 +652,7 @@ function ajustesVentasApp() {
     urls: boot.urls || {},
     arbol: { vinculos_gs: [], vinculos_sv: [], gerentes: [], etiquetas: {} },
     supervisoresColapsados: {},
+    vendedoresParaQuitar: {},
     pick: {
       panel: { q: '', cod: null, id_usuario: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false, listadoCompleto: false },
     },
@@ -1257,6 +1308,57 @@ function ajustesVentasApp() {
       const ok = await this.jerarquiaAccion(accion, payload);
       if (ok) this.cerrarAlta();
     },
+    seleccionQuitar(sup) {
+      const clave = this._claveSupervisor(sup);
+      const lista = this.vendedoresParaQuitar[clave];
+      return Array.isArray(lista) ? lista : [];
+    },
+    cantidadSeleccionadosQuitar(sup) {
+      return this.seleccionQuitar(sup).length;
+    },
+    vendedorMarcadoParaQuitar(sup, cod) {
+      const n = Number(cod);
+      return this.seleccionQuitar(sup).some((c) => Number(c) === n);
+    },
+    toggleVendedorQuitar(sup, cod) {
+      const clave = this._claveSupervisor(sup);
+      const n = Number(cod);
+      if (!Number.isFinite(n)) return;
+      const actual = this.seleccionQuitar(sup).slice();
+      const idx = actual.findIndex((c) => Number(c) === n);
+      if (idx >= 0) actual.splice(idx, 1);
+      else actual.push(n);
+      this.vendedoresParaQuitar = { ...this.vendedoresParaQuitar, [clave]: actual };
+    },
+    seleccionarTodosVendedoresQuitar(sup) {
+      const clave = this._claveSupervisor(sup);
+      const cods = (sup.vendedores || [])
+        .map((v) => Number(v.cod))
+        .filter((c) => Number.isFinite(c));
+      this.vendedoresParaQuitar = { ...this.vendedoresParaQuitar, [clave]: cods };
+    },
+    deseleccionarTodosVendedoresQuitar(sup) {
+      const clave = this._claveSupervisor(sup);
+      const next = { ...this.vendedoresParaQuitar };
+      delete next[clave];
+      this.vendedoresParaQuitar = next;
+    },
+    async quitarVendedoresSeleccionados(sup) {
+      const cods = this.seleccionQuitar(sup);
+      if (!cods.length) return;
+      const padreNombre = (sup && (sup.etiqueta || ('Viajante ' + sup.cod))) || 'el supervisor';
+      const n = cods.length;
+      if (!window.confirm(
+        '¿Quitar ' + n + ' vendedor' + (n === 1 ? '' : 'es') +
+        ' de ' + padreNombre + '?'
+      )) return;
+      const ok = await this.jerarquiaAccion('desactivar_supervisor_vendedor', {
+        id_usuario_supervisor: sup.id_usuario,
+        cod_supervisor: sup.cod,
+        cod_vendedores: cods,
+      });
+      if (ok) this.deseleccionarTodosVendedoresQuitar(sup);
+    },
     async quitarNodo(tipo, nodo, padre) {
       const nombre = nodo.etiqueta || ('Viajante ' + nodo.cod);
       const padreNombre = padre ? (padre.etiqueta || ('Viajante ' + padre.cod)) : 'su superior';
@@ -1264,11 +1366,21 @@ function ajustesVentasApp() {
       if (tipo === 'supervisor') {
         await this.jerarquiaAccion('desactivar_gerente_supervisor', { id_usuario_supervisor: nodo.id_usuario, cod_supervisor: nodo.cod });
       } else {
-        await this.jerarquiaAccion('desactivar_supervisor_vendedor', {
+        const ok = await this.jerarquiaAccion('desactivar_supervisor_vendedor', {
           id_usuario_supervisor: padre.id_usuario,
           cod_supervisor: padre.cod,
           cod_vendedor: nodo.cod,
         });
+        if (ok && padre) {
+          const clave = this._claveSupervisor(padre);
+          const n = Number(nodo.cod);
+          const filtrada = this.seleccionQuitar(padre).filter((c) => Number(c) !== n);
+          if (filtrada.length) {
+            this.vendedoresParaQuitar = { ...this.vendedoresParaQuitar, [clave]: filtrada };
+          } else {
+            this.deseleccionarTodosVendedoresQuitar(padre);
+          }
+        }
       }
     },
   };
