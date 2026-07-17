@@ -14,8 +14,8 @@ Aplicación: Archivo → **Migración esquema MySQL (legacy)** → «E-com — j
 
 | Objeto | Descripción |
 |--------|-------------|
-| `ecom_org_gerente_supervisor` | Vínculo Gerente → Supervisor (1 supervisor activo por fila) |
-| `ecom_org_supervisor_vendedor` | Vínculo Supervisor → Vendedor (1 supervisor activo por vendedor) |
+| `ecom_org_gerente_supervisor` | Vínculo Gerente → Supervisor (1 supervisor activo por fila). Incluye `id_usuario_gerente` / `id_usuario_supervisor` (NULL) para etiqueta de UI cuando varios usuarios comparten el mismo `CodViajante`. |
+| `ecom_org_supervisor_vendedor` | Vínculo Supervisor → Vendedor (1 supervisor activo por vendedor). Incluye `id_usuario_supervisor` (NULL) con el mismo criterio de etiqueta. |
 | `ecom_aprobacion_evento` | Auditoría de solicitudes/aprobaciones/rechazos |
 | `comp_ped.estado_aprobacion_comercial` | Estado comercial (`-`, `pendiente`, `aprobado`, `rechazado`) |
 | `comp_ped.aprobador_codviajante` | CodViajante que resolvió |

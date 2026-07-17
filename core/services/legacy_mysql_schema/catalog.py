@@ -1835,6 +1835,8 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
                     id BIGINT NOT NULL AUTO_INCREMENT,
                     cod_gerente INT NOT NULL COMMENT 'CodViajante gerente',
                     cod_supervisor INT NOT NULL COMMENT 'CodViajante supervisor (único activo)',
+                    id_usuario_gerente INT NULL COMMENT 'usuarios.id_usuario gerente seleccionado',
+                    id_usuario_supervisor INT NULL COMMENT 'usuarios.id_usuario supervisor seleccionado',
                     activo VARCHAR(3) NOT NULL DEFAULT 'Si' COMMENT 'Si / No',
                     creado_en DATETIME NOT NULL,
                     actualizado_en DATETIME NOT NULL,
@@ -1850,6 +1852,29 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
         else:
             _append_migration(applied, failed, True, "ecom_org_gerente_supervisor ya existe (omitido)")
 
+        if not _columna_existe(cursor, "ecom_org_gerente_supervisor", "id_usuario_gerente"):
+            cursor.execute(
+                """
+                ALTER TABLE ecom_org_gerente_supervisor
+                ADD COLUMN id_usuario_gerente INT NULL
+                    COMMENT 'usuarios.id_usuario gerente seleccionado'
+                """
+            )
+            _append_migration(
+                applied, failed, True, "ecom_org_gerente_supervisor.id_usuario_gerente"
+            )
+        if not _columna_existe(cursor, "ecom_org_gerente_supervisor", "id_usuario_supervisor"):
+            cursor.execute(
+                """
+                ALTER TABLE ecom_org_gerente_supervisor
+                ADD COLUMN id_usuario_supervisor INT NULL
+                    COMMENT 'usuarios.id_usuario supervisor seleccionado'
+                """
+            )
+            _append_migration(
+                applied, failed, True, "ecom_org_gerente_supervisor.id_usuario_supervisor"
+            )
+
         if not _tabla_existe(cursor, "ecom_org_supervisor_vendedor"):
             cursor.execute(
                 """
@@ -1857,6 +1882,7 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
                     id BIGINT NOT NULL AUTO_INCREMENT,
                     cod_supervisor INT NOT NULL COMMENT 'CodViajante supervisor',
                     cod_vendedor INT NOT NULL COMMENT 'CodViajante vendedor (único activo)',
+                    id_usuario_supervisor INT NULL COMMENT 'usuarios.id_usuario supervisor seleccionado',
                     activo VARCHAR(3) NOT NULL DEFAULT 'Si' COMMENT 'Si / No',
                     creado_en DATETIME NOT NULL,
                     actualizado_en DATETIME NOT NULL,
@@ -1871,6 +1897,18 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
             _append_migration(applied, failed, True, "CREATE TABLE ecom_org_supervisor_vendedor")
         else:
             _append_migration(applied, failed, True, "ecom_org_supervisor_vendedor ya existe (omitido)")
+
+        if not _columna_existe(cursor, "ecom_org_supervisor_vendedor", "id_usuario_supervisor"):
+            cursor.execute(
+                """
+                ALTER TABLE ecom_org_supervisor_vendedor
+                ADD COLUMN id_usuario_supervisor INT NULL
+                    COMMENT 'usuarios.id_usuario supervisor seleccionado'
+                """
+            )
+            _append_migration(
+                applied, failed, True, "ecom_org_supervisor_vendedor.id_usuario_supervisor"
+            )
 
         if not _tabla_existe(cursor, "ecom_aprobacion_evento"):
             cursor.execute(

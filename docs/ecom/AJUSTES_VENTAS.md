@@ -90,6 +90,8 @@ Orden de las tarjetas en `ecom/ajustes_ventas.html` (canon slate/sky, toggles Ac
 
    El **primer alta** siempre crea un G→S (no existe nodo gerente suelto): el modo `gerente` es un asistente de 2 pasos. Botones del panel: *Cancelar* / *Confirmar* (o *Siguiente* en el paso 1). Si la persona elegida **ya tiene padre** en otra rama, se pide confirmación para **mover** (`mover: true` en el POST) en lugar de fallar. El éxito muestra el toast `mensaje` y cierra el panel.
 
+   **Identidad de gerente/supervisor:** los vínculos conservan `CodViajante` para el alcance comercial, pero también guardan el `id_usuario` elegido (`id_usuario_gerente` e `id_usuario_supervisor`). Esto evita que un código compartido muestre el primer usuario encontrado: las etiquetas del árbol priorizan nombre y apellido del `id_usuario` persistido y solo usan el viajante como compatibilidad para vínculos históricos.
+
    **Quitar:** confirmación ligera con `window.confirm`: *"¿Quitar a {Nombre} de la jerarquía? Dejará de reportar a {Padre}."*
 
    Gerente/Supervisor: búsqueda de **usuarios** con puesto **Supervisor**, **Administrador**/**Administración** o **Ventas** (chip *Usuario*, ícono `badge`). Vendedor: catálogo **viajantes** (chip *Viajante*, ícono `storefront`); se excluyen nombres vacíos, `-Ninguno-` o solo guiones/placeholders.
