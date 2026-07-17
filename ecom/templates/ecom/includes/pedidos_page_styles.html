@@ -1488,31 +1488,56 @@
     border-bottom: none;
   }
 
-  /* Preview/totales responsive (REQ-MAS-19) */
+  /* Preview/totales responsive (REQ-MAS-19) + UX PWA P0 (17/07/2026) */
   @media (max-width: 1023px) {
     /*
-     * PWA/móvil: el viewport fijo + overflow:hidden hacía que hero+contexto+preview
-     * dejaran la matriz (buscador/líneas) en altura 0. Permitimos scroll de página
-     * y una altura mínima para la zona de carga.
+     * PWA/móvil: flujo de página (sin 100dvh ni scroll anidado agresivo).
+     * Inputs ≥16px evitan zoom iOS; targets táctiles ≥44px en acciones clave.
      */
+    .pm-matrix-viewport input[type="number"],
+    .pm-matrix-viewport input[type="text"],
+    .pm-matrix-viewport input[type="date"],
+    .pm-matrix-viewport select,
+    .pm-matrix-viewport textarea,
+    .pm-matrix-viewport .pm-input-dense {
+      font-size: 1rem !important;
+      min-height: 2.75rem !important;
+      height: auto !important;
+    }
     .pm-matrix-viewport {
       height: auto !important;
-      min-height: calc(100dvh - 4.5rem);
+      min-height: 0;
       overflow-x: hidden;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
+      overflow-y: visible;
+      padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
     }
     .pm-matrix-viewport > div {
       height: auto !important;
       min-height: 0;
     }
     .pm-accordion {
-      flex: 1 0 auto; /* no encoger bajo el preview: buscador/líneas deben verse */
+      flex: 1 0 auto;
       min-height: 16rem;
+      overflow-y: visible;
     }
     .pm-preview-panel {
-      margin-bottom: 0.5rem;
+      position: sticky;
+      bottom: 0;
+      z-index: 20;
+      margin-bottom: 0;
       flex-shrink: 0;
+      background: rgb(255 255 255);
+      box-shadow: 0 -4px 12px rgb(15 23 42 / 0.08);
+    }
+    .dark .pm-preview-panel {
+      background: rgb(30 41 59);
+      box-shadow: 0 -4px 12px rgb(0 0 0 / 0.35);
+    }
+    .pm-matrix-viewport .pm-btn-delete,
+    .pm-matrix-viewport .pm-accordion-toggle,
+    .pm-matrix-viewport .pm-touch-target {
+      min-height: 2.75rem;
+      min-width: 2.75rem;
     }
     .pm-preview-totals {
       width: 100%;

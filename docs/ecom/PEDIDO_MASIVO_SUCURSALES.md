@@ -34,6 +34,19 @@ La API rechaza aperturas simples sin domicilio en este último caso con
 Al cambiar la sucursal de un borrador simple existente, sus celdas se reasignan al nuevo
 domicilio para conservar las cantidades en la única columna del pedido.
 
+### UX PWA P0 — 17/07/2026
+
+Ajustes de captura móvil (<lg) sin tocar lógica de borrador/confirm ni la matriz desktop:
+
+| Criterio | Detalle |
+|----------|---------|
+| **CA-1** | Inputs/select/textarea en `.pm-matrix-viewport` con **font-size ≥ 16px** (`1rem`) y **min-height ≥ 44px** (`2.75rem`) para evitar zoom automático en iOS Safari. |
+| **CA-2** | Sin `min-height: 100dvh` en móvil: scroll de **página** (`height: auto`, `overflow-y: visible`) + `padding-bottom` con `env(safe-area-inset-bottom)`. |
+| **CA-3** | Filas móvil (simple y acordeón masivo): layout **vertical** con labels visibles («% desc.», «Packs» / «Cantidad») y grid 2 columnas (% estrecho, cantidad ancha). |
+| **CA-4** | `.pm-preview-panel` **sticky** al pie con fondo sólido; botones eliminar/acordeón ≥ 44px; `scrollIntoView` con `block: 'nearest'` al enfocar fecha. |
+
+Archivos: `pedidos_page_styles.html`, `pedido_masivo_sucursales.html`, `pedido_masivo_app.mjs`.
+
 ### Layout matriz: simple vs masivo + PWA — 17/07/2026
 
 Ambos modos comparten el shell de 3 zonas (`.pm-matrix-shell`) en desktop y el
@@ -41,8 +54,8 @@ patrón de tarjetas en móvil, pero el reparto de ancho difiere:
 
 | Modo | Desktop (lg+) | Móvil / PWA (<lg) |
 |------|---------------|-------------------|
-| **Simple** (1 sucursal) | Clase `pm-matrix-shell--simple`: la **descripción del artículo predomina**; cantidad fija `--pm-col-suc: 5.7rem` (~6 dígitos + 20%). Buscador en **primera fila**; dropdown abre **hacia abajo**. | **Lista plana** + buscador siempre visible. Viewport móvil con `height:auto` y `min-height` de matriz para que no colapse bajo el preview. |
-| **Masivo** (N sucursales) | Distribución actual: zona media con **scroll-x** en sucursales (`.pm-ztable-mid` `min-width:100%`). | **Acordeón** por sucursal (primera abierta). Mismo viewport scrollable en PWA. |
+| **Simple** (1 sucursal) | Clase `pm-matrix-shell--simple`: la **descripción del artículo predomina**; cantidad fija `--pm-col-suc: 5.7rem` (~6 dígitos + 20%). Buscador en **primera fila**; dropdown abre **hacia abajo**. | **Lista plana** + buscador siempre visible. Scroll de página (`height: auto`, sin `100dvh`). |
+| **Masivo** (N sucursales) | Distribución actual: zona media con **scroll-x** en sucursales (`.pm-ztable-mid` `min-width:100%`). | **Acordeón** por sucursal (primera abierta). Mismo scroll de página en PWA. |
 
 **Foco (móvil + desktop):** los inputs de cantidad se duplican en el DOM (matriz
 desktop + acordeón/lista móvil) con el mismo `data-pm-qty`. `_qtyInputVisible()`

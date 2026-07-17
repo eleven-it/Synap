@@ -1458,7 +1458,7 @@ function pedidoMasivoCore() {
       this.$nextTick(() => {
         const el = document.getElementById('pm-fecha-entrega');
         if (!el) return;
-        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         el.focus();
         el.classList.add('ring-2', 'ring-amber-500', 'border-amber-500');
         setTimeout(() => {
