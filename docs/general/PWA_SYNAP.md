@@ -28,8 +28,12 @@ En desktop, el navegador no recibe meta tags PWA ni registra el Service Worker.
 | `core/views/pwa_views.py` | Nuevo | Vistas `serve_sw` y `serve_manifest` |
 | `django_project/urls.py` | Modificado | Rutas `/sw.js`, `/manifest.json`, `/offline/` |
 | `theme/templates/base_app.html` | Modificado | Bloque PWA condicional `{% if request.is_mobile %}` |
-| `theme/static/img/pwa/` | Nuevo dir | Directorio para iconos (pendiente generarlos) |
-| `core/tests/test_pwa.py` | Nuevo | 62 tests automatizados |
+| `theme/static/img/pwa/` | Iconos PNG | Generados con `generate_pwa_icons` (ver Fase 0 abajo) |
+| `login/templates/login/includes/pwa_head.html` | Nuevo | Manifest + meta PWA en login móvil |
+| `login/templates/login/includes/pwa_sw_register.html` | Nuevo | Registro SW en login móvil |
+| `login/templates/login/mobile/login_administranet.html` | Modificado | Includes PWA solo si `request.is_mobile` |
+| `login/management/commands/generate_pwa_icons.py` | Nuevo | Comando para generar iconos desde logo |
+| `core/tests/test_pwa.py` | Nuevo | Tests automatizados PWA (+ login móvil) |
 | `core/middleware/mobile_level_a_middleware.py` | Nuevo | En móvil, solo rutas Nivel A + APIs TPV |
 | `core/templates/core/mobile_desktop_only.html` | Nuevo | Mensaje 403 móvil (solo escritorio) |
 | `docs/general/MOBILE_SOLO_NIVEL_A.md` | Nuevo | Política y lista de rutas permitidas |
@@ -126,18 +130,55 @@ En iPadOS 13+, el UA en servidor es tipo Macintosh; el script en `base_app.html`
 
 ---
 
-## Iconos pendientes
+## Fase 0 — Iconos e instalabilidad en login móvil
 
-Generar iconos desde un PNG fuente de al menos 512x512 y colocarlos en `theme/static/img/pwa/`:
+Prerequisito para PWA instalable desde `/login/` (start_url del manifest) y para desbloqueo WebAuthn en standalone.
 
+### Comando `generate_pwa_icons`
+
+Genera PNG en `theme/static/img/pwa/` a partir del logo del producto:
+
+1. Logo más reciente `Logo_Signo_administraNET*` en `MEDIA/empresas/logos`
+2. Fallback `theme/static/img/brand/logo_signo_administranet.png`
+3. Opcional: `--source /ruta/logo.png`
+
+```bash
+docker exec Synap_app python manage.py generate_pwa_icons
 ```
+
+Tamaños: 72, 96, 128, 144, 152, 180, 192, 384, 512 px. Los iconos 192 y 512 incluyen padding maskable (80 % área segura).
+
+Tras generar o cambiar iconos:
+
+```bash
+docker exec Synap_app python manage.py collectstatic --noinput
+```
+
+### Partials PWA en login
+
+`login/templates/login/mobile/login_administranet.html` incluye (solo móvil):
+
+- `login/includes/pwa_head.html` — `<link rel="manifest">`, meta theme-color, apple-touch-icon (`icon-180.png`)
+- `login/includes/pwa_sw_register.html` — `navigator.serviceWorker.register('/sw.js')`
+
+Paridad con el bloque PWA de `base_app.html`; el login no extiende ese layout pero debe ser instalable al abrir `/login/`.
+
+---
+
+## Iconos PWA (referencia)
+
+Generar iconos con el comando de gestión (recomendado) o manualmente desde un PNG fuente ≥512×512:
+
+```bash
+docker exec Synap_app python manage.py generate_pwa_icons
+```
+
+Salida en `theme/static/img/pwa/`:
 icon-72.png   icon-96.png   icon-128.png  icon-144.png
 icon-152.png  icon-180.png  icon-192.png  icon-384.png  icon-512.png
 ```
 
-### Herramientas recomendadas
-
-- **pwa-asset-generator (npm):**
+Alternativa manual con **pwa-asset-generator (npm):**
   ```bash
   npx pwa-asset-generator logo-512.png theme/static/img/pwa/ --icon-only --type png
   ```
@@ -167,22 +208,10 @@ location = /sw.js {
 ## Tests
 
 ```bash
-docker exec Synap_app python manage.py test core.tests.test_pwa --verbosity=2
+docker exec Synap_app python manage.py test core.tests.test_pwa login.tests.test_webauthn --verbosity=2
 ```
 
-62 tests organizados en 8 grupos:
-
-| Grupo | Tests | Qué verifica |
-|-------|-------|-------------|
-| URLs | 6 | Resolución de `/sw.js`, `/manifest.json`, `/offline/` |
-| Service Worker | 11 | Vista, content-type, cache-control, contenido del SW |
-| Manifest | 14 | Vista, JSON válido, campos obligatorios, iconos |
-| Offline | 6 | Página offline autocontenida |
-| Template source | 7 | `base_app.html` tiene condicional y meta tags |
-| Feature flag | 7 | Mobile SI vs Desktop NO (renderizado condicional) |
-| Static files | 4 | Archivos fuente existen en `theme/static/` |
-| Integración | 4 | CSRF, admin, redirect raíz siguen OK |
-| HTTPS | 3 | SSL redirect, HSTS, proxy header |
+Tests PWA organizados en grupos (URLs, SW, manifest, offline, templates, feature flag, estáticos, integración, HTTPS, **login móvil**).
 
 ---
 
@@ -198,5 +227,6 @@ docker exec Synap_app python manage.py test core.tests.test_pwa --verbosity=2
 ## Referencia
 
 - Especificación completa: `docs/general/ESPEC_PWA_SYNAP.md`
-- Tests: `core/tests/test_pwa.py`
+- Desbloqueo WebAuthn: `docs/login/WEBAUTHN_UNLOCK.md`
+- Tests: `core/tests/test_pwa.py`, `login/tests/test_webauthn.py`
 - Middleware de dispositivos: `core/middleware/base_middleware.py` (clase `DeviceDetectionMiddleware`)

@@ -581,3 +581,116 @@ class PWAHTTPSSettingsTests(SimpleTestCase):
                              'SECURE_PROXY_SSL_HEADER no configurado')
         self.assertEqual(header[0], 'HTTP_X_FORWARDED_PROTO')
         self.assertEqual(header[1], 'https')
+
+
+# ---------------------------------------------------------------------------
+# Grupo 9: Login móvil — manifest, SW e iconos PWA
+# Spec pwa-instalabilidad-login — CA login móvil
+# ---------------------------------------------------------------------------
+
+class PWALoginTemplateSourceTests(SimpleTestCase):
+    """Verifica que login_administranet.html incluye PWA condicional móvil."""
+
+    def _login_template_path(self):
+        return (
+            Path(settings.BASE_DIR)
+            / 'login'
+            / 'templates'
+            / 'login'
+            / 'mobile'
+            / 'login_administranet.html'
+        )
+
+    def _read_source(self):
+        path = self._login_template_path()
+        self.assertTrue(path.exists(), f'No existe {path}')
+        return path.read_text(encoding='utf-8')
+
+    def test_login_template_contiene_condicional_is_mobile(self):
+        """Login móvil envuelve PWA en {% if request.is_mobile %}."""
+        source = self._read_source()
+        self.assertIn('request.is_mobile', source)
+
+    def test_login_template_incluye_pwa_head(self):
+        """Login móvil incluye partial pwa_head (manifest + meta)."""
+        source = self._read_source()
+        self.assertIn('login/includes/pwa_head.html', source)
+
+    def test_login_template_incluye_pwa_sw_register(self):
+        """Login móvil incluye registro del Service Worker."""
+        source = self._read_source()
+        self.assertIn('login/includes/pwa_sw_register.html', source)
+
+
+class PWALoginIncludesSourceTests(SimpleTestCase):
+    """Verifica contenido de los partials PWA del login."""
+
+    def test_pwa_head_contiene_manifest(self):
+        path = Path(settings.BASE_DIR) / 'login' / 'templates' / 'login' / 'includes' / 'pwa_head.html'
+        source = path.read_text(encoding='utf-8')
+        self.assertIn('rel="manifest"', source)
+        self.assertIn('/manifest.json', source)
+
+    def test_pwa_head_contiene_apple_touch_icon(self):
+        path = Path(settings.BASE_DIR) / 'login' / 'templates' / 'login' / 'includes' / 'pwa_head.html'
+        source = path.read_text(encoding='utf-8')
+        self.assertIn('apple-touch-icon', source)
+        self.assertIn('img/pwa/icon-180.png', source)
+
+    def test_pwa_sw_register_contiene_service_worker(self):
+        path = (
+            Path(settings.BASE_DIR)
+            / 'login'
+            / 'templates'
+            / 'login'
+            / 'includes'
+            / 'pwa_sw_register.html'
+        )
+        source = path.read_text(encoding='utf-8')
+        self.assertIn('serviceWorker', source)
+        self.assertIn("/sw.js", source)
+
+
+class PWALoginMobileRenderTests(TestCase):
+    """Renderizado condicional PWA en GET /login/ según User-Agent."""
+
+    def test_mobile_login_incluye_manifest_y_sw(self):
+        """CA login móvil: UA móvil incluye manifest y registro SW."""
+        response = self.client.get('/login/', HTTP_USER_AGENT=MOBILE_USER_AGENT)
+        self.assertIn(response.status_code, (200, 302))
+        if response.status_code != 200:
+            return
+        html = response.content.decode('utf-8')
+        self.assertIn('rel="manifest"', html)
+        self.assertIn('/manifest.json', html)
+        self.assertIn('serviceWorker', html)
+        self.assertIn('/sw.js', html)
+
+    def test_desktop_login_no_incluye_manifest(self):
+        """CA desktop: login sin bloque PWA."""
+        response = self.client.get('/login/', HTTP_USER_AGENT=DESKTOP_USER_AGENT)
+        self.assertIn(response.status_code, (200, 302))
+        if response.status_code != 200:
+            return
+        html = response.content.decode('utf-8')
+        self.assertNotIn('rel="manifest"', html)
+        self.assertNotIn("serviceWorker.register('/sw.js'", html)
+
+
+class PWALoginIconFilesTests(SimpleTestCase):
+    """Iconos referenciados en login PWA existen en theme/static/img/pwa/."""
+
+    REQUIRED_LOGIN_ICONS = ('icon-180.png', 'icon-192.png', 'icon-512.png')
+
+    def _pwa_dir(self):
+        return Path(settings.STATICFILES_DIRS[0]) / 'img' / 'pwa'
+
+    def test_iconos_login_referenciados_existen(self):
+        pwa_dir = self._pwa_dir()
+        for name in self.REQUIRED_LOGIN_ICONS:
+            ruta = pwa_dir / name
+            self.assertTrue(
+                ruta.exists(),
+                f'Falta icono PWA referenciado: {ruta}',
+            )
+            self.assertGreater(ruta.stat().st_size, 0, f'Icono vacío: {ruta}')

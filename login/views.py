@@ -12,6 +12,8 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.contrib import messages
 from urllib.parse import urlparse
 from .administranet_auth import AdministraNETAuth
+from .services.session_bootstrap import bootstrap_synap_session
+from login.services.webauthn_config import is_webauthn_feature_enabled
 from core.models import Empresa
 from core.utils.template_selector import get_template_for_device
 from core.utils.rate_limit import check_rate_limit
@@ -81,55 +83,15 @@ def login_view(request):
                     "error": "Usuario y contraseña incorrectos"
                 }, status=401)
             
-            # Obtener IP del cliente
             ip_address = request.META.get('REMOTE_ADDR', '127.0.0.1')
-            # Crear sesión en administraNET
-            session_data = auth_service.create_session(user_data, base_empresa, ip_address)
-            
-            # Nombre visible del combo Empresa (tabla empresas), no la razón social DatosEmpresa.
-            nombre_empresa_login = auth_service.nombre_empresa_por_base(base_empresa) or base_empresa
+            bootstrap_synap_session(
+                request,
+                user_data,
+                base_empresa,
+                auth_service=auth_service,
+                ip_address=ip_address,
+            )
 
-            # Guardar datos en sesión Django
-            request.session["user"] = {
-                "id_usuario": user_data['id_usuario'],
-                "cod_usuario": user_data['cod_usuario'],
-                "nombre_usuario": user_data['nombre_usuario'],
-                "apellido_usuario": user_data['apellido_usuario'],
-                "nombre_completo": f"{user_data['nombre_usuario']} {user_data['apellido_usuario']}",
-                "id_empresa": user_data['id_empresa'],
-                "id_sucursal": user_data['id_sucursal'],
-                "id_puesto": user_data['id_puesto'],
-                "nombre_puesto": user_data.get('nombre_puesto'),
-                "base_empresa": base_empresa,
-                "nombre_empresa": nombre_empresa_login,
-                "id_sesion": session_data['id_sesion'] if session_data else None
-            }
-
-            # Paridad control.php: CodViajante, todos_clientes, supervisor_venta en sesión.
-            try:
-                from ecom.services.mayoristapp_sesion_contexto import contexto_usuario_mayoristapp
-                contexto_usuario_mayoristapp(request, persistir=True)
-            except Exception as e:
-                logger.debug("Contexto mayoristapp post-login (no crítico): %s", e)
-            
-            # Asegurar esquema de permisos Synap (synap_*) + catálogo, con cache por empresa.
-            # NO inyecta en permiso_sistema (tablas VB6); reemplaza el sync legacy.
-            try:
-                from core.services.synap_permisos_seed import asegurar_synap_schema_si_procede
-                asegurar_synap_schema_si_procede(base_empresa)
-            except Exception as e:
-                logger.debug("Asegurar esquema Synap post-login (no crítico): %s", e)
-
-            # MPR: resolver operario asociado al usuario (si existe mapeo) y guardarlo en sesión.
-            try:
-                from mpr.repositories.operario_usuario import resolver_operario_por_usuario
-                id_operario = resolver_operario_por_usuario(base_empresa, user_data['id_usuario'])
-                if id_operario:
-                    request.session["user"]["id_operario"] = id_operario
-                    request.session.modified = True
-            except Exception as e:
-                logger.debug("Resolver operario MPR post-login (no crítico): %s", e)
-            
             logger.info(f"✅ Login exitoso: {cod_usuario} en empresa {base_empresa}")
             
             # Validar y retornar next si está presente
@@ -174,6 +136,7 @@ def login_view(request):
         'server_default': server_default,
         'db_host': db_host,
         'db_port': db_port,
+        'webauthn_unlock_enabled': is_webauthn_feature_enabled(),
     })
 
 
@@ -389,5 +352,6 @@ def perfil_view(request):
         {
             "user": session_user,
             "tpv_visible_movil": tpv_visible_en_movil(usuario, request),
+            "webauthn_unlock_enabled": is_webauthn_feature_enabled(),
         },
     )
