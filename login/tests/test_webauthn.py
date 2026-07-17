@@ -109,6 +109,18 @@ class WebAuthnServiceTests(TestCase):
         _enable_webauthn_feature(True)
         _enable_user_pref(self.base, self.id_usuario, True)
 
+    def test_resolve_webauthn_rp_from_request_host(self):
+        rf = RequestFactory()
+        request = rf.get("/login/api/webauthn/register/options/", HTTP_HOST="192.168.0.2:8000")
+        rp_id, origin = svc.resolve_webauthn_rp(request)
+        self.assertEqual(rp_id, "192.168.0.2")
+        self.assertEqual(origin, "http://192.168.0.2:8000")
+
+    def test_resolve_webauthn_rp_fallback_settings(self):
+        rp_id, origin = svc.resolve_webauthn_rp(None)
+        self.assertEqual(rp_id, settings.WEBAUTHN_RP_ID)
+        self.assertEqual(origin, settings.WEBAUTHN_ORIGIN)
+
     def test_max_three_credentials_rejects_enrollment(self):
         for i in range(3):
             _create_credential(

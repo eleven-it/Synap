@@ -114,6 +114,7 @@ def register_options(request):
             cod_usuario=user["cod_usuario"],
             nombre_completo=user.get("nombre_completo") or user.get("cod_usuario", ""),
             device_label=device_label,
+            request=request,
         )
     except svc.WebAuthnServiceError as e:
         return JsonResponse({"error": e.message}, status=e.status)
@@ -141,6 +142,7 @@ def register_verify(request):
         svc.verify_register(
             session_key=_session_key(request),
             credential_json=credential,
+            request=request,
         )
     except svc.WebAuthnServiceError as e:
         return JsonResponse({"error": e.message}, status=e.status)
@@ -165,6 +167,7 @@ def authenticate_options(request):
             session_key=_session_key(request),
             base_empresa=base_empresa,
             cod_usuario=cod_usuario,
+            request=request,
         )
     except svc.WebAuthnServiceError as e:
         return JsonResponse({"error": e.message}, status=e.status)

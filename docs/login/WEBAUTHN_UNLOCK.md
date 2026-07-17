@@ -29,34 +29,40 @@ Otras variables en `django_project/settings.py`:
 
 | Variable | Descripción |
 |----------|-------------|
-| `WEBAUTHN_RP_ID` | Hostname del sitio (sin path). Dev: `localhost`. Prod: hostname de `SITE_URL`. |
-| `WEBAUTHN_ORIGIN` | Origen completo HTTPS (`SITE_URL` sin slash final). |
+| `WEBAUTHN_RP_ID` | Fallback si no hay request. En runtime, register/authenticate usan el **hostname del request**. |
+| `WEBAUTHN_ORIGIN` | Fallback si no hay request. En runtime se usa `scheme://host` del request (incluye puerto). |
 | `WEBAUTHN_SESSION_AGE` | TTL sesión post-unlock (default **12 h**). |
 | `WEBAUTHN_MAX_CREDENTIALS` | Máximo passkeys activas por `(base_empresa, id_usuario)` (**3**). |
 | `WEBAUTHN_CHALLENGE_TTL` | TTL Redis del challenge (**120 s**), un solo uso. |
+
+> **Importante (fix 07/2026):** Activar el toggle de Perfil solo guarda la preferencia; hay que **registrar el dispositivo** (passkey). El enroll se inicia automáticamente al activar si no hay credenciales. RP ID/origin se resuelven desde el host actual (no solo `SITE_URL`), para que LAN/PWA no fallen por mismatch.
 
 ## RP ID y origins
 
 WebAuthn exige coherencia entre **RP ID** (hostname), **origin** (esquema + host + puerto) y el dominio desde el que se sirve la PWA.
 
-- **Desarrollo:** `WEBAUTHN_RP_ID=localhost`, `WEBAUTHN_ORIGIN=https://localhost:8443` (o el puerto configurado). Añadir el origin a `CSRF_TRUSTED_ORIGINS`.
-- **Staging / producción:** RP ID = hostname de `SITE_URL` (p. ej. `synap.administranet.com.ar`). Origin = `SITE_URL` sin barra final.
+- **Runtime:** `resolve_webauthn_rp(request)` toma hostname y origin del request (prioridad sobre `WEBAUTHN_*` en settings).
+- **Fallback / tests:** `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` (derivados de `SITE_URL` si no se overridean).
+- **Desarrollo LAN:** si entrás por IP (`http://192.168.x.x:8000`), el RP ID será esa IP. WebAuthn en HTTP solo funciona en `localhost`; en dispositivos reales preferí HTTPS.
+- Añadir el origin real a `CSRF_TRUSTED_ORIGINS`.
 
 El navegador rechazará enroll/unlock si RP ID u origin no coinciden con la URL real de la PWA.
 
 ## Superficie de UI
 
-- **Solo PWA standalone:** la UI de unlock/enroll se muestra cuando JS detecta `display-mode: standalone` o `navigator.standalone === true` (`login/static/login/pwa-standalone.js`).
-- **Navegador móvil en pestaña:** solo login con contraseña.
-- **Desktop v1:** sin WebAuthn.
+- **PWA / superficie WebAuthn:** `login/static/login/pwa-standalone.js` detecta `standalone`, `fullscreen`, `minimal-ui`, `navigator.standalone` y guarda un marcador en `localStorage`.
+- Al activar la preferencia en Perfil, si no hay passkeys se **dispara el enroll** (Face ID / huella).
+- Sin passkey registrada, el botón de desbloqueo en login no puede completar la validación (mensaje claro en español).
+- **Desktop v1:** sin WebAuthn dedicado.
 
 ## Flujo de enrollment (opt-in)
 
 1. Usuario inicia sesión con contraseña AdministraNET.
-2. En PWA standalone, desde **Perfil móvil**, elige activar desbloqueo rápido (etiqueta de dispositivo opcional).
-3. `POST /login/api/webauthn/register/options/` → challenge en Redis.
-4. Cliente (`webauthn-client.js`) invoca `navigator.credentials.create()`.
-5. `POST /login/api/webauthn/register/verify/` → credencial en Postgres + `password_fingerprint` (SHA-256 del BLOB cifrado en MySQL).
+2. En Perfil móvil, activa **Autenticación rápida** (toggle).
+3. Si no hay dispositivos, se inicia automáticamente el registro biométrico (también disponible el botón «Activar desbloqueo en este dispositivo»).
+4. `POST /login/api/webauthn/register/options/` → challenge en Redis (RP ID/origin del host actual).
+5. Cliente (`webauthn-client.js`) invoca `navigator.credentials.create()`.
+6. `POST /login/api/webauthn/register/verify/` → credencial en Postgres + `password_fingerprint`.
 
 Máximo **3** dispositivos activos por usuario y empresa. Al intentar un cuarto, el servidor responde error en español.
 
