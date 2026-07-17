@@ -4,6 +4,37 @@
 {% block title %}Planificación de turnos - MPR - Synap{% endblock %}
 
 {% block content %}
+<style>
+    /* Diferenciación visual de turnos en la grilla de roster.
+       Scoped a la pantalla; dark mode vía clase .dark en <html> (base_app). */
+    .mpr-turno-badge {
+        display: inline-block;
+        border-radius: 0.5rem;
+        border: 1px solid transparent;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 600;
+    }
+    /* Mañana → cielo claro (sky) */
+    .mpr-turno-badge--manana { background-color: #e0f2fe; border-color: #bae6fd; color: #075985; }
+    .dark .mpr-turno-badge--manana { background-color: rgba(12, 74, 110, 0.35); border-color: rgba(2, 132, 199, 0.35); color: #7dd3fc; }
+    /* Tarde → ámbar/naranja */
+    .mpr-turno-badge--tarde { background-color: #fef3c7; border-color: #fde68a; color: #92400e; }
+    .dark .mpr-turno-badge--tarde { background-color: rgba(120, 53, 15, 0.35); border-color: rgba(217, 119, 6, 0.35); color: #fcd34d; }
+    /* Noche → índigo suave */
+    .mpr-turno-badge--noche { background-color: #e0e7ff; border-color: #c7d2fe; color: #3730a3; }
+    .dark .mpr-turno-badge--noche { background-color: rgba(49, 46, 129, 0.45); border-color: rgba(79, 70, 229, 0.35); color: #a5b4fc; }
+    /* Paleta de reserva (otros turnos), rota por id: teal / slate / cyan / rose */
+    .mpr-turno-badge--p0 { background-color: #ccfbf1; border-color: #99f6e4; color: #115e59; }
+    .dark .mpr-turno-badge--p0 { background-color: rgba(19, 78, 74, 0.35); border-color: rgba(13, 148, 136, 0.35); color: #5eead4; }
+    .mpr-turno-badge--p1 { background-color: #e2e8f0; border-color: #cbd5e1; color: #334155; }
+    .dark .mpr-turno-badge--p1 { background-color: rgba(51, 65, 85, 0.5); border-color: rgba(100, 116, 139, 0.4); color: #cbd5e1; }
+    .mpr-turno-badge--p2 { background-color: #cffafe; border-color: #a5f3fc; color: #155e75; }
+    .dark .mpr-turno-badge--p2 { background-color: rgba(22, 78, 99, 0.35); border-color: rgba(8, 145, 178, 0.35); color: #67e8f9; }
+    .mpr-turno-badge--p3 { background-color: #ffe4e6; border-color: #fecdd3; color: #9f1239; }
+    .dark .mpr-turno-badge--p3 { background-color: rgba(136, 19, 55, 0.35); border-color: rgba(225, 29, 72, 0.35); color: #fda4af; }
+</style>
 <section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10"
          x-data="{ modalMasivoOpen: false, seleccionarTodos: false }">
     <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
@@ -102,9 +133,9 @@
                             {% with asig=op_asigs|dict_get:fecha_iso %}
                             <td class="px-3 py-2 text-center align-middle{% if dia.fecha == hoy %} bg-purple-50/50 dark:bg-purple-900/10{% endif %}{% if dia.fecha < hoy %} opacity-60{% endif %}">
                                 {% if dia.fecha < hoy %}
-                                    {# Fecha pasada: solo lectura #}
+                                    {# Fecha pasada: solo lectura (mismo color; la celda ya baja opacidad) #}
                                     {% if asig %}
-                                    <span class="inline-block rounded-lg bg-gray-200 px-2 py-1 text-xs font-medium text-gray-600 dark:bg-gray-700 dark:text-gray-400">{{ asig.nombre_turno }}</span>
+                                    <span class="mpr-turno-badge mpr-turno-badge--{{ asig|turno_color }}">{{ asig.nombre_turno }}</span>
                                     {% else %}
                                     <span class="text-gray-300 dark:text-gray-600">—</span>
                                     {% endif %}
@@ -112,7 +143,7 @@
                                     {# Fecha hoy o futura: editable #}
                                     {% if asig %}
                                     <div class="flex flex-col items-center gap-1">
-                                        <span class="inline-block rounded-lg bg-green-100 px-2 py-1 text-xs font-semibold text-green-800 dark:bg-green-900/30 dark:text-green-300">{{ asig.nombre_turno }}</span>
+                                        <span class="mpr-turno-badge mpr-turno-badge--{{ asig|turno_color }}">{{ asig.nombre_turno }}</span>
                                         <form method="post" action="{% url 'mpr:roster_eliminar' %}" class="inline">
                                             {% csrf_token %}
                                             <input type="hidden" name="fecha" value="{{ dia.fecha_str }}"/>
@@ -161,8 +192,12 @@
             </div>
         </div>
 
-        <div class="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-            <span class="flex items-center gap-1.5"><span class="inline-block h-3 w-3 rounded-full bg-green-400"></span> Turno asignado (editable)</span>
+        <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-gray-400">
+            <span class="font-medium text-gray-600 dark:text-gray-300">Referencia de turnos:</span>
+            {% for t in turnos_activos %}
+            <span class="mpr-turno-badge mpr-turno-badge--{{ t|turno_color }}">{{ t.nombre }}</span>
+            {% endfor %}
+            <span class="mx-1 hidden h-4 w-px bg-gray-200 dark:bg-gray-700 sm:inline-block" aria-hidden="true"></span>
             <span class="flex items-center gap-1.5"><span class="inline-block h-3 w-3 rounded-full bg-gray-300 dark:bg-gray-600"></span> Fecha pasada (solo lectura)</span>
             <span class="flex items-center gap-1.5"><span class="inline-block h-4 w-6 rounded bg-purple-100 dark:bg-purple-900/30"></span> Hoy</span>
         </div>

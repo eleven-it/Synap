@@ -46,7 +46,9 @@ hasta esa aprobación (modelo de dos etapas).
 
 - Móvil: `mpr/templates/mpr/mobile/parte_operario.html` (vía `get_template_for_device`),
   con header de contexto (línea/turno/fecha), lista de máquinas colapsables → artículos,
-  inputs docenas/pares, total en vivo (Alpine), progreso `cargadas/total` y confirmación antes de enviar.
+  inputs docenas/pares **vacíos por defecto** (vacío = 0 al guardar; solo se muestran
+  cifras si hay precarga de borrador/pendiente &gt; 0), total en vivo (Alpine),
+  progreso `cargadas/total` y confirmación antes de enviar.
 - Escritorio: `mpr/templates/mpr/parte_operario.html`. Extiende `mpr/base_mpr.html`
   (misma shell que Tablero/Parte de producción: barra de acceso rápido MPR, contenedor
   `mpr-contenedor-pagina` de ancho fluido, migas de pan y **frame de encabezado oscuro**
@@ -120,3 +122,20 @@ Segunda etapa del flujo. Solo la aprobación mueve stock.
 Los partes `pendiente` guardan `cantidad = 0`, por lo que **no** contaminan los acumulados
 basados en `mpr_parte_linea.cantidad` (OPP acumulado, cupo). Al aprobar, `cantidad` pasa a
 `cantidad_aprobada` y recién ahí cuenta en el pipeline.
+
+## Carga de artículos por máquina (supervisor)
+
+Pantalla de escritorio para habilitar/deshabilitar artículos en la grilla de máquinas
+(antes de que el operario cargue producción en `/mpr/mi-parte/`):
+
+- Ruta: `/mpr/maquinas/carga-articulos/` (`mpr:maquinas_carga_articulos`). Permiso: `mpr.maquinas_lineas`.
+- Filtro MVP por línea: query `?id_linea=<id_mpr_linea>`.
+- Búsqueda predictiva de artículos (API GET `/mpr/maquinas/api/articulos/buscar/`): solo
+  artículos con `tipo_art_fab = 'Fabricado'`.
+- Habilitar/deshabilitar vía API POST `/mpr/maquinas/api/articulos/accion/` (`accion`:
+  `habilitar` | `deshabilitar`). Deshabilitar cierra la vigencia (`vigencia_hasta = hoy`);
+  no hay undo silencioso ni cierre automático diario.
+- Histórico por máquina: `/mpr/maquinas/<id>/articulos/` (vista detalle existente).
+
+Servicio de contexto: `construir_grilla_carga_articulos` en `mpr/services_maquina_linea.py`.
+Ver también [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md#urls).

@@ -23,6 +23,14 @@
         <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
             <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Artículos habilitados</h1>
             <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Máquina <span class="font-semibold text-gray-900 dark:text-white">{{ maquina.codigo }}</span>{% if maquina.nombre %} — {{ maquina.nombre }}{% endif %}. Una máquina puede tener varios artículos habilitados a la vez. Al deshabilitar se cierra la vigencia para trazabilidad.</p>
+            <div class="mt-4 flex items-start gap-2 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm text-purple-800 dark:border-purple-800 dark:bg-purple-900/20 dark:text-purple-200">
+                <span class="material-icons text-lg" aria-hidden="true">bolt</span>
+                <span>
+                    Esta pantalla queda para el histórico y la carga detallada.
+                    Para gestionar los artículos de todas las máquinas en una sola grilla, usá
+                    <a href="{% url 'mpr:maquinas_carga_articulos' %}" class="font-semibold underline decoration-purple-400 underline-offset-2 transition-colors hover:text-purple-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:hover:text-purple-100">Carga de artículos</a>.
+                </span>
+            </div>
         </header>
 
         <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">

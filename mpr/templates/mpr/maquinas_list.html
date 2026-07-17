@@ -21,16 +21,28 @@
                 <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Máquinas de producción</h1>
                 <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Catálogo de máquinas y su pertenencia a una línea. Al cambiar la línea se registra la vigencia para trazabilidad histórica.</p>
             </div>
-            <a href="{% url 'mpr:maquina_create' %}" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
-                <span class="material-icons text-lg" aria-hidden="true">add</span>
-                Nueva máquina
-            </a>
+            <div class="flex shrink-0 flex-wrap items-center gap-3">
+                <a href="{% url 'mpr:maquinas_carga_articulos' %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-purple-200 bg-white px-5 py-2.5 text-sm font-semibold text-purple-700 shadow-sm transition-colors hover:bg-purple-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-purple-800 dark:bg-gray-900 dark:text-purple-300 dark:hover:bg-purple-900/20 dark:focus-visible:ring-offset-gray-900">
+                    <span class="material-icons text-lg" aria-hidden="true">grid_view</span>
+                    Carga de artículos
+                </a>
+                <a href="{% url 'mpr:maquina_create' %}" class="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+                    <span class="material-icons text-lg" aria-hidden="true">add</span>
+                    Nueva máquina
+                </a>
+            </div>
         </header>
 
         <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
+            <div class="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                 <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Máquinas registradas</h2>
-                <p class="text-xs text-gray-500 dark:text-gray-400 md:hidden" aria-hidden="true">Deslizá horizontalmente si hace falta</p>
+                <label class="flex min-w-0 max-w-xs flex-1 items-center gap-2 sm:max-w-sm">
+                    <span class="sr-only">Buscar máquina</span>
+                    <span class="material-icons text-base text-gray-400" aria-hidden="true">search</span>
+                    <input type="search" id="buscar-maquina" placeholder="Buscar por código o nombre…"
+                           class="min-h-9 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white"
+                           autocomplete="off"/>
+                </label>
             </div>
             <div class="overflow-x-auto" role="region" aria-label="Tabla de máquinas">
                 <table class="min-w-[46rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
@@ -46,7 +58,7 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         {% for maquina in maquinas %}
-                        <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40">
+                        <tr class="transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40 maquina-fila" data-search="{{ maquina.codigo|lower }} {{ maquina.nombre|lower }}">
                             <td class="px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-5">{{ maquina.codigo }}</td>
                             <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">{{ maquina.nombre|default:"—" }}</td>
                             <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">
@@ -121,6 +133,16 @@
                 if (form) form.submit();
             });
         });
+        var buscar = document.getElementById('buscar-maquina');
+        if (buscar) {
+            buscar.addEventListener('input', function() {
+                var q = (this.value || '').trim().toLowerCase();
+                document.querySelectorAll('.maquina-fila').forEach(function(row) {
+                    var hay = !q || (row.getAttribute('data-search') || '').indexOf(q) !== -1;
+                    row.style.display = hay ? '' : 'none';
+                });
+            });
+        }
     });
 })();
 </script>

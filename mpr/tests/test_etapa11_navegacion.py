@@ -37,6 +37,7 @@ class TestMenuMprEtapa11(SimpleTestCase):
         self.assertIsNotNone(prod)
         urls = [it["url"] for it in prod["items"]]
         self.assertEqual(urls[0], "mpr:tablero_produccion")
+        self.assertIn("mpr:maquinas_carga_articulos", urls)
         self.assertIn("mpr:parte_produccion", urls)
         self.assertIn("mpr:clasificacion_produccion", urls)
 

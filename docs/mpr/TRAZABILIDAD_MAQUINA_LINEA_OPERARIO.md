@@ -137,7 +137,10 @@ Las pertenencias y habilitaciones no se borran ni se pisan: se **versionan** con
   `KEY (id_operario, vigencia_hasta)`).
 - Al **reasignar** una máquina a otra línea, **deshabilitar** un artículo de una máquina o
   **cambiar** la línea habitual de un operario, el servicio **cierra** la fila vigente
-  (`vigencia_hasta`) e **inserta** la nueva en la misma transacción.
+  (`vigencia_hasta = fecha de corte`, típicamente hoy) e **inserta** la nueva en la misma
+  transacción cuando corresponde. **No hay cierre automático diario** de habilitaciones:
+  la vigencia es dinámica hasta que el supervisor deshabilita explícitamente (con
+  confirmación en la UI de carga).
 - `mpr_maquina_linea`: a lo sumo una vigente por máquina. `mpr_maquina_articulo`: varias
   vigentes por máquina (una por artículo habilitado).
 
@@ -263,12 +266,21 @@ permiso (el operario no los ve):
 | `/mpr/partes-pendientes/` | Bandeja de partes pendientes de aprobación | `mpr.aprobar_parte` |
 | `/mpr/partes-pendientes/<id>/` | Detalle de aprobación (declarada/aprobada/gap/motivo) | `mpr.aprobar_parte` |
 | `/mpr/lineas/` | CRUD de líneas de producción | `mpr.maquinas_lineas` |
-| `/mpr/maquinas/` | CRUD de máquinas y asignación máquina↔línea / máquina↔artículo | `mpr.maquinas_lineas` |
+| `/mpr/maquinas/` | CRUD de máquinas y asignación máquina↔línea | `mpr.maquinas_lineas` |
+| `/mpr/maquinas/carga-articulos/` | Grilla de carga de artículos habilitados por máquina (MVP) | `mpr.maquinas_lineas` |
+| `/mpr/maquinas/<id>/articulos/` | Histórico y detalle de artículos por máquina | `mpr.maquinas_lineas` |
+| `/mpr/maquinas/api/articulos/buscar/` | API JSON búsqueda predictiva (solo `tipo_art_fab = Fabricado`) | `mpr.maquinas_lineas` |
+| `/mpr/maquinas/api/articulos/accion/` | API JSON habilitar/deshabilitar artículo en máquina | `mpr.maquinas_lineas` |
 | `/mpr/operarios-usuarios/` | Mapeo operario ↔ usuario de login | `mpr.ver` |
 | `/mpr/operarios-lineas/` | Línea habitual por operario | `mpr.maquinas_lineas` |
 
 El listado de `/mpr/maquinas/` (y el de máquinas por línea) ordena por `codigo`
-en sentido **numérico descendente** (`CAST(codigo AS UNSIGNED) DESC`).
+en sentido **numérico ascendente** (`CAST(codigo AS UNSIGNED) ASC`).
+
+La pantalla **`/mpr/maquinas/carga-articulos/`** concentra la carga operativa en grilla
+(filtro opcional `?id_linea=`); la ruta **`/mpr/maquinas/<id>/articulos/`** queda para
+consulta histórica por máquina. La búsqueda de artículos para habilitar filtra solo
+artículos con `tipo_art_fab = 'Fabricado'` (normalizado con `TRIM`/`COALESCE`).
 
 El detalle de la carga y la aprobación (pantallas, bordes, borrador vs. envío) está en
 [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md).

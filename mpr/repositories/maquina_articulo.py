@@ -61,7 +61,12 @@ def _map_articulo(row: Dict[str, Any]) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Búsqueda de artículos (para el buscador de la UI)
 # --------------------------------------------------------------------------- #
-def buscar_articulos(base_empresa: str, q: str, limit: int = 25) -> List[Dict[str, Any]]:
+def buscar_articulos(
+    base_empresa: str,
+    q: str,
+    limit: int = 25,
+    tipo_art_fab: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     base = (base_empresa or "").strip()
     if not base:
         return []
@@ -70,21 +75,28 @@ def buscar_articulos(base_empresa: str, q: str, limit: int = 25) -> List[Dict[st
     except (TypeError, ValueError):
         lim = 25
     q = (q or "").strip()
+    tipo_filtro = (tipo_art_fab or "").strip()
     with mysql_cursor(base, dict_cursor=True) as cursor:
         tbl = _tabla_articulo(cursor)
         if not tbl:
             return []
         params: List[Any] = []
-        filtro = ""
+        condiciones: List[str] = []
         if q:
             like = f"%{q}%"
-            filtro = (
-                " WHERE (COALESCE(a.id_manual,'') LIKE %s"
+            condiciones.append(
+                "(COALESCE(a.id_manual,'') LIKE %s"
                 " OR COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR),'') LIKE %s"
                 " OR COALESCE(a.NombreArticulo,'') LIKE %s"
                 " OR CAST(a.IDArt AS CHAR) LIKE %s)"
             )
-            params = [like, like, like, like]
+            params.extend([like, like, like, like])
+        if tipo_filtro:
+            condiciones.append("COALESCE(TRIM(a.tipo_art_fab),'') = %s")
+            params.append(tipo_filtro)
+        filtro = ""
+        if condiciones:
+            filtro = " WHERE " + " AND ".join(condiciones)
         params.append(lim)
         cursor.execute(
             f"SELECT {_COLS_ART} FROM `{tbl}` a{filtro} "
@@ -195,6 +207,39 @@ def listar_articulos_vigentes(
             info = _map_articulo(r)
             info["vigencia_desde"] = _as_date(r.get("vigencia_desde"))
             out.append(info)
+        return out
+
+
+def listar_articulos_vigentes_todas_maquinas(
+    base_empresa: str, fecha: date
+) -> Dict[int, List[Dict[str, Any]]]:
+    """Artículos habilitados vigentes a `fecha`, agrupados por id_mpr_maquina."""
+    base = (base_empresa or "").strip()
+    if not base:
+        return {}
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        tbl = _tabla_articulo(cursor)
+        if not tbl:
+            return {}
+        cursor.execute(
+            f"""
+            SELECT ma.id_mpr_maquina, {_COLS_ART}, ma.vigencia_desde AS vigencia_desde
+            FROM mpr_maquina_articulo ma
+            INNER JOIN `{tbl}` a ON a.IDArt = ma.id_articulo
+            WHERE ma.vigencia_desde <= %s
+              AND (ma.vigencia_hasta IS NULL OR ma.vigencia_hasta > %s)
+            ORDER BY ma.id_mpr_maquina, codigo_articulo, a.IDArt
+            """,
+            [fecha, fecha],
+        )
+        out: Dict[int, List[Dict[str, Any]]] = {}
+        for r in cursor.fetchall() or []:
+            mid = to_int_or_none(r.get("id_mpr_maquina"))
+            if mid is None:
+                continue
+            info = _map_articulo(r)
+            info["vigencia_desde"] = _as_date(r.get("vigencia_desde"))
+            out.setdefault(mid, []).append(info)
         return out
 
 

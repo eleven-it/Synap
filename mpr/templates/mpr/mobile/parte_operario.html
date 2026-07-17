@@ -130,7 +130,7 @@
                                     <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Docenas</span>
                                     <input type="number" inputmode="numeric" min="0" step="1"
                                            name="doc_{{ maq.id_maquina }}_{{ art.id_articulo }}"
-                                           value="{{ art.docenas|default:0 }}"
+                                           value="{% if art.docenas %}{{ art.docenas }}{% endif %}"
                                            @input="recalc()"
                                            class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-center text-lg font-semibold text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
                                 </label>
@@ -138,7 +138,7 @@
                                     <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Pares</span>
                                     <input type="number" inputmode="numeric" min="0" step="1"
                                            name="par_{{ maq.id_maquina }}_{{ art.id_articulo }}"
-                                           value="{{ art.pares|default:0 }}"
+                                           value="{% if art.pares %}{{ art.pares }}{% endif %}"
                                            @input="recalc()"
                                            class="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-center text-lg font-semibold text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
                                 </label>

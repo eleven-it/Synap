@@ -198,12 +198,31 @@ Sigue el mismo patrón que `operarios_list.html`:
 - `<select>` con JS `onchange` dispara el form automáticamente.
 - Fechas en cabecera: `"Lu dd/MM/yyyy"`.
 
+#### Color por turno (diferenciación visual) {#color-por-turno}
+
+Los badges de turno asignado (hoy/futuro) se **colorean por turno** para mejor UX
+(antes todos eran verdes). El color se resuelve con el filtro `turno_color` y clases
+CSS scoped en `planificacion_turnos.html` (`.mpr-turno-badge--<slug>`), sin campo nuevo
+en `MprTurno` ni migración de DB. Dark mode vía clase `.dark` (igual que el resto de la UI).
+
+Paleta (canon Synap slate/sky, índigo semántico para noche):
+
+| Turno (heurística por nombre) | Slug | Color claro |
+|---|---|---|
+| Mañana | `manana` | cielo (sky) |
+| Tarde | `tarde` | ámbar |
+| Noche / Nocturno | `noche` | índigo suave |
+| Otros (rota por `id % 4`) | `p0..p3` | teal / slate / cyan / rose |
+
+El link «Quitar» permanece en rojo/rose (acción destructiva) y no compite con el badge.
+
 ### Template filters (mpr_filters.py)
 
 ```python
 {{ valor|dict_get:clave }}   # acceso a dict con clave dinámica
 {{ fecha|isoformat }}        # date → "YYYY-MM-DD" para query params
 {{ fecha|fecha_dd_mm_yyyy }} # ya existía: date → "dd-MM-yyyy"
+{{ asig|turno_color }}       # slug de color por turno: manana/tarde/noche/p0..p3
 ```
 
 ---

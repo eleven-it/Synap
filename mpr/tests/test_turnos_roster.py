@@ -13,6 +13,7 @@ from django.db.models import ProtectedError
 from django.test import TestCase
 
 from mpr.models import MprRosterDia, MprTurno
+from mpr.templatetags.mpr_filters import turno_color
 from mpr.services import (
     actualizar_turno,
     asignar_turno_roster,
@@ -369,3 +370,30 @@ class TestAsignarTurnoRosterRango(TestCase):
         self.assertEqual(mock_upsert.call_count, 2)
         ultima_llamada = mock_upsert.call_args_list[-1]
         self.assertEqual(ultima_llamada[0][3], self.turno2.id)
+
+
+class TestFiltroTurnoColor(TestCase):
+    """Filtro turno_color: slug de color por turno para la grilla de roster."""
+
+    def test_heuristica_por_nombre_con_y_sin_acento(self):
+        self.assertEqual(turno_color({"nombre_turno": "Mañana", "id_turno": 1}), "manana")
+        self.assertEqual(turno_color({"nombre_turno": "manana", "id_turno": 9}), "manana")
+        self.assertEqual(turno_color({"nombre_turno": "Tarde", "id_turno": 2}), "tarde")
+        self.assertEqual(turno_color({"nombre_turno": "Noche", "id_turno": 3}), "noche")
+        self.assertEqual(turno_color({"nombre_turno": "Nocturno", "id_turno": 4}), "noche")
+
+    def test_fallback_rota_paleta_por_id(self):
+        self.assertEqual(turno_color({"nombre_turno": "Especial A", "id_turno": 4}), "p0")
+        self.assertEqual(turno_color({"nombre_turno": "Especial B", "id_turno": 5}), "p1")
+        self.assertEqual(turno_color({"nombre_turno": "Especial C", "id_turno": 6}), "p2")
+        self.assertEqual(turno_color({"nombre_turno": "Especial D", "id_turno": 7}), "p3")
+
+    def test_acepta_dict_de_turno_y_cadena(self):
+        # dict de listar_turnos usa claves id/nombre
+        self.assertEqual(turno_color({"nombre": "Tarde", "id": 2}), "tarde")
+        # cadena simple
+        self.assertEqual(turno_color("Noche"), "noche")
+
+    def test_entrada_invalida_no_rompe(self):
+        self.assertEqual(turno_color(None), "p0")
+        self.assertEqual(turno_color({}), "p0")
