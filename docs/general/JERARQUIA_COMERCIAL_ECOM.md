@@ -15,7 +15,7 @@ Aplicación: Archivo → **Migración esquema MySQL (legacy)** → «E-com — j
 | Objeto | Descripción |
 |--------|-------------|
 | `ecom_org_gerente_supervisor` | Vínculo Gerente → Supervisor (1 supervisor activo por fila). Incluye `id_usuario_gerente` / `id_usuario_supervisor` (NULL) para etiqueta de UI cuando varios usuarios comparten el mismo `CodViajante`. |
-| `ecom_org_supervisor_vendedor` | Vínculo Supervisor → Vendedor (1 supervisor activo por vendedor). Incluye `id_usuario_supervisor` (NULL) con el mismo criterio de etiqueta. |
+| `ecom_org_supervisor_vendedor` | Vínculo Supervisor → Vendedor. Un vendedor puede tener varios supervisores activos; la unicidad aplica al par Supervisor/Vendedor y estado. Incluye `id_usuario_supervisor` (NULL) con el mismo criterio de etiqueta. |
 | `ecom_aprobacion_evento` | Auditoría de solicitudes/aprobaciones/rechazos |
 | `comp_ped.estado_aprobacion_comercial` | Estado comercial (`-`, `pendiente`, `aprobado`, `rechazado`) |
 | `comp_ped.aprobador_codviajante` | CodViajante que resolvió |
@@ -24,6 +24,21 @@ Aplicación: Archivo → **Migración esquema MySQL (legacy)** → «E-com — j
 | Claves `configuracion_ecom` | Master, subflag, umbrales y atajos hub (ver [AJUSTES_VENTAS.md](../ecom/AJUSTES_VENTAS.md)) |
 
 Tras DDL, el provider intenta **backfill** desde JSON legacy (`ecom_vendedores_a_cargo_*`).
+
+El provider elimina el índice histórico `uq_eosv_vendedor_activo` y asegura
+`uq_eosv_par_activo (cod_supervisor, cod_vendedor, activo)`, para admitir
+cobertura comercial por vacaciones o turnos sin duplicar el mismo vínculo activo.
+
+## Vínculos S→V múltiples
+
+- El servicio vincula o reactiva por par Supervisor/Vendedor; no mueve ni desactiva
+  los otros supervisores del vendedor.
+- La API acepta `cod_vendedor` para compatibilidad y `cod_vendedores` (lista) para
+  altas masivas.
+- La baja con `cod_supervisor` desactiva solamente ese par; sin supervisor mantiene
+  la baja histórica de todos los vínculos del vendedor.
+- Los catálogos de viajantes aplican orden natural ascendente para nombres
+  `Vendedor N` (`1, 2, …, 10`) y orden alfabético case-insensitive como respaldo.
 
 ## Permisos nuevos
 

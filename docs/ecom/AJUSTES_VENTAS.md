@@ -86,16 +86,18 @@ Orden de las tarjetas en `ecom/ajustes_ventas.html` (canon slate/sky, toggles Ac
    | `gerente` | Agregar gerente (paso 1 de 2) | usuario `gerente` | guarda gerente y pasa a `supervisor_bajo_nuevo` (botón *Siguiente*) |
    | `supervisor_bajo_nuevo` | Agregar supervisor bajo {gerente} | usuario `supervisor` | POST `vincular_gerente_supervisor` |
    | `supervisor` | Agregar supervisor bajo {gerente} | usuario `supervisor` | POST `vincular_gerente_supervisor` (padre = gerente del nodo) |
-   | `vendedor` | Agregar vendedor bajo {supervisor} | viajante `vendedor` | POST `vincular_supervisor_vendedor` (padre = supervisor del nodo) |
+   | `vendedor` | Agregar vendedores bajo {supervisor} | viajantes `vendedor` | POST `vincular_supervisor_vendedor` con `cod_vendedores` (padre = supervisor del nodo) |
 
-   El **primer alta** siempre crea un G→S (no existe nodo gerente suelto): el modo `gerente` es un asistente de 2 pasos. Botones del panel: *Cancelar* / *Confirmar* (o *Siguiente* en el paso 1). Si la persona elegida **ya tiene padre** en otra rama, se pide confirmación para **mover** (`mover: true` en el POST) en lugar de fallar. El éxito muestra el toast `mensaje` y cierra el panel.
+   El **primer alta** siempre crea un G→S (no existe nodo gerente suelto): el modo `gerente` es un asistente de 2 pasos. Botones del panel: *Cancelar* / *Confirmar* (o *Siguiente* en el paso 1). Si la persona elegida **ya tiene padre** en otra rama, se pide confirmación para **mover** (`mover: true` en el POST) en lugar de fallar.
+
+   En modo `vendedor`, el picker permite seleccionar uno o más viajantes: cada click alterna un chip y *Confirmar* crea vínculos S→V para todos, sin mover ni quitar vínculos de otros supervisores. Un vendedor puede reportar a varios supervisores activos para cobertura de vacaciones o turnos. Quitar un vendedor desde un nodo desactiva únicamente el par Supervisor→Vendedor de ese nodo.
 
    **Identidad de gerente/supervisor:** los vínculos conservan `CodViajante` para el alcance comercial, pero también guardan el `id_usuario` elegido (`id_usuario_gerente` e `id_usuario_supervisor`). Esto evita que un código compartido muestre el primer usuario encontrado: las etiquetas del árbol priorizan nombre y apellido del `id_usuario` persistido y solo usan el viajante como compatibilidad para vínculos históricos.
 
    **Quitar:** confirmación ligera con `window.confirm`: *"¿Quitar a {Nombre} de la jerarquía? Dejará de reportar a {Padre}."*
 
    Gerente/Supervisor: búsqueda de **usuarios** con puesto **Supervisor**, **Administrador**/**Administración** o **Ventas** (chip *Usuario*, ícono `badge`). Vendedor: catálogo **viajantes** (chip *Viajante*, ícono `storefront`); se excluyen nombres vacíos, `-Ninguno-` o solo guiones/placeholders.
-   - **Autocomplete:** la etiqueta (dropdown e input seleccionado) muestra **solo nombre y apellido** (usuarios) o el **Nombre del viajante** (vendedor), nunca `@cod` ni `· vía. N`. La **flecha abajo** (o el chevron `expand_more`) lista **todos** los resultados (`q=''`, `limit=50`); flecha arriba navega o abre la lista completa. Accesible con `role="combobox"`, `aria-expanded`, `aria-activedescendant` y scroll al ítem resaltado.
+   - **Autocomplete:** la etiqueta (dropdown e input seleccionado) muestra **solo nombre y apellido** (usuarios) o el **Nombre del viajante** (vendedor), nunca `@cod` ni `· vía. N`. Los nombres tipo `Vendedor 1`, `Vendedor 2`, … `Vendedor 10` se ordenan de forma natural ascendente; los restantes se ordenan alfabéticamente sin distinguir mayúsculas. La **flecha abajo** (o el chevron `expand_more`) lista **todos** los resultados (`q=''`, `limit=50`); flecha arriba navega o abre la lista completa. Accesible con `role="combobox"`, `aria-expanded`, `aria-activedescendant` y scroll al ítem resaltado.
 
 ## Menú
 

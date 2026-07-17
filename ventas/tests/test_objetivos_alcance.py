@@ -60,7 +60,7 @@ class TestAgruparArbolOrg(unittest.TestCase):
         self.assertEqual(agrupar_grupos_arbol_org("emp1", {"id_vendedor_usr": 1}, grupos), grupos)
 
     @patch("ventas.services.objetivos_mysql._nombres_viajantes_map", return_value={10: "S10", 20: "V20", 1: "G1"})
-    @patch("ventas.services.objetivos_mysql._relaciones_org_activas", return_value=({20: 10}, {10: 1}))
+    @patch("ventas.services.objetivos_mysql._relaciones_org_activas", return_value=({20: [10]}, {10: 1}))
     @patch("ventas.services.objetivos_mysql.usar_vista_arbol_org", return_value=True)
     def test_on_anida_gerente_supervisor_vendedor(self, _u, _rel, _nom):
         grupos = [{"cod_viajante": 20, "nombre_vendedor": "V20", "clientes": [{"codigo": 1}]}]
@@ -69,6 +69,17 @@ class TestAgruparArbolOrg(unittest.TestCase):
         self.assertEqual(arbol[0]["tipo"], "gerente")
         self.assertEqual(arbol[0]["children"][0]["tipo"], "supervisor")
         self.assertEqual(arbol[0]["children"][0]["children"][0]["tipo"], "vendedor")
+
+    @patch("ventas.services.objetivos_mysql._nombres_viajantes_map", return_value={10: "S10", 11: "S11", 20: "V20"})
+    @patch("ventas.services.objetivos_mysql._relaciones_org_activas", return_value=({20: [10, 11]}, {}))
+    @patch("ventas.services.objetivos_mysql.usar_vista_arbol_org", return_value=True)
+    def test_on_repite_vendedor_bajo_cada_supervisor(self, _u, _rel, _nom):
+        grupos = [{"cod_viajante": 20, "nombre_vendedor": "V20", "clientes": [{"codigo": 1}]}]
+
+        arbol = agrupar_grupos_arbol_org("emp1", {"id_vendedor_usr": 1}, grupos)
+
+        self.assertEqual({nodo["cod_viajante"] for nodo in arbol}, {10, 11})
+        self.assertTrue(all(nodo["children"][0]["cod_viajante"] == 20 for nodo in arbol))
 
 
 class TestListarGruposAlcance(unittest.TestCase):

@@ -18,6 +18,7 @@ from ecom.services.jerarquia_comercial import (
     listar_arbol_jerarquia,
     vincular_gerente_supervisor,
     vincular_supervisor_vendedor,
+    vincular_supervisor_vendedores_batch,
 )
 
 
@@ -51,20 +52,31 @@ class JerarquiaNodosAPIView(APIView):
                 id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
             )
         elif accion == "vincular_supervisor_vendedor":
-            ok, msg = vincular_supervisor_vendedor(
-                base,
-                to_int_or_none(data.get("cod_supervisor")),
-                to_int_or_none(data.get("cod_vendedor")),
-                mover=mover,
-                id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
-            )
+            vendedores = data.get("cod_vendedores")
+            if isinstance(vendedores, list):
+                ok, msg = vincular_supervisor_vendedores_batch(
+                    base,
+                    to_int_or_none(data.get("cod_supervisor")),
+                    vendedores,
+                    id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
+                )
+            else:
+                ok, msg = vincular_supervisor_vendedor(
+                    base,
+                    to_int_or_none(data.get("cod_supervisor")),
+                    to_int_or_none(data.get("cod_vendedor")),
+                    mover=mover,
+                    id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
+                )
         elif accion == "desactivar_gerente_supervisor":
             ok, msg = desactivar_vinculo_gerente_supervisor(
                 base, to_int_or_none(data.get("cod_supervisor"))
             )
         elif accion == "desactivar_supervisor_vendedor":
             ok, msg = desactivar_vinculo_supervisor_vendedor(
-                base, to_int_or_none(data.get("cod_vendedor"))
+                base,
+                to_int_or_none(data.get("cod_vendedor")),
+                to_int_or_none(data.get("cod_supervisor")),
             )
         else:
             return Response(

@@ -1,5 +1,5 @@
 """
-Jerarquía comercial Gerente → Supervisor → Vendedor (árbol 1 padre).
+Jerarquía comercial Gerente → Supervisor → Vendedor.
 
 Tablas: ``ecom_org_gerente_supervisor``, ``ecom_org_supervisor_vendedor``.
 """
@@ -189,20 +189,28 @@ def _gerente_de_supervisor(cursor, cod_supervisor: int) -> Optional[int]:
     return to_int_or_none(row[0])
 
 
-def _supervisor_de_vendedor(cursor, cod_vendedor: int) -> Optional[int]:
+def _supervisores_de_vendedor(cursor, cod_vendedor: int) -> List[int]:
+    """Devuelve todos los supervisores activos del vendedor, ordenados por código."""
     cursor.execute(
         """
         SELECT cod_supervisor FROM ecom_org_supervisor_vendedor
-        WHERE cod_vendedor = %s AND activo = %s LIMIT 1
+        WHERE cod_vendedor = %s AND activo = %s
+        ORDER BY cod_supervisor
         """,
         (cod_vendedor, _ACTIVO_SI),
     )
-    row = cursor.fetchone()
-    if not row:
-        return None
-    if isinstance(row, dict):
-        return to_int_or_none(row.get("cod_supervisor"))
-    return to_int_or_none(row[0])
+    supervisores: List[int] = []
+    for row in _fetchall_dict(cursor):
+        supervisor = to_int_or_none(row.get("cod_supervisor"))
+        if supervisor is not None:
+            supervisores.append(supervisor)
+    return sorted(set(supervisores))
+
+
+def _supervisor_de_vendedor(cursor, cod_vendedor: int) -> Optional[int]:
+    """Compatibilidad: retorna el primer supervisor activo del vendedor."""
+    supervisores = _supervisores_de_vendedor(cursor, cod_vendedor)
+    return supervisores[0] if supervisores else None
 
 
 def _validar_sin_ciclo_gerente_supervisor(
@@ -336,10 +344,10 @@ def vincular_supervisor_vendedor(
     mover: bool = False,
     id_usuario_supervisor: Optional[int] = None,
 ) -> Tuple[bool, str]:
-    """Crea o reactiva vínculo supervisor→vendedor (1 padre por vendedor activo).
+    """Crea o reactiva vínculo supervisor→vendedor por par activo.
 
-    Si el vendedor ya tiene otro supervisor activo y ``mover`` es False, falla.
-    Con ``mover=True`` actualiza el padre (mueve de rama).
+    Un vendedor puede tener varios supervisores activos para cubrir turnos o vacaciones.
+    ``mover`` se conserva como parámetro compatible, pero no modifica otros vínculos.
     """
     s = to_int_or_none(cod_supervisor)
     v = to_int_or_none(cod_vendedor)
@@ -358,21 +366,20 @@ def vincular_supervisor_vendedor(
             try:
                 cursor.execute(
                     """
-                    SELECT id, cod_supervisor, activo FROM ecom_org_supervisor_vendedor
-                    WHERE cod_vendedor = %s LIMIT 1
+                    SELECT id, activo FROM ecom_org_supervisor_vendedor
+                    WHERE cod_supervisor = %s AND cod_vendedor = %s LIMIT 1
                     """,
-                    (v,),
+                    (s, v),
                 )
                 row = cursor.fetchone()
                 ahora = _ahora()
                 if row:
                     if isinstance(row, dict):
                         rid = to_int_or_none(row.get("id"))
-                        actual_s = to_int_or_none(row.get("cod_supervisor"))
                         activo = row.get("activo")
                     else:
-                        rid, actual_s, activo = row[0], row[1], row[2]
-                    if _si_activo(activo) and actual_s == s:
+                        rid, activo = row[0], row[1]
+                    if _si_activo(activo):
                         if id_s is not None:
                             cursor.execute(
                                 """
@@ -384,26 +391,18 @@ def vincular_supervisor_vendedor(
                             )
                             conn.commit()
                         return True, "Vínculo ya existente."
-                    if _si_activo(activo) and actual_s != s and not mover:
-                        return (
-                            False,
-                            "El vendedor ya tiene un supervisor activo asignado.",
-                        )
                     cursor.execute(
                         """
                         UPDATE ecom_org_supervisor_vendedor
-                        SET cod_supervisor = %s,
-                            id_usuario_supervisor = COALESCE(%s, id_usuario_supervisor),
+                        SET id_usuario_supervisor = COALESCE(%s, id_usuario_supervisor),
                             activo = %s,
                             actualizado_en = %s
                         WHERE id = %s
                         """,
-                        (s, id_s, _ACTIVO_SI, ahora, rid),
+                        (id_s, _ACTIVO_SI, ahora, rid),
                     )
                     conn.commit()
-                    if _si_activo(activo) and actual_s != s:
-                        return True, "Vendedor movido al nuevo supervisor."
-                    return True, "Vínculo supervisor→vendedor guardado."
+                    return True, "Vínculo supervisor→vendedor reactivado."
                 cursor.execute(
                     """
                     INSERT INTO ecom_org_supervisor_vendedor
@@ -420,6 +419,39 @@ def vincular_supervisor_vendedor(
     except Exception as exc:
         logger.exception("vincular_supervisor_vendedor: %s", exc)
         return False, f"Error al guardar vínculo: {exc}"
+
+
+def vincular_supervisor_vendedores_batch(
+    base_empresa: str,
+    cod_supervisor: int,
+    cod_vendedores: Sequence[int],
+    *,
+    id_usuario_supervisor: Optional[int] = None,
+) -> Tuple[bool, str]:
+    """Vincula varios vendedores con el supervisor sin afectar otros supervisores."""
+    vendedores: List[int] = []
+    vistos: set[int] = set()
+    for valor in cod_vendedores or []:
+        vendedor = to_int_or_none(valor)
+        if vendedor is not None and vendedor not in vistos:
+            vistos.add(vendedor)
+            vendedores.append(vendedor)
+    if not vendedores:
+        return False, "Debe indicar al menos un vendedor válido."
+
+    errores: List[str] = []
+    for vendedor in vendedores:
+        ok, mensaje = vincular_supervisor_vendedor(
+            base_empresa,
+            cod_supervisor,
+            vendedor,
+            id_usuario_supervisor=id_usuario_supervisor,
+        )
+        if not ok:
+            errores.append(f"{vendedor}: {mensaje}")
+    if errores:
+        return False, "No se pudieron vincular todos los vendedores: " + "; ".join(errores)
+    return True, f"{len(vendedores)} vendedor(es) vinculado(s) al supervisor."
 
 
 def desactivar_vinculo_gerente_supervisor(
@@ -459,10 +491,14 @@ def desactivar_vinculo_gerente_supervisor(
 def desactivar_vinculo_supervisor_vendedor(
     base_empresa: str,
     cod_vendedor: int,
+    cod_supervisor: Optional[int] = None,
 ) -> Tuple[bool, str]:
     v = to_int_or_none(cod_vendedor)
+    s = to_int_or_none(cod_supervisor)
     if v is None:
         return False, "Código de vendedor inválido."
+    if cod_supervisor is not None and s is None:
+        return False, "Código de supervisor inválido."
     base = (base_empresa or "").strip()
     if not base:
         return False, "Base de empresa inválida."
@@ -471,18 +507,28 @@ def desactivar_vinculo_supervisor_vendedor(
         with pool.get_connection(base) as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute(
-                    """
-                    UPDATE ecom_org_supervisor_vendedor
-                    SET activo = %s, actualizado_en = %s
-                    WHERE cod_vendedor = %s AND activo = %s
-                    """,
-                    (_ACTIVO_NO, _ahora(), v, _ACTIVO_SI),
-                )
+                if s is None:
+                    cursor.execute(
+                        """
+                        UPDATE ecom_org_supervisor_vendedor
+                        SET activo = %s, actualizado_en = %s
+                        WHERE cod_vendedor = %s AND activo = %s
+                        """,
+                        (_ACTIVO_NO, _ahora(), v, _ACTIVO_SI),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        UPDATE ecom_org_supervisor_vendedor
+                        SET activo = %s, actualizado_en = %s
+                        WHERE cod_supervisor = %s AND cod_vendedor = %s AND activo = %s
+                        """,
+                        (_ACTIVO_NO, _ahora(), s, v, _ACTIVO_SI),
+                    )
                 conn.commit()
                 if cursor.rowcount:
                     return True, "Vínculo supervisor→vendedor desactivado."
-                return False, "No se encontró vínculo activo para el vendedor."
+                return False, "No se encontró vínculo activo para el vendedor y supervisor indicados."
             finally:
                 cursor.close()
     except Exception as exc:
@@ -891,8 +937,7 @@ def _buscar_viajantes_jerarquia(base: str, term: str, lim: int) -> List[Dict[str
                       )
                     """
                     params.extend([like, like])
-                sql += " ORDER BY Nombre, CodViajante LIMIT %s"
-                params.append(lim)
+                sql += " ORDER BY CodViajante"
                 cursor.execute(sql, tuple(params))
                 rows = _fetchall_dict(cursor)
             finally:
@@ -922,7 +967,15 @@ def _buscar_viajantes_jerarquia(base: str, term: str, lim: int) -> List[Dict[str
                 "text": nombre,
             }
         )
-    return out
+    def clave_natural_vendedor(item: Dict[str, Any]) -> Tuple[int, int, str, int]:
+        nombre = str_or_default(item.get("nombre_viajante"), "").strip()
+        coincidencia = re.search(r"\bvendedor\s+(\d+)\b", nombre, flags=re.IGNORECASE)
+        codigo = to_int_or_none(item.get("cod_viajante")) or 0
+        if coincidencia:
+            return (0, int(coincidencia.group(1)), nombre.casefold(), codigo)
+        return (1, 0, nombre.casefold(), codigo)
+
+    return sorted(out, key=clave_natural_vendedor)[:lim]
 
 
 def _listar_claves_carteras_json(cursor) -> List[Tuple[int, str]]:

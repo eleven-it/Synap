@@ -8,6 +8,10 @@
 
 Cuando el master flag está **activo**, Synap reemplaza las carteras JSON legacy por un organigrama **Gerente → Supervisor → Vendedor**, filtra hub/objetivos/informes por **alcance comercial** y opcionalmente activa un **workflow de aprobación comercial** separado de `autorizacion_sistema`.
 
+Un vendedor puede tener más de un supervisor activo para cubrir vacaciones o turnos.
+La UI permite agregarlos en forma masiva con selección múltiple; cada vínculo se
+gestiona por su par Supervisor→Vendedor y quitar uno no afecta los demás.
+
 Con master **inactivo** (REQ-GLOB-01), el sistema conserva el comportamiento anterior: JSON `ecom_vendedores_a_cargo_*`, alcance propio del vendedor, hub sin cola comercial y checkout sin `estado_aprobacion_comercial`.
 
 ## Flags y configuración
@@ -63,7 +67,8 @@ API: `GET /ecom/api/mayoristapp/pedidos/hub/`.
 Motor: `ecom/services/aprobacion_pedidos.py`
 
 - Reglas: monto, descuento pie/renglón, crédito no autorizado, cliente nuevo.
-- Routing: Supervisor → Gerente según organigrama.
+- Routing: unión de todos los Supervisores activos del vendedor y los Gerentes de
+  esos supervisores. Cualquiera de esos aprobadores puede intervenir en su nivel.
 - Estados en `comp_ped.estado_aprobacion_comercial`: `-` | `pendiente` | `aprobado` | `rechazado`.
 - Auditoría: `ecom_aprobacion_evento`.
 - **No modifica** `autorizacion_sistema`.
@@ -96,6 +101,9 @@ Detalle operativo: [../general/JERARQUIA_COMERCIAL_ECOM.md](../general/JERARQUIA
 3. Activar master en Ajustes de ventas; validar ABM y alcance en hub.
 4. Activar subflag aprobación y umbrales; probar cola en hub móvil.
 5. Capacitar supervisores/gerentes con permiso `ecom.pedidos.aprobar`.
+
+Los resultados del catálogo de viajantes usan orden natural ascendente para nombres
+del tipo `Vendedor N`, evitando el orden lexicográfico `1, 10, 2`.
 
 ## Tests
 
