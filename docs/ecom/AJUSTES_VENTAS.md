@@ -71,7 +71,7 @@ Orden de las tarjetas en `ecom/ajustes_ventas.html` (canon slate/sky, toggles Ac
 1. **Validación de stock** — toggle `validar_stock_pedidos`.
 2. **Correo al confirmar pedido** — toggle `enviar_mail_confirmar_pedido`. Nota UI: al confirmar un PED, si el cliente tiene email se encola el comprobante; requiere correo saliente configurado y el worker `process_ecom_mail_queue`. Se guarda junto a `validar_stock_pedidos` en el mismo POST a `api_ajustes_ventas`.
 3. **Workflow comercial** — flags/umbrales de aprobación y atajos del hub.
-4. **Jerarquía comercial** — ABM G→S→V con **búsqueda predictiva de usuarios** (nombre, código, viajante). Solo usuarios activos con `CodViajante` > 0. El vínculo persiste códigos de viajante; la lista muestra etiquetas legibles. Permiso `ecom.jerarquia.editar`.
+4. **Jerarquía comercial** — ABM G→S→V. Gerente/Supervisor: búsqueda de usuarios con puesto **Supervisor**, **Administrador**/**Administración** o **Ventas** (etiqueta = nombre y apellido). Vendedor: búsqueda en catálogo **viajantes** (no usuarios). Permiso `ecom.jerarquia.editar`.
 
 ## Menú
 

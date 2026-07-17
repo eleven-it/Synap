@@ -523,7 +523,7 @@ def etiquetas_viajantes_usuarios(
     base_empresa: str,
     codigos: Sequence[int],
 ) -> Dict[int, str]:
-    """Mapa CodViajante → etiqueta legible (usuario / viajante)."""
+    """Mapa CodViajante → etiqueta legible (nombre/apellido usuario o Nombre viajante)."""
     ids = [to_int_or_none(c) for c in codigos]
     ids = [i for i in ids if i is not None]
     if not ids or not (base_empresa or "").strip():
@@ -539,7 +539,6 @@ def etiquetas_viajantes_usuarios(
                     f"""
                     SELECT
                         u.CodViajante AS cod_viajante,
-                        u.cod_usuario,
                         u.nombre_usuario,
                         u.apellido_usuario,
                         COALESCE(v.Nombre, '') AS nombre_viajante
@@ -555,7 +554,9 @@ def etiquetas_viajantes_usuarios(
                     cv = to_int_or_none(row.get("cod_viajante"))
                     if cv is None or cv in out:
                         continue
-                    out[cv] = _etiqueta_usuario_row(row)
+                    out[cv] = _etiqueta_nombre_apellido(row) or str_or_default(
+                        row.get("nombre_viajante"), ""
+                    ).strip() or f"Viajante {cv}"
                 faltan = [i for i in ids if i not in out]
                 if faltan:
                     ph2 = ",".join(["%s"] * len(faltan))
@@ -571,7 +572,7 @@ def etiquetas_viajantes_usuarios(
                         if cv is None or cv in out:
                             continue
                         nom = str_or_default(row.get("nombre_viajante"), "").strip()
-                        out[cv] = f"{nom} (vía. {cv})" if nom else f"Viajante {cv}"
+                        out[cv] = nom or f"Viajante {cv}"
             finally:
                 cursor.close()
     except Exception as exc:
@@ -579,41 +580,72 @@ def etiquetas_viajantes_usuarios(
     return out
 
 
-def _etiqueta_usuario_row(row: Dict[str, Any]) -> str:
-    cv = to_int_or_none(row.get("cod_viajante")) or 0
-    cod = str_or_default(row.get("cod_usuario"), "").strip()
-    nom = " ".join(
+def _etiqueta_nombre_apellido(row: Dict[str, Any]) -> str:
+    """Solo nombre y apellido (sin código de usuario ni vía.)."""
+    return " ".join(
         p for p in (
             str_or_default(row.get("nombre_usuario"), "").strip(),
             str_or_default(row.get("apellido_usuario"), "").strip(),
         ) if p
     ).strip()
-    via = str_or_default(row.get("nombre_viajante"), "").strip()
-    partes = []
-    if nom:
-        partes.append(nom)
-    if cod:
-        partes.append(f"@{cod}")
-    label = " ".join(partes) if partes else (via or f"Viajante {cv}")
-    return f"{label} · vía. {cv}"
+
+
+def _normalizar_puesto(nombre: str) -> str:
+    """Normaliza nombre de puesto para comparar (minúsculas, sin acentos)."""
+    import unicodedata
+
+    raw = str_or_default(nombre, "").strip().lower()
+    if not raw:
+        return ""
+    return "".join(
+        ch for ch in unicodedata.normalize("NFKD", raw)
+        if not unicodedata.combining(ch)
+    )
+
+
+# Puestos habilitados para Gerente / Supervisor comercial.
+_PUESTOS_GERENTE_SUPERVISOR = frozenset({
+    "supervisor",
+    "administrador",
+    "administracion",
+    "ventas",
+})
+
+
+def _puesto_habilitado_gerente_supervisor(nombre_puesto: str) -> bool:
+    return _normalizar_puesto(nombre_puesto) in _PUESTOS_GERENTE_SUPERVISOR
 
 
 def buscar_usuarios_jerarquia(
     base_empresa: str,
     q: str = "",
     *,
+    rol: str = "gerente",
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
     """
-    Búsqueda predictiva de usuarios activos con ``CodViajante`` para el ABM org.
+    Búsqueda predictiva para el ABM org.
 
-    Busca por código de usuario, nombre, apellido, nombre de viajante o nº CodViajante.
+    - ``rol`` gerente/supervisor: usuarios con puesto Supervisor, Administrador/
+      Administración o Ventas y CodViajante > 0. Etiqueta = nombre + apellido.
+    - ``rol`` vendedor: catálogo ``viajantes`` (no usuarios). Etiqueta = Nombre.
     """
     base = (base_empresa or "").strip()
     if not base:
         return []
     lim = max(1, min(to_int_or_none(limit) or 20, 50))
     term = (q or "").strip()
+    rol_n = (rol or "gerente").strip().lower()
+    if rol_n in ("vendedor", "vendedores", "viajante"):
+        return _buscar_viajantes_jerarquia(base, term, lim)
+    return _buscar_usuarios_gerente_supervisor(base, term, lim)
+
+
+def _buscar_usuarios_gerente_supervisor(
+    base: str,
+    term: str,
+    lim: int,
+) -> List[Dict[str, Any]]:
     try:
         pool = get_mysql_pool()
         with pool.get_connection(base) as conn:
@@ -626,9 +658,10 @@ def buscar_usuarios_jerarquia(
                         u.nombre_usuario,
                         u.apellido_usuario,
                         u.CodViajante AS cod_viajante,
-                        COALESCE(v.Nombre, '') AS nombre_viajante,
-                        COALESCE(u.permiso_supervisor_venta, 'No') AS permiso_supervisor_venta
+                        COALESCE(p.puesto, '') AS nombre_puesto,
+                        COALESCE(v.Nombre, '') AS nombre_viajante
                     FROM usuarios u
+                    LEFT JOIN puestos p ON p.idpuesto = u.id_puesto
                     LEFT JOIN viajantes v ON v.CodViajante = u.CodViajante
                     WHERE (u.baja_usuario IS NULL OR u.baja_usuario <> 'Si')
                       AND u.CodViajante IS NOT NULL
@@ -639,33 +672,35 @@ def buscar_usuarios_jerarquia(
                     like = f"%{term}%"
                     sql += """
                       AND (
-                        u.cod_usuario LIKE %s
-                        OR u.nombre_usuario LIKE %s
+                        u.nombre_usuario LIKE %s
                         OR u.apellido_usuario LIKE %s
                         OR CONCAT(COALESCE(u.nombre_usuario,''), ' ', COALESCE(u.apellido_usuario,'')) LIKE %s
-                        OR COALESCE(v.Nombre, '') LIKE %s
-                        OR CAST(u.CodViajante AS CHAR) LIKE %s
+                        OR u.cod_usuario LIKE %s
                       )
                     """
-                    params.extend([like, like, like, like, like, like])
-                sql += " ORDER BY u.nombre_usuario, u.apellido_usuario, u.cod_usuario LIMIT %s"
-                params.append(lim)
+                    params.extend([like, like, like, like])
+                sql += " ORDER BY u.nombre_usuario, u.apellido_usuario LIMIT %s"
+                params.append(max(lim * 5, 50))
                 cursor.execute(sql, tuple(params))
                 rows = _fetchall_dict(cursor)
             finally:
                 cursor.close()
     except Exception as exc:
-        logger.warning("buscar_usuarios_jerarquia (%s): %s", base, exc)
+        logger.warning("_buscar_usuarios_gerente_supervisor (%s): %s", base, exc)
         return []
 
     out: List[Dict[str, Any]] = []
     seen_cv: set[int] = set()
     for row in rows:
+        if not _puesto_habilitado_gerente_supervisor(str(row.get("nombre_puesto") or "")):
+            continue
         cv = to_int_or_none(row.get("cod_viajante"))
         if cv is None or cv in seen_cv:
             continue
         seen_cv.add(cv)
-        etiqueta = _etiqueta_usuario_row(row)
+        etiqueta = _etiqueta_nombre_apellido(row)
+        if not etiqueta:
+            continue
         out.append(
             {
                 "id_usuario": to_int_or_none(row.get("id_usuario")),
@@ -673,12 +708,67 @@ def buscar_usuarios_jerarquia(
                 "nombre_usuario": str_or_default(row.get("nombre_usuario"), "").strip(),
                 "apellido_usuario": str_or_default(row.get("apellido_usuario"), "").strip(),
                 "cod_viajante": cv,
+                "nombre_puesto": str_or_default(row.get("nombre_puesto"), "").strip(),
                 "nombre_viajante": str_or_default(row.get("nombre_viajante"), "").strip(),
-                "permiso_supervisor_venta": str_or_default(
-                    row.get("permiso_supervisor_venta"), "No"
-                ).strip(),
                 "etiqueta": etiqueta,
                 "text": etiqueta,
+            }
+        )
+        if len(out) >= lim:
+            break
+    return out
+
+
+def _buscar_viajantes_jerarquia(base: str, term: str, lim: int) -> List[Dict[str, Any]]:
+    """Catálogo de vendedores (tabla viajantes), no usuarios del sistema."""
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base) as conn:
+            cursor = conn.cursor()
+            try:
+                sql = """
+                    SELECT
+                        CodViajante AS cod_viajante,
+                        COALESCE(Nombre, '') AS nombre_viajante
+                    FROM viajantes
+                    WHERE (Anulado IS NULL OR Anulado = 'No' OR Anulado = '')
+                """
+                params: List[Any] = []
+                if term:
+                    like = f"%{term}%"
+                    sql += """
+                      AND (
+                        Nombre LIKE %s
+                        OR CAST(CodViajante AS CHAR) LIKE %s
+                      )
+                    """
+                    params.extend([like, like])
+                sql += " ORDER BY Nombre, CodViajante LIMIT %s"
+                params.append(lim)
+                cursor.execute(sql, tuple(params))
+                rows = _fetchall_dict(cursor)
+            finally:
+                cursor.close()
+    except Exception as exc:
+        logger.warning("_buscar_viajantes_jerarquia (%s): %s", base, exc)
+        return []
+
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        cv = to_int_or_none(row.get("cod_viajante"))
+        if cv is None:
+            continue
+        nombre = str_or_default(row.get("nombre_viajante"), "").strip() or f"Viajante {cv}"
+        out.append(
+            {
+                "id_usuario": None,
+                "cod_usuario": "",
+                "nombre_usuario": nombre,
+                "apellido_usuario": "",
+                "cod_viajante": cv,
+                "nombre_viajante": nombre,
+                "etiqueta": nombre,
+                "text": nombre,
             }
         )
     return out

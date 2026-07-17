@@ -89,11 +89,17 @@ class JerarquiaUsuariosAPIView(APIView):
             return Response({"ok": False, "error": "Sin base_empresa."}, status=400)
         q = str(request.query_params.get("q") or "").strip()
         limit = to_int_or_none(request.query_params.get("limit")) or 20
-        resultados = buscar_usuarios_jerarquia(base, q, limit=limit)
+        rol = str(
+            request.query_params.get("rol")
+            or request.query_params.get("campo")
+            or "gerente"
+        ).strip()
+        resultados = buscar_usuarios_jerarquia(base, q, rol=rol, limit=limit)
         return Response(
             {
                 "ok": True,
                 "results": resultados,
                 "total": len(resultados),
+                "rol": rol,
             }
         )
