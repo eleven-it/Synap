@@ -42,8 +42,17 @@ class TestAlcanceOn(unittest.TestCase):
     @patch("ecom.services.alcance_comercial.workflow_jerarquia_comercial_activo", return_value=True)
     def test_on_ver_todos(self, _wf, _vt, mock_todos):
         ctx = {"id_vendedor_usr": 10, "synap_permisos": ["ecom.pedidos.ver_todos"]}
-        self.assertEqual(alcance_viajantes_comercial("emp1", ctx), [1, 2, 3])
+        self.assertEqual(alcance_viajantes_comercial("emp1", ctx), [2, 3])
         mock_todos.assert_called_once_with("emp1")
+
+    @patch("ecom.services.alcance_comercial.subarbol_de_usuario", return_value=[1, 20, 21])
+    @patch("ecom.services.alcance_comercial.rol_de_usuario", return_value="supervisor")
+    @patch("ecom.services.alcance_comercial.puede_ver_todos_pedidos", return_value=False)
+    @patch("ecom.services.alcance_comercial.workflow_jerarquia_comercial_activo", return_value=True)
+    def test_supervisor_placeholder_excluye_codigo_uno(self, _wf, _todos, _rol, subarbol):
+        ctx = {"user": {"id_usuario": 72}, "id_vendedor_usr": 1}
+        self.assertEqual(alcance_viajantes_comercial("emp1", ctx), [20, 21])
+        subarbol.assert_called_once_with("emp1", 72, "supervisor")
 
     @patch("ecom.services.alcance_comercial.subarbol_de", return_value=[99])
     @patch("ecom.services.alcance_comercial.rol_de", return_value="vendedor")

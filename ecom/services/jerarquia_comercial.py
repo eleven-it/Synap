@@ -26,6 +26,13 @@ RolJerarquia = Literal["gerente", "supervisor", "vendedor", "ninguno"]
 _ACTIVO_SI = "Si"
 _ACTIVO_NO = "No"
 _CLAVE_CARTERA_PREFIX = "ecom_vendedores_a_cargo_"
+COD_VIAJANTE_PLACEHOLDER = 1
+
+
+def es_vendedor_real(cod_viajante: Any) -> bool:
+    """El código 1 identifica usuarios placeholder, nunca vendedores."""
+    cv = to_int_or_none(cod_viajante)
+    return cv is not None and cv > COD_VIAJANTE_PLACEHOLDER
 
 
 def _ahora() -> datetime:
@@ -49,7 +56,7 @@ def _fetchall_dict(cursor) -> List[Dict[str, Any]]:
 def rol_de(base_empresa: str, cod_viajante: int) -> RolJerarquia:
     """Determina el rol orgánico del viajante (prioridad: gerente > supervisor > vendedor)."""
     cv = to_int_or_none(cod_viajante)
-    if cv is None or not (base_empresa or "").strip():
+    if not es_vendedor_real(cv) or not (base_empresa or "").strip():
         return "ninguno"
     base = base_empresa.strip()
     try:
@@ -93,6 +100,52 @@ def rol_de(base_empresa: str, cod_viajante: int) -> RolJerarquia:
     except Exception as exc:
         logger.warning("rol_de (%s, %s): %s", base, cv, exc)
     return "ninguno"
+
+
+def rol_de_usuario(base_empresa: str, id_usuario: int) -> RolJerarquia:
+    """Rol orgánico por identidad de usuario para G/S, incluso con vía=1."""
+    uid = to_int_or_none(id_usuario)
+    base = (base_empresa or "").strip()
+    if uid is None or not base:
+        return "ninguno"
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    """SELECT 1 FROM ecom_org_gerente_supervisor
+                       WHERE id_usuario_gerente = %s AND activo = %s LIMIT 1""",
+                    (uid, _ACTIVO_SI),
+                )
+                if cursor.fetchone():
+                    return "gerente"
+                cursor.execute(
+                    """SELECT 1 FROM ecom_org_gerente_supervisor
+                       WHERE id_usuario_supervisor = %s AND activo = %s
+                       UNION
+                       SELECT 1 FROM ecom_org_supervisor_vendedor
+                       WHERE id_usuario_supervisor = %s AND activo = %s LIMIT 1""",
+                    (uid, _ACTIVO_SI, uid, _ACTIVO_SI),
+                )
+                if cursor.fetchone():
+                    return "supervisor"
+            finally:
+                cursor.close()
+    except Exception as exc:
+        logger.warning("rol_de_usuario (%s, %s): %s", base, uid, exc)
+    return "ninguno"
+
+
+def _cod_viajante_usuario(cursor, id_usuario: int) -> Optional[int]:
+    cursor.execute(
+        """SELECT CodViajante FROM usuarios
+           WHERE id_usuario = %s AND (baja_usuario IS NULL OR baja_usuario <> 'Si')
+           LIMIT 1""",
+        (id_usuario,),
+    )
+    row = cursor.fetchone()
+    return to_int_or_none(row.get("CodViajante") if isinstance(row, dict) else row[0]) if row else None
 
 
 def _supervisores_de_gerente(cursor, cod_gerente: int) -> List[int]:
@@ -171,6 +224,52 @@ def subarbol_de(
         logger.warning("subarbol_de (%s, %s): %s", base, cv, exc)
         return [cv]
     return out
+
+
+def subarbol_de_usuario(
+    base_empresa: str,
+    id_usuario: int,
+    rol: Optional[RolJerarquia] = None,
+) -> List[int]:
+    """Subárbol comercial por identidad de usuario; devuelve solo vendedores reales."""
+    uid = to_int_or_none(id_usuario)
+    base = (base_empresa or "").strip()
+    if uid is None or not base:
+        return []
+    rol_eff = rol if rol and rol != "ninguno" else rol_de_usuario(base, uid)
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base) as conn:
+            cursor = conn.cursor()
+            try:
+                if rol_eff == "supervisor":
+                    cursor.execute(
+                        """SELECT cod_vendedor FROM ecom_org_supervisor_vendedor
+                           WHERE id_usuario_supervisor = %s AND activo = %s""",
+                        (uid, _ACTIVO_SI),
+                    )
+                elif rol_eff == "gerente":
+                    cursor.execute(
+                        """SELECT sv.cod_vendedor
+                           FROM ecom_org_gerente_supervisor gs
+                           JOIN ecom_org_supervisor_vendedor sv
+                             ON sv.id_usuario_supervisor = gs.id_usuario_supervisor
+                           WHERE gs.id_usuario_gerente = %s
+                             AND gs.activo = %s AND sv.activo = %s""",
+                        (uid, _ACTIVO_SI, _ACTIVO_SI),
+                    )
+                else:
+                    cv = _cod_viajante_usuario(cursor, uid)
+                    return [cv] if es_vendedor_real(cv) else []
+                return sorted({
+                    cv for row in _fetchall_dict(cursor)
+                    if es_vendedor_real(cv := to_int_or_none(row.get("cod_vendedor")))
+                })
+            finally:
+                cursor.close()
+    except Exception as exc:
+        logger.warning("subarbol_de_usuario (%s, %s): %s", base, uid, exc)
+        return []
 
 
 def _gerente_de_supervisor(cursor, cod_supervisor: int) -> Optional[int]:
@@ -252,10 +351,10 @@ def vincular_gerente_supervisor(
     s = to_int_or_none(cod_supervisor)
     id_g = to_int_or_none(id_usuario_gerente)
     id_s = to_int_or_none(id_usuario_supervisor)
-    if g is None or s is None:
-        return False, "Códigos de gerente y supervisor inválidos."
-    if g == s:
-        return False, "Gerente y supervisor no pueden ser el mismo código."
+    if id_g is None or id_s is None:
+        return False, "Debe indicar los usuarios de gerente y supervisor."
+    if id_g == id_s:
+        return False, "Gerente y supervisor no pueden ser el mismo usuario."
     base = (base_empresa or "").strip()
     if not base:
         return False, "Base de empresa inválida."
@@ -264,15 +363,17 @@ def vincular_gerente_supervisor(
         with pool.get_connection(base) as conn:
             cursor = conn.cursor()
             try:
-                ok_ciclo, msg_ciclo = _validar_sin_ciclo_gerente_supervisor(cursor, g, s)
-                if not ok_ciclo:
-                    return False, msg_ciclo
+                g = _cod_viajante_usuario(cursor, id_g)
+                s = _cod_viajante_usuario(cursor, id_s)
+                if g is None or s is None:
+                    return False, "Los usuarios seleccionados no tienen CodViajante activo."
                 cursor.execute(
                     """
-                    SELECT id, cod_gerente, activo FROM ecom_org_gerente_supervisor
-                    WHERE cod_supervisor = %s LIMIT 1
+                    SELECT id, cod_gerente, id_usuario_gerente, id_usuario_supervisor, activo
+                    FROM ecom_org_gerente_supervisor
+                    WHERE id_usuario_supervisor = %s LIMIT 1
                     """,
-                    (s,),
+                    (id_s,),
                 )
                 row = cursor.fetchone()
                 ahora = _ahora()
@@ -280,42 +381,32 @@ def vincular_gerente_supervisor(
                     if isinstance(row, dict):
                         rid = to_int_or_none(row.get("id"))
                         actual_g = to_int_or_none(row.get("cod_gerente"))
+                        actual_id_g = to_int_or_none(row.get("id_usuario_gerente"))
+                        actual_id_s = to_int_or_none(row.get("id_usuario_supervisor"))
                         activo = row.get("activo")
                     else:
-                        rid, actual_g, activo = row[0], row[1], row[2]
-                    if _si_activo(activo) and actual_g == g:
-                        if id_g is not None or id_s is not None:
-                            cursor.execute(
-                                """
-                                UPDATE ecom_org_gerente_supervisor
-                                SET id_usuario_gerente = COALESCE(%s, id_usuario_gerente),
-                                    id_usuario_supervisor = COALESCE(%s, id_usuario_supervisor),
-                                    actualizado_en = %s
-                                WHERE id = %s
-                                """,
-                                (id_g, id_s, ahora, rid),
-                            )
-                            conn.commit()
+                        rid, actual_g, actual_id_g, actual_id_s, activo = row[0], row[1], row[2], row[3], row[4]
+                        actual_id_g = to_int_or_none(actual_id_g)
+                        actual_id_s = to_int_or_none(actual_id_s)
+                    if _si_activo(activo) and actual_id_g == id_g:
                         return True, "Vínculo ya existente."
-                    if _si_activo(activo) and actual_g != g and not mover:
-                        return (
-                            False,
-                            "El supervisor ya tiene un gerente activo asignado.",
-                        )
+                    if _si_activo(activo) and actual_id_g != id_g and not mover:
+                        return False, "El supervisor ya tiene otro gerente activo."
                     cursor.execute(
                         """
                         UPDATE ecom_org_gerente_supervisor
                         SET cod_gerente = %s,
-                            id_usuario_gerente = COALESCE(%s, id_usuario_gerente),
-                            id_usuario_supervisor = COALESCE(%s, id_usuario_supervisor),
+                            cod_supervisor = %s,
+                            id_usuario_gerente = %s,
+                            id_usuario_supervisor = %s,
                             activo = %s,
                             actualizado_en = %s
                         WHERE id = %s
                         """,
-                        (g, id_g, id_s, _ACTIVO_SI, ahora, rid),
+                        (g, s, id_g, id_s, _ACTIVO_SI, ahora, rid),
                     )
                     conn.commit()
-                    if _si_activo(activo) and actual_g != g:
+                    if _si_activo(activo) and actual_id_g != id_g:
                         return True, "Supervisor movido al nuevo gerente."
                     return True, "Vínculo gerente→supervisor guardado."
                 cursor.execute(
@@ -352,10 +443,10 @@ def vincular_supervisor_vendedor(
     s = to_int_or_none(cod_supervisor)
     v = to_int_or_none(cod_vendedor)
     id_s = to_int_or_none(id_usuario_supervisor)
-    if s is None or v is None:
-        return False, "Códigos de supervisor y vendedor inválidos."
-    if s == v:
-        return False, "Supervisor y vendedor no pueden ser el mismo código."
+    if id_s is None:
+        return False, "Debe indicar el usuario supervisor."
+    if not es_vendedor_real(v):
+        return False, "El vendedor debe tener un CodViajante mayor a 1."
     base = (base_empresa or "").strip()
     if not base:
         return False, "Base de empresa inválida."
@@ -364,12 +455,15 @@ def vincular_supervisor_vendedor(
         with pool.get_connection(base) as conn:
             cursor = conn.cursor()
             try:
+                s = _cod_viajante_usuario(cursor, id_s)
+                if s is None:
+                    return False, "El usuario supervisor no tiene CodViajante activo."
                 cursor.execute(
                     """
                     SELECT id, activo FROM ecom_org_supervisor_vendedor
-                    WHERE cod_supervisor = %s AND cod_vendedor = %s LIMIT 1
+                    WHERE id_usuario_supervisor = %s AND cod_vendedor = %s LIMIT 1
                     """,
-                    (s, v),
+                    (id_s, v),
                 )
                 row = cursor.fetchone()
                 ahora = _ahora()
@@ -380,26 +474,17 @@ def vincular_supervisor_vendedor(
                     else:
                         rid, activo = row[0], row[1]
                     if _si_activo(activo):
-                        if id_s is not None:
-                            cursor.execute(
-                                """
-                                UPDATE ecom_org_supervisor_vendedor
-                                SET id_usuario_supervisor = %s, actualizado_en = %s
-                                WHERE id = %s
-                                """,
-                                (id_s, ahora, rid),
-                            )
-                            conn.commit()
                         return True, "Vínculo ya existente."
                     cursor.execute(
                         """
                         UPDATE ecom_org_supervisor_vendedor
-                        SET id_usuario_supervisor = COALESCE(%s, id_usuario_supervisor),
+                        SET cod_supervisor = %s,
+                            id_usuario_supervisor = %s,
                             activo = %s,
                             actualizado_en = %s
                         WHERE id = %s
                         """,
-                        (id_s, _ACTIVO_SI, ahora, rid),
+                        (s, id_s, _ACTIVO_SI, ahora, rid),
                     )
                     conn.commit()
                     return True, "Vínculo supervisor→vendedor reactivado."
@@ -456,11 +541,14 @@ def vincular_supervisor_vendedores_batch(
 
 def desactivar_vinculo_gerente_supervisor(
     base_empresa: str,
-    cod_supervisor: int,
+    cod_supervisor: Optional[int] = None,
+    *,
+    id_usuario_supervisor: Optional[int] = None,
 ) -> Tuple[bool, str]:
     s = to_int_or_none(cod_supervisor)
-    if s is None:
-        return False, "Código de supervisor inválido."
+    id_s = to_int_or_none(id_usuario_supervisor)
+    if id_s is None and s is None:
+        return False, "Debe indicar el usuario o código del supervisor."
     base = (base_empresa or "").strip()
     if not base:
         return False, "Base de empresa inválida."
@@ -469,14 +557,18 @@ def desactivar_vinculo_gerente_supervisor(
         with pool.get_connection(base) as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute(
-                    """
-                    UPDATE ecom_org_gerente_supervisor
-                    SET activo = %s, actualizado_en = %s
-                    WHERE cod_supervisor = %s AND activo = %s
-                    """,
-                    (_ACTIVO_NO, _ahora(), s, _ACTIVO_SI),
-                )
+                if id_s is not None:
+                    cursor.execute(
+                        """UPDATE ecom_org_gerente_supervisor SET activo = %s, actualizado_en = %s
+                           WHERE id_usuario_supervisor = %s AND activo = %s""",
+                        (_ACTIVO_NO, _ahora(), id_s, _ACTIVO_SI),
+                    )
+                else:
+                    cursor.execute(
+                        """UPDATE ecom_org_gerente_supervisor SET activo = %s, actualizado_en = %s
+                           WHERE cod_supervisor = %s AND activo = %s""",
+                        (_ACTIVO_NO, _ahora(), s, _ACTIVO_SI),
+                    )
                 conn.commit()
                 if cursor.rowcount:
                     return True, "Vínculo gerente→supervisor desactivado."
@@ -492,9 +584,12 @@ def desactivar_vinculo_supervisor_vendedor(
     base_empresa: str,
     cod_vendedor: int,
     cod_supervisor: Optional[int] = None,
+    *,
+    id_usuario_supervisor: Optional[int] = None,
 ) -> Tuple[bool, str]:
     v = to_int_or_none(cod_vendedor)
     s = to_int_or_none(cod_supervisor)
+    id_s = to_int_or_none(id_usuario_supervisor)
     if v is None:
         return False, "Código de vendedor inválido."
     if cod_supervisor is not None and s is None:
@@ -507,7 +602,13 @@ def desactivar_vinculo_supervisor_vendedor(
         with pool.get_connection(base) as conn:
             cursor = conn.cursor()
             try:
-                if s is None:
+                if id_s is not None:
+                    cursor.execute(
+                        """UPDATE ecom_org_supervisor_vendedor SET activo = %s, actualizado_en = %s
+                           WHERE id_usuario_supervisor = %s AND cod_vendedor = %s AND activo = %s""",
+                        (_ACTIVO_NO, _ahora(), id_s, v, _ACTIVO_SI),
+                    )
+                elif s is None:
                     cursor.execute(
                         """
                         UPDATE ecom_org_supervisor_vendedor
@@ -584,17 +685,27 @@ def listar_arbol_jerarquia(base_empresa: str) -> Dict[str, Any]:
     for row in vinculos_gs:
         g = to_int_or_none(row.get("cod_gerente"))
         s = to_int_or_none(row.get("cod_supervisor"))
-        if g is not None:
+        id_g = to_int_or_none(row.get("id_usuario_gerente"))
+        id_s = to_int_or_none(row.get("id_usuario_supervisor"))
+        if id_g is not None:
+            gerentes_set.add(id_g)
+        elif g is not None:
             gerentes_set.add(g)
-        if s is not None:
+        if id_s is not None:
+            supervisores_set.add(id_s)
+        elif s is not None:
             supervisores_set.add(s)
     for row in vinculos_sv:
         s = to_int_or_none(row.get("cod_supervisor"))
-        if s is not None:
+        id_s = to_int_or_none(row.get("id_usuario_supervisor"))
+        if id_s is not None:
+            supervisores_set.add(id_s)
+        elif s is not None:
             supervisores_set.add(s)
 
     raices = gerentes_set | {s for s in supervisores_set if not any(
-        to_int_or_none(r.get("cod_supervisor")) == s for r in vinculos_gs
+        (to_int_or_none(r.get("id_usuario_supervisor")) or to_int_or_none(r.get("cod_supervisor"))) == s
+        for r in vinculos_gs
     )}
 
     codigos: set[int] = set(raices)
@@ -655,6 +766,7 @@ def listar_arbol_jerarquia(base_empresa: str) -> Dict[str, Any]:
         "vinculos_gs": vinculos_gs,
         "vinculos_sv": vinculos_sv,
         "etiquetas": etiquetas,
+        "etiquetas_usuarios": etiquetas_usuarios,
     }
 
 
@@ -807,7 +919,7 @@ def buscar_usuarios_jerarquia(
     Búsqueda predictiva para el ABM org.
 
     - ``rol`` gerente/supervisor: usuarios con puesto Supervisor, Administrador/
-      Administración o Ventas y CodViajante > 0. Etiqueta = nombre + apellido.
+      Administración o Ventas. Se identifican por ``id_usuario``.
     - ``rol`` vendedor: catálogo ``viajantes`` (no usuarios). Etiqueta = Nombre.
     """
     base = (base_empresa or "").strip()
@@ -844,8 +956,6 @@ def _buscar_usuarios_gerente_supervisor(
                     LEFT JOIN puestos p ON p.idpuesto = u.id_puesto
                     LEFT JOIN viajantes v ON v.CodViajante = u.CodViajante
                     WHERE (u.baja_usuario IS NULL OR u.baja_usuario <> 'Si')
-                      AND u.CodViajante IS NOT NULL
-                      AND u.CodViajante > 0
                 """
                 params: List[Any] = []
                 if term:
@@ -876,7 +986,7 @@ def _buscar_usuarios_gerente_supervisor(
             continue
         cv = to_int_or_none(row.get("cod_viajante"))
         id_usuario = to_int_or_none(row.get("id_usuario"))
-        if cv is None or id_usuario is None or id_usuario in seen_usuarios:
+        if id_usuario is None or id_usuario in seen_usuarios:
             continue
         seen_usuarios.add(id_usuario)
         etiqueta = _etiqueta_nombre_apellido(row)
@@ -926,6 +1036,7 @@ def _buscar_viajantes_jerarquia(base: str, term: str, lim: int) -> List[Dict[str
                         COALESCE(Nombre, '') AS nombre_viajante
                     FROM viajantes
                     WHERE (Anulado IS NULL OR Anulado = 'No' OR Anulado = '')
+                      AND CodViajante > 1
                 """
                 params: List[Any] = []
                 if term:
@@ -949,7 +1060,7 @@ def _buscar_viajantes_jerarquia(base: str, term: str, lim: int) -> List[Dict[str
     out: List[Dict[str, Any]] = []
     for row in rows:
         cv = to_int_or_none(row.get("cod_viajante"))
-        if cv is None:
+        if not es_vendedor_real(cv):
             continue
         nombre_raw = str_or_default(row.get("nombre_viajante"), "").strip()
         if _nombre_viajante_inutil(nombre_raw):

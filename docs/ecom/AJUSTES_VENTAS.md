@@ -92,7 +92,12 @@ Orden de las tarjetas en `ecom/ajustes_ventas.html` (canon slate/sky, toggles Ac
 
    En modo `vendedor`, el picker permite seleccionar uno o más viajantes: cada click alterna un chip y *Confirmar* crea vínculos S→V para todos, sin mover ni quitar vínculos de otros supervisores. Un vendedor puede reportar a varios supervisores activos para cobertura de vacaciones o turnos. Quitar un vendedor desde un nodo desactiva únicamente el par Supervisor→Vendedor de ese nodo.
 
-   **Identidad de gerente/supervisor:** los vínculos conservan `CodViajante` para el alcance comercial, pero también guardan el `id_usuario` elegido (`id_usuario_gerente` e `id_usuario_supervisor`). Esto evita que un código compartido muestre el primer usuario encontrado: las etiquetas del árbol priorizan nombre y apellido del `id_usuario` persistido y solo usan el viajante como compatibilidad para vínculos históricos.
+   **Identidad de gerente/supervisor:** los vínculos se identifican por el
+   `id_usuario` elegido (`id_usuario_gerente` e `id_usuario_supervisor`).
+   `CodViajante` es solo un snapshot compatible. En particular, el código `1`
+   es un placeholder de usuario: varios supervisores distintos pueden usarlo
+   bajo un mismo gerente. Los vendedores se seleccionan exclusivamente desde
+   `viajantes` con código mayor a `1`.
 
    **Quitar:** confirmación ligera con `window.confirm`: *"¿Quitar a {Nombre} de la jerarquía? Dejará de reportar a {Padre}."*
 

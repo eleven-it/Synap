@@ -13,7 +13,13 @@ from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import to_int_or_none
 
 from ecom.services.ecom_config_mysql import workflow_jerarquia_comercial_activo
-from ecom.services.jerarquia_comercial import rol_de, subarbol_de
+from ecom.services.jerarquia_comercial import (
+    es_vendedor_real,
+    rol_de,
+    rol_de_usuario,
+    subarbol_de,
+    subarbol_de_usuario,
+)
 from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 from ecom.services.vendedor_operativo import cartera_permitida_legacy
 
@@ -30,6 +36,16 @@ def _id_vendedor_desde_ctx(ctx: Dict[str, Any]) -> Optional[int]:
     )
 
 
+def _id_usuario_desde_ctx(ctx: Dict[str, Any]) -> Optional[int]:
+    session_user = ctx.get("user")
+    if not isinstance(session_user, dict):
+        session_user = ctx.get("session_user")
+    return to_int_or_none(
+        ctx.get("id_usuario")
+        or (session_user or {}).get("id_usuario")
+    )
+
+
 def _listar_todos_viajantes(base_empresa: str) -> List[int]:
     base = (base_empresa or "").strip()
     if not base:
@@ -42,7 +58,7 @@ def _listar_todos_viajantes(base_empresa: str) -> List[int]:
                 cursor.execute(
                     """
                     SELECT CodViajante FROM viajantes
-                    WHERE COALESCE(anulado, 'No') = 'No'
+                    WHERE COALESCE(anulado, 'No') = 'No' AND CodViajante > 1
                     ORDER BY CodViajante
                     """
                 )
@@ -84,12 +100,18 @@ def alcance_viajantes_comercial(
     elif puede_ver_todos_pedidos(ctx):
         result = _listar_todos_viajantes(base)
     else:
-        cv = _id_vendedor_desde_ctx(ctx)
-        if cv is None:
-            result = []
+        id_usuario = _id_usuario_desde_ctx(ctx)
+        if id_usuario is not None:
+            rol = rol_de_usuario(base, id_usuario)
+            result = subarbol_de_usuario(base, id_usuario, rol)
         else:
-            rol = rol_de(base, cv)
-            result = subarbol_de(base, cv, rol)
+            cv = _id_vendedor_desde_ctx(ctx)
+            if cv is None:
+                result = []
+            else:
+                rol = rol_de(base, cv)
+                result = subarbol_de(base, cv, rol)
 
+    result = [cv for cv in result if es_vendedor_real(cv)]
     ctx[_CACHE_KEY] = list(result)
     return result

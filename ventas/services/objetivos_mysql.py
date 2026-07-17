@@ -114,7 +114,7 @@ def usar_vista_arbol_org(base_empresa: str, ctx: Optional[Dict[str, Any]]) -> bo
     if not ctx:
         return False
     from ecom.services.ecom_config_mysql import workflow_jerarquia_comercial_activo
-    from ecom.services.jerarquia_comercial import rol_de
+    from ecom.services.jerarquia_comercial import rol_de, rol_de_usuario
     from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 
     base = (base_empresa or "").strip()
@@ -122,6 +122,10 @@ def usar_vista_arbol_org(base_empresa: str, ctx: Optional[Dict[str, Any]]) -> bo
         return False
     if puede_ver_todos_pedidos(ctx):
         return True
+    session_user = ctx.get("user") if isinstance(ctx.get("user"), dict) else {}
+    id_usuario = to_int_or_none(ctx.get("id_usuario") or session_user.get("id_usuario"))
+    if id_usuario is not None:
+        return rol_de_usuario(base, id_usuario) == "gerente"
     cv = to_int_or_none(ctx.get("id_vendedor_usr") or ctx.get("CodViajante") or ctx.get("cod_viajante"))
     if cv is None:
         return False
@@ -136,10 +140,12 @@ def _nombres_viajantes_map(base_empresa: str, codigos: List[int]) -> Dict[int, s
     return nombres_viajantes(base_empresa, codigos)
 
 
-def _relaciones_org_activas(base_empresa: str) -> Tuple[Dict[int, List[int]], Dict[int, int]]:
-    """Mapas vendedor→supervisores y supervisor→gerente (vínculos activos)."""
-    v_a_s: Dict[int, List[int]] = {}
-    s_a_g: Dict[int, int] = {}
+def _relaciones_org_activas(
+    base_empresa: str,
+) -> Tuple[Dict[int, List[Tuple[int, int]]], Dict[int, Tuple[int, int]]]:
+    """Mapas vendedor→(código,id supervisor) y id supervisor→(código,id gerente)."""
+    v_a_s: Dict[int, List[Tuple[int, int]]] = {}
+    s_a_g: Dict[int, Tuple[int, int]] = {}
     base = (base_empresa or "").strip()
     if not base:
         return v_a_s, s_a_g
@@ -150,7 +156,7 @@ def _relaciones_org_activas(base_empresa: str) -> Tuple[Dict[int, List[int]], Di
             try:
                 cursor.execute(
                     """
-                    SELECT cod_supervisor, cod_vendedor
+                    SELECT cod_supervisor, cod_vendedor, id_usuario_supervisor
                     FROM ecom_org_supervisor_vendedor
                     WHERE activo = 'Si'
                     """
@@ -158,11 +164,12 @@ def _relaciones_org_activas(base_empresa: str) -> Tuple[Dict[int, List[int]], Di
                 for row in cursor.fetchall() or []:
                     sup = to_int_or_none(row[0] if not isinstance(row, dict) else row.get("cod_supervisor"))
                     ven = to_int_or_none(row[1] if not isinstance(row, dict) else row.get("cod_vendedor"))
+                    id_sup = to_int_or_none(row[2] if not isinstance(row, dict) else row.get("id_usuario_supervisor"))
                     if sup is not None and ven is not None:
-                        v_a_s.setdefault(ven, []).append(sup)
+                        v_a_s.setdefault(ven, []).append((sup, id_sup if id_sup is not None else sup))
                 cursor.execute(
                     """
-                    SELECT cod_gerente, cod_supervisor
+                    SELECT cod_gerente, cod_supervisor, id_usuario_gerente, id_usuario_supervisor
                     FROM ecom_org_gerente_supervisor
                     WHERE activo = 'Si'
                     """
@@ -170,8 +177,10 @@ def _relaciones_org_activas(base_empresa: str) -> Tuple[Dict[int, List[int]], Di
                 for row in cursor.fetchall() or []:
                     ger = to_int_or_none(row[0] if not isinstance(row, dict) else row.get("cod_gerente"))
                     sup = to_int_or_none(row[1] if not isinstance(row, dict) else row.get("cod_supervisor"))
+                    id_ger = to_int_or_none(row[2] if not isinstance(row, dict) else row.get("id_usuario_gerente"))
+                    id_sup = to_int_or_none(row[3] if not isinstance(row, dict) else row.get("id_usuario_supervisor"))
                     if ger is not None and sup is not None:
-                        s_a_g[sup] = ger
+                        s_a_g[id_sup if id_sup is not None else sup] = (ger, id_ger if id_ger is not None else ger)
             finally:
                 cursor.close()
     except Exception as exc:
@@ -226,9 +235,17 @@ def agrupar_grupos_arbol_org(
         return grupos_vendedor
 
     cods = list(por_cv.keys())
-    supervisores_codigos = [sup for supervisores in v_a_s.values() for sup in supervisores]
+    supervisores_codigos = [
+        relacion[0] if isinstance(relacion, tuple) else relacion
+        for supervisores in v_a_s.values()
+        for relacion in supervisores
+    ]
     nombres = _nombres_viajantes_map(
-        base_empresa, cods + supervisores_codigos + list(s_a_g.values())
+        base_empresa,
+        cods + supervisores_codigos + [
+            relacion[0] if isinstance(relacion, tuple) else relacion
+            for relacion in s_a_g.values()
+        ]
     )
 
     gerentes: Dict[int, Dict[str, Any]] = {}
@@ -244,28 +261,35 @@ def agrupar_grupos_arbol_org(
             gerentes.setdefault(cv, _nodo_org("gerente", cv, ven_nombre))["children"].append(nodo_v)
             continue
 
-        for sup in supervisores_vendedor:
-            ger = s_a_g.get(sup)
+        for relacion in supervisores_vendedor:
+            sup, id_sup = relacion if isinstance(relacion, tuple) else (relacion, relacion)
+            ger_rel = s_a_g.get(id_sup)
+            ger, id_ger = (
+                ger_rel if isinstance(ger_rel, tuple)
+                else (ger_rel, ger_rel) if ger_rel is not None
+                else (None, None)
+            )
             nodo_v = dict(grupo, tipo="vendedor", cod_viajante=cv, nombre_vendedor=ven_nombre)
             if "total_clientes" not in nodo_v:
                 nodo_v["total_clientes"] = len(nodo_v.get("clientes") or [])
             g_cod = ger if ger is not None else sup
+            g_key = id_ger if ger is not None else id_sup
             g_nom = nombres.get(g_cod) or (
                 f"Gerente {g_cod}" if ger is not None else f"Supervisor {g_cod}"
             )
             g_tipo = "gerente" if ger is not None else "supervisor"
-            if g_cod not in gerentes:
-                gerentes[g_cod] = _nodo_org(g_tipo, g_cod, g_nom)
+            if g_key not in gerentes:
+                gerentes[g_key] = _nodo_org(g_tipo, g_cod, g_nom)
 
             if ger is not None:
-                sk = (g_cod, sup)
+                sk = (g_key, id_sup)
                 if sk not in supervisores:
                     s_nom = nombres.get(sup) or f"Supervisor {sup}"
                     supervisores[sk] = _nodo_org("supervisor", sup, s_nom)
-                    gerentes[g_cod]["children"].append(supervisores[sk])
+                    gerentes[g_key]["children"].append(supervisores[sk])
                 supervisores[sk]["children"].append(nodo_v)
             else:
-                gerentes[g_cod]["children"].append(nodo_v)
+                gerentes[g_key]["children"].append(nodo_v)
 
     out = sorted(gerentes.values(), key=lambda x: ((x.get("nombre_vendedor") or "").upper(), int(x.get("cod_viajante") or 0)))
     for g in out:

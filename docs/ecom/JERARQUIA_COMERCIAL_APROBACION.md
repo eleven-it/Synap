@@ -38,6 +38,12 @@ Tablas MySQL (provider `ecom_jerarquia_aprobacion`):
 - `ecom_org_gerente_supervisor`
 - `ecom_org_supervisor_vendedor`
 
+`CodViajante=1` es un placeholder de usuario, no un vendedor. Gerentes y
+supervisores se resuelven por `id_usuario`; sus códigos quedan como snapshot
+para compatibilidad. Por eso varios supervisores con vía `1` pueden coexistir.
+El alcance, la búsqueda y la aprobación solo consideran vendedores con
+`CodViajante > 1`.
+
 ## Alcance comercial
 
 `ecom/services/alcance_comercial.py` → `alcance_viajantes_comercial(base, ctx)`:

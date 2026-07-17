@@ -70,13 +70,16 @@ class JerarquiaNodosAPIView(APIView):
                 )
         elif accion == "desactivar_gerente_supervisor":
             ok, msg = desactivar_vinculo_gerente_supervisor(
-                base, to_int_or_none(data.get("cod_supervisor"))
+                base,
+                to_int_or_none(data.get("cod_supervisor")),
+                id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
             )
         elif accion == "desactivar_supervisor_vendedor":
             ok, msg = desactivar_vinculo_supervisor_vendedor(
                 base,
                 to_int_or_none(data.get("cod_vendedor")),
                 to_int_or_none(data.get("cod_supervisor")),
+                id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
             )
         else:
             return Response(

@@ -29,6 +29,19 @@ El provider elimina el índice histórico `uq_eosv_vendedor_activo` y asegura
 `uq_eosv_par_activo (cod_supervisor, cod_vendedor, activo)`, para admitir
 cobertura comercial por vacaciones o turnos sin duplicar el mismo vínculo activo.
 
+## Identidad de roles y vendedor real
+
+`CodViajante=1` es un placeholder de usuario y **no** representa un vendedor.
+Los gerentes y supervisores se identifican obligatoriamente por
+`usuarios.id_usuario`; `cod_gerente` y `cod_supervisor` se conservan como
+snapshot compatible del código del usuario (puede ser `1`).
+
+El índice G→S es `uq_eogs_usuario_supervisor_activo
+(id_usuario_supervisor, activo)`, por lo que varios usuarios con vía `1` pueden
+ser supervisores diferentes bajo el mismo gerente. S→V se identifica por
+`(id_usuario_supervisor, cod_vendedor, activo)`. Los vendedores son únicamente
+filas `viajantes` con `CodViajante > 1`.
+
 ## Vínculos S→V múltiples
 
 - El servicio vincula o reactiva por par Supervisor/Vendedor; no mueve ni desactiva
