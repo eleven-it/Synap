@@ -719,6 +719,19 @@ def _buscar_usuarios_gerente_supervisor(
     return out
 
 
+def _nombre_viajante_inutil(nombre: str) -> bool:
+    """True si el Nombre del viajante es vacío, ``-Ninguno-`` o solo guiones/placeholders."""
+    limpio = str_or_default(nombre, "").strip().lower()
+    if not limpio:
+        return True
+    if limpio in ("-ninguno-", "ninguno", "(ninguno)", "sin nombre", "n/a", "na"):
+        return True
+    # Solo guiones, puntos, espacios u otros separadores sin contenido útil.
+    if not re.sub(r"[\s\-_.·•]+", "", limpio):
+        return True
+    return False
+
+
 def _buscar_viajantes_jerarquia(base: str, term: str, lim: int) -> List[Dict[str, Any]]:
     """Catálogo de vendedores (tabla viajantes), no usuarios del sistema."""
     try:
@@ -758,7 +771,10 @@ def _buscar_viajantes_jerarquia(base: str, term: str, lim: int) -> List[Dict[str
         cv = to_int_or_none(row.get("cod_viajante"))
         if cv is None:
             continue
-        nombre = str_or_default(row.get("nombre_viajante"), "").strip() or f"Viajante {cv}"
+        nombre_raw = str_or_default(row.get("nombre_viajante"), "").strip()
+        if _nombre_viajante_inutil(nombre_raw):
+            continue
+        nombre = nombre_raw
         out.append(
             {
                 "id_usuario": None,

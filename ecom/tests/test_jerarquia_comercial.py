@@ -215,3 +215,27 @@ class TestBuscarUsuariosJerarquia(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["etiqueta"], "Pedro Viajante")
         self.assertIsNone(rows[0]["id_usuario"])
+
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_vendedor_excluye_placeholders(self, mock_pool_fn):
+        from ecom.services.jerarquia_comercial import buscar_usuarios_jerarquia
+
+        pool = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {"cod_viajante": 1, "nombre_viajante": "-Ninguno-"},
+            {"cod_viajante": 2, "nombre_viajante": ""},
+            {"cod_viajante": 3, "nombre_viajante": "   ---   "},
+            {"cod_viajante": 4, "nombre_viajante": "Ana Real"},
+        ]
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+
+        rows = buscar_usuarios_jerarquia("emp1", "", rol="vendedor")
+        etiquetas = [r["etiqueta"] for r in rows]
+        self.assertEqual(rows and len(rows), 1)
+        self.assertEqual(rows[0]["etiqueta"], "Ana Real")
+        self.assertNotIn("-Ninguno-", etiquetas)

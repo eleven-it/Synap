@@ -71,7 +71,8 @@ Orden de las tarjetas en `ecom/ajustes_ventas.html` (canon slate/sky, toggles Ac
 1. **Validación de stock** — toggle `validar_stock_pedidos`.
 2. **Correo al confirmar pedido** — toggle `enviar_mail_confirmar_pedido`. Nota UI: al confirmar un PED, si el cliente tiene email se encola el comprobante; requiere correo saliente configurado y el worker `process_ecom_mail_queue`. Se guarda junto a `validar_stock_pedidos` en el mismo POST a `api_ajustes_ventas`.
 3. **Workflow comercial** — flags/umbrales de aprobación y atajos del hub.
-4. **Jerarquía comercial** — ABM G→S→V. Gerente/Supervisor: búsqueda de usuarios con puesto **Supervisor**, **Administrador**/**Administración** o **Ventas** (etiqueta = nombre y apellido). Vendedor: búsqueda en catálogo **viajantes** (no usuarios). Permiso `ecom.jerarquia.editar`.
+4. **Jerarquía comercial** — ABM G→S→V a **ancho completo** (contenedor MPR `max-w-none`; pickers `sm:grid-cols-2 xl:grid-cols-3`; árboles G→S y S→V lado a lado en `lg:grid-cols-2`). Gerente/Supervisor: búsqueda de **usuarios** con puesto **Supervisor**, **Administrador**/**Administración** o **Ventas** (chip *Usuario*, ícono `badge`). Vendedor: búsqueda en catálogo **viajantes** (chip *Viajante*, ícono `storefront`); se excluyen nombres vacíos, `-Ninguno-` o solo guiones/placeholders. Permiso `ecom.jerarquia.editar`.
+   - **Autocomplete:** la etiqueta (dropdown e input seleccionado) muestra **solo nombre y apellido** (usuarios) o el **Nombre del viajante** (vendedor), nunca `@cod` ni `· vía. N`. La **flecha abajo** (o el chevron `expand_more`) lista **todos** los resultados (`q=''`, `limit=50`); flecha arriba navega o abre la lista completa. Accesible con `role="combobox"`, `aria-expanded`, `aria-activedescendant` y scroll al ítem resaltado.
 
 ## Menú
 
