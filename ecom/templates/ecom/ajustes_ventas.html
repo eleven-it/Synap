@@ -420,7 +420,7 @@
           <span class="min-w-0 flex-1 truncate font-medium text-slate-700 dark:text-slate-200" x-text="altaJerarquia.padreEtiqueta"></span>
         </div>
 
-        <!-- Picker único -->
+        <!-- Picker único o selección múltiple de vendedores -->
         <div class="relative" @click.outside="cerrarPick('panel')">
           <div class="mb-1 flex items-center gap-2">
             <label class="block text-xs font-medium text-slate-600 dark:text-slate-300" for="jerarquia-panel" x-text="altaPickerLabel"></label>
@@ -438,7 +438,7 @@
           <div class="flex items-center gap-1">
             <div class="relative w-full">
               <input type="search" autocomplete="off" role="combobox" id="jerarquia-panel"
-                     :placeholder="altaJerarquia.rol === 'vendedor' ? 'Buscar vendedor… (↓ todos)' : 'Buscar usuario… (↓ todos)'"
+                     :placeholder="altaJerarquia.rol === 'vendedor' ? 'Buscar y marcar varios… (↓ todos)' : 'Buscar usuario… (↓ todos)'"
                      class="w-full rounded-lg border border-slate-200 py-2.5 pl-3 pr-10 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"
                      x-model="pick.panel.q"
                      aria-autocomplete="list"
@@ -458,7 +458,7 @@
                 <span class="material-icons text-lg" aria-hidden="true" x-text="pick.panel.abierto ? 'expand_less' : 'expand_more'"></span>
               </button>
             </div>
-            <button type="button" x-show="pick.panel.cod" @click="limpiarPick('panel')"
+            <button type="button" x-show="pick.panel.cod || altaJerarquia.seleccionados.length" @click="limpiarPick('panel')"
                     class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700"
                     aria-label="Limpiar selección" title="Limpiar">
               <span class="material-icons text-base" aria-hidden="true">close</span>
@@ -471,8 +471,14 @@
               <li role="option" :id="'opt-panel-' + i"
                   :aria-selected="i === pick.panel.idx ? 'true' : 'false'"
                   @mousedown.prevent="elegirPick('panel', u)"
-                  :class="i === pick.panel.idx ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
-                  class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+                  :class="[
+                    i === pick.panel.idx ? 'bg-sky-50 dark:bg-sky-950/40' : '',
+                    (altaJerarquia.modo === 'vendedor' && esVendedorSeleccionado(u.cod_viajante)) ? 'bg-amber-50 dark:bg-amber-950/30' : ''
+                  ]"
+                  class="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+                <span x-show="altaJerarquia.modo === 'vendedor'" class="material-icons text-base text-amber-600 dark:text-amber-400"
+                      aria-hidden="true"
+                      x-text="esVendedorSeleccionado(u.cod_viajante) ? 'check_box' : 'check_box_outline_blank'"></span>
                 <span class="font-medium" x-text="etiquetaVisible('panel', u)"></span>
               </li>
             </template>
@@ -485,6 +491,19 @@
              class="absolute left-0 right-0 z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800"
              x-text="altaJerarquia.rol === 'vendedor' ? 'Sin viajantes. Probá otro texto.' : 'Sin usuarios (puestos Supervisor, Administrador o Ventas).'">
           </p>
+          <div x-show="altaJerarquia.modo === 'vendedor' && altaJerarquia.seleccionados.length" x-cloak
+               class="mt-3 flex flex-wrap gap-2">
+            <template x-for="vendedor in altaJerarquia.seleccionados" :key="'vendedor-seleccionado-' + vendedor.cod">
+              <span class="inline-flex max-w-full items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-900 dark:bg-amber-900/40 dark:text-amber-100">
+                <span class="truncate" x-text="vendedor.etiqueta"></span>
+                <button type="button" @click="quitarVendedorSeleccionado(vendedor.cod)"
+                        class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full hover:bg-amber-200 dark:hover:bg-amber-800"
+                        :aria-label="'Quitar ' + vendedor.etiqueta">
+                  <span class="material-icons text-[14px]" aria-hidden="true">close</span>
+                </button>
+              </span>
+            </template>
+          </div>
         </div>
 
         <p x-show="error" x-cloak class="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200" x-text="error"></p>
@@ -495,7 +514,7 @@
             Cancelar
           </button>
           <button type="button" @click="confirmarAlta()"
-                  :disabled="jerarquiaGuardando || !pick.panel.cod"
+                  :disabled="jerarquiaGuardando || (altaJerarquia.modo === 'vendedor' ? !altaJerarquia.seleccionados.length : !pick.panel.cod)"
                   class="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60">
             <span class="material-icons text-base" aria-hidden="true" x-text="altaJerarquia.modo === 'gerente' ? 'arrow_forward' : 'check'"></span>
             <span x-text="altaJerarquia.modo === 'gerente' ? 'Siguiente' : 'Confirmar'"></span>
@@ -543,6 +562,7 @@ function ajustesVentasApp() {
       gerenteNuevoCod: null, // gerente elegido en el paso 1 del alta de gerente
       gerenteNuevoIdUsuario: null,
       gerenteNuevoEtiqueta: '',
+      seleccionados: [],      // vendedores seleccionados para alta masiva S→V
     },
     mensaje: '',
     error: '',
@@ -637,12 +657,12 @@ function ajustesVentasApp() {
         case 'gerente': return 'Agregar gerente (paso 1 de 2)';
         case 'supervisor_bajo_nuevo': return 'Agregar supervisor bajo ' + (a.gerenteNuevoEtiqueta || '—');
         case 'supervisor': return 'Agregar supervisor bajo ' + (a.padreEtiqueta || '—');
-        case 'vendedor': return 'Agregar vendedor bajo ' + (a.padreEtiqueta || '—');
+        case 'vendedor': return 'Agregar vendedores bajo ' + (a.padreEtiqueta || '—');
         default: return '';
       }
     },
     get altaPickerLabel() {
-      return this.altaJerarquia.rol === 'vendedor' ? 'Vendedor' : (this.altaJerarquia.modo === 'gerente' ? 'Gerente' : 'Supervisor');
+      return this.altaJerarquia.rol === 'vendedor' ? 'Elegí uno o más viajantes' : (this.altaJerarquia.modo === 'gerente' ? 'Gerente' : 'Supervisor');
     },
     init() {
       if (this.puedeEditarJerarquia && this.urls.jerarquia) {
@@ -808,6 +828,9 @@ function ajustesVentasApp() {
       p.buscado = false;
       p.listadoCompleto = false;
       this.cerrarPick(campo);
+      if (campo === 'panel' && this.altaJerarquia.modo === 'vendedor') {
+        this.altaJerarquia.seleccionados = [];
+      }
     },
     etiquetaVisible(campo, u) {
       if (!u) return '';
@@ -836,6 +859,23 @@ function ajustesVentasApp() {
     elegirPick(campo, u) {
       const p = this.pick[campo];
       if (!p || !u) return;
+      if (this._rolDePick(campo) === 'vendedor') {
+        const cod = Number(u.cod_viajante);
+        const seleccionados = this.altaJerarquia.seleccionados;
+        const indice = seleccionados.findIndex((v) => Number(v.cod) === cod);
+        if (indice >= 0) {
+          seleccionados.splice(indice, 1);
+        } else {
+          seleccionados.push({
+            cod: u.cod_viajante,
+            etiqueta: this.etiquetaVisible(campo, u) || String(u.cod_viajante),
+          });
+        }
+        p.q = '';
+        p.resultados = [];
+        this.buscarUsuariosJerarquia(campo, { todos: true });
+        return;
+      }
       p.cod = u.cod_viajante;
       p.id_usuario = u.id_usuario ?? null;
       p.etiqueta = this.etiquetaVisible(campo, u) || String(u.cod_viajante);
@@ -843,6 +883,15 @@ function ajustesVentasApp() {
       p.resultados = [];
       p.listadoCompleto = false;
       this.cerrarPick(campo);
+    },
+    quitarVendedorSeleccionado(cod) {
+      this.altaJerarquia.seleccionados = this.altaJerarquia.seleccionados.filter(
+        (vendedor) => Number(vendedor.cod) !== Number(cod)
+      );
+    },
+    esVendedorSeleccionado(cod) {
+      const n = Number(cod);
+      return (this.altaJerarquia.seleccionados || []).some((v) => Number(v.cod) === n);
     },
     moverPick(campo, delta) {
       const p = this.pick[campo];
@@ -921,6 +970,7 @@ function ajustesVentasApp() {
         cod_gerente: extra.cod_gerente ?? null,
         cod_supervisor: extra.cod_supervisor ?? null,
         cod_vendedor: extra.cod_vendedor ?? null,
+        cod_vendedores: extra.cod_vendedores ?? null,
         id_usuario_gerente: extra.id_usuario_gerente ?? null,
         id_usuario_supervisor: extra.id_usuario_supervisor ?? null,
       };
@@ -965,6 +1015,7 @@ function ajustesVentasApp() {
       a.gerenteNuevoCod = null;
       a.gerenteNuevoIdUsuario = null;
       a.gerenteNuevoEtiqueta = '';
+      a.seleccionados = [];
       a.padreCod = null;
       a.padreIdUsuario = null;
       a.padreEtiqueta = '';
@@ -991,6 +1042,7 @@ function ajustesVentasApp() {
     cerrarAlta() {
       this.altaJerarquia.abierto = false;
       this.altaJerarquia.modo = null;
+      this.altaJerarquia.seleccionados = [];
       this.error = '';
       this._resetPickPanel();
     },
@@ -1016,7 +1068,7 @@ function ajustesVentasApp() {
     async confirmarAlta() {
       const a = this.altaJerarquia;
       const p = this.pick.panel;
-      if (!p.cod) return;
+      if (a.modo === 'vendedor' ? !a.seleccionados.length : !p.cod) return;
       // Paso 1 del alta de gerente: guardar gerente y pasar a pedir supervisor.
       if (a.modo === 'gerente') {
         a.gerenteNuevoCod = p.cod;
@@ -1059,16 +1111,13 @@ function ajustesVentasApp() {
         accion = 'vincular_supervisor_vendedor';
         payload = {
           cod_supervisor: a.padreCod,
-          cod_vendedor: p.cod,
+          cod_vendedores: a.seleccionados.map((vendedor) => vendedor.cod),
           id_usuario_supervisor: a.padreIdUsuario,
         };
-        tipoHijo = 'vendedor';
-        nuevoPadreCod = a.padreCod;
-        nuevoPadreEtiqueta = a.padreEtiqueta;
       } else {
         return;
       }
-      const padreActual = this._padreActualDe(p.cod, tipoHijo);
+      const padreActual = a.modo === 'vendedor' ? null : this._padreActualDe(p.cod, tipoHijo);
       if (padreActual && Number(padreActual.cod) !== Number(nuevoPadreCod)) {
         const nombre = p.etiqueta || String(p.cod);
         const okMover = window.confirm(
@@ -1088,7 +1137,10 @@ function ajustesVentasApp() {
       if (tipo === 'supervisor') {
         await this.jerarquiaAccion('desactivar_gerente_supervisor', { cod_supervisor: nodo.cod });
       } else {
-        await this.jerarquiaAccion('desactivar_supervisor_vendedor', { cod_vendedor: nodo.cod });
+        await this.jerarquiaAccion('desactivar_supervisor_vendedor', {
+          cod_supervisor: padre.cod,
+          cod_vendedor: nodo.cod,
+        });
       }
     },
   };

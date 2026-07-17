@@ -1881,13 +1881,13 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
                 CREATE TABLE ecom_org_supervisor_vendedor (
                     id BIGINT NOT NULL AUTO_INCREMENT,
                     cod_supervisor INT NOT NULL COMMENT 'CodViajante supervisor',
-                    cod_vendedor INT NOT NULL COMMENT 'CodViajante vendedor (único activo)',
+                    cod_vendedor INT NOT NULL COMMENT 'CodViajante vendedor',
                     id_usuario_supervisor INT NULL COMMENT 'usuarios.id_usuario supervisor seleccionado',
                     activo VARCHAR(3) NOT NULL DEFAULT 'Si' COMMENT 'Si / No',
                     creado_en DATETIME NOT NULL,
                     actualizado_en DATETIME NOT NULL,
                     PRIMARY KEY (id),
-                    UNIQUE KEY uq_eosv_vendedor_activo (cod_vendedor, activo),
+                    UNIQUE KEY uq_eosv_par_activo (cod_supervisor, cod_vendedor, activo),
                     INDEX idx_eosv_supervisor (cod_supervisor),
                     INDEX idx_eosv_vendedor (cod_vendedor)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -1897,6 +1897,25 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
             _append_migration(applied, failed, True, "CREATE TABLE ecom_org_supervisor_vendedor")
         else:
             _append_migration(applied, failed, True, "ecom_org_supervisor_vendedor ya existe (omitido)")
+
+        tbl_eosv = nombre_tabla_real(cursor, "ecom_org_supervisor_vendedor") or "ecom_org_supervisor_vendedor"
+        tbl_eosv_esc = tbl_eosv.replace("`", "``")
+        if _indice_existe(cursor, tbl_eosv, "uq_eosv_vendedor_activo"):
+            cursor.execute(f"ALTER TABLE `{tbl_eosv_esc}` DROP INDEX uq_eosv_vendedor_activo")
+            _append_migration(applied, failed, True, "DROP INDEX uq_eosv_vendedor_activo")
+        else:
+            _append_migration(applied, failed, True, "uq_eosv_vendedor_activo ausente (omitido)")
+
+        if not _indice_existe(cursor, tbl_eosv, "uq_eosv_par_activo"):
+            cursor.execute(
+                f"""
+                ALTER TABLE `{tbl_eosv_esc}`
+                ADD UNIQUE KEY uq_eosv_par_activo (cod_supervisor, cod_vendedor, activo)
+                """
+            )
+            _append_migration(applied, failed, True, "ADD UNIQUE uq_eosv_par_activo")
+        else:
+            _append_migration(applied, failed, True, "uq_eosv_par_activo ya existe (omitido)")
 
         if not _columna_existe(cursor, "ecom_org_supervisor_vendedor", "id_usuario_supervisor"):
             cursor.execute(

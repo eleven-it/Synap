@@ -2,7 +2,7 @@
 Motor de aprobación comercial de pedidos (separado de ``autorizacion_sistema`` crédito).
 
 Reglas OR: monto, descuento pie/renglón, crédito no autorizado, cliente nuevo.
-Routing: supervisor del vendedor → gerente del supervisor.
+Routing: supervisores activos del vendedor → gerentes de esos supervisores.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from ecom.services.ecom_config_mysql import (
 )
 from ecom.services.jerarquia_comercial import (
     _gerente_de_supervisor,
-    _supervisor_de_vendedor,
+    _supervisores_de_vendedor,
 )
 from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 
@@ -256,30 +256,47 @@ def _ultimo_evento_escalado(cursor, cod_mov: int) -> bool:
     return str(accion or "").strip().lower() == ACCION_ESCALADO
 
 
-def _routing_aprobadores(cursor, cod_vendedor: int) -> Tuple[Optional[int], Optional[int]]:
-    sup = _supervisor_de_vendedor(cursor, cod_vendedor)
-    ger = _gerente_de_supervisor(cursor, sup) if sup is not None else None
-    return sup, ger
+def _routing_aprobadores(cursor, cod_vendedor: int) -> Tuple[List[int], List[int]]:
+    """Devuelve la unión de supervisores y gerentes activos habilitados a aprobar."""
+    supervisores = _supervisores_de_vendedor(cursor, cod_vendedor)
+    gerentes = sorted(
+        {
+            gerente
+            for supervisor in supervisores
+            if (gerente := _gerente_de_supervisor(cursor, supervisor)) is not None
+        }
+    )
+    return supervisores, gerentes
+
+
+def _codigos_routing(valor: Any) -> List[int]:
+    """Normaliza el contrato previo escalar para callers y mocks existentes."""
+    if valor is None:
+        return []
+    valores = valor if isinstance(valor, (list, tuple, set)) else [valor]
+    return [codigo for item in valores if (codigo := to_int_or_none(item)) is not None]
 
 
 def _aprobador_autorizado_para_nivel(
     aprobador: int,
     *,
     cod_vendedor: int,
-    supervisor: Optional[int],
-    gerente: Optional[int],
+    supervisor: Sequence[int],
+    gerente: Sequence[int],
     escalado: bool,
     ver_todos: bool,
 ) -> bool:
     if ver_todos:
         return True
+    supervisores = _codigos_routing(supervisor)
+    gerentes = _codigos_routing(gerente)
     if not escalado:
-        if supervisor is not None and aprobador == supervisor:
+        if aprobador in supervisores:
             return True
-        if gerente is not None and aprobador == gerente:
+        if aprobador in gerentes:
             return True
         return False
-    if gerente is not None and aprobador == gerente:
+    if aprobador in gerentes:
         return True
     return False
 
@@ -395,6 +412,8 @@ def resolver(
             try:
                 conn.autocommit(False)
                 sup, ger = _routing_aprobadores(cursor, cv_ped)
+                sup = _codigos_routing(sup)
+                ger = _codigos_routing(ger)
                 escalado = _ultimo_evento_escalado(cursor, cod_mov)
 
                 if sess_user and not ver_todos:
@@ -434,7 +453,7 @@ def resolver(
                     return True, "Pedido rechazado.", {"estado_aprobacion_comercial": ESTADO_RECHAZADO}
 
                 # aprobar
-                if not escalado and ger is not None and sup is not None and aprobador == sup:
+                if not escalado and ger and sup and aprobador in sup:
                     _insertar_evento(
                         cursor,
                         cod_mov=cod_mov,
