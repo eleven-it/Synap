@@ -17,6 +17,7 @@ django-redis
 django-crispy-forms==2.4
 crispy-tailwind==1.0.3
 Pillow==10.1.0
+webauthn>=2.0,<3
 six==1.16.0
 django-widget-tweaks==1.5.0
 openpyxl  # Para exportación de reportes a Excel

@@ -6,6 +6,9 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
   <title>Synap - Iniciar sesión</title>
+  {% if request.is_mobile %}
+  {% include "login/includes/pwa_head.html" %}
+  {% endif %}
   {% get_media_prefix as MEDIA_URL %}
   {% get_administranet_logo as logo_path %}
   {% if logo_path %}
@@ -96,6 +99,20 @@
       <div class="pt-2 sm:pt-4">
         <button type="button" id="btn-submit" onclick="handleLogin(event)" class="w-full rounded-xl bg-primary py-3.5 sm:py-4 text-base font-bold text-white shadow-lg shadow-primary/25 hover:bg-primary/90 active:scale-[0.98] transition-all min-h-[44px]">Iniciar sesión</button>
       </div>
+      {% if webauthn_unlock_enabled %}
+      <div id="webauthn-unlock-section" class="hidden pt-2 space-y-3">
+        <div class="relative flex items-center py-1">
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+          <span class="flex-shrink mx-3 text-slate-400 text-xs font-medium uppercase">o</span>
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+        </div>
+        <button type="button" id="btn-webauthn-unlock" class="w-full rounded-xl border-2 border-primary/30 bg-white dark:bg-slate-900 py-3.5 text-base font-semibold text-primary hover:bg-primary/5 active:scale-[0.98] transition-all min-h-[44px] flex items-center justify-center gap-2">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.379-1.832 7.218l-2.655-2.655a4.502 4.502 0 0 0 1.045-2.888 4.5 4.5 0 0 0-7.086-3.66l1.892-1.892Zm9.772 9.772-2.655 2.655a7.5 7.5 0 0 1-10.607-10.607l2.655-2.655a4.502 4.502 0 0 0 1.045 2.888 4.5 4.5 0 0 0 7.086 3.66Z"/></svg>
+          Desbloquear con biometría
+        </button>
+        <p class="text-center text-slate-400 text-xs px-2">Seleccioná empresa y usuario arriba. Solo en la app instalada.</p>
+      </div>
+      {% endif %}
     </div>
     <!-- Decoración (no interfieren en scroll) -->
     <div class="fixed top-[-10%] left-[-10%] -z-10 h-[40%] w-[40%] rounded-full bg-primary/5 blur-[100px] pointer-events-none" aria-hidden="true"></div>
@@ -173,5 +190,43 @@
       if (lastUsr && usr) usr.value = lastUsr;
     });
   </script>
+  {% if webauthn_unlock_enabled %}
+  <script src="{% static 'login/pwa-standalone.js' %}"></script>
+  <script src="{% static 'login/webauthn-client.js' %}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (!window.SynapPwa || !SynapPwa.isPwaStandalone()) return;
+      if (!window.SynapWebAuthn || !SynapWebAuthn.isSupported()) return;
+      var section = document.getElementById('webauthn-unlock-section');
+      if (section) section.classList.remove('hidden');
+      var btn = document.getElementById('btn-webauthn-unlock');
+      if (!btn) return;
+      btn.addEventListener('click', function() {
+        var base_empresa = document.getElementById('empresa').value.trim();
+        var cod_usuario = document.getElementById('usuario').value.trim();
+        if (!base_empresa || !cod_usuario) {
+          showError('Seleccioná empresa y usuario para desbloquear');
+          return;
+        }
+        btn.disabled = true;
+        btn.textContent = 'Verificando...';
+        SynapWebAuthn.authenticatePasskey(base_empresa, cod_usuario)
+          .then(function(data) {
+            if (base_empresa) localStorage.setItem('last_selected_empresa', base_empresa);
+            if (cod_usuario) localStorage.setItem('last_username', cod_usuario);
+            window.location.href = data.redirect || '/core/dashboard/';
+          })
+          .catch(function(err) {
+            showError(err.message || 'No se pudo desbloquear');
+            btn.disabled = false;
+            btn.innerHTML = '<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.379-1.832 7.218l-2.655-2.655a4.502 4.502 0 0 0 1.045-2.888 4.5 4.5 0 0 0-7.086-3.66l1.892-1.892Zm9.772 9.772-2.655 2.655a7.5 7.5 0 0 1-10.607-10.607l2.655-2.655a4.502 4.502 0 0 0 1.045 2.888 4.5 4.5 0 0 0 7.086 3.66Z"/></svg> Desbloquear con biometría';
+          });
+      });
+    });
+  </script>
+  {% endif %}
+  {% if request.is_mobile %}
+  {% include "login/includes/pwa_sw_register.html" %}
+  {% endif %}
 </body>
 </html>

@@ -489,6 +489,24 @@ LOGGING['loggers'] = {
 # URL base pública del sitio (para imágenes, enlaces externos, etc.)
 SITE_URL = config('SITE_URL', default='https://synap.administranet.com.ar')
 
+# WebAuthn unlock PWA (passkeys post-login; desactivado por defecto)
+from urllib.parse import urlparse
+
+_webauthn_site_parsed = urlparse(SITE_URL.strip().rstrip('/'))
+WEBAUTHN_UNLOCK_ENABLED = config('WEBAUTHN_UNLOCK_ENABLED', default=False, cast=bool)  # deprecado: ignorado; usar UI Settings → Acceso rápido PWA
+WEBAUTHN_RP_NAME = 'Synap'
+WEBAUTHN_RP_ID = config(
+    'WEBAUTHN_RP_ID',
+    default=_webauthn_site_parsed.hostname or 'localhost',
+)
+WEBAUTHN_ORIGIN = config(
+    'WEBAUTHN_ORIGIN',
+    default=SITE_URL.strip().rstrip('/'),
+)
+WEBAUTHN_SESSION_AGE = config('WEBAUTHN_SESSION_AGE', default=12 * 3600, cast=int)
+WEBAUTHN_MAX_CREDENTIALS = 3
+WEBAUTHN_CHALLENGE_TTL = 120
+
 # Correo saliente (fallback si no hay config en SystemConfiguration)
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')
 EMAIL_HOST = config('EMAIL_HOST', default='localhost')

@@ -115,6 +115,8 @@ urlpatterns = [
     path('configuracion/correo-saliente/', views.OutboundEmailConfigView.as_view(), name='outbound_email_config'),
     path('api/configuracion/correo-saliente/', views.OutboundEmailConfigAPIView.as_view(), name='api_outbound_email_save'),
     path('api/configuracion/correo-saliente/probar/', views.OutboundEmailTestAPIView.as_view(), name='api_outbound_email_test'),
+    path('configuracion/acceso-rapido-pwa/', views.WebAuthnSettingsView.as_view(), name='webauthn_settings'),
+    path('api/configuracion/acceso-rapido-pwa/', views.WebAuthnSettingsAPIView.as_view(), name='api_webauthn_settings_save'),
 
     # Gestión de Módulos
     path('modules/', ModuleListView.as_view(), name='module_list'),

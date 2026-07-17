@@ -1,0 +1,141 @@
+{% extends "core/core_app_base.html" %}
+{% load static %}
+
+{% block title %}Acceso rápido PWA — Synap{% endblock %}
+
+{% block admin_content %}
+<section class="w-full"
+         x-data="accesoRapidoPwaApp()"
+         x-init="init()">
+  <div class="mx-auto w-full max-w-3xl">
+    <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
+      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <li><span class="font-medium text-slate-600 dark:text-slate-300">Settings</span></li>
+        <li class="text-slate-300" aria-hidden="true">/</li>
+        <li><span class="font-medium text-slate-600 dark:text-slate-300">Configuración del sistema</span></li>
+        <li class="text-slate-300" aria-hidden="true">/</li>
+        <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Acceso rápido PWA</span></li>
+      </ol>
+    </nav>
+
+    <div class="mb-4 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md sm:p-4">
+      <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Acceso rápido PWA</h1>
+          <p class="mt-1 text-xs text-slate-300 sm:text-sm">
+            Habilita el desbloqueo biométrico WebAuthn en la PWA instalada de Synap.
+          </p>
+        </div>
+        <span class="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full px-3 py-1 text-xs font-medium"
+              :class="form.enabled
+                ? 'bg-emerald-100 text-emerald-800'
+                : 'bg-slate-200 text-slate-700'">
+          <span class="material-icons text-base" aria-hidden="true" x-text="form.enabled ? 'check_circle' : 'error_outline'"></span>
+          <span x-text="form.enabled ? 'Activo' : 'Inactivo'"></span>
+        </span>
+      </header>
+    </div>
+
+    <div x-show="mensaje" x-cloak class="mb-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" x-text="mensaje" role="status"></div>
+    <div x-show="error" x-cloak class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900" x-text="error" role="alert"></div>
+
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Desbloqueo WebAuthn</h2>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Si está <strong>Inactivo</strong>, no se muestra la UI de unlock/enroll y las APIs responden 404.
+            Las passkeys ya registradas se conservan en la base de datos.
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <button type="button"
+                  @click="toggleEnabled()"
+                  :class="form.enabled
+                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300'"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1"
+                  :aria-pressed="form.enabled">
+            <span class="material-icons text-base" aria-hidden="true" x-text="form.enabled ? 'check_circle' : 'cancel'"></span>
+            <span x-text="form.enabled ? 'Activo' : 'Inactivo'"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end border-t border-slate-100 pt-4 dark:border-slate-700">
+        <button type="button"
+                @click="guardar()"
+                :disabled="guardando"
+                class="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-60">
+          <span class="material-icons text-base" aria-hidden="true">save</span>
+          <span x-text="guardando ? 'Guardando…' : 'Guardar'"></span>
+        </button>
+      </div>
+    </div>
+
+    <p class="mt-4 text-center">
+      <a href="{% url 'core:system_config_list' %}" class="text-xs font-medium text-sky-600 hover:text-sky-800 dark:text-sky-400">Volver a Configuración del sistema</a>
+    </p>
+  </div>
+</section>
+
+{% csrf_token %}
+{{ bootstrap|json_script:"acceso-rapido-pwa-bootstrap" }}
+<script>
+function accesoRapidoPwaApp() {
+  const raw = document.getElementById('acceso-rapido-pwa-bootstrap');
+  const boot = raw ? JSON.parse(raw.textContent) : {};
+  return {
+    form: { enabled: !!boot.enabled },
+    urls: boot.urls || {},
+    mensaje: '',
+    error: '',
+    guardando: false,
+    init() {},
+    csrf() {
+      const m = document.cookie.match(/csrftoken=([^;]+)/);
+      if (m) return decodeURIComponent(m[1]);
+      const inp = document.querySelector('[name=csrfmiddlewaretoken]');
+      return inp ? inp.value : (window.csrftoken || '');
+    },
+    _limpiar() {
+      this.mensaje = '';
+      this.error = '';
+    },
+    toggleEnabled() {
+      this.form.enabled = !this.form.enabled;
+      this._limpiar();
+    },
+    async guardar() {
+      if (!this.urls.guardar) return;
+      this.guardando = true;
+      this._limpiar();
+      try {
+        const res = await fetch(this.urls.guardar, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-CSRFToken': this.csrf(),
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ enabled: this.form.enabled }),
+        });
+        let data = {};
+        try { data = await res.json(); } catch (_) { data = {}; }
+        if (!res.ok || !data.ok) {
+          this.error = data.error || data.detail || ('No se pudo guardar (HTTP ' + res.status + ').');
+          return;
+        }
+        this.form.enabled = !!data.enabled;
+        this.mensaje = data.message || 'Configuración guardada.';
+      } catch (e) {
+        this.error = 'Error de red al guardar.';
+      } finally {
+        this.guardando = false;
+      }
+    },
+  };
+}
+</script>
+{% endblock %}

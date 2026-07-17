@@ -409,6 +409,13 @@ APPS_MENU = [
                         "menu_item_id": "settings_sc_outbound_email",
                     },
                     {
+                        "label": _("Acceso rápido PWA"),
+                        "url": "core:webauthn_settings",
+                        "icon": "fingerprint",
+                        "permission": "configuracion.sistema",
+                        "menu_item_id": "settings_sc_webauthn_pwa",
+                    },
+                    {
                         "label": _("CDN Wizard"),
                         "url": "core:cdn_wizard",
                         "icon": "cloud",

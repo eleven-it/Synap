@@ -43,6 +43,8 @@ _MOBILE_ALLOWED_API_PREFIXES = (
     '/api/mercadopago/',
     # Módulo de informes (catálogo, dashboards, builder, exportación).
     '/api/reports/',
+    # WebAuthn unlock PWA (desbloqueo biométrico post-login).
+    '/login/api/webauthn/',
 )
 
 # Pantallas HTML self_checkout Nivel A + ticket post-venta (ventana de impresión usada por kiosco.html).

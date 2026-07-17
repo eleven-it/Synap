@@ -2,6 +2,7 @@
 Servicio de autenticación con administraNET Gestión.
 Usa el pool MySQL de core (origen único). Conexiones vía context manager.
 """
+import hashlib
 import logging
 from django.conf import settings
 from typing import Optional, Dict, List
@@ -191,6 +192,167 @@ class AdministraNETAuth:
 
         except Exception as e:
             logger.warning("Error al validar usuario %s en empresa %s: %s", cod_usuario, base_empresa, e)
+            return None
+
+    def _build_user_dict_from_row(self, row, base_empresa: str, tiene_idioma: bool, cursor) -> Dict:
+        user_dict = {
+            'id_usuario': row[0],
+            'cod_usuario': row[1],
+            'nombre_usuario': row[2] if row[2] else '',
+            'apellido_usuario': row[3] if row[3] else '',
+            'id_empresa': row[4],
+            'id_sucursal': row[5],
+            'id_puesto': row[6],
+            'id_punto_venta': row[7],
+            'id_deposito': row[8],
+            'id_caja': row[9],
+            'tipo_busqueda_defecto': row[10],
+            'baja_usuario': row[11],
+            'base_empresa': base_empresa,
+            'idioma': (row[12] if tiene_idioma else None) or 'es',
+        }
+        if user_dict['id_puesto']:
+            try:
+                cursor.execute(
+                    "SELECT puesto FROM puestos WHERE idpuesto = %s AND anulado = 'No'",
+                    [user_dict['id_puesto']],
+                )
+                puesto_row = cursor.fetchone()
+                user_dict['nombre_puesto'] = puesto_row[0] if puesto_row else None
+            except Exception as e:
+                logger.warning("No se pudo obtener nombre del puesto: %s", e)
+                user_dict['nombre_puesto'] = None
+        else:
+            user_dict['nombre_puesto'] = None
+        return user_dict
+
+    def get_user_by_cod(self, cod_usuario: str, base_empresa: str) -> Optional[Dict]:
+        """Obtiene usuario activo por código (sin validar contraseña)."""
+        cod_lower = (cod_usuario or "").strip().lower()
+        if not cod_lower:
+            return None
+        try:
+            with pool_get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT COUNT(*) FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'idioma'
+                """, [base_empresa])
+                tiene_idioma = cursor.fetchone()[0] > 0
+
+                if tiene_idioma:
+                    cursor.execute("""
+                        SELECT id_usuario, cod_usuario, nombre_usuario, apellido_usuario,
+                               id_empresa, id_sucursal, id_puesto, id_punto_venta, id_deposito, id_caja,
+                               tipo_busqueda_defecto, baja_usuario, idioma
+                        FROM usuarios
+                        WHERE LOWER(cod_usuario) = %s
+                          AND (baja_usuario IS NULL OR baja_usuario = 'No')
+                    """, [cod_lower])
+                else:
+                    cursor.execute("""
+                        SELECT id_usuario, cod_usuario, nombre_usuario, apellido_usuario,
+                               id_empresa, id_sucursal, id_puesto, id_punto_venta, id_deposito, id_caja,
+                               tipo_busqueda_defecto, baja_usuario
+                        FROM usuarios
+                        WHERE LOWER(cod_usuario) = %s
+                          AND (baja_usuario IS NULL OR baja_usuario = 'No')
+                    """, [cod_lower])
+
+                row = cursor.fetchone()
+                if not row:
+                    cursor.close()
+                    return None
+
+                user_dict = self._build_user_dict_from_row(row, base_empresa, tiene_idioma, cursor)
+                cursor.close()
+                return user_dict
+        except Exception as e:
+            logger.warning(
+                "Error al obtener usuario cod=%s en empresa %s: %s",
+                cod_usuario,
+                base_empresa,
+                e,
+            )
+            return None
+
+    def get_user_by_id(self, id_usuario: int, base_empresa: str) -> Optional[Dict]:
+        """
+        Obtiene datos del usuario activo por id_usuario (sin validar contraseña).
+        """
+        try:
+            with pool_get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT COUNT(*) FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'usuarios' AND COLUMN_NAME = 'idioma'
+                """, [base_empresa])
+                tiene_idioma = cursor.fetchone()[0] > 0
+
+                if tiene_idioma:
+                    cursor.execute("""
+                        SELECT id_usuario, cod_usuario, nombre_usuario, apellido_usuario,
+                               id_empresa, id_sucursal, id_puesto, id_punto_venta, id_deposito, id_caja,
+                               tipo_busqueda_defecto, baja_usuario, idioma
+                        FROM usuarios
+                        WHERE id_usuario = %s
+                          AND (baja_usuario IS NULL OR baja_usuario = 'No')
+                    """, [id_usuario])
+                else:
+                    cursor.execute("""
+                        SELECT id_usuario, cod_usuario, nombre_usuario, apellido_usuario,
+                               id_empresa, id_sucursal, id_puesto, id_punto_venta, id_deposito, id_caja,
+                               tipo_busqueda_defecto, baja_usuario
+                        FROM usuarios
+                        WHERE id_usuario = %s
+                          AND (baja_usuario IS NULL OR baja_usuario = 'No')
+                    """, [id_usuario])
+
+                row = cursor.fetchone()
+                if not row:
+                    cursor.close()
+                    return None
+
+                user_dict = self._build_user_dict_from_row(row, base_empresa, tiene_idioma, cursor)
+                cursor.close()
+                return user_dict
+        except Exception as e:
+            logger.warning(
+                "Error al obtener usuario id=%s en empresa %s: %s",
+                id_usuario,
+                base_empresa,
+                e,
+            )
+            return None
+
+    def get_password_fingerprint(self, id_usuario: int, base_empresa: str) -> Optional[str]:
+        """
+        SHA-256 (hex) del BLOB password_usuario cifrado (AES), sin descifrar.
+        """
+        try:
+            with pool_get_connection(base_empresa) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT password_usuario FROM usuarios WHERE id_usuario = %s",
+                    [id_usuario],
+                )
+                row = cursor.fetchone()
+                cursor.close()
+            if not row or row[0] is None:
+                return None
+            blob = row[0]
+            if isinstance(blob, memoryview):
+                blob = blob.tobytes()
+            elif isinstance(blob, str):
+                blob = blob.encode("latin-1")
+            return hashlib.sha256(blob).hexdigest()
+        except Exception as e:
+            logger.warning(
+                "Error al obtener fingerprint id=%s en empresa %s: %s",
+                id_usuario,
+                base_empresa,
+                e,
+            )
             return None
     
     def get_servidores(self) -> List[Dict]:

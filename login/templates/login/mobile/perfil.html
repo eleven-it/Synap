@@ -108,6 +108,37 @@
           <span class="flex-1 text-left font-medium">Cambiar contraseña</span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
+        {% if webauthn_unlock_enabled %}
+        <div id="webauthn-perfil-section" class="border-b border-primary/5">
+          <div class="px-4 py-4 space-y-3">
+            <div class="flex items-center gap-3">
+              <span class="material-symbols-outlined text-primary p-2 bg-primary/10 rounded-lg">fingerprint</span>
+              <div class="flex-1">
+                <p class="font-medium text-left">Autenticación rápida</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 text-left" id="webauthn-perfil-summary">Cargando…</p>
+              </div>
+              <button type="button" id="btn-webauthn-pref-toggle"
+                      class="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                      aria-pressed="false">
+                <span class="material-symbols-outlined text-base" id="webauthn-pref-icon">cancel</span>
+                <span id="webauthn-pref-label">Inactivo</span>
+              </button>
+            </div>
+            <p id="webauthn-pref-disabled-msg" class="hidden text-xs text-slate-500 dark:text-slate-400 text-left rounded-lg bg-slate-50 dark:bg-slate-800 px-3 py-2">
+              Activá la autenticación rápida para usar desbloqueo biométrico en la app instalada.
+            </p>
+            <div id="webauthn-devices-block" class="hidden space-y-3">
+              <ul id="webauthn-cred-list" class="space-y-2 text-sm"></ul>
+              <div id="webauthn-enroll-block" class="space-y-2">
+                <input type="text" id="webauthn-device-label" maxlength="128" placeholder="Etiqueta del dispositivo (ej. Mi iPhone)" class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm min-h-[44px]"/>
+                <button type="button" id="btn-webauthn-enroll" class="w-full rounded-lg bg-primary/10 text-primary font-semibold py-3 min-h-[44px] hover:bg-primary/20 transition-colors">Activar desbloqueo en este dispositivo</button>
+              </div>
+              <button type="button" id="btn-webauthn-revoke-all" class="hidden w-full text-red-600 dark:text-red-400 text-sm font-medium py-2 min-h-[44px]">Revocar todos los dispositivos</button>
+            </div>
+            <p id="webauthn-perfil-msg" class="hidden text-sm text-center rounded-lg px-3 py-2"></p>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </section>
 
@@ -140,5 +171,167 @@
       <span class="text-[10px] font-bold">Ajustes</span>
     </a>
   </nav>
+  {% csrf_token %}
+  {% if webauthn_unlock_enabled %}
+  <script src="{% static 'login/pwa-standalone.js' %}"></script>
+  <script src="{% static 'login/webauthn-client.js' %}"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      if (!window.SynapWebAuthn) return;
+      var section = document.getElementById('webauthn-perfil-section');
+      if (!section) return;
+
+      var summary = document.getElementById('webauthn-perfil-summary');
+      var listEl = document.getElementById('webauthn-cred-list');
+      var enrollBlock = document.getElementById('webauthn-enroll-block');
+      var revokeAllBtn = document.getElementById('btn-webauthn-revoke-all');
+      var msgEl = document.getElementById('webauthn-perfil-msg');
+      var prefToggle = document.getElementById('btn-webauthn-pref-toggle');
+      var prefLabel = document.getElementById('webauthn-pref-label');
+      var prefIcon = document.getElementById('webauthn-pref-icon');
+      var disabledMsg = document.getElementById('webauthn-pref-disabled-msg');
+      var devicesBlock = document.getElementById('webauthn-devices-block');
+      var userPrefEnabled = false;
+      var canUseDevices = false;
+
+      function showMsg(text, isError) {
+        if (!msgEl) return;
+        msgEl.textContent = text;
+        msgEl.classList.remove('hidden', 'bg-red-50', 'text-red-700', 'bg-emerald-50', 'text-emerald-700');
+        msgEl.classList.add(isError ? 'bg-red-50' : 'bg-emerald-50', isError ? 'text-red-700' : 'text-emerald-700');
+      }
+
+      function renderPrefToggle(enabled) {
+        userPrefEnabled = !!enabled;
+        prefToggle.setAttribute('aria-pressed', userPrefEnabled ? 'true' : 'false');
+        prefLabel.textContent = userPrefEnabled ? 'Activo' : 'Inactivo';
+        prefIcon.textContent = userPrefEnabled ? 'check_circle' : 'cancel';
+        prefToggle.className = 'inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition ' +
+          (userPrefEnabled
+            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
+            : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300');
+        updateDevicesVisibility();
+      }
+
+      function updateDevicesVisibility() {
+        canUseDevices = userPrefEnabled
+          && window.SynapPwa && SynapPwa.isPwaStandalone()
+          && SynapWebAuthn.isSupported();
+        if (canUseDevices) {
+          disabledMsg.classList.add('hidden');
+          devicesBlock.classList.remove('hidden');
+        } else {
+          devicesBlock.classList.add('hidden');
+          if (!userPrefEnabled) {
+            disabledMsg.classList.remove('hidden');
+            summary.textContent = 'Autenticación rápida desactivada';
+          } else if (!window.SynapPwa || !SynapPwa.isPwaStandalone()) {
+            disabledMsg.classList.add('hidden');
+            summary.textContent = 'Disponible en la app instalada (PWA)';
+          } else {
+            disabledMsg.classList.add('hidden');
+            summary.textContent = 'WebAuthn no disponible en este navegador';
+          }
+        }
+      }
+
+      function renderList(data) {
+        var creds = data.credentials || [];
+        var max = data.max || 3;
+        if (canUseDevices) {
+          summary.textContent = creds.length + ' de ' + max + ' dispositivo(s) registrado(s)';
+        }
+        listEl.innerHTML = '';
+        creds.forEach(function(c) {
+          var li = document.createElement('li');
+          li.className = 'flex items-center justify-between gap-2 rounded-lg bg-slate-50 dark:bg-slate-800 px-3 py-2';
+          li.innerHTML = '<span class="flex-1 text-left"><span class="font-medium">' + (c.device_label || 'Dispositivo') + '</span><br><span class="text-xs text-slate-500">Desde ' + (c.created_at || '-') + '</span></span>';
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'text-red-600 text-xs font-semibold min-h-[44px] px-2';
+          btn.textContent = 'Revocar';
+          btn.addEventListener('click', function() {
+            if (!confirm('¿Revocar este dispositivo?')) return;
+            SynapWebAuthn.revokeCredential(c.credential_id).then(refresh).catch(function(e) { showMsg(e.message, true); });
+          });
+          li.appendChild(btn);
+          listEl.appendChild(li);
+        });
+        if (creds.length >= max) {
+          enrollBlock.classList.add('hidden');
+        } else {
+          enrollBlock.classList.remove('hidden');
+        }
+        if (creds.length > 0) {
+          revokeAllBtn.classList.remove('hidden');
+        } else {
+          revokeAllBtn.classList.add('hidden');
+        }
+      }
+
+      function refresh() {
+        if (!canUseDevices) return Promise.resolve();
+        return SynapWebAuthn.listCredentials().then(renderList).catch(function(e) {
+          showMsg(e.message, true);
+        });
+      }
+
+      prefToggle.addEventListener('click', function() {
+        var next = !userPrefEnabled;
+        prefToggle.disabled = true;
+        SynapWebAuthn.setPreference(next)
+          .then(function(data) {
+            renderPrefToggle(data.enabled);
+            showMsg(data.enabled ? 'Autenticación rápida activada' : 'Autenticación rápida desactivada', false);
+            return refresh();
+          })
+          .catch(function(e) {
+            showMsg(e.message, true);
+          })
+          .finally(function() {
+            prefToggle.disabled = false;
+          });
+      });
+
+      document.getElementById('btn-webauthn-enroll').addEventListener('click', function() {
+        var label = (document.getElementById('webauthn-device-label').value || '').trim();
+        var btn = document.getElementById('btn-webauthn-enroll');
+        btn.disabled = true;
+        btn.textContent = 'Registrando...';
+        SynapWebAuthn.registerPasskey(label || 'Este dispositivo')
+          .then(function() {
+            showMsg('Desbloqueo biométrico activado', false);
+            document.getElementById('webauthn-device-label').value = '';
+            return refresh();
+          })
+          .catch(function(e) {
+            showMsg(e.message, true);
+          })
+          .finally(function() {
+            btn.disabled = false;
+            btn.textContent = 'Activar desbloqueo en este dispositivo';
+          });
+      });
+
+      revokeAllBtn.addEventListener('click', function() {
+        if (!confirm('¿Revocar todos los dispositivos registrados?')) return;
+        SynapWebAuthn.revokeAllCredentials().then(function() {
+          showMsg('Dispositivos revocados', false);
+          return refresh();
+        }).catch(function(e) { showMsg(e.message, true); });
+      });
+
+      SynapWebAuthn.getPreference()
+        .then(function(data) {
+          renderPrefToggle(data.enabled);
+          return refresh();
+        })
+        .catch(function(e) {
+          summary.textContent = 'No se pudo cargar la preferencia';
+          showMsg(e.message, true);
+        });
+    });
+  </script>
+  {% endif %}
 </body>
 </html>

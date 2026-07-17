@@ -37,6 +37,10 @@ from .views_outbound_email import (
     OutboundEmailConfigAPIView,
     OutboundEmailTestAPIView,
 )
+from .views_webauthn_settings import (
+    WebAuthnSettingsView,
+    WebAuthnSettingsAPIView,
+)
 from .views_contacts import (
     ContactListView, ContactCreateView, ContactUpdateView, 
     ContactDetailView, ContactDeleteView, ContactRelationshipListView,
