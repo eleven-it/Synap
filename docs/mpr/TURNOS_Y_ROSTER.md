@@ -140,6 +140,26 @@ eliminar_asignacion_roster(base_empresa, fecha_str, id_operario) -> Tuple[bool, 
 # Valida fecha >= hoy.
 ```
 
+### Asignación masiva (rango)
+
+**Fecha de implementación:** 17/07/2026
+
+```python
+asignar_turno_roster_rango(
+    base_empresa,
+    ids_operario: List[Any],
+    id_turno: int,
+    fecha_desde: Any,
+    fecha_hasta: Any,
+    id_linea: Optional[int] = None,
+) -> Tuple[bool, Optional[str], Dict[str, Any]]
+```
+
+- **URL:** `planificacion-turnos/asignar-masivo/` (`roster_asignar_masivo`), vista `AsignarTurnoRosterMasivoView` (POST).
+- **Campos del formulario:** `ids_operario` (lista), `id_turno`, `fecha_desde`, `fecha_hasta` (ISO `YYYY-MM-DD` desde inputs HTML), `semana` (redirect).
+- **Reglas:** valida empresa, operarios y turno; recorre el rango con `_iter_dias_rango`; **omite fechas anteriores a hoy** (`omitidos_pasados`); aplica `upsert_roster` por celda operario×fecha (reasignación segura). Retorna resumen `{aplicados, omitidos_pasados, errores}`; éxito parcial si `aplicados > 0`.
+- **Helper UI:** `mensaje_flash_asignacion_masiva(resumen)` construye el mensaje de éxito en español.
+
 ---
 
 ## Vistas y URLs (`mpr/`)
@@ -151,6 +171,7 @@ eliminar_asignacion_roster(base_empresa, fecha_str, id_operario) -> Tuple[bool, 
 | `turnos/<id>/editar/` | `turno_edit` | TurnoUpdateView | GET / POST |
 | `planificacion-turnos/` | `planificacion_turnos` | PlanificacionTurnosView | GET |
 | `planificacion-turnos/asignar/` | `roster_asignar` | AsignarTurnoRosterView | POST |
+| `planificacion-turnos/asignar-masivo/` | `roster_asignar_masivo` | AsignarTurnoRosterMasivoView | POST |
 | `planificacion-turnos/eliminar/` | `roster_eliminar` | EliminarAsignacionRosterView | POST |
 
 Todas las vistas usan `MprLoginRequiredMixin`. La `base_empresa` se obtiene de la sesión con `_get_base_empresa(request)`.

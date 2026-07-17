@@ -5717,12 +5717,14 @@ class PlanificacionTurnosView(MprLoginRequiredMixin, TemplateView):
             fecha_lunes = hoy - timedelta(days=hoy.weekday())
         semana_anterior = fecha_lunes - timedelta(days=7)
         semana_siguiente = fecha_lunes + timedelta(days=7)
+        fecha_domingo = fecha_lunes + timedelta(days=6)
         turnos_activos = listar_turnos(base_empresa, solo_activos=True)
         roster_data = listar_roster_semana(base_empresa, fecha_lunes)
         from datetime import date as _date2
         hoy = _date2.today()
         context.update({
             "fecha_lunes": fecha_lunes,
+            "fecha_domingo": fecha_domingo,
             "semana_anterior": semana_anterior,
             "semana_siguiente": semana_siguiente,
             "turnos_activos": turnos_activos,
@@ -5771,6 +5773,62 @@ class AsignarTurnoRosterView(MprLoginRequiredMixin, View):
             messages.success(request, "Turno asignado exitosamente.")
         else:
             messages.error(request, error or "Error al asignar turno.")
+        base_url = reverse("mpr:planificacion_turnos")
+        if semana_param:
+            return redirect(f"{base_url}?semana={semana_param}")
+        return redirect(base_url)
+
+
+class AsignarTurnoRosterMasivoView(MprLoginRequiredMixin, View):
+    """
+    POST: asignación masiva de turno a varios operarios en un rango de fechas.
+    Params POST: ids_operario (lista), id_turno, fecha_desde/fecha_hasta (YYYY-MM-DD), semana.
+    """
+
+    def post(self, request, *args, **kwargs):
+        from django.contrib import messages
+        from django.urls import reverse
+        from mpr.services import asignar_turno_roster_rango, mensaje_flash_asignacion_masiva
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            messages.error(request, "No se pudo determinar la empresa activa.")
+            return redirect("mpr:planificacion_turnos")
+
+        ids_operario = request.POST.getlist("ids_operario")
+        id_turno_raw = request.POST.get("id_turno", "")
+        fecha_desde = (request.POST.get("fecha_desde") or "").strip()
+        fecha_hasta = (request.POST.get("fecha_hasta") or "").strip()
+        semana_param = (request.POST.get("semana") or "").strip()
+
+        try:
+            id_turno = int(id_turno_raw)
+        except (ValueError, TypeError):
+            messages.error(request, "Turno inválido.")
+            return redirect("mpr:planificacion_turnos")
+
+        id_linea_raw = (request.POST.get("id_linea") or "").strip()
+        id_linea = None
+        if id_linea_raw:
+            try:
+                id_linea = int(id_linea_raw)
+            except (ValueError, TypeError):
+                messages.error(request, "Línea de override inválida.")
+                return redirect("mpr:planificacion_turnos")
+
+        ok, error, resumen = asignar_turno_roster_rango(
+            base_empresa,
+            ids_operario,
+            id_turno,
+            fecha_desde,
+            fecha_hasta,
+            id_linea=id_linea,
+        )
+        if ok:
+            messages.success(request, mensaje_flash_asignacion_masiva(resumen))
+        else:
+            messages.error(request, error or "Error al asignar turnos.")
+
         base_url = reverse("mpr:planificacion_turnos")
         if semana_param:
             return redirect(f"{base_url}?semana={semana_param}")

@@ -16,6 +16,7 @@ from mpr.models import MprRosterDia, MprTurno
 from mpr.services import (
     actualizar_turno,
     asignar_turno_roster,
+    asignar_turno_roster_rango,
     crear_turno,
     eliminar_asignacion_roster,
     listar_turnos,
@@ -251,3 +252,120 @@ class TestServiciosRoster(TestCase):
         ok, error = eliminar_asignacion_roster(EMPRESA, self.fecha_futura_str, 9999)
         self.assertFalse(ok)
         self.assertIsNotNone(error)
+
+
+class TestAsignarTurnoRosterRango(TestCase):
+    """Tests de asignación masiva de roster por rango de fechas."""
+
+    def setUp(self):
+        self.turno = _crear_turno_db(nombre="Mañana")
+        self.turno2 = _crear_turno_db(nombre="Tarde", h_ini="14:00", h_fin="22:00")
+        self.hoy = date.today()
+        self.manana = self.hoy + timedelta(days=1)
+        self.pasado_manana = self.hoy + timedelta(days=2)
+        self.ayer = self.hoy - timedelta(days=1)
+
+    def test_rango_futuro_tres_dias_dos_operarios(self):
+        """Rango futuro 3 días × 2 operarios → aplicados=6, upsert llamado 6 veces."""
+        from unittest.mock import patch
+
+        desde = self.manana
+        hasta = self.manana + timedelta(days=2)
+        ids_op = [101, 102]
+
+        with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch("mpr.repositories.turno_roster.upsert_roster") as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": 101, "nombre_empleado": "Op Test"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA, ids_op, self.turno.id, desde, hasta
+            )
+
+        self.assertTrue(ok, error)
+        self.assertIsNone(error)
+        self.assertEqual(resumen["aplicados"], 6)
+        self.assertEqual(resumen["omitidos_pasados"], 0)
+        self.assertEqual(mock_upsert.call_count, 6)
+
+    def test_rango_incluye_ayer_omite_pasados(self):
+        """Rango con ayer omite fechas pasadas y aplica solo hoy o futuras."""
+        from unittest.mock import patch
+
+        desde = self.ayer
+        hasta = self.manana
+
+        with patch("mpr.services.obtener_turno", return_value=self.turno), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch("mpr.repositories.turno_roster.upsert_roster") as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": 200, "nombre_empleado": "Op Uno"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA, [200], self.turno.id, desde, hasta
+            )
+
+        self.assertTrue(ok, error)
+        self.assertEqual(resumen["omitidos_pasados"], 1)
+        dias_editables = 2
+        self.assertEqual(resumen["aplicados"], dias_editables)
+        self.assertEqual(mock_upsert.call_count, dias_editables)
+
+    def test_desde_posterior_hasta_falla(self):
+        """desde > hasta retorna ok=False."""
+        desde = self.manana + timedelta(days=5)
+        hasta = self.manana
+        ok, error, resumen = asignar_turno_roster_rango(
+            EMPRESA, [100], self.turno.id, desde, hasta
+        )
+        self.assertFalse(ok)
+        self.assertIn("posterior", error)
+        self.assertEqual(resumen["aplicados"], 0)
+
+    def test_turno_invalido_falla(self):
+        """Turno inexistente retorna ok=False."""
+        from unittest.mock import patch
+
+        with patch("mpr.services.obtener_turno", return_value=None), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op:
+            mock_op.return_value = {"id_sue_abm_empleado": 100, "nombre_empleado": "Op"}
+            ok, error, resumen = asignar_turno_roster_rango(
+                EMPRESA, [100], 999999, self.manana, self.manana
+            )
+        self.assertFalse(ok)
+        self.assertIn("Turno no encontrado", error)
+        self.assertEqual(resumen["aplicados"], 0)
+
+    def test_operarios_vacios_falla(self):
+        """Lista vacía de operarios retorna ok=False."""
+        ok, error, resumen = asignar_turno_roster_rango(
+            EMPRESA, [], self.turno.id, self.manana, self.manana
+        )
+        self.assertFalse(ok)
+        self.assertIn("operario", error.lower())
+        self.assertEqual(resumen["aplicados"], 0)
+
+    def test_reasignacion_llama_upsert_sobrescribe(self):
+        """Dos llamadas mismo operario/fecha con distinto turno invocan upsert (overwrite)."""
+        from unittest.mock import patch
+
+        fecha = self.manana
+        id_op = 301
+
+        def _turno_side_effect(base, tid):
+            return self.turno if tid == self.turno.id else self.turno2
+
+        with patch("mpr.services.obtener_turno", side_effect=_turno_side_effect), patch(
+            "mpr.services.obtener_operario"
+        ) as mock_op, patch("mpr.repositories.turno_roster.upsert_roster") as mock_upsert:
+            mock_op.return_value = {"id_sue_abm_empleado": id_op, "nombre_empleado": "Op Reasign"}
+            ok1, err1, _ = asignar_turno_roster_rango(
+                EMPRESA, [id_op], self.turno.id, fecha, fecha
+            )
+            ok2, err2, _ = asignar_turno_roster_rango(
+                EMPRESA, [id_op], self.turno2.id, fecha, fecha
+            )
+
+        self.assertTrue(ok1, err1)
+        self.assertTrue(ok2, err2)
+        self.assertEqual(mock_upsert.call_count, 2)
+        ultima_llamada = mock_upsert.call_args_list[-1]
+        self.assertEqual(ultima_llamada[0][3], self.turno2.id)
