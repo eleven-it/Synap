@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from ecom.services.jerarquia_comercial import (
     desactivar_vinculo_supervisor_vendedor,
+    listar_arbol_jerarquia,
     rol_de,
     subarbol_de,
     vincular_gerente_supervisor,
@@ -115,6 +116,48 @@ class TestUnPadre(unittest.TestCase):
         self.assertTrue(ok)
         conn.commit.assert_called_once()
 
+    @patch("ecom.services.jerarquia_comercial._validar_sin_ciclo_gerente_supervisor", return_value=(True, ""))
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_vincular_gs_guarda_ids_usuarios(self, mock_pool_fn, _ciclo):
+        pool = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchone.return_value = None
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+
+        ok, _ = vincular_gerente_supervisor(
+            "emp1", 1, 2, id_usuario_gerente=41, id_usuario_supervisor=72
+        )
+
+        self.assertTrue(ok)
+        sql, params = cursor.execute.call_args_list[-1][0]
+        self.assertIn("id_usuario_gerente", sql)
+        self.assertIn("id_usuario_supervisor", sql)
+        self.assertEqual(params[:4], (1, 2, 41, 72))
+
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_vincular_sv_guarda_id_usuario_supervisor(self, mock_pool_fn):
+        pool = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchone.return_value = None
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+
+        ok, _ = vincular_supervisor_vendedor(
+            "emp1", 2, 30, id_usuario_supervisor=72
+        )
+
+        self.assertTrue(ok)
+        sql, params = cursor.execute.call_args_list[-1][0]
+        self.assertIn("id_usuario_supervisor", sql)
+        self.assertEqual(params[:3], (2, 30, 72))
+
 
 class TestDesactivar(unittest.TestCase):
     @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
@@ -134,7 +177,7 @@ class TestDesactivar(unittest.TestCase):
 
 class TestBuscarUsuariosJerarquia(unittest.TestCase):
     @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
-    def test_busca_y_deduplica_por_viajante(self, mock_pool_fn):
+    def test_busca_dos_usuarios_con_mismo_viajante(self, mock_pool_fn):
         from ecom.services.jerarquia_comercial import buscar_usuarios_jerarquia
 
         pool = MagicMock()
@@ -170,11 +213,55 @@ class TestBuscarUsuariosJerarquia(unittest.TestCase):
         mock_pool_fn.return_value = pool
 
         rows = buscar_usuarios_jerarquia("emp1", "juan", rol="gerente")
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["cod_viajante"], 10)
-        self.assertEqual(rows[0]["etiqueta"], "Juan Perez")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual([row["id_usuario"] for row in rows], [1, 2])
+        self.assertEqual([row["cod_viajante"] for row in rows], [10, 10])
+        self.assertEqual([row["etiqueta"] for row in rows], ["Juan Perez", "Juan Bis"])
         self.assertNotIn("@", rows[0]["etiqueta"])
         self.assertNotIn("vía", rows[0]["etiqueta"])
+
+
+class TestEtiquetasArbol(unittest.TestCase):
+    @patch("ecom.services.jerarquia_comercial.etiquetas_usuarios_por_id")
+    @patch("ecom.services.jerarquia_comercial.etiquetas_viajantes_usuarios")
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_prioriza_id_usuario_para_etiqueta(self, mock_pool_fn, mock_viajantes, mock_usuarios):
+        cursor = MagicMock()
+        cursor.fetchall.side_effect = [
+            [
+                {
+                    "id": 1,
+                    "cod_gerente": 1,
+                    "cod_supervisor": 2,
+                    "id_usuario_gerente": 41,
+                    "id_usuario_supervisor": 72,
+                    "activo": "Si",
+                }
+            ],
+            [
+                {
+                    "id": 2,
+                    "cod_supervisor": 2,
+                    "cod_vendedor": 30,
+                    "id_usuario_supervisor": 72,
+                    "activo": "Si",
+                }
+            ],
+        ]
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool = MagicMock()
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+        mock_viajantes.return_value = {1: "Victoria Martinez", 2: "Supervisor .", 30: "Vendedor"}
+        mock_usuarios.return_value = {41: "Gerente Correcto", 72: "Priscila Borgo"}
+
+        arbol = listar_arbol_jerarquia("emp1")
+
+        self.assertEqual(arbol["vinculos_gs"][0]["etiqueta_gerente"], "Gerente Correcto")
+        self.assertEqual(arbol["vinculos_gs"][0]["etiqueta_supervisor"], "Priscila Borgo")
+        self.assertEqual(arbol["vinculos_sv"][0]["etiqueta_supervisor"], "Priscila Borgo")
 
     @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
     def test_gerente_excluye_puestos_no_habilitados(self, mock_pool_fn):

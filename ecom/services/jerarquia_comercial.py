@@ -232,6 +232,8 @@ def vincular_gerente_supervisor(
     cod_supervisor: int,
     *,
     mover: bool = False,
+    id_usuario_gerente: Optional[int] = None,
+    id_usuario_supervisor: Optional[int] = None,
 ) -> Tuple[bool, str]:
     """Crea o reactiva vínculo gerente→supervisor (1 padre por supervisor activo).
 
@@ -240,6 +242,8 @@ def vincular_gerente_supervisor(
     """
     g = to_int_or_none(cod_gerente)
     s = to_int_or_none(cod_supervisor)
+    id_g = to_int_or_none(id_usuario_gerente)
+    id_s = to_int_or_none(id_usuario_supervisor)
     if g is None or s is None:
         return False, "Códigos de gerente y supervisor inválidos."
     if g == s:
@@ -272,6 +276,18 @@ def vincular_gerente_supervisor(
                     else:
                         rid, actual_g, activo = row[0], row[1], row[2]
                     if _si_activo(activo) and actual_g == g:
+                        if id_g is not None or id_s is not None:
+                            cursor.execute(
+                                """
+                                UPDATE ecom_org_gerente_supervisor
+                                SET id_usuario_gerente = COALESCE(%s, id_usuario_gerente),
+                                    id_usuario_supervisor = COALESCE(%s, id_usuario_supervisor),
+                                    actualizado_en = %s
+                                WHERE id = %s
+                                """,
+                                (id_g, id_s, ahora, rid),
+                            )
+                            conn.commit()
                         return True, "Vínculo ya existente."
                     if _si_activo(activo) and actual_g != g and not mover:
                         return (
@@ -281,10 +297,14 @@ def vincular_gerente_supervisor(
                     cursor.execute(
                         """
                         UPDATE ecom_org_gerente_supervisor
-                        SET cod_gerente = %s, activo = %s, actualizado_en = %s
+                        SET cod_gerente = %s,
+                            id_usuario_gerente = COALESCE(%s, id_usuario_gerente),
+                            id_usuario_supervisor = COALESCE(%s, id_usuario_supervisor),
+                            activo = %s,
+                            actualizado_en = %s
                         WHERE id = %s
                         """,
-                        (g, _ACTIVO_SI, ahora, rid),
+                        (g, id_g, id_s, _ACTIVO_SI, ahora, rid),
                     )
                     conn.commit()
                     if _si_activo(activo) and actual_g != g:
@@ -293,10 +313,11 @@ def vincular_gerente_supervisor(
                 cursor.execute(
                     """
                     INSERT INTO ecom_org_gerente_supervisor
-                        (cod_gerente, cod_supervisor, activo, creado_en, actualizado_en)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (cod_gerente, cod_supervisor, id_usuario_gerente, id_usuario_supervisor,
+                         activo, creado_en, actualizado_en)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (g, s, _ACTIVO_SI, ahora, ahora),
+                    (g, s, id_g, id_s, _ACTIVO_SI, ahora, ahora),
                 )
                 conn.commit()
                 return True, "Vínculo gerente→supervisor guardado."
@@ -313,6 +334,7 @@ def vincular_supervisor_vendedor(
     cod_vendedor: int,
     *,
     mover: bool = False,
+    id_usuario_supervisor: Optional[int] = None,
 ) -> Tuple[bool, str]:
     """Crea o reactiva vínculo supervisor→vendedor (1 padre por vendedor activo).
 
@@ -321,6 +343,7 @@ def vincular_supervisor_vendedor(
     """
     s = to_int_or_none(cod_supervisor)
     v = to_int_or_none(cod_vendedor)
+    id_s = to_int_or_none(id_usuario_supervisor)
     if s is None or v is None:
         return False, "Códigos de supervisor y vendedor inválidos."
     if s == v:
@@ -350,6 +373,16 @@ def vincular_supervisor_vendedor(
                     else:
                         rid, actual_s, activo = row[0], row[1], row[2]
                     if _si_activo(activo) and actual_s == s:
+                        if id_s is not None:
+                            cursor.execute(
+                                """
+                                UPDATE ecom_org_supervisor_vendedor
+                                SET id_usuario_supervisor = %s, actualizado_en = %s
+                                WHERE id = %s
+                                """,
+                                (id_s, ahora, rid),
+                            )
+                            conn.commit()
                         return True, "Vínculo ya existente."
                     if _si_activo(activo) and actual_s != s and not mover:
                         return (
@@ -359,10 +392,13 @@ def vincular_supervisor_vendedor(
                     cursor.execute(
                         """
                         UPDATE ecom_org_supervisor_vendedor
-                        SET cod_supervisor = %s, activo = %s, actualizado_en = %s
+                        SET cod_supervisor = %s,
+                            id_usuario_supervisor = COALESCE(%s, id_usuario_supervisor),
+                            activo = %s,
+                            actualizado_en = %s
                         WHERE id = %s
                         """,
-                        (s, _ACTIVO_SI, ahora, rid),
+                        (s, id_s, _ACTIVO_SI, ahora, rid),
                     )
                     conn.commit()
                     if _si_activo(activo) and actual_s != s:
@@ -371,10 +407,11 @@ def vincular_supervisor_vendedor(
                 cursor.execute(
                     """
                     INSERT INTO ecom_org_supervisor_vendedor
-                        (cod_supervisor, cod_vendedor, activo, creado_en, actualizado_en)
-                    VALUES (%s, %s, %s, %s, %s)
+                        (cod_supervisor, cod_vendedor, id_usuario_supervisor, activo, creado_en,
+                         actualizado_en)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
-                    (s, v, _ACTIVO_SI, ahora, ahora),
+                    (s, v, id_s, _ACTIVO_SI, ahora, ahora),
                 )
                 conn.commit()
                 return True, "Vínculo supervisor→vendedor guardado."
@@ -465,7 +502,8 @@ def listar_arbol_jerarquia(base_empresa: str) -> Dict[str, Any]:
             try:
                 cursor.execute(
                     """
-                    SELECT id, cod_gerente, cod_supervisor, activo
+                    SELECT id, cod_gerente, cod_supervisor, id_usuario_gerente,
+                           id_usuario_supervisor, activo
                     FROM ecom_org_gerente_supervisor
                     WHERE activo = %s
                     ORDER BY cod_gerente, cod_supervisor
@@ -475,7 +513,7 @@ def listar_arbol_jerarquia(base_empresa: str) -> Dict[str, Any]:
                 vinculos_gs = _fetchall_dict(cursor)
                 cursor.execute(
                     """
-                    SELECT id, cod_supervisor, cod_vendedor, activo
+                    SELECT id, cod_supervisor, cod_vendedor, id_usuario_supervisor, activo
                     FROM ecom_org_supervisor_vendedor
                     WHERE activo = %s
                     ORDER BY cod_supervisor, cod_vendedor
@@ -488,6 +526,12 @@ def listar_arbol_jerarquia(base_empresa: str) -> Dict[str, Any]:
     except Exception as exc:
         logger.warning("listar_arbol_jerarquia (%s): %s", base, exc)
         return {"gerentes": [], "vinculos_gs": [], "vinculos_sv": [], "error": str(exc)}
+
+    for row in vinculos_gs:
+        row["id_usuario_gerente"] = to_int_or_none(row.get("id_usuario_gerente"))
+        row["id_usuario_supervisor"] = to_int_or_none(row.get("id_usuario_supervisor"))
+    for row in vinculos_sv:
+        row["id_usuario_supervisor"] = to_int_or_none(row.get("id_usuario_supervisor"))
 
     gerentes_set: set[int] = set()
     supervisores_set: set[int] = set()
@@ -519,19 +563,44 @@ def listar_arbol_jerarquia(base_empresa: str) -> Dict[str, Any]:
             if n is not None:
                 codigos.add(n)
     etiquetas = etiquetas_viajantes_usuarios(base, sorted(codigos))
+    ids_usuarios = {
+        id_usuario
+        for row in vinculos_gs
+        for id_usuario in (
+            to_int_or_none(row.get("id_usuario_gerente")),
+            to_int_or_none(row.get("id_usuario_supervisor")),
+        )
+        if id_usuario is not None
+    }
+    ids_usuarios.update(
+        id_usuario
+        for row in vinculos_sv
+        for id_usuario in (to_int_or_none(row.get("id_usuario_supervisor")),)
+        if id_usuario is not None
+    )
+    etiquetas_usuarios = etiquetas_usuarios_por_id(base, sorted(ids_usuarios))
 
-    def _etiq(cod: Any) -> str:
+    def _etiq(cod: Any, id_usuario: Any = None) -> str:
+        usuario_id = to_int_or_none(id_usuario)
+        if usuario_id is not None and etiquetas_usuarios.get(usuario_id):
+            return etiquetas_usuarios[usuario_id]
         n = to_int_or_none(cod)
         if n is None:
             return "—"
         return etiquetas.get(n) or f"Viajante {n}"
 
     for row in vinculos_gs:
-        row["etiqueta_gerente"] = _etiq(row.get("cod_gerente"))
-        row["etiqueta_supervisor"] = _etiq(row.get("cod_supervisor"))
+        row["etiqueta_gerente"] = _etiq(
+            row.get("cod_gerente"), row.get("id_usuario_gerente")
+        )
+        row["etiqueta_supervisor"] = _etiq(
+            row.get("cod_supervisor"), row.get("id_usuario_supervisor")
+        )
         row["etiqueta"] = f"{row['etiqueta_gerente']} → {row['etiqueta_supervisor']}"
     for row in vinculos_sv:
-        row["etiqueta_supervisor"] = _etiq(row.get("cod_supervisor"))
+        row["etiqueta_supervisor"] = _etiq(
+            row.get("cod_supervisor"), row.get("id_usuario_supervisor")
+        )
         row["etiqueta_vendedor"] = _etiq(row.get("cod_vendedor"))
         row["etiqueta"] = f"{row['etiqueta_supervisor']} → {row['etiqueta_vendedor']}"
 
@@ -541,6 +610,47 @@ def listar_arbol_jerarquia(base_empresa: str) -> Dict[str, Any]:
         "vinculos_sv": vinculos_sv,
         "etiquetas": etiquetas,
     }
+
+
+def etiquetas_usuarios_por_id(
+    base_empresa: str,
+    ids_usuarios: Sequence[int],
+) -> Dict[int, str]:
+    """Mapa ``usuarios.id_usuario`` a nombre y apellido para vínculos explícitos."""
+    ids = [to_int_or_none(id_usuario) for id_usuario in ids_usuarios]
+    ids = [id_usuario for id_usuario in ids if id_usuario is not None]
+    if not ids or not (base_empresa or "").strip():
+        return {}
+    placeholders = ",".join(["%s"] * len(ids))
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    f"""
+                    SELECT id_usuario, nombre_usuario, apellido_usuario
+                    FROM usuarios
+                    WHERE id_usuario IN ({placeholders})
+                    """,
+                    tuple(ids),
+                )
+                return {
+                    id_usuario: etiqueta
+                    for row in _fetchall_dict(cursor)
+                    for id_usuario, etiqueta in [
+                        (
+                            to_int_or_none(row.get("id_usuario")),
+                            _etiqueta_nombre_apellido(row),
+                        )
+                    ]
+                    if id_usuario is not None and etiqueta
+                }
+            finally:
+                cursor.close()
+    except Exception as exc:
+        logger.warning("etiquetas_usuarios_por_id (%s): %s", base_empresa, exc)
+        return {}
 
 
 def etiquetas_viajantes_usuarios(
@@ -714,14 +824,15 @@ def _buscar_usuarios_gerente_supervisor(
         return []
 
     out: List[Dict[str, Any]] = []
-    seen_cv: set[int] = set()
+    seen_usuarios: set[int] = set()
     for row in rows:
         if not _puesto_habilitado_gerente_supervisor(str(row.get("nombre_puesto") or "")):
             continue
         cv = to_int_or_none(row.get("cod_viajante"))
-        if cv is None or cv in seen_cv:
+        id_usuario = to_int_or_none(row.get("id_usuario"))
+        if cv is None or id_usuario is None or id_usuario in seen_usuarios:
             continue
-        seen_cv.add(cv)
+        seen_usuarios.add(id_usuario)
         etiqueta = _etiqueta_nombre_apellido(row)
         if not etiqueta:
             continue

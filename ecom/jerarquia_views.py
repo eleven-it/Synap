@@ -47,6 +47,8 @@ class JerarquiaNodosAPIView(APIView):
                 to_int_or_none(data.get("cod_gerente")),
                 to_int_or_none(data.get("cod_supervisor")),
                 mover=mover,
+                id_usuario_gerente=to_int_or_none(data.get("id_usuario_gerente")),
+                id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
             )
         elif accion == "vincular_supervisor_vendedor":
             ok, msg = vincular_supervisor_vendedor(
@@ -54,6 +56,7 @@ class JerarquiaNodosAPIView(APIView):
                 to_int_or_none(data.get("cod_supervisor")),
                 to_int_or_none(data.get("cod_vendedor")),
                 mover=mover,
+                id_usuario_supervisor=to_int_or_none(data.get("id_usuario_supervisor")),
             )
         elif accion == "desactivar_gerente_supervisor":
             ok, msg = desactivar_vinculo_gerente_supervisor(

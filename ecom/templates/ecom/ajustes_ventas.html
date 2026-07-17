@@ -467,7 +467,7 @@
           <ul x-show="pick.panel.abierto && pick.panel.resultados.length" x-cloak id="listbox-panel"
               class="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
               role="listbox">
-            <template x-for="(u, i) in pick.panel.resultados" :key="'panel-' + u.cod_viajante">
+            <template x-for="(u, i) in pick.panel.resultados" :key="'panel-' + (u.id_usuario ?? u.cod_viajante)">
               <li role="option" :id="'opt-panel-' + i"
                   :aria-selected="i === pick.panel.idx ? 'true' : 'false'"
                   @mousedown.prevent="elegirPick('panel', u)"
@@ -531,15 +531,17 @@ function ajustesVentasApp() {
     urls: boot.urls || {},
     arbol: { vinculos_gs: [], vinculos_sv: [], gerentes: [], etiquetas: {} },
     pick: {
-      panel: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false, listadoCompleto: false },
+      panel: { q: '', cod: null, id_usuario: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false, listadoCompleto: false },
     },
     altaJerarquia: {
       abierto: false,
       modo: null,            // 'gerente' | 'supervisor_bajo_nuevo' | 'supervisor' | 'vendedor'
       rol: 'gerente',        // rol del picker activo (gerente/supervisor/vendedor)
       padreCod: null,        // gerente (para supervisor) o supervisor (para vendedor)
+      padreIdUsuario: null,  // usuario del padre si el rol es gerente o supervisor
       padreEtiqueta: '',
       gerenteNuevoCod: null, // gerente elegido en el paso 1 del alta de gerente
+      gerenteNuevoIdUsuario: null,
       gerenteNuevoEtiqueta: '',
     },
     mensaje: '',
@@ -576,13 +578,26 @@ function ajustesVentasApp() {
       };
       const supPorGerente = {};
       const ordenGerentes = [];
+      const datosGerente = {};
+      const datosSupervisor = {};
       const supConGerente = new Set();
       gs.forEach((v) => {
         const g = v.cod_gerente;
         const s = v.cod_supervisor;
         if (g === null || g === undefined) return;
         if (!(g in supPorGerente)) { supPorGerente[g] = []; ordenGerentes.push(g); }
-        supPorGerente[g].push(s);
+        datosGerente[g] = {
+          cod: g,
+          etiqueta: v.etiqueta_gerente || etiq(g),
+          id_usuario: v.id_usuario_gerente ?? null,
+        };
+        const supervisor = {
+          cod: s,
+          etiqueta: v.etiqueta_supervisor || etiq(s),
+          id_usuario: v.id_usuario_supervisor ?? null,
+        };
+        supPorGerente[g].push(supervisor);
+        datosSupervisor[s] = supervisor;
         if (s !== null && s !== undefined) supConGerente.add(Number(s));
       });
       const venPorSup = {};
@@ -591,21 +606,29 @@ function ajustesVentasApp() {
         const s = v.cod_supervisor;
         if (s === null || s === undefined) return;
         if (!(s in venPorSup)) { venPorSup[s] = []; ordenSupSv.push(Number(s)); }
-        venPorSup[s].push(v.cod_vendedor);
+        if (!(s in datosSupervisor)) {
+          datosSupervisor[s] = {
+            cod: s,
+            etiqueta: v.etiqueta_supervisor || etiq(s),
+            id_usuario: v.id_usuario_supervisor ?? null,
+          };
+        }
+        venPorSup[s].push({
+          cod: v.cod_vendedor,
+          etiqueta: v.etiqueta_vendedor || etiq(v.cod_vendedor),
+        });
       });
-      const mapSup = (s) => ({
-        cod: s,
-        etiqueta: etiq(s),
-        vendedores: (venPorSup[s] || []).map((vc) => ({ cod: vc, etiqueta: etiq(vc) })),
+      const mapSup = (sup) => ({
+        ...(datosSupervisor[sup.cod] || sup),
+        vendedores: venPorSup[sup.cod] || [],
       });
       const gerentes = ordenGerentes.map((g) => ({
-        cod: g,
-        etiqueta: etiq(g),
+        ...(datosGerente[g] || { cod: g, etiqueta: etiq(g), id_usuario: null }),
         supervisores: (supPorGerente[g] || []).map(mapSup),
       }));
       const sinGerente = ordenSupSv
         .filter((s) => !supConGerente.has(s))
-        .map(mapSup);
+        .map((s) => mapSup(datosSupervisor[s] || { cod: s, etiqueta: etiq(s), id_usuario: null }));
       return { gerentes, sinGerente };
     },
     get altaTitulo() {
@@ -779,6 +802,7 @@ function ajustesVentasApp() {
       if (!p) return;
       p.q = '';
       p.cod = null;
+      p.id_usuario = null;
       p.etiqueta = '';
       p.resultados = [];
       p.buscado = false;
@@ -813,6 +837,7 @@ function ajustesVentasApp() {
       const p = this.pick[campo];
       if (!p || !u) return;
       p.cod = u.cod_viajante;
+      p.id_usuario = u.id_usuario ?? null;
       p.etiqueta = this.etiquetaVisible(campo, u) || String(u.cod_viajante);
       p.q = p.etiqueta;
       p.resultados = [];
@@ -896,6 +921,8 @@ function ajustesVentasApp() {
         cod_gerente: extra.cod_gerente ?? null,
         cod_supervisor: extra.cod_supervisor ?? null,
         cod_vendedor: extra.cod_vendedor ?? null,
+        id_usuario_gerente: extra.id_usuario_gerente ?? null,
+        id_usuario_supervisor: extra.id_usuario_supervisor ?? null,
       };
       if (extra.mover) body.mover = true;
       try {
@@ -926,7 +953,7 @@ function ajustesVentasApp() {
     },
     _resetPickPanel() {
       this.pick.panel = {
-        q: '', cod: null, etiqueta: '', resultados: [],
+        q: '', cod: null, id_usuario: null, etiqueta: '', resultados: [],
         abierto: false, idx: 0, buscando: false, buscado: false, listadoCompleto: false,
       };
     },
@@ -936,8 +963,10 @@ function ajustesVentasApp() {
       this._resetPickPanel();
       const a = this.altaJerarquia;
       a.gerenteNuevoCod = null;
+      a.gerenteNuevoIdUsuario = null;
       a.gerenteNuevoEtiqueta = '';
       a.padreCod = null;
+      a.padreIdUsuario = null;
       a.padreEtiqueta = '';
       if (modo === 'gerente') {
         a.modo = 'gerente';
@@ -946,11 +975,13 @@ function ajustesVentasApp() {
         a.modo = 'supervisor';
         a.rol = 'supervisor';
         a.padreCod = ctx.cod ?? null;
+        a.padreIdUsuario = ctx.id_usuario ?? null;
         a.padreEtiqueta = ctx.etiqueta || '';
       } else if (modo === 'vendedor') {
         a.modo = 'vendedor';
         a.rol = 'vendedor';
         a.padreCod = ctx.cod ?? null;
+        a.padreIdUsuario = ctx.id_usuario ?? null;
         a.padreEtiqueta = ctx.etiqueta || '';
       } else {
         return;
@@ -970,6 +1001,7 @@ function ajustesVentasApp() {
         if (!v) return null;
         return {
           cod: v.cod_gerente,
+          id_usuario: v.id_usuario_gerente ?? null,
           etiqueta: v.etiqueta_gerente || (this.arbol.etiquetas || {})[v.cod_gerente] || ('Viajante ' + v.cod_gerente),
         };
       }
@@ -977,6 +1009,7 @@ function ajustesVentasApp() {
       if (!v) return null;
       return {
         cod: v.cod_supervisor,
+        id_usuario: v.id_usuario_supervisor ?? null,
         etiqueta: v.etiqueta_supervisor || (this.arbol.etiquetas || {})[v.cod_supervisor] || ('Viajante ' + v.cod_supervisor),
       };
     },
@@ -987,6 +1020,7 @@ function ajustesVentasApp() {
       // Paso 1 del alta de gerente: guardar gerente y pasar a pedir supervisor.
       if (a.modo === 'gerente') {
         a.gerenteNuevoCod = p.cod;
+        a.gerenteNuevoIdUsuario = p.id_usuario;
         a.gerenteNuevoEtiqueta = p.etiqueta || String(p.cod);
         a.modo = 'supervisor_bajo_nuevo';
         a.rol = 'supervisor';
@@ -1001,19 +1035,33 @@ function ajustesVentasApp() {
       let nuevoPadreEtiqueta = '';
       if (a.modo === 'supervisor_bajo_nuevo') {
         accion = 'vincular_gerente_supervisor';
-        payload = { cod_gerente: a.gerenteNuevoCod, cod_supervisor: p.cod };
+        payload = {
+          cod_gerente: a.gerenteNuevoCod,
+          cod_supervisor: p.cod,
+          id_usuario_gerente: a.gerenteNuevoIdUsuario,
+          id_usuario_supervisor: p.id_usuario,
+        };
         tipoHijo = 'supervisor';
         nuevoPadreCod = a.gerenteNuevoCod;
         nuevoPadreEtiqueta = a.gerenteNuevoEtiqueta;
       } else if (a.modo === 'supervisor') {
         accion = 'vincular_gerente_supervisor';
-        payload = { cod_gerente: a.padreCod, cod_supervisor: p.cod };
+        payload = {
+          cod_gerente: a.padreCod,
+          cod_supervisor: p.cod,
+          id_usuario_gerente: a.padreIdUsuario,
+          id_usuario_supervisor: p.id_usuario,
+        };
         tipoHijo = 'supervisor';
         nuevoPadreCod = a.padreCod;
         nuevoPadreEtiqueta = a.padreEtiqueta;
       } else if (a.modo === 'vendedor') {
         accion = 'vincular_supervisor_vendedor';
-        payload = { cod_supervisor: a.padreCod, cod_vendedor: p.cod };
+        payload = {
+          cod_supervisor: a.padreCod,
+          cod_vendedor: p.cod,
+          id_usuario_supervisor: a.padreIdUsuario,
+        };
         tipoHijo = 'vendedor';
         nuevoPadreCod = a.padreCod;
         nuevoPadreEtiqueta = a.padreEtiqueta;
