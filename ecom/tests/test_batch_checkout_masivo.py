@@ -314,6 +314,87 @@ class TestConfirmacionMasivaStreamAPI(TestCase):
         self.assertIn("matriz", lineas[-1])
         mock_stream.assert_called_once()
 
+    @patch("ecom.pedido_masivo_views.serializar_matriz", return_value={"estado": "confirmado"})
+    @patch("ecom.pedido_masivo_views.confirmar_lote_masivo_stream")
+    @patch("ecom.pedido_masivo_views.es_supervisor_desde_ctx", return_value=False)
+    @patch("ecom.pedido_masivo_views.ctx_desde_request", return_value={})
+    @patch("ecom.pedido_masivo_views._resolver_cabecera_masivo")
+    def test_api_stream_accept_wildcard_no_406(
+        self,
+        mock_cabecera,
+        _mock_ctx,
+        _mock_supervisor,
+        mock_stream,
+        _mock_matriz,
+    ):
+        """El front debe usar Accept */*; application/x-ndjson provoca 406 en DRF."""
+        draft = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_b",
+            id_usuario=9,
+            id_cliente=100,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        )
+
+        def _gen(*_a, **_k):
+            yield {"event": "inicio", "total": 1}
+            yield {
+                "event": "fin",
+                "ok": True,
+                "message": "Se crearon 1 pedido(s).",
+                "codigos_movimiento": [901],
+                "errores": {},
+                "compensacion": [],
+            }
+
+        mock_cabecera.return_value = (MagicMock(lista_id=1), None)
+        mock_stream.side_effect = _gen
+
+        request = APIRequestFactory().post(
+            "/ecom/api/mayoristapp/pedido-masivo/confirmar/",
+            {"draft_id": draft.pk, "stream": True},
+            format="json",
+            HTTP_ACCEPT="*/*",
+        )
+        SessionMiddleware(lambda r: HttpResponse()).process_request(request)
+        request.session["user"] = {
+            "id_usuario": 9,
+            "base_empresa": "emp_b",
+            "id_punto_venta": 1,
+        }
+        request.session.save()
+        force_authenticate(
+            request,
+            user=MagicMock(is_authenticated=True, is_superuser=True),
+        )
+
+        response = PedidoMasivoConfirmarAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/x-ndjson", response["Content-Type"])
+        # Consumir el stream para ejecutar el generador mockeado.
+        _ = b"".join(response.streaming_content)
+        mock_stream.assert_called_once()
+
+        request_ndjson = APIRequestFactory().post(
+            "/ecom/api/mayoristapp/pedido-masivo/confirmar/",
+            {"draft_id": draft.pk, "stream": True},
+            format="json",
+            HTTP_ACCEPT="application/x-ndjson",
+        )
+        SessionMiddleware(lambda r: HttpResponse()).process_request(request_ndjson)
+        request_ndjson.session["user"] = {
+            "id_usuario": 9,
+            "base_empresa": "emp_b",
+            "id_punto_venta": 1,
+        }
+        request_ndjson.session.save()
+        force_authenticate(
+            request_ndjson,
+            user=MagicMock(is_authenticated=True, is_superuser=True),
+        )
+        response_ndjson = PedidoMasivoConfirmarAPIView.as_view()(request_ndjson)
+        self.assertEqual(response_ndjson.status_code, 406)
+
 
 class TestConfirmacionMasivaPuntoVenta(TestCase):
     @patch("ecom.pedido_masivo_views.serializar_matriz", return_value={})

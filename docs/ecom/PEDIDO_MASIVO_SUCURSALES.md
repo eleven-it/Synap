@@ -185,7 +185,7 @@ Servicio: `ecom.services.batch_checkout_masivo.confirmar_lote_masivo` (sync) y `
 
 ### Confirmación con progreso en vivo — NDJSON (14/07/2026, `?v=masivo16`)
 
-Tras el resumen del modal (`masivo_confirmar`), el front envía `POST …/confirmar/` con `"stream": true` y cabecera comercial (`desc_pie_pct`, fechas, condición, lista). La respuesta es `Content-Type: application/x-ndjson; charset=utf-8`: **una línea JSON por evento**, sin array envolvente.
+Tras el resumen del modal (`masivo_confirmar`), el front envía `POST …/confirmar/` con `"stream": true` y cabecera comercial (`desc_pie_pct`, fechas, condición, lista). Usar `Accept: */*` (no `application/x-ndjson`): DRF rechaza ese Accept con HTTP 406 antes de llegar a la vista. La respuesta sigue siendo `Content-Type: application/x-ndjson; charset=utf-8`: **una línea JSON por evento**, sin array envolvente.
 
 **Body (campos relevantes):**
 

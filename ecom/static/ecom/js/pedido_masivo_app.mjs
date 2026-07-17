@@ -420,12 +420,19 @@ function pedidoMasivoCore() {
         credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/x-ndjson',
+          // DRF negocia Accept antes de la vista: application/x-ndjson provoca 406.
+          // La respuesta sigue siendo NDJSON vía StreamingHttpResponse.
+          'Accept': '*/*',
           'X-CSRFToken': this.csrf(),
         },
         body: JSON.stringify(body),
       });
-      if (!r.ok && !r.body) {
+      const ct = (r.headers.get('content-type') || '').toLowerCase();
+      if (!r.ok && !ct.includes('ndjson')) {
+        const data = await r.json().catch(() => ({}));
+        return { status: r.status, fin: data };
+      }
+      if (!r.body) {
         const data = await r.json().catch(() => ({}));
         return { status: r.status, fin: data };
       }
