@@ -286,7 +286,19 @@
       <!-- Árbol -->
       <template x-if="hayJerarquia">
         <div class="mt-3 space-y-2">
-          <div class="flex justify-end">
+          <div class="mb-2 flex flex-wrap items-center justify-end gap-2">
+            <button type="button" @click="expandirTodosSupervisores()"
+                    class="inline-flex min-h-8 items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                    title="Expandir todos los supervisores">
+              <span class="material-icons text-sm" aria-hidden="true">unfold_more</span>
+              Expandir todo
+            </button>
+            <button type="button" @click="colapsarTodosSupervisores()"
+                    class="inline-flex min-h-8 items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                    title="Colapsar todos los supervisores">
+              <span class="material-icons text-sm" aria-hidden="true">unfold_less</span>
+              Colapsar todo
+            </button>
             <button type="button" @click="abrirAlta('gerente')"
                     class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-700">
               <span class="material-icons text-sm" aria-hidden="true">person_add</span>
@@ -295,7 +307,7 @@
           </div>
 
           <!-- Gerentes -->
-          <template x-for="ger in arbolAnidado.gerentes" :key="'g-' + ger.cod">
+          <template x-for="ger in arbolAnidado.gerentes" :key="'g-' + (ger.id_usuario ?? ger.cod)">
             <div class="rounded-lg border border-slate-200 dark:border-slate-700">
               <div class="flex flex-wrap items-center gap-2 px-3 py-2">
                 <span class="material-icons text-[19px] text-sky-600 dark:text-sky-400" aria-hidden="true">badge</span>
@@ -313,8 +325,19 @@
                 <template x-for="sup in ger.supervisores" :key="'gs-' + (ger.id_usuario ?? ger.cod) + '-' + (sup.id_usuario ?? sup.cod)">
                   <div class="mt-1">
                     <div class="flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40">
+                      <button type="button"
+                              @click="toggleSupervisorColapsado(sup)"
+                              class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-700"
+                              :aria-expanded="!supervisorColapsado(sup) ? 'true' : 'false'"
+                              :aria-label="(supervisorColapsado(sup) ? 'Expandir' : 'Colapsar') + ' vendedores de ' + (sup.etiqueta || '')"
+                              :title="supervisorColapsado(sup) ? 'Expandir' : 'Colapsar'">
+                        <span class="material-icons text-base" aria-hidden="true"
+                              x-text="supervisorColapsado(sup) ? 'chevron_right' : 'expand_more'"></span>
+                      </button>
                       <span class="material-icons text-[18px] text-indigo-500 dark:text-indigo-400" aria-hidden="true">supervisor_account</span>
                       <span class="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-200" x-text="sup.etiqueta"></span>
+                      <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                            x-text="(sup.vendedores.length || 0) + ((sup.vendedores.length === 1) ? ' vendedor' : ' vendedores')"></span>
                       <button type="button" @click="abrirAlta('vendedor', sup)"
                               class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-700">
                         <span class="material-icons text-sm" aria-hidden="true">add</span>
@@ -327,7 +350,8 @@
                       </button>
                     </div>
                     <!-- Vendedores del supervisor -->
-                    <div class="ml-5 border-l-2 border-slate-100 pl-2 dark:border-slate-700">
+                    <div x-show="!supervisorColapsado(sup)" x-cloak
+                         class="ml-5 border-l-2 border-slate-100 pl-2 dark:border-slate-700">
                       <template x-for="ven in sup.vendedores" :key="'sv-' + (sup.id_usuario ?? sup.cod) + '-' + ven.cod">
                         <div class="mt-1 flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40">
                           <span class="material-icons text-[17px] text-amber-500 dark:text-amber-400" aria-hidden="true">storefront</span>
@@ -356,19 +380,31 @@
                 <span class="text-sm font-semibold text-slate-600 dark:text-slate-300">Supervisores sin gerente</span>
               </div>
               <div class="ml-5 border-l-2 border-slate-100 pb-2 pl-2 dark:border-slate-700">
-                <template x-for="sup in arbolAnidado.sinGerente" :key="'sg-' + sup.cod">
+                <template x-for="sup in arbolAnidado.sinGerente" :key="'sg-' + (sup.id_usuario ?? sup.cod)">
                   <div class="mt-1">
                     <div class="flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40">
+                      <button type="button"
+                              @click="toggleSupervisorColapsado(sup)"
+                              class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200/70 dark:hover:bg-slate-700"
+                              :aria-expanded="!supervisorColapsado(sup) ? 'true' : 'false'"
+                              :aria-label="(supervisorColapsado(sup) ? 'Expandir' : 'Colapsar') + ' vendedores de ' + (sup.etiqueta || '')"
+                              :title="supervisorColapsado(sup) ? 'Expandir' : 'Colapsar'">
+                        <span class="material-icons text-base" aria-hidden="true"
+                              x-text="supervisorColapsado(sup) ? 'chevron_right' : 'expand_more'"></span>
+                      </button>
                       <span class="material-icons text-[18px] text-indigo-500 dark:text-indigo-400" aria-hidden="true">supervisor_account</span>
                       <span class="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-200" x-text="sup.etiqueta"></span>
+                      <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                            x-text="(sup.vendedores.length || 0) + ((sup.vendedores.length === 1) ? ' vendedor' : ' vendedores')"></span>
                       <button type="button" @click="abrirAlta('vendedor', sup)"
                               class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-700">
                         <span class="material-icons text-sm" aria-hidden="true">add</span>
                         Agregar vendedor
                       </button>
                     </div>
-                    <div class="ml-5 border-l-2 border-slate-100 pl-2 dark:border-slate-700">
-                      <template x-for="ven in sup.vendedores" :key="'sgv-' + sup.cod + '-' + ven.cod">
+                    <div x-show="!supervisorColapsado(sup)" x-cloak
+                         class="ml-5 border-l-2 border-slate-100 pl-2 dark:border-slate-700">
+                      <template x-for="ven in sup.vendedores" :key="'sgv-' + (sup.id_usuario ?? sup.cod) + '-' + ven.cod">
                         <div class="mt-1 flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40">
                           <span class="material-icons text-[17px] text-amber-500 dark:text-amber-400" aria-hidden="true">storefront</span>
                           <span class="min-w-0 flex-1 truncate text-sm text-slate-600 dark:text-slate-300" x-text="ven.etiqueta"></span>
@@ -565,6 +601,7 @@ function ajustesVentasApp() {
     puedeEditarJerarquia: !!boot.puede_editar_jerarquia,
     urls: boot.urls || {},
     arbol: { vinculos_gs: [], vinculos_sv: [], gerentes: [], etiquetas: {} },
+    supervisoresColapsados: {},
     pick: {
       panel: { q: '', cod: null, id_usuario: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false, listadoCompleto: false },
     },
@@ -603,6 +640,38 @@ function ajustesVentasApp() {
     get hayJerarquia() {
       return !!((this.arbol.vinculos_gs && this.arbol.vinculos_gs.length) ||
                 (this.arbol.vinculos_sv && this.arbol.vinculos_sv.length));
+    },
+    _claveSupervisor(sup) {
+      if (!sup) return '';
+      if (sup.id_usuario !== null && sup.id_usuario !== undefined) return 'u-' + String(sup.id_usuario);
+      return 'c-' + String(sup.cod);
+    },
+    supervisorColapsado(sup) {
+      const k = this._claveSupervisor(sup);
+      return !!(k && this.supervisoresColapsados[k]);
+    },
+    toggleSupervisorColapsado(sup) {
+      const k = this._claveSupervisor(sup);
+      if (!k) return;
+      this.supervisoresColapsados = {
+        ...this.supervisoresColapsados,
+        [k]: !this.supervisoresColapsados[k],
+      };
+    },
+    expandirTodosSupervisores() {
+      this.supervisoresColapsados = {};
+    },
+    colapsarTodosSupervisores() {
+      const next = {};
+      const marcar = (sup) => {
+        const k = this._claveSupervisor(sup);
+        if (k) next[k] = true;
+      };
+      (this.arbolAnidado.gerentes || []).forEach((ger) => {
+        (ger.supervisores || []).forEach(marcar);
+      });
+      (this.arbolAnidado.sinGerente || []).forEach(marcar);
+      this.supervisoresColapsados = next;
     },
     get arbolAnidado() {
       const gs = this.arbol.vinculos_gs || [];
