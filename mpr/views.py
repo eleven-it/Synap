@@ -4765,6 +4765,9 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
 
 _TABLERO_SESSION_SOLO_URGENTE = "tablero_produccion_solo_urgente"
 _TABLERO_SESSION_SOLO_PENDIENTE_LEGACY = "tablero_produccion_solo_pendiente"
+_TABLERO_SESSION_MODO = "tablero_produccion_modo"
+_TABLERO_MODOS = frozenset({"par", "pack"})
+_TABLERO_MODO_DEFAULT = "par"
 
 
 def _resolver_solo_urgente_tablero(request) -> bool:
@@ -4786,15 +4789,33 @@ def _resolver_solo_pendiente_tablero(request) -> bool:
     return _resolver_solo_urgente_tablero(request)
 
 
+def _resolver_modo_tablero(request) -> str:
+    """Lee ``modo`` (par|pack) de GET (persiste en sesión) o sesión/default ``par``."""
+    raw = (request.GET.get("modo") or "").strip().lower()
+    if raw in _TABLERO_MODOS:
+        request.session[_TABLERO_SESSION_MODO] = raw
+        return raw
+    saved = (request.session.get(_TABLERO_SESSION_MODO) or "").strip().lower()
+    if saved in _TABLERO_MODOS:
+        return saved
+    return _TABLERO_MODO_DEFAULT
+
+
 def _redirect_tablero_produccion(request, query_string: str | None = None):
-    """Redirect al tablero preservando solo_urgente, marcas y query opcional."""
+    """Redirect al tablero preservando solo_urgente, modo, presentacion, marcas y query."""
     from urllib.parse import parse_qsl, urlencode
+
+    from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
 
     url = reverse("mpr:tablero_produccion")
     params = dict(parse_qsl(query_string, keep_blank_values=True)) if query_string else {}
     if "solo_urgente" not in params and "solo_pendiente" not in params:
         solo = _resolver_solo_urgente_tablero(request)
         params["solo_urgente"] = "1" if solo else "0"
+    if "modo" not in params:
+        params["modo"] = _resolver_modo_tablero(request)
+    if "presentacion" not in params:
+        params["presentacion"] = resolver_modo_presentacion_operativa(request)
     params.pop("marcas_incluidos", None)
     pairs = [(k, v) for k, v in params.items()]
     pairs.extend(_marcas_urlencode_pairs(_parse_marcas_incluidos(request)))
@@ -4826,9 +4847,8 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
         marcas_incluidos = _parse_marcas_incluidos(request)
         # modo=par|pack — par (default) explota BOM por componente; pack consolida
         # por artículo pack terminado (paridad BEST PCP Producción) sin explosión BOM.
-        modo_tablero = (request.GET.get("modo") or "").strip().lower()
-        if modo_tablero not in ("par", "pack"):
-            modo_tablero = "par"
+        # Persiste en sesión (mismo patrón que presentacion y solo_urgente).
+        modo_tablero = _resolver_modo_tablero(request)
         listar_fn = listar_tablero_pack if modo_tablero == "pack" else listar_tablero_por_articulo
         try:
             filas = listar_fn(
@@ -6300,13 +6320,6 @@ class EnviarProduccionLoteView(MprLoginRequiredMixin, View):
             base_empresa, id_usuario, items, pendientes
         )
 
-        redirect_url = reverse("mpr:tablero_produccion")
-        if filtros_qs:
-            redirect_url += "?" + filtros_qs
-        else:
-            solo = _resolver_solo_urgente_tablero(request)
-            redirect_url += f"?solo_urgente={'1' if solo else '0'}"
-
         if ok:
             if creados:
                 sufijo = "s" if creados != 1 else ""
@@ -6319,7 +6332,7 @@ class EnviarProduccionLoteView(MprLoginRequiredMixin, View):
         else:
             dj_messages.error(request, error or "Error al registrar envíos.")
 
-        return redirect(redirect_url)
+        return _redirect_tablero_produccion(request, filtros_qs or None)
 
 
 # =============================================================================

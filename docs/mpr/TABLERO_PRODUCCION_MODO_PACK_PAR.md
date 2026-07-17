@@ -56,6 +56,20 @@ El toggle **Pack|Par** preserva `fecha_desde/hasta`, `solo_urgente`, marcas y
 `presentacion` (docenas/pares). El toggle **Docenas|Pares** y el filtro *Solo urgentes*
 preservan a su vez `modo`.
 
+### Último estado en sesión (17/07/2026)
+
+Además de la query string, el tablero **persiste en sesión** el último estado de:
+
+| Preferencia | Clave de sesión | Default |
+|-------------|-----------------|---------|
+| Pack \| Par | `tablero_produccion_modo` | `par` |
+| Docenas \| Pares | `mpr_presentacion_cantidad` | `docenas` |
+| Solo urgentes | `tablero_produccion_solo_urgente` | `true` |
+
+- Al abrir `?modo=pack` o `?presentacion=unidades`, se guarda en sesión.
+- Sin el param en la URL (F5, «Actualizar vista», redirect post-envío), se reutiliza el valor de sesión.
+- `_redirect_tablero_produccion` reinyecta `modo` y `presentacion` en la URL de retorno para que los toggles y bookmarks queden alineados.
+
 ## Presentación docenas/pares
 
 El toggle **Docenas | Pares** aplica en ambos modos: `enriquecer_filas_tablero_presentacion`
@@ -72,4 +86,11 @@ opera sobre las mismas claves (`dem_ped`, `dem_res`, `resta_total`, `resta_urgen
 - `TestTableroProduccionViewModo`: `?modo=pack|par|inválido` selecciona el servicio
   correcto y expone `modo_tablero` en el contexto (default `par`).
 
-Ejecutar: `docker exec Synap_app python manage.py test mpr.tests.test_tablero_pack_modo`
+`mpr/tests/test_tablero_solo_pendiente_sesion.py`:
+
+- `TestModoTableroSesion`: `?modo=pack` persiste; GET sin `modo` reusa sesión;
+  valor inválido no pisa sesión; `_redirect_tablero_produccion` reinyecta
+  `modo` y `presentacion`.
+
+Ejecutar:
+`docker exec Synap_app python manage.py test mpr.tests.test_tablero_pack_modo mpr.tests.test_tablero_solo_pendiente_sesion`
