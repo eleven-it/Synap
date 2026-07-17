@@ -130,8 +130,8 @@ class TestBuscarUsuariosJerarquia(unittest.TestCase):
                 "nombre_usuario": "Juan",
                 "apellido_usuario": "Perez",
                 "cod_viajante": 10,
+                "nombre_puesto": "Supervisor",
                 "nombre_viajante": "Juan V",
-                "permiso_supervisor_venta": "Si",
             },
             {
                 "id_usuario": 2,
@@ -139,13 +139,13 @@ class TestBuscarUsuariosJerarquia(unittest.TestCase):
                 "nombre_usuario": "Juan",
                 "apellido_usuario": "Bis",
                 "cod_viajante": 10,
+                "nombre_puesto": "Supervisor",
                 "nombre_viajante": "Juan V",
-                "permiso_supervisor_venta": "No",
             },
         ]
         cursor.description = [
             ("id_usuario",), ("cod_usuario",), ("nombre_usuario",), ("apellido_usuario",),
-            ("cod_viajante",), ("nombre_viajante",), ("permiso_supervisor_venta",),
+            ("cod_viajante",), ("nombre_puesto",), ("nombre_viajante",),
         ]
         conn = MagicMock()
         conn.cursor.return_value = cursor
@@ -153,8 +153,65 @@ class TestBuscarUsuariosJerarquia(unittest.TestCase):
         pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
         mock_pool_fn.return_value = pool
 
-        rows = buscar_usuarios_jerarquia("emp1", "juan")
+        rows = buscar_usuarios_jerarquia("emp1", "juan", rol="gerente")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["cod_viajante"], 10)
-        self.assertIn("Juan", rows[0]["etiqueta"])
-        self.assertIn("vía. 10", rows[0]["etiqueta"])
+        self.assertEqual(rows[0]["etiqueta"], "Juan Perez")
+        self.assertNotIn("@", rows[0]["etiqueta"])
+        self.assertNotIn("vía", rows[0]["etiqueta"])
+
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_gerente_excluye_puestos_no_habilitados(self, mock_pool_fn):
+        from ecom.services.jerarquia_comercial import buscar_usuarios_jerarquia
+
+        pool = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {
+                "id_usuario": 1,
+                "cod_usuario": "dep",
+                "nombre_usuario": "Ana",
+                "apellido_usuario": "Depo",
+                "cod_viajante": 5,
+                "nombre_puesto": "Depósito",
+                "nombre_viajante": "",
+            },
+            {
+                "id_usuario": 2,
+                "cod_usuario": "ven",
+                "nombre_usuario": "Beto",
+                "apellido_usuario": "Venta",
+                "cod_viajante": 6,
+                "nombre_puesto": "Ventas",
+                "nombre_viajante": "",
+            },
+        ]
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+
+        rows = buscar_usuarios_jerarquia("emp1", "", rol="supervisor")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["etiqueta"], "Beto Venta")
+
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_vendedor_busca_viajantes(self, mock_pool_fn):
+        from ecom.services.jerarquia_comercial import buscar_usuarios_jerarquia
+
+        pool = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {"cod_viajante": 21, "nombre_viajante": "Pedro Viajante"},
+        ]
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+
+        rows = buscar_usuarios_jerarquia("emp1", "Pedro", rol="vendedor")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["etiqueta"], "Pedro Viajante")
+        self.assertIsNone(rows[0]["id_usuario"])
