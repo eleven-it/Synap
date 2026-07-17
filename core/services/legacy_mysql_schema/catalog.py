@@ -1833,15 +1833,15 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
                 """
                 CREATE TABLE ecom_org_gerente_supervisor (
                     id BIGINT NOT NULL AUTO_INCREMENT,
-                    cod_gerente INT NOT NULL COMMENT 'CodViajante gerente',
-                    cod_supervisor INT NOT NULL COMMENT 'CodViajante supervisor (único activo)',
+                    cod_gerente INT NOT NULL COMMENT 'Snapshot CodViajante gerente',
+                    cod_supervisor INT NOT NULL COMMENT 'Snapshot CodViajante supervisor',
                     id_usuario_gerente INT NULL COMMENT 'usuarios.id_usuario gerente seleccionado',
                     id_usuario_supervisor INT NULL COMMENT 'usuarios.id_usuario supervisor seleccionado',
                     activo VARCHAR(3) NOT NULL DEFAULT 'Si' COMMENT 'Si / No',
                     creado_en DATETIME NOT NULL,
                     actualizado_en DATETIME NOT NULL,
                     PRIMARY KEY (id),
-                    UNIQUE KEY uq_eogs_supervisor_activo (cod_supervisor, activo),
+                    UNIQUE KEY uq_eogs_usuario_supervisor_activo (id_usuario_supervisor, activo),
                     INDEX idx_eogs_gerente (cod_gerente),
                     INDEX idx_eogs_supervisor (cod_supervisor)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -1874,20 +1874,52 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
             _append_migration(
                 applied, failed, True, "ecom_org_gerente_supervisor.id_usuario_supervisor"
             )
+        tbl_eogs = nombre_tabla_real(cursor, "ecom_org_gerente_supervisor") or "ecom_org_gerente_supervisor"
+        tbl_eogs_esc = tbl_eogs.replace("`", "``")
+        # Los vínculos históricos solo se pueden identificar sin ambigüedad cuando
+        # el CodViajante pertenece a un único usuario activo.
+        cursor.execute(
+            f"""
+            UPDATE `{tbl_eogs_esc}` gs
+            JOIN (
+                SELECT CodViajante, MIN(id_usuario) AS id_usuario
+                FROM usuarios
+                WHERE (baja_usuario IS NULL OR baja_usuario <> 'Si')
+                  AND CodViajante IS NOT NULL
+                GROUP BY CodViajante
+                HAVING COUNT(*) = 1
+            ) u ON u.CodViajante = gs.cod_supervisor
+            SET gs.id_usuario_supervisor = u.id_usuario
+            WHERE gs.id_usuario_supervisor IS NULL
+            """
+        )
+        _append_migration(applied, failed, True, "backfill id_usuario_supervisor GS no ambiguo")
+        if _indice_existe(cursor, tbl_eogs, "uq_eogs_supervisor_activo"):
+            cursor.execute(f"ALTER TABLE `{tbl_eogs_esc}` DROP INDEX uq_eogs_supervisor_activo")
+            _append_migration(applied, failed, True, "DROP INDEX uq_eogs_supervisor_activo")
+        if not _indice_existe(cursor, tbl_eogs, "uq_eogs_usuario_supervisor_activo"):
+            cursor.execute(
+                f"""
+                ALTER TABLE `{tbl_eogs_esc}`
+                ADD UNIQUE KEY uq_eogs_usuario_supervisor_activo
+                    (id_usuario_supervisor, activo)
+                """
+            )
+            _append_migration(applied, failed, True, "ADD UNIQUE uq_eogs_usuario_supervisor_activo")
 
         if not _tabla_existe(cursor, "ecom_org_supervisor_vendedor"):
             cursor.execute(
                 """
                 CREATE TABLE ecom_org_supervisor_vendedor (
                     id BIGINT NOT NULL AUTO_INCREMENT,
-                    cod_supervisor INT NOT NULL COMMENT 'CodViajante supervisor',
+                    cod_supervisor INT NOT NULL COMMENT 'Snapshot CodViajante supervisor',
                     cod_vendedor INT NOT NULL COMMENT 'CodViajante vendedor',
                     id_usuario_supervisor INT NULL COMMENT 'usuarios.id_usuario supervisor seleccionado',
                     activo VARCHAR(3) NOT NULL DEFAULT 'Si' COMMENT 'Si / No',
                     creado_en DATETIME NOT NULL,
                     actualizado_en DATETIME NOT NULL,
                     PRIMARY KEY (id),
-                    UNIQUE KEY uq_eosv_par_activo (cod_supervisor, cod_vendedor, activo),
+                    UNIQUE KEY uq_eosv_usuario_vendedor_activo (id_usuario_supervisor, cod_vendedor, activo),
                     INDEX idx_eosv_supervisor (cod_supervisor),
                     INDEX idx_eosv_vendedor (cod_vendedor)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -1897,25 +1929,6 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
             _append_migration(applied, failed, True, "CREATE TABLE ecom_org_supervisor_vendedor")
         else:
             _append_migration(applied, failed, True, "ecom_org_supervisor_vendedor ya existe (omitido)")
-
-        tbl_eosv = nombre_tabla_real(cursor, "ecom_org_supervisor_vendedor") or "ecom_org_supervisor_vendedor"
-        tbl_eosv_esc = tbl_eosv.replace("`", "``")
-        if _indice_existe(cursor, tbl_eosv, "uq_eosv_vendedor_activo"):
-            cursor.execute(f"ALTER TABLE `{tbl_eosv_esc}` DROP INDEX uq_eosv_vendedor_activo")
-            _append_migration(applied, failed, True, "DROP INDEX uq_eosv_vendedor_activo")
-        else:
-            _append_migration(applied, failed, True, "uq_eosv_vendedor_activo ausente (omitido)")
-
-        if not _indice_existe(cursor, tbl_eosv, "uq_eosv_par_activo"):
-            cursor.execute(
-                f"""
-                ALTER TABLE `{tbl_eosv_esc}`
-                ADD UNIQUE KEY uq_eosv_par_activo (cod_supervisor, cod_vendedor, activo)
-                """
-            )
-            _append_migration(applied, failed, True, "ADD UNIQUE uq_eosv_par_activo")
-        else:
-            _append_migration(applied, failed, True, "uq_eosv_par_activo ya existe (omitido)")
 
         if not _columna_existe(cursor, "ecom_org_supervisor_vendedor", "id_usuario_supervisor"):
             cursor.execute(
@@ -1928,6 +1941,46 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
             _append_migration(
                 applied, failed, True, "ecom_org_supervisor_vendedor.id_usuario_supervisor"
             )
+
+        tbl_eosv = nombre_tabla_real(cursor, "ecom_org_supervisor_vendedor") or "ecom_org_supervisor_vendedor"
+        tbl_eosv_esc = tbl_eosv.replace("`", "``")
+        if _indice_existe(cursor, tbl_eosv, "uq_eosv_vendedor_activo"):
+            cursor.execute(f"ALTER TABLE `{tbl_eosv_esc}` DROP INDEX uq_eosv_vendedor_activo")
+            _append_migration(applied, failed, True, "DROP INDEX uq_eosv_vendedor_activo")
+        else:
+            _append_migration(applied, failed, True, "uq_eosv_vendedor_activo ausente (omitido)")
+
+        if _indice_existe(cursor, tbl_eosv, "uq_eosv_par_activo"):
+            cursor.execute(f"ALTER TABLE `{tbl_eosv_esc}` DROP INDEX uq_eosv_par_activo")
+            _append_migration(applied, failed, True, "DROP INDEX uq_eosv_par_activo")
+        if not _indice_existe(cursor, tbl_eosv, "uq_eosv_usuario_vendedor_activo"):
+            cursor.execute(
+                f"""
+                ALTER TABLE `{tbl_eosv_esc}`
+                ADD UNIQUE KEY uq_eosv_usuario_vendedor_activo
+                    (id_usuario_supervisor, cod_vendedor, activo)
+                """
+            )
+            _append_migration(applied, failed, True, "ADD UNIQUE uq_eosv_usuario_vendedor_activo")
+        else:
+            _append_migration(applied, failed, True, "uq_eosv_usuario_vendedor_activo ya existe (omitido)")
+
+        cursor.execute(
+            f"""
+            UPDATE `{tbl_eosv_esc}` sv
+            JOIN (
+                SELECT CodViajante, MIN(id_usuario) AS id_usuario
+                FROM usuarios
+                WHERE (baja_usuario IS NULL OR baja_usuario <> 'Si')
+                  AND CodViajante IS NOT NULL
+                GROUP BY CodViajante
+                HAVING COUNT(*) = 1
+            ) u ON u.CodViajante = sv.cod_supervisor
+            SET sv.id_usuario_supervisor = u.id_usuario
+            WHERE sv.id_usuario_supervisor IS NULL
+            """
+        )
+        _append_migration(applied, failed, True, "backfill id_usuario_supervisor SV no ambiguo")
 
         if not _tabla_existe(cursor, "ecom_aprobacion_evento"):
             cursor.execute(

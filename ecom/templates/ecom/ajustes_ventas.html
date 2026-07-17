@@ -310,7 +310,7 @@
 
               <!-- Supervisores del gerente -->
               <div class="ml-5 border-l-2 border-slate-100 pb-2 pl-2 dark:border-slate-700">
-                <template x-for="sup in ger.supervisores" :key="'gs-' + ger.cod + '-' + sup.cod">
+                <template x-for="sup in ger.supervisores" :key="'gs-' + (ger.id_usuario ?? ger.cod) + '-' + (sup.id_usuario ?? sup.cod)">
                   <div class="mt-1">
                     <div class="flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40">
                       <span class="material-icons text-[18px] text-indigo-500 dark:text-indigo-400" aria-hidden="true">supervisor_account</span>
@@ -328,7 +328,7 @@
                     </div>
                     <!-- Vendedores del supervisor -->
                     <div class="ml-5 border-l-2 border-slate-100 pl-2 dark:border-slate-700">
-                      <template x-for="ven in sup.vendedores" :key="'sv-' + sup.cod + '-' + ven.cod">
+                      <template x-for="ven in sup.vendedores" :key="'sv-' + (sup.id_usuario ?? sup.cod) + '-' + ven.cod">
                         <div class="mt-1 flex flex-wrap items-center gap-2 rounded-lg px-3 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-900/40">
                           <span class="material-icons text-[17px] text-amber-500 dark:text-amber-400" aria-hidden="true">storefront</span>
                           <span class="min-w-0 flex-1 truncate text-sm text-slate-600 dark:text-slate-300" x-text="ven.etiqueta"></span>
@@ -464,6 +464,10 @@
               <span class="material-icons text-base" aria-hidden="true">close</span>
             </button>
           </div>
+          <p x-show="altaJerarquia.modo === 'supervisor' || altaJerarquia.modo === 'supervisor_bajo_nuevo'"
+             class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            CodViajante 1 identifica usuarios placeholder, no vendedores. Los supervisores se distinguen por usuario; los vendedores son viajantes con código mayor a 1.
+          </p>
           <ul x-show="pick.panel.abierto && pick.panel.resultados.length" x-cloak id="listbox-panel"
               class="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
               role="listbox">
@@ -602,18 +606,18 @@ function ajustesVentasApp() {
       const datosSupervisor = {};
       const supConGerente = new Set();
       gs.forEach((v) => {
-        const g = v.cod_gerente;
-        const s = v.cod_supervisor;
+        const g = v.id_usuario_gerente ?? v.cod_gerente;
+        const s = v.id_usuario_supervisor ?? v.cod_supervisor;
         if (g === null || g === undefined) return;
         if (!(g in supPorGerente)) { supPorGerente[g] = []; ordenGerentes.push(g); }
         datosGerente[g] = {
-          cod: g,
-          etiqueta: v.etiqueta_gerente || etiq(g),
+          cod: v.cod_gerente,
+          etiqueta: v.etiqueta_gerente || etiq(v.cod_gerente),
           id_usuario: v.id_usuario_gerente ?? null,
         };
         const supervisor = {
-          cod: s,
-          etiqueta: v.etiqueta_supervisor || etiq(s),
+          cod: v.cod_supervisor,
+          etiqueta: v.etiqueta_supervisor || etiq(v.cod_supervisor),
           id_usuario: v.id_usuario_supervisor ?? null,
         };
         supPorGerente[g].push(supervisor);
@@ -623,13 +627,13 @@ function ajustesVentasApp() {
       const venPorSup = {};
       const ordenSupSv = [];
       sv.forEach((v) => {
-        const s = v.cod_supervisor;
+        const s = v.id_usuario_supervisor ?? v.cod_supervisor;
         if (s === null || s === undefined) return;
         if (!(s in venPorSup)) { venPorSup[s] = []; ordenSupSv.push(Number(s)); }
         if (!(s in datosSupervisor)) {
           datosSupervisor[s] = {
-            cod: s,
-            etiqueta: v.etiqueta_supervisor || etiq(s),
+            cod: v.cod_supervisor,
+            etiqueta: v.etiqueta_supervisor || etiq(v.cod_supervisor),
             id_usuario: v.id_usuario_supervisor ?? null,
           };
         }
@@ -639,8 +643,8 @@ function ajustesVentasApp() {
         });
       });
       const mapSup = (sup) => ({
-        ...(datosSupervisor[sup.cod] || sup),
-        vendedores: venPorSup[sup.cod] || [],
+        ...(datosSupervisor[sup.id_usuario ?? sup.cod] || sup),
+        vendedores: venPorSup[sup.id_usuario ?? sup.cod] || [],
       });
       const gerentes = ordenGerentes.map((g) => ({
         ...(datosGerente[g] || { cod: g, etiqueta: etiq(g), id_usuario: null }),
@@ -933,6 +937,20 @@ function ajustesVentasApp() {
       if (!p || !p.resultados.length) return;
       this.elegirPick(campo, p.resultados[p.idx] || p.resultados[0]);
     },
+    filtrarSupervisoresDisponibles(resultados) {
+      if (!['supervisor', 'supervisor_bajo_nuevo'].includes(this.altaJerarquia.modo)) {
+        return resultados;
+      }
+      const codigosOcupados = new Set(
+        (this.arbol.vinculos_gs || [])
+        .map((vinculo) => Number(vinculo.id_usuario_supervisor))
+          .filter(Number.isFinite)
+      );
+      return resultados.filter((usuario) => {
+        const idUsuario = Number(usuario.id_usuario);
+        return Number.isFinite(idUsuario) && !codigosOcupados.has(idUsuario);
+      });
+    },
     async buscarUsuariosJerarquia(campo, opts = {}) {
       const p = this.pick[campo];
       if (!p || !this.urls.jerarquia_usuarios) return;
@@ -952,7 +970,8 @@ function ajustesVentasApp() {
           credentials: 'same-origin',
         });
         const data = await res.json();
-        p.resultados = (res.ok && data.ok) ? (data.results || []) : [];
+        const resultados = (res.ok && data.ok) ? (data.results || []) : [];
+        p.resultados = this.filtrarSupervisoresDisponibles(resultados);
       } catch (_) {
         p.resultados = [];
       } finally {
@@ -1135,9 +1154,10 @@ function ajustesVentasApp() {
       const padreNombre = padre ? (padre.etiqueta || ('Viajante ' + padre.cod)) : 'su superior';
       if (!window.confirm('¿Quitar a ' + nombre + ' de la jerarquía? Dejará de reportar a ' + padreNombre + '.')) return;
       if (tipo === 'supervisor') {
-        await this.jerarquiaAccion('desactivar_gerente_supervisor', { cod_supervisor: nodo.cod });
+        await this.jerarquiaAccion('desactivar_gerente_supervisor', { id_usuario_supervisor: nodo.id_usuario, cod_supervisor: nodo.cod });
       } else {
         await this.jerarquiaAccion('desactivar_supervisor_vendedor', {
+          id_usuario_supervisor: padre.id_usuario,
           cod_supervisor: padre.cod,
           cod_vendedor: nodo.cod,
         });

@@ -57,6 +57,11 @@ def _cod_aprobador_desde_ctx(ctx: Dict[str, Any]) -> Optional[int]:
     )
 
 
+def _id_aprobador_desde_ctx(ctx: Dict[str, Any]) -> Optional[int]:
+    user = ctx.get("user") if isinstance(ctx.get("user"), dict) else {}
+    return to_int_or_none(ctx.get("id_usuario") or user.get("id_usuario"))
+
+
 def _tiene_permiso_aprobar(sess_user: Dict[str, Any]) -> bool:
     if puede_ver_todos_pedidos(sess_user):
         return True
@@ -269,6 +274,37 @@ def _routing_aprobadores(cursor, cod_vendedor: int) -> Tuple[List[int], List[int
     return supervisores, gerentes
 
 
+def _routing_aprobadores_por_usuario(cursor, cod_vendedor: int) -> Tuple[List[int], List[int]]:
+    """Identidades de aprobadores; evita confundir usuarios con vía placeholder."""
+    cursor.execute(
+        """SELECT DISTINCT sv.id_usuario_supervisor
+           FROM ecom_org_supervisor_vendedor sv
+           WHERE sv.cod_vendedor = %s AND sv.activo = 'Si'
+             AND sv.id_usuario_supervisor IS NOT NULL""",
+        (cod_vendedor,),
+    )
+    supervisores = [
+        to_int_or_none(row.get("id_usuario_supervisor") if isinstance(row, dict) else row[0])
+        for row in cursor.fetchall() or []
+    ]
+    supervisores = [uid for uid in supervisores if uid is not None]
+    if not supervisores:
+        return [], []
+    ph = ",".join(["%s"] * len(supervisores))
+    cursor.execute(
+        f"""SELECT DISTINCT id_usuario_gerente
+            FROM ecom_org_gerente_supervisor
+            WHERE id_usuario_supervisor IN ({ph}) AND activo = 'Si'
+              AND id_usuario_gerente IS NOT NULL""",
+        tuple(supervisores),
+    )
+    gerentes = [
+        to_int_or_none(row.get("id_usuario_gerente") if isinstance(row, dict) else row[0])
+        for row in cursor.fetchall() or []
+    ]
+    return sorted(set(supervisores)), sorted({uid for uid in gerentes if uid is not None})
+
+
 def _codigos_routing(valor: Any) -> List[int]:
     """Normaliza el contrato previo escalar para callers y mocks existentes."""
     if valor is None:
@@ -333,7 +369,8 @@ def puede_aprobar_pedido(
         return False
 
     aprobador = _cod_aprobador_desde_ctx(sess_user)
-    if aprobador is None:
+    id_aprobador = _id_aprobador_desde_ctx(sess_user)
+    if aprobador is None and id_aprobador is None:
         return False
     if puede_ver_todos_pedidos(sess_user):
         return True
@@ -343,6 +380,10 @@ def puede_aprobar_pedido(
         with pool.get_connection(base_empresa) as conn:
             cursor = conn.cursor()
             try:
+                if id_aprobador is not None:
+                    sup_ids, ger_ids = _routing_aprobadores_por_usuario(cursor, cv_ped)
+                    escalado = _ultimo_evento_escalado(cursor, to_int_or_none(ped.get("CodigoMovimiento")) or 0)
+                    return id_aprobador in (ger_ids if escalado else sup_ids + ger_ids)
                 sup, ger = _routing_aprobadores(cursor, cv_ped)
                 escalado = _ultimo_evento_escalado(cursor, to_int_or_none(ped.get("CodigoMovimiento")) or 0)
                 return _aprobador_autorizado_para_nivel(
@@ -417,14 +458,20 @@ def resolver(
                 escalado = _ultimo_evento_escalado(cursor, cod_mov)
 
                 if sess_user and not ver_todos:
-                    if not _aprobador_autorizado_para_nivel(
-                        aprobador,
-                        cod_vendedor=cv_ped,
-                        supervisor=sup,
-                        gerente=ger,
-                        escalado=escalado,
-                        ver_todos=False,
-                    ):
+                    id_aprobador = _id_aprobador_desde_ctx(sess_user)
+                    if id_aprobador is not None:
+                        sup_ids, ger_ids = _routing_aprobadores_por_usuario(cursor, cv_ped)
+                        permitido = id_aprobador in (ger_ids if escalado else sup_ids + ger_ids)
+                    else:
+                        permitido = _aprobador_autorizado_para_nivel(
+                            aprobador,
+                            cod_vendedor=cv_ped,
+                            supervisor=sup,
+                            gerente=ger,
+                            escalado=escalado,
+                            ver_todos=False,
+                        )
+                    if not permitido:
                         return False, "No corresponde aprobar este pedido en su nivel jerárquico.", None
 
                 ahora = _ahora()

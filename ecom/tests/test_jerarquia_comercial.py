@@ -80,8 +80,9 @@ class TestVinculosMultiples(unittest.TestCase):
         pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
         mock_pool_fn.return_value = pool
 
-        ok_primero, _ = vincular_supervisor_vendedor("emp1", 10, 30)
-        ok_segundo, _ = vincular_supervisor_vendedor("emp1", 20, 30)
+        with patch("ecom.services.jerarquia_comercial._cod_viajante_usuario", side_effect=[10, 20]):
+            ok_primero, _ = vincular_supervisor_vendedor("emp1", 10, 30, id_usuario_supervisor=101)
+            ok_segundo, _ = vincular_supervisor_vendedor("emp1", 20, 30, id_usuario_supervisor=102)
 
         self.assertTrue(ok_primero)
         self.assertTrue(ok_segundo)
@@ -104,7 +105,8 @@ class TestVinculosMultiples(unittest.TestCase):
         pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
         mock_pool_fn.return_value = pool
 
-        ok, msg = vincular_supervisor_vendedor("emp1", 10, 30)
+        with patch("ecom.services.jerarquia_comercial._cod_viajante_usuario", return_value=10):
+            ok, msg = vincular_supervisor_vendedor("emp1", 10, 30, id_usuario_supervisor=101)
         self.assertTrue(ok)
         self.assertIn("reactivado", msg.lower())
         conn.commit.assert_called_once()
@@ -121,7 +123,8 @@ class TestVinculosMultiples(unittest.TestCase):
         pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
         mock_pool_fn.return_value = pool
 
-        ok, msg = vincular_gerente_supervisor("emp1", 1, 2)
+        with patch("ecom.services.jerarquia_comercial._cod_viajante_usuario", side_effect=[1, 2]):
+            ok, msg = vincular_gerente_supervisor("emp1", 1, 2, id_usuario_gerente=41, id_usuario_supervisor=72)
         self.assertTrue(ok)
         conn.commit.assert_called_once()
 
@@ -137,15 +140,65 @@ class TestVinculosMultiples(unittest.TestCase):
         pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
         mock_pool_fn.return_value = pool
 
-        ok, _ = vincular_gerente_supervisor(
-            "emp1", 1, 2, id_usuario_gerente=41, id_usuario_supervisor=72
-        )
+        with patch("ecom.services.jerarquia_comercial._cod_viajante_usuario", side_effect=[1, 2]):
+            ok, _ = vincular_gerente_supervisor(
+                "emp1", 1, 2, id_usuario_gerente=41, id_usuario_supervisor=72
+            )
 
         self.assertTrue(ok)
         sql, params = cursor.execute.call_args_list[-1][0]
         self.assertIn("id_usuario_gerente", sql)
         self.assertIn("id_usuario_supervisor", sql)
         self.assertEqual(params[:4], (1, 2, 41, 72))
+
+    @patch("ecom.services.jerarquia_comercial._validar_sin_ciclo_gerente_supervisor", return_value=(True, ""))
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_vincular_gs_permite_otro_usuario_con_mismo_viajante(
+        self, mock_pool_fn, _ciclo
+    ):
+        pool = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchone.return_value = None
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+
+        with patch("ecom.services.jerarquia_comercial._cod_viajante_usuario", side_effect=[1, 1]):
+            ok, msg = vincular_gerente_supervisor(
+                "emp1", 1, 1, id_usuario_gerente=41, id_usuario_supervisor=73
+            )
+
+        self.assertTrue(ok)
+        self.assertTrue(conn.commit.called)
+
+    @patch("ecom.services.jerarquia_comercial._validar_sin_ciclo_gerente_supervisor", return_value=(True, ""))
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_vincular_gs_permite_segundo_supervisor_con_otro_viajante(
+        self, mock_pool_fn, _ciclo
+    ):
+        pool = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchone.return_value = None
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+
+        with patch("ecom.services.jerarquia_comercial._cod_viajante_usuario", side_effect=[1, 1]):
+            ok, _ = vincular_gerente_supervisor(
+                "emp1", 1, 1, id_usuario_gerente=41, id_usuario_supervisor=73
+            )
+
+        self.assertTrue(ok)
+        inserts = [
+            llamada for llamada in cursor.execute.call_args_list
+            if "INSERT INTO ecom_org_gerente_supervisor" in llamada[0][0]
+        ]
+        self.assertEqual(len(inserts), 1)
+        self.assertEqual(inserts[0][0][1][:4], (1, 1, 41, 73))
 
     @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
     def test_vincular_sv_guarda_id_usuario_supervisor(self, mock_pool_fn):
@@ -158,9 +211,10 @@ class TestVinculosMultiples(unittest.TestCase):
         pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
         mock_pool_fn.return_value = pool
 
-        ok, _ = vincular_supervisor_vendedor(
-            "emp1", 2, 30, id_usuario_supervisor=72
-        )
+        with patch("ecom.services.jerarquia_comercial._cod_viajante_usuario", return_value=2):
+            ok, _ = vincular_supervisor_vendedor(
+                "emp1", 2, 30, id_usuario_supervisor=72
+            )
 
         self.assertTrue(ok)
         sql, params = cursor.execute.call_args_list[-1][0]
@@ -390,5 +444,5 @@ class TestEtiquetasArbol(unittest.TestCase):
         rows = buscar_usuarios_jerarquia("emp1", "", rol="vendedor")
 
         self.assertEqual([row["nombre_viajante"] for row in rows], [
-            "Vendedor 1", "Vendedor 2", "Vendedor 10",
+            "Vendedor 2", "Vendedor 10",
         ])
