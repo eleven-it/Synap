@@ -99,7 +99,7 @@ Orden de las tarjetas en `ecom/ajustes_ventas.html` (canon slate/sky, toggles Ac
    bajo un mismo gerente. Los vendedores se seleccionan exclusivamente desde
    `viajantes` con código mayor a `1`.
 
-   **Quitar:** confirmación ligera con `window.confirm`: *"¿Quitar a {Nombre} de la jerarquía? Dejará de reportar a {Padre}."*
+   **Quitar:** modal Synap de confirmación (overlay slate, ícono `link_off`, Cancelar / Quitar rojo) en lugar de `window.confirm`; cubre quitar individual y *Quitar seleccionados*.
 
    Gerente/Supervisor: búsqueda de **usuarios** con puesto **Supervisor**, **Administrador**/**Administración** o **Ventas** (chip *Usuario*, ícono `badge`). Vendedor: catálogo **viajantes** (chip *Viajante*, ícono `storefront`); se excluyen nombres vacíos, `-Ninguno-` o solo guiones/placeholders.
    - **Autocomplete:** la etiqueta (dropdown e input seleccionado) muestra **solo nombre y apellido** (usuarios) o el **Nombre del viajante** (vendedor), nunca `@cod` ni `· vía. N`. Los nombres tipo `Vendedor 1`, `Vendedor 2`, … `Vendedor 10` se ordenan de forma natural ascendente; los restantes se ordenan alfabéticamente sin distinguir mayúsculas. La **flecha abajo** (o el chevron `expand_more`) lista **todos** los resultados (`q=''`, `limit=50`); flecha arriba navega o abre la lista completa. Accesible con `role="combobox"`, `aria-expanded`, `aria-activedescendant` y scroll al ítem resaltado.

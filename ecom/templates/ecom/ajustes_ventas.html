@@ -625,6 +625,48 @@
       </div>
     </div>
 
+    <!-- Modal Synap — confirmación Quitar (reemplaza window.confirm) -->
+    <div x-show="confirmQuitar.abierto" x-cloak
+         class="fixed inset-0 z-[60] overflow-y-auto"
+         role="dialog" aria-modal="true" aria-labelledby="jerarquia-confirm-quitar-titulo"
+         @keydown.escape.window="!confirmQuitar.busy && cerrarConfirmQuitar()">
+      <div class="flex min-h-full items-center justify-center p-4">
+        <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" aria-hidden="true"
+             @click="!confirmQuitar.busy && cerrarConfirmQuitar()"></div>
+        <div class="relative w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+             @click.stop>
+          <div class="flex items-start gap-4">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-100 dark:bg-red-950/40" aria-hidden="true">
+              <span class="material-icons text-red-600 dark:text-red-400">link_off</span>
+            </span>
+            <div class="min-w-0 flex-1">
+              <h3 id="jerarquia-confirm-quitar-titulo"
+                  class="text-base font-semibold text-slate-800 dark:text-slate-100"
+                  x-text="confirmQuitar.titulo"></h3>
+              <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-300"
+                 x-text="confirmQuitar.mensaje"></p>
+              <p x-show="confirmQuitar.detalle" x-cloak
+                 class="mt-1.5 text-xs text-slate-500 dark:text-slate-400"
+                 x-text="confirmQuitar.detalle"></p>
+              <div class="mt-5 flex flex-wrap justify-end gap-2">
+                <button type="button" @click="cerrarConfirmQuitar()" :disabled="confirmQuitar.busy"
+                        class="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 disabled:opacity-60 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-800">
+                  Cancelar
+                </button>
+                <button type="button" @click="ejecutarConfirmQuitar()" :disabled="confirmQuitar.busy"
+                        class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 disabled:opacity-60 dark:bg-red-700 dark:hover:bg-red-600 dark:focus-visible:ring-offset-slate-800">
+                  <span class="material-icons text-base" aria-hidden="true"
+                        x-text="confirmQuitar.busy ? 'autorenew' : 'link_off'"
+                        :class="confirmQuitar.busy && 'animate-spin'"></span>
+                  <span x-text="confirmQuitar.busy ? 'Quitando…' : 'Quitar'"></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <p class="mt-4 text-center">
       <a :href="urls.hub" class="text-xs font-medium text-sky-600 hover:text-sky-800 dark:text-sky-400">Volver al hub de pedidos</a>
     </p>
@@ -653,6 +695,19 @@ function ajustesVentasApp() {
     arbol: { vinculos_gs: [], vinculos_sv: [], gerentes: [], etiquetas: {} },
     supervisoresColapsados: {},
     vendedoresParaQuitar: {},
+    confirmQuitar: {
+      abierto: false,
+      busy: false,
+      titulo: '',
+      mensaje: '',
+      detalle: '',
+      modo: null,       // 'nodo' | 'batch'
+      tipo: null,       // 'supervisor' | 'vendedor' (modo nodo)
+      nodo: null,
+      padre: null,
+      sup: null,
+      cods: [],
+    },
     pick: {
       panel: { q: '', cod: null, id_usuario: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false, listadoCompleto: false },
     },
@@ -1343,44 +1398,114 @@ function ajustesVentasApp() {
       delete next[clave];
       this.vendedoresParaQuitar = next;
     },
-    async quitarVendedoresSeleccionados(sup) {
+    cerrarConfirmQuitar() {
+      if (this.confirmQuitar.busy) return;
+      this.confirmQuitar = {
+        abierto: false,
+        busy: false,
+        titulo: '',
+        mensaje: '',
+        detalle: '',
+        modo: null,
+        tipo: null,
+        nodo: null,
+        padre: null,
+        sup: null,
+        cods: [],
+      };
+    },
+    abrirConfirmQuitar(cfg) {
+      this.confirmQuitar = {
+        abierto: true,
+        busy: false,
+        titulo: cfg.titulo || 'Quitar de la jerarquía',
+        mensaje: cfg.mensaje || '',
+        detalle: cfg.detalle || '',
+        modo: cfg.modo || null,
+        tipo: cfg.tipo || null,
+        nodo: cfg.nodo || null,
+        padre: cfg.padre || null,
+        sup: cfg.sup || null,
+        cods: Array.isArray(cfg.cods) ? cfg.cods.slice() : [],
+      };
+    },
+    quitarVendedoresSeleccionados(sup) {
       const cods = this.seleccionQuitar(sup);
       if (!cods.length) return;
       const padreNombre = (sup && (sup.etiqueta || ('Viajante ' + sup.cod))) || 'el supervisor';
       const n = cods.length;
-      if (!window.confirm(
-        '¿Quitar ' + n + ' vendedor' + (n === 1 ? '' : 'es') +
-        ' de ' + padreNombre + '?'
-      )) return;
-      const ok = await this.jerarquiaAccion('desactivar_supervisor_vendedor', {
-        id_usuario_supervisor: sup.id_usuario,
-        cod_supervisor: sup.cod,
-        cod_vendedores: cods,
+      this.abrirConfirmQuitar({
+        modo: 'batch',
+        sup,
+        cods,
+        titulo: n === 1 ? 'Quitar vendedor' : 'Quitar vendedores',
+        mensaje: '¿Quitar ' + n + ' vendedor' + (n === 1 ? '' : 'es') + ' de ' + padreNombre + '?',
+        detalle: 'Solo se desactiva el vínculo con este supervisor; otros supervisores del mismo vendedor no se modifican.',
       });
-      if (ok) this.deseleccionarTodosVendedoresQuitar(sup);
     },
-    async quitarNodo(tipo, nodo, padre) {
+    quitarNodo(tipo, nodo, padre) {
       const nombre = nodo.etiqueta || ('Viajante ' + nodo.cod);
       const padreNombre = padre ? (padre.etiqueta || ('Viajante ' + padre.cod)) : 'su superior';
-      if (!window.confirm('¿Quitar a ' + nombre + ' de la jerarquía? Dejará de reportar a ' + padreNombre + '.')) return;
-      if (tipo === 'supervisor') {
-        await this.jerarquiaAccion('desactivar_gerente_supervisor', { id_usuario_supervisor: nodo.id_usuario, cod_supervisor: nodo.cod });
-      } else {
-        const ok = await this.jerarquiaAccion('desactivar_supervisor_vendedor', {
-          id_usuario_supervisor: padre.id_usuario,
-          cod_supervisor: padre.cod,
-          cod_vendedor: nodo.cod,
-        });
-        if (ok && padre) {
-          const clave = this._claveSupervisor(padre);
-          const n = Number(nodo.cod);
-          const filtrada = this.seleccionQuitar(padre).filter((c) => Number(c) !== n);
-          if (filtrada.length) {
-            this.vendedoresParaQuitar = { ...this.vendedoresParaQuitar, [clave]: filtrada };
+      this.abrirConfirmQuitar({
+        modo: 'nodo',
+        tipo,
+        nodo,
+        padre,
+        titulo: tipo === 'supervisor' ? 'Quitar supervisor' : 'Quitar vendedor',
+        mensaje: '¿Quitar a ' + nombre + ' de la jerarquía?',
+        detalle: 'Dejará de reportar a ' + padreNombre + '.',
+      });
+    },
+    async ejecutarConfirmQuitar() {
+      const c = this.confirmQuitar;
+      if (!c.abierto || c.busy) return;
+      c.busy = true;
+      try {
+        if (c.modo === 'batch') {
+          const sup = c.sup;
+          const cods = c.cods || [];
+          if (!sup || !cods.length) {
+            this.cerrarConfirmQuitar();
+            return;
+          }
+          const ok = await this.jerarquiaAccion('desactivar_supervisor_vendedor', {
+            id_usuario_supervisor: sup.id_usuario,
+            cod_supervisor: sup.cod,
+            cod_vendedores: cods,
+          });
+          if (ok) this.deseleccionarTodosVendedoresQuitar(sup);
+        } else if (c.modo === 'nodo') {
+          const { tipo, nodo, padre } = c;
+          if (!nodo) {
+            this.cerrarConfirmQuitar();
+            return;
+          }
+          if (tipo === 'supervisor') {
+            await this.jerarquiaAccion('desactivar_gerente_supervisor', {
+              id_usuario_supervisor: nodo.id_usuario,
+              cod_supervisor: nodo.cod,
+            });
           } else {
-            this.deseleccionarTodosVendedoresQuitar(padre);
+            const ok = await this.jerarquiaAccion('desactivar_supervisor_vendedor', {
+              id_usuario_supervisor: padre.id_usuario,
+              cod_supervisor: padre.cod,
+              cod_vendedor: nodo.cod,
+            });
+            if (ok && padre) {
+              const clave = this._claveSupervisor(padre);
+              const n = Number(nodo.cod);
+              const filtrada = this.seleccionQuitar(padre).filter((x) => Number(x) !== n);
+              if (filtrada.length) {
+                this.vendedoresParaQuitar = { ...this.vendedoresParaQuitar, [clave]: filtrada };
+              } else {
+                this.deseleccionarTodosVendedoresQuitar(padre);
+              }
+            }
           }
         }
+      } finally {
+        this.confirmQuitar.busy = false;
+        this.cerrarConfirmQuitar();
       }
     },
   };
