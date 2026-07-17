@@ -166,6 +166,9 @@ class MobilePathAllowedUnitTests(SimpleTestCase):
             mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/jerarquia/nodos/')
         )
         self.assertTrue(
+            mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/jerarquia/usuarios/')
+        )
+        self.assertTrue(
             mobile_path_allowed_for_level_a('/ecom/api/mayoristapp/aprobacion/123/aprobar/')
         )
 

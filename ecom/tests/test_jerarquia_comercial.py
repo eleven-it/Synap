@@ -114,3 +114,47 @@ class TestDesactivar(unittest.TestCase):
 
         ok, _ = desactivar_vinculo_supervisor_vendedor("emp1", 42)
         self.assertTrue(ok)
+
+
+class TestBuscarUsuariosJerarquia(unittest.TestCase):
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_busca_y_deduplica_por_viajante(self, mock_pool_fn):
+        from ecom.services.jerarquia_comercial import buscar_usuarios_jerarquia
+
+        pool = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {
+                "id_usuario": 1,
+                "cod_usuario": "juan",
+                "nombre_usuario": "Juan",
+                "apellido_usuario": "Perez",
+                "cod_viajante": 10,
+                "nombre_viajante": "Juan V",
+                "permiso_supervisor_venta": "Si",
+            },
+            {
+                "id_usuario": 2,
+                "cod_usuario": "juan2",
+                "nombre_usuario": "Juan",
+                "apellido_usuario": "Bis",
+                "cod_viajante": 10,
+                "nombre_viajante": "Juan V",
+                "permiso_supervisor_venta": "No",
+            },
+        ]
+        cursor.description = [
+            ("id_usuario",), ("cod_usuario",), ("nombre_usuario",), ("apellido_usuario",),
+            ("cod_viajante",), ("nombre_viajante",), ("permiso_supervisor_venta",),
+        ]
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+
+        rows = buscar_usuarios_jerarquia("emp1", "juan")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["cod_viajante"], 10)
+        self.assertIn("Juan", rows[0]["etiqueta"])
+        self.assertIn("vía. 10", rows[0]["etiqueta"])

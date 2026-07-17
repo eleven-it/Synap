@@ -12,6 +12,7 @@ from core.utils.administranet_types import to_int_or_none
 from ecom.catalogo_producto_relay_views import _session_base_empresa
 from ecom.permissions import EcomJerarquiaEditarPermission
 from ecom.services.jerarquia_comercial import (
+    buscar_usuarios_jerarquia,
     desactivar_vinculo_gerente_supervisor,
     desactivar_vinculo_supervisor_vendedor,
     listar_arbol_jerarquia,
@@ -75,3 +76,24 @@ class JerarquiaNodosAPIView(APIView):
         if not ok:
             return Response({"ok": False, "error": msg}, status=400)
         return Response({"ok": True, "message": msg, "arbol": listar_arbol_jerarquia(base)})
+
+
+class JerarquiaUsuariosAPIView(APIView):
+    """GET ``/ecom/api/mayoristapp/jerarquia/usuarios/?q=`` — búsqueda predictiva."""
+
+    permission_classes = [EcomJerarquiaEditarPermission]
+
+    def get(self, request: Request) -> Response:
+        base = _session_base_empresa(request)
+        if not base:
+            return Response({"ok": False, "error": "Sin base_empresa."}, status=400)
+        q = str(request.query_params.get("q") or "").strip()
+        limit = to_int_or_none(request.query_params.get("limit")) or 20
+        resultados = buscar_usuarios_jerarquia(base, q, limit=limit)
+        return Response(
+            {
+                "ok": True,
+                "results": resultados,
+                "total": len(resultados),
+            }
+        )

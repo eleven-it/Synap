@@ -98,6 +98,7 @@ _ECOM_MAYORISTAPP_API_NIVEL_A_SUFFIXES = (
     '/pedidos/hub/',
     '/pedidos/hub/archivar-draft/',
     '/jerarquia/nodos/',
+    '/jerarquia/usuarios/',
     '/aprobacion/',  # reservado fase aprobación comercial
 )
 

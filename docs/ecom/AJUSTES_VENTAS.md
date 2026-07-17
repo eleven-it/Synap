@@ -50,6 +50,8 @@ Servicio de lectura/escritura: `ecom.services.ecom_config_mysql` (`pedidos_valid
 | POST | `/ecom/api/mayoristapp/ajustes-ventas/` | `{ "validar_stock_pedidos": true \| false, "enviar_mail_confirmar_pedido": true \| false }` (al menos uno) |
 | GET | `/ecom/api/mayoristapp/ajustes/workflow/` | — |
 | POST | `/ecom/api/mayoristapp/ajustes/workflow/` | `{ "workflow_jerarquia_comercial": bool, "aprobacion_pedidos_activa": bool, "objetivos_en_pedidos": bool, "backorder_en_pedidos": bool, "umbral_monto": string, "umbral_desc_pie": string, "umbral_desc_renglon": string }` |
+| GET/POST | `/ecom/api/mayoristapp/jerarquia/nodos/` | ABM árbol (permiso `ecom.jerarquia.editar`) |
+| GET | `/ecom/api/mayoristapp/jerarquia/usuarios/?q=` | Búsqueda predictiva de usuarios con `CodViajante` para el ABM |
 
 ## Seed de parámetros
 
@@ -69,7 +71,7 @@ Orden de las tarjetas en `ecom/ajustes_ventas.html` (canon slate/sky, toggles Ac
 1. **Validación de stock** — toggle `validar_stock_pedidos`.
 2. **Correo al confirmar pedido** — toggle `enviar_mail_confirmar_pedido`. Nota UI: al confirmar un PED, si el cliente tiene email se encola el comprobante; requiere correo saliente configurado y el worker `process_ecom_mail_queue`. Se guarda junto a `validar_stock_pedidos` en el mismo POST a `api_ajustes_ventas`.
 3. **Workflow comercial** — flags/umbrales de aprobación y atajos del hub.
-4. **Jerarquía comercial** — ABM G→S→V (permiso `ecom.jerarquia.editar`).
+4. **Jerarquía comercial** — ABM G→S→V con **búsqueda predictiva de usuarios** (nombre, código, viajante). Solo usuarios activos con `CodViajante` > 0. El vínculo persiste códigos de viajante; la lista muestra etiquetas legibles. Permiso `ecom.jerarquia.editar`.
 
 ## Menú
 

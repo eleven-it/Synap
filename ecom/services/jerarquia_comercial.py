@@ -483,11 +483,205 @@ def listar_arbol_jerarquia(base_empresa: str) -> Dict[str, Any]:
         to_int_or_none(r.get("cod_supervisor")) == s for r in vinculos_gs
     )}
 
+    codigos: set[int] = set(raices)
+    for row in vinculos_gs:
+        for k in ("cod_gerente", "cod_supervisor"):
+            n = to_int_or_none(row.get(k))
+            if n is not None:
+                codigos.add(n)
+    for row in vinculos_sv:
+        for k in ("cod_supervisor", "cod_vendedor"):
+            n = to_int_or_none(row.get(k))
+            if n is not None:
+                codigos.add(n)
+    etiquetas = etiquetas_viajantes_usuarios(base, sorted(codigos))
+
+    def _etiq(cod: Any) -> str:
+        n = to_int_or_none(cod)
+        if n is None:
+            return "—"
+        return etiquetas.get(n) or f"Viajante {n}"
+
+    for row in vinculos_gs:
+        row["etiqueta_gerente"] = _etiq(row.get("cod_gerente"))
+        row["etiqueta_supervisor"] = _etiq(row.get("cod_supervisor"))
+        row["etiqueta"] = f"{row['etiqueta_gerente']} → {row['etiqueta_supervisor']}"
+    for row in vinculos_sv:
+        row["etiqueta_supervisor"] = _etiq(row.get("cod_supervisor"))
+        row["etiqueta_vendedor"] = _etiq(row.get("cod_vendedor"))
+        row["etiqueta"] = f"{row['etiqueta_supervisor']} → {row['etiqueta_vendedor']}"
+
     return {
         "gerentes": sorted(raices),
         "vinculos_gs": vinculos_gs,
         "vinculos_sv": vinculos_sv,
+        "etiquetas": etiquetas,
     }
+
+
+def etiquetas_viajantes_usuarios(
+    base_empresa: str,
+    codigos: Sequence[int],
+) -> Dict[int, str]:
+    """Mapa CodViajante → etiqueta legible (usuario / viajante)."""
+    ids = [to_int_or_none(c) for c in codigos]
+    ids = [i for i in ids if i is not None]
+    if not ids or not (base_empresa or "").strip():
+        return {}
+    placeholders = ",".join(["%s"] * len(ids))
+    out: Dict[int, str] = {}
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    f"""
+                    SELECT
+                        u.CodViajante AS cod_viajante,
+                        u.cod_usuario,
+                        u.nombre_usuario,
+                        u.apellido_usuario,
+                        COALESCE(v.Nombre, '') AS nombre_viajante
+                    FROM usuarios u
+                    LEFT JOIN viajantes v ON v.CodViajante = u.CodViajante
+                    WHERE u.CodViajante IN ({placeholders})
+                      AND (u.baja_usuario IS NULL OR u.baja_usuario <> 'Si')
+                    ORDER BY u.id_usuario
+                    """,
+                    tuple(ids),
+                )
+                for row in _fetchall_dict(cursor):
+                    cv = to_int_or_none(row.get("cod_viajante"))
+                    if cv is None or cv in out:
+                        continue
+                    out[cv] = _etiqueta_usuario_row(row)
+                faltan = [i for i in ids if i not in out]
+                if faltan:
+                    ph2 = ",".join(["%s"] * len(faltan))
+                    cursor.execute(
+                        f"""
+                        SELECT CodViajante AS cod_viajante, COALESCE(Nombre, '') AS nombre_viajante
+                        FROM viajantes WHERE CodViajante IN ({ph2})
+                        """,
+                        tuple(faltan),
+                    )
+                    for row in _fetchall_dict(cursor):
+                        cv = to_int_or_none(row.get("cod_viajante"))
+                        if cv is None or cv in out:
+                            continue
+                        nom = str_or_default(row.get("nombre_viajante"), "").strip()
+                        out[cv] = f"{nom} (vía. {cv})" if nom else f"Viajante {cv}"
+            finally:
+                cursor.close()
+    except Exception as exc:
+        logger.warning("etiquetas_viajantes_usuarios (%s): %s", base_empresa, exc)
+    return out
+
+
+def _etiqueta_usuario_row(row: Dict[str, Any]) -> str:
+    cv = to_int_or_none(row.get("cod_viajante")) or 0
+    cod = str_or_default(row.get("cod_usuario"), "").strip()
+    nom = " ".join(
+        p for p in (
+            str_or_default(row.get("nombre_usuario"), "").strip(),
+            str_or_default(row.get("apellido_usuario"), "").strip(),
+        ) if p
+    ).strip()
+    via = str_or_default(row.get("nombre_viajante"), "").strip()
+    partes = []
+    if nom:
+        partes.append(nom)
+    if cod:
+        partes.append(f"@{cod}")
+    label = " ".join(partes) if partes else (via or f"Viajante {cv}")
+    return f"{label} · vía. {cv}"
+
+
+def buscar_usuarios_jerarquia(
+    base_empresa: str,
+    q: str = "",
+    *,
+    limit: int = 20,
+) -> List[Dict[str, Any]]:
+    """
+    Búsqueda predictiva de usuarios activos con ``CodViajante`` para el ABM org.
+
+    Busca por código de usuario, nombre, apellido, nombre de viajante o nº CodViajante.
+    """
+    base = (base_empresa or "").strip()
+    if not base:
+        return []
+    lim = max(1, min(to_int_or_none(limit) or 20, 50))
+    term = (q or "").strip()
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base) as conn:
+            cursor = conn.cursor()
+            try:
+                sql = """
+                    SELECT
+                        u.id_usuario,
+                        u.cod_usuario,
+                        u.nombre_usuario,
+                        u.apellido_usuario,
+                        u.CodViajante AS cod_viajante,
+                        COALESCE(v.Nombre, '') AS nombre_viajante,
+                        COALESCE(u.permiso_supervisor_venta, 'No') AS permiso_supervisor_venta
+                    FROM usuarios u
+                    LEFT JOIN viajantes v ON v.CodViajante = u.CodViajante
+                    WHERE (u.baja_usuario IS NULL OR u.baja_usuario <> 'Si')
+                      AND u.CodViajante IS NOT NULL
+                      AND u.CodViajante > 0
+                """
+                params: List[Any] = []
+                if term:
+                    like = f"%{term}%"
+                    sql += """
+                      AND (
+                        u.cod_usuario LIKE %s
+                        OR u.nombre_usuario LIKE %s
+                        OR u.apellido_usuario LIKE %s
+                        OR CONCAT(COALESCE(u.nombre_usuario,''), ' ', COALESCE(u.apellido_usuario,'')) LIKE %s
+                        OR COALESCE(v.Nombre, '') LIKE %s
+                        OR CAST(u.CodViajante AS CHAR) LIKE %s
+                      )
+                    """
+                    params.extend([like, like, like, like, like, like])
+                sql += " ORDER BY u.nombre_usuario, u.apellido_usuario, u.cod_usuario LIMIT %s"
+                params.append(lim)
+                cursor.execute(sql, tuple(params))
+                rows = _fetchall_dict(cursor)
+            finally:
+                cursor.close()
+    except Exception as exc:
+        logger.warning("buscar_usuarios_jerarquia (%s): %s", base, exc)
+        return []
+
+    out: List[Dict[str, Any]] = []
+    seen_cv: set[int] = set()
+    for row in rows:
+        cv = to_int_or_none(row.get("cod_viajante"))
+        if cv is None or cv in seen_cv:
+            continue
+        seen_cv.add(cv)
+        etiqueta = _etiqueta_usuario_row(row)
+        out.append(
+            {
+                "id_usuario": to_int_or_none(row.get("id_usuario")),
+                "cod_usuario": str_or_default(row.get("cod_usuario"), "").strip(),
+                "nombre_usuario": str_or_default(row.get("nombre_usuario"), "").strip(),
+                "apellido_usuario": str_or_default(row.get("apellido_usuario"), "").strip(),
+                "cod_viajante": cv,
+                "nombre_viajante": str_or_default(row.get("nombre_viajante"), "").strip(),
+                "permiso_supervisor_venta": str_or_default(
+                    row.get("permiso_supervisor_venta"), "No"
+                ).strip(),
+                "etiqueta": etiqueta,
+                "text": etiqueta,
+            }
+        )
+    return out
 
 
 def _listar_claves_carteras_json(cursor) -> List[Tuple[int, str]]:

@@ -43,7 +43,7 @@ from ecom.vendedor_cliente_marca_views import (
     VendedorClienteMarcaVendedoresAPIView,
 )
 from ecom.ajustes_ventas_views import AjustesVentasAPIView, AjustesVentasView, AjustesWorkflowAPIView
-from ecom.jerarquia_views import JerarquiaNodosAPIView
+from ecom.jerarquia_views import JerarquiaNodosAPIView, JerarquiaUsuariosAPIView
 from ecom.pedido_masivo_views import (
     PedidoMasivoAbrirAPIView,
     PedidoMasivoAbrirPedidoAPIView,
@@ -295,6 +295,11 @@ urlpatterns = [
         "api/mayoristapp/jerarquia/nodos/",
         JerarquiaNodosAPIView.as_view(),
         name="api_jerarquia_nodos",
+    ),
+    path(
+        "api/mayoristapp/jerarquia/usuarios/",
+        JerarquiaUsuariosAPIView.as_view(),
+        name="api_jerarquia_usuarios",
     ),
     path(
         "api/mayoristapp/aprobacion/pendientes/",
