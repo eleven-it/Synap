@@ -232,36 +232,71 @@
     <div x-show="puedeEditarJerarquia" x-cloak class="mt-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
       <h2 class="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-100">Jerarquía comercial</h2>
       <p class="mb-4 text-xs text-slate-500 dark:text-slate-400">
-        Organigrama Gerente → Supervisor → Vendedor. Requiere workflow jerarquía activo para aplicar alcance en pedidos.
+        Organigrama Gerente → Supervisor → Vendedor. Buscá usuarios del sistema (con viajante asignado). Requiere workflow jerarquía activo para aplicar alcance en pedidos.
       </p>
 
       <div class="mb-4 grid gap-3 sm:grid-cols-2">
-        <div>
-          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Gerente</label>
-          <input type="number" x-model.number="formJerarquia.cod_gerente" min="1"
-                 class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900" />
-        </div>
-        <div>
-          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Supervisor</label>
-          <input type="number" x-model.number="formJerarquia.cod_supervisor" min="1"
-                 class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900" />
-        </div>
-        <div>
-          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Vendedor</label>
-          <input type="number" x-model.number="formJerarquia.cod_vendedor" min="1"
-                 class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900" />
-        </div>
+        <template x-for="campo in ['gerente','supervisor','vendedor']" :key="'pick-' + campo">
+          <div class="relative" @click.outside="cerrarPick(campo)">
+            <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300"
+                   :for="'jerarquia-' + campo"
+                   x-text="campo === 'gerente' ? 'Gerente' : (campo === 'supervisor' ? 'Supervisor' : 'Vendedor')"></label>
+            <div class="flex items-center gap-1">
+              <input type="search" autocomplete="off"
+                     :id="'jerarquia-' + campo"
+                     :placeholder="'Buscar usuario…'"
+                     class="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+                     x-model="pick[campo].q"
+                     @focus="abrirPick(campo)"
+                     @input.debounce.250ms="buscarUsuariosJerarquia(campo)"
+                     @keydown.arrow-down.prevent="moverPick(campo, 1)"
+                     @keydown.arrow-up.prevent="moverPick(campo, -1)"
+                     @keydown.enter.prevent="elegirPickResaltado(campo)"
+                     @keydown.escape="cerrarPick(campo)"/>
+              <button type="button" x-show="pick[campo].cod"
+                      @click="limpiarPick(campo)"
+                      class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-700"
+                      :aria-label="'Limpiar ' + campo"
+                      title="Limpiar">
+                <span class="material-icons text-base" aria-hidden="true">close</span>
+              </button>
+            </div>
+            <p x-show="pick[campo].etiqueta" x-cloak
+               class="mt-1 truncate text-xs font-medium text-sky-700 dark:text-sky-300"
+               x-text="pick[campo].etiqueta"></p>
+            <ul x-show="pick[campo].abierto && pick[campo].resultados.length" x-cloak
+                class="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+                role="listbox">
+              <template x-for="(u, i) in pick[campo].resultados" :key="campo + '-' + u.cod_viajante">
+                <li role="option"
+                    @mousedown.prevent="elegirPick(campo, u)"
+                    :class="i === pick[campo].idx ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
+                    class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+                  <span class="font-medium" x-text="u.etiqueta"></span>
+                </li>
+              </template>
+            </ul>
+            <p x-show="pick[campo].abierto && pick[campo].buscando" x-cloak
+               class="absolute left-0 right-0 z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+              Buscando…
+            </p>
+            <p x-show="pick[campo].abierto && !pick[campo].buscando && pick[campo].buscado && !pick[campo].resultados.length" x-cloak
+               class="absolute left-0 right-0 z-30 mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+              Sin usuarios con viajante. Probá otro texto.
+            </p>
+          </div>
+        </template>
       </div>
 
       <div class="flex flex-wrap gap-2">
         <button type="button" @click="jerarquiaAccion('vincular_gerente_supervisor')"
-                :disabled="jerarquiaGuardando"
-                class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
+                :disabled="jerarquiaGuardando || !formJerarquia.cod_gerente || !formJerarquia.cod_supervisor"
+                class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
           Vincular G→S
         </button>
         <button type="button" @click="jerarquiaAccion('vincular_supervisor_vendedor')"
-                :disabled="jerarquiaGuardando"
-                class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
+                :disabled="jerarquiaGuardando || !formJerarquia.cod_supervisor || !formJerarquia.cod_vendedor"
+                class="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
           Vincular S→V
         </button>
         <button type="button" @click="cargarJerarquia()"
@@ -277,10 +312,10 @@
             <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Gerente → Supervisor</h3>
             <ul class="space-y-1">
               <template x-for="v in arbol.vinculos_gs" :key="'gs-' + v.id">
-                <li class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-700">
-                  <span x-text="v.cod_gerente + ' → ' + v.cod_supervisor"></span>
+                <li class="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-700">
+                  <span class="min-w-0 flex-1 truncate" x-text="v.etiqueta || (v.cod_gerente + ' → ' + v.cod_supervisor)"></span>
                   <button type="button" @click="jerarquiaAccion('desactivar_gerente_supervisor', { cod_supervisor: v.cod_supervisor })"
-                          class="text-xs text-red-600 hover:text-red-800">Quitar</button>
+                          class="shrink-0 text-xs text-red-600 hover:text-red-800">Quitar</button>
                 </li>
               </template>
             </ul>
@@ -291,17 +326,17 @@
             <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Supervisor → Vendedor</h3>
             <ul class="space-y-1">
               <template x-for="v in arbol.vinculos_sv" :key="'sv-' + v.id">
-                <li class="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-700">
-                  <span x-text="v.cod_supervisor + ' → ' + v.cod_vendedor"></span>
+                <li class="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-700">
+                  <span class="min-w-0 flex-1 truncate" x-text="v.etiqueta || (v.cod_supervisor + ' → ' + v.cod_vendedor)"></span>
                   <button type="button" @click="jerarquiaAccion('desactivar_supervisor_vendedor', { cod_vendedor: v.cod_vendedor })"
-                          class="text-xs text-red-600 hover:text-red-800">Quitar</button>
+                          class="shrink-0 text-xs text-red-600 hover:text-red-800">Quitar</button>
                 </li>
               </template>
             </ul>
           </div>
         </template>
         <p x-show="!arbol.vinculos_gs?.length && !arbol.vinculos_sv?.length"
-           class="text-xs text-slate-500 dark:text-slate-400">Sin vínculos activos. Use los botones para crear el árbol.</p>
+           class="text-xs text-slate-500 dark:text-slate-400">Sin vínculos activos. Buscá usuarios y usá los botones para crear el árbol.</p>
       </div>
     </div>
 
@@ -332,6 +367,11 @@ function ajustesVentasApp() {
     urls: boot.urls || {},
     arbol: { vinculos_gs: [], vinculos_sv: [], gerentes: [] },
     formJerarquia: { cod_gerente: null, cod_supervisor: null, cod_vendedor: null },
+    pick: {
+      gerente: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false },
+      supervisor: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false },
+      vendedor: { q: '', cod: null, etiqueta: '', resultados: [], abierto: false, idx: 0, buscando: false, buscado: false },
+    },
     mensaje: '',
     error: '',
     guardando: false,
@@ -484,8 +524,84 @@ function ajustesVentasApp() {
       } catch (_) { /* silencioso */ }
       finally { this.jerarquiaGuardando = false; }
     },
+    _syncFormDesdePick() {
+      this.formJerarquia.cod_gerente = this.pick.gerente.cod;
+      this.formJerarquia.cod_supervisor = this.pick.supervisor.cod;
+      this.formJerarquia.cod_vendedor = this.pick.vendedor.cod;
+    },
+    abrirPick(campo) {
+      const p = this.pick[campo];
+      if (!p) return;
+      p.abierto = true;
+      if (!p.resultados.length && !p.buscando) {
+        this.buscarUsuariosJerarquia(campo);
+      }
+    },
+    cerrarPick(campo) {
+      const p = this.pick[campo];
+      if (!p) return;
+      p.abierto = false;
+      p.idx = 0;
+    },
+    limpiarPick(campo) {
+      const p = this.pick[campo];
+      if (!p) return;
+      p.q = '';
+      p.cod = null;
+      p.etiqueta = '';
+      p.resultados = [];
+      p.buscado = false;
+      this._syncFormDesdePick();
+      this.cerrarPick(campo);
+    },
+    elegirPick(campo, u) {
+      const p = this.pick[campo];
+      if (!p || !u) return;
+      p.cod = u.cod_viajante;
+      p.etiqueta = u.etiqueta || u.text || String(u.cod_viajante);
+      p.q = p.etiqueta;
+      p.resultados = [];
+      this._syncFormDesdePick();
+      this.cerrarPick(campo);
+    },
+    moverPick(campo, delta) {
+      const p = this.pick[campo];
+      if (!p || !p.resultados.length) return;
+      p.abierto = true;
+      p.idx = (p.idx + delta + p.resultados.length) % p.resultados.length;
+    },
+    elegirPickResaltado(campo) {
+      const p = this.pick[campo];
+      if (!p || !p.resultados.length) return;
+      this.elegirPick(campo, p.resultados[p.idx] || p.resultados[0]);
+    },
+    async buscarUsuariosJerarquia(campo) {
+      const p = this.pick[campo];
+      if (!p || !this.urls.jerarquia_usuarios) return;
+      p.abierto = true;
+      p.buscando = true;
+      p.buscado = false;
+      p.idx = 0;
+      try {
+        const url = new URL(this.urls.jerarquia_usuarios, window.location.origin);
+        url.searchParams.set('q', (p.q || '').trim());
+        url.searchParams.set('limit', '20');
+        const res = await fetch(url.toString(), {
+          headers: { Accept: 'application/json' },
+          credentials: 'same-origin',
+        });
+        const data = await res.json();
+        p.resultados = (res.ok && data.ok) ? (data.results || []) : [];
+      } catch (_) {
+        p.resultados = [];
+      } finally {
+        p.buscando = false;
+        p.buscado = true;
+      }
+    },
     async jerarquiaAccion(accion, extra = {}) {
       if (!this.urls.jerarquia) return;
+      this._syncFormDesdePick();
       this.jerarquiaGuardando = true;
       this.error = '';
       const body = {

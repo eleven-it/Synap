@@ -45,6 +45,7 @@ class AjustesVentasView(_StubMayoristappPermisoView):
                 "guardar": reverse("ecom:api_ajustes_ventas"),
                 "guardar_workflow": reverse("ecom:api_ajustes_workflow"),
                 "jerarquia": reverse("ecom:api_jerarquia_nodos"),
+                "jerarquia_usuarios": reverse("ecom:api_jerarquia_usuarios"),
                 "hub": reverse("ecom:mayoristapp_pedidos_hub"),
             },
         }
