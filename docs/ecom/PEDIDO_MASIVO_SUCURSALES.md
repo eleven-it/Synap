@@ -80,7 +80,7 @@ artículo, el foco cae en el campo realmente pintado y la carga fluye.
    - Sin borrador → guía «Elegí un cliente…»
    - Borrador sin sucursales → alerta amber
    - Borrador sin filas → guía «Agregá artículos…» + fila buscador al pie (solo con `draftId`)
-4. Columnas = `cliente_domicilio` no anulados con ≥1 **relación** activa (vendedor operativo + cliente) cuando VCM está activo; si no, todos los domicilios activos. Orden de columnas: **ascendente numérico por `NroCalle`**. Encabezado = **`NroCalle`** en **negrita** (nº de sucursal). Click en la celda del encabezado (desktop) o en la fila del acordeón (móvil) abre un modal con calle, dpto, distrito, provincia y zona. En móvil, el chevron expande/colapsa el acordeón sin abrir el modal. Ver `docs/ecom/VENDEDOR_CLIENTE_MARCA.md`.  
+4. Columnas = `cliente_domicilio` no anulados con ≥1 **relación** activa (vendedor operativo + cliente) cuando VCM está activo; si no, todos los domicilios activos. Orden de columnas: **ascendente numérico por `NroCalle`**. Encabezado = **`Suc ` + `NroCalle`** en **negrita** (ej. `Suc 14`). Click en la celda del encabezado (desktop) o en la fila del acordeón (móvil) abre un modal con calle, dpto, distrito, provincia y zona. En móvil, el chevron expande/colapsa el acordeón sin abrir el modal. Ver `docs/ecom/VENDEDOR_CLIENTE_MARCA.md`.  
 5. Filas = artículos **Terminado** de marcas asignadas con **paridad carrito/precio**: `Discontinuo='No'` y `ecommerce='Si'` (mismo criterio que `obtener_articulo_row_precio` / `agregar_item`). El buscador predictivo (`buscar_articulos_filtrados_ternas`) no ofrece ítems que luego fallarían en preview/confirm con «Artículo no encontrado o inactivo». **Flecha abajo** (o botón ▾) lista **todo** el catálogo filtrado (`?todos=1`, sin mínimo de 2 caracteres; tope 5000). La búsqueda tipada sigue pidiendo ≥2 caracteres y `tam=20`. Desktop y móvil.  
    Columna **Precio** = precio real del motor (lista del cliente).  
 6. Celdas = cantidad en **packs**. Columna de sumatoria: **Total packs**. Enter en la última sucursal vuelve al buscador.  
@@ -141,7 +141,7 @@ Para bajar costo de servidor (clientes con muchas sucursales / timeout de 8 s), 
 
 - Viewport `<lg`: tabla oculta; **acordeón** por `id_cliente_domicilio` reutilizando `celda()` / `onCelda()` / `descFila()`.
 - Panel preview/totales apilado verticalmente; botones alcanzables en pantalla estrecha.
-- Encabezado de sucursal en móvil/PWA: solo nº + **un** botón expandir/contraer (sin chevron CSS duplicado; el total solo se muestra si hay importe).
+- Encabezado de sucursal en móvil/PWA: prefijo **`Suc `** + nº (ej. `Suc 14`) + **un** botón expandir/contraer (sin chevron CSS duplicado; el total solo se muestra si hay importe).
 - **Nivel A / PWA (16/07/2026):** ruta HTML y APIs `/ecom/api/mayoristapp/` permitidas en móvil; menú e-com filtrado (`ecom_compra`, `ecom_pedidos`, `ecom_pedido_masivo`) y `PWA_ECOM_DEEP_LINKS`. Pedido simple: deep link `ecom_compra` → `/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple`. Permisos captura: `ecom.pedidos.crear` **o** `ecom.pedido_masivo.usar`. Ver `docs/general/MOBILE_SOLO_NIVEL_A.md`.
 
 ## Borrador (Postgres)

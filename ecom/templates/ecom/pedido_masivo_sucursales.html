@@ -450,7 +450,7 @@
                         @click="abrirDetalleSucursal(s)"
                         @keydown.enter.prevent="abrirDetalleSucursal(s)"
                         @keydown.space.prevent="abrirDetalleSucursal(s)">
-                      <span class="line-clamp-2 font-bold tabular-nums" x-text="nroSucursal(s)"></span>
+                      <span class="line-clamp-2 font-bold tabular-nums" x-text="'Suc ' + nroSucursal(s)"></span>
                     </th>
                   </template>
                 </tr>
@@ -647,7 +647,7 @@
                        @click.prevent="abrirDetalleSucursal(s)">
                 <span class="min-w-0 flex-1 cursor-pointer truncate rounded-md px-1 py-1 font-bold tabular-nums"
                       :title="etiquetaSucursalCompleta(s)"
-                      x-text="nroSucursal(s)"></span>
+                      x-text="'Suc ' + nroSucursal(s)"></span>
                 <span class="shrink-0 text-xs font-medium tabular-nums text-sky-700 dark:text-sky-300"
                       x-show="totalSucursal(s.id_cliente_domicilio) !== '—'"
                       x-cloak
