@@ -7,7 +7,7 @@
 {# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
 {% include "ecom/includes/pedidos_page_styles.html" %}
 
-<section class="pm-matrix-viewport flex h-[calc(100dvh-4.5rem)] min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-[calc(100dvh-4.5rem)] max-lg:overflow-y-auto"
+<section class="pm-matrix-viewport flex h-[calc(100dvh-4.5rem)] min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible"
          x-data="pedidoMasivoApp()"
          x-init="init()">
   <div class="mx-auto flex h-full min-h-0 w-full min-w-0 flex-col px-3 sm:px-4 md:px-6 lg:px-8 max-lg:h-auto">
@@ -522,7 +522,7 @@
       </div>
 
       {# Móvil/tablet: acordeón por sucursal #}
-      <div class="pm-accordion min-h-[16rem] flex-1 space-y-2 overflow-y-auto max-lg:flex-shrink-0 lg:hidden" role="region" aria-label="Matriz por sucursal">
+      <div class="pm-accordion min-h-[16rem] flex-1 space-y-2 max-lg:flex-shrink-0 lg:hidden" role="region" aria-label="Matriz por sucursal">
         <div x-show="!draftId" x-cloak
              class="rounded-lg border border-dashed border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
           Elegí un cliente en la barra de contexto para cargar sucursales y artículos.
@@ -547,11 +547,11 @@
                      @keydown.enter.prevent="elegirResaltadoArt()"
                      @keydown.escape="cerrarPanelArt()"
                      placeholder="Buscar artículo… (↓ todos)"
-                     class="pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-sky-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800"/>
+                     class="pm-input-dense min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-sky-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800"/>
               <button type="button"
                       @mousedown.prevent="listarTodosArticulos()"
                       :disabled="!matrizEditable"
-                      class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                      class="pm-touch-target inline-flex shrink-0 items-center justify-center rounded-md border border-sky-300 text-sky-700 hover:bg-sky-50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-sky-700 dark:text-sky-300 dark:hover:bg-sky-950/40"
                       title="Ver todos los artículos"
                       aria-label="Ver todos los artículos disponibles">
                 <span class="material-icons text-base leading-none" aria-hidden="true">expand_more</span>
@@ -585,38 +585,46 @@
           <template x-if="modoSimple && sucursales.length">
             <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
               <template x-for="art in articulos" :key="'simple-' + art.id_articulo">
-                <div class="pm-accordion-row flex items-center gap-2 border-b border-slate-100 py-2 last:border-b-0 dark:border-slate-700">
-                  <div class="min-w-0 flex-1">
-                    <p class="text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.id_manual || art.codigo || ('#'+art.id_articulo)"></p>
-                    <p class="text-xs leading-snug text-slate-600 dark:text-slate-300" x-text="art.nombre || art.descripcion"></p>
+                <div class="pm-accordion-row flex flex-col gap-2 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-700">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0 flex-1">
+                      <p class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.id_manual || art.codigo || ('#'+art.id_articulo)"></p>
+                      <p class="text-sm leading-snug text-slate-600 dark:text-slate-300" x-text="art.nombre || art.descripcion"></p>
+                    </div>
+                    <button type="button"
+                            @click="eliminarFila(art.id_articulo)"
+                            x-show="matrizEditable"
+                            class="pm-btn-delete pm-touch-target inline-flex shrink-0 items-center justify-center rounded-md text-rose-600 hover:bg-rose-50 dark:text-rose-400"
+                            title="Quitar artículo"
+                            :aria-label="'Quitar artículo ' + (art.id_manual || art.id_articulo)">
+                      <span class="material-icons text-base" aria-hidden="true">delete_outline</span>
+                    </button>
                   </div>
-                  <label class="sr-only" :for="'pm-desc-simple-' + art.id_articulo">% descuento</label>
-                  <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                         :id="'pm-desc-simple-' + art.id_articulo"
-                         class="pm-input-dense h-8 w-14 shrink-0 rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
-                         :value="descFila(art.id_articulo)"
-                         placeholder="%"
-                         title="% descuento fila"
-                         :disabled="!matrizEditable"
-                         @change="onDescFila(art.id_articulo, $event.target.value)"/>
-                  <label class="sr-only" :for="'pm-qty-simple-' + art.id_articulo">Cantidad</label>
-                  <input type="number" min="0" step="0.001" inputmode="decimal"
-                         :id="'pm-qty-simple-' + art.id_articulo"
-                         :data-pm-qty="art.id_articulo + ':' + sucursales[0].id_cliente_domicilio"
-                         class="pm-input-dense h-8 w-[5.7rem] shrink-0 rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
-                         :value="celda(art.id_articulo, sucursales[0].id_cliente_domicilio)"
-                         placeholder="Cant."
-                         :disabled="!matrizEditable"
-                         @change="onCelda(art.id_articulo, sucursales[0].id_cliente_domicilio, $event.target.value)"
-                         @keydown.enter.prevent="focusBuscadorArt()"/>
-                  <button type="button"
-                          @click="eliminarFila(art.id_articulo)"
-                          x-show="matrizEditable"
-                          class="pm-btn-delete inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-rose-600 hover:bg-rose-50 dark:text-rose-400"
-                          title="Quitar artículo"
-                          :aria-label="'Quitar artículo ' + (art.id_manual || art.id_articulo)">
-                    <span class="material-icons text-base" aria-hidden="true">delete_outline</span>
-                  </button>
+                  <div class="grid grid-cols-[minmax(5rem,1fr)_minmax(0,2fr)] gap-2">
+                    <div class="min-w-0">
+                      <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" :for="'pm-desc-simple-' + art.id_articulo">% desc.</label>
+                      <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                             :id="'pm-desc-simple-' + art.id_articulo"
+                             class="pm-input-dense w-full rounded-md border border-slate-300 bg-white px-2 text-right tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                             :value="descFila(art.id_articulo)"
+                             placeholder="0"
+                             title="% descuento fila"
+                             :disabled="!matrizEditable"
+                             @change="onDescFila(art.id_articulo, $event.target.value)"/>
+                    </div>
+                    <div class="min-w-0">
+                      <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" :for="'pm-qty-simple-' + art.id_articulo">Cantidad</label>
+                      <input type="number" min="0" step="0.001" inputmode="decimal"
+                             :id="'pm-qty-simple-' + art.id_articulo"
+                             :data-pm-qty="art.id_articulo + ':' + sucursales[0].id_cliente_domicilio"
+                             class="pm-input-dense w-full rounded-md border border-slate-300 bg-white px-2 text-right tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                             :value="celda(art.id_articulo, sucursales[0].id_cliente_domicilio)"
+                             placeholder="0"
+                             :disabled="!matrizEditable"
+                             @change="onCelda(art.id_articulo, sucursales[0].id_cliente_domicilio, $event.target.value)"
+                             @keydown.enter.prevent="focusBuscadorArt()"/>
+                    </div>
+                  </div>
                 </div>
               </template>
               {# Empty state líneas (simple móvil): hint claro bajo el buscador #}
@@ -645,7 +653,7 @@
                       x-cloak
                       x-text="totalSucursal(s.id_cliente_domicilio)"></span>
                 <button type="button"
-                        class="pm-accordion-toggle inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:hover:bg-slate-700"
+                        class="pm-accordion-toggle pm-touch-target inline-flex shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:hover:bg-slate-700"
                         :aria-expanded="abierto"
                         :aria-label="abierto ? 'Cerrar sucursal ' + nroSucursal(s) : 'Abrir sucursal ' + nroSucursal(s)"
                         @click.stop.prevent="abierto = !abierto">
@@ -656,43 +664,45 @@
               </summary>
               <div class="border-t border-slate-100 px-3 py-2 dark:border-slate-700">
                 <template x-for="art in articulos" :key="s.id_cliente_domicilio + '-' + art.id_articulo">
-                  <div class="pm-accordion-row border-b border-slate-100 py-2 last:border-b-0 dark:border-slate-700">
-                    <div class="mb-1.5 flex items-start justify-between gap-2">
+                  <div class="pm-accordion-row flex flex-col gap-2 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-700">
+                    <div class="flex items-start justify-between gap-2">
                       <div class="min-w-0 flex-1">
-                        <p class="text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.id_manual || art.codigo || ('#'+art.id_articulo)"></p>
-                        <p class="text-xs leading-snug text-slate-600 dark:text-slate-300" x-text="art.nombre || art.descripcion"></p>
+                        <p class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.id_manual || art.codigo || ('#'+art.id_articulo)"></p>
+                        <p class="text-sm leading-snug text-slate-600 dark:text-slate-300" x-text="art.nombre || art.descripcion"></p>
+                        <p class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400" x-text="fmtPrecio(art.precio_unitario_neto)"></p>
                       </div>
-                      <div class="flex shrink-0 items-center gap-1">
-                        <span class="text-xs tabular-nums text-slate-500" x-text="fmtPrecio(art.precio_unitario_neto)"></span>
-                        <button type="button"
-                                @click="eliminarFila(art.id_articulo)"
-                                x-show="matrizEditable"
-                                class="pm-btn-delete inline-flex h-7 w-7 items-center justify-center rounded-md text-rose-600 hover:bg-rose-50 dark:text-rose-400"
-                                title="Quitar artículo"
-                                :aria-label="'Quitar artículo ' + (art.id_manual || art.id_articulo)">
-                          <span class="material-icons text-base" aria-hidden="true">delete_outline</span>
-                        </button>
-                      </div>
+                      <button type="button"
+                              @click="eliminarFila(art.id_articulo)"
+                              x-show="matrizEditable"
+                              class="pm-btn-delete pm-touch-target inline-flex shrink-0 items-center justify-center rounded-md text-rose-600 hover:bg-rose-50 dark:text-rose-400"
+                              title="Quitar artículo"
+                              :aria-label="'Quitar artículo ' + (art.id_manual || art.id_articulo)">
+                        <span class="material-icons text-base" aria-hidden="true">delete_outline</span>
+                      </button>
                     </div>
-                    <div class="flex items-center gap-2">
-                      <label class="sr-only" :for="'pm-desc-mob-' + art.id_articulo">% descuento</label>
-                      <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                             :id="'pm-desc-mob-' + art.id_articulo"
-                             class="pm-input-dense h-8 w-16 shrink-0 rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
-                             :value="descFila(art.id_articulo)"
-                             placeholder="%"
-                             title="% descuento fila"
-                             :disabled="!matrizEditable"
-                             @change="onDescFila(art.id_articulo, $event.target.value)"/>
-                      <label class="sr-only" :for="'pm-qty-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio">Cantidad packs</label>
-                      <input type="number" min="0" step="0.001" inputmode="decimal"
-                             :id="'pm-qty-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio"
-                             :data-pm-qty="art.id_articulo + ':' + s.id_cliente_domicilio"
-                             class="pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
-                             :value="celda(art.id_articulo, s.id_cliente_domicilio)"
-                             placeholder="Packs"
-                             :disabled="!matrizEditable"
-                             @change="onCelda(art.id_articulo, s.id_cliente_domicilio, $event.target.value)"/>
+                    <div class="grid grid-cols-[minmax(5rem,1fr)_minmax(0,2fr)] gap-2">
+                      <div class="min-w-0">
+                        <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" :for="'pm-desc-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio">% desc.</label>
+                        <input type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                               :id="'pm-desc-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio"
+                               class="pm-input-dense w-full rounded-md border border-slate-300 bg-white px-2 text-right tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                               :value="descFila(art.id_articulo)"
+                               placeholder="0"
+                               title="% descuento fila"
+                               :disabled="!matrizEditable"
+                               @change="onDescFila(art.id_articulo, $event.target.value)"/>
+                      </div>
+                      <div class="min-w-0">
+                        <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" :for="'pm-qty-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio">Packs</label>
+                        <input type="number" min="0" step="0.001" inputmode="decimal"
+                               :id="'pm-qty-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio"
+                               :data-pm-qty="art.id_articulo + ':' + s.id_cliente_domicilio"
+                               class="pm-input-dense w-full rounded-md border border-slate-300 bg-white px-2 text-right tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                               :value="celda(art.id_articulo, s.id_cliente_domicilio)"
+                               placeholder="0"
+                               :disabled="!matrizEditable"
+                               @change="onCelda(art.id_articulo, s.id_cliente_domicilio, $event.target.value)"/>
+                      </div>
                     </div>
                   </div>
                 </template>
