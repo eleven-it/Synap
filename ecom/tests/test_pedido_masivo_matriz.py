@@ -467,3 +467,20 @@ class TestApiDescuentoFila(TestCase):
         self.assertEqual(resp.status_code, 200)
         d.refresh_from_db()
         self.assertEqual(d.descuentos_fila.get("3"), 15.0)
+
+
+class TestOrdenSucursalesNroCalle(TestCase):
+    def test_clave_orden_numerico_ascendente(self):
+        from ecom.services.pedido_masivo_matriz import _clave_orden_nro_sucursal
+
+        filas = [
+            {"id_cliente_domicilio": 30, "nro": "11"},
+            {"id_cliente_domicilio": 10, "nro": "2"},
+            {"id_cliente_domicilio": 20, "nro": "9"},
+            {"id_cliente_domicilio": 40, "nro": ""},
+        ]
+        ordenadas = sorted(filas, key=_clave_orden_nro_sucursal)
+        self.assertEqual(
+            [r["nro"] or r["id_cliente_domicilio"] for r in ordenadas],
+            ["2", "9", "11", 40],
+        )

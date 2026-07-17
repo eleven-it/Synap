@@ -34,6 +34,22 @@ La API rechaza aperturas simples sin domicilio en este último caso con
 Al cambiar la sucursal de un borrador simple existente, sus celdas se reasignan al nuevo
 domicilio para conservar las cantidades en la única columna del pedido.
 
+### Layout matriz: simple vs masivo + PWA — 17/07/2026
+
+Ambos modos comparten el shell de 3 zonas (`.pm-matrix-shell`) en desktop y el
+patrón de tarjetas en móvil, pero el reparto de ancho difiere:
+
+| Modo | Desktop (lg+) | Móvil / PWA (<lg) |
+|------|---------------|-------------------|
+| **Simple** (1 sucursal) | Clase `pm-matrix-shell--simple`: la **descripción del artículo predomina** (zona izquierda `flex:1 1 auto`, columna Artículo `width:auto`) y la única columna de cantidad se fija a `--pm-col-suc: 4.75rem` (~6 dígitos), sin estirarse. La zona media deja de crecer (`flex:0 0 auto`, `overflow-x:visible`). | **Lista plana** de líneas (sin acordeón): nombre del artículo `flex-1` + `% desc` (`w-14`) + cantidad (`w-[4.75rem] shrink-0`, no ancho completo) + quitar. Empty state bajo el buscador: «Buscá un artículo para agregar la primera línea.» |
+| **Masivo** (N sucursales) | Distribución actual sin cambios: zona media con **scroll-x** en sucursales (`.pm-ztable-mid` `min-width:100%`). | **Acordeón** por sucursal; la **primera** sucursal (o cuando hay una sola) arranca **abierta** por defecto. |
+
+**Foco (móvil + desktop):** los inputs de cantidad se duplican en el DOM (matriz
+desktop + acordeón/lista móvil) con el mismo `data-pm-qty`. `_qtyInputVisible()`
+elige el input **visible** (`offsetParent !== null`) según viewport, y
+`focusBuscadorArt()` prefiere `#pm-art-mob` en `<lg`. Así, tras agregar un
+artículo, el foco cae en el campo realmente pintado y la carga fluye.
+
 ### Permisos (OR)
 
 | Key | Uso |
@@ -51,7 +67,7 @@ domicilio para conservar las cantidades en la única columna del pedido.
    - Sin borrador → guía «Elegí un cliente…»
    - Borrador sin sucursales → alerta amber
    - Borrador sin filas → guía «Agregá artículos…» + fila buscador al pie (solo con `draftId`)
-4. Columnas = `cliente_domicilio` no anulados con ≥1 **relación** activa (vendedor operativo + cliente) cuando VCM está activo; si no, todos los domicilios activos. Encabezado = **`NroCalle`** (nº de sucursal). Click en la celda del encabezado (desktop) o en la fila del acordeón (móvil) abre un modal con calle, dpto, distrito, provincia y zona. En móvil, el chevron expande/colapsa el acordeón sin abrir el modal. Ver `docs/ecom/VENDEDOR_CLIENTE_MARCA.md`.  
+4. Columnas = `cliente_domicilio` no anulados con ≥1 **relación** activa (vendedor operativo + cliente) cuando VCM está activo; si no, todos los domicilios activos. Orden de columnas: **ascendente numérico por `NroCalle`**. Encabezado = **`NroCalle`** en **negrita** (nº de sucursal). Click en la celda del encabezado (desktop) o en la fila del acordeón (móvil) abre un modal con calle, dpto, distrito, provincia y zona. En móvil, el chevron expande/colapsa el acordeón sin abrir el modal. Ver `docs/ecom/VENDEDOR_CLIENTE_MARCA.md`.  
 5. Filas = artículos **Terminado** de marcas asignadas con **paridad carrito/precio**: `Discontinuo='No'` y `ecommerce='Si'` (mismo criterio que `obtener_articulo_row_precio` / `agregar_item`). El buscador predictivo (`buscar_articulos_filtrados_ternas`) no ofrece ítems que luego fallarían en preview/confirm con «Artículo no encontrado o inactivo». **Flecha abajo** (o botón ▾) lista **todo** el catálogo filtrado (`?todos=1`, sin mínimo de 2 caracteres; tope 5000). La búsqueda tipada sigue pidiendo ≥2 caracteres y `tam=20`. Desktop y móvil.  
    Columna **Precio** = precio real del motor (lista del cliente).  
 6. Celdas = cantidad en **packs**. Columna de sumatoria: **Total packs**. Enter en la última sucursal vuelve al buscador.  
@@ -185,7 +201,7 @@ Servicio: `ecom.services.batch_checkout_masivo.confirmar_lote_masivo` (sync) y `
 
 ### Confirmación con progreso en vivo — NDJSON (14/07/2026, `?v=masivo16`)
 
-Tras el resumen del modal (`masivo_confirmar`), el front envía `POST …/confirmar/` con `"stream": true` y cabecera comercial (`desc_pie_pct`, fechas, condición, lista). Usar `Accept: */*` (no `application/x-ndjson`): DRF rechaza ese Accept con HTTP 406 antes de llegar a la vista. La respuesta sigue siendo `Content-Type: application/x-ndjson; charset=utf-8`: **una línea JSON por evento**, sin array envolvente.
+Tras el resumen del modal (`masivo_confirmar`), el front envía `POST …/confirmar/` con `"stream": true` y cabecera comercial (`desc_pie_pct`, fechas, condición, lista). El front usa `Accept: */*` y la vista declara un renderer NDJSON, por lo que también negocia `Accept: application/x-ndjson` sin HTTP 406. La respuesta sigue siendo `Content-Type: application/x-ndjson; charset=utf-8`: **una línea JSON por evento**, sin array envolvente.
 
 **Body (campos relevantes):**
 

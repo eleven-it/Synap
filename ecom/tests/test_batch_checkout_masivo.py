@@ -319,7 +319,7 @@ class TestConfirmacionMasivaStreamAPI(TestCase):
     @patch("ecom.pedido_masivo_views.es_supervisor_desde_ctx", return_value=False)
     @patch("ecom.pedido_masivo_views.ctx_desde_request", return_value={})
     @patch("ecom.pedido_masivo_views._resolver_cabecera_masivo")
-    def test_api_stream_accept_wildcard_no_406(
+    def test_api_stream_accept_wildcard_y_ndjson_no_406(
         self,
         mock_cabecera,
         _mock_ctx,
@@ -327,7 +327,7 @@ class TestConfirmacionMasivaStreamAPI(TestCase):
         mock_stream,
         _mock_matriz,
     ):
-        """El front debe usar Accept */*; application/x-ndjson provoca 406 en DRF."""
+        """La vista negocia Accept */* y application/x-ndjson sin responder 406."""
         draft = EcomPedidoMasivoDraft.objects.create(
             base_empresa="emp_b",
             id_usuario=9,
@@ -393,7 +393,10 @@ class TestConfirmacionMasivaStreamAPI(TestCase):
             user=MagicMock(is_authenticated=True, is_superuser=True),
         )
         response_ndjson = PedidoMasivoConfirmarAPIView.as_view()(request_ndjson)
-        self.assertEqual(response_ndjson.status_code, 406)
+        self.assertEqual(response_ndjson.status_code, 200)
+        self.assertIn("application/x-ndjson", response_ndjson["Content-Type"])
+        _ = b"".join(response_ndjson.streaming_content)
+        self.assertEqual(mock_stream.call_count, 2)
 
 
 class TestConfirmacionMasivaPuntoVenta(TestCase):

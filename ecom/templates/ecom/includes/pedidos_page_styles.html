@@ -1283,6 +1283,40 @@
     box-sizing: border-box;
   }
 
+  /* ── Pedido simple (desktop lg+): la descripción del artículo predomina en
+   * ancho; la única columna de cantidad se limita a ~6 dígitos y no se estira.
+   * Masivo NO recibe esta variante: conserva mid con scroll-x (min-width:100%). */
+  .pm-matrix-shell--simple {
+    --pm-col-suc: 4.75rem; /* ~6 dígitos + padding */
+  }
+  .pm-matrix-shell--simple .pm-zone-left {
+    flex: 1 1 auto; /* la zona del artículo absorbe el sobrante */
+    min-width: 0;
+  }
+  .pm-matrix-shell--simple .pm-ztable-left {
+    width: 100%;
+  }
+  /* table-layout:fixed + precio/%desc fijos ⇒ Artículo (auto) toma el resto. */
+  .pm-matrix-shell--simple .pm-c-art {
+    width: auto;
+  }
+  .pm-matrix-shell--simple .pm-zone-mid {
+    flex: 0 0 auto; /* deja de crecer: solo el ancho de la columna cantidad */
+    overflow-x: visible;
+  }
+  .pm-matrix-shell--simple .pm-ztable-mid {
+    min-width: 0;
+    width: var(--pm-col-suc);
+  }
+  .pm-matrix-shell--simple .pm-c-suc {
+    width: var(--pm-col-suc);
+    max-width: var(--pm-col-suc);
+  }
+  .pm-matrix-shell--simple .pm-c-suc .pm-qty-input {
+    width: 100%;
+    max-width: var(--pm-col-suc);
+  }
+
   /* Selector vendedor inline — barra contexto pedido masivo (REQ-MAS-12) */
   .pedidos-vendedor-operativo--inline > div:first-child[x-show] {
     margin-bottom: 0;
