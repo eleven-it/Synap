@@ -83,6 +83,22 @@ class TestUnPadre(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("supervisor activo", msg.lower())
 
+    @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
+    def test_mover_vendedor_con_flag(self, mock_pool_fn):
+        pool = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchone.return_value = (1, 5, "Si")  # id, cod_supervisor actual, activo
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        pool.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        pool.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_pool_fn.return_value = pool
+
+        ok, msg = vincular_supervisor_vendedor("emp1", 10, 30, mover=True)
+        self.assertTrue(ok)
+        self.assertIn("movido", msg.lower())
+        conn.commit.assert_called_once()
+
     @patch("ecom.services.jerarquia_comercial._validar_sin_ciclo_gerente_supervisor", return_value=(True, ""))
     @patch("ecom.services.jerarquia_comercial.get_mysql_pool")
     def test_vincular_gs_ok_nuevo(self, mock_pool_fn, _ciclo):
