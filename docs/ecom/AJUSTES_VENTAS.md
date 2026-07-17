@@ -71,7 +71,28 @@ Orden de las tarjetas en `ecom/ajustes_ventas.html` (canon slate/sky, toggles Ac
 1. **Validación de stock** — toggle `validar_stock_pedidos`.
 2. **Correo al confirmar pedido** — toggle `enviar_mail_confirmar_pedido`. Nota UI: al confirmar un PED, si el cliente tiene email se encola el comprobante; requiere correo saliente configurado y el worker `process_ecom_mail_queue`. Se guarda junto a `validar_stock_pedidos` en el mismo POST a `api_ajustes_ventas`.
 3. **Workflow comercial** — flags/umbrales de aprobación y atajos del hub.
-4. **Jerarquía comercial** — ABM G→S→V a **ancho completo** (contenedor MPR `max-w-none`; pickers `sm:grid-cols-2 xl:grid-cols-3`; árboles G→S y S→V lado a lado en `lg:grid-cols-2`). Gerente/Supervisor: búsqueda de **usuarios** con puesto **Supervisor**, **Administrador**/**Administración** o **Ventas** (chip *Usuario*, ícono `badge`). Vendedor: búsqueda en catálogo **viajantes** (chip *Viajante*, ícono `storefront`); se excluyen nombres vacíos, `-Ninguno-` o solo guiones/placeholders. Permiso `ecom.jerarquia.editar`.
+4. **Jerarquía comercial** — ABM G→S→V como **árbol anidado** con **alta contextual** (permiso `ecom.jerarquia.editar`). Reemplaza el layout anterior de 3 pickers fijos + botones `Vincular G→S` / `Vincular S→V` / `Actualizar árbol`.
+
+   **Zona 1 — Header + banner de workflow.** Título *Jerarquía comercial* y subtítulo *"Definí quién reporta a quién. Esta estructura se usa para el alcance y la aprobación de pedidos cuando el flujo de trabajo está activo."* Debajo, un banner que depende de `workflowJerarquia`:
+   - **OFF** (borde `sky`, ícono `info`): *"El flujo de trabajo de pedidos está desactivado. Podés configurar con tranquilidad: los cambios se guardan, pero todavía no afectan pedidos."*
+   - **ON** (borde `emerald`, ícono `check_circle`): *"Flujo de trabajo activo. Los pedidos siguen esta jerarquía. Los cambios se aplican de inmediato."*
+
+   **Zona 2 — Árbol anidado.** El getter Alpine `arbolAnidado` deriva de la respuesta `{ vinculos_gs, vinculos_sv, etiquetas }` la estructura `{ gerentes:[{ cod, etiqueta, supervisores:[{ cod, etiqueta, vendedores:[{ cod, etiqueta }] }] }], sinGerente:[…] }`. Cada nivel se indenta con borde izquierdo (`border-l-2`) e ícono: gerente `badge` (sky), supervisor `supervisor_account` (indigo), vendedor `storefront` (amber). Acciones por nodo: gerente → *Agregar supervisor*; supervisor → *Agregar vendedor* + *Quitar* (desactiva G→S vía `cod_supervisor`); vendedor → *Quitar* (desactiva S→V vía `cod_vendedor`). Los supervisores que aparecen en `vinculos_sv` pero no tienen padre en `vinculos_gs` se listan en un grupo aparte **"Supervisores sin gerente"** (sin botón *Quitar*, ya que son raíz). El header del árbol tiene un botón sutil *Actualizar* (`refresh`, recarga `cargarJerarquia()`). El árbol se refresca solo con la respuesta `arbol` tras cada acción.
+   - **Empty state:** título *"Todavía no hay jerarquía comercial"*, cuerpo *"Empezá agregando un gerente y su primer supervisor. Después vas a poder colgar más supervisores y vendedores."* y CTA primario *Agregar gerente*.
+
+   **Zona 3 — Panel de alta (modal `altaJerarquia`).** Un único picker activo (`pick.panel`) según el modo:
+   | modo | título | picker (`rol`) | al confirmar |
+   |------|--------|----------------|--------------|
+   | `gerente` | Agregar gerente (paso 1 de 2) | usuario `gerente` | guarda gerente y pasa a `supervisor_bajo_nuevo` (botón *Siguiente*) |
+   | `supervisor_bajo_nuevo` | Agregar supervisor bajo {gerente} | usuario `supervisor` | POST `vincular_gerente_supervisor` |
+   | `supervisor` | Agregar supervisor bajo {gerente} | usuario `supervisor` | POST `vincular_gerente_supervisor` (padre = gerente del nodo) |
+   | `vendedor` | Agregar vendedor bajo {supervisor} | viajante `vendedor` | POST `vincular_supervisor_vendedor` (padre = supervisor del nodo) |
+
+   El **primer alta** siempre crea un G→S (no existe nodo gerente suelto): el modo `gerente` es un asistente de 2 pasos. Botones del panel: *Cancelar* / *Confirmar* (o *Siguiente* en el paso 1). Si la persona elegida **ya tiene padre** en otra rama, se pide confirmación para **mover** (`mover: true` en el POST) en lugar de fallar. El éxito muestra el toast `mensaje` y cierra el panel.
+
+   **Quitar:** confirmación ligera con `window.confirm`: *"¿Quitar a {Nombre} de la jerarquía? Dejará de reportar a {Padre}."*
+
+   Gerente/Supervisor: búsqueda de **usuarios** con puesto **Supervisor**, **Administrador**/**Administración** o **Ventas** (chip *Usuario*, ícono `badge`). Vendedor: catálogo **viajantes** (chip *Viajante*, ícono `storefront`); se excluyen nombres vacíos, `-Ninguno-` o solo guiones/placeholders.
    - **Autocomplete:** la etiqueta (dropdown e input seleccionado) muestra **solo nombre y apellido** (usuarios) o el **Nombre del viajante** (vendedor), nunca `@cod` ni `· vía. N`. La **flecha abajo** (o el chevron `expand_more`) lista **todos** los resultados (`q=''`, `limit=50`); flecha arriba navega o abre la lista completa. Accesible con `role="combobox"`, `aria-expanded`, `aria-activedescendant` y scroll al ítem resaltado.
 
 ## Menú

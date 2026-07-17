@@ -230,8 +230,14 @@ def vincular_gerente_supervisor(
     base_empresa: str,
     cod_gerente: int,
     cod_supervisor: int,
+    *,
+    mover: bool = False,
 ) -> Tuple[bool, str]:
-    """Crea o reactiva vínculo gerente→supervisor (1 padre por supervisor activo)."""
+    """Crea o reactiva vínculo gerente→supervisor (1 padre por supervisor activo).
+
+    Si el supervisor ya tiene otro gerente activo y ``mover`` es False, falla.
+    Con ``mover=True`` actualiza el padre (mueve de rama).
+    """
     g = to_int_or_none(cod_gerente)
     s = to_int_or_none(cod_supervisor)
     if g is None or s is None:
@@ -267,8 +273,11 @@ def vincular_gerente_supervisor(
                         rid, actual_g, activo = row[0], row[1], row[2]
                     if _si_activo(activo) and actual_g == g:
                         return True, "Vínculo ya existente."
-                    if _si_activo(activo) and actual_g != g:
-                        return False, "El supervisor ya tiene un gerente activo asignado."
+                    if _si_activo(activo) and actual_g != g and not mover:
+                        return (
+                            False,
+                            "El supervisor ya tiene un gerente activo asignado.",
+                        )
                     cursor.execute(
                         """
                         UPDATE ecom_org_gerente_supervisor
@@ -277,15 +286,18 @@ def vincular_gerente_supervisor(
                         """,
                         (g, _ACTIVO_SI, ahora, rid),
                     )
-                else:
-                    cursor.execute(
-                        """
-                        INSERT INTO ecom_org_gerente_supervisor
-                            (cod_gerente, cod_supervisor, activo, creado_en, actualizado_en)
-                        VALUES (%s, %s, %s, %s, %s)
-                        """,
-                        (g, s, _ACTIVO_SI, ahora, ahora),
-                    )
+                    conn.commit()
+                    if _si_activo(activo) and actual_g != g:
+                        return True, "Supervisor movido al nuevo gerente."
+                    return True, "Vínculo gerente→supervisor guardado."
+                cursor.execute(
+                    """
+                    INSERT INTO ecom_org_gerente_supervisor
+                        (cod_gerente, cod_supervisor, activo, creado_en, actualizado_en)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (g, s, _ACTIVO_SI, ahora, ahora),
+                )
                 conn.commit()
                 return True, "Vínculo gerente→supervisor guardado."
             finally:
@@ -299,8 +311,14 @@ def vincular_supervisor_vendedor(
     base_empresa: str,
     cod_supervisor: int,
     cod_vendedor: int,
+    *,
+    mover: bool = False,
 ) -> Tuple[bool, str]:
-    """Crea o reactiva vínculo supervisor→vendedor (1 padre por vendedor activo)."""
+    """Crea o reactiva vínculo supervisor→vendedor (1 padre por vendedor activo).
+
+    Si el vendedor ya tiene otro supervisor activo y ``mover`` es False, falla.
+    Con ``mover=True`` actualiza el padre (mueve de rama).
+    """
     s = to_int_or_none(cod_supervisor)
     v = to_int_or_none(cod_vendedor)
     if s is None or v is None:
@@ -333,8 +351,11 @@ def vincular_supervisor_vendedor(
                         rid, actual_s, activo = row[0], row[1], row[2]
                     if _si_activo(activo) and actual_s == s:
                         return True, "Vínculo ya existente."
-                    if _si_activo(activo) and actual_s != s:
-                        return False, "El vendedor ya tiene un supervisor activo asignado."
+                    if _si_activo(activo) and actual_s != s and not mover:
+                        return (
+                            False,
+                            "El vendedor ya tiene un supervisor activo asignado.",
+                        )
                     cursor.execute(
                         """
                         UPDATE ecom_org_supervisor_vendedor
@@ -343,15 +364,18 @@ def vincular_supervisor_vendedor(
                         """,
                         (s, _ACTIVO_SI, ahora, rid),
                     )
-                else:
-                    cursor.execute(
-                        """
-                        INSERT INTO ecom_org_supervisor_vendedor
-                            (cod_supervisor, cod_vendedor, activo, creado_en, actualizado_en)
-                        VALUES (%s, %s, %s, %s, %s)
-                        """,
-                        (s, v, _ACTIVO_SI, ahora, ahora),
-                    )
+                    conn.commit()
+                    if _si_activo(activo) and actual_s != s:
+                        return True, "Vendedor movido al nuevo supervisor."
+                    return True, "Vínculo supervisor→vendedor guardado."
+                cursor.execute(
+                    """
+                    INSERT INTO ecom_org_supervisor_vendedor
+                        (cod_supervisor, cod_vendedor, activo, creado_en, actualizado_en)
+                    VALUES (%s, %s, %s, %s, %s)
+                    """,
+                    (s, v, _ACTIVO_SI, ahora, ahora),
+                )
                 conn.commit()
                 return True, "Vínculo supervisor→vendedor guardado."
             finally:

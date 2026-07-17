@@ -40,17 +40,20 @@ class JerarquiaNodosAPIView(APIView):
         data: Dict[str, Any] = request.data if isinstance(request.data, dict) else {}
         accion = str(data.get("accion") or "").strip().lower()
 
+        mover = bool(data.get("mover"))
         if accion == "vincular_gerente_supervisor":
             ok, msg = vincular_gerente_supervisor(
                 base,
                 to_int_or_none(data.get("cod_gerente")),
                 to_int_or_none(data.get("cod_supervisor")),
+                mover=mover,
             )
         elif accion == "vincular_supervisor_vendedor":
             ok, msg = vincular_supervisor_vendedor(
                 base,
                 to_int_or_none(data.get("cod_supervisor")),
                 to_int_or_none(data.get("cod_vendedor")),
+                mover=mover,
             )
         elif accion == "desactivar_gerente_supervisor":
             ok, msg = desactivar_vinculo_gerente_supervisor(
