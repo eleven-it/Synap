@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from core.utils.administranet_types import to_int_or_none
+from core.utils.administranet_types import str_codigo_manual_articulo, to_int_or_none
 
 from mpr.db import mysql_cursor
 
@@ -43,16 +43,18 @@ def _tabla_articulo(cursor) -> Optional[str]:
 
 _COLS_ART = (
     "a.IDArt AS id_articulo, "
-    "COALESCE(a.id_manual, '') AS codigo_manual, "
+    "a.id_manual AS id_manual, "
     "COALESCE(a.CodigoArticuloT, CAST(a.CodigoArticulo AS CHAR), '') AS codigo_articulo, "
     "COALESCE(a.NombreArticulo, '') AS descripcion_articulo"
 )
 
 
 def _map_articulo(row: Dict[str, Any]) -> Dict[str, Any]:
+    # Código de usuario = articulo.id_manual (no CodigoArticulo / CodigoArticuloT).
+    codigo = str_codigo_manual_articulo(row.get("id_manual") or row.get("codigo_manual"))
     return {
         "id_articulo": to_int_or_none(row.get("id_articulo")),
-        "codigo_manual": str(row.get("codigo_manual") or ""),
+        "codigo_manual": "" if codigo == "-" else codigo,
         "codigo_articulo": str(row.get("codigo_articulo") or ""),
         "descripcion_articulo": str(row.get("descripcion_articulo") or ""),
     }
@@ -252,7 +254,7 @@ def historico_maquina_articulo(base_empresa: str, id_maquina: int) -> List[Dict[
         tbl = _tabla_articulo(cursor)
         join_art = f"LEFT JOIN `{tbl}` a ON a.IDArt = ma.id_articulo" if tbl else ""
         cols_art = _COLS_ART if tbl else (
-            "ma.id_articulo AS id_articulo, '' AS codigo_manual, "
+            "ma.id_articulo AS id_articulo, NULL AS id_manual, "
             "'' AS codigo_articulo, '' AS descripcion_articulo"
         )
         cursor.execute(
