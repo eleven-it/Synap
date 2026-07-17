@@ -2,6 +2,7 @@
 Filtros de plantilla para el módulo MPR.
 Formato de fecha unificado en la UI: dd-MM-yyyy.
 """
+import unicodedata
 from datetime import date, datetime
 
 from django import template
@@ -9,6 +10,16 @@ from django import template
 from core.utils.administranet_types import str_codigo_manual_articulo
 
 register = template.Library()
+
+# Cantidad de colores de la paleta de reserva (fallback por id de turno).
+_TURNO_COLOR_PALETA_N = 4
+
+
+def _normalizar_nombre_turno(texto):
+    """Minúsculas sin acentos, para heurística por nombre de turno."""
+    s = str(texto or "").strip().lower()
+    s = unicodedata.normalize("NFKD", s)
+    return "".join(c for c in s if not unicodedata.combining(c))
 
 
 @register.filter
@@ -52,6 +63,40 @@ def dict_get(d, key):
     if d is None:
         return None
     return d.get(key)
+
+
+@register.filter
+def turno_color(asig):
+    """
+    Devuelve un slug de color para diferenciar visualmente los turnos en la
+    grilla de roster. El slug se usa como sufijo de clase CSS scoped
+    (`.mpr-turno-badge--<slug>`) definida en la plantilla.
+
+    Heurística:
+    - Por nombre: mañana → "manana", tarde → "tarde", noche/nocturno → "noche".
+    - Fallback: rota una paleta fija (`p0`..`p{N-1}`) por id del turno.
+
+    Acepta un dict de asignación ({"id_turno", "nombre_turno"}) o una cadena.
+    Uso: {{ asig|turno_color }}
+    """
+    nombre = ""
+    id_turno = 0
+    if isinstance(asig, dict):
+        nombre = asig.get("nombre_turno") or asig.get("nombre") or ""
+        try:
+            id_turno = int(asig.get("id_turno") or asig.get("id") or 0)
+        except (ValueError, TypeError):
+            id_turno = 0
+    else:
+        nombre = asig
+    n = _normalizar_nombre_turno(nombre)
+    if "manana" in n:
+        return "manana"
+    if "tarde" in n:
+        return "tarde"
+    if "noche" in n or "nocturno" in n:
+        return "noche"
+    return "p%d" % (id_turno % _TURNO_COLOR_PALETA_N)
 
 
 @register.filter

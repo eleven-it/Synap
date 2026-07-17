@@ -5376,7 +5376,9 @@ class MaquinaArticulosView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView)
         context["historico"] = historico_maquina_articulo(base_empresa, id_maquina)
         q = (self.request.GET.get("q") or "").strip()
         context["q"] = q
-        context["resultados"] = buscar_articulos(base_empresa, q) if q else []
+        context["resultados"] = (
+            buscar_articulos(base_empresa, q, tipo_art_fab="Fabricado") if q else []
+        )
         return context
 
     def post(self, request, *args, **kwargs):
@@ -5409,6 +5411,108 @@ class MaquinaArticulosView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView)
         else:
             messages.error(request, error or "No se pudo completar la acción.")
         return redirect("mpr:maquina_articulos", id_maquina=id_maquina)
+
+
+class MaquinasCargaArticulosView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+    """Grilla de carga de artículos habilitados por máquina (supervisor)."""
+
+    template_name = "mpr/maquinas_carga_articulos.html"
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get_context_data(self, **kwargs):
+        from mpr.services_maquina_linea import construir_grilla_carga_articulos
+
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        id_linea_raw = (self.request.GET.get("id_linea") or "").strip()
+        id_linea = None
+        if id_linea_raw:
+            try:
+                id_linea = int(id_linea_raw)
+            except (ValueError, TypeError):
+                id_linea = None
+        grilla = construir_grilla_carga_articulos(base_empresa, id_linea=id_linea)
+        context.update(grilla)
+        return context
+
+
+class MaquinaArticuloBuscarAPIView(MprLoginRequiredMixin, MprPermisoMixin, View):
+    """API JSON: búsqueda predictiva de artículos fabricados para habilitar en máquina."""
+
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get(self, request, *args, **kwargs):
+        from mpr.services_maquina_linea import buscar_articulos
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"articulos": []})
+        q = (request.GET.get("q") or "").strip()
+        if len(q) < 1:
+            return JsonResponse({"articulos": []})
+        try:
+            limit = int(request.GET.get("limit") or 25)
+        except (ValueError, TypeError):
+            limit = 25
+        articulos = buscar_articulos(
+            base_empresa, q, limit=limit, tipo_art_fab="Fabricado"
+        )
+        return JsonResponse({"articulos": articulos})
+
+
+class MaquinaArticuloAccionAPIView(MprLoginRequiredMixin, MprPermisoMixin, View):
+    """API JSON: habilitar o deshabilitar artículo en máquina (trazabilidad versionada)."""
+
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def post(self, request, *args, **kwargs):
+        import json
+
+        from mpr.services_maquina_linea import (
+            deshabilitar_articulo_maquina,
+            habilitar_articulo_maquina,
+            listar_articulos_vigentes_maquina,
+        )
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"ok": False, "error": "Empresa inválida."}, status=400)
+
+        content_type = (request.content_type or "").lower()
+        if "application/json" in content_type:
+            try:
+                payload = json.loads(request.body.decode("utf-8") or "{}")
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return JsonResponse({"ok": False, "error": "JSON inválido."}, status=400)
+        else:
+            payload = request.POST
+
+        accion = (payload.get("accion") or "").strip()
+        try:
+            id_maquina = int(payload.get("id_maquina", ""))
+            id_articulo = int(payload.get("id_articulo", ""))
+        except (ValueError, TypeError):
+            return JsonResponse({"ok": False, "error": "Parámetros inválidos."}, status=400)
+
+        if accion == "habilitar":
+            ok, error = habilitar_articulo_maquina(base_empresa, id_maquina, id_articulo)
+            if not ok:
+                return JsonResponse({"ok": False, "error": error or "No se pudo habilitar."}, status=400)
+            vigentes = listar_articulos_vigentes_maquina(base_empresa, id_maquina)
+            articulo = next(
+                (a for a in vigentes if a.get("id_articulo") == id_articulo),
+                None,
+            )
+            return JsonResponse({"ok": True, "articulo": articulo or {"id_articulo": id_articulo}})
+        if accion == "deshabilitar":
+            ok, error = deshabilitar_articulo_maquina(base_empresa, id_maquina, id_articulo)
+            if not ok:
+                return JsonResponse(
+                    {"ok": False, "error": error or "No se pudo deshabilitar."},
+                    status=400,
+                )
+            return JsonResponse({"ok": True})
+        return JsonResponse({"ok": False, "error": "Acción inválida."}, status=400)
 
 
 class OperarioUsuarioMapView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):

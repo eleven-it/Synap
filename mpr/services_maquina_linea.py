@@ -196,12 +196,75 @@ def listar_historico_maquina_linea(base_empresa: str, id_maquina: int) -> List[D
 # --------------------------------------------------------------------------- #
 # Habilitación máquina->artículo (versionada; varios vigentes por máquina)
 # --------------------------------------------------------------------------- #
-def buscar_articulos(base_empresa: str, q: str, limit: int = 25) -> List[Dict[str, Any]]:
+def buscar_articulos(
+    base_empresa: str,
+    q: str,
+    limit: int = 25,
+    tipo_art_fab: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     try:
-        return repo_art.buscar_articulos(base_empresa, q, limit=limit)
+        return repo_art.buscar_articulos(
+            base_empresa, q, limit=limit, tipo_art_fab=tipo_art_fab
+        )
     except Exception as e:
         logger.error("Error al buscar artículos en %s: %s", base_empresa, e, exc_info=True)
         return []
+
+
+def listar_articulos_vigentes_todas_maquinas(
+    base_empresa: str, fecha: Optional[date] = None
+) -> Dict[int, List[Dict[str, Any]]]:
+    try:
+        return repo_art.listar_articulos_vigentes_todas_maquinas(
+            base_empresa, fecha or date.today()
+        )
+    except Exception as e:
+        logger.error(
+            "Error al listar artículos vigentes todas máquinas en %s: %s",
+            base_empresa, e, exc_info=True,
+        )
+        return {}
+
+
+def construir_grilla_carga_articulos(
+    base_empresa: str,
+    id_linea: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Contexto para la grilla de carga de artículos por máquina (supervisor)."""
+    fecha_hoy = date.today()
+    lineas = listar_lineas(base_empresa, solo_activas=True)
+    id_linea_filtro = _to_int(id_linea) if id_linea is not None else None
+    maquinas_raw = listar_maquinas(base_empresa, solo_activas=True)
+    if id_linea_filtro is not None:
+        maquinas_raw = [
+            m for m in maquinas_raw
+            if m.get("id_linea_actual") == id_linea_filtro
+        ]
+    articulos_por_maquina = listar_articulos_vigentes_todas_maquinas(base_empresa, fecha_hoy)
+    maquinas: List[Dict[str, Any]] = []
+    con_articulos = 0
+    for m in maquinas_raw:
+        mid = m.get("id")
+        articulos = articulos_por_maquina.get(mid, []) if mid is not None else []
+        if articulos:
+            con_articulos += 1
+        codigo = str(m.get("codigo") or "")
+        nombre = str(m.get("nombre") or "")
+        maquinas.append(
+            {
+                **m,
+                "articulos": articulos,
+                "codigo_search": f"{codigo} {nombre}".strip().lower(),
+            }
+        )
+    return {
+        "maquinas": maquinas,
+        "lineas": lineas,
+        "id_linea_filtro": id_linea_filtro,
+        "fecha_hoy": fecha_hoy,
+        "total_maquinas": len(maquinas),
+        "con_articulos": con_articulos,
+    }
 
 
 def listar_articulos_vigentes_maquina(

@@ -220,6 +220,7 @@ APPS_MENU = [
                 "seccion": _("Producción diaria"),
                 "items": [
                     {"label": _("Tablero de producción"), "url": "mpr:tablero_produccion", "icon": "table_chart", "permission": "mpr.ver", "menu_item_id": "mpr_prod_tablero"},
+                    {"label": _("Carga de artículos"), "url": "mpr:maquinas_carga_articulos", "icon": "grid_view", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_prod_carga_articulos"},
                     {"label": _("Parte de producción"), "url": "mpr:parte_produccion", "icon": "assignment", "permission": "mpr.ver", "menu_item_id": "mpr_prod_parte"},
                     {"label": _("Partes pendientes (aprobación)"), "url": "mpr:partes_pendientes", "icon": "fact_check", "permission": "mpr.aprobar_parte", "menu_item_id": "mpr_prod_partes_pendientes"},
                     {"label": _("Control de calidad"), "url": "mpr:clasificacion_produccion", "icon": "verified", "permission": "mpr.ver", "menu_item_id": "mpr_prod_clasificacion"},
