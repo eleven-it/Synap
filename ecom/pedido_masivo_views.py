@@ -38,6 +38,7 @@ from ecom.services.pedido_cabecera_relay import (
     cabecera_pedido_relay,
     puede_anular_pedido_relay,
 )
+from ecom.services.pedidos_hub_pipeline import url_pedido_masivo_modo_simple
 from ecom.services.pedido_plantilla_service import cargar_pedido_en_draft_masivo
 from ecom.services.batch_checkout_masivo import (
     calcular_totales_lote_masivo,
@@ -157,6 +158,10 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
                     "repetir": repetir_q,
                     "urls": {
                         "hub": reverse("ecom:mayoristapp_pedidos_hub"),
+                        "nuevo_simple": url_pedido_masivo_modo_simple(),
+                        "nuevo_masivo": reverse(
+                            "ecom:mayoristapp_pedido_masivo_sucursales"
+                        ),
                         "clientes": reverse("ecom:api_pedido_masivo_clientes"),
                         "abrir": reverse("ecom:api_pedido_masivo_abrir"),
                         "abrir_pedido": reverse("ecom:api_pedido_masivo_abrir_pedido"),

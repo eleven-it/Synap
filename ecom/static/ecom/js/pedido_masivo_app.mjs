@@ -79,6 +79,7 @@ function pedidoMasivoCore() {
     confirmProgreso: null,
     anulando: false,
     mensajeOk: '',
+    nuevoMenuAbierto: false,
     _chipTimer: null,
     // Preview híbrido: estimado FE instantáneo + validación servidor (debounce).
     preview: { sucursales: [], total_lote: { neto: 0, iva: 0, total: 0 }, warning: '' },
@@ -197,6 +198,13 @@ function pedidoMasivoCore() {
     /** Un PED está cargado o consultado → habilita PDF / repetir / mail. */
     get pedidoCargado() {
       return Boolean(this.modoSimple && this.pedidoCodMov);
+    },
+    /** Tras confirmar (o PED en solo consulta): ofrecer Nuevo como en el Hub. */
+    get mostrarBotonNuevo() {
+      return (
+        this.pedidoSoloConsulta
+        || String(this.draftEstado || '') === 'confirmado'
+      );
     },
     get pdfPedidoUrl() {
       if (!this.pedidoCodMov || !this.urls.pdf_tpl) return '#';
@@ -1298,6 +1306,15 @@ function pedidoMasivoCore() {
       if (!this.pedidoCodMov) return;
       this.abrirPedido(this.pedidoCodMov, true);
     },
+    /** Mismo destino que el Hub: captura limpia simple o masiva. */
+    onNuevoSimple() {
+      const u = this.urls.nuevo_simple;
+      if (u) window.location.href = u;
+    },
+    onNuevoMasivo() {
+      const u = this.urls.nuevo_masivo;
+      if (u) window.location.href = u;
+    },
     solicitarEnviarMail() {
       if (!this.pedidoCodMov || !this.urls.mail_enqueue) return;
       this.dialogInput = this.emailCliente || '';
@@ -1632,6 +1649,7 @@ function pedidoMasivoCore() {
 
       this.ultimoError = {};
       this.mensajeOk = data.message || 'Pedido confirmado.';
+      this.draftEstado = 'confirmado';
       const cods = data.codigos_movimiento || [];
       if (cods.length) {
         this.mensajeOk += ' PED: ' + cods.join(', ');
