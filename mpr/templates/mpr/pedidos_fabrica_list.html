@@ -22,7 +22,6 @@
                 <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Pedidos de venta (PED) con estado Pendiente, Producción, Parcial o Terminado. La demanda para fabricación incluye pedidos en estado Pendiente y Parcial.</p>
             </div>
             <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-                {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="pedidos-fabrica" only %}
                 <a href="{% url 'mpr:ventana_pack' %}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-center text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">Orden de Producción de Trabajo (OPT)</a>
                 <a href="{% url 'mpr:tablero' %}" class="inline-flex min-h-11 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">Tablero</a>
             </div>

@@ -10,12 +10,13 @@
     <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col px-3 pb-36 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
         {# Migas de pan #}
-        <nav class="mb-2 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
-            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <nav class="mb-2 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
+            <ol class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <li><span class="font-medium text-purple-600 dark:text-purple-400">Producción</span></li>
                 <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
                 <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Carga de producción</span></li>
             </ol>
+            {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="carga-movil-operario" only %}
         </nav>
 
         {% if ok_msg %}
@@ -33,13 +34,10 @@
         <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 dark:bg-slate-900">
             <header class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
                 <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <h1 class="flex items-center gap-2 text-lg font-bold tracking-tight text-white sm:text-xl">
-                            <span class="material-icons text-2xl text-purple-400" aria-hidden="true">assignment_turned_in</span>
-                            Carga de producción
-                        </h1>
-                        {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="carga-movil-operario" class_extra="border-slate-500 bg-slate-700 text-white hover:bg-slate-600 dark:border-slate-500 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600" only %}
-                    </div>
+                    <h1 class="flex items-center gap-2 text-lg font-bold tracking-tight text-white sm:text-xl">
+                        <span class="material-icons text-2xl text-purple-400" aria-hidden="true">assignment_turned_in</span>
+                        Carga de producción
+                    </h1>
                     <p class="mt-0.5 text-xs text-slate-400">Hola{% if nombre_usuario %}, {{ nombre_usuario }}{% endif %} — registrá tu producción por máquina.</p>
                 </div>
                 {% if not estado_borde or estado_borde == "ok" %}
