@@ -110,7 +110,9 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 | **Fabricando** | Cupo virtual: `max(0, envíos tablero − acreditado)`. Acreditado = max(stock físico componente, clasificación desde Producción, partes acumulados). No usa Terminado del componente. |
 | **Enviar a producción** | Registro en `mpr_envio_produccion` (ledger). No mueve stock hasta el parte. |
 | **Parte de producción (E8)** | Grilla componente × operario; solo filas con Fabricando > 0. Registra `mpr_parte_linea` e ingresa stock a **Producido**. |
-| **Control de calidad** | Clasificación desde **Producido** hacia Semi / 2da / Scrap, por **operario fabricante**. Ledger: `mpr_transicion_lote`. Ruta: `/mpr/clasificacion-produccion/`. |
+| **Control de calidad (clasificación / CC)** | Clasificación desde **Producido** hacia Semi / 2da / Scrap, por **operario fabricante**. Ledger: `mpr_transicion_lote`. Ruta: `/mpr/clasificacion-produccion/`. No confundir con la planilla impresa. |
+| **Planilla Control de Calidad** | Hoja A4 horizontal impresa desde **Asignar artículo a máquina**: máquina, artículo, color, talle y casilleros de turnos/observaciones para completar a mano. Respeta filtros de pantalla. |
+| **TALLES / COLOR (CE)** | Campos especiales de artículo (`articulo_ce` / `articulo_val_ce` / `articulo_valor_ce`). Se muestran en grilla de máquinas e inventario por etapa. |
 | **Clasificado (reportes)** | Suma de `mpr_transicion_lote` con `tipo_origen = Produccion` en el período. |
 | **Acreditado** | Unidades que cubren envíos sin contar como Fabricando pendiente: stock pipeline del componente, CC registrada o partes ya cargados. |
 | **Componente vs pack terminado** | El tablero y CC operan sobre **componentes** (semi). El **terminado** es del pack en armado; no se muestra en tablero de producción de componentes. |
@@ -122,7 +124,7 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 | **En fabricación** | Sinónimo de reporte para envíos tablero (`mpr_envio_produccion`). |
 | **Producido** | Sinónimo de reporte para parte de producción acreditado (`mpr_parte_linea`). |
 
-Ver: [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md), [PARTE_PRODUCCION.md](PARTE_PRODUCCION.md), [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md), [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md), [DOCENAS_CLASIFICACION_OPERARIO_MPR.md](DOCENAS_CLASIFICACION_OPERARIO_MPR.md), [REPORTES_MPR.md](REPORTES_MPR.md).
+Ver: [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md), [PARTE_PRODUCCION.md](PARTE_PRODUCCION.md), [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md), [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md), [ARTICULO_CE_TALLES_COLOR.md](ARTICULO_CE_TALLES_COLOR.md), [DOCENAS_CLASIFICACION_OPERARIO_MPR.md](DOCENAS_CLASIFICACION_OPERARIO_MPR.md), [REPORTES_MPR.md](REPORTES_MPR.md). Inventario Stock: [../stock/INVENTARIO_TABLA_MPR.md](../stock/INVENTARIO_TABLA_MPR.md).
 
 ---
 

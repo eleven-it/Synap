@@ -16,11 +16,14 @@
             </ol>
         </nav>
 
-        <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+        <header class="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <div class="min-w-0 max-w-2xl">
             <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Nueva OPT (un artículo)</h1>
             <p class="mt-2 max-w-2xl text-base leading-relaxed text-gray-600 dark:text-gray-300">
                 Cree una OPT con un solo artículo. Para múltiples artículos use Orden de Producción de Trabajo (OPT).
             </p>
+            </div>
+            {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="nueva-opt" only %}
         </header>
 
         <form method="post" action="" class="mpr-post-loading w-full max-w-none space-y-8"

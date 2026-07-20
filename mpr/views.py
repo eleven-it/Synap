@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Tuple
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from urllib.parse import urlencode
@@ -6745,4 +6745,25 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
 
         return _redirect_clasificacion_produccion(
             request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
+        )
+
+
+class ManualUsuarioMprView(MprLoginRequiredMixin, View):
+    """Sirve el manual de usuario MPR (HTML estático generado desde Markdown)."""
+
+    def get(self, request, *args, **kwargs):
+        from pathlib import Path
+
+        manual_path = (
+            Path(__file__).resolve().parent
+            / "static"
+            / "mpr"
+            / "manuales"
+            / "manual_usuario_mpr.html"
+        )
+        if not manual_path.is_file():
+            raise Http404("Manual de usuario MPR no encontrado.")
+        return FileResponse(
+            manual_path.open("rb"),
+            content_type="text/html; charset=utf-8",
         )

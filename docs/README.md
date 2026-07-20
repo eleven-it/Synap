@@ -17,7 +17,8 @@ Toda la documentación del proyecto está en **`docs/`** en la raíz del reposit
 | **support/** | Módulo Support: RAG con LangChain/PGVector, implementación del refactor ([RAG_LANGCHAIN_IMPLEMENTACION.md](support/RAG_LANGCHAIN_IMPLEMENTACION.md)), uso y configuración (ver también [support/docs/RAG_Y_SYNAP.md](../support/docs/RAG_Y_SYNAP.md)). |
 | **login/** | Reservado para documentación de login, sesión y autenticación. |
 | **compras/** | **Factura de compra:** auditoría VB6 (`Guardar` PFactura), origen Manual/Remito/OC/Vale, especificación PWA captura + workflow, posting legacy MySQL, contrato `LegacyPostingCommand`, SQL y tests. Índice: [compras/README.md](compras/README.md). |
-| **mpr/** | Producción (MPR): manual ([mpr/MANUAL_USUARIO_MPR.md](mpr/MANUAL_USUARIO_MPR.md)), pack/componente ([mpr/ARTICULO_PACK_COMPONENTE_MPR.md](mpr/ARTICULO_PACK_COMPONENTE_MPR.md)), índice [mpr/README.md](mpr/README.md). |
+| **mpr/** | Producción (MPR): manual ([mpr/MANUAL_USUARIO_MPR.md](mpr/MANUAL_USUARIO_MPR.md)), CE talle/color ([mpr/ARTICULO_CE_TALLES_COLOR.md](mpr/ARTICULO_CE_TALLES_COLOR.md)), índice [mpr/README.md](mpr/README.md). |
+| **stock/** | Stock e inventario por etapa: manual ([stock/MANUAL_USUARIO_STOCK.md](stock/MANUAL_USUARIO_STOCK.md)), inventario MPR ([stock/INVENTARIO_TABLA_MPR.md](stock/INVENTARIO_TABLA_MPR.md)), índice [stock/README.md](stock/README.md). |
 
 Los README de proyecto (`README_REPORTS.md`, `README_INSTALLATION.md`) permanecen en la raíz del repo como punto de entrada.
 

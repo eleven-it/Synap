@@ -16,9 +16,12 @@
             </ol>
         </nav>
 
-        <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+        <header class="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <div class="min-w-0 max-w-3xl">
             <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Operarios y usuarios</h1>
             <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Vinculá el legajo del operario con su usuario de login para habilitar la carga de producción desde el móvil. Un usuario se vincula a un único operario.</p>
+            </div>
+            {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="config-planta" only %}
         </header>
 
         <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">

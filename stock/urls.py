@@ -6,6 +6,7 @@ from . import api_views
 app_name = "stock"
 
 urlpatterns = [
+    path("manual/", views.manual_usuario_view, name="manual_usuario"),
     path("ingreso-movimiento/", views.alta_movimiento_view, name="alta_movimiento"),
     path("movimientos/", views.visualiza_movimientos_view, name="visualiza_movimientos"),
     path("movimientos/<int:codigo_movimiento>/", views.detalle_movimiento_view, name="detalle_movimiento"),

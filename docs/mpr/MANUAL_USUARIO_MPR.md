@@ -6,7 +6,7 @@ Este manual describe el uso del módulo MPR en Synap: tablero, demanda, OPT (Ped
 
 **Dos circuitos operativos:** (1) **Flujo diario de fábrica** — Tablero de producción → envío → parte → control de calidad → armado → imputación (sin OPT legacy). (2) **Flujo OPT / asistente** — demanda ventana pack, wizard y listado OPT (trazabilidad avanzada y bases con lista_produccion). Este manual cubre ambos; el flujo diario es la entrada principal desde 04/07/2026.
 
-**Referencias:** Glosario en [GLOSARIO_MPR.md](GLOSARIO_MPR.md). Pack vs componente: [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md). Trazabilidad máquina/línea/operario: [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md). Tablero consolidado: [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md).
+**Referencias:** Glosario en [GLOSARIO_MPR.md](GLOSARIO_MPR.md). Pack vs componente: [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md). Trazabilidad máquina/línea/operario: [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md). Tablero consolidado: [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md). Inventario Stock (talle/color): [../stock/MANUAL_USUARIO_STOCK.md](../stock/MANUAL_USUARIO_STOCK.md).
 
 ---
 
@@ -589,9 +589,21 @@ Menú **Producción → Configuración** (permiso `mpr.maquinas_lineas`):
 |----------|------|-----|
 | **Líneas** | `/mpr/lineas/` | Alta/edición de líneas de producción (activo/inactivo). |
 | **Máquinas** | `/mpr/maquinas/` | Catálogo de máquinas; asignación versionada a línea; artículos habilitados por máquina con historial. |
+| **Asignar artículo a máquina** | `/mpr/maquinas/carga-articulos/` | Grilla para habilitar/deshabilitar artículos fabricados por máquina; columnas **Talle** y **Color**; impresión de planilla de Control de Calidad. |
 | **Operarios y usuarios** | `/mpr/operarios-usuarios/` | Vincular empleado (`sue_abm_empleado`) con usuario de login. Un usuario → un operario. |
 | **Turnos y roster** | `/mpr/turnos/`, `/mpr/roster/` | Turnos y planificación; override de línea por día en roster. Ver [TURNOS_Y_ROSTER.md](TURNOS_Y_ROSTER.md). |
 | **Línea habitual operario** | `/mpr/operarios/<id>/linea/` | Línea habitual versionada del operario. |
+
+#### Asignar artículo a máquina e imprimir planilla
+
+1. Ir a **Producción diaria → Asignar artículo a máquina** (permiso `mpr.maquinas_lineas`).
+2. Filtrar por **línea** y/o buscar máquina por código o nombre: la grilla y la impresión respetan ese filtro.
+3. En cada fila: buscar artículo fabricado, habilitar o deshabilitar (cierra vigencia; conserva historial).
+4. En la grilla se muestran **Talle** y **Color** del artículo (campos especiales AdministraNET).
+5. Pulsar **Imprimir Control de Calidad** (único botón, en el encabezado): sale una hoja A4 horizontal con máquina, artículo, color, talle y casilleros en blanco para turnos (1ra/2da mañana·tarde·noche) y observaciones.
+6. Si no hay filas con artículos asignados según el filtro, aparece un **aviso en modal Synap** (no el diálogo del navegador).
+
+Detalle técnico: [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md#asignar-artículo-a-máquina-supervisor).
 
 ### 12.2 Carga móvil del operario
 
@@ -640,9 +652,10 @@ El **parte directo del supervisor** (`/mpr/parte-produccion/`) sigue disponible:
 - **«Sin turno» / «Sin línea»:** Completar roster del día o línea habitual del operario.
 - **«Sin máquinas»:** La línea resuelta no tiene máquinas vigentes o no hay artículos habilitados en las máquinas.
 - **403 en Partes pendientes o Configuración máquinas:** Solicitar permisos `mpr.aprobar_parte` o `mpr.maquinas_lineas`.
+- **Nada para imprimir (planilla CQ):** No hay máquinas visibles con artículos según el filtro; ajustar línea/búsqueda o asignar artículos.
 - **Bucle de redirección al entrar a Mi parte:** Verificar que el usuario tenga `mpr.parte_operario` y que el módulo MPR reconozca ese permiso (catálogo `synap_permiso` actualizado).
 - **Parte móvil pendiente no suma en reportes:** Es correcto hasta aprobación; `cantidad = 0` en partes pendientes.
 
 ---
 
-*Documento: Manual de usuario MPR. Proyecto Synap. Actualizado 09/07/2026 (trazabilidad máquina/línea, flujo diario, reportes y E2E).*
+*Documento: Manual de usuario MPR. Proyecto Synap. Actualizado 20/07/2026 (planilla Control de Calidad, talle/color en grilla de máquinas, inventario Stock).*

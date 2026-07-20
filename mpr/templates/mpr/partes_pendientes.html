@@ -14,9 +14,12 @@
             </ol>
         </nav>
 
-        <header class="mb-6 border-b border-gray-200/80 pb-6 dark:border-gray-700/80">
+        <header class="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-gray-200/80 pb-6 dark:border-gray-700/80">
+            <div class="min-w-0 max-w-3xl">
             <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Partes pendientes de aprobación</h1>
             <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">Revisá los partes cargados por los operarios, corregí desvíos (gap) y aprobalos. La aprobación ingresa el stock al depósito de Producción.</p>
+            </div>
+            {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="partes-pendientes" only %}
         </header>
 
         {% if ok_msg %}

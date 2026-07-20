@@ -144,14 +144,19 @@ Los artículos vigentes incluyen **TALLES** y **COLOR** desde campos especiales
 
 ### Planilla Control de Calidad (impresión)
 
-Botón **Imprimir Control de Calidad** en el encabezado. Genera una hoja A4 horizontal con:
+Botón único **Imprimir Control de Calidad** en el encabezado de la pantalla.
+Genera una hoja **A4 horizontal** pensada para completar a mano:
 
 - Título: `CONTROL DE CALIDAD — {día} {dd/MM/yyyy}` (día en español).
 - Columnas: MÁQUINA | DETALLE (ARTÍCULO · COLOR · TALLE) | TURNO MAÑANA (1ra·2da) |
   TURNO TARDE (1ra·2da) | TURNO NOCHE (1ra·2da) | OBSERVACIONES.
+- Anchos de impresión: las columnas **1ra/2da** de turnos son amplias (escritura a mano);
+  **ARTÍCULO** cede espacio y hace wrap si hace falta.
 - Filas: **solo lo visible en pantalla** (filtro de línea GET + búsqueda de máquina).
   Si filtrás una sola máquina, la planilla imprime únicamente esa fila/artículos.
-- Turnos y observaciones en blanco para completar a mano.
-- Si no hay filas imprimibles, se muestra un **modal Synap** (no `alert` nativo).
+- Turnos y observaciones en blanco.
+- Si no hay filas imprimibles, **modal Synap** (no `alert` nativo del navegador).
+- El encabezado de la hoja puede mostrar el filtro activo (línea / búsqueda).
 
+Origen de COLOR/TALLES: ver [ARTICULO_CE_TALLES_COLOR.md](ARTICULO_CE_TALLES_COLOR.md).
 Ver también [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md#urls).

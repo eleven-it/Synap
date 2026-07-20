@@ -12,9 +12,11 @@ Documentación del módulo MPR en Synap: flujos, esquema de datos, manual de usu
 | [SCHEMA_MPR_ADMINISTRANET92.md](SCHEMA_MPR_ADMINISTRANET92.md) | Esquema de tablas MPR en base AdministraNET (lista_produccion_*, movimiento_stock, etc.). |
 | [PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md](PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md) | **Plan** — Migrar ledgers MPR de Postgres a MySQL (`mpr_*`), FK, utf8mb4, deprecación OPT/lista_produccion. OpenSpec: `openspec/changes/mpr-mysql-fuente-unica/`. |
 | [NORMALIZACION_TABLAS_MPR.md](NORMALIZACION_TABLAS_MPR.md) | Normalización de tablas DB (MPR / AdministraNET) y relaciones. |
-| [MANUAL_USUARIO_MPR.md](MANUAL_USUARIO_MPR.md) | **Manual de usuario** del módulo MPR (flujo diario, OPT, trazabilidad máquina/línea, reportes). |
+| [MANUAL_USUARIO_MPR.md](MANUAL_USUARIO_MPR.md) | **Manual de usuario** del módulo MPR (flujo diario, OPT, trazabilidad máquina/línea, planilla CQ, reportes). |
+| [manual_usuario_mpr.html](manual_usuario_mpr.html) | **Manual HTML navegable** (generado desde el MD). En la app: **`/mpr/manual/`** (requiere login). Regenerar: `python scripts/generar_manuales_html.py`. |
 | [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md) | **Trazabilidad** máquina / línea / operario: modelo, permisos, flujo dos etapas (móvil + aprobación). |
-| [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md) | Carga móvil del operario (`/mpr/mi-parte/`), buscador, aprobación supervisor. |
+| [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md) | Carga móvil del operario (`/mpr/mi-parte/`), grilla asignar artículo, planilla Control de Calidad. |
+| [ARTICULO_CE_TALLES_COLOR.md](ARTICULO_CE_TALLES_COLOR.md) | **Desarrollo** — Campos especiales CE TALLES/COLOR: tablas, lectura en UI, inferencia/carga masiva. |
 | [ARTICULO_PACK_COMPONENTE_MPR.md](ARTICULO_PACK_COMPONENTE_MPR.md) | **Implementación:** cómo se identifican pack y componente (`articulo`, BOM, OPT, armado surtido). |
 | [GLOSARIO_MPR.md](GLOSARIO_MPR.md) | Glosario de términos MPR. |
 | [SDD_ARMADO_SURTIDO_MVP.md](SDD_ARMADO_SURTIDO_MVP.md) | SDD — Armado surtido desde 2.ª selección (MVP implementado). |
