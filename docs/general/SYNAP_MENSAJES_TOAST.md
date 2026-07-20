@@ -82,6 +82,15 @@ En componentes Alpine (VCM, armado surtido, etc.) se expone un helper local `mos
 - `mpr/armado_surtido.html`: `mostrarMensaje` ahora usa `mprShowAviso` (mapea `ok`→`success`, `warn`→`warning`); se quitó el banner `mensajeLote`.
 - `mpr/imputacion_armado_1ra.html`: el banner `#imputacion-error-cliente` se reemplazó por `mprShowAviso`.
 
+### Pantallas migradas a modal (2026-07-20)
+
+- `ecom/pedido_masivo_sucursales.html` + `ecom/static/ecom/js/pedido_masivo_app.mjs` (Pedido simple / Pedido masivo): se quitaron los banners inline de la región «Mensajes» (`error`, `mensajeOk`, `advertenciasCarga`, `previewWarningBloqueante`, `alertasUltimoError`). Helper local `mostrarAviso(texto, tipo, titulo)` que delega en `mprShowAviso`.
+  - Errores → modal `error`. El error de confirmación usa título **«No se pudo confirmar»** (antes hardcodeado como título del banner para todos los errores).
+  - Éxito (confirmar, anular borrador/pedido, mail, repetir) → modal `success`.
+  - Avisos de conversión/redondeo al cargar un PED (`advertenciasCarga`) → modal `warning` título **«Avisos al cargar el pedido»**.
+  - `previewWarningBloqueante` sigue mostrándose dentro del modal de confirmación (`masivo_confirmar`); el detalle por sucursal del lote ya viaja en el mensaje del modal de error de confirmación (`_formatoErrorConfirmacion`), por lo que no se abre un modal extra de «Advertencias del lote».
+  - Leftover intencional: el empty-state «Este cliente no tiene sucursales (domicilios) activas» se conserva como **estado de página** (no feedback de acción).
+
 ### Leftovers intencionales (no migrados)
 
 Se dejaron por ser **ayuda contextual / estados de página o dropdown**, no feedback de acción:
