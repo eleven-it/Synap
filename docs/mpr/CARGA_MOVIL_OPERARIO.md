@@ -144,7 +144,7 @@ Los artículos vigentes incluyen **TALLES** y **COLOR** desde campos especiales
 
 ### Planilla Control de Calidad (impresión)
 
-Botón **Imprimir Control de Calidad** en el encabezado (y otro en la barra de filtros). Genera una hoja A4 horizontal con:
+Botón **Imprimir Control de Calidad** en el encabezado. Genera una hoja A4 horizontal con:
 
 - Título: `CONTROL DE CALIDAD — {día} {dd/MM/yyyy}` (día en español).
 - Columnas: MÁQUINA | DETALLE (ARTÍCULO · COLOR · TALLE) | TURNO MAÑANA (1ra·2da) |

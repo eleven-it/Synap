@@ -8,13 +8,16 @@
 
 Consulta operativa de inventario: una fila por artículo con columnas por etapa MPR (`deposito.tipo_mpr`) y columna **Consolidado**.
 
-| Columna | `tipo_mpr` |
-|---------|-------------|
-| Producción | `Produccion` |
-| Semi elaborado | `SemiElaborado` |
-| 2da Selección | `2daSeleccion` |
-| Terminado | `Terminado` |
-| Consolidado | Suma de las cuatro anteriores |
+| Columna | Origen |
+|---------|--------|
+| Artículo | Código compuesto + nombre |
+| Talle | Campo especial CE `TALLES` (`articulo_valor_ce.valor1`) |
+| Color | Campo especial CE `COLOR` (`articulo_valor_ce.valor2`) |
+| Producción | `tipo_mpr = Produccion` |
+| Semi elaborado | `tipo_mpr = SemiElaborado` |
+| 2da Selección | `tipo_mpr = 2daSeleccion` |
+| Terminado | `tipo_mpr = Terminado` |
+| Consolidado | Suma de las cuatro etapas |
 
 Solo se suman depósitos con `suma_stock = 'Si'`.
 

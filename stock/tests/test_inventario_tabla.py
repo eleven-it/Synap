@@ -5,6 +5,7 @@ from django.test import SimpleTestCase
 from stock.services.inventario_tabla import (
     InventarioTablaFiltros,
     build_inventario_query_string,
+    ce_texto,
     codigo_compuesto_articulo,
     parse_inventario_filtros,
     parse_presentacion,
@@ -18,6 +19,17 @@ class CodigoCompuestoTest(SimpleTestCase):
     def test_solo_manual(self):
         self.assertEqual(codigo_compuesto_articulo("12A", ""), "12A")
         self.assertEqual(codigo_compuesto_articulo("12A", None), "12A")
+
+
+class CeTextoTest(SimpleTestCase):
+    def test_vacio_y_guion(self):
+        self.assertEqual(ce_texto(""), "")
+        self.assertEqual(ce_texto("-"), "")
+        self.assertEqual(ce_texto(None), "")
+
+    def test_valor(self):
+        self.assertEqual(ce_texto("T4"), "T4")
+        self.assertEqual(ce_texto(" Negro "), "Negro")
 
 
 class ParseFiltrosTest(SimpleTestCase):
