@@ -1,0 +1,49 @@
+change: contabilidad-auditoria-recalculo
+status: archived
+updated: "2026-07-19"
+artifact_store: openspec
+phases:
+  explore: complete
+  propose: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+  archive: complete
+depends_on: []
+notes: >
+  Auditoría contable solo lectura (17 checks), políticas configurables Synap, dry-run/apply de recálculo
+  (regen asientos compras/pagos, rebuild saldos, REI defensivo). Fases 0-3 + REI refinado;
+  gaps REC-07/08/14 cerrados. Verificado 19/07/2026: PASS WITH WARNINGS (40 tests OK, 1 skip integración piloto).
+  Archivado en openspec/changes/archive/2026-07-19-contabilidad-auditoria-recalculo/
+spec_summary:
+  new_capabilities:
+    - contabilidad-auditoria-lectura
+    - contabilidad-politicas-configurables
+    - contabilidad-recalculo-correccion
+  modified_capabilities: []
+  requirements_total: 54
+  requirements_by_capability:
+    contabilidad-auditoria-lectura: 23
+    contabilidad-politicas-configurables: 13
+    contabilidad-recalculo-correccion: 18
+verify_summary:
+  verdict: PASS_WITH_WARNINGS
+  tasks_complete: 58
+  tasks_total: 58
+  tests_passed: 40
+  tests_failed: 0
+  tests_skipped: 1
+archive_summary:
+  archived_at: "2026-07-19"
+  archive_path: openspec/changes/archive/2026-07-19-contabilidad-auditoria-recalculo/
+  main_specs_synced:
+    - openspec/specs/contabilidad-auditoria-lectura/spec.md
+    - openspec/specs/contabilidad-politicas-configurables/spec.md
+    - openspec/specs/contabilidad-recalculo-correccion/spec.md
+  merge_action: created
+  delta_totals:
+    added: 54
+    modified: 0
+    removed: 0
