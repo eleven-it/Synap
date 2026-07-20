@@ -339,6 +339,80 @@
       </div>
     </div>
   </div>
+
+  {# Modal de confirmación genérico (reemplaza window.confirm) #}
+  <div x-show="confirmOpen" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="pedidos-hub-confirm-title"
+       @keydown.escape.window="cerrarConfirm()"
+       @click.self="cerrarConfirm()"
+       x-transition.opacity>
+    <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-600 dark:bg-slate-800"
+         @click.stop>
+      <div class="mb-1 flex items-center gap-2">
+        <span class="material-icons"
+              :class="confirmVariante === 'danger' ? 'text-rose-500' : 'text-purple-500'"
+              x-text="confirmIcono"
+              aria-hidden="true"></span>
+        <h3 id="pedidos-hub-confirm-title"
+            class="text-sm font-semibold text-slate-800 dark:text-slate-100"
+            x-text="confirmTitulo"></h3>
+      </div>
+      <p class="mb-5 text-xs text-slate-500 dark:text-slate-400" x-text="confirmMensaje"></p>
+      <div class="flex justify-end gap-2">
+        <button type="button" @click="cerrarConfirm()" :disabled="confirmProcesando"
+                class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+          Cancelar
+        </button>
+        <button type="button" @click="ejecutarConfirm()" :disabled="confirmProcesando"
+                class="inline-flex items-center gap-1 rounded-lg px-4 py-2 text-xs font-medium text-white disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-offset-2"
+                :class="confirmVariante === 'danger' ? 'bg-rose-600 hover:bg-rose-500 focus:ring-rose-500' : 'bg-purple-600 hover:bg-purple-500 focus:ring-purple-500'">
+          <span class="material-icons text-sm" aria-hidden="true" x-text="confirmIcono"></span>
+          <span x-show="!confirmProcesando" x-text="confirmBtnTexto"></span>
+          <span x-show="confirmProcesando" x-cloak>Procesando…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  {# Modal motivo de rechazo (reemplaza window.prompt) #}
+  <div x-show="rechazoOpen" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+       role="dialog"
+       aria-modal="true"
+       aria-labelledby="pedidos-hub-rechazo-title"
+       @keydown.escape.window="cerrarRechazo()"
+       @click.self="cerrarRechazo()"
+       x-transition.opacity>
+    <div class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-600 dark:bg-slate-800"
+         @click.stop>
+      <div class="mb-1 flex items-center gap-2">
+        <span class="material-icons text-rose-500" aria-hidden="true">block</span>
+        <h3 id="pedidos-hub-rechazo-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Rechazar pedido</h3>
+      </div>
+      <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">Indicá el motivo del rechazo. Es obligatorio.</p>
+      <label class="sr-only" for="pedidos-hub-rechazo-motivo">Motivo del rechazo</label>
+      <textarea id="pedidos-hub-rechazo-motivo"
+                x-model="rechazoMotivo"
+                rows="3"
+                placeholder="Motivo del rechazo (obligatorio)…"
+                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"></textarea>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" @click="cerrarRechazo()" :disabled="rechazoProcesando"
+                class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+          Cancelar
+        </button>
+        <button type="button" @click="confirmarRechazo()" :disabled="rechazoProcesando || !rechazoMotivo.trim()"
+                class="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-4 py-2 text-xs font-medium text-white hover:bg-rose-500 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2">
+          <span class="material-icons text-sm" aria-hidden="true">block</span>
+          <span x-show="!rechazoProcesando">Rechazar pedido</span>
+          <span x-show="rechazoProcesando" x-cloak>Procesando…</span>
+        </button>
+      </div>
+    </div>
+  </div>
 </section>
 
 {{ hub_bootstrap|json_script:"pedidos-hub-bootstrap" }}
@@ -360,6 +434,18 @@ function pedidosHubApp() {
     urlContinuarBorrador: '',
     draftMasivoId: null,
     cargando: false,
+    confirmOpen: false,
+    confirmTitulo: '',
+    confirmMensaje: '',
+    confirmBtnTexto: 'Confirmar',
+    confirmVariante: 'primary',
+    confirmIcono: 'help',
+    confirmProcesando: false,
+    _confirmFn: null,
+    rechazoOpen: false,
+    rechazoMotivo: '',
+    rechazoProcesando: false,
+    _rechazoIt: null,
     init() {
       const raw = document.getElementById('pedidos-hub-bootstrap');
       const data = raw ? JSON.parse(raw.textContent) : {};
@@ -417,6 +503,34 @@ function pedidosHubApp() {
       const masivo = borr.find(i => i.tipo === 'masivo');
       this.draftMasivoId = masivo && masivo.meta ? masivo.meta.draft_id : null;
       this.urlContinuarBorrador = masivo ? masivo.url : (this.urls.nuevo_masivo || '#');
+    },
+    pedirConfirmacion({ titulo, mensaje, confirmarTexto, variante, icono, onConfirm } = {}) {
+      this.confirmTitulo = titulo || 'Confirmar';
+      this.confirmMensaje = mensaje || '';
+      this.confirmBtnTexto = confirmarTexto || 'Confirmar';
+      this.confirmVariante = variante || 'primary';
+      this.confirmIcono = icono || (variante === 'danger' ? 'warning' : 'help');
+      this._confirmFn = typeof onConfirm === 'function' ? onConfirm : null;
+      this.confirmProcesando = false;
+      this.confirmOpen = true;
+    },
+    cerrarConfirm() {
+      if (this.confirmProcesando) return;
+      this.confirmOpen = false;
+      this._confirmFn = null;
+    },
+    async ejecutarConfirm() {
+      if (this.confirmProcesando) return;
+      const fn = this._confirmFn;
+      if (!fn) { this.confirmOpen = false; return; }
+      this.confirmProcesando = true;
+      try {
+        await fn();
+        this.confirmOpen = false;
+        this._confirmFn = null;
+      } finally {
+        this.confirmProcesando = false;
+      }
     },
     async actualizar() {
       if (this.cargando || !this.urls.api) return;
@@ -492,7 +606,7 @@ function pedidosHubApp() {
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data.ok === false) {
-        alert(data.error || 'No se pudo migrar el carrito legacy.');
+        this._aviso(data.error || 'No se pudo migrar el carrito legacy.', 'error');
         return;
       }
       if (data.url) {
@@ -501,47 +615,64 @@ function pedidosHubApp() {
       }
       await this.actualizar();
     },
-    async archivarCarritoLegacy(it) {
+    archivarCarritoLegacy(it) {
       const cartId = it && it.meta ? it.meta.cart_id : null;
       if (!cartId || !this.urls.archivar_carrito) return;
-      if (!window.confirm('¿Archivar el carrito legacy? Se perderán los ítems no migrados.')) return;
-      const resp = await fetch(this.urls.archivar_carrito, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
-        body: JSON.stringify({ cart_id: cartId }),
+      this.pedirConfirmacion({
+        titulo: 'Archivar carrito legacy',
+        mensaje: '¿Archivar el carrito legacy? Se perderán los ítems no migrados.',
+        confirmarTexto: 'Archivar',
+        variante: 'danger',
+        icono: 'archive',
+        onConfirm: async () => {
+          const resp = await fetch(this.urls.archivar_carrito, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
+            body: JSON.stringify({ cart_id: cartId }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || data.ok === false) {
+            this._aviso(data.error || 'No se pudo archivar el carrito legacy.', 'error');
+            return;
+          }
+          await this.actualizar();
+        },
       });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data.ok === false) {
-        alert(data.error || 'No se pudo archivar el carrito legacy.');
-        return;
-      }
-      await this.actualizar();
     },
     _aviso(texto, tipo) {
       if (typeof window.mprShowAviso === 'function') {
         window.mprShowAviso(texto, tipo || 'error');
       } else {
+        // Degradación documentada: solo si el partial mprShowAviso no está cargado.
         alert(texto);
       }
     },
-    async eliminarBorradorAnulado(it) {
+    eliminarBorradorAnulado(it) {
       const draftId = it && it.meta ? it.meta.draft_id : null;
       if (!draftId || !this.urls.eliminar_draft) return;
-      if (!window.confirm('¿Eliminar este borrador anulado de forma definitiva? No se podrá recuperar.')) return;
-      const resp = await fetch(this.urls.eliminar_draft, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
-        body: JSON.stringify({ draft_id: draftId }),
+      this.pedirConfirmacion({
+        titulo: 'Eliminar borrador',
+        mensaje: '¿Eliminar este borrador anulado de forma definitiva? No se podrá recuperar.',
+        confirmarTexto: 'Eliminar',
+        variante: 'danger',
+        icono: 'delete_forever',
+        onConfirm: async () => {
+          const resp = await fetch(this.urls.eliminar_draft, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
+            body: JSON.stringify({ draft_id: draftId }),
+          });
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || data.ok === false) {
+            this._aviso(data.error || 'No se pudo eliminar el borrador.', 'error');
+            return;
+          }
+          this._aviso(data.message || 'Borrador eliminado definitivamente.', 'success');
+          await this.actualizar();
+        },
       });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data.ok === false) {
-        this._aviso(data.error || 'No se pudo eliminar el borrador.', 'error');
-        return;
-      }
-      this._aviso(data.message || 'Borrador eliminado definitivamente.', 'exito');
-      await this.actualizar();
     },
     _urlAprobacion(template, codMov) {
       if (!template || !codMov) return '';
@@ -564,30 +695,56 @@ function pedidosHubApp() {
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || data.ok === false) {
-        alert(data.error || 'No se pudo aprobar el pedido.');
+        this._aviso(data.error || 'No se pudo aprobar el pedido.', 'error');
         return;
       }
       await this.actualizar();
     },
-    async rechazarPedido(it) {
+    rechazarPedido(it) {
       const cod = it && it.meta ? it.meta.codigo_movimiento : null;
       if (!cod) return;
-      const motivo = window.prompt('Motivo del rechazo (obligatorio):');
-      if (!motivo || !motivo.trim()) return;
-      const url = this._urlAprobacion(this.urls.aprobacion_rechazar, cod);
-      if (!url) return;
-      const resp = await fetch(url, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
-        body: JSON.stringify({ motivo: motivo.trim() }),
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok || data.ok === false) {
-        alert(data.error || 'No se pudo rechazar el pedido.');
+      this._rechazoIt = it;
+      this.rechazoMotivo = '';
+      this.rechazoProcesando = false;
+      this.rechazoOpen = true;
+    },
+    cerrarRechazo() {
+      if (this.rechazoProcesando) return;
+      this.rechazoOpen = false;
+      this._rechazoIt = null;
+      this.rechazoMotivo = '';
+    },
+    async confirmarRechazo() {
+      if (this.rechazoProcesando) return;
+      const it = this._rechazoIt;
+      const cod = it && it.meta ? it.meta.codigo_movimiento : null;
+      const motivo = (this.rechazoMotivo || '').trim();
+      if (!motivo) {
+        this._aviso('El motivo del rechazo es obligatorio.', 'warning');
         return;
       }
-      await this.actualizar();
+      const url = this._urlAprobacion(this.urls.aprobacion_rechazar, cod);
+      if (!url) return;
+      this.rechazoProcesando = true;
+      try {
+        const resp = await fetch(url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
+          body: JSON.stringify({ motivo }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || data.ok === false) {
+          this._aviso(data.error || 'No se pudo rechazar el pedido.', 'error');
+          return;
+        }
+        this.rechazoOpen = false;
+        this._rechazoIt = null;
+        this.rechazoMotivo = '';
+        await this.actualizar();
+      } finally {
+        this.rechazoProcesando = false;
+      }
     },
   };
 }
