@@ -342,7 +342,7 @@ function pedidoMasivoCore() {
         );
         if (String(this.clienteSel || '') !== id) return [];
         if (!data.ok) {
-          this.error = data.error || 'No se pudieron cargar las sucursales.';
+          this.mostrarAviso(data.error || 'No se pudieron cargar las sucursales.', 'error');
           this.opcionesSucursal = [];
           return [];
         }
@@ -401,7 +401,7 @@ function pedidoMasivoCore() {
         this.idDomicilioInicial = null;
         const sucursales = await this.cargarOpcionesSucursal(id);
         if (!sucursales.length) {
-          this.error = 'Este cliente no tiene sucursales activas.';
+          this.mostrarAviso('Este cliente no tiene sucursales activas.', 'error');
           return;
         }
         if (sucursales.length === 1) {
@@ -428,6 +428,21 @@ function pedidoMasivoCore() {
     money(v) {
       const n = Number(v || 0);
       return `$${n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    },
+    /**
+     * Feedback operativo en modal (fuente de verdad MPR: `mprShowAviso`).
+     * `tipo`: 'error' (default) | 'success' | 'warning' | 'info'. `titulo` opcional.
+     */
+    mostrarAviso(texto, tipo, titulo) {
+      if (typeof window.mprShowAviso === 'function') {
+        if (titulo) {
+          window.mprShowAviso('', { tipo: tipo || 'error', titulo, mensaje: texto || '' });
+        } else {
+          window.mprShowAviso(texto || '', tipo || 'error');
+        }
+        return;
+      }
+      window.alert(texto || '');
     },
     async getJson(url, options = {}) {
       const r = await fetch(url, {
@@ -680,7 +695,7 @@ function pedidoMasivoCore() {
         this.clientes = data.items || [];
         this.idxCli = 0;
       } else {
-        this.error = data.error || '';
+        if (data.error) this.mostrarAviso(data.error, 'error');
         this.clientes = [];
       }
     },
@@ -692,9 +707,9 @@ function pedidoMasivoCore() {
           ? this.opcionesSucursal
           : await this.cargarOpcionesSucursal(this.clienteSel);
         if (!sucursales.length) {
-          this.error = 'Este cliente no tiene sucursales activas.';
+          this.mostrarAviso('Este cliente no tiene sucursales activas.', 'error');
         } else {
-          this.error = 'Elegí la sucursal del pedido.';
+          this.mostrarAviso('Elegí la sucursal del pedido.', 'info');
           this.panelSuc = sucursales.length > 1;
         }
         return;
@@ -713,7 +728,7 @@ function pedidoMasivoCore() {
       }
       const { data } = await this.postJson(this.urls.abrir, body);
       this.abriendo = false;
-      if (!data.ok) { this.error = data.error || 'No se pudo abrir.'; return; }
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo abrir.', 'error'); return; }
       // Cliente nuevo elegido a mano: no arrastra PED cargado previo.
       this._resetPedidoCargado();
       this.aplicarMatriz(data.matriz);
@@ -730,7 +745,7 @@ function pedidoMasivoCore() {
       if (this.modoSimple) body.modo = 'simple';
       const { data } = await this.postJson(this.urls.abrir, body);
       this.abriendo = false;
-      if (!data.ok) { this.error = data.error || 'No se pudo recuperar el borrador.'; return; }
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo recuperar el borrador.', 'error'); return; }
       this.aplicarMatriz(data.matriz);
     },
     /** Reemplaza la URL preservando modo=simple + draft para F5/bookmark. */
@@ -765,7 +780,7 @@ function pedidoMasivoCore() {
       });
       this.abriendo = false;
       if (!data.ok) {
-        this.error = data.error || 'No se pudo cargar el pedido.';
+        this.mostrarAviso(data.error || 'No se pudo cargar el pedido.', 'error');
         return;
       }
       this.modoSimple = true;
@@ -787,9 +802,13 @@ function pedidoMasivoCore() {
       this.emailCliente = String(p.email_cliente || '').trim();
       this.advertenciasCarga = Array.isArray(advertencias) ? advertencias : [];
       if (p.repetido) {
-        this.mensajeOk = 'Pedido copiado a un borrador nuevo. Revisá y confirmá para generar un PED.';
+        this.mostrarAviso('Pedido copiado a un borrador nuevo. Revisá y confirmá para generar un PED.', 'success');
       } else if (this.pedidoSoloConsulta) {
-        this.mensajeOk = `PED ${this.pedidoNro || this.pedidoCodMov} en consulta (${this.pedidoEstado}).`;
+        this.mostrarAviso(`PED ${this.pedidoNro || this.pedidoCodMov} en consulta (${this.pedidoEstado}).`, 'info');
+      }
+      // Avisos de conversión/redondeo al cargar el PED (prioridad sobre el info anterior).
+      if (this.advertenciasCarga.length) {
+        this.mostrarAviso(this.advertenciasCarga.join('\n'), 'warning', 'Avisos al cargar el pedido');
       }
     },
     celda(idArt, idDom) {
@@ -930,7 +949,7 @@ function pedidoMasivoCore() {
         id_articulo: id,
       });
       if (!data.ok) {
-        this.error = data.error || 'No se pudo quitar el artículo.';
+        this.mostrarAviso(data.error || 'No se pudo quitar el artículo.', 'error');
         return;
       }
       if (data.matriz) this.aplicarMatriz(data.matriz);
@@ -969,7 +988,7 @@ function pedidoMasivoCore() {
           this.marcarTotalesEstimados();
           return;
         }
-        this.error = data.error || 'Error al guardar';
+        this.mostrarAviso(data.error || 'Error al guardar', 'error');
         return;
       }
       if (data.celda && data.celda.eliminada) delete this.celdas[key];
@@ -989,7 +1008,7 @@ function pedidoMasivoCore() {
         id_articulo: idArt,
         porcentaje_descuento: val === '' ? 0 : val,
       });
-      if (!data.ok) { this.error = data.error || 'No se pudo guardar el descuento.'; return; }
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo guardar el descuento.', 'error'); return; }
       if (data.matriz) this.aplicarMatriz(data.matriz);
       this.flashGuardado();
     },
@@ -1002,7 +1021,7 @@ function pedidoMasivoCore() {
         draft_id: this.draftId,
         desc_pie_pct: val === '' ? 0 : val,
       });
-      if (!data.ok) { this.error = data.error || 'No se pudo guardar el descuento de pie.'; return; }
+      if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo guardar el descuento de pie.', 'error'); return; }
       if (data.matriz) this.aplicarMatriz(data.matriz);
       this.flashGuardado();
     },
@@ -1094,7 +1113,7 @@ function pedidoMasivoCore() {
         });
         if (seq !== this._previewSeq) return;
         if (!data || !data.ok) {
-          this.error = (data && (data.error || data.message)) || 'No se pudo validar los totales.';
+          this.mostrarAviso((data && (data.error || data.message)) || 'No se pudo validar los totales.', 'error');
           return;
         }
         this.preview = {
@@ -1174,9 +1193,9 @@ function pedidoMasivoCore() {
       try {
         const data = await this.getJson(u, { signal: abortController.signal });
         if (seq !== this._artBusquedaSeq || abortController.signal.aborted) return;
-        if (!data.ok) { this.error = data.error || ''; this.articulosBusqueda = []; this.artBusquedaHecha = true; return; }
+        if (!data.ok) { if (data.error) this.mostrarAviso(data.error, 'error'); this.articulosBusqueda = []; this.artBusquedaHecha = true; return; }
         if (data.sin_marcas) {
-          this.error = 'No hay marcas asignadas para este cliente en tu territorio.';
+          this.mostrarAviso('No hay marcas asignadas para este cliente en tu territorio.', 'error');
           this.articulosBusqueda = [];
           this.artBusquedaHecha = true;
           return;
@@ -1195,7 +1214,7 @@ function pedidoMasivoCore() {
         this.artBusquedaHecha = true;
       } catch (error) {
         if (error?.name !== 'AbortError' && seq === this._artBusquedaSeq) {
-          this.error = 'No se pudieron buscar artículos.';
+          this.mostrarAviso('No se pudieron buscar artículos.', 'error');
           this.articulosBusqueda = [];
           this.artBusquedaHecha = true;
         }
@@ -1434,11 +1453,11 @@ function pedidoMasivoCore() {
       const { data } = await this.postJson(this.urls.anular, { draft_id: this.draftId });
       this.anulando = false;
       if (!data.ok) {
-        this.error = data.error || 'No se pudo anular el borrador.';
+        this.mostrarAviso(data.error || 'No se pudo anular el borrador.', 'error');
         return;
       }
       if (data.matriz) this.aplicarMatriz(data.matriz);
-      this.mensajeOk = data.message || 'Borrador anulado. Podés recuperarlo desde el hub.';
+      this.mostrarAviso(data.message || 'Borrador anulado. Podés recuperarlo desde el hub.', 'success');
     },
     // ── Acciones hero PED (mail / repetir / PDF / anular) — REQ-PSU-07 ──
     verPdfPedido() {
@@ -1491,10 +1510,10 @@ function pedidoMasivoCore() {
       });
       const okMsg = data && (data.msg === 'ok' || data.ok);
       if (!okMsg) {
-        this.error = (data && (data.error || data.detail)) || 'No se pudo encolar el mail.';
+        this.mostrarAviso((data && (data.error || data.detail)) || 'No se pudo encolar el mail.', 'error');
         return;
       }
-      this.mensajeOk = 'Solicitud de envío registrada.';
+      this.mostrarAviso('Solicitud de envío registrada.', 'success');
     },
     solicitarAnularPedido() {
       if (!this.puedeAnularPedido || !this.pedidoCodMov || !this.urls.anular_pedido) return;
@@ -1530,10 +1549,10 @@ function pedidoMasivoCore() {
       });
       const okMsg = data && (data.msg === 'ok' || data.ok);
       if (!okMsg) {
-        this.error = (data && (data.error || data.detail)) || 'No se pudo anular el pedido.';
+        this.mostrarAviso((data && (data.error || data.detail)) || 'No se pudo anular el pedido.', 'error');
         return;
       }
-      this.mensajeOk = 'Pedido anulado.';
+      this.mostrarAviso('Pedido anulado.', 'success');
       this.puedeAnularPedido = false;
       this.pedidoEditable = false;
       // Recargar el PED anulado en consulta (solo lectura).
@@ -1542,7 +1561,7 @@ function pedidoMasivoCore() {
     async confirmarLote() {
       if (!this.draftId || !this.urls.confirmar || this.confirmando) return;
       if (this.pedidoSoloConsulta) {
-        this.error = 'Este pedido no es editable (en producción o anulado). Solo consulta.';
+        this.mostrarAviso('Este pedido no es editable (en producción o anulado). Solo consulta.', 'warning');
         return;
       }
       this.error = '';
@@ -1768,7 +1787,7 @@ function pedidoMasivoCore() {
         this.confirmando = false;
         this.confirmProgreso = null;
         this.dialogKind = 'masivo_confirmar';
-        this.error = 'No se pudo confirmar el pedido: fallo de red o respuesta inválida.';
+        this.mostrarAviso('No se pudo confirmar el pedido: fallo de red o respuesta inválida.', 'error', 'No se pudo confirmar');
         return;
       }
 
@@ -1785,7 +1804,7 @@ function pedidoMasivoCore() {
       }
 
       if (!data.ok || status === 409 || status >= 400) {
-        this.error = this._formatoErrorConfirmacion(data, status);
+        this.mostrarAviso(this._formatoErrorConfirmacion(data, status), 'error', 'No se pudo confirmar');
         if (data.matriz?.ultimo_error) this.ultimoError = data.matriz.ultimo_error;
         else if (data.errores) this.ultimoError = data.errores;
         // Volver al resumen editable tras breve pausa para leer el error en el modal.
@@ -1797,12 +1816,13 @@ function pedidoMasivoCore() {
       }
 
       this.ultimoError = {};
-      this.mensajeOk = data.message || 'Pedido confirmado.';
+      let okMsg = data.message || 'Pedido confirmado.';
       this.draftEstado = 'confirmado';
       const cods = data.codigos_movimiento || [];
       if (cods.length) {
-        this.mensajeOk += ' PED: ' + cods.join(', ');
+        okMsg += ' PED: ' + cods.join(', ');
       }
+      this.mostrarAviso(okMsg, 'success');
       // Modo simple: habilitar acciones hero (PDF/mail/anular) sobre el PED creado.
       if (this.modoSimple && cods.length) {
         this.pedidoCodMov = Number(cods[0]);
@@ -1859,7 +1879,7 @@ function pedidoMasivoCore() {
       if (!this.urls.vendedor_operativo || !Number.isFinite(cod)) return;
       const { data } = await this.postJson(this.urls.vendedor_operativo, { cod_viajante: cod });
       if (!data.ok) {
-        this.error = data.detail || 'No se pudo cambiar el vendedor.';
+        this.mostrarAviso(data.detail || 'No se pudo cambiar el vendedor.', 'error');
         await this.cargarCarteraVendedor();
         return;
       }

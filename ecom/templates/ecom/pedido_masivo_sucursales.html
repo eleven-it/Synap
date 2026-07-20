@@ -115,43 +115,12 @@
       </div>
     </div>
 
-    {# Alertas en encabezado (error / éxito / preview / último confirm) #}
-    <div class="mb-2 flex flex-shrink-0 flex-col gap-2" role="region" aria-label="Mensajes">
-      <div x-show="error" x-cloak
-           class="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-100"
-           role="alert">
-        <p class="font-semibold">No se pudo confirmar</p>
-        <p class="mt-0.5 whitespace-pre-wrap break-words" x-text="error"></p>
-      </div>
-      <div x-show="mensajeOk" x-cloak class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-100" x-text="mensajeOk" role="status"></div>
-      {# Advertencias de carga del PED (conversión packs / redondeo) — REQ-PSU-04 #}
-      <div x-show="advertenciasCarga.length" x-cloak
-           class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
-           role="alert">
-        <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Avisos al cargar el pedido</p>
-        <ul class="list-inside list-disc space-y-0.5">
-          <template x-for="(msg, i) in advertenciasCarga" :key="'ac-' + i">
-            <li x-text="msg"></li>
-          </template>
-        </ul>
-      </div>
-      <div x-show="previewWarningBloqueante" x-cloak
-           class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
-           x-text="previewWarningBloqueante" role="alert"></div>
-      <div x-show="alertasUltimoError.length" x-cloak
-           class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
-           role="alert">
-        <p class="mb-1 text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Advertencias del lote</p>
-        <ul class="list-inside list-disc space-y-0.5 text-xs">
-          <template x-for="(msg, i) in alertasUltimoError" :key="'ue-' + i">
-            <li x-text="msg"></li>
-          </template>
-        </ul>
-      </div>
-      <div x-show="draftId && !sucursales.length" x-cloak
-           class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-        Este cliente no tiene sucursales (domicilios) activas.
-      </div>
+    {# Feedback operativo (error / éxito / avisos / preview) → modal canónico `mprShowAviso`. #}
+    {# Se conserva solo el empty-state de sucursales como estado de página. #}
+    <div x-show="draftId && !sucursales.length" x-cloak
+         class="mb-2 flex-shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-100"
+         role="region" aria-label="Mensajes">
+      Este cliente no tiene sucursales (domicilios) activas.
     </div>
 
     {# Tarjeta de contexto comercial — labels inline, densa, colapsable #}
@@ -828,5 +797,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo28"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo29"></script>
 {% endblock %}
