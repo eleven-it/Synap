@@ -281,6 +281,10 @@ La pantalla **`/mpr/maquinas/carga-articulos/`** concentra la carga operativa en
 (filtro opcional `?id_linea=`); la ruta **`/mpr/maquinas/<id>/articulos/`** queda para
 consulta histórica por máquina. La búsqueda de artículos para habilitar filtra solo
 artículos con `tipo_art_fab = 'Fabricado'` (normalizado con `TRIM`/`COALESCE`).
+Incluye botón **Imprimir Control de Calidad** (planilla A4 horizontal filtrada por lo
+visible en pantalla: máquina / línea; modal Synap si no hay filas). Columnas: máquina,
+artículo, color, talle, turnos mañana/tarde/noche 1ra·2da, observaciones). Color y
+talle salen de `articulo_val_ce` según captions `COLOR` / `TALLES` en `articulo_ce`.
 
 El detalle de la carga y la aprobación (pantallas, bordes, borrador vs. envío) está en
 [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md).

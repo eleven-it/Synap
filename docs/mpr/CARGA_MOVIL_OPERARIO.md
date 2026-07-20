@@ -139,4 +139,19 @@ Pantalla de escritorio para habilitar/deshabilitar artículos en la grilla de m�
 - Histórico por máquina: `/mpr/maquinas/<id>/articulos/` (vista detalle existente).
 
 Servicio de contexto: `construir_grilla_carga_articulos` en `mpr/services_maquina_linea.py`.
+Los artículos vigentes incluyen **TALLES** y **COLOR** desde campos especiales
+(`articulo_ce` / `articulo_val_ce`, resueltos por caption, no por id fijo).
+
+### Planilla Control de Calidad (impresión)
+
+Botón **Imprimir Control de Calidad** en el encabezado (y otro en la barra de filtros). Genera una hoja A4 horizontal con:
+
+- Título: `CONTROL DE CALIDAD — {día} {dd/MM/yyyy}` (día en español).
+- Columnas: MÁQUINA | DETALLE (ARTÍCULO · COLOR · TALLE) | TURNO MAÑANA (1ra·2da) |
+  TURNO TARDE (1ra·2da) | TURNO NOCHE (1ra·2da) | OBSERVACIONES.
+- Filas: **solo lo visible en pantalla** (filtro de línea GET + búsqueda de máquina).
+  Si filtrás una sola máquina, la planilla imprime únicamente esa fila/artículos.
+- Turnos y observaciones en blanco para completar a mano.
+- Si no hay filas imprimibles, se muestra un **modal Synap** (no `alert` nativo).
+
 Ver también [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md#urls).
