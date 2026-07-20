@@ -26,6 +26,7 @@ from ecom.pedido_gestion_views import (
     PedidosHubAPIView,
     PedidosHubArchivarDraftAPIView,
     PedidosHubArchivarCarritoAPIView,
+    PedidosHubEliminarDraftAPIView,
     PedidosHubMigrarCarritoAPIView,
     PedidosHubView,
     PedidosKpisAPIView,
@@ -191,6 +192,11 @@ urlpatterns = [
         "api/mayoristapp/pedidos/hub/archivar-draft/",
         PedidosHubArchivarDraftAPIView.as_view(),
         name="mayoristapp_pedidos_hub_archivar_draft",
+    ),
+    path(
+        "api/mayoristapp/pedidos/hub/eliminar-draft/",
+        PedidosHubEliminarDraftAPIView.as_view(),
+        name="mayoristapp_pedidos_hub_eliminar_draft",
     ),
     path(
         "api/mayoristapp/pedidos/hub/migrar-carrito/",

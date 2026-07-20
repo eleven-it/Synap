@@ -15,6 +15,7 @@ from ecom.services.pedidos_hub_pipeline import (
     archivar_borrador_masivo,
     columnas_hub_visibles,
     construir_hub_pedidos,
+    eliminar_borrador_masivo_definitivo,
     url_pedido_masivo_modo_simple,
 )
 
@@ -254,6 +255,55 @@ class TestConstruirHub(TestCase):
         d.refresh_from_db()
         self.assertEqual(d.estado, EcomPedidoMasivoDraft.ESTADO_ARCHIVADO)
 
+    def test_eliminar_draft_anulado(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_hub",
+            id_usuario=7,
+            id_cliente=2,
+            estado=EcomPedidoMasivoDraft.ESTADO_ANULADO,
+        )
+        pk = d.pk
+        ok, msg = eliminar_borrador_masivo_definitivo(pk, 7, "emp_hub")
+        self.assertTrue(ok)
+        self.assertEqual(msg, "Borrador eliminado definitivamente.")
+        self.assertFalse(EcomPedidoMasivoDraft.objects.filter(pk=pk).exists())
+
+    def test_rechazar_eliminar_borrador_activo(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_hub",
+            id_usuario=7,
+            id_cliente=2,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        )
+        ok, msg = eliminar_borrador_masivo_definitivo(d.pk, 7, "emp_hub")
+        self.assertFalse(ok)
+        self.assertIn("anulados", msg.lower())
+        self.assertTrue(EcomPedidoMasivoDraft.objects.filter(pk=d.pk).exists())
+
+    def test_rechazar_eliminar_confirmado(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_hub",
+            id_usuario=7,
+            id_cliente=2,
+            estado=EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
+        )
+        ok, msg = eliminar_borrador_masivo_definitivo(d.pk, 7, "emp_hub")
+        self.assertFalse(ok)
+        self.assertIn("anulados", msg.lower())
+        self.assertTrue(EcomPedidoMasivoDraft.objects.filter(pk=d.pk).exists())
+
+    def test_eliminar_draft_otro_usuario(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_hub",
+            id_usuario=7,
+            id_cliente=2,
+            estado=EcomPedidoMasivoDraft.ESTADO_ANULADO,
+        )
+        ok, msg = eliminar_borrador_masivo_definitivo(d.pk, 99, "emp_hub")
+        self.assertFalse(ok)
+        self.assertEqual(msg, "Borrador no encontrado.")
+        self.assertTrue(EcomPedidoMasivoDraft.objects.filter(pk=d.pk).exists())
+
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline._nombres_clientes", return_value={5: "Acme Mayorista"})
     @patch("ecom.services.pedidos_hub_pipeline._pedidos_mysql", return_value=[])
@@ -291,6 +341,22 @@ class TestConstruirHub(TestCase):
         self.assertEqual(items[0]["columna"], "anulado")
         self.assertIn("Cliente Test", items[0]["titulo"])
         self.assertNotIn("cliente 3", items[0]["titulo"])
+        self.assertIn(f"draft={d.pk}", items[0]["url"])
+        self.assertTrue(items[0]["meta"].get("puede_eliminar_definitivo"))
+
+    @patch("ecom.services.pedidos_hub_pipeline._nombres_clientes", return_value={4: "Simple SA"})
+    def test_masivos_anulados_modo_simple(self, _nombres):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_hub",
+            id_usuario=9,
+            id_cliente=4,
+            estado=EcomPedidoMasivoDraft.ESTADO_ANULADO,
+            modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
+        )
+        items = _masivos_anulados("emp_hub", 9)
+        self.assertEqual(len(items), 1)
+        self.assertIn("Pedido simple", items[0]["titulo"])
+        self.assertIn("modo=simple", items[0]["url"])
         self.assertIn(f"draft={d.pk}", items[0]["url"])
 
 

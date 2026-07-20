@@ -279,20 +279,28 @@ def _masivos_anulados(
         fecha = d.updated_at.strftime("%d/%m/%Y") if d.updated_at else ""
         idc = to_int_or_none(d.id_cliente)
         nombre = _etiqueta_cliente(nombres.get(idc, "") if idc is not None else "", idc)
+        es_simple = (d.modo or "").strip().lower() == EcomPedidoMasivoDraft.MODO_SIMPLE
+        if es_simple:
+            url = url_pedido_masivo_modo_simple(draft=d.pk)
+            titulo = f"Pedido simple · {nombre}"
+        else:
+            url = reverse("ecom:mayoristapp_pedido_masivo_sucursales") + f"?draft={d.pk}"
+            titulo = f"Masivo · {nombre}"
         out.append(
             _tarjeta(
                 tipo="masivo",
                 columna="anulado",
-                titulo=f"Masivo · {nombre}",
+                titulo=titulo,
                 subtitulo="Borrador anulado · Recuperable",
                 fecha=fecha,
-                url=reverse("ecom:mayoristapp_pedido_masivo_sucursales")
-                + f"?draft={d.pk}",
+                url=url,
                 id_ref=f"masivo-anulado-{d.pk}",
                 meta={
                     "draft_id": d.pk,
                     "id_cliente": d.id_cliente,
                     "nombre_cliente": nombres.get(idc, "") if idc is not None else "",
+                    "modo": d.modo,
+                    "puede_eliminar_definitivo": True,
                 },
             )
         )
@@ -555,6 +563,25 @@ def archivar_borrador_masivo(draft_id: int, id_usuario: int, base_empresa: str) 
         ),
     ).update(estado=EcomPedidoMasivoDraft.ESTADO_ARCHIVADO)
     return n > 0
+
+
+def eliminar_borrador_masivo_definitivo(
+    draft_id: int,
+    id_usuario: int,
+    base_empresa: str,
+) -> tuple[bool, str]:
+    """Elimina definitivamente un borrador masivo/simple en estado anulado."""
+    draft = EcomPedidoMasivoDraft.objects.filter(
+        pk=draft_id,
+        id_usuario=id_usuario,
+        base_empresa=base_empresa,
+    ).first()
+    if draft is None:
+        return False, "Borrador no encontrado."
+    if draft.estado != EcomPedidoMasivoDraft.ESTADO_ANULADO:
+        return False, "Solo se pueden eliminar definitivamente borradores anulados."
+    draft.delete()
+    return True, "Borrador eliminado definitivamente."
 
 
 def archivar_carrito_legacy(cart_id: int, id_usuario: int, base_empresa: str) -> bool:
