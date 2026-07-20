@@ -18,6 +18,24 @@
         background: white;
         color: black;
     }
+    /* Anchos para escritura a mano: turnos 1ra/2da amplios; artículo más estrecho */
+    #planilla-control-calidad table { table-layout: fixed; width: 100%; }
+    #planilla-control-calidad col.col-maquina { width: 9%; }
+    #planilla-control-calidad col.col-articulo { width: 26%; }
+    #planilla-control-calidad col.col-color { width: 8%; }
+    #planilla-control-calidad col.col-talle { width: 5%; }
+    #planilla-control-calidad col.col-turno { width: 6.5%; }
+    #planilla-control-calidad col.col-obs { width: 13%; }
+    #planilla-control-calidad td.celda-turno,
+    #planilla-control-calidad th.celda-turno {
+        min-height: 11mm;
+        padding: 3mm 2mm !important;
+    }
+    #planilla-control-calidad td.celda-articulo {
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        font-size: 9px;
+    }
 }
 </style>
 {{ maquinas|json_script:"maquinas-carga-data" }}
@@ -252,6 +270,16 @@
                x-text="filtroPlanillaResumen"></p>
         </header>
         <table class="w-full border-collapse text-[10px] leading-tight text-black">
+            <colgroup>
+                <col class="col-maquina">
+                <col class="col-articulo">
+                <col class="col-color">
+                <col class="col-talle">
+                <col class="col-turno"><col class="col-turno">
+                <col class="col-turno"><col class="col-turno">
+                <col class="col-turno"><col class="col-turno">
+                <col class="col-obs">
+            </colgroup>
             <thead>
                 <tr>
                     <th rowspan="2" class="border border-black px-1 py-1.5 align-middle">MÁQUINA</th>
@@ -265,12 +293,12 @@
                     <th class="border border-black px-1 py-1">ARTÍCULO</th>
                     <th class="border border-black px-1 py-1">COLOR</th>
                     <th class="border border-black px-1 py-1">TALLE</th>
-                    <th class="border border-black px-1 py-1 w-8">1ra</th>
-                    <th class="border border-black px-1 py-1 w-8">2da</th>
-                    <th class="border border-black px-1 py-1 w-8">1ra</th>
-                    <th class="border border-black px-1 py-1 w-8">2da</th>
-                    <th class="border border-black px-1 py-1 w-8">1ra</th>
-                    <th class="border border-black px-1 py-1 w-8">2da</th>
+                    <th class="celda-turno border border-black px-1 py-1">1ra</th>
+                    <th class="celda-turno border border-black px-1 py-1">2da</th>
+                    <th class="celda-turno border border-black px-1 py-1">1ra</th>
+                    <th class="celda-turno border border-black px-1 py-1">2da</th>
+                    <th class="celda-turno border border-black px-1 py-1">1ra</th>
+                    <th class="celda-turno border border-black px-1 py-1">2da</th>
                 </tr>
             </thead>
             <tbody>
@@ -281,15 +309,15 @@
                                 :rowspan="fila.rowspan"
                                 x-text="fila.maquina"></td>
                         </template>
-                        <td class="border border-black px-1 py-1 text-left" x-text="fila.articulo"></td>
+                        <td class="celda-articulo border border-black px-1 py-1 text-left" x-text="fila.articulo"></td>
                         <td class="border border-black px-1 py-1 text-center whitespace-nowrap" x-text="fila.color || '—'"></td>
                         <td class="border border-black px-1 py-1 text-center whitespace-nowrap" x-text="fila.talle || '—'"></td>
-                        <td class="border border-black px-1 py-3">&nbsp;</td>
-                        <td class="border border-black px-1 py-3">&nbsp;</td>
-                        <td class="border border-black px-1 py-3">&nbsp;</td>
-                        <td class="border border-black px-1 py-3">&nbsp;</td>
-                        <td class="border border-black px-1 py-3">&nbsp;</td>
-                        <td class="border border-black px-1 py-3">&nbsp;</td>
+                        <td class="celda-turno border border-black">&nbsp;</td>
+                        <td class="celda-turno border border-black">&nbsp;</td>
+                        <td class="celda-turno border border-black">&nbsp;</td>
+                        <td class="celda-turno border border-black">&nbsp;</td>
+                        <td class="celda-turno border border-black">&nbsp;</td>
+                        <td class="celda-turno border border-black">&nbsp;</td>
                         <td class="border border-black px-1 py-3">&nbsp;</td>
                     </tr>
                 </template>
