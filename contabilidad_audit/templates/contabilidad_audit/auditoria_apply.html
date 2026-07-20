@@ -1,0 +1,135 @@
+{% extends "base_app.html" %}
+
+{% block title %}{{ titulo_pagina }} - Synap{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
+    <div class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-rose-900 to-slate-900 opacity-95"></div>
+        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
+            <p class="text-[11px] uppercase tracking-[0.25em] text-rose-200 font-semibold mb-2">
+                Contabilidad · Apply (producción)
+            </p>
+            <h1 class="text-3xl font-semibold text-white">{{ titulo_pagina }}</h1>
+            <p class="text-sm text-slate-300 mt-2 max-w-3xl">
+                Esta operación escribe en MySQL legacy. Requiere doble confirmación explícita y permiso
+                <code class="text-rose-200">{{ permiso_corregir }}</code>.
+            </p>
+        </div>
+    </div>
+
+    <div class="w-full px-4 sm:px-6 lg:px-12 -mt-4 relative z-10 space-y-6">
+        {% if messages %}
+        <div class="space-y-2">
+            {% for message in messages %}
+            <div class="rounded-xl px-4 py-3 text-sm border bg-emerald-50 border-emerald-300 text-emerald-800">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if error_apply %}
+        <div class="bg-rose-50 border border-rose-300 rounded-xl px-4 py-3 text-sm text-rose-800">
+            {{ error_apply }}
+        </div>
+        {% endif %}
+
+        {% if resultado_apply %}
+        <div class="bg-emerald-50 border border-emerald-300 rounded-xl p-5 text-sm space-y-2">
+            <p class="font-semibold text-emerald-900">Corrección aplicada correctamente</p>
+            <p>Lote: <span class="font-mono">{{ resultado_apply.lote_id|default:"—" }}</span></p>
+            <p>Filas afectadas: {{ resultado_apply.filas_aplicadas }}</p>
+            <p>Fecha: {{ resultado_apply.fecha }}</p>
+            {% if resultado_apply.modo %}<p>Modo: {{ resultado_apply.modo }}</p>{% endif %}
+        </div>
+        {% endif %}
+
+        {% if plan %}
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5 text-sm grid md:grid-cols-2 gap-4">
+            <div>
+                <p class="text-[10px] uppercase text-slate-400">Empresa</p>
+                <p class="font-medium">{{ plan.base_empresa }}</p>
+            </div>
+            <div>
+                <p class="text-[10px] uppercase text-slate-400">Modo</p>
+                <p class="font-medium">{% if modo == 'rei' %}REI (solo casos aprobados){% else %}General (saldos/regeneración){% endif %}</p>
+            </div>
+            <div>
+                <p class="text-[10px] uppercase text-slate-400">dry_run_id</p>
+                <p class="font-mono text-xs">{{ dry_run_id }}</p>
+            </div>
+            <div>
+                <p class="text-[10px] uppercase text-slate-400">config_hash</p>
+                <p class="font-mono text-xs truncate">{{ plan.config_hash }}</p>
+            </div>
+            <div>
+                <p class="text-[10px] uppercase text-slate-400">Items aplicables (general)</p>
+                <p>{{ plan.plan.impacto.total_aplicables|default:0 }}</p>
+            </div>
+            <div>
+                <p class="text-[10px] uppercase text-slate-400">Propuestas REI</p>
+                <p>{{ plan.plan.impacto.propuestas_rei_total|default:0 }}</p>
+            </div>
+        </div>
+
+        <div class="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-sm text-amber-900">
+            Solo disponible con <strong>ENVIRONMENT=production</strong>. Se creará backup previo y log transaccional
+            (<code>cont_audit_correccion_lote</code> / <code>cont_audit_correccion</code>).
+        </div>
+
+        {% if not resultado_apply %}
+        <form method="post" action="{% url 'contabilidad_audit:auditoria_apply_ejecutar' %}"
+              class="bg-white dark:bg-slate-900 rounded-2xl border p-6 space-y-5">
+            {% csrf_token %}
+            <input type="hidden" name="dry_run_id" value="{{ dry_run_id }}">
+            <input type="hidden" name="base_empresa" value="{{ base_empresa }}">
+            <input type="hidden" name="modo" value="{{ modo }}">
+
+            <label class="flex items-start gap-3 text-sm">
+                <input type="checkbox" name="confirmacion_entiendo" class="mt-1 rounded border-slate-300" required>
+                <span>
+                    <strong>Primera confirmación:</strong> entiendo que se modificarán datos contables en la base
+                    legacy de producción y que la operación quedará registrada en el log de auditoría.
+                </span>
+            </label>
+
+            <label class="flex items-start gap-3 text-sm">
+                <input type="checkbox" name="confirmar_reapertura" class="mt-1 rounded border-slate-300">
+                <span>
+                    Confirmo reapertura explícita si el plan afecta ejercicios cerrados (según política
+                    <em>permitir_con_reapertura</em>).
+                </span>
+            </label>
+
+            <div>
+                <label class="block text-sm font-semibold mb-1">
+                    Segunda confirmación (escriba el token exacto)
+                </label>
+                <p class="text-xs text-slate-500 mb-2">
+                    Token: <code class="font-mono">APLICAR-{{ dry_run_id|upper }}</code>
+                    (alternativa aceptada: <code>APLICAR DEFINITIVAMENTE</code>)
+                </p>
+                <input type="text" name="confirmacion_final" required autocomplete="off"
+                       class="w-full rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-mono"
+                       placeholder="APLICAR-{{ dry_run_id|upper }}">
+            </div>
+
+            <div class="flex flex-wrap gap-3">
+                <button type="submit"
+                        class="rounded-lg px-5 py-2.5 text-sm font-semibold text-white bg-rose-700 hover:bg-rose-800">
+                    Aplicar corrección definitivamente
+                </button>
+                <a href="{{ dry_run_url }}?base_empresa={{ base_empresa|urlencode }}"
+                   class="rounded-lg px-5 py-2.5 text-sm font-semibold border border-slate-300">Cancelar</a>
+                {% if modo != 'rei' and plan.plan.propuestas_rei %}
+                <a href="{{ rei_url }}"
+                   class="rounded-lg px-5 py-2.5 text-sm font-semibold border border-indigo-300 text-indigo-700">
+                    Ir a aprobación REI
+                </a>
+                {% endif %}
+            </div>
+        </form>
+        {% endif %}
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -138,6 +138,12 @@ PERMISOS_POR_MODULO = {
         ("finance.reportes", "Ver reportes financieros"),
         ("finance.exportar", "Exportar datos financieros"),
     ],
+    "Contabilidad audit": [
+        ("contabilidad.auditoria.leer", "Ejecutar auditoría contable (solo lectura)"),
+        ("contabilidad.auditoria.configurar", "Configurar políticas de auditoría contable"),
+        ("contabilidad.auditoria.corregir", "Aplicar corrección contable (producción)"),
+        ("contabilidad.auditoria.rei", "Aprobar ajustes REI caso a caso"),
+    ],
     "Stock": [
         ("stock.ver", "Ver módulo Stock"),
         ("stock.crear_movimiento", "Crear movimiento de stock"),

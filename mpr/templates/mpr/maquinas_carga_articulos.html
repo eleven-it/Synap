@@ -4,16 +4,33 @@
 {% block title %}Asignar artículo a máquina - MPR - Synap{% endblock %}
 
 {% block content %}
-<style>[x-cloak]{display:none!important}</style>
+<style>[x-cloak]{display:none!important}
+@media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    body * { visibility: hidden !important; }
+    #planilla-control-calidad, #planilla-control-calidad * { visibility: visible !important; }
+    #planilla-control-calidad {
+        display: block !important;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white;
+        color: black;
+    }
+}
+</style>
 {{ maquinas|json_script:"maquinas-carga-data" }}
-<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10"
-         x-data="cargaArticulos({
+<div x-data="cargaArticulos({
             buscarUrl: '{% url 'mpr:maquina_articulo_buscar_api' %}',
             accionUrl: '{% url 'mpr:maquina_articulo_accion_api' %}',
             historicoBase: '{% url 'mpr:maquina_articulos' id_maquina=999999999 %}',
             csrf: '{{ csrf_token }}',
-            filtroMaquina: ''
+            filtroMaquina: '',
+            fechaHoy: '{{ fecha_hoy|date:"Y-m-d" }}',
+            filtroLineaLabel: '{% if id_linea_filtro %}{% for linea in lineas %}{% if linea.id == id_linea_filtro %}{{ linea.nombre|escapejs }}{% endif %}{% endfor %}{% else %}{% endif %}'
          })" x-init="init()">
+<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10 print:hidden">
     <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
         {# Migas de pan #}
@@ -37,10 +54,18 @@
                 <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Asignar artículo a máquina</h1>
             </div>
             <div class="flex shrink-0 flex-col items-start gap-2 lg:items-end">
-                <a href="{% url 'mpr:maquinas_list' %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
-                    <span class="material-icons text-lg" aria-hidden="true">arrow_back</span>
-                    Volver a Máquinas
-                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" @click="imprimirPlanilla()"
+                            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:bg-purple-600 dark:hover:bg-purple-500 dark:focus-visible:ring-offset-gray-900"
+                            title="Imprime la planilla de Control de Calidad (A4 horizontal)">
+                        <span class="material-icons text-lg" aria-hidden="true">print</span>
+                        Imprimir Control de Calidad
+                    </button>
+                    <a href="{% url 'mpr:maquinas_list' %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
+                        <span class="material-icons text-lg" aria-hidden="true">arrow_back</span>
+                        Volver a Máquinas
+                    </a>
+                </div>
                 <p class="text-xs text-gray-500 dark:text-gray-400">Fecha de hoy: <span class="font-semibold text-gray-700 dark:text-gray-200">{{ fecha_hoy|date:"d/m/Y" }}</span></p>
             </div>
         </header>
@@ -77,10 +102,18 @@
                     </form>
                 </div>
 
-                {# Contador dinámico #}
-                <div class="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-sm font-medium text-purple-800 dark:bg-purple-900/20 dark:text-purple-200">
-                    <span class="material-icons text-base" aria-hidden="true">precision_manufacturing</span>
-                    <span>Mostrando <span class="font-bold" x-text="totalMostradas"></span> · <span class="font-bold" x-text="totalConArticulos"></span> con artículos</span>
+                {# Contador + impresión #}
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" @click="imprimirPlanilla()"
+                            class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-semibold text-purple-700 shadow-sm transition-colors hover:bg-purple-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:border-purple-700 dark:bg-gray-900 dark:text-purple-300 dark:hover:bg-purple-900/30"
+                            title="Imprime la planilla de Control de Calidad (A4 horizontal)">
+                        <span class="material-icons text-base" aria-hidden="true">print</span>
+                        Control de Calidad
+                    </button>
+                    <div class="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-sm font-medium text-purple-800 dark:bg-purple-900/20 dark:text-purple-200">
+                        <span class="material-icons text-base" aria-hidden="true">precision_manufacturing</span>
+                        <span>Mostrando <span class="font-bold" x-text="totalMostradas"></span> · <span class="font-bold" x-text="totalConArticulos"></span> con artículos</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -207,10 +240,105 @@
             </div>
         </div>
     </div>
+</section>
+
+    {# Planilla Control de Calidad (solo visible al imprimir) #}
+    <div id="planilla-control-calidad" class="hidden print:block">
+        <header class="mb-4 text-center">
+            <h1 class="text-xl font-bold tracking-wide text-black uppercase"
+                x-text="'CONTROL DE CALIDAD — ' + tituloPlanillaFecha"></h1>
+            <p class="mt-1 text-xs text-gray-600"
+               x-show="filtroPlanillaResumen"
+               x-text="filtroPlanillaResumen"></p>
+        </header>
+        <table class="w-full border-collapse text-[10px] leading-tight text-black">
+            <thead>
+                <tr>
+                    <th rowspan="2" class="border border-black px-1 py-1.5 align-middle">MÁQUINA</th>
+                    <th colspan="3" class="border border-black px-1 py-1.5">DETALLE</th>
+                    <th colspan="2" class="border border-black px-1 py-1.5">TURNO MAÑANA</th>
+                    <th colspan="2" class="border border-black px-1 py-1.5">TURNO TARDE</th>
+                    <th colspan="2" class="border border-black px-1 py-1.5">TURNO NOCHE</th>
+                    <th rowspan="2" class="border border-black px-1 py-1.5 align-middle">OBSERVACIONES</th>
+                </tr>
+                <tr>
+                    <th class="border border-black px-1 py-1">ARTÍCULO</th>
+                    <th class="border border-black px-1 py-1">COLOR</th>
+                    <th class="border border-black px-1 py-1">TALLE</th>
+                    <th class="border border-black px-1 py-1 w-8">1ra</th>
+                    <th class="border border-black px-1 py-1 w-8">2da</th>
+                    <th class="border border-black px-1 py-1 w-8">1ra</th>
+                    <th class="border border-black px-1 py-1 w-8">2da</th>
+                    <th class="border border-black px-1 py-1 w-8">1ra</th>
+                    <th class="border border-black px-1 py-1 w-8">2da</th>
+                </tr>
+            </thead>
+            <tbody>
+                <template x-for="fila in planillaFilas" :key="fila.key">
+                    <tr>
+                        <template x-if="fila.showMaquina">
+                            <td class="border border-black px-1 py-1 font-semibold align-middle"
+                                :rowspan="fila.rowspan"
+                                x-text="fila.maquina"></td>
+                        </template>
+                        <td class="border border-black px-1 py-1 text-left" x-text="fila.articulo"></td>
+                        <td class="border border-black px-1 py-1 text-center whitespace-nowrap" x-text="fila.color || '—'"></td>
+                        <td class="border border-black px-1 py-1 text-center whitespace-nowrap" x-text="fila.talle || '—'"></td>
+                        <td class="border border-black px-1 py-3">&nbsp;</td>
+                        <td class="border border-black px-1 py-3">&nbsp;</td>
+                        <td class="border border-black px-1 py-3">&nbsp;</td>
+                        <td class="border border-black px-1 py-3">&nbsp;</td>
+                        <td class="border border-black px-1 py-3">&nbsp;</td>
+                        <td class="border border-black px-1 py-3">&nbsp;</td>
+                        <td class="border border-black px-1 py-3">&nbsp;</td>
+                    </tr>
+                </template>
+                <tr x-show="planillaFilas.length === 0">
+                    <td colspan="11" class="border border-black px-2 py-4 text-center text-gray-500">
+                        No hay máquinas con artículos asignados para imprimir.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {# Modal aviso (estilo Synap; reemplaza alert nativo) #}
+    <div x-show="avisoOpen" x-cloak
+         class="fixed inset-0 z-[90] overflow-y-auto print:hidden"
+         role="dialog" aria-modal="true" aria-labelledby="carga-aviso-title"
+         @keydown.escape.window="cerrarAviso()">
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true"
+                 @click="cerrarAviso()"></div>
+            <div class="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+                 @click.stop>
+                <div class="flex items-start gap-4">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900/40" aria-hidden="true">
+                        <span class="material-icons text-sky-600 dark:text-sky-400" x-text="avisoIcono"></span>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <h3 id="carga-aviso-title" class="text-lg font-semibold text-gray-900 dark:text-white"
+                            x-text="avisoTitulo"></h3>
+                        <p class="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300"
+                           x-text="avisoMensaje"></p>
+                        <p x-show="avisoDetalle" x-cloak
+                           class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
+                           x-text="avisoDetalle"></p>
+                        <div class="mt-5 flex flex-wrap justify-end gap-2">
+                            <button type="button" @click="cerrarAviso()"
+                                    class="inline-flex min-h-10 items-center justify-center rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800">
+                                Aceptar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     {# Modal confirmación deshabilitar (estilo Synap) #}
     <div x-show="confirmOpen" x-cloak
-         class="fixed inset-0 z-[90] overflow-y-auto"
+         class="fixed inset-0 z-[90] overflow-y-auto print:hidden"
          role="dialog" aria-modal="true" aria-labelledby="carga-confirm-title"
          @keydown.escape.window="!confirmBusy && cerrarConfirm()">
         <div class="flex min-h-full items-center justify-center p-4">
@@ -249,7 +377,7 @@
             </div>
         </div>
     </div>
-</section>
+</div>
 
 <script>
 function cargaArticulos(cfg) {
@@ -259,6 +387,8 @@ function cargaArticulos(cfg) {
         historicoBase: cfg.historicoBase,
         csrfFallback: cfg.csrf || '',
         filtroMaquina: cfg.filtroMaquina || '',
+        fechaHoy: cfg.fechaHoy || '',
+        filtroLineaLabel: cfg.filtroLineaLabel || '',
         maquinas: [],
         confirmOpen: false,
         confirmBusy: false,
@@ -266,6 +396,11 @@ function cargaArticulos(cfg) {
         confirmArt: null,
         confirmCodArt: '',
         confirmNomMaq: '',
+        avisoOpen: false,
+        avisoTitulo: '',
+        avisoMensaje: '',
+        avisoDetalle: '',
+        avisoIcono: 'info',
 
         init() {
             let data = [];
@@ -293,6 +428,8 @@ function cargaArticulos(cfg) {
                 codigo_manual: a.codigo_manual || '',
                 codigo_articulo: a.codigo_articulo || '',
                 descripcion_articulo: a.descripcion_articulo || '',
+                talle: a.talle || '',
+                color: a.color || '',
                 vigencia_desde: a.vigencia_desde || null,
             };
         },
@@ -309,6 +446,84 @@ function cargaArticulos(cfg) {
 
         get totalConArticulos() {
             return this.maquinasVisibles.filter((m) => m.articulos.length > 0).length;
+        },
+
+        get tituloPlanillaFecha() {
+            const iso = (this.fechaHoy || '').slice(0, 10);
+            const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            let d = null;
+            if (iso && iso.length === 10) {
+                const p = iso.split('-');
+                d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+            } else {
+                d = new Date();
+            }
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yyyy = d.getFullYear();
+            return dias[d.getDay()] + ' ' + dd + '/' + mm + '/' + yyyy;
+        },
+
+        get filtroPlanillaResumen() {
+            const partes = [];
+            if (this.filtroLineaLabel) partes.push('Línea: ' + this.filtroLineaLabel);
+            const q = (this.filtroMaquina || '').trim();
+            if (q) partes.push('Máquina: ' + q);
+            if (!partes.length) return '';
+            return 'Filtro activo — ' + partes.join(' · ');
+        },
+
+        get planillaFilas() {
+            // Solo máquinas visibles en pantalla (filtro de búsqueda + línea del GET).
+            const out = [];
+            (this.maquinasVisibles || []).forEach((m) => {
+                const arts = m.articulos || [];
+                if (!arts.length) return;
+                const maquinaLabel = (m.nombre || m.codigo || ('#' + m.id)).trim();
+                arts.forEach((art, idx) => {
+                    const cod = this.codigoCorto(art);
+                    const desc = (art.descripcion_articulo || '').trim();
+                    out.push({
+                        key: m.id + '-' + art.id_articulo + '-' + idx,
+                        showMaquina: idx === 0,
+                        rowspan: idx === 0 ? arts.length : 1,
+                        maquina: maquinaLabel,
+                        articulo: (cod !== '—' ? cod + ' — ' : '') + (desc || '—'),
+                        color: art.color || '',
+                        talle: art.talle || '',
+                    });
+                });
+            });
+            return out;
+        },
+
+        mostrarAviso(titulo, mensaje, detalle, icono) {
+            this.avisoTitulo = titulo || 'Aviso';
+            this.avisoMensaje = mensaje || '';
+            this.avisoDetalle = detalle || '';
+            this.avisoIcono = icono || 'info';
+            this.avisoOpen = true;
+        },
+
+        cerrarAviso() {
+            this.avisoOpen = false;
+        },
+
+        imprimirPlanilla() {
+            if (!this.planillaFilas.length) {
+                const hayVisibles = (this.maquinasVisibles || []).length > 0;
+                const detalle = hayVisibles
+                    ? 'Las máquinas filtradas no tienen artículos asignados. Ajustá el filtro o asigná artículos.'
+                    : 'No hay filas visibles con el filtro actual (línea / búsqueda de máquina).';
+                this.mostrarAviso(
+                    'Nada para imprimir',
+                    'No hay máquinas con artículos asignados para imprimir según el filtro de la pantalla.',
+                    detalle,
+                    'print_disabled'
+                );
+                return;
+            }
+            window.print();
         },
 
         csrf() {

@@ -106,6 +106,7 @@ handler403 = "core.views.error_403_view"
 # Finance web (mantener reports)
 urlpatterns.extend([
     # path('finance/', include('finance.urls', namespace='finance')),
+    path('contabilidad/', include('contabilidad_audit.urls', namespace='contabilidad_audit')),
     path('reports/', include('reports.urls', namespace='reports')),
     path('ia/', include('ia.urls', namespace='ia')),
     path('stock/', include('stock.urls', namespace='stock')),

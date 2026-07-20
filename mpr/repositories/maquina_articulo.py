@@ -52,12 +52,79 @@ _COLS_ART = (
 def _map_articulo(row: Dict[str, Any]) -> Dict[str, Any]:
     # Código de usuario = articulo.id_manual (no CodigoArticulo / CodigoArticuloT).
     codigo = str_codigo_manual_articulo(row.get("id_manual") or row.get("codigo_manual"))
+    talle = str(row.get("talle") or "").strip()
+    color = str(row.get("color") or "").strip()
+    if talle in ("-",):
+        talle = ""
+    if color in ("-",):
+        color = ""
     return {
         "id_articulo": to_int_or_none(row.get("id_articulo")),
         "codigo_manual": "" if codigo == "-" else codigo,
         "codigo_articulo": str(row.get("codigo_articulo") or ""),
         "descripcion_articulo": str(row.get("descripcion_articulo") or ""),
+        "talle": talle,
+        "color": color,
     }
+
+
+def _slots_talle_color(cursor) -> tuple[Optional[int], Optional[int]]:
+    """Resuelve id_articulo_ce de TALLES y COLOR por caption (no hardcodear slots)."""
+    try:
+        cursor.execute("SELECT id_articulo_ce, caption FROM articulo_ce")
+    except Exception:
+        return None, None
+    talle_slot: Optional[int] = None
+    color_slot: Optional[int] = None
+    for r in cursor.fetchall() or []:
+        cap = str(r.get("caption") or "").strip().upper()
+        sid = to_int_or_none(r.get("id_articulo_ce"))
+        if sid is None:
+            continue
+        if talle_slot is None and cap in ("TALLES", "TALLE"):
+            talle_slot = sid
+        if color_slot is None and cap == "COLOR":
+            color_slot = sid
+    return talle_slot, color_slot
+
+
+def _sql_joins_ce(talle_slot: Optional[int], color_slot: Optional[int]) -> tuple[str, str]:
+    """JOIN + columnas CE; params se agregan aparte si hay slots."""
+    joins = ""
+    cols = ", '' AS talle, '' AS color"
+    if talle_slot is not None and color_slot is not None:
+        joins = (
+            " LEFT JOIN articulo_val_ce vt"
+            " ON vt.id_articulo = a.IDArt AND vt.id_articulo_ce = %s"
+            " LEFT JOIN articulo_val_ce vc"
+            " ON vc.id_articulo = a.IDArt AND vc.id_articulo_ce = %s"
+        )
+        cols = (
+            ", COALESCE(vt.valor_ce, '') AS talle"
+            ", COALESCE(vc.valor_ce, '') AS color"
+        )
+    elif talle_slot is not None:
+        joins = (
+            " LEFT JOIN articulo_val_ce vt"
+            " ON vt.id_articulo = a.IDArt AND vt.id_articulo_ce = %s"
+        )
+        cols = ", COALESCE(vt.valor_ce, '') AS talle, '' AS color"
+    elif color_slot is not None:
+        joins = (
+            " LEFT JOIN articulo_val_ce vc"
+            " ON vc.id_articulo = a.IDArt AND vc.id_articulo_ce = %s"
+        )
+        cols = ", '' AS talle, COALESCE(vc.valor_ce, '') AS color"
+    return joins, cols
+
+
+def _params_ce(talle_slot: Optional[int], color_slot: Optional[int]) -> List[Any]:
+    params: List[Any] = []
+    if talle_slot is not None:
+        params.append(talle_slot)
+    if color_slot is not None:
+        params.append(color_slot)
+    return params
 
 
 # --------------------------------------------------------------------------- #
@@ -192,17 +259,21 @@ def listar_articulos_vigentes(
         tbl = _tabla_articulo(cursor)
         if not tbl:
             return []
+        talle_slot, color_slot = _slots_talle_color(cursor)
+        joins_ce, cols_ce = _sql_joins_ce(talle_slot, color_slot)
+        params: List[Any] = _params_ce(talle_slot, color_slot) + [mid, fecha, fecha]
         cursor.execute(
             f"""
-            SELECT {_COLS_ART}, ma.vigencia_desde AS vigencia_desde
+            SELECT {_COLS_ART}, ma.vigencia_desde AS vigencia_desde{cols_ce}
             FROM mpr_maquina_articulo ma
             INNER JOIN `{tbl}` a ON a.IDArt = ma.id_articulo
+            {joins_ce}
             WHERE ma.id_mpr_maquina = %s
               AND ma.vigencia_desde <= %s
               AND (ma.vigencia_hasta IS NULL OR ma.vigencia_hasta > %s)
             ORDER BY codigo_articulo, a.IDArt
             """,
-            [mid, fecha, fecha],
+            params,
         )
         out: List[Dict[str, Any]] = []
         for r in cursor.fetchall() or []:
@@ -223,16 +294,20 @@ def listar_articulos_vigentes_todas_maquinas(
         tbl = _tabla_articulo(cursor)
         if not tbl:
             return {}
+        talle_slot, color_slot = _slots_talle_color(cursor)
+        joins_ce, cols_ce = _sql_joins_ce(talle_slot, color_slot)
+        params: List[Any] = _params_ce(talle_slot, color_slot) + [fecha, fecha]
         cursor.execute(
             f"""
-            SELECT ma.id_mpr_maquina, {_COLS_ART}, ma.vigencia_desde AS vigencia_desde
+            SELECT ma.id_mpr_maquina, {_COLS_ART}, ma.vigencia_desde AS vigencia_desde{cols_ce}
             FROM mpr_maquina_articulo ma
             INNER JOIN `{tbl}` a ON a.IDArt = ma.id_articulo
+            {joins_ce}
             WHERE ma.vigencia_desde <= %s
               AND (ma.vigencia_hasta IS NULL OR ma.vigencia_hasta > %s)
             ORDER BY ma.id_mpr_maquina, codigo_articulo, a.IDArt
             """,
-            [fecha, fecha],
+            params,
         )
         out: Dict[int, List[Dict[str, Any]]] = {}
         for r in cursor.fetchall() or []:

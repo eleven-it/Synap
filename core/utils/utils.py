@@ -526,6 +526,36 @@ APPS_MENU = [
         ]
     },
     {
+        "id": "contabilidad",
+        "nombre": _("Contabilidad"),
+        "permiso": "contabilidad.auditoria.leer",
+        "url": "contabilidad_audit:auditoria_tablero",
+        "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M9 17v-6h6v6M9 7h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z'/></svg>""",
+        "orden": 6.2,
+        "color": "emerald",
+        "submenus": [
+            {
+                "seccion": _("Auditoría contable"),
+                "items": [
+                    {
+                        "label": _("Tablero de auditoría"),
+                        "url": "contabilidad_audit:auditoria_tablero",
+                        "icon": "fact_check",
+                        "permission": "contabilidad.auditoria.leer",
+                        "menu_item_id": "contabilidad_auditoria_tablero",
+                    },
+                    {
+                        "label": _("Configuración de políticas"),
+                        "url": "contabilidad_audit:auditoria_configuracion",
+                        "icon": "tune",
+                        "permission": "contabilidad.auditoria.configurar",
+                        "menu_item_id": "contabilidad_auditoria_configuracion",
+                    },
+                ],
+            }
+        ],
+    },
+    {
         "id": "ia",
         "nombre": _("IA"),
         "permiso": "ia.ver",
@@ -1295,7 +1325,7 @@ def apps_visibles_sin_filtro_pwa(
     # Siempre visibles en menú: cadena base y apps sin registro en ModuleConfig.
     # Los demás módulos de MODULE_CONFIGS (reports, ia, mpr, logistica, fe_afip, …)
     # dependen solo de ModuleConfig.is_active.
-    core_modules = {'core', 'login', 'dashboard', 'stock', 'ventas', 'compras', 'self_checkout'}
+    core_modules = {'core', 'login', 'dashboard', 'stock', 'ventas', 'compras', 'self_checkout', 'contabilidad'}
     active_modules.update(core_modules)
 
     from core.services.navbar_visibilidad import (

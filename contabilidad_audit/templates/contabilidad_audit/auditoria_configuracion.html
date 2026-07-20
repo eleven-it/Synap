@@ -1,0 +1,260 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}{{ titulo_pagina }} - Synap{% endblock %}
+
+{% block extra_css %}<style>[x-cloak]{display:none !important;}</style>{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
+
+    <!-- Encabezado (canon reportes) -->
+    <div class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 opacity-95"></div>
+        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">
+                        Contabilidad · Políticas de auditoría
+                    </p>
+                    <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">
+                        {{ titulo_pagina }}
+                    </h1>
+                    <p class="text-sm text-slate-300 mt-2 max-w-2xl">
+                        Parámetros de negocio que gobiernan cómo se arman los checks y el alcance del recálculo.
+                        Se resuelven por empresa: la política global <code class="text-slate-200">{{ base_default }}</code> es la base;
+                        cada empresa puede sobrescribir campos.
+                    </p>
+                </div>
+                <a href="{{ tablero_url }}"
+                   class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-slate-200 hover:text-white border border-slate-600 hover:border-slate-400 transition-all">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10 19l-7-7 7-7M3 12h18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span class="hidden sm:inline">Volver al tablero</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full px-4 sm:px-6 lg:px-12 -mt-4 relative z-10 space-y-6">
+
+        <!-- Mensajes -->
+        {% if messages %}
+        <div class="space-y-2">
+            {% for message in messages %}
+            <div class="rounded-xl px-4 py-3 text-sm border
+                {% if message.tags == 'success' %}bg-emerald-50 dark:bg-emerald-900/20 border-emerald-300 dark:border-emerald-700 text-emerald-700 dark:text-emerald-300
+                {% elif message.tags == 'error' %}bg-rose-50 dark:bg-rose-900/20 border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300
+                {% else %}bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Selector de empresa a editar -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow border border-slate-200 dark:border-slate-800 p-5">
+            <form method="get" action="{{ configuracion_url }}" class="flex flex-col sm:flex-row sm:items-end gap-3">
+                <div class="flex-1">
+                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Empresa (base) a consultar / editar</label>
+                    <input type="text" name="base_empresa" value="{{ base_empresa }}"
+                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:outline-none">
+                    <p class="text-[11px] text-slate-400 mt-1">Usá <code>{{ base_default }}</code> para la política global.</p>
+                </div>
+                <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">
+                    Cargar política
+                </button>
+            </form>
+        </div>
+
+        {% if not puede_configurar %}
+        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+            Modo sólo lectura. No tenés el permiso <code>{{ permiso_configurar }}</code>; podés consultar la política pero no editarla.
+        </div>
+        {% endif %}
+
+        <!-- Formulario de política -->
+        <form method="post" action="{{ configuracion_url }}"
+              x-data="{ alcanceRecompute: '{{ datos.alcance_recompute|escapejs }}' }"
+              class="bg-white dark:bg-slate-900 rounded-2xl shadow border border-slate-200 dark:border-slate-800 p-5 sm:p-6 space-y-6">
+            {% csrf_token %}
+            <input type="hidden" name="base_empresa" value="{{ base_empresa }}">
+
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                        Política de «{{ base_empresa }}»
+                    </h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        {% if datos.existe %}
+                            Override propio.
+                            {% if datos.actualizado_por %}Última edición por {{ datos.actualizado_por }}{% if datos.actualizado_en %} el {{ datos.actualizado_en|date:"d/m/Y H:i" }}{% endif %}.{% endif %}
+                        {% else %}
+                            Sin override propio: se muestran los valores efectivos heredados del default global.
+                        {% endif %}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] uppercase tracking-wide text-slate-400">config_hash efectivo</p>
+                    <p class="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate max-w-xs" title="{{ config_hash }}">{{ config_hash }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Tratamiento de anulados</label>
+                    <select name="tratamiento_anulados" {% if not puede_configurar %}disabled{% endif %}
+                            class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:opacity-60">
+                        {% for valor, etiqueta in choices_anulados %}
+                        <option value="{{ valor }}" {% if datos.tratamiento_anulados == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-1">Si los asientos anulados participan del saldo teórico.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Política de centavo</label>
+                    <select name="politica_centavo" {% if not puede_configurar %}disabled{% endif %}
+                            class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:opacity-60">
+                        {% for valor, etiqueta in choices_centavo %}
+                        <option value="{{ valor }}" {% if datos.politica_centavo == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-1">Tratamiento del desbalance ±0,01 heredado de VB6.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Ejercicios cerrados</label>
+                    <select name="ejercicios_cerrados" {% if not puede_configurar %}disabled{% endif %}
+                            class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:opacity-60">
+                        {% for valor, etiqueta in choices_cerrados %}
+                        <option value="{{ valor }}" {% if datos.ejercicios_cerrados == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-1">Gobierna si la corrección (Fase 3) puede tocar ejercicios cerrados.</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Alcance de recálculo</label>
+                    <select name="alcance_recompute" x-model="alcanceRecompute" {% if not puede_configurar %}disabled{% endif %}
+                            class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:opacity-60">
+                        {% for valor, etiqueta in choices_alcance %}
+                        <option value="{{ valor }}" {% if datos.alcance_recompute == valor %}selected{% endif %}>{{ etiqueta }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-1">Límite del dry-run/apply de recálculo (Fase 2/3).</p>
+                </div>
+
+                <div x-show="alcanceRecompute === 'historico'" x-cloak
+                     class="md:col-span-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 rounded-xl px-4 py-3 text-sm text-orange-900 dark:text-orange-200">
+                    <p class="font-semibold mb-1">Advertencia de performance (POL-07)</p>
+                    <p>
+                        El recálculo con alcance <strong>histórico</strong> procesa todos los ejercicios y puede ser muy costoso
+                        en bases grandes. Ejecutelo por lotes y preferentemente fuera del horario operativo.
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Tolerancia decimal</label>
+                    <input type="text" name="tolerancia_decimal" value="{{ datos.tolerancia_decimal }}"
+                           {% if not puede_configurar %}disabled{% endif %}
+                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:opacity-60">
+                    <p class="text-[11px] text-slate-400 mt-1">Ruido de comparación (default 0.005). Valor positivo.</p>
+                </div>
+            </div>
+
+            <!-- Prefijos de cuenta -->
+            <div class="border-t border-slate-200 dark:border-slate-800 pt-5">
+                <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-1">Prefijos de cuenta</h3>
+                <p class="text-[11px] text-slate-400 mb-3">Prefijos del plan de cuentas por categoría, separados por coma. La categoría «resultado» no puede quedar vacía.</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {% for cat, valor in datos.prefijos_items %}
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">{{ cat }}</label>
+                        <input type="text" name="prefijos_{{ cat }}" value="{{ valor }}"
+                               {% if not puede_configurar %}disabled{% endif %}
+                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:opacity-60">
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% if puede_configurar %}
+            <div class="flex justify-end gap-3 border-t border-slate-200 dark:border-slate-800 pt-5">
+                <a href="{{ tablero_url }}" class="inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Cancelar</a>
+                <button type="submit" class="inline-flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-semibold text-white bg-slate-900 dark:bg-sky-600 hover:bg-slate-700 dark:hover:bg-sky-500 transition-all">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    Guardar política
+                </button>
+            </div>
+            {% endif %}
+        </form>
+
+        <!-- Historial de cambios (POL-10) -->
+        <div id="historial-politica"
+             class="bg-white dark:bg-slate-900 rounded-2xl shadow border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-100">Historial de cambios</h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Registro consultable de altas y modificaciones de la política «{{ base_empresa }}».
+                    </p>
+                </div>
+                <a href="{{ historial_url }}?base_empresa={{ base_empresa|urlencode }}&format=json"
+                   class="inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">
+                    Exportar JSON
+                </a>
+            </div>
+
+            {% if historial %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase text-[10px] tracking-wide">
+                        <tr>
+                            <th class="px-3 py-2 text-left">Fecha</th>
+                            <th class="px-3 py-2 text-left">Usuario</th>
+                            <th class="px-3 py-2 text-left">Cambios</th>
+                            <th class="px-3 py-2 text-left">config_hash</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        {% for fila in historial %}
+                        <tr>
+                            <td class="px-3 py-2 whitespace-nowrap text-slate-700 dark:text-slate-200">{{ fila.cambiado_en_ui }}</td>
+                            <td class="px-3 py-2 text-slate-700 dark:text-slate-200">{{ fila.cambiado_por }}</td>
+                            <td class="px-3 py-2">
+                                {% if fila.es_alta %}
+                                <span class="text-emerald-700 dark:text-emerald-300 font-medium">Alta de política</span>
+                                {% elif fila.cambios %}
+                                <ul class="space-y-1 text-xs">
+                                    {% for cambio in fila.cambios %}
+                                    <li>
+                                        <span class="font-medium text-slate-700 dark:text-slate-200">{{ cambio.etiqueta }}:</span>
+                                        <span class="text-slate-500">{{ cambio.anterior }}</span>
+                                        <span class="text-slate-400">→</span>
+                                        <span class="text-slate-800 dark:text-slate-100">{{ cambio.nuevo }}</span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <span class="text-slate-400">Sin cambios detectados</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-3 py-2">
+                                {% if fila.config_hash_anterior %}
+                                <p class="text-[10px] font-mono text-slate-400 truncate max-w-[10rem]" title="{{ fila.config_hash_anterior }}">{{ fila.config_hash_anterior }}</p>
+                                <p class="text-[10px] text-slate-400">→</p>
+                                {% endif %}
+                                <p class="text-[10px] font-mono text-slate-600 dark:text-slate-300 truncate max-w-[10rem]" title="{{ fila.config_hash_nuevo }}">{{ fila.config_hash_nuevo }}</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-sm text-slate-500 dark:text-slate-400">No hay cambios registrados para esta empresa.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

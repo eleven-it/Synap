@@ -1,0 +1,1 @@
+# Migraciones Django (Postgres Synap)
