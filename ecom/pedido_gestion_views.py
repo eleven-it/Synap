@@ -30,6 +30,7 @@ from ecom.services.pedidos_hub_pipeline import (
     archivar_borrador_masivo,
     archivar_carrito_legacy,
     construir_hub_pedidos,
+    eliminar_borrador_masivo_definitivo,
     migrar_carrito_legacy_a_draft,
     url_pedido_masivo_modo_simple,
 )
@@ -373,6 +374,7 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
                         "kanban_deposito": reverse("ecom:mayoristapp_estado_pedidos_preparacion"),
                         "api": reverse("ecom:mayoristapp_pedidos_hub_api"),
                         "archivar_draft": reverse("ecom:mayoristapp_pedidos_hub_archivar_draft"),
+                        "eliminar_draft": reverse("ecom:mayoristapp_pedidos_hub_eliminar_draft"),
                         "migrar_carrito": reverse("ecom:mayoristapp_pedidos_hub_migrar_carrito"),
                         "archivar_carrito": reverse("ecom:mayoristapp_pedidos_hub_archivar_carrito"),
                         "listado_legacy": reverse("ecom:mayoristapp_pedidos_vendedor"),
@@ -423,6 +425,27 @@ class PedidosHubArchivarDraftAPIView(APIView):
         if not ok:
             return _error("Borrador no encontrado.", "no_encontrado", 404)
         return Response({"ok": True})
+
+
+class PedidosHubEliminarDraftAPIView(APIView):
+    """POST elimina definitivamente un borrador masivo/simple anulado."""
+
+    permission_classes = [EcomPedidosVerPermission]
+
+    def post(self, request: Request) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        id_u = to_int_or_none(sess.get("id_usuario"))
+        data = request.data if isinstance(request.data, dict) else {}
+        draft_id = to_int_or_none(data.get("draft_id"))
+        if not base or id_u is None or draft_id is None:
+            return _error("Parámetros inválidos.")
+        ok, msg = eliminar_borrador_masivo_definitivo(draft_id, id_u, base)
+        if not ok:
+            status = 404 if msg == "Borrador no encontrado." else 400
+            code = "no_encontrado" if status == 404 else "no_permitido"
+            return _error(msg, code, status)
+        return Response({"ok": True, "message": msg})
 
 
 class PedidosHubMigrarCarritoAPIView(APIView):

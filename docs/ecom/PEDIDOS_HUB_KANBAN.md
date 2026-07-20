@@ -63,12 +63,13 @@ Fechas UI: **dd/MM/yyyy**.
 1. Tarjeta en Borrador → Continuar.
 2. Nuevo con borrador activo → modal Continuar vs Archivar y crear (nunca pisar en silencio).
 3. Borrador con `ultimo_error` → badge “Error al confirmar”; datos intactos.
+4. Borrador **anulado** (soft-anular desde pedido masivo/simple) → columna **Anulado** del hub; **Continuar** reactiva a `borrador`. Ícono **Eliminar definitivamente** (`delete_forever`, rose) en tarjeta Kanban, móvil y columna Acciones en Lista; `window.confirm` antes de borrar; no navega al flujo Continuar. Endpoint `POST /ecom/api/mayoristapp/pedidos/hub/eliminar-draft/` body `{ "draft_id": <int> }` — hard delete solo si `estado == anulado` y pertenece al usuario/base; celdas CASCADE. Permiso: `ecom.pedidos.ver` (mismo que archivar). Bootstrap: `urls.eliminar_draft`.
 
 ## Implementación (Phase 3)
 
 - Template: `ecom/templates/ecom/pedidos_hub.html` (canon tablero slate-800; buscador en hero)
 - Pipeline: `ecom/services/pedidos_hub_pipeline.py` (`columnas_hub_visibles`, mapeo `en_curso` / `cerrado`)
-- API: `GET /ecom/api/mayoristapp/pedidos/hub/`, `POST .../hub/archivar-draft/`
+- API: `GET /ecom/api/mayoristapp/pedidos/hub/`, `POST .../hub/archivar-draft/`, `POST .../hub/eliminar-draft/`
 - Preferencia Lista/Kanban: `localStorage` clave `synap_pedidos_hub_vista`
 - Botón **Actualizar** en el hero: vuelve a pedir el JSON del hub (`urls.api`) sin recargar la página; icono `refresh` con spin mientras `cargando`
 
@@ -87,7 +88,7 @@ Misma idea que pedido masivo (`.pm-matrix-viewport`): la página **no** scrollea
 
 | Tipo | Título | Campo extra |
 |------|--------|-------------|
-| Borrador masivo / anulado | `Masivo · {nombre_cliente}` | `meta.nombre_cliente` |
+| Borrador masivo / anulado | `Masivo · {nombre_cliente}` o `Pedido simple · {nombre_cliente}` si `modo=simple` | `meta.nombre_cliente`, `meta.puede_eliminar_definitivo` (anulados) |
 | Borrador carrito simple | `Pedido simple · {nombre_cliente}` | `meta.nombre_cliente` |
 | PED confirmado | `PED {nro}` | `sucursal` (domicilio de entrega vía `cliente_datos_adicionales` + `cliente_domicilio`) |
 
