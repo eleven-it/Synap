@@ -35,6 +35,43 @@ class _User:
 
 
 class TestGuardarCelda(TestCase):
+    @patch(
+        "ecom.services.pedido_masivo_matriz._multiplos_articulos",
+        return_value={5: {"multiplo_empaque": 6, "multiplo_cantidad_vta": 6}},
+    )
+    def test_rechaza_cantidad_no_multiplo(self, _m):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=10,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        )
+        ok, msg, payload = guardar_celda(
+            d, id_articulo=5, id_cliente_domicilio=3, cantidad_packs=7
+        )
+        self.assertFalse(ok)
+        self.assertIn("empaquetado", msg.lower())
+        self.assertEqual(payload.get("code"), "multiplo_empaque")
+        self.assertEqual(payload.get("multiplo_empaque"), 6)
+        self.assertEqual(d.celdas.count(), 0)
+
+    @patch(
+        "ecom.services.pedido_masivo_matriz._multiplos_articulos",
+        return_value={5: {"multiplo_empaque": 6, "multiplo_cantidad_vta": 6}},
+    )
+    def test_acepta_cantidad_multiplo(self, _m):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=10,
+            estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        )
+        ok, _, payload = guardar_celda(
+            d, id_articulo=5, id_cliente_domicilio=3, cantidad_packs=12
+        )
+        self.assertTrue(ok)
+        self.assertEqual(payload["cantidad_packs"], "12")
+
     def test_upsert_y_cero_elimina(self):
         d = EcomPedidoMasivoDraft.objects.create(
             base_empresa="emp_m",
@@ -185,6 +222,7 @@ class TestCatalogoFiltrado(TestCase):
         self.assertIn("ecommerce = 'Si'", sql)
         self.assertIn("Discontinuo = 'No'", sql)
         self.assertIn("Precio1V", sql)
+        self.assertIn("NroCodBarra", sql)
         mock_reglas.assert_called_once()
 
     @patch(

@@ -71,6 +71,8 @@
                             {% endfor %}
                         </div>
                     </div>
+                    <div class="flex shrink-0 flex-col items-end gap-2">
+                    {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="precios-terminados" only %}
                     <button type="button"
                             @click="toggleFiltros()"
                             :aria-expanded="filtrosExpandidos"
@@ -79,6 +81,7 @@
                         <span class="material-icons text-base" aria-hidden="true" x-text="filtrosExpandidos ? 'unfold_less' : 'tune'"></span>
                         <span x-text="filtrosExpandidos ? 'Compactar' : 'Filtros'"></span>
                     </button>
+                    </div>
                 </header>
 
                 <div id="precios-terminados-filtros-panel" x-show="filtrosExpandidos" x-cloak>

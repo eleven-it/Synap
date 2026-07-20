@@ -23,6 +23,7 @@ from ecom.services.pedido_masivo_matriz import (
     descuentos_fila_efectivos,
     leer_contexto_cliente_masivo,
     listar_sucursales_cliente,
+    validar_multiplos_draft,
 )
 from ecom.services.presentacion_articulo import opciones_presentacion_articulo
 from ecom.services.vendedor_operativo import resolver_viajante_operativo
@@ -333,6 +334,8 @@ def _evento_fin(
     ya_confirmado: bool = False,
     codigos_anulados_intento: Optional[List[int]] = None,
     cod_mov_origen_anulado: Optional[int] = None,
+    infracciones_multiplo: Optional[List[Dict[str, Any]]] = None,
+    code: Optional[str] = None,
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "event": "fin",
@@ -352,6 +355,10 @@ def _evento_fin(
         payload["codigos_anulados_intento"] = codigos_anulados_intento
     if cod_mov_origen_anulado is not None:
         payload["cod_mov_origen_anulado"] = cod_mov_origen_anulado
+    if infracciones_multiplo is not None:
+        payload["infracciones_multiplo"] = infracciones_multiplo
+    if code:
+        payload["code"] = code
     return payload
 
 
@@ -423,6 +430,16 @@ def confirmar_lote_masivo_stream(
     por_dom = _agrupar_por_sucursal(draft)
     if not por_dom:
         yield _evento_fin(ok=False, message="No hay cantidades para confirmar.")
+        return
+
+    ok_mult, msg_mult, infracciones = validar_multiplos_draft(draft, draft.base_empresa)
+    if not ok_mult:
+        yield _evento_fin(
+            ok=False,
+            message=msg_mult,
+            infracciones_multiplo=infracciones,
+            code="multiplo_empaque",
+        )
         return
 
     nombres = _mapa_nombres_sucursales(draft, nombres_sucursales=nombres_sucursales)

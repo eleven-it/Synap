@@ -26,11 +26,14 @@
                         {% if fecha_hasta %}{{ fecha_hasta|date:"d/m/Y" }}{% else %}—{% endif %}
                     </p>
                 </div>
+                <div class="flex flex-wrap items-center gap-2">
+                {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="evolucion-precios" class_extra="text-slate-300 hover:text-sky-300 dark:hover:text-sky-300" only %}
                 <a href="{{ url_precios_terminados }}"
                    class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700">
                     <span class="material-icons text-base">price_change</span>
                     Precios terminados
                 </a>
+                </div>
             </header>
 
             <form method="get" class="flex flex-col gap-2">

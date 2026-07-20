@@ -81,7 +81,7 @@ artículo, el foco cae en el campo realmente pintado y la carga fluye.
    - Borrador sin sucursales → alerta amber
    - Borrador sin filas → guía «Agregá artículos…» + fila buscador al pie (solo con `draftId`)
 4. Columnas = `cliente_domicilio` no anulados con ≥1 **relación** activa (vendedor operativo + cliente) cuando VCM está activo; si no, todos los domicilios activos. Orden de columnas: **ascendente numérico por `NroCalle`**. Encabezado = **`Suc ` + `NroCalle`** en **negrita** (ej. `Suc 14`). Click en la celda del encabezado (desktop) o en la fila del acordeón (móvil) abre un modal con calle, dpto, distrito, provincia y zona. En móvil, el chevron expande/colapsa el acordeón sin abrir el modal. Ver `docs/ecom/VENDEDOR_CLIENTE_MARCA.md`.  
-5. Filas = artículos **Terminado** de marcas asignadas con **paridad carrito/precio**: `Discontinuo='No'` y `ecommerce='Si'` (mismo criterio que `obtener_articulo_row_precio` / `agregar_item`). El buscador predictivo (`buscar_articulos_filtrados_ternas`) no ofrece ítems que luego fallarían en preview/confirm con «Artículo no encontrado o inactivo». **Flecha abajo** (o botón ▾) lista **todo** el catálogo filtrado (`?todos=1`, sin mínimo de 2 caracteres; tope 5000). La búsqueda tipada sigue pidiendo ≥2 caracteres y `tam=20`. Desktop y móvil.  
+5. Filas = artículos **Terminado** de marcas asignadas con **paridad carrito/precio**: `Discontinuo='No'` y `ecommerce='Si'` (mismo criterio que `obtener_articulo_row_precio` / `agregar_item`). El buscador predictivo (`buscar_articulos_filtrados_ternas`) no ofrece ítems que luego fallarían en preview/confirm con «Artículo no encontrado o inactivo». Criterios de búsqueda tipada (≥2 caracteres, `tam=20`): código de sistema (`IDArt`/`CodigoArticuloT`), `id_manual`, nombre y **código de barra** (`NroCodBarra`). **Flecha abajo** (o botón ▾) lista **todo** el catálogo filtrado (`?todos=1`, sin mínimo de 2 caracteres; tope 5000). Desktop y móvil.  
    Columna **Precio** = precio real del motor (lista del cliente).  
 6. Celdas = cantidad en **packs**. Columna de sumatoria: **Total packs**. Enter en la última sucursal vuelve al buscador.  
 7. **Fecha de entrega** obligatoria al confirmar: si falta, modal de aviso y foco en el campo. Cliente en UI sin `(cod: N)`.  
@@ -273,6 +273,25 @@ Resumen del corte vertical que consolidó usabilidad de pedidos y supervisor ope
 | **E — Visual slate/sky** | Barrido de purple en el flujo de pedido | `pedido_masivo_sucursales.html` sin purple; toggle, foco y CTAs en sky/amber/rose; token compartido `.pedidos-badge-lista` |
 
 **Totales:** preview híbrido — estimación FE instantánea + validación backend (`preview` / batch). Fechas al usuario en `dd/MM/yyyy`.
+
+### Unidad de empaquetado (múltiplo de cantidad) — 20/07/2026
+
+Las cantidades cargadas en la matriz (modo masivo y **modo simple**) deben respetar la **unidad de empaquetado** del artículo:
+
+| Campo MySQL (`articulo`) | Uso en Synap |
+|--------------------------|--------------|
+| `multiplo_cantidad_vta` | Unidad de empaquetado de venta. Fuente única de validación. |
+| `multiplo_empaque` (API/FE) | Valor resuelto por `multiplo_empaque_venta()` en `ecom/services/multiplo_empaque.py` (= `multiplo_cantidad_vta` si > 0; else 1). |
+
+**Nota:** no se usa `multiplo_vta` para esta validación.
+
+**Regla:** cantidad `q > 0` debe ser múltiplo entero de `multiplo_empaque`. Si `multiplo_empaque ≤ 1`, no se valida.
+
+**Validación:**
+
+- **Autoguardado celda** (`POST …/celda/`): rechaza con `code=multiplo_empaque` y mensaje en español.
+- **Confirmar lote** (`batch_checkout_masivo`): rechaza antes de crear PEDs; devuelve `infracciones_multiplo[]`.
+- **Front** (`pedido_masivo_app.mjs`): modal `aviso` al editar celda inválida; bloqueo en «Validar totales» y antes de abrir confirmación; borde ámbar en inputs inválidos.
 
 ### Preview vs confirmación — stock (14/07/2026)
 

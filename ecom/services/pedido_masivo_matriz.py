@@ -16,6 +16,13 @@ from ecom.services.price_rules_engine import (
     calcular_precio_articulo_row,
     resolver_reglas_precio_map,
 )
+from ecom.services.multiplo_empaque import (
+    campos_multiplo_articulo,
+    cantidad_respeta_multiplo,
+    infracciones_multiplo_celdas,
+    mensaje_multiplo_invalido,
+    multiplo_empaque_venta,
+)
 from ecom.services.vendedor_operativo import resolver_viajante_operativo
 
 logger = logging.getLogger(__name__)
@@ -504,9 +511,10 @@ def buscar_articulos_filtrados_ternas(
         like = f"%{q}%"
         where.append(
             "(articulo.id_manual LIKE %s OR articulo.NombreArticulo LIKE %s "
-            "OR articulo.CodigoArticuloT LIKE %s OR CAST(articulo.IDArt AS CHAR) LIKE %s)"
+            "OR articulo.CodigoArticuloT LIKE %s OR CAST(articulo.IDArt AS CHAR) LIKE %s "
+            "OR articulo.NroCodBarra = %s OR articulo.NroCodBarra LIKE %s)"
         )
-        params.extend([like, like, like, like])
+        params.extend([like, like, like, like, q, like])
 
     select_cols = """
             articulo.IDArt,
@@ -535,6 +543,7 @@ def buscar_articulos_filtrados_ternas(
             articulo.promocion_listaoficial,
             articulo.promocion_vigencia_desde,
             articulo.promocion_vigencia_hasta,
+            articulo.multiplo_cantidad_vta,
             iva.Alicuota AS alic_iva
     """
     if q:
@@ -546,15 +555,16 @@ def buscar_articulos_filtrados_ternas(
         ORDER BY
             CASE
                 WHEN articulo.id_manual = %s THEN 0
-                WHEN articulo.id_manual LIKE %s THEN 1
-                ELSE 2
+                WHEN articulo.NroCodBarra = %s THEN 1
+                WHEN articulo.id_manual LIKE %s THEN 2
+                ELSE 3
             END,
             articulo.NombreArticulo
         LIMIT %s
         """
         q_exact = q
         q_prefix = f"{q}%"
-        params_order = params + [q_exact, q_prefix, lim]
+        params_order = params + [q_exact, q_exact, q_prefix, lim]
     else:
         sql = f"""
         SELECT {select_cols}
@@ -606,6 +616,9 @@ def buscar_articulos_filtrados_ternas(
                             "precio_unitario_neto": float(precio or 0),
                             "precio_lista1": float(precio or 0),
                             "alicuota_iva": float(alic if alic is not None else 21),
+                            **campos_multiplo_articulo(
+                                articulo.get("multiplo_cantidad_vta"),
+                            ),
                         }
                     )
             finally:
@@ -642,7 +655,8 @@ def _nombres_articulos(
             articulo.IDArt,
             COALESCE(articulo.id_manual, ''),
             COALESCE(articulo.NombreArticulo, ''),
-            COALESCE(iva.Alicuota, 21) AS alic_iva
+            COALESCE(iva.Alicuota, 21) AS alic_iva,
+            articulo.multiplo_cantidad_vta
         FROM articulo
         LEFT JOIN iva ON iva.ID = articulo.Alicuota
         WHERE articulo.IDArt IN ({placeholders})
@@ -670,6 +684,7 @@ def _nombres_articulos(
                         "precio_unitario_neto": float(precio or 0),
                         "precio_lista1": float(precio or 0),
                         "alicuota_iva": float(alic if alic is not None else 21),
+                        **campos_multiplo_articulo(r[4]),
                     }
             finally:
                 cursor.close()
@@ -862,6 +877,13 @@ def serializar_matriz(
             "precio_lista1": float(nombres.get(aid, {}).get("precio_lista1") or 0),
             "alicuota_iva": float(nombres.get(aid, {}).get("alicuota_iva") or 21),
             "porcentaje_descuento": float(desc_map.get(aid, desc_cli)),
+            "multiplo_cantidad_vta": int(nombres.get(aid, {}).get("multiplo_cantidad_vta") or 0),
+            "multiplo_empaque": int(
+                nombres.get(aid, {}).get("multiplo_empaque")
+                or multiplo_empaque_venta(
+                    nombres.get(aid, {}).get("multiplo_cantidad_vta"),
+                )
+            ),
         }
         for aid in art_ids
     ]
@@ -946,6 +968,20 @@ def guardar_celda(
     if qty < 0:
         return False, "La cantidad no puede ser negativa.", None
 
+    if qty > 0:
+        multiplos = _multiplos_articulos(draft.base_empresa, [aid])
+        info = multiplos.get(aid) or {}
+        multiplo = int(info.get("multiplo_empaque") or 1)
+        if not cantidad_respeta_multiplo(qty, multiplo):
+            return (
+                False,
+                mensaje_multiplo_invalido(multiplo),
+                {
+                    "code": "multiplo_empaque",
+                    "multiplo_empaque": multiplo,
+                },
+            )
+
     with transaction.atomic():
         if qty == 0:
             EcomPedidoMasivoDraftCelda.objects.filter(
@@ -977,6 +1013,76 @@ def guardar_celda(
                 "eliminada": False,
             },
         )
+
+
+def _multiplos_articulos(
+    base_empresa: str,
+    ids: Sequence[int],
+) -> Dict[int, Dict[str, Any]]:
+    """Mapa id_articulo → campos de múltiplo de empaquetado."""
+    ids_clean = [i for i in (to_int_or_none(x) for x in ids) if i is not None]
+    if not ids_clean:
+        return {}
+    placeholders = ",".join(["%s"] * len(ids_clean))
+    sql = f"""
+        SELECT
+            articulo.IDArt,
+            articulo.multiplo_cantidad_vta
+        FROM articulo
+        WHERE articulo.IDArt IN ({placeholders})
+    """
+    out: Dict[int, Dict[str, Any]] = {}
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa.strip()) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, list(ids_clean))
+                for r in cursor.fetchall():
+                    id_art = int(r[0])
+                    out[id_art] = campos_multiplo_articulo(r[1])
+            finally:
+                cursor.close()
+    except Exception as e:
+        logger.warning("_multiplos_articulos: %s", e)
+    return out
+
+
+def validar_multiplos_draft(
+    draft: EcomPedidoMasivoDraft,
+    base_empresa: str,
+) -> Tuple[bool, str, List[Dict[str, Any]]]:
+    """Rechaza confirmación si alguna celda con qty>0 viola el múltiplo de empaquetado."""
+    celdas_qs = list(draft.celdas.all())
+    art_ids = sorted(
+        {
+            int(c.id_articulo)
+            for c in celdas_qs
+            if (to_decimal_or_none(c.cantidad_packs) or Decimal("0")) > 0
+        }
+    )
+    if not art_ids:
+        return True, "", []
+    multiplos = _multiplos_articulos(base_empresa, art_ids)
+    nombres = _nombres_articulos(
+        base_empresa,
+        art_ids,
+        id_cliente=draft.id_cliente,
+    )
+    infracciones = infracciones_multiplo_celdas(
+        celdas_qs,
+        multiplos,
+        nombres=nombres,
+    )
+    if not infracciones:
+        return True, "", []
+    primera = infracciones[0]
+    multiplo = int(primera.get("multiplo_empaque") or 1)
+    msg = (
+        f"Hay {len(infracciones)} cantidad(es) que no respetan la unidad de "
+        f"empaquetado ({multiplo}). Corregí la matriz antes de confirmar."
+    )
+    return False, msg, infracciones
 
 
 def cod_viajante_sesion(sess_user: Dict[str, Any]) -> Optional[int]:

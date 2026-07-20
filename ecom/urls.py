@@ -161,6 +161,7 @@ from ecom.mayoristapp_listado_urls import mayoristapp_listado_urlpatterns
 app_name = "ecom"
 
 urlpatterns = [
+    path("manual/", views.manual_usuario_view, name="manual_usuario"),
     path(
         "mayoristapp/",
         HubMayoristappView.as_view(),

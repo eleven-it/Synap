@@ -12,13 +12,8 @@
          x-init="init()">
   <div class="mx-auto flex h-full min-h-0 w-full min-w-0 flex-col px-3 sm:px-4 md:px-6 lg:px-8 max-lg:h-auto">
     <div class="flex-shrink-0">
-      <nav class="mb-3 text-xs text-slate-500" aria-label="Migas de pan">
-        <ol class="flex flex-wrap items-center gap-x-2">
-          <li><a :href="urls.hub" class="font-medium text-sky-600 hover:text-sky-700">Pedidos</a></li>
-          <li class="text-slate-300" aria-hidden="true">/</li>
-          <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Pedido masivo</span></li>
-        </ol>
-      </nav>
+      {% url 'ecom:mayoristapp_pedidos_hub' as hub_pedidos_url %}
+      {% include "ecom/includes/ventas_breadcrumb.html" with mid_label="Pedidos" mid_url=hub_pedidos_url current_label="Pedido masivo" %}
 
       <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 shadow-md sm:px-4">
         <header class="pm-hero-bar flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -35,6 +30,7 @@
                   class="rounded-full bg-slate-500/25 px-2.5 py-1 text-[11px] font-semibold text-slate-200">Solo consulta</span>
           </div>
           <div class="pm-hero-actions ml-auto flex flex-wrap items-center gap-2">
+            {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="pedido-masivo" class_extra="text-slate-300 hover:text-sky-300 dark:hover:text-sky-300" only %}
             <span x-show="guardadoChip" x-cloak
                   class="rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-200"
                   x-text="guardadoChip"></span>
@@ -469,7 +465,10 @@
                       <td class="pm-c-suc">
                         <input type="number" min="0" step="0.001" inputmode="decimal"
                                :data-pm-qty="art.id_articulo + ':' + s.id_cliente_domicilio"
-                               class="pm-qty-input pm-input-dense h-8 rounded-md border border-slate-300 bg-white px-1 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                               class="pm-qty-input pm-input-dense h-8 rounded-md border bg-white px-1 text-right text-xs tabular-nums focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-100 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                               :class="celdaInvalida(art.id_articulo, s.id_cliente_domicilio)
+                                 ? 'border-amber-500 ring-2 ring-amber-500/40 focus:border-amber-500 focus:ring-amber-500/40 dark:border-amber-500'
+                                 : 'border-slate-300 focus:border-sky-400 focus:ring-sky-500/40 dark:border-slate-600'"
                                :value="celda(art.id_articulo, s.id_cliente_domicilio)"
                                :disabled="!matrizEditable"
                                @change="onCelda(art.id_articulo, s.id_cliente_domicilio, $event.target.value)"
@@ -617,7 +616,10 @@
                       <input type="number" min="0" step="0.001" inputmode="decimal"
                              :id="'pm-qty-simple-' + art.id_articulo"
                              :data-pm-qty="art.id_articulo + ':' + sucursales[0].id_cliente_domicilio"
-                             class="pm-input-dense w-full rounded-md border border-slate-300 bg-white px-2 text-right tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                             class="pm-input-dense w-full rounded-md border bg-white px-2 text-right tabular-nums focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-100 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                             :class="celdaInvalida(art.id_articulo, sucursales[0].id_cliente_domicilio)
+                               ? 'border-amber-500 ring-2 ring-amber-500/40 focus:border-amber-500 focus:ring-amber-500/40 dark:border-amber-500'
+                               : 'border-slate-300 focus:border-sky-400 focus:ring-sky-500/40 dark:border-slate-600'"
                              :value="celda(art.id_articulo, sucursales[0].id_cliente_domicilio)"
                              placeholder="0"
                              :disabled="!matrizEditable"
@@ -697,7 +699,10 @@
                         <input type="number" min="0" step="0.001" inputmode="decimal"
                                :id="'pm-qty-mob-' + art.id_articulo + '-' + s.id_cliente_domicilio"
                                :data-pm-qty="art.id_articulo + ':' + s.id_cliente_domicilio"
-                               class="pm-input-dense w-full rounded-md border border-slate-300 bg-white px-2 text-right tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                               class="pm-input-dense w-full rounded-md border bg-white px-2 text-right tabular-nums focus:outline-none focus:ring-2 disabled:cursor-not-allowed disabled:bg-slate-100 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                             :class="celdaInvalida(art.id_articulo, s.id_cliente_domicilio)
+                               ? 'border-amber-500 ring-2 ring-amber-500/40 focus:border-amber-500 focus:ring-amber-500/40 dark:border-amber-500'
+                               : 'border-slate-300 focus:border-sky-400 focus:ring-sky-500/40 dark:border-slate-600'"
                                :value="celda(art.id_articulo, s.id_cliente_domicilio)"
                                placeholder="0"
                                :disabled="!matrizEditable"

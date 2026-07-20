@@ -594,7 +594,14 @@ class PedidoMasivoCeldaAPIView(APIView):
             cantidad_packs=data.get("cantidad_packs"),
         )
         if not ok:
-            return _err(msg)
+            resp: Dict[str, Any] = {
+                "ok": False,
+                "error": msg,
+                "code": (payload or {}).get("code", "error"),
+            }
+            if payload and payload.get("multiplo_empaque") is not None:
+                resp["multiplo_empaque"] = payload["multiplo_empaque"]
+            return Response(resp, status=400)
         return Response({"ok": True, "message": msg, "celda": payload})
 
 

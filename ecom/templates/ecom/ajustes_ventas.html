@@ -8,18 +8,15 @@
          x-data="ajustesVentasApp()"
          x-init="init()">
   <div class="mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
-    <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
-      <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <li><span class="font-medium text-slate-600 dark:text-slate-300">Ventas</span></li>
-        <li class="text-slate-300" aria-hidden="true">/</li>
-        <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Ajustes de ventas</span></li>
-      </ol>
-    </nav>
+    {% include "ecom/includes/ventas_breadcrumb.html" with current_label="Ajustes de ventas" %}
 
     <div class="mb-4 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md sm:p-4">
-      <header>
-        <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Ajustes de ventas</h1>
-        <p class="mt-1 text-xs text-slate-300 sm:text-sm">Parámetros del flujo de pedidos mayorista (ecom).</p>
+      <header class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Ajustes de ventas</h1>
+          <p class="mt-1 text-xs text-slate-300 sm:text-sm">Parámetros del flujo de pedidos mayorista (ecom).</p>
+        </div>
+        {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="ajustes-ventas" class_extra="text-slate-300 hover:text-sky-300 dark:hover:text-sky-300" only %}
       </header>
     </div>
 

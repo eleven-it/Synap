@@ -11,13 +11,10 @@
          x-init="init()">
   <div class="mx-auto flex h-full min-h-0 w-full min-w-0 flex-col px-3 sm:px-4 md:px-6 lg:px-8">
     <div class="flex-shrink-0">
-      <nav class="mb-3 text-xs text-slate-500" aria-label="Migas de pan">
-        <ol class="flex flex-wrap items-center gap-x-2">
-          <li><span class="font-medium text-purple-600">Ventas</span></li>
-          <li class="text-slate-300" aria-hidden="true">/</li>
-          <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Pedidos</span></li>
-        </ol>
-      </nav>
+      <div class="mb-3 flex items-center justify-between gap-3">
+        {% include "ecom/includes/ventas_breadcrumb.html" with current_label="Pedidos" %}
+        {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="pedidos-hub" only %}
+      </div>
 
       <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md sm:p-4">
         <header class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">

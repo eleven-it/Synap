@@ -16,6 +16,7 @@
           <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">Objetivos de venta</h1>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+          {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="objetivos-venta" class_extra="text-slate-300 hover:text-sky-300 dark:hover:text-sky-300" only %}
           {% if puede_editar %}
           <button type="button" id="vo-btn-abrir-modal-nuevo"
                   class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800"
