@@ -7,12 +7,12 @@
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 {% endif %}
 <div class="mx-auto w-full min-w-0 max-w-5xl px-4 py-5 sm:px-6 sm:py-6 lg:py-8" x-data="ingresoMovStock()" x-init="init()">
-  <header class="mb-5 flex flex-wrap items-start justify-between gap-3 sm:mb-6">
-    <div class="min-w-0">
-    <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">Ingreso Mov. Stock</h1>
-    <p class="mt-1.5 max-w-2xl text-sm leading-snug text-slate-600 dark:text-slate-400">Complete la cabecera del movimiento y, en la siguiente pestaña, agregue los artículos.</p>
+  <header class="mb-5 sm:mb-6">
+    <div class="flex items-start justify-between gap-3">
+      <h1 class="min-w-0 text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">Ingreso Mov. Stock</h1>
+      {% include "includes/btn_manual_ayuda.html" with url_name="stock:manual_usuario" seccion="alta-movimiento" only %}
     </div>
-    {% include "includes/btn_manual_ayuda.html" with url_name="stock:manual_usuario" seccion="alta-movimiento" only %}
+    <p class="mt-1.5 max-w-2xl text-sm leading-snug text-slate-600 dark:text-slate-400">Complete la cabecera del movimiento y, en la siguiente pestaña, agregue los artículos.</p>
   </header>
 
   <!-- Mensajes -->

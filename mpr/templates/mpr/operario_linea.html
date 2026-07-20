@@ -6,19 +6,22 @@
 {% block content %}
 <section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
     <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
-        <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
-            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <nav class="mb-8 flex items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
+            <ol class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <li>
                     <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a>
                 </li>
                 <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
                 <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Línea habitual por operario</span></li>
             </ol>
+            {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="linea-habitual" only %}
         </nav>
 
         <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <div class="min-w-0 max-w-3xl">
             <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Línea habitual por operario</h1>
             <p class="mt-2 text-base leading-relaxed text-gray-600 dark:text-gray-300">La línea habitual se usa por defecto para la carga del operario. El roster puede sobrescribirla por día. Al cambiarla se registra la vigencia.</p>
+            </div>
         </header>
 
         <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">

@@ -21,7 +21,6 @@
                 <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Productos para armado / desarmado</h1>
             </div>
             <div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-                {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="lista-materiales" only %}
                 <a href="{% url 'mpr:bom_create' %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-lg" aria-hidden="true">add</span>
                     Nuevo

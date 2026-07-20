@@ -15,35 +15,29 @@ ROOT = Path(__file__).resolve().parent.parent
 
 MPR_ALIASES: dict[str, str] = {
     "acceso": "1. Acceso al módulo",
-    "tablero": "2. Tablero de control",
-    "tablero-produccion": "2.1 Tablero de producción (operación diaria)",
-    "demanda": "3. Demanda",
-    "ventana-unidades": "3.1 Pedido producción trabajo (OPT) / Ventana Unidades",
-    "confirmar-opt": "3.1.1 Confirmar OPT (agrupar)",
-    "pedidos-fabrica": "3.2 Pedidos a fábrica",
-    "wizard": "5.0 Asistente de producción (wizard)",
-    "lista-opt": "5.1 Lista de OPT",
-    "nueva-opt": "5.2 Nueva OPT",
-    "detalle-opt": "5.3 Detalle de una OP",
-    "liberar-opt": "5.4 Liberar a producción (OPT)",
-    "registrar-opp": "5.5 Registrar parte de producción (OPP)",
-    "cerrar-opt": "5.6 Cerrar OPT",
-    "operarios": "5.8 Operarios (ABM)",
-    "lista-materiales": "6. Lista de materiales (recetas)",
-    "armado": "7. Armado unificado (1ra y 2da)",
-    "armado-2da": "7.1 Armado 2da (composición libre)",
-    "armado-1ra": "7.2 Armado 1ra (BOM fija)",
-    "imputacion-pedido": "7.3 Imputación de pedido (supervisor)",
-    "reclasificacion": "8. Reclasificación",
-    "depositos": "9. Configuración: Depósitos",
-    "reportes-mpr": "10. Reportes MPR",
-    "flujo-resumido": "11. Flujo resumido",
-    "trazabilidad": "12. Trazabilidad por máquina, línea y operario",
-    "config-planta": "12.1 Configuración de planta (supervisor)",
-    "asignar-articulo-maquina": "Asignar artículo a máquina e imprimir planilla",
-    "carga-movil-operario": "12.2 Carga móvil del operario",
-    "partes-pendientes": "12.3 Aprobación de partes (supervisor)",
-    "mensajes-mpr": "13. Mensajes y errores frecuentes",
+    "flujo-diario": "2. Flujo del día a día",
+    "tablero-produccion": "3. Tablero de producción",
+    "tablero": "3. Tablero de producción",
+    "parte-produccion": "4. Parte de producción",
+    "parte-supervisor": "4.1 Parte de producción (supervisor)",
+    "carga-movil-operario": "4.2 Carga de producción (operario)",
+    "partes-pendientes": "4.3 Partes pendientes (aprobación)",
+    "control-calidad": "5. Control de calidad",
+    "armado": "6. Armado",
+    "imputacion-pedido": "7. Imputación de pedido",
+    "configuracion": "8. Configuración (orden recomendado)",
+    "config-planta": "8. Configuración (orden recomendado)",
+    "config-lineas": "8.1 Líneas",
+    "config-maquinas": "8.2 Máquinas",
+    "asignar-articulo-maquina": "Asignar artículo a máquina",
+    "depositos": "8.3 Config. Depósitos",
+    "operarios": "8.4 Operarios",
+    "operarios-usuarios": "8.5 Operarios y usuarios",
+    "linea-habitual": "8.6 Línea habitual (operarios)",
+    "turnos": "8.7 Turnos de producción",
+    "planificacion-turnos": "8.8 Planificación de turnos",
+    "resumen": "9. Resumen rápido",
+    "mensajes-mpr": "10. Problemas frecuentes",
 }
 
 STOCK_ALIASES: dict[str, str] = {
@@ -53,11 +47,8 @@ STOCK_ALIASES: dict[str, str] = {
     "mensajes-stock": "4. Mensajes frecuentes",
 }
 
-# alias -> título exacto (invertido para búsqueda)
-_ALIAS_BY_TITLE: dict[frozenset, dict[str, str]] = {
-    frozenset({"mpr"}): {v: k for k, v in MPR_ALIASES.items()},
-    frozenset({"stock"}): {v: k for k, v in STOCK_ALIASES.items()},
-}
+# alias -> título exacto del encabezado en el MD
+# Varios alias pueden apuntar al mismo título (anclas alternativas).
 
 
 def slug_es(text: str) -> str:
@@ -71,16 +62,27 @@ def slug_es(text: str) -> str:
     return text.strip("-")
 
 
-def _alias_for_title(title: str, module: str) -> str | None:
-    key = frozenset({"mpr"} if module == "mpr" else {"stock"})
-    return _ALIAS_BY_TITLE[key].get(title.strip())
+def _aliases_for_title(title: str, module: str) -> list[str]:
+    aliases = MPR_ALIASES if module == "mpr" else STOCK_ALIASES
+    t = title.strip()
+    return [a for a, tit in aliases.items() if tit.strip() == t]
 
 
 def _heading_id(level: int, title: str, module: str) -> str:
-    alias = _alias_for_title(title, module)
-    if alias:
-        return alias
+    als = _aliases_for_title(title, module)
+    if als:
+        return als[0]
     return slug_es(title)
+
+
+def _extra_anchor_spans(title: str, module: str, primary_id: str) -> str:
+    extras = [a for a in _aliases_for_title(title, module) if a != primary_id]
+    if not extras:
+        return ""
+    return "".join(
+        f'<span id="{html.escape(a, quote=True)}" class="anchor-alias" aria-hidden="true"></span>'
+        for a in extras
+    )
 
 
 CSS = """
@@ -173,6 +175,10 @@ body {
 }
 .content-section a { color: var(--accent); }
 .content-section strong { font-weight: 600; }
+.anchor-alias {
+  position: relative; top: -0.5rem; display: block;
+  height: 0; width: 0; overflow: hidden;
+}
 :target {
   animation: hash-highlight 2.2s ease-out;
 }
@@ -317,8 +323,9 @@ def parse_markdown(md: str, module: str) -> tuple[str, str, list[tuple[int, str,
             else:
                 if level <= 2:
                     toc.append((level, hid, title))
+                extras = _extra_anchor_spans(title, module, hid)
                 body_parts.append(
-                    f'<{tag} id="{html.escape(hid, quote=True)}">{_inline_md(title)}</{tag}>'
+                    f'{extras}<{tag} id="{html.escape(hid, quote=True)}">{_inline_md(title)}</{tag}>'
                 )
             i += 1
             continue

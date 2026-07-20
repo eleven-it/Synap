@@ -6,14 +6,15 @@
 {% block content %}
 <section class="flex flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
     <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
-        <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4 sm:text-sm" aria-label="Migas de pan">
-            <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <nav class="mb-3 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4 sm:text-sm" aria-label="Migas de pan">
+            <ol class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <li>
                     <a href="{% url 'mpr:tablero_produccion' %}" class="rounded font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a>
                 </li>
                 <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
                 <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Imputación de pedido</span></li>
             </ol>
+            {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="imputacion-pedido" only %}
         </nav>
 
         <header class="mb-6 flex flex-col gap-4 border-b border-slate-200/80 pb-5 dark:border-slate-700/80 lg:flex-row lg:items-center lg:justify-between">
