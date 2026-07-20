@@ -1,5 +1,3 @@
-{# Enlace discreto al manual — ubicar a la derecha del breadcrumb / migas de pan.
-   Parámetros: url_name, seccion (sin #), label opcional. #}
 <a href="{% url url_name %}{% if seccion %}#{{ seccion }}{% endif %}"
    target="_blank"
    rel="noopener noreferrer"
