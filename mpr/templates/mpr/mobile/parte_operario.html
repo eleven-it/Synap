@@ -21,9 +21,12 @@
     </div>
     {% endif %}
 
-    <header class="mb-4">
-        <p class="text-sm text-gray-500 dark:text-gray-400">Hola{% if nombre_usuario %}, {{ nombre_usuario }}{% endif %}</p>
-        <h1 class="mt-0.5 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Carga de producción</h1>
+    <header class="mb-4 flex items-start justify-between gap-3">
+        <div class="min-w-0">
+            <p class="text-sm text-gray-500 dark:text-gray-400">Hola{% if nombre_usuario %}, {{ nombre_usuario }}{% endif %}</p>
+            <h1 class="mt-0.5 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Carga de producción</h1>
+        </div>
+        {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="carga-movil-operario" only %}
     </header>
 
     {% if estado_borde == "sin_operario" %}

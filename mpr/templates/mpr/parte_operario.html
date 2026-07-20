@@ -33,10 +33,13 @@
         <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 dark:bg-slate-900">
             <header class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
                 <div class="min-w-0">
-                    <h1 class="flex items-center gap-2 text-lg font-bold tracking-tight text-white sm:text-xl">
-                        <span class="material-icons text-2xl text-purple-400" aria-hidden="true">assignment_turned_in</span>
-                        Carga de producción
-                    </h1>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h1 class="flex items-center gap-2 text-lg font-bold tracking-tight text-white sm:text-xl">
+                            <span class="material-icons text-2xl text-purple-400" aria-hidden="true">assignment_turned_in</span>
+                            Carga de producción
+                        </h1>
+                        {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="carga-movil-operario" class_extra="border-slate-500 bg-slate-700 text-white hover:bg-slate-600 dark:border-slate-500 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600" only %}
+                    </div>
                     <p class="mt-0.5 text-xs text-slate-400">Hola{% if nombre_usuario %}, {{ nombre_usuario }}{% endif %} — registrá tu producción por máquina.</p>
                 </div>
                 {% if not estado_borde or estado_borde == "ok" %}

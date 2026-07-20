@@ -20,11 +20,14 @@
             </ol>
         </nav>
 
-        <header class="mb-8 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+        <header class="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-gray-200/80 pb-8 dark:border-gray-700/80">
+            <div class="min-w-0">
             <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Armado – OPT {{ opt_numero|default:"-" }}</h1>
             <p class="mt-2 max-w-2xl text-base leading-relaxed text-gray-600 dark:text-gray-300">
                 Salida de componentes desde el depósito origen y entrada del producto armado en el depósito destino. Se genera un movimiento de stock tipo Armado. Los productos y cantidades corresponden a la OPT seleccionada.
             </p>
+            </div>
+            {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="armado" only %}
         </header>
 
         <form method="post" action="" class="mpr-post-loading space-y-8"

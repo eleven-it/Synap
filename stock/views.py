@@ -4,9 +4,30 @@ import json
 
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from django.http import HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 
 from core.decorators import tiene_permiso
+
+
+def manual_usuario_view(request):
+    """Manual de usuario Stock (HTML estático). Solo requiere sesión activa."""
+    if "user" not in request.session or not request.session.get("user"):
+        return redirect("login:login")
+    from pathlib import Path
+
+    manual_path = (
+        Path(__file__).resolve().parent
+        / "static"
+        / "stock"
+        / "manuales"
+        / "manual_usuario_stock.html"
+    )
+    if not manual_path.is_file():
+        raise Http404("Manual de usuario Stock no encontrado.")
+    return FileResponse(
+        manual_path.open("rb"),
+        content_type="text/html; charset=utf-8",
+    )
 
 
 @tiene_permiso("stock.crear_movimiento")

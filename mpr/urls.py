@@ -5,6 +5,7 @@ from mpr.best_migration import views as best_migration_views
 app_name = "mpr"
 
 urlpatterns = [
+    path("manual/", views.ManualUsuarioMprView.as_view(), name="manual_usuario"),
     path("", views.TableroView.as_view(), name="tablero"),
     path("ordenes/", views.OpListView.as_view(), name="op_list"),
     path("wizard/", views.WizardProduccionView.as_view(), name="wizard"),

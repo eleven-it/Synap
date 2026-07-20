@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual de usuario – Stock e Inventario — Synap</title>
+  <meta name="description" content="Manual de usuario — Inventario y movimientos">
+  <style>
+:root {
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --muted: #64748b;
+  --accent: #0f766e;
+  --accent-light: #ccfbf1;
+  --accent-dark: #115e59;
+  --warn: #b45309;
+  --sidebar-w: 280px;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.04);
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 1.25rem; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+}
+.layout { display: flex; min-height: 100vh; }
+.sidebar {
+  position: fixed; top: 0; left: 0;
+  width: var(--sidebar-w); height: 100vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1.5rem 1rem 2rem;
+  z-index: 100;
+}
+.sidebar-brand { font-weight: 700; font-size: 0.95rem; color: var(--accent-dark); margin-bottom: 0.25rem; }
+.sidebar-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 1.25rem; line-height: 1.4; }
+.sidebar nav ul { list-style: none; padding: 0; margin: 0; }
+.sidebar nav li { margin-bottom: 2px; }
+.sidebar nav a {
+  display: block; padding: 0.45rem 0.65rem; border-radius: 6px;
+  color: var(--text); text-decoration: none; font-size: 0.875rem;
+  transition: background 0.15s;
+}
+.sidebar nav a:hover, .sidebar nav a:focus { background: var(--accent-light); color: var(--accent-dark); }
+.sidebar nav .nav-h3 a { padding-left: 1.15rem; font-size: 0.82rem; color: var(--muted); }
+.sidebar nav .nav-h4 a { padding-left: 1.65rem; font-size: 0.78rem; color: var(--muted); }
+.main { margin-left: var(--sidebar-w); flex: 1; padding: 2rem 2.5rem 4rem; max-width: 960px; }
+.hero {
+  background: linear-gradient(135deg, var(--accent-dark) 0%, var(--accent) 100%);
+  color: #fff; border-radius: var(--radius);
+  padding: 2rem 2.25rem; margin-bottom: 2rem; box-shadow: var(--shadow);
+}
+.hero h1 { margin: 0 0 0.5rem; font-size: 1.75rem; font-weight: 700; line-height: 1.25; }
+.hero p { margin: 0; opacity: 0.92; font-size: 1rem; max-width: 58ch; }
+.meta-bar { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; margin-top: 1.25rem; font-size: 0.82rem; opacity: 0.88; }
+.content-section { margin-bottom: 2rem; }
+.content-section h2, .content-section h3, .content-section h4 {
+  scroll-margin-top: 1.25rem;
+}
+.content-section h2 {
+  margin: 2rem 0 0.75rem; font-size: 1.35rem; color: var(--accent-dark);
+  padding-bottom: 0.35rem; border-bottom: 2px solid var(--accent-light);
+}
+.content-section h3 { margin: 1.5rem 0 0.6rem; font-size: 1.1rem; color: var(--accent-dark); }
+.content-section h4 { margin: 1.25rem 0 0.5rem; font-size: 1rem; color: var(--text); }
+.content-section p { margin: 0 0 0.85rem; }
+.content-section ul, .content-section ol { margin: 0 0 1rem; padding-left: 1.5rem; }
+.content-section li { margin-bottom: 0.35rem; }
+.content-section hr {
+  border: none; border-top: 1px solid var(--border); margin: 2rem 0;
+}
+.content-section table {
+  width: 100%; border-collapse: collapse; font-size: 0.875rem;
+  margin: 0.75rem 0 1.25rem; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+}
+.content-section th, .content-section td {
+  padding: 0.6rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border);
+}
+.content-section th { background: #f8fafc; font-weight: 600; color: var(--muted); font-size: 0.78rem; }
+.content-section tr:last-child td { border-bottom: none; }
+.content-section code {
+  font-family: var(--mono); font-size: 0.88em;
+  background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 4px;
+}
+.content-section a { color: var(--accent); }
+.content-section strong { font-weight: 600; }
+:target {
+  animation: hash-highlight 2.2s ease-out;
+}
+@keyframes hash-highlight {
+  0% { background-color: var(--accent-light); box-shadow: 0 0 0 4px var(--accent-light); }
+  100% { background-color: transparent; box-shadow: none; }
+}
+h2:target, h3:target, h4:target {
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  margin-left: -0.5rem;
+}
+@media print {
+  .sidebar { display: none !important; }
+  .main { margin-left: 0; max-width: none; padding: 0; }
+}
+@media (max-width: 860px) {
+  .sidebar { position: static; width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+  .layout { flex-direction: column; }
+  .main { margin-left: 0; padding: 1.25rem; }
+}
+</style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-brand">Synap · Stock</div>
+      <div class="sidebar-sub">Manual de usuario — Inventario y movimientos</div>
+      <nav aria-label="Índice del manual">
+        <ul><li><a href="#acceso-stock">Acceso</a></li><li><a href="#inventario-por-etapa">Inventario por etapa</a></li><li class="nav-h3"><a href="#para-que-sirve">Para qué sirve</a></li><li class="nav-h3"><a href="#columnas">Columnas</a></li><li class="nav-h3"><a href="#filtros-y-presentacion">Filtros y presentación</a></li><li class="nav-h3"><a href="#como-usarlo-en-el-dia-a-dia">Cómo usarlo en el día a día</a></li><li><a href="#alta-movimiento">Alta de movimiento (orientación)</a></li><li><a href="#mensajes-stock">Mensajes frecuentes</a></li></ul>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="hero">
+        <h1>Manual de usuario – Stock e Inventario</h1>
+        <p>Manual de usuario en Synap. Navegue por el índice o use enlaces directos con ancla (<code>#seccion</code>).</p>
+        <div class="meta-bar">
+          <span>Generado: 20/07/2026</span>
+          <span>URL app: /stock/manual/</span>
+          <span>Fuente: Markdown en docs/</span>
+        </div>
+      </header>
+      <div class="content-section"><p>Manual operativo del módulo <strong>Stock</strong> en Synap, con foco en <strong>Inventario por etapa</strong> (saldos MPR) y orientación al alta de movimientos.</p><p><strong>Requisitos:</strong> empresa activa en sesión y permiso adecuado (<code>stock.consultas</code> para inventario; permisos de movimiento según la operación).</p><p><strong>Referencias técnicas:</strong> <a href="INVENTARIO_TABLA_MPR">INVENTARIO_TABLA_MPR.md</a>, <a href="ALTA_MOVIMIENTO_UX">ALTA_MOVIMIENTO_UX.md</a>, campos talle/color <a href="mpr/ARTICULO_CE_TALLES_COLOR">../mpr/ARTICULO_CE_TALLES_COLOR.md</a>.</p><p><strong>Versión HTML en la app:</strong> <code>/stock/manual/</code> (archivo estático en <code>stock/static/stock/manuales/</code>). Fuente: este Markdown; regenerar con <code>python scripts/generar_manuales_html.py</code>.</p><hr><h2 id="acceso-stock">1. Acceso</h2><p>Desde el menú Synap → <strong>Stock</strong>.</p><table><thead><tr><th>Pantalla</th><th>Menú típico</th><th>Ruta</th></tr></thead><tbody><tr><td><strong>Inventario por etapa</strong></td><td>Stock → Inventario</td><td><code>/stock/inventario/</code></td></tr><tr><td>Alta / listado de movimientos</td><td>Stock → movimientos (según menú)</td><td><code>/stock/...</code> (ver plantillas de movimiento)</td></tr></tbody></table><p>El inventario por etapa <strong>reemplaza</strong> la antigua consulta ficha (<code>/stock/consulta-ficha/</code> eliminada).</p><hr><h2 id="inventario-por-etapa">2. Inventario por etapa</h2><p><strong>Permiso:</strong> <code>stock.consultas</code>.</p><h3 id="para-que-sirve">Para qué sirve</h3><p>Ver, por artículo, el saldo en los depósitos que <strong>suman stock</strong> y tienen etapa MPR configurada (<code>deposito.tipo_mpr</code>), más un <strong>Consolidado</strong> (suma de las cuatro etapas).</p><p>También muestra <strong>Talle</strong> y <strong>Color</strong> del artículo (campos especiales AdministraNET), útiles para controlar calidad y producción.</p><h3 id="columnas">Columnas</h3><table><thead><tr><th>Columna</th><th>Significado</th></tr></thead><tbody><tr><td><strong>Artículo</strong></td><td>Código compuesto (manual − proveedor si aplica) y nombre</td></tr><tr><td><strong>Talle</strong></td><td>Valor CE TALLES (vacío → «—»)</td></tr><tr><td><strong>Color</strong></td><td>Valor CE COLOR: sólido (<code>Negro</code>) o combinación (<code>Rosa/Gris</code>)</td></tr><tr><td><strong>Producción</strong></td><td>Saldo en depósitos <code>tipo_mpr = Produccion</code></td></tr><tr><td><strong>Semi elaborado</strong></td><td><code>SemiElaborado</code></td></tr><tr><td><strong>2da Selección</strong></td><td><code>2daSeleccion</code></td></tr><tr><td><strong>Terminado</strong></td><td><code>Terminado</code></td></tr><tr><td><strong>Consolidado</strong></td><td>Suma de las cuatro etapas anteriores</td></tr></tbody></table><p>Solo entran depósitos con <code>suma_stock = &#x27;Si&#x27;</code> y <code>anulado = &#x27;No&#x27;</code>.</p><h3 id="filtros-y-presentacion">Filtros y presentación</h3><ol><li><strong>Marcas:</strong> tags multi-selección (vacío = todas).</li><li><strong>Artículo:</strong> búsqueda predictiva por código o nombre (≥ 2 caracteres), o fijar un artículo concreto.</li><li><strong>Presentación:</strong> <strong>Pares</strong> (unidades, default) o <strong>Docenas</strong> (docenas de pares + pares debajo).</li><li><strong>Solo con stock</strong> / incluir ceros: por defecto solo artículos con consolidado &gt; 0; activar incluir sin stock si hace falta.</li><li><strong>Actualizar</strong> aplica filtros; <strong>Limpiar</strong> vuelve al estado base.</li><li>Paginación: 150 artículos por página.</li></ol><h3 id="como-usarlo-en-el-dia-a-dia">Cómo usarlo en el día a día</h3><ul><li>Controlar stock por etapa de fábrica (producción → semi → 2da → terminado).</li><li>Cruzar con <strong>Talle/Color</strong> al armar planillas o revisar surtido.</li><li>Si Talle/Color aparecen vacíos, el artículo aún no tiene valor en campos especiales CE (cargar en AdministraNET o pedir carga masiva al equipo).</li></ul><hr><h2 id="alta-movimiento">3. Alta de movimiento (orientación)</h2><p>Pantalla de alta de movimiento de stock (plantilla <code>alta_movimiento.html</code>):</p><ol><li>Completar <strong>cabecera</strong>: motivo, fecha, depósitos origen/destino, detalle/referencia según el motivo.</li><li>Pasar a la pestaña <strong>Artículos</strong>: buscar por código/nombre (predictivo), escanear si aplica, cargar cantidades.</li><li><strong>Continuar</strong> / <strong>Confirmar</strong> según el flujo; en móvil el botón principal queda arriba.</li></ol><p>Detalle visual/UX para desarrollo: <a href="ALTA_MOVIMIENTO_UX">ALTA_MOVIMIENTO_UX.md</a>. Búsqueda de artículos: <a href="general/BUSQUEDA_PREDICTIVA_ARTICULO_MOVIMIENTO_STOCK">../general/BUSQUEDA_PREDICTIVA_ARTICULO_MOVIMIENTO_STOCK.md</a>.</p><hr><h2 id="mensajes-stock">4. Mensajes frecuentes</h2><ul><li><strong>«No hay artículos con los filtros seleccionados»:</strong> Ampliar marcas, quitar filtro de artículo, o activar incluir sin stock.</li><li><strong>Talle/Color en «—»:</strong> Sin dato CE; no implica saldo cero.</li><li><strong>Inventario vacío con stock real:</strong> Verificar que los depósitos tengan <code>tipo_mpr</code> y <code>suma_stock = &#x27;Si&#x27;</code>.</li><li><strong>Sin empresa activa:</strong> Seleccionar empresa en login/sesión.</li></ul><hr><p>*Documento: Manual de usuario Stock/Inventario. Proyecto Synap. Actualizado 20/07/2026.*</p></div>
+    </main>
+  </div>
+  <script>
+(function () {
+  function highlightHash() {
+    var hash = window.location.hash;
+    if (!hash || hash.length < 2) return;
+    var el = document.getElementById(hash.slice(1));
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('hash-flash');
+    window.setTimeout(function () { el.classList.remove('hash-flash'); }, 2200);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', highlightHash);
+  } else {
+    highlightHash();
+  }
+  window.addEventListener('hashchange', highlightHash);
+})();
+</script>
+</body>
+</html>
