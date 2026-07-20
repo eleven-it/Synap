@@ -63,7 +63,7 @@ Fechas UI: **dd/MM/yyyy**.
 1. Tarjeta en Borrador → Continuar.
 2. Nuevo con borrador activo → modal Continuar vs Archivar y crear (nunca pisar en silencio).
 3. Borrador con `ultimo_error` → badge “Error al confirmar”; datos intactos.
-4. Borrador **anulado** (soft-anular desde pedido masivo/simple) → columna **Anulado** del hub; **Continuar** reactiva a `borrador`. Ícono **Eliminar definitivamente** (`delete_forever`, rose) en tarjeta Kanban, móvil y columna Acciones en Lista; `window.confirm` antes de borrar; no navega al flujo Continuar. Endpoint `POST /ecom/api/mayoristapp/pedidos/hub/eliminar-draft/` body `{ "draft_id": <int> }` — hard delete solo si `estado == anulado` y pertenece al usuario/base; celdas CASCADE. Permiso: `ecom.pedidos.ver` (mismo que archivar). Bootstrap: `urls.eliminar_draft`.
+4. Borrador **anulado** (soft-anular desde pedido masivo/simple) → columna **Anulado** del hub; **Continuar** reactiva a `borrador`. Ícono **Eliminar definitivamente** (`delete_forever`, rose) en tarjeta Kanban, móvil y columna Acciones en Lista; **modal Synap de confirmación** antes de borrar (nunca `window.confirm`; ver `docs/general/SYNAP_MENSAJES_TOAST.md` y `.cursor/rules/modales-sin-dialogos-nativos.mdc`); no navega al flujo Continuar. Endpoint `POST /ecom/api/mayoristapp/pedidos/hub/eliminar-draft/` body `{ "draft_id": <int> }` — hard delete solo si `estado == anulado` y pertenece al usuario/base; celdas CASCADE. Permiso: `ecom.pedidos.ver` (mismo que archivar). Bootstrap: `urls.eliminar_draft`.
 
 ## Implementación (Phase 3)
 

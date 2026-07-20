@@ -1,0 +1,40 @@
+---
+description: Prohíbe alert/confirm/prompt nativos; usar modales Synap
+alwaysApply: true
+---
+
+# Diálogos nativos prohibidos en la UI Synap
+
+Los diálogos nativos del navegador (`alert`, `confirm`, `prompt`) rompen la
+consistencia visual, bloquean el hilo del navegador, no respetan el tema
+oscuro/claro ni el idioma español de la UI y no se pueden testear. En toda
+pantalla Synap (HTML/JS/Alpine) se usan **modales Synap**.
+
+## Reglas
+
+- **MUST NOT** usar `alert()`, `confirm()`, `prompt()` ni
+  `window.alert` / `window.confirm` / `window.prompt` en pantallas Synap.
+- Confirmaciones **destructivas u operativas** (eliminar, anular, archivar,
+  aprobar/rechazar) → **modal Synap** de confirmación. Patrones de referencia:
+  - VCM: `ecom/templates/ecom/config_vendedor_cliente_marca.html`
+    (overlay `bg-black/50 backdrop-blur-sm`, panel blanco/slate, ícono
+    material, Cancelar + CTA, estado `guardando`/`procesando`).
+  - Módulo pedidos: `ecom/templates/ecom/pedidos_modal.html` +
+    `order_dialogs.mjs` (cuando la pantalla es un módulo ES).
+  - Modal Alpine local tipo hub (estado `confirmOpen` + helper
+    `pedirConfirmacion({...})`) cuando la pantalla **no** es módulo ES.
+- **Feedback AJAX corto** (éxito/error de una acción sin recargar) →
+  `window.mprShowAviso(texto, tipo)` en pantallas MPR, o `SynapMessages.show`,
+  según `docs/general/SYNAP_MENSAJES_TOAST.md`. **Nunca** `alert`.
+- **Entrada de texto** (motivos de rechazo/anulación, notas) → modal con
+  `input`/`textarea`, con validación de obligatorio. **Nunca** `prompt`.
+
+## Excepción
+
+Solo se admite degradación a un diálogo nativo cuando el partial del modal
+**no está cargado** y esa degradación **ya está documentada** (p. ej. el
+fallback interno de `mprShowAviso` a `window.alert`). **MUST NOT** introducir
+nuevos fallbacks a diálogos nativos en pantallas nuevas.
+
+Ver también: `.cursorrules` (bullet «Diálogos nativos») y
+`docs/general/SYNAP_MENSAJES_TOAST.md`.

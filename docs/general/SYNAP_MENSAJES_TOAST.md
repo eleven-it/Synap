@@ -10,6 +10,23 @@ Antes, muchas pantallas **no consumían** los mensajes Django (`django.contrib.m
 2. **Persistencia aparente** — los mensajes viven en sesión hasta que alguna plantilla los itera; si la pantalla origen no los mostraba, quedaban para la siguiente visita.
 3. **Pérdida de espacio vertical** — varios banners empujaban tablas y grillas hacia abajo.
 
+## Prohibido diálogos nativos
+
+En la UI Synap **no** se usan los diálogos nativos del navegador
+(`alert`, `confirm`, `prompt`, ni `window.alert/confirm/prompt`): bloquean el
+hilo, ignoran tema e idioma y no se pueden testear. Regla permanente en
+**`.cursor/rules/modales-sin-dialogos-nativos.mdc`**.
+
+| Necesidad | Usar |
+|-----------|------|
+| Confirmación destructiva/operativa (eliminar, anular, archivar, aprobar/rechazar) | Modal Synap: patrón VCM `ecom/config_vendedor_cliente_marca.html`, o `ecom/pedidos_modal.html` + `order_dialogs.mjs`, o modal Alpine local tipo hub (`confirmOpen` + `pedirConfirmacion`) |
+| Feedback AJAX corto (éxito/error sin recargar) | `mprShowAviso` (MPR) / `SynapMessages.show` — **nunca** `alert` |
+| Entrada de texto (motivo de rechazo, nota) | Modal con `input`/`textarea` y validación de obligatorio — **nunca** `prompt` |
+
+Excepción: solo la degradación **ya documentada** (p. ej. el fallback interno
+de `mprShowAviso` a `window.alert` cuando el partial no está cargado). No
+introducir nuevos fallbacks a diálogos nativos en pantallas nuevas.
+
 ## Solución canónica
 
 | Pieza | Ubicación |
