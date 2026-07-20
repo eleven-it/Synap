@@ -13,7 +13,7 @@ Documentación del módulo MPR en Synap: flujos, esquema de datos, manual de usu
 | [PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md](PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md) | **Plan** — Migrar ledgers MPR de Postgres a MySQL (`mpr_*`), FK, utf8mb4, deprecación OPT/lista_produccion. OpenSpec: `openspec/changes/mpr-mysql-fuente-unica/`. |
 | [NORMALIZACION_TABLAS_MPR.md](NORMALIZACION_TABLAS_MPR.md) | Normalización de tablas DB (MPR / AdministraNET) y relaciones. |
 | [MANUAL_USUARIO_MPR.md](MANUAL_USUARIO_MPR.md) | **Manual de usuario** (flujo diario: tablero, parte, control de calidad, armado, imputación + configuración). Sin flujo OPT/OPP. |
-| [manual_usuario_mpr.html](manual_usuario_mpr.html) | **Manual HTML** para usuarios finales. En la app: **`/mpr/manual/`** (login). Regenerar: `python scripts/generar_manuales_html.py`. |
+| [manual_usuario_mpr.html](manual_usuario_mpr.html) | **Manual HTML** para usuarios finales (branding administraNET + logo login). En la app: **`/mpr/manual/`** (login). Regenerar: `python scripts/generar_manuales_html.py`. |
 | [TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md](TRAZABILIDAD_MAQUINA_LINEA_OPERARIO.md) | **Trazabilidad** máquina / línea / operario: modelo, permisos, flujo dos etapas (móvil + aprobación). |
 | [CARGA_MOVIL_OPERARIO.md](CARGA_MOVIL_OPERARIO.md) | Carga móvil del operario (`/mpr/mi-parte/`), grilla asignar artículo, planilla Control de Calidad. |
 | [ARTICULO_CE_TALLES_COLOR.md](ARTICULO_CE_TALLES_COLOR.md) | **Desarrollo** — Campos especiales CE TALLES/COLOR: tablas, lectura en UI, inferencia/carga masiva. |

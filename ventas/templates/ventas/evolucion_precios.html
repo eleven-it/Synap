@@ -54,7 +54,7 @@
                         </select>
                     </label>
                     {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos equal=1 only %}
-                    {% include "ventas/includes/filtro_tags_generico.html" with field_id="rubros_incluidos" label="Rubro" catalogo=rubros_catalogo incluidos=rubros_incluidos equal=1 only %}
+                    {% include "ventas/includes/filtro_tags_generico.html" with field_id="rubros_incluidos" label="Rubro" catalogo=rubros_catalogo incluidos=rubros_incluidos equal=1 variant="dark" only %}
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
                     <label class="inline-flex items-center gap-2 text-xs text-slate-300">
