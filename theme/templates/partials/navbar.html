@@ -108,7 +108,7 @@
 }" class="w-full font-inter">
 
   <!-- Barra superior -->
-  <div class="flex items-center justify-between w-full h-14 md:h-16 px-3 md:px-6 bg-white dark:bg-gray-950 shadow-sm">
+  <div class="flex items-center w-full h-14 md:h-16 px-3 md:px-6 bg-white dark:bg-gray-950 shadow-sm">
     
     <!-- Izquierda: hamburguesa (mobile) + logo -->
     <div class="flex items-center gap-2">
@@ -123,8 +123,8 @@
       </a>
     </div>
 
-    <!-- Centro: menú horizontal (desktop) -->
-    <nav class="hidden md:flex items-center gap-6 text-sm font-medium">
+    <!-- Menú horizontal (desktop) alineado a la izquierda, tras el logo -->
+    <nav class="hidden md:flex items-center gap-6 text-sm font-medium md:ml-6">
       {% for module in modules %}
         <div class="relative" @mouseenter="openMenu('{{ module.id }}')" @mouseleave="scheduleClose()">
           <a href="{{ module.url }}" class="flex items-center gap-1 text-gray-700 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-300 transition">
@@ -163,7 +163,7 @@
     </nav>
 
     <!-- Derecha: sucursal (desktop), usuario, dark mode — empresa/login van en el pie -->
-    <div class="flex items-center gap-2 md:gap-3">
+    <div class="flex items-center gap-2 md:gap-3 ml-auto">
       {% if sucursales_disponibles %}
       <div class="relative hidden md:block">
         <button @click="branchDropdownOpen = !branchDropdownOpen" class="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-200 text-xs font-medium hover:bg-blue-200 dark:hover:bg-blue-800/80 transition">

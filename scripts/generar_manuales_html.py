@@ -2,9 +2,14 @@
 """
 Genera HTML navegable desde los manuales Markdown de MPR y Stock.
 Sin dependencias externas. Fuente: docs/mpr|stock/MANUAL_USUARIO_*.md
+
+El HTML de usuario final usa branding administraNET (colores website, Plus Jakarta Sans)
+y el logo del login (`Logo_Signo_administraNET.png` → logo-administranet.png por módulo),
+embebido en base64 para funcionar vía /mpr/manual/, /stock/manual/ o desde docs/.
 """
 from __future__ import annotations
 
+import base64
 import html
 import re
 import unicodedata
@@ -85,21 +90,36 @@ def _extra_anchor_spans(title: str, module: str, primary_id: str) -> str:
     )
 
 
+MODULE_CONFIG: dict[str, dict[str, str | Path]] = {
+    "mpr": {
+        "module_label": "Producción",
+        "static_logo": "/static/mpr/manuales/logo-administranet.png",
+        "logo_path": ROOT / "mpr/static/mpr/manuales/logo-administranet.png",
+    },
+    "stock": {
+        "module_label": "Stock",
+        "static_logo": "/static/stock/manuales/logo-administranet.png",
+        "logo_path": ROOT / "stock/static/stock/manuales/logo-administranet.png",
+    },
+}
+
 CSS = """
 :root {
-  --bg: #f4f6f9;
-  --surface: #ffffff;
-  --border: #e2e8f0;
-  --text: #1e293b;
-  --muted: #64748b;
-  --accent: #0f766e;
-  --accent-light: #ccfbf1;
-  --accent-dark: #115e59;
+  --bg: #F5F6F8;
+  --surface: #FFFFFF;
+  --border: #E2E8F0;
+  --text: #202030;
+  --muted: #64748B;
+  --accent: #3D9B9B;
+  --accent-light: rgba(61, 155, 155, 0.12);
+  --accent-dark: #1E3A4C;
+  --hero-mid: #2A4A5C;
+  --terracotta: #C06050;
   --warn: #b45309;
   --sidebar-w: 280px;
   --radius: 10px;
-  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 16px rgba(15, 23, 42, 0.04);
-  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --shadow: 0 1px 3px rgba(32, 32, 48, 0.08), 0 4px 16px rgba(32, 32, 48, 0.04);
+  --font: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
   --mono: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -122,8 +142,19 @@ body {
   padding: 1.5rem 1rem 2rem;
   z-index: 100;
 }
-.sidebar-brand { font-weight: 700; font-size: 0.95rem; color: var(--accent-dark); margin-bottom: 0.25rem; }
-.sidebar-sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 1.25rem; line-height: 1.4; }
+.sidebar-logo {
+  display: block; max-height: 52px; width: auto; max-width: 100%;
+  margin-bottom: 0.85rem;
+}
+.sidebar-brand {
+  font-weight: 700; font-size: 1rem; letter-spacing: -0.01em;
+  color: var(--text); margin-bottom: 0.15rem;
+}
+.sidebar-sub {
+  font-size: 0.82rem; font-weight: 500; color: var(--accent);
+  margin-bottom: 1.25rem; line-height: 1.4;
+}
+.sidebar-meta { font-size: 0.72rem; color: var(--muted); margin-bottom: 1rem; }
 .sidebar nav ul { list-style: none; padding: 0; margin: 0; }
 .sidebar nav li { margin-bottom: 2px; }
 .sidebar nav a {
@@ -131,25 +162,28 @@ body {
   color: var(--text); text-decoration: none; font-size: 0.875rem;
   transition: background 0.15s;
 }
-.sidebar nav a:hover, .sidebar nav a:focus { background: var(--accent-light); color: var(--accent-dark); }
+.sidebar nav a:hover, .sidebar nav a:focus { background: var(--accent-light); color: var(--accent); }
 .sidebar nav .nav-h3 a { padding-left: 1.15rem; font-size: 0.82rem; color: var(--muted); }
 .sidebar nav .nav-h4 a { padding-left: 1.65rem; font-size: 0.78rem; color: var(--muted); }
 .main { margin-left: var(--sidebar-w); flex: 1; padding: 2rem 2.5rem 4rem; max-width: 960px; }
 .hero {
-  background: linear-gradient(135deg, var(--accent-dark) 0%, var(--accent) 100%);
+  background: linear-gradient(135deg, var(--accent-dark) 0%, var(--hero-mid) 52%, var(--accent) 100%);
   color: #fff; border-radius: var(--radius);
   padding: 2rem 2.25rem; margin-bottom: 2rem; box-shadow: var(--shadow);
 }
-.hero h1 { margin: 0 0 0.5rem; font-size: 1.75rem; font-weight: 700; line-height: 1.25; }
-.hero p { margin: 0; opacity: 0.92; font-size: 1rem; max-width: 58ch; }
-.meta-bar { display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem; margin-top: 1.25rem; font-size: 0.82rem; opacity: 0.88; }
+.hero h1 { margin: 0; font-size: 1.75rem; font-weight: 700; line-height: 1.25; }
+.meta-bar {
+  display: flex; flex-wrap: wrap; gap: 0.75rem 1.5rem;
+  margin-top: 1.25rem; font-size: 0.82rem; opacity: 0.9;
+}
+.meta-bar span + span::before { content: "·"; margin-right: 0.75rem; opacity: 0.65; }
 .content-section { margin-bottom: 2rem; }
 .content-section h2, .content-section h3, .content-section h4 {
   scroll-margin-top: 1.25rem;
 }
 .content-section h2 {
-  margin: 2rem 0 0.75rem; font-size: 1.35rem; color: var(--accent-dark);
-  padding-bottom: 0.35rem; border-bottom: 2px solid var(--accent-light);
+  margin: 2rem 0 0.75rem; font-size: 1.35rem; color: var(--text);
+  padding-bottom: 0.35rem; border-bottom: 2px solid var(--accent);
 }
 .content-section h3 { margin: 1.5rem 0 0.6rem; font-size: 1.1rem; color: var(--accent-dark); }
 .content-section h4 { margin: 1.25rem 0 0.5rem; font-size: 1rem; color: var(--text); }
@@ -173,7 +207,8 @@ body {
   font-family: var(--mono); font-size: 0.88em;
   background: #f1f5f9; padding: 0.15rem 0.4rem; border-radius: 4px;
 }
-.content-section a { color: var(--accent); }
+.content-section a { color: var(--accent); text-decoration-color: rgba(61, 155, 155, 0.45); }
+.content-section a:hover { color: var(--accent-dark); text-decoration-color: var(--accent); }
 .content-section strong { font-weight: 600; }
 .anchor-alias {
   position: relative; top: -0.5rem; display: block;
@@ -426,30 +461,51 @@ def _build_sidebar(toc: list[tuple[int, str, str]]) -> str:
     return "".join(parts)
 
 
+def _logo_data_uri(logo_path: Path) -> str:
+    if not logo_path.is_file():
+        raise FileNotFoundError(f"No se encontró el logo del manual: {logo_path}")
+    encoded = base64.standard_b64encode(logo_path.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
 def build_html(
     doc_title: str,
     sidebar_nav: str,
     body: str,
-    brand: str,
-    subtitle: str,
     module: str,
 ) -> str:
+    cfg = MODULE_CONFIG[module]
+    module_label = str(cfg["module_label"])
+    static_logo = str(cfg["static_logo"])
+    logo_path = Path(cfg["logo_path"])
+    logo_src = _logo_data_uri(logo_path)
     today = date.today().strftime("%d/%m/%Y")
-    url_hint = "/mpr/manual/" if module == "mpr" else "/stock/manual/"
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{html.escape(doc_title)} — Synap</title>
-  <meta name="description" content="{html.escape(subtitle)}">
+  <title>{html.escape(doc_title)} — administraNET</title>
+  <meta name="description" content="Manual de usuario {html.escape(module_label)} — administraNET">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>{CSS}</style>
 </head>
 <body>
   <div class="layout">
     <aside class="sidebar">
-      <div class="sidebar-brand">{html.escape(brand)}</div>
-      <div class="sidebar-sub">{html.escape(subtitle)}</div>
+      <img
+        class="sidebar-logo"
+        src="{logo_src}"
+        data-static-src="{html.escape(static_logo, quote=True)}"
+        alt="administraNET"
+        width="52"
+        height="52"
+      >
+      <div class="sidebar-brand">administraNET</div>
+      <div class="sidebar-sub">{html.escape(module_label)}</div>
+      <div class="sidebar-meta">Manual de usuario · Synap</div>
       <nav aria-label="Índice del manual">
         {sidebar_nav}
       </nav>
@@ -457,11 +513,9 @@ def build_html(
     <main class="main">
       <header class="hero">
         <h1>{html.escape(doc_title)}</h1>
-        <p>Manual de usuario en Synap. Navegue por el índice o use enlaces directos con ancla (<code>#seccion</code>).</p>
         <div class="meta-bar">
-          <span>Generado: {today}</span>
-          <span>URL app: {html.escape(url_hint)}</span>
-          <span>Fuente: Markdown en docs/</span>
+          <span>Actualizado: {today}</span>
+          <span>Synap</span>
         </div>
       </header>
       {body}
@@ -478,12 +532,10 @@ def generate_one(
     out_runtime: Path,
     out_docs: Path,
     module: str,
-    brand: str,
-    subtitle: str,
 ) -> None:
     md = md_path.read_text(encoding="utf-8")
     doc_title, sidebar, body = parse_markdown(md, module)
-    html_out = build_html(doc_title, sidebar, body, brand, subtitle, module)
+    html_out = build_html(doc_title, sidebar, body, module)
     out_runtime.parent.mkdir(parents=True, exist_ok=True)
     out_docs.parent.mkdir(parents=True, exist_ok=True)
     out_runtime.write_text(html_out, encoding="utf-8")
@@ -498,16 +550,12 @@ def main() -> None:
         ROOT / "mpr/static/mpr/manuales/manual_usuario_mpr.html",
         ROOT / "docs/mpr/manual_usuario_mpr.html",
         "mpr",
-        "Synap · MPR",
-        "Manual de usuario — Producción",
     )
     generate_one(
         ROOT / "docs/stock/MANUAL_USUARIO_STOCK.md",
         ROOT / "stock/static/stock/manuales/manual_usuario_stock.html",
         ROOT / "docs/stock/manual_usuario_stock.html",
         "stock",
-        "Synap · Stock",
-        "Manual de usuario — Inventario y movimientos",
     )
 
 
