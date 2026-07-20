@@ -120,18 +120,10 @@
                     </form>
                 </div>
 
-                {# Contador + impresión #}
-                <div class="flex flex-wrap items-center gap-2">
-                    <button type="button" @click="imprimirPlanilla()"
-                            class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm font-semibold text-purple-700 shadow-sm transition-colors hover:bg-purple-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:border-purple-700 dark:bg-gray-900 dark:text-purple-300 dark:hover:bg-purple-900/30"
-                            title="Imprime la planilla de Control de Calidad (A4 horizontal)">
-                        <span class="material-icons text-base" aria-hidden="true">print</span>
-                        Control de Calidad
-                    </button>
-                    <div class="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-sm font-medium text-purple-800 dark:bg-purple-900/20 dark:text-purple-200">
-                        <span class="material-icons text-base" aria-hidden="true">precision_manufacturing</span>
-                        <span>Mostrando <span class="font-bold" x-text="totalMostradas"></span> · <span class="font-bold" x-text="totalConArticulos"></span> con artículos</span>
-                    </div>
+                {# Contador dinámico #}
+                <div class="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-sm font-medium text-purple-800 dark:bg-purple-900/20 dark:text-purple-200">
+                    <span class="material-icons text-base" aria-hidden="true">precision_manufacturing</span>
+                    <span>Mostrando <span class="font-bold" x-text="totalMostradas"></span> · <span class="font-bold" x-text="totalConArticulos"></span> con artículos</span>
                 </div>
             </div>
         </div>

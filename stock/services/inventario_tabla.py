@@ -132,6 +132,12 @@ def codigo_compuesto_articulo(id_manual: Any, cod_art_prov: Any) -> str:
     return prov or "-"
 
 
+def ce_texto(valor: Any) -> str:
+    """Normaliza valor CE (TALLES/COLOR): vacío o '-' → ''."""
+    s = str_or_default(valor, "").strip()
+    return "" if s in ("", "-") else s
+
+
 def _nombre_tabla(cursor, nombre_lower: str) -> Optional[str]:
     cursor.execute("SHOW TABLES")
     for row in cursor.fetchall():
@@ -278,7 +284,12 @@ def consultar_inventario_tabla(
             having_sql = (" HAVING " + " AND ".join(having_parts)) if having_parts else ""
 
             tart = tbl_art.replace("`", "``")
-            from_sql = f"FROM `{tart}` a {join_agg}"
+            tbl_ce = _nombre_tabla(cursor, "articulo_valor_ce")
+            join_ce = ""
+            if tbl_ce:
+                tce = tbl_ce.replace("`", "``")
+                join_ce = f" LEFT JOIN `{tce}` avce ON avce.id_articulo = a.IDArt"
+            from_sql = f"FROM `{tart}` a {join_agg}{join_ce}"
 
             count_sql = f"SELECT COUNT(*) AS n FROM (SELECT a.IDArt {from_sql} WHERE {where_art}{having_sql}) sub"
             cursor.execute(count_sql, tuple(params_art))
@@ -291,6 +302,12 @@ def consultar_inventario_tabla(
                 "a.CodArtProv AS cod_art_prov",
                 "a.NombreArticulo AS nombre_articulo",
             ]
+            if tbl_ce:
+                select_cols.append("COALESCE(avce.valor1, '') AS talle")
+                select_cols.append("COALESCE(avce.valor2, '') AS color")
+            else:
+                select_cols.append("'' AS talle")
+                select_cols.append("'' AS color")
             for tipo, _ in ETAPAS_INVENTARIO:
                 if join_agg:
                     select_cols.append(f"COALESCE(agg.`{tipo}`, 0) AS `{tipo}`")
@@ -326,6 +343,8 @@ def consultar_inventario_tabla(
                     r.get("id_manual"), r.get("cod_art_prov")
                 ),
                 "nombre_articulo": str_or_default(r.get("nombre_articulo"), "-"),
+                "talle": ce_texto(r.get("talle")),
+                "color": ce_texto(r.get("color")),
                 "etapas_saldos": etapas_saldos,
                 "consolidado": consolidado,
             })
@@ -375,6 +394,8 @@ def preparar_filas_inventario_presentacion(
             "id_articulo": aid,
             "codigo_compuesto": fila.get("codigo_compuesto", "-"),
             "nombre_articulo": fila.get("nombre_articulo", "-"),
+            "talle": ce_texto(fila.get("talle")),
+            "color": ce_texto(fila.get("color")),
             "etapas": etapas_celdas,
             "consolidado": _celda_stock_deposito(
                 consolidado, modo, cantidad_promedio_bulto=bulto
