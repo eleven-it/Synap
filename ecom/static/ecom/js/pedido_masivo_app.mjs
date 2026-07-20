@@ -31,6 +31,35 @@ function roundMoney(n) {
   return Math.round(Number(n || 0) * 100) / 100;
 }
 
+/** Múltiplo mínimo de empaque (>0) desde multiplo_cantidad_vta. */
+function multiploEmpaque(art) {
+  const mc = Number(art?.multiplo_cantidad_vta || 0);
+  if (mc > 0) return mc;
+  return Number(art?.multiplo_empaque || 1) || 1;
+}
+
+/** True si qty es 0/vacía o múltiplo entero de multiplo. */
+function cantidadOk(qty, multiplo) {
+  const q = parseFloat(String(qty ?? '').trim());
+  const m = Number(multiplo || 1);
+  if (isNaN(q) || q <= 0 || m <= 1) return true;
+  const resto = q % m;
+  return Math.abs(resto) < 1e-9;
+}
+
+function sugerenciaMultiplo(qty, multiplo) {
+  const q = Math.floor(parseFloat(qty) || 0);
+  const m = Number(multiplo || 1);
+  if (m <= 1) return '';
+  const inf = Math.max(m, Math.floor(q / m) * m);
+  const sup = inf + m;
+  const ejemplos = [];
+  if (inf > 0) ejemplos.push(inf);
+  ejemplos.push(sup);
+  if (sup + m <= sup + m * 2) ejemplos.push(sup + m);
+  return 'Usá ' + [...new Set(ejemplos)].join(', ') + '…';
+}
+
 function pedidoMasivoCore() {
   return {
     urls: {},
@@ -56,6 +85,7 @@ function pedidoMasivoCore() {
     sucursales: [],
     articulos: [],
     celdas: {},
+    celdasInvalidas: {},
     descuentosFila: {},
     descPiePct: 0,
     ultimoError: {},
@@ -513,8 +543,11 @@ function pedidoMasivoCore() {
         precio_lista1: Number(a.precio_lista1 || 0),
         porcentaje_descuento: Number(a.porcentaje_descuento || 0),
         alicuota_iva: Number(a.alicuota_iva ?? 21),
+        multiplo_cantidad_vta: Number(a.multiplo_cantidad_vta || 0),
+        multiplo_empaque: Number(a.multiplo_empaque || multiploEmpaque(a)),
       }));
       this.celdas = m.celdas || {};
+      this.celdasInvalidas = {};
       // Descuentos por fila (REQ-MAS-08/09): mapa id_articulo → % renglón efectivo.
       this.descuentosFila = m.descuentos_fila || {};
       this.descPiePct = Number(m.desc_pie_pct || 0);
@@ -762,6 +795,90 @@ function pedidoMasivoCore() {
     celda(idArt, idDom) {
       return this.celdas[idArt + ':' + idDom] || '';
     },
+    celdaInvalida(idArt, idDom) {
+      return !!this.celdasInvalidas[idArt + ':' + idDom];
+    },
+    _marcarCeldaInvalida(idArt, idDom, invalido) {
+      const key = idArt + ':' + idDom;
+      if (invalido) this.celdasInvalidas[key] = true;
+      else delete this.celdasInvalidas[key];
+    },
+    _artPorId(idArt) {
+      return (this.articulos || []).find(
+        (a) => String(a.id_articulo) === String(idArt),
+      );
+    },
+    _escanearInfraccionesMultiplo() {
+      const out = [];
+      for (const art of this.articulos || []) {
+        const multiplo = multiploEmpaque(art);
+        if (multiplo <= 1) continue;
+        for (const su of this.sucursales || []) {
+          const idDom = su.id_cliente_domicilio;
+          const qty = parseFloat(this.celda(art.id_articulo, idDom));
+          if (isNaN(qty) || qty <= 0) continue;
+          if (cantidadOk(qty, multiplo)) continue;
+          out.push({
+            id_articulo: art.id_articulo,
+            id_cliente_domicilio: idDom,
+            codigo: art.codigo || art.id_manual || '',
+            nombre: art.nombre || art.descripcion || '',
+            cantidad: qty,
+            multiplo_empaque: multiplo,
+          });
+          this._marcarCeldaInvalida(art.id_articulo, idDom, true);
+        }
+      }
+      return out;
+    },
+    _lineaInfraccionMultiplo(item) {
+      const cod = item.codigo ? `${item.codigo} — ` : '';
+      const nom = item.nombre || `Art. ${item.id_articulo}`;
+      return `${cod}${nom}: ${item.cantidad} (empaque ${item.multiplo_empaque})`;
+    },
+    _mostrarModalMultiploCelda(idArt, idDom, qty, multiplo, onClose) {
+      const art = this._artPorId(idArt);
+      const cod = (art && (art.codigo || art.id_manual)) || '';
+      const nom = (art && (art.nombre || art.descripcion)) || `Art. ${idArt}`;
+      const sugerencia = sugerenciaMultiplo(qty, multiplo);
+      const lineas = [
+        `${cod ? cod + ' — ' : ''}${nom}`,
+        `Cantidad ingresada: ${qty}`,
+        `Unidad de empaquetado: ${multiplo}`,
+      ];
+      if (sugerencia) lineas.push(sugerencia);
+      this.abrirDialogo('aviso', {
+        titulo: 'Cantidad inválida',
+        mensaje: lineas.join('\n'),
+        confirmarTexto: 'Entendido',
+        variante: 'warning',
+        onConfirm: () => {
+          if (typeof onClose === 'function') onClose();
+          else {
+            const el = this._qtyInputVisible(idArt, idDom);
+            if (el) {
+              el.focus();
+              el.select && el.select();
+            }
+          }
+        },
+      });
+      const el = this._qtyInputVisible(idArt, idDom);
+      if (el) this._dialogFocoPrevio = el;
+    },
+    _mostrarModalListaInfracciones(infracciones) {
+      const lineas = infracciones.map((it) => this._lineaInfraccionMultiplo(it));
+      this.abrirDialogo('aviso', {
+        titulo: 'Cantidades inválidas',
+        mensaje: [
+          'Corregí las cantidades antes de continuar. Deben ser múltiplo de la unidad de empaquetado:',
+          '',
+          ...lineas,
+        ].join('\n'),
+        confirmarTexto: 'Entendido',
+        variante: 'warning',
+      });
+    },
     fmtPrecio(v) {
       const n = Number(v);
       if (!n && n !== 0) return '—';
@@ -823,8 +940,20 @@ function pedidoMasivoCore() {
     async onCelda(idArt, idDom, raw) {
       const key = idArt + ':' + idDom;
       const val = String(raw || '').trim();
+      const prev = this.celdas[key] || '';
       this.celdas[key] = val;
       this.marcarTotalesEstimados();
+      const qtyNum = val === '' ? 0 : parseFloat(val);
+      const art = this._artPorId(idArt);
+      const multiplo = multiploEmpaque(art || {});
+      if (!isNaN(qtyNum) && qtyNum > 0 && !cantidadOk(qtyNum, multiplo)) {
+        this._marcarCeldaInvalida(idArt, idDom, true);
+        this.celdas[key] = prev;
+        this._mostrarModalMultiploCelda(idArt, idDom, qtyNum, multiplo);
+        this.marcarTotalesEstimados();
+        return;
+      }
+      this._marcarCeldaInvalida(idArt, idDom, false);
       const { data } = await this.postJson(this.urls.celda, {
         draft_id: this.draftId,
         id_articulo: idArt,
@@ -832,6 +961,14 @@ function pedidoMasivoCore() {
         cantidad_packs: val === '' ? 0 : val,
       });
       if (!data.ok) {
+        if (data.code === 'multiplo_empaque' || /empaquetado/i.test(data.error || '')) {
+          const mult = Number(data.multiplo_empaque || multiplo);
+          this.celdas[key] = prev;
+          this._marcarCeldaInvalida(idArt, idDom, true);
+          this._mostrarModalMultiploCelda(idArt, idDom, qtyNum, mult);
+          this.marcarTotalesEstimados();
+          return;
+        }
         this.error = data.error || 'Error al guardar';
         return;
       }
@@ -938,6 +1075,11 @@ function pedidoMasivoCore() {
      */
     async refrescarPreview() {
       if (!this.draftId || !this.urls.preview) return;
+      const infracciones = this._escanearInfraccionesMultiplo();
+      if (infracciones.length) {
+        this._mostrarModalListaInfracciones(infracciones);
+        return;
+      }
       if (this._previewTimer) {
         clearTimeout(this._previewTimer);
         this._previewTimer = null;
@@ -1257,6 +1399,8 @@ function pedidoMasivoCore() {
           precio_lista1: Number(a.precio_lista1 || 0),
           porcentaje_descuento: 0,
           alicuota_iva: Number(a.alicuota_iva ?? 21),
+          multiplo_cantidad_vta: Number(a.multiplo_cantidad_vta || 0),
+          multiplo_empaque: Number(a.multiplo_empaque || multiploEmpaque(a)),
         });
       }
       this.qArt = '';
@@ -1422,6 +1566,11 @@ function pedidoMasivoCore() {
           // Esc / cierre también deja el foco en el campo.
           if (elFecha) this._dialogFocoPrevio = elFecha;
         });
+        return;
+      }
+      const infracciones = this._escanearInfraccionesMultiplo();
+      if (infracciones.length) {
+        this._mostrarModalListaInfracciones(infracciones);
         return;
       }
       this.recalcularPreviewEstimado();

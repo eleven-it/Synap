@@ -154,11 +154,12 @@
 <section class="pre-doc min-h-[calc(100vh-5rem)] w-full bg-slate-200/60 py-6 dark:bg-slate-950 sm:py-8">
   <div class="mx-auto w-full max-w-none px-3 sm:px-5 lg:px-8 xl:px-10 2xl:px-12">
 
-    <div class="mb-5 flex flex-wrap items-center gap-3 text-sm">
-      <a href="{{ volver_url }}" class="text-slate-500 transition hover:text-cyan-600 dark:text-slate-400 dark:hover:text-cyan-400">← Presupuestos</a>
-      <span class="hidden text-slate-300 sm:inline dark:text-slate-600" aria-hidden="true">/</span>
-      <span class="text-xs font-medium uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">Ventas</span>
-    </div>
+    {% url 'ventas:presupuesto_list' as presupuestos_list_url %}
+    {% if solo_lectura %}
+    {% include "ecom/includes/ventas_breadcrumb.html" with mid_label="Presupuestos" mid_url=presupuestos_list_url current_label="Detalle" %}
+    {% else %}
+    {% include "ecom/includes/ventas_breadcrumb.html" with mid_label="Presupuestos" mid_url=presupuestos_list_url current_label="Nuevo" %}
+    {% endif %}
 
     {% if not puede_emitir and not solo_lectura %}
     <p class="mb-4 rounded-lg border border-amber-300/60 bg-amber-50/90 px-4 py-2.5 text-sm text-amber-950 dark:border-amber-800/60 dark:bg-amber-950/35 dark:text-amber-100">
@@ -198,6 +199,7 @@
             {% endif %}
           </div>
           <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+            {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="presupuestos" only %}
             {% if solo_lectura %}
             <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200/80 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-600">Estado: {{ cab.estado }}</span>
             {% if cab.anulado and cab.anulado != 'No' %}

@@ -185,6 +185,24 @@ class TestConfirmarLoteMasivo(TestCase):
         self.assertFalse(ok)
         self.assertIn("cantidades", msg.lower())
 
+    @patch("ecom.services.batch_checkout_masivo.validar_multiplos_draft")
+    def test_rechaza_confirmar_si_multiplo_invalido(self, mock_val):
+        d = self._draft_con_dos_sucursales()
+        mock_val.return_value = (
+            False,
+            "Hay 1 cantidad(es) que no respetan la unidad de empaquetado (6).",
+            [{"id_articulo": 1, "codigo": "X", "cantidad": 7, "multiplo_empaque": 6}],
+        )
+        ok, msg, payload = confirmar_lote_masivo(
+            d, id_usuario=9, id_punto_venta=1, cod_viajante=2
+        )
+        self.assertFalse(ok)
+        self.assertIn("empaquetado", msg.lower())
+        self.assertEqual(payload.get("code"), "multiplo_empaque")
+        self.assertEqual(len(payload.get("infracciones_multiplo") or []), 1)
+        d.refresh_from_db()
+        self.assertEqual(d.estado, EcomPedidoMasivoDraft.ESTADO_BORRADOR)
+
     @patch("ecom.services.batch_checkout_masivo.opciones_presentacion_articulo")
     @patch("ecom.services.batch_checkout_masivo.agregar_item")
     @patch("ecom.services.batch_checkout_masivo.confirmar")

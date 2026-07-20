@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Genera HTML navegable desde los manuales Markdown de MPR y Stock.
-Sin dependencias externas. Fuente: docs/mpr|stock/MANUAL_USUARIO_*.md
+Genera HTML navegable desde los manuales Markdown de MPR, Stock y Ventas (ecom).
+Sin dependencias externas. Fuente: docs/mpr|stock|ecom/MANUAL_USUARIO_*.md
 
 El HTML de usuario final usa branding administraNET (colores website, Plus Jakarta Sans)
 y el logo del login (`Logo_Signo_administraNET.png` → logo-administranet.png por módulo),
-embebido en base64 para funcionar vía /mpr/manual/, /stock/manual/ o desde docs/.
+embebido en base64 para funcionar vía /mpr/manual/, /stock/manual/, /ecom/manual/ o docs/.
 """
 from __future__ import annotations
 
@@ -52,6 +52,27 @@ STOCK_ALIASES: dict[str, str] = {
     "mensajes-stock": "4. Mensajes frecuentes",
 }
 
+ECOM_ALIASES: dict[str, str] = {
+    "acceso": "1. Acceso al módulo",
+    "presupuestos": "2. Presupuestos",
+    "pedidos": "3. Pedidos (hub)",
+    "pedidos-hub": "3. Pedidos (hub)",
+    "pedido-masivo": "4. Pedido masivo por sucursales",
+    "vendedor-cliente-marca": "5. Vendedor · Cliente · Marca",
+    "actualizacion-precios": "6. Actualización de precios",
+    "precios-terminados": "6. Actualización de precios",
+    "evolucion-precios": "7. Evolución de precios",
+    "ajustes-ventas": "8. Ajustes de ventas",
+    "asignacion-vendedor": "9. Asignación vendedor",
+    "objetivos-venta": "10. Objetivos de venta",
+}
+
+ALIASES_BY_MODULE: dict[str, dict[str, str]] = {
+    "mpr": MPR_ALIASES,
+    "stock": STOCK_ALIASES,
+    "ecom": ECOM_ALIASES,
+}
+
 # alias -> título exacto del encabezado en el MD
 # Varios alias pueden apuntar al mismo título (anclas alternativas).
 
@@ -68,7 +89,7 @@ def slug_es(text: str) -> str:
 
 
 def _aliases_for_title(title: str, module: str) -> list[str]:
-    aliases = MPR_ALIASES if module == "mpr" else STOCK_ALIASES
+    aliases = ALIASES_BY_MODULE.get(module, {})
     t = title.strip()
     return [a for a, tit in aliases.items() if tit.strip() == t]
 
@@ -100,6 +121,11 @@ MODULE_CONFIG: dict[str, dict[str, str | Path]] = {
         "module_label": "Stock",
         "static_logo": "/static/stock/manuales/logo-administranet.png",
         "logo_path": ROOT / "stock/static/stock/manuales/logo-administranet.png",
+    },
+    "ecom": {
+        "module_label": "Ventas",
+        "static_logo": "/static/ecom/manuales/logo-administranet.png",
+        "logo_path": ROOT / "ecom/static/ecom/manuales/logo-administranet.png",
     },
 }
 
@@ -422,12 +448,12 @@ def parse_markdown(md: str, module: str) -> tuple[str, str, list[tuple[int, str,
     for level, hid, label in toc:
         toc_extended.append((level, hid, label))
     # h3/h4 con alias
-    alias_titles = MPR_ALIASES if module == "mpr" else STOCK_ALIASES
+    alias_titles = ALIASES_BY_MODULE.get(module, {})
     for alias, title in alias_titles.items():
         if not any(t[1] == alias for t in toc_extended):
             # buscar en body si existe el id
             if f'id="{alias}"' in "".join(body_parts):
-                lvl = 3 if alias not in {v for v in MPR_ALIASES.values()} else 2
+                lvl = 3 if alias not in set(alias_titles.values()) else 2
                 toc_extended.append((lvl, alias, title))
 
     # Re-parse headings h3/h4 para TOC sidebar
@@ -556,6 +582,12 @@ def main() -> None:
         ROOT / "stock/static/stock/manuales/manual_usuario_stock.html",
         ROOT / "docs/stock/manual_usuario_stock.html",
         "stock",
+    )
+    generate_one(
+        ROOT / "docs/ecom/MANUAL_USUARIO_VENTAS.md",
+        ROOT / "ecom/static/ecom/manuales/manual_usuario_ventas.html",
+        ROOT / "docs/ecom/manual_usuario_ventas.html",
+        "ecom",
     )
 
 

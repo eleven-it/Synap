@@ -4,12 +4,13 @@
 <section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
   <div class="mx-auto flex w-full min-w-0 max-w-[1920px] flex-col px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
-    <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4" aria-label="Migas de pan">
+    <nav class="mb-3 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4" aria-label="Migas de pan">
       <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Ventas</span></li>
         <li class="text-slate-400 dark:text-slate-500" aria-hidden="true">/</li>
         <li><span class="font-medium text-slate-800 dark:text-slate-200">Presupuestos</span></li>
       </ol>
+      {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="presupuestos" only %}
     </nav>
 
     <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md dark:border-slate-800 sm:mb-4 sm:p-4">
