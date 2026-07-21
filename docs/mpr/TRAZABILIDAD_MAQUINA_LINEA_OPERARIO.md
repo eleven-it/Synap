@@ -284,7 +284,10 @@ artículos con `tipo_art_fab = 'Fabricado'` (normalizado con `TRIM`/`COALESCE`).
 Incluye botón **Imprimir Control de Calidad** (planilla A4 horizontal filtrada por lo
 visible en pantalla: máquina / línea; modal Synap si no hay filas). Columnas: máquina,
 artículo, color, talle, turnos mañana/tarde/noche 1ra·2da (ancho generoso para
-escritura a mano), observaciones. Color y talle salen de `articulo_val_ce` según
+escritura a mano), observaciones (persistente por máquina en
+`mpr_maquina.observacion_planilla`, API `maquina_observacion_planilla_api`). Artículos
+ordenados por antigüedad de asignación. Operadores de turno en MAYÚSCULAS (temporales,
+solo impresión). Color y talle salen de `articulo_val_ce` según
 captions `COLOR` / `TALLES` en `articulo_ce` (detalle: [ARTICULO_CE_TALLES_COLOR.md](ARTICULO_CE_TALLES_COLOR.md)).
 
 El detalle de la carga y la aprobación (pantallas, bordes, borrador vs. envío) está en
@@ -297,7 +300,8 @@ El detalle de la carga y la aprobación (pantallas, bordes, borrador vs. envío)
 - **Proveedor:** `mpr_maquina_linea_trazabilidad` (título UI «MPR — máquina/línea/trazabilidad»),
   función `run_mpr_maquina_linea_mysql`, registrado en `PROVIDER_REGISTRY` de
   `core/services/legacy_mysql_schema/catalog.py`.
-- **SQL:** `mpr/sql/003_mpr_maquina_linea_tables.sql` (tablas nuevas) y
+- **SQL:** `mpr/sql/003_mpr_maquina_linea_tables.sql` (tablas nuevas, incluye
+  `mpr_maquina.observacion_planilla`) y
   `mpr/sql/004_mpr_parte_maquina_gap.sql` (ALTERs a `mpr_parte`, `mpr_parte_linea`,
   `mpr_roster_dia`). El `003_*` se ejecuta tal cual (`CREATE TABLE IF NOT EXISTS`); el `004_*`
   documenta el DDL, cuya aplicación idempotente vive en `catalog.py`.

@@ -154,7 +154,21 @@ Genera una hoja **A4 horizontal** pensada para completar a mano:
   **ARTÍCULO** cede espacio y hace wrap si hace falta.
 - Filas: **solo lo visible en pantalla** (filtro de línea GET + búsqueda de máquina).
   Si filtrás una sola máquina, la planilla imprime únicamente esa fila/artículos.
-- Turnos y observaciones en blanco.
+- Las celdas 1ra/2da de cada turno se imprimen en blanco (para completar a mano).
+- **Operadores por turno**: en la barra de filtros hay tres campos —«Operador mañana»,
+  «Operador tarde», «Operador noche»— cuyo texto se imprime debajo del encabezado del
+  turno correspondiente (sin el literal «Operador:»). Si el campo queda vacío, la celda
+  se imprime en blanco para escribir el nombre a mano.
+- **Observación por máquina**: cada máquina de la grilla tiene un campo «Observación
+  (planilla)» (máx. 220 caracteres). Ese texto se imprime **una sola vez por máquina**
+  en la columna OBSERVACIONES (celda con `rowspan` que abarca todos sus artículos),
+  no una celda por artículo. Se **persiste en MySQL** (`mpr_maquina.observacion_planilla`)
+  y se guarda al salir del campo (blur); API `POST /mpr/maquinas/api/observacion-planilla/`.
+- **Operadores por turno** (mañana/tarde/noche): solo para la impresión actual; se
+  convierten a **MAYÚSCULAS** al escribir y al imprimir. **No se guardan** en backend
+  (se pierden al recargar).
+- **Orden de artículos** en la planilla: por antigüedad de asignación
+  (`vigencia_desde`, `creado_en`, `id_mpr_maquina_articulo` ASC).
 - Si no hay filas imprimibles, **modal Synap** (no `alert` nativo del navegador).
 - El encabezado de la hoja puede mostrar el filtro activo (línea / búsqueda).
 

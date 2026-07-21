@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS mpr_maquina (
     codigo VARCHAR(50) NOT NULL COMMENT 'Identificador visible (ej. M-001)',
     nombre VARCHAR(100) NULL,
     activo TINYINT(1) NOT NULL DEFAULT 1,
+    observacion_planilla VARCHAR(220) NULL COMMENT 'Observación persistente planilla Control de Calidad',
     creado_en DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id_mpr_maquina),
     UNIQUE KEY uk_mpr_maquina_codigo (codigo),
