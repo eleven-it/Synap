@@ -155,18 +155,18 @@ Genera una hoja **A4 horizontal** pensada para completar a mano:
 - Filas: **solo lo visible en pantalla** (filtro de línea GET + búsqueda de máquina).
   Si filtrás una sola máquina, la planilla imprime únicamente esa fila/artículos.
 - Las celdas 1ra/2da de cada turno se imprimen en blanco (para completar a mano).
-- **Operadores por turno**: en la barra de filtros hay tres campos —«Operador mañana»,
-  «Operador tarde», «Operador noche»— cuyo texto se imprime debajo del encabezado del
-  turno correspondiente (sin el literal «Operador:»). Si el campo queda vacío, la celda
-  se imprime en blanco para escribir el nombre a mano.
+- **Operadores por turno**: se toman automáticamente de la **Planificación de turnos**
+  (roster `mpr_roster_dia` del día actual). No hay carga manual en pantalla. El servicio
+  `operarios_roster_por_franja` (`mpr/services.py`) agrupa los operarios del roster por
+  franja mañana/tarde/noche —primero por nombre del turno, con fallback por
+  `hora_inicio`— y sus nombres se imprimen en **MAYÚSCULAS** debajo del encabezado del
+  turno correspondiente (sin el literal «Operador:»). Si el roster del día no tiene
+  operarios en una franja, la celda se imprime en blanco para escribir el nombre a mano.
 - **Observación por máquina**: cada máquina de la grilla tiene un campo «Observación
   (planilla)» (máx. 220 caracteres). Ese texto se imprime **una sola vez por máquina**
   en la columna OBSERVACIONES (celda con `rowspan` que abarca todos sus artículos),
   no una celda por artículo. Se **persiste en MySQL** (`mpr_maquina.observacion_planilla`)
   y se guarda al salir del campo (blur); API `POST /mpr/maquinas/api/observacion-planilla/`.
-- **Operadores por turno** (mañana/tarde/noche): solo para la impresión actual; se
-  convierten a **MAYÚSCULAS** al escribir y al imprimir. **No se guardan** en backend
-  (se pierden al recargar).
 - **Orden de artículos** en la planilla: por antigüedad de asignación
   (`vigencia_desde`, `creado_en`, `id_mpr_maquina_articulo` ASC).
 - Si no hay filas imprimibles, **modal Synap** (no `alert` nativo del navegador).

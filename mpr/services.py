@@ -15777,6 +15777,80 @@ def listar_roster_semana(
         return {"operarios": [], "dias": [], "asignaciones": {}}
 
 
+def _franja_horaria_turno(nombre_turno: str, hora_inicio: Optional[str]) -> Optional[str]:
+    """
+    Clasifica un turno en franja 'manana' / 'tarde' / 'noche' para la planilla CQ.
+    Primero por nombre del turno; si no es concluyente, por hora de inicio.
+    """
+    nombre = (nombre_turno or "").strip().lower()
+    nombre_sin_acentos = (
+        nombre.replace("á", "a").replace("é", "e").replace("í", "i")
+        .replace("ó", "o").replace("ú", "u").replace("ñ", "n")
+    )
+    if "manan" in nombre_sin_acentos:
+        return "manana"
+    if "tard" in nombre_sin_acentos:
+        return "tarde"
+    if "noch" in nombre_sin_acentos:
+        return "noche"
+    try:
+        hora = int(str(hora_inicio or "").split(":")[0])
+    except (ValueError, IndexError):
+        return None
+    if 5 <= hora < 13:
+        return "manana"
+    if 13 <= hora < 20:
+        return "tarde"
+    return "noche"
+
+
+def operarios_roster_por_franja(
+    base_empresa: str,
+    fecha: date,
+) -> Dict[str, str]:
+    """
+    Nombres de operarios del roster (Planificación de turnos) de `fecha`,
+    agrupados por franja mañana/tarde/noche para la planilla de Control de Calidad.
+    Retorna {"manana": "NOMBRE1, NOMBRE2", "tarde": "...", "noche": "..."} en mayúsculas.
+    """
+    resultado = {"manana": "", "tarde": "", "noche": ""}
+    if not (base_empresa or "").strip() or fecha is None:
+        return resultado
+    try:
+        from mpr.repositories.turno_roster import listar_roster_rango
+
+        filas = listar_roster_rango(base_empresa, fecha, fecha)
+        if not filas:
+            return resultado
+        turnos_por_id = {
+            t["id"]: t for t in listar_turnos(base_empresa, solo_activos=False)
+        }
+        nombres_por_id = {
+            op["id"]: (op.get("label") or "").strip()
+            for op in listar_empleados_operarios(base_empresa, busqueda=None, limit=500)
+        }
+        agrupados: Dict[str, List[str]] = {"manana": [], "tarde": [], "noche": []}
+        for fila in filas:
+            id_turno = to_int_or_none(fila.get("id_mpr_turno"))
+            turno = turnos_por_id.get(id_turno) or {}
+            franja = _franja_horaria_turno(
+                str(fila.get("nombre_turno") or turno.get("nombre") or ""),
+                turno.get("hora_inicio"),
+            )
+            nombre = nombres_por_id.get(to_int_or_none(fila.get("id_operario"))) or ""
+            if franja and nombre:
+                agrupados[franja].append(nombre.upper())
+        for franja, nombres in agrupados.items():
+            resultado[franja] = ", ".join(dict.fromkeys(nombres))
+        return resultado
+    except Exception as e:
+        logger.warning(
+            "Error al obtener operarios del roster por franja en %s (%s): %s",
+            base_empresa, fecha, e, exc_info=True,
+        )
+        return resultado
+
+
 def asignar_turno_roster(
     base_empresa: str,
     fecha_str: str,

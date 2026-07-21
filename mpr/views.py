@@ -5433,6 +5433,14 @@ class MaquinasCargaArticulosView(MprLoginRequiredMixin, MprPermisoMixin, Templat
                 id_linea = None
         grilla = construir_grilla_carga_articulos(base_empresa, id_linea=id_linea)
         context.update(grilla)
+        # Operarios del roster del día (Planificación de turnos) para la planilla CQ.
+        from datetime import date as _date
+
+        from mpr.services import operarios_roster_por_franja
+
+        context["operadores_turno"] = operarios_roster_por_franja(
+            base_empresa, _date.today()
+        )
         return context
 
 
