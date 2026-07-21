@@ -593,14 +593,13 @@ function cargaArticulos(cfg) {
                 const maquinaLabel = (m.nombre || m.codigo || ('#' + m.id)).trim();
                 const observacion = (m.observacion || '').trim();
                 arts.forEach((art, idx) => {
-                    const cod = this.codigoCorto(art);
                     const desc = (art.descripcion_articulo || '').trim();
                     out.push({
                         key: m.id + '-' + art.id_articulo + '-' + idx,
                         showMaquina: idx === 0,
                         rowspan: idx === 0 ? arts.length : 1,
                         maquina: maquinaLabel,
-                        articulo: (cod !== '—' ? cod + ' — ' : '') + (desc || '—'),
+                        articulo: desc || '—',
                         color: art.color || '',
                         talle: art.talle || '',
                         observacion: observacion,
