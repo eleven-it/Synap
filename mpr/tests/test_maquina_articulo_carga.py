@@ -290,3 +290,63 @@ class MaquinaObservacionPlanillaAPIViewTest(SimpleTestCase):
         self.assertEqual(resp.status_code, 400)
         data = json.loads(resp.content)
         self.assertIn("no encontrada", data["error"].lower())
+
+
+class OperariosRosterPorFranjaTest(SimpleTestCase):
+    """Operadores de la planilla CQ tomados del roster (Planificación de turnos)."""
+
+    def test_franja_por_nombre_turno(self):
+        from mpr.services import _franja_horaria_turno
+
+        self.assertEqual(_franja_horaria_turno("Turno Mañana", None), "manana")
+        self.assertEqual(_franja_horaria_turno("MANANA", None), "manana")
+        self.assertEqual(_franja_horaria_turno("Tarde", None), "tarde")
+        self.assertEqual(_franja_horaria_turno("Nocturno... noche", None), "noche")
+
+    def test_franja_por_hora_inicio_fallback(self):
+        from mpr.services import _franja_horaria_turno
+
+        self.assertEqual(_franja_horaria_turno("Turno A", "06:00"), "manana")
+        self.assertEqual(_franja_horaria_turno("Turno B", "14:00"), "tarde")
+        self.assertEqual(_franja_horaria_turno("Turno C", "22:00"), "noche")
+        self.assertIsNone(_franja_horaria_turno("Turno D", None))
+
+    @patch("mpr.services.listar_empleados_operarios")
+    @patch("mpr.services.listar_turnos")
+    @patch("mpr.repositories.turno_roster.listar_roster_rango")
+    def test_agrupa_nombres_en_mayusculas_por_franja(
+        self, mock_roster, mock_turnos, mock_operarios
+    ):
+        from mpr.services import operarios_roster_por_franja
+
+        mock_roster.return_value = [
+            {"id_operario": 1, "id_mpr_turno": 10, "nombre_turno": "Mañana"},
+            {"id_operario": 2, "id_mpr_turno": 10, "nombre_turno": "Mañana"},
+            {"id_operario": 3, "id_mpr_turno": 20, "nombre_turno": "Turno B"},
+        ]
+        mock_turnos.return_value = [
+            {"id": 10, "nombre": "Mañana", "hora_inicio": "06:00"},
+            {"id": 20, "nombre": "Turno B", "hora_inicio": "22:00"},
+        ]
+        mock_operarios.return_value = [
+            {"id": 1, "label": "Juan Pérez"},
+            {"id": 2, "label": "Ana Gómez"},
+            {"id": 3, "label": "Luis Díaz"},
+        ]
+        out = operarios_roster_por_franja("emp", date(2026, 7, 21))
+        self.assertEqual(out["manana"], "JUAN PÉREZ, ANA GÓMEZ")
+        self.assertEqual(out["tarde"], "")
+        self.assertEqual(out["noche"], "LUIS DÍAZ")
+
+    @patch("mpr.repositories.turno_roster.listar_roster_rango", return_value=[])
+    def test_roster_vacio_devuelve_franjas_vacias(self, _mock_roster):
+        from mpr.services import operarios_roster_por_franja
+
+        out = operarios_roster_por_franja("emp", date(2026, 7, 21))
+        self.assertEqual(out, {"manana": "", "tarde": "", "noche": ""})
+
+    def test_empresa_invalida_devuelve_franjas_vacias(self):
+        from mpr.services import operarios_roster_por_franja
+
+        out = operarios_roster_por_franja("", date(2026, 7, 21))
+        self.assertEqual(out, {"manana": "", "tarde": "", "noche": ""})
