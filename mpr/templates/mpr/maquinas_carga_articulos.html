@@ -34,6 +34,13 @@
     #planilla-control-calidad td.celda-articulo {
         word-break: break-word;
         overflow-wrap: anywhere;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    /* Renglón para escribir a mano el nombre del operador de cada turno */
+    #planilla-control-calidad th.celda-operador {
+        min-height: 8mm;
+        padding: 2.5mm 2mm !important;
         font-size: 9px;
     }
 }
@@ -275,17 +282,22 @@
             </colgroup>
             <thead>
                 <tr>
-                    <th rowspan="2" class="border border-black px-1 py-1.5 align-middle">MÁQUINA</th>
+                    <th rowspan="3" class="border border-black px-1 py-1.5 align-middle">MÁQUINA</th>
                     <th colspan="3" class="border border-black px-1 py-1.5">DETALLE</th>
                     <th colspan="2" class="border border-black px-1 py-1.5">TURNO MAÑANA</th>
                     <th colspan="2" class="border border-black px-1 py-1.5">TURNO TARDE</th>
                     <th colspan="2" class="border border-black px-1 py-1.5">TURNO NOCHE</th>
-                    <th rowspan="2" class="border border-black px-1 py-1.5 align-middle">OBSERVACIONES</th>
+                    <th rowspan="3" class="border border-black px-1 py-1.5 align-middle">OBSERVACIONES</th>
                 </tr>
                 <tr>
-                    <th class="border border-black px-1 py-1">ARTÍCULO</th>
-                    <th class="border border-black px-1 py-1">COLOR</th>
-                    <th class="border border-black px-1 py-1">TALLE</th>
+                    <th rowspan="2" class="border border-black px-1 py-1 align-middle">ARTÍCULO</th>
+                    <th rowspan="2" class="border border-black px-1 py-1 align-middle">COLOR</th>
+                    <th rowspan="2" class="border border-black px-1 py-1 align-middle">TALLE</th>
+                    <th colspan="2" class="celda-operador border border-black px-1 py-1 text-left font-normal">Operador:</th>
+                    <th colspan="2" class="celda-operador border border-black px-1 py-1 text-left font-normal">Operador:</th>
+                    <th colspan="2" class="celda-operador border border-black px-1 py-1 text-left font-normal">Operador:</th>
+                </tr>
+                <tr>
                     <th class="celda-turno border border-black px-1 py-1">1ra</th>
                     <th class="celda-turno border border-black px-1 py-1">2da</th>
                     <th class="celda-turno border border-black px-1 py-1">1ra</th>
@@ -302,7 +314,7 @@
                                 :rowspan="fila.rowspan"
                                 x-text="fila.maquina"></td>
                         </template>
-                        <td class="celda-articulo border border-black px-1 py-1 text-left" x-text="fila.articulo"></td>
+                        <td class="celda-articulo border border-black px-1 py-1 text-left text-xs font-bold" x-text="fila.articulo"></td>
                         <td class="border border-black px-1 py-1 text-center whitespace-nowrap" x-text="fila.color || '—'"></td>
                         <td class="border border-black px-1 py-1 text-center whitespace-nowrap" x-text="fila.talle || '—'"></td>
                         <td class="celda-turno border border-black">&nbsp;</td>
