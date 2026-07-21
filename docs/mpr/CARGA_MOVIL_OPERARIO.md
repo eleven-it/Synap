@@ -157,11 +157,15 @@ Genera una hoja **A4 horizontal** pensada para completar a mano:
 - Las celdas 1ra/2da de cada turno se imprimen en blanco (para completar a mano).
 - **Operadores por turno**: se toman automáticamente de la **Planificación de turnos**
   (roster `mpr_roster_dia` del día actual). No hay carga manual en pantalla. El servicio
-  `operarios_roster_por_franja` (`mpr/services.py`) agrupa los operarios del roster por
-  franja mañana/tarde/noche —primero por nombre del turno, con fallback por
-  `hora_inicio`— y sus nombres se imprimen en **MAYÚSCULAS** debajo del encabezado del
-  turno correspondiente (sin el literal «Operador:»). Si el roster del día no tiene
-  operarios en una franja, la celda se imprime en blanco para escribir el nombre a mano.
+  `operarios_roster_por_linea` (`mpr/services.py`) agrupa los operarios del roster por
+  línea efectiva y por franja mañana/tarde/noche —primero por nombre del turno, con
+  fallback por `hora_inicio`. La línea efectiva respeta
+  **override diario de roster > línea habitual vigente**. La planilla reúne solo las
+  líneas de las máquinas que se imprimirán: reacciona al filtro GET de línea y a la
+  búsqueda client-side de máquina. Sus nombres se imprimen en **MAYÚSCULAS** debajo del
+  encabezado del turno correspondiente (sin el literal «Operador:»). Si el roster del
+  día no tiene operarios en una franja, la celda se imprime en blanco para escribir el
+  nombre a mano.
 - **Observación por máquina**: cada máquina de la grilla tiene un campo «Observación
   (planilla)» (máx. 220 caracteres). Ese texto se imprime **una sola vez por máquina**
   en la columna OBSERVACIONES (celda con `rowspan` que abarca todos sus artículos),

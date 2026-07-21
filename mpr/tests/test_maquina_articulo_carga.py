@@ -16,6 +16,7 @@ from mpr.views import (
     MaquinaArticuloAccionAPIView,
     MaquinaArticuloBuscarAPIView,
     MaquinaObservacionPlanillaAPIView,
+    MaquinasCargaArticulosView,
 )
 
 
@@ -350,3 +351,74 @@ class OperariosRosterPorFranjaTest(SimpleTestCase):
 
         out = operarios_roster_por_franja("", date(2026, 7, 21))
         self.assertEqual(out, {"manana": "", "tarde": "", "noche": ""})
+
+    @patch(
+        "mpr.repositories.operario_linea.lineas_habituales_vigentes",
+        return_value={1: 1, 2: 1},
+    )
+    @patch("mpr.services.listar_empleados_operarios")
+    @patch("mpr.services.listar_turnos")
+    @patch("mpr.repositories.turno_roster.listar_roster_rango")
+    def test_resuelve_override_antes_de_linea_habitual(
+        self, mock_roster, mock_turnos, mock_operarios, _mock_habituales
+    ):
+        from mpr.services import operarios_roster_por_linea
+
+        mock_roster.return_value = [
+            {
+                "id_operario": 1,
+                "id_mpr_turno": 10,
+                "nombre_turno": "Mañana",
+                "id_mpr_linea": 2,
+            },
+            {
+                "id_operario": 2,
+                "id_mpr_turno": 10,
+                "nombre_turno": "Mañana",
+                "id_mpr_linea": None,
+            },
+        ]
+        mock_turnos.return_value = [
+            {"id": 10, "nombre": "Mañana", "hora_inicio": "06:00"},
+        ]
+        mock_operarios.return_value = [
+            {"id": 1, "label": "Juan Pérez"},
+            {"id": 2, "label": "Ana Gómez"},
+        ]
+
+        out = operarios_roster_por_linea("emp", date(2026, 7, 21), [1, 2])
+
+        self.assertEqual(out[1]["manana"], "ANA GÓMEZ")
+        self.assertEqual(out[2]["manana"], "JUAN PÉREZ")
+
+    @patch("mpr.services.operarios_roster_por_linea")
+    @patch("mpr.services_maquina_linea.construir_grilla_carga_articulos")
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    def test_vista_entrega_operadores_solo_de_lineas_en_grilla(
+        self, _base, mock_grilla, mock_operarios_por_linea
+    ):
+        mock_grilla.return_value = {
+            "maquinas": [
+                {"id": 10, "id_linea_actual": 1},
+                {"id": 20, "id_linea_actual": 2},
+                {"id": 30, "id_linea_actual": None},
+            ],
+            "lineas": [],
+            "id_linea_filtro": None,
+            "fecha_hoy": date.today(),
+        }
+        mock_operarios_por_linea.return_value = {
+            1: {"manana": "ANA GÓMEZ", "tarde": "", "noche": ""},
+            2: {"manana": "JUAN PÉREZ", "tarde": "", "noche": ""},
+        }
+        request = RequestFactory().get("/mpr/maquinas/carga-articulos/")
+        request.session = {}
+        view = MaquinasCargaArticulosView()
+        view.setup(request)
+
+        context = view.get_context_data()
+
+        self.assertEqual(context["operadores_por_linea"], mock_operarios_por_linea.return_value)
+        mock_operarios_por_linea.assert_called_once_with(
+            "emp", date.today(), {1, 2}
+        )

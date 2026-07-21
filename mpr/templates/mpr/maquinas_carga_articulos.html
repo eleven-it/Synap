@@ -46,6 +46,7 @@
 }
 </style>
 {{ maquinas|json_script:"maquinas-carga-data" }}
+{{ operadores_por_linea|json_script:"operadores-por-linea-data" }}
 <div x-data="cargaArticulos({
             buscarUrl: '{% url 'mpr:maquina_articulo_buscar_api' %}',
             accionUrl: '{% url 'mpr:maquina_articulo_accion_api' %}',
@@ -310,9 +311,9 @@
                     <th rowspan="2" class="border border-black px-1 py-1 align-middle">ARTÍCULO</th>
                     <th rowspan="2" class="border border-black px-1 py-1 align-middle">COLOR</th>
                     <th rowspan="2" class="border border-black px-1 py-1 align-middle">TALLE</th>
-                    <th colspan="2" class="celda-operador border border-black px-1 py-1 text-center font-semibold uppercase">{{ operadores_turno.manana|default:"" }}&nbsp;</th>
-                    <th colspan="2" class="celda-operador border border-black px-1 py-1 text-center font-semibold uppercase">{{ operadores_turno.tarde|default:"" }}&nbsp;</th>
-                    <th colspan="2" class="celda-operador border border-black px-1 py-1 text-center font-semibold uppercase">{{ operadores_turno.noche|default:"" }}&nbsp;</th>
+                    <th colspan="2" class="celda-operador border border-black px-1 py-1 text-center font-semibold uppercase" x-text="nombresOperadoresPlanilla('manana')">&nbsp;</th>
+                    <th colspan="2" class="celda-operador border border-black px-1 py-1 text-center font-semibold uppercase" x-text="nombresOperadoresPlanilla('tarde')">&nbsp;</th>
+                    <th colspan="2" class="celda-operador border border-black px-1 py-1 text-center font-semibold uppercase" x-text="nombresOperadoresPlanilla('noche')">&nbsp;</th>
                 </tr>
                 <tr>
                     <th class="celda-turno border border-black px-1 py-1">1ra</th>
@@ -445,6 +446,7 @@ function cargaArticulos(cfg) {
         fechaHoy: cfg.fechaHoy || '',
         filtroLineaLabel: cfg.filtroLineaLabel || '',
         maquinas: [],
+        operadoresPorLinea: {},
         confirmOpen: false,
         confirmBusy: false,
         confirmMaq: null,
@@ -464,6 +466,12 @@ function cargaArticulos(cfg) {
                 data = JSON.parse((el && el.textContent) || '[]') || [];
             } catch (e) {
                 data = [];
+            }
+            try {
+                const elOperadores = document.getElementById('operadores-por-linea-data');
+                this.operadoresPorLinea = JSON.parse((elOperadores && elOperadores.textContent) || '{}') || {};
+            } catch (e) {
+                this.operadoresPorLinea = {};
             }
             this.maquinas = data.map((m) => ({
                 id: m.id,
@@ -577,6 +585,25 @@ function cargaArticulos(cfg) {
                 });
             });
             return out;
+        },
+
+        nombresOperadoresPlanilla(franja) {
+            // La cabecera siempre acompaña las máquinas que efectivamente se imprimirán:
+            // filtro GET por línea + búsqueda client-side por máquina.
+            const nombres = [];
+            const yaIncluidos = new Set();
+            (this.maquinasVisibles || []).forEach((m) => {
+                if (!(m.articulos || []).length || m.id_linea_actual == null) return;
+                const porFranja = this.operadoresPorLinea[String(m.id_linea_actual)] || {};
+                const texto = String(porFranja[franja] || '');
+                texto.split(', ').forEach((nombre) => {
+                    if (nombre && !yaIncluidos.has(nombre)) {
+                        yaIncluidos.add(nombre);
+                        nombres.push(nombre);
+                    }
+                });
+            });
+            return nombres.join(', ');
         },
 
         mostrarAviso(titulo, mensaje, detalle, icono) {

@@ -15804,17 +15804,102 @@ def _franja_horaria_turno(nombre_turno: str, hora_inicio: Optional[str]) -> Opti
     return "noche"
 
 
+def _franjas_operarios_vacias() -> Dict[str, str]:
+    return {"manana": "", "tarde": "", "noche": ""}
+
+
+def operarios_roster_por_linea(
+    base_empresa: str,
+    fecha: date,
+    id_lineas: Iterable[Any],
+) -> Dict[int, Dict[str, str]]:
+    """
+    Nombres de operarios del roster agrupados por línea y franja horaria.
+
+    La línea efectiva de cada operario respeta la misma regla que la carga móvil:
+    override diario de ``mpr_roster_dia`` > línea habitual vigente en
+    ``mpr_operario_linea``. Solo devuelve las líneas solicitadas.
+    """
+    lineas = {
+        id_linea
+        for valor in (id_lineas or [])
+        if (id_linea := to_int_or_none(valor)) is not None
+    }
+    resultado = {id_linea: _franjas_operarios_vacias() for id_linea in lineas}
+    if not (base_empresa or "").strip() or fecha is None or not lineas:
+        return resultado
+    try:
+        from mpr.repositories.operario_linea import lineas_habituales_vigentes
+        from mpr.repositories.turno_roster import listar_roster_rango
+
+        filas = listar_roster_rango(base_empresa, fecha, fecha)
+        if not filas:
+            return resultado
+        turnos_por_id = {
+            t["id"]: t for t in listar_turnos(base_empresa, solo_activos=False)
+        }
+        nombres_por_id = {
+            op["id"]: (op.get("label") or "").strip()
+            for op in listar_empleados_operarios(base_empresa, busqueda=None, limit=500)
+        }
+        lineas_habituales = lineas_habituales_vigentes(base_empresa, fecha)
+        agrupados: Dict[int, Dict[str, List[str]]] = {
+            id_linea: {"manana": [], "tarde": [], "noche": []}
+            for id_linea in lineas
+        }
+        for fila in filas:
+            id_operario = to_int_or_none(fila.get("id_operario"))
+            if id_operario is None:
+                continue
+            id_linea = (
+                to_int_or_none(fila.get("id_mpr_linea"))
+                or lineas_habituales.get(id_operario)
+            )
+            if id_linea not in lineas:
+                continue
+            id_turno = to_int_or_none(fila.get("id_mpr_turno"))
+            turno = turnos_por_id.get(id_turno) or {}
+            franja = _franja_horaria_turno(
+                str(fila.get("nombre_turno") or turno.get("nombre") or ""),
+                turno.get("hora_inicio"),
+            )
+            nombre = nombres_por_id.get(id_operario) or ""
+            if franja and nombre:
+                agrupados[id_linea][franja].append(nombre.upper())
+        for id_linea, por_franja in agrupados.items():
+            for franja, nombres in por_franja.items():
+                resultado[id_linea][franja] = ", ".join(dict.fromkeys(nombres))
+        return resultado
+    except Exception as e:
+        logger.warning(
+            "Error al obtener operarios del roster por línea en %s (%s): %s",
+            base_empresa, fecha, e, exc_info=True,
+        )
+        return resultado
+
+
 def operarios_roster_por_franja(
     base_empresa: str,
     fecha: date,
+    id_lineas: Optional[Iterable[Any]] = None,
 ) -> Dict[str, str]:
     """
     Nombres de operarios del roster (Planificación de turnos) de `fecha`,
     agrupados por franja mañana/tarde/noche para la planilla de Control de Calidad.
     Retorna {"manana": "NOMBRE1, NOMBRE2", "tarde": "...", "noche": "..."} en mayúsculas.
     """
-    resultado = {"manana": "", "tarde": "", "noche": ""}
+    resultado = _franjas_operarios_vacias()
     if not (base_empresa or "").strip() or fecha is None:
+        return resultado
+    if id_lineas is not None:
+        por_linea = operarios_roster_por_linea(base_empresa, fecha, id_lineas)
+        agrupados: Dict[str, List[str]] = {"manana": [], "tarde": [], "noche": []}
+        for id_linea in sorted(por_linea):
+            for franja, nombres in por_linea[id_linea].items():
+                if nombres:
+                    agrupados[franja].extend(nombres.split(", "))
+        for franja, nombres in agrupados.items():
+            resultado[franja] = ", ".join(dict.fromkeys(nombres))
         return resultado
     try:
         from mpr.repositories.turno_roster import listar_roster_rango
