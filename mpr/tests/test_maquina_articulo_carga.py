@@ -1,12 +1,22 @@
 """Tests backend carga en grilla de artículos por máquina (MPR)."""
+import inspect
 import json
 from datetime import date
 from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase
 
-from mpr.services_maquina_linea import buscar_articulos, construir_grilla_carga_articulos
-from mpr.views import MaquinaArticuloAccionAPIView, MaquinaArticuloBuscarAPIView
+from mpr.repositories import maquina_articulo as repo_art
+from mpr.services_maquina_linea import (
+    buscar_articulos,
+    construir_grilla_carga_articulos,
+    guardar_observacion_planilla_maquina,
+)
+from mpr.views import (
+    MaquinaArticuloAccionAPIView,
+    MaquinaArticuloBuscarAPIView,
+    MaquinaObservacionPlanillaAPIView,
+)
 
 
 class BuscarArticulosServiceTest(SimpleTestCase):
@@ -28,7 +38,14 @@ class ConstruirGrillaCargaArticulosTest(SimpleTestCase):
     ):
         mock_lineas.return_value = [{"id": 1, "nombre": "L1", "activo": True}]
         mock_maquinas.return_value = [
-            {"id": 10, "codigo": "1", "nombre": "M1", "activo": True, "id_linea_actual": 1},
+            {
+                "id": 10,
+                "codigo": "1",
+                "nombre": "M1",
+                "activo": True,
+                "id_linea_actual": 1,
+                "observacion_planilla": "Nota previa",
+            },
             {"id": 20, "codigo": "2", "nombre": "M2", "activo": True, "id_linea_actual": 2},
         ]
         mock_articulos.return_value = {
@@ -38,10 +55,61 @@ class ConstruirGrillaCargaArticulosTest(SimpleTestCase):
         self.assertEqual(out["total_maquinas"], 1)
         self.assertEqual(out["con_articulos"], 1)
         self.assertEqual(out["maquinas"][0]["id"], 10)
+        self.assertEqual(out["maquinas"][0]["observacion_planilla"], "Nota previa")
         self.assertEqual(len(out["maquinas"][0]["articulos"]), 1)
         self.assertIn("codigo_search", out["maquinas"][0])
         self.assertEqual(out["id_linea_filtro"], 1)
         self.assertEqual(out["fecha_hoy"], date.today())
+
+
+class ListarArticulosVigentesOrdenTest(SimpleTestCase):
+    def test_orden_por_antiguedad_en_sql(self):
+        src_vig = inspect.getsource(repo_art.listar_articulos_vigentes)
+        src_todas = inspect.getsource(repo_art.listar_articulos_vigentes_todas_maquinas)
+        for src in (src_vig, src_todas):
+            self.assertIn("ma.vigencia_desde ASC", src)
+            self.assertIn("ma.creado_en ASC", src)
+            self.assertIn("ma.id_mpr_maquina_articulo ASC", src)
+
+
+class GuardarObservacionPlanillaMaquinaTest(SimpleTestCase):
+    @patch("mpr.services_maquina_linea.repo.actualizar_observacion_planilla")
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 5})
+    def test_ok_guarda_texto(self, _obtener, mock_actualizar):
+        ok, error, normalizada = guardar_observacion_planilla_maquina(
+            "emp", 5, "  Revisar talle  "
+        )
+        self.assertTrue(ok)
+        self.assertIsNone(error)
+        self.assertEqual(normalizada, "Revisar talle")
+        mock_actualizar.assert_called_once_with("emp", 5, "Revisar talle")
+
+    @patch("mpr.services_maquina_linea.repo.actualizar_observacion_planilla")
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 5})
+    def test_vacio_ok(self, _obtener, mock_actualizar):
+        ok, error, normalizada = guardar_observacion_planilla_maquina("emp", 5, "   ")
+        self.assertTrue(ok)
+        self.assertIsNone(error)
+        self.assertEqual(normalizada, "")
+        mock_actualizar.assert_called_once_with("emp", 5, "")
+
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 5})
+    def test_rechaza_mas_de_220(self, _obtener):
+        ok, error, normalizada = guardar_observacion_planilla_maquina("emp", 5, "x" * 221)
+        self.assertFalse(ok)
+        self.assertIn("220", error)
+        self.assertEqual(normalizada, "")
+
+    def test_rechaza_empresa_invalida(self):
+        ok, error, _normalizada = guardar_observacion_planilla_maquina("", 5, "texto")
+        self.assertFalse(ok)
+        self.assertIn("Empresa", error)
+
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value=None)
+    def test_rechaza_maquina_inexistente(self, _obtener):
+        ok, error, _normalizada = guardar_observacion_planilla_maquina("emp", 99, "texto")
+        self.assertFalse(ok)
+        self.assertIn("no encontrada", error.lower())
 
 
 class MaquinaArticuloBuscarAPIViewTest(SimpleTestCase):
@@ -137,3 +205,88 @@ class MaquinaArticuloAccionAPIViewTest(SimpleTestCase):
         self.assertEqual(resp.status_code, 400)
         data = json.loads(resp.content)
         self.assertFalse(data["ok"])
+
+
+class MaquinaObservacionPlanillaAPIViewTest(SimpleTestCase):
+    def setUp(self):
+        self.rf = RequestFactory()
+        self.view = MaquinaObservacionPlanillaAPIView()
+
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    @patch(
+        "mpr.services_maquina_linea.guardar_observacion_planilla_maquina",
+        return_value=(True, None, "Observación OK"),
+    )
+    def test_post_ok(self, mock_guardar, _base):
+        req = self.rf.post(
+            "/mpr/maquinas/api/observacion-planilla/",
+            data=json.dumps({"id_maquina": 3, "observacion": "Observación OK"}),
+            content_type="application/json",
+        )
+        resp = self.view.post(req)
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.content)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["observacion_planilla"], "Observación OK")
+        mock_guardar.assert_called_once_with("emp", 3, "Observación OK")
+
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    @patch(
+        "mpr.services_maquina_linea.guardar_observacion_planilla_maquina",
+        return_value=(True, None, ""),
+    )
+    def test_post_vacio_ok(self, mock_guardar, _base):
+        req = self.rf.post(
+            "/mpr/maquinas/api/observacion-planilla/",
+            data=json.dumps({"id_maquina": 3, "observacion": "   "}),
+            content_type="application/json",
+        )
+        resp = self.view.post(req)
+        data = json.loads(resp.content)
+        self.assertTrue(data["ok"])
+        self.assertEqual(data["observacion_planilla"], "")
+        mock_guardar.assert_called_once_with("emp", 3, "   ")
+
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    @patch(
+        "mpr.services_maquina_linea.guardar_observacion_planilla_maquina",
+        return_value=(False, "La observación no puede superar 220 caracteres.", ""),
+    )
+    def test_post_error_longitud_400(self, _mock_guardar, _base):
+        req = self.rf.post(
+            "/mpr/maquinas/api/observacion-planilla/",
+            data=json.dumps({"id_maquina": 3, "observacion": "x" * 221}),
+            content_type="application/json",
+        )
+        resp = self.view.post(req)
+        self.assertEqual(resp.status_code, 400)
+        data = json.loads(resp.content)
+        self.assertFalse(data["ok"])
+
+    @patch("mpr.views._get_base_empresa", return_value="")
+    def test_post_empresa_invalida_400(self, _base):
+        req = self.rf.post(
+            "/mpr/maquinas/api/observacion-planilla/",
+            data=json.dumps({"id_maquina": 3, "observacion": "texto"}),
+            content_type="application/json",
+        )
+        resp = self.view.post(req)
+        self.assertEqual(resp.status_code, 400)
+        data = json.loads(resp.content)
+        self.assertFalse(data["ok"])
+
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    @patch(
+        "mpr.services_maquina_linea.guardar_observacion_planilla_maquina",
+        return_value=(False, "Máquina no encontrada.", ""),
+    )
+    def test_post_maquina_inexistente_400(self, _mock_guardar, _base):
+        req = self.rf.post(
+            "/mpr/maquinas/api/observacion-planilla/",
+            data=json.dumps({"id_maquina": 999, "observacion": "texto"}),
+            content_type="application/json",
+        )
+        resp = self.view.post(req)
+        self.assertEqual(resp.status_code, 400)
+        data = json.loads(resp.content)
+        self.assertIn("no encontrada", data["error"].lower())

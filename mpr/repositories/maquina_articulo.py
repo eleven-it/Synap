@@ -30,6 +30,23 @@ def _as_date(value: Any) -> Optional[date]:
         return None
 
 
+def _as_iso_datetime(value: Any) -> Optional[str]:
+    """Serializa DATETIME MySQL a string ISO estable para JSON/UI."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%S")
+    s = str(value).strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(s[:19], fmt).strftime("%Y-%m-%dT%H:%M:%S")
+        except (ValueError, TypeError):
+            continue
+    return s[:19].replace(" ", "T") if len(s) >= 19 else s
+
+
 def _tabla_articulo(cursor) -> Optional[str]:
     """Resuelve el nombre real de la tabla `articulo` (case-insensitive)."""
     cursor.execute("SHOW TABLES")
@@ -264,14 +281,15 @@ def listar_articulos_vigentes(
         params: List[Any] = _params_ce(talle_slot, color_slot) + [mid, fecha, fecha]
         cursor.execute(
             f"""
-            SELECT {_COLS_ART}, ma.vigencia_desde AS vigencia_desde{cols_ce}
+            SELECT {_COLS_ART}, ma.vigencia_desde AS vigencia_desde,
+                   ma.creado_en AS creado_en, ma.id_mpr_maquina_articulo AS id_mpr_maquina_articulo{cols_ce}
             FROM mpr_maquina_articulo ma
             INNER JOIN `{tbl}` a ON a.IDArt = ma.id_articulo
             {joins_ce}
             WHERE ma.id_mpr_maquina = %s
               AND ma.vigencia_desde <= %s
               AND (ma.vigencia_hasta IS NULL OR ma.vigencia_hasta > %s)
-            ORDER BY codigo_articulo, a.IDArt
+            ORDER BY ma.vigencia_desde ASC, ma.creado_en ASC, ma.id_mpr_maquina_articulo ASC
             """,
             params,
         )
@@ -279,6 +297,8 @@ def listar_articulos_vigentes(
         for r in cursor.fetchall() or []:
             info = _map_articulo(r)
             info["vigencia_desde"] = _as_date(r.get("vigencia_desde"))
+            info["creado_en"] = _as_iso_datetime(r.get("creado_en"))
+            info["id_mpr_maquina_articulo"] = to_int_or_none(r.get("id_mpr_maquina_articulo"))
             out.append(info)
         return out
 
@@ -299,13 +319,14 @@ def listar_articulos_vigentes_todas_maquinas(
         params: List[Any] = _params_ce(talle_slot, color_slot) + [fecha, fecha]
         cursor.execute(
             f"""
-            SELECT ma.id_mpr_maquina, {_COLS_ART}, ma.vigencia_desde AS vigencia_desde{cols_ce}
+            SELECT ma.id_mpr_maquina, {_COLS_ART}, ma.vigencia_desde AS vigencia_desde,
+                   ma.creado_en AS creado_en, ma.id_mpr_maquina_articulo AS id_mpr_maquina_articulo{cols_ce}
             FROM mpr_maquina_articulo ma
             INNER JOIN `{tbl}` a ON a.IDArt = ma.id_articulo
             {joins_ce}
             WHERE ma.vigencia_desde <= %s
               AND (ma.vigencia_hasta IS NULL OR ma.vigencia_hasta > %s)
-            ORDER BY ma.id_mpr_maquina, codigo_articulo, a.IDArt
+            ORDER BY ma.id_mpr_maquina, ma.vigencia_desde ASC, ma.creado_en ASC, ma.id_mpr_maquina_articulo ASC
             """,
             params,
         )
@@ -316,6 +337,8 @@ def listar_articulos_vigentes_todas_maquinas(
                 continue
             info = _map_articulo(r)
             info["vigencia_desde"] = _as_date(r.get("vigencia_desde"))
+            info["creado_en"] = _as_iso_datetime(r.get("creado_en"))
+            info["id_mpr_maquina_articulo"] = to_int_or_none(r.get("id_mpr_maquina_articulo"))
             out.setdefault(mid, []).append(info)
         return out
 

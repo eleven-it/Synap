@@ -5515,6 +5515,46 @@ class MaquinaArticuloAccionAPIView(MprLoginRequiredMixin, MprPermisoMixin, View)
         return JsonResponse({"ok": False, "error": "Acción inválida."}, status=400)
 
 
+class MaquinaObservacionPlanillaAPIView(MprLoginRequiredMixin, MprPermisoMixin, View):
+    """API JSON: persistir observación de planilla Control de Calidad por máquina."""
+
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def post(self, request, *args, **kwargs):
+        import json
+
+        from mpr.services_maquina_linea import guardar_observacion_planilla_maquina
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"ok": False, "error": "Empresa inválida."}, status=400)
+
+        content_type = (request.content_type or "").lower()
+        if "application/json" in content_type:
+            try:
+                payload = json.loads(request.body.decode("utf-8") or "{}")
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return JsonResponse({"ok": False, "error": "JSON inválido."}, status=400)
+        else:
+            payload = request.POST
+
+        try:
+            id_maquina = int(payload.get("id_maquina", ""))
+        except (ValueError, TypeError):
+            return JsonResponse({"ok": False, "error": "Parámetros inválidos."}, status=400)
+
+        observacion = payload.get("observacion", "")
+        ok, error, normalizada = guardar_observacion_planilla_maquina(
+            base_empresa, id_maquina, observacion
+        )
+        if not ok:
+            return JsonResponse(
+                {"ok": False, "error": error or "No se pudo guardar la observación."},
+                status=400,
+            )
+        return JsonResponse({"ok": True, "observacion_planilla": normalizada})
+
+
 class OperarioUsuarioMapView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
     """Vincula operarios (legajo) con usuarios de login para la carga móvil."""
 

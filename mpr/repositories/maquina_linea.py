@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
-from core.utils.administranet_types import to_int_or_none
+from core.utils.administranet_types import str_or_default, to_int_or_none
 
 from mpr.db import mysql_cursor
 
@@ -116,7 +116,7 @@ def listar_maquinas(base_empresa: str, solo_activas: bool = False) -> List[Dict[
     if not base:
         return []
     sql = """
-        SELECT m.id_mpr_maquina, m.codigo, m.nombre, m.activo,
+        SELECT m.id_mpr_maquina, m.codigo, m.nombre, m.activo, m.observacion_planilla,
                ml.id_mpr_linea AS id_linea_actual, l.nombre AS linea_actual_nombre
         FROM mpr_maquina m
         LEFT JOIN mpr_maquina_linea ml
@@ -140,6 +140,7 @@ def listar_maquinas(base_empresa: str, solo_activas: bool = False) -> List[Dict[
                     "codigo": str(row.get("codigo") or ""),
                     "nombre": str(row.get("nombre") or ""),
                     "activo": bool(row.get("activo", 1)),
+                    "observacion_planilla": str_or_default(row.get("observacion_planilla"), ""),
                     "id_linea_actual": to_int_or_none(row.get("id_linea_actual")),
                     "linea_actual_nombre": str(row.get("linea_actual_nombre") or ""),
                 }
@@ -154,7 +155,8 @@ def obtener_maquina(base_empresa: str, id_maquina: int) -> Optional[Dict[str, An
         return None
     with mysql_cursor(base, dict_cursor=True) as cursor:
         cursor.execute(
-            "SELECT id_mpr_maquina, codigo, nombre, activo FROM mpr_maquina WHERE id_mpr_maquina = %s",
+            "SELECT id_mpr_maquina, codigo, nombre, activo, observacion_planilla "
+            "FROM mpr_maquina WHERE id_mpr_maquina = %s",
             [mid],
         )
         row = cursor.fetchone()
@@ -165,6 +167,7 @@ def obtener_maquina(base_empresa: str, id_maquina: int) -> Optional[Dict[str, An
             "codigo": str(row.get("codigo") or ""),
             "nombre": str(row.get("nombre") or ""),
             "activo": bool(row.get("activo", 1)),
+            "observacion_planilla": str_or_default(row.get("observacion_planilla"), ""),
         }
 
 
@@ -193,6 +196,23 @@ def toggle_maquina_activa(base_empresa: str, id_maquina: int, activa: bool) -> N
         cursor.execute(
             "UPDATE mpr_maquina SET activo = %s WHERE id_mpr_maquina = %s",
             [1 if activa else 0, int(id_maquina)],
+        )
+
+
+def actualizar_observacion_planilla(
+    base_empresa: str, id_maquina: int, observacion: str
+) -> None:
+    """Persiste observación de planilla Control de Calidad (vacío → NULL, máx. 220)."""
+    base = (base_empresa or "").strip()
+    mid = to_int_or_none(id_maquina)
+    if not base or mid is None:
+        return
+    texto = str(observacion or "").strip()
+    valor_db = texto[:220] if texto else None
+    with mysql_cursor(base) as cursor:
+        cursor.execute(
+            "UPDATE mpr_maquina SET observacion_planilla = %s WHERE id_mpr_maquina = %s",
+            [valor_db, mid],
         )
 
 

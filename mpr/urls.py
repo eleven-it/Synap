@@ -90,6 +90,7 @@ urlpatterns = [
     path("maquinas/carga-articulos/", views.MaquinasCargaArticulosView.as_view(), name="maquinas_carga_articulos"),
     path("maquinas/api/articulos/buscar/", views.MaquinaArticuloBuscarAPIView.as_view(), name="maquina_articulo_buscar_api"),
     path("maquinas/api/articulos/accion/", views.MaquinaArticuloAccionAPIView.as_view(), name="maquina_articulo_accion_api"),
+    path("maquinas/api/observacion-planilla/", views.MaquinaObservacionPlanillaAPIView.as_view(), name="maquina_observacion_planilla_api"),
     path("maquinas/<int:id_maquina>/editar/", views.MaquinaUpdateView.as_view(), name="maquina_edit"),
     path("maquinas/<int:id_maquina>/articulos/", views.MaquinaArticulosView.as_view(), name="maquina_articulos"),
     path("maquinas/asignar-linea/", views.MaquinaAsignarLineaView.as_view(), name="maquina_asignar_linea"),

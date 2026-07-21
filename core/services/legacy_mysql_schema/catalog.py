@@ -927,6 +927,17 @@ def run_mpr_maquina_linea_mysql(conn) -> Dict[str, Any]:
             applied, failed, True, "DDL MPR máquina/línea (003_mpr_maquina_linea_tables.sql)"
         )
 
+        # 1b) mpr_maquina — observación persistente planilla Control de Calidad
+        tbl_m = nombre_tabla_real(cursor, "mpr_maquina")
+        if tbl_m:
+            tm = tbl_m.replace("`", "``")
+            if not columna_existe(cursor, tbl_m, "observacion_planilla"):
+                cursor.execute(
+                    "ALTER TABLE `{}` ADD COLUMN observacion_planilla VARCHAR(220) NULL "
+                    "COMMENT 'Observación persistente planilla Control de Calidad'".format(tm)
+                )
+                _append_migration(applied, failed, True, f"{tbl_m}.observacion_planilla")
+
         # 2) mpr_parte — estado/origen/auditoría de aprobación
         tbl_p = nombre_tabla_real(cursor, "mpr_parte")
         if tbl_p:

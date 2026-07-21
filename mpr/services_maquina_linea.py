@@ -146,6 +146,33 @@ def toggle_maquina_activa(base_empresa: str, id_maquina: int, activa: bool) -> T
         return False, "Error al cambiar estado de la máquina."
 
 
+def guardar_observacion_planilla_maquina(
+    base_empresa: str,
+    id_maquina: int,
+    observacion: str,
+) -> Tuple[bool, Optional[str], str]:
+    """Valida y persiste la observación de planilla Control de Calidad por máquina."""
+    if not (base_empresa or "").strip():
+        return False, "Empresa inválida.", ""
+    mid = _to_int(id_maquina)
+    if mid is None:
+        return False, "Máquina inválida.", ""
+    if not repo.obtener_maquina(base_empresa, mid):
+        return False, "Máquina no encontrada.", ""
+    texto = str(observacion or "").strip()
+    if len(texto) > 220:
+        return False, "La observación no puede superar 220 caracteres.", ""
+    try:
+        repo.actualizar_observacion_planilla(base_empresa, mid, texto)
+        return True, None, texto
+    except Exception as e:
+        logger.error(
+            "Error al guardar observación planilla máquina %s en %s: %s",
+            mid, base_empresa, e, exc_info=True,
+        )
+        return False, "Error al guardar la observación.", ""
+
+
 # --------------------------------------------------------------------------- #
 # Pertenencia máquina->línea (versionada)
 # --------------------------------------------------------------------------- #
