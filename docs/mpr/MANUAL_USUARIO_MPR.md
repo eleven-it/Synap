@@ -189,7 +189,7 @@ Desde Máquinas o desde **Producción diaria → Asignar artículo a máquina**:
 1. Filtre por línea o busque la máquina.
 2. Habilite o quite los artículos que cada máquina puede producir.
 3. En la grilla verá **Talle** y **Color** del artículo.
-4. Pulse **Imprimir Control de Calidad** para la planilla de planta (hoja horizontal con casilleros para turnos y observaciones).
+4. Pulse **Imprimir Control de Calidad**, elija la **fecha** de la planilla y confirme. Se imprime la hoja horizontal con artículos vigentes a esa fecha, cantidades del parte en **1ra** por turno y una fila vacía debajo de cada artículo para anotar la clasificación a mano.
 
 Si no hay filas con artículos según el filtro, el sistema avisa en pantalla.
 

@@ -6,18 +6,73 @@
 {% if request.is_mobile %}
 <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 {% endif %}
-<div class="mx-auto w-full min-w-0 max-w-5xl px-4 py-5 sm:px-6 sm:py-6 lg:py-8" x-data="ingresoMovStock()" x-init="init()">
-  <header class="mb-5 sm:mb-6">
-    <div class="flex items-start justify-between gap-3">
-      <h1 class="min-w-0 text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">Ingreso Mov. Stock</h1>
-      {% include "includes/btn_manual_ayuda.html" with url_name="stock:manual_usuario" seccion="alta-movimiento" only %}
-    </div>
-    <p class="mt-1.5 max-w-2xl text-sm leading-snug text-slate-600 dark:text-slate-400">Complete la cabecera del movimiento y, en la siguiente pestaña, agregue los artículos.</p>
-  </header>
+<style>
+  /* ── Cabecera densa «concepto pedido masivo» (acento purple Synap stock) ──
+   * Inspirado en pm-field-row / pm-label-inline / pm-input-dense / pm-context-*
+   * (ecom/includes/pedidos_page_styles.html), reimplementado local para no
+   * acoplar el módulo ecom al de stock. */
+  .ims-context-card {
+    background: linear-gradient(135deg, rgb(250 245 255 / 0.9), rgb(248 250 252 / 0.9));
+  }
+  .dark .ims-context-card {
+    background: linear-gradient(135deg, rgb(15 23 42 / 0.95), rgb(30 41 59 / 0.85));
+  }
+  /* Fila densa: label + control en la misma línea (horizontal) */
+  .ims-field-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .ims-label-inline {
+    flex-shrink: 0;
+    min-width: 6.5rem;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: rgb(71 85 105); /* slate-600 */
+    white-space: nowrap;
+  }
+  .dark .ims-label-inline { color: rgb(203 213 225); } /* slate-300 */
+  /* Input/select denso: 2rem de alto, texto xs */
+  .ims-input-dense {
+    font-size: 0.75rem;
+    line-height: 1.25rem;
+    min-height: 2rem;
+  }
+  .ims-input-dense:focus-visible {
+    outline: none;
+    border-color: rgb(147 51 234); /* purple-600 */
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgb(168 85 247);
+  }
+  .dark .ims-input-dense:focus-visible {
+    border-color: rgb(192 132 252);
+    box-shadow: 0 0 0 2px rgb(15 23 42), 0 0 0 4px rgb(168 85 247);
+  }
+  .ims-input-date { line-height: 1.1; }
+  .ims-input-date::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 0.6; }
+  .ims-input-date::-webkit-calendar-picker-indicator:hover { opacity: 1; }
+  .dark .ims-input-date::-webkit-calendar-picker-indicator { filter: invert(1); opacity: 0.7; }
+  .ims-context-summary span.font-semibold { color: rgb(30 41 59); }
+  .dark .ims-context-summary span.font-semibold { color: rgb(226 232 240); }
+</style>
+<div class="mx-auto flex w-full min-w-0 max-w-none flex-col px-3 py-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pb-24" x-data="ingresoMovStock()" x-init="init()">
+  <div class="mb-3 flex-shrink-0 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
+    <header class="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
+        <h1 class="text-base font-bold tracking-tight text-white sm:text-lg">Ingreso Mov. Stock</h1>
+        <span x-show="!cabeceraMinimaCompleta" x-cloak class="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-200">Datos incompletos</span>
+        <span x-show="cabeceraMinimaCompleta" x-cloak class="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[11px] font-semibold text-emerald-200" x-text="renglones.length + (renglones.length === 1 ? ' renglón' : ' renglones')"></span>
+      </div>
+      <div class="ml-auto flex flex-wrap items-center gap-2">
+        {% include "includes/btn_manual_ayuda.html" with url_name="stock:manual_usuario" seccion="alta-movimiento" class_extra="!text-slate-300 dark:!text-slate-300 hover:!text-purple-300 dark:hover:!text-purple-300" only %}
+      </div>
+    </header>
+  </div>
 
   <!-- Mensajes -->
-  <div x-show="mensajeError" x-cloak class="mb-4 overflow-hidden break-words rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" x-text="mensajeError"></div>
-  <div x-show="mensajeOk" x-cloak class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
+  <div x-show="mensajeError" x-cloak class="mb-3 flex-shrink-0 overflow-hidden break-words rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300" x-text="mensajeError"></div>
+  <div x-show="mensajeOk" x-cloak class="mb-3 flex-shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
     <p x-text="mensajeOk"></p>
     <template x-if="nroComprobante">
       <p class="mt-2 break-words">
@@ -35,171 +90,180 @@
     </template>
   </div>
 
-  <!-- Tabs -->
-  <div class="mb-5 border-b border-slate-200 dark:border-slate-700" role="tablist">
-    <div class="flex flex-wrap gap-1">
-      <button type="button" role="tab" :aria-selected="tabActivo === 'datos'" aria-controls="panel-datos" id="tab-datos"
-        @click="forzarCerrarTooltipRenglon(); tabActivo = 'datos'"
-        :class="tabActivo === 'datos' ? 'border-purple-600 text-purple-700 dark:border-purple-500 dark:text-purple-300 border-b-2 -mb-px' : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'"
-        class="min-h-10 rounded-t-lg px-4 py-2 text-sm font-semibold transition border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
-        Datos del movimiento
+  <!-- Cabecera del movimiento — contexto denso (concepto «pedido masivo»), colapsable -->
+  <div x-data="{ contextoAbierto: true }" class="ims-context-card mb-3 flex-shrink-0 rounded-xl border border-purple-200/70 px-3 py-2.5 shadow-sm dark:border-purple-900/40">
+    <!-- Eyebrow + chevron expandir/compactar -->
+    <div class="flex items-center justify-between gap-2">
+      <p class="text-[10px] font-semibold uppercase tracking-wider text-purple-700/80 dark:text-purple-300/80">Cabecera del movimiento</p>
+      <button type="button" @click="contextoAbierto = !contextoAbierto"
+              class="inline-flex h-6 w-6 items-center justify-center rounded-md text-purple-700 hover:bg-purple-100/70 dark:text-purple-300 dark:hover:bg-purple-900/40 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
+              :aria-expanded="contextoAbierto"
+              :title="contextoAbierto ? 'Compactar cabecera' : 'Expandir cabecera'"
+              aria-label="Expandir o compactar cabecera del movimiento">
+        <span class="material-icons text-lg leading-none transition-transform" :class="contextoAbierto ? '' : '-rotate-90'" aria-hidden="true">expand_more</span>
       </button>
-      <button type="button" role="tab" :aria-selected="tabActivo === 'articulos'" aria-controls="panel-articulos" id="tab-articulos"
-        @click="forzarCerrarTooltipRenglon(); tabActivo = 'articulos'; setDefaultESDesdeMotivo()"
-        :class="tabActivo === 'articulos' ? 'border-purple-600 text-purple-700 dark:border-purple-500 dark:text-purple-300 border-b-2 -mb-px' : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'"
-        class="min-h-10 rounded-t-lg px-4 py-2 text-sm font-semibold transition border-b-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900">
-        Artículos
-      </button>
+    </div>
+
+    <!-- Resumen corto (visible al compactar): Label: valor -->
+    <div x-show="!contextoAbierto" x-cloak
+         class="ims-context-summary mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-300">
+      <span><span class="text-slate-500 dark:text-slate-400">Motivo:</span> <span class="font-semibold" x-text="nombreMotivo || '—'"></span></span>
+      <span><span class="text-slate-500 dark:text-slate-400">Depósito:</span> <span class="font-semibold" x-text="(nombreDepOrigen || '—') + (cabecera.deposito_destino ? (' → ' + nombreDepDestino) : '')"></span></span>
+      <span><span class="text-slate-500 dark:text-slate-400">Fecha:</span> <span class="font-semibold tabular-nums" x-text="cabecera.fecha ? cabecera.fecha.split('-').reverse().join('/') : '—'"></span></span>
+    </div>
+
+    <!-- Campos densos (visible al expandir) — 2 columnas, label inline -->
+    <div x-show="contextoAbierto" x-cloak id="panel-cabecera" class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 lg:grid-cols-2">
+      <h2 class="sr-only">Datos del movimiento</h2>
+
+      <div class="ims-field-row">
+        <label class="ims-label-inline" for="fecha">Fecha</label>
+        <input type="date" id="fecha" x-model="cabecera.fecha" class="ims-input-dense ims-input-date h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+      </div>
+
+      <div class="ims-field-row">
+        <label class="ims-label-inline" for="motivo">Motivo</label>
+        <select id="motivo" x-model="cabecera.motivo_movimiento" @change="if(parseInt(cabecera.motivo_movimiento, 10) !== 6) cabecera.detalle = ''; setDefaultESDesdeMotivo()" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <option value="">Seleccione motivo</option>
+          <template x-for="m in motivos" :key="m.codigo">
+            <option :value="m.codigo" x-text="m.nombre"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="ims-field-row">
+        <label class="ims-label-inline" for="dep_origen">Depósito origen</label>
+        <select id="dep_origen" x-model="cabecera.deposito_origen" @change="if(cabecera.deposito_destino && String(cabecera.deposito_destino) === String(cabecera.deposito_origen)) cabecera.deposito_destino = ''; if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <option value="">Seleccione depósito</option>
+          <template x-for="d in depositos" :key="d.CodDeposito">
+            <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="ims-field-row" x-show="mostrarDepDestino" x-cloak>
+        <label class="ims-label-inline" for="dep_destino">Depósito destino</label>
+        <select id="dep_destino" x-model="cabecera.deposito_destino" @change="if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <option value="">Ninguno</option>
+          <template x-for="d in depositosDestino" :key="d.CodDeposito">
+            <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="ims-field-row" x-show="mostrarVendedor" x-cloak>
+        <label class="ims-label-inline" for="vendedor">Vendedor</label>
+        <select id="vendedor" x-model="cabecera.id_vendedor" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <option value="">Sin asignar</option>
+          <template x-for="v in viajantes" :key="v.CodViajante">
+            <option :value="v.CodViajante" x-text="v.Nombre || ('Viajante ' + v.CodViajante)"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="ims-field-row" x-show="mostrarCliente" x-cloak>
+        <label class="ims-label-inline" for="cliente">Cliente</label>
+        <select id="cliente" x-model="cabecera.id_cliente" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <option value="">Sin asignar</option>
+          <template x-for="c in clientes" :key="c.Codigo">
+            <option :value="c.Codigo" x-text="c.nombre_cliente || ('Cliente ' + c.Codigo)"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="ims-field-row">
+        <label class="ims-label-inline" for="ref">Referencia</label>
+        <select id="ref" x-model="cabecera.id_ref_movstock" title="Referencia parametrizada en AdministraNET (opcional)" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <option value="">Sin referencia</option>
+          <template x-for="r in refMovstock" :key="r.id_ref_movstock">
+            <option :value="r.id_ref_movstock" x-text="r.nombre_ref_movstock"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="ims-field-row" x-show="mostrarDatosOPT" x-cloak>
+        <label class="ims-label-inline" for="operario">Operario</label>
+        <select id="operario" x-model="cabecera.id_vendedor" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <option value="">Sin asignar</option>
+          <template x-for="v in viajantes" :key="v.CodViajante">
+            <option :value="v.CodViajante" x-text="v.Nombre || ('Viajante ' + v.CodViajante)"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="ims-field-row" x-show="mostrarDatosOPT" x-cloak>
+        <label class="ims-label-inline" for="maquina">Máquina</label>
+        <input type="text" id="maquina" x-model="cabecera.maquina" placeholder="Opcional" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+      </div>
+
+      <div class="ims-field-row" x-show="mostrarCantidadArmado" x-cloak>
+        <label class="ims-label-inline" for="cantidad_armado">Cantidad armado</label>
+        <select id="cantidad_armado" x-model="cabecera.cantidad_armado" title="Indica si la cantidad a cargar es en unidades o en armados (OPT/OPP)" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <option value="Unidad">Unidad</option>
+          <option value="Armado">Armado</option>
+        </select>
+      </div>
+
+      <div class="ims-field-row" x-show="mostrarValorVariable" x-cloak>
+        <label class="ims-label-inline" for="valor_variable">Valor variable (%)</label>
+        <input type="number" id="valor_variable" x-model.number="cabecera.valor_variable" placeholder="100" step="0.01" min="0" max="100" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+      </div>
+
+      <div class="ims-field-row lg:col-span-2" x-show="mostrarBuscaPEDI" x-cloak>
+        <label class="ims-label-inline">Pedidos internos</label>
+        <div class="min-w-0 flex-1">
+          <template x-if="!cabecera.nro_pedi">
+            <button type="button" @click="abrirModalPedidos()" :disabled="parseInt(cabecera.motivo_movimiento, 10) === 6 && !cabecera.deposito_destino" class="ims-input-dense inline-flex h-8 max-w-full items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-800 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
+              <span class="material-icons shrink-0 text-base">list</span>
+              <span class="truncate" x-text="tituloBotonPedidos"></span>
+            </button>
+          </template>
+          <template x-if="cabecera.nro_pedi">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs font-medium text-gray-900 dark:text-white" x-text="pedidoSeleccionadoResumen ? (pedidoSeleccionadoResumen.tipo === 'PEDI' ? 'PEDI #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi) : 'Pedido #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi)) : ('#' + cabecera.nro_pedi)"></span>
+              <button type="button" @click="abrirModalPedidos()" class="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline"><span class="material-icons text-sm">edit</span>Cambiar</button>
+              <button type="button" @click="cabecera.nro_pedi = ''; pedidoSeleccionadoResumen = null" class="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-sm">close</span>Quitar</button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="ims-field-row" x-show="activ_proyecto === 'Si'" x-cloak>
+        <label class="ims-label-inline">Proyecto</label>
+        <div class="min-w-0 flex-1">
+          <template x-if="!cabecera.id_proyecto || cabecera.id_proyecto === ''">
+            <button type="button" @click="abrirModalProyectos()" class="ims-input-dense inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+              <span class="material-icons text-base">folder_open</span>
+              <span>Lista de proyectos</span>
+            </button>
+          </template>
+          <template x-if="cabecera.id_proyecto && cabecera.id_proyecto !== ''">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs font-medium text-gray-900 dark:text-white" x-text="proyectoSeleccionadoResumen ? proyectoSeleccionadoResumen.nombre_proyecto : ('#' + cabecera.id_proyecto)"></span>
+              <button type="button" @click="abrirModalProyectos()" class="inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400 hover:underline"><span class="material-icons text-sm">edit</span>Cambiar</button>
+              <button type="button" @click="cabecera.id_proyecto = ''; proyectoSeleccionadoResumen = null" class="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-sm">close</span>Quitar</button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div class="ims-field-row lg:col-span-2">
+        <label class="ims-label-inline" for="detalle">Detalle</label>
+        <input type="text" id="detalle" x-model="cabecera.detalle" placeholder="Observaciones" class="ims-input-dense h-8 w-full rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+      </div>
     </div>
   </div>
 
-  <!-- Panel: Datos del movimiento -->
-  <div x-show="tabActivo === 'datos'" role="tabpanel" id="panel-datos" aria-labelledby="tab-datos" class="mb-6">
-    <section class="mb-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
-      <h2 class="sr-only">Datos del movimiento</h2>
-      <div class="space-y-5">
-        <!-- Fecha + Motivo + Depósitos + Vendedor (una franja en pantallas anchas) -->
-        <div class="flex flex-col gap-4 xl:flex-row xl:flex-wrap xl:items-end">
-          <div class="w-full shrink-0 sm:max-w-[12.5rem]">
-            <label for="fecha" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Fecha</label>
-            <input type="date" id="fecha" x-model="cabecera.fecha" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-          </div>
-          <div class="min-w-0 flex-1 basis-[min(100%,14rem)]">
-            <label for="motivo" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Motivo</label>
-            <select id="motivo" x-model="cabecera.motivo_movimiento" @change="if(parseInt(cabecera.motivo_movimiento, 10) !== 6) cabecera.detalle = ''; setDefaultESDesdeMotivo()" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-              <option value="">Seleccione motivo</option>
-              <template x-for="m in motivos" :key="m.codigo">
-                <option :value="m.codigo" x-text="m.nombre"></option>
-              </template>
-            </select>
-          </div>
-          <div class="min-w-0 flex-1 basis-[min(100%,14rem)]">
-            <label for="dep_origen" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Depósito origen</label>
-            <select id="dep_origen" x-model="cabecera.deposito_origen" @change="if(cabecera.deposito_destino && String(cabecera.deposito_destino) === String(cabecera.deposito_origen)) cabecera.deposito_destino = ''; if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-              <option value="">Seleccione depósito</option>
-              <template x-for="d in depositos" :key="d.CodDeposito">
-                <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
-              </template>
-            </select>
-          </div>
-          <div x-show="mostrarDepDestino" x-cloak class="min-w-0 flex-1 basis-[min(100%,14rem)]">
-            <label for="dep_destino" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Depósito destino</label>
-            <select id="dep_destino" x-model="cabecera.deposito_destino" @change="if(parseInt(cabecera.motivo_movimiento, 10) === 6) actualizarDetalleTransferencia()" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-              <option value="">Ninguno</option>
-              <template x-for="d in depositosDestino" :key="d.CodDeposito">
-                <option :value="d.CodDeposito" x-text="d.NombreDeposito || d.CodDeposito"></option>
-              </template>
-            </select>
-          </div>
-          <div x-show="mostrarVendedor" x-cloak class="min-w-0 flex-1 basis-[min(100%,12rem)]">
-            <label for="vendedor" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Vendedor</label>
-            <select id="vendedor" x-model="cabecera.id_vendedor" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-              <option value="">Sin asignar</option>
-              <template x-for="v in viajantes" :key="v.CodViajante">
-                <option :value="v.CodViajante" x-text="v.Nombre || ('Viajante ' + v.CodViajante)"></option>
-              </template>
-            </select>
-          </div>
-        </div>
-        <!-- Cliente (Mov. Interno Salida/Entrada) | Referencia -->
-        <div class="grid grid-cols-1 gap-4" :class="mostrarCliente ? 'md:grid-cols-2' : 'md:grid-cols-1'">
-          <div x-show="mostrarCliente" x-cloak>
-            <label for="cliente" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cliente</label>
-            <select id="cliente" x-model="cabecera.id_cliente" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
-              <option value="">Sin asignar</option>
-              <template x-for="c in clientes" :key="c.Codigo">
-                <option :value="c.Codigo" x-text="c.nombre_cliente || ('Cliente ' + c.Codigo)"></option>
-              </template>
-            </select>
-          </div>
-          <div>
-            <label for="ref" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Referencia</label>
-            <select id="ref" x-model="cabecera.id_ref_movstock" class="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
-              <option value="">Sin referencia</option>
-              <template x-for="r in refMovstock" :key="r.id_ref_movstock">
-                <option :value="r.id_ref_movstock" x-text="r.nombre_ref_movstock"></option>
-              </template>
-            </select>
-            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Referencia parametrizada en AdministraNET (opcional).</p>
-          </div>
-        </div>
-        <!-- Operario | Máquina | Cantidad armado (solo Parte producción, OPT/OPP) -->
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-3" x-show="mostrarDatosOPT" x-cloak>
-          <div>
-            <label for="operario" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Operario</label>
-            <select id="operario" x-model="cabecera.id_vendedor" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
-              <option value="">Sin asignar</option>
-              <template x-for="v in viajantes" :key="v.CodViajante">
-                <option :value="v.CodViajante" x-text="v.Nombre || ('Viajante ' + v.CodViajante)"></option>
-              </template>
-            </select>
-          </div>
-          <div>
-            <label for="maquina" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Máquina</label>
-            <input type="text" id="maquina" x-model="cabecera.maquina" placeholder="Opcional" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
-          </div>
-          <div x-show="mostrarCantidadArmado" x-cloak>
-            <label for="cantidad_armado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cantidad armado</label>
-            <select id="cantidad_armado" x-model="cabecera.cantidad_armado" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
-              <option value="Unidad">Unidad</option>
-              <option value="Armado">Armado</option>
-            </select>
-            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Indica si la cantidad a cargar es en unidades o en armados (OPT/OPP).</p>
-          </div>
-        </div>
-        <!-- Valor variable (solo Desarmado) | Pedidos internos a depósito | Proyecto -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div x-show="mostrarValorVariable" x-cloak>
-            <label for="valor_variable" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valor variable (%)</label>
-            <input type="number" id="valor_variable" x-model.number="cabecera.valor_variable" placeholder="100" step="0.01" min="0" max="100" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2">
-          </div>
-          <div x-show="mostrarBuscaPEDI" x-cloak class="w-full md:col-span-3">
-            <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">Pedidos internos a depósito</label>
-            <template x-if="!cabecera.nro_pedi">
-              <button type="button" @click="abrirModalPedidos()" :disabled="parseInt(cabecera.motivo_movimiento, 10) === 6 && !cabecera.deposito_destino" class="flex w-full min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">
-                <span class="material-icons shrink-0 text-lg">list</span>
-                <span class="text-center" x-text="tituloBotonPedidos"></span>
-              </button>
-            </template>
-            <template x-if="cabecera.nro_pedi">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-sm text-gray-900 dark:text-white font-medium" x-text="pedidoSeleccionadoResumen ? (pedidoSeleccionadoResumen.tipo === 'PEDI' ? 'PEDI #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi) : 'Pedido #' + (pedidoSeleccionadoResumen.NroComprobante || cabecera.nro_pedi)) : ('#' + cabecera.nro_pedi)"></span>
-                <button type="button" @click="abrirModalPedidos()" class="inline-flex items-center gap-1.5 text-sm text-purple-600 dark:text-purple-400 hover:underline"><span class="material-icons text-base">edit</span>Cambiar</button>
-                <button type="button" @click="cabecera.nro_pedi = ''; pedidoSeleccionadoResumen = null" class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-base">close</span>Quitar</button>
-              </div>
-            </template>
-          </div>
-          <div x-show="activ_proyecto === 'Si'" x-cloak>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto</label>
-            <template x-if="!cabecera.id_proyecto || cabecera.id_proyecto === ''">
-              <button type="button" @click="abrirModalProyectos()" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
-                <span class="material-icons text-lg">folder_open</span>
-                <span>Lista de proyectos</span>
-              </button>
-            </template>
-            <template x-if="cabecera.id_proyecto && cabecera.id_proyecto !== ''">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-sm text-gray-900 dark:text-white font-medium" x-text="proyectoSeleccionadoResumen ? proyectoSeleccionadoResumen.nombre_proyecto : ('#' + cabecera.id_proyecto)"></span>
-                <button type="button" @click="abrirModalProyectos()" class="inline-flex items-center gap-1.5 text-sm text-purple-600 dark:text-purple-400 hover:underline"><span class="material-icons text-base">edit</span>Cambiar</button>
-                <button type="button" @click="cabecera.id_proyecto = ''; proyectoSeleccionadoResumen = null" class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:underline"><span class="material-icons text-base">close</span>Quitar</button>
-              </div>
-            </template>
-          </div>
-        </div>
-        <!-- Detalle (texto largo, 3 líneas) -->
-        <div>
-          <label for="detalle" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Detalle</label>
-          <textarea id="detalle" x-model="cabecera.detalle" rows="3" placeholder="Observaciones" class="w-full resize-y rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"></textarea>
-        </div>
+  <!-- Artículos: workspace principal (tabla única con fila de búsqueda) -->
+  <section class="mb-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-200/80 px-3 py-2 dark:border-slate-700">
+      <div class="flex min-w-0 items-center gap-2">
+        <span class="material-icons shrink-0 text-lg text-purple-600 dark:text-purple-400">inventory_2</span>
+        <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Artículos</h2>
+        <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200" x-text="renglones.length + (renglones.length === 1 ? ' renglón' : ' renglones')"></span>
       </div>
-    </section>
-  </div>
-
-  <!-- Panel: Artículos (tabla única con fila de búsqueda) -->
-  <div x-show="tabActivo === 'articulos'" role="tabpanel" id="panel-articulos" aria-labelledby="tab-articulos" class="mb-6 min-w-0 overflow-hidden" x-cloak>
-    <section class="min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-6">
-      <h2 class="sr-only">Artículos del movimiento</h2>
-      <p class="text-xs text-gray-500 dark:text-gray-400 mb-3 break-words" x-show="!puedeCambiarES">El tipo de movimiento (Entrada/Salida) queda fijo según el motivo elegido en la primera pestaña.</p>
+    </div>
+    <div class="min-w-0 flex-1 overflow-hidden p-3">
       <div x-show="mostrarSaldoDeseado" x-cloak class="mb-4 p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
         <label for="saldo_deseado" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Saldo deseado</label>
         <div class="flex flex-wrap items-center gap-2">
@@ -209,16 +273,20 @@
           <span class="text-xs text-gray-500 dark:text-gray-400">Al salir del campo o Enter se calcula Entrada/Salida y cantidad según la diferencia con el saldo actual.</span>
         </div>
       </div>
-      <p x-show="!cabeceraMinimaCompleta" x-cloak class="mb-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2 break-words">
-        Complete los datos mínimos del movimiento (fecha, motivo, depósito origen<span x-show="mostrarDepDestino">, depósito destino</span>) para poder agregar artículos.
-      </p>
       <!-- Mobile: búsqueda + cards -->
       <div class="md:hidden space-y-3 min-w-0">
         <!-- Búsqueda mobile -->
         <div class="flex gap-2 items-center min-w-0">
-          <input type="text" x-ref="inputBusquedaArtMobile" x-model="filaBusqueda.texto" @input="mensajeCodigoInexistente = false; buscarArticulosDebounce()" @keydown.enter.prevent="onEnterFilaBusqueda()" @focus="filaBusqueda.mostrarSugerencias = true"
+          <input type="text" x-ref="inputBusquedaArtMobile" x-model="filaBusqueda.texto"
+            @input="mensajeCodigoInexistente = false; idxDropdown = -1; buscarArticulosDebounce()"
+            @keydown.enter.prevent="onEnterBusquedaConDropdown()"
+            @keydown.arrow-down.prevent="moverSelDropdown(1)"
+            @keydown.arrow-up.prevent="moverSelDropdown(-1)"
+            @keydown.escape.prevent="cerrarDropdownBusqueda()"
+            @focus="filaBusqueda.mostrarSugerencias = true"
             placeholder="Buscar artículo o escanear código"
-            class="flex-1 min-w-0 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100">
+            class="flex-1 min-w-0 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100"
+            role="combobox" :aria-expanded="dropdownSugerencias.length > 0" aria-autocomplete="list" aria-controls="lista-resultados-busqueda">
           <input type="number" x-model.number="filaBusqueda.cantidad" min="1" step="1" placeholder="Cant."
             class="w-16 text-center rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-2.5 text-sm">
           <button type="button" x-show="tieneCamera" @click="abrirScanner()" class="flex-shrink-0 p-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white" title="Escanear código de barras">
@@ -233,10 +301,7 @@
             <div class="flex items-start justify-between gap-2 mb-2">
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-medium text-gray-900 dark:text-white truncate" x-text="r.Descripcion || '—'"></p>
-                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  <span x-text="r.CodigoArticulo || ''"></span>
-                  <span x-show="r.id_manual" x-text="' · ' + r.id_manual"></span>
-                </p>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5" x-text="r.id_manual || r.CodigoArticulo || ''"></p>
               </div>
               <button type="button" @click="quitarRenglon(r.Orden)" class="p-1.5 rounded text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 flex-shrink-0"><span class="material-icons text-lg">delete</span></button>
             </div>
@@ -263,33 +328,107 @@
         </p>
       </div>
 
-      <!-- Desktop: tabla completa -->
-      <div class="hidden md:block overflow-x-auto">
-        <table class="w-full table-fixed text-sm text-left text-gray-700 dark:text-gray-300">
-          <thead class="bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-gray-100">
-            <tr>
-              <th class="px-3 py-2 w-24">Cod. Sistema</th>
-              <th class="px-3 py-2 w-24">Cod. Manual</th>
-              <th class="px-3 py-2 min-w-[120px]">Descripción</th>
-              <th class="px-3 py-2 w-[7.5rem]">Movimiento</th>
-              <th class="px-3 py-2 text-right w-24">Cantidad</th>
-              <th x-show="mostrarEmbalaje" class="px-3 py-2 w-[90px]">Embalaje</th>
-              <th x-show="mostrarUnidadPeso" class="px-3 py-2 text-right w-20">Peso</th>
-              <th class="px-3 py-2 w-28">Nro. Pedido int.</th>
-              <th class="px-3 py-2 w-24">Lote</th>
-              <th class="px-3 py-2 w-20 text-center">Series</th>
-              <th class="px-3 py-2 w-20 text-center rounded-tr">Eliminar</th>
+      <!-- Desktop: barra de ingreso (fuera de la tabla) -->
+      <div class="hidden md:block min-w-0">
+        <div class="mb-2 flex flex-wrap items-end gap-2 rounded-lg border border-slate-200 bg-slate-50/70 p-2 dark:border-slate-700 dark:bg-slate-700/30">
+          <div class="min-w-0 flex-1 basis-[min(100%,22rem)]">
+            <label for="busq-art" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Buscar artículo</label>
+            <input type="text" id="busq-art" x-ref="inputBusquedaArt" x-model="filaBusqueda.texto"
+              @input="mensajeCodigoInexistente = false; idxDropdown = -1; buscarArticulosDebounce()"
+              @keydown.enter.prevent="onEnterBusquedaConDropdown()"
+              @keydown.arrow-down.prevent="moverSelDropdown(1)"
+              @keydown.arrow-up.prevent="moverSelDropdown(-1)"
+              @keydown.escape.prevent="cerrarDropdownBusqueda()"
+              @focus="filaBusqueda.mostrarSugerencias = true; actualizarPosicionDropdown()"
+              :placeholder="(parseInt(cabecera.motivo_movimiento, 10) === 9 || parseInt(cabecera.motivo_movimiento, 10) === 10) ? 'Buscar por nombre o código, o * para ver todos los ensamblados (Enter)' : 'Buscar por nombre o escanear código de barras (Enter)'"
+              class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white"
+              role="combobox" :aria-expanded="dropdownSugerencias.length > 0" aria-autocomplete="list" aria-controls="lista-resultados-busqueda">
+          </div>
+          <div class="w-32">
+            <label for="busq-es" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Movimiento</label>
+            <select id="busq-es" x-model="filaBusqueda.ES" :disabled="!puedeCambiarES" :title="puedeCambiarES ? 'Entrada o Salida' : 'Según motivo'"
+              class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 disabled:opacity-70 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+              <option value="E">Entrada</option>
+              <option value="S">Salida</option>
+            </select>
+          </div>
+          <div class="w-24">
+            <label for="busq-cant" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Cantidad</label>
+            <input type="number" id="busq-cant" x-model.number="filaBusqueda.cantidad" min="1" step="1"
+              @change="filaBusqueda.cantidad = Math.max(1, Math.round(parseFloat(filaBusqueda.cantidad) || 1))"
+              @keydown.enter.prevent="confirmarFilaBusqueda()"
+              class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-right text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          </div>
+          <div x-show="mostrarEmbalaje" x-cloak class="w-28">
+            <label for="busq-emb" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Embalaje</label>
+            <select id="busq-emb" x-model="filaBusqueda.tipo_unidad"
+              class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+              <template x-for="opt in opcionesTipoUnidad" :key="opt.value">
+                <option :value="opt.value" x-text="opt.label"></option>
+              </template>
+            </select>
+          </div>
+          <div x-show="mostrarUnidadPeso" x-cloak class="w-24">
+            <label for="busq-peso" class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Peso</label>
+            <input type="number" id="busq-peso" x-model.number="filaBusqueda.unidad_art_peso" min="0" step="0.001" placeholder="0"
+              class="h-9 w-full rounded-md border border-slate-300 bg-white px-2 text-right text-sm text-slate-900 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          </div>
+          <div>
+            <button type="button" @click="confirmarFilaBusqueda()" :disabled="agregando || !cabeceraMinimaCompleta || !filaBusqueda.articuloSeleccionado"
+              class="inline-flex h-9 items-center gap-1.5 rounded-md bg-purple-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 disabled:cursor-not-allowed disabled:opacity-50" title="Agregar artículo">
+              <span class="material-icons text-base">add</span>
+              <span>Agregar</span>
+            </button>
+          </div>
+          <p x-show="mensajeCodigoInexistente" x-cloak class="w-full text-xs text-red-600 dark:text-red-400">Código inexistente.</p>
+        </div>
+      </div>
+
+      <!-- Lista de resultados de búsqueda (solo nombre; navegable con ↑/↓) -->
+      <div id="lista-resultados-busqueda" x-ref="listaResultadosBusqueda" x-show="dropdownSugerencias.length > 0" x-cloak x-transition
+        @click.outside="cerrarDropdownSiFueraDeBusqueda($event)"
+        role="listbox"
+        class="mb-2 max-h-72 min-h-[2rem] overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800">
+        <template x-for="(a, i) in dropdownSugerencias" :key="'art-' + (a.IDArt || a.esMensajeSinResultados || i) + '-' + i">
+          <div class="border-b border-slate-100 last:border-0 dark:border-slate-700">
+            <div x-show="a.esMensajeSinResultados" class="cursor-default px-3 py-2 text-sm italic text-slate-500 dark:text-slate-400" x-text="a.Descripcion || 'No hay artículos'"></div>
+            <button type="button" x-show="!a.esMensajeSinResultados"
+              role="option"
+              :aria-selected="idxDropdown === i"
+              :data-dropdown-idx="i"
+              @click="seleccionarArticuloFilaBusqueda(a)"
+              @mouseenter="idxDropdown = i"
+              :class="idxDropdown === i ? 'bg-purple-50 text-purple-900 dark:bg-purple-900/40 dark:text-purple-100' : 'text-slate-900 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700/50'"
+              class="w-full truncate px-3 py-2 text-left text-sm font-medium focus:outline-none"
+              x-text="a.Descripcion || '—'"
+              :title="a.Descripcion || ''"></button>
+          </div>
+        </template>
+      </div>
+
+      <!-- Desktop: tabla de renglones -->
+      <div class="hidden md:block min-w-0 overflow-x-auto">
+        <table class="w-full table-fixed border-collapse text-left text-sm text-gray-700 dark:text-gray-300">
+          <thead>
+            <tr class="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-700/50 dark:text-slate-400">
+              <th class="w-40 whitespace-nowrap px-2 py-2 font-semibold">Cod. manual</th>
+              <th class="whitespace-nowrap px-2 py-2 font-semibold">Descripción</th>
+              <th class="w-[7.5rem] whitespace-nowrap px-2 py-2 font-semibold">Movimiento</th>
+              <th class="w-24 whitespace-nowrap px-2 py-2 text-right font-semibold">Cantidad</th>
+              <th x-show="mostrarEmbalaje" class="w-24 whitespace-nowrap px-2 py-2 font-semibold">Embalaje</th>
+              <th x-show="mostrarUnidadPeso" class="w-20 whitespace-nowrap px-2 py-2 text-right font-semibold">Peso</th>
+              <th class="w-24 whitespace-nowrap px-2 py-2 font-semibold" title="Nro. pedido interno">Nro. ped.</th>
+              <th class="w-28 whitespace-nowrap px-2 py-2 font-semibold">Lote</th>
+              <th class="w-20 whitespace-nowrap px-2 py-2 text-center font-semibold">Series</th>
+              <th class="w-20 whitespace-nowrap px-2 py-2 text-center font-semibold">Eliminar</th>
             </tr>
           </thead>
           <tbody>
             <template x-for="r in renglones" :key="r.Orden">
-              <tr class="renglon-fila border-b border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/30"
-                  @mouseenter="mostrarTooltipRenglon($event, r)" @mouseleave="ocultarTooltipRenglon()"
-                  :data-renglon-tooltip="JSON.stringify({ Marca: r.marca || '', Lote: r.cod_lote || '', VtoLote: r.vto_lote || '', PresV: r.multiplicador_vta, PresC: r.cantidad_uni, Embalaje: r.tipo_unidad || '', Unidad: r.unidad_art_peso != null ? r.unidad_art_peso : '' })">
-                <td class="px-3 py-2 font-medium" x-text="r.CodigoArticulo || '—'"></td>
-                <td class="px-3 py-2" x-text="r.id_manual || '—'"></td>
-                <td class="px-3 py-2 max-w-[200px] truncate" x-text="r.Descripcion || '—'"></td>
-                <td class="px-3 py-2">
+              <tr class="renglon-fila border-b border-slate-100 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-700/30">
+                <td class="whitespace-nowrap px-2 py-1.5 font-medium tabular-nums" x-text="r.id_manual || '—'" :title="r.id_manual || ''"></td>
+                <td class="truncate px-2 py-1.5" x-text="r.Descripcion || '—'" :title="r.Descripcion || ''"></td>
+                <td class="px-2 py-1.5">
                   <template x-if="puedeCambiarES">
                     <select x-model="r.ES" @change="actualizarMovimientoCantidad(r)"
                       class="w-full max-w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 pl-2 pr-8 py-1 text-xs">
@@ -301,27 +440,27 @@
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium" :class="r.ES === 'E' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'" x-text="r.ES === 'E' ? 'Entrada' : 'Salida'"></span>
                   </template>
                 </td>
-                <td class="px-3 py-2">
+                <td class="px-2 py-1.5 text-right">
                   <input type="number" x-model.number="r.Cantidad" @change="actualizarMovimientoCantidad(r)" min="1" step="1"
                     class="w-20 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-sm">
                 </td>
-                <td x-show="mostrarEmbalaje" class="px-3 py-2">
+                <td x-show="mostrarEmbalaje" class="px-2 py-1.5">
                   <select x-model="r.tipo_unidad" @change="actualizarMovimientoCantidad(r)"
-                    class="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs min-w-[90px]">
+                    class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs">
                     <template x-for="opt in opcionesTipoUnidad" :key="opt.value">
                       <option :value="opt.value" x-text="opt.label"></option>
                     </template>
                   </select>
                 </td>
-                <td x-show="mostrarUnidadPeso" class="px-3 py-2">
-                  <div class="flex items-center gap-1">
+                <td x-show="mostrarUnidadPeso" class="px-2 py-1.5">
+                  <div class="flex items-center justify-end gap-1">
                     <input type="number" x-model.number="r.unidad_art_peso" @change="actualizarMovimientoCantidad(r)" min="0" step="0.001" placeholder="0"
-                      class="w-16 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs">
+                      class="w-14 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1 text-xs">
                     <button type="button" @click="abrirModalPeso(r)" class="p-1 rounded text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20" title="Ingresar peso (lista)"><span class="material-icons text-base">list</span></button>
                   </div>
                 </td>
-                <td class="px-3 py-2" x-text="r.nro_pedi || '—'"></td>
-                <td class="px-3 py-2">
+                <td class="truncate px-2 py-1.5" x-text="r.nro_pedi || '—'" :title="r.nro_pedi || ''"></td>
+                <td class="px-2 py-1.5">
                   <template x-if="r.lote_articulo === 'Si' && !r.id_lote && !r.cod_lote">
                     <button type="button" @click="abrirModalLote(r)" :disabled="!cabecera.deposito_origen" class="p-1.5 rounded text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed" title="Elegir lote"><span class="material-icons text-lg">inventory_2</span></button>
                   </template>
@@ -337,7 +476,7 @@
                     <span class="material-icons text-lg text-gray-400 cursor-default" title="Artículo sin lote">inventory_2</span>
                   </template>
                 </td>
-                <td class="px-3 py-2 text-center">
+                <td class="px-2 py-1.5 text-center">
                   <template x-if="r.serie_articulo === 'Si'">
                     <button type="button" @click="abrirModalSeries(r)" :disabled="!cabecera.deposito_origen" class="p-1.5 rounded text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 disabled:opacity-50 disabled:cursor-not-allowed" title="Números de serie"><span class="material-icons text-lg">layers</span></button>
                   </template>
@@ -345,101 +484,33 @@
                     <span class="material-icons text-lg text-gray-400 cursor-default" title="Artículo no seriado">layers</span>
                   </template>
                 </td>
-                <td class="px-3 py-2 text-center">
+                <td class="px-2 py-1.5 text-center">
                   <button type="button" @click="quitarRenglon(r.Orden)" class="p-1.5 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20" title="Eliminar"><span class="material-icons text-lg">delete</span></button>
                 </td>
               </tr>
             </template>
-            <!-- Fila de búsqueda (siempre al final) -->
-            <tr class="border-b border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/20">
-              <td colspan="3" class="px-3 py-2">
-                <div>
-                  <input type="text" x-ref="inputBusquedaArt" x-model="filaBusqueda.texto" @input="mensajeCodigoInexistente = false; buscarArticulosDebounce()" @keydown.enter.prevent="onEnterFilaBusqueda()" @focus="filaBusqueda.mostrarSugerencias = true; actualizarPosicionDropdown()" :placeholder="(parseInt(cabecera.motivo_movimiento, 10) === 9 || parseInt(cabecera.motivo_movimiento, 10) === 10) ? 'Buscar por nombre o código, o * para ver todos los artículos ensamblados (Enter)' : 'Buscar por nombre o escanear código de barras (Enter)'"
-                    class="w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100">
-                  <p x-show="mensajeCodigoInexistente" x-cloak class="mt-1 text-xs text-red-600 dark:text-red-400">Código inexistente.</p>
-                </div>
-              </td>
-              <td class="px-3 py-2">
-                <select x-model="filaBusqueda.ES" :disabled="!puedeCambiarES" class="w-full max-w-full rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 pl-2 pr-8 py-1.5 text-sm disabled:opacity-70"
-                  :title="puedeCambiarES ? 'Entrada o Salida' : 'Según motivo'">
-                  <option value="E">Entrada</option>
-                  <option value="S">Salida</option>
-                </select>
-              </td>
-              <td class="px-3 py-2">
-                <input type="number" x-model.number="filaBusqueda.cantidad" min="1" step="1" @change="filaBusqueda.cantidad = Math.max(1, Math.round(parseFloat(filaBusqueda.cantidad) || 1))" @keydown.enter.prevent="confirmarFilaBusqueda()"
-                  class="w-20 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm">
-              </td>
-              <td x-show="mostrarEmbalaje" class="px-3 py-2">
-                <select x-model="filaBusqueda.tipo_unidad" class="rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm min-w-[90px]">
-                  <template x-for="opt in opcionesTipoUnidad" :key="opt.value">
-                    <option :value="opt.value" x-text="opt.label"></option>
-                  </template>
-                </select>
-              </td>
-              <td x-show="mostrarUnidadPeso" class="px-3 py-2">
-                <input type="number" x-model.number="filaBusqueda.unidad_art_peso" min="0" step="0.001" placeholder="0"
-                  class="w-16 text-right rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-2 py-1.5 text-sm">
-              </td>
-              <td colspan="4" class="px-3 py-2">
-                <button type="button" @click="confirmarFilaBusqueda()" :disabled="agregando || !cabeceraMinimaCompleta || !filaBusqueda.articuloSeleccionado"
-                  class="rounded bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-3 py-1.5 text-sm" title="Agregar">Agregar</button>
+            <!-- Estado vacío -->
+            <tr x-show="renglones.length === 0" x-cloak>
+              <td :colspan="8 + (mostrarEmbalaje ? 1 : 0) + (mostrarUnidadPeso ? 1 : 0)" class="px-2 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                No hay artículos agregados. Buscá un artículo en la barra de arriba para comenzar.
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p x-show="renglones.length === 0 && !filaBusqueda.articuloSeleccionado" x-cloak class="mt-2 text-center text-sm text-gray-500 dark:text-gray-400">
-        Escriba en la fila de búsqueda y pulse Enter para agregar.
-      </p>
-      <!-- Lista de resultados de búsqueda (un div por ítem con x-show para evitar problemas de x-if dentro de x-for) -->
-      <div x-ref="listaResultadosBusqueda" x-show="dropdownSugerencias.length > 0" x-cloak x-transition
-        @click.outside="cerrarDropdownSiFueraDeBusqueda($event)"
-        class="mt-2 border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 shadow-lg max-h-80 overflow-y-auto min-h-[2rem]">
-        <template x-for="(a, i) in dropdownSugerencias" :key="'art-' + (a.IDArt || a.esMensajeSinResultados || i) + '-' + i">
-          <div class="border-b border-gray-100 dark:border-gray-600 last:border-0">
-            <div x-show="a.esMensajeSinResultados" class="w-full text-left px-3 py-2.5 text-sm text-gray-500 dark:text-gray-400 italic cursor-default" x-text="a.Descripcion || 'No hay artículos'"></div>
-            <button type="button" x-show="!a.esMensajeSinResultados" @click="seleccionarArticuloFilaBusqueda(a)" class="w-full text-left px-3 py-2.5 hover:bg-purple-50 dark:hover:bg-purple-900/30 text-sm">
-              <div class="font-medium text-gray-900 dark:text-gray-100" x-text="(a.id_manual || a.CodigoArticulo || '') + ' · ' + (a.Descripcion || '')"></div>
-              <div class="mt-0.5 text-xs text-gray-600 dark:text-gray-400" x-show="a.PrecioCosto != null || a.Precio1V != null">
-                <span x-show="a.PrecioCosto != null">P. Costo: <span x-text="formatoMoneda(a.PrecioCosto)"></span></span>
-                <span x-show="a.PrecioCosto != null && a.Precio1V != null" class="mx-1">|</span>
-                <span x-show="a.Precio1V != null">PV 1: <span x-text="formatoMoneda(a.Precio1V)"></span></span>
-                <span x-show="(a.PrecioCosto != null || a.Precio1V != null) && a.Alicuota != null" class="mx-1">|</span>
-                <span x-show="a.Alicuota != null">Alic: <span x-text="a.Alicuota"></span>%</span>
-              </div>
-              <div class="mt-0.5 text-xs text-gray-600 dark:text-gray-400 space-y-0.5" x-show="a.stock_depositos && a.stock_depositos.length">
-                <span class="font-semibold text-gray-700 dark:text-gray-300">Stock:</span>
-                <template x-for="(sd, iDep) in (a.stock_depositos || [])" :key="'fb-' + sd.id_deposito + '-' + iDep">
-                  <div class="flex gap-1">
-                    <span class="font-semibold text-gray-800 dark:text-gray-200" x-text="sd.nombre_deposito"></span>
-                      <span>: </span>
-                      <span x-text="formatoEntero(sd.saldo)"></span>
-                  </div>
-                </template>
-              </div>
-            </button>
-          </div>
-        </template>
-      </div>
-    </section>
-  </div>
+    </div>
+  </section>
 
-  <!-- Pie: Continuar / Confirmar / Cancelar (móvil: acción principal arriba) -->
-  <div class="mt-8 flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-    <button type="button" @click="cancelarYSalir()" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 sm:w-auto">
-      <span class="material-icons text-xl">close</span>
-      <span>Cancelar</span>
-    </button>
-    <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:justify-end sm:gap-3">
-      <button x-show="tabActivo === 'datos'" type="button" @click="forzarCerrarTooltipRenglon(); tabActivo = 'articulos'; setDefaultESDesdeMotivo(); window.scrollTo({top: 0, behavior: 'smooth'})" :disabled="!cabeceraMinimaCompleta"
-        class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900 sm:w-auto">
-        <span class="material-icons text-xl">arrow_forward</span>
-        <span>Continuar</span>
+  <!-- Pie de acciones fijo: Cancelar + Confirmar -->
+  <div class="sticky bottom-0 z-30 -mx-3 mt-2 flex-shrink-0 border-t border-slate-200 bg-white/85 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-white/70 dark:border-slate-700 dark:bg-slate-900/85 dark:supports-[backdrop-filter]:bg-slate-900/70 sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8 xl:-mx-10 xl:px-10 2xl:-mx-12 2xl:px-12">
+    <div class="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+      <button type="button" @click="cancelarYSalir()" class="inline-flex min-h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-xs font-semibold text-slate-800 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900 sm:w-auto">
+        <span class="material-icons text-base">close</span>
+        <span>Cancelar</span>
       </button>
-      <button x-show="tabActivo === 'articulos'" x-cloak type="button" @click="abrirResumen()" :disabled="renglones.length === 0 || confirmando"
-        class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900 sm:w-auto">
-        <span class="material-icons text-xl">save</span>
+      <button type="button" @click="abrirResumen()" :disabled="renglones.length === 0 || confirmando"
+        class="inline-flex min-h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus-visible:ring-offset-slate-900 sm:w-auto">
+        <span class="material-icons text-base">save</span>
         <span>Confirmar movimiento</span>
       </button>
     </div>
@@ -727,7 +798,6 @@ document.addEventListener('alpine:init', function() {
 
   Alpine.data('ingresoMovStock', function() {
     return {
-      tabActivo: 'datos',
       depositos: [],
       refMovstock: [],
       motivos: [],
@@ -762,6 +832,8 @@ document.addEventListener('alpine:init', function() {
       mostrarDropdownArticulos: false,
       /** Lista mostrada en el dropdown (nivel raíz para que Alpine reactive bien). Ver buscarArticulos / onEnterFilaBusqueda. */
       dropdownSugerencias: [],
+      /** Índice resaltado en el dropdown (−1 = ninguno). Navegación con ↑/↓. */
+      idxDropdown: -1,
       saldoDisponible: null,
       agregando: false,
       confirmando: false,
@@ -992,18 +1064,9 @@ document.addEventListener('alpine:init', function() {
         this.tipo_balanza = d.tipo_balanza || '';
         this.pedidos_parte_produccion = d.pedidos_parte_produccion || 'No';
         if (this.filaBusqueda) this.filaBusqueda.tipo_unidad = this.tipo_unidad_defecto;
+        this.setDefaultESDesdeMotivo();
         const rR = await fetch('{% url "stock:api_ingreso_renglones" %}', { headers: { 'X-CSRFToken': csrfToken } });
         if (rR.ok) { const dR = await rR.json(); this.renglones = this.normalizarRenglones(dR.renglones || []); }
-        const tooltipEl = document.createElement('div');
-        tooltipEl.setAttribute('class', 'absolute bg-slate-900 text-white text-xs rounded-lg px-3 py-2 shadow-2xl opacity-0 z-[9999] border border-slate-700 overflow-y-auto overflow-x-hidden');
-        tooltipEl.style.minWidth = '200px';
-        tooltipEl.style.maxWidth = '320px';
-        tooltipEl.style.maxHeight = '85vh';
-        tooltipEl.style.transition = 'opacity 0.2s ease-in-out';
-        tooltipEl.style.pointerEvents = 'none';
-        document.body.appendChild(tooltipEl);
-        this._tooltipRenglonEl = tooltipEl;
-        this._tooltipRenglonHide = null;
         const self = this;
         this._onBeforeUnload = function(e) {
           if (window._ingresoCancelando) return;
@@ -1018,71 +1081,6 @@ document.addEventListener('alpine:init', function() {
             this.tieneCamera = false;
           }
         }
-      },
-      _escHtml(s) {
-        if (s == null || s === undefined) return '';
-        const t = String(s);
-        return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-      },
-      buildRenglonTooltipHtml(datos) {
-        if (!datos) return '';
-        const esc = this._escHtml.bind(this);
-        const line = (label, value) => '<div class="flex items-center justify-between gap-3 py-0.5 border-t border-slate-700 first:border-t-0 first:pt-0 pt-0.5"><span class="text-slate-400 text-[9px] shrink-0">' + esc(label) + '</span><span class="text-sky-300 text-xs text-right break-all max-w-[180px]">' + esc(value || '—') + '</span></div>';
-        return '<div class="font-bold text-sm text-white mb-1.5">Detalle línea</div>' +
-          line('Código', datos.CodigoArticulo) +
-          line('Cod. Manual', datos.id_manual) +
-          line('Descripción', datos.Descripcion) +
-          line('Cantidad', datos.Cantidad) +
-          line('Movimiento', datos.Movimiento) +
-          line('Nro. Pedido int.', datos.nro_pedi) +
-          line('Marca', datos.Marca) +
-          line('Lote', datos.Lote) +
-          line('Vto Lote', datos.VtoLote) +
-          line('Pres. V', datos.PresV) +
-          line('Pres. C', datos.PresC) +
-          line('Embalaje', datos.Embalaje) +
-          line('Unidad (peso)', datos.Unidad);
-      },
-      mostrarTooltipRenglon(ev, r) {
-        if (this._tooltipRenglonHide) { clearTimeout(this._tooltipRenglonHide); this._tooltipRenglonHide = null; }
-        if (!this._tooltipRenglonEl || !r) return;
-        const movimiento = r.ES === 'E' ? 'Entrada' : (r.ES === 'S' ? 'Salida' : (r.ES || '—'));
-        const datos = {
-          CodigoArticulo: r.CodigoArticulo || '',
-          id_manual: r.id_manual || '',
-          Descripcion: (r.Descripcion || '').substring(0, 40) + ((r.Descripcion || '').length > 40 ? '…' : ''),
-          Cantidad: r.Cantidad != null ? String(r.Cantidad) : '',
-          Movimiento: movimiento,
-          nro_pedi: r.nro_pedi || '',
-          Marca: r.marca || '',
-          Lote: r.cod_lote || '',
-          VtoLote: r.vto_lote != null ? String(r.vto_lote) : '',
-          PresV: r.multiplicador_vta != null ? String(r.multiplicador_vta) : '',
-          PresC: r.cantidad_uni != null ? String(r.cantidad_uni) : '',
-          Embalaje: r.tipo_unidad || '',
-          Unidad: r.unidad_art_peso != null ? String(r.unidad_art_peso) : ''
-        };
-        this._tooltipRenglonEl.innerHTML = this.buildRenglonTooltipHtml(datos);
-        const pad = 12;
-        const tooltipMaxW = 320;
-        const tooltipMaxH = Math.min(400, window.innerHeight - 40);
-        let left = ev.pageX + pad;
-        let top = ev.pageY - pad;
-        if (left + tooltipMaxW > window.innerWidth) left = ev.pageX - tooltipMaxW - pad;
-        if (left < pad) left = pad;
-        if (top + tooltipMaxH > window.innerHeight - pad) top = window.innerHeight - tooltipMaxH - pad;
-        if (top < pad) top = pad;
-        this._tooltipRenglonEl.style.left = left + 'px';
-        this._tooltipRenglonEl.style.top = top + 'px';
-        this._tooltipRenglonEl.style.opacity = '1';
-      },
-      ocultarTooltipRenglon() {
-        const self = this;
-        this._tooltipRenglonHide = setTimeout(function() { if (self._tooltipRenglonEl) self._tooltipRenglonEl.style.opacity = '0'; }, 150);
-      },
-      forzarCerrarTooltipRenglon() {
-        if (this._tooltipRenglonHide) { clearTimeout(this._tooltipRenglonHide); this._tooltipRenglonHide = null; }
-        if (this._tooltipRenglonEl) this._tooltipRenglonEl.style.opacity = '0';
       },
       _busquedaTimeout: null,
       buscarArticulosDebounce() {
@@ -1104,6 +1102,7 @@ document.addEventListener('alpine:init', function() {
         if (q.length < 2 && !permitirAsterisco) {
           this.dropdownSugerencias = [];
           this.mostrarDropdownArticulos = false;
+          this.idxDropdown = -1;
           if (this.filaBusqueda) { this.filaBusqueda.sugerencias = []; this.filaBusqueda.mostrarSugerencias = false; }
           else this.sugerencias = [];
           return;
@@ -1118,6 +1117,7 @@ document.addEventListener('alpine:init', function() {
           if (!r.ok) {
             this.dropdownSugerencias = [];
             this.mostrarDropdownArticulos = false;
+            this.idxDropdown = -1;
             if (this.filaBusqueda) { this.filaBusqueda.sugerencias = []; this.filaBusqueda.mostrarSugerencias = false; }
             else this.sugerencias = [];
             return;
@@ -1133,6 +1133,9 @@ document.addEventListener('alpine:init', function() {
           }
           this.dropdownSugerencias = items.slice ? items.slice() : [...items];
           this.mostrarDropdownArticulos = true;
+          // Resaltar el primer ítem seleccionable (no mensajes)
+          const firstSel = this.dropdownSugerencias.findIndex(function(a) { return !a.esMensajeSinResultados; });
+          this.idxDropdown = firstSel;
           if (this.filaBusqueda) {
             this.filaBusqueda.sugerencias = items;
             this.filaBusqueda.mostrarSugerencias = items.length > 0;
@@ -1140,13 +1143,65 @@ document.addEventListener('alpine:init', function() {
           this.$nextTick(() => {
             const el = this.$refs.listaResultadosBusqueda;
             if (el && items.length > 0) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            this._scrollDropdownItemIntoView();
           });
         } catch (err) {
           this.dropdownSugerencias = [];
           this.mostrarDropdownArticulos = false;
+          this.idxDropdown = -1;
           if (this.filaBusqueda) { this.filaBusqueda.sugerencias = []; this.filaBusqueda.mostrarSugerencias = false; }
           else this.sugerencias = [];
         }
+      },
+      /** Índices de ítems reales del dropdown (excluye mensajes vacíos). */
+      _indicesDropdownSeleccionables() {
+        const items = this.dropdownSugerencias || [];
+        const out = [];
+        for (let i = 0; i < items.length; i++) {
+          if (!items[i].esMensajeSinResultados) out.push(i);
+        }
+        return out;
+      },
+      moverSelDropdown(delta) {
+        const selectable = this._indicesDropdownSeleccionables();
+        if (!selectable.length) return;
+        let pos = selectable.indexOf(this.idxDropdown);
+        if (pos < 0) pos = delta > 0 ? -1 : 0;
+        pos = (pos + delta + selectable.length) % selectable.length;
+        this.idxDropdown = selectable[pos];
+        this.$nextTick(() => this._scrollDropdownItemIntoView());
+      },
+      elegirResaltadoDropdown() {
+        const a = (this.dropdownSugerencias || [])[this.idxDropdown];
+        if (a && !a.esMensajeSinResultados) this.seleccionarArticuloFilaBusqueda(a);
+      },
+      _scrollDropdownItemIntoView() {
+        const list = this.$refs.listaResultadosBusqueda;
+        if (!list || this.idxDropdown < 0) return;
+        const el = list.querySelector('[data-dropdown-idx="' + this.idxDropdown + '"]');
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      },
+      onEnterBusquedaConDropdown() {
+        const selectable = this._indicesDropdownSeleccionables();
+        if (selectable.length) {
+          if (this.idxDropdown >= 0 && selectable.indexOf(this.idxDropdown) >= 0) {
+            this.elegirResaltadoDropdown();
+            return;
+          }
+          if (selectable.length === 1) {
+            this.seleccionarArticuloFilaBusqueda(this.dropdownSugerencias[selectable[0]]);
+            return;
+          }
+        }
+        this.onEnterFilaBusqueda();
+      },
+      cerrarDropdownBusqueda() {
+        this.dropdownSugerencias = [];
+        this.mostrarDropdownArticulos = false;
+        this.idxDropdown = -1;
+        if (this.filaBusqueda) this.filaBusqueda.mostrarSugerencias = false;
       },
       seleccionarArticulo(a) {
         this.nuevoRenglon = { IDArt: a.IDArt, CodigoArticulo: a.CodigoArticulo, Descripcion: a.Descripcion, cantidad: 1, ES: this.getDefaultES() };
@@ -1164,10 +1219,10 @@ document.addEventListener('alpine:init', function() {
       },
       cerrarDropdownSiFueraDeBusqueda(ev) {
         const input = this.$refs.inputBusquedaArt;
+        const inputMobile = this.$refs.inputBusquedaArtMobile;
         if (input && (ev.target === input || input.contains(ev.target))) return;
-        this.dropdownSugerencias = [];
-        this.mostrarDropdownArticulos = false;
-        if (this.filaBusqueda) this.filaBusqueda.mostrarSugerencias = false;
+        if (inputMobile && (ev.target === inputMobile || inputMobile.contains(ev.target))) return;
+        this.cerrarDropdownBusqueda();
       },
       formatoMoneda(val) {
         const n = parseFloat(val);
@@ -1195,6 +1250,7 @@ document.addEventListener('alpine:init', function() {
         this.filaBusqueda.sugerencias = [];
         this.dropdownSugerencias = [];
         this.mostrarDropdownArticulos = false;
+        this.idxDropdown = -1;
         if (typeof window !== 'undefined' && window.innerWidth < 768 && this.cabeceraMinimaCompleta) {
           const self = this;
           this.$nextTick(async function() { await self.confirmarFilaBusqueda(); });
@@ -1405,7 +1461,6 @@ document.addEventListener('alpine:init', function() {
         this.agregando = false;
         if (!r.ok) { this.mensajeError = d.error || 'Error al agregar.'; return; }
         this.renglones = this.normalizarRenglones(d.renglones || []);
-        this.forzarCerrarTooltipRenglon();
         this.nuevoRenglon = { IDArt: null, CodigoArticulo: '', Descripcion: '', cantidad: 1, ES: this.getDefaultES() };
         this.busquedaArt = '';
       },
@@ -1449,7 +1504,6 @@ document.addEventListener('alpine:init', function() {
         this.agregando = false;
         if (!r.ok) { this.mensajeError = d.error || 'Error al agregar.'; return; }
         this.renglones = this.normalizarRenglones(d.renglones || []);
-        this.forzarCerrarTooltipRenglon();
         this.filaBusqueda.texto = '';
         this.filaBusqueda.articuloSeleccionado = null;
         this.filaBusqueda.cantidad = 1;
@@ -1497,7 +1551,6 @@ document.addEventListener('alpine:init', function() {
         const d = await resp.json().catch(() => ({}));
         if (!resp.ok) { this.mensajeError = d.error || 'Error al actualizar.'; return; }
         this.renglones = this.normalizarRenglones(d.renglones || []);
-        this.forzarCerrarTooltipRenglon();
       },
       iniciarEdicion(r) {
         this.renglonEditando = r.Orden;
@@ -1548,13 +1601,11 @@ document.addEventListener('alpine:init', function() {
         const d = await r.json().catch(() => ({}));
         if (!r.ok) { this.mensajeError = d.error || 'Error al actualizar.'; return; }
         this.renglones = this.normalizarRenglones(d.renglones || []);
-        this.forzarCerrarTooltipRenglon();
         this.renglonEditando = null;
         this.edicionRenglon = null;
       },
       abrirModalLote(r) {
         if (!r || !this.cabecera.deposito_origen) return;
-        this.forzarCerrarTooltipRenglon();
         this.renglonLoteModal = r;
         this.lotesParaRenglon = [];
         this.loadingLotesRenglon = true;
@@ -1570,7 +1621,6 @@ document.addEventListener('alpine:init', function() {
       },
       abrirModalPeso(r) {
         if (!r) return;
-        this.forzarCerrarTooltipRenglon();
         this.renglonPesoModal = r;
         this.valorPesoModal = r.unidad_art_peso != null && r.unidad_art_peso !== '' ? String(r.unidad_art_peso) : '';
       },
@@ -1580,7 +1630,6 @@ document.addEventListener('alpine:init', function() {
       },
       async abrirModalSeries(r) {
         if (!r || !this.cabecera.deposito_origen) return;
-        this.forzarCerrarTooltipRenglon();
         this.renglonSerieModal = r;
         this.seriesRenglon = [];
         this.seriesDisponibles = [];
@@ -1712,7 +1761,6 @@ document.addEventListener('alpine:init', function() {
         const d = await resp.json().catch(() => ({}));
         if (!resp.ok) { this.mensajeError = d.error || 'Error al actualizar lote.'; return; }
         this.renglones = this.normalizarRenglones(d.renglones || []);
-        this.forzarCerrarTooltipRenglon();
         const updated = this.renglones.find(function(x) { return x.Orden === r.Orden; });
         if (updated) updated.stock_lote = lt.stock_lote != null ? lt.stock_lote : null;
       },
@@ -1722,7 +1770,7 @@ document.addEventListener('alpine:init', function() {
           headers: { 'X-CSRFToken': csrfToken }
         });
         const d = await r.json().catch(() => ({}));
-        if (r.ok) { this.renglones = this.normalizarRenglones(d.renglones || []); this.forzarCerrarTooltipRenglon(); this.renglonDetalle = null; }
+        if (r.ok) { this.renglones = this.normalizarRenglones(d.renglones || []); this.renglonDetalle = null; }
       },
       async cancelarYSalir() {
         if (this._onBeforeUnload) window.removeEventListener('beforeunload', this._onBeforeUnload);
@@ -1738,7 +1786,6 @@ document.addEventListener('alpine:init', function() {
       },
       abrirResumen() {
         this.mensajeError = '';
-        this.forzarCerrarTooltipRenglon();
         this.mostrarModalResumen = true;
       },
       async confirmarMovimiento() {
@@ -1789,7 +1836,6 @@ document.addEventListener('alpine:init', function() {
         this.codigoMovimiento = d.codigo_movimiento;
         this.nroComprobante = d.nro_comprobante;
         this.renglones = [];
-        this.forzarCerrarTooltipRenglon();
       }
     };
   });

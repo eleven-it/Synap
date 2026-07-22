@@ -54,7 +54,7 @@ Al ejecutar el proveedor en **Archivo → Migración esquema MySQL**:
 
 | Método | Path | Descripción |
 |--------|------|-------------|
-| GET | `/ecom/api/mayoristapp/vendedor-cliente-marca/ternas/` | Lista (filtros `CodViajante`, `id_cliente`, `id_cliente_domicilio`, `solo_activas`) |
+| GET | `/ecom/api/mayoristapp/vendedor-cliente-marca/ternas/` | Lista (filtros `CodViajante`, `id_cliente`, `id_cliente_domicilio`, `solo_activas`; límite predeterminado `5000`, máximo `20000`) |
 | POST | `/ecom/api/mayoristapp/vendedor-cliente-marca/crear/` | Alta con `id_cliente_domicilio` (una sucursal) o `ids_cliente_domicilio` (array, lote); **409** `code=conflicto_marca` + `dueno` (simple) o `resumen` (lote); **201** si alguna creada; **200** si solo ya existían |
 | POST | `/ecom/api/mayoristapp/vendedor-cliente-marca/anular/` | Soft-delete `{id}` |
 | GET | `.../vendedores/`, `.../clientes/`, `.../sucursales/?id_cliente=`, `.../marcas/` | Búsqueda predictiva `?q=` |
@@ -62,6 +62,8 @@ Al ejecutar el proveedor en **Archivo → Migración esquema MySQL**:
 UI: `/ecom/mayoristapp/config/vendedor-cliente-marca/` — formulario con 4 combobox: Vendedor, Cliente, **Sucursal** (multi-select: una o más sucursales del cliente; chips + checkboxes en listado; botones Todas/Ninguna), Marca (single). Un clic en **Asignar** crea N relaciones (mismo vendedor, cliente y marca × cada sucursal seleccionada).
 
 **Listado de relaciones:** árbol colapsable de 4 niveles `Vendedor → Cliente → Sucursal → Marca` (cada nivel con chevron y badge «N relaciones»; **inicia siempre contraído**; estado en `gruposColapsados` con claves string `v:<cod>`, `v:<cod>:c:<idc>`, `v:<cod>:c:<idc>:s:<idd>`), armado client-side con `arbolCuaternas()`/`filasArbol()` y orden natural (`cmpNatural`) en cada nivel; columnas de la hoja `Marca | Alta | (acciones)` con tabulación alineada al texto de Sucursal. Botones **Expandir todo** / **Contraer todo** (mismo patrón que informes VO). Se muestra solo el dato legible, **sin códigos entre paréntesis ni índices** (`nombre_viajante`, `nombre_cliente`, `nombre_marca`); en sucursal, si no hay domicilio (id 0/vacío) o la etiqueta es solo un índice, se muestra «Sin sucursal». Los 4 combobox y el filtro de vendedor usan búsqueda predictiva con orden natural, recarga al borrar el texto y flecha abajo para traer todo el catálogo (`onInput`/`flechaAbajo`).
+
+La pantalla de configuración solicita explícitamente `limit=10000` para cargar todas las relaciones activas del árbol.
 
 ## Filtros operativos
 
@@ -73,3 +75,36 @@ UI: `/ecom/mayoristapp/config/vendedor-cliente-marca/` — formulario con 4 comb
 | Carrito simple `agregar_item` | Valida marca contra relaciones; sin domicilio en sesión usa unión |
 
 Ver también `docs/ecom/PEDIDO_MASIVO_SUCURSALES.md`.
+
+## Carga masiva desde Excel (producción `administranet`)
+
+**Fecha:** 22/07/2026  
+**Fuente:** `vendedor_cliente_marca_unicos.xlsx` (3 columnas: Nombre vendedor, Nombre cliente, Marca).  
+**Script:** `tmp/cargar_vcm_administranet_prod.py` (misma lógica que la carga en `administranet1`).
+
+### Criterios
+
+- Resolución solo por **nombre** (cliente y marca); no se usan códigos BEST.
+- Se omiten clientes faltantes, nombres ambiguos y marcas no confirmadas (en esta corrida: **BC**, **DM**).
+- Cada par cliente–marca se expande a **todas** las sucursales activas del cliente.
+- Gustavo Ursela: 0 pares confirmados (todos los clientes faltaban) → no se creó viajante.
+
+### Resultado en `administranet`
+
+| Vendedor | CodViajante | Relaciones activas |
+|----------|-------------|--------------------|
+| Alejandro Bruschini | 26 | 26 |
+| Diego Cannarella | 27 | 8 |
+| Esteban Carrizo | 28 | 170 |
+| Felipe | 29 | 4 |
+| Francisco Balantzian | 30 | 677 |
+| Guillermo Bruschini | 31 | 13 |
+| Guillermo Carraccioli | 32 | 1 |
+| Miguel Diez | 33 | 26 |
+| Raul Cabrera | 34 | 32 |
+| Ricardo Lozada | 35 | 20 |
+| Walter esquivel | 36 | 23 |
+
+- **Filtro Excel:** 195 confirmadas, 34 cliente faltante, 8 ambiguo, 2 marca.
+- **Francisco:** usuario `francisco` (id=7) ya existía; se creó viajante 30 y se vinculó (`CodViajante` pasó de 2 → 30). Se actualizaron 3 filas G→S. Tres ternas DABRA/PUM que estaban en viajante genérico 2 se reasignaron a 30.
+- **Resto de vendedores:** solo alta de viajante (sin usuario de login), igual que en pruebas.

@@ -62,6 +62,36 @@ No se bloquean URLs por middleware: un usuario con enlace directo a una vista pu
 2. Archivo → **Permiso en sistema** → pestaña **Menú navbar Synap**.
 3. Pulsar **Mostrar menú navbar (todos)**.
 
+## Mega-menú desktop: panel acotado y relleno por columnas
+
+Fix del dropdown desktop del mega-menú en `theme/templates/partials/navbar.html`
+(solo desktop; el menú móvil overlay **no** se toca). La lógica visual vive en el
+bloque `<style>` del propio `navbar.html` (CSS puro), para no depender de un
+rebuild de Tailwind: el `theme/static/css/dist/styles.css` compilado no incluía
+`sm:columns-2`, `break-inside-avoid`, `[scrollbar-gutter:stable]` ni
+`max-h-[calc(...)]`.
+
+- **Panel acotado + scroll (`.mega-menu-panel`):**
+  `max-height: calc(100vh - 4rem - 2.5rem)` (header `top-16` = 4rem + barra de
+  estado `min-height: 2rem` + pequeño margen), con `overflow-y: auto`,
+  `overscroll-behavior: contain` y `scrollbar-gutter: stable`. Si hay muchas
+  secciones, el contenido se desplaza sin quedar cortado.
+- **Sobre la barra de estado:** el panel pasó de `z-50` a `z-[60]` (clase
+  Tailwind ya compilada) para quedar por encima del footer `#status-bar`
+  (`z-50`) y no quedar tapado.
+- **Scrollbar discreta:** `scrollbar-width: thin` + estilos
+  `::-webkit-scrollbar` con thumb `slate` translúcido y track transparente.
+- **Relleno por columnas (`.mega-menu-cols`):** CSS multi-column sin JS —
+  `column-count` 1/2/3 vía media queries (`min-width: 640px` y `768px`, mismos
+  breakpoints que Tailwind `sm`/`md`), `column-gap: 1.5rem`, y cada `.app-card`
+  con `break-inside: avoid` + `margin-bottom: 1.5rem`. Las secciones fluyen de
+  arriba hacia abajo llenando cada columna, evitando la fila con huecos que
+  dejaba el `grid` anterior cuando el número de secciones no era múltiplo de 3.
+
+Verificación manual: en Producción (MPR) con 4 secciones, «Migración BEST» queda
+visible/clickeable (por reflujo de columnas o por scroll) y el panel no queda
+tapado por la barra de estado inferior.
+
 ## Notas
 
 - **Histórico:** existió un flag de entorno `NAVBAR_FASE_DESARROLLO` que ocultaba Compras, Settings, Module Management y dejaba en Stock solo «Ingreso Mov. Stock». Se **eliminó** del código; para demos o fases de desarrollo usar la **ocultación global** de esta pantalla (supervisor).

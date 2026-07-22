@@ -1,4 +1,4 @@
-{% extends "mpr/base_mpr.html" %}
+{% extends pm_embed|yesno:"ecom/base_embed.html,mpr/base_mpr.html" %}
 {% load static %}
 
 {% block title %}Pedido masivo por sucursales — Synap{% endblock %}
@@ -7,20 +7,23 @@
 {# Tokens del sistema de diseño Synap (slate/sky) + modal canon OrderShell #}
 {% include "ecom/includes/pedidos_page_styles.html" %}
 
-<section class="pm-matrix-viewport flex h-[calc(100dvh-4.5rem)] min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible"
+<section class="pm-matrix-viewport flex min-h-0 w-full max-w-full flex-col overflow-hidden bg-slate-50 py-3 dark:bg-slate-900 sm:py-4 max-lg:h-auto max-lg:min-h-0 max-lg:overflow-visible {% if pm_embed %}h-full{% else %}h-[calc(100dvh-4.5rem)]{% endif %}"
          x-data="pedidoMasivoApp()"
          x-init="init()">
   <div class="mx-auto flex h-full min-h-0 w-full min-w-0 flex-col px-3 sm:px-4 md:px-6 lg:px-8 max-lg:h-auto">
     <div class="flex-shrink-0">
+      {% if not pm_embed %}
       {% url 'ecom:mayoristapp_pedidos_hub' as hub_pedidos_url %}
       {% include "ecom/includes/ventas_breadcrumb.html" with mid_label="Pedidos" mid_url=hub_pedidos_url current_label="Pedido masivo" %}
+      {% endif %}
 
       <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 shadow-md sm:px-4">
         <header class="pm-hero-bar flex flex-wrap items-center gap-x-3 gap-y-2">
           <div class="flex min-w-0 flex-wrap items-center gap-2">
             <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl" x-text="tituloPantalla">Pedido masivo por sucursales</h1>
-            <span x-show="draftId && !pedidoCargado" x-cloak
-                  class="pedidos-badge-borrador pedidos-badge-borrador--hero"
+            <span x-show="draftId && !pedidoCargado && !pedidoSoloConsulta" x-cloak
+                  class="pedidos-badge-estado pedidos-badge-estado--hero"
+                  :class="claseEstadoDraft"
                   x-text="etiquetaEstadoDraft"></span>
             {# Estado del PED cargado (consulta/edición) #}
             <span x-show="pedidoCargado" x-cloak
@@ -108,7 +111,7 @@
                     x-show="!pedidoSoloConsulta"
                     :disabled="confirmando || previewCargando || !puedeConfirmar"
                     class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50">
-              <span x-text="confirmando ? 'Confirmando…' : (previewCargando ? 'Validando…' : (codMovOrigen ? 'Anular y crear nuevo' : 'Confirmar pedido'))"></span>
+              <span x-text="confirmando ? 'Confirmando…' : (previewCargando ? 'Validando…' : ((codMovOrigen && puedeAnularPedido) ? 'Anular y crear nuevo' : 'Confirmar pedido'))"></span>
             </button>
           </div>
         </header>
@@ -296,10 +299,10 @@
       </p>
 
       {# Desktop (lg+): shell de 3 zonas — izq. fija · sucursales scroll-x · der. fija #}
-      <div class="pm-matrix-desktop hidden min-h-0 w-full min-w-0 flex-1 flex-col gap-2 lg:flex">
+      <div class="pm-matrix-desktop hidden min-h-0 w-full min-w-0 flex-1 flex-col gap-0 lg:flex">
         {# Empty-state (sin borrador) — mismo mensaje que móvil #}
         <div x-show="!draftId" x-cloak
-             class="flex flex-1 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
+             class="mb-2 flex flex-1 items-center justify-center rounded-lg border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-400">
           Elegí un cliente en la barra de contexto para cargar sucursales y artículos.
         </div>
 
@@ -308,7 +311,8 @@
              class="pm-matrix-shell relative z-0 min-h-0 w-full max-w-full flex-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
              :class="{
                'pm-matrix-shell--buscador-abierto': panelArt,
-               'pm-matrix-shell--simple': modoSimple
+               'pm-matrix-shell--simple': modoSimple,
+               'pm-matrix-shell--con-totales': mostrarTotalesPorSucursal
              }"
              role="region" aria-label="Matriz packs por sucursal">
           {# Zona izquierda fija: Artículo · Precio · % Desc. #}
@@ -381,8 +385,7 @@
                   <tr class="pm-zrow">
                     <td class="pm-c-art">
                       <div class="pm-cell-art">
-                        <p class="whitespace-nowrap text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.id_manual || art.codigo || ('#'+art.id_articulo)"></p>
-                        <p class="pm-art-nombre text-xs leading-snug text-slate-600 dark:text-slate-300" x-text="art.nombre || art.descripcion"></p>
+                        <p class="pm-art-nombre text-xs font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
                       </div>
                     </td>
                     <td class="pm-c-precio text-xs tabular-nums text-slate-700 dark:text-slate-200" x-text="fmtPrecio(art.precio_unitario_neto)"></td>
@@ -407,7 +410,6 @@
                 <tr>
                   <template x-for="(s, si) in sucursales" :key="s.id_cliente_domicilio">
                     <th class="pm-c-suc pm-zhead pm-zhead-suc cursor-pointer select-none"
-                        :class="'pm-matrix-suc-tone-' + (si % 4)"
                         role="button"
                         tabindex="0"
                         :title="etiquetaSucursalCompleta(s)"
@@ -487,6 +489,33 @@
             </table>
           </div>
         </div>
+
+        {# Totales fuera del shell 3-zonas: mismos anchos medidos que thead (evita desfase) #}
+        <div class="pm-matrix-totales-bar"
+             x-ref="pmTotalesBar"
+             x-show="draftId && sucursales.length && mostrarTotalesPorSucursal"
+             x-cloak
+             role="row"
+             aria-label="Totales de packs por sucursal">
+          <div class="pm-totales-left">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Totales</span>
+          </div>
+          <div class="pm-totales-mid" x-ref="pmTotalesMid">
+            <div class="pm-totales-mid-inner" x-ref="pmTotalesMidInner">
+              <template x-for="(s, si) in sucursales" :key="'totbar-' + s.id_cliente_domicilio">
+                <div class="pm-totales-suc">
+                  <span class="pm-tot-qty"
+                        x-text="sumaColumnaSucursal(s.id_cliente_domicilio)"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div class="pm-totales-right">
+            <span class="pm-totales-grand tabular-nums"
+                  x-text="sumaTotalMatriz()"></span>
+            <span class="pm-totales-delete-spacer" aria-hidden="true"></span>
+          </div>
+        </div>
       </div>
 
       {# Móvil/tablet: acordeón por sucursal #}
@@ -556,8 +585,7 @@
                 <div class="pm-accordion-row flex flex-col gap-2 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-700">
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0 flex-1">
-                      <p class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.id_manual || art.codigo || ('#'+art.id_articulo)"></p>
-                      <p class="text-sm leading-snug text-slate-600 dark:text-slate-300" x-text="art.nombre || art.descripcion"></p>
+                      <p class="text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
                     </div>
                     <button type="button"
                             @click="eliminarFila(art.id_articulo)"
@@ -598,6 +626,12 @@
                   </div>
                 </div>
               </template>
+              <div x-show="mostrarTotalesPorSucursal" x-cloak
+                   class="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
+                <span class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Total packs</span>
+                <span class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100"
+                      x-text="sumaColumnaSucursal(sucursales[0].id_cliente_domicilio)"></span>
+              </div>
               {# Empty state líneas (simple móvil): hint claro bajo el buscador #}
               <p x-show="!articulos.length"
                  class="py-3 text-center text-xs text-slate-500 dark:text-slate-400">
@@ -638,8 +672,7 @@
                   <div class="pm-accordion-row flex flex-col gap-2 border-b border-slate-100 py-3 last:border-b-0 dark:border-slate-700">
                     <div class="flex items-start justify-between gap-2">
                       <div class="min-w-0 flex-1">
-                        <p class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="art.id_manual || art.codigo || ('#'+art.id_articulo)"></p>
-                        <p class="text-sm leading-snug text-slate-600 dark:text-slate-300" x-text="art.nombre || art.descripcion"></p>
+                        <p class="text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
                         <p class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400" x-text="fmtPrecio(art.precio_unitario_neto)"></p>
                       </div>
                       <button type="button"
@@ -680,6 +713,12 @@
                     </div>
                   </div>
                 </template>
+                <div x-show="mostrarTotalesPorSucursal" x-cloak
+                     class="mt-1 flex items-center justify-between border-t border-slate-200 pt-2 dark:border-slate-600">
+                  <span class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Total packs</span>
+                  <span class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100"
+                        x-text="sumaColumnaSucursal(s.id_cliente_domicilio)"></span>
+                </div>
                 <p x-show="!articulos.length" class="py-2 text-xs text-slate-500">Sin artículos en el borrador.</p>
               </div>
             </details>
@@ -689,48 +728,44 @@
         </div>
       </div>
 
-      {# Pie: descuento de lote + preview híbrido (estimado FE + validación servidor) #}
-      <div class="pm-preview-panel flex flex-shrink-0 flex-col gap-3 rounded-xl border border-sky-200/80 bg-white p-3 shadow-sm dark:border-sky-900/40 dark:bg-slate-800"
+      {# Pie compacto: descuento + totales en una sola fila (más alto útil para la matriz) #}
+      <div class="pm-preview-panel flex flex-shrink-0 flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-sky-200/80 bg-white px-3 py-2 shadow-sm dark:border-sky-900/40 dark:bg-slate-800"
            x-show="draftId && sucursales.length" x-cloak>
-        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <div class="min-w-[8rem]">
-            <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="pm-desc-pie">Descuento pie de lote (%)</label>
-            <input id="pm-desc-pie" type="number" min="0" max="100" step="0.01" inputmode="decimal"
-                   class="pm-input-dense h-8 w-full max-w-[7rem] rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800 sm:w-28"
-                   :value="descPiePct || ''"
-                   placeholder="0"
-                   :disabled="!matrizEditable"
-                   @change="onDescPie($event.target.value)"/>
-          </div>
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <label class="whitespace-nowrap text-xs font-medium text-slate-600 dark:text-slate-300" for="pm-desc-pie">Desc. pie lote (%)</label>
+          <input id="pm-desc-pie" type="number" min="0" max="100" step="0.01" inputmode="decimal"
+                 class="pm-input-dense h-8 w-[4.5rem] rounded-md border border-slate-300 bg-white px-2 text-right text-xs tabular-nums focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800"
+                 :value="descPiePct || ''"
+                 placeholder="0"
+                 :disabled="!matrizEditable"
+                 @change="onDescPie($event.target.value)"/>
           <button type="button" @click="refrescarPreview()" :disabled="previewCargando"
-                  class="inline-flex h-8 w-full items-center justify-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-3 text-xs font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300 sm:w-auto"
+                  class="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-sky-200 bg-sky-50 px-2.5 text-xs font-semibold text-sky-700 hover:bg-sky-100 disabled:opacity-50 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300"
                   title="Consulta opcional al servidor (puede demorar con muchas sucursales)">
             <span x-text="previewCargando ? 'Validando…' : 'Validar totales'"></span>
           </button>
         </div>
-        <div class="pm-preview-totals grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 dark:border-slate-700 sm:grid-cols-3 sm:gap-x-6 sm:border-t-0 sm:pt-0">
-          <div class="flex items-center justify-between gap-2 sm:block sm:text-right">
-            <p class="text-[10px] font-medium uppercase text-slate-500">Neto</p>
-            <p class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="money(totalesPie.neto)"></p>
+        <div class="pm-preview-totals ml-auto flex flex-wrap items-center justify-end gap-x-5 gap-y-1">
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-[10px] font-medium uppercase tracking-wide text-slate-500">Neto</span>
+            <span class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="money(totalesPie.neto)"></span>
           </div>
-          <div class="flex items-center justify-between gap-2 sm:block sm:text-right">
-            <p class="text-[10px] font-medium uppercase text-slate-500">IVA</p>
-            <p class="font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="money(totalesPie.iva)"></p>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-[10px] font-medium uppercase tracking-wide text-slate-500">IVA</span>
+            <span class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100" x-text="money(totalesPie.iva)"></span>
           </div>
-          <div class="flex items-center justify-between gap-2 sm:block sm:text-right">
-            <div class="flex items-center gap-2 sm:justify-end">
-              <p class="text-[10px] font-medium uppercase text-sky-600 dark:text-sky-400">Total del lote</p>
-              <span x-show="previewCargando" x-cloak
-                    class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                    role="status">Validando…</span>
-              <span x-show="!previewCargando && previewFuente === 'estimado'" x-cloak
-                    class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-                    role="status">Estimado</span>
-              <span x-show="!previewCargando && previewFuente === 'servidor'" x-cloak
-                    class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
-                    role="status">Validado</span>
-            </div>
-            <p class="text-base font-bold tabular-nums text-slate-900 dark:text-white" x-text="money(totalesPie.total)"></p>
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-[10px] font-medium uppercase tracking-wide text-sky-600 dark:text-sky-400">Total lote</span>
+            <span x-show="previewCargando" x-cloak
+                  class="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+                  role="status">Validando…</span>
+            <span x-show="!previewCargando && previewFuente === 'estimado'" x-cloak
+                  class="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
+                  role="status">Estimado</span>
+            <span x-show="!previewCargando && previewFuente === 'servidor'" x-cloak
+                  class="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200"
+                  role="status">Validado</span>
+            <span class="text-base font-bold tabular-nums text-slate-900 dark:text-white" x-text="money(totalesPie.total)"></span>
           </div>
         </div>
       </div>
@@ -797,5 +832,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo29"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo34"></script>
 {% endblock %}

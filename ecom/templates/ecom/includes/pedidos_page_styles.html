@@ -852,6 +852,49 @@
     border-color: rgb(56 189 248 / 0.45);
   }
 
+  /* Badge de estado del draft (hero oscuro) — color por estado */
+  .pedidos-badge-estado {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 9999px;
+    padding: 0.125rem 0.5rem;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    border: 1px solid transparent;
+  }
+  .pedidos-badge-estado--hero {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+    text-transform: none;
+  }
+  .pedidos-badge-estado--borrador {
+    color: rgb(224 242 254);
+    background: rgb(14 165 233 / 0.28);
+    border-color: rgb(56 189 248 / 0.5);
+  }
+  .pedidos-badge-estado--confirmando {
+    color: rgb(254 243 199);
+    background: rgb(245 158 11 / 0.28);
+    border-color: rgb(251 191 36 / 0.55);
+  }
+  .pedidos-badge-estado--confirmado {
+    color: rgb(209 250 229);
+    background: rgb(16 185 129 / 0.28);
+    border-color: rgb(52 211 153 / 0.55);
+  }
+  .pedidos-badge-estado--archivado {
+    color: rgb(226 232 240);
+    background: rgb(100 116 139 / 0.35);
+    border-color: rgb(148 163 184 / 0.45);
+  }
+  .pedidos-badge-estado--anulado {
+    color: rgb(254 226 226);
+    background: rgb(244 63 94 / 0.28);
+    border-color: rgb(251 113 133 / 0.55);
+  }
+
   .pedidos-badge-stock {
     display: inline-flex;
     align-items: center;
@@ -936,14 +979,19 @@
   .dark .pm-matrix-sticky-sky {
     background: rgb(12 74 110 / 0.45) !important;
   }
-  .pm-matrix-suc-tone-0 { background: rgb(224 242 254); }
-  .pm-matrix-suc-tone-1 { background: rgb(241 245 249); }
-  .pm-matrix-suc-tone-2 { background: rgb(236 254 255); }
-  .pm-matrix-suc-tone-3 { background: rgb(248 250 252); }
-  .dark .pm-matrix-suc-tone-0 { background: rgb(12 74 110 / 0.35); }
-  .dark .pm-matrix-suc-tone-1 { background: rgb(30 41 59 / 0.65); }
-  .dark .pm-matrix-suc-tone-2 { background: rgb(8 51 68 / 0.45); }
-  .dark .pm-matrix-suc-tone-3 { background: rgb(15 23 42 / 0.55); }
+  /* Tonos de sucursal: gris uniforme (sin predominancia por columna). */
+  .pm-matrix-suc-tone-0,
+  .pm-matrix-suc-tone-1,
+  .pm-matrix-suc-tone-2,
+  .pm-matrix-suc-tone-3 {
+    background: rgb(226 232 240); /* slate-200 */
+  }
+  .dark .pm-matrix-suc-tone-0,
+  .dark .pm-matrix-suc-tone-1,
+  .dark .pm-matrix-suc-tone-2,
+  .dark .pm-matrix-suc-tone-3 {
+    background: rgb(51 65 85); /* slate-700 */
+  }
   .pm-btn-delete {
     color: rgb(225 29 72) !important;
   }
@@ -1167,8 +1215,10 @@
    * Zona izquierda (Artículo|Precio|%Desc) y derecha (Total|Eliminar) FIJAS; zona
    * media con scroll-x solo en sucursales. Las 3 tablas se alinean por índice de
    * fila con alto fijo (--pm-row-h). El scroll-y vive en la zona media y se espeja
-   * (JS) a izquierda/derecha para mantener las filas alineadas. */
-  .pm-matrix-shell {
+   * (JS) a izquierda/derecha para mantener las filas alineadas.
+   * Tokens de columna viven en .pm-matrix-desktop para compartirlos con la barra
+   * de totales (hermana del shell). */
+  .pm-matrix-desktop {
     --pm-row-h: 3.25rem;
     --pm-head-h: 3rem;
     --pm-col-art: 15rem;
@@ -1177,6 +1227,11 @@
     --pm-col-suc: 4.5rem;
     --pm-col-total: 5.5rem;
     --pm-col-delete: 2.75rem;
+  }
+  .pm-matrix-desktop:has(.pm-matrix-shell--simple) {
+    --pm-col-suc: 5.7rem;
+  }
+  .pm-matrix-shell {
     display: flex;
     min-width: 0;
     max-width: 100%;
@@ -1207,6 +1262,103 @@
   }
   .pm-zrow-buscador .pm-c-art {
     overflow: visible;
+  }
+  /* Barra de totales debajo del shell (no va dentro de las 3 tablas) */
+  .pm-matrix-totales-bar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    max-width: 100%;
+    height: var(--pm-row-h, 3.25rem);
+    border: 1px solid rgb(203 213 225);
+    border-top-width: 2px;
+    border-top-color: rgb(148 163 184);
+    border-radius: 0 0 0.5rem 0.5rem;
+    background: rgb(226 232 240);
+    overflow: hidden;
+  }
+  .dark .pm-matrix-totales-bar {
+    border-color: rgb(51 65 85);
+    border-top-color: rgb(71 85 105);
+    background: rgb(51 65 85);
+  }
+  .pm-matrix-shell.pm-matrix-shell--con-totales {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-width: 0;
+  }
+  .pm-totales-left {
+    flex: 0 0 auto;
+    width: calc(var(--pm-col-art) + var(--pm-col-precio) + var(--pm-col-desc));
+    display: flex;
+    align-items: center;
+    padding: 0 0.5rem;
+    box-shadow: 4px 0 8px -4px rgba(15, 23, 42, 0.18);
+    z-index: 1;
+    background: rgb(226 232 240);
+  }
+  .dark .pm-totales-left { background: rgb(51 65 85); }
+  .pm-totales-mid {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .pm-totales-mid-inner {
+    display: flex;
+    align-items: stretch;
+    height: 100%;
+    width: max-content;
+  }
+  .pm-totales-suc {
+    flex: 0 0 var(--pm-col-suc);
+    width: var(--pm-col-suc);
+    min-width: var(--pm-col-suc);
+    max-width: var(--pm-col-suc);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 0.125rem;
+    box-sizing: border-box;
+    background: rgb(226 232 240); /* gris uniforme, sin predominancia */
+  }
+  .dark .pm-totales-suc {
+    background: rgb(51 65 85);
+  }
+  .pm-totales-suc .pm-tot-qty {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 0.25rem;
+    text-align: right;
+    font-size: 0.75rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: rgb(30 41 59);
+  }
+  .dark .pm-totales-suc .pm-tot-qty { color: rgb(241 245 249); }
+  .pm-totales-right {
+    flex: 0 0 auto;
+    width: calc(var(--pm-col-total) + var(--pm-col-delete));
+    display: flex;
+    align-items: center;
+    box-shadow: -4px 0 8px -4px rgba(15, 23, 42, 0.18);
+    z-index: 1;
+    background: rgb(226 232 240);
+  }
+  .dark .pm-totales-right { background: rgb(51 65 85); }
+  .pm-totales-grand {
+    flex: 0 0 var(--pm-col-total);
+    width: var(--pm-col-total);
+    text-align: right;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgb(30 41 59);
+  }
+  .dark .pm-totales-grand { color: rgb(241 245 249); }
+  .pm-totales-delete-spacer {
+    flex: 0 0 var(--pm-col-delete);
+    width: var(--pm-col-delete);
   }
   .pm-zone-mid {
     flex: 1 1 0;
@@ -1245,6 +1397,13 @@
   .pm-zhead-suc {
     text-align: center;
     line-height: 1.15;
+    font-weight: 700;
+    background: rgb(226 232 240); /* slate-200 — gris uniforme */
+    color: rgb(51 65 85);
+  }
+  .dark .pm-zhead-suc {
+    background: rgb(51 65 85); /* slate-700 */
+    color: rgb(226 232 240);
   }
   .pm-ztable td {
     height: var(--pm-row-h);
@@ -1285,10 +1444,8 @@
 
   /* ── Pedido simple (desktop lg+): la descripción del artículo predomina en
    * ancho; la única columna de cantidad se limita a ~6 dígitos y no se estira.
-   * Masivo NO recibe esta variante: conserva mid con scroll-x (min-width:100%). */
-  .pm-matrix-shell--simple {
-    --pm-col-suc: 5.7rem; /* ~6 dígitos + 20% extra */
-  }
+   * Masivo NO recibe esta variante: conserva mid con scroll-x (min-width:100%).
+   * Tokens --pm-col-suc: ver .pm-matrix-desktop:has(.pm-matrix-shell--simple). */
   .pm-matrix-shell--simple .pm-zone-left {
     flex: 1 1 auto; /* la zona del artículo absorbe el sobrante */
     min-width: 0;
@@ -1540,7 +1697,8 @@
       min-width: 2.75rem;
     }
     .pm-preview-totals {
-      width: 100%;
+      width: auto;
+      margin-left: 0;
     }
   }
 

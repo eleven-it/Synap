@@ -222,18 +222,35 @@ def listar_sucursales_cliente(
     base_empresa: str,
     id_cliente: int,
     cod_viajante: Optional[int] = None,
+    *,
+    ids_domicilio: Optional[List[int]] = None,
+    incluir_anulados: bool = False,
 ) -> List[Dict[str, Any]]:
-    """``cliente_domicilio`` no anulados → columnas de la matriz.
+    """``cliente_domicilio`` → columnas de la matriz.
 
     Si VCM está activo y hay ``cod_viajante``, solo sucursales con ≥1 cuaterna activa.
+    Con ``ids_domicilio`` se fuerza ese conjunto (snapshot histórico) y se omite el
+    filtro VCM — útil al reabrir un lote confirmado cuyas celdas apuntan a
+    domicilios que ya no están en la asignación VCM vigente.
     """
     from ecom.services.vendedor_asignacion_sql import vcm_ternas_disponible
 
     idc = to_int_or_none(id_cliente)
     if idc is None:
         return []
+    ids_hist = sorted(
+        {
+            i
+            for i in (to_int_or_none(x) for x in (ids_domicilio or []))
+            if i is not None
+        }
+    )
     cv = to_int_or_none(cod_viajante)
-    filtrar_vcm = vcm_ternas_disponible(base_empresa) and cv is not None
+    filtrar_vcm = (
+        not ids_hist
+        and vcm_ternas_disponible(base_empresa)
+        and cv is not None
+    )
     sql = """
         SELECT
             cm.id_cliente_domicilio AS id_cliente_domicilio,
@@ -248,9 +265,14 @@ def listar_sucursales_cliente(
         LEFT JOIN distrito AS dt ON dt.IDDistrito = cm.IDDistrito
         LEFT JOIN erp_zona AS z ON z.id_zona = cm.id_zona
         WHERE cm.id_cliente = %s
-          AND COALESCE(cm.anulado, 'No') = 'No'
     """
     params: List[Any] = [idc]
+    if not incluir_anulados:
+        sql += " AND COALESCE(cm.anulado, 'No') = 'No'"
+    if ids_hist:
+        placeholders = ",".join(["%s"] * len(ids_hist))
+        sql += f" AND cm.id_cliente_domicilio IN ({placeholders})"
+        params.extend(ids_hist)
     if filtrar_vcm:
         sql += """
           AND EXISTS (
@@ -703,10 +725,12 @@ def obtener_o_crear_draft(
     modo: str = EcomPedidoMasivoDraft.MODO_MASIVO,
     id_domicilio_fijo: Optional[int] = None,
     cod_mov_origen: Optional[int] = None,
+    solo_lectura: bool = False,
 ) -> Tuple[Optional[EcomPedidoMasivoDraft], str]:
     """
     Si ``draft_id``: valida ownership y cliente.
     Si no: reutiliza borrador activo del mismo usuario+cliente+modo o crea uno nuevo.
+    Con ``solo_lectura=True`` permite abrir drafts ``confirmado`` (matriz del resumen).
     """
     id_u = to_int_or_none(id_usuario)
     idc = to_int_or_none(id_cliente)
@@ -731,8 +755,14 @@ def obtener_o_crear_draft(
         if not d:
             return None, "Borrador no encontrado."
         if d.estado == EcomPedidoMasivoDraft.ESTADO_ARCHIVADO:
+            # Consulta de PED ya avanzado: el draft se archiva para no ensuciar el hub,
+            # pero sigue siendo recuperable por id / cod_mov en solo lectura.
+            if solo_lectura or to_int_or_none(d.cod_mov_origen) is not None:
+                return d, ""
             return None, "El borrador está archivado."
         if d.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMADO:
+            if solo_lectura:
+                return d, ""
             return None, "El borrador ya fue confirmado."
         if d.estado == EcomPedidoMasivoDraft.ESTADO_ANULADO:
             reactivar_borrador_masivo(d)
@@ -813,13 +843,58 @@ def obtener_o_crear_draft(
     return d, ""
 
 
+def _sucursal_fallback(id_dom: int) -> Dict[str, Any]:
+    """Columna mínima cuando el domicilio ya no está en MySQL."""
+    etiqueta = f"Sucursal #{int(id_dom)}"
+    return {
+        "id_cliente_domicilio": int(id_dom),
+        "nombre": etiqueta,
+        "etiqueta": etiqueta,
+        "calle": "",
+        "nro": "",
+        "dpto": "",
+        "provincia": "",
+        "distrito": "",
+        "zona": "",
+    }
+
+
 def serializar_matriz(
     draft: EcomPedidoMasivoDraft,
     base_empresa: str,
 ) -> Dict[str, Any]:
-    sucursales = listar_sucursales_cliente(
-        base_empresa, draft.id_cliente, cod_viajante=draft.cod_viajante
+    celdas_qs = list(draft.celdas.all())
+    doms_celdas = sorted(
+        {
+            i
+            for i in (to_int_or_none(c.id_cliente_domicilio) for c in celdas_qs)
+            if i is not None
+        }
     )
+    # Lote confirmado: columnas = domicilios históricos de las celdas (no VCM vigente).
+    es_snapshot = (
+        (draft.estado or "") == EcomPedidoMasivoDraft.ESTADO_CONFIRMADO
+        and bool(doms_celdas)
+    )
+    if es_snapshot:
+        sucursales = listar_sucursales_cliente(
+            base_empresa,
+            draft.id_cliente,
+            ids_domicilio=doms_celdas,
+            incluir_anulados=True,
+        )
+        presentes = {
+            to_int_or_none(s.get("id_cliente_domicilio"))
+            for s in sucursales
+        }
+        for idd in doms_celdas:
+            if idd not in presentes:
+                sucursales.append(_sucursal_fallback(idd))
+        sucursales.sort(key=_clave_orden_nro_sucursal)
+    else:
+        sucursales = listar_sucursales_cliente(
+            base_empresa, draft.id_cliente, cod_viajante=draft.cod_viajante
+        )
     modo = (draft.modo or EcomPedidoMasivoDraft.MODO_MASIVO).strip().lower()
     id_dom_fijo = to_int_or_none(draft.id_domicilio_fijo)
     if modo == EcomPedidoMasivoDraft.MODO_SIMPLE and id_dom_fijo is not None:
@@ -827,20 +902,7 @@ def serializar_matriz(
             s for s in sucursales if int(s.get("id_cliente_domicilio") or 0) == id_dom_fijo
         ]
         if not sucursales:
-            sucursales = [
-                {
-                    "id_cliente_domicilio": id_dom_fijo,
-                    "nombre": f"Sucursal #{id_dom_fijo}",
-                    "etiqueta": f"Sucursal #{id_dom_fijo}",
-                    "calle": "",
-                    "nro": "",
-                    "dpto": "",
-                    "provincia": "",
-                    "distrito": "",
-                    "zona": "",
-                }
-            ]
-    celdas_qs = list(draft.celdas.all())
+            sucursales = [_sucursal_fallback(id_dom_fijo)]
     art_ids = sorted({c.id_articulo for c in celdas_qs})
     ctx_cli = leer_contexto_cliente_masivo(base_empresa, draft.id_cliente)
     lista_id = int(ctx_cli.get("lista_id") or 1)
@@ -891,6 +953,44 @@ def serializar_matriz(
     descuentos_fila_out = {
         str(k): float(v) for k, v in desc_map.items()
     }
+
+    # #region agent log
+    try:
+        import json, time
+        _doms_suc = sorted(
+            {
+                i
+                for i in (
+                    to_int_or_none(s.get("id_cliente_domicilio")) for s in sucursales
+                )
+                if i is not None
+            }
+        )
+        _inter = sorted(set(doms_celdas) & set(_doms_suc))
+        with open("/app/.cursor/debug-a987c5.log", "a", encoding="utf-8") as _df:
+            _df.write(json.dumps({
+                "sessionId": "a987c5",
+                "runId": "post-fix",
+                "hypothesisId": "M1",
+                "location": "pedido_masivo_matriz.py:matriz_payload",
+                "message": "payload matriz draft",
+                "data": {
+                    "draft_id": draft.pk,
+                    "modo": modo,
+                    "estado": draft.estado,
+                    "es_snapshot": es_snapshot,
+                    "n_articulos": len(articulos),
+                    "n_celdas": len(celdas_qs),
+                    "n_sucursales": len(sucursales),
+                    "doms_celdas": doms_celdas[:30],
+                    "doms_suc": _doms_suc[:30],
+                    "n_interseccion": len(_inter),
+                },
+                "timestamp": int(time.time() * 1000),
+            }, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+    # #endregion
 
     return {
         "draft_id": draft.pk,

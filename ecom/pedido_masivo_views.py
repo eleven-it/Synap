@@ -56,6 +56,7 @@ from ecom.services.pedido_cabecera_comercial import (
     parsear_cabecera_desde_body,
     resolver_cabecera_comercial,
 )
+from ecom.services.ecom_config_mysql import aprobacion_pedidos_activa
 from ecom.services.vendedor_operativo import ctx_desde_request
 
 
@@ -83,10 +84,84 @@ class _NdjsonAcceptRenderer(BaseRenderer):
 
 
 def _serializar_matriz_ui(draft: EcomPedidoMasivoDraft, base: str) -> Dict[str, Any]:
-    """Matriz serializada + widget de crédito del cliente en modo simple."""
+    """Matriz serializada + widget de crédito del cliente en modo simple.
+
+    Si hay ``cod_mov_origen``, adjunta estado actual del PED y si aún se puede
+    anular (solo Pendiente). Evita ofrecer «Anular y crear nuevo» cuando el
+    origen ya avanzó (p. ej. En preparación).
+    """
+    from ecom.services.pedido_cabecera_relay import (
+        cabecera_pedido_relay,
+        puede_anular_pedido_relay,
+    )
+
     matriz = serializar_matriz(draft, base)
     if matriz.get("modo") == EcomPedidoMasivoDraft.MODO_SIMPLE:
         matriz["credito"] = credito_cliente_masivo(base, draft.id_cliente)
+
+    cod_origen = to_int_or_none(getattr(draft, "cod_mov_origen", None))
+    origen: Dict[str, Any] = {
+        "cod_mov": cod_origen,
+        "nro_comprobante": "",
+        "estado": "",
+        "anulado": "",
+        "puede_anular": False,
+        "editable": False,
+    }
+    if cod_origen is not None:
+        cab = cabecera_pedido_relay(base, cod_origen) or {}
+        puede_anular, _msg = puede_anular_pedido_relay(base, cod_origen)
+        estado = str(cab.get("estado") or "").strip()
+        anulado = str(cab.get("anulado") or "").strip()
+        origen.update(
+            {
+                "nro_comprobante": str(cab.get("nro_comprobante") or "").strip(),
+                "estado": estado,
+                "anulado": anulado,
+                "puede_anular": bool(puede_anular),
+                # Paridad con _pedido_origen_editable: solo Pendiente no anulado.
+                "editable": bool(puede_anular),
+            }
+        )
+        # No dejar basura en columna Borrador del hub si el PED ya avanzó.
+        if not puede_anular and draft.estado in (
+            EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+            EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+        ):
+            draft.estado = EcomPedidoMasivoDraft.ESTADO_ARCHIVADO
+            draft.save(update_fields=["estado", "updated_at"])
+            matriz["estado"] = draft.estado
+    matriz["origen_pedido"] = origen
+
+    # #region agent log
+    try:
+        import json
+        import time
+
+        with open("/app/.cursor/debug-a987c5.log", "a", encoding="utf-8") as _df:
+            _df.write(
+                json.dumps(
+                    {
+                        "sessionId": "a987c5",
+                        "runId": "post-fix",
+                        "hypothesisId": "F",
+                        "location": "pedido_masivo_views.py:_serializar_matriz_ui",
+                        "message": "origen_pedido serializado",
+                        "data": {
+                            "draft_id": draft.pk,
+                            "cod_mov_origen": cod_origen,
+                            "origen": origen,
+                        },
+                        "timestamp": int(time.time() * 1000),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+    except Exception:
+        pass
+    # #endregion
+
     return matriz
 
 
@@ -145,20 +220,72 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
             "si",
             "sí",
         )
+        readonly_q = (self.request.GET.get("readonly") or "").strip().lower() in (
+            "1",
+            "true",
+            "si",
+            "sí",
+        )
+        # Solo el iframe del resumen de lote pide marco embebido (sin navbar/pie).
+        # ``readonly=1`` desde el hub abre consulta a pantalla completa como un PED.
+        embed_q = (self.request.GET.get("embed") or "").strip().lower() in (
+            "1",
+            "true",
+            "si",
+            "sí",
+        )
+        base_sess = str((self.request.session.get("user") or {}).get("base_empresa") or "")
         # PDF de pedido: plantilla con ``/0/`` para reemplazar el cod_mov en el FE.
         pdf_tpl = reverse("ecom:mayoristapp_pedido_pdf", args=[0])
+        # #region agent log
+        try:
+            import json
+            import time
+
+            with open("/app/.cursor/debug-a987c5.log", "a", encoding="utf-8") as _df:
+                _df.write(
+                    json.dumps(
+                        {
+                            "sessionId": "a987c5",
+                            "runId": "post-fix",
+                            "hypothesisId": "E1",
+                            "location": "pedido_masivo_views.py:get_context_data",
+                            "message": "pm_embed vs readonly",
+                            "data": {
+                                "draft": draft_q,
+                                "readonly": readonly_q,
+                                "embed": embed_q,
+                                "pm_embed": embed_q,
+                                "qs": self.request.META.get("QUERY_STRING") or "",
+                            },
+                            "timestamp": int(time.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         ctx.update(
             {
                 "draft_id_inicial": draft_q,
+                # Embebido en iframe del resumen de lote: sin navbar/footer de base_app.
+                "pm_embed": embed_q,
                 "bootstrap": {
                     "draft_id": draft_q,
                     "modo": modo_q or None,
                     "cod_mov": cod_mov_q,
                     "id_domicilio": id_domicilio_q,
                     "repetir": repetir_q,
+                    "readonly": readonly_q,
+                    "aprobacion_pedidos_activa": aprobacion_pedidos_activa(base_sess),
                     "urls": {
                         "hub": reverse("ecom:mayoristapp_pedidos_hub"),
                         "nuevo_simple": url_pedido_masivo_modo_simple(),
+                        "resumen_lote_tpl": reverse(
+                            "ecom:mayoristapp_lote_resumen", kwargs={"draft_id": 0}
+                        ).replace("/0/", "/{draft_id}/"),
                         "nuevo_masivo": reverse(
                             "ecom:mayoristapp_pedido_masivo_sucursales"
                         ),
@@ -270,6 +397,8 @@ class PedidoMasivoConfirmarAPIView(APIView):
                     draft.refresh_from_db()
                     ev = dict(ev)
                     ev["matriz"] = _serializar_matriz_ui(draft, base)
+                    ev["draft_id"] = draft.pk
+                    ev["estado_aprobacion_lote"] = draft.estado_aprobacion_lote
                 yield json.dumps(ev, ensure_ascii=False) + "\n"
         except Exception as exc:
             draft.refresh_from_db()
@@ -319,6 +448,8 @@ class PedidoMasivoConfirmarAPIView(APIView):
             "ok": ok,
             "message": msg,
             "matriz": _serializar_matriz_ui(draft, base),
+            "draft_id": draft.pk,
+            "estado_aprobacion_lote": draft.estado_aprobacion_lote,
             **(payload or {}),
         }
         if not ok:
@@ -388,6 +519,7 @@ class PedidoMasivoAbrirAPIView(APIView):
         ):
             modo = EcomPedidoMasivoDraft.MODO_MASIVO
         id_domicilio = to_int_or_none(data.get("id_domicilio"))
+        solo_lectura = bool(data.get("readonly") or data.get("solo_lectura"))
         if id_u is None:
             return _err("Sin usuario en sesión.")
         if draft_id is None and idc is None:
@@ -411,6 +543,12 @@ class PedidoMasivoAbrirAPIView(APIView):
             if not d0:
                 return _err("Borrador no encontrado.", "no_encontrado", 404)
             idc = d0.id_cliente
+            # Si el draft es masivo, respetar su modo (evita forzar masivo por default).
+            if (d0.modo or "").strip().lower() in (
+                EcomPedidoMasivoDraft.MODO_SIMPLE,
+                EcomPedidoMasivoDraft.MODO_MASIVO,
+            ):
+                modo = (d0.modo or "").strip().lower()
 
         # Modo simple sin domicilio explícito: solo se infiere cuando el cliente
         # tiene un único domicilio operativo. Con varios, la UI debe pedirlo.
@@ -448,6 +586,7 @@ class PedidoMasivoAbrirAPIView(APIView):
             draft_id=draft_id,
             modo=modo,
             id_domicilio_fijo=id_domicilio,
+            solo_lectura=solo_lectura,
         )
         if not draft:
             return _err(err or "No se pudo abrir el borrador.")

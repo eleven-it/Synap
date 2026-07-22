@@ -1,7 +1,7 @@
 # Jerarquía comercial, hub móvil y aprobación de pedidos
 
-**Change:** `ecom-hub-movil-jerarquia-aprobacion`  
-**Fecha:** 16/07/2026  
+**Change:** `ecom-hub-movil-jerarquia-aprobacion` (+ `ecom-pedido-masivo-consolidado-hub`)  
+**Fecha:** 22/07/2026  
 **Master flag:** `ecom_workflow_jerarquia_comercial` (default **No**)
 
 ## Propósito
@@ -88,6 +88,24 @@ Hook checkout: `ecom/services/mayorista_checkout_service.py` → `confirmar` tra
 | GET | `/ecom/api/mayoristapp/aprobacion/pendientes/` |
 | POST | `/ecom/api/mayoristapp/aprobacion/<cod_mov>/aprobar/` |
 | POST | `/ecom/api/mayoristapp/aprobacion/<cod_mov>/rechazar/` |
+| POST | `/ecom/api/mayoristapp/aprobacion/lote/<draft_id>/aprobar/` |
+| POST | `/ecom/api/mayoristapp/aprobacion/lote/<draft_id>/rechazar/` (motivo obligatorio) |
+
+### Autorización de lote completo (22/07/2026)
+
+Con subflag ON, un `EcomPedidoMasivoDraft` confirmado puede autorizarse o rechazarse **en bloque** sobre todos los PED activos (`codigos_movimiento[]`):
+
+| Aspecto | Detalle |
+|---------|---------|
+| Servicio | `resolver_lote_masivo(...)` en `ecom/services/aprobacion_pedidos.py` — itera PED, snapshot + `resolver` individual |
+| Escalado | Supervisor→Gerente por PED es resultado **válido** (`escalados` en respuesta); `estado_aprobacion_lote` puede quedar `pendiente` |
+| Compensación | Fallo parcial revierte snapshots (`_revertir_estados_comerciales`); `estado_aprobacion_lote=error` |
+| Guard individual | `pedido_en_lote_pendiente(cod_mov)` bloquea POST aprobar/rechazar de PED hijo con mensaje en español |
+| Estado agregado | Campo `EcomPedidoMasivoDraft.estado_aprobacion_lote`: `-` \| `pendiente` \| `aprobado` \| `rechazado` \| `error` |
+| Resumen lote | GET `/ecom/mayoristapp/pedidos/lote/<draft_id>/` + JSON `/ecom/api/mayoristapp/pedidos/lote/<draft_id>/` |
+| UI | CTAs en hub (tarjeta `lote_masivo`) y pantalla resumen; modales Synap (sin `alert/confirm/prompt`) |
+
+Respuesta API lote (200): `{ resueltos, escalados, estado_aprobacion_lote, codigos_movimiento }`. Error tras compensación (400): `{ afectados, estado_aprobacion_lote, compensacion }`.
 
 ## Migración JSON → organigrama
 
@@ -122,5 +140,8 @@ docker exec Synap_app python manage.py test \
   ecom.tests.test_aprobacion_pedidos \
   ecom.tests.test_migrar_carteras_jerarquia \
   ecom.tests.test_aprobacion_flujo_api \
-  ecom.tests.test_pedidos_hub_pipeline
+  ecom.tests.test_pedidos_hub_pipeline \
+  ecom.tests.test_lote_resumen \
+  ecom.tests.test_aprobacion_lote \
+  ecom.tests.test_batch_checkout_masivo
 ```

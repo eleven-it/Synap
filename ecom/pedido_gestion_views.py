@@ -25,7 +25,17 @@ from ecom.permissions import (
     EcomPedidosAprobarPermission,
     EcomPedidosVerPermission,
 )
-from ecom.services.aprobacion_pedidos import listar_pendientes_comerciales, resolver
+from ecom.services.aprobacion_pedidos import (
+    listar_pendientes_comerciales,
+    resolver,
+    resolver_lote_masivo,
+)
+from ecom.services.lote_resumen import (
+    LoteResumenError,
+    cargar_draft_resumen,
+    construir_resumen_lote,
+    reverse_matriz_readonly,
+)
 from ecom.services.pedidos_hub_pipeline import (
     archivar_borrador_masivo,
     archivar_carrito_legacy,
@@ -34,6 +44,7 @@ from ecom.services.pedidos_hub_pipeline import (
     migrar_carrito_legacy_a_draft,
     url_pedido_masivo_modo_simple,
 )
+from ecom.services.ecom_config_mysql import aprobacion_pedidos_activa
 from ecom.checkout_relay_views import _session_dias_no_laborables
 from ecom.services.pedido_cabecera_comercial import (
     cabecera_defaults_json,
@@ -350,6 +361,188 @@ class PresupuestoConvertirPedidoAPIView(APIView):
         return Response({"ok": True, **(result or {})})
 
 
+class LoteResumenView(MayoristappWebSessionMixin, TemplateView):
+    """Resumen de lote masivo confirmado — ``/ecom/mayoristapp/pedidos/lote/<draft_id>/``."""
+
+    template_name = "ecom/lote_resumen.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        draft_id = to_int_or_none(kwargs.get("draft_id"))
+        # #region agent log
+        try:
+            import json
+            import time
+
+            _payload = {
+                "sessionId": "a987c5",
+                "runId": "pre-fix",
+                "hypothesisId": "H3",
+                "location": "pedido_gestion_views.py:LoteResumenView.dispatch",
+                "message": "hit resumen lote",
+                "data": {
+                    "draft_id": draft_id,
+                    "path": request.path,
+                    "referer": request.META.get("HTTP_REFERER") or "",
+                    "q": request.META.get("QUERY_STRING") or "",
+                },
+                "timestamp": int(time.time() * 1000),
+            }
+            for _p in (
+                "/Users/sebastian/Documents/Administranet/Proyectos/Synap-v1/Synap/.cursor/debug-a987c5.log",
+                "/app/.cursor/debug-a987c5.log",
+            ):
+                try:
+                    with open(_p, "a", encoding="utf-8") as _df:
+                        _df.write(json.dumps(_payload, ensure_ascii=False) + "\n")
+                    break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        # #endregion
+        try:
+            if draft_id is None:
+                raise LoteResumenError("Lote no encontrado.", status=404)
+            cargar_draft_resumen(base, int(draft_id), sess)
+        except LoteResumenError as exc:
+            if exc.status == 403:
+                from django.contrib import messages
+
+                messages.error(request, exc.message)
+                return redirect(reverse("ecom:mayoristapp_pedidos_hub"))
+            from django.http import Http404
+
+            raise Http404(exc.message) from exc
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        sess = _session_user(self.request)
+        base = str(sess.get("base_empresa") or "").strip()
+        draft_id = to_int_or_none(kwargs.get("draft_id"))
+        resumen = construir_resumen_lote(base, int(draft_id), sess)
+        lote = resumen.get("lote") or {}
+        context.update(
+            {
+                "page_title": "Resumen del lote",
+                "resumen_bootstrap": {
+                    "resumen": resumen,
+                    "draft_id": draft_id,
+                    "urls": {
+                        "hub": reverse("ecom:mayoristapp_pedidos_hub"),
+                        "api_resumen": reverse(
+                            "ecom:api_lote_resumen", kwargs={"draft_id": draft_id or 0}
+                        ),
+                        "matriz_readonly": reverse_matriz_readonly(draft_id or 0),
+                        "aprobacion_lote_aprobar": reverse(
+                            "ecom:api_aprobacion_lote_aprobar",
+                            kwargs={"draft_id": draft_id or 0},
+                        ),
+                        "aprobacion_lote_rechazar": reverse(
+                            "ecom:api_aprobacion_lote_rechazar",
+                            kwargs={"draft_id": draft_id or 0},
+                        ),
+                    },
+                },
+                "lote_cliente": lote.get("cliente") or "",
+            }
+        )
+        return context
+
+
+class LoteResumenAPIView(APIView):
+    """GET ``/ecom/api/mayoristapp/pedidos/lote/<draft_id>/`` — JSON del resumen."""
+
+    permission_classes = [EcomPedidosVerPermission]
+
+    def get(self, request: Request, draft_id: int) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        if not base:
+            return _error("Sin base_empresa.", "sin_base_empresa")
+        try:
+            payload = construir_resumen_lote(base, int(draft_id), sess)
+        except LoteResumenError as exc:
+            return _error(exc.message, "lote_resumen", exc.status)
+        return Response(payload)
+
+
+class AprobacionLoteAprobarAPIView(APIView):
+    """POST ``/ecom/api/mayoristapp/aprobacion/lote/<draft_id>/aprobar/``"""
+
+    permission_classes = [EcomPedidosAprobarPermission]
+
+    def post(self, request: Request, draft_id: int) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        if not base:
+            return _error("Sin base_empresa.", "sin_base_empresa")
+        if not aprobacion_pedidos_activa(base):
+            return _error(
+                "La aprobación comercial no está activa para esta empresa.",
+                "aprobacion_inactiva",
+            )
+        try:
+            draft = cargar_draft_resumen(base, int(draft_id), sess)
+        except LoteResumenError as exc:
+            return _error(exc.message, "lote_resumen", exc.status)
+        ctx = ctx_desde_request(request)
+        aprobador = to_int_or_none(
+            ctx.get("id_vendedor_usr") or ctx.get("CodViajante") or ctx.get("cod_viajante")
+        )
+        if aprobador is None:
+            return _error("No se pudo resolver el vendedor aprobador.", "sin_vendedor")
+        data = request.data if isinstance(request.data, dict) else {}
+        motivo = str(data.get("motivo") or "").strip() or "Aprobado"
+        ok, msg, payload = resolver_lote_masivo(
+            base, draft, "aprobar", aprobador, motivo, sess_user=sess
+        )
+        if not ok:
+            body = {"ok": False, "error": msg, **(payload or {})}
+            return Response(body, status=400)
+        return Response({"ok": True, "message": msg, **(payload or {})})
+
+
+class AprobacionLoteRechazarAPIView(APIView):
+    """POST ``/ecom/api/mayoristapp/aprobacion/lote/<draft_id>/rechazar/``"""
+
+    permission_classes = [EcomPedidosAprobarPermission]
+
+    def post(self, request: Request, draft_id: int) -> Response:
+        sess = _session_user(request)
+        base = str(sess.get("base_empresa") or "").strip()
+        if not base:
+            return _error("Sin base_empresa.", "sin_base_empresa")
+        if not aprobacion_pedidos_activa(base):
+            return _error(
+                "La aprobación comercial no está activa para esta empresa.",
+                "aprobacion_inactiva",
+            )
+        try:
+            draft = cargar_draft_resumen(base, int(draft_id), sess)
+        except LoteResumenError as exc:
+            return _error(exc.message, "lote_resumen", exc.status)
+        ctx = ctx_desde_request(request)
+        aprobador = to_int_or_none(
+            ctx.get("id_vendedor_usr") or ctx.get("CodViajante") or ctx.get("cod_viajante")
+        )
+        if aprobador is None:
+            return _error("No se pudo resolver el vendedor aprobador.", "sin_vendedor")
+        data = request.data if isinstance(request.data, dict) else {}
+        motivo = str(data.get("motivo") or "").strip()
+        if not motivo:
+            return _error("Indique el motivo del rechazo.", "motivo_requerido")
+        ok, msg, payload = resolver_lote_masivo(
+            base, draft, "rechazar", aprobador, motivo, sess_user=sess
+        )
+        if not ok:
+            body = {"ok": False, "error": msg, **(payload or {})}
+            return Response(body, status=400)
+        return Response({"ok": True, "message": msg, **(payload or {})})
+
+
 class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
     """Hub Lista|Kanban de pedidos — ``/ecom/mayoristapp/pedidos/``."""
 
@@ -361,6 +554,65 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
         base = str(sess.get("base_empresa") or "").strip()
         vista = (self.request.GET.get("vista") or "kanban").strip().lower()
         hub = construir_hub_pedidos(base, sess, vista=vista)
+        # #region agent log
+        try:
+            import json
+            import time
+
+            _lotes = [
+                {"id_ref": it.get("id_ref"), "url": it.get("url")}
+                for it in (hub.get("items") or [])
+                if it.get("tipo") == "lote_masivo"
+            ]
+            with open(
+                "/Users/sebastian/Documents/Administranet/Proyectos/Synap-v1/Synap/.cursor/debug-a987c5.log",
+                "a",
+                encoding="utf-8",
+            ) as _df:
+                _df.write(
+                    json.dumps(
+                        {
+                            "sessionId": "a987c5",
+                            "runId": "pre-fix",
+                            "hypothesisId": "H1",
+                            "location": "pedido_gestion_views.py:PedidosHubView",
+                            "message": "hub SSR lote urls",
+                            "data": {"lotes": _lotes, "path": self.request.path},
+                            "timestamp": int(time.time() * 1000),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+        except Exception:
+            try:
+                import json
+                import time
+
+                _lotes = [
+                    {"id_ref": it.get("id_ref"), "url": it.get("url")}
+                    for it in (hub.get("items") or [])
+                    if it.get("tipo") == "lote_masivo"
+                ]
+                with open("/app/.cursor/debug-a987c5.log", "a", encoding="utf-8") as _df:
+                    _df.write(
+                        json.dumps(
+                            {
+                                "sessionId": "a987c5",
+                                "runId": "pre-fix",
+                                "hypothesisId": "H1",
+                                "location": "pedido_gestion_views.py:PedidosHubView",
+                                "message": "hub SSR lote urls",
+                                "data": {"lotes": _lotes, "path": self.request.path},
+                                "timestamp": int(time.time() * 1000),
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    )
+            except Exception:
+                pass
+        # #endregion
         context.update(
             {
                 "page_title": "Pedidos",
@@ -385,6 +637,11 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
                         "aprobacion_rechazar": reverse(
                             "ecom:api_aprobacion_pedido_rechazar", kwargs={"cod_mov": 0}
                         ).replace("/0/", "/{cod_mov}/"),
+                        # Destino canónico del lote desde el hub (matriz readonly).
+                        "lote_matriz_tpl": (
+                            reverse("ecom:mayoristapp_pedido_masivo_sucursales")
+                            + "?draft={draft_id}&readonly=1"
+                        ),
                     },
                 },
             }

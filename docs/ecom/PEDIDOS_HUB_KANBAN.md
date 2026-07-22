@@ -1,16 +1,16 @@
 # Pedidos hub — Lista | Kanban
 
-**Change:** `ecom-pedidos-hub-kanban-masivo-sucursales` (+ `ecom-hub-movil-jerarquia-aprobacion`)  
+**Change:** `ecom-pedidos-hub-kanban-masivo-sucursales` (+ `ecom-hub-movil-jerarquia-aprobacion`, `ecom-pedido-masivo-consolidado-hub`)  
 **Ruta:** `/ecom/mayoristapp/pedidos/` (`ecom:mayoristapp_pedidos_hub`)  
 **Canon UI:** Tablero de producción MPR (header `slate-800`, viewport flex).  
-**Fecha:** 16/07/2026
+**Fecha:** 22/07/2026
 
 ## Rol
 
 Pantalla **inicial** del módulo Pedidos. Reemplaza el hub solo-KPI. El vendedor ve su trabajo y puede:
 
 - Continuar un **borrador** (pedido simple `EcomCart` o masivo por sucursales)
-- Ver PED **enviados / en curso / entregados-cerrados / anulados** (y cola de aprobación si el workflow lo habilita)
+- Ver PED **pendientes / en preparación / entregados-cerrados / anulados** (y cola de aprobación si el workflow lo habilita)
 - Buscar por **nro PED, cliente o sucursal** (filtro client-side sobre la ventana cargada)
 - Crear **Nuevo** → Simple | Masivo sucursales
 
@@ -31,10 +31,10 @@ Con **workflow comercial ON** y subflag aprobación activa (`aprobacion_pedidos_
 | Estado | Visible | Origen |
 |--------|---------|--------|
 | Borrador | siempre | `EcomCart` con ítems + `EcomPedidoMasivoDraft` BORRADOR |
-| Enviado | siempre | PED confirmado (`Pendiente`) o mid-flow sin etapa operativa |
+| Pendiente | siempre | PED confirmado (`Estado = Pendiente`) o mid-flow sin etapa operativa (id interno `enviado`) |
 | Por autorizar | solo si aprobación comercial activa | Pendiente aprobación comercial o crédito `No Autorizado` |
 | Aprobado | solo si aprobación comercial activa | Autorizado comercialmente, aún no en preparación |
-| En curso | siempre | Preparación / preparado / remito / parcial |
+| En preparación | siempre | Preparación / preparado / remito / parcial (id interno `en_curso`) |
 | Entregado / Cerrado | siempre | `Facturado`, `Entregado`, `Cerrado` |
 | Anulado | siempre | Anulados (ventana reciente) + drafts masivos anulados |
 
@@ -95,3 +95,19 @@ Misma idea que pedido masivo (`.pm-matrix-viewport`): la página **no** scrollea
 Nombres de cliente: batch `_nombres_clientes` (un SQL). Sucursal: etiqueta `Calle Nro` o `Sucursal #{id}` (misma convención que pedido masivo). Total PED: preferir `ImporteVenta` (bruto); fallback fórmula IVA+percepciones.
 
 Vista **Lista**: columna **Sucursal** entre Documento y Detalle. Vista **Kanban**: línea de sucursal bajo el subtítulo en tarjetas PED.
+
+## Lotes masivos en columnas Kanban (22/07/2026, rediseño)
+
+Tras confirmar un pedido masivo por sucursales, el hub muestra **una tarjeta padre por lote** dentro de la columna operativa que corresponda (ya no hay lane/segmento **Cargas masivas**):
+
+| Aspecto | Detalle |
+|---------|---------|
+| Tarjeta padre | `tipo=lote_masivo` en la columna Kanban/Lista según rollup y `estado_aprobacion_lote` |
+| Columna | Regla `_columna_lote_desde_contexto` (prioridad: lote pendiente aprobación → todos anulados → en preparación → cerrados → por autorizar rollup → aprobado rollup → Pendiente) |
+| CTA | **Ver pedido** → matriz masiva solo lectura `/pedido-masivo-sucursales/?draft=<id>&readonly=1` (mismo patrón que consultar un PED; la pantalla resumen de lote queda disponible por URL directa si hace falta) |
+| PED hijos | **No** se muestran en hub (Kanban ni Lista); acceso solo vía tarjeta del lote |
+| PED sueltos | Sin cambio: siguen en columnas según estado individual |
+| Payload API | `cargas_masivas[]` deprecado (siempre `[]`); lotes integrados en `items[]` y `columnas[]` |
+| Aprobación lote | Si `estado_aprobacion_lote=pendiente`, la tarjeta padre va a **Por autorizar** (o **Pendiente** si aprobación off); CTAs de lote en resumen/hub según permiso |
+
+Pipeline: `_columna_lote_desde_contexto`, `_rollup_lote_desde_pedidos` (incluye `enviado`/`cerrado`), `_lotes_masivos_confirmados`, `_mapa_reverso_lotes`, filtro de hijos en `construir_hub_pedidos` (`ecom/services/pedidos_hub_pipeline.py`).

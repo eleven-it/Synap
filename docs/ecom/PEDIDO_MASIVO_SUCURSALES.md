@@ -1,6 +1,7 @@
 # Pedido masivo por sucursales
 
 **Change:** `ecom-pedidos-hub-kanban-masivo-sucursales` · UX contexto: `ecom-pedido-masivo-ux-contexto`  
+**Consolidado hub/lote:** `ecom-pedido-masivo-consolidado-hub` (22/07/2026)  
 **Unificación pedido simple:** `ecom-pedido-simple-unificado-masivo` (16/07/2026)  
 **Cabecera comercial (barra contexto):** `docs/ecom/PEDIDO_CABECERA_COMERCIAL.md`  
 **Ruta (Phase 4):** `/ecom/mayoristapp/pedido-masivo-sucursales/`  
@@ -83,7 +84,7 @@ artículo, el foco cae en el campo realmente pintado y la carga fluye.
 4. Columnas = `cliente_domicilio` no anulados con ≥1 **relación** activa (vendedor operativo + cliente) cuando VCM está activo; si no, todos los domicilios activos. Orden de columnas: **ascendente numérico por `NroCalle`**. Encabezado = **`Suc ` + `NroCalle`** en **negrita** (ej. `Suc 14`). Click en la celda del encabezado (desktop) o en la fila del acordeón (móvil) abre un modal con calle, dpto, distrito, provincia y zona. En móvil, el chevron expande/colapsa el acordeón sin abrir el modal. Ver `docs/ecom/VENDEDOR_CLIENTE_MARCA.md`.  
 5. Filas = artículos **Terminado** de marcas asignadas con **paridad carrito/precio**: `Discontinuo='No'` y `ecommerce='Si'` (mismo criterio que `obtener_articulo_row_precio` / `agregar_item`). El buscador predictivo (`buscar_articulos_filtrados_ternas`) no ofrece ítems que luego fallarían en preview/confirm con «Artículo no encontrado o inactivo». Criterios de búsqueda tipada (≥2 caracteres, `tam=20`): código de sistema (`IDArt`/`CodigoArticuloT`), `id_manual`, nombre y **código de barra** (`NroCodBarra`). **Flecha abajo** (o botón ▾) lista **todo** el catálogo filtrado (`?todos=1`, sin mínimo de 2 caracteres; tope 5000). Desktop y móvil.  
    Columna **Precio** = precio real del motor (lista del cliente).  
-6. Celdas = cantidad en **packs**. Columna de sumatoria: **Total packs**. Enter en la última sucursal vuelve al buscador.  
+6. Celdas = cantidad en **packs**. Columna de sumatoria: **Total packs**. Enter en la última sucursal vuelve al buscador. Con más de una línea de artículo, la matriz muestra fila **Totales** con suma de packs por sucursal (y total packs en la columna Total).  
 7. **Fecha de entrega** obligatoria al confirmar: si falta, modal de aviso y foco en el campo. Cliente en UI sin `(cod: N)`.  
 8. Confirmar → **1 PED por sucursal** con `cliente_datos_adicionales.id_cliente_domicilio`.
 
@@ -299,3 +300,18 @@ Las cantidades cargadas en la matriz (modo masivo y **modo simple**) deben respe
 - **Confirmación** (simple y masivo): respeta `configuracion_ecom.ecom_validar_stock_pedidos` (default **Si**). Con **No**, carrito y commit PED no bloquean por stock. Ver `docs/ecom/AJUSTES_VENTAS.md`.
 
 Documentación de diseño y estado: `docs/order-ui-redesign/05-design-system-pedidos.md` y `10-estado-implementacion.md`.
+
+## Post-confirmación y resumen de lote (22/07/2026)
+
+Tras confirmar un lote masivo (`batch_checkout_masivo` exitoso):
+
+| Aspecto | Comportamiento |
+|---------|----------------|
+| `estado_aprobacion_lote` | Con subflag `ecom_aprobacion_pedidos_activa` ON y PED pendientes comerciales → `pendiente`; sin subflag → `-` |
+| Modal éxito | Incluye CTA **Ver resumen del lote** hacia `/ecom/mayoristapp/pedidos/lote/<draft_id>/` y mensaje de que la autorización comercial es a nivel lote |
+| Hub | Tarjeta `lote_masivo` en la columna Kanban que corresponda; PED hijos **no** se muestran en hub (acceso vía resumen del lote) |
+| Matriz read-only | Pestaña «Qué se cargó» del resumen embebe `/ecom/mayoristapp/pedido-masivo-sucursales/?draft=<id>&readonly=1` con shell **sin navbar** (`ecom/base_embed.html`); permite abrir drafts `confirmado` solo para lectura (sin edición, autoguardado ni confirmar) |
+
+Servicio resumen: `ecom/services/lote_resumen.py`. Pantalla: `ecom/templates/ecom/lote_resumen.html`.
+
+El resumen lista solo sucursales del territorio VCM del viajante del draft (intersección con celdas del draft); se incluyen además domicilios con PED real en MySQL aunque queden fuera de VCM.

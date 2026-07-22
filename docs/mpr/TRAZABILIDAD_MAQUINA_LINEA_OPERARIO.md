@@ -282,10 +282,12 @@ La pantalla **`/mpr/maquinas/carga-articulos/`** concentra la carga operativa en
 consulta histórica por máquina. La búsqueda de artículos para habilitar filtra solo
 artículos con `tipo_art_fab = 'Fabricado'` (normalizado con `TRIM`/`COALESCE`).
 Incluye botón **Imprimir Control de Calidad** (planilla A4 horizontal filtrada por lo
-visible en pantalla: máquina / línea; modal Synap si no hay filas). Columnas: máquina,
-artículo, color, talle, turnos mañana/tarde/noche 1ra·2da (ancho generoso para
-escritura a mano), observaciones (persistente por máquina en
-`mpr_maquina.observacion_planilla`, API `maquina_observacion_planilla_api`). Artículos
+visible en pantalla: máquina / línea; modal Synap con selector de fecha; aviso Synap si
+no hay filas). Columnas: máquina, artículo, color, talle, turnos mañana/tarde/noche
+1ra·2da (ancho generoso para escritura a mano; **1ra precargada** desde partes del día
+en fila producción; fila CC vacía por artículo), observaciones (persistente por máquina en
+`mpr_maquina.observacion_planilla`, API `maquina_observacion_planilla_api` y
+`maquina_planilla_control_calidad_api`). Artículos
 ordenados por antigüedad de asignación. Operadores de turno en MAYÚSCULAS (temporales,
 solo impresión). Color y talle salen de `articulo_val_ce` según
 captions `COLOR` / `TALLES` en `articulo_ce` (detalle: [ARTICULO_CE_TALLES_COLOR.md](ARTICULO_CE_TALLES_COLOR.md)).

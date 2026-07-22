@@ -24,6 +24,16 @@ from ecom.services.recibo_catalogos_service import listar_puntos_venta_usuario
 
 
 class TestConfirmarLoteMasivo(TestCase):
+    def setUp(self):
+        self._apr_patcher = patch(
+            "ecom.services.batch_checkout_masivo.aprobacion_pedidos_activa",
+            return_value=False,
+        )
+        self._apr_patcher.start()
+
+    def tearDown(self):
+        self._apr_patcher.stop()
+
     def _draft_con_dos_sucursales(self):
         d = EcomPedidoMasivoDraft.objects.create(
             base_empresa="emp_b",
@@ -61,12 +71,42 @@ class TestConfirmarLoteMasivo(TestCase):
         d.refresh_from_db()
         self.assertEqual(d.estado, EcomPedidoMasivoDraft.ESTADO_CONFIRMADO)
         self.assertEqual(d.codigos_movimiento, [101, 102])
+        self.assertEqual(d.estado_aprobacion_lote, EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_NEUTRO)
         self.assertEqual(mock_conf.call_count, 2)
         # id_cliente_domicilio en cada checkout
         doms = [
             mock_conf.call_args_list[i].args[1].id_cliente_domicilio for i in range(2)
         ]
         self.assertEqual(sorted(doms), [10, 20])
+
+    @patch("ecom.services.batch_checkout_masivo.aprobacion_pedidos_activa", return_value=True)
+    @patch("ecom.services.batch_checkout_masivo.opciones_presentacion_articulo")
+    @patch("ecom.services.batch_checkout_masivo.agregar_item")
+    @patch("ecom.services.batch_checkout_masivo.confirmar")
+    def test_ok_marca_estado_aprobacion_lote_pendiente(
+        self,
+        mock_conf,
+        mock_add,
+        mock_opts,
+        _apr,
+    ):
+        mock_opts.return_value = {
+            "tipo_unidad_defecto": "Unidad",
+            "opciones": [{"tipo": "Unidad", "multiplicador": 1}],
+        }
+        mock_add.return_value = (MagicMock(), None)
+        mock_conf.side_effect = [
+            (True, None, {"codigo_movimiento": 201, "nro_comprobante": "A-1"}),
+            (True, None, {"codigo_movimiento": 202, "nro_comprobante": "A-2"}),
+        ]
+        d = self._draft_con_dos_sucursales()
+        ok, _, _ = confirmar_lote_masivo(d, id_usuario=9, id_punto_venta=1, cod_viajante=2)
+        self.assertTrue(ok)
+        d.refresh_from_db()
+        self.assertEqual(
+            d.estado_aprobacion_lote,
+            EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_PENDIENTE,
+        )
 
     @patch("ecom.services.batch_checkout_masivo.opciones_presentacion_articulo")
     @patch("ecom.services.batch_checkout_masivo.agregar_item")

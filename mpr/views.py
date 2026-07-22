@@ -5569,6 +5569,42 @@ class MaquinaObservacionPlanillaAPIView(MprLoginRequiredMixin, MprPermisoMixin, 
         return JsonResponse({"ok": True, "observacion_planilla": normalizada})
 
 
+class MaquinaPlanillaControlCalidadAPIView(MprLoginRequiredMixin, MprPermisoMixin, View):
+    """API JSON: datos de planilla Control de Calidad para impresión."""
+
+    permiso_requerido = "mpr.maquinas_lineas"
+
+    def get(self, request, *args, **kwargs):
+        from datetime import date as _date
+
+        from mpr.services_maquina_linea import construir_datos_planilla_control_calidad
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"ok": False, "error": "Empresa inválida."}, status=400)
+
+        fecha_str = (request.GET.get("fecha") or "").strip()
+        if not fecha_str:
+            return JsonResponse({"ok": False, "error": "Fecha requerida."}, status=400)
+        try:
+            fecha = _date.fromisoformat(fecha_str)
+        except ValueError:
+            return JsonResponse({"ok": False, "error": "Fecha inválida."}, status=400)
+
+        id_linea_raw = (request.GET.get("id_linea") or "").strip()
+        id_linea = None
+        if id_linea_raw:
+            try:
+                id_linea = int(id_linea_raw)
+            except (ValueError, TypeError):
+                return JsonResponse({"ok": False, "error": "Línea inválida."}, status=400)
+
+        datos = construir_datos_planilla_control_calidad(
+            base_empresa, fecha, id_linea=id_linea
+        )
+        return JsonResponse({"ok": True, **datos})
+
+
 class OperarioUsuarioMapView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
     """Vincula operarios (legajo) con usuarios de login para la carga móvil."""
 

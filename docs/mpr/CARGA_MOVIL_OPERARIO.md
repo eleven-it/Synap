@@ -145,35 +145,51 @@ Los artículos vigentes incluyen **TALLES** y **COLOR** desde campos especiales
 ### Planilla Control de Calidad (impresión)
 
 Botón único **Imprimir Control de Calidad** en el encabezado de la pantalla.
-Genera una hoja **A4 horizontal** pensada para completar a mano:
+Abre un **modal Synap** (sin `alert`/`confirm` nativos) para elegir la **fecha** de la
+planilla (por defecto hoy). **Cancelar** cierra el modal; **Confirmar e imprimir** obtiene
+los datos vía API y lanza `window.print()`.
 
-- Título: `CONTROL DE CALIDAD — {día} {dd/MM/yyyy}` (día en español).
+API: `GET /mpr/maquinas/api/planilla-control-calidad/?fecha=YYYY-MM-DD&id_linea=`  
+Servicio: `construir_datos_planilla_control_calidad` en `mpr/services_maquina_linea.py`.
+
+Genera una hoja **A4 horizontal** (`@page size: A4 landscape`, márgenes 6 mm) pensada
+para completar a mano. El bloque de impresión usa flujo normal (no `position: absolute`)
+para paginar sin recortes; la cabecera de la tabla se repite en cada hoja
+(`thead { display: table-header-group }`). Cada casillero 1ra/2da apila **prod + CC**
+en la misma celda (bandas de ~7 mm) para que un salto de página no pierda la franja CC.
+
+- Título: `CONTROL DE CALIDAD — {día} {dd/MM/yyyy}` (día en español; fecha elegida en el modal).
 - Columnas: MÁQUINA | DETALLE (ARTÍCULO · COLOR · TALLE) | TURNO MAÑANA (1ra·2da) |
   TURNO TARDE (1ra·2da) | TURNO NOCHE (1ra·2da) | OBSERVACIONES.
 - Anchos de impresión: las columnas **1ra/2da** de turnos son amplias (escritura a mano);
   **ARTÍCULO** cede espacio y hace wrap si hace falta.
-- Filas: **solo lo visible en pantalla** (filtro de línea GET + búsqueda de máquina).
+- Filas: **solo lo visible en pantalla** (filtro de línea GET + búsqueda de máquina client-side).
   Si filtrás una sola máquina, la planilla imprime únicamente esa fila/artículos.
-- Las celdas 1ra/2da de cada turno se imprimen en blanco (para completar a mano).
-- **Operadores por turno**: se toman automáticamente de la **Planificación de turnos**
-  (roster `mpr_roster_dia` del día actual). No hay carga manual en pantalla. El servicio
-  `operarios_roster_por_linea` (`mpr/services.py`) agrupa los operarios del roster por
-  línea efectiva y por franja mañana/tarde/noche —primero por nombre del turno, con
-  fallback por `hora_inicio`. La línea efectiva respeta
-  **override diario de roster > línea habitual vigente**. La planilla reúne solo las
-  líneas de las máquinas que se imprimirán: reacciona al filtro GET de línea y a la
-  búsqueda client-side de máquina. Sus nombres se imprimen en **MAYÚSCULAS** debajo del
-  encabezado del turno correspondiente (sin el literal «Operador:»). Si el roster del
-  día no tiene operarios en una franja, la celda se imprime en blanco para escribir el
-  nombre a mano.
+- **Por cada artículo, un solo `<tr>`** (`break-inside: avoid`):
+  - En cada casillero 1ra/2da: banda superior = producción (1ra precargada / 2da vacía);
+    banda inferior = CC vacía (escritura manual), separadas por línea.
+  - Así no se usa `rowspan=2` entre prod y CC (ese esquema perdía la 2.ª banda al paginar
+    con **todas las líneas**).
+  - Máquina y observaciones: `rowspan = n_artículos`.
+- **Artículos por fecha:**
+  - Fecha **≤ hoy:** vigentes en `mpr_maquina_articulo` a esa fecha
+    (`listar_articulos_vigentes_todas_maquinas`).
+  - Fecha **futura:** mismos artículos vigentes **hoy**; cantidades vacías.
+- **Cantidades 1ra** (solo fecha ≤ hoy): suma por máquina×artículo×franja desde partes de esa
+  fecha (`cantidades_parte_planilla_por_fecha`). Parte `aprobado` → `cantidad_aprobada`
+  (o 0 si null); otro estado → `cantidad_declarada`. Franja vía `id_mpr_turno` +
+  `_franja_horaria_turno`. Solo líneas con `id_mpr_maquina` no null. Sin parte → vacío.
+  Si hay artículos pero sin cantidades, **se imprime igual**.
+- **Operadores por turno**: roster del **día de la planilla** (`operarios_roster_por_linea`).
+  Misma granularidad: nombres en cabecera mañana/tarde/noche. Sin roster → celda vacía; se imprime igual.
 - **Observación por máquina**: cada máquina de la grilla tiene un campo «Observación
   (planilla)» (máx. 220 caracteres). Ese texto se imprime **una sola vez por máquina**
-  en la columna OBSERVACIONES (celda con `rowspan` que abarca todos sus artículos),
+  en la columna OBSERVACIONES (celda con `rowspan` sobre sus artículos),
   no una celda por artículo. Se **persiste en MySQL** (`mpr_maquina.observacion_planilla`)
   y se guarda al salir del campo (blur); API `POST /mpr/maquinas/api/observacion-planilla/`.
 - **Orden de artículos** en la planilla: por antigüedad de asignación
   (`vigencia_desde`, `creado_en`, `id_mpr_maquina_articulo` ASC).
-- Si no hay filas imprimibles, **modal Synap** (no `alert` nativo del navegador).
+- Si no hay filas imprimibles tras confirmar el modal, **modal Synap** de aviso (no `alert` nativo).
 - El encabezado de la hoja puede mostrar el filtro activo (línea / búsqueda).
 
 Origen de COLOR/TALLES: ver [ARTICULO_CE_TALLES_COLOR.md](ARTICULO_CE_TALLES_COLOR.md).

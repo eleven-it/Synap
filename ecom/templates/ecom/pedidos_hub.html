@@ -16,38 +16,34 @@
         {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="pedidos-hub" only %}
       </div>
 
-      <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 p-3 shadow-md sm:p-4">
-        <header class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div class="min-w-0 flex-1">
-            <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl md:text-2xl">Pedidos</h1>
-            <p class="mt-1 text-xs text-slate-300 sm:text-sm">Borradores, envíos y seguimiento comercial.</p>
-            <div class="relative mt-3 max-w-xl">
-              <label class="sr-only" for="pedidos-hub-busqueda">Buscar pedidos</label>
-              <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400" aria-hidden="true">
-                <span class="material-icons text-lg">search</span>
-              </span>
-              <input id="pedidos-hub-busqueda"
-                     type="search"
-                     x-model.debounce.200ms="busqueda"
-                     placeholder="Buscar por PED, cliente o sucursal…"
-                     autocomplete="off"
-                     class="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-2 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
-              <button type="button"
-                      x-show="busqueda.trim()"
-                      x-cloak
-                      @click="busqueda=''"
-                      class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
-                      title="Limpiar búsqueda"
-                      aria-label="Limpiar búsqueda">
-                <span class="material-icons text-base">close</span>
-              </button>
-            </div>
-            <p x-show="busqueda.trim()" x-cloak class="mt-1.5 text-[11px] text-slate-400">
-              <span x-text="itemsFiltrados().length"></span> resultado<span x-text="itemsFiltrados().length===1 ? '' : 's'"></span>
-              de <span x-text="itemsPlanos.length"></span>
-            </p>
+      <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
+        <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl">Pedidos</h1>
+          <div class="relative min-w-[12rem] flex-1 max-w-xl">
+            <label class="sr-only" for="pedidos-hub-busqueda">Buscar pedidos</label>
+            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400" aria-hidden="true">
+              <span class="material-icons text-lg">search</span>
+            </span>
+            <input id="pedidos-hub-busqueda"
+                   type="search"
+                   x-model.debounce.200ms="busqueda"
+                   placeholder="Buscar por PED, cliente o sucursal…"
+                   autocomplete="off"
+                   class="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-1.5 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
+            <button type="button"
+                    x-show="busqueda.trim()"
+                    x-cloak
+                    @click="busqueda=''"
+                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                    title="Limpiar búsqueda"
+                    aria-label="Limpiar búsqueda">
+              <span class="material-icons text-base">close</span>
+            </button>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
+          <p x-show="busqueda.trim()" x-cloak class="shrink-0 text-[11px] text-slate-400">
+            <span x-text="itemsFiltrados().length"></span>/<span x-text="itemsPlanos.length"></span>
+          </p>
+          <div class="ml-auto flex flex-wrap items-center gap-2">
             <div class="hidden lg:inline-flex rounded-lg border border-slate-600 bg-slate-700 p-0.5" role="group" aria-label="Vista">
               <button type="button" @click="setVista('lista')"
                       :class="vista==='lista' ? 'bg-purple-600 text-white' : 'text-slate-300 hover:text-white'"
@@ -118,7 +114,27 @@
       <div class="min-h-0 flex-1 space-y-2 overflow-y-auto pb-2">
         <template x-for="it in itemsMovilFiltrados()" :key="it.id_ref">
           <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
-            <template x-if="it.tipo!=='carrito_legacy' && !(it.tipo==='masivo' && it.columna==='anulado')">
+            <template x-if="it.tipo==='lote_masivo'">
+              <a :href="urlLoteMasivo(it)" class="block" @click="logClickLote(it, $event)">
+                <div class="flex items-start justify-between gap-2">
+                  <p class="truncate text-sm font-semibold text-slate-900 dark:text-white" x-text="it.titulo"></p>
+                  <span class="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                        :class="badgeLoteClase(it)" x-text="badgeLoteTexto(it)"></span>
+                </div>
+                <p class="mt-0.5 line-clamp-2 text-xs text-slate-500" x-text="it.subtitulo"></p>
+                <p class="mt-1 text-[11px] tabular-nums text-slate-400" x-text="it.fecha"></p>
+                <div class="mt-2 flex flex-wrap gap-1" x-show="rollupChips(it).length">
+                  <template x-for="chip in rollupChips(it)" :key="chip.key">
+                    <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold" :class="chip.clase" x-text="chip.label"></span>
+                  </template>
+                </div>
+                <span class="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-purple-600">
+                  Ver pedido
+                  <span class="material-icons text-sm leading-none" aria-hidden="true">arrow_forward</span>
+                </span>
+              </a>
+            </template>
+            <template x-if="it.tipo!=='carrito_legacy' && it.tipo!=='lote_masivo' && !(it.tipo==='masivo' && it.columna==='anulado')">
               <a :href="it.url" class="block">
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0 flex-1">
@@ -213,7 +229,27 @@
             <div class="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2">
               <template x-for="it in itemsColumna(col)" :key="it.id_ref">
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-600 dark:bg-slate-900/40">
-                  <template x-if="it.tipo!=='carrito_legacy' && !(it.tipo==='masivo' && it.columna==='anulado')">
+                  <template x-if="it.tipo==='lote_masivo'">
+                    <a :href="urlLoteMasivo(it)" class="block transition hover:border-purple-300 hover:bg-white dark:hover:border-purple-500" @click="logClickLote(it, $event)">
+                      <div class="flex items-start justify-between gap-1">
+                        <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="it.titulo"></p>
+                        <span class="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                              :class="badgeLoteClase(it)" x-text="badgeLoteTexto(it)"></span>
+                      </div>
+                      <p class="mt-0.5 text-xs text-slate-500" x-text="it.subtitulo"></p>
+                      <p class="mt-1 text-[11px] tabular-nums text-slate-400" x-text="it.fecha"></p>
+                      <div class="mt-2 flex flex-wrap gap-1" x-show="rollupChips(it).length">
+                        <template x-for="chip in rollupChips(it)" :key="chip.key">
+                          <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold" :class="chip.clase" x-text="chip.label"></span>
+                        </template>
+                      </div>
+                      <span class="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-purple-600">
+                        Ver pedido
+                        <span class="material-icons text-sm leading-none" aria-hidden="true">arrow_forward</span>
+                      </span>
+                    </a>
+                  </template>
+                  <template x-if="it.tipo!=='carrito_legacy' && it.tipo!=='lote_masivo' && !(it.tipo==='masivo' && it.columna==='anulado')">
                     <a :href="it.url" class="block transition hover:border-purple-300 hover:bg-white dark:hover:border-purple-500">
                       <div class="flex items-start justify-between gap-1">
                         <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="it.titulo"></p>
@@ -293,15 +329,28 @@
           </tr>
         </thead>
         <tbody>
-          <template x-for="it in itemsFiltrados()" :key="it.id_ref">
+          <template x-for="it in itemsListaFiltrados()" :key="it.id_ref">
             <tr class="border-t border-slate-100 dark:border-slate-700">
               <td class="px-3 py-2 text-xs font-semibold uppercase text-slate-500" x-text="labels[it.columna] || it.columna"></td>
               <td class="px-3 py-2">
-                <a :href="it.url" class="font-semibold text-purple-700 hover:underline dark:text-purple-400" x-text="it.titulo"></a>
+                <a :href="it.tipo==='lote_masivo' ? urlLoteMasivo(it) : it.url"
+                   class="font-semibold text-purple-700 hover:underline dark:text-purple-400"
+                   @click="it.tipo==='lote_masivo' && logClickLote(it, $event)"
+                   x-text="it.titulo"></a>
                 <span x-show="it.badge_error" class="ml-1 text-[10px] font-bold text-red-600">Error</span>
+                <span x-show="it.tipo==='lote_masivo'"
+                      class="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                      :class="badgeLoteClase(it)" x-text="badgeLoteTexto(it)"></span>
               </td>
               <td class="px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400" x-text="it.sucursal || '—'"></td>
-              <td class="px-3 py-2 text-slate-600 dark:text-slate-300" x-text="it.subtitulo"></td>
+              <td class="px-3 py-2 text-slate-600 dark:text-slate-300">
+                <span x-text="it.subtitulo"></span>
+                <div x-show="it.tipo==='lote_masivo' && rollupChips(it).length" class="mt-1 flex flex-wrap gap-1">
+                  <template x-for="chip in rollupChips(it)" :key="chip.key">
+                    <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold" :class="chip.clase" x-text="chip.label"></span>
+                  </template>
+                </div>
+              </td>
               <td class="px-3 py-2 tabular-nums text-slate-500" x-text="it.fecha"></td>
               <td class="px-3 py-2">
                 <button x-show="it.tipo==='masivo' && it.columna==='anulado'"
@@ -315,7 +364,7 @@
               </td>
             </tr>
           </template>
-          <tr x-show="!itemsFiltrados().length">
+          <tr x-show="!itemsListaFiltrados().length">
             <td colspan="6" class="px-3 py-10 text-center text-slate-500"
                 x-text="busqueda.trim() ? 'Ningún pedido coincide con la búsqueda.' : 'No hay pedidos en la ventana actual.'"></td>
           </tr>
@@ -452,11 +501,32 @@ function pedidosHubApp() {
       this.urls = data.urls || {};
       this.labels = data.labels || {};
       this.aplicarPayload(data.hub || {});
+      // #region agent log
+      fetch('http://127.0.0.1:7901/ingest/bb09dfde-5064-40a1-8f80-fceaaab4c660',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a987c5'},body:JSON.stringify({sessionId:'a987c5',runId:'pre-fix',hypothesisId:'H2',location:'pedidos_hub.html:init',message:'hub init lote urls',data:{lotes:(this.itemsPlanos||[]).filter(i=>i.tipo==='lote_masivo').map(i=>({id_ref:i.id_ref,url:i.url,href:this.urlLoteMasivo(i)})),lote_matriz_tpl:this.urls.lote_matriz_tpl||null,lote_resumen_tpl:this.urls.lote_resumen_tpl||null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       const saved = localStorage.getItem('synap_pedidos_hub_vista');
       if (window.matchMedia('(min-width: 1024px)').matches) {
         if (saved === 'lista' || saved === 'kanban') this.vista = saved;
         else if (data.vista) this.vista = data.vista;
       }
+    },
+    /** Destino fijo del lote: matriz masiva readonly (nunca el resumen). */
+    urlLoteMasivo(it) {
+      const id = it && it.meta ? it.meta.draft_id : null;
+      const tpl = this.urls && this.urls.lote_matriz_tpl;
+      if (id != null && tpl) {
+        return String(tpl).replace('{draft_id}', String(id));
+      }
+      if (id != null) {
+        return `/ecom/mayoristapp/pedido-masivo-sucursales/?draft=${id}&readonly=1`;
+      }
+      return (it && it.url) || '#';
+    },
+    logClickLote(it, ev) {
+      // #region agent log
+      const href = this.urlLoteMasivo(it);
+      fetch('http://127.0.0.1:7901/ingest/bb09dfde-5064-40a1-8f80-fceaaab4c660',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a987c5'},body:JSON.stringify({sessionId:'a987c5',runId:'pre-fix',hypothesisId:'H2',location:'pedidos_hub.html:logClickLote',message:'click tarjeta lote',data:{id_ref:it&&it.id_ref,it_url:it&&it.url,href,targetHref:ev&&ev.currentTarget&&ev.currentTarget.getAttribute('href')},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
     },
     coincideBusqueda(it) {
       const q = (this.busqueda || '').trim().toLowerCase();
@@ -484,6 +554,39 @@ function pedidosHubApp() {
       }
       return items;
     },
+    itemsListaFiltrados() {
+      return this.itemsFiltrados();
+    },
+    _estadoLote(it) {
+      return String((it && it.meta && it.meta.estado_aprobacion_lote) || '').trim().toLowerCase();
+    },
+    badgeLoteTexto(it) {
+      const map = { pendiente: 'Por autorizar', aprobado: 'Aprobado', rechazado: 'Rechazado', error: 'Error' };
+      return map[this._estadoLote(it)] || 'Sin autorización';
+    },
+    badgeLoteClase(it) {
+      const map = {
+        pendiente: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+        aprobado: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
+        rechazado: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+        error: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+      };
+      return map[this._estadoLote(it)] || 'bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300';
+    },
+    rollupChips(it) {
+      const r = (it && it.meta && it.meta.rollup) || {};
+      const defs = [
+        { key: 'por_autorizar', label: 'Por autorizar', clase: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' },
+        { key: 'enviado', label: 'Pendiente', clase: 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300' },
+        { key: 'aprobado', label: 'Aprobado', clase: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300' },
+        { key: 'en_curso', label: 'En preparación', clase: 'bg-sky-50 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300' },
+        { key: 'cerrado', label: 'Entregado / Cerrado', clase: 'bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300' },
+        { key: 'anulado', label: 'Anulado', clase: 'bg-slate-100 text-slate-500 dark:bg-slate-900 dark:text-slate-400' },
+      ];
+      return defs
+        .filter((d) => Number(r[d.key] || 0) > 0)
+        .map((d) => ({ key: d.key, label: `${d.label}: ${Number(r[d.key])}`, clase: d.clase }));
+    },
     itemsColumna(col) {
       return (col.items || []).filter((it) => this.coincideBusqueda(it));
     },
@@ -491,12 +594,21 @@ function pedidosHubApp() {
       return this.itemsColumna(col).length;
     },
     aplicarPayload(hub) {
-      this.columnas = hub.columnas || [];
-      this.itemsPlanos = hub.items || [];
+      const norm = (it) => {
+        if (!it || it.tipo !== 'lote_masivo') return it;
+        const url = this.urlLoteMasivo(it);
+        return { ...it, url };
+      };
+      this.columnas = (hub.columnas || []).map((col) => ({
+        ...col,
+        items: (col.items || []).map(norm),
+      }));
+      this.itemsPlanos = (hub.items || []).map(norm);
       this.borradoresActivos = hub.borradores_activos || 0;
       this.aprobacionActiva = !!hub.aprobacion_comercial_activa;
       this.labels = hub.labels || this.labels;
-      if (this.columnaMovil !== 'todas' && !this.columnas.some((c) => c.id === this.columnaMovil)) {
+      if (this.columnaMovil !== 'todas'
+          && !this.columnas.some((c) => c.id === this.columnaMovil)) {
         this.columnaMovil = 'todas';
       }
       const borr = (this.columnas.find(c => c.id === 'borrador') || {}).items || [];

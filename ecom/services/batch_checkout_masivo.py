@@ -25,6 +25,7 @@ from ecom.services.pedido_masivo_matriz import (
     listar_sucursales_cliente,
     validar_multiplos_draft,
 )
+from ecom.services.ecom_config_mysql import aprobacion_pedidos_activa
 from ecom.services.presentacion_articulo import opciones_presentacion_articulo
 from ecom.services.vendedor_operativo import resolver_viajante_operativo
 
@@ -613,8 +614,18 @@ def confirmar_lote_masivo_stream(
         draft.estado = EcomPedidoMasivoDraft.ESTADO_CONFIRMADO
         draft.ultimo_error = {}
         draft.codigos_movimiento = creados
+        if aprobacion_pedidos_activa(draft.base_empresa):
+            draft.estado_aprobacion_lote = EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_PENDIENTE
+        else:
+            draft.estado_aprobacion_lote = EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_NEUTRO
         draft.save(
-            update_fields=["estado", "ultimo_error", "codigos_movimiento", "updated_at"]
+            update_fields=[
+                "estado",
+                "ultimo_error",
+                "codigos_movimiento",
+                "estado_aprobacion_lote",
+                "updated_at",
+            ]
         )
         yield _evento_fin(
             ok=True,

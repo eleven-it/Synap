@@ -149,6 +149,37 @@ class TestObtenerDraft(TestCase):
         opened.refresh_from_db()
         self.assertEqual(opened.estado, EcomPedidoMasivoDraft.ESTADO_BORRADOR)
 
+    def test_abrir_confirmado_solo_lectura_ok(self):
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=7,
+            id_cliente=20,
+            estado=EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
+            codigos_movimiento=[101, 102],
+        )
+        blocked, err = obtener_o_crear_draft(
+            base_empresa="emp_m",
+            id_usuario=7,
+            id_cliente=20,
+            cod_viajante=3,
+            draft_id=d.pk,
+        )
+        self.assertIsNone(blocked)
+        self.assertIn("confirmado", (err or "").lower())
+
+        opened, err2 = obtener_o_crear_draft(
+            base_empresa="emp_m",
+            id_usuario=7,
+            id_cliente=20,
+            cod_viajante=3,
+            draft_id=d.pk,
+            solo_lectura=True,
+        )
+        self.assertIsNotNone(opened, err2)
+        self.assertEqual(opened.pk, d.pk)
+        opened.refresh_from_db()
+        self.assertEqual(opened.estado, EcomPedidoMasivoDraft.ESTADO_CONFIRMADO)
+
 
 class TestAnularBorradorMasivo(TestCase):
     def test_anular_solo_desde_borrador(self):
@@ -327,6 +358,51 @@ class TestSerializarMatriz(TestCase):
         self.assertEqual(m["desc_pie_pct"], 5.0)
         self.assertEqual(m["descuentos_fila"]["4"], 10.0)
         self.assertEqual(len(m["sucursales"]), 1)
+
+    @patch(
+        "ecom.services.pedido_masivo_matriz.listar_sucursales_cliente",
+        return_value=[{"id_cliente_domicilio": 2, "etiqueta": "Histórica"}],
+    )
+    @patch("ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo")
+    @patch("ecom.services.pedido_masivo_matriz._nombres_articulos")
+    def test_confirmado_usa_domicilios_historicos_celdas(self, mock_n, mock_ctx, mock_list):
+        """Readonly de lote confirmado: columnas = domicilios de celdas, no VCM vigente."""
+        mock_ctx.return_value = {
+            "descRenglon": Decimal("0"),
+            "descPie": Decimal("0"),
+            "lista_id": 1,
+        }
+        mock_n.return_value = {
+            4: {
+                "codigo": "X",
+                "descripcion": "Art X",
+                "precio_unitario_neto": 10.0,
+                "precio_lista1": 10.0,
+            }
+        }
+        d = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_m",
+            id_usuario=1,
+            id_cliente=10,
+            estado=EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
+            cod_viajante=26,
+        )
+        EcomPedidoMasivoDraftCelda.objects.create(
+            draft=d,
+            id_articulo=4,
+            id_cliente_domicilio=2,
+            cantidad_packs=Decimal("5"),
+        )
+        m = serializar_matriz(d, "emp_m")
+        self.assertEqual(m["celdas"]["4:2"], "5")
+        self.assertEqual(
+            [s["id_cliente_domicilio"] for s in m["sucursales"]],
+            [2],
+        )
+        # Debe pedir snapshot histórico, sin viajante/VCM.
+        kwargs = mock_list.call_args.kwargs
+        self.assertEqual(kwargs.get("ids_domicilio"), [2])
+        self.assertTrue(kwargs.get("incluir_anulados"))
 
     @patch(
         "ecom.services.pedido_masivo_matriz.listar_sucursales_cliente",

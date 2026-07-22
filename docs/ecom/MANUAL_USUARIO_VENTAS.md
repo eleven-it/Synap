@@ -58,6 +58,7 @@ Pantalla **inicial de pedidos**: ver borradores, pedidos enviados, en curso, cer
 2. Busque por número de pedido, cliente o sucursal.
 3. Pulse **Continuar** en un borrador o **Nuevo** → **Pedido simple** o **Masivo sucursales**.
 4. Si el workflow de aprobación está activo, revise columnas **Por autorizar** / **Aprobado**.
+5. Los **lotes de carga masiva** aparecen como tarjetas en la columna operativa del Kanban (no hay una lane separada «Cargas masivas»). Los PED hijos del lote no se listan individualmente en el hub; use el **resumen de lote** para ver el detalle.
 
 ---
 
@@ -73,14 +74,12 @@ Cargar cantidades para **varias sucursales** del mismo cliente en una sola opera
 
 ### Pasos básicos
 
-1. Desde el hub de pedidos, elija **Nuevo** → **Masivo sucursales** o abra un borrador existente.
-2. Seleccione cliente y, si corresponde, sucursales a incluir.
-3. Busque artículos por código de sistema, código manual (`id_manual`), nombre o
-   **código de barra**, complete cantidades en la grilla y confirme el pedido.
-   Las cantidades deben ser **múltiplo de la unidad de empaquetado** del artículo
-   (p. ej. 6, 12, 18 si el empaque es 6). Si ingresa una cantidad inválida, el
-   sistema muestra un aviso con la unidad de empaquetado antes de guardar o confirmar.
-4. Use **Volver al hub** (breadcrumb o botón) para retomar otros pedidos.
+1. Desde el hub de pedidos, elija **Nuevo** → **Masivo sucursales** (o **Pedido simple**) o abra un borrador existente.
+2. En la barra superior verá el título y las acciones (confirmar, hub, etc.). Debajo, la tarjeta **Contexto comercial** (colapsable) concentra cliente, fechas, lista y condición: complete esos datos antes de cargar la matriz.
+3. Busque artículos por código de sistema, código manual, nombre o **código de barra**; complete cantidades en la grilla (packs / múltiplos de empaque) y confirme el pedido.
+   Si ingresa una cantidad inválida, el sistema muestra un aviso con la unidad de empaquetado antes de guardar o confirmar.
+4. Tras confirmar, puede abrir el **resumen del lote** para revisar lo cargado y, si aplica, el flujo de autorización comercial del lote completo.
+5. Use **Hub pedidos** (o el breadcrumb) para retomar otros pedidos.
 
 ---
 
@@ -195,3 +194,7 @@ Definir y hacer seguimiento de **objetivos comerciales** por período, vendedor 
 | Vendedor · Cliente · Marca | [VENDEDOR_CLIENTE_MARCA.md](VENDEDOR_CLIENTE_MARCA.md) |
 | Ajustes de ventas | [AJUSTES_VENTAS.md](AJUSTES_VENTAS.md) |
 | Índice ecom | [README.md](README.md) |
+
+---
+
+*Manual de usuario – Ventas. Synap. Actualizado 22/07/2026.*

@@ -1,8 +1,10 @@
 # Manual de usuario – Stock e Inventario
 
-Guía práctica del módulo **Stock** en Synap: consulta de inventario por etapa de fábrica y orientación para cargar movimientos.
+Guía práctica del módulo **Stock** en Synap: consulta de inventario por etapa de fábrica y carga de movimientos de stock.
 
 **Antes de empezar:** iniciar sesión y seleccionar la empresa con la que va a trabajar.
+
+**Manual HTML en la app:** **`/stock/manual/`** (requiere sesión). En las pantallas del módulo hay un botón **Ayuda** que abre este manual en la sección correspondiente. Regenerar HTML: `python3 scripts/generar_manuales_html.py`.
 
 ---
 
@@ -13,7 +15,7 @@ Menú Synap → **Stock**.
 | Pantalla | Dónde encontrarla |
 |----------|-------------------|
 | **Inventario por etapa** | Stock → Inventario |
-| Alta de movimiento | Stock → ingreso / movimiento (según el menú de su empresa) |
+| **Ingreso Mov. Stock** (alta de movimiento) | Stock → Ingreso Mov. Stock |
 
 ---
 
@@ -63,19 +65,42 @@ También muestra **Talle** y **Color** del artículo, útiles para controlar cal
 
 ## 3. Alta de movimiento
 
-1. Complete la **cabecera**: motivo, fecha, depósitos origen/destino y detalle según el motivo.
-2. Pase a la pestaña **Artículos**: busque por código o nombre, escanee si aplica y cargue cantidades.
-3. Confirme el movimiento. En celular, el botón principal suele estar arriba.
+**Pantalla:** Stock → **Ingreso Mov. Stock**.
+
+**Diseño:** una sola pantalla a ancho completo (sin pestañas). Arriba va la **cabecera del movimiento** (compacta, colapsable); debajo, el workspace de **Artículos**, que es el foco principal. Abajo, la barra fija **Cancelar** / **Confirmar movimiento**.
+
+### Cabecera del movimiento
+
+1. Complete los datos mínimos: **Fecha**, **Motivo** y **Depósito origen** (y **Depósito destino** si el motivo lo exige, p. ej. transferencia).
+2. Según el motivo pueden aparecer campos adicionales (vendedor, cliente, referencia, pedidos internos/PEDI, proyecto, operario/máquina, valor variable, detalle).
+3. Si faltan datos mínimos, el encabezado oscuro muestra el chip **Datos incompletos** y el botón **Agregar** permanece deshabilitado.
+4. Use el chevron de la tarjeta **Cabecera del movimiento** para compactarla: al colapsar verá un resumen (motivo, depósito, fecha en formato **dd/MM/yyyy**).
+
+### Artículos (workspace principal)
+
+1. En la barra **Buscar artículo**, escriba nombre o código (o escanee en móvil).
+2. El listado de sugerencias muestra **solo el nombre** del artículo. Navegue con **↓ / ↑**, confirme con **Enter** o cierre con **Esc**.
+3. Indique **Movimiento** (Entrada/Salida, si el motivo lo permite) y **Cantidad**, luego **Agregar**.
+4. La tabla lista los renglones con: **Cod. manual**, descripción, movimiento, cantidad, nro. de pedido interno (si aplica), lote, series y eliminar. No hay columna de código de sistema; el código manual se muestra completo.
+5. Cuando tenga al menos un renglón, pulse **Confirmar movimiento**, revise el resumen y confirme.
+
+### Consejos
+
+- En **celular**, la carga es por tarjetas; el escáner de cámara aparece si el dispositivo lo permite.
+- Motivos de armado/desarmado: puede usar `*` en la búsqueda para listar artículos ensamblados.
+- No hay botón **Continuar** ni pestañas: cabecera y artículos conviven en la misma vista.
 
 ---
 
 ## 4. Mensajes frecuentes
 
-- **«No hay artículos con los filtros seleccionados»:** amplíe marcas, quite el filtro de artículo o incluya sin stock.
+- **Chip «Datos incompletos» / Agregar deshabilitado:** complete fecha, motivo y depósito origen (y destino si aplica).
+- **«Código inexistente»:** el texto no coincide con un artículo; revise el código o busque por nombre.
+- **«No hay artículos con los filtros seleccionados»** (inventario): amplíe marcas, quite el filtro de artículo o incluya sin stock.
 - **Talle/Color en «—»:** falta el dato de talle/color; no implica saldo cero.
 - **Inventario vacío con stock real:** revise en Producción → Config. Depósitos que cada depósito tenga el tipo de etapa correcto y que sume al stock.
 - **Sin empresa activa:** seleccione la empresa al iniciar sesión.
 
 ---
 
-*Manual de usuario – Stock e Inventario. Synap. Actualizado 20/07/2026.*
+*Manual de usuario – Stock e Inventario. Synap. Actualizado 22/07/2026.*

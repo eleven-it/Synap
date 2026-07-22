@@ -1,0 +1,56 @@
+change: ecom-pedido-masivo-consolidado-hub
+status: archived
+created: 2026-07-22
+archived: 2026-07-22
+phase: archived
+artifact_store: openspec
+depends_on: []
+product_decisions_locked: 2026-07-22
+artifacts:
+  exploration: complete
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: complete
+  archive: complete
+next_recommended: none
+spec_summary:
+  new_capability: ecom-pedido-masivo-lote-resumen
+  modified_capabilities:
+    - ecom-pedidos-hub-kanban
+    - ecom-aprobacion-pedidos
+    - ecom-pedido-masivo-sucursales
+  requirements_added: 16
+  requirements_modified: 2
+  scenarios_total: 40
+capabilities:
+  new:
+    - ecom-pedido-masivo-lote-resumen
+  modified:
+    - ecom-pedidos-hub-kanban
+    - ecom-aprobacion-pedidos
+    - ecom-pedido-masivo-sucursales
+verify:
+  date: 2026-07-22
+  result: PASS
+  tests_run: 59
+  warnings:
+    - HUB-10 sin test E2E automatizado
+    - LOT CTAs HTML sin test de vista en Phase 6
+archive:
+  date: 2026-07-22
+  path: openspec/changes/archive/2026-07-22-ecom-pedido-masivo-consolidado-hub/
+  specs_synced:
+    created:
+      - ecom-pedido-masivo-lote-resumen
+    updated:
+      - ecom-pedidos-hub-kanban
+      - ecom-aprobacion-pedidos
+      - ecom-pedido-masivo-sucursales
+  engram_observations:
+    proposal: 2125
+    spec: 2126
+    design: 2127
+    tasks: 2128
