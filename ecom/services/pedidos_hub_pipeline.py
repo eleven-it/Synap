@@ -24,7 +24,6 @@ from ecom.services.pedido_cabecera_relay import puede_anular_pedido_relay
 from ecom.services.aprobacion_pedidos import puede_aprobar_lote, puede_aprobar_pedido
 from ecom.services.ecom_config_mysql import (
     aprobacion_pedidos_activa,
-    workflow_jerarquia_comercial_activo,
 )
 from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 
@@ -425,10 +424,8 @@ def _draft_en_alcance_hub(
     if tipousuario == "cliente":
         idc = to_int_or_none(sess_user.get("idcliente") or sess_user.get("Codigo"))
         return idc is not None and draft.id_cliente == idc
-    if (
-        puede_ver_todos_pedidos(sess_user)
-        and not workflow_jerarquia_comercial_activo(base_empresa)
-    ):
+    # Puestos gerenciales / permiso ver_todos: sin filtro de viajante.
+    if puede_ver_todos_pedidos(sess_user):
         return True
     alcance = alcance_viajantes_comercial(base_empresa, sess_user)
     if not alcance:
@@ -743,10 +740,9 @@ def _pedidos_mysql(
         if idc is not None:
             where.append("cp.Codigo = %s")
             params.append(idc)
-    elif (
-        puede_ver_todos_pedidos(sess_user)
-        and not workflow_jerarquia_comercial_activo(base_empresa)
-    ):
+    elif puede_ver_todos_pedidos(sess_user):
+        # Supervisor / Supervisor venta / Administracion, todos_clientes o
+        # ecom.pedidos.ver_todos: sin filtro CodViajante (ven todos los PED).
         pass
     else:
         alcance = alcance_viajantes_comercial(base_empresa, sess_user)

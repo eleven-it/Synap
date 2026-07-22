@@ -115,6 +115,18 @@ def _cargar_campos_mayoristapp_mysql(base_empresa: str, id_usuario: int, id_pues
                 out["CodViajante"] = cv_map
 
             if id_puesto:
+                cursor.execute(
+                    """
+                    SELECT puesto FROM puestos
+                    WHERE idpuesto = %s
+                    LIMIT 1
+                    """,
+                    [int(id_puesto)],
+                )
+                puesto_row = cursor.fetchone()
+                if puesto_row and puesto_row[0] is not None:
+                    out["nombre_puesto"] = str(puesto_row[0]).strip() or None
+
                 todos = _valor_permiso_puesto(
                     cursor,
                     int(id_puesto),
@@ -179,6 +191,7 @@ def _persistir_contexto(request: Any, ctx: dict) -> None:
         "vendedor_a_cargo",
         "cod_viajante_operativo",
         "tipousuario",
+        "nombre_puesto",
     ):
         val = ctx.get(clave)
         if val is None:
@@ -223,6 +236,7 @@ def contexto_usuario_mayoristapp(request: Any, *, persistir: bool = True) -> Dic
             "todos_clientes",
             "supervisor_venta",
             "permiso_supervisor_venta_web",
+            "nombre_puesto",
         )
         for k in _CLAVES_MYSQL_SIEMPRE:
             if k in loaded and loaded[k] is not None:

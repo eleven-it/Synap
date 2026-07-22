@@ -89,6 +89,15 @@ class TestPedidoPermisos(TestCase):
     def test_vendedor_normal_no_ver_todos(self):
         self.assertFalse(puede_ver_todos_pedidos({"todos_clientes": "No", "id_vendedor_usr": 1}))
 
+    def test_puesto_supervisor_ve_todos(self):
+        from ecom.services.pedido_permisos import puesto_ve_todos_pedidos
+
+        self.assertTrue(puede_ver_todos_pedidos({"nombre_puesto": "Supervisor", "todos_clientes": "No"}))
+        self.assertTrue(puesto_ve_todos_pedidos({"nombre_puesto": "Supervisor venta"}))
+        self.assertTrue(puesto_ve_todos_pedidos({"nombre_puesto": "Administración"}))
+        self.assertTrue(puesto_ve_todos_pedidos({"nombre_puesto": "Administracion"}))
+        self.assertFalse(puesto_ve_todos_pedidos({"nombre_puesto": "Vendedor"}))
+
     def test_where_pedidos_sin_filtro_viajante_si_supervisor(self):
         sql, params = _where_pedidos(
             {"vendedor": "true", "filtraVendedor": "todos"},

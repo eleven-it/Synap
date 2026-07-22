@@ -86,7 +86,9 @@ def alcance_viajantes_comercial(
     """
     Devuelve lista de ``CodViajante`` visibles para el usuario en ctx.
 
-    Con ``ecom.pedidos.ver_todos`` y workflow ON devuelve todos los viajantes activos.
+    Si ``puede_ver_todos_pedidos`` (puesto Supervisor / Supervisor venta /
+    Administracion, ``todos_clientes=Si`` o ``ecom.pedidos.ver_todos``),
+    devuelve todos los viajantes activos (con o sin workflow org).
     Cache por request en ``ctx[_CACHE_KEY]``.
     """
     if _CACHE_KEY in ctx:
@@ -95,10 +97,12 @@ def alcance_viajantes_comercial(
             return list(cached)
 
     base = (base_empresa or "").strip()
-    if not workflow_jerarquia_comercial_activo(base):
-        result = cartera_permitida_legacy(ctx)
-    elif puede_ver_todos_pedidos(ctx):
+    # Ver todos (puesto gerencial, todos_clientes o ecom.pedidos.ver_todos)
+    # tiene prioridad sobre cartera/subárbol, con o sin workflow org.
+    if puede_ver_todos_pedidos(ctx):
         result = _listar_todos_viajantes(base)
+    elif not workflow_jerarquia_comercial_activo(base):
+        result = cartera_permitida_legacy(ctx)
     else:
         id_usuario = _id_usuario_desde_ctx(ctx)
         if id_usuario is not None:

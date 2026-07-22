@@ -63,9 +63,6 @@ class TestUrlPedidoMasivoModoSimple(TestCase):
             yield cursor
 
         with patch(
-            "ecom.services.pedidos_hub_pipeline.workflow_jerarquia_comercial_activo",
-            return_value=False,
-        ), patch(
             "ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa",
             return_value=False,
         ), patch(
@@ -169,10 +166,9 @@ class TestEtiquetaSucursal(TestCase):
 
 
 class TestPedidosMysql(TestCase):
-    @patch("ecom.services.pedidos_hub_pipeline.workflow_jerarquia_comercial_activo", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
-    def test_incluye_sucursal_e_importe_venta(self, mock_cursor_ctx, _apr, _wf):
+    def test_incluye_sucursal_e_importe_venta(self, mock_cursor_ctx, _apr):
         cursor = MagicMock()
         cursor.fetchall.return_value = [
             {
@@ -367,9 +363,8 @@ class TestConstruirHub(TestCase):
 class TestPedidosMysqlAlcance(TestCase):
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial", return_value=[10, 20, 21])
-    @patch("ecom.services.pedidos_hub_pipeline.workflow_jerarquia_comercial_activo", return_value=True)
     @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
-    def test_supervisor_filtra_por_alcance(self, mock_cursor_ctx, _wf, mock_alcance, _apr):
+    def test_vendedor_filtra_por_alcance(self, mock_cursor_ctx, mock_alcance, _apr):
         cursor = MagicMock()
         cursor.fetchall.return_value = []
 
@@ -381,7 +376,7 @@ class TestPedidosMysqlAlcance(TestCase):
 
         _pedidos_mysql(
             "emp_hub",
-            {"id_vendedor_usr": 10, "synap_permisos": []},
+            {"id_vendedor_usr": 10, "synap_permisos": [], "nombre_puesto": "Vendedor"},
         )
         mock_alcance.assert_called_once()
         sql = cursor.execute.call_args[0][0]
@@ -392,9 +387,8 @@ class TestPedidosMysqlAlcance(TestCase):
 
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial")
-    @patch("ecom.services.pedidos_hub_pipeline.workflow_jerarquia_comercial_activo", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
-    def test_ver_todos_legacy_sin_filtro_viajante(self, mock_cursor_ctx, _wf, mock_alcance, _apr):
+    def test_ver_todos_legacy_sin_filtro_viajante(self, mock_cursor_ctx, mock_alcance, _apr):
         cursor = MagicMock()
         cursor.fetchall.return_value = []
 
@@ -411,10 +405,9 @@ class TestPedidosMysqlAlcance(TestCase):
         self.assertNotIn("CodViajante =", sql)
 
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
-    @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial", return_value=[])
-    @patch("ecom.services.pedidos_hub_pipeline.workflow_jerarquia_comercial_activo", return_value=True)
+    @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial")
     @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
-    def test_alcance_vacio_sin_resultados(self, mock_cursor_ctx, _wf, _alcance, _apr):
+    def test_puesto_supervisor_sin_filtro_viajante(self, mock_cursor_ctx, mock_alcance, _apr):
         cursor = MagicMock()
         cursor.fetchall.return_value = []
 
@@ -424,7 +417,36 @@ class TestPedidosMysqlAlcance(TestCase):
 
         mock_cursor_ctx.side_effect = _fake_cursor
 
-        items = _pedidos_mysql("emp_hub", {"id_vendedor_usr": 10})
+        for puesto in ("Supervisor", "Supervisor venta", "Administracion"):
+            mock_alcance.reset_mock()
+            _pedidos_mysql(
+                "emp_hub",
+                {
+                    "nombre_puesto": puesto,
+                    "todos_clientes": "No",
+                    "synap_permisos": [],
+                    "id_vendedor_usr": 1,
+                },
+            )
+            mock_alcance.assert_not_called()
+            sql = cursor.execute.call_args[0][0]
+            self.assertNotIn("CodViajante IN", sql, msg=puesto)
+            self.assertNotIn("1 = 0", sql, msg=puesto)
+
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial", return_value=[])
+    @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
+    def test_alcance_vacio_sin_resultados(self, mock_cursor_ctx, _alcance, _apr):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+
+        @contextmanager
+        def _fake_cursor(*_a, **_kw):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _fake_cursor
+
+        items = _pedidos_mysql("emp_hub", {"id_vendedor_usr": 10, "nombre_puesto": "Vendedor"})
         self.assertEqual(items, [])
         sql = cursor.execute.call_args[0][0]
         self.assertIn("1 = 0", sql)
@@ -655,29 +677,26 @@ class TestCargasMasivasPipeline(TestCase):
         self.assertEqual(ctx[draft_id]["indice_por_cod"][101], 1)
         self.assertEqual(ctx[draft_id]["indice_por_cod"][102], 2)
 
-    @patch("ecom.services.pedidos_hub_pipeline.workflow_jerarquia_comercial_activo", return_value=True)
     @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial", return_value=[99])
     @patch("ecom.services.pedidos_hub_pipeline._fetch_estados_pedidos_lote", return_value={})
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
-    def test_lote_fuera_de_alcance_no_aparece(self, _apr, _estados, _alcance, _wf):
+    def test_lote_fuera_de_alcance_no_aparece(self, _apr, _estados, _alcance):
         self._draft_confirmado(id_usuario=22, codigos=[201])
         mapa, _ctx = _mapa_reverso_lotes(
             "emp_hub",
             77,
-            {"id_usuario": 77, "id_vendedor_usr": 99},
+            {"id_usuario": 77, "id_vendedor_usr": 99, "nombre_puesto": "Vendedor"},
             aprobacion_on=False,
         )
         self.assertEqual(mapa, {})
 
     @patch("ecom.services.pedidos_hub_pipeline.puede_aprobar_pedido", return_value=True)
-    @patch("ecom.services.pedidos_hub_pipeline.workflow_jerarquia_comercial_activo", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=True)
     @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
     def test_ped_hijo_enriquecido_y_sin_aprobar_si_lote_pendiente(
         self,
         mock_cursor_ctx,
         _apr,
-        _wf,
         _puede_ped,
     ):
         cursor = MagicMock()
@@ -733,10 +752,9 @@ class TestCargasMasivasPipeline(TestCase):
         self.assertEqual(meta["lote_total"], 2)
         self.assertFalse(meta["puede_aprobar"])
 
-    @patch("ecom.services.pedidos_hub_pipeline.workflow_jerarquia_comercial_activo", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
-    def test_ped_suelto_sin_meta_lote(self, mock_cursor_ctx, _apr, _wf):
+    def test_ped_suelto_sin_meta_lote(self, mock_cursor_ctx, _apr):
         cursor = MagicMock()
         cursor.fetchall.return_value = [
             {
