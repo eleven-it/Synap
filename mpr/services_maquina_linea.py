@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import logging
 from datetime import date
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 import MySQLdb
 
+from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
+from mpr.db import mysql_cursor
 from mpr.repositories import maquina_articulo as repo_art
 from mpr.repositories import maquina_linea as repo
 
@@ -251,6 +254,192 @@ def listar_articulos_vigentes_todas_maquinas(
             base_empresa, e, exc_info=True,
         )
         return {}
+
+
+def _franjas_cantidad_vacias() -> Dict[str, float]:
+    return {"manana": 0.0, "tarde": 0.0, "noche": 0.0}
+
+
+def cantidades_parte_planilla_por_fecha(
+    base_empresa: str,
+    fecha: date,
+) -> Dict[Tuple[int, int], Dict[str, float]]:
+    """
+    Suma cantidades de partes del día por (id_maquina, id_articulo) y franja horaria.
+
+    Parte aprobado → cantidad_aprobada (0 si null); otro estado → cantidad_declarada.
+    Solo líneas con id_mpr_maquina no null.
+    """
+    base = (base_empresa or "").strip()
+    if not base or fecha is None:
+        return {}
+    try:
+        from mpr.services import _franja_horaria_turno, listar_turnos
+
+        turnos_por_id = {
+            t["id"]: t for t in listar_turnos(base, solo_activos=False)
+        }
+        acumulado: Dict[Tuple[int, int], Dict[str, Decimal]] = {}
+        with mysql_cursor(base, dict_cursor=True) as cursor:
+            cursor.execute(
+                """
+                SELECT pl.id_mpr_maquina, pl.id_articulo, p.estado, p.id_mpr_turno,
+                       pl.cantidad_declarada, pl.cantidad_aprobada
+                FROM mpr_parte p
+                INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
+                WHERE p.fecha_produccion = %s
+                  AND pl.id_mpr_maquina IS NOT NULL
+                """,
+                [fecha],
+            )
+            for row in cursor.fetchall() or []:
+                mid = to_int_or_none(row.get("id_mpr_maquina"))
+                aid = to_int_or_none(row.get("id_articulo"))
+                if mid is None or aid is None:
+                    continue
+                estado = str(row.get("estado") or "").strip().lower()
+                if estado == "aprobado":
+                    cant = to_decimal_or_none(row.get("cantidad_aprobada")) or Decimal("0")
+                else:
+                    cant = to_decimal_or_none(row.get("cantidad_declarada")) or Decimal("0")
+                if cant <= 0:
+                    continue
+                id_turno = to_int_or_none(row.get("id_mpr_turno"))
+                turno = turnos_por_id.get(id_turno) or {}
+                franja = _franja_horaria_turno(
+                    str(turno.get("nombre") or ""),
+                    turno.get("hora_inicio"),
+                )
+                if not franja:
+                    continue
+                clave = (mid, aid)
+                bucket = acumulado.setdefault(
+                    clave,
+                    {"manana": Decimal("0"), "tarde": Decimal("0"), "noche": Decimal("0")},
+                )
+                bucket[franja] = bucket[franja] + cant
+        resultado: Dict[Tuple[int, int], Dict[str, float]] = {}
+        for clave, franjas in acumulado.items():
+            resultado[clave] = {
+                franja: float(valor) for franja, valor in franjas.items()
+            }
+        return resultado
+    except Exception as e:
+        logger.error(
+            "Error al obtener cantidades planilla CQ %s en %s: %s",
+            fecha, base_empresa, e, exc_info=True,
+        )
+        return {}
+
+
+def _serializar_cantidad_franjas(cantidades: Dict[str, float]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for franja in ("manana", "tarde", "noche"):
+        valor = cantidades.get(franja, 0) or 0
+        if isinstance(valor, Decimal):
+            valor = float(valor)
+        if valor == 0:
+            out[franja] = None
+        elif float(valor) == int(float(valor)):
+            out[franja] = int(float(valor))
+        else:
+            out[franja] = float(valor)
+    return out
+
+
+def construir_datos_planilla_control_calidad(
+    base_empresa: str,
+    fecha: date,
+    id_linea: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Datos JSON para imprimir la planilla Control de Calidad a una fecha dada.
+
+    Fecha futura: artículos vigentes hoy y cantidades vacías; operarios del roster
+    de la fecha solicitada.
+    """
+    from mpr.services import operarios_roster_por_linea
+
+    hoy = date.today()
+    es_futuro = fecha > hoy
+    fecha_articulos = hoy if es_futuro else fecha
+    id_linea_filtro = _to_int(id_linea) if id_linea is not None else None
+
+    maquinas_raw = listar_maquinas(base_empresa, solo_activas=True)
+    if id_linea_filtro is not None:
+        maquinas_raw = [
+            m for m in maquinas_raw
+            if m.get("id_linea_actual") == id_linea_filtro
+        ]
+
+    articulos_por_maquina = listar_articulos_vigentes_todas_maquinas(
+        base_empresa, fecha_articulos
+    )
+    cantidades_map: Dict[Tuple[int, int], Dict[str, float]] = {}
+    if not es_futuro:
+        cantidades_map = cantidades_parte_planilla_por_fecha(base_empresa, fecha)
+
+    maquinas: List[Dict[str, Any]] = []
+    id_lineas_planilla: set = set()
+    for m in maquinas_raw:
+        mid = m.get("id")
+        articulos_raw = articulos_por_maquina.get(mid, []) if mid is not None else []
+        if not articulos_raw:
+            continue
+        if m.get("id_linea_actual") is not None:
+            id_lineas_planilla.add(m.get("id_linea_actual"))
+        articulos: List[Dict[str, Any]] = []
+        for art in articulos_raw:
+            aid = art.get("id_articulo")
+            cantidades = _franjas_cantidad_vacias()
+            if aid is not None and not es_futuro:
+                cantidades = cantidades_map.get((mid, aid), _franjas_cantidad_vacias())
+            articulos.append(
+                {
+                    "id_articulo": aid,
+                    "codigo_manual": art.get("codigo_manual") or "",
+                    "codigo_articulo": art.get("codigo_articulo") or "",
+                    "descripcion_articulo": art.get("descripcion_articulo") or "",
+                    "talle": art.get("talle") or "",
+                    "color": art.get("color") or "",
+                    "vigencia_desde": (
+                        art.get("vigencia_desde").isoformat()
+                        if art.get("vigencia_desde") else None
+                    ),
+                    "creado_en": art.get("creado_en"),
+                    "id_mpr_maquina_articulo": art.get("id_mpr_maquina_articulo"),
+                    "cantidades": _serializar_cantidad_franjas(cantidades),
+                }
+            )
+        codigo = str(m.get("codigo") or "")
+        nombre = str(m.get("nombre") or "")
+        maquinas.append(
+            {
+                "id": mid,
+                "codigo": codigo,
+                "nombre": nombre,
+                "id_linea_actual": m.get("id_linea_actual"),
+                "linea_actual_nombre": m.get("linea_actual_nombre") or "",
+                "observacion_planilla": m.get("observacion_planilla") or "",
+                "codigo_search": f"{codigo} {nombre}".strip().lower(),
+                "articulos": articulos,
+            }
+        )
+
+    operadores_por_linea = operarios_roster_por_linea(
+        base_empresa, fecha, id_lineas_planilla
+    )
+    operadores_json = {
+        str(k): v for k, v in operadores_por_linea.items()
+    }
+
+    return {
+        "fecha": fecha.isoformat(),
+        "fecha_articulos": fecha_articulos.isoformat(),
+        "es_futuro": es_futuro,
+        "maquinas": maquinas,
+        "operadores_por_linea": operadores_json,
+    }
 
 
 def construir_grilla_carga_articulos(

@@ -11,6 +11,8 @@ from ecom.mayoristapp_web_views import (
     PresupuestosVendedorView,
 )
 from ecom.pedido_gestion_views import (
+    AprobacionLoteAprobarAPIView,
+    AprobacionLoteRechazarAPIView,
     AprobacionPedidoAprobarAPIView,
     AprobacionPedidoRechazarAPIView,
     AprobacionPendientesAPIView,
@@ -20,6 +22,8 @@ from ecom.pedido_gestion_views import (
     ComprobanteComercialCabeceraAPIView,
     ComprobanteComercialDetalleAPIView,
     ComprobanteComercialDetalleView,
+    LoteResumenAPIView,
+    LoteResumenView,
     PedidoCabeceraV1APIView,
     PedidoComprobantePDFAPIView,
     PedidoDetalleView,
@@ -184,6 +188,16 @@ urlpatterns = [
         name="mayoristapp_pedidos_hub",
     ),
     path(
+        "mayoristapp/pedidos/lote/<int:draft_id>/",
+        LoteResumenView.as_view(),
+        name="mayoristapp_lote_resumen",
+    ),
+    path(
+        "api/mayoristapp/pedidos/lote/<int:draft_id>/",
+        LoteResumenAPIView.as_view(),
+        name="api_lote_resumen",
+    ),
+    path(
         "api/mayoristapp/pedidos/hub/",
         PedidosHubAPIView.as_view(),
         name="mayoristapp_pedidos_hub_api",
@@ -322,6 +336,16 @@ urlpatterns = [
         "api/mayoristapp/aprobacion/<int:cod_mov>/rechazar/",
         AprobacionPedidoRechazarAPIView.as_view(),
         name="api_aprobacion_pedido_rechazar",
+    ),
+    path(
+        "api/mayoristapp/aprobacion/lote/<int:draft_id>/aprobar/",
+        AprobacionLoteAprobarAPIView.as_view(),
+        name="api_aprobacion_lote_aprobar",
+    ),
+    path(
+        "api/mayoristapp/aprobacion/lote/<int:draft_id>/rechazar/",
+        AprobacionLoteRechazarAPIView.as_view(),
+        name="api_aprobacion_lote_rechazar",
     ),
     path(
         "api/mayoristapp/vendedor-cliente-marca/ternas/",

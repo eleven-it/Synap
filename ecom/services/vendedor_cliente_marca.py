@@ -147,10 +147,10 @@ def listar_ternas(
     id_cliente: Optional[int] = None,
     id_cliente_domicilio: Optional[int] = None,
     solo_activas: bool = True,
-    limit: int = 200,
+    limit: int = 5000,
 ) -> Tuple[bool, str, List[Dict[str, Any]]]:
     """Lista relaciones con nombres de viajante / cliente / sucursal / marca."""
-    lim = max(1, min(int(limit), 500))
+    lim = max(1, min(int(limit), 20000))
     where = ["1=1"]
     params: List[Any] = []
     if solo_activas:

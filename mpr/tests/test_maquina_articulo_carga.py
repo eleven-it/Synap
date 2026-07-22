@@ -9,6 +9,8 @@ from django.test import RequestFactory, SimpleTestCase
 from mpr.repositories import maquina_articulo as repo_art
 from mpr.services_maquina_linea import (
     buscar_articulos,
+    cantidades_parte_planilla_por_fecha,
+    construir_datos_planilla_control_calidad,
     construir_grilla_carga_articulos,
     guardar_observacion_planilla_maquina,
 )
@@ -16,6 +18,7 @@ from mpr.views import (
     MaquinaArticuloAccionAPIView,
     MaquinaArticuloBuscarAPIView,
     MaquinaObservacionPlanillaAPIView,
+    MaquinaPlanillaControlCalidadAPIView,
     MaquinasCargaArticulosView,
 )
 
@@ -422,3 +425,139 @@ class OperariosRosterPorFranjaTest(SimpleTestCase):
         mock_operarios_por_linea.assert_called_once_with(
             "emp", date.today(), {1, 2}
         )
+
+
+class ConstruirDatosPlanillaControlCalidadTest(SimpleTestCase):
+    @patch("mpr.services.operarios_roster_por_linea")
+    @patch("mpr.services_maquina_linea.cantidades_parte_planilla_por_fecha")
+    @patch("mpr.services_maquina_linea.listar_articulos_vigentes_todas_maquinas")
+    @patch("mpr.services_maquina_linea.listar_maquinas")
+    def test_fecha_futura_usa_hoy_para_articulos_y_cantidades_vacias(
+        self, mock_maquinas, mock_articulos, mock_cantidades, mock_operarios
+    ):
+        hoy = date.today()
+        futuro = date(hoy.year + 1, 1, 15)
+        mock_maquinas.return_value = [
+            {
+                "id": 10,
+                "codigo": "1",
+                "nombre": "M1",
+                "id_linea_actual": 1,
+                "observacion_planilla": "",
+            }
+        ]
+        mock_articulos.return_value = {
+            10: [{"id_articulo": 100, "descripcion_articulo": "Art", "color": "", "talle": ""}],
+        }
+        mock_operarios.return_value = {1: {"manana": "JUAN", "tarde": "", "noche": ""}}
+
+        out = construir_datos_planilla_control_calidad("emp", futuro)
+
+        self.assertTrue(out["es_futuro"])
+        self.assertEqual(out["fecha_articulos"], hoy.isoformat())
+        mock_articulos.assert_called_once_with("emp", hoy)
+        mock_cantidades.assert_not_called()
+        cant = out["maquinas"][0]["articulos"][0]["cantidades"]
+        self.assertIsNone(cant["manana"])
+        self.assertIsNone(cant["tarde"])
+        self.assertIsNone(cant["noche"])
+
+    @patch("mpr.services.operarios_roster_por_linea")
+    @patch("mpr.services_maquina_linea.cantidades_parte_planilla_por_fecha")
+    @patch("mpr.services_maquina_linea.listar_articulos_vigentes_todas_maquinas")
+    @patch("mpr.services_maquina_linea.listar_maquinas")
+    def test_fecha_pasada_pide_vigentes_y_cantidades_a_esa_fecha(
+        self, mock_maquinas, mock_articulos, mock_cantidades, mock_operarios
+    ):
+        fecha = date(2026, 3, 10)
+        mock_maquinas.return_value = [
+            {
+                "id": 10,
+                "codigo": "1",
+                "nombre": "M1",
+                "id_linea_actual": 1,
+                "observacion_planilla": "Nota",
+            }
+        ]
+        mock_articulos.return_value = {
+            10: [{"id_articulo": 100, "descripcion_articulo": "Art", "color": "R", "talle": "M"}],
+        }
+        mock_cantidades.return_value = {(10, 100): {"manana": 12.0, "tarde": 0.0, "noche": 0.0}}
+        mock_operarios.return_value = {1: {"manana": "ANA", "tarde": "", "noche": ""}}
+
+        out = construir_datos_planilla_control_calidad("emp", fecha)
+
+        self.assertFalse(out["es_futuro"])
+        self.assertEqual(out["fecha_articulos"], fecha.isoformat())
+        mock_articulos.assert_called_once_with("emp", fecha)
+        mock_cantidades.assert_called_once_with("emp", fecha)
+        self.assertEqual(out["maquinas"][0]["articulos"][0]["cantidades"]["manana"], 12)
+        mock_operarios.assert_called_once_with("emp", fecha, {1})
+
+
+class CantidadesPartePlanillaPorFechaTest(SimpleTestCase):
+    @patch("mpr.services_maquina_linea.mysql_cursor")
+    @patch("mpr.services.listar_turnos")
+    def test_agrega_aprobado_y_declarado_por_franja(self, mock_turnos, mock_cursor_ctx):
+        mock_turnos.return_value = [
+            {"id": 10, "nombre": "Mañana", "hora_inicio": "06:00"},
+            {"id": 20, "nombre": "Tarde", "hora_inicio": "14:00"},
+        ]
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [
+            {
+                "id_mpr_maquina": 1,
+                "id_articulo": 100,
+                "estado": "aprobado",
+                "id_mpr_turno": 10,
+                "cantidad_declarada": 5,
+                "cantidad_aprobada": 4,
+            },
+            {
+                "id_mpr_maquina": 1,
+                "id_articulo": 100,
+                "estado": "pendiente",
+                "id_mpr_turno": 20,
+                "cantidad_declarada": 3,
+                "cantidad_aprobada": None,
+            },
+        ]
+
+        out = cantidades_parte_planilla_por_fecha("emp", date(2026, 7, 21))
+
+        self.assertEqual(out[(1, 100)]["manana"], 4.0)
+        self.assertEqual(out[(1, 100)]["tarde"], 3.0)
+        self.assertEqual(out[(1, 100)]["noche"], 0.0)
+
+
+class MaquinaPlanillaControlCalidadAPIViewTest(SimpleTestCase):
+    def setUp(self):
+        self.rf = RequestFactory()
+        self.view = MaquinaPlanillaControlCalidadAPIView()
+
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    def test_get_fecha_invalida_400(self, _base):
+        req = self.rf.get("/mpr/maquinas/api/planilla-control-calidad/?fecha=31-07-2026")
+        resp = self.view.get(req)
+        self.assertEqual(resp.status_code, 400)
+        data = json.loads(resp.content)
+        self.assertFalse(data["ok"])
+
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    @patch("mpr.services_maquina_linea.construir_datos_planilla_control_calidad")
+    def test_get_ok_200(self, mock_construir, _base):
+        mock_construir.return_value = {
+            "fecha": "2026-07-21",
+            "fecha_articulos": "2026-07-21",
+            "es_futuro": False,
+            "maquinas": [],
+            "operadores_por_linea": {},
+        }
+        req = self.rf.get(
+            "/mpr/maquinas/api/planilla-control-calidad/?fecha=2026-07-21&id_linea=1"
+        )
+        resp = self.view.get(req)
+        self.assertEqual(resp.status_code, 200)
+        data = json.loads(resp.content)
+        self.assertTrue(data["ok"])
+        mock_construir.assert_called_once_with("emp", date(2026, 7, 21), id_linea=1)

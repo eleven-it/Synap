@@ -24,9 +24,12 @@ from ecom.services.jerarquia_comercial import (
     _gerente_de_supervisor,
     _supervisores_de_vendedor,
 )
+from ecom.models import EcomPedidoMasivoDraft
 from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 
 logger = logging.getLogger(__name__)
+
+ESTADO_LOTE_ERROR = "error"
 
 ESTADO_NEUTRO = "-"
 ESTADO_PENDIENTE = "pendiente"
@@ -401,6 +404,259 @@ def puede_aprobar_pedido(
         return False
 
 
+def pedido_en_lote_pendiente(base_empresa: str, cod_mov: int) -> bool:
+    """True si el PED pertenece a un lote confirmado con aprobación lote pendiente."""
+    cod = to_int_or_none(cod_mov)
+    if cod is None or not base_empresa:
+        return False
+    qs = EcomPedidoMasivoDraft.objects.filter(
+        base_empresa=base_empresa,
+        estado=EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
+        estado_aprobacion_lote=EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_PENDIENTE,
+    ).only("codigos_movimiento")
+    for draft in qs:
+        cods = [to_int_or_none(c) for c in (draft.codigos_movimiento or [])]
+        if cod in cods:
+            return True
+    return False
+
+
+def _snapshot_estado_comercial(base_empresa: str, cod_mov: int) -> Optional[str]:
+    ped = _fetch_ped_aprobacion(base_empresa, cod_mov)
+    if not ped:
+        return None
+    return str(ped.get("estado_aprobacion_comercial") or ESTADO_NEUTRO).strip().lower()
+
+
+def _revertir_estados_comerciales(
+    base_empresa: str,
+    snapshots: Dict[int, str],
+) -> List[str]:
+    """Restaura estados comerciales previos (compensación lote)."""
+    avisos: List[str] = []
+    if not snapshots:
+        return avisos
+    try:
+        pool = get_mysql_pool()
+        with pool.get_connection(base_empresa) as conn:
+            cursor = conn.cursor()
+            try:
+                conn.autocommit(False)
+                for cod, estado_prev in snapshots.items():
+                    cursor.execute(
+                        """
+                        UPDATE comp_ped
+                        SET estado_aprobacion_comercial = %s
+                        WHERE CodigoMovimiento = %s AND TipoComprobante = 'PED'
+                        """,
+                        (estado_prev, cod),
+                    )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                cursor.close()
+                try:
+                    conn.autocommit(True)
+                except Exception:
+                    pass
+    except Exception as exc:
+        logger.exception("_revertir_estados_comerciales: %s", exc)
+        avisos.append(str(exc))
+    return avisos
+
+
+def _codigos_ped_activos_lote(
+    base_empresa: str,
+    codigos: Sequence[int],
+) -> List[int]:
+    """PED del lote no anulados (candidatos a resolver)."""
+    activos: List[int] = []
+    for cod in codigos:
+        c = to_int_or_none(cod)
+        if c is None:
+            continue
+        ped = _fetch_ped_aprobacion(base_empresa, c)
+        if not ped:
+            continue
+        if (ped.get("Anulado") or "").strip().lower() in ("si", "sí"):
+            continue
+        activos.append(c)
+    return activos
+
+
+def _sincronizar_estado_lote_tras_resolver(
+    draft: EcomPedidoMasivoDraft,
+    *,
+    accion: str,
+    base_empresa: str,
+    hubo_escalados: bool,
+) -> str:
+    """Calcula y persiste ``estado_aprobacion_lote`` según agregado de PED."""
+    acc = (accion or "").strip().lower()
+    if acc == "rechazar":
+        nuevo = EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_RECHAZADO
+    elif hubo_escalados:
+        nuevo = EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_PENDIENTE
+    else:
+        pendientes = 0
+        for cod in draft.codigos_movimiento or []:
+            c = to_int_or_none(cod)
+            if c is None:
+                continue
+            ped = _fetch_ped_aprobacion(base_empresa, c)
+            if not ped:
+                continue
+            if (ped.get("Anulado") or "").strip().lower() in ("si", "sí"):
+                continue
+            est = str(ped.get("estado_aprobacion_comercial") or ESTADO_NEUTRO).strip().lower()
+            if est == ESTADO_PENDIENTE:
+                pendientes += 1
+        if pendientes > 0:
+            nuevo = EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_PENDIENTE
+        else:
+            nuevo = EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_APROBADO
+    draft.estado_aprobacion_lote = nuevo
+    draft.save(update_fields=["estado_aprobacion_lote", "updated_at"])
+    return nuevo
+
+
+def resolver_lote_masivo(
+    base_empresa: str,
+    draft: EcomPedidoMasivoDraft,
+    accion: str,
+    aprobador_cod: int,
+    motivo: str,
+    *,
+    sess_user: Optional[Dict[str, Any]] = None,
+) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    """
+    Autoriza o rechaza un lote masivo (orquestación sobre ``resolver`` por PED).
+
+    Ante fallo parcial revierte snapshots de estados comerciales ya aplicados.
+    """
+    if not aprobacion_pedidos_activa(base_empresa):
+        return False, "La aprobación comercial no está activa.", None
+
+    acc = (accion or "").strip().lower()
+    if acc not in ("aprobar", "rechazar"):
+        return False, "Acción inválida. Use aprobar o rechazar.", None
+
+    if draft.estado != EcomPedidoMasivoDraft.ESTADO_CONFIRMADO:
+        return False, "El lote no está confirmado.", None
+
+    estado_lote = str(
+        draft.estado_aprobacion_lote or EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_NEUTRO
+    ).strip().lower()
+    permitidos = {
+        EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_PENDIENTE,
+        ESTADO_LOTE_ERROR,
+    }
+    if estado_lote not in permitidos:
+        return False, "El lote no está pendiente de autorización comercial.", None
+
+    if sess_user and not puede_aprobar_lote(base_empresa, sess_user, draft):
+        return False, "No tiene permiso para autorizar este lote.", None
+
+    if acc == "rechazar" and not str(motivo or "").strip():
+        return False, "Indique el motivo del rechazo.", None
+
+    codigos = _codigos_ped_activos_lote(
+        base_empresa,
+        [to_int_or_none(c) for c in (draft.codigos_movimiento or []) if to_int_or_none(c)],
+    )
+    if not codigos:
+        return False, "No hay pedidos activos en el lote.", None
+
+    snapshots: Dict[int, str] = {}
+    aplicados: List[int] = []
+    resueltos = 0
+    escalados = 0
+    motivo_txt = str_or_default(motivo, "-")
+
+    for cod in codigos:
+        prev = _snapshot_estado_comercial(base_empresa, cod)
+        if prev is None:
+            _revertir_estados_comerciales(base_empresa, snapshots)
+            draft.estado_aprobacion_lote = EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_ERROR
+            draft.save(update_fields=["estado_aprobacion_lote", "updated_at"])
+            return (
+                False,
+                f"Pedido {cod} no encontrado.",
+                {"afectados": aplicados, "estado_aprobacion_lote": ESTADO_LOTE_ERROR},
+            )
+        snapshots[cod] = prev
+        ok, msg, payload = resolver(
+            base_empresa,
+            cod,
+            acc,
+            aprobador_cod,
+            motivo_txt,
+            sess_user=sess_user,
+        )
+        if not ok:
+            avisos = _revertir_estados_comerciales(base_empresa, snapshots)
+            draft.estado_aprobacion_lote = EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_ERROR
+            draft.save(update_fields=["estado_aprobacion_lote", "updated_at"])
+            detalle = f"{msg}"
+            if avisos:
+                detalle += f" (compensación: {'; '.join(avisos)})"
+            return (
+                False,
+                detalle,
+                {
+                    "afectados": aplicados,
+                    "estado_aprobacion_lote": ESTADO_LOTE_ERROR,
+                    "compensacion": avisos,
+                },
+            )
+        aplicados.append(cod)
+        if payload and payload.get("escalado"):
+            escalados += 1
+        else:
+            resueltos += 1
+
+    nuevo_estado = _sincronizar_estado_lote_tras_resolver(
+        draft,
+        accion=acc,
+        base_empresa=base_empresa,
+        hubo_escalados=escalados > 0,
+    )
+    msg_ok = (
+        f"Lote rechazado ({resueltos} pedido(s))."
+        if acc == "rechazar"
+        else f"Lote procesado: {resueltos} resuelto(s), {escalados} escalado(s)."
+    )
+    return True, msg_ok, {
+        "estado_aprobacion_lote": nuevo_estado,
+        "resueltos": resueltos,
+        "escalados": escalados,
+        "codigos_movimiento": aplicados,
+    }
+
+
+def puede_aprobar_lote(
+    base_empresa: str,
+    sess_user: Dict[str, Any],
+    draft: Any,
+) -> bool:
+    """Indica si el usuario puede autorizar o rechazar un lote masivo pendiente."""
+    if not aprobacion_pedidos_activa(base_empresa):
+        return False
+    estado = str(
+        getattr(draft, "estado_aprobacion_lote", ESTADO_NEUTRO) or ESTADO_NEUTRO
+    ).strip().lower()
+    if estado != ESTADO_PENDIENTE:
+        return False
+    if not _tiene_permiso_aprobar(sess_user):
+        return False
+    cv = to_int_or_none(getattr(draft, "cod_viajante", None))
+    if cv is None:
+        return False
+    return pedido_en_alcance_aprobador(base_empresa, sess_user, cv)
+
+
 def resolver(
     base_empresa: str,
     cod_mov: int,
@@ -417,6 +673,14 @@ def resolver(
     """
     if not aprobacion_pedidos_activa(base_empresa):
         return False, "La aprobación comercial no está activa.", None
+
+    if pedido_en_lote_pendiente(base_empresa, cod_mov):
+        return (
+            False,
+            "Este pedido pertenece a un lote masivo pendiente de autorización. "
+            "Use la autorización de lote desde el resumen del lote.",
+            None,
+        )
 
     acc = (accion or "").strip().lower()
     if acc not in ("aprobar", "rechazar"):

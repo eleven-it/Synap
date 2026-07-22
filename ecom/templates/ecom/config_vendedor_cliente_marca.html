@@ -711,7 +711,7 @@ window.vcmApp = function vcmApp() {
     },
     async cargar() {
       this.cargando = true;
-      let u = this.urls.ternas + '?solo_activas=1';
+      let u = this.urls.ternas + '?solo_activas=1&limit=10000';
       if (this.filtroViajante) u += '&CodViajante=' + encodeURIComponent(this.filtroViajante);
       const data = await this.getJson(u);
       this.cargando = false;

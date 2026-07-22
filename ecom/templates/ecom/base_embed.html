@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-50 dark:bg-slate-900">
+{# Shell mínimo para embeber pantallas en iframe (sin navbar ni footer de base_app). #}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Synap{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'css/dist/styles.css' %}">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' };
+    </script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    {% block extra_css %}{% endblock %}
+    <style>
+        [x-cloak] { display: none !important; }
+        html, body { height: 100%; margin: 0; }
+    </style>
+</head>
+<body class="h-full min-h-0 overflow-hidden bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+    <main class="h-full min-h-0 w-full overflow-hidden">
+        {% block content %}{% endblock content %}
+    </main>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

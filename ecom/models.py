@@ -235,6 +235,19 @@ class EcomPedidoMasivoDraft(models.Model):
         (ESTADO_ANULADO, "Anulado"),
     )
 
+    ESTADO_APROBACION_LOTE_NEUTRO = "-"
+    ESTADO_APROBACION_LOTE_PENDIENTE = "pendiente"
+    ESTADO_APROBACION_LOTE_APROBADO = "aprobado"
+    ESTADO_APROBACION_LOTE_RECHAZADO = "rechazado"
+    ESTADO_APROBACION_LOTE_ERROR = "error"
+    ESTADO_APROBACION_LOTE_CHOICES = (
+        (ESTADO_APROBACION_LOTE_NEUTRO, "Sin aprobación comercial"),
+        (ESTADO_APROBACION_LOTE_PENDIENTE, "Pendiente"),
+        (ESTADO_APROBACION_LOTE_APROBADO, "Aprobado"),
+        (ESTADO_APROBACION_LOTE_RECHAZADO, "Rechazado"),
+        (ESTADO_APROBACION_LOTE_ERROR, "Error"),
+    )
+
     MODO_MASIVO = "masivo"
     MODO_SIMPLE = "simple"
     MODO_CHOICES = (
@@ -259,6 +272,13 @@ class EcomPedidoMasivoDraft(models.Model):
         default=list,
         blank=True,
         help_text="Lista de CodigoMovimiento PED creados al confirmar.",
+    )
+    estado_aprobacion_lote = models.CharField(
+        "estado aprobación comercial del lote",
+        max_length=16,
+        choices=ESTADO_APROBACION_LOTE_CHOICES,
+        default=ESTADO_APROBACION_LOTE_NEUTRO,
+        db_index=True,
     )
     descuento_pie_pct = models.DecimalField(
         "descuento pie lote %",

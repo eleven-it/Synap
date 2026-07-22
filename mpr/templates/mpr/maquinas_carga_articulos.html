@@ -6,42 +6,131 @@
 {% block content %}
 <style>[x-cloak]{display:none!important}
 @media print {
-    @page { size: A4 landscape; margin: 8mm; }
+    /* A4 horizontal: márgenes chicos para maximizar área útil (~281×194 mm). */
+    @page { size: A4 landscape; margin: 6mm; }
+    html, body {
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
     body * { visibility: hidden !important; }
     #planilla-control-calidad, #planilla-control-calidad * { visibility: visible !important; }
+    /* Flujo normal (no absolute): permite paginar varias hojas sin recortar. */
     #planilla-control-calidad {
         display: block !important;
-        position: absolute;
-        left: 0;
-        top: 0;
-        width: 100%;
-        background: white;
-        color: black;
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+        color: black !important;
+        overflow: visible !important;
     }
-    /* Anchos para escritura a mano: turnos 1ra/2da amplios; artículo más estrecho */
-    #planilla-control-calidad table { table-layout: fixed; width: 100%; }
-    #planilla-control-calidad col.col-maquina { width: 9%; }
-    #planilla-control-calidad col.col-articulo { width: 26%; }
-    #planilla-control-calidad col.col-color { width: 8%; }
-    #planilla-control-calidad col.col-talle { width: 5%; }
-    #planilla-control-calidad col.col-turno { width: 6.5%; }
-    #planilla-control-calidad col.col-obs { width: 13%; }
-    #planilla-control-calidad td.celda-turno,
+    #planilla-control-calidad > header {
+        margin: 0 0 2mm 0 !important;
+        padding: 0 !important;
+    }
+    #planilla-control-calidad > header h1 {
+        font-size: 11pt !important;
+        line-height: 1.2 !important;
+        margin: 0 !important;
+    }
+    #planilla-control-calidad > header p {
+        font-size: 7pt !important;
+        margin: 0.5mm 0 0 0 !important;
+    }
+    #planilla-control-calidad table {
+        table-layout: fixed !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 7.5pt !important;
+        line-height: 1.15 !important;
+    }
+    /* Anchos ~100%: turnos usables a mano; artículo cede espacio. */
+    #planilla-control-calidad col.col-maquina { width: 8%; }
+    #planilla-control-calidad col.col-articulo { width: 22%; }
+    #planilla-control-calidad col.col-color { width: 7%; }
+    #planilla-control-calidad col.col-talle { width: 4%; }
+    #planilla-control-calidad col.col-turno { width: 7.5%; }
+    #planilla-control-calidad col.col-obs { width: 14%; }
+    #planilla-control-calidad thead {
+        display: table-header-group; /* repetir cabecera en cada hoja */
+    }
+    #planilla-control-calidad tbody {
+        display: table-row-group;
+    }
+    /* Un <tr> = un artículo (prod+CC apilados). Evita que el salto de hoja
+       parta el par y se pierda la fila vacía de CC (bug con todas las líneas). */
+    #planilla-control-calidad tbody tr.fila-articulo {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+    #planilla-control-calidad th,
+    #planilla-control-calidad td {
+        box-sizing: border-box !important;
+        overflow: hidden;
+        vertical-align: middle;
+    }
+    #planilla-control-calidad th {
+        font-size: 7.5pt !important;
+        padding: 1mm 0.8mm !important;
+        font-weight: 700;
+    }
+    /* Cada columna 1ra/2da apila prod (arriba) + CC vacía (abajo) en la misma celda. */
+    #planilla-control-calidad td.celda-turno-stack {
+        padding: 0 !important;
+        height: auto !important;
+        vertical-align: stretch !important;
+    }
+    #planilla-control-calidad td.celda-turno-stack .turno-prod,
+    #planilla-control-calidad td.celda-turno-stack .turno-cc {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 7mm;
+        min-height: 7mm;
+        box-sizing: border-box;
+        padding: 0.5mm 0.6mm;
+        font-size: 8pt;
+        text-align: center;
+        line-height: 1;
+    }
+    #planilla-control-calidad td.celda-turno-stack .turno-prod {
+        border-bottom: 1px solid #000;
+    }
     #planilla-control-calidad th.celda-turno {
-        min-height: 11mm;
-        padding: 3mm 2mm !important;
+        height: 5mm !important;
+        padding: 1mm 0.8mm !important;
+        font-size: 8pt !important;
+        text-align: center;
     }
     #planilla-control-calidad td.celda-articulo {
         word-break: break-word;
         overflow-wrap: anywhere;
-        font-size: 12px;
+        font-size: 8pt !important;
         font-weight: 700;
+        padding: 1mm 1.2mm !important;
+        text-align: left !important;
     }
-    /* Renglón con el operador de cada turno (tomado de la Planificación de turnos) */
     #planilla-control-calidad th.celda-operador {
-        min-height: 8mm;
-        padding: 2.5mm 2mm !important;
-        font-size: 9px;
+        height: auto !important;
+        max-height: 14mm;
+        padding: 1mm 0.6mm !important;
+        font-size: 6.5pt !important;
+        font-weight: 600 !important;
+        line-height: 1.15 !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: normal;
+        word-break: break-word;
     }
 }
 </style>
@@ -51,10 +140,12 @@
             buscarUrl: '{% url 'mpr:maquina_articulo_buscar_api' %}',
             accionUrl: '{% url 'mpr:maquina_articulo_accion_api' %}',
             observacionUrl: '{% url 'mpr:maquina_observacion_planilla_api' %}',
+            planillaUrl: '{% url 'mpr:maquina_planilla_control_calidad_api' %}',
             historicoBase: '{% url 'mpr:maquina_articulos' id_maquina=999999999 %}',
             csrf: '{{ csrf_token }}',
             filtroMaquina: '',
             fechaHoy: '{{ fecha_hoy|date:"Y-m-d" }}',
+            idLineaFiltro: '{% if id_linea_filtro %}{{ id_linea_filtro }}{% endif %}',
             filtroLineaLabel: '{% if id_linea_filtro %}{% for linea in lineas %}{% if linea.id == id_linea_filtro %}{{ linea.nombre|escapejs }}{% endif %}{% endfor %}{% else %}{% endif %}'
          })" x-init="init()">
 <section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10 print:hidden">
@@ -278,12 +369,12 @@
     </div>
 </section>
 
-    {# Planilla Control de Calidad (solo visible al imprimir) #}
+    {# Planilla Control de Calidad (solo visible al imprimir; CSS @media print = A4 landscape) #}
     <div id="planilla-control-calidad" class="hidden print:block">
-        <header class="mb-4 text-center">
-            <h1 class="text-xl font-bold tracking-wide text-black uppercase"
+        <header class="mb-1 text-center">
+            <h1 class="text-base font-bold tracking-wide text-black uppercase"
                 x-text="'CONTROL DE CALIDAD — ' + tituloPlanillaFecha"></h1>
-            <p class="mt-1 text-xs text-gray-600"
+            <p class="mt-0.5 text-[10px] text-gray-600"
                x-show="filtroPlanillaResumen"
                x-text="filtroPlanillaResumen"></p>
         </header>
@@ -326,25 +417,47 @@
             </thead>
             <tbody>
                 <template x-for="fila in planillaFilas" :key="fila.key">
-                    <tr>
+                    <tr class="fila-articulo">
                         <template x-if="fila.showMaquina">
                             <td class="border border-black px-1 py-1 font-semibold align-middle"
-                                :rowspan="fila.rowspan"
+                                :rowspan="fila.rowspanMaquina"
                                 x-text="fila.maquina"></td>
                         </template>
-                        <td class="celda-articulo border border-black px-1 py-1 text-left text-xs font-bold" x-text="fila.articulo"></td>
-                        <td class="border border-black px-1 py-1 text-center whitespace-nowrap" x-text="fila.color || '—'"></td>
-                        <td class="border border-black px-1 py-1 text-center whitespace-nowrap" x-text="fila.talle || '—'"></td>
-                        <td class="celda-turno border border-black">&nbsp;</td>
-                        <td class="celda-turno border border-black">&nbsp;</td>
-                        <td class="celda-turno border border-black">&nbsp;</td>
-                        <td class="celda-turno border border-black">&nbsp;</td>
-                        <td class="celda-turno border border-black">&nbsp;</td>
-                        <td class="celda-turno border border-black">&nbsp;</td>
+                        <td class="celda-articulo border border-black px-1 py-1 text-left text-xs font-bold align-middle"
+                            x-text="fila.articulo"></td>
+                        <td class="border border-black px-1 py-1 text-center whitespace-nowrap align-middle"
+                            x-text="fila.color || '—'"></td>
+                        <td class="border border-black px-1 py-1 text-center whitespace-nowrap align-middle"
+                            x-text="fila.talle || '—'"></td>
+                        {# Cada casillero: arriba producción (1ra precargada / 2da vacía), abajo CC vacío #}
+                        <td class="celda-turno-stack border border-black">
+                            <div class="turno-prod" x-text="fila.manana1ra || '\u00a0'"></div>
+                            <div class="turno-cc">&nbsp;</div>
+                        </td>
+                        <td class="celda-turno-stack border border-black">
+                            <div class="turno-prod">&nbsp;</div>
+                            <div class="turno-cc">&nbsp;</div>
+                        </td>
+                        <td class="celda-turno-stack border border-black">
+                            <div class="turno-prod" x-text="fila.tarde1ra || '\u00a0'"></div>
+                            <div class="turno-cc">&nbsp;</div>
+                        </td>
+                        <td class="celda-turno-stack border border-black">
+                            <div class="turno-prod">&nbsp;</div>
+                            <div class="turno-cc">&nbsp;</div>
+                        </td>
+                        <td class="celda-turno-stack border border-black">
+                            <div class="turno-prod" x-text="fila.noche1ra || '\u00a0'"></div>
+                            <div class="turno-cc">&nbsp;</div>
+                        </td>
+                        <td class="celda-turno-stack border border-black">
+                            <div class="turno-prod">&nbsp;</div>
+                            <div class="turno-cc">&nbsp;</div>
+                        </td>
                         <template x-if="fila.showMaquina">
                             <td class="border border-black px-1 py-1 align-top text-left whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
-                                :rowspan="fila.rowspan"
-                                x-text="fila.observacion">&nbsp;</td>
+                                :rowspan="fila.rowspanMaquina"
+                                x-text="fila.observacion || '\u00a0'"></td>
                         </template>
                     </tr>
                 </template>
@@ -355,6 +468,47 @@
                 </tr>
             </tbody>
         </table>
+    </div>
+
+    {# Modal fecha planilla Control de Calidad #}
+    <div x-show="planillaOpen" x-cloak
+         class="fixed inset-0 z-[90] overflow-y-auto print:hidden"
+         role="dialog" aria-modal="true" aria-labelledby="carga-planilla-title"
+         @keydown.escape.window="!planillaBusy && cerrarPlanillaModal()">
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div class="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true"
+                 @click="!planillaBusy && cerrarPlanillaModal()"></div>
+            <div class="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800"
+                 @click.stop>
+                <div class="flex items-start gap-4">
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/40" aria-hidden="true">
+                        <span class="material-icons text-purple-600 dark:text-purple-400">print</span>
+                    </span>
+                    <div class="min-w-0 flex-1">
+                        <h3 id="carga-planilla-title" class="text-lg font-semibold text-gray-900 dark:text-white">Imprimir Control de Calidad</h3>
+                        <p class="mt-2 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
+                            Elegí la fecha de la planilla. Se respetan los filtros de línea y búsqueda de máquina activos en pantalla.
+                        </p>
+                        <label class="mt-4 flex flex-col gap-1">
+                            <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">Fecha de la planilla</span>
+                            <input type="date" x-model="fechaPlanilla" :disabled="planillaBusy"
+                                   class="min-h-10 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white"/>
+                        </label>
+                        <div class="mt-5 flex flex-wrap justify-end gap-2">
+                            <button type="button" @click="cerrarPlanillaModal()" :disabled="planillaBusy"
+                                    class="inline-flex min-h-10 items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 disabled:opacity-60 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-800">
+                                Cancelar
+                            </button>
+                            <button type="button" @click="confirmarPlanilla()" :disabled="planillaBusy || !fechaPlanilla"
+                                    class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 disabled:opacity-60 dark:bg-purple-600 dark:hover:bg-purple-500 dark:focus-visible:ring-offset-gray-800">
+                                <span class="material-icons text-base" aria-hidden="true" x-text="planillaBusy ? 'autorenew' : 'print'" :class="planillaBusy && 'animate-spin'"></span>
+                                <span x-text="planillaBusy ? 'Preparando…' : 'Confirmar e imprimir'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     {# Modal aviso (estilo Synap; reemplaza alert nativo) #}
@@ -440,13 +594,21 @@ function cargaArticulos(cfg) {
         buscarUrl: cfg.buscarUrl,
         accionUrl: cfg.accionUrl,
         observacionUrl: cfg.observacionUrl,
+        planillaUrl: cfg.planillaUrl,
         historicoBase: cfg.historicoBase,
         csrfFallback: cfg.csrf || '',
         filtroMaquina: cfg.filtroMaquina || '',
         fechaHoy: cfg.fechaHoy || '',
+        idLineaFiltro: cfg.idLineaFiltro || '',
         filtroLineaLabel: cfg.filtroLineaLabel || '',
         maquinas: [],
         operadoresPorLinea: {},
+        fechaPlanilla: cfg.fechaHoy || '',
+        planillaOpen: false,
+        planillaBusy: false,
+        planillaPrintMaquinas: null,
+        planillaPrintOperadores: null,
+        planillaPrintFecha: '',
         confirmOpen: false,
         confirmBusy: false,
         confirmMaq: null,
@@ -538,7 +700,7 @@ function cargaArticulos(cfg) {
         },
 
         get tituloPlanillaFecha() {
-            const iso = (this.fechaHoy || '').slice(0, 10);
+            const iso = (this.planillaPrintFecha || this.fechaHoy || '').slice(0, 10);
             const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
             let d = null;
             if (iso && iso.length === 10) {
@@ -553,34 +715,52 @@ function cargaArticulos(cfg) {
             return dias[d.getDay()] + ' ' + dd + '/' + mm + '/' + yyyy;
         },
 
-        get filtroPlanillaResumen() {
-            const partes = [];
-            if (this.filtroLineaLabel) partes.push('Línea: ' + this.filtroLineaLabel);
-            const q = (this.filtroMaquina || '').trim();
-            if (q) partes.push('Máquina: ' + q);
-            if (!partes.length) return '';
-            return 'Filtro activo — ' + partes.join(' · ');
+        get planillaMaquinasFuente() {
+            if (Array.isArray(this.planillaPrintMaquinas)) {
+                return this.planillaPrintMaquinas;
+            }
+            return this.maquinas;
+        },
+
+        get planillaMaquinasVisibles() {
+            const q = (this.filtroMaquina || '').trim().toLowerCase();
+            const fuente = this.planillaMaquinasFuente || [];
+            if (!q) return fuente;
+            return fuente.filter((m) => (m.codigo_search || '').includes(q));
+        },
+
+        _fmtCantidadPlanilla(valor) {
+            if (valor === null || valor === undefined || valor === '') return '';
+            const n = Number(valor);
+            if (!Number.isFinite(n) || n === 0) return '';
+            return Number.isInteger(n) ? String(n) : String(n);
         },
 
         get planillaFilas() {
-            // Solo máquinas visibles en pantalla (filtro de búsqueda + línea del GET).
+            // Un <tr> por artículo: prod + CC van apilados en cada celda de turno
+            // (evita que un salto de página parta el rowspan=2 y pierda la fila CC).
             const out = [];
-            (this.maquinasVisibles || []).forEach((m) => {
+            (this.planillaMaquinasVisibles || []).forEach((m) => {
                 const arts = m.articulos || [];
                 if (!arts.length) return;
                 const maquinaLabel = (m.nombre || m.codigo || ('#' + m.id)).trim();
-                const observacion = (m.observacion || '').trim();
+                const observacion = (m.observacion || m.observacion_planilla || '').trim();
+                const rowspanMaquina = arts.length;
                 arts.forEach((art, idx) => {
                     const desc = (art.descripcion_articulo || '').trim();
+                    const cant = art.cantidades || {};
                     out.push({
                         key: m.id + '-' + art.id_articulo + '-' + idx,
-                        showMaquina: idx === 0,
-                        rowspan: idx === 0 ? arts.length : 1,
                         maquina: maquinaLabel,
                         articulo: desc || '—',
                         color: art.color || '',
                         talle: art.talle || '',
                         observacion: observacion,
+                        showMaquina: idx === 0,
+                        rowspanMaquina: rowspanMaquina,
+                        manana1ra: this._fmtCantidadPlanilla(cant.manana),
+                        tarde1ra: this._fmtCantidadPlanilla(cant.tarde),
+                        noche1ra: this._fmtCantidadPlanilla(cant.noche),
                     });
                 });
             });
@@ -588,13 +768,12 @@ function cargaArticulos(cfg) {
         },
 
         nombresOperadoresPlanilla(franja) {
-            // La cabecera siempre acompaña las máquinas que efectivamente se imprimirán:
-            // filtro GET por línea + búsqueda client-side por máquina.
+            const operadores = this.planillaPrintOperadores || this.operadoresPorLinea || {};
             const nombres = [];
             const yaIncluidos = new Set();
-            (this.maquinasVisibles || []).forEach((m) => {
+            (this.planillaMaquinasVisibles || []).forEach((m) => {
                 if (!(m.articulos || []).length || m.id_linea_actual == null) return;
-                const porFranja = this.operadoresPorLinea[String(m.id_linea_actual)] || {};
+                const porFranja = operadores[String(m.id_linea_actual)] || {};
                 const texto = String(porFranja[franja] || '');
                 texto.split(', ').forEach((nombre) => {
                     if (nombre && !yaIncluidos.has(nombre)) {
@@ -618,21 +797,85 @@ function cargaArticulos(cfg) {
             this.avisoOpen = false;
         },
 
+        get filtroPlanillaResumen() {
+            const partes = [];
+            if (this.filtroLineaLabel) partes.push('Línea: ' + this.filtroLineaLabel);
+            const q = (this.filtroMaquina || '').trim();
+            if (q) partes.push('Máquina: ' + q);
+            if (!partes.length) return '';
+            return 'Filtro activo — ' + partes.join(' · ');
+        },
+
         imprimirPlanilla() {
-            if (!this.planillaFilas.length) {
-                const hayVisibles = (this.maquinasVisibles || []).length > 0;
-                const detalle = hayVisibles
-                    ? 'Las máquinas filtradas no tienen artículos asignados. Ajustá el filtro o asigná artículos.'
-                    : 'No hay filas visibles con el filtro actual (línea / búsqueda de máquina).';
+            this.fechaPlanilla = this.fechaHoy || '';
+            this.planillaOpen = true;
+        },
+
+        cerrarPlanillaModal() {
+            if (this.planillaBusy) return;
+            this.planillaOpen = false;
+        },
+
+        _tieneFilasPlanillaImpresion() {
+            return (this.planillaMaquinasVisibles || []).some((m) => (m.articulos || []).length > 0);
+        },
+
+        _mostrarAvisoSinFilasPlanilla() {
+            const hayVisibles = (this.planillaMaquinasVisibles || []).length > 0;
+            const detalle = hayVisibles
+                ? 'Las máquinas filtradas no tienen artículos asignados para esa fecha. Ajustá el filtro o asigná artículos.'
+                : 'No hay filas visibles con el filtro actual (línea / búsqueda de máquina).';
+            this.mostrarAviso(
+                'Nada para imprimir',
+                'No hay máquinas con artículos asignados para imprimir según el filtro de la pantalla.',
+                detalle,
+                'print_disabled'
+            );
+        },
+
+        async confirmarPlanilla() {
+            if (this.planillaBusy || !this.fechaPlanilla) return;
+            this.planillaBusy = true;
+            try {
+                const params = new URLSearchParams({ fecha: this.fechaPlanilla });
+                if (this.idLineaFiltro) params.set('id_linea', this.idLineaFiltro);
+                const url = this.planillaUrl + '?' + params.toString();
+                const resp = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const data = await resp.json().catch(() => ({}));
+                if (!resp.ok || !data.ok) {
+                    this.mostrarAviso(
+                        'Error al preparar planilla',
+                        (data && data.error) || 'No se pudieron obtener los datos de la planilla.',
+                        '',
+                        'error'
+                    );
+                    return;
+                }
+                this.planillaPrintFecha = data.fecha || this.fechaPlanilla;
+                this.planillaPrintMaquinas = (data.maquinas || []).map((m) => ({
+                    ...m,
+                    observacion: m.observacion_planilla || '',
+                    codigo_search: m.codigo_search || ((m.codigo || '') + ' ' + (m.nombre || '')).trim().toLowerCase(),
+                }));
+                this.planillaPrintOperadores = data.operadores_por_linea || {};
+                if (!this._tieneFilasPlanillaImpresion()) {
+                    this.planillaOpen = false;
+                    this._mostrarAvisoSinFilasPlanilla();
+                    return;
+                }
+                this.planillaOpen = false;
+                await this.$nextTick();
+                window.print();
+            } catch (e) {
                 this.mostrarAviso(
-                    'Nada para imprimir',
-                    'No hay máquinas con artículos asignados para imprimir según el filtro de la pantalla.',
-                    detalle,
-                    'print_disabled'
+                    'Error de red',
+                    'No se pudo preparar la planilla. Reintentá.',
+                    '',
+                    'wifi_off'
                 );
-                return;
+            } finally {
+                this.planillaBusy = false;
             }
-            window.print();
         },
 
         csrf() {

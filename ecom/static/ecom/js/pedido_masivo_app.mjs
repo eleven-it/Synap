@@ -147,6 +147,9 @@ function pedidoMasivoCore() {
     pedidoEditable: true,
     pedidoRepetido: false,
     puedeAnularPedido: false,
+    readonly: false,
+    aprobacionPedidosActiva: false,
+    urlResumenLote: '',
     emailCliente: '',
     credito: null,
     advertenciasCarga: [],
@@ -198,16 +201,31 @@ function pedidoMasivoCore() {
 
     get etiquetaEstadoDraft() {
       if (!this.draftId) return '';
+      // PED origen no editable: no confundir con borrador activo.
+      if (this.pedidoSoloConsulta) return '';
       const e = String(this.draftEstado || 'borrador');
       const map = {
         borrador: 'Borrador',
-        confirmando: 'Borrador',
+        confirmando: 'Confirmando',
         confirmado: 'Confirmado',
         archivado: 'Archivado',
         anulado: 'Anulado',
       };
       const label = map[e] || 'Borrador';
       return `${label} #${this.draftId}`;
+    },
+
+    /** Clase de color del badge de estado en el hero (oscuro). */
+    get claseEstadoDraft() {
+      const e = String(this.draftEstado || 'borrador');
+      const map = {
+        borrador: 'pedidos-badge-estado--borrador',
+        confirmando: 'pedidos-badge-estado--confirmando',
+        confirmado: 'pedidos-badge-estado--confirmado',
+        archivado: 'pedidos-badge-estado--archivado',
+        anulado: 'pedidos-badge-estado--anulado',
+      };
+      return map[e] || map.borrador;
     },
 
     // ── Pedido simple: título, consulta/edición y acciones hero ──
@@ -218,9 +236,9 @@ function pedidoMasivoCore() {
     get pedidoSoloConsulta() {
       return Boolean(this.modoSimple && this.pedidoCodMov && !this.pedidoEditable);
     },
-    /** La matriz acepta ediciones (borrador editable y no en consulta). */
+    /** La matriz acepta ediciones (borrador editable, no consulta, no readonly). */
     get matrizEditable() {
-      return this.esBorradorEditable && !this.pedidoSoloConsulta;
+      return this.esBorradorEditable && !this.pedidoSoloConsulta && !this.readonly;
     },
     get puedeConfirmar() {
       return Boolean(this.draftId && this.matrizEditable);
@@ -249,6 +267,8 @@ function pedidoMasivoCore() {
       this.urls = boot.urls || {};
       this.modoSimple = String(boot.modo || '') === 'simple';
       this.idDomicilioInicial = boot.id_domicilio || null;
+      this.readonly = Boolean(boot.readonly);
+      this.aprobacionPedidosActiva = Boolean(boot.aprobacion_pedidos_activa);
       try {
         const guardado = sessionStorage.getItem('pm-contexto-abierto');
         if (guardado === '1') this.contextoAbierto = true;
@@ -267,9 +287,33 @@ function pedidoMasivoCore() {
         if (this.panelArt) this.cerrarPanelArt();
       };
       this.$watch('draftId', () => {
-        this.$nextTick(() => this._bindMatrixScrollSync());
+        this.$nextTick(() => {
+          this._bindMatrixScrollSync();
+          this._syncTotalesBarLayout();
+        });
       });
-      this.$nextTick(() => this._bindMatrixScrollSync());
+      this.$watch(
+        () => (this.articulos || []).length,
+        () => this.$nextTick(() => this._syncTotalesBarLayout()),
+      );
+      this.$watch(
+        () => (this.sucursales || []).length,
+        () => this.$nextTick(() => this._syncTotalesBarLayout()),
+      );
+      this.$watch('mostrarTotalesPorSucursal', (on) => {
+        if (on) this.$nextTick(() => this._syncTotalesBarLayout());
+      });
+      if (typeof ResizeObserver !== 'undefined') {
+        this._pmTotalesRo = new ResizeObserver(() => this._syncTotalesBarLayout());
+        this.$nextTick(() => {
+          const mid = this.$refs.pmZoneMid;
+          if (mid) this._pmTotalesRo.observe(mid);
+        });
+      }
+      this.$nextTick(() => {
+        this._bindMatrixScrollSync();
+        this._syncTotalesBarLayout();
+      });
     },
     /**
      * Sincroniza el scroll vertical del shell de 3 zonas (desktop): la zona media
@@ -287,6 +331,8 @@ function pedidoMasivoCore() {
         const t = mid.scrollTop;
         if (left) left.scrollTop = t;
         if (right) right.scrollTop = t;
+        const totMid = this.$refs.pmTotalesMid;
+        if (totMid) totMid.scrollLeft = mid.scrollLeft;
       };
       mid.addEventListener('scroll', () => {
         mirror();
@@ -302,6 +348,43 @@ function pedidoMasivoCore() {
       if (left) left.addEventListener('wheel', fwdWheel, { passive: false });
       if (right) right.addEventListener('wheel', fwdWheel, { passive: false });
       mid._pmSyncBound = true;
+      this.$nextTick(() => this._syncTotalesBarLayout());
+    },
+    /**
+     * Alinea la barra de totales con anchos reales del shell (thead / zonas).
+     * Necesario porque la zona media estira columnas (`min-width:100%`) y puede
+     * tener scrollbar vertical que reduce el clientWidth.
+     */
+    _syncTotalesBarLayout() {
+      if (!this.mostrarTotalesPorSucursal) return;
+      const left = this.$refs.pmZoneLeft;
+      const mid = this.$refs.pmZoneMid;
+      const right = this.$refs.pmZoneRight;
+      const bar = this.$refs.pmTotalesBar;
+      const totMid = this.$refs.pmTotalesMid;
+      const totInner = this.$refs.pmTotalesMidInner;
+      if (!bar || !mid) return;
+
+      const leftEl = bar.querySelector('.pm-totales-left');
+      const rightEl = bar.querySelector('.pm-totales-right');
+      if (left && leftEl) leftEl.style.width = `${left.offsetWidth}px`;
+      if (right && rightEl) rightEl.style.width = `${right.offsetWidth}px`;
+
+      const ths = mid.querySelectorAll('thead th.pm-c-suc');
+      const cells = totInner ? totInner.querySelectorAll('.pm-totales-suc') : [];
+      let innerW = 0;
+      ths.forEach((th, i) => {
+        const w = th.getBoundingClientRect().width;
+        innerW += w;
+        const cell = cells[i];
+        if (!cell) return;
+        cell.style.flex = `0 0 ${w}px`;
+        cell.style.width = `${w}px`;
+        cell.style.minWidth = `${w}px`;
+        cell.style.maxWidth = `${w}px`;
+      });
+      if (totInner && innerW > 0) totInner.style.width = `${innerW}px`;
+      if (totMid) totMid.scrollLeft = mid.scrollLeft;
     },
     abrirPanelCli() { this.panelCli = true; },
     cerrarPanelCli() { this.panelCli = false; },
@@ -576,6 +659,30 @@ function pedidoMasivoCore() {
         }
       }
       this.codMovOrigen = m.cod_mov_origen || null;
+      // Revalidar PED origen al recuperar borrador (puede haber dejado de ser Pendiente).
+      const origen = m.origen_pedido || null;
+      if (this.codMovOrigen && origen) {
+        this.pedidoCodMov = origen.cod_mov || this.codMovOrigen;
+        this.pedidoNro = String(origen.nro_comprobante || this.pedidoNro || '').trim();
+        this.pedidoEstado = String(origen.estado || '').trim();
+        this.puedeAnularPedido = !!origen.puede_anular;
+        this.pedidoEditable = origen.editable !== false && !!origen.puede_anular;
+        if (!this.puedeAnularPedido) {
+          this.mostrarAviso(
+            `El PED ${this.pedidoNro || this.pedidoCodMov} está en «${this.pedidoEstado || 'otro estado'}» y ya no se puede anular. Solo consulta; usá «Repetir» para un pedido nuevo.`,
+            'warning',
+            'Pedido no editable',
+          );
+        }
+        // URL refleja consulta del PED (no un borrador “activo” confuso).
+        if (this.draftId && this.pedidoCodMov) {
+          history.replaceState(
+            null,
+            '',
+            `?modo=simple&draft=${this.draftId}&cod_mov=${this.pedidoCodMov}`,
+          );
+        }
+      }
       if (m.credito) this.credito = m.credito;
       if (!this.clienteNombre) {
         const c = this.clientes.find(x => String(x.id_cliente) === String(this.idCliente));
@@ -585,6 +692,7 @@ function pedidoMasivoCore() {
         }
       }
       this.marcarTotalesEstimados();
+      this.$nextTick(() => this._syncTotalesBarLayout());
     },
     async _cargarCatalogosCabecera() {
       if (!this.urls.condiciones_venta && !this.urls.lista_precio) return;
@@ -743,6 +851,7 @@ function pedidoMasivoCore() {
       this.abriendo = true; this.error = '';
       const body = { draft_id: Number(id) };
       if (this.modoSimple) body.modo = 'simple';
+      if (this.readonly) body.readonly = true;
       const { data } = await this.postJson(this.urls.abrir, body);
       this.abriendo = false;
       if (!data.ok) { this.mostrarAviso(data.error || 'No se pudo recuperar el borrador.', 'error'); return; }
@@ -752,7 +861,8 @@ function pedidoMasivoCore() {
     _replaceHistoryDraft() {
       if (!this.draftId) return;
       const modoQ = this.modoSimple ? 'modo=simple&' : '';
-      history.replaceState(null, '', `?${modoQ}draft=${this.draftId}`);
+      const roQ = this.readonly ? '&readonly=1' : '';
+      history.replaceState(null, '', `?${modoQ}draft=${this.draftId}${roQ}`);
     },
     _resetPedidoCargado() {
       this.pedidoCodMov = null;
@@ -916,6 +1026,29 @@ function pedidoMasivoCore() {
       }
       return s ? s.toLocaleString('es-AR', { maximumFractionDigits: 3 }) : '—';
     },
+    get mostrarTotalesPorSucursal() {
+      return (this.articulos || []).length > 1;
+    },
+    /** Suma packs de todas las líneas para una sucursal. */
+    sumaColumnaSucursal(idDom) {
+      let s = 0;
+      for (const art of this.articulos || []) {
+        const v = parseFloat(this.celda(art.id_articulo, idDom));
+        if (!isNaN(v)) s += v;
+      }
+      return s ? s.toLocaleString('es-AR', { maximumFractionDigits: 3 }) : '—';
+    },
+    /** Suma packs de todas las celdas (para columna Total del pie). */
+    sumaTotalMatriz() {
+      let s = 0;
+      for (const art of this.articulos || []) {
+        for (const su of this.sucursales || []) {
+          const v = parseFloat(this.celda(art.id_articulo, su.id_cliente_domicilio));
+          if (!isNaN(v)) s += v;
+        }
+      }
+      return s ? s.toLocaleString('es-AR', { maximumFractionDigits: 3 }) : '—';
+    },
     get alertasUltimoError() {
       const u = this.ultimoError || {};
       return Object.keys(u).map((k) => {
@@ -957,6 +1090,7 @@ function pedidoMasivoCore() {
       this.flashGuardado();
     },
     async onCelda(idArt, idDom, raw) {
+      if (this.readonly || !this.matrizEditable) return;
       const key = idArt + ':' + idDom;
       const val = String(raw || '').trim();
       const prev = this.celdas[key] || '';
@@ -997,6 +1131,7 @@ function pedidoMasivoCore() {
       this.marcarTotalesEstimados();
     },
     async onDescFila(idArt, raw) {
+      if (this.readonly || !this.matrizEditable) return;
       if (!this.draftId || !this.urls.descuento_fila) return;
       const val = String(raw || '').trim();
       const pct = val === '' ? 0 : Number(val);
@@ -1013,6 +1148,7 @@ function pedidoMasivoCore() {
       this.flashGuardado();
     },
     async onDescPie(raw) {
+      if (this.readonly || !this.matrizEditable) return;
       if (!this.draftId || !this.urls.descuento_pie) return;
       const val = String(raw || '').trim();
       this.descPiePct = val === '' ? 0 : Number(val);
@@ -1599,6 +1735,14 @@ function pedidoMasivoCore() {
       let confirmarTexto = 'Confirmar pedido';
       let variante = 'primary';
       if (this.modoSimple) {
+        if (this.codMovOrigen && !this.puedeAnularPedido) {
+          this.mostrarAviso(
+            `No se puede confirmar: el PED origen ${this.pedidoNro || this.codMovOrigen} está en «${this.pedidoEstado || 'otro estado'}» y ya no se puede anular.`,
+            'error',
+            'No se pudo confirmar',
+          );
+          return;
+        }
         if (this.codMovOrigen) {
           titulo = 'Confirmar cambios del pedido simple';
           mensaje = `Se anulará el PED ${this.pedidoNro || this.codMovOrigen} y se creará uno nuevo con las cantidades cargadas. El número de comprobante cambiará.`;
@@ -1822,6 +1966,25 @@ function pedidoMasivoCore() {
       if (cods.length) {
         okMsg += ' PED: ' + cods.join(', ');
       }
+      const tplResumen = this.urls.resumen_lote_tpl || '';
+      const esMasivoMultiped = !this.modoSimple && cods.length > 1;
+      const lotePendiente = String(
+        data.estado_aprobacion_lote
+        || data.matriz?.estado_aprobacion_lote
+        || (this.aprobacionPedidosActiva ? 'pendiente' : '-'),
+      ) === 'pendiente';
+      if (this.draftId && tplResumen && (esMasivoMultiped || lotePendiente)) {
+        this.urlResumenLote = String(tplResumen).replace('{draft_id}', String(this.draftId));
+        if (lotePendiente && this.aprobacionPedidosActiva) {
+          okMsg += ' El lote quedó pendiente de autorización comercial a nivel lote.';
+        }
+        okMsg += ' Podés ver el resumen del lote desde el enlace inferior.';
+      } else {
+        this.urlResumenLote = '';
+      }
+      if (this.confirmProgreso) {
+        this.confirmProgreso.finMessage = okMsg;
+      }
       this.mostrarAviso(okMsg, 'success');
       // Modo simple: habilitar acciones hero (PDF/mail/anular) sobre el PED creado.
       if (this.modoSimple && cods.length) {
@@ -1832,10 +1995,12 @@ function pedidoMasivoCore() {
         this.codMovOrigen = null;
       }
       this.flashGuardado();
-      setTimeout(() => {
-        this.confirmProgreso = null;
-        this.cerrarDialogo();
-      }, 1500);
+      if (!this.urlResumenLote) {
+        setTimeout(() => {
+          this.confirmProgreso = null;
+          this.cerrarDialogo();
+        }, 1500);
+      }
     },
     async cargarCarteraVendedor() {
       if (!this.urls.vendedores_cartera) return;

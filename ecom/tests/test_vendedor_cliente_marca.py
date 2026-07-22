@@ -10,10 +10,12 @@ from ecom.services.vendedor_cliente_marca import (
     anular_terna,
     crear_terna,
     crear_ternas_lote,
+    listar_ternas,
 )
 from ecom.vendedor_cliente_marca_views import (
     VendedorClienteMarcaAnularAPIView,
     VendedorClienteMarcaCrearAPIView,
+    VendedorClienteMarcaTernasAPIView,
 )
 
 
@@ -125,7 +127,37 @@ class TestAnularTerna(SimpleTestCase):
         self.assertIn("anulada", msg.lower())
 
 
+class TestListarTernas(SimpleTestCase):
+    @patch("ecom.services.vendedor_cliente_marca.get_mysql_pool")
+    def test_limite_predeterminado_y_tope_seguro(self, mock_pool):
+        conn = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+        conn.cursor.return_value = cursor
+        mock_pool.return_value.get_connection.return_value.__enter__ = MagicMock(return_value=conn)
+        mock_pool.return_value.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+
+        listar_ternas("emp1")
+        self.assertEqual(cursor.execute.call_args.args[1][-1], 5000)
+
+        listar_ternas("emp1", limit=50000)
+        self.assertEqual(cursor.execute.call_args.args[1][-1], 20000)
+
+
 class TestApiCrear409(TestCase):
+    @patch("ecom.vendedor_cliente_marca_views.listar_ternas", return_value=(True, "", []))
+    @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
+    def test_ternas_usa_limite_predeterminado_del_servicio(self, _base, mock_listar):
+        factory = APIRequestFactory()
+        req = factory.get("/ecom/api/mayoristapp/vendedor-cliente-marca/ternas/?solo_activas=1")
+        req.session = {"user": {"base_empresa": "emp1"}}
+        force_authenticate(req, user=_User())
+
+        resp = VendedorClienteMarcaTernasAPIView.as_view()(req)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(mock_listar.call_args.kwargs["limit"], 5000)
+
     @patch("ecom.vendedor_cliente_marca_views.crear_terna")
     @patch("ecom.vendedor_cliente_marca_views._session_base_empresa", return_value="emp1")
     def test_post_conflicto_409(self, _base, mock_crear):

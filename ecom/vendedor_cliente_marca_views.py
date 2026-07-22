@@ -108,7 +108,7 @@ class VendedorClienteMarcaTernasAPIView(APIView):
             id_cliente_domicilio=to_int_or_none(request.query_params.get("id_cliente_domicilio")),
             solo_activas=str(request.query_params.get("solo_activas", "1")).strip()
             not in ("0", "false", "False", "no", "No"),
-            limit=to_int_or_none(request.query_params.get("limit")) or 200,
+            limit=to_int_or_none(request.query_params.get("limit")) or 5000,
         )
         if not ok:
             return Response({"ok": False, "error": err}, status=400)

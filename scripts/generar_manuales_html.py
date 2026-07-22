@@ -48,7 +48,7 @@ MPR_ALIASES: dict[str, str] = {
 STOCK_ALIASES: dict[str, str] = {
     "acceso-stock": "1. Acceso",
     "inventario-por-etapa": "2. Inventario por etapa",
-    "alta-movimiento": "3. Alta de movimiento (orientación)",
+    "alta-movimiento": "3. Alta de movimiento",
     "mensajes-stock": "4. Mensajes frecuentes",
 }
 
@@ -169,18 +169,28 @@ body {
   z-index: 100;
 }
 .sidebar-logo {
-  display: block; max-height: 52px; width: auto; max-width: 100%;
-  margin-bottom: 0.85rem;
+  display: block;
+  height: 88px;
+  width: 88px;
+  max-width: 100%;
+  object-fit: contain;
+  margin: 0 0 1rem;
+  border-radius: 14px;
+}
+.sidebar-brand-block {
+  margin-bottom: 1.35rem;
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid var(--border);
 }
 .sidebar-brand {
-  font-weight: 700; font-size: 1rem; letter-spacing: -0.01em;
-  color: var(--text); margin-bottom: 0.15rem;
+  font-weight: 700; font-size: 1.2rem; letter-spacing: -0.02em;
+  color: var(--text); margin: 0 0 0.2rem; line-height: 1.2;
 }
 .sidebar-sub {
-  font-size: 0.82rem; font-weight: 500; color: var(--accent);
-  margin-bottom: 1.25rem; line-height: 1.4;
+  font-size: 0.88rem; font-weight: 600; color: var(--accent);
+  margin: 0 0 0.45rem; line-height: 1.35;
 }
-.sidebar-meta { font-size: 0.72rem; color: var(--muted); margin-bottom: 1rem; }
+.sidebar-meta { font-size: 0.72rem; color: var(--muted); margin: 0; }
 .sidebar nav ul { list-style: none; padding: 0; margin: 0; }
 .sidebar nav li { margin-bottom: 2px; }
 .sidebar nav a {
@@ -526,12 +536,14 @@ def build_html(
         src="{logo_src}"
         data-static-src="{html.escape(static_logo, quote=True)}"
         alt="administraNET"
-        width="52"
-        height="52"
+        width="88"
+        height="88"
       >
-      <div class="sidebar-brand">administraNET</div>
-      <div class="sidebar-sub">{html.escape(module_label)}</div>
-      <div class="sidebar-meta">Manual de usuario · Synap</div>
+      <div class="sidebar-brand-block">
+        <div class="sidebar-brand">administraNET</div>
+        <div class="sidebar-sub">{html.escape(module_label)}</div>
+        <div class="sidebar-meta">Manual de usuario · Synap</div>
+      </div>
       <nav aria-label="Índice del manual">
         {sidebar_nav}
       </nav>
