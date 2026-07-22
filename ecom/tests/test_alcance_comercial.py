@@ -26,6 +26,13 @@ class TestAlcanceOff(unittest.TestCase):
         self.assertEqual(r1, r2)
         self.assertEqual(r1, [5])
 
+    @patch("ecom.services.alcance_comercial._listar_todos_viajantes", return_value=[1, 2, 3])
+    @patch("ecom.services.alcance_comercial.workflow_jerarquia_comercial_activo", return_value=False)
+    def test_off_puesto_supervisor_lista_todos(self, _wf, mock_todos):
+        ctx = {"id_vendedor_usr": 10, "nombre_puesto": "Supervisor", "vendedor_a_cargo": []}
+        self.assertEqual(alcance_viajantes_comercial("emp1", ctx), [2, 3])
+        mock_todos.assert_called_once_with("emp1")
+
 
 class TestAlcanceOn(unittest.TestCase):
     @patch("ecom.services.alcance_comercial.puede_ver_todos_pedidos", return_value=False)

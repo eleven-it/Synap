@@ -50,9 +50,10 @@ El alcance, la búsqueda y la aprobación solo consideran vendedores con
 
 `ecom/services/alcance_comercial.py` → `alcance_viajantes_comercial(base, ctx)`:
 
+- **Ver todos primero:** si `puede_ver_todos_pedidos` (puesto **Supervisor** / **Supervisor venta** / **Administracion**, `todos_clientes=Si` o `ecom.pedidos.ver_todos`) → todos los viajantes activos (`CodViajante > 1`), con master ON u OFF.
 - **Master OFF:** delega cartera JSON / `[CodViajante]` (paridad legacy).
-- **Master ON:** subárbol según rol + permiso `ecom.pedidos.ver_todos`.
-- Cache por request en `ctx["_alcance_comercial_cache"]`.
+- **Master ON:** subárbol según rol.
+- Cache por request en `ctx["_alcance_viajantes_comercial_cache"]`.
 
 Consumidores: hub pipeline, selector vendedor, objetivos ventas, informe `ventas-objetivos-vs-bo`.
 

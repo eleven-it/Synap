@@ -56,13 +56,23 @@ Desde una tarjeta/fila de PED confirmado, el usuario MUST poder abrir el detalle
 
 ### REQ-HUB-05 — Alcance comercial
 
-El hub MUST filtrar vía `alcance_viajantes_comercial`. Con workflow OFF MUST aplicar filtros actuales (JSON/`ecom.pedidos.ver_todos`). Con aprobación ON MUST exponer cola comercial (`por_aprobar`).
+El hub MUST filtrar vía `alcance_viajantes_comercial` / `puede_ver_todos_pedidos`.
+Con workflow OFF MUST aplicar filtros actuales (JSON/`ecom.pedidos.ver_todos`).
+Con aprobación ON MUST exponer cola comercial (`por_aprobar`).
+Los puestos AdministraNET **Supervisor**, **Supervisor venta** y **Administracion**
+MUST ver todos los PED sin filtro de `CodViajante` (equivalente a `ver_todos`).
 
-#### Scenario: Supervisor con workflow ON
+#### Scenario: Vendedor con workflow ON
 
-- **GIVEN** master ON y usuario supervisor con subárbol org
+- **GIVEN** master ON y usuario vendedor con subárbol org
 - **WHEN** abre el hub
 - **THEN** MUST ver solo pedidos del subárbol org
+
+#### Scenario: Puesto Supervisor ve todos
+
+- **GIVEN** usuario con `nombre_puesto` Supervisor (o Supervisor venta / Administracion)
+- **WHEN** abre el hub
+- **THEN** MUST listar PED de todos los viajantes (sin filtro `CodViajante`)
 
 ---
 

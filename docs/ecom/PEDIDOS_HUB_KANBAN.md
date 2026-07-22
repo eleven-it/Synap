@@ -50,13 +50,17 @@ Fechas UI: **dd/MM/yyyy**.
 
 ## Permisos
 
-| Key | Uso |
-|-----|-----|
+| Key / criterio | Uso |
+|----------------|-----|
 | `ecom.pedidos.ver` | Ver hub |
-| `ecom.pedidos.ver_todos` | Ver todos los vendedores (alcance org o legacy según master flag) |
+| `ecom.pedidos.ver_todos` | Ver todos los vendedores (sin filtro `CodViajante`) |
+| Puesto **Supervisor**, **Supervisor venta** o **Administracion** | Mismo efecto que `ver_todos` / `todos_clientes=Si`: hub y listados sin filtro de cartera (comparación case-insensitive, sin acentos) |
+| `todos_clientes=Si` (legacy) | Ver todos los vendedores |
 | `ecom.pedidos.aprobar` | Aprobar/rechazar cola comercial en hub |
 | `ecom.pedido_masivo.usar` | CTA / abrir masivo |
 | `ecom.pedidos.crear` / `ecom.carrito.editar` | Pedido simple |
+
+Implementación: `ecom/services/pedido_permisos.py` (`puede_ver_todos_pedidos` / `puesto_ve_todos_pedidos`); el pipeline del hub omite el filtro `CodViajante` cuando aplica.
 
 ## Recuperación de borrador
 

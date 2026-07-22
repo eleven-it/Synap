@@ -35,7 +35,11 @@ Detalle de modelo CE: [../mpr/ARTICULO_CE_TALLES_COLOR.md](../mpr/ARTICULO_CE_TA
 | `presentacion` | `unidades` (pares, default) o `docenas` (docenas de pares) |
 | `page` | Paginación (150 filas) |
 
-Componentes UI compartidos con MPR operativo: `templates/includes/filtro_marcas_tags.html` (variant `light`), `templates/includes/toggle_docenas_pares.html` (toggle **Docenas | Pares**), JS `stock/static/stock/js/filtro_marcas_tags.mjs`.
+Componentes UI compartidos con MPR operativo: `templates/includes/filtro_marcas_tags.html` (variant `light`), JS `stock/static/stock/js/filtro_marcas_tags.mjs`. El toggle **Docenas | Pares** se renderiza local en `_filtros.html` con paleta slate/sky (mismos bindings Alpine `cambiarPresentacion`).
+
+## UI
+
+Interfaz alineada al patrón visual de **Ingreso de movimiento de stock** (`/stock/ingreso-movimiento/`): hero oscuro slate (gradient) con breadcrumb/eyebrow, título, subtítulo y acciones (Ayuda + contador de artículos); tarjeta de filtros canónica y paleta **slate/sky** (sin acento purple). El botón primario **Actualizar** usa slate; el toggle Presentación y el estado «incluir ceros» usan acento sky. Las columnas de etapa (Producción / Semi elaborado / 2da Selección / Terminado) llevan un borde superior de color sutil solo como diferenciación visual.
 
 ## API
 
