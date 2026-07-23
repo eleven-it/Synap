@@ -59,6 +59,40 @@ class AsignacionContadoresTest(SimpleTestCase):
         self.assertFalse(svc.usuario_asignado_a_campana(campana, 99))
 
 
+class ParseIdsContadoresTest(SimpleTestCase):
+    def test_lista_post_normaliza_a_ints_unicos(self):
+        self.assertEqual(svc.parse_ids_contadores(["10", "20", "10"]), [10, 20])
+
+    def test_string_csv_y_espacios(self):
+        self.assertEqual(svc.parse_ids_contadores("10, 24; 37\n24"), [10, 24, 37])
+
+    def test_descarta_no_numericos_y_none(self):
+        self.assertEqual(svc.parse_ids_contadores(["a", "", None, "5"]), [5])
+
+    def test_vacio_devuelve_lista_vacia(self):
+        self.assertEqual(svc.parse_ids_contadores(None), [])
+        self.assertEqual(svc.parse_ids_contadores([]), [])
+
+
+class EtiquetarContadoresTest(SimpleTestCase):
+    CANDIDATOS = [
+        {"id_usuario": 10, "cod_usuario": "JPEREZ", "nombre_completo": "Juan Pérez"},
+        {"id_usuario": 20, "cod_usuario": "", "nombre_completo": "Ana Gómez"},
+    ]
+
+    def test_etiqueta_codigo_y_nombre(self):
+        det = svc.etiquetar_contadores([10], self.CANDIDATOS)
+        self.assertEqual(det, [{"id_usuario": 10, "etiqueta": "JPEREZ · Juan Pérez"}])
+
+    def test_etiqueta_solo_nombre_si_sin_codigo(self):
+        det = svc.etiquetar_contadores([20], self.CANDIDATOS)
+        self.assertEqual(det[0]["etiqueta"], "Ana Gómez")
+
+    def test_id_desconocido_usa_fallback(self):
+        det = svc.etiquetar_contadores([99], self.CANDIDATOS)
+        self.assertEqual(det[0]["etiqueta"], "Usuario #99")
+
+
 class CrearCampanaServiceTest(SimpleTestCase):
     @patch("stock.services.inventario_fisico.mysql_cursor")
     def test_crear_campana_rechaza_deposito_no_mpr(self, mock_cursor_ctx):

@@ -2,90 +2,184 @@
 {% load i18n static %}
 {% block title %}Monitor campaña #{{ campana.id_campana }} | Inventario físico | Synap{% endblock %}
 {% block content %}
-<section class="flex flex-col bg-slate-50 py-4 dark:bg-slate-900 sm:py-5"
-         x-data="{ confirmAnular: false }">
-  <div class="mx-auto w-full min-w-0 max-w-4xl px-3 sm:px-4 md:px-6">
-    <div class="mb-4 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 shadow-md">
-      <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stock · Inventario físico · Monitor</p>
-      <h1 class="mt-1 text-lg font-bold text-white">Campaña #{{ campana.id_campana }}</h1>
-      <p class="mt-1 text-xs text-slate-300">
-        Fecha {{ campana.fecha|slice:"8:10" }}/{{ campana.fecha|slice:"5:7" }}/{{ campana.fecha|slice:"0:4" }}
-        · Estado <strong class="text-white">{{ campana.estado }}</strong>
-      </p>
-    </div>
-
-    <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-        <p class="text-xs text-slate-500 dark:text-slate-400">Total líneas</p>
-        <p class="text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ progreso.total }}</p>
+<div class="mx-auto flex w-full min-w-0 max-w-none flex-col px-3 py-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pb-24"
+     x-data="{ confirmAnular: false, reasignarOpen: false }">
+  {# Cabecera canónica #}
+  <div class="mb-3 flex-shrink-0 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 shadow-md sm:px-4">
+    <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div class="min-w-0 flex-1">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stock · Inventario físico · Monitor</p>
+        <div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-2">
+          <h1 class="text-base font-bold tracking-tight text-white sm:text-lg">Campaña #{{ campana.id_campana }}</h1>
+          <span class="rounded-full bg-sky-500/20 px-2 py-0.5 text-[11px] font-semibold text-sky-200">{{ campana.estado }}</span>
+        </div>
+        <p class="mt-1 text-xs leading-snug text-slate-300">
+          Fecha {{ campana.fecha|slice:"8:10" }}/{{ campana.fecha|slice:"5:7" }}/{{ campana.fecha|slice:"0:4" }}
+          · {{ campana.depositos|length }} depósito{{ campana.depositos|length|pluralize }}
+        </p>
       </div>
-      <div class="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-        <p class="text-xs text-emerald-800 dark:text-emerald-300">Contados</p>
-        <p class="text-xl font-bold tabular-nums text-emerald-900 dark:text-emerald-100">{{ progreso.contados }}</p>
+      <div class="ml-auto flex flex-wrap items-center gap-2">
+        <a href="{% url 'stock:inventario_fisico_list' %}"
+           class="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-600 bg-slate-800 px-3 text-xs font-semibold text-slate-200 shadow-sm transition-colors hover:bg-slate-700">
+          <span class="material-icons text-base leading-none" aria-hidden="true">arrow_back</span>
+          Listado
+        </a>
       </div>
-      <div class="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
-        <p class="text-xs text-amber-800 dark:text-amber-300">Pendientes</p>
-        <p class="text-xl font-bold tabular-nums text-amber-900 dark:text-amber-100">{{ progreso.pendientes }}</p>
-      </div>
-      <div class="rounded-xl border border-purple-200 bg-purple-50/60 px-4 py-3 dark:border-purple-900/40 dark:bg-purple-950/20">
-        <p class="text-xs text-purple-800 dark:text-purple-300">Avance</p>
-        <p class="text-xl font-bold tabular-nums text-purple-900 dark:text-purple-100">{{ progreso.porcentaje }}%</p>
-      </div>
-    </div>
+    </header>
+  </div>
 
-    {% if resumen.conflictos_sync %}
-    <div class="mb-4 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
-      <span class="material-icons text-base" aria-hidden="true">warning</span>
-      {{ resumen.conflictos_sync }} conflicto(s) de sync entre operarios — resolver antes de autorizar.
+  {# KPIs #}
+  <div class="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div class="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
+      <p class="text-[11px] text-slate-500 dark:text-slate-400">Total líneas</p>
+      <p class="text-xl font-bold tabular-nums text-slate-900 dark:text-white">{{ progreso.total }}</p>
     </div>
-    {% endif %}
-
-    {% if resumen.bloqueo_autorizar %}
-    <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
-      {{ resumen.mensaje_bloqueo }}
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+      <p class="text-[11px] text-emerald-800 dark:text-emerald-300">Contados</p>
+      <p class="text-xl font-bold tabular-nums text-emerald-900 dark:text-emerald-100">{{ progreso.contados }}</p>
     </div>
-    {% endif %}
-
-    <div class="mb-4 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-      <div class="h-full rounded-full bg-purple-600 transition-all" style="width: {{ progreso.porcentaje }}%"></div>
+    <div class="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 dark:border-amber-900/40 dark:bg-amber-950/20">
+      <p class="text-[11px] text-amber-800 dark:text-amber-300">Pendientes</p>
+      <p class="text-xl font-bold tabular-nums text-amber-900 dark:text-amber-100">{{ progreso.pendientes }}</p>
     </div>
+    <div class="rounded-xl border border-purple-200 bg-purple-50/60 px-4 py-3 dark:border-purple-900/40 dark:bg-purple-950/20">
+      <p class="text-[11px] text-purple-800 dark:text-purple-300">Avance</p>
+      <p class="text-xl font-bold tabular-nums text-purple-900 dark:text-purple-100">{{ progreso.porcentaje }}%</p>
+    </div>
+  </div>
 
-    <div class="flex flex-wrap gap-2">
-      <a href="{% url 'stock:inventario_fisico_analizador' id_campana=campana.id_campana %}"
-         class="inline-flex items-center gap-1 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700">
-        <span class="material-icons text-base" aria-hidden="true">analytics</span>
-        Analizador ({{ resumen.lineas_con_diferencia }} dif.)
-      </a>
-      <form method="post" class="inline">
-        {% csrf_token %}
-        {% if campana.estado == "EnConteo" %}
-        <input type="hidden" name="accion" value="cerrar_conteo">
-        <button type="submit" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-          Cerrar conteo (revisión)
-        </button>
-        {% elif campana.estado == "Borrador" or campana.estado == "EnRevision" %}
-        <input type="hidden" name="accion" value="abrir_conteo">
-        <button type="submit" class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100">
-          Abrir conteo
-        </button>
-        {% endif %}
-      </form>
-      {% if campana.estado == "Borrador" or campana.estado == "EnConteo" %}
-      <button type="button" @click="confirmAnular = true"
-              class="rounded-xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300">
-        Anular campaña
+  {% if resumen.conflictos_sync %}
+  <div class="mb-3 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+    <span class="material-icons text-base" aria-hidden="true">warning</span>
+    {{ resumen.conflictos_sync }} conflicto(s) de sync entre operarios — resolver antes de autorizar.
+  </div>
+  {% endif %}
+
+  {% if resumen.bloqueo_autorizar %}
+  <div class="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
+    {{ resumen.mensaje_bloqueo }}
+  </div>
+  {% endif %}
+
+  <div class="mb-3 h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+    <div class="h-full rounded-full bg-purple-600 transition-all" style="width: {{ progreso.porcentaje }}%"></div>
+  </div>
+
+  {# Acciones de estado #}
+  <div class="mb-3 flex flex-wrap gap-2">
+    <a href="{% url 'stock:inventario_fisico_analizador' id_campana=campana.id_campana %}"
+       class="inline-flex h-10 items-center gap-1.5 rounded-xl bg-purple-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-purple-700">
+      <span class="material-icons text-base" aria-hidden="true">analytics</span>
+      Analizador ({{ resumen.lineas_con_diferencia }} dif.)
+    </a>
+    <form method="post" class="inline">
+      {% csrf_token %}
+      {% if campana.estado == "EnConteo" %}
+      <input type="hidden" name="accion" value="cerrar_conteo">
+      <button type="submit" class="h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700/40">
+        Cerrar conteo (revisión)
+      </button>
+      {% elif campana.estado == "Borrador" or campana.estado == "EnRevision" %}
+      <input type="hidden" name="accion" value="abrir_conteo">
+      <button type="submit" class="h-10 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700/40">
+        Abrir conteo
       </button>
       {% endif %}
-      <a href="{% url 'stock:inventario_fisico_list' %}" class="inline-flex items-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200">
-        Volver al listado
-      </a>
-    </div>
-
-    {% if campana.contadores %}
-    <p class="mt-4 text-xs text-slate-500 dark:text-slate-400">Contadores asignados: {{ campana.contadores|join:", " }}</p>
+    </form>
+    {% if campana.estado == "Borrador" or campana.estado == "EnConteo" or campana.estado == "EnRevision" %}
+    <button type="button" @click="reasignarOpen = true"
+            class="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700/40">
+      <span class="material-icons text-base" aria-hidden="true">group</span>
+      Reasignar contadores
+    </button>
+    {% endif %}
+    {% if campana.estado == "Borrador" or campana.estado == "EnConteo" %}
+    <button type="button" @click="confirmAnular = true"
+            class="inline-flex h-10 items-center gap-1.5 rounded-xl border border-red-300 px-4 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/30">
+      <span class="material-icons text-base" aria-hidden="true">block</span>
+      Anular campaña
+    </button>
     {% endif %}
   </div>
 
+  {# Contadores asignados #}
+  <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="mb-2 flex items-center justify-between gap-2">
+      <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Contadores asignados</h2>
+      <span class="rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-semibold text-sky-600 tabular-nums dark:text-sky-300">
+        {{ contadores_detalle|length }}
+      </span>
+    </div>
+    {% if contadores_detalle %}
+    <div class="flex flex-wrap gap-1.5">
+      {% for ct in contadores_detalle %}
+      <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+        <span class="material-icons text-sm text-slate-400" aria-hidden="true">person</span>
+        {{ ct.etiqueta }}
+      </span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-xs italic text-slate-400">Sin contadores asignados. Reasigná antes de abrir el conteo.</p>
+    {% endif %}
+  </section>
+
+  {# Modal reasignar (Synap) #}
+  <div x-show="reasignarOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-800"
+         x-data="{ filtro: '' }">
+      <h2 class="text-base font-bold text-slate-900 dark:text-white">Reasignar contadores</h2>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Seleccioná los usuarios que contarán esta campaña.</p>
+      <form method="post" class="mt-4">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="reasignar">
+        {% if contadores_disponibles %}
+        <div class="relative mb-2">
+          <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-slate-400" aria-hidden="true">search</span>
+          <input type="search" x-model="filtro" placeholder="Buscar usuario…"
+                 class="h-9 w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 text-sm shadow-sm placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+        </div>
+        <ul class="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-600">
+          {% for u in contadores_disponibles %}
+          <li x-show="(!filtro) || '{{ u.cod_usuario|escapejs }} {{ u.nombre_completo|escapejs }}'.toLowerCase().includes(filtro.toLowerCase())">
+            <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/40">
+              <input type="checkbox" name="contadores" value="{{ u.id_usuario }}"
+                     {% if u.id_usuario in campana.contadores %}checked{% endif %}
+                     class="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500">
+              <span class="min-w-0 flex-1 truncate">
+                {% if u.nombre_completo %}{{ u.nombre_completo }}{% else %}Usuario #{{ u.id_usuario }}{% endif %}
+              </span>
+              {% if u.cod_usuario %}
+              <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-700 dark:text-slate-300">{{ u.cod_usuario }}</span>
+              {% endif %}
+            </label>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+          No se pudo cargar el listado de usuarios. Ingresá los códigos AdministraNET abajo.
+        </p>
+        {% endif %}
+        <div class="mt-3">
+          <label for="contadores_texto" class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Códigos AdministraNET adicionales</label>
+          <input type="text" name="contadores_texto" id="contadores_texto" inputmode="numeric" placeholder="Ej.: 10, 24, 37"
+                 class="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+        </div>
+        <div class="mt-5 flex justify-end gap-2">
+          <button type="button" @click="reasignarOpen = false"
+                  class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200">
+            Cancelar
+          </button>
+          <button type="submit" class="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700">
+            Guardar asignación
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {# Modal anular (Synap) #}
   <div x-show="confirmAnular" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
     <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-800">
       <h2 class="text-base font-bold text-slate-900 dark:text-white">Anular campaña</h2>
@@ -97,11 +191,11 @@
                 class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200">
           Cancelar
         </button>
-        <button type="submit" class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white">
+        <button type="submit" class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">
           Anular
         </button>
       </form>
     </div>
   </div>
-</section>
+</div>
 {% endblock %}
