@@ -55,6 +55,32 @@ Reconteo ciego: `EnRevision → EnConteo`.
 | `/stock/api/conteo/sync/` | contar | Sync batch |
 | `/stock/api/campana/<id>/autorizar/` | `stock.inventario_fisico.autorizar` | Autorizar + MSTOCK |
 
+### Crear campaña y asignar contadores (supervisor)
+
+UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-slate-700 bg-slate-800`, eyebrow `Stock · …`, contenedor `mx-auto flex w-full min-w-0 max-w-none flex-col … pb-24`).
+
+**Pantalla de alta (`crear.html`)** en una sola vista con secciones:
+
+1. **Fecha y depósitos** — `input[type=date]` (se registra como dd/MM/yyyy) + checkboxes de depósitos MPR elegibles. Al crear se toma el snapshot de saldos por artículo.
+2. **Asignar contadores** — lista de usuarios con buscador (checkboxes `name=contadores`) obtenida de `listar_contadores_candidatos()` (reutiliza `mpr.services_operario.listar_usuarios`). Fallback: campo `contadores_texto` con IDs AdministraNET separados por coma. El permiso `stock.inventario_fisico.contar` se valida al abrir la app móvil.
+3. **CTA**:
+   - **Guardar borrador** (`accion=crear_borrador`) → crea en `Borrador`.
+   - **Crear y abrir conteo** (`accion=crear_abrir`) → crea, asigna contadores y transiciona a `EnConteo`. Si no hay contadores, queda en `Borrador` con aviso.
+
+**Reasignar contadores (`monitor.html`)** — modal Synap (sin diálogos nativos) con `accion=reasignar` que invoca `asignar_contadores()`. Disponible en `Borrador`, `EnConteo` y `EnRevision`. Los chips «Contadores asignados» muestran `código · nombre` vía `etiquetar_contadores()`.
+
+**Listado (`listado.html`)** — tabla densa con fecha dd/MM/yyyy, badge de estado por color, cantidad de depósitos, barra de avance (`obtener_progreso_campana`), chips de contadores y accesos Monitor/Analizador.
+
+**Contrato de vistas / servicio:**
+
+| Función servicio | Rol |
+|------------------|-----|
+| `parse_ids_contadores(valores)` | Normaliza IDs (lista POST + CSV) a ints únicos ordenados |
+| `listar_contadores_candidatos(base_empresa)` | Usuarios candidatos `{id_usuario, cod_usuario, nombre_completo}` |
+| `etiquetar_contadores(ids, candidatos)` | Enlaza ids asignados a su etiqueta legible |
+
+`inventario_fisico_crear_view` acepta `contadores` (lista) + `contadores_texto` y `accion` (`crear_abrir`/`crear_borrador`); `inventario_fisico_monitor_view` acepta `accion=reasignar`.
+
 ### Offline (PWA)
 
 - IndexedDB `synap_inv_fisico` (`theme/static/js/inv_fisico_offline.js`): stores `catalogo`, `cola`, `meta`.

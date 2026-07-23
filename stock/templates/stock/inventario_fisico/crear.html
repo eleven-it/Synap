@@ -2,56 +2,161 @@
 {% load i18n static %}
 {% block title %}Nueva campaña | Inventario físico | Synap{% endblock %}
 {% block content %}
-<section class="flex flex-col bg-slate-50 py-4 dark:bg-slate-900 sm:py-5">
-  <div class="mx-auto w-full min-w-0 max-w-3xl px-3 sm:px-4 md:px-6">
-    <div class="mb-4 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 shadow-md">
-      <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stock · Inventario físico</p>
-      <h1 class="mt-1 text-lg font-bold text-white">Nueva campaña de conteo</h1>
-      <p class="mt-1 text-xs text-slate-300">Solo depósitos MPR elegibles (Terminado, Semi elaborado, 2da Selección).</p>
-    </div>
-
-    <form method="post" class="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-      {% csrf_token %}
-      <div>
-        <label for="fecha" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Fecha de campaña</label>
-        <input type="date" name="fecha" id="fecha" required
-               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+<div class="mx-auto flex w-full min-w-0 max-w-none flex-col px-3 py-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12 pb-24"
+     x-data="crearCampanaInvFisico()">
+  {# Cabecera canónica — mismo patrón que /stock/inventario/ #}
+  <div class="mb-3 flex-shrink-0 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2.5 shadow-md sm:px-4">
+    <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
+      <div class="min-w-0 flex-1">
+        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stock · Inventario físico</p>
+        <div class="mt-0.5 flex min-w-0 flex-wrap items-center gap-2">
+          <h1 class="text-base font-bold tracking-tight text-white sm:text-lg">Nueva campaña de conteo</h1>
+          <span class="rounded-full bg-sky-500/20 px-2 py-0.5 text-[11px] font-semibold text-sky-200">Borrador</span>
+        </div>
+        <p class="mt-1 text-xs leading-snug text-slate-300">
+          Conteo ciego en depósitos MPR elegibles (Terminado, Semi elaborado, 2da Selección).
+        </p>
       </div>
+      <div class="ml-auto flex flex-wrap items-center gap-2">
+        <a href="{% url 'stock:inventario_fisico_list' %}"
+           class="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-600 bg-slate-800 px-3 text-xs font-semibold text-slate-200 shadow-sm transition-colors hover:bg-slate-700">
+          <span class="material-icons text-base leading-none" aria-hidden="true">arrow_back</span>
+          Volver
+        </a>
+      </div>
+    </header>
+  </div>
 
-      <div>
-        <p class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">Depósitos</p>
-        {% if depositos %}
-        <ul class="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3 dark:border-slate-600">
-          {% for d in depositos %}
-          <li>
-            <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-              <input type="checkbox" name="depositos" value="{{ d.id_deposito }}" class="rounded border-slate-300">
-              <span>{{ d.nombre }} <span class="text-slate-400">({{ d.tipo_mpr }})</span></span>
+  <form method="post" class="flex flex-col gap-3">
+    {% csrf_token %}
+    <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+      {# --- Sección 1 y 2: Fecha + Depósitos --- #}
+      <section class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="flex h-6 w-6 items-center justify-center rounded-full bg-purple-100 text-xs font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">1</span>
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Fecha y depósitos</h2>
+        </div>
+
+        <div>
+          <label for="fecha" class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">Fecha de campaña</label>
+          <input type="date" name="fecha" id="fecha" required
+                 class="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+          <p class="mt-1 text-[11px] text-slate-400">Se registra en formato dd/MM/yyyy.</p>
+        </div>
+
+        <div>
+          <p class="mb-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">Depósitos MPR elegibles</p>
+          {% if depositos %}
+          <ul class="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-600">
+            {% for d in depositos %}
+            <li>
+              <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/40">
+                <input type="checkbox" name="depositos" value="{{ d.id_deposito }}"
+                       class="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500">
+                <span class="min-w-0 flex-1 truncate">{{ d.nombre }}</span>
+                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-300">{{ d.tipo_mpr }}</span>
+              </label>
+            </li>
+            {% endfor %}
+          </ul>
+          <p class="mt-1 text-[11px] text-slate-400">Se tomará una foto (snapshot) del saldo de cada artículo al crear la campaña.</p>
+          {% else %}
+          <div class="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            No hay depósitos MPR elegibles configurados (tipo Terminado / Semi elaborado / 2da Selección con suma de stock).
+          </div>
+          {% endif %}
+        </div>
+      </section>
+
+      {# --- Sección 3: Asignar contadores --- #}
+      <section class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-center gap-2">
+          <span class="flex h-6 w-6 items-center justify-center rounded-full bg-purple-100 text-xs font-bold text-purple-700 dark:bg-purple-950/60 dark:text-purple-300">2</span>
+          <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Asignar contadores</h2>
+          <span class="ml-auto rounded-full bg-sky-500/15 px-2 py-0.5 text-[11px] font-semibold text-sky-600 tabular-nums dark:text-sky-300"
+                x-text="totalSeleccionados() + ' asignado' + (totalSeleccionados() === 1 ? '' : 's')"></span>
+        </div>
+
+        {% if contadores_disponibles %}
+        <div class="relative">
+          <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-slate-400" aria-hidden="true">search</span>
+          <input type="search" x-model="filtro" placeholder="Buscar usuario por código o nombre…"
+                 class="h-9 w-full rounded-md border border-slate-300 bg-white pl-9 pr-3 text-sm shadow-sm placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+        </div>
+        <ul class="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-600">
+          {% for u in contadores_disponibles %}
+          <li x-show="coincide('{{ u.cod_usuario|escapejs }}', '{{ u.nombre_completo|escapejs }}')">
+            <label class="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700/40">
+              <input type="checkbox" name="contadores" value="{{ u.id_usuario }}" @change="sincronizar()"
+                     class="h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500">
+              <span class="min-w-0 flex-1 truncate">
+                {% if u.nombre_completo %}{{ u.nombre_completo }}{% else %}Usuario #{{ u.id_usuario }}{% endif %}
+              </span>
+              {% if u.cod_usuario %}
+              <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500 dark:bg-slate-700 dark:text-slate-300">{{ u.cod_usuario }}</span>
+              {% endif %}
             </label>
           </li>
           {% endfor %}
         </ul>
         {% else %}
-        <p class="text-sm text-amber-700 dark:text-amber-300">No hay depósitos MPR elegibles configurados.</p>
+        <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+          No se pudo cargar el listado de usuarios. Ingresá el código de usuario AdministraNET separado por comas.
+        </div>
         {% endif %}
-      </div>
 
-      <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-        <input type="checkbox" name="abrir_conteo" value="1" class="rounded border-slate-300">
-        Abrir conteo inmediatamente (estado EnConteo)
-      </label>
+        <div>
+          <label for="contadores_texto" class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300">
+            Códigos AdministraNET adicionales
+          </label>
+          <input type="text" name="contadores_texto" id="contadores_texto" inputmode="numeric"
+                 placeholder="Ej.: 10, 24, 37"
+                 class="h-9 w-full rounded-md border border-slate-300 bg-white px-3 text-sm shadow-sm placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+          <p class="mt-1 text-[11px] text-slate-400">Solo IDs numéricos. Se suman a los seleccionados arriba. El permiso de conteo se valida al abrir la app móvil.</p>
+        </div>
+      </section>
+    </div>
 
-      <div class="flex flex-wrap gap-2 pt-2">
-        <button type="submit"
-                class="inline-flex min-h-10 items-center rounded-xl bg-purple-600 px-5 py-2 text-sm font-semibold text-white hover:bg-purple-700">
-          Crear campaña
-        </button>
-        <a href="{% url 'stock:inventario_fisico_list' %}"
-           class="inline-flex min-h-10 items-center rounded-xl border border-slate-300 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200">
-          Cancelar
-        </a>
-      </div>
-    </form>
-  </div>
-</section>
+    {# --- CTA --- #}
+    <div class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-end">
+      <p class="mr-auto text-[11px] text-slate-400">
+        «Crear y abrir conteo» requiere al menos un contador asignado; si no, se guarda como borrador.
+      </p>
+      <a href="{% url 'stock:inventario_fisico_list' %}"
+         class="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 px-5 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/40">
+        Cancelar
+      </a>
+      <button type="submit" name="accion" value="crear_borrador"
+              class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-5 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700/40">
+        <span class="material-icons text-base" aria-hidden="true">save</span>
+        Guardar borrador
+      </button>
+      <button type="submit" name="accion" value="crear_abrir"
+              class="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-purple-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2">
+        <span class="material-icons text-base" aria-hidden="true">play_arrow</span>
+        Crear y abrir conteo
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+function crearCampanaInvFisico() {
+  return {
+    filtro: '',
+    seleccionados: 0,
+    coincide(cod, nombre) {
+      const q = (this.filtro || '').trim().toLowerCase();
+      if (!q) return true;
+      return (cod || '').toLowerCase().includes(q) || (nombre || '').toLowerCase().includes(q);
+    },
+    sincronizar() {
+      this.seleccionados = document.querySelectorAll('input[name=contadores]:checked').length;
+    },
+    totalSeleccionados() {
+      return this.seleccionados;
+    },
+  };
+}
+</script>
 {% endblock %}

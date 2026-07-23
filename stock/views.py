@@ -394,9 +394,18 @@ def inventario_fisico_list_view(request):
         messages.error(request, "No se pudo determinar la empresa activa.")
         return redirect("core:dashboard")
 
-    from stock.services.inventario_fisico import listar_campanas
+    from stock.services.inventario_fisico import (
+        etiquetar_contadores,
+        listar_campanas,
+        listar_contadores_candidatos,
+        obtener_progreso_campana,
+    )
 
     campanas = listar_campanas(base_empresa)
+    candidatos = listar_contadores_candidatos(base_empresa)
+    for c in campanas:
+        c["progreso"] = obtener_progreso_campana(base_empresa, c["id_campana"])
+        c["contadores_detalle"] = etiquetar_contadores(c.get("contadores", []), candidatos)
     context = {
         "base_empresa": base_empresa,
         "campanas": campanas,
@@ -416,12 +425,16 @@ def inventario_fisico_crear_view(request):
 
     from stock.services.inventario_fisico import (
         ESTADO_EN_CONTEO,
+        asignar_contadores,
         crear_campana,
+        listar_contadores_candidatos,
         listar_depositos_elegibles,
+        parse_ids_contadores,
         transicionar_campana,
     )
 
     depositos = listar_depositos_elegibles(base_empresa)
+    contadores_disponibles = listar_contadores_candidatos(base_empresa)
 
     if request.method == "POST":
         fecha = request.POST.get("fecha", "").strip()
@@ -431,7 +444,11 @@ def inventario_fisico_crear_view(request):
                 seleccionados.append(int(raw))
             except (TypeError, ValueError):
                 continue
-        abrir_conteo = request.POST.get("abrir_conteo") == "1"
+        contadores_ids = parse_ids_contadores(
+            request.POST.getlist("contadores") + [request.POST.get("contadores_texto", "")]
+        )
+        accion = request.POST.get("accion", "").strip()
+        abrir_conteo = accion == "crear_abrir" or request.POST.get("abrir_conteo") == "1"
         ok, result = crear_campana(
             base_empresa,
             fecha=fecha,
@@ -442,14 +459,33 @@ def inventario_fisico_crear_view(request):
             messages.error(request, result.get("error", "No se pudo crear la campaña."))
         else:
             id_campana = result["id_campana"]
+            if contadores_ids:
+                ok_asig, res_asig = asignar_contadores(base_empresa, id_campana, contadores_ids)
+                if not ok_asig:
+                    messages.warning(
+                        request,
+                        res_asig.get("error", "No se pudieron asignar los contadores."),
+                    )
             if abrir_conteo:
-                transicionar_campana(base_empresa, id_campana, ESTADO_EN_CONTEO)
-            messages.success(request, "Campaña de inventario físico creada correctamente.")
+                if contadores_ids:
+                    transicionar_campana(base_empresa, id_campana, ESTADO_EN_CONTEO)
+                    messages.success(
+                        request,
+                        "Campaña creada y abierta para conteo (EnConteo).",
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        "Campaña creada como borrador: asigná contadores antes de abrir el conteo.",
+                    )
+            else:
+                messages.success(request, "Campaña de inventario físico creada como borrador.")
             return redirect("stock:inventario_fisico_monitor", id_campana=id_campana)
 
     context = {
         "base_empresa": base_empresa,
         "depositos": depositos,
+        "contadores_disponibles": contadores_disponibles,
     }
     return render(request, "stock/inventario_fisico/crear.html", context)
 
@@ -467,9 +503,13 @@ def inventario_fisico_monitor_view(request, id_campana):
         ESTADO_EN_CONTEO,
         ESTADO_EN_REVISION,
         anular_campana,
+        asignar_contadores,
+        etiquetar_contadores,
+        listar_contadores_candidatos,
         obtener_campana,
         obtener_progreso_campana,
         obtener_resumen_monitor,
+        parse_ids_contadores,
         transicionar_campana,
     )
 
@@ -494,6 +534,16 @@ def inventario_fisico_monitor_view(request, id_campana):
                 campana = obtener_campana(base_empresa, id_campana)
             else:
                 messages.error(request, result.get("error", "No se pudo abrir el conteo."))
+        elif accion == "reasignar":
+            contadores_ids = parse_ids_contadores(
+                request.POST.getlist("contadores") + [request.POST.get("contadores_texto", "")]
+            )
+            ok, result = asignar_contadores(base_empresa, id_campana, contadores_ids)
+            if ok:
+                messages.success(request, "Contadores actualizados.")
+                campana = obtener_campana(base_empresa, id_campana)
+            else:
+                messages.error(request, result.get("error", "No se pudieron asignar contadores."))
         elif accion == "anular":
             ok, result = anular_campana(base_empresa, id_campana)
             if ok:
@@ -503,11 +553,17 @@ def inventario_fisico_monitor_view(request, id_campana):
 
     progreso = obtener_progreso_campana(base_empresa, id_campana)
     resumen = obtener_resumen_monitor(base_empresa, id_campana)
+    contadores_disponibles = listar_contadores_candidatos(base_empresa)
+    contadores_detalle = etiquetar_contadores(
+        campana.get("contadores", []), contadores_disponibles
+    )
     context = {
         "base_empresa": base_empresa,
         "campana": campana,
         "progreso": progreso,
         "resumen": resumen,
+        "contadores_disponibles": contadores_disponibles,
+        "contadores_detalle": contadores_detalle,
     }
     return render(request, "stock/inventario_fisico/monitor.html", context)
 

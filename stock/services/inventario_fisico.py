@@ -99,6 +99,31 @@ def parse_contadores_json(contadores_json: Any) -> List[int]:
     return out
 
 
+def parse_ids_contadores(valores: Any) -> List[int]:
+    """Normaliza valores crudos (lista de POST, string CSV) a ids únicos ordenados.
+
+    Acepta lista/tupla de ids o un string con separadores coma/espacio/salto.
+    Descarta no numéricos y duplicados preservando el orden de aparición.
+    """
+    if valores is None:
+        return []
+    if isinstance(valores, str):
+        crudos: List[Any] = [p for p in valores.replace(";", ",").replace("\n", ",").split(",")]
+    elif isinstance(valores, (list, tuple)):
+        crudos = list(valores)
+    else:
+        crudos = [valores]
+    out: List[int] = []
+    vistos: Set[int] = set()
+    for item in crudos:
+        uid = to_int_or_none(item)
+        if uid is None or uid in vistos:
+            continue
+        vistos.add(uid)
+        out.append(uid)
+    return out
+
+
 def usuario_asignado_a_campana(campana: Dict[str, Any], id_usuario: int) -> bool:
     contadores = parse_contadores_json(campana.get("contadores_json"))
     if not contadores:
@@ -268,6 +293,66 @@ def listar_depositos_elegibles(base_empresa: str) -> List[Dict[str, Any]]:
     except Exception as exc:
         logger.warning("listar_depositos_elegibles %s: %s", base_empresa, exc)
         return []
+
+
+def listar_contadores_candidatos(base_empresa: str) -> List[Dict[str, Any]]:
+    """Usuarios de login candidatos a contador (reutiliza el listado MPR).
+
+    Devuelve `[{id_usuario, cod_usuario, nombre_completo}]`. El permiso de conteo
+    (`stock.inventario_fisico.contar`) se valida al abrir la app móvil; aquí se
+    ofrece el universo de usuarios para asignar.
+    """
+    base = str_or_default(base_empresa, "").strip()
+    if not base:
+        return []
+    try:
+        from mpr.services_operario import listar_usuarios
+
+        usuarios = listar_usuarios(base) or []
+    except Exception as exc:
+        logger.warning("listar_contadores_candidatos %s: %s", base_empresa, exc)
+        return []
+    candidatos: List[Dict[str, Any]] = []
+    for u in usuarios:
+        uid = to_int_or_none(u.get("id_usuario"))
+        if uid is None:
+            continue
+        candidatos.append(
+            {
+                "id_usuario": uid,
+                "cod_usuario": str_or_default(u.get("cod_usuario"), ""),
+                "nombre_completo": str_or_default(u.get("nombre_completo"), ""),
+            }
+        )
+    return candidatos
+
+
+def etiquetar_contadores(
+    contadores_ids: Sequence[int],
+    candidatos: Sequence[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Enlaza ids asignados con su nombre/código a partir de los candidatos."""
+    indice = {
+        to_int_or_none(c.get("id_usuario")): c
+        for c in (candidatos or [])
+        if to_int_or_none(c.get("id_usuario")) is not None
+    }
+    detalle: List[Dict[str, Any]] = []
+    for raw in contadores_ids or []:
+        uid = to_int_or_none(raw)
+        if uid is None:
+            continue
+        cand = indice.get(uid)
+        if cand:
+            nombre = str_or_default(cand.get("nombre_completo"), "").strip()
+            cod = str_or_default(cand.get("cod_usuario"), "").strip()
+            etiqueta = nombre or cod or f"Usuario #{uid}"
+            if nombre and cod:
+                etiqueta = f"{cod} · {nombre}"
+        else:
+            etiqueta = f"Usuario #{uid}"
+        detalle.append({"id_usuario": uid, "etiqueta": etiqueta})
+    return detalle
 
 
 def listar_campanas_para_contador(
