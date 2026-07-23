@@ -61,6 +61,7 @@ Pantalla **inicial de pedidos**: ver borradores, pedidos enviados, en curso, cer
 5. Los **lotes de carga masiva** aparecen como tarjetas en la columna operativa del Kanban (no hay una lane separada «Cargas masivas»). Los PED hijos del lote no se listan individualmente en el hub; use el **resumen de lote** para ver el detalle.
 6. **Pedidos migrados desde BEST** (cutover): se identifican por comprobante/origen de migración. Al abrirlos verá el aviso de **solo lectura** («Pedido en solo lectura.» / «Abriendo pedido…»). No se editan ni se confirman como un pedido operativo normal; sirven para consulta y seguimiento del cutover.
 7. En vista **Lista**, las columnas son: **Pedido** (estado), **Documento**, **Cliente**, **Sucursal** (solo número), **Vendedor**, **Total** y **Fecha**.
+8. En vista **Kanban**, cada tarjeta PED muestra el **cliente en violeta**, el total y la sucursal como **Sucursal N** (solo el número).
 
 ---
 

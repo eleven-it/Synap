@@ -11,6 +11,7 @@ from ecom.services.pedidos_hub_pipeline import (
     _columna_lote_desde_contexto,
     _columna_ped_mysql,
     _etiqueta_sucursal,
+    _etiqueta_sucursal_kanban,
     _nro_sucursal,
     _mapa_reverso_lotes,
     _masivos_anulados,
@@ -324,6 +325,12 @@ class TestEtiquetaSucursal(TestCase):
         self.assertEqual(_nro_sucursal("", 42), "42")
         self.assertEqual(_nro_sucursal("-", None), "")
 
+    def test_etiqueta_sucursal_kanban(self):
+        self.assertEqual(_etiqueta_sucursal_kanban("11", 99), "Sucursal 11")
+        self.assertEqual(_etiqueta_sucursal_kanban("1", 5), "Sucursal 1")
+        self.assertEqual(_etiqueta_sucursal_kanban("", 42), "Sucursal 42")
+        self.assertEqual(_etiqueta_sucursal_kanban("-", None), "")
+
 
 class TestPedidosMysql(TestCase):
     @patch("ecom.services.pedidos_hub_pipeline._nombres_viajantes", return_value={8: "Juan Pérez"})
@@ -359,13 +366,14 @@ class TestPedidosMysql(TestCase):
         items = _pedidos_mysql("emp_hub", {"todos_clientes": "Si"})
         self.assertEqual(len(items), 1)
         tarjeta = items[0]
-        self.assertEqual(tarjeta["sucursal"], "San Martín 500")
+        self.assertEqual(tarjeta["sucursal"], "Sucursal 500")
         self.assertEqual(tarjeta["sucursal_nro"], "500")
         self.assertEqual(tarjeta["cliente"], "Distribuidora Norte")
         self.assertEqual(tarjeta["vendedor"], "Juan Pérez")
         self.assertEqual(tarjeta["total_fmt"], "$1,500.50")
         self.assertIn("Distribuidora Norte", tarjeta["subtitulo"])
         self.assertIn("1,500.50", tarjeta["subtitulo"])
+        self.assertEqual(tarjeta["meta"]["sucursal"], "San Martín 500")
         self.assertEqual(tarjeta["meta"]["id_cliente_domicilio"], 77)
         self.assertEqual(tarjeta["meta"]["nombre_cliente"], "Distribuidora Norte")
 
