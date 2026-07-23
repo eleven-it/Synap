@@ -71,6 +71,7 @@ APPS_MENU = [
                     {"label": _("Remito de Venta"), "url": "stock:alta_movimiento", "icon": "receipt_long", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_remito_venta"},
                     {"label": _("Pedido interno a depósito / compras"), "url": "stock:alta_movimiento", "icon": "swap_horiz", "permission": "stock.crear_movimiento", "menu_item_id": "stock_mov_pedido_interno"},
                     {"label": _("Inventario"), "url": "stock:inventario", "icon": "inventory_2", "permission": "stock.consultas", "menu_item_id": "stock_mov_inventario"},
+                    {"label": _("Inventario físico (campañas)"), "url": "stock:inventario_fisico_list", "icon": "fact_check", "permission": "stock.inventario_fisico.gestionar", "menu_item_id": "stock_inv_fisico_campanas"},
                     {"label": _("Conteo inventario físico"), "url": "stock:conteo_mis", "icon": "qr_code_scanner", "permission": "stock.inventario_fisico.contar", "menu_item_id": "stock_inv_fisico_conteo"},
                 ]
             },
