@@ -150,6 +150,9 @@ PERMISOS_POR_MODULO = {
         ("stock.consultas", "Consultas y anulaciones de stock"),
         ("stock.ref_movstock", "ABM referencia de movimiento de stock"),
         ("stock.informes", "Informes de stock"),
+        ("stock.inventario_fisico.contar", "Conteo móvil de inventario físico"),
+        ("stock.inventario_fisico.gestionar", "Gestionar campañas de inventario físico"),
+        ("stock.inventario_fisico.autorizar", "Autorizar y aplicar ajustes de inventario físico"),
     ],
     "Producción (MPR)": [
         ("mpr.ver", "Ver módulo Producción (MPR)"),

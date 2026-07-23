@@ -383,3 +383,219 @@ def movimiento_pdf_view(request, codigo_movimiento):
         response = HttpResponse(b"PDF no disponible (ReportLab no instalado).", content_type="text/plain")
         response["Content-Disposition"] = 'attachment; filename="movimiento-stock.txt"'
         return response
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
+def inventario_fisico_list_view(request):
+    """Listado de campañas de inventario físico."""
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+
+    from stock.services.inventario_fisico import listar_campanas
+
+    campanas = listar_campanas(base_empresa)
+    context = {
+        "base_empresa": base_empresa,
+        "campanas": campanas,
+    }
+    return render(request, "stock/inventario_fisico/listado.html", context)
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
+def inventario_fisico_crear_view(request):
+    """Alta de campaña de inventario físico."""
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    id_usuario = session_user.get("id_usuario")
+    if not base_empresa or not id_usuario:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+
+    from stock.services.inventario_fisico import (
+        ESTADO_EN_CONTEO,
+        crear_campana,
+        listar_depositos_elegibles,
+        transicionar_campana,
+    )
+
+    depositos = listar_depositos_elegibles(base_empresa)
+
+    if request.method == "POST":
+        fecha = request.POST.get("fecha", "").strip()
+        seleccionados = []
+        for raw in request.POST.getlist("depositos"):
+            try:
+                seleccionados.append(int(raw))
+            except (TypeError, ValueError):
+                continue
+        abrir_conteo = request.POST.get("abrir_conteo") == "1"
+        ok, result = crear_campana(
+            base_empresa,
+            fecha=fecha,
+            depositos_ids=seleccionados,
+            id_usuario_alta=int(id_usuario),
+        )
+        if not ok:
+            messages.error(request, result.get("error", "No se pudo crear la campaña."))
+        else:
+            id_campana = result["id_campana"]
+            if abrir_conteo:
+                transicionar_campana(base_empresa, id_campana, ESTADO_EN_CONTEO)
+            messages.success(request, "Campaña de inventario físico creada correctamente.")
+            return redirect("stock:inventario_fisico_monitor", id_campana=id_campana)
+
+    context = {
+        "base_empresa": base_empresa,
+        "depositos": depositos,
+    }
+    return render(request, "stock/inventario_fisico/crear.html", context)
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
+def inventario_fisico_monitor_view(request, id_campana):
+    """Monitor básico de progreso de campaña."""
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+
+    from stock.services.inventario_fisico import (
+        ESTADO_EN_CONTEO,
+        ESTADO_EN_REVISION,
+        anular_campana,
+        obtener_campana,
+        obtener_progreso_campana,
+        obtener_resumen_monitor,
+        transicionar_campana,
+    )
+
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana:
+        messages.error(request, "Campaña no encontrada.")
+        return redirect("stock:inventario_fisico_list")
+
+    if request.method == "POST":
+        accion = request.POST.get("accion", "").strip()
+        if accion == "cerrar_conteo":
+            ok, result = transicionar_campana(base_empresa, id_campana, ESTADO_EN_REVISION)
+            if ok:
+                messages.success(request, "Conteo cerrado. Campaña en revisión.")
+                campana = obtener_campana(base_empresa, id_campana)
+            else:
+                messages.error(request, result.get("error", "No se pudo cerrar el conteo."))
+        elif accion == "abrir_conteo" and campana["estado"] != ESTADO_EN_CONTEO:
+            ok, result = transicionar_campana(base_empresa, id_campana, ESTADO_EN_CONTEO)
+            if ok:
+                messages.success(request, "Campaña abierta para conteo.")
+                campana = obtener_campana(base_empresa, id_campana)
+            else:
+                messages.error(request, result.get("error", "No se pudo abrir el conteo."))
+        elif accion == "anular":
+            ok, result = anular_campana(base_empresa, id_campana)
+            if ok:
+                messages.success(request, "Campaña anulada.")
+                return redirect("stock:inventario_fisico_list")
+            messages.error(request, result.get("error", "No se pudo anular."))
+
+    progreso = obtener_progreso_campana(base_empresa, id_campana)
+    resumen = obtener_resumen_monitor(base_empresa, id_campana)
+    context = {
+        "base_empresa": base_empresa,
+        "campana": campana,
+        "progreso": progreso,
+        "resumen": resumen,
+    }
+    return render(request, "stock/inventario_fisico/monitor.html", context)
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
+def inventario_fisico_analizador_view(request, id_campana):
+    """Analizador de diferencias (supervisor)."""
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+
+    from stock.services.inventario_fisico import (
+        ESTADO_BORRADOR,
+        ESTADO_EN_CONTEO,
+        obtener_campana,
+        obtener_resumen_monitor,
+        listar_lineas_analizador,
+    )
+
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana:
+        messages.error(request, "Campaña no encontrada.")
+        return redirect("stock:inventario_fisico_list")
+
+    filtro = request.GET.get("filtro", "").strip().lower()
+    if filtro not in ("", "faltante", "sobrante", "con_diferencia"):
+        filtro = ""
+
+    lineas = listar_lineas_analizador(
+        base_empresa,
+        id_campana,
+        filtro=filtro or None,
+    )
+    resumen = obtener_resumen_monitor(base_empresa, id_campana)
+    puede_autorizar = (
+        campana["estado"] == "EnRevision"
+        and not resumen.get("bloqueo_autorizar")
+        and not resumen.get("bloqueo_estado")
+    )
+
+    context = {
+        "base_empresa": base_empresa,
+        "campana": campana,
+        "lineas": lineas,
+        "resumen": resumen,
+        "filtro": filtro,
+        "puede_autorizar": puede_autorizar,
+        "puede_anular": campana["estado"] in (ESTADO_BORRADOR, ESTADO_EN_CONTEO),
+    }
+    return render(request, "stock/inventario_fisico/analizador.html", context)
+
+
+@tiene_permiso("stock.inventario_fisico.gestionar")
+def inventario_fisico_linea_view(request, id_campana, id_linea):
+    """Detalle de línea con eventos de conteo."""
+    session_user = request.session.get("user", {})
+    base_empresa = session_user.get("base_empresa")
+    if not base_empresa:
+        messages.error(request, "No se pudo determinar la empresa activa.")
+        return redirect("core:dashboard")
+
+    from stock.services.inventario_fisico import (
+        obtener_campana,
+        obtener_linea_analizador,
+        listar_eventos_linea,
+    )
+
+    campana = obtener_campana(base_empresa, id_campana)
+    if not campana:
+        messages.error(request, "Campaña no encontrada.")
+        return redirect("stock:inventario_fisico_list")
+
+    linea = obtener_linea_analizador(base_empresa, id_campana, id_linea)
+    if not linea:
+        messages.error(request, "Línea no encontrada.")
+        return redirect("stock:inventario_fisico_analizador", id_campana=id_campana)
+
+    eventos = listar_eventos_linea(
+        base_empresa,
+        id_campana,
+        linea["id_articulo"],
+        linea["id_deposito"],
+    )
+    context = {
+        "campana": campana,
+        "linea": linea,
+        "eventos": eventos,
+    }
+    return render(request, "stock/inventario_fisico/linea_detalle.html", context)

@@ -1,0 +1,189 @@
+{% extends "base_app.html" %}
+{% load i18n static %}
+{% block title %}Analizador campaña #{{ campana.id_campana }} | Inventario físico | Synap{% endblock %}
+{% block content %}
+<section class="flex flex-col bg-slate-50 py-4 dark:bg-slate-900 sm:py-5"
+         x-data="analizadorInvFisico()"
+         x-init="init()">
+  <div class="mx-auto w-full min-w-0 max-w-6xl px-3 sm:px-4 md:px-6">
+    <div class="mb-4 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 shadow-md">
+      <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stock · Inventario físico · Analizador</p>
+      <h1 class="mt-1 text-lg font-bold text-white">Campaña #{{ campana.id_campana }}</h1>
+      <p class="mt-1 text-xs text-slate-300">
+        Fecha {{ campana.fecha|slice:"8:10" }}/{{ campana.fecha|slice:"5:7" }}/{{ campana.fecha|slice:"0:4" }}
+        · Estado <strong class="text-white">{{ campana.estado }}</strong>
+        · {{ resumen.lineas_con_diferencia }} línea(s) con diferencia
+      </p>
+    </div>
+
+    {% if resumen.bloqueo_autorizar %}
+    <div class="mb-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+      <span class="material-icons text-base shrink-0" aria-hidden="true">sync_problem</span>
+      <div>
+        <p class="font-semibold">Autorización bloqueada</p>
+        <p class="mt-0.5">{{ resumen.mensaje_bloqueo|default:"Hay conteos sin sincronizar o conflictos pendientes." }}</p>
+        {% if resumen.conflictos_sync %}
+        <p class="mt-1 text-xs">Conflictos de sync en servidor: {{ resumen.conflictos_sync }}</p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="mb-4 flex flex-wrap items-center gap-2">
+      <a href="{% url 'stock:inventario_fisico_monitor' id_campana=campana.id_campana %}"
+         class="inline-flex items-center rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200">
+        Monitor
+      </a>
+      <a href="?filtro="
+         class="rounded-lg px-3 py-1.5 text-xs font-medium {% if not filtro %}bg-purple-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
+        Todas
+      </a>
+      <a href="?filtro=faltante"
+         class="rounded-lg px-3 py-1.5 text-xs font-medium {% if filtro == 'faltante' %}bg-red-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
+        Faltante
+      </a>
+      <a href="?filtro=sobrante"
+         class="rounded-lg px-3 py-1.5 text-xs font-medium {% if filtro == 'sobrante' %}bg-emerald-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
+        Sobrante
+      </a>
+      <a href="?filtro=con_diferencia"
+         class="rounded-lg px-3 py-1.5 text-xs font-medium {% if filtro == 'con_diferencia' %}bg-amber-600 text-white{% else %}bg-white text-slate-700 dark:bg-slate-800 dark:text-slate-200{% endif %}">
+        Con diferencia
+      </a>
+      {% if puede_autorizar %}
+      <button type="button" @click="confirmOpen = true"
+              class="ml-auto inline-flex items-center gap-1 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700">
+        <span class="material-icons text-base" aria-hidden="true">verified</span>
+        Autorizar y aplicar MSTOCK
+      </button>
+      {% endif %}
+    </div>
+
+    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      {% if lineas %}
+      <table class="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+        <thead class="bg-slate-50 dark:bg-slate-900/50">
+          <tr>
+            <th class="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Código</th>
+            <th class="px-4 py-3 text-left font-semibold text-slate-600 dark:text-slate-300">Artículo</th>
+            <th class="px-4 py-3 text-right font-semibold text-slate-600 dark:text-slate-300">Snapshot</th>
+            <th class="px-4 py-3 text-right font-semibold text-slate-600 dark:text-slate-300">Contado</th>
+            <th class="px-4 py-3 text-right font-semibold text-slate-600 dark:text-slate-300">Diferencia</th>
+            <th class="px-4 py-3 text-right font-semibold text-slate-600 dark:text-slate-300">Detalle</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+          {% for l in lineas %}
+          <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+            <td class="px-4 py-3 font-mono text-xs text-slate-800 dark:text-slate-100">{{ l.codigo }}</td>
+            <td class="px-4 py-3 text-slate-700 dark:text-slate-200">{{ l.nombre }}</td>
+            <td class="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">{{ l.saldo_snapshot }}</td>
+            <td class="px-4 py-3 text-right tabular-nums text-slate-600 dark:text-slate-300">{{ l.cantidad_contada|default:"—" }}</td>
+            <td class="px-4 py-3 text-right tabular-nums font-semibold {% if l.diferencia and l.diferencia < 0 %}text-red-600{% elif l.diferencia and l.diferencia > 0 %}text-emerald-600{% else %}text-slate-500{% endif %}">
+              {{ l.diferencia|default:"—" }}
+            </td>
+            <td class="px-4 py-3 text-right">
+              <a href="{% url 'stock:inventario_fisico_linea' id_campana=campana.id_campana id_linea=l.id_linea %}"
+                 class="text-sm font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Ver conteos</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+        <p class="text-sm">No hay líneas para el filtro seleccionado.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div x-show="confirmOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-800">
+      <h2 class="text-base font-bold text-slate-900 dark:text-white">Confirmar autorización</h2>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300">
+        Se generarán movimientos MSTOCK por las diferencias y la campaña quedará <strong>Aplicada</strong>.
+        Esta acción no se puede deshacer automáticamente.
+      </p>
+      <label class="mt-4 block text-xs font-medium text-slate-500 dark:text-slate-400">
+        Conteos pendientes en dispositivos (cola local)
+        <input type="number" min="0" x-model.number="pendientesCliente"
+               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+      </label>
+      <div class="mt-5 flex justify-end gap-2">
+        <button type="button" @click="confirmOpen = false"
+                class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 dark:border-slate-600 dark:text-slate-200">
+          Cancelar
+        </button>
+        <button type="button" @click="autorizar()" :disabled="procesando"
+                class="rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+          <span x-show="!procesando">Autorizar</span>
+          <span x-show="procesando">Procesando…</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div x-show="bloqueoOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+    <div class="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-5 shadow-xl dark:border-amber-900 dark:bg-slate-800">
+      <h2 class="text-base font-bold text-amber-900 dark:text-amber-100">No se puede autorizar</h2>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-300" x-text="bloqueoMensaje"></p>
+      <div class="mt-5 flex justify-end">
+        <button type="button" @click="bloqueoOpen = false"
+                class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-700">
+          Entendido
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+function analizadorInvFisico() {
+  return {
+    confirmOpen: false,
+    bloqueoOpen: false,
+    bloqueoMensaje: '',
+    procesando: false,
+    pendientesCliente: 0,
+    init() {},
+    async autorizar() {
+      this.procesando = true;
+      try {
+        var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+        var headers = { 'Content-Type': 'application/json' };
+        if (csrf) headers['X-CSRFToken'] = csrf.value;
+        var resp = await fetch('{% url "stock:api_campana_autorizar" id_campana=campana.id_campana %}', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({ pendientes_cliente: this.pendientesCliente || 0 }),
+          credentials: 'same-origin',
+        });
+        var data = await resp.json();
+        this.confirmOpen = false;
+        if (resp.status === 409 && data.bloqueado) {
+          this.bloqueoMensaje = data.error || 'Hay conteos sin sincronizar.';
+          this.bloqueoOpen = true;
+          return;
+        }
+        if (!resp.ok) {
+          this.bloqueoMensaje = data.error || 'No se pudo autorizar.';
+          this.bloqueoOpen = true;
+          return;
+        }
+        if (window.mprShowAviso) {
+          window.mprShowAviso(data.mensaje || 'Campaña aplicada.', 'success');
+        }
+        window.location.href = '{% url "stock:inventario_fisico_monitor" id_campana=campana.id_campana %}';
+      } catch (e) {
+        this.bloqueoMensaje = 'Error de conexión al autorizar.';
+        this.bloqueoOpen = true;
+      } finally {
+        this.procesando = false;
+      }
+    },
+  };
+}
+</script>
+{% csrf_token %}
+{% endblock %}

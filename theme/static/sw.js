@@ -11,10 +11,16 @@
  *   3. El navegador detecta el cambio y activa el nuevo SW
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const STATIC_CACHE  = `synap-static-${CACHE_VERSION}`;
 const PAGES_CACHE   = `synap-pages-${CACHE_VERSION}`;
 const OFFLINE_URL   = '/offline/';
+
+/** Shell HTML conteo inventario físico (Nivel A). APIs /stock/api/ no se cachean aquí. */
+const CONTEO_SHELL_URLS = [
+  '/stock/conteo/',
+  '/offline/',
+];
 
 const EXCLUDED_PATHS = ['/admin/', '/api/', '/logout/'];
 
@@ -50,7 +56,7 @@ function isExcluded(url) {
 self.addEventListener('install', function(event) {
   event.waitUntil(
     caches.open(PAGES_CACHE).then(function(cache) {
-      return cache.add(OFFLINE_URL);
+      return cache.addAll(CONTEO_SHELL_URLS);
     }).then(function() {
       return self.skipWaiting();
     })

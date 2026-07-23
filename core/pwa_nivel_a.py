@@ -11,7 +11,15 @@ from typing import Any, Dict, List, Optional
 from django.http import HttpRequest
 
 # IDs de `APPS_MENU` (`app["id"]`) que pueden mostrarse en el menú principal en móvil/PWA.
-PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom"})
+PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom", "stock"})
+
+# Submenús stock accesibles en Nivel A (conteo móvil).
+PWA_STOCK_MENU_ITEM_IDS = frozenset({"stock_inv_fisico_conteo"})
+
+# Deep links PWA stock conteo.
+PWA_STOCK_CONTEO_DEEP_LINKS = (
+    "/stock/conteo/",
+)
 
 # Submenús e-com accesibles en Nivel A (`menu_item_id` en APPS_MENU / menu_config).
 PWA_ECOM_MENU_ITEM_IDS = frozenset(
@@ -64,6 +72,40 @@ def ecom_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
     return usuario_tiene_ecom_en_menu(user, request)
 
 
+def usuario_tiene_conteo_en_menu(user, request: Optional[HttpRequest] = None) -> bool:
+    """True si el usuario puede contar inventario físico desde PWA."""
+    if not user or not getattr(user, "is_authenticated", False) or not user.is_authenticated:
+        return False
+    if hasattr(user, "is_admin") and user.is_admin():
+        return True
+    if hasattr(user, "tiene_permiso"):
+        return user.tiene_permiso("stock.inventario_fisico.contar")
+    return False
+
+
+def conteo_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
+    """Conteo inventario físico accesible en móvil con permiso contar."""
+    return usuario_tiene_conteo_en_menu(user, request)
+
+
+def filtrar_submenus_stock_para_pwa_movil(
+    submenus: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Deja solo conteo inventario físico del sidebar stock en móvil."""
+    resultado: List[Dict[str, Any]] = []
+    for seccion in submenus or []:
+        items = [
+            item
+            for item in seccion.get("items") or []
+            if item.get("menu_item_id") in PWA_STOCK_MENU_ITEM_IDS
+        ]
+        if items:
+            copia = dict(seccion)
+            copia["items"] = items
+            resultado.append(copia)
+    return resultado
+
+
 def filtrar_submenus_ecom_para_pwa_movil(
     submenus: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -106,9 +148,13 @@ def filtrar_apps_menu_para_pwa_movil(
             continue
         if app_id == "ecom" and not usuario_tiene_ecom_en_menu(usuario, request):
             continue
+        if app_id == "stock" and not usuario_tiene_conteo_en_menu(usuario, request):
+            continue
         app_copy = dict(app)
         if app_id == "ecom" and app_copy.get("submenus"):
             app_copy["submenus"] = filtrar_submenus_ecom_para_pwa_movil(app_copy["submenus"])
+        if app_id == "stock" and app_copy.get("submenus"):
+            app_copy["submenus"] = filtrar_submenus_stock_para_pwa_movil(app_copy["submenus"])
         resultado.append(app_copy)
     return resultado
 
@@ -127,4 +173,7 @@ def sidebar_visible_en_pwa(
     if current_app_id == "ecom":
         usuario = user or (getattr(request, "user", None) if request else None)
         return usuario_tiene_ecom_en_menu(usuario, request)
+    if current_app_id == "stock":
+        usuario = user or (getattr(request, "user", None) if request else None)
+        return usuario_tiene_conteo_en_menu(usuario, request)
     return True

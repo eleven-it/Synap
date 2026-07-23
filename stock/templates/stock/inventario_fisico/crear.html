@@ -1,0 +1,57 @@
+{% extends "base_app.html" %}
+{% load i18n static %}
+{% block title %}Nueva campaña | Inventario físico | Synap{% endblock %}
+{% block content %}
+<section class="flex flex-col bg-slate-50 py-4 dark:bg-slate-900 sm:py-5">
+  <div class="mx-auto w-full min-w-0 max-w-3xl px-3 sm:px-4 md:px-6">
+    <div class="mb-4 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 shadow-md">
+      <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Stock · Inventario físico</p>
+      <h1 class="mt-1 text-lg font-bold text-white">Nueva campaña de conteo</h1>
+      <p class="mt-1 text-xs text-slate-300">Solo depósitos MPR elegibles (Terminado, Semi elaborado, 2da Selección).</p>
+    </div>
+
+    <form method="post" class="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      {% csrf_token %}
+      <div>
+        <label for="fecha" class="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-200">Fecha de campaña</label>
+        <input type="date" name="fecha" id="fecha" required
+               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+      </div>
+
+      <div>
+        <p class="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">Depósitos</p>
+        {% if depositos %}
+        <ul class="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-slate-200 p-3 dark:border-slate-600">
+          {% for d in depositos %}
+          <li>
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+              <input type="checkbox" name="depositos" value="{{ d.id_deposito }}" class="rounded border-slate-300">
+              <span>{{ d.nombre }} <span class="text-slate-400">({{ d.tipo_mpr }})</span></span>
+            </label>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-amber-700 dark:text-amber-300">No hay depósitos MPR elegibles configurados.</p>
+        {% endif %}
+      </div>
+
+      <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+        <input type="checkbox" name="abrir_conteo" value="1" class="rounded border-slate-300">
+        Abrir conteo inmediatamente (estado EnConteo)
+      </label>
+
+      <div class="flex flex-wrap gap-2 pt-2">
+        <button type="submit"
+                class="inline-flex min-h-10 items-center rounded-xl bg-purple-600 px-5 py-2 text-sm font-semibold text-white hover:bg-purple-700">
+          Crear campaña
+        </button>
+        <a href="{% url 'stock:inventario_fisico_list' %}"
+           class="inline-flex min-h-10 items-center rounded-xl border border-slate-300 px-5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200">
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

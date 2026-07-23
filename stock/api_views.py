@@ -575,3 +575,102 @@ def api_ingreso_limpiar_temporales(request):
     except Exception as e:
         logger.warning("Error al limpiar temporales: %s", e)
     return JsonResponse({"ok": True})
+
+
+@tiene_permiso("stock.inventario_fisico.contar")
+@require_http_methods(["GET"])
+def api_conteo_prefetch(request):
+    """GET: catálogo ciego para conteo offline."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+    try:
+        id_campana = int(request.GET.get("id_campana", 0))
+        id_deposito = int(request.GET.get("id_deposito", 0))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Parámetros id_campana e id_deposito obligatorios."}, status=400)
+    if not id_campana or not id_deposito:
+        return JsonResponse({"error": "Parámetros id_campana e id_deposito obligatorios."}, status=400)
+
+    from stock.services.inventario_fisico import prefetch_catalogo_ciego
+
+    ok, payload = prefetch_catalogo_ciego(
+        ctx["base_empresa"],
+        id_campana,
+        id_deposito,
+        ctx["id_usuario"],
+    )
+    if not ok:
+        return JsonResponse({"error": payload.get("error", "Prefetch no disponible.")}, status=400)
+    return JsonResponse(payload)
+
+
+@tiene_permiso("stock.inventario_fisico.contar")
+@require_http_methods(["POST"])
+def api_conteo_sync(request):
+    """POST: sync batch de eventos de conteo."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido."}, status=400)
+
+    try:
+        id_campana = int(data.get("id_campana", 0))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "id_campana inválido."}, status=400)
+    if not id_campana:
+        return JsonResponse({"error": "id_campana obligatorio."}, status=400)
+
+    eventos = data.get("eventos") or data.get("events") or []
+    if not isinstance(eventos, list):
+        return JsonResponse({"error": "eventos debe ser una lista."}, status=400)
+
+    from stock.services.inventario_fisico import sync_eventos
+
+    resp = sync_eventos(ctx["base_empresa"], id_campana, eventos, ctx["id_usuario"])
+    return JsonResponse(resp)
+
+
+@tiene_permiso("stock.inventario_fisico.autorizar")
+@require_http_methods(["POST"])
+def api_campana_autorizar(request, id_campana):
+    """POST: autorizar campaña, aplicar MSTOCK y transicionar a Aplicado."""
+    ctx, err = _session_context(request)
+    if err:
+        return err
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "JSON inválido."}, status=400)
+
+    pendientes = data.get("pendientes_cliente") or data.get("cola_pendiente_cliente") or 0
+    try:
+        pendientes_cliente = max(int(pendientes), 0)
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "pendientes_cliente inválido."}, status=400)
+
+    from stock.services.inventario_fisico import autorizar_y_aplicar_campana
+
+    ok, result = autorizar_y_aplicar_campana(
+        ctx["base_empresa"],
+        id_campana,
+        id_usuario=ctx["id_usuario"],
+        id_puesto=ctx.get("id_puesto"),
+        pendientes_cliente=pendientes_cliente,
+        id_punto_venta=ctx.get("id_punto_venta") or 1,
+    )
+    if not ok:
+        status = 409 if result.get("bloqueado") else 400
+        return JsonResponse(result, status=status)
+    return JsonResponse({
+        "ok": True,
+        "id_campana": id_campana,
+        "estado": result.get("estado"),
+        "movimientos_mstock": result.get("movimientos_mstock", 0),
+        "lineas_ajustadas": result.get("lineas_ajustadas", 0),
+        "codigo_movimiento": result.get("codigo_movimiento"),
+        "mensaje": "Campaña aplicada. Ajustes MSTOCK generados.",
+    })
