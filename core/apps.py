@@ -8,5 +8,6 @@ class CoreConfig(AppConfig):
     def ready(self):
         import core.signals
         from core.pyafipws_errno_compat import apply_pyafipws_errno_compat
+        from core.backup import models as backup_models  # noqa: F401
 
         apply_pyafipws_errno_compat()

@@ -23,6 +23,12 @@ from .views_permisos_puesto import (
     permisos_puesto_backfill_view,
 )
 from .views_legacy_mysql_schema import legacy_mysql_schema_tool
+from .views_backup import (
+    backup_list_view,
+    backup_detail_view,
+    backup_launch_view,
+    backup_job_api_view,
+)
 from .views_uom import UoMListView, UoMCreateView, UoMUpdateView, UoMDeleteView
 from .views_currency import (
     CurrencyListView, CurrencyCreateView, CurrencyUpdateView, CurrencyDeleteView,

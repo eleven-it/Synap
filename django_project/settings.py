@@ -557,6 +557,19 @@ LP_PDF_MAX_ITEMS_CON_IMAGEN = config('LP_PDF_MAX_ITEMS_CON_IMAGEN', default=1800
 LP_PDF_MAX_SECONDS = config('LP_PDF_MAX_SECONDS', default=90, cast=int)
 LP_PDF_MAX_SECONDS_CON_IMAGEN = config('LP_PDF_MAX_SECONDS_CON_IMAGEN', default=180, cast=int)
 
+# Backup y DR Synap (Postgres + MySQL AdministraNET)
+BACKUP_LOCAL_ROOT = config('BACKUP_LOCAL_ROOT', default='/var/lib/synap/backups')
+BACKUP_RETENTION_DAYS = config('BACKUP_RETENTION_DAYS', default=30, cast=int)
+BACKUP_SFTP_ENABLED = config('BACKUP_SFTP_ENABLED', default=False, cast=bool)
+BACKUP_SFTP_HOST = config('BACKUP_SFTP_HOST', default='')
+BACKUP_SFTP_PORT = config('BACKUP_SFTP_PORT', default=22, cast=int)
+BACKUP_SFTP_USER = config('BACKUP_SFTP_USER', default='')
+BACKUP_SFTP_PASSWORD = config('BACKUP_SFTP_PASSWORD', default='')
+BACKUP_SFTP_KEY_PATH = config('BACKUP_SFTP_KEY_PATH', default='')
+BACKUP_SFTP_REMOTE_PATH = config('BACKUP_SFTP_REMOTE_PATH', default='/synap/backups')
+BACKUP_PG_WAL_ARCHIVE_DIR = config('BACKUP_PG_WAL_ARCHIVE_DIR', default='')
+BACKUP_SCHEDULED_BASE_MYSQL = config('BACKUP_SCHEDULED_BASE_MYSQL', default='')
+
 # Celery Configuration - ELIMINADO (No necesario para Reportes básico)
 # CELERY_BROKER_URL = "redis://localhost:6379/0"
 # CELERY_RESULT_BACKEND = "redis://localhost:6379/0"

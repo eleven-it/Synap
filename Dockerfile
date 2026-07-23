@@ -18,6 +18,8 @@ RUN apt-get update \
         default-libmysqlclient-dev \
         python3-dev \
         gettext \
+        default-mysql-client \
+        postgresql-client \
         # Node.js 20 LTS — pin npm 10 (npm@latest exige Node ≥22 y rompe el build)
         && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
         && apt-get install -y nodejs \

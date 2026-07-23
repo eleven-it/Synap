@@ -220,6 +220,12 @@ def _nro_sucursal(nro: str, id_dom: Optional[int] = None) -> str:
     return str(idd) if idd is not None else ""
 
 
+def _etiqueta_sucursal_kanban(nro: str, id_dom: Optional[int] = None) -> str:
+    """Etiqueta corta para Kanban/móvil: «Sucursal 11»."""
+    nro_corto = _nro_sucursal(nro, id_dom)
+    return f"Sucursal {nro_corto}" if nro_corto else ""
+
+
 def _formato_total_pedido(total: Optional[float]) -> str:
     try:
         val = float(total or 0)
@@ -884,12 +890,13 @@ def _pedidos_mysql(
                 total = float(row.get("total_calc") or 0)
             id_dom = to_int_or_none(row.get("id_cliente_domicilio"))
             nro_dom = str(row.get("nro_domicilio") or "")
-            sucursal = _etiqueta_sucursal(
+            sucursal_completa = _etiqueta_sucursal(
                 str(row.get("calle_domicilio") or ""),
                 nro_dom,
                 id_dom,
             )
             sucursal_nro = _nro_sucursal(nro_dom, id_dom)
+            sucursal = _etiqueta_sucursal_kanban(nro_dom, id_dom)
             cod_viajante = to_int_or_none(row.get("CodViajante"))
             vendedor = (
                 nombres_viajante.get(cod_viajante, "") if cod_viajante is not None else ""
@@ -915,7 +922,7 @@ def _pedidos_mysql(
                 "id_cliente": id_cliente,
                 "nombre_cliente": nombre_cliente,
                 "id_cliente_domicilio": id_dom,
-                "sucursal": sucursal,
+                "sucursal": sucursal_completa,
                 "sucursal_nro": sucursal_nro,
                 "cod_viajante": cod_viajante,
                 "vendedor": vendedor,
