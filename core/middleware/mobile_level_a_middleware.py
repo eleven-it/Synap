@@ -104,6 +104,17 @@ _ECOM_MAYORISTAPP_API_NIVEL_A_SUFFIXES = (
 
 _ECOM_PEDIDO_SIMPLE_API_PREFIX = '/ecom/api/mayoristapp/'
 
+# Inventario físico — conteo móvil ciego (PWA Nivel A).
+_STOCK_CONTEO_PAGE_PATTERNS = tuple(
+    re.compile(p)
+    for p in (
+        r'^/stock/conteo/?$',
+        r'^/stock/conteo/\d+/?$',
+    )
+)
+
+_STOCK_CONTEO_API_PREFIX = '/stock/api/conteo/'
+
 
 def mobile_path_es_ruta_tpv(path: str) -> bool:
     """True si la ruta es HTML o API del módulo TPV / self_checkout."""
@@ -140,6 +151,11 @@ def mobile_path_allowed_for_level_a(path: str) -> bool:
     if path.startswith(_ECOM_PEDIDO_SIMPLE_API_PREFIX):
         return True
     for rx in _ECOM_PEDIDO_SIMPLE_PAGE_PATTERNS:
+        if rx.match(path):
+            return True
+    if path.startswith(_STOCK_CONTEO_API_PREFIX):
+        return True
+    for rx in _STOCK_CONTEO_PAGE_PATTERNS:
         if rx.match(path):
             return True
     return False

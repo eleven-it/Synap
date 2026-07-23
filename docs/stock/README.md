@@ -9,6 +9,7 @@ Módulo **Stock**: movimientos, inventario por etapa MPR y consultas relacionada
 | [MANUAL_USUARIO_STOCK.md](MANUAL_USUARIO_STOCK.md) | **Usuario** | Uso de Inventario por etapa y orientación al alta de movimientos. |
 | [manual_usuario_stock.html](manual_usuario_stock.html) | **Usuario** | Manual HTML navegable (generado desde el MD). En la app: **`/stock/manual/`** (requiere login). Regenerar: `python scripts/generar_manuales_html.py`. |
 | [INVENTARIO_TABLA_MPR.md](INVENTARIO_TABLA_MPR.md) | Desarrollo + usuario técnico | Inventario pivoteado por `tipo_mpr`, columnas Talle/Color CE, filtros, API. |
+| [INVENTARIO_FISICO.md](INVENTARIO_FISICO.md) | Desarrollo + supervisor | Conteo ciego, campañas, offline PWA, analizador, autorización MSTOCK. |
 | [ALTA_MOVIMIENTO_UX.md](ALTA_MOVIMIENTO_UX.md) | Desarrollo | Notas de UX del alta de movimiento de stock. |
 
 ## Relacionado (otros módulos)

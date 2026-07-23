@@ -2130,6 +2130,77 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
 
 ProviderFn = Callable[[Any], Dict[str, Any]]
 
+def run_stock_inv_fisico_tables_mysql(conn) -> Dict[str, Any]:
+    """
+    Crea ``inv_fisico_campana``, ``inv_fisico_linea`` e ``inv_fisico_evento`` en la base de la empresa.
+
+    Inventario físico Synap (conteo ciego, sync offline). Idempotente; tablas nuevas.
+    Fuente: ``stock/sql/001_inv_fisico_tables.sql``.
+    """
+    from django.apps import apps
+
+    applied: List[str] = []
+    failed: List[str] = []
+    try:
+        app_path = Path(apps.get_app_config("stock").path)
+    except LookupError:
+        msg = "La app Django «stock» no está instalada."
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    sql_path = app_path / "sql" / "001_inv_fisico_tables.sql"
+    if not sql_path.is_file():
+        msg = f"No se encontró el archivo {sql_path}"
+        return {
+            "success": False,
+            "message": msg,
+            "migrations_applied": [],
+            "migrations_failed": [msg],
+        }
+
+    cursor = conn.cursor()
+    try:
+        sql_content = sql_path.read_text(encoding="utf-8")
+        raw_statements = _split_sql_statements(sql_content)
+        for stmt in raw_statements:
+            stmt = _sc_sql_strip_leading_comments(stmt)
+            if stmt:
+                cursor.execute(stmt)
+        _append_migration(
+            applied,
+            failed,
+            True,
+            "DDL inventario físico Synap (001_inv_fisico_tables.sql)",
+        )
+        if not columna_existe(cursor, "inv_fisico_campana", "contadores_json"):
+            cursor.execute(
+                "ALTER TABLE inv_fisico_campana ADD COLUMN contadores_json TEXT NULL "
+                "COMMENT 'JSON array id_usuario contadores asignados'"
+            )
+            _append_migration(applied, failed, True, "inv_fisico_campana.contadores_json")
+        cursor.close()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_stock_inv_fisico_tables_mysql: %s", e)
+        failed.append(str(e))
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 def run_contabilidad_audit_correccion_log_mysql(conn) -> Dict[str, Any]:
     """
     Crea ``cont_audit_correccion_lote`` y ``cont_audit_correccion`` en la base de la empresa.
@@ -2294,6 +2365,18 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "bajo",
         "run": run_contabilidad_audit_correccion_log_mysql,
+    },
+    {
+        "id": "stock_inv_fisico_tables",
+        "title": "Inventario físico Synap",
+        "description": (
+            "Crea ``inv_fisico_campana``, ``inv_fisico_linea`` e ``inv_fisico_evento`` "
+            "(conteo ciego, sync offline, ledger idempotente). "
+            "Fuente: ``stock/sql/001_inv_fisico_tables.sql``. "
+            "Ver openspec/changes/stock-inventario-fisico/design.md."
+        ),
+        "risk": "medio",
+        "run": run_stock_inv_fisico_tables_mysql,
     },
     {
         "id": "viajantes_objetivos_ventas",
