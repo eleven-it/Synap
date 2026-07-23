@@ -133,35 +133,6 @@ def _serializar_matriz_ui(draft: EcomPedidoMasivoDraft, base: str) -> Dict[str, 
             matriz["estado"] = draft.estado
     matriz["origen_pedido"] = origen
 
-    # #region agent log
-    try:
-        import json
-        import time
-
-        with open("/app/.cursor/debug-a987c5.log", "a", encoding="utf-8") as _df:
-            _df.write(
-                json.dumps(
-                    {
-                        "sessionId": "a987c5",
-                        "runId": "post-fix",
-                        "hypothesisId": "F",
-                        "location": "pedido_masivo_views.py:_serializar_matriz_ui",
-                        "message": "origen_pedido serializado",
-                        "data": {
-                            "draft_id": draft.pk,
-                            "cod_mov_origen": cod_origen,
-                            "origen": origen,
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
-
     return matriz
 
 
@@ -226,6 +197,12 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
             "si",
             "sí",
         )
+        consulta_q = (self.request.GET.get("consulta") or "").strip().lower() in (
+            "1",
+            "true",
+            "si",
+            "sí",
+        )
         # Solo el iframe del resumen de lote pide marco embebido (sin navbar/pie).
         # ``readonly=1`` desde el hub abre consulta a pantalla completa como un PED.
         embed_q = (self.request.GET.get("embed") or "").strip().lower() in (
@@ -237,36 +214,6 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
         base_sess = str((self.request.session.get("user") or {}).get("base_empresa") or "")
         # PDF de pedido: plantilla con ``/0/`` para reemplazar el cod_mov en el FE.
         pdf_tpl = reverse("ecom:mayoristapp_pedido_pdf", args=[0])
-        # #region agent log
-        try:
-            import json
-            import time
-
-            with open("/app/.cursor/debug-a987c5.log", "a", encoding="utf-8") as _df:
-                _df.write(
-                    json.dumps(
-                        {
-                            "sessionId": "a987c5",
-                            "runId": "post-fix",
-                            "hypothesisId": "E1",
-                            "location": "pedido_masivo_views.py:get_context_data",
-                            "message": "pm_embed vs readonly",
-                            "data": {
-                                "draft": draft_q,
-                                "readonly": readonly_q,
-                                "embed": embed_q,
-                                "pm_embed": embed_q,
-                                "qs": self.request.META.get("QUERY_STRING") or "",
-                            },
-                            "timestamp": int(time.time() * 1000),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        except Exception:
-            pass
-        # #endregion
         ctx.update(
             {
                 "draft_id_inicial": draft_q,
@@ -279,6 +226,7 @@ class PedidoMasivoSucursalesView(_StubMayoristappPermisoView):
                     "id_domicilio": id_domicilio_q,
                     "repetir": repetir_q,
                     "readonly": readonly_q,
+                    "consulta": consulta_q,
                     "aprobacion_pedidos_activa": aprobacion_pedidos_activa(base_sess),
                     "urls": {
                         "hub": reverse("ecom:mayoristapp_pedidos_hub"),
@@ -628,6 +576,7 @@ class PedidoMasivoAbrirPedidoAPIView(APIView):
         if cod_mov is None:
             return _err("Falta cod_mov del pedido.")
         repetir = bool(data.get("repetir"))
+        consulta = bool(data.get("consulta"))
         draft_id = to_int_or_none(data.get("draft_id"))
 
         draft, err, meta = cargar_pedido_en_draft_masivo(
@@ -636,6 +585,7 @@ class PedidoMasivoAbrirPedidoAPIView(APIView):
             sess,
             id_usuario=id_u,
             draft_id=None if repetir else draft_id,
+            consulta=consulta,
         )
         if err or draft is None:
             return _err(err or "No se pudo cargar el pedido.")
@@ -650,7 +600,7 @@ class PedidoMasivoAbrirPedidoAPIView(APIView):
 
         cab = cabecera_pedido_relay(base, cod_mov) or {}
         puede_anular = False
-        if not repetir:
+        if not repetir and not consulta:
             puede_anular, _msg_anular = puede_anular_pedido_relay(base, cod_mov)
 
         matriz = _serializar_matriz_ui(draft, base)
@@ -670,9 +620,10 @@ class PedidoMasivoAbrirPedidoAPIView(APIView):
             "estado": str(cab.get("estado") or "").strip(),
             "anulado": str(cab.get("anulado") or "").strip(),
             "email_cliente": str(cab.get("email_cliente") or "").strip(),
-            "editable": bool(meta.get("editable")),
-            "puede_anular": bool(puede_anular),
+            "editable": False if consulta else bool(meta.get("editable")),
+            "puede_anular": False if consulta else bool(puede_anular),
             "repetido": repetir,
+            "consulta": consulta,
         }
         return Response(
             {

@@ -25,12 +25,13 @@
                   class="pedidos-badge-estado pedidos-badge-estado--hero"
                   :class="claseEstadoDraft"
                   x-text="etiquetaEstadoDraft"></span>
-            {# Estado del PED cargado (consulta/edición) #}
+            {# Estado del PED cargado (consulta/edición) — color por estado MySQL #}
             <span x-show="pedidoCargado" x-cloak
-                  class="pedidos-badge-borrador pedidos-badge-borrador--hero"
-                  x-text="(pedidoNro ? ('PED ' + pedidoNro) : ('PED #' + pedidoCodMov)) + (pedidoEstado ? (' · ' + pedidoEstado) : '')"></span>
+                  class="pedidos-badge-estado pedidos-badge-estado--hero"
+                  :class="clasePedidoEstado"
+                  x-text="etiquetaPedidoCargado"></span>
             <span x-show="pedidoSoloConsulta" x-cloak
-                  class="rounded-full bg-slate-500/25 px-2.5 py-1 text-[11px] font-semibold text-slate-200">Solo consulta</span>
+                  class="rounded-full bg-slate-500/25 px-2.5 py-1 text-[11px] font-semibold text-slate-200">Solo lectura</span>
           </div>
           <div class="pm-hero-actions ml-auto flex flex-wrap items-center gap-2">
             {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="pedido-masivo" class_extra="text-slate-300 hover:text-sky-300 dark:hover:text-sky-300" only %}
@@ -288,7 +289,7 @@
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
         </svg>
-        Abriendo borrador…
+        <span x-text="abriendoMensaje">Abriendo…</span>
       </div>
     </div>
 
@@ -832,5 +833,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo34"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo36"></script>
 {% endblock %}

@@ -104,6 +104,8 @@ function pedidoMasivoCore() {
     sucursalDetalle: null,
     error: '',
     abriendo: false,
+    /** true = abriendo PED (cod_mov); false = abriendo borrador/draft. */
+    abriendoEsPedido: false,
     guardadoChip: '',
     confirmando: false,
     confirmProgreso: null,
@@ -228,6 +230,41 @@ function pedidoMasivoCore() {
       return map[e] || map.borrador;
     },
 
+    /** Texto de carga: pedido vs borrador (no confundir PED con draft). */
+    get abriendoMensaje() {
+      return this.abriendoEsPedido ? 'Abriendo pedido…' : 'Abriendo borrador…';
+    },
+
+    /** Etiqueta hero del PED cargado: «PED 0001-… · Pendiente». */
+    get etiquetaPedidoCargado() {
+      if (!this.pedidoCodMov) return '';
+      const nro = this.pedidoNro
+        ? `PED ${this.pedidoNro}`
+        : `PED #${this.pedidoCodMov}`;
+      const est = String(this.pedidoEstado || '').trim();
+      return est ? `${nro} · ${est}` : nro;
+    },
+
+    /**
+     * Color del badge PED según estado MySQL (paridad visual con OrderShell /
+     * compra_mayorista_pedido).
+     */
+    get clasePedidoEstado() {
+      const raw = String(this.pedidoEstado || '').trim().toLowerCase();
+      const map = {
+        pendiente: 'pedidos-badge-estado--ped-pendiente',
+        'en preparación': 'pedidos-badge-estado--ped-preparacion',
+        'en preparacion': 'pedidos-badge-estado--ped-preparacion',
+        preparado: 'pedidos-badge-estado--ped-preparado',
+        'en remito': 'pedidos-badge-estado--ped-remito',
+        parcial: 'pedidos-badge-estado--ped-remito',
+        cerrado: 'pedidos-badge-estado--ped-facturado',
+        facturado: 'pedidos-badge-estado--ped-facturado',
+        anulado: 'pedidos-badge-estado--anulado',
+      };
+      return map[raw] || 'pedidos-badge-estado--ped-otro';
+    },
+
     // ── Pedido simple: título, consulta/edición y acciones hero ──
     get tituloPantalla() {
       return this.modoSimple ? 'Pedido simple' : 'Pedido masivo por sucursales';
@@ -278,7 +315,10 @@ function pedidoMasivoCore() {
       // Prioridad: abrir PED (cod_mov) → recuperar borrador → nuevo simple.
       if (boot.cod_mov) {
         this.modoSimple = true;
-        this.abrirPedido(boot.cod_mov, !!boot.repetir);
+        const consulta = Boolean(
+          boot.consulta || (boot.readonly && boot.cod_mov),
+        );
+        this.abrirPedido(boot.cod_mov, !!boot.repetir, consulta);
       } else if (boot.draft_id) {
         this.abrirDraft(boot.draft_id);
       }
@@ -828,6 +868,7 @@ function pedidoMasivoCore() {
         && String(this.idCliente) === String(this.clienteSel)
         && (!this.modoSimple || Number(domicilioActual) === Number(this.idDomicilioInicial))
       ) return;
+      this.abriendoEsPedido = false;
       this.abriendo = true; this.error = ''; this.mensajeOk = '';
       const body = { id_cliente: Number(this.clienteSel) };
       if (this.modoSimple) {
@@ -848,6 +889,7 @@ function pedidoMasivoCore() {
       this._replaceHistoryDraft();
     },
     async abrirDraft(id) {
+      this.abriendoEsPedido = false;
       this.abriendo = true; this.error = '';
       const body = { draft_id: Number(id) };
       if (this.modoSimple) body.modo = 'simple';
@@ -878,16 +920,19 @@ function pedidoMasivoCore() {
      * Carga un PED (``cod_mov``) en un borrador simple. Con ``repetir`` copia las
      * líneas a un borrador nuevo sin anular el origen (REQ-PSU-07/CAR-008).
      */
-    async abrirPedido(cod, repetir = false) {
+    async abrirPedido(cod, repetir = false, consulta = false) {
       const codMov = Number(cod);
       if (!Number.isFinite(codMov) || codMov <= 0 || !this.urls.abrir_pedido) return;
+      this.abriendoEsPedido = true;
       this.abriendo = true;
       this.error = '';
       this.mensajeOk = '';
-      const { data } = await this.postJson(this.urls.abrir_pedido, {
+      const body = {
         cod_mov: codMov,
         repetir: !!repetir,
-      });
+      };
+      if (consulta) body.consulta = true;
+      const { data } = await this.postJson(this.urls.abrir_pedido, body);
       this.abriendo = false;
       if (!data.ok) {
         this.mostrarAviso(data.error || 'No se pudo cargar el pedido.', 'error');
@@ -896,9 +941,14 @@ function pedidoMasivoCore() {
       this.modoSimple = true;
       this.aplicarMatriz(data.matriz);
       this._aplicarPedidoInfo(data.pedido, data.advertencias);
+      const esConsulta = consulta || !!(data.pedido && data.pedido.consulta);
       if (this.draftId) {
         const codQ = this.pedidoCodMov ? `&cod_mov=${this.pedidoCodMov}` : '';
-        history.replaceState(null, '', `?modo=simple&draft=${this.draftId}${codQ}`);
+        if (esConsulta) {
+          history.replaceState(null, '', `?modo=simple${codQ}&consulta=1`);
+        } else {
+          history.replaceState(null, '', `?modo=simple&draft=${this.draftId}${codQ}`);
+        }
       }
     },
     _aplicarPedidoInfo(info, advertencias) {
@@ -914,7 +964,8 @@ function pedidoMasivoCore() {
       if (p.repetido) {
         this.mostrarAviso('Pedido copiado a un borrador nuevo. Revisá y confirmá para generar un PED.', 'success');
       } else if (this.pedidoSoloConsulta) {
-        this.mostrarAviso(`PED ${this.pedidoNro || this.pedidoCodMov} en consulta (${this.pedidoEstado}).`, 'info');
+        // Badge del hero ya muestra nro + estado; aviso corto sin repetir el PED.
+        this.mostrarAviso('Pedido en solo lectura.', 'info');
       }
       // Avisos de conversión/redondeo al cargar el PED (prioridad sobre el info anterior).
       if (this.advertenciasCarga.length) {

@@ -145,10 +145,27 @@ def _etiqueta_cliente(nombre: str, id_cliente: Optional[int]) -> str:
     return f"Cliente {idc}" if idc is not None else "Cliente —"
 
 
+def es_ped_migracion_best(
+    nro_comprobante: Optional[str] = None,
+    tipo_pedido: Optional[str] = None,
+    detalle: Optional[str] = None,
+) -> bool:
+    """True si el PED proviene de migración BEST (solo consulta desde el hub)."""
+    nro = str(nro_comprobante or "").strip().upper()
+    tipo = str(tipo_pedido or "").strip().lower()
+    det = str(detalle or "").strip().lower()
+    if nro.startswith("BEST-") or tipo == "migracion best":
+        return True
+    if "cutover best" in det or "best orden" in det:
+        return True
+    return False
+
+
 def url_pedido_masivo_modo_simple(
     *,
     cod_mov: Optional[int] = None,
     draft: Optional[int] = None,
+    consulta: bool = False,
 ) -> str:
     """URL canónica de captura pedido simple (matriz 1 columna)."""
     base = reverse("ecom:mayoristapp_pedido_masivo_sucursales")
@@ -157,6 +174,8 @@ def url_pedido_masivo_modo_simple(
         params.append(f"draft={int(draft)}")
     if cod_mov is not None:
         params.append(f"cod_mov={int(cod_mov)}")
+    if consulta:
+        params.append("consulta=1")
     return f"{base}?{'&'.join(params)}"
 
 
@@ -247,33 +266,6 @@ def _archivar_draft_origen_no_editable(
         return True
     draft.estado = EcomPedidoMasivoDraft.ESTADO_ARCHIVADO
     draft.save(update_fields=["estado", "updated_at"])
-    # #region agent log
-    try:
-        import json
-        import time
-
-        with open("/app/.cursor/debug-a987c5.log", "a", encoding="utf-8") as _df:
-            _df.write(
-                json.dumps(
-                    {
-                        "sessionId": "a987c5",
-                        "runId": "post-fix",
-                        "hypothesisId": "H",
-                        "location": "pedidos_hub_pipeline.py:_archivar_draft_origen_no_editable",
-                        "message": "draft archivado por origen no anulable",
-                        "data": {
-                            "draft_id": draft.pk,
-                            "cod_mov_origen": cod_origen,
-                        },
-                        "timestamp": int(time.time() * 1000),
-                    },
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
-    except Exception:
-        pass
-    # #endregion
     return True
 
 
@@ -439,17 +431,26 @@ def _drafts_lote_confirmados_alcance(
     id_usuario: int,
     sess_user: Dict[str, Any],
     *,
-    dias: int = 60,
+    dias: Optional[int] = None,
 ) -> List[EcomPedidoMasivoDraft]:
-    """Drafts masivos confirmados en ventana hub y alcance del usuario."""
-    cutoff = timezone.now() - timedelta(days=max(1, min(int(dias), 365)))
+    """
+    Drafts masivos confirmados en alcance del usuario.
+
+    Si ``dias`` es ``None`` o ``<= 0``: sin filtro de fecha (hasta 200 recientes).
+    Si ``dias > 0``: solo drafts con ``updated_at`` en esa ventana (hasta 50).
+    """
+    filtros: Dict[str, Any] = {
+        "base_empresa": base_empresa,
+        "estado": EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
+    }
+    limite = 200
+    if dias is not None and int(dias) > 0:
+        cutoff = timezone.now() - timedelta(days=max(1, min(int(dias), 365)))
+        filtros["updated_at__gte"] = cutoff
+        limite = 50
     qs = (
-        EcomPedidoMasivoDraft.objects.filter(
-            base_empresa=base_empresa,
-            estado=EcomPedidoMasivoDraft.ESTADO_CONFIRMADO,
-            updated_at__gte=cutoff,
-        )
-        .order_by("-updated_at")[:50]
+        EcomPedidoMasivoDraft.objects.filter(**filtros)
+        .order_by("-updated_at")[:limite]
     )
     out: List[EcomPedidoMasivoDraft] = []
     for draft in qs:
@@ -607,14 +608,14 @@ def _mapa_reverso_lotes(
     id_usuario: int,
     sess_user: Dict[str, Any],
     *,
-    dias: int = 60,
+    dias: Optional[int] = None,
     aprobacion_on: bool = False,
     drafts: Optional[List[EcomPedidoMasivoDraft]] = None,
 ) -> Tuple[Dict[int, int], Dict[int, Dict[str, Any]]]:
     """
     Mapa ``cod_mov → draft_id`` y contexto por draft para enriquecer PED hijos.
 
-    Alineado a la ventana temporal del hub (``dias``).
+    Usa la misma ventana temporal que ``_drafts_lote_confirmados_alcance`` (``dias``).
     """
     if drafts is None:
         drafts = _drafts_lote_confirmados_alcance(
@@ -722,17 +723,23 @@ def _pedidos_mysql(
     base_empresa: str,
     sess_user: Dict[str, Any],
     *,
-    dias: int = 60,
-    limit: int = 200,
+    dias: Optional[int] = None,
+    limit: int = 5000,
     aprobacion_on: Optional[bool] = None,
     mapa_lotes: Optional[Dict[int, int]] = None,
     contexto_lotes: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    where = [
-        "cp.TipoComprobante = 'PED'",
-        "cp.Fecha >= DATE_SUB(CURDATE(), INTERVAL %s DAY)",
-    ]
-    params: List[Any] = [max(1, min(int(dias), 365))]
+    """
+    PED MySQL del alcance comercial del usuario.
+
+    Si ``dias`` es ``None`` o ``<= 0``: sin filtro ``Fecha`` (todos los PED del alcance,
+    hasta ``limit``, default 5000). Si ``dias > 0``: filtra ``Fecha >= DATE_SUB(...)``.
+    """
+    where = ["cp.TipoComprobante = 'PED'"]
+    params: List[Any] = []
+    if dias is not None and int(dias) > 0:
+        where.append("cp.Fecha >= DATE_SUB(CURDATE(), INTERVAL %s DAY)")
+        params.append(max(1, min(int(dias), 365)))
 
     tipousuario = (sess_user.get("tipousuario") or "").strip().lower()
     if tipousuario == "cliente":
@@ -756,7 +763,7 @@ def _pedidos_mysql(
             where.append(f"cp.CodViajante IN ({ph})")
             params.extend(alcance)
 
-    params.append(max(1, min(int(limit), 500)))
+    params.append(max(1, min(int(limit), 5000)))
     if aprobacion_on is None:
         aprobacion_on = aprobacion_pedidos_activa(base_empresa)
     mapa_lotes = mapa_lotes or {}
@@ -765,6 +772,8 @@ def _pedidos_mysql(
         SELECT
             cp.CodigoMovimiento,
             cp.NroComprobante,
+            TRIM(COALESCE(cp.TipoPedido, '')) AS tipo_pedido,
+            TRIM(COALESCE(cp.Detalle, '')) AS detalle,
             DATE_FORMAT(cp.Fecha, '%%d/%%m/%%Y') AS fecha,
             cp.Estado,
             cp.Anulado,
@@ -862,6 +871,11 @@ def _pedidos_mysql(
                     ).strip().lower()
                     if est_lote == EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_PENDIENTE:
                         meta["puede_aprobar"] = False
+                es_best = es_ped_migracion_best(
+                    str(row.get("NroComprobante") or nro),
+                    str(row.get("tipo_pedido") or ""),
+                    str(row.get("detalle") or ""),
+                )
                 out.append(
                     _tarjeta(
                         tipo="ped",
@@ -869,7 +883,10 @@ def _pedidos_mysql(
                         titulo=f"PED {nro}",
                         subtitulo=f"{cliente} · ${total:,.2f}",
                         fecha=str(row.get("fecha") or ""),
-                        url=url_pedido_masivo_modo_simple(cod_mov=cod),
+                        url=url_pedido_masivo_modo_simple(
+                            cod_mov=cod,
+                            consulta=es_best,
+                        ),
                         id_ref=f"ped-{cod}",
                         sucursal=sucursal,
                         meta=meta,
@@ -886,12 +903,14 @@ def construir_hub_pedidos(
     *,
     id_usuario: Optional[int] = None,
     vista: str = "kanban",
-    dias: int = 60,
+    dias: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Devuelve columnas + items planos para Lista|Kanban.
 
     ``vista``: ``lista`` | ``kanban`` (solo metadato; mismos datos).
+    ``dias``: ventana temporal opcional para PED MySQL y lotes confirmados;
+    ``None`` (default) incluye todos los PED del alcance (sin ``DATE_SUB``).
     """
     id_u = to_int_or_none(id_usuario if id_usuario is not None else sess_user.get("id_usuario"))
     aprobacion_on = aprobacion_pedidos_activa(base_empresa) if base_empresa else False
@@ -942,6 +961,7 @@ def construir_hub_pedidos(
             base_empresa,
             sess_user,
             dias=dias,
+            limit=5000,
             aprobacion_on=aprobacion_on,
             mapa_lotes=mapa_lotes,
             contexto_lotes=contexto_lotes,
