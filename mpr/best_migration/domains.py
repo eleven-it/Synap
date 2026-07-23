@@ -36,12 +36,13 @@ DOMAINS: tuple[MigrationDomain, ...] = (
         nombre="Artículos fabricados",
         obligatorio_para_pedidos=False,
         descripcion=(
-            "Componentes Fabricado detectados en BOM Admin (en_abm / en_abm_formula) desde terminados validados. "
-            "Matcher inverso Admin→BEST; origen BOM_FABRICADO. No bloquea el gate PED ni el cutover de terminados. "
+            "PP BEST con stock en depósitos 4000/4002 mapeados a componentes Admin Fabricado. "
+            "Matcher BEST→Admin vía REP_RECETAS (ola pedidos) + scoring simétrico; origen BOM_FABRICADO. "
+            "No bloquea el gate PED ni el cutover de terminados. "
             "Stock Semi-Embalado (BEST 4002 → Semi-elaborado) es opcional post-cutover."
         ),
-        fuente_best="Inferencia inversa desde MYL/MM (no REP_RECETAS)",
-        destino_admin="articulo (tipo_art_fab=Fabricado) vía explosión BOM Admin",
+        fuente_best="REP_INVENTARIOS (4000/4002) + REP_RECETAS + MYL",
+        destino_admin="articulo (tipo_art_fab=Fabricado)",
         estado_modulo="implementado",
     ),
     MigrationDomain(

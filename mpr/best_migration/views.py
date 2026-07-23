@@ -46,9 +46,12 @@ from mpr.best_migration.services import (
     marcar_stock_conciliado,
     marcar_unidades_ok,
     recalcular_mapeo_articulos,
+    resolver_fabricados_desde_pp_best,
     resolver_fabricados_desde_terminados,
     aceptar_inferidos_altos_fabricados,
+    asignar_admin_a_fabricado_pp,
     asignar_best_a_fabricado,
+    buscar_fabricados_admin,
     buscar_skus_best_componentes,
     sincronizar_stock_fabricados_semi,
     reabrir_articulo,
@@ -1023,10 +1026,15 @@ def _aplicar_filtro_alcance_fabricados(qs, *, cola_trabajo: bool, alcance: str):
         BestArticuloMap.Estado.VALIDADO,
         BestArticuloMap.Estado.DESCARTADO,
     ]
-    if cola_trabajo:
-        return qs.exclude(estado__in=estados_resueltos)
-    if alcance == "necesarios":
+    if alcance == "stock":
+        qs = qs.filter(requerido_migracion=False)
+        if cola_trabajo:
+            qs = qs.exclude(estado__in=estados_resueltos)
         return qs
+    if alcance == "necesarios":
+        return qs.filter(requerido_migracion=True)
+    if cola_trabajo:
+        return qs.filter(requerido_migracion=True).exclude(estado__in=estados_resueltos)
     return qs
 
 
@@ -1091,18 +1099,18 @@ class MigracionBestResolverFabricadosView(MprLoginRequiredMixin, View):
         if not base:
             return redirect("core:dashboard")
         try:
-            result = resolver_fabricados_desde_terminados(base)
+            result = resolver_fabricados_desde_pp_best(base)
             messages.success(
                 request,
                 (
-                    f"Fabricados resueltos desde BOM Admin: {result['fabricados_bom']} componentes "
-                    f"(terminados fuente: {result['terminados_fuente']}) — "
+                    f"Fabricados resueltos desde PP BEST: {result['fabricados_bom']} SKUs con stock "
+                    f"({result['pp_requeridos_pedido']} requeridos por pedido) — "
                     f"nuevos {result['created']}, actualizados {result['updated']}, "
-                    f"preservados {result['preserved']}, sin SKU BEST {result['skipped_sin_best']}."
+                    f"preservados {result['preserved']}, sin Admin {result['skipped_sin_admin']}."
                 ),
             )
         except Exception as exc:
-            logger.exception("Error resolviendo fabricados desde terminados")
+            logger.exception("Error resolviendo fabricados desde PP BEST")
             messages.error(request, f"No se pudieron resolver fabricados: {exc}")
         return redirect("mpr:migracion_best_articulos_fabricados")
 
@@ -1243,11 +1251,13 @@ class MigracionBestValidarArticuloFabricadoView(MprLoginRequiredMixin, View):
                     return _json_ok({"best_id": best_id, "accion": "aceptar"})
                 messages.success(request, f"Validado {obj.best_id_articulo} con componente Admin.")
             elif accion == "asignar":
-                nuevo = (request.POST.get("best_id_nuevo") or "").strip()
-                obj = asignar_best_a_fabricado(
+                raw = (request.POST.get("admin_idart") or "").strip()
+                if not raw.isdigit():
+                    raise ValueError("IDArt inválido.")
+                obj = asignar_admin_a_fabricado_pp(
                     base_empresa=base,
-                    map_best_id=best_id,
-                    nuevo_best_id=nuevo,
+                    best_id=best_id,
+                    nuevo_admin_idart=int(raw),
                     usuario=usuario,
                     notas=notas,
                 )
@@ -1261,7 +1271,7 @@ class MigracionBestValidarArticuloFabricadoView(MprLoginRequiredMixin, View):
                     )
                 messages.success(
                     request,
-                    f"Asignado componente IDArt {obj.admin_idart} → SKU BEST {obj.best_id_articulo}.",
+                    f"Asignado PP BEST {obj.best_id_articulo} → componente IDArt {obj.admin_idart}.",
                 )
             elif accion == "descartar":
                 descartar_articulo(

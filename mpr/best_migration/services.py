@@ -13,6 +13,7 @@ from django.utils import timezone
 from mpr.best_migration.article_matcher import (
     MatchRow,
     match_admin_fabricados_to_best,
+    match_best_pp_to_admin_fabricados,
     match_open_order_skus,
 )
 from mpr.best_migration.client_matcher import match_clients
@@ -186,8 +187,68 @@ def _invalidate_best_catalog_skus_cache() -> None:
     _best_catalog_skus_cache_at = None
 
 
+def _fetch_best_pp_con_stock() -> tuple[list[dict], dict[str, dict]]:
+    """PP BEST con saldo en depósitos Producción/Semi (4000/4002), agregado por Id Articulo."""
+    conn = connect_best()
+    try:
+        best_rows = fetch_dict(
+            conn,
+            """
+            SELECT [Id Articulo] AS id_articulo,
+                   MAX(Codigo) AS codigo,
+                   MAX(Articulo) AS articulo,
+                   MAX(Marca) AS marca,
+                   SUM(COALESCE(Stock, 0)) AS stock_pares
+            FROM REP_INVENTARIOS
+            WHERE [Id Deposito] IN (4000, 4002)
+              AND COALESCE(Stock, 0) <> 0
+              AND [Id Articulo] IS NOT NULL
+            GROUP BY [Id Articulo]
+            """,
+        )
+        ids = [str(r.get("id_articulo") or "").strip() for r in best_rows if r.get("id_articulo")]
+        if not ids:
+            return [], {}
+        placeholders = ", ".join(["%s"] * len(ids))
+        myl_rows = fetch_dict(
+            conn,
+            f"""
+            SELECT MYMMID, CODIGO, COLOR, COLOR1, COLOR2, COLOR3, TALLE, PACK, MARCADS
+            FROM MYL
+            WHERE MYMMID IN ({placeholders})
+            """,
+            tuple(ids),
+        )
+        myl = {str(r["MYMMID"]): r for r in myl_rows}
+        return best_rows, myl
+    finally:
+        conn.close()
+
+
+def _fetch_best_pp_ids_requeridos_pedido() -> set[str]:
+    """Id PP en REP_RECETAS cuyo Id PT figura en pedidos abiertos BEST."""
+    conn = connect_best()
+    try:
+        rows = fetch_dict(
+            conn,
+            """
+            SELECT DISTINCT r.[Id PP] AS id_pp
+            FROM REP_RECETAS r
+            WHERE r.[Id PT] IN (
+                SELECT DISTINCT c.[Id Articulo]
+                FROM REP_ORDENES_COMBINADO c
+                WHERE c.Finalizada = 0 AND c.Pendiente > 0
+            )
+              AND r.[Id PP] IS NOT NULL
+            """,
+        )
+        return {str(r.get("id_pp") or "").strip() for r in rows if r.get("id_pp")}
+    finally:
+        conn.close()
+
+
 def _fetch_best_catalog_skus() -> tuple[list[dict], dict[str, dict]]:
-    """Catálogo BEST semi-elaborado para matcher inverso (sin REP_RECETAS)."""
+    """Catálogo BEST semi-elaborado para búsqueda manual (4000/4002, con o sin stock)."""
     global _best_catalog_skus_cache, _best_catalog_skus_cache_at
     now = time.monotonic()
     if (
@@ -826,177 +887,193 @@ def resumen_articulos_fabricados(base_empresa: str) -> dict[str, Any]:
     pendientes = qs.exclude(estado__in=estados_resueltos).count()
     total = qs.count()
     resueltos = sum(1 for a in qs if a.resuelto_para_migracion)
+    ped = qs.filter(requerido_migracion=True)
+    stock = qs.filter(requerido_migracion=False)
+    ped_pendientes = ped.exclude(estado__in=estados_resueltos).count()
+    stock_pendientes = stock.exclude(estado__in=estados_resueltos).count()
     return {
         "total": total,
         "por_estado": dict(by_estado),
         "pendientes": pendientes,
         "validados": by_estado.get(BestArticuloMap.Estado.VALIDADO, 0),
         "descartados": by_estado.get(BestArticuloMap.Estado.DESCARTADO, 0),
+        "ambiguos": by_estado.get(BestArticuloMap.Estado.AMBIGUO, 0),
+        "sin_candidato": by_estado.get(BestArticuloMap.Estado.SIN_CANDIDATO, 0),
+        "sin_match": by_estado.get(BestArticuloMap.Estado.SIN_MATCH, 0),
+        "conflictos": by_estado.get(BestArticuloMap.Estado.CONFLICTO_1_A_N, 0),
         "requeridos_total": total,
         "requeridos_resueltos": resueltos,
         "requeridos_pendientes": pendientes,
-        "necesarios_pendientes": pendientes,
+        "necesarios_pendientes": ped_pendientes,
+        "necesarios_pendientes_pedido": ped_pendientes,
+        "necesarios_pendientes_stock": stock_pendientes,
+        "stock_pendientes": stock_pendientes,
+        "requeridos_pedido_total": ped.count(),
+        "requeridos_pedido_resueltos": sum(1 for a in ped if a.resuelto_para_migracion),
+        "requeridos_stock_total": stock.count(),
+        "requeridos_stock_resueltos": sum(1 for a in stock if a.resuelto_para_migracion),
+    }
+
+
+def _flags_alcance_bom_fabricado(*, requerido_migracion: bool) -> dict[str, Any]:
+    """Flags BOM_FABRICADO por ola: pedidos (True) o stock (False)."""
+    return {
+        "requerido_migracion": requerido_migracion,
+        "en_snapshot_abierto": requerido_migracion,
+        "origen_requerimiento": BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
     }
 
 
 @transaction.atomic
-def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
+def resolver_fabricados_desde_pp_best(base_empresa: str) -> dict[str, Any]:
     """
-    Terminados VALIDADO → explosión en_abm_formula → Fabricados únicos → inferir SKU BEST.
-    Upsert origen BOM_FABRICADO. No toca parity ni migracion_habilitada.
+    PP BEST con stock 4000/4002 → inferir Admin Fabricado (matcher BEST→Admin).
+    Ola 1: PP requeridos por receta+pedido abierto (requerido_migracion=True).
+    Ola 2: resto con stock (requerido_migracion=False). Sin stock: fuera de cola.
     """
-    terminados = BestArticuloMap.objects.filter(
-        base_empresa=base_empresa,
-        estado=BestArticuloMap.Estado.VALIDADO,
-        admin_idart__isnull=False,
-    ).exclude(
-        origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
-    )
-    terminado_idarts = [m.admin_idart for m in terminados if m.admin_idart]
-    fabricados_admin = _fabricado_idarts_desde_bom_terminados(base_empresa, terminado_idarts)
-    best_rows, myl = _fetch_best_catalog_skus()
-    non_bom_ids = set(
-        BestArticuloMap.objects.filter(base_empresa=base_empresa)
-        .exclude(origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO)
-        .values_list("best_id_articulo", flat=True)
-    )
-    inferidos = match_admin_fabricados_to_best(
-        admin_fabricados=fabricados_admin,
-        best_rows=best_rows,
-        myl_by_mmid=myl,
-        best_ids_ocupados=non_bom_ids,
-    )
+    pp_rows, myl = _fetch_best_pp_con_stock()
+    pp_requeridos = _fetch_best_pp_ids_requeridos_pedido()
+    admin_fabricados = _load_admin_fabricados(base_empresa)
 
     bom_qs = BestArticuloMap.objects.filter(
         base_empresa=base_empresa,
         origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
     )
-    # La clave BEST es única por empresa. Si una instalación anterior permitió
-    # coexistencia, re-clavar la fila BOM evita que vuelva a competir con PT.
-    contaminadas = 0
-    for obj in bom_qs.filter(best_id_articulo__in=non_bom_ids):
-        obj.best_id_articulo = f"FAB:{obj.admin_idart}"
-        obj.best_codigo = ""
-        obj.best_articulo = (obj.admin_nombre or "")[:255]
-        obj.best_marca = ""
-        obj.best_modelos = ""
-        obj.best_colores = ""
-        obj.best_color_mode = ""
-        obj.best_talle = ""
-        obj.best_pack = ""
-        obj.best_variant_codes = ""
-        obj.estado = BestArticuloMap.Estado.SIN_CANDIDATO
-        obj.score = None
-        obj.razon = "SKU BEST ocupado por mapeo no BOM"
-        obj.validado = False
-        obj.validado_por = ""
-        obj.validado_en = None
-        obj.save()
-        contaminadas += 1
+    admin_validados = set(
+        bom_qs.filter(
+            estado=BestArticuloMap.Estado.VALIDADO,
+            admin_idart__isnull=False,
+        ).values_list("admin_idart", flat=True)
+    )
+    inferidos = match_best_pp_to_admin_fabricados(
+        best_pps=pp_rows,
+        admin_fabricados=admin_fabricados,
+        myl_by_mmid=myl,
+        admin_idarts_ocupados=admin_validados,
+    )
 
-    created = updated = preserved = sin_sku_best = 0
-    claimed_best: set[str] = set()
+    created = updated = preserved = sin_admin = 0
+    claimed_admin: set[int] = set()
 
-    def _candidatos_best_desde_row(row: MatchRow | None) -> list[dict]:
+    def _candidatos_admin_desde_row(row: MatchRow | None) -> list[dict]:
         if not row:
             return []
-        vistos: set[str] = set()
+        vistos: set[int] = set()
         out_cands: list[dict] = []
         for cand in (row.extras or {}).get("cand_best") or []:
-            bid = str(cand.get("id") or "").strip()
-            if bid and bid not in vistos:
-                vistos.add(bid)
+            cid = to_int_or_none(cand.get("id"))
+            if cid and cid not in vistos:
+                vistos.add(cid)
                 out_cands.append(cand)
-        proposed = (row.best_id_articulo or "").strip()
+        proposed = to_int_or_none(row.admin_idart)
         if proposed and proposed not in vistos:
             out_cands.insert(
                 0,
                 {
                     "id": proposed,
-                    "articulo": row.best_articulo,
-                    "codigo": row.best_codigo,
+                    "articulo": row.admin_nombre,
+                    "id_manual": row.admin_id_manual,
                     "score": row.score,
-                    "pack": row.best_pack,
-                    "marca": row.best_marca,
                     "razon": row.razon,
                 },
             )
         return out_cands
 
-    def _elegir_best_libre(row: MatchRow | None) -> tuple[str, dict | None]:
-        for cand in _candidatos_best_desde_row(row):
-            bid = str(cand.get("id") or "").strip()
-            if not bid or bid in non_bom_ids or bid in claimed_best:
+    def _elegir_admin_libre(row: MatchRow | None) -> tuple[int | None, dict | None]:
+        for cand in _candidatos_admin_desde_row(row):
+            aid = to_int_or_none(cand.get("id"))
+            if not aid or aid in admin_validados or aid in claimed_admin:
                 continue
-            return bid, cand
-        return "", None
+            return aid, cand
+        return None, None
 
-    for admin in fabricados_admin:
-        aid = int(admin["IDArt"])
-        row = inferidos.get(aid)
-        synthetic_id = f"FAB:{aid}"
-        proposed_id = (row.best_id_articulo or "").strip() if row else ""
-        elegido_id, elegido_cand = _elegir_best_libre(row)
-        best_id = elegido_id or synthetic_id
-        sku_ocupado = bool(proposed_id and not elegido_id)
+    for pp in pp_rows:
+        best_id = str(pp.get("id_articulo") or "").strip()
+        if not best_id:
+            continue
 
-        if not elegido_id:
-            sin_sku_best += 1
+        es_requerido = best_id in pp_requeridos
+        flags = _flags_alcance_bom_fabricado(requerido_migracion=es_requerido)
+        row = inferidos.get(best_id)
+        proposed_aid = to_int_or_none(row.admin_idart) if row else None
+        elegido_aid, elegido_cand = _elegir_admin_libre(row)
+        admin_ocupado = bool(proposed_aid and not elegido_aid)
 
-        prev = bom_qs.filter(admin_idart=aid).order_by("pk").first()
+        if not elegido_aid:
+            sin_admin += 1
+
+        prev = bom_qs.filter(best_id_articulo=best_id).order_by("pk").first()
         if prev and prev.estado in (
             BestArticuloMap.Estado.VALIDADO,
             BestArticuloMap.Estado.DESCARTADO,
         ):
+            if (
+                prev.requerido_migracion != es_requerido
+                or prev.en_snapshot_abierto != es_requerido
+            ):
+                prev.requerido_migracion = es_requerido
+                prev.en_snapshot_abierto = es_requerido
+                prev.save(update_fields=["requerido_migracion", "en_snapshot_abierto"])
             preserved += 1
             continue
 
-        if prev and prev.best_id_articulo != best_id:
-            # Solo la fila BOM se reclava; nunca se actualiza una fila no-BOM
-            # por el Id Artículo BEST inferido.
-            if BestArticuloMap.objects.filter(
-                base_empresa=base_empresa, best_id_articulo=best_id
-            ).exclude(pk=prev.pk).exists():
-                best_id = synthetic_id
-                sin_sku_best += 1
+        attrs = myl.get(best_id) or {}
+        best_codigo = str(pp.get("codigo") or attrs.get("CODIGO") or "")
+        best_articulo = str(pp.get("articulo") or "")
+        best_marca = str(pp.get("marca") or attrs.get("MARCADS") or "")
 
-        if not row or not elegido_id:
+        if not row or not elegido_aid:
             estado = BestArticuloMap.Estado.SIN_CANDIDATO
             razon = (
-                "SKU BEST ocupado por mapeo no BOM"
-                if sku_ocupado
-                else "Sin SKU BEST candidato en depósitos Producción/Semi-Embalado"
+                "Admin Fabricado ocupado por otro BOM validado"
+                if admin_ocupado
+                else "Sin candidato Admin Fabricado"
             )
-            best_articulo = admin.get("NombreArticulo") or ""
-            best_codigo = best_marca = best_modelos = best_colores = ""
-            best_color_mode = best_talle = best_pack = best_variant_codes = ""
-            score = None
+            admin_idart = None
+            admin_nombre = admin_id_manual = admin_cod_art_prov = ""
+            admin_pack = admin_talle = admin_color_mode = ""
+            score = row.score if row else None
             candidatos_n = 0
             alt1_idart = alt1_nombre = alt1_score = None
             alt2_idart = alt2_nombre = alt2_score = None
+            best_modelos = best_colores = best_color_mode = best_talle = best_pack = ""
+            best_variant_codes = ""
+            if row:
+                best_modelos = row.best_modelos
+                best_colores = row.best_colores
+                best_color_mode = row.best_color_mode
+                best_talle = row.best_talle
+                best_pack = row.best_pack
+                best_variant_codes = row.best_variant_codes
+                candidatos_n = row.candidatos_n
         else:
             estado = row.status
             razon = row.razon
-            if elegido_cand and elegido_cand.get("id") != proposed_id:
+            if elegido_cand and to_int_or_none(elegido_cand.get("id")) != proposed_aid:
                 razon = (razon or "") + "+alternate_libre"
-            best_articulo = (
-                elegido_cand.get("articulo") if elegido_cand else row.best_articulo
+            admin_idart = elegido_aid
+            admin_nombre = (
+                elegido_cand.get("articulo") if elegido_cand else row.admin_nombre
             )
-            best_codigo = elegido_cand.get("codigo") if elegido_cand else row.best_codigo
-            best_marca = elegido_cand.get("marca") if elegido_cand else row.best_marca
-            best_modelos = row.best_modelos
-            best_colores = row.best_colores
-            best_color_mode = row.best_color_mode
-            best_talle = row.best_talle
-            best_pack = (
-                elegido_cand.get("pack") if elegido_cand else row.best_pack
+            admin_id_manual = (
+                elegido_cand.get("id_manual") if elegido_cand else row.admin_id_manual
             )
-            best_variant_codes = row.best_variant_codes
+            admin_cod_art_prov = row.admin_cod_art_prov
+            admin_pack = row.admin_pack
+            admin_talle = row.admin_talle
+            admin_color_mode = row.admin_color_mode
             score = row.score
             candidatos_n = row.candidatos_n
             alt1_idart, alt1_nombre, alt1_score = row.alt1_idart, row.alt1_nombre, row.alt1_score
             alt2_idart, alt2_nombre, alt2_score = row.alt2_idart, row.alt2_nombre, row.alt2_score
-            claimed_best.add(best_id)
+            best_modelos = row.best_modelos
+            best_colores = row.best_colores
+            best_color_mode = row.best_color_mode
+            best_talle = row.best_talle
+            best_pack = row.best_pack
+            best_variant_codes = row.best_variant_codes
+            claimed_admin.add(elegido_aid)
+
         defaults = {
             "best_codigo": (best_codigo or "")[:64],
             "best_articulo": (best_articulo or "")[:255],
@@ -1015,19 +1092,19 @@ def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
             "alt2_idart": alt2_idart,
             "alt2_nombre": (alt2_nombre or "")[:255],
             "alt2_score": alt2_score,
-            **_FLAGS_ALCANCE_BOM_FABRICADO,
+            **flags,
         }
         if prev:
             prev.best_id_articulo = best_id
             for k, v in defaults.items():
                 setattr(prev, k, v)
-            prev.admin_idart = aid
-            prev.admin_id_manual = (admin.get("id_manual") or "")[:64]
-            prev.admin_nombre = (admin.get("NombreArticulo") or "")[:255]
-            prev.admin_cod_art_prov = (admin.get("CodArtProv") or "")[:128]
-            prev.admin_pack = (row.admin_pack if row else "")[:8]
-            prev.admin_talle = (row.admin_talle if row else "")[:8]
-            prev.admin_color_mode = (row.admin_color_mode if row else "")[:16]
+            prev.admin_idart = admin_idart
+            prev.admin_id_manual = (admin_id_manual or "")[:64]
+            prev.admin_nombre = (admin_nombre or "")[:255]
+            prev.admin_cod_art_prov = (admin_cod_art_prov or "")[:128]
+            prev.admin_pack = (admin_pack or "")[:8]
+            prev.admin_talle = (admin_talle or "")[:8]
+            prev.admin_color_mode = (admin_color_mode or "")[:16]
             prev.estado = estado
             prev.score = score
             prev.razon = (razon or "")[:512]
@@ -1042,13 +1119,13 @@ def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
             base_empresa=base_empresa,
             best_id_articulo=best_id,
             **defaults,
-            admin_idart=aid,
-            admin_id_manual=(admin.get("id_manual") or "")[:64],
-            admin_nombre=(admin.get("NombreArticulo") or "")[:255],
-            admin_cod_art_prov=(admin.get("CodArtProv") or "")[:128],
-            admin_pack=(row.admin_pack if row else "")[:8],
-            admin_talle=(row.admin_talle if row else "")[:8],
-            admin_color_mode=(row.admin_color_mode if row else "")[:16],
+            admin_idart=admin_idart,
+            admin_id_manual=(admin_id_manual or "")[:64],
+            admin_nombre=(admin_nombre or "")[:255],
+            admin_cod_art_prov=(admin_cod_art_prov or "")[:128],
+            admin_pack=(admin_pack or "")[:8],
+            admin_talle=(admin_talle or "")[:8],
+            admin_color_mode=(admin_color_mode or "")[:16],
             estado=estado,
             score=score,
             razon=(razon or "")[:512],
@@ -1059,15 +1136,20 @@ def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
         created += 1
 
     return {
-        "terminados_fuente": len(terminado_idarts),
-        "fabricados_bom": len(fabricados_admin),
+        "pp_con_stock": len(pp_rows),
+        "pp_requeridos_pedido": len(pp_requeridos & {str(r.get("id_articulo") or "").strip() for r in pp_rows}),
+        "fabricados_bom": len(pp_rows),
         "created": created,
         "updated": updated,
         "preserved": preserved,
-        "skipped_sin_best": sin_sku_best,
-        "contaminadas_reclavadas": contaminadas,
-        "total": len(fabricados_admin),
+        "skipped_sin_admin": sin_admin,
+        "total": len(pp_rows),
     }
+
+
+def resolver_fabricados_desde_terminados(base_empresa: str) -> dict[str, Any]:
+    """Alias retrocompatible: delega en resolver BEST PP → Admin Fabricado."""
+    return resolver_fabricados_desde_pp_best(base_empresa)
 
 
 def aceptar_inferidos_altos_fabricados(
@@ -2445,6 +2527,79 @@ def buscar_skus_best_componentes(
 
 
 @transaction.atomic
+def asignar_admin_a_fabricado_pp(
+    *,
+    base_empresa: str,
+    best_id: str,
+    nuevo_admin_idart: int,
+    usuario: str,
+    notas: str = "",
+) -> BestArticuloMap:
+    """
+    Asigna un componente Admin Fabricado a una fila PP BEST (origen BOM_FABRICADO).
+    La clave de fila es el MMID BEST; no se reemplaza la fila.
+    """
+    clave = (best_id or "").strip()
+    aid = to_int_or_none(nuevo_admin_idart)
+    if not clave:
+        raise ValueError("Falta el SKU BEST de la fila.")
+    if not aid:
+        raise ValueError("Debés elegir un componente Admin Fabricado.")
+
+    obj = BestArticuloMap.objects.get(
+        base_empresa=base_empresa,
+        best_id_articulo=clave,
+        origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+    )
+
+    arts = _load_admin_fabricados(base_empresa)
+    hit = next((a for a in arts if int(a["IDArt"]) == aid), None)
+    if not hit:
+        raise ValueError(f"IDArt {aid} no es un artículo tipo Fabricado.")
+
+    conflicto = (
+        BestArticuloMap.objects.select_for_update()
+        .filter(
+            base_empresa=base_empresa,
+            admin_idart=aid,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+        .exclude(pk=obj.pk)
+        .first()
+    )
+    if conflicto:
+        nombre = conflicto.admin_nombre or conflicto.best_articulo or "sin nombre"
+        if conflicto.estado == BestArticuloMap.Estado.VALIDADO or conflicto.validado is True:
+            raise ValueError(
+                f"IDArt {aid} ya está validado en otro PP BEST "
+                f"({conflicto.best_id_articulo} · {nombre}). Elegí otro fabricado."
+            )
+        conflicto.admin_idart = None
+        conflicto.admin_nombre = ""
+        conflicto.admin_id_manual = ""
+        conflicto.estado = BestArticuloMap.Estado.SIN_CANDIDATO
+        conflicto.validado = False
+        conflicto.validado_por = ""
+        conflicto.validado_en = None
+        conflicto.razon = "Admin reasignado a otro PP BEST"
+        conflicto.save()
+
+    obj.admin_idart = aid
+    obj.admin_nombre = (hit.get("NombreArticulo") or "")[:255]
+    obj.admin_id_manual = (hit.get("id_manual") or "")[:64]
+    obj.admin_cod_art_prov = (hit.get("CodArtProv") or "")[:128]
+    obj.estado = BestArticuloMap.Estado.VALIDADO
+    obj.validado = True
+    obj.validado_por = (usuario or "")[:64]
+    obj.validado_en = timezone.now()
+    if notas:
+        obj.notas = notas
+    obj.save()
+    refresh_parity_counters(base_empresa).save()
+    return obj
+
+
+@transaction.atomic
 def asignar_best_a_fabricado(
     *,
     base_empresa: str,
@@ -2536,8 +2691,8 @@ def validar_articulo_fabricado(
 ) -> BestArticuloMap:
     """Valida mapeo fabricado (BOM_FABRICADO); no afecta gate PED."""
     bid = (best_id or "").strip()
-    if bid.upper().startswith("FAB:"):
-        raise ValueError("No hay sugerencia BEST para aceptar.")
+    if not admin_idart:
+        raise ValueError("No hay sugerencia Admin para aceptar.")
     return validar_articulo(
         base_empresa=base_empresa,
         best_id=bid,
@@ -2545,6 +2700,42 @@ def validar_articulo_fabricado(
         usuario=usuario,
         notas=notas,
     )
+
+
+def buscar_fabricados_admin(
+    q: str, *, base_empresa: str, limit: int = 15
+) -> list[dict[str, Any]]:
+    """Búsqueda de artículos Admin tipo Fabricado para asignación manual."""
+    term = (q or "").strip()
+    if not term or not base_empresa:
+        return []
+    try:
+        limit = min(50, max(1, int(limit)))
+    except (TypeError, ValueError):
+        limit = 15
+    like_term = f"%{term}%"
+    with mysql_cursor(base_empresa, dict_cursor=True) as cur:
+        cur.execute(
+            f"""
+            SELECT IDArt,
+                   TRIM(COALESCE(id_manual, '')) AS id_manual,
+                   TRIM(COALESCE(NombreArticulo, '')) AS NombreArticulo,
+                   TRIM(COALESCE(NombreArticulo, '')) AS Descripcion,
+                   TRIM(COALESCE(CodArtProv, '')) AS CodArtProv
+            FROM articulo
+            WHERE COALESCE(TRIM(tipo_art_fab), '') = 'Fabricado'
+              AND (
+                  CAST(IDArt AS CHAR) LIKE %s
+                  OR id_manual LIKE %s
+                  OR NombreArticulo LIKE %s
+                  OR CodArtProv LIKE %s
+              )
+            ORDER BY NombreArticulo
+            LIMIT {limit}
+            """,
+            (like_term, like_term, like_term, like_term),
+        )
+        return list(cur.fetchall())
 
 
 @transaction.atomic

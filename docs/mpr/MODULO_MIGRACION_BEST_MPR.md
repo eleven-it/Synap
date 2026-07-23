@@ -59,7 +59,7 @@ Contadores de gate en `BestMigrationParity`: `articulos_total` / `articulos_resu
 | Dominio | Obligatorio para pedidos | Estado módulo |
 |---------|--------------------------|---------------|
 | Artículos terminados | Sí | Implementado (inferencia + validación UI + lote score + selección múltiple) |
-| Artículos fabricados | No | Implementado (BOM Admin → matcher Admin→BEST directo; no bloquea gate PED) |
+| Artículos fabricados | No | Implementado (PP BEST con stock → matcher BEST→Admin; olas pedido/stock; no bloquea gate PED) |
 | Clientes | Sí | Implementado (inferencia CUIT/nombre/campaña + validación UI + lote + selección múltiple) |
 | Unidades (par) | Sí | Confirmación manual en hub |
 | Depósitos / etapas | No | Implementado (REP_INVENTARIOS + inferencia tipo_mpr) |
@@ -102,19 +102,18 @@ UI (`/mpr/migracion-best/articulos/`):
 
 `asegurar_articulos_desde_inventario` infiere mapeo con el mismo matcher. Preserva VALIDADO/DESCARTADO. Si el SKU ya tenía `PEDIDO_ABIERTO`, se conserva; si no, queda `STOCK_DEPOSITO`. El delete de recalcular **no** borra filas `STOCK_DEPOSITO` con `requerido_migracion=True` ni filas `BOM_FABRICADO`.
 
-## Artículos fabricados (BOM Admin, no bloqueante)
+## Artículos fabricados (PP BEST → Admin, no bloqueante)
 
-- **Fuente BOM:** solo AdministraNET (`en_abm` / `en_abm_formula`). **No** se lee `REP_RECETAS` en BEST.
-- **Filas:** cada fila representa un componente Admin `tipo_art_fab=Fabricado` de la BOM, no un producto terminado BEST.
-- **Flujo:** terminados `VALIDADO` → explosión primer nivel BOM → componentes `tipo_art_fab=Fabricado` → matcher **Admin→BEST directo** (modelo/tokens/color/talle sobre catálogo 4000/4002; no inversión del matcher de pedidos) → `BestArticuloMap` con `origen_requerimiento=BOM_FABRICADO`, identificado funcionalmente por `admin_idart`.
-- **Matcher fabricados:** `match_admin_fabricados_to_best` en `article_matcher.py` puntúa cada SKU BEST del catálogo semi por hit de modelo, Jaccard de tokens, marca, talle y pack suave (componentes 1Par no penalizan fuerte). Color distinto no bloquea: mismo modelo puede inferirse como `INFERIDO_BAJO`/`MEDIO`. Umbral mínimo ~40. Alternativas en `extras.cand_best` para el resolver cuando el top está ocupado por `PEDIDO_ABIERTO`/`STOCK_DEPOSITO`.
-- **Catálogo BEST aproximado:** solo `REP_INVENTARIOS` en depósitos **4000 Producción** y **4002 Semi-Embalado**. Se excluyen depósito **4003 Terminado** y pedidos abiertos, porque corresponden a productos terminados.
-- **Clave sin SKU:** si no hay coincidencia segura, o el SKU ya pertenece a un mapeo no BOM (`PEDIDO_ABIERTO`, `STOCK_DEPOSITO` o `HISTORICO`), la fila usa `FAB:{IDArt}` y queda `SIN_CANDIDATO`; la UI muestra «Sin sugerencia BEST».
-- **Persistencia:** `admin_idart` = componente Admin (fijo desde BOM); `best_id_articulo` = MMID BEST del componente (inferido o asignado manualmente). La clave temporal `FAB:{IDArt}` se reemplaza al validar/asignar un SKU real vía `asignar_best_a_fabricado`.
-- **UI:** `/mpr/migracion-best/articulos-fabricados/` — columnas: Componente Admin (solo lectura), Alcance, Sugerencia BEST (link ámbar `aceptar` si hay MMID real), Acciones (buscador SKU BEST + Asignar/Descartar). API `GET /mpr/migracion-best/api/skus-componentes/?q=` consulta Azure de forma acotada con `TOP`/`LIKE` sobre inventario 4000/4002. Un SKU ocupado por una fila de terminados, stock o histórico **no validada** se reasigna automáticamente: borra ese mapeo y valida el componente sin pedir confirmación. Nunca se reasigna si está `VALIDADO`/`validado=True` ni a otro `BOM_FABRICADO`. **No** hay alta en Admin ni columna «Coincidencia Admin».
-- **Limitación vigente:** `REP_RECETAS` aún no se lee. La relación esperada PT → PP → crudo está documentada, pero este catálogo semi es una aproximación hasta incorporar esas recetas.
-- **Gate:** dominio `articulos_fabricados` con `obligatorio_para_pedidos=False`; pendientes de fabricados no bloquean cutover ni siembra PED.
-- **Stock Semi opcional:** `sincronizar_stock_fabricados_semi` filtra inventario BEST depósito **4002** (Semi-Embalado) y SKUs fabricados validados; misma máquina de olas (`CARGADO` inmutable).
+- **Fuente cola:** `REP_INVENTARIOS` depósitos **4000 Producción** y **4002 Semi-Embalado** con `Stock <> 0`. Sin stock no entra al resolver.
+- **Olas:** mismo `origen_requerimiento=BOM_FABRICADO`; `requerido_migracion=True` + `en_snapshot_abierto=True` para PP requeridos por pedido (ola 1); `requerido_migracion=False` para el resto con stock (ola 2). Referencia operativa: ~129 PP pedido / ~278 PP stock total (jul 2026).
+- **Pedidos abiertos:** `REP_RECETAS.[Id PP]` cuyo `[Id PT]` está en `REP_ORDENES_COMBINADO` (`Finalizada=0`, `Pendiente>0`).
+- **Filas:** clave `best_id_articulo` = MMID PP BEST; `admin_idart` = componente Admin `tipo_art_fab=Fabricado` inferido o asignado.
+- **Flujo:** «Resolver fabricados» → `_fetch_best_pp_con_stock` + `_fetch_best_pp_ids_requeridos_pedido` → matcher **BEST→Admin** (`match_best_pp_to_admin_fabricados`) → upsert `BestArticuloMap`. Ya no depende de terminados VALIDADO ni de explosión BOM Admin.
+- **Matcher fabricados:** scoring simétrico al histórico Admin→BEST (modelo, Jaccard, marca, talle, pack suave). Umbral mínimo ~40. Alternativas en `extras.cand_best` (candidatos Admin) cuando el top está ocupado por otro BOM validado.
+- **Persistencia:** preserva filas `VALIDADO`/`DESCARTADO`; actualiza flags de ola en validados si cambia el set de pedidos.
+- **UI:** `/mpr/migracion-best/articulos-fabricados/` — columnas: PP BEST (fijo), Alcance (pedido/stock), Sugerencia Admin Fabricado, Acciones (buscador Admin `tipo_art_fab=Fabricado` vía `core_api:articulo_search` + Asignar/Descartar). Filtro «Solo necesarios pendientes» = `requerido_migracion=True`; «Solo ola stock» = `requerido_migracion=False`.
+- **Gate:** dominio `articulos_fabricados` con `obligatorio_para_pedidos=False`; pendientes no bloquean cutover ni siembra PED.
+- **Stock Semi opcional:** `sincronizar_stock_fabricados_semi` filtra inventario BEST depósito **4002** y SKUs fabricados validados; misma máquina de olas (`CARGADO` inmutable).
 
 ## Clientes (maestro 1:1)
 

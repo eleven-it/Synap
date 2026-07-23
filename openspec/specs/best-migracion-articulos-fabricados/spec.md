@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Introducir dominio **Artículos fabricados** no bloqueante para cutover ni gate PED: mapeo BOM Admin→BEST vía matcher inverso desde terminados validados, pantalla espejo de terminados, y stock Semi-Embalado↔Semi-elaborado opcional post-cutover. **No** se migran recetas desde BEST (`REP_RECETAS`).
+Dominio **Artículos fabricados** no bloqueante para cutover ni gate PED: mapeo **BEST PP → Admin Fabricado** desde stock en depósitos 4000/4002, con olas pedido (REP_RECETAS) y stock, pantalla espejo de terminados, y stock Semi-Embalado↔Semi-elaborado opcional post-cutover.
 
-*Archivado desde el cambio OpenSpec `best-articulos-terminados-fabricados-olas` (15/07/2026).*
+*Actualizado jul 2026: flujo invertido BEST→Admin (antes Admin→BEST vía BOM Admin).*
 
 ## Requirements
 
@@ -16,7 +16,7 @@ El sistema MUST registrar un `MigrationDomain` con `codigo="articulos_fabricados
 
 - **GIVEN** el usuario abre el hub de migración BEST
 - **WHEN** visualiza «Artículos fabricados»
-- **THEN** ve contadores propios de pendientes/validados
+- **THEN** ve contadores propios de pendientes/validados (olas pedido y stock)
 - **AND** el dominio no figura como requisito del semáforo «Gate PED»
 
 #### Scenario: Cutover posible con fabricados pendientes
@@ -30,63 +30,77 @@ El sistema MUST registrar un `MigrationDomain` con `codigo="articulos_fabricados
 
 ### Requirement: Pantalla espejo y ruta dedicada
 
-Debe existir pantalla en `/mpr/migracion-best/articulos-fabricados/` con UX equivalente a terminados (listado, Asignar, Validar, métricas). Los mapeos MUST persistirse con `origen_requerimiento=BOM_FABRICADO` (o equivalente distinto de pedidos/stock terminados).
+Debe existir pantalla en `/mpr/migracion-best/articulos-fabricados/` con UX equivalente a terminados (listado, Asignar, Validar, métricas). Los mapeos MUST persistirse con `origen_requerimiento=BOM_FABRICADO`. Cada fila MUST representar un PP BEST (clave `best_id_articulo`).
 
 #### Scenario: Navegación desde hub
 
 - **GIVEN** el usuario está en el hub
 - **WHEN** hace clic en «Artículos fabricados»
 - **THEN** accede a `/mpr/migracion-best/articulos-fabricados/`
-- **AND** ve flujo de resolución análogo a terminados
+- **AND** ve PP BEST como fila principal y candidato Admin Fabricado como sugerencia
 
 ---
 
-### Requirement: BOM AdministraNET como única fuente
+### Requirement: Cola desde stock BEST y recetas de pedido
 
-La inferencia de fabricados MUST usar exclusivamente tablas Admin `en_abm` / `en_abm_formula`. El sistema MUST NOT leer ni migrar recetas desde BEST (`REP_RECETAS`).
+La inferencia MUST partir de PP BEST con stock en depósitos 4000/4002 (`REP_INVENTARIOS`, `Stock <> 0`). PP sin stock MUST NOT aparecer en el resolver ni generar líneas de stock.
 
-#### Scenario: Explosión BOM desde terminado validado
+Ola 1 (pedidos): PP cuya receta los vincula a un PT en pedidos abiertos (`REP_ORDENES_COMBINADO` `Finalizada=0`, `Pendiente>0`) vía `REP_RECETAS.[Id PP]` / `[Id PT]` MUST tener `requerido_migracion=True` y `en_snapshot_abierto=True`.
 
-- **GIVEN** un artículo terminado Admin mapeado y VALIDADO
-- **WHEN** el usuario ejecuta «Resolver fabricados» (o acción equivalente)
-- **THEN** el sistema explota la BOM Admin del terminado
-- **AND** obtiene componentes únicos con `tipo_art_fab=Fabricado`
-- **AND** no consulta `REP_RECETAS` en BEST
+Ola 2 (stock): resto de PP con stock MUST tener `requerido_migracion=False`.
 
-#### Scenario: Fuera de alcance REP_RECETAS
+#### Scenario: Resolver desde inventario semi/producción
 
-- **GIVEN** existe stock o receta solo en BEST sin paridad en Admin BOM
-- **WHEN** se intenta resolver fabricados
-- **THEN** el sistema no importa desde `REP_RECETAS`
-- **AND** el operador puede asignar manualmente vía UI
+- **GIVEN** PP con saldo en depósito 4000 o 4002
+- **WHEN** el usuario ejecuta «Resolver fabricados»
+- **THEN** el sistema consulta `REP_INVENTARIOS` y `REP_RECETAS` (solo para marcar ola pedido)
+- **AND** crea o actualiza filas `BOM_FABRICADO` keyed por MMID PP
+- **AND** no exige terminados Admin VALIDADO como prerequisito
+
+#### Scenario: Sin stock fuera de alcance
+
+- **GIVEN** un PP BEST sin saldo en 4000/4002
+- **WHEN** se ejecuta el resolver
+- **THEN** ese PP no aparece en la cola
 
 ---
 
-### Requirement: Matcher inverso Admin→BEST
+### Requirement: Matcher BEST→Admin Fabricado
 
-Desde fabricados únicos detectados en BOM, el sistema MUST inferir SKU BEST 1:1 con la misma UX de score/lote que terminados. La UI «Asignar» para fabricados MUST NOT limitarse a candidatos Admin Terminado; MUST aceptar candidatos Fabricado.
+Desde cada PP con stock, el sistema MUST inferir `articulo.IDArt` con `tipo_art_fab=Fabricado` usando `match_best_pp_to_admin_fabricados` (scoring simétrico: modelo, Jaccard, marca, talle, pack suave). La UI «Asignar» MUST buscar candidatos Admin Fabricado (no SKU BEST).
 
 #### Scenario: Inferencia automática con score
 
-- **GIVEN** un componente Fabricado Admin sin mapeo previo
-- **WHEN** el matcher inverso se ejecuta
-- **THEN** propone candidato BEST con score/lote visible
+- **GIVEN** un PP BEST sin mapeo previo
+- **WHEN** el matcher se ejecuta
+- **THEN** propone candidato Admin Fabricado con score/lote visible
 - **AND** el operador puede confirmar o corregir manualmente
 
-#### Scenario: Asignación manual fabricado
+#### Scenario: Asignación manual Admin Fabricado
 
 - **GIVEN** inferencia ambigua o sin match
 - **WHEN** el usuario abre «Asignar» en fabricados
 - **THEN** puede elegir candidato Admin Fabricado
-- **AND** el mapeo queda con `origen_requerimiento=BOM_FABRICADO`
+- **AND** el mapeo queda validado con el MMID PP fijo
 
-#### Scenario: Reasignación automática de SKU no validado
+#### Scenario: No pisar VALIDADO
 
-- **GIVEN** un SKU BEST ocupado por una fila no validada que no es `BOM_FABRICADO`
-- **WHEN** el operador lo asigna desde un componente fabricado
-- **THEN** el sistema borra la fila conflictiva y valida el componente con ese SKU
-- **AND** no solicita confirmación adicional
-- **AND** nunca permite reclamar una fila `VALIDADO`, `validado=True` u otro `BOM_FABRICADO`
+- **GIVEN** una fila `BOM_FABRICADO` ya VALIDADA
+- **WHEN** se re-ejecuta el resolver
+- **THEN** no se sobrescribe estado ni `admin_idart`
+- **AND** pueden actualizarse solo flags de ola (`requerido_migracion`)
+
+---
+
+### Requirement: Filtros UI por ola
+
+Filtro «necesarios pendientes» MUST usar `requerido_migracion=True`. Filtro «ola stock» MUST usar `requerido_migracion=False`. Contadores MUST distinguir pendientes pedido vs stock.
+
+#### Scenario: Cola de trabajo pedidos
+
+- **GIVEN** filas ola 1 y ola 2 en la base
+- **WHEN** el usuario activa «Solo necesarios pendientes (pedido)»
+- **THEN** ve solo filas con `requerido_migracion=True` no resueltas
 
 ---
 
@@ -97,17 +111,10 @@ La carga de stock de fabricados MUST usar depósito BEST Semi-Embalado (típ. Id
 #### Scenario: Sync stock fabricados después del cutover
 
 - **GIVEN** terminados ya cargados en stock inicial (`CARGADO`)
-- **AND** fabricados mapeados con depósito Semi mapeado
+- **AND** fabricados mapeados y VALIDADOS con depósito Semi mapeado
 - **WHEN** el usuario sincroniza/carga stock de fabricados
 - **THEN** las cantidades BEST Semi-Embalado se reconcilian contra Admin Semi-elaborado
 - **AND** líneas previas `CARGADO` no se reprocesan
-
-#### Scenario: Stock Semi no bloquea PED
-
-- **GIVEN** fabricados mapeados pero stock Semi sin cargar
-- **WHEN** el usuario revisa checklist del hub
-- **THEN** stock Semi fabricados no aparece como requisito de `migracion_habilitada`
-- **AND** cutover de terminados puede considerarse completo independientemente
 
 ---
 
@@ -120,4 +127,4 @@ Los mapeos de fabricados MUST coexistir con terminados sin duplicar SKUs en conf
 - **GIVEN** hay 100 terminados resueltos y 20 fabricados pendientes
 - **WHEN** el usuario ve el hub
 - **THEN** «Artículos terminados» muestra 100/100 OK para gate
-- **AND** «Artículos fabricados» muestra 0/20 sin afectar el semáforo PED
+- **AND** «Artículos fabricados» muestra pendientes propios sin afectar el semáforo PED
