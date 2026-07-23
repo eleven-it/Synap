@@ -248,6 +248,99 @@ class ResolverFabricadosDesdePpBestTests(TestCase):
     @patch("mpr.best_migration.services._load_admin_fabricados")
     @patch("mpr.best_migration.services._fetch_best_pp_ids_requeridos_pedido")
     @patch("mpr.best_migration.services._fetch_best_pp_con_stock")
+    def test_reclama_sku_stock_deposito_no_validado(
+        self, mock_stock, mock_req, mock_admin, mock_match
+    ):
+        """Un PP ya mapeado como STOCK_DEPOSITO no validado se reclama sin IntegrityError."""
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="SEAT2402BLNE4",
+            estado=BestArticuloMap.Estado.INFERIDO_BAJO,
+            admin_idart=999,
+            requerido_migracion=True,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.STOCK_DEPOSITO,
+        )
+        mock_stock.return_value = (
+            [
+                {
+                    "id_articulo": "SEAT2402BLNE4",
+                    "codigo": "2402",
+                    "articulo": "Atomik 2402 Bl/Ne 4",
+                }
+            ],
+            {},
+        )
+        mock_req.return_value = {"SEAT2402BLNE4"}
+        mock_admin.return_value = [
+            {
+                "IDArt": 1400,
+                "id_manual": "2402",
+                "NombreArticulo": "2402 Fabricado 1Par",
+                "CodArtProv": "",
+            }
+        ]
+        from mpr.best_migration.article_matcher import MatchRow
+
+        mock_match.return_value = {
+            "SEAT2402BLNE4": MatchRow(
+                best_id_articulo="SEAT2402BLNE4",
+                status="INFERIDO_ALTO",
+                score=95,
+                admin_idart=1400,
+                admin_nombre="2402 Fabricado 1Par",
+            )
+        }
+
+        result = resolver_fabricados_desde_pp_best(BASE)
+        self.assertEqual(result["reclamados"], 1)
+        self.assertEqual(result["created"], 0)
+        self.assertEqual(result["updated"], 1)
+        fab = BestArticuloMap.objects.get(
+            base_empresa=BASE, best_id_articulo="SEAT2402BLNE4"
+        )
+        self.assertEqual(
+            fab.origen_requerimiento,
+            BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+        self.assertTrue(fab.requerido_migracion)
+        self.assertEqual(fab.admin_idart, 1400)
+        self.assertEqual(
+            BestArticuloMap.objects.filter(
+                base_empresa=BASE, best_id_articulo="SEAT2402BLNE4"
+            ).count(),
+            1,
+        )
+
+    @patch("mpr.best_migration.services.match_best_pp_to_admin_fabricados")
+    @patch("mpr.best_migration.services._load_admin_fabricados")
+    @patch("mpr.best_migration.services._fetch_best_pp_ids_requeridos_pedido")
+    @patch("mpr.best_migration.services._fetch_best_pp_con_stock")
+    def test_elimina_claves_fab_legacy(self, mock_stock, mock_req, mock_admin, mock_match):
+        BestArticuloMap.objects.create(
+            base_empresa=BASE,
+            best_id_articulo="FAB:1064",
+            estado=BestArticuloMap.Estado.SIN_CANDIDATO,
+            admin_idart=1064,
+            requerido_migracion=False,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+        mock_stock.return_value = ([], {})
+        mock_req.return_value = set()
+        mock_admin.return_value = []
+        mock_match.return_value = {}
+
+        result = resolver_fabricados_desde_pp_best(BASE)
+        self.assertEqual(result["stale_fab_eliminados"], 1)
+        self.assertFalse(
+            BestArticuloMap.objects.filter(
+                base_empresa=BASE, best_id_articulo="FAB:1064"
+            ).exists()
+        )
+
+    @patch("mpr.best_migration.services.match_best_pp_to_admin_fabricados")
+    @patch("mpr.best_migration.services._load_admin_fabricados")
+    @patch("mpr.best_migration.services._fetch_best_pp_ids_requeridos_pedido")
+    @patch("mpr.best_migration.services._fetch_best_pp_con_stock")
     def test_no_pisa_validado(self, mock_stock, mock_req, mock_admin, mock_match):
         BestArticuloMap.objects.create(
             base_empresa=BASE,

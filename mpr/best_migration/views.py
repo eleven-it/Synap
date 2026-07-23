@@ -1106,7 +1106,8 @@ class MigracionBestResolverFabricadosView(MprLoginRequiredMixin, View):
                     f"Fabricados resueltos desde PP BEST: {result['fabricados_bom']} SKUs con stock "
                     f"({result['pp_requeridos_pedido']} requeridos por pedido) — "
                     f"nuevos {result['created']}, actualizados {result['updated']}, "
-                    f"preservados {result['preserved']}, sin Admin {result['skipped_sin_admin']}."
+                    f"preservados {result['preserved']}, reclamados {result.get('reclamados', 0)}, "
+                    f"sin Admin {result['skipped_sin_admin']}."
                 ),
             )
         except Exception as exc:

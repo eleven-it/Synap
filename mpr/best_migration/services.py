@@ -939,6 +939,21 @@ def resolver_fabricados_desde_pp_best(base_empresa: str) -> dict[str, Any]:
         base_empresa=base_empresa,
         origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
     )
+    # Limpia claves sintéticas del flujo Admin→BEST (FAB:{IDArt}) no validadas.
+    stale_fab = bom_qs.filter(best_id_articulo__startswith="FAB:").exclude(
+        estado__in=(
+            BestArticuloMap.Estado.VALIDADO,
+            BestArticuloMap.Estado.DESCARTADO,
+        )
+    )
+    stale_fab_n = stale_fab.count()
+    if stale_fab_n:
+        stale_fab.delete()
+        bom_qs = BestArticuloMap.objects.filter(
+            base_empresa=base_empresa,
+            origen_requerimiento=BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO,
+        )
+
     admin_validados = set(
         bom_qs.filter(
             estado=BestArticuloMap.Estado.VALIDADO,
@@ -953,6 +968,8 @@ def resolver_fabricados_desde_pp_best(base_empresa: str) -> dict[str, Any]:
     )
 
     created = updated = preserved = sin_admin = 0
+    skipped_sku_ocupado = 0
+    reclamados = 0
     claimed_admin: set[int] = set()
 
     def _candidatos_admin_desde_row(row: MatchRow | None) -> list[dict]:
@@ -1002,7 +1019,30 @@ def resolver_fabricados_desde_pp_best(base_empresa: str) -> dict[str, Any]:
         if not elegido_aid:
             sin_admin += 1
 
+        # unique (base_empresa, best_id_articulo): puede existir como
+        # PEDIDO_ABIERTO/STOCK_DEPOSITO. Solo buscamos BOM o reclamamos.
         prev = bom_qs.filter(best_id_articulo=best_id).order_by("pk").first()
+        if prev is None:
+            existente = (
+                BestArticuloMap.objects.filter(
+                    base_empresa=base_empresa,
+                    best_id_articulo=best_id,
+                )
+                .order_by("pk")
+                .first()
+            )
+            if existente is not None:
+                if _sku_best_mapa_es_reclamable(existente):
+                    existente.origen_requerimiento = (
+                        BestArticuloMap.OrigenRequerimiento.BOM_FABRICADO
+                    )
+                    existente.save(update_fields=["origen_requerimiento", "actualizado_en"])
+                    prev = existente
+                    reclamados += 1
+                else:
+                    skipped_sku_ocupado += 1
+                    continue
+
         if prev and prev.estado in (
             BestArticuloMap.Estado.VALIDADO,
             BestArticuloMap.Estado.DESCARTADO,
@@ -1072,7 +1112,6 @@ def resolver_fabricados_desde_pp_best(base_empresa: str) -> dict[str, Any]:
             best_talle = row.best_talle
             best_pack = row.best_pack
             best_variant_codes = row.best_variant_codes
-            claimed_admin.add(elegido_aid)
 
         defaults = {
             "best_codigo": (best_codigo or "")[:64],
@@ -1094,6 +1133,8 @@ def resolver_fabricados_desde_pp_best(base_empresa: str) -> dict[str, Any]:
             "alt2_score": alt2_score,
             **flags,
         }
+        if admin_idart is not None:
+            claimed_admin.add(admin_idart)
         if prev:
             prev.best_id_articulo = best_id
             for k, v in defaults.items():
@@ -1137,12 +1178,18 @@ def resolver_fabricados_desde_pp_best(base_empresa: str) -> dict[str, Any]:
 
     return {
         "pp_con_stock": len(pp_rows),
-        "pp_requeridos_pedido": len(pp_requeridos & {str(r.get("id_articulo") or "").strip() for r in pp_rows}),
+        "pp_requeridos_pedido": len(
+            pp_requeridos
+            & {str(r.get("id_articulo") or "").strip() for r in pp_rows}
+        ),
         "fabricados_bom": len(pp_rows),
         "created": created,
         "updated": updated,
         "preserved": preserved,
         "skipped_sin_admin": sin_admin,
+        "skipped_sku_ocupado": skipped_sku_ocupado,
+        "reclamados": reclamados,
+        "stale_fab_eliminados": stale_fab_n,
         "total": len(pp_rows),
     }
 
