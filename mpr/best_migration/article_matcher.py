@@ -844,3 +844,144 @@ def match_admin_fabricados_to_best(
             cand_best=cand_best,
         )
     return out
+
+
+def match_best_pp_to_admin_fabricados(
+    *,
+    best_pps: list[dict],
+    admin_fabricados: list[dict],
+    myl_by_mmid: dict[str, dict],
+    admin_idarts_ocupados: set[int] | None = None,
+) -> dict[str, MatchRow]:
+    """
+    Matcher BEST PP (semi/producción con stock) → Admin Fabricado.
+
+    Simétrico a ``match_admin_fabricados_to_best``: primero coincidencia exacta
+    de CODIGO/MYMMID BEST contra ``id_manual`` Admin; luego scoring por
+    modelo/tokens/color/talle/pack suave. Devuelve filas keyed por ``best_id_articulo``.
+    """
+    if not best_pps:
+        return {}
+
+    ocupados = admin_idarts_ocupados or set()
+    out: dict[str, MatchRow] = {}
+    pendientes: list[dict] = []
+
+    def pack_rank(pack: Any) -> int:
+        return 0 if str(pack or "").strip().upper() in ("", "1", "1P") else 1
+
+    for best in best_pps:
+        mmid = str(best.get("id_articulo") or "").strip()
+        if not mmid:
+            continue
+        attrs = myl_by_mmid.get(mmid) or {}
+        codigo = str(best.get("codigo") or attrs.get("CODIGO") or "").strip()
+        codigos_best = (
+            mmid.upper(),
+            codigo.upper(),
+            str(attrs.get("CODIGO") or "").strip().upper(),
+        )
+        exactos: list[tuple[int, dict]] = []
+        for admin in admin_fabricados:
+            id_manual = (admin.get("id_manual") or "").strip().upper()
+            if id_manual and any(id_manual == c for c in codigos_best if c):
+                exactos.append((pack_rank(attrs.get("PACK")), admin))
+        if exactos:
+            _, admin = sorted(
+                exactos, key=lambda item: (item[0], int(item[1]["IDArt"]))
+            )[0]
+            out[mmid] = _match_row_fabricado_desde_best(
+                admin,
+                best=best,
+                attrs=attrs,
+                score=100,
+                razon="A_exact_codigo_best_id_manual",
+                status=STATUS_INFERIDO_ALTO,
+                candidatos_n=len(exactos),
+                cand_best=[],
+            )
+            continue
+        pendientes.append(best)
+
+    if not pendientes:
+        return out
+
+    for best in pendientes:
+        mmid = str(best.get("id_articulo") or "").strip()
+        if not mmid:
+            continue
+        attrs = myl_by_mmid.get(mmid) or {}
+        scored: list[tuple[int, str, dict]] = []
+        for admin in admin_fabricados:
+            aid = int(admin["IDArt"])
+            sc, rs = _score_admin_fabricado_a_best(admin, best, attrs)
+            if aid in ocupados:
+                sc -= 3
+                rs = list(rs) + ["ocupado_ext"]
+            scored.append((sc, "+".join(rs), admin))
+
+        scored.sort(
+            key=lambda x: (
+                -x[0],
+                1 if int(x[2]["IDArt"]) in ocupados else 0,
+                int(x[2]["IDArt"]),
+            )
+        )
+        aceptados = [s for s in scored if s[0] >= 40]
+
+        if not aceptados:
+            out[mmid] = MatchRow(
+                best_id_articulo=mmid,
+                best_codigo=str(best.get("codigo") or attrs.get("CODIGO") or ""),
+                best_articulo=str(best.get("articulo") or ""),
+                best_marca=str(best.get("marca") or attrs.get("MARCADS") or ""),
+                status=STATUS_SIN_CANDIDATO,
+            )
+            continue
+
+        top_score, top_reason, top_admin = aceptados[0]
+        amb = False
+        if len(aceptados) > 1:
+            top_nom = norm(top_admin.get("NombreArticulo"))
+            for sc, _, a in aceptados[1:5]:
+                if sc >= top_score - 5 and sc >= 55:
+                    if norm(a.get("NombreArticulo")) != top_nom:
+                        amb = True
+                        break
+
+        status = _status_inferencia_fabricado(top_score, amb)
+        if status == STATUS_SIN_CANDIDATO:
+            out[mmid] = MatchRow(
+                best_id_articulo=mmid,
+                best_codigo=str(best.get("codigo") or attrs.get("CODIGO") or ""),
+                best_articulo=str(best.get("articulo") or ""),
+                best_marca=str(best.get("marca") or attrs.get("MARCADS") or ""),
+                status=STATUS_SIN_CANDIDATO,
+                score=top_score,
+                razon=top_reason,
+            )
+            continue
+
+        cand_admin: list[dict] = []
+        for sc, rs, a in aceptados[:10]:
+            cand_admin.append(
+                {
+                    "id": int(a["IDArt"]),
+                    "articulo": a.get("NombreArticulo") or "",
+                    "id_manual": (a.get("id_manual") or "").strip(),
+                    "score": sc,
+                    "razon": rs,
+                }
+            )
+
+        out[mmid] = _match_row_fabricado_desde_best(
+            top_admin,
+            best=best,
+            attrs=attrs,
+            score=top_score,
+            razon=top_reason + ("+ambiguo" if amb else ""),
+            status=status,
+            candidatos_n=len(aceptados),
+            cand_best=cand_admin,
+        )
+    return out
