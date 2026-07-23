@@ -15369,6 +15369,145 @@ def listar_tablero_por_articulo(
     return filas[:limit]
 
 
+def _tablero_pack_tiene_receta(
+    abm_map: Dict[int, int],
+    bom_map: Dict[int, Dict[str, Any]],
+    pack_id: int,
+) -> bool:
+    """True si el pack tiene id_en_abm y al menos un componente en en_abm_formula."""
+    id_abm = abm_map.get(pack_id)
+    if not id_abm:
+        return False
+    bom = bom_map.get(id_abm) or {}
+    return bool(bom.get("componentes"))
+
+
+def _tablero_pack_pedidos_revision(
+    base_empresa: str,
+    id_articulos: List[int],
+    *,
+    limit_por_articulo: int = 30,
+) -> Dict[int, List[Dict[str, Any]]]:
+    """
+    PED vivos por pack (misma fuente que la demanda del tablero) para tooltip de revisión.
+
+    Shape compatible con el tooltip de ventana-pack: nro_pedido, estado_pedido_opt,
+    nombre_cliente, cantidad, fecha (dd/MM/yyyy).
+    """
+    ids = sorted({a for a in (to_int_or_none(x) for x in id_articulos) if a is not None})
+    if not (base_empresa or "").strip() or not ids:
+        return {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            tbl_stockp = _nombre_tabla(cursor, "stockp")
+            tbl_cp = _nombre_tabla(cursor, "comp_ped")
+            tbl_cli = _nombre_tabla(cursor, "cliente")
+            if not tbl_stockp or not tbl_cp:
+                return {}
+            ph = ",".join(["%s"] * len(ids))
+            join_cli = (
+                f"LEFT JOIN {tbl_cli} cli ON cli.codigo = cp.codigo" if tbl_cli else ""
+            )
+            col_cli = (
+                "COALESCE(cli.nombre_cliente, '') AS nombre_cliente"
+                if tbl_cli
+                else "'' AS nombre_cliente"
+            )
+            col_estado = "'' AS estado_pedido_opt"
+            if columna_existe(cursor, tbl_cp, "estado_pedido_opt"):
+                col_estado = "COALESCE(cp.estado_pedido_opt, '') AS estado_pedido_opt"
+            col_fecha = "cp.Fecha AS fecha"
+            if columna_existe(cursor, tbl_cp, "FechaEntrega"):
+                col_fecha = "COALESCE(cp.FechaEntrega, cp.Fecha) AS fecha"
+            qty_expr = "COALESCE(sp.cantidad, sp.cantidad_pendiente, sp.Cantidad, 0)"
+            sql = f"""
+                SELECT sp.IDArt AS id_articulo,
+                       cp.CodigoMovimiento AS codigo_movimiento,
+                       COALESCE(cp.NroComprobante, cp.NroCompBusq, '') AS nro_pedido,
+                       {col_estado},
+                       {col_cli},
+                       {col_fecha},
+                       {qty_expr} AS cantidad
+                FROM {tbl_stockp} sp
+                INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
+                {join_cli}
+                WHERE sp.IDArt IN ({ph})
+                  AND COALESCE(cp.Anulado, 'No') = 'No'
+                  AND COALESCE(cp.TipoComprobante, '') = 'PED'
+                  AND ({qty_expr}) > 0
+            """
+            params: List[Any] = list(ids)
+            if columna_existe(cursor, tbl_cp, "estado_pedido_opt"):
+                sql += " AND COALESCE(cp.estado_pedido_opt, '') IN ('Pendiente', 'Parcial')"
+            sql += " ORDER BY sp.IDArt, fecha ASC, cp.CodigoMovimiento ASC"
+            try:
+                cursor.execute(sql, params)
+                rows = list(cursor.fetchall() or [])
+            except Exception as col_err:
+                if "1054" not in str(col_err):
+                    raise
+                # Fallback mínimo sin cliente / estado / FechaEntrega.
+                cursor.execute(
+                    f"""
+                    SELECT sp.IDArt AS id_articulo,
+                           cp.CodigoMovimiento AS codigo_movimiento,
+                           COALESCE(cp.NroComprobante, cp.NroCompBusq, '') AS nro_pedido,
+                           '' AS estado_pedido_opt,
+                           '' AS nombre_cliente,
+                           cp.Fecha AS fecha,
+                           COALESCE(sp.cantidad, sp.cantidad_pendiente, 0) AS cantidad
+                    FROM {tbl_stockp} sp
+                    INNER JOIN {tbl_cp} cp ON cp.CodigoMovimiento = sp.CodigoMovimiento
+                    WHERE sp.IDArt IN ({ph})
+                      AND COALESCE(cp.Anulado, 'No') = 'No'
+                      AND COALESCE(cp.TipoComprobante, '') = 'PED'
+                    ORDER BY sp.IDArt, cp.Fecha ASC, cp.CodigoMovimiento ASC
+                    """,
+                    params,
+                )
+                rows = list(cursor.fetchall() or [])
+
+            out: Dict[int, List[Dict[str, Any]]] = {aid: [] for aid in ids}
+            vistos: Dict[int, Set[str]] = {aid: set() for aid in ids}
+            for r in rows:
+                aid = to_int_or_none(r.get("id_articulo"))
+                if aid is None or aid not in out:
+                    continue
+                if len(out[aid]) >= limit_por_articulo:
+                    continue
+                cod = to_int_or_none(r.get("codigo_movimiento"))
+                clave = str(cod) if cod is not None else (
+                    "nro:" + str_or_default(r.get("nro_pedido"), "-")
+                )
+                if clave in vistos[aid]:
+                    continue
+                vistos[aid].add(clave)
+                fecha_ui = _formatear_fecha_entrega_ui(r.get("fecha")) or "—"
+                estado = str_or_default(r.get("estado_pedido_opt"), "Pendiente")
+                if not estado or estado == "-":
+                    estado = "Pendiente"
+                try:
+                    cant = int(round(float(r.get("cantidad") or 0)))
+                except (TypeError, ValueError):
+                    cant = 0
+                out[aid].append({
+                    "nro_pedido": str_or_default(r.get("nro_pedido"), "-"),
+                    "estado_pedido_opt": estado,
+                    "nombre_cliente": str_or_default(r.get("nombre_cliente"), "-"),
+                    "fecha": fecha_ui,
+                    "cantidad": cant,
+                })
+            return out
+    except Exception as e:
+        logger.warning(
+            "Error en _tablero_pack_pedidos_revision en %s: %s",
+            base_empresa,
+            e,
+            exc_info=True,
+        )
+        return {}
+
+
 def listar_tablero_pack(
     base_empresa: str,
     *,
@@ -15396,6 +15535,7 @@ def listar_tablero_pack(
     * ``terminado``/``total`` = stock terminado del pack
     * ``enviado`` (Fabricando) = 0: el envío a producción es por componente (modo Par),
       no aplica a nivel pack.
+    * ``sin_receta`` / ``pedidos_resumen``: aviso UI (no bloquea envío; el envío es en Par).
 
     ``solo_pendiente`` (legacy) se interpreta como ``solo_urgente`` si se pasa explícito.
     """
@@ -15425,6 +15565,23 @@ def listar_tablero_pack(
 
     desc_map = _fetch_descripciones_articulo(base_empresa, pack_ids)
 
+    # Aviso UI: receta = id_en_abm + componentes (no explota demanda).
+    abm_map = bulk_id_en_abm(
+        base_empresa, pack_ids, requiere_ensamblado_si=False
+    )
+    id_abms = sorted({v for v in abm_map.values() if v})
+    bom_map = bulk_bom_detalle(base_empresa, id_abms) if id_abms else {}
+    sin_receta_ids = [
+        aid
+        for aid in pack_ids
+        if not _tablero_pack_tiene_receta(abm_map, bom_map, aid)
+    ]
+    pedidos_map = (
+        _tablero_pack_pedidos_revision(base_empresa, sin_receta_ids)
+        if sin_receta_ids
+        else {}
+    )
+
     filas: List[Dict[str, Any]] = []
     for fp in filas_pack:
         pack_id = to_int_or_none(fp.get("id_articulo"))
@@ -15437,6 +15594,8 @@ def listar_tablero_pack(
         resta_total = float(fp.get("cantidad_a_fabricar") or 0.0)
         demanda = p_ped + reserva
         codigo_manual, descripcion = desc_map.get(pack_id, ("-", "-"))
+        sin_receta = pack_id in sin_receta_ids
+        pedidos_resumen = pedidos_map.get(pack_id) or [] if sin_receta else []
         filas.append({
             "id_articulo": pack_id,
             "codigo_manual": codigo_manual,
@@ -15464,6 +15623,9 @@ def listar_tablero_pack(
             "primera_fecha_entrega_display": _formatear_fecha_entrega_ui(
                 fp.get("primera_fecha_entrega")
             ),
+            "sin_receta": sin_receta,
+            "pedidos_resumen": pedidos_resumen,
+            "pedidos_resumen_json": json.dumps(pedidos_resumen, ensure_ascii=False),
         })
 
     filas.sort(key=lambda r: -float(r.get("resta_urgente") or 0))
