@@ -39,8 +39,20 @@ Es la pantalla principal del día: muestra la demanda (según pedidos), cuánto 
 1. Filtre por fechas de pedido, marcas o **Solo urgentes** si necesita enfocarse.
 2. Elija vista **Pack** (producto terminado) o **Par** (componente). Para enviar a producción use modo **Par**.
 3. Si hace falta, pulse **Actualizar vista** para refrescar la demanda desde los pedidos.
-4. Complete **Enviar docenas** o **Enviar pares** en las filas que correspondan y pulse **Enviar a producción**. Confirme el envío.
-5. Desde el encabezado puede ir a Parte de producción, Control de calidad o Armado.
+4. En modo **Par**, complete **Enviar docenas** o **Enviar pares** en las filas que correspondan y pulse **Enviar a producción**. Confirme el envío.
+5. En modo **Pack** no hay envío: use el botón **Ver en modo Par para enviar**.
+6. Desde el encabezado puede ir a Parte de producción, Control de calidad o Armado.
+
+### Modo Pack y packs sin receta
+
+En **Pack** cada fila es un **artículo terminado** (demanda del pedido, sin desglosar componentes).
+
+Si el pack **no tiene receta** (lista de materiales / BOM) en AdministraNET:
+
+- La fila se destaca en **ámbar** con el aviso **Sin receta**.
+- Puede abrir el ícono de documento junto al aviso para ver los **pedidos PED** asociados (número, estado, fecha de entrega, cliente y cantidad) y revisar el caso.
+- Ese aviso es **recomendado**: no bloquea el tablero. En modo **Par** ese pack **no genera** componentes para enviar; hay que cargar o corregir la receta del artículo antes de poder producirlo por el flujo normal.
+- Al **generar una OPT** desde Orden de producción / ventana pack, el sistema **sí bloquea** packs sin receta hasta que tengan BOM.
 
 ### Avisos frecuentes
 
@@ -48,7 +60,7 @@ Es la pantalla principal del día: muestra la demanda (según pedidos), cuánto 
 - «Sin artículos/packs con demanda…» o «Sin resta urgente…»: no hay filas con el filtro actual; amplíe fechas o quite filtros.
 - «Ningún artículo coincide con la búsqueda.»
 - Tras un envío correcto: mensaje de componentes enviados a producción.
-
+- Badge **Sin receta** (modo Pack): el terminado no tiene lista de materiales; revise pedidos en el tooltip y complete la receta del artículo.
 ---
 
 ## 4. Parte de producción
@@ -248,6 +260,7 @@ Sin turno del día, el operario no podrá cargar su parte.
 ## 10. Problemas frecuentes
 
 - **No veo demanda en el tablero:** revise filtros de fecha y marcas; pulse Actualizar vista.
+- **Veo un pack en ámbar «Sin receta»:** el terminado no tiene lista de materiales. Use el ícono de pedidos para ver qué PED lo piden; complete la BOM del artículo. En Par no podrá enviar componentes de ese pack hasta tener receta.
 - **No puedo guardar el parte:** no hay cupo en Fabricando o faltan operarios en el turno.
 - **El operario no puede cargar:** falta vínculo usuario–operario, turno del día, línea o artículos en la máquina.
 - **No hay filas en Control de calidad:** no hay pendiente en Producción para esa fecha/turno (falta parte).
@@ -257,4 +270,34 @@ Sin turno del día, el operario no podrá cargar su parte.
 
 ---
 
-*Manual de usuario – Producción (MPR). Synap. Actualizado 20/07/2026.*
+## 11. Migración BEST (cutover)
+
+**Menú:** Producción → Migración BEST.
+
+Herramienta de **migración desde BEST** hacia AdministraNET (artículos, clientes, depósitos, stock, pedidos). Úsela en el cutover con el equipo de implementación; no forma parte del día a día de planta.
+
+### Artículos terminados vs fabricados
+
+| Dominio | Qué mapea | ¿Bloquea pedidos? |
+|---------|-----------|-------------------|
+| **Artículos terminados** | SKU BEST de pedido → artículo Admin **Terminado** | Sí (gate de pedidos) |
+| **Artículos fabricados** | **PP BEST con stock** (depósitos 4000/4002) → Admin **Fabricado** | No |
+
+### Artículos fabricados (PP BEST → Admin)
+
+**Ruta:** Migración BEST → **Artículos fabricados**.
+
+1. Pulse **Resolver fabricados** para cargar los PP con stock y sugerir el Fabricado Admin.
+2. Hay dos olas:
+   - **Necesario pedido** (ola 1): PP requeridos por receta de pedidos abiertos.
+   - **Stock** (ola 2): resto con stock, sin demanda de pedido.
+3. Revise sugerencias (o use **Aceptar inferidos altos** / asigne a mano con el buscador).
+4. Valide o descarte cada fila. Los PP que ya estén bien mapeados como **Terminado** en el dominio de terminados **no aparecen** aquí (es correcto).
+
+### Pedidos sembrados desde BEST
+
+Los pedidos migrados (comprobantes con origen cutover BEST) se abren desde el hub de **Ventas → Pedidos** en **solo consulta** (no se editan como un pedido normal). Ver el manual de Ventas, sección Pedidos.
+
+---
+
+*Manual de usuario – Producción (MPR). Synap. Actualizado 23/07/2026.*
