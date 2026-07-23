@@ -51,6 +51,10 @@ urlpatterns = [
         views.legacy_mysql_schema_tool,
         name='legacy_mysql_schema',
     ),
+    path('backups/', views.backup_list_view, name='backup_list'),
+    path('backups/lanzar/', views.backup_launch_view, name='backup_launch'),
+    path('backups/api/jobs/<uuid:job_id>/', views.backup_job_api_view, name='backup_job_api'),
+    path('backups/<uuid:job_id>/', views.backup_detail_view, name='backup_detail'),
     path('permisos-sistema/puesto/<int:id_puesto>/', views.editar_permisos_puesto_view, name='editar_permisos_puesto'),
 
     # Asignación de permisos por puesto (solo usuario cod_usuario supervisor)

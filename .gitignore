@@ -93,6 +93,14 @@ media_bak/
 *.backup
 *.bak
 *_backup.py
+# Excepciones: módulo Backup/DR Synap (no confundir con dumps locales)
+!core/backup/
+!core/backup/**
+!core/views/views_backup.py
+!core/templates/core/backups/
+!core/templates/core/backups/**
+!core/backup/services/mysql_backup.py
+!core/backup/services/postgres_backup.py
 
 # Logs
 logs/

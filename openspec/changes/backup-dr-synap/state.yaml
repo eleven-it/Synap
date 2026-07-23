@@ -1,0 +1,27 @@
+change: backup-dr-synap
+status: tasks-complete
+created: 2026-07-23
+updated: 2026-07-23
+phase: apply-complete
+artifact_store: openspec
+artifacts:
+  exploration: skipped
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply-progress: complete
+  verify: pending
+apply:
+  mode: strict-tdd
+  completed_tasks:
+    - "1.1-8.3"
+  tests_passing: true
+verify:
+  date: null
+  mode: null
+  result: null
+  report: null
+next_recommended:
+  - sdd-verify
+notes: "Implementación apply 23/07/2026: core/backup, UI /core/backups/, SFTP paramiko, incremental binlog+WAL, docs BACKUP_DR_SYNAP.md."

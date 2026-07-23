@@ -429,6 +429,13 @@ APPS_MENU = [
                         "icon": "event",
                         "permission": "configuracion.sistema",
                         "menu_item_id": "settings_sc_hooks",
+                    },
+                    {
+                        "label": _("Backups y DR"),
+                        "url": "core:backup_list",
+                        "icon": "backup",
+                        "permission": "administrar.backup",
+                        "menu_item_id": "settings_sc_backups",
                     }
                 ]
             }
