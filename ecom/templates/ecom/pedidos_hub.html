@@ -28,7 +28,7 @@
                    type="search"
                    x-model.debounce.200ms="busqueda"
                    @input="listaPage = 1; reiniciarKanbanVisible()"
-                   placeholder="Buscar por PED, cliente o sucursal…"
+                   placeholder="Buscar por PED, cliente, sucursal o vendedor…"
                    autocomplete="off"
                    class="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-1.5 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
             <button type="button"
@@ -328,10 +328,12 @@
       <table class="min-w-full text-left text-sm">
         <thead class="sticky top-0 bg-slate-100 text-xs uppercase text-slate-600 dark:bg-slate-900 dark:text-slate-400">
           <tr>
-            <th class="px-3 py-2">Estado</th>
+            <th class="px-3 py-2">Pedido</th>
             <th class="px-3 py-2">Documento</th>
+            <th class="px-3 py-2">Cliente</th>
             <th class="px-3 py-2">Sucursal</th>
-            <th class="px-3 py-2">Detalle</th>
+            <th class="px-3 py-2">Vendedor</th>
+            <th class="px-3 py-2 text-right">Total</th>
             <th class="px-3 py-2">Fecha</th>
             <th class="px-3 py-2">Acciones</th>
           </tr>
@@ -349,15 +351,20 @@
                       class="ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
                       :class="badgeLoteClase(it)" x-text="badgeLoteTexto(it)"></span>
               </td>
-              <td class="px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400" x-text="it.sucursal || '—'"></td>
-              <td class="px-3 py-2 text-slate-600 dark:text-slate-300">
-                <span x-text="it.subtitulo"></span>
+              <td class="px-3 py-2 text-slate-700 dark:text-slate-200">
+                <span x-text="it.cliente || (it.meta && it.meta.nombre_cliente) || '—'"></span>
                 <div x-show="it.tipo==='lote_masivo' && rollupChips(it).length" class="mt-1 flex flex-wrap gap-1">
                   <template x-for="chip in rollupChips(it)" :key="chip.key">
                     <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold" :class="chip.clase" x-text="chip.label"></span>
                   </template>
                 </div>
               </td>
+              <td class="px-3 py-2 tabular-nums text-xs font-medium text-slate-600 dark:text-slate-400"
+                  x-text="it.sucursal_nro || '—'"></td>
+              <td class="px-3 py-2 text-xs text-slate-600 dark:text-slate-300"
+                  x-text="it.vendedor || '—'"></td>
+              <td class="px-3 py-2 text-right tabular-nums font-medium text-slate-800 dark:text-slate-100"
+                  x-text="it.total_fmt || '—'"></td>
               <td class="px-3 py-2 tabular-nums text-slate-500" x-text="it.fecha"></td>
               <td class="px-3 py-2">
                 <button x-show="it.tipo==='masivo' && it.columna==='anulado'"
@@ -372,7 +379,7 @@
             </tr>
           </template>
           <tr x-show="!itemsListaFiltrados().length">
-            <td colspan="6" class="px-3 py-10 text-center text-slate-500"
+            <td colspan="8" class="px-3 py-10 text-center text-slate-500"
                 x-text="busqueda.trim() ? 'Ningún pedido coincide con la búsqueda.' : 'No hay pedidos para mostrar.'"></td>
           </tr>
         </tbody>
@@ -560,12 +567,17 @@ function pedidosHubApp() {
       const hay = [
         it.titulo,
         it.subtitulo,
+        it.cliente,
         it.sucursal,
+        it.sucursal_nro,
+        it.vendedor,
+        it.total_fmt,
         it.fecha,
         it.id_ref,
         meta.nombre_cliente,
         meta.codigo_movimiento,
         meta.estado,
+        meta.vendedor,
       ].join(' ').toLowerCase();
       return hay.includes(q);
     },

@@ -11,6 +11,7 @@ from ecom.services.pedidos_hub_pipeline import (
     _columna_lote_desde_contexto,
     _columna_ped_mysql,
     _etiqueta_sucursal,
+    _nro_sucursal,
     _mapa_reverso_lotes,
     _masivos_anulados,
     _pedidos_mysql,
@@ -75,6 +76,9 @@ class TestUrlPedidoMasivoModoSimple(TestCase):
         ), patch(
             "ecom.services.pedidos_hub_pipeline.mysql_cursor",
             side_effect=_fake_cursor,
+        ), patch(
+            "ecom.services.pedidos_hub_pipeline._nombres_viajantes",
+            return_value={},
         ):
             items = _pedidos_mysql("emp_hub", {"todos_clientes": "Si"})
         self.assertEqual(len(items), 1)
@@ -314,11 +318,18 @@ class TestEtiquetaSucursal(TestCase):
     def test_fallback_id(self):
         self.assertEqual(_etiqueta_sucursal("", "", 42), "Sucursal #42")
 
+    def test_nro_sucursal_solo_numero(self):
+        self.assertEqual(_nro_sucursal("1", 99), "1")
+        self.assertEqual(_nro_sucursal("500", 77), "500")
+        self.assertEqual(_nro_sucursal("", 42), "42")
+        self.assertEqual(_nro_sucursal("-", None), "")
+
 
 class TestPedidosMysql(TestCase):
+    @patch("ecom.services.pedidos_hub_pipeline._nombres_viajantes", return_value={8: "Juan Pérez"})
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
-    def test_incluye_sucursal_e_importe_venta(self, mock_cursor_ctx, _apr):
+    def test_incluye_sucursal_e_importe_venta(self, mock_cursor_ctx, _apr, _viaj):
         cursor = MagicMock()
         cursor.fetchall.return_value = [
             {
@@ -335,6 +346,7 @@ class TestPedidosMysql(TestCase):
                 "id_cliente_domicilio": 77,
                 "calle_domicilio": "San Martín",
                 "nro_domicilio": "500",
+                "CodViajante": 8,
             }
         ]
 
@@ -348,6 +360,10 @@ class TestPedidosMysql(TestCase):
         self.assertEqual(len(items), 1)
         tarjeta = items[0]
         self.assertEqual(tarjeta["sucursal"], "San Martín 500")
+        self.assertEqual(tarjeta["sucursal_nro"], "500")
+        self.assertEqual(tarjeta["cliente"], "Distribuidora Norte")
+        self.assertEqual(tarjeta["vendedor"], "Juan Pérez")
+        self.assertEqual(tarjeta["total_fmt"], "$1,500.50")
         self.assertIn("Distribuidora Norte", tarjeta["subtitulo"])
         self.assertIn("1,500.50", tarjeta["subtitulo"])
         self.assertEqual(tarjeta["meta"]["id_cliente_domicilio"], 77)

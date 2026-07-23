@@ -43,6 +43,10 @@ MPR_ALIASES: dict[str, str] = {
     "planificacion-turnos": "8.8 Planificación de turnos",
     "resumen": "9. Resumen rápido",
     "mensajes-mpr": "10. Problemas frecuentes",
+    "problemas-frecuentes": "10. Problemas frecuentes",
+    "migracion-best": "11. Migración BEST (cutover)",
+    "articulos-fabricados": "Artículos fabricados (PP BEST → Admin)",
+    "packs-sin-receta": "Modo Pack y packs sin receta",
 }
 
 STOCK_ALIASES: dict[str, str] = {

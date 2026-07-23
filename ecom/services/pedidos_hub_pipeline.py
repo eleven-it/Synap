@@ -97,6 +97,11 @@ def _tarjeta(
     id_ref: str = "",
     badge_error: bool = False,
     sucursal: str = "",
+    cliente: str = "",
+    sucursal_nro: str = "",
+    vendedor: str = "",
+    total: Optional[float] = None,
+    total_fmt: str = "",
     meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     return {
@@ -109,6 +114,11 @@ def _tarjeta(
         "id_ref": id_ref,
         "badge_error": badge_error,
         "sucursal": sucursal,
+        "cliente": cliente,
+        "sucursal_nro": sucursal_nro,
+        "vendedor": vendedor,
+        "total": total,
+        "total_fmt": total_fmt,
         "meta": meta or {},
     }
 
@@ -201,6 +211,47 @@ def _etiqueta_sucursal(calle: str, nro: str, id_dom: Optional[int]) -> str:
     return f"Sucursal #{idd}" if idd is not None else ""
 
 
+def _nro_sucursal(nro: str, id_dom: Optional[int] = None) -> str:
+    """Solo el número de sucursal (NroCalle) para la columna Lista del hub."""
+    nro = (nro or "").strip()
+    if nro and nro != "-":
+        return nro
+    idd = to_int_or_none(id_dom)
+    return str(idd) if idd is not None else ""
+
+
+def _formato_total_pedido(total: Optional[float]) -> str:
+    try:
+        val = float(total or 0)
+    except (TypeError, ValueError):
+        val = 0.0
+    return f"${val:,.2f}"
+
+
+def _nombres_viajantes(base_empresa: str, ids: List[int]) -> Dict[int, str]:
+    """Resuelve nombres de vendedor (viajantes) en un solo query batch."""
+    unicos = sorted({i for i in (to_int_or_none(x) for x in ids) if i is not None})
+    if not base_empresa or not unicos:
+        return {}
+    placeholders = ",".join(["%s"] * len(unicos))
+    sql = f"""
+        SELECT CodViajante, COALESCE(Nombre, '') AS nombre
+        FROM viajantes
+        WHERE CodViajante IN ({placeholders})
+    """
+    out: Dict[int, str] = {}
+    try:
+        with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
+            cursor.execute(sql, unicos)
+            for row in cursor.fetchall() or []:
+                cod = to_int_or_none(row.get("CodViajante"))
+                if cod is not None:
+                    out[cod] = (row.get("nombre") or "").strip()
+    except Exception as e:
+        logger.warning("_nombres_viajantes: %s", e)
+    return out
+
+
 def _borradores_carrito_legacy(
     base_empresa: str,
     id_usuario: int,
@@ -233,6 +284,7 @@ def _borradores_carrito_legacy(
                 fecha=fecha,
                 url="",
                 id_ref=f"cart-legacy-{c.pk}",
+                cliente=nombre,
                 meta={
                     "cart_id": c.pk,
                     "id_cliente": c.idcliente,
@@ -311,6 +363,7 @@ def _borradores_masivo(
                 url=url,
                 id_ref=f"masivo-{d.pk}",
                 badge_error=err,
+                cliente=nombre,
                 meta={
                     "draft_id": d.pk,
                     "id_cliente": d.id_cliente,
@@ -354,6 +407,7 @@ def _masivos_anulados(
                 fecha=fecha,
                 url=url,
                 id_ref=f"masivo-anulado-{d.pk}",
+                cliente=nombre,
                 meta={
                     "draft_id": d.pk,
                     "id_cliente": d.id_cliente,
@@ -701,6 +755,7 @@ def _lotes_masivos_confirmados(
                 fecha=fecha,
                 url=url_pedido_masivo_readonly(draft.pk),
                 id_ref=f"lote-{draft.pk}",
+                cliente=nombre,
                 meta={
                     "draft_id": draft.pk,
                     "id_cliente": draft.id_cliente,
@@ -802,96 +857,116 @@ def _pedidos_mysql(
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(sql, params)
-            for row in cursor.fetchall() or []:
-                col = _columna_ped_mysql(
-                    str(row.get("Anulado") or ""),
-                    str(row.get("autorizacion") or ""),
-                    str(row.get("Estado") or ""),
-                    estado_aprobacion_comercial=str(
-                        row.get("estado_aprobacion_comercial") or "-"
+            rows = list(cursor.fetchall() or [])
+        cods_viajante = [
+            to_int_or_none(r.get("CodViajante")) for r in rows
+        ]
+        nombres_viajante = _nombres_viajantes(base_empresa, [c for c in cods_viajante if c])
+        for row in rows:
+            col = _columna_ped_mysql(
+                str(row.get("Anulado") or ""),
+                str(row.get("autorizacion") or ""),
+                str(row.get("Estado") or ""),
+                estado_aprobacion_comercial=str(
+                    row.get("estado_aprobacion_comercial") or "-"
+                ),
+                aprobacion_activa=aprobacion_on,
+            )
+            cod = int(row["CodigoMovimiento"])
+            nro = str(row.get("NroComprobante") or cod)
+            id_cliente = to_int_or_none(row.get("id_cliente"))
+            nombre_cliente = (row.get("nombre_cliente") or "").strip()
+            cliente = _etiqueta_cliente(nombre_cliente, id_cliente)
+            importe_venta = row.get("ImporteVenta")
+            if importe_venta is not None and float(importe_venta or 0) > 0:
+                total = float(importe_venta)
+            else:
+                total = float(row.get("total_calc") or 0)
+            id_dom = to_int_or_none(row.get("id_cliente_domicilio"))
+            nro_dom = str(row.get("nro_domicilio") or "")
+            sucursal = _etiqueta_sucursal(
+                str(row.get("calle_domicilio") or ""),
+                nro_dom,
+                id_dom,
+            )
+            sucursal_nro = _nro_sucursal(nro_dom, id_dom)
+            cod_viajante = to_int_or_none(row.get("CodViajante"))
+            vendedor = (
+                nombres_viajante.get(cod_viajante, "") if cod_viajante is not None else ""
+            )
+            ped_aprob = {
+                "CodigoMovimiento": cod,
+                "CodViajante": cod_viajante,
+                "estado_aprobacion_comercial": row.get("estado_aprobacion_comercial"),
+            }
+            puede_aprobar = (
+                aprobacion_on
+                and col == "por_autorizar"
+                and puede_aprobar_pedido(base_empresa, sess_user, ped_aprob)
+            )
+            est_com = str(row.get("estado_aprobacion_comercial") or "-").strip().lower()
+            meta: Dict[str, Any] = {
+                "codigo_movimiento": cod,
+                "estado": row.get("Estado"),
+                "autorizacion": row.get("autorizacion"),
+                "estado_aprobacion_comercial": row.get("estado_aprobacion_comercial"),
+                "puede_aprobar": puede_aprobar,
+                "aprobacion_comercial_activa": aprobacion_on,
+                "id_cliente": id_cliente,
+                "nombre_cliente": nombre_cliente,
+                "id_cliente_domicilio": id_dom,
+                "sucursal": sucursal,
+                "sucursal_nro": sucursal_nro,
+                "cod_viajante": cod_viajante,
+                "vendedor": vendedor,
+                "total": total,
+                "rechazado_comercial": est_com == "rechazado",
+            }
+            draft_lote_id = mapa_lotes.get(cod)
+            if draft_lote_id is not None:
+                ctx_lote = contexto_lotes.get(draft_lote_id) or {}
+                n_total = int(ctx_lote.get("n_total") or 0)
+                idx = int((ctx_lote.get("indice_por_cod") or {}).get(cod) or 0)
+                nombre_lote = _etiqueta_cliente(
+                    str(ctx_lote.get("nombre_cliente") or nombre_cliente or ""),
+                    id_cliente,
+                )
+                meta["lote_draft_id"] = draft_lote_id
+                meta["lote_label"] = f"Lote · {nombre_lote} ({idx}/{n_total})"
+                meta["lote_indice"] = idx
+                meta["lote_total"] = n_total
+                est_lote = str(
+                    ctx_lote.get("estado_aprobacion_lote")
+                    or EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_NEUTRO
+                ).strip().lower()
+                if est_lote == EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_PENDIENTE:
+                    meta["puede_aprobar"] = False
+            es_best = es_ped_migracion_best(
+                str(row.get("NroComprobante") or nro),
+                str(row.get("tipo_pedido") or ""),
+                str(row.get("detalle") or ""),
+            )
+            out.append(
+                _tarjeta(
+                    tipo="ped",
+                    columna=col,
+                    titulo=f"PED {nro}",
+                    subtitulo=f"{cliente} · ${total:,.2f}",
+                    fecha=str(row.get("fecha") or ""),
+                    url=url_pedido_masivo_modo_simple(
+                        cod_mov=cod,
+                        consulta=es_best,
                     ),
-                    aprobacion_activa=aprobacion_on,
+                    id_ref=f"ped-{cod}",
+                    sucursal=sucursal,
+                    cliente=cliente,
+                    sucursal_nro=sucursal_nro,
+                    vendedor=vendedor,
+                    total=total,
+                    total_fmt=_formato_total_pedido(total),
+                    meta=meta,
                 )
-                cod = int(row["CodigoMovimiento"])
-                nro = str(row.get("NroComprobante") or cod)
-                id_cliente = to_int_or_none(row.get("id_cliente"))
-                nombre_cliente = (row.get("nombre_cliente") or "").strip()
-                cliente = _etiqueta_cliente(nombre_cliente, id_cliente)
-                importe_venta = row.get("ImporteVenta")
-                if importe_venta is not None and float(importe_venta or 0) > 0:
-                    total = float(importe_venta)
-                else:
-                    total = float(row.get("total_calc") or 0)
-                id_dom = to_int_or_none(row.get("id_cliente_domicilio"))
-                sucursal = _etiqueta_sucursal(
-                    str(row.get("calle_domicilio") or ""),
-                    str(row.get("nro_domicilio") or ""),
-                    id_dom,
-                )
-                ped_aprob = {
-                    "CodigoMovimiento": cod,
-                    "CodViajante": to_int_or_none(row.get("CodViajante")),
-                    "estado_aprobacion_comercial": row.get("estado_aprobacion_comercial"),
-                }
-                puede_aprobar = (
-                    aprobacion_on
-                    and col == "por_autorizar"
-                    and puede_aprobar_pedido(base_empresa, sess_user, ped_aprob)
-                )
-                est_com = str(row.get("estado_aprobacion_comercial") or "-").strip().lower()
-                meta: Dict[str, Any] = {
-                    "codigo_movimiento": cod,
-                    "estado": row.get("Estado"),
-                    "autorizacion": row.get("autorizacion"),
-                    "estado_aprobacion_comercial": row.get("estado_aprobacion_comercial"),
-                    "puede_aprobar": puede_aprobar,
-                    "aprobacion_comercial_activa": aprobacion_on,
-                    "id_cliente": id_cliente,
-                    "nombre_cliente": nombre_cliente,
-                    "id_cliente_domicilio": id_dom,
-                    "sucursal": sucursal,
-                    "rechazado_comercial": est_com == "rechazado",
-                }
-                draft_lote_id = mapa_lotes.get(cod)
-                if draft_lote_id is not None:
-                    ctx_lote = contexto_lotes.get(draft_lote_id) or {}
-                    n_total = int(ctx_lote.get("n_total") or 0)
-                    idx = int((ctx_lote.get("indice_por_cod") or {}).get(cod) or 0)
-                    nombre_lote = _etiqueta_cliente(
-                        str(ctx_lote.get("nombre_cliente") or nombre_cliente or ""),
-                        id_cliente,
-                    )
-                    meta["lote_draft_id"] = draft_lote_id
-                    meta["lote_label"] = f"Lote · {nombre_lote} ({idx}/{n_total})"
-                    meta["lote_indice"] = idx
-                    meta["lote_total"] = n_total
-                    est_lote = str(
-                        ctx_lote.get("estado_aprobacion_lote")
-                        or EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_NEUTRO
-                    ).strip().lower()
-                    if est_lote == EcomPedidoMasivoDraft.ESTADO_APROBACION_LOTE_PENDIENTE:
-                        meta["puede_aprobar"] = False
-                es_best = es_ped_migracion_best(
-                    str(row.get("NroComprobante") or nro),
-                    str(row.get("tipo_pedido") or ""),
-                    str(row.get("detalle") or ""),
-                )
-                out.append(
-                    _tarjeta(
-                        tipo="ped",
-                        columna=col,
-                        titulo=f"PED {nro}",
-                        subtitulo=f"{cliente} · ${total:,.2f}",
-                        fecha=str(row.get("fecha") or ""),
-                        url=url_pedido_masivo_modo_simple(
-                            cod_mov=cod,
-                            consulta=es_best,
-                        ),
-                        id_ref=f"ped-{cod}",
-                        sucursal=sucursal,
-                        meta=meta,
-                    )
-                )
+            )
     except Exception as e:
         logger.warning("pedidos_hub_pipeline MySQL: %s", e)
     return out
