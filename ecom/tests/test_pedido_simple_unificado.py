@@ -9,6 +9,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
 from ecom.pedido_masivo_views import (
     PedidoMasivoAbrirAPIView,
+    PedidoMasivoAbrirPedidoAPIView,
     PedidoMasivoCeldaAPIView,
 )
 from ecom.permissions import EcomPedidoCapturaPermission, usuario_puede_matriz_multi_columna
@@ -143,6 +144,120 @@ class TestCargarPedidoEnDraftMasivo(TestCase):
         )
         self.assertIsNone(draft)
         self.assertIn("anulado", err.lower())
+
+    @patch("ecom.services.pedido_plantilla_service.leer_contexto_cliente_masivo")
+    @patch("ecom.services.pedido_plantilla_service.detalle_pedido_relay")
+    @patch("ecom.services.pedido_plantilla_service.cabecera_pedido_relay")
+    @patch("ecom.services.pedido_plantilla_service.validar_pedido_como_plantilla")
+    @patch("ecom.services.pedido_plantilla_service._salida_a_packs_matriz")
+    def test_modo_consulta_archiva_draft(
+        self,
+        mock_packs,
+        mock_validar,
+        mock_cab,
+        mock_detalle,
+        mock_ctx,
+    ):
+        mock_validar.return_value = (self._CAB, None)
+        mock_cab.return_value = {
+            **self._CAB,
+            "nro_comprobante": "BEST-9001",
+            "tipo_pedido": "Migracion BEST",
+        }
+        mock_detalle.return_value = self._RENGLONES
+        mock_ctx.return_value = {"descPie": Decimal("0")}
+        mock_packs.return_value = (Decimal("2"), None)
+
+        draft, err, meta = cargar_pedido_en_draft_masivo(
+            "emp_psu",
+            9001,
+            {"todos_clientes": "Si", "id_vendedor_usr": 3},
+            id_usuario=22,
+            idcliente_contexto=500,
+            consulta=True,
+        )
+        self.assertIsNone(err)
+        self.assertIsNotNone(draft)
+        self.assertEqual(draft.estado, EcomPedidoMasivoDraft.ESTADO_ARCHIVADO)
+        self.assertFalse(meta["editable"])
+        self.assertTrue(meta["consulta"])
+
+        draft2, err2, _meta2 = cargar_pedido_en_draft_masivo(
+            "emp_psu",
+            9001,
+            {"todos_clientes": "Si", "id_vendedor_usr": 3},
+            id_usuario=22,
+            idcliente_contexto=500,
+            consulta=True,
+        )
+        self.assertIsNone(err2)
+        self.assertEqual(draft2.pk, draft.pk)
+        self.assertEqual(draft2.estado, EcomPedidoMasivoDraft.ESTADO_ARCHIVADO)
+
+
+class TestAbrirPedidoConsultaAPI(TestCase):
+    _CAB = {
+        "tipo_comprobante": "PED",
+        "anulado": "No",
+        "estado": "Pendiente",
+        "id_cliente": 500,
+        "id_cliente_domicilio": 77,
+        "nro_comprobante": "BEST-123",
+        "tipo_pedido": "Migracion BEST",
+    }
+
+    def setUp(self):
+        self.api = APIRequestFactory()
+        self.user = _PermUser(["ecom.pedidos.crear"])
+
+    def _request(self, body):
+        req = self.api.post(
+            "/ecom/api/mayoristapp/pedido-masivo/abrir-pedido/",
+            body,
+            format="json",
+        )
+        req.session = {
+            "user": {
+                "base_empresa": "emp_psu",
+                "id_usuario": 55,
+                "id_vendedor_usr": 3,
+            }
+        }
+        force_authenticate(req, user=self.user)
+        return req
+
+    @patch("ecom.pedido_masivo_views.cabecera_pedido_relay")
+    @patch("ecom.pedido_masivo_views.cabecera_defaults_json", return_value={})
+    @patch("ecom.pedido_masivo_views._serializar_matriz_ui")
+    @patch("ecom.pedido_masivo_views.cargar_pedido_en_draft_masivo")
+    def test_api_consulta_respuesta_no_editable(
+        self, mock_cargar, mock_serializar, _mock_cabecera, mock_cab_relay
+    ):
+        draft = EcomPedidoMasivoDraft.objects.create(
+            base_empresa="emp_psu",
+            id_usuario=55,
+            id_cliente=500,
+            modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
+            cod_mov_origen=123,
+            estado=EcomPedidoMasivoDraft.ESTADO_ARCHIVADO,
+        )
+        mock_cargar.return_value = (
+            draft,
+            None,
+            {"editable": False, "consulta": True, "advertencias": []},
+        )
+        mock_serializar.return_value = {"draft_id": draft.pk, "sucursales": []}
+        mock_cab_relay.return_value = self._CAB
+
+        resp = PedidoMasivoAbrirPedidoAPIView.as_view()(
+            self._request({"cod_mov": 123, "consulta": True})
+        )
+        self.assertEqual(resp.status_code, 200)
+        mock_cargar.assert_called_once()
+        self.assertTrue(mock_cargar.call_args.kwargs.get("consulta"))
+        self.assertFalse(resp.data["pedido"]["editable"])
+        self.assertFalse(resp.data["pedido"]["puede_anular"])
+        self.assertTrue(resp.data["pedido"]["consulta"])
 
 
 class TestEcomPedidoCapturaPermissionOR(TestCase):

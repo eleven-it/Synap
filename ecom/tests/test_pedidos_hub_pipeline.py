@@ -18,6 +18,7 @@ from ecom.services.pedidos_hub_pipeline import (
     columnas_hub_visibles,
     construir_hub_pedidos,
     eliminar_borrador_masivo_definitivo,
+    es_ped_migracion_best,
     url_pedido_masivo_modo_simple,
     url_pedido_masivo_readonly,
     url_resumen_lote_masivo,
@@ -30,6 +31,12 @@ class TestUrlPedidoMasivoModoSimple(TestCase):
         self.assertIn("modo=simple", url)
         self.assertIn("cod_mov=12345", url)
         self.assertIn("/pedido-masivo-sucursales/", url)
+
+    def test_con_consulta(self):
+        url = url_pedido_masivo_modo_simple(cod_mov=99, consulta=True)
+        self.assertIn("modo=simple", url)
+        self.assertIn("cod_mov=99", url)
+        self.assertIn("consulta=1", url)
 
     def test_con_draft(self):
         url = url_pedido_masivo_modo_simple(draft=99)
@@ -74,6 +81,149 @@ class TestUrlPedidoMasivoModoSimple(TestCase):
         url = items[0]["url"]
         self.assertIn("modo=simple", url)
         self.assertIn("cod_mov=555", url)
+        self.assertNotIn("consulta=1", url)
+
+
+class TestEsPedMigracionBest(TestCase):
+    def test_nro_best(self):
+        self.assertTrue(es_ped_migracion_best("BEST-12345"))
+        self.assertTrue(es_ped_migracion_best("best-99"))
+
+    def test_tipo_pedido(self):
+        self.assertTrue(es_ped_migracion_best(tipo_pedido="Migracion BEST"))
+        self.assertTrue(es_ped_migracion_best(tipo_pedido="  migracion best  "))
+
+    def test_ped_comercial_no_es_best(self):
+        self.assertFalse(es_ped_migracion_best("0001-00000555", "Ecom vendedor"))
+
+    def test_detalle_cutover_best(self):
+        self.assertTrue(
+            es_ped_migracion_best(
+                "0001-00000003",
+                "Sistema",
+                "Cutover BEST orden 5001",
+            )
+        )
+        self.assertTrue(
+            es_ped_migracion_best(detalle="Migrado desde BEST orden 123")
+        )
+
+    def test_detalle_sin_marcador_no_es_best(self):
+        self.assertFalse(
+            es_ped_migracion_best("0001-00000003", "Sistema", "Pedido cliente")
+        )
+
+
+class TestPedMysqlBestConsulta(TestCase):
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
+    def test_ped_best_url_consulta(self, mock_cursor_ctx, _apr):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {
+                "CodigoMovimiento": 777,
+                "NroComprobante": "BEST-777",
+                "tipo_pedido": "Migracion BEST",
+                "detalle": "Cutover BEST orden 777",
+                "fecha": "23/07/2026",
+                "Estado": "Pendiente",
+                "Anulado": "No",
+                "autorizacion": "Autorizado",
+                "id_cliente": 10,
+                "nombre_cliente": "Cliente BEST",
+                "ImporteVenta": Decimal("500"),
+                "total_calc": Decimal("500"),
+                "id_cliente_domicilio": 5,
+                "calle_domicilio": "Calle",
+                "nro_domicilio": "1",
+                "CodViajante": 1,
+                "estado_aprobacion_comercial": "-",
+            }
+        ]
+
+        @contextmanager
+        def _fake_cursor(*_a, **_kw):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _fake_cursor
+
+        items = _pedidos_mysql("emp_hub", {"todos_clientes": "Si"})
+        self.assertEqual(len(items), 1)
+        self.assertIn("consulta=1", items[0]["url"])
+        self.assertIn("cod_mov=777", items[0]["url"])
+
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
+    def test_ped_normal_sin_consulta(self, mock_cursor_ctx, _apr):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {
+                "CodigoMovimiento": 888,
+                "NroComprobante": "0001-00000888",
+                "tipo_pedido": "Ecom vendedor",
+                "detalle": "",
+                "fecha": "23/07/2026",
+                "Estado": "Pendiente",
+                "Anulado": "No",
+                "autorizacion": "Autorizado",
+                "id_cliente": 10,
+                "nombre_cliente": "Cliente X",
+                "ImporteVenta": Decimal("100"),
+                "total_calc": Decimal("100"),
+                "id_cliente_domicilio": 5,
+                "calle_domicilio": "Calle",
+                "nro_domicilio": "1",
+                "CodViajante": 1,
+                "estado_aprobacion_comercial": "-",
+            }
+        ]
+
+        @contextmanager
+        def _fake_cursor(*_a, **_kw):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _fake_cursor
+
+        items = _pedidos_mysql("emp_hub", {"todos_clientes": "Si"})
+        self.assertEqual(len(items), 1)
+        self.assertNotIn("consulta=1", items[0]["url"])
+
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
+    def test_ped_remediado_best_consulta_por_detalle(self, mock_cursor_ctx, _apr):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            {
+                "CodigoMovimiento": 999,
+                "NroComprobante": "0001-00000003",
+                "tipo_pedido": "Sistema",
+                "detalle": "Cutover BEST orden 5001",
+                "fecha": "23/07/2026",
+                "Estado": "Pendiente",
+                "Anulado": "No",
+                "autorizacion": "Autorizado",
+                "id_cliente": 10,
+                "nombre_cliente": "Cliente BEST remediado",
+                "ImporteVenta": Decimal("500"),
+                "total_calc": Decimal("500"),
+                "id_cliente_domicilio": 5,
+                "calle_domicilio": "Calle",
+                "nro_domicilio": "1",
+                "CodViajante": 1,
+                "estado_aprobacion_comercial": "-",
+            }
+        ]
+
+        @contextmanager
+        def _fake_cursor(*_a, **_kw):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _fake_cursor
+
+        items = _pedidos_mysql("emp_hub", {"todos_clientes": "Si"})
+        self.assertEqual(len(items), 1)
+        self.assertIn("consulta=1", items[0]["url"])
+        self.assertIn("cod_mov=999", items[0]["url"])
 
 
 class TestColumnaPed(TestCase):
@@ -382,8 +532,45 @@ class TestPedidosMysqlAlcance(TestCase):
         sql = cursor.execute.call_args[0][0]
         params = cursor.execute.call_args[0][1]
         self.assertIn("CodViajante IN", sql)
-        self.assertEqual(params[:3], [60, 10, 20])
-        self.assertEqual(params[3], 21)
+        self.assertEqual(params[:3], [10, 20, 21])
+        self.assertEqual(params[3], 5000)
+
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial", return_value=[10])
+    @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
+    def test_sin_dias_no_filtra_fecha(self, mock_cursor_ctx, _alcance, _apr):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+
+        @contextmanager
+        def _fake_cursor(*_a, **_kw):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _fake_cursor
+
+        _pedidos_mysql("emp_hub", {"todos_clientes": "Si"}, dias=None)
+        sql = cursor.execute.call_args[0][0]
+        self.assertNotIn("DATE_SUB", sql)
+        self.assertNotIn("cp.Fecha >=", sql)
+
+    @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
+    @patch("ecom.services.pedidos_hub_pipeline.mysql_cursor")
+    def test_con_dias_si_filtra_fecha(self, mock_cursor_ctx, _apr):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+
+        @contextmanager
+        def _fake_cursor(*_a, **_kw):
+            yield cursor
+
+        mock_cursor_ctx.side_effect = _fake_cursor
+
+        _pedidos_mysql("emp_hub", {"todos_clientes": "Si"}, dias=30)
+        sql = cursor.execute.call_args[0][0]
+        params = cursor.execute.call_args[0][1]
+        self.assertIn("DATE_SUB", sql)
+        self.assertIn("cp.Fecha >=", sql)
+        self.assertEqual(params[0], 30)
 
     @patch("ecom.services.pedidos_hub_pipeline.aprobacion_pedidos_activa", return_value=False)
     @patch("ecom.services.pedidos_hub_pipeline.alcance_viajantes_comercial")

@@ -139,6 +139,7 @@ def cargar_pedido_en_draft_masivo(
     idcliente_contexto: Optional[int] = None,
     es_cliente: Optional[bool] = None,
     draft_id: Optional[int] = None,
+    consulta: bool = False,
 ) -> Tuple[Optional[EcomPedidoMasivoDraft], Optional[str], Dict[str, Any]]:
     """
     Valida PED, resuelve domicilio, crea/reutiliza draft modo=simple y copia
@@ -181,7 +182,10 @@ def cargar_pedido_en_draft_masivo(
         return None, "El pedido no tiene domicilio de entrega asociado.", meta
 
     editable = _pedido_origen_editable(cab)
+    if consulta:
+        editable = False
     meta["editable"] = editable
+    meta["consulta"] = consulta
     meta["estado_origen"] = str(cab.get("estado") or "").strip()
     meta["cod_mov_origen"] = cod
     meta["id_domicilio_fijo"] = id_domicilio
@@ -199,6 +203,7 @@ def cargar_pedido_en_draft_masivo(
         modo=EcomPedidoMasivoDraft.MODO_SIMPLE,
         id_domicilio_fijo=id_domicilio,
         cod_mov_origen=cod,
+        consulta=consulta,
     )
     if err_draft or draft is None:
         return None, err_draft or "No se pudo crear el borrador.", meta
@@ -247,18 +252,19 @@ def cargar_pedido_en_draft_masivo(
         draft.id_cliente = id_cliente
         if cv is not None:
             draft.cod_viajante = cv
-        draft.descuento_pie_pct = pie_pct
-        draft.save(
-            update_fields=[
-                "modo",
-                "cod_mov_origen",
-                "id_domicilio_fijo",
-                "id_cliente",
-                "cod_viajante",
-                "descuento_pie_pct",
-                "updated_at",
-            ]
-        )
+        update_fields = [
+            "modo",
+            "cod_mov_origen",
+            "id_domicilio_fijo",
+            "id_cliente",
+            "cod_viajante",
+            "descuento_pie_pct",
+            "updated_at",
+        ]
+        if consulta:
+            draft.estado = EcomPedidoMasivoDraft.ESTADO_ARCHIVADO
+            update_fields.insert(-1, "estado")
+        draft.save(update_fields=update_fields)
 
     meta["advertencias"] = advertencias
     return draft, None, meta

@@ -27,6 +27,7 @@
             <input id="pedidos-hub-busqueda"
                    type="search"
                    x-model.debounce.200ms="busqueda"
+                   @input="listaPage = 1; reiniciarKanbanVisible()"
                    placeholder="Buscar por PED, cliente o sucursal…"
                    autocomplete="off"
                    class="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-1.5 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500">
@@ -115,7 +116,7 @@
         <template x-for="it in itemsMovilFiltrados()" :key="it.id_ref">
           <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-600 dark:bg-slate-800">
             <template x-if="it.tipo==='lote_masivo'">
-              <a :href="urlLoteMasivo(it)" class="block" @click="logClickLote(it, $event)">
+              <a :href="urlLoteMasivo(it)" class="block">
                 <div class="flex items-start justify-between gap-2">
                   <p class="truncate text-sm font-semibold text-slate-900 dark:text-white" x-text="it.titulo"></p>
                   <span class="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
@@ -227,10 +228,10 @@
               <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold tabular-nums text-slate-700 dark:bg-slate-900 dark:text-slate-200" x-text="countColumna(col)"></span>
             </div>
             <div class="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-2">
-              <template x-for="it in itemsColumna(col)" :key="it.id_ref">
+              <template x-for="it in itemsKanbanVisibles(col)" :key="it.id_ref">
                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5 dark:border-slate-600 dark:bg-slate-900/40">
                   <template x-if="it.tipo==='lote_masivo'">
-                    <a :href="urlLoteMasivo(it)" class="block transition hover:border-purple-300 hover:bg-white dark:hover:border-purple-500" @click="logClickLote(it, $event)">
+                    <a :href="urlLoteMasivo(it)" class="block transition hover:border-purple-300 hover:bg-white dark:hover:border-purple-500">
                       <div class="flex items-start justify-between gap-1">
                         <p class="text-sm font-semibold text-slate-900 dark:text-white" x-text="it.titulo"></p>
                         <span class="flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
@@ -310,6 +311,13 @@
               </template>
               <p x-show="!itemsColumna(col).length" class="px-1 py-6 text-center text-xs text-slate-400">Vacío</p>
             </div>
+            <div x-show="kanbanHayMas(col)" class="flex-shrink-0 border-t border-slate-100 p-2 dark:border-slate-700">
+              <button type="button"
+                      @click="mostrarMasKanban(col.id)"
+                      class="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs font-semibold text-purple-700 hover:bg-white dark:border-slate-600 dark:bg-slate-900/40 dark:text-purple-400 dark:hover:bg-slate-800">
+                Mostrar más (<span x-text="kanbanRestantes(col)"></span> restantes)
+              </button>
+            </div>
           </div>
         </template>
       </div>
@@ -329,13 +337,12 @@
           </tr>
         </thead>
         <tbody>
-          <template x-for="it in itemsListaFiltrados()" :key="it.id_ref">
+          <template x-for="it in itemsListaPaginados()" :key="it.id_ref">
             <tr class="border-t border-slate-100 dark:border-slate-700">
               <td class="px-3 py-2 text-xs font-semibold uppercase text-slate-500" x-text="labels[it.columna] || it.columna"></td>
               <td class="px-3 py-2">
                 <a :href="it.tipo==='lote_masivo' ? urlLoteMasivo(it) : it.url"
                    class="font-semibold text-purple-700 hover:underline dark:text-purple-400"
-                   @click="it.tipo==='lote_masivo' && logClickLote(it, $event)"
                    x-text="it.titulo"></a>
                 <span x-show="it.badge_error" class="ml-1 text-[10px] font-bold text-red-600">Error</span>
                 <span x-show="it.tipo==='lote_masivo'"
@@ -366,10 +373,33 @@
           </template>
           <tr x-show="!itemsListaFiltrados().length">
             <td colspan="6" class="px-3 py-10 text-center text-slate-500"
-                x-text="busqueda.trim() ? 'Ningún pedido coincide con la búsqueda.' : 'No hay pedidos en la ventana actual.'"></td>
+                x-text="busqueda.trim() ? 'Ningún pedido coincide con la búsqueda.' : 'No hay pedidos para mostrar.'"></td>
           </tr>
         </tbody>
       </table>
+      <div x-show="itemsListaFiltrados().length > listaPageSize"
+           class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2 dark:border-slate-700">
+        <p class="text-xs text-slate-500 dark:text-slate-400">
+          Página <span x-text="listaPage"></span> de <span x-text="listaTotalPaginas()"></span>
+          (<span x-text="itemsListaFiltrados().length"></span> pedidos)
+        </p>
+        <div class="flex items-center gap-2">
+          <button type="button"
+                  @click="listaPaginaAnterior()"
+                  :disabled="listaPage <= 1"
+                  class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+            <span class="material-icons text-sm" aria-hidden="true">chevron_left</span>
+            Anterior
+          </button>
+          <button type="button"
+                  @click="listaPaginaSiguiente()"
+                  :disabled="listaPage >= listaTotalPaginas()"
+                  class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+            Siguiente
+            <span class="material-icons text-sm" aria-hidden="true">chevron_right</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -495,15 +525,16 @@ function pedidosHubApp() {
     rechazoMotivo: '',
     rechazoProcesando: false,
     _rechazoIt: null,
+    listaPage: 1,
+    listaPageSize: 25,
+    KANBAN_PAGE_SIZE: 15,
+    kanbanVisiblePorColumna: {},
     init() {
       const raw = document.getElementById('pedidos-hub-bootstrap');
       const data = raw ? JSON.parse(raw.textContent) : {};
       this.urls = data.urls || {};
       this.labels = data.labels || {};
       this.aplicarPayload(data.hub || {});
-      // #region agent log
-      fetch('http://127.0.0.1:7901/ingest/bb09dfde-5064-40a1-8f80-fceaaab4c660',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a987c5'},body:JSON.stringify({sessionId:'a987c5',runId:'pre-fix',hypothesisId:'H2',location:'pedidos_hub.html:init',message:'hub init lote urls',data:{lotes:(this.itemsPlanos||[]).filter(i=>i.tipo==='lote_masivo').map(i=>({id_ref:i.id_ref,url:i.url,href:this.urlLoteMasivo(i)})),lote_matriz_tpl:this.urls.lote_matriz_tpl||null,lote_resumen_tpl:this.urls.lote_resumen_tpl||null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       const saved = localStorage.getItem('synap_pedidos_hub_vista');
       if (window.matchMedia('(min-width: 1024px)').matches) {
         if (saved === 'lista' || saved === 'kanban') this.vista = saved;
@@ -521,12 +552,6 @@ function pedidosHubApp() {
         return `/ecom/mayoristapp/pedido-masivo-sucursales/?draft=${id}&readonly=1`;
       }
       return (it && it.url) || '#';
-    },
-    logClickLote(it, ev) {
-      // #region agent log
-      const href = this.urlLoteMasivo(it);
-      fetch('http://127.0.0.1:7901/ingest/bb09dfde-5064-40a1-8f80-fceaaab4c660',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a987c5'},body:JSON.stringify({sessionId:'a987c5',runId:'pre-fix',hypothesisId:'H2',location:'pedidos_hub.html:logClickLote',message:'click tarjeta lote',data:{id_ref:it&&it.id_ref,it_url:it&&it.url,href,targetHref:ev&&ev.currentTarget&&ev.currentTarget.getAttribute('href')},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
     },
     coincideBusqueda(it) {
       const q = (this.busqueda || '').trim().toLowerCase();
@@ -556,6 +581,50 @@ function pedidosHubApp() {
     },
     itemsListaFiltrados() {
       return this.itemsFiltrados();
+    },
+    itemsListaPaginados() {
+      const items = this.itemsListaFiltrados();
+      const start = (this.listaPage - 1) * this.listaPageSize;
+      return items.slice(start, start + this.listaPageSize);
+    },
+    listaTotalPaginas() {
+      const total = this.itemsListaFiltrados().length;
+      return Math.max(1, Math.ceil(total / this.listaPageSize));
+    },
+    listaPaginaAnterior() {
+      if (this.listaPage > 1) this.listaPage -= 1;
+    },
+    listaPaginaSiguiente() {
+      if (this.listaPage < this.listaTotalPaginas()) this.listaPage += 1;
+    },
+    reiniciarKanbanVisible() {
+      const vis = {};
+      for (const col of this.columnas || []) {
+        vis[col.id] = this.KANBAN_PAGE_SIZE;
+      }
+      this.kanbanVisiblePorColumna = vis;
+    },
+    itemsKanbanVisibles(col) {
+      const items = this.itemsColumna(col);
+      const limite = this.kanbanVisiblePorColumna[col.id] ?? this.KANBAN_PAGE_SIZE;
+      return items.slice(0, limite);
+    },
+    kanbanHayMas(col) {
+      const items = this.itemsColumna(col);
+      const limite = this.kanbanVisiblePorColumna[col.id] ?? this.KANBAN_PAGE_SIZE;
+      return items.length > limite;
+    },
+    kanbanRestantes(col) {
+      const items = this.itemsColumna(col);
+      const limite = this.kanbanVisiblePorColumna[col.id] ?? this.KANBAN_PAGE_SIZE;
+      return Math.max(0, items.length - limite);
+    },
+    mostrarMasKanban(colId) {
+      const actual = this.kanbanVisiblePorColumna[colId] ?? this.KANBAN_PAGE_SIZE;
+      this.kanbanVisiblePorColumna = {
+        ...this.kanbanVisiblePorColumna,
+        [colId]: actual + this.KANBAN_PAGE_SIZE,
+      };
     },
     _estadoLote(it) {
       return String((it && it.meta && it.meta.estado_aprobacion_lote) || '').trim().toLowerCase();
@@ -607,6 +676,8 @@ function pedidosHubApp() {
       this.borradoresActivos = hub.borradores_activos || 0;
       this.aprobacionActiva = !!hub.aprobacion_comercial_activa;
       this.labels = hub.labels || this.labels;
+      this.listaPage = 1;
+      this.reiniciarKanbanVisible();
       if (this.columnaMovil !== 'todas'
           && !this.columnas.some((c) => c.id === this.columnaMovil)) {
         this.columnaMovil = 'todas';
@@ -648,7 +719,7 @@ function pedidosHubApp() {
       if (this.cargando || !this.urls.api) return;
       this.cargando = true;
       try {
-        const qs = new URLSearchParams({ vista: this.vista || 'kanban', dias: '60' });
+        const qs = new URLSearchParams({ vista: this.vista || 'kanban' });
         const resp = await fetch(`${this.urls.api}?${qs}`, {
           method: 'GET',
           credentials: 'same-origin',

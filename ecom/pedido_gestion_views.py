@@ -370,38 +370,6 @@ class LoteResumenView(MayoristappWebSessionMixin, TemplateView):
         sess = _session_user(request)
         base = str(sess.get("base_empresa") or "").strip()
         draft_id = to_int_or_none(kwargs.get("draft_id"))
-        # #region agent log
-        try:
-            import json
-            import time
-
-            _payload = {
-                "sessionId": "a987c5",
-                "runId": "pre-fix",
-                "hypothesisId": "H3",
-                "location": "pedido_gestion_views.py:LoteResumenView.dispatch",
-                "message": "hit resumen lote",
-                "data": {
-                    "draft_id": draft_id,
-                    "path": request.path,
-                    "referer": request.META.get("HTTP_REFERER") or "",
-                    "q": request.META.get("QUERY_STRING") or "",
-                },
-                "timestamp": int(time.time() * 1000),
-            }
-            for _p in (
-                "/Users/sebastian/Documents/Administranet/Proyectos/Synap-v1/Synap/.cursor/debug-a987c5.log",
-                "/app/.cursor/debug-a987c5.log",
-            ):
-                try:
-                    with open(_p, "a", encoding="utf-8") as _df:
-                        _df.write(json.dumps(_payload, ensure_ascii=False) + "\n")
-                    break
-                except Exception:
-                    continue
-        except Exception:
-            pass
-        # #endregion
         try:
             if draft_id is None:
                 raise LoteResumenError("Lote no encontrado.", status=404)
@@ -554,65 +522,6 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
         base = str(sess.get("base_empresa") or "").strip()
         vista = (self.request.GET.get("vista") or "kanban").strip().lower()
         hub = construir_hub_pedidos(base, sess, vista=vista)
-        # #region agent log
-        try:
-            import json
-            import time
-
-            _lotes = [
-                {"id_ref": it.get("id_ref"), "url": it.get("url")}
-                for it in (hub.get("items") or [])
-                if it.get("tipo") == "lote_masivo"
-            ]
-            with open(
-                "/Users/sebastian/Documents/Administranet/Proyectos/Synap-v1/Synap/.cursor/debug-a987c5.log",
-                "a",
-                encoding="utf-8",
-            ) as _df:
-                _df.write(
-                    json.dumps(
-                        {
-                            "sessionId": "a987c5",
-                            "runId": "pre-fix",
-                            "hypothesisId": "H1",
-                            "location": "pedido_gestion_views.py:PedidosHubView",
-                            "message": "hub SSR lote urls",
-                            "data": {"lotes": _lotes, "path": self.request.path},
-                            "timestamp": int(time.time() * 1000),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
-        except Exception:
-            try:
-                import json
-                import time
-
-                _lotes = [
-                    {"id_ref": it.get("id_ref"), "url": it.get("url")}
-                    for it in (hub.get("items") or [])
-                    if it.get("tipo") == "lote_masivo"
-                ]
-                with open("/app/.cursor/debug-a987c5.log", "a", encoding="utf-8") as _df:
-                    _df.write(
-                        json.dumps(
-                            {
-                                "sessionId": "a987c5",
-                                "runId": "pre-fix",
-                                "hypothesisId": "H1",
-                                "location": "pedido_gestion_views.py:PedidosHubView",
-                                "message": "hub SSR lote urls",
-                                "data": {"lotes": _lotes, "path": self.request.path},
-                                "timestamp": int(time.time() * 1000),
-                            },
-                            ensure_ascii=False,
-                        )
-                        + "\n"
-                    )
-            except Exception:
-                pass
-        # #endregion
         context.update(
             {
                 "page_title": "Pedidos",
@@ -660,7 +569,7 @@ class PedidosHubAPIView(APIView):
         if not base:
             return _error("Sin base_empresa.", "sin_base_empresa")
         vista = str(request.query_params.get("vista") or "kanban").strip().lower()
-        dias = to_int_or_none(request.query_params.get("dias")) or 60
+        dias = to_int_or_none(request.query_params.get("dias"))
         hub = construir_hub_pedidos(base, sess, vista=vista, dias=dias)
         return Response({"ok": True, **hub})
 

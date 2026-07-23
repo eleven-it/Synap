@@ -47,6 +47,7 @@ Fechas UI: **dd/MM/yyyy**.
 - Etapa terminal **Entregado / Cerrado** separada del trabajo en curso.
 - Búsqueda rápida por identificadores operativos (PED, cliente, sucursal) con contador de resultados.
 - Ventana temporal acotada en pipeline (p. ej. 60 días) para no saturar el Kanban.
++ Por defecto **sin ventana temporal**: el hub carga todos los PED del alcance del usuario (hasta 5000 en MySQL). Opcionalmente la API acepta `?dias=N` para acotar por fecha (compatibilidad). La UX limita volumen en cliente: **paginación** en vista Lista (25 por página) y **«Mostrar más»** por columna en Kanban (lote inicial 15).
 
 ## Permisos
 
@@ -76,6 +77,8 @@ Implementación: `ecom/services/pedido_permisos.py` (`puede_ver_todos_pedidos` /
 - API: `GET /ecom/api/mayoristapp/pedidos/hub/`, `POST .../hub/archivar-draft/`, `POST .../hub/eliminar-draft/`
 - Preferencia Lista/Kanban: `localStorage` clave `synap_pedidos_hub_vista`
 - Botón **Actualizar** en el hero: vuelve a pedir el JSON del hub (`urls.api`) sin recargar la página; icono `refresh` con spin mientras `cargando`
+- **Paginación Lista (≥ lg):** controles Anterior/Siguiente y texto «Página X de Y (N pedidos)» sobre `itemsFiltrados` (25 por página; reset al cambiar búsqueda o recargar payload)
+- **Kanban (≥ lg):** cada columna muestra un lote inicial de 15 tarjetas; botón «Mostrar más (N restantes)» al pie de la columna suma 15 más (filtrado de búsqueda incluido)
 
 ### Viewport fijo (hero + botones) — 16/07/2026
 
@@ -99,6 +102,19 @@ Misma idea que pedido masivo (`.pm-matrix-viewport`): la página **no** scrollea
 Nombres de cliente: batch `_nombres_clientes` (un SQL). Sucursal: etiqueta `Calle Nro` o `Sucursal #{id}` (misma convención que pedido masivo). Total PED: preferir `ImporteVenta` (bruto); fallback fórmula IVA+percepciones.
 
 Vista **Lista**: columna **Sucursal** entre Documento y Detalle. Vista **Kanban**: línea de sucursal bajo el subtítulo en tarjetas PED.
+
+## PED migrados BEST — solo consulta (23/07/2026)
+
+Los PED sembrados desde migración BEST (`NroComprobante` prefijo `BEST-` **o** `TipoPedido = Migracion BEST`, case-insensitive) se abren desde el hub en **solo consulta**, no en edición:
+
+| Aspecto | Detalle |
+|---------|---------|
+| URL tarjeta | `/pedido-masivo-sucursales/?modo=simple&cod_mov=<N>&consulta=1` (`url_pedido_masivo_modo_simple(..., consulta=True)`) |
+| UI | Chip «Solo consulta»; matriz no editable; acciones PDF / repetir / mail disponibles |
+| Borrador Postgres | Se crea/reutiliza un `EcomPedidoMasivoDraft` interno para serializar la matriz, pero queda en estado **`archivado`** (no aparece en columna **Borrador** del hub) |
+| PED comercial | Sin cambio: URL sin `consulta=1`; carga editable si el origen está Pendiente |
+
+API: `POST /ecom/api/mayoristapp/pedido-masivo/abrir-pedido/` body `{ "cod_mov": N, "consulta": true }`. Servicio: `cargar_pedido_en_draft_masivo(..., consulta=True)`.
 
 ## Lotes masivos en columnas Kanban (22/07/2026, rediseño)
 

@@ -726,6 +726,7 @@ def obtener_o_crear_draft(
     id_domicilio_fijo: Optional[int] = None,
     cod_mov_origen: Optional[int] = None,
     solo_lectura: bool = False,
+    consulta: bool = False,
 ) -> Tuple[Optional[EcomPedidoMasivoDraft], str]:
     """
     Si ``draft_id``: valida ownership y cliente.
@@ -772,22 +773,32 @@ def obtener_o_crear_draft(
         return d, ""
 
     if cod_origen is not None:
+        estados_origen = (
+            EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+            EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+        )
+        if consulta:
+            estados_origen = (
+                EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+                EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
+                EcomPedidoMasivoDraft.ESTADO_ARCHIVADO,
+            )
         existente_origen = (
             EcomPedidoMasivoDraft.objects.filter(
                 base_empresa=base_empresa,
                 id_usuario=id_u,
                 cod_mov_origen=cod_origen,
                 modo=modo_ef,
-                estado__in=(
-                    EcomPedidoMasivoDraft.ESTADO_BORRADOR,
-                    EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO,
-                ),
+                estado__in=estados_origen,
             )
             .order_by("-updated_at")
             .first()
         )
         if existente_origen:
-            if existente_origen.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO:
+            if (
+                not consulta
+                and existente_origen.estado == EcomPedidoMasivoDraft.ESTADO_CONFIRMANDO
+            ):
                 existente_origen.estado = EcomPedidoMasivoDraft.ESTADO_BORRADOR
                 existente_origen.save(update_fields=["estado", "updated_at"])
             return existente_origen, ""
@@ -826,12 +837,17 @@ def obtener_o_crear_draft(
             existente.save(update_fields=["estado", "updated_at"])
         return existente, ""
 
+    estado_inicial = (
+        EcomPedidoMasivoDraft.ESTADO_ARCHIVADO
+        if consulta
+        else EcomPedidoMasivoDraft.ESTADO_BORRADOR
+    )
     d = EcomPedidoMasivoDraft.objects.create(
         base_empresa=base_empresa,
         id_usuario=id_u,
         id_cliente=idc,
         cod_viajante=to_int_or_none(cod_viajante),
-        estado=EcomPedidoMasivoDraft.ESTADO_BORRADOR,
+        estado=estado_inicial,
         modo=modo_ef,
         id_domicilio_fijo=id_dom_fijo,
         cod_mov_origen=cod_origen,
@@ -953,44 +969,6 @@ def serializar_matriz(
     descuentos_fila_out = {
         str(k): float(v) for k, v in desc_map.items()
     }
-
-    # #region agent log
-    try:
-        import json, time
-        _doms_suc = sorted(
-            {
-                i
-                for i in (
-                    to_int_or_none(s.get("id_cliente_domicilio")) for s in sucursales
-                )
-                if i is not None
-            }
-        )
-        _inter = sorted(set(doms_celdas) & set(_doms_suc))
-        with open("/app/.cursor/debug-a987c5.log", "a", encoding="utf-8") as _df:
-            _df.write(json.dumps({
-                "sessionId": "a987c5",
-                "runId": "post-fix",
-                "hypothesisId": "M1",
-                "location": "pedido_masivo_matriz.py:matriz_payload",
-                "message": "payload matriz draft",
-                "data": {
-                    "draft_id": draft.pk,
-                    "modo": modo,
-                    "estado": draft.estado,
-                    "es_snapshot": es_snapshot,
-                    "n_articulos": len(articulos),
-                    "n_celdas": len(celdas_qs),
-                    "n_sucursales": len(sucursales),
-                    "doms_celdas": doms_celdas[:30],
-                    "doms_suc": _doms_suc[:30],
-                    "n_interseccion": len(_inter),
-                },
-                "timestamp": int(time.time() * 1000),
-            }, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
-    # #endregion
 
     return {
         "draft_id": draft.pk,

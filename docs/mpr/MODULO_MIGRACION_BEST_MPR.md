@@ -252,6 +252,72 @@ docker exec Synap_app python manage.py migrar_pedidos_best --base-empresa=admini
 ### Limitaciones v1
 
 - Solo `REP_ORDENES_COMBINADO` (no OO/OOL).
+- La siembra v1 escribe `comp_ped` + `stockp` pero **no** crea `cliente_datos_adicionales`; abrir esos PED desde el Hub requiere remediación (sección siguiente).
+
+### Remediación CDA pedidos BEST ya sembrados
+
+Pedidos PED con `NroComprobante` tipo `BEST-<orden>` migrados antes de asociar domicilio de entrega fallan al abrirlos en el Hub por falta de fila en `cliente_datos_adicionales` (o sin `id_cliente_domicilio` válido).
+
+Servicio: `mpr/best_migration/pedido_cda_backfill.py` → `backfill_cda_pedidos_best(base_empresa, dry_run=True, prefijo='BEST')`.
+
+**Regla de domicilio:** para cada PED pendiente de remediar, toma el **primer domicilio no anulado** del cliente (`cliente_domicilio`, `ORDER BY id_cliente_domicilio ASC LIMIT 1`). Si el cliente no tiene domicilios activos, el pedido se omite y queda listado en el reporte.
+
+**Acciones:**
+
+| Situación | Acción |
+|-----------|--------|
+| CDA con `id_cliente_domicilio > 0` | Skip (`ya_ok`) |
+| Sin CDA | `INSERT` en `cliente_datos_adicionales` (origen `Migracion BEST`, espejo checkout mayorista) |
+| CDA sin domicilio válido | `UPDATE` de campos de entrega + `id_cliente_domicilio` |
+| Cliente sin domicilio | Omitir (`omitidos_sin_domicilio`) |
+
+Valores de entrega: `fechaEntrega` e `id_deposito_despacho` desde `comp_ped` (fallback fecha = `Fecha` del PED, depósito = 1).
+
+```bash
+docker exec Synap_app python manage.py backfill_cda_pedidos_best --base-empresa=administranet1 --dry-run
+docker exec Synap_app python manage.py backfill_cda_pedidos_best --base-empresa=administranet1 --confirmar
+```
+
+Por defecto ensayo; `--confirmar` escribe en MySQL dentro de una transacción. No modifica `pedido_loader` ni re-siembra pedidos.
+
+Tests: `mpr.best_migration.tests.test_pedido_cda_backfill`.
+
+### Consulta desde el Hub Pedidos
+
+Tras la remediación CDA, al abrir un PED BEST desde el **Hub Pedidos** (`/ecom/mayoristapp/pedidos/`) la tarjeta enlaza con `consulta=1`. Synap carga la matriz en solo lectura (chip «Solo consulta») y el borrador Postgres queda **archivado** para no ensuciar la columna Borrador. Ver [PEDIDOS_HUB_KANBAN.md](../ecom/PEDIDOS_HUB_KANBAN.md) (sección «PED migrados BEST»).
+
+La detección incluye `NroComprobante` tipo `BEST-*`, `TipoPedido='Migracion BEST'` y, tras renumerar, el marcador en `Detalle` (`Cutover BEST` / `BEST orden`).
+
+### Remediación cabecera/stockp PED BEST (Oleada A+B + P2)
+
+Pedidos PED sembrados con prefijo `BEST-*` conservan numeración provisional, `TipoPedido='Migracion BEST'`, condición de venta vacía e IVA simplificado (neto = bruto en renglón). Este remediador los alinea a paridad Synap **sin re-siembra** ni modificar `pedido_loader.py`.
+
+Servicio: `mpr/best_migration/pedido_best_remediar.py` → `remediar_pedidos_best(base_empresa, dry_run=True, id_pv=1, alicuota_iva=21)`.
+
+**Acciones por PED pendiente (orden estable `CodigoMovimiento ASC`):**
+
+| Campo / ámbito | Valor |
+|--------------|-------|
+| `NroComprobante` / `NroCompBusq` | Correlativo Synap `0001-00000003`… rellenando hueco tras el último `NroCompBusq` real no BEST |
+| `TipoPedido` | `Sistema` |
+| Condición venta | `id_condventa=6`, `CondVenta='Cta/Cte 30'`, `Vencimiento = Fecha + 30 días` |
+| IVA cabecera (P2) | `ImporteVenta` **sin cambio** (bruto); `SubTotal1 = ImporteVenta/1.21`, `IVA1 = resto`, netos alineados |
+| IVA renglón (`stockp`) | `PrecioBrutoxU` actual → bruto; neto/IVA/venta recalculados; `lista_precio=1`, `tipo_art='Articulo'` |
+| Integridad renglón | `CodigoMovimiento` = cabecera; `saldo` = `cantidad_entregada` = `Salida`; `CodLaboratorio=0` |
+| Viajante | `cliente.CodViajante` en cabecera y renglones |
+| Trazabilidad | `Detalle` conserva cutover BEST; `cod_mov_ped_orginal`, `Nro_Comp_PED_orginal`, `observacion_interna=''` |
+| Autorización | `autorizacion_sistema='Autorizado'`, `ImporteVentaL` vía `numero_a_letras` |
+
+**Idempotencia:** solo procesa `TipoComprobante='PED'` no anulados con `NroComprobante LIKE 'BEST-%'` (o cutover en `Detalle` con `TipoPedido='Migracion BEST'` aún sin renumerar). Tras confirmar no deben quedar `BEST-*` activos. El talonario PED **no se modifica** si el próximo libre sigue siendo mayor al máximo asignado; si `max(NroCompBusq) ≥ talonario.Nro`, se ajusta a `max+1`.
+
+```bash
+docker exec Synap_app python manage.py remediar_pedidos_best --base-empresa=administranet1 --dry-run
+docker exec Synap_app python manage.py remediar_pedidos_best --base-empresa=administranet1 --confirmar
+```
+
+Por defecto ensayo; `--confirmar` escribe en MySQL dentro de una transacción. Ejecutar **después** del backfill CDA si el Hub debe mostrar domicilio de entrega.
+
+Tests: `mpr.best_migration.tests.test_pedido_best_remediar`, `ecom.tests.test_pedidos_hub_pipeline.TestEsPedMigracionBest`.
 
 ## Stock de seguridad (reserva)
 
