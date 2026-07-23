@@ -106,6 +106,7 @@ logs/
 # IDE
 .vscode/
 .idea/
+.atl/
 
 # Static files generados (se generan en runtime)
 staticfiles/

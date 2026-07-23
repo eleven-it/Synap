@@ -57,6 +57,19 @@ La primera aplicación se **reversó por completo** (bloque a bloque, verificado
 - Salvaguarda en `delete_product` para artículos referenciados en `en_abm_formula` o vinculados a `en_abm`.
 - Duplicado preexistente en `articulo` (IDArt 1346 vs 1352, «2400 TM Atomik Media Stripe Negro 2P») pendiente de resolución de negocio.
 
-## Verificación
+## Seguimiento 23/07/2026 — artículo 938382-16 (`administranet`)
 
-Compilar `administraNET.vbp` y probar: alta encadenada, cancelación con limpieza, duplicados rechazados en las 3 ramas y bloqueo de eliminación de artículos referenciados por BOM. El estado de la base se puede auditar con las consultas del saneo (0 huérfanos, 0 líneas rotas, 0 duplicados activos).
+Caso reportado como «8382-16»: `IDArt=1219` (`CodArtProv=938382-16 T110`) apuntaba a `id_en_abm=292` sin componentes; además había cabeceras duplicadas vacías `181`, `290`, `291`.
+
+Saneo (solo anulación, sin borrar ni tocar el artículo):
+
+| `id_en_abm` | Acción |
+|-------------|--------|
+| 181, 290, 291 | `anulado='Si'` (duplicados vacíos, sin artículo armado ni fórmula) |
+| **292** | Se deja **activa** y enlazada a 1219 para recargar la fórmula en VB6 |
+
+El bug de alta/duplicados en formularios VB6 ya estaba corregido (sección anterior). Negocio: cargar insumos en definición de fórmula de la receta **292**.
+
+### Ajuste posterior (mismo día)
+
+Para empezar limpio desde VB6: `articulo` **1219** → `ensamblado='No'`, `id_en_abm=NULL`; cabecera **292** → `anulado='Si'`. Sin artículos apuntando a 292.

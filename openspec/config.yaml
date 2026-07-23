@@ -1,10 +1,47 @@
 schema: spec-driven
 
 context: |
-  Synap: Django, PostgreSQL (Synap) + MySQL legacy AdministraNET.
+  Synap: Django 4.2, PostgreSQL (Synap) + MySQL legacy AdministraNET.
+  Frontend: Tailwind/Alpine.js (django-tailwind, crispy-tailwind).
+  Docker: contenedor `Synap_app` para manage.py, tests y shell.
   Ventas: app `ventas/`; permisos `core/services/administranet_permisos_sistema.py`;
-  reportes documento operativo en app `reports/` (ReportDefinition).
+  reportes en app `reports/` (ReportDefinition).
   Tipos legacy: `core.utils.administranet_types`.
+  UI canon: reportes `/reports/dashboard/` y MPR `/mpr/`; español obligatorio; modales Synap (sin alert/confirm).
+
+strict_tdd: true
+
+testing:
+  strict_tdd: true
+  detected: "23/07/2026"
+  runner:
+    command: "docker exec Synap_app python manage.py test"
+    framework: Django TestCase
+    alt_command: "docker exec Synap_app pytest"
+    alt_framework: pytest + pytest-django
+  layers:
+    unit:
+      available: true
+      tool: Django TestCase / pytest
+    integration:
+      available: true
+      tool: pytest-django + factory-boy (marker integration)
+    e2e:
+      available: false
+      tool: "—"
+  coverage:
+    available: true
+    command: "docker exec Synap_app pytest --cov"
+  quality:
+    linter:
+      available: false
+      command: "—"
+    type_checker:
+      available: false
+      command: "—"
+    formatter:
+      available: false
+      command: "—"
 
 rules:
   proposal:
@@ -15,3 +52,16 @@ rules:
     - Escenarios en español; RFC 2119 (MUST / MUST NOT / SHOULD).
   design:
     - Rutas y archivos concretos del repo Synap; no inventar apps no instaladas.
+  apply:
+    - Seguir patrones existentes del repo; UI en español.
+    - Tests y manage.py siempre vía `docker exec Synap_app`.
+    - Tipos MySQL legacy: `core.utils.administranet_types`.
+    - UI canon reports/mpr; MUST NOT alert/confirm/prompt nativos.
+    tdd: true
+    test_command: "docker exec Synap_app python manage.py test"
+  verify:
+    test_command: "docker exec Synap_app python manage.py test"
+    alt_test_command: "docker exec Synap_app pytest"
+    coverage_threshold: 0
+  archive:
+    - Advertir antes de fusionar deltas destructivos (eliminaciones masivas).
