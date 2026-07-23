@@ -282,13 +282,31 @@
                     </thead>
                     <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
                         {% for fila in filas %}
-                        <tr class="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40{% if fila.resta_urgente <= 0 and fila.resta_total > 0 %} opacity-90{% endif %}"
+                        <tr class="transition-colors {% if fila.sin_receta %}bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/15 dark:hover:bg-amber-950/25{% else %}hover:bg-slate-50/80 dark:hover:bg-slate-800/40{% endif %}{% if fila.resta_urgente <= 0 and fila.resta_total > 0 %} opacity-90{% endif %}"
                             data-descripcion="{{ fila.descripcion_articulo|lower }} {{ fila.codigo_manual|lower }}"
                             x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase())">
-                            <td class="sticky left-0 z-10 min-w-[16rem] max-w-[26rem] bg-white px-4 py-2.5 dark:bg-slate-900 sm:min-w-[18rem]">
+                            <td class="sticky left-0 z-10 min-w-[16rem] max-w-[26rem] px-4 py-2.5 sm:min-w-[18rem] {% if fila.sin_receta %}border-l-4 border-l-amber-400 bg-amber-50/70 dark:border-l-amber-500/70 dark:bg-amber-950/25{% else %}bg-white dark:bg-slate-900{% endif %}">
                                 <div class="flex flex-col gap-0.5">
                                     <span class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">{{ fila.codigo_manual }}</span>
                                     <span class="text-xs leading-snug text-slate-600 dark:text-slate-300 sm:text-sm">{{ fila.descripcion_articulo }}</span>
+                                    {% if fila.sin_receta %}
+                                    <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                                        <span class="inline-flex items-center gap-1 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900 ring-1 ring-inset ring-amber-300/60 dark:bg-amber-900/40 dark:text-amber-100 dark:ring-amber-700/50"
+                                              title="Este pack no tiene receta (BOM) definida. En modo Par no genera componentes; revise la receta en el artículo.">
+                                            <span class="material-icons text-[13px] leading-none" aria-hidden="true">warning_amber</span>
+                                            Sin receta
+                                        </span>
+                                        {% if fila.pedidos_resumen %}
+                                        <span class="pedidos-tooltip-trigger inline-flex h-6 w-6 cursor-help items-center justify-center rounded text-slate-500 transition-colors hover:bg-amber-100 hover:text-amber-800 dark:text-slate-400 dark:hover:bg-amber-900/40 dark:hover:text-amber-200"
+                                              data-pedidos="{{ fila.pedidos_resumen_json|escape }}"
+                                              tabindex="0"
+                                              role="button"
+                                              aria-label="Ver pedidos PED de este pack sin receta">
+                                            <span class="material-icons text-lg" aria-hidden="true">description</span>
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </td>
                             <td class="whitespace-nowrap px-3 py-2.5 text-left text-xs tabular-nums text-slate-600 dark:text-slate-400 sm:text-sm">
@@ -319,6 +337,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                <div id="tooltip-pedidos" class="pointer-events-none fixed z-[9999] max-h-[70vh] w-max max-w-[min(56rem,calc(100vw-2rem))] overflow-x-auto overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white shadow-2xl" style="display: none;" role="tooltip"></div>
                 {% else %}
                 <table class="min-w-[88rem] w-full border-separate border-spacing-0">
                     <caption class="sr-only">Tablero de producción — demanda PCP y stock por etapa MPR</caption>
@@ -568,6 +587,89 @@
                 form.submit();
             }
         };
+
+        // Tooltip PED de packs sin receta (modo Pack)
+        (function () {
+            var tipPedidos = document.getElementById('tooltip-pedidos');
+            if (!tipPedidos) return;
+            function esc(s) {
+                if (s == null || s === '') return '-';
+                var d = document.createElement('div');
+                d.textContent = s;
+                return d.innerHTML;
+            }
+            function estadoClass(estado) {
+                if (estado === 'Parcial') return 'text-amber-300';
+                if (estado === 'Terminado') return 'text-emerald-300';
+                if (estado === 'Produccion') return 'text-blue-300';
+                return 'text-slate-300';
+            }
+            function positionTip(ev) {
+                var rect = ev.currentTarget.getBoundingClientRect();
+                var pad = 10;
+                var tw = Math.min(tipPedidos.offsetWidth || 480, window.innerWidth - 2 * pad);
+                var left = ev.clientX + pad;
+                if (left + tw > window.innerWidth - pad) left = Math.max(pad, window.innerWidth - tw - pad);
+                tipPedidos.style.left = Math.max(pad, left) + 'px';
+                var top = rect.bottom + 6;
+                tipPedidos.style.top = top + 'px';
+                if (tipPedidos.offsetHeight && top + tipPedidos.offsetHeight > window.innerHeight - pad) {
+                    tipPedidos.style.top = Math.max(pad, rect.top - tipPedidos.offsetHeight - 6) + 'px';
+                }
+            }
+            function showTip(ev, pedidos) {
+                var title = '<div class="text-amber-300 text-[10px] font-semibold">Pedido(s) — pack sin receta</div>';
+                var body = '';
+                if (pedidos && pedidos.length) {
+                    body =
+                        '<div class="border-t border-slate-700 pt-1.5 mt-1 min-w-0 overflow-x-auto">' +
+                        '<table class="w-full min-w-[22rem] text-left text-xs table-fixed border-separate border-spacing-0" role="presentation">' +
+                        '<colgroup><col style="width:7rem"/><col style="width:10rem"/><col style="width:6rem"/><col/></colgroup>' +
+                        '<tbody>';
+                    pedidos.forEach(function (p) {
+                        var estado = (p && p.estado_pedido_opt != null) ? String(p.estado_pedido_opt) : 'Pendiente';
+                        var nro = (p && p.nro_pedido != null) ? esc(String(p.nro_pedido)) : '-';
+                        var fecha = (p && p.fecha != null) ? esc(String(p.fecha)) : '—';
+                        var cant = (p && p.cantidad != null) ? esc(String(p.cantidad)) : '—';
+                        var nomCli = (p && p.nombre_cliente != null) ? String(p.nombre_cliente).trim() : '';
+                        var cliTxt = (nomCli && nomCli !== '-') ? esc(nomCli) : '—';
+                        body +=
+                            '<tr class="border-b border-slate-700/40 last:border-b-0">' +
+                            '<td class="py-1.5 pr-2 align-top whitespace-nowrap font-medium ' + estadoClass(estado) + '">' + esc(estado) + '</td>' +
+                            '<td class="py-1.5 pr-2 align-top whitespace-nowrap tabular-nums text-slate-200">' + nro + '</td>' +
+                            '<td class="py-1.5 pr-2 align-top whitespace-nowrap tabular-nums text-slate-300">' + fecha + '</td>' +
+                            '<td class="py-1.5 align-top text-slate-200 min-w-0 leading-snug break-words">' +
+                            '<span class="text-slate-400">Cliente:</span> ' + cliTxt +
+                            ' <span class="text-slate-500">·</span> <span class="text-slate-400">Cant.:</span> ' + cant +
+                            '</td></tr>';
+                    });
+                    body += '</tbody></table></div>';
+                } else {
+                    body = '<div class="border-t border-slate-700 pt-1 mt-1 text-slate-400 text-[10px] py-0.5">Sin pedidos</div>';
+                }
+                tipPedidos.innerHTML = title + body;
+                tipPedidos.style.display = 'block';
+                requestAnimationFrame(function () { positionTip(ev); });
+            }
+            function hideTip() { tipPedidos.style.display = 'none'; }
+            document.querySelectorAll('.pedidos-tooltip-trigger').forEach(function (el) {
+                var raw = el.getAttribute('data-pedidos');
+                var pedidos = [];
+                try {
+                    if (raw) {
+                        var s = raw.replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+                        pedidos = JSON.parse(s);
+                    }
+                } catch (e) {}
+                el.addEventListener('mouseenter', function (ev) { showTip(ev, pedidos); });
+                el.addEventListener('mousemove', function (ev) {
+                    if (tipPedidos.style.display === 'block') positionTip(ev);
+                });
+                el.addEventListener('mouseleave', hideTip);
+                el.addEventListener('focus', function (ev) { showTip(ev, pedidos); });
+                el.addEventListener('blur', hideTip);
+            });
+        })();
     })();
     </script>
 <script type="module" src="{% static 'stock/js/filtro_marcas_tags.mjs' %}"></script>

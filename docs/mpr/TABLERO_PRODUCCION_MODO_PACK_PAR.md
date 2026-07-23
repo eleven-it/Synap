@@ -36,6 +36,18 @@ componente BOM (base del envío a producción)."*
 - **Pack:** Pack terminado · Fecha entrega · Pedido · Reserva · Resta total ·
   Resta urgente · Terminado (stock del pack).
 
+### Aviso «Sin receta» (modo Pack)
+
+Si el pack terminado **no tiene BOM** (`id_en_abm` vacío/0 o sin componentes en
+`en_abm_formula`):
+
+- La fila se marca en **ámbar** con badge **Sin receta** (aviso recomendado).
+- Un ícono de pedidos abre un **tooltip** con los PED vivos asociados (n.º, estado,
+  fecha, cliente, cantidad) para revisión.
+- **No bloquea envío** en el tablero: el envío solo ocurre en modo **Par**, y un pack
+  sin receta **no genera** componentes allí (omisión silenciosa en la explosión).
+- El bloqueo duro por falta de receta sigue en **OPT / ventana-pack** al generar OPT.
+
 ## Cálculos (modo Pack)
 
 Sobre `listar_demanda_pack_desde_pedidos` (sin escribir en `lista_produccion_*`):
