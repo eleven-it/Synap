@@ -11,13 +11,37 @@
             <h1 class="mt-0.5 text-2xl font-bold tracking-tight text-gray-900 dark:text-white">Mis conteos</h1>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Campañas abiertas asignadas a vos</p>
         </div>
+        {% if puede_gestionar %}
+        <a href="{{ url_nueva_campana }}"
+           class="inline-flex shrink-0 items-center gap-1 rounded-xl bg-purple-600 px-3 py-2 text-sm font-semibold text-white shadow-sm">
+            <span class="material-icons text-base" aria-hidden="true">add</span>
+            Nueva
+        </a>
+        {% endif %}
     </header>
 
     {% if not filas %}
     <div class="rounded-2xl border border-gray-200 bg-white p-6 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <span class="material-icons text-4xl text-gray-300 dark:text-gray-600" aria-hidden="true">inventory_2</span>
         <p class="mt-3 text-sm font-medium text-gray-900 dark:text-white">No tenés campañas en conteo</p>
+        {% if puede_gestionar %}
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Esta pantalla es solo para contar. Para crear y asignar campañas usá
+            <strong class="font-semibold text-gray-700 dark:text-gray-200">Inventario físico (campañas)</strong>.
+        </p>
+        <div class="mt-4 flex flex-col items-center gap-2">
+            <a href="{{ url_nueva_campana }}"
+               class="inline-flex items-center gap-1 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">
+                <span class="material-icons text-base" aria-hidden="true">add</span>
+                Crear campaña
+            </a>
+            <a href="{{ url_campanas }}" class="text-xs font-medium text-purple-600 underline dark:text-purple-300">
+                Ir al listado de campañas
+            </a>
+        </div>
+        {% else %}
         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Cuando tu supervisor te asigne una campaña activa, aparecerá acá.</p>
+        {% endif %}
     </div>
     {% else %}
     <div class="space-y-3">

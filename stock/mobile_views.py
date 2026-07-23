@@ -57,10 +57,27 @@ def conteo_mis_view(request):
         )
 
     session = _session_user(request)
+    puede_gestionar = False
+    try:
+        from core.services.administranet_permisos_usuario import tiene_permiso_administranet
+
+        puede_gestionar = tiene_permiso_administranet(
+            base_empresa,
+            session.get("id_puesto"),
+            "stock.inventario_fisico.gestionar",
+            cod_usuario=session.get("cod_usuario"),
+            nombre_puesto=session.get("nombre_puesto") or session.get("puesto"),
+        )
+    except Exception:
+        puede_gestionar = False
+
     context = {
         "filas": filas,
         "nombre_usuario": session.get("nombre_usuario") or "",
         "dep_por_id": dep_por_id,
+        "puede_gestionar": puede_gestionar,
+        "url_campanas": reverse("stock:inventario_fisico_list"),
+        "url_nueva_campana": reverse("stock:inventario_fisico_crear"),
     }
     template = get_template_for_device(request, "stock/conteo/mis_conteos.html")
     return render(request, template, context)
