@@ -12,6 +12,8 @@ from typing import Dict, List, Optional, Set
 
 from django.conf import settings
 
+from core.backup.services import config as backup_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -114,15 +116,15 @@ def run_wal_incremental(
     parent_wal_files: Optional[Set[str]] = None,
     dry_run: bool = False,
 ) -> PostgresBackupResult:
-    wal_dir_str = (getattr(settings, "BACKUP_PG_WAL_ARCHIVE_DIR", "") or "").strip()
+    wal_dir_str = backup_config.effective_pg_wal_archive_dir()
     if not wal_dir_str:
         return PostgresBackupResult(
             success=False,
             relative_paths=[],
             absolute_paths=[],
             error=(
-                "BACKUP_PG_WAL_ARCHIVE_DIR no está configurado. "
-                "Configure archive_mode y archive_command en PostgreSQL."
+                "El directorio WAL archivado no está configurado. "
+                "Configúrelo en /core/backups/configuracion/ y archive_mode en PostgreSQL."
             ),
         )
     wal_dir = Path(wal_dir_str)

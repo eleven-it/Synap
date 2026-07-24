@@ -9,18 +9,23 @@ import sys
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib import messages
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
-from core.backup.models import BackupArtifact, BackupJob
+from core.backup.models import BackupJob
+from core.backup.services import config as backup_config
+from core.backup.services.sftp_upload import test_sftp_connection
 from core.decorators import administranet_login_required, tiene_permiso
 from core.utils.administranet_types import to_int_or_none, str_or_default
 from login.administranet_auth import AdministraNETAuth
 
 logger = logging.getLogger(__name__)
+
+DOW_LABELS = backup_config.DOW_LABELS
 
 
 def _list_mysql_bases():
@@ -77,21 +82,187 @@ def _launch_backup_subprocess(job_id: str) -> None:
     )
 
 
+def _schedule_rows_from_json(schedule_json):
+    rules = backup_config.normalize_schedule(schedule_json)
+    by_dow = {int(r["dow"]): r for r in rules}
+    rows = []
+    for dow in range(7):
+        rule = by_dow.get(dow, {"dow": dow, "time": "02:00", "job_type": "incremental"})
+        rows.append(
+            {
+                "dow": dow,
+                "label": DOW_LABELS[dow],
+                "time": rule.get("time", "02:00"),
+                "job_type": rule.get("job_type", BackupJob.JOB_TYPE_INCREMENTAL),
+                "enabled": dow in by_dow,
+            }
+        )
+    return rows
+
+
+_DIAS_CORTO = ("L", "M", "X", "J", "V", "S", "D")
+
+
+def _comprimir_dias(dows: list) -> str:
+    """Convierte [0,1,2,3,4,5] en 'L–S' y [0,2] en 'L, X' (Lun=0…Dom=6)."""
+    dows = sorted(set(int(d) for d in dows))
+    if not dows:
+        return ""
+    tramos = []
+    inicio = prev = dows[0]
+    for dow in dows[1:]:
+        if dow == prev + 1:
+            prev = dow
+            continue
+        tramos.append((inicio, prev))
+        inicio = prev = dow
+    tramos.append((inicio, prev))
+    partes = []
+    for a, b in tramos:
+        if a == b:
+            partes.append(_DIAS_CORTO[a])
+        elif b == a + 1:
+            partes.append(f"{_DIAS_CORTO[a]}, {_DIAS_CORTO[b]}")
+        else:
+            partes.append(f"{_DIAS_CORTO[a]}–{_DIAS_CORTO[b]}")
+    return ", ".join(partes)
+
+
+def _resumen_programacion(schedule_json) -> str:
+    """Resumen legible: 'L–S incremental 02:00 · D completo 03:00'."""
+    rules = backup_config.normalize_schedule(schedule_json)
+    grupos: dict = {}
+    for rule in rules:
+        clave = (rule.get("job_type"), rule.get("time"))
+        grupos.setdefault(clave, []).append(int(rule.get("dow")))
+    partes = []
+    for (job_type, time_str), dows in sorted(grupos.items(), key=lambda kv: min(kv[1])):
+        tipo = "completo" if job_type == BackupJob.JOB_TYPE_FULL else "incremental"
+        partes.append(f"{_comprimir_dias(dows)} {tipo} {time_str}")
+    return " · ".join(partes)
+
+
+def _parse_schedule_from_post(request) -> list:
+    rules = []
+    for dow in range(7):
+        if request.POST.get(f"schedule_enabled_{dow}") != "1":
+            continue
+        time_str = (request.POST.get(f"schedule_time_{dow}") or "02:00").strip()
+        job_type = (request.POST.get(f"schedule_type_{dow}") or BackupJob.JOB_TYPE_INCREMENTAL).strip()
+        rules.append({"dow": dow, "time": time_str, "job_type": job_type})
+    return backup_config.normalize_schedule(rules)
+
+
 @require_GET
 @administranet_login_required
 @tiene_permiso("administrar.backup")
 def backup_list_view(request):
     jobs = BackupJob.objects.prefetch_related("artifacts").all()[:100]
     bases = _list_mysql_bases()
+    bs = backup_config.get_backup_settings()
     return render(
         request,
         "core/backups/list.html",
         {
             "jobs": jobs,
             "bases_mysql": bases,
-            "sftp_enabled": getattr(settings, "BACKUP_SFTP_ENABLED", False),
+            "backup_settings": bs,
+            "sftp_enabled": backup_config.effective_sftp_enabled(),
+            "schedule_hint": backup_config.next_schedule_hint(),
+            "schedule_resumen": _resumen_programacion(bs.schedule_json),
         },
     )
+
+
+@require_http_methods(["GET", "POST"])
+@administranet_login_required
+@tiene_permiso("administrar.backup")
+def backup_config_view(request):
+    bs = backup_config.get_backup_settings()
+    bases = _list_mysql_bases()
+    errors = []
+
+    if request.method == "POST":
+        bs.enabled_auto = request.POST.get("enabled_auto") == "1"
+        bs.base_mysql = (request.POST.get("base_mysql") or "").strip()
+        bs.include_empresas = request.POST.get("include_empresas") == "1"
+        bs.local_root = (request.POST.get("local_root") or bs.local_root).strip()
+        try:
+            bs.retention_days = max(1, int(request.POST.get("retention_days") or bs.retention_days))
+        except ValueError:
+            errors.append("Los días de retención deben ser un número entero.")
+        bs.pg_wal_archive_dir = (request.POST.get("pg_wal_archive_dir") or "").strip()
+        bs.sftp_enabled = request.POST.get("sftp_enabled") == "1"
+        bs.sftp_host = (request.POST.get("sftp_host") or "").strip()
+        try:
+            bs.sftp_port = max(1, int(request.POST.get("sftp_port") or 22))
+        except ValueError:
+            errors.append("El puerto SFTP debe ser un número entero.")
+        bs.sftp_user = (request.POST.get("sftp_user") or "").strip()
+        bs.sftp_remote_path = (request.POST.get("sftp_remote_path") or "/synap/backups").strip()
+        bs.sftp_key_path = (request.POST.get("sftp_key_path") or "").strip()
+        bs.schedule_json = _parse_schedule_from_post(request)
+
+        # Password: casilla "borrar" tiene prioridad; si no, vacío = no cambiar.
+        if request.POST.get("sftp_clear_password") == "1":
+            bs.sftp_password_encrypted = ""
+        else:
+            new_password = (request.POST.get("sftp_password") or "").strip()
+            backup_config.set_sftp_password(bs, new_password or None)
+
+        session_user = request.session.get("user") or {}
+        bs.updated_by_cod_usuario = str_or_default(session_user.get("cod_usuario"), "")
+
+        if not errors:
+            bs.save()
+            if request.headers.get("Accept") == "application/json":
+                return JsonResponse({"ok": True, "message": "Configuración guardada."})
+            messages.success(request, "Configuración de copias de seguridad guardada.")
+            return redirect(reverse("core:backup_config"))
+
+    schedule_rows = _schedule_rows_from_json(bs.schedule_json)
+    return render(
+        request,
+        "core/backups/configuracion.html",
+        {
+            "backup_settings": bs,
+            "bases_mysql": bases,
+            "schedule_rows": schedule_rows,
+            "dow_labels": DOW_LABELS,
+            "errors": errors,
+            "has_sftp_password": bool(bs.sftp_password_encrypted),
+        },
+    )
+
+
+@require_http_methods(["POST"])
+@administranet_login_required
+@tiene_permiso("administrar.backup")
+def backup_test_sftp_view(request):
+    host = (request.POST.get("sftp_host") or "").strip()
+    user = (request.POST.get("sftp_user") or "").strip()
+    remote_path = (request.POST.get("sftp_remote_path") or "/synap/backups").strip()
+    key_path = (request.POST.get("sftp_key_path") or "").strip()
+    try:
+        port = int(request.POST.get("sftp_port") or 22)
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "Puerto SFTP inválido."}, status=400)
+
+    password = (request.POST.get("sftp_password") or "").strip()
+    if not password:
+        password = backup_config.sftp_password_plain()
+
+    result = test_sftp_connection(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+        key_path=key_path,
+        remote_path=remote_path,
+    )
+    if result.success:
+        return JsonResponse({"ok": True, "message": result.message})
+    return JsonResponse({"ok": False, "error": result.message}, status=400)
 
 
 @require_GET

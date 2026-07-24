@@ -322,7 +322,7 @@ Tests: `mpr.best_migration.tests.test_pedido_best_remediar`, `ecom.tests.test_pe
 
 **Estado:** implementado (10/07/2026).
 
-Equivalencia: BEST `MC.MCSS` (pares, centro de costo Terminado `MCCCID=4003`) → `articulo.stock_reserva`. Alimenta demanda por reserva (código 0) y resta armar en tablero PCP.
+Equivalencia: BEST `MC.MCSS` (pares, centro de costo Terminado `MCCCID=4003`) → `articulo.stock_reserva`. Alimenta demanda por reserva (código 0) y resta armar en tablero PCP. **Solo escribe en artículos `tipo_art_fab = Terminado`** (omite fabricados/componentes BOM aunque estén mapeados).
 
 Servicio: `mpr/best_migration/stock_reserva_loader.py` → `migrar_stock_reserva_best`. Por defecto solo escribe filas con `MCSS>0` (no pisa reservas manuales a cero). Requiere `BestArticuloMap` VALIDADO.
 

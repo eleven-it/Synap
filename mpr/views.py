@@ -4821,6 +4821,7 @@ class VentanaPackView(MprLoginRequiredMixin, TemplateView):
 # =============================================================================
 
 _TABLERO_SESSION_SOLO_URGENTE = "tablero_produccion_solo_urgente"
+_TABLERO_SESSION_SOLO_SIN_RECETA = "tablero_produccion_solo_sin_receta"
 _TABLERO_SESSION_SOLO_PENDIENTE_LEGACY = "tablero_produccion_solo_pendiente"
 _TABLERO_SESSION_MODO = "tablero_produccion_modo"
 _TABLERO_MODOS = frozenset({"par", "pack"})
@@ -4846,6 +4847,18 @@ def _resolver_solo_pendiente_tablero(request) -> bool:
     return _resolver_solo_urgente_tablero(request)
 
 
+def _resolver_solo_sin_receta_tablero(request) -> bool:
+    """Lee ``solo_sin_receta`` de GET (persiste en sesión) o sesión/default ``False``."""
+    raw = request.GET.get("solo_sin_receta")
+    if raw is not None:
+        valor = raw == "1"
+        request.session[_TABLERO_SESSION_SOLO_SIN_RECETA] = valor
+        return valor
+    if _TABLERO_SESSION_SOLO_SIN_RECETA in request.session:
+        return bool(request.session.get(_TABLERO_SESSION_SOLO_SIN_RECETA, False))
+    return False
+
+
 def _resolver_modo_tablero(request) -> str:
     """Lee ``modo`` (par|pack) de GET (persiste en sesión) o sesión/default ``par``."""
     raw = (request.GET.get("modo") or "").strip().lower()
@@ -4859,7 +4872,7 @@ def _resolver_modo_tablero(request) -> str:
 
 
 def _redirect_tablero_produccion(request, query_string: str | None = None):
-    """Redirect al tablero preservando solo_urgente, modo, presentacion, marcas y query."""
+    """Redirect al tablero preservando solo_urgente, solo_sin_receta, modo, presentacion, marcas y query."""
     from urllib.parse import parse_qsl, urlencode
 
     from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
@@ -4869,6 +4882,9 @@ def _redirect_tablero_produccion(request, query_string: str | None = None):
     if "solo_urgente" not in params and "solo_pendiente" not in params:
         solo = _resolver_solo_urgente_tablero(request)
         params["solo_urgente"] = "1" if solo else "0"
+    if "solo_sin_receta" not in params:
+        solo_sr = _resolver_solo_sin_receta_tablero(request)
+        params["solo_sin_receta"] = "1" if solo_sr else "0"
     if "modo" not in params:
         params["modo"] = _resolver_modo_tablero(request)
     if "presentacion" not in params:
@@ -4901,21 +4917,24 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
         fecha_desde_str = (request.GET.get("fecha_desde") or "").strip() or None
         fecha_hasta_str = (request.GET.get("fecha_hasta") or "").strip() or None
         solo_urgente = _resolver_solo_urgente_tablero(request)
+        solo_sin_receta = _resolver_solo_sin_receta_tablero(request)
         marcas_incluidos = _parse_marcas_incluidos(request)
         # modo=par|pack — par (default) explota BOM por componente; pack consolida
         # por artículo pack terminado (paridad BEST PCP Producción) sin explosión BOM.
         # Persiste en sesión (mismo patrón que presentacion y solo_urgente).
         modo_tablero = _resolver_modo_tablero(request)
         listar_fn = listar_tablero_pack if modo_tablero == "pack" else listar_tablero_por_articulo
+        listar_kwargs = {
+            "fecha_desde": to_date_or_none(fecha_desde_str) if fecha_desde_str else None,
+            "fecha_hasta": to_date_or_none(fecha_hasta_str) if fecha_hasta_str else None,
+            "solo_urgente": solo_urgente,
+            "limit": 200,
+            "marcas_incluidos": marcas_incluidos or None,
+        }
+        if modo_tablero == "pack":
+            listar_kwargs["solo_sin_receta"] = solo_sin_receta
         try:
-            filas = listar_fn(
-                base_empresa,
-                fecha_desde=to_date_or_none(fecha_desde_str) if fecha_desde_str else None,
-                fecha_hasta=to_date_or_none(fecha_hasta_str) if fecha_hasta_str else None,
-                solo_urgente=solo_urgente,
-                limit=200,
-                marcas_incluidos=marcas_incluidos or None,
-            )
+            filas = listar_fn(base_empresa, **listar_kwargs)
         except MprSchemaError as e:
             return _mpr_schema_error_redirect(request, e)
         except Exception as e:
@@ -4935,6 +4954,7 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
         if fecha_hasta_str:
             qs_params["fecha_hasta"] = fecha_hasta_str
         qs_params["solo_urgente"] = "1" if solo_urgente else "0"
+        qs_params["solo_sin_receta"] = "1" if solo_sin_receta else "0"
         # Base para el toggle Pack|Par: preserva filtros + presentación (sin modo).
         modo_query_base = _urlencode_con_marcas(
             {**qs_params, "presentacion": modo_presentacion}, marcas_incluidos
@@ -4951,6 +4971,7 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
             "fecha_hasta": fecha_hasta_str or "",
             "solo_urgente": solo_urgente,
             "solo_pendiente": solo_urgente,
+            "solo_sin_receta": solo_sin_receta,
             "kpis_tablero": kpis_tablero,
             "ultima_actualizacion": ultima_act,
             "tablero_url": reverse("mpr:tablero"),

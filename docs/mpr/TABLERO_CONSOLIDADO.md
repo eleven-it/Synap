@@ -54,8 +54,17 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 resta_urgente = MAX(0, dem_ped − stock_proceso)      # PCP col L — sin envíos ledger
 resta_total   = MAX(0, demanda − stock_proceso)      # PCP col H — demanda = dem_ped + dem_res
 fabricando    = MAX(0, Σ envíos_tablero − acreditado)   # acreditado ver REPORTES_MPR.md
-a_enviar      = MAX(0, resta_urgente − fabricando)  # tope columna Enviar (evita doble envío)
+a_enviar      = si Fabricando>0: MAX(0, MIN(urgente − Σ envíos, resta_total));
+                si Fabricando=0 y urgente>0: MIN(urgente, resta_total)  # reabre
 ```
+
+**Importante (24/07/2026, ajustado):** con **Fabricando > 0**, `a_enviar` descuenta
+**envíos ledger** (`max(0, resta_urgente − Σ envíos)`), no el Fabricando en sí, para no
+doble-contar el stock de proceso ya restado en la brecha PCP. Si **Fabricando = 0** y el
+recálculo deja **Resta urgente > 0**, el tope **se reabre** a esa Resta urgente (ciclo
+anterior acreditado; el hueco urgente es demanda nueva). El tope no puede superar
+`resta_total`. En UI modo docenas el input se deshabilita si `a_enviar_docenas_pcp = 0`
+(pares sueltos sin docena entera).
 
 La columna **Resta urgente** sigue mostrando la brecha PCP; **Enviar** usa `a_enviar` para precargar, deshabilitar inputs y validar el POST (hidden `pendiente_*` / `resta_urgente_*`).
 

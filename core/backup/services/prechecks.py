@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Tuple
 
-from django.conf import settings
-
+from core.backup.services import config as backup_config
 from core.mysql_pool import get_connection
 
 
@@ -75,13 +74,13 @@ def check_mysql_binlog_enabled(base_mysql: str) -> PrecheckResult:
 
 
 def check_postgres_wal_archive_dir(for_incremental: bool = False) -> PrecheckResult:
-    wal_dir = (getattr(settings, "BACKUP_PG_WAL_ARCHIVE_DIR", "") or "").strip()
+    wal_dir = backup_config.effective_pg_wal_archive_dir()
     if not wal_dir:
         return PrecheckResult(
             ok=False,
             message=(
-                "BACKUP_PG_WAL_ARCHIVE_DIR no está configurado. "
-                "Configure archive_mode y archive_command en PostgreSQL."
+                "El directorio WAL archivado no está configurado. "
+                "Configúrelo en /core/backups/configuracion/ y archive_mode en PostgreSQL."
             ),
         )
     path = Path(wal_dir)

@@ -57,8 +57,12 @@
 - [x] 7.4 Documentar variables ENV y rollback (desactivar URLs + cron)
 - [x] 7.5 Verificación manual MVP: full UI → manifest OK → SFTP (si habilitado) → incremental cron simulado
 
-## Fase 8: Cierre y escenarios spec
+## Fase 9: Configuración UI (singleton BackupSettings)
 
-- [x] 8.1 Mapear escenarios spec a tests (tabla job_id ↔ escenario en comentario o doc)
-- [x] 8.2 Ejecutar suite `docker exec Synap_app python manage.py test core.tests.test_backup_*`
-- [x] 8.3 Revisar que no se introducen destinos S3/Azure ni backup multi-empresa en UI
+- [x] 9.1 Modelo `BackupSettings` pk=1 + migración `0016_backupsettings`
+- [x] 9.2 Servicios `core/backup/services/config.py` y `secrets.py` (Fernet SFTP)
+- [x] 9.3 Refactor lectores: orchestrator, sftp, prechecks, postgres/mysql backup, backup_run
+- [x] 9.4 Comando `backup_tick` + deduplicación 50 min
+- [x] 9.5 UI `/core/backups/configuracion/` + test SFTP AJAX
+- [x] 9.6 Tests `test_backup_config`, `test_backup_tick`; actualizar tests BACKUP_*
+- [x] 9.7 Docs: config solo UI; cron solo `backup_tick`

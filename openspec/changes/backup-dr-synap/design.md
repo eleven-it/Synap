@@ -32,10 +32,14 @@ Implementar un **orquestador de backup conjunto** Postgres Synap + MySQL Adminis
 **Alternativas**: request síncrono hasta terminar dump; Celery worker.
 **Rationale**: dumps largos; sin Celery beat/worker dedicado en MVP.
 
-### ADR-6: Configuración en settings (+ destino opcional en DB futuro)
-**Elección MVP**: `BACKUP_LOCAL_ROOT`, `BACKUP_RETENTION_DAYS`, `BACKUP_SFTP_*`, `BACKUP_PG_WAL_ARCHIVE_DIR`, flags de habilitación remoto.
-**Alternativas**: solo DB para destinos; UI de credenciales.
-**Rationale**: alinear con secretos ENV; UI solo dispara jobs, no almacena passwords.
+### ADR-6: Configuración operativa en Postgres (singleton BackupSettings)
+**Elección MVP (refactor 2026-07)**: toda la configuración operativa (programación, SFTP, rutas, retención, base MySQL) en **`BackupSettings`** (pk=1) editable en **`/core/backups/configuracion/`** (permiso `administrar.backup`). Contraseña SFTP cifrada con Fernet derivado de `SECRET_KEY`. Cron del host solo ejecuta `manage.py backup_tick` sin argumentos ni `BACKUP_*` en ENV.
+**Alternativas anteriores**: solo settings ENV; credenciales SFTP solo ENV.
+**Rationale**: el supervisor configura DR desde Synap; `settings.BACKUP_*` quedan como fallback inerte si no hay fila.
+
+### ADR-6 (histórico MVP inicial): Configuración en settings
+**Elección MVP inicial**: `BACKUP_LOCAL_ROOT`, `BACKUP_RETENTION_DAYS`, `BACKUP_SFTP_*`, `BACKUP_PG_WAL_ARCHIVE_DIR`, flags de habilitación remoto.
+**Estado**: superseded por ADR-6 singleton UI (jul 2026).
 
 ## Modelo de datos (Postgres Synap)
 
@@ -62,6 +66,14 @@ BackupArtifact
   relative_path, absolute_path
   sha256, size_bytes
   created_at
+
+BackupSettings (singleton pk=1, config operativa UI)
+  enabled_auto, base_mysql, include_empresas
+  local_root, retention_days, pg_wal_archive_dir
+  sftp_enabled, sftp_host, sftp_port, sftp_user, sftp_remote_path
+  sftp_password_encrypted, sftp_key_path
+  schedule_json [{dow: 0-6 (0=lunes), time: HH:MM, job_type: full|incremental}]
+  updated_at, updated_by_cod_usuario
 ```
 
 Manifest JSON (ejemplo de campos): `job_id`, `created_at` ISO, `tipo`, `parent_job_id`, `base_mysql`, `engines[]`, `artifacts[{engine, path, sha256, size}]`, `mysql_binlog_marker`, `postgres_wal_range`.

@@ -23,41 +23,38 @@ Menú Synap → **Stock**.
 
 ### Para qué sirve
 
-Ver, por artículo, el saldo en las etapas de fábrica:
+Ver, por artículo, el saldo en las etapas de fábrica según el **tipo de artículo**:
 
-- Producción  
-- Semi elaborado  
-- 2da selección  
-- Terminado  
-
-y un **Consolidado** (suma de esas etapas).
+- **Fabricados** (componentes / `tipo_art_fab` Fabricado o Fabricado 2da): Producción, Semi elaborado, 2da selección y su consolidado.
+- **Terminados** (producto final / `tipo_art_fab` Terminado): saldo en depósito Terminado y consolidado (= ese saldo).
 
 También muestra **Talle** y **Color** del artículo, útiles para controlar calidad y surtido.
 
 ### Columnas
 
-| Columna | Significado |
-|--------|-------------|
-| **Artículo** | Código y nombre |
-| **Talle** | Talle del artículo (si no hay dato, se muestra «—») |
-| **Color** | Color sólido (ej. Negro) o combinación (ej. Rosa/Gris) |
-| **Producción** | Saldo en depósitos de producción |
-| **Semi elaborado** | Saldo en semi elaborado |
-| **2da Selección** | Saldo en segunda selección |
-| **Terminado** | Saldo en terminado |
-| **Consolidado** | Suma de las cuatro etapas |
+| Columna | Significado | Cuándo se ve |
+|--------|-------------|--------------|
+| **Artículo** | Nombre | Siempre |
+| **Talle** | Talle del artículo (si no hay dato, se muestra «—») | Siempre |
+| **Color** | Color sólido (ej. Negro) o combinación (ej. Rosa/Gris) | Siempre |
+| **Producción** | Saldo en depósitos de producción | Solo Fabricados |
+| **Semi elaborado** | Saldo en semi elaborado | Solo Fabricados |
+| **2da Selección** | Saldo en segunda selección | Solo Fabricados |
+| **Terminado** | Saldo en depósito terminado | Solo Terminados |
+| **Consolidado** | Suma de Producción + Semi + 2da | Solo Fabricados |
 
 ### Filtros
 
-1. **Marcas:** puede elegir una o varias (vacío = todas).
-2. **Artículo:** busque por código o nombre, o fije un artículo.
-3. **Presentación:** **Pares** (por defecto) o **Docenas**.
-4. Por defecto solo se listan artículos **con stock**; active incluir sin stock si lo necesita.
-5. **Actualizar** aplica los filtros; **Limpiar** vuelve al estado inicial.
+1. **Tipo de artículo:** **Fabricados** (por defecto) o **Terminados**.
+2. **Marcas:** puede elegir una o varias (vacío = todas).
+3. **Artículo / buscar en tabla:** filtrá al escribir por nombre, talle, color o código (mismo patrón que tablero MPR). La **X** del campo quita el filtro.
+4. **Presentación:** **Pares** (por defecto) o **Docenas**.
+5. Por defecto solo se listan artículos **con stock** en las etapas del tipo activo; active incluir sin stock si lo necesita.
+6. **Actualizar** recarga desde el servidor (marcas, tipo, stock, presentación).
 
 ### Día a día
 
-- Controle el avance del stock por etapa (producción → semi → 2da → terminado).
+- Alterne Fabricados / Terminados según consulte componentes en proceso o packs terminados.
 - Use Talle y Color al revisar planillas o surtido.
 - Si Talle o Color aparecen en «—», el artículo aún no tiene ese dato cargado; no significa que el saldo sea cero.
 
@@ -103,4 +100,4 @@ También muestra **Talle** y **Color** del artículo, útiles para controlar cal
 
 ---
 
-*Manual de usuario – Stock e Inventario. Synap. Actualizado 22/07/2026.*
+*Manual de usuario – Stock e Inventario. Synap. Actualizado 24/07/2026.*

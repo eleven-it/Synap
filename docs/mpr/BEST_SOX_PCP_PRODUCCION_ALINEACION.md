@@ -259,10 +259,10 @@ Aplicación:
 resta_urgente = MAX(0, dem_ped − stock_proceso)
 resta_total   = MAX(0, demanda − stock_proceso)   # demanda = dem_ped + dem_res
 fabricando    = MAX(0, envíos_ledger − stock_acreditado_pipeline)
-a_enviar      = MAX(0, resta_urgente − fabricando)   # tope columna Enviar
+a_enviar      = MAX(0, resta_urgente − envíos_ledger)   # tope columna Enviar
 ```
 
-**Fabricando** complementa la vista PCP: lo enviado al tablero que aún no ingresó (o no quedó cubierto) por stock físico en pipeline. **Enviar** usa `a_enviar` para no permitir reenviar lo ya comprometido en Fabricando (la columna Resta urgente sigue mostrando la brecha PCP).
+**Fabricando** complementa la vista PCP: lo enviado al tablero que aún no ingresó (o no quedó cubierto) por stock físico en pipeline. **Enviar** usa `a_enviar = resta_urgente − Σ envíos` mientras Fabricando > 0 (evita doble contar stock de proceso). Si Fabricando = 0 y el recálculo deja Resta urgente > 0, el tope **se reabre** a esa urgente (ajuste 24/07/2026).
 
 ### 9.4 Cambios previstos (cuando se implemente)
 

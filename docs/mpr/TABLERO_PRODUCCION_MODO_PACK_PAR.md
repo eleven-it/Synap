@@ -16,8 +16,11 @@ pedidos PED), seleccionables con el toggle **Pack | Par** del encabezado:
   docenas/pares*). Es el modo por defecto para no alterar el flujo operativo.
 - **Pack** = terminado (PCP). Pedido / reserva / resta / stock se calculan a nivel
   del pack terminado, sin explotar la BOM (equivalente a la vista BEST PCP Producción).
+  Lista **toda** la demanda a fabricar: pedidos PED abiertos **y** terminados con
+  quiebre solo-reserva (`stock_reserva > 0` sin PED). El chip **Solo urgentes** no
+  aplica en este modo (sí en Par).
 
-Ayuda visible en el encabezado: *"Pack = terminado (PCP, sin explosión BOM); Par =
+Ayuda visible en el encabezado: *"Pack = terminado (PCP, pedido + reserva, sin explosión BOM); Par =
 componente BOM (base del envío a producción)."*
 
 ## Comportamiento del botón "Enviar a producción"
@@ -31,9 +34,9 @@ componente BOM (base del envío a producción)."*
 
 ## Columnas por modo
 
-- **Par:** Artículo · Pedido · Reserva · Resta total · Resta urgente · Fabricando ·
+- **Par:** Artículo (solo nombre) · Pedido · Reserva · Resta total · Resta urgente · Fabricando ·
   Producido · 2da Selección · Semi Elaborado · Desperdicio · Total · Enviar.
-- **Pack:** Pack terminado · Fecha entrega · Pedido · Reserva · Resta total ·
+- **Pack:** Artículo (solo nombre) · Fecha entrega · Pedido · Reserva · Resta total ·
   Resta urgente · Terminado (stock del pack).
 
 ### Aviso «Sin receta» (modo Pack)
@@ -48,25 +51,37 @@ Si el pack terminado **no tiene BOM** (`id_en_abm` vacío/0 o sin componentes en
   sin receta **no genera** componentes allí (omisión silenciosa en la explosión).
 - El bloqueo duro por falta de receta sigue en **OPT / ventana-pack** al generar OPT.
 
+**Filtro «Sin receta» (chip en encabezado):** visible solo en modo Pack. Query
+`solo_sin_receta=1|0` (default `0`). Persiste en sesión (`tablero_produccion_solo_sin_receta`).
+Cuando está activo, la tabla muestra solo packs marcados con badge **Sin receta**; si no hay
+coincidencias: «Sin packs sin receta con demanda en el rango especificado».
+
 ## Cálculos (modo Pack)
 
 Sobre `listar_demanda_pack_desde_pedidos` (sin escribir en `lista_produccion_*`):
 
-- `dem_ped` (Pedido) = `cantidad_pedida_pedido` (P_ped del pack).
+- Fuente: pedidos PED abiertos **+** terminados con `stock_reserva > 0` (solo-reserva).
+- Los filtros de **fecha** aplican solo a líneas PED; la parte solo-reserva no depende de fechas.
+- `dem_ped` (Pedido) = `cantidad_pedida_pedido` (P_ped del pack; 0 si solo-reserva).
 - `dem_res` (Reserva) = `cantidad_demanda_reserva`.
 - `resta_total` = `cantidad_a_fabricar` = `max(0, Pedido + Reserva − Terminado)`.
 - `resta_urgente` = `cantidad_urgente_abs` = `max(0, Pedido − Terminado)`.
 - `terminado` / `total` = `stock_terminado` (depósitos que suman stock).
 - `enviado` (Fabricando) = `0` y `a_enviar` = `0`: el envío es por componente.
+- **Solo urgentes:** no filtra en Pack; se muestran filas con `resta_total > 0` aunque
+  `resta_urgente = 0` (p. ej. quiebre solo-reserva). En Par sí aplica `resta_urgente > 0`.
 
 Los **KPIs del encabezado** (`calcular_kpis_tablero_produccion`) se recalculan sobre
 las filas del modo activo (resta urgente / resta total en pares y docenas).
 
 ## Persistencia de filtros
 
-El toggle **Pack|Par** preserva `fecha_desde/hasta`, `solo_urgente`, marcas y
-`presentacion` (docenas/pares). El toggle **Docenas|Pares** y el filtro *Solo urgentes*
-preservan a su vez `modo`.
+El toggle **Pack|Par** preserva `fecha_desde/hasta`, marcas y
+`presentacion` (docenas/pares). El toggle **Docenas|Pares** preserva a su vez `modo`.
+En modo **Par**, el filtro *Solo urgentes* (`solo_urgente`) también se preserva entre
+vistas; en modo **Pack** el chip *Solo urgentes* se oculta porque no tiene efecto.
+En modo **Pack**, el chip *Sin receta* (`solo_sin_receta`, default desactivado) filtra
+solo packs sin BOM y se preserva igual que el resto de filtros.
 
 ### Último estado en sesión (17/07/2026)
 
@@ -77,6 +92,7 @@ Además de la query string, el tablero **persiste en sesión** el último estado
 | Pack \| Par | `tablero_produccion_modo` | `par` |
 | Docenas \| Pares | `mpr_presentacion_cantidad` | `docenas` |
 | Solo urgentes | `tablero_produccion_solo_urgente` | `true` |
+| Sin receta (Pack) | `tablero_produccion_solo_sin_receta` | `false` |
 
 - Al abrir `?modo=pack` o `?presentacion=unidades`, se guarda en sesión.
 - Sin el param en la URL (F5, «Actualizar vista», redirect post-envío), se reutiliza el valor de sesión.
@@ -93,7 +109,7 @@ opera sobre las mismas claves (`dem_ped`, `dem_res`, `resta_total`, `resta_urgen
 `mpr/tests/test_tablero_pack_modo.py` (suite pura, sin MySQL):
 
 - `TestListarTableroPack`: mapeo de columnas a nivel pack, sin explosión BOM,
-  `solo_urgente`, sin envío a nivel pack, orden y bordes.
+  Pack ignora `solo_urgente`, filtro `solo_sin_receta`, sin envío a nivel pack, orden y bordes.
 - `TestModoPackVsPar`: la resta total del pack no multiplica por la BOM.
 - `TestTableroProduccionViewModo`: `?modo=pack|par|inválido` selecciona el servicio
   correcto y expone `modo_tablero` en el contexto (default `par`).
@@ -102,7 +118,8 @@ opera sobre las mismas claves (`dem_ped`, `dem_res`, `resta_total`, `resta_urgen
 
 - `TestModoTableroSesion`: `?modo=pack` persiste; GET sin `modo` reusa sesión;
   valor inválido no pisa sesión; `_redirect_tablero_produccion` reinyecta
-  `modo` y `presentacion`.
+  `modo`, `presentacion` y `solo_sin_receta`.
+- `TestSoloSinRecetaSesion`: query/sesión/redirect de `solo_sin_receta`.
 
 Ejecutar:
-`docker exec Synap_app python manage.py test mpr.tests.test_tablero_pack_modo mpr.tests.test_tablero_solo_pendiente_sesion`
+`docker exec Synap_app python manage.py test mpr.tests.test_tablero_pack_modo mpr.tests.test_tablero_armado_fecha_entrega mpr.tests.test_tablero_solo_pendiente_sesion`

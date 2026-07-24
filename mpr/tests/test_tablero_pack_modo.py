@@ -92,17 +92,30 @@ class TestListarTableroPack(SimpleTestCase):
         self.assertEqual(filas[0]["id_articulo"], 1)
         self.assertEqual(filas[1]["id_articulo"], 2)
 
-    def test_solo_urgente_filtra_cero(self):
-        """solo_urgente excluye packs sin resta urgente."""
+    def test_solo_urgente_no_filtra_en_pack(self):
+        """En modo Pack, solo_urgente no excluye filas: se lista toda la demanda."""
         filas = self._call(solo_urgente=True)
         ids = [f["id_articulo"] for f in filas]
         self.assertIn(1, ids)
-        self.assertNotIn(2, ids)
+        self.assertIn(2, ids)
 
-    def test_solo_pendiente_alias_legacy(self):
+    def test_solo_pendiente_no_filtra_en_pack(self):
+        """solo_pendiente (legacy) tampoco filtra en modo Pack."""
         filas = self._call(solo_pendiente=True)
-        for f in filas:
-            self.assertGreater(f["resta_urgente"], 0)
+        ids = [f["id_articulo"] for f in filas]
+        self.assertIn(1, ids)
+        self.assertIn(2, ids)
+
+    def test_solo_sin_receta_filtra_packs_sin_bom(self):
+        """Con solo_sin_receta=True solo quedan filas marcadas sin_receta."""
+        filas = self._call(
+            abm_map={2: 99},
+            bom_map={99: {"componentes": [{"id_articulo": 50, "cantidad_articulo": 1}]}},
+            solo_sin_receta=True,
+        )
+        self.assertEqual(len(filas), 1)
+        self.assertEqual(filas[0]["id_articulo"], 1)
+        self.assertTrue(filas[0]["sin_receta"])
 
     def test_sin_demanda_pack_retorna_vacio(self):
         self.assertEqual(self._call(filas_pack=[]), [])

@@ -36,8 +36,8 @@ Es la pantalla principal del día: muestra la demanda (según pedidos), cuánto 
 
 ### Cómo usarlo
 
-1. Filtre por fechas de pedido, marcas o **Solo urgentes** si necesita enfocarse.
-2. Elija vista **Pack** (producto terminado) o **Par** (componente). Para enviar a producción use modo **Par**.
+1. Filtre por fechas de pedido, marcas o **Solo urgentes** (modo **Par**) si necesita enfocarse.
+2. Elija vista **Pack** (producto terminado, pedido + reserva) o **Par** (componente). Para enviar a producción use modo **Par**.
 3. Si hace falta, pulse **Actualizar vista** para refrescar la demanda desde los pedidos.
 4. En modo **Par**, complete **Enviar docenas** o **Enviar pares** en las filas que correspondan y pulse **Enviar a producción**. Confirme el envío.
 5. En modo **Pack** no hay envío: use el botón **Ver en modo Par para enviar**.
@@ -45,7 +45,7 @@ Es la pantalla principal del día: muestra la demanda (según pedidos), cuánto 
 
 ### Modo Pack y packs sin receta
 
-En **Pack** cada fila es un **artículo terminado** (demanda del pedido, sin desglosar componentes).
+En **Pack** cada fila es un **artículo terminado** (demanda del pedido y reserva, sin desglosar componentes). El filtro **Solo urgentes** no aplica en Pack: se listan todos los packs con demanda a fabricar, incluidos quiebres solo-reserva. Puede activar el chip **Sin receta** para ver solo packs sin lista de materiales (BOM).
 
 Si el pack **no tiene receta** (lista de materiales / BOM) en AdministraNET:
 
@@ -57,7 +57,7 @@ Si el pack **no tiene receta** (lista de materiales / BOM) en AdministraNET:
 ### Avisos frecuentes
 
 - «Sin cantidades a enviar»: cargue al menos una cantidad antes de confirmar.
-- «Sin artículos/packs con demanda…» o «Sin resta urgente…»: no hay filas con el filtro actual; amplíe fechas o quite filtros.
+- «Sin artículos/packs con demanda…», «Sin packs sin receta…» o «Sin resta urgente…»: no hay filas con el filtro actual; amplíe fechas o quite filtros.
 - «Ningún artículo coincide con la búsqueda.»
 - Tras un envío correcto: mensaje de componentes enviados a producción.
 - Badge **Sin receta** (modo Pack): el terminado no tiene lista de materiales; revise pedidos en el tooltip y complete la receta del artículo.

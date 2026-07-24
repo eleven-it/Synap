@@ -7,10 +7,10 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
-from django.conf import settings
 from django.utils import timezone
 
 from core.backup.models import BackupArtifact, BackupJob
+from core.backup.services import config as backup_config
 from core.backup.services import manifest as manifest_svc
 from core.backup.services import mysql_backup, postgres_backup, prechecks, sftp_upload
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def job_directory(job: BackupJob) -> Path:
     created = job.created_at or timezone.now()
-    root = Path(getattr(settings, "BACKUP_LOCAL_ROOT", "/var/lib/synap/backups"))
+    root = Path(backup_config.effective_local_root())
     return root / f"{created.year:04d}" / f"{created.month:02d}" / str(job.id)
 
 
@@ -288,7 +288,7 @@ def run_job(job: BackupJob, *, dry_run: bool = False) -> BackupJob:
 
     if job.status == BackupJob.STATUS_COMPLETED:
         upload = sftp_upload.upload_job_directory(job_dir, str(job.id))
-        if not getattr(settings, "BACKUP_SFTP_ENABLED", False):
+        if not backup_config.effective_sftp_enabled():
             job.remote_upload_status = BackupJob.REMOTE_SKIPPED
         elif upload.success:
             job.remote_upload_status = BackupJob.REMOTE_SUCCESS
@@ -344,8 +344,8 @@ def _write_log(
 
 def prune_old_backups(retention_days: int | None = None) -> int:
     """Elimina directorios de jobs más antiguos que retention_days. Devuelve cantidad purgada."""
-    days = retention_days or int(getattr(settings, "BACKUP_RETENTION_DAYS", 30))
-    root = Path(getattr(settings, "BACKUP_LOCAL_ROOT", "/var/lib/synap/backups"))
+    days = retention_days or backup_config.effective_retention_days()
+    root = Path(backup_config.effective_local_root())
     if not root.is_dir():
         return 0
     cutoff = timezone.now() - timedelta(days=days)

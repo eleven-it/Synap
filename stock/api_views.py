@@ -43,11 +43,13 @@ def api_inventario_articulos(request):
         "si",
         "sí",
     )
+    ambito = (request.GET.get("ambito") or "fabricados").strip().lower()
     items = buscar_articulos_inventario(
         base_empresa,
         q,
         marcas_incluidos=marcas,
         incluir_ceros=incluir_ceros,
+        ambito=ambito,
         limit=limit,
     )
     return JsonResponse({"articulos": items})

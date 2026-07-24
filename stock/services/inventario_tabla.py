@@ -23,7 +23,27 @@ ETAPAS_INVENTARIO: Tuple[Tuple[str, str], ...] = (
     ("Terminado", "Terminado"),
 )
 
+ETAPAS_FABRICADOS: Tuple[Tuple[str, str], ...] = (
+    ("Produccion", "Producción"),
+    ("SemiElaborado", "Semi elaborado"),
+    ("2daSeleccion", "2da Selección"),
+)
+
+ETAPAS_TERMINADOS: Tuple[Tuple[str, str], ...] = (
+    ("Terminado", "Terminado"),
+)
+
 TIPOS_MPR_COLUMNAS = frozenset(t[0] for t in ETAPAS_INVENTARIO)
+
+AMBITO_FABRICADOS = "fabricados"
+AMBITO_TERMINADOS = "terminados"
+AMBITOS_VALIDOS = frozenset({AMBITO_FABRICADOS, AMBITO_TERMINADOS})
+
+# tipo_art_fab Admin por ámbito (Fabricado 2da = packs/componentes fabricados)
+TIPOS_ART_FAB_POR_AMBITO: Dict[str, Tuple[str, ...]] = {
+    AMBITO_FABRICADOS: ("Fabricado", "Fabricado 2da"),
+    AMBITO_TERMINADOS: ("Terminado",),
+}
 
 
 @dataclass
@@ -33,12 +53,25 @@ class InventarioTablaFiltros:
     id_articulo: Optional[int] = None
     incluir_ceros: bool = False
     presentacion: str = "unidades"
+    ambito: str = AMBITO_FABRICADOS
     page: int = 1
 
     @property
     def offset(self) -> int:
         p = max(1, self.page)
         return (p - 1) * PAGE_SIZE
+
+
+def parse_ambito(raw: Optional[str]) -> str:
+    modo = (raw or AMBITO_FABRICADOS).strip().lower()
+    return modo if modo in AMBITOS_VALIDOS else AMBITO_FABRICADOS
+
+
+def etapas_para_ambito(ambito: Optional[str]) -> Tuple[Tuple[str, str], ...]:
+    """Columnas de etapa visibles según Fabricados | Terminados."""
+    if parse_ambito(ambito) == AMBITO_TERMINADOS:
+        return ETAPAS_TERMINADOS
+    return ETAPAS_FABRICADOS
 
 
 def build_inventario_query_string(
@@ -59,6 +92,8 @@ def build_inventario_query_string(
         pairs.append(("incluir_ceros", "1"))
     if filtros.presentacion and filtros.presentacion != "unidades":
         pairs.append(("presentacion", filtros.presentacion))
+    if filtros.ambito and filtros.ambito != AMBITO_FABRICADOS:
+        pairs.append(("ambito", filtros.ambito))
     if not clear_search:
         if id_articulo is not None:
             pairs.append(("id_articulo", str(id_articulo)))
@@ -116,6 +151,7 @@ def parse_inventario_filtros(
         id_articulo=id_art,
         incluir_ceros=incluir,
         presentacion=parse_presentacion(get_params.get("presentacion")),
+        ambito=parse_ambito(get_params.get("ambito")),
         page=page,
     )
 
@@ -169,12 +205,52 @@ def listar_marcas_catalogo(base_empresa: str) -> List[Dict[str, Any]]:
         return []
 
 
+def _clausula_busqueda_inventario(
+    busqueda: str,
+    *,
+    alias: str = "a",
+    alias_ce: Optional[str] = None,
+) -> Tuple[str, List[Any]]:
+    """
+    Texto libre sobre columnas visibles/utiles de la grilla: código, nombre,
+    barras, talle y color (CE) cuando hay join a articulo_valor_ce.
+    """
+    q = (busqueda or "").strip()
+    if not q:
+        return "", []
+    term = f"%{q}%"
+    partes = [
+        f"IFNULL({alias}.id_manual, '') LIKE %s",
+        f"IFNULL({alias}.CodArtProv, '') LIKE %s",
+        f"IFNULL({alias}.NombreArticulo, '') LIKE %s",
+        f"IFNULL({alias}.NroCodBarra, '') LIKE %s",
+        f"IFNULL({alias}.NroCodBarraF, '') LIKE %s",
+    ]
+    params: List[Any] = [term, term, term, term, term]
+    if alias_ce:
+        partes.append(f"IFNULL({alias_ce}.valor1, '') LIKE %s")
+        partes.append(f"IFNULL({alias_ce}.valor2, '') LIKE %s")
+        params.extend([term, term])
+    return "(" + " OR ".join(partes) + ")", params
+
+
 def _build_articulo_where(
     f: InventarioTablaFiltros,
     alias: str = "a",
+    *,
+    alias_ce: Optional[str] = None,
 ) -> Tuple[str, List[Any]]:
     parts: List[str] = []
     params: List[Any] = []
+
+    tipos_fab = TIPOS_ART_FAB_POR_AMBITO.get(parse_ambito(f.ambito), TIPOS_ART_FAB_POR_AMBITO[AMBITO_FABRICADOS])
+    if len(tipos_fab) == 1:
+        parts.append(f"COALESCE(TRIM({alias}.tipo_art_fab), '') = %s")
+        params.append(tipos_fab[0])
+    else:
+        ph = ",".join(["%s"] * len(tipos_fab))
+        parts.append(f"COALESCE(TRIM({alias}.tipo_art_fab), '') IN ({ph})")
+        params.extend(tipos_fab)
 
     if f.id_articulo is not None:
         parts.append(f"{alias}.IDArt = %s")
@@ -187,15 +263,12 @@ def _build_articulo_where(
         params.extend(f.marcas_incluidos)
 
     if f.busqueda:
-        term = f"%{f.busqueda}%"
-        parts.append(
-            f"(IFNULL({alias}.id_manual, '') LIKE %s "
-            f"OR IFNULL({alias}.CodArtProv, '') LIKE %s "
-            f"OR IFNULL({alias}.NombreArticulo, '') LIKE %s "
-            f"OR IFNULL({alias}.NroCodBarra, '') LIKE %s "
-            f"OR IFNULL({alias}.NroCodBarraF, '') LIKE %s)"
+        clausula, params_q = _clausula_busqueda_inventario(
+            f.busqueda, alias=alias, alias_ce=alias_ce
         )
-        params.extend([term, term, term, term, term])
+        if clausula:
+            parts.append(clausula)
+            params.extend(params_q)
 
     return " AND ".join(parts) if parts else "1=1", params
 
@@ -223,6 +296,37 @@ def _sql_agg_subquery(tbl_sd: str, tbl_dep: str) -> str:
     """
 
 
+def _sql_tiene_stock_positivo_expr(
+    alias: str = "agg",
+    *,
+    etapas: Optional[Tuple[Tuple[str, str], ...]] = None,
+) -> str:
+    """
+    Expresión que indica si el artículo tiene saldo positivo en alguna etapa
+    del ámbito activo.
+
+    No usa el consolidado: un saldo negativo en una etapa no debe ocultar el
+    saldo disponible de otra etapa del mismo artículo.
+    """
+    cols = etapas if etapas is not None else ETAPAS_INVENTARIO
+    return "(" + " OR ".join(
+        f"COALESCE({alias}.`{tipo}`, 0) > 0"
+        for tipo, _ in cols
+    ) + ")"
+
+
+def _sql_consolidado_expr(
+    alias: str = "agg",
+    *,
+    etapas: Optional[Tuple[Tuple[str, str], ...]] = None,
+) -> str:
+    cols = etapas if etapas is not None else ETAPAS_INVENTARIO
+    return "(" + " + ".join(
+        f"COALESCE({alias}.`{tipo}`, 0)"
+        for tipo, _ in cols
+    ) + ")"
+
+
 def consultar_inventario_tabla(
     base_empresa: str,
     filtros: InventarioTablaFiltros,
@@ -230,6 +334,7 @@ def consultar_inventario_tabla(
     """
     Devuelve filas pivoteadas, total_registros, page, page_size, sin_config_mpr.
     """
+    etapas = etapas_para_ambito(filtros.ambito)
     vacio: Dict[str, Any] = {
         "filas": [],
         "total_registros": 0,
@@ -237,6 +342,8 @@ def consultar_inventario_tabla(
         "page_size": PAGE_SIZE,
         "total_pages": 0,
         "sin_config_mpr": False,
+        "etapas": etapas,
+        "ambito": parse_ambito(filtros.ambito),
     }
     if not (base_empresa or "").strip():
         return vacio
@@ -262,7 +369,10 @@ def consultar_inventario_tabla(
                 row_cfg = cursor.fetchone()
                 sin_config = not (row_cfg and int(row_cfg.get("n") or 0) > 0)
 
-            where_art, params_art = _build_articulo_where(filtros)
+            tbl_ce = _nombre_tabla(cursor, "articulo_valor_ce")
+            where_art, params_art = _build_articulo_where(
+                filtros, alias_ce="avce" if tbl_ce else None
+            )
             agg_sql = ""
             join_agg = ""
             if tbl_sd and tbl_dep:
@@ -272,26 +382,33 @@ def consultar_inventario_tabla(
                 join_agg = ""
 
             consolidado_expr = (
-                "(COALESCE(agg.`Produccion`, 0) + COALESCE(agg.`SemiElaborado`, 0) + "
-                "COALESCE(agg.`2daSeleccion`, 0) + COALESCE(agg.`Terminado`, 0))"
+                _sql_consolidado_expr(etapas=etapas) if join_agg else "0"
             )
-            if not join_agg:
-                consolidado_expr = "0"
 
-            having_parts = []
+            where_stock_parts = []
             if not filtros.incluir_ceros and not filtros.id_articulo:
-                having_parts.append(f"{consolidado_expr} > 0")
-            having_sql = (" HAVING " + " AND ".join(having_parts)) if having_parts else ""
+                where_stock_parts.append(
+                    _sql_tiene_stock_positivo_expr(etapas=etapas)
+                    if join_agg
+                    else "0 > 0"
+                )
+            where_stock_sql = (
+                " AND " + " AND ".join(where_stock_parts)
+                if where_stock_parts
+                else ""
+            )
 
             tart = tbl_art.replace("`", "``")
-            tbl_ce = _nombre_tabla(cursor, "articulo_valor_ce")
             join_ce = ""
             if tbl_ce:
                 tce = tbl_ce.replace("`", "``")
                 join_ce = f" LEFT JOIN `{tce}` avce ON avce.id_articulo = a.IDArt"
             from_sql = f"FROM `{tart}` a {join_agg}{join_ce}"
 
-            count_sql = f"SELECT COUNT(*) AS n FROM (SELECT a.IDArt {from_sql} WHERE {where_art}{having_sql}) sub"
+            count_sql = (
+                f"SELECT COUNT(*) AS n FROM "
+                f"(SELECT a.IDArt {from_sql} WHERE {where_art}{where_stock_sql}) sub"
+            )
             cursor.execute(count_sql, tuple(params_art))
             count_row = cursor.fetchone()
             total = int(count_row.get("n") or 0) if count_row else 0
@@ -308,7 +425,7 @@ def consultar_inventario_tabla(
             else:
                 select_cols.append("'' AS talle")
                 select_cols.append("'' AS color")
-            for tipo, _ in ETAPAS_INVENTARIO:
+            for tipo, _ in etapas:
                 if join_agg:
                     select_cols.append(f"COALESCE(agg.`{tipo}`, 0) AS `{tipo}`")
                 else:
@@ -319,7 +436,7 @@ def consultar_inventario_tabla(
             limit_sql = "LIMIT %s OFFSET %s"
             sql = (
                 f"SELECT {', '.join(select_cols)} {from_sql} "
-                f"WHERE {where_art}{having_sql} {order_sql} {limit_sql}"
+                f"WHERE {where_art}{where_stock_sql} {order_sql} {limit_sql}"
             )
             cursor.execute(sql, tuple(params_art) + (PAGE_SIZE, filtros.offset))
             rows = cursor.fetchall()
@@ -327,7 +444,7 @@ def consultar_inventario_tabla(
         filas_raw = []
         for r in rows:
             etapas_saldos = {}
-            for tipo, _ in ETAPAS_INVENTARIO:
+            for tipo, _ in etapas:
                 try:
                     etapas_saldos[tipo] = float(r.get(tipo) or 0)
                 except (TypeError, ValueError):
@@ -356,6 +473,8 @@ def consultar_inventario_tabla(
             "page_size": PAGE_SIZE,
             "total_pages": max(1, math.ceil(total / PAGE_SIZE)) if total else 0,
             "sin_config_mpr": sin_config,
+            "etapas": etapas,
+            "ambito": parse_ambito(filtros.ambito),
         }
     except Exception as exc:
         logger.warning("consultar_inventario_tabla %s: %s", base_empresa, exc, exc_info=True)
@@ -366,11 +485,14 @@ def preparar_filas_inventario_presentacion(
     filas_raw: List[Dict[str, Any]],
     modo: str,
     base_empresa: Optional[str] = None,
+    *,
+    ambito: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Enriquece filas con celdas docenas/unidades para plantilla."""
     from mpr.reportes_presentacion import _celda_stock_deposito
     from mpr.services import bulk_cantidad_promedio_bulto
 
+    etapas = etapas_para_ambito(ambito)
     bulto_map: Dict[int, float] = {}
     if modo == "docenas" and base_empresa:
         ids = [int(f["id_articulo"]) for f in filas_raw if f.get("id_articulo") is not None]
@@ -382,7 +504,7 @@ def preparar_filas_inventario_presentacion(
         aid = fila.get("id_articulo")
         bulto = bulto_map.get(int(aid)) if aid is not None and modo == "docenas" else None
         etapas_celdas = []
-        for tipo, label in ETAPAS_INVENTARIO:
+        for tipo, label in etapas:
             saldo = (fila.get("etapas_saldos") or {}).get(tipo, 0)
             etapas_celdas.append({
                 "tipo_mpr": tipo,
@@ -410,17 +532,21 @@ def buscar_articulos_inventario(
     *,
     marcas_incluidos: Optional[List[int]] = None,
     incluir_ceros: bool = False,
+    ambito: Optional[str] = None,
     limit: int = 15,
 ) -> List[Dict[str, Any]]:
-    """Búsqueda predictiva sobre universo completo (sin paginación de tabla)."""
+    """Búsqueda predictiva sobre universo del ámbito (sin paginación de tabla)."""
     q = (q or "").strip()
     if len(q) < _BUSQUEDA_MIN_LEN:
         return []
     limit = min(max(1, limit), 50)
+    ambito_norm = parse_ambito(ambito)
+    etapas = etapas_para_ambito(ambito_norm)
     f = InventarioTablaFiltros(
         marcas_incluidos=list(marcas_incluidos or []),
         busqueda=q,
         incluir_ceros=incluir_ceros,
+        ambito=ambito_norm,
         page=1,
     )
     try:
@@ -431,26 +557,37 @@ def buscar_articulos_inventario(
             if not tbl_art:
                 return []
 
-            where_art, params_art = _build_articulo_where(f)
+            tbl_ce = _nombre_tabla(cursor, "articulo_valor_ce")
+            where_art, params_art = _build_articulo_where(
+                f, alias_ce="avce" if tbl_ce else None
+            )
             join_agg = ""
             consolidado_expr = "0"
             if tbl_sd and tbl_dep:
                 agg_sql = _sql_agg_subquery(tbl_sd, tbl_dep)
                 join_agg = f"LEFT JOIN ({agg_sql}) agg ON agg.id_articulo = a.IDArt"
-                consolidado_expr = (
-                    "(COALESCE(agg.`Produccion`, 0) + COALESCE(agg.`SemiElaborado`, 0) + "
-                    "COALESCE(agg.`2daSeleccion`, 0) + COALESCE(agg.`Terminado`, 0))"
+                consolidado_expr = _sql_consolidado_expr(etapas=etapas)
+
+            where_stock_sql = ""
+            if not incluir_ceros:
+                where_stock_sql = (
+                    f" AND {_sql_tiene_stock_positivo_expr(etapas=etapas)}"
+                    if join_agg
+                    else " AND 0 > 0"
                 )
 
-            having_sql = ""
-            if not incluir_ceros:
-                having_sql = f" HAVING {consolidado_expr} > 0"
-
             tart = tbl_art.replace("`", "``")
+            join_ce = ""
+            select_ce = "'' AS talle, '' AS color"
+            if tbl_ce:
+                tce = tbl_ce.replace("`", "``")
+                join_ce = f" LEFT JOIN `{tce}` avce ON avce.id_articulo = a.IDArt"
+                select_ce = "COALESCE(avce.valor1, '') AS talle, COALESCE(avce.valor2, '') AS color"
             sql = (
                 f"SELECT a.IDArt AS id_articulo, a.id_manual, a.CodArtProv AS cod_art_prov, "
-                f"a.NombreArticulo AS nombre_articulo, {consolidado_expr} AS consolidado "
-                f"FROM `{tart}` a {join_agg} WHERE {where_art}{having_sql} "
+                f"a.NombreArticulo AS nombre_articulo, {select_ce}, "
+                f"{consolidado_expr} AS consolidado "
+                f"FROM `{tart}` a {join_agg}{join_ce} WHERE {where_art}{where_stock_sql} "
                 f"ORDER BY a.NombreArticulo LIMIT %s"
             )
             cursor.execute(sql, tuple(params_art) + (limit,))
@@ -464,6 +601,8 @@ def buscar_articulos_inventario(
                 "id_manual": str_codigo_manual_articulo(r.get("id_manual")),
                 "cod_art_prov": str_or_default(r.get("cod_art_prov"), ""),
                 "nombre": str_or_default(r.get("nombre_articulo"), "-"),
+                "talle": ce_texto(r.get("talle")),
+                "color": ce_texto(r.get("color")),
                 "marca_nombre": "",
             }
             for r in rows

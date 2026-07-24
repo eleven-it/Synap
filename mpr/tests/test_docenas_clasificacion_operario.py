@@ -50,12 +50,14 @@ class PresentacionOperativaTests(SimpleTestCase):
         self.assertEqual(fila["enviado_display"], "0")
         self.assertNotIn("pares", fila["produccion_display"].lower())
 
-    def test_a_enviar_descuenta_fabricando(self):
+    def test_a_enviar_descuenta_envios_con_fabricando(self):
+        """Con Fabricando>0 el tope descuenta el ledger (no reabre)."""
         fila = enriquecer_fila_tablero_presentacion(
             {
                 "dem_ped": 12,
                 "resta_urgente": 12,
                 "resta_total": 12,
+                "envios": 12,
                 "enviado": 12,
                 "produccion": 0,
             },
@@ -63,6 +65,48 @@ class PresentacionOperativaTests(SimpleTestCase):
         )
         self.assertEqual(fila["a_enviar"], 0)
         self.assertEqual(fila["a_enviar_docenas"], 0)
+
+    def test_a_enviar_reabre_cuando_fabricando_cero(self):
+        """Fabricando=0 y Resta urgente>0: reabre tope aunque haya envíos históricos."""
+        fila = enriquecer_fila_tablero_presentacion(
+            {
+                "dem_ped": 12,
+                "resta_urgente": 12,
+                "resta_total": 12,
+                "envios": 12,
+                "enviado": 0,
+                "produccion": 0,
+            },
+            "unidades",
+        )
+        self.assertEqual(fila["a_enviar"], 12)
+
+    def test_a_enviar_no_doble_cuenta_acreditado(self):
+        """Con envíos = resta y Fabricando>0, a_enviar debe ser 0 (sin residual fantasma)."""
+        fila = enriquecer_fila_tablero_presentacion(
+            {
+                "resta_urgente": 2513,
+                "envios": 2513,
+                "enviado": 1486,  # envíos − acreditado(1027)
+                "produccion": 1027,
+            },
+            "unidades",
+        )
+        self.assertEqual(fila["a_enviar"], 0)
+
+    def test_a_enviar_docenas_pcp_cero_deshabilita_concepto(self):
+        """Pares sueltos < media docena: tope docenas = 0 (input no editable en UI)."""
+        fila = enriquecer_fila_tablero_presentacion(
+            {
+                "resta_urgente": 5,
+                "resta_total": 5,
+                "envios": 0,
+                "enviado": 0,
+            },
+            "docenas",
+        )
+        self.assertEqual(fila["a_enviar"], 5)
+        self.assertEqual(fila["a_enviar_docenas_pcp"], 0)
 
     def test_a_enviar_docenas_pcp_enteras(self):
         fila = enriquecer_fila_tablero_presentacion(

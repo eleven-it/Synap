@@ -152,23 +152,56 @@ class TestCalcularPendienteComponente(SimpleTestCase):
 
 
 class TestCalcularAEnviarComponente(SimpleTestCase):
-    """Tope Enviar = resta urgente − Fabricando."""
+    """Tope Enviar: urgente−envíos si Fabricando>0; reabre a urgente si Fabricando=0."""
 
-    def test_resta_menos_fabricando(self):
+    def test_resta_menos_envios(self):
         from mpr.services import _calcular_a_enviar_componente
 
-        self.assertAlmostEqual(_calcular_a_enviar_componente(12.0, 12.0), 0.0)
+        self.assertAlmostEqual(
+            _calcular_a_enviar_componente(12.0, 12.0, fabricando=12.0), 0.0
+        )
 
-    def test_parcial_fabricando(self):
+    def test_parcial_envios(self):
         from mpr.services import _calcular_a_enviar_componente
 
-        self.assertAlmostEqual(_calcular_a_enviar_componente(12.0, 5.0), 7.0)
+        self.assertAlmostEqual(
+            _calcular_a_enviar_componente(12.0, 5.0, fabricando=5.0), 7.0
+        )
 
-    def test_sin_fabricando(self):
+    def test_sin_envios(self):
         from mpr.services import _calcular_a_enviar_componente
 
         self.assertAlmostEqual(_calcular_a_enviar_componente(12.0, 0.0), 12.0)
 
+    def test_envio_exacto_con_stock_preexistente_queda_cero(self):
+        """Con Fabricando>0 no residual: stock_proceso ya bajó resta; ledger cubre el hueco."""
+        from mpr.services import _calcular_a_enviar_componente
+
+        dem_ped, stock_proceso, envios = 3540.0, 1027.0, 2513.0
+        resta = max(0.0, dem_ped - stock_proceso)
+        fabricando = 1486.0  # envíos − acreditado(1027)
+        self.assertAlmostEqual(resta, 2513.0)
+        self.assertAlmostEqual(
+            _calcular_a_enviar_componente(resta, envios, fabricando=fabricando),
+            0.0,
+        )
+
+    def test_reabre_cuando_fabricando_cero_y_urgente_positiva(self):
+        """Ciclo acreditado (Fabricando=0): si el recálculo deja urgente>0, reabre Enviar."""
+        from mpr.services import _calcular_a_enviar_componente
+
+        self.assertAlmostEqual(
+            _calcular_a_enviar_componente(100.0, 100.0, fabricando=0.0),
+            100.0,
+        )
+
+    def test_a_enviar_no_supera_resta_total(self):
+        from mpr.services import _calcular_a_enviar_componente
+
+        self.assertAlmostEqual(
+            _calcular_a_enviar_componente(100.0, 0.0, resta_total=40.0),
+            40.0,
+        )
 
 class TestEnviadoProduccionPorComponente(SimpleTestCase):
     """Tests de la función pura _enviado_produccion_por_componente."""

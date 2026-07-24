@@ -3,21 +3,18 @@
 import tempfile
 from unittest.mock import patch
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
-from core.backup.models import BackupArtifact, BackupJob
+from core.backup.models import BackupArtifact, BackupJob, BackupSettings
 from core.backup.services.orchestrator import run_job
 
 
-@override_settings(BACKUP_LOCAL_ROOT=tempfile.gettempdir())
 class BackupIncrementalTests(TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        self.settings_override = override_settings(BACKUP_LOCAL_ROOT=self.tmp)
-        self.settings_override.enable()
-
-    def tearDown(self):
-        self.settings_override.disable()
+        bs = BackupSettings.get_solo()
+        bs.local_root = self.tmp
+        bs.save()
 
     @patch("core.backup.services.orchestrator.sftp_upload.upload_job_directory")
     @patch("core.backup.services.orchestrator.postgres_backup.run_wal_incremental")

@@ -2,12 +2,13 @@
 
 from unittest.mock import MagicMock, patch
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase
 
+from core.backup.models import BackupSettings
 from core.backup.services import prechecks
 
 
-class BackupPrechecksTests(SimpleTestCase):
+class BackupPrechecksTests(TestCase):
     @patch("core.backup.services.prechecks.get_connection")
     def test_log_bin_off_error_espanol(self, mock_conn):
         cursor = MagicMock()
@@ -22,14 +23,18 @@ class BackupPrechecksTests(SimpleTestCase):
         self.assertIn("log_bin=OFF", result.message)
         self.assertIn("binary log", result.message.lower())
 
-    @override_settings(BACKUP_PG_WAL_ARCHIVE_DIR="")
     def test_wal_dir_vacio_fallo_explicito(self):
+        bs = BackupSettings.get_solo()
+        bs.pg_wal_archive_dir = ""
+        bs.save()
         result = prechecks.check_postgres_wal_archive_dir(for_incremental=True)
         self.assertFalse(result.ok)
-        self.assertIn("BACKUP_PG_WAL_ARCHIVE_DIR", result.message)
+        self.assertIn("WAL archivado", result.message)
 
-    @override_settings(BACKUP_PG_WAL_ARCHIVE_DIR="/tmp/no-existe-wal-synap-test")
     def test_wal_dir_no_existe(self):
+        bs = BackupSettings.get_solo()
+        bs.pg_wal_archive_dir = "/tmp/no-existe-wal-synap-test"
+        bs.save()
         result = prechecks.check_postgres_wal_archive_dir(for_incremental=True)
         self.assertFalse(result.ok)
         self.assertIn("no existe", result.message.lower())

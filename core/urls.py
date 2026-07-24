@@ -52,6 +52,8 @@ urlpatterns = [
         name='legacy_mysql_schema',
     ),
     path('backups/', views.backup_list_view, name='backup_list'),
+    path('backups/configuracion/', views.backup_config_view, name='backup_config'),
+    path('backups/configuracion/probar-sftp/', views.backup_test_sftp_view, name='backup_test_sftp'),
     path('backups/lanzar/', views.backup_launch_view, name='backup_launch'),
     path('backups/api/jobs/<uuid:job_id>/', views.backup_job_api_view, name='backup_job_api'),
     path('backups/<uuid:job_id>/', views.backup_detail_view, name='backup_detail'),

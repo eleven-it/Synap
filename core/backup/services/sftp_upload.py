@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from django.conf import settings
+from core.backup.services import config as backup_config
 
 try:
     import paramiko
@@ -22,37 +22,104 @@ class SftpUploadResult:
     message: str = ""
 
 
+def _connect_sftp(
+    *,
+    host: str,
+    port: int,
+    user: str,
+    password: str = "",
+    key_path: str = "",
+):
+    if paramiko is None:
+        raise RuntimeError("paramiko no está instalado.")
+    transport = paramiko.Transport((host, port))
+    if key_path:
+        pkey = paramiko.RSAKey.from_private_key_file(key_path)
+        transport.connect(username=user, pkey=pkey)
+    else:
+        transport.connect(username=user, password=password)
+    return transport, paramiko.SFTPClient.from_transport(transport)
+
+
+def test_sftp_connection(
+    *,
+    host: str,
+    port: int,
+    user: str,
+    password: str = "",
+    key_path: str = "",
+    remote_path: str = "/synap/backups",
+) -> SftpUploadResult:
+    host = (host or "").strip()
+    user = (user or "").strip()
+    if not host or not user:
+        return SftpUploadResult(
+            success=False,
+            message="Indique host y usuario SFTP.",
+        )
+    if paramiko is None:
+        return SftpUploadResult(success=False, message="paramiko no está instalado.")
+
+    transport = None
+    sftp = None
+    try:
+        transport, sftp = _connect_sftp(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            key_path=(key_path or "").strip(),
+        )
+        remote_base = (remote_path or "/synap/backups").strip()
+        _mkdir_p_sftp(sftp, remote_base)
+        return SftpUploadResult(success=True, message=f"Conexión SFTP OK ({host}:{port}).")
+    except Exception as exc:
+        logger.exception("Test SFTP falló: %s", exc)
+        return SftpUploadResult(success=False, message=f"Conexión SFTP falló: {exc}")
+    finally:
+        if sftp is not None:
+            try:
+                sftp.close()
+            except Exception:
+                pass
+        if transport is not None:
+            try:
+                transport.close()
+            except Exception:
+                pass
+
+
 def upload_job_directory(job_dir: Path, job_id: str) -> SftpUploadResult:
-    if not getattr(settings, "BACKUP_SFTP_ENABLED", False):
+    if not backup_config.effective_sftp_enabled():
         return SftpUploadResult(success=True, message="SFTP deshabilitado (skipped).")
 
-    host = (getattr(settings, "BACKUP_SFTP_HOST", "") or "").strip()
-    user = (getattr(settings, "BACKUP_SFTP_USER", "") or "").strip()
-    remote_base = (getattr(settings, "BACKUP_SFTP_REMOTE_PATH", "") or "/synap/backups").strip()
+    host = backup_config.effective_sftp_host()
+    user = backup_config.effective_sftp_user()
+    remote_base = backup_config.effective_sftp_remote_path()
 
     if not host or not user:
         return SftpUploadResult(
             success=False,
-            message="SFTP habilitado pero faltan BACKUP_SFTP_HOST o BACKUP_SFTP_USER.",
+            message="SFTP habilitado pero faltan host o usuario en la configuración.",
         )
 
     if paramiko is None:
         return SftpUploadResult(success=False, message="paramiko no está instalado.")
 
-    port = int(getattr(settings, "BACKUP_SFTP_PORT", 22) or 22)
-    password = (getattr(settings, "BACKUP_SFTP_PASSWORD", "") or "").strip()
-    key_path = (getattr(settings, "BACKUP_SFTP_KEY_PATH", "") or "").strip()
+    port = backup_config.effective_sftp_port()
+    password = backup_config.sftp_password_plain()
+    key_path = backup_config.effective_sftp_key_path()
 
     transport = None
     sftp = None
     try:
-        transport = paramiko.Transport((host, port))
-        if key_path:
-            pkey = paramiko.RSAKey.from_private_key_file(key_path)
-            transport.connect(username=user, pkey=pkey)
-        else:
-            transport.connect(username=user, password=password)
-        sftp = paramiko.SFTPClient.from_transport(transport)
+        transport, sftp = _connect_sftp(
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            key_path=key_path,
+        )
 
         remote_job_dir = f"{remote_base.rstrip('/')}/{job_id}"
         _mkdir_p_sftp(sftp, remote_job_dir)

@@ -1,0 +1,356 @@
+{% extends "core/core_app_base.html" %}
+
+{% block admin_content %}
+{{ schedule_rows|json_script:"schedule-data" }}
+<section class="flex flex-col bg-slate-50 py-4 dark:bg-slate-900 sm:py-5"
+         x-data="backupConfig()">
+  <form method="post" action="{% url 'core:backup_config' %}" x-ref="form">
+    {% csrf_token %}
+    <div class="mx-auto w-full min-w-0 max-w-5xl px-3 pb-24 sm:px-4 md:px-6">
+
+      {# ── Breadcrumb ── #}
+      <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:text-sm" aria-label="Migas de pan">
+        <a href="{% url 'core:backup_list' %}" class="font-medium text-slate-600 hover:text-emerald-600 dark:text-slate-300 dark:hover:text-emerald-400">Copias de seguridad</a>
+        <span class="mx-1 text-slate-300 dark:text-slate-600">/</span>
+        <span class="font-medium text-slate-800 dark:text-slate-200">Configuración</span>
+      </nav>
+
+      {# ── Hero ── #}
+      <header class="mb-5 overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-800 p-5 shadow-sm sm:p-6">
+        <div class="flex items-center gap-2.5">
+          <span class="material-icons text-emerald-400" aria-hidden="true">tune</span>
+          <h1 class="text-xl font-bold tracking-tight text-white sm:text-2xl">Configuración de copias de seguridad</h1>
+        </div>
+        <p class="mt-1.5 max-w-2xl text-sm leading-snug text-slate-300">
+          Defina qué respaldar, con qué frecuencia y a dónde enviar las copias. Todos los ajustes
+          se guardan aquí: no necesita conocimientos técnicos del servidor.
+        </p>
+      </header>
+
+      {% if errors %}
+      <div class="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-200">
+        <p class="flex items-center gap-1.5 font-semibold"><span class="material-icons text-base" aria-hidden="true">error</span> Revise los siguientes puntos:</p>
+        <ul class="mt-1 list-disc pl-6">
+          {% for e in errors %}<li>{{ e }}</li>{% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      {# ══ A. Qué respaldar ══ #}
+      <div class="mb-5 rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+            <span class="material-icons text-lg" aria-hidden="true">dns</span>
+          </span>
+          <div>
+            <h2 class="font-semibold text-slate-900 dark:text-white">Qué respaldar</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Base de datos de producción a copiar.</p>
+          </div>
+        </div>
+        <div class="grid gap-5 p-5 sm:grid-cols-2">
+          <div>
+            <label for="base_mysql" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Base MySQL de producción</label>
+            <select id="base_mysql" name="base_mysql" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+              <option value="">— Seleccione —</option>
+              {% for b in bases_mysql %}
+              <option value="{{ b.base_empresa }}" {% if b.base_empresa == backup_settings.base_mysql %}selected{% endif %}>{{ b.nombre_empresa }} ({{ b.base_empresa }})</option>
+              {% endfor %}
+            </select>
+            <p class="mt-1 text-xs text-slate-400">Se usará en las copias automáticas programadas.</p>
+          </div>
+          <div class="flex flex-col justify-center rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-medium text-slate-800 dark:text-slate-100">Incluir catálogo de empresas</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Añade la base <code>empresas</code> en copias completas.</p>
+              </div>
+              <button type="button" role="switch" :aria-checked="incluirEmpresas ? 'true' : 'false'"
+                      @click="incluirEmpresas = !incluirEmpresas"
+                      :class="incluirEmpresas ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
+                      class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+                <span :class="incluirEmpresas ? 'translate-x-6' : 'translate-x-1'" class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+              </button>
+            </div>
+            <input type="hidden" name="include_empresas" :value="incluirEmpresas ? '1' : '0'">
+          </div>
+        </div>
+      </div>
+
+      {# ══ B. Calendario semanal (héroe) ══ #}
+      <div class="mb-5 rounded-2xl border-2 border-emerald-200 bg-white shadow-sm dark:border-emerald-900/50 dark:bg-slate-800">
+        <div class="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-center gap-3">
+            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
+              <span class="material-icons text-lg" aria-hidden="true">calendar_month</span>
+            </span>
+            <div>
+              <h2 class="font-semibold text-slate-900 dark:text-white">Calendario semanal</h2>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Elija el tipo de copia y la hora para cada día.</p>
+            </div>
+          </div>
+          <button type="button" @click="aplicarPreset()"
+                  class="inline-flex items-center justify-center gap-1.5 self-start rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950/60 sm:self-auto">
+            <span class="material-icons text-base" aria-hidden="true">auto_fix_high</span>
+            L–S incremental 02:00 · D completo 03:00
+          </button>
+        </div>
+
+        <div class="p-5">
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
+            <template x-for="(d, i) in dias" :key="d.dow">
+              <div class="rounded-xl border p-3 transition-colors"
+                   :class="d.modo === 'none' ? 'border-slate-200 bg-slate-50/60 dark:border-slate-700 dark:bg-slate-900/40' : 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-900/50 dark:bg-emerald-950/20'">
+                <div class="flex items-center justify-between">
+                  <span class="text-sm font-bold text-slate-800 dark:text-slate-100" x-text="d.label"></span>
+                  <span class="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold"
+                        :class="d.modo === 'none' ? 'bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400' : (d.modo === 'full' ? 'bg-emerald-500 text-white' : 'bg-sky-500 text-white')"
+                        x-text="d.modo === 'full' ? 'C' : (d.modo === 'incremental' ? 'I' : '—')"></span>
+                </div>
+                <label class="sr-only" :for="'modo_' + d.dow">Tipo de copia para el día</label>
+                <select :id="'modo_' + d.dow" x-model="d.modo"
+                        class="mt-2 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+                  <option value="full">Completo</option>
+                  <option value="incremental">Incremental</option>
+                  <option value="none">No respaldar</option>
+                </select>
+                <input type="time" x-model="d.hora" :disabled="d.modo === 'none'"
+                       class="mt-2 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs tabular-nums focus:border-emerald-500 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+
+                {# Campos que consume el backend #}
+                <input type="hidden" :name="'schedule_enabled_' + d.dow" :value="d.modo === 'none' ? '0' : '1'">
+                <input type="hidden" :name="'schedule_type_' + d.dow" :value="d.modo === 'full' ? 'full' : 'incremental'">
+                <input type="hidden" :name="'schedule_time_' + d.dow" :value="d.hora">
+              </div>
+            </template>
+          </div>
+
+          {# Activar programación #}
+          <div class="mt-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/40 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-start gap-3">
+              <span class="material-icons mt-0.5 text-slate-400" aria-hidden="true">schedule</span>
+              <div>
+                <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">Activar programación automática</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                  El servidor consulta esta agenda cada minuto. No hace falta editar archivos.
+                </p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-medium" :class="enabledAuto ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'"
+                    x-text="enabledAuto ? 'Activada' : 'Pausada'"></span>
+              <button type="button" role="switch" :aria-checked="enabledAuto ? 'true' : 'false'"
+                      @click="enabledAuto = !enabledAuto"
+                      :class="enabledAuto ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
+                      class="relative inline-flex h-7 w-14 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+                <span :class="enabledAuto ? 'translate-x-8' : 'translate-x-1'" class="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform"></span>
+              </button>
+            </div>
+            <input type="hidden" name="enabled_auto" :value="enabledAuto ? '1' : '0'">
+          </div>
+        </div>
+      </div>
+
+      {# ══ C. Destino local ══ #}
+      <div class="mb-5 rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+            <span class="material-icons text-lg" aria-hidden="true">save</span>
+          </span>
+          <div>
+            <h2 class="font-semibold text-slate-900 dark:text-white">Destino local</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Dónde se guardan las copias en el disco del servidor.</p>
+          </div>
+        </div>
+        <div class="grid gap-5 p-5 sm:grid-cols-3">
+          <div class="sm:col-span-2">
+            <label for="local_root" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Ruta en disco del servidor</label>
+            <input type="text" id="local_root" name="local_root" value="{{ backup_settings.local_root }}"
+                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                   placeholder="/var/lib/synap/backups">
+          </div>
+          <div>
+            <label for="retention_days" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Días de retención</label>
+            <input type="number" min="1" id="retention_days" name="retention_days" value="{{ backup_settings.retention_days }}"
+                   class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm tabular-nums focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+            <p class="mt-1 text-xs text-slate-400">Las copias más antiguas se eliminan.</p>
+          </div>
+        </div>
+      </div>
+
+      {# ══ D. Copia remota SFTP ══ #}
+      <div class="mb-5 rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+          <div class="flex items-center gap-3">
+            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+              <span class="material-icons text-lg" aria-hidden="true">cloud_upload</span>
+            </span>
+            <div>
+              <h2 class="font-semibold text-slate-900 dark:text-white">Copia remota (SFTP)</h2>
+              <p class="text-xs text-slate-500 dark:text-slate-400">Envía una réplica a un servidor externo.</p>
+            </div>
+          </div>
+          <button type="button" role="switch" :aria-checked="sftpEnabled ? 'true' : 'false'"
+                  @click="sftpEnabled = !sftpEnabled"
+                  :class="sftpEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'"
+                  class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">
+            <span :class="sftpEnabled ? 'translate-x-6' : 'translate-x-1'" class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+          </button>
+          <input type="hidden" name="sftp_enabled" :value="sftpEnabled ? '1' : '0'">
+        </div>
+
+        <div class="p-5 transition-opacity" :class="!sftpEnabled && 'pointer-events-none opacity-50'" :aria-hidden="!sftpEnabled ? 'true' : 'false'">
+          <div class="grid gap-5 sm:grid-cols-2">
+            <div>
+              <label for="sftp_host" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Host</label>
+              <input type="text" id="sftp_host" name="sftp_host" value="{{ backup_settings.sftp_host }}"
+                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                     placeholder="sftp.ejemplo.com">
+            </div>
+            <div>
+              <label for="sftp_port" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Puerto</label>
+              <input type="number" min="1" id="sftp_port" name="sftp_port" value="{{ backup_settings.sftp_port }}"
+                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm tabular-nums focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+            </div>
+            <div>
+              <label for="sftp_user" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Usuario</label>
+              <input type="text" id="sftp_user" name="sftp_user" value="{{ backup_settings.sftp_user }}"
+                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100">
+            </div>
+            <div>
+              <label for="sftp_remote_path" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Ruta remota</label>
+              <input type="text" id="sftp_remote_path" name="sftp_remote_path" value="{{ backup_settings.sftp_remote_path }}"
+                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                     placeholder="/synap/backups">
+            </div>
+            <div>
+              <label for="sftp_password" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Contraseña</label>
+              <input type="password" id="sftp_password" name="sftp_password" autocomplete="new-password" :disabled="borrarPassword"
+                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                     placeholder="{% if has_sftp_password %}•••••••• (guardada — deje vacío para no cambiar){% else %}Sin contraseña guardada{% endif %}">
+              <div class="mt-2 flex items-center gap-2">
+                <input type="checkbox" id="sftp_clear_password" name="sftp_clear_password" value="1" x-model="borrarPassword"
+                       class="rounded border-slate-300 text-red-600 focus:ring-red-500">
+                <label for="sftp_clear_password" class="text-xs text-slate-600 dark:text-slate-300">Borrar contraseña guardada</label>
+              </div>
+            </div>
+            <div>
+              <label for="sftp_key_path" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Ruta de clave SSH <span class="font-normal text-slate-400">(opcional)</span></label>
+              <input type="text" id="sftp_key_path" name="sftp_key_path" value="{{ backup_settings.sftp_key_path }}"
+                     class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                     placeholder="/ruta/clave_privada">
+              <p class="mt-1 text-xs text-slate-400">Si se indica, se usa la clave en lugar de la contraseña.</p>
+            </div>
+          </div>
+
+          <div class="mt-4 flex items-center gap-3">
+            <button type="button" @click="probarSftp()" :disabled="probando"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-700">
+              <span class="material-icons text-base" :class="probando && 'animate-spin'" aria-hidden="true" x-text="probando ? 'autorenew' : 'wifi_tethering'"></span>
+              <span x-text="probando ? 'Probando…' : 'Probar conexión'"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {# ══ E. Incremental Postgres ══ #}
+      <div class="mb-5 rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-200">
+            <span class="material-icons text-lg" aria-hidden="true">layers</span>
+          </span>
+          <div>
+            <h2 class="font-semibold text-slate-900 dark:text-white">Incremental PostgreSQL</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Carpeta de segmentos WAL para copias incrementales.</p>
+          </div>
+        </div>
+        <div class="p-5">
+          <label for="pg_wal_archive_dir" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Directorio de WAL archivados</label>
+          <input type="text" id="pg_wal_archive_dir" name="pg_wal_archive_dir" value="{{ backup_settings.pg_wal_archive_dir }}"
+                 class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                 placeholder="/var/lib/postgresql/wal_archive">
+          <p class="mt-2 flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <span class="material-icons text-sm text-slate-400" aria-hidden="true">info</span>
+            Lo configura el administrador del servidor PostgreSQL; el supervisor solo indica la carpeta.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {# ══ Footer sticky ══ #}
+    <div class="sticky bottom-0 z-20 border-t border-slate-200 bg-white/90 backdrop-blur dark:border-slate-700 dark:bg-slate-800/90">
+      <div class="mx-auto flex w-full max-w-5xl items-center justify-end gap-2 px-3 py-3 sm:px-4 md:px-6">
+        <a href="{% url 'core:backup_list' %}"
+           class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-700">
+          Cancelar
+        </a>
+        <button type="submit"
+                class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-emerald-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2">
+          <span class="material-icons text-lg" aria-hidden="true">save</span>
+          Guardar cambios
+        </button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<script>
+function backupConfig() {
+  return {
+    enabledAuto: {{ backup_settings.enabled_auto|yesno:"true,false" }},
+    incluirEmpresas: {{ backup_settings.include_empresas|yesno:"true,false" }},
+    sftpEnabled: {{ backup_settings.sftp_enabled|yesno:"true,false" }},
+    borrarPassword: false,
+    probando: false,
+    dias: [],
+    init() {
+      const raw = JSON.parse(document.getElementById('schedule-data').textContent);
+      this.dias = raw.map(function(r) {
+        return {
+          dow: r.dow,
+          label: r.label,
+          hora: r.time || '02:00',
+          modo: r.enabled ? (r.job_type === 'full' ? 'full' : 'incremental') : 'none',
+        };
+      });
+    },
+    aplicarPreset() {
+      this.dias.forEach(function(d) {
+        if (d.dow <= 5) { d.modo = 'incremental'; d.hora = '02:00'; }
+        else { d.modo = 'full'; d.hora = '03:00'; }
+      });
+      this.enabledAuto = true;
+    },
+    async probarSftp() {
+      if (this.probando) return;
+      this.probando = true;
+      try {
+        const form = this.$refs.form;
+        const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
+        const fd = new FormData();
+        fd.append('sftp_host', document.getElementById('sftp_host').value);
+        fd.append('sftp_port', document.getElementById('sftp_port').value);
+        fd.append('sftp_user', document.getElementById('sftp_user').value);
+        fd.append('sftp_remote_path', document.getElementById('sftp_remote_path').value);
+        fd.append('sftp_key_path', document.getElementById('sftp_key_path').value);
+        fd.append('sftp_password', document.getElementById('sftp_password').value);
+        const resp = await fetch("{% url 'core:backup_test_sftp' %}", {
+          method: 'POST',
+          headers: { 'X-CSRFToken': csrf, 'Accept': 'application/json' },
+          body: fd,
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          window.SynapMessages && window.SynapMessages.show(data.message || 'Conexión SFTP correcta.', 'success');
+        } else {
+          window.SynapMessages && window.SynapMessages.show(data.error || 'No se pudo conectar por SFTP.', 'error');
+        }
+      } catch (e) {
+        window.SynapMessages && window.SynapMessages.show('Error al probar la conexión SFTP.', 'error');
+      } finally {
+        this.probando = false;
+      }
+    },
+  };
+}
+</script>
+{% endblock %}
