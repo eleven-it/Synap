@@ -15293,7 +15293,7 @@ def listar_tablero_por_articulo(
     3.  Explosión BOM de demanda pack → componentes (dem_ped, dem_res)
     4.  comp_ids = demanda ∪ envíos directos
     5.  Enviado/Fabricando = max(0, Σ envíos − acreditado) por componente
-    6.  stock_proceso = total sin Terminado; resta_urgente / resta_total (PCP, sin envíos ledger)
+    6.  stock_proceso = total sin Terminado; resta_urgente = resta_total = brecha demanda total (PCP)
     7.  a_enviar = tope Enviar: si Fabricando>0 → max(0, urgente−envíos);
         si Fabricando=0 y urgente>0 → reabre a urgente (ciclo acreditado)
 
@@ -15387,8 +15387,8 @@ def listar_tablero_por_articulo(
         envios_raw = float(envios_tablero.get(comp_id, 0) or 0)
         enviado = fabricando_map.get(comp_id, 0.0)
         dem_ped_val = dem_ped.get(comp_id, 0.0)
-        resta_urgente = _calcular_resta_urgente_componente(dem_ped_val, stock_proceso)
         resta_total = _calcular_resta_total_componente(demanda, stock_proceso)
+        resta_urgente = resta_total
         pendiente = resta_total
         a_enviar = _calcular_a_enviar_componente(
             resta_urgente,
@@ -15594,17 +15594,15 @@ def listar_tablero_pack(
     docenas/pares y la plantilla):
 
     * ``dem_ped``       = cantidad_pedida_pedido (P_ped del pack)
-    * ``dem_res``       = cantidad_demanda_reserva (reserva efectiva del pack)
-    * ``resta_urgente`` = cantidad_urgente_abs   = max(0, P_ped − stock terminado)
-    * ``resta_total``   = cantidad_a_fabricar    = max(0, P_ped + reserva − stock)
+    * ``dem_res``       = stock_reserva (R maestro del pack; colchón objetivo terminado)
+    * ``resta_urgente`` = ``resta_total`` = cantidad_a_fabricar = max(0, P + R − stock terminado)
     * ``terminado``/``total`` = stock terminado del pack
     * ``enviado`` (Fabricando) = 0: el envío a producción es por componente (modo Par),
       no aplica a nivel pack.
     * ``sin_receta`` / ``pedidos_resumen``: aviso UI (no bloquea envío; el envío es en Par).
 
     El chip «Solo urgentes» aplica en modo Par; en Pack se lista toda la demanda a fabricar
-    (incl. solo-reserva y filas con resta_urgente = 0 y resta_total > 0). ``solo_urgente``
-    y ``solo_pendiente`` se ignoran en este modo.
+    (incl. solo-reserva). ``solo_urgente`` y ``solo_pendiente`` se ignoran en este modo.
 
     Con ``solo_sin_receta=True`` (chip «Sin receta» en modo Pack) se excluyen filas cuyo
     pack tiene BOM/receta; solo permanecen las marcadas con ``sin_receta``.
@@ -15655,11 +15653,13 @@ def listar_tablero_pack(
         if pack_id is None:
             continue
         p_ped = float(fp.get("cantidad_pedida_pedido") or 0.0)
-        reserva = float(fp.get("cantidad_demanda_reserva") or 0.0)
+        stock_reserva = float(fp.get("stock_reserva") or 0.0)
         stock_terminado = float(fp.get("stock_terminado") or 0.0)
-        resta_urgente = float(fp.get("cantidad_urgente_abs") or 0.0)
-        resta_total = float(fp.get("cantidad_a_fabricar") or 0.0)
-        demanda = p_ped + reserva
+        cf = float(fp.get("cantidad_a_fabricar") or 0.0)
+        dem_res = stock_reserva
+        resta_urgente = cf
+        resta_total = cf
+        demanda = p_ped + dem_res
         codigo_manual, descripcion = desc_map.get(pack_id, ("-", "-"))
         sin_receta = pack_id in sin_receta_ids
         pedidos_resumen = pedidos_map.get(pack_id) or [] if sin_receta else []
@@ -15669,7 +15669,7 @@ def listar_tablero_pack(
             "descripcion_articulo": descripcion,
             "demanda": demanda,
             "dem_ped": p_ped,
-            "dem_res": reserva,
+            "dem_res": dem_res,
             "urgente": p_ped,
             "stock_proceso": 0.0,
             "resta_urgente": resta_urgente,

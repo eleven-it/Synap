@@ -263,13 +263,17 @@
                                 class="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                 Pack terminado
                             </th>
-                            <th scope="colgroup" colspan="4"
+                            <th scope="colgroup" colspan="2"
                                 class="sticky top-0 z-10 border-b border-l border-rose-200/80 bg-rose-50/90 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
-                                Demanda a producir{% if modo_presentacion == "docenas" %} (docenas){% else %} (pares){% endif %}
+                                Demanda{% if modo_presentacion == "docenas" %} (docenas){% else %} (pares){% endif %}
                             </th>
                             <th scope="colgroup" colspan="1"
                                 class="sticky top-0 z-10 border-b border-l border-emerald-200/80 bg-emerald-50/70 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/25 dark:text-emerald-200">
                                 Stock
+                            </th>
+                            <th scope="colgroup" colspan="1"
+                                class="sticky top-0 z-10 border-b border-l border-rose-200/80 bg-rose-50/90 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
+                                A producir
                             </th>
                         </tr>
                         <tr>
@@ -287,29 +291,24 @@
                             </th>
                             <th scope="col"
                                 class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-rose-50/40 px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-rose-950/10 dark:text-slate-300"
-                                title="Reserva del pack terminado (articulo.stock_reserva).">
+                                title="Colchón objetivo del terminado (articulo.stock_reserva).">
                                 Reserva
-                            </th>
-                            <th scope="col"
-                                class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-rose-50/40 px-2 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-rose-950/10 dark:text-slate-300"
-                                title="max(0, Pedido + Reserva − Stock terminado). Paridad PCP.">
-                                Resta total
-                            </th>
-                            <th scope="col"
-                                class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-rose-50/60 px-2 py-2 text-right text-xs font-semibold text-rose-900 dark:border-slate-700 dark:bg-rose-950/20 dark:text-rose-200"
-                                title="max(0, Pedido − Stock terminado). Paridad PCP.">
-                                Resta urgente
                             </th>
                             <th scope="col"
                                 class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-l border-emerald-200/60 bg-emerald-50/50 px-3 py-2 text-right text-xs font-semibold text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200"
                                 title="Stock terminado del pack (depósitos que suman stock).">
                                 Terminado
                             </th>
+                            <th scope="col"
+                                class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-l border-rose-200/60 bg-rose-50/60 px-2 py-2 text-right text-xs font-semibold text-rose-900 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200"
+                                title="max(0, Pedido + Reserva − Stock terminado). Incluye pedido y reposición de colchón.">
+                                Urgente
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
                         {% for fila in filas %}
-                        <tr class="transition-colors {% if fila.sin_receta %}bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/15 dark:hover:bg-amber-950/25{% else %}hover:bg-slate-50/80 dark:hover:bg-slate-800/40{% endif %}{% if fila.resta_urgente <= 0 and fila.resta_total > 0 %} opacity-90{% endif %}"
+                        <tr class="transition-colors {% if fila.sin_receta %}bg-amber-50/50 hover:bg-amber-50 dark:bg-amber-950/15 dark:hover:bg-amber-950/25{% else %}hover:bg-slate-50/80 dark:hover:bg-slate-800/40{% endif %}"
                             data-descripcion="{{ fila.descripcion_articulo|lower }} {{ fila.codigo_manual|lower }}"
                             x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase())">
                             <td class="sticky left-0 z-10 min-w-[16rem] max-w-[26rem] px-4 py-2.5 sm:min-w-[18rem] {% if fila.sin_receta %}border-l-4 border-l-amber-400 bg-amber-50/70 dark:border-l-amber-500/70 dark:bg-amber-950/25{% else %}bg-white dark:bg-slate-900{% endif %}">
@@ -344,19 +343,16 @@
                             <td class="whitespace-nowrap bg-rose-50/20 px-3 py-2.5 text-right text-sm tabular-nums{% if fila.reserva_pares > 0 %} font-medium text-slate-700 dark:text-slate-300{% else %} text-slate-400 dark:text-slate-500{% endif %} dark:bg-rose-950/5">
                                 {% if modo_presentacion == "docenas" %}{{ fila.reserva_docenas_pcp }}{% else %}{{ fila.reserva_pares }}{% endif %}
                             </td>
-                            <td class="whitespace-nowrap px-2 py-2.5 text-right text-sm tabular-nums{% if fila.resta_total_pares > 0 %} font-medium text-slate-700 dark:text-slate-300{% else %} text-slate-400 dark:text-slate-500{% endif %}">
-                                {% if modo_presentacion == "docenas" %}{{ fila.resta_total_docenas_pcp }}{% else %}{{ fila.resta_total_pares }}{% endif %}
-                            </td>
-                            <td class="whitespace-nowrap px-2 py-2.5 text-right text-sm tabular-nums{% if fila.resta_urgente_pares > 0 %} bg-rose-50/40 font-semibold text-red-600 dark:bg-rose-950/20 dark:text-red-400{% else %} bg-slate-50/50 text-slate-400 dark:bg-slate-800/30 dark:text-slate-500{% endif %}">
-                                {% if modo_presentacion == "docenas" %}{{ fila.resta_urgente_docenas_pcp }}{% else %}{{ fila.resta_urgente_pares }}{% endif %}
-                            </td>
                             <td class="whitespace-nowrap border-l border-emerald-100 bg-emerald-50/20 px-3 py-2.5 text-right text-sm tabular-nums text-slate-700 dark:border-emerald-900/30 dark:bg-emerald-950/10 dark:text-slate-300">
                                 {{ fila.total_display }}
+                            </td>
+                            <td class="whitespace-nowrap border-l border-rose-100 px-2 py-2.5 text-right text-sm tabular-nums dark:border-rose-900/30{% if fila.resta_urgente_pares > 0 %} bg-rose-50/40 font-semibold text-red-600 dark:bg-rose-950/20 dark:text-red-400{% else %} bg-slate-50/50 text-slate-400 dark:bg-slate-800/30 dark:text-slate-500{% endif %}">
+                                {% if modo_presentacion == "docenas" %}{{ fila.resta_urgente_docenas_pcp }}{% else %}{{ fila.resta_urgente_pares }}{% endif %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
+                            <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
                                 Sin packs con demanda en el rango especificado
                             </td>
                         </tr>
@@ -373,7 +369,7 @@
                                 class="sticky left-0 top-0 z-20 border-b border-slate-200 bg-slate-100 px-3 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                 Artículo
                             </th>
-                            <th scope="colgroup" colspan="4"
+                            <th scope="colgroup" colspan="3"
                                 class="sticky top-0 z-10 border-b border-l border-rose-200/80 bg-rose-50/90 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:border-rose-900/40 dark:bg-rose-950/30 dark:text-rose-200">
                                 Demanda a producir{% if modo_presentacion == "docenas" %} (docenas){% else %} (pares){% endif %}
                             </th>
@@ -402,18 +398,13 @@
                             </th>
                             <th scope="col"
                                 class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-rose-50/40 px-3 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-rose-950/10 dark:text-slate-300"
-                                title="Demanda atribuible a reserva pack (explosión BOM).">
+                                title="Demanda de componente atribuible a reposición de colchón de packs.">
                                 Reserva
                             </th>
                             <th scope="col"
-                                class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-rose-50/40 px-2 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-rose-950/10 dark:text-slate-300"
-                                title="max(0, Demanda − stock en proceso). Incluye reserva pack. Paridad PCP.">
-                                Resta total
-                            </th>
-                            <th scope="col"
                                 class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-rose-50/60 px-2 py-2 text-right text-xs font-semibold text-rose-900 dark:border-slate-700 dark:bg-rose-950/20 dark:text-rose-200"
-                                title="max(0, Dem. pedido − stock en proceso). Base del envío. Paridad PCP.">
-                                Resta urgente
+                                title="max(0, Pedido + Reserva − stock en proceso). Incluye pedido y reposición de colchón.">
+                                Urgente
                             </th>
                             <th scope="col"
                                 class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-l border-violet-200/60 bg-violet-50/50 px-3 py-2 text-right text-xs font-semibold text-violet-900 dark:border-violet-900/40 dark:bg-violet-950/20 dark:text-violet-200">
@@ -431,7 +422,7 @@
                     </thead>
                     <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
                         {% for fila in filas %}
-                        <tr class="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40{% if fila.resta_urgente <= 0 and fila.resta_total > 0 %} opacity-90{% endif %}"
+                        <tr class="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
                             data-descripcion="{{ fila.descripcion_articulo|lower }} {{ fila.codigo_manual|lower }}"
                             x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase())">
                             <td class="sticky left-0 z-10 min-w-[18rem] max-w-[28rem] bg-white px-4 py-2.5 dark:bg-slate-900 sm:min-w-[20rem]">
@@ -442,9 +433,6 @@
                             </td>
                             <td class="whitespace-nowrap bg-rose-50/20 px-3 py-2.5 text-right text-sm tabular-nums{% if fila.reserva_pares > 0 %} font-medium text-slate-700 dark:text-slate-300{% else %} text-slate-400 dark:text-slate-500{% endif %} dark:bg-rose-950/5">
                                 {% if modo_presentacion == "docenas" %}{{ fila.reserva_docenas_pcp }}{% else %}{{ fila.reserva_pares }}{% endif %}
-                            </td>
-                            <td class="whitespace-nowrap px-2 py-2.5 text-right text-sm tabular-nums{% if fila.resta_total_pares > 0 %} font-medium text-slate-700 dark:text-slate-300{% else %} text-slate-400 dark:text-slate-500{% endif %}">
-                                {% if modo_presentacion == "docenas" %}{{ fila.resta_total_docenas_pcp }}{% else %}{{ fila.resta_total_pares }}{% endif %}
                             </td>
                             <td class="whitespace-nowrap border-l-2 border-l-rose-300/70 px-2 py-2.5 text-right text-sm tabular-nums dark:border-l-rose-800/50{% if fila.resta_urgente_pares > 0 %} bg-rose-50/40 font-semibold text-red-600 dark:bg-rose-950/20 dark:text-red-400{% else %} bg-slate-50/50 text-slate-400 dark:bg-slate-800/30 dark:text-slate-500{% endif %}">
                                 {% if modo_presentacion == "docenas" %}{{ fila.resta_urgente_docenas_pcp }}{% else %}{{ fila.resta_urgente_pares }}{% endif %}
@@ -482,7 +470,7 @@
                                        aria-label="Docenas a enviar para {{ fila.descripcion_articulo }}"
                                        class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-emerald-800 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                                        placeholder="0"
-                                       title="Tope: {{ fila.a_enviar_docenas_pcp|default:0 }} docenas (no supera resta total)">
+                                       title="Tope: {{ fila.a_enviar_docenas_pcp|default:0 }} docenas (no supera Urgente)">
                                 {% else %}
                                 <input form="form-enviar-lote"
                                        type="number"
@@ -497,7 +485,7 @@
                                        aria-label="Pares a enviar para {{ fila.descripcion_articulo }}"
                                        class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-emerald-800 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                                        placeholder="0"
-                                       title="Tope: {{ fila.a_enviar|floatformat:0 }} pares (no supera resta total)">
+                                       title="Tope: {{ fila.a_enviar|floatformat:0 }} pares (no supera Urgente)">
                                 {% endif %}
                                 <input form="form-enviar-lote" type="hidden" name="resta_urgente_{{ fila.id_articulo }}" value="{{ fila.a_enviar }}">
                                 <input form="form-enviar-lote" type="hidden" name="pendiente_{{ fila.id_articulo }}" value="{{ fila.a_enviar }}">
@@ -506,8 +494,8 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="12" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
-                                {% if modo_tablero == "pack" and solo_sin_receta %}Sin packs sin receta con demanda en el rango especificado{% elif solo_urgente %}Sin artículos con resta urgente en el rango especificado{% else %}Sin artículos con demanda en el rango especificado{% endif %}
+                            <td colspan="11" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
+                                {% if modo_tablero == "pack" and solo_sin_receta %}Sin packs sin receta con demanda en el rango especificado{% elif solo_urgente %}Sin artículos con Urgente &gt; 0 en el rango especificado{% else %}Sin artículos con demanda en el rango especificado{% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -526,12 +514,12 @@
             <p class="mt-2 flex-shrink-0 text-[11px] leading-snug text-slate-400 dark:text-slate-500">
                 {% if modo_tablero == "pack" %}
                 Vista <strong>Pack</strong>: demanda consolidada por artículo pack terminado (paridad BEST PCP Producción), sin explosión BOM.
-                <strong>Resta total</strong> = max(0, Pedido + Reserva − Terminado); <strong>Resta urgente</strong> = max(0, Pedido − Terminado).
+                <strong>Urgente</strong> = max(0, Pedido + Reserva − Terminado).
                 El envío a producción se realiza por <strong>componente</strong>: cambiá a <strong>modo Par</strong> para enviar docenas/pares.
                 {% else %}
                 El toggle <strong>Docenas / Pares</strong> cambia la unidad mostrada en toda la tabla (docenas enteras = pares ÷ 12 redondeado).
                 En modo docenas el envío es en docenas enteras; en modo pares, en pares enteros (sin decimales).
-                El envío admite hasta <strong>a enviar</strong> = max(0, resta urgente − Σ envíos), sin superar <strong>resta total</strong>.
+                El envío admite hasta <strong>a enviar</strong> = max(0, Urgente − Σ envíos), sin superar <strong>Urgente</strong>.
                 Si el tope en la unidad mostrada es 0, el input queda deshabilitado.
                 <strong>Fabricando</strong> = envíos no acreditados en stock del pipeline.
                 {% endif %}
