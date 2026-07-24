@@ -558,6 +558,7 @@ LP_PDF_MAX_SECONDS = config('LP_PDF_MAX_SECONDS', default=90, cast=int)
 LP_PDF_MAX_SECONDS_CON_IMAGEN = config('LP_PDF_MAX_SECONDS_CON_IMAGEN', default=180, cast=int)
 
 # Backup y DR Synap (Postgres + MySQL AdministraNET)
+# Backup DR — fallback inerte si no existe fila BackupSettings (config operativa en UI Postgres).
 BACKUP_LOCAL_ROOT = config('BACKUP_LOCAL_ROOT', default='/var/lib/synap/backups')
 BACKUP_RETENTION_DAYS = config('BACKUP_RETENTION_DAYS', default=30, cast=int)
 BACKUP_SFTP_ENABLED = config('BACKUP_SFTP_ENABLED', default=False, cast=bool)

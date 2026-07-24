@@ -226,7 +226,7 @@ class TestEnviarProduccionLote(TestCase):
         self.assertNotIn(30, ids_creados)
 
     def test_warning_sobrenvio_no_bloquea(self):
-        """pendiente=20, cantidad=30 crea registro + warning de sobreenvío (no bloquea)."""
+        """pendiente=20, cantidad=30 ajusta al tope 20 + warning (sigue creando)."""
         items = [(42, Decimal("30"))]
         pendientes = {42: Decimal("20")}
         ok, creados, warnings, error = enviar_a_produccion_lote(
@@ -236,7 +236,20 @@ class TestEnviarProduccionLote(TestCase):
         self.assertEqual(creados, 1)
         self.assertIsNone(error)
         self.assertEqual(len(warnings), 1)
-        self.assertIn("sobrenv" if "sobr" in warnings[0].lower() else "supera", warnings[0].lower() if warnings else "")
+        self.assertIn("supera", warnings[0].lower())
+        self.assertIn("ajust", warnings[0].lower())
+        self.assertEqual(_count_envios_mysql([42]), 1)
+        from mpr.db import mysql_cursor
+
+        with mysql_cursor(EMPRESA) as c:
+            c.execute(
+                "SELECT cantidad FROM mpr_envio_produccion "
+                "WHERE anulado = 0 AND id_articulo = %s ORDER BY id_mpr_envio_produccion DESC LIMIT 1",
+                [42],
+            )
+            row = c.fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(Decimal(str(row[0])), Decimal("20"))
 
     def test_lote_vacio_retorna_0_creados_sin_error(self):
         """Lista items vacía retorna 0 creados sin error."""

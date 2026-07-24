@@ -4,28 +4,34 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from django.test import SimpleTestCase, override_settings
+from django.test import TestCase
 
+from core.backup.models import BackupSettings
 from core.backup.services.sftp_upload import SftpUploadResult, upload_job_directory
 
 
-class BackupSftpTests(SimpleTestCase):
-    @override_settings(BACKUP_SFTP_ENABLED=False)
+class BackupSftpTests(TestCase):
     def test_sftp_disabled_skipped(self):
+        bs = BackupSettings.get_solo()
+        bs.sftp_enabled = False
+        bs.save()
         with tempfile.TemporaryDirectory() as tmp:
             result = upload_job_directory(Path(tmp), "job-1")
             self.assertTrue(result.success)
             self.assertIn("skipped", result.message.lower())
 
-    @override_settings(
-        BACKUP_SFTP_ENABLED=True,
-        BACKUP_SFTP_HOST="sftp.example.com",
-        BACKUP_SFTP_USER="backup",
-        BACKUP_SFTP_PASSWORD="secret",
-        BACKUP_SFTP_REMOTE_PATH="/synap/backups",
-    )
     @patch("core.backup.services.sftp_upload.paramiko")
     def test_sftp_upload_mock(self, mock_paramiko):
+        bs = BackupSettings.get_solo()
+        bs.sftp_enabled = True
+        bs.sftp_host = "sftp.example.com"
+        bs.sftp_user = "backup"
+        bs.sftp_remote_path = "/synap/backups"
+        from core.backup.services import config as backup_config
+
+        backup_config.set_sftp_password(bs, "secret")
+        bs.save()
+
         transport = MagicMock()
         mock_paramiko.Transport.return_value = transport
         sftp = MagicMock()
@@ -40,14 +46,17 @@ class BackupSftpTests(SimpleTestCase):
             sftp.put.assert_called()
             self.assertTrue((job_dir / "manifest.json").is_file())
 
-    @override_settings(
-        BACKUP_SFTP_ENABLED=True,
-        BACKUP_SFTP_HOST="sftp.example.com",
-        BACKUP_SFTP_USER="backup",
-        BACKUP_SFTP_PASSWORD="secret",
-    )
     @patch("core.backup.services.sftp_upload.paramiko")
     def test_sftp_fallo_preserva_local(self, mock_paramiko):
+        bs = BackupSettings.get_solo()
+        bs.sftp_enabled = True
+        bs.sftp_host = "sftp.example.com"
+        bs.sftp_user = "backup"
+        from core.backup.services import config as backup_config
+
+        backup_config.set_sftp_password(bs, "secret")
+        bs.save()
+
         mock_paramiko.Transport.side_effect = Exception("conexión rechazada")
         with tempfile.TemporaryDirectory() as tmp:
             job_dir = Path(tmp)

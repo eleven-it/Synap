@@ -132,9 +132,14 @@ def enriquecer_fila_tablero_presentacion(
     if "a_enviar" not in out:
         from mpr.services import _calcular_a_enviar_componente
 
+        # `envios` = ledger bruto; `enviado` = Fabricando (envíos − acreditado).
+        envios_ledger = out.get("envios", out.get("enviado", 0))
+        fabricando = out["enviado"] if "enviado" in out else None
         out["a_enviar"] = _calcular_a_enviar_componente(
             out.get("resta_urgente", 0),
-            out.get("enviado", 0),
+            envios_ledger,
+            resta_total=out.get("resta_total"),
+            fabricando=fabricando,
         )
     _enriquecer_cantidad_envio(out, "a_enviar", modo)
     # Alias legacy: inputs/docenas de envío leen a_enviar_*

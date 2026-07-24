@@ -3511,7 +3511,7 @@ def listar_demanda_pack_desde_pedidos(
     marcas_incluidos: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
     """
-    Demanda de packs terminados calculada en vivo desde pedidos PED (stockp + comp_ped + articulo),
+    Demanda de packs terminados en vivo desde pedidos PED y colchón de reserva (solo-reserva),
     sin leer ni escribir lista_produccion_*.
 
     P_ped = suma de cantidades pendientes por artículo en pedidos PED no anulados
@@ -3519,8 +3519,10 @@ def listar_demanda_pack_desde_pedidos(
     S = stock terminado (depósitos suma_stock='Si').
     cantidad_a_fabricar = max(0, P_ped + R − S); solo devuelve filas con cantidad_a_fabricar > 0.
 
-    primera_fecha_entrega: MIN(comp_ped.FechaEntrega) por artículo en las mismas líneas PED
-    (paridad PCP Armado col E / vista BEST REP_PCP_ARMADO).
+    Incluye terminados con R > 0 aunque P_ped = 0 (quiebre solo-reserva). Los filtros de fecha
+    aplican solo a líneas PED; la parte solo-reserva no depende de fechas.
+
+    primera_fecha_entrega: MIN(comp_ped.FechaEntrega) por artículo en líneas PED; None si no hay PED.
 
     Shape compatible con _explosion_demanda_componentes_pedido_reserva_pack:
     id_articulo, cantidad_a_fabricar, cantidad_pedida_pedido, stock_terminado, stock_reserva,
@@ -3599,10 +3601,33 @@ def listar_demanda_pack_desde_pedidos(
                         if prev is None or fe < prev:
                             fecha_entrega_min[id_art] = fe
 
-            if not p_ped_map:
+            sql_reserva_solo = f"""
+                SELECT IDArt, COALESCE(stock_reserva, 0) AS stock_reserva
+                FROM {tbl_articulo}
+                WHERE COALESCE(TRIM(tipo_art_fab), '') = 'Terminado'
+                  AND COALESCE(stock_reserva, 0) > 0
+            """
+            params_reserva_solo: List[Any] = []
+            if marcas_incluidos:
+                marcas_vals_res = [
+                    int(m) for m in marcas_incluidos if to_int_or_none(m) is not None
+                ]
+                if marcas_vals_res:
+                    ph_mr = ",".join(["%s"] * len(marcas_vals_res))
+                    sql_reserva_solo += f" AND CodigoMarca IN ({ph_mr})"
+                    params_reserva_solo.extend(marcas_vals_res)
+            cursor.execute(sql_reserva_solo, params_reserva_solo)
+            ids_reserva_solo: Set[int] = set()
+            for row in cursor.fetchall() or []:
+                aid = to_int_or_none(row.get("IDArt"))
+                if aid is not None:
+                    ids_reserva_solo.add(aid)
+
+            ids_set = set(p_ped_map.keys()) | ids_reserva_solo
+            if not ids_set:
                 return []
 
-            ids = list(p_ped_map.keys())
+            ids = list(ids_set)
             stock_map, _det = _ventana_pack_stock_maps(
                 cursor, tbl_sd, tbl_dep, ids, incluir_detalle=not modo_ligero
             )
@@ -3623,7 +3648,8 @@ def listar_demanda_pack_desde_pedidos(
                     reserva_map[aid] = 0.0
 
             filas: List[Dict[str, Any]] = []
-            for id_art, p_ped in p_ped_map.items():
+            for id_art in ids_set:
+                p_ped = p_ped_map.get(id_art, 0.0)
                 st = stock_map.get(id_art, 0.0)
                 reserva = reserva_map.get(id_art, 0.0)
                 cf = max(0.0, p_ped + reserva - st)
@@ -14914,10 +14940,33 @@ def _calcular_stock_proceso_componente(
 
 def _calcular_a_enviar_componente(
     resta_urgente: float,
-    fabricando: float,
+    envios_ledger: float,
+    resta_total: Optional[float] = None,
+    *,
+    fabricando: Optional[float] = None,
 ) -> float:
-    """Tope de Enviar: resta urgente (PCP) menos unidades ya comprometidas en Fabricando."""
-    return max(0.0, float(resta_urgente or 0) - float(fabricando or 0))
+    """Tope de Enviar según Resta urgente (PCP) y estado de envíos.
+
+    * Si aún hay **Fabricando** (``envíos − acreditado > 0``): tope =
+      ``max(0, resta_urgente − Σ envíos ledger)``. Evita reenviar mientras el lote
+      anterior sigue en vuelo y no doble-cuenta el stock de proceso (ya descontado
+      en ``resta_urgente``).
+    * Si **Fabricando = 0** y el recálculo deja ``resta_urgente > 0``: **reabre**
+      el tope a esa Resta urgente (ciclo anterior acreditado; el hueco urgente es
+      demanda nueva — p. ej. más PED o menos stock de proceso).
+
+    Si se informa ``resta_total``, el tope no puede superarla (regla operativa UI).
+    """
+    urg = max(0.0, float(resta_urgente or 0))
+    env = max(0.0, float(envios_ledger or 0))
+    fab = None if fabricando is None else max(0.0, float(fabricando or 0))
+    if fab is not None and fab <= 0 and urg > 0:
+        tope = urg
+    else:
+        tope = max(0.0, urg - env)
+    if resta_total is not None:
+        tope = min(tope, max(0.0, float(resta_total or 0)))
+    return tope
 
 
 def _calcular_resta_brecha_componente(
@@ -14996,9 +15045,15 @@ def enviar_a_produccion_lote(
             pend_dec = to_decimal_or_none(pend)
             if pend_dec is not None and qty > pend_dec:
                 warnings_list.append(
-                    f"Artículo {id_art_int}: cantidad {qty} supera resta urgente"
-                    f" {pend_dec} — enviado igual."
+                    f"Artículo {id_art_int}: cantidad {qty} supera el tope a enviar"
+                    f" {pend_dec} — se ajustó al tope."
                 )
+                qty = pend_dec
+        if qty <= Decimal("0"):
+            warnings_list.append(
+                f"Artículo {id_art_int}: cantidad quedó en cero tras tope, omitido."
+            )
+            continue
         to_create_mysql.append((id_art_int, qty))
 
     if not to_create_mysql:
@@ -15237,8 +15292,10 @@ def listar_tablero_por_articulo(
     2.  _query_enviados_todos_componentes → componentes con envío directo al tablero
     3.  Explosión BOM de demanda pack → componentes (dem_ped, dem_res)
     4.  comp_ids = demanda ∪ envíos directos
-    5.  Enviado/Fabricando = max(0, Σ envíos − stock pipeline MPR) por componente
+    5.  Enviado/Fabricando = max(0, Σ envíos − acreditado) por componente
     6.  stock_proceso = total sin Terminado; resta_urgente / resta_total (PCP, sin envíos ledger)
+    7.  a_enviar = tope Enviar: si Fabricando>0 → max(0, urgente−envíos);
+        si Fabricando=0 y urgente>0 → reabre a urgente (ciclo acreditado)
 
     ``solo_pendiente`` filtra filas con demanda pendiente total; ``solo_urgente``
     conserva el filtro más estricto por demanda urgente.
@@ -15327,12 +15384,18 @@ def listar_tablero_por_articulo(
             if t != TIPO_MPR_TERMINADO
         )
         stock_proceso = _calcular_stock_proceso_componente(suma_comp, tipos_suma)
+        envios_raw = float(envios_tablero.get(comp_id, 0) or 0)
         enviado = fabricando_map.get(comp_id, 0.0)
         dem_ped_val = dem_ped.get(comp_id, 0.0)
         resta_urgente = _calcular_resta_urgente_componente(dem_ped_val, stock_proceso)
         resta_total = _calcular_resta_total_componente(demanda, stock_proceso)
         pendiente = resta_total
-        a_enviar = _calcular_a_enviar_componente(resta_urgente, enviado)
+        a_enviar = _calcular_a_enviar_componente(
+            resta_urgente,
+            envios_raw,
+            resta_total=resta_total,
+            fabricando=enviado,
+        )
         codigo_manual, descripcion = desc_map.get(comp_id, ("-", "-"))
         filas.append({
             "id_articulo": comp_id,
@@ -15347,6 +15410,7 @@ def listar_tablero_por_articulo(
             "resta_total": resta_total,
             "a_enviar": a_enviar,
             "pendiente": pendiente,
+            "envios": envios_raw,
             "enviado": enviado,
             "produccion": produccion,
             "segunda_seleccion": segunda_seleccion,
@@ -15515,6 +15579,7 @@ def listar_tablero_pack(
     fecha_hasta: Optional[date] = None,
     solo_urgente: bool = False,
     solo_pendiente: Optional[bool] = None,
+    solo_sin_receta: bool = False,
     limit: int = 200,
     marcas_incluidos: Optional[Sequence[int]] = None,
 ) -> List[Dict[str, Any]]:
@@ -15523,7 +15588,7 @@ def listar_tablero_pack(
     Producción). A diferencia de ``listar_tablero_por_articulo``, NO explota la BOM:
     pedido/reserva/resta/stock se calculan a nivel del pack terminado.
 
-    Fuente: ``listar_demanda_pack_desde_pedidos`` (demanda en vivo desde pedidos PED).
+    Fuente: ``listar_demanda_pack_desde_pedidos`` (demanda en vivo desde PED y solo-reserva).
 
     Mapea al mismo shape de fila del tablero (para reutilizar la presentación
     docenas/pares y la plantilla):
@@ -15537,13 +15602,15 @@ def listar_tablero_pack(
       no aplica a nivel pack.
     * ``sin_receta`` / ``pedidos_resumen``: aviso UI (no bloquea envío; el envío es en Par).
 
-    ``solo_pendiente`` (legacy) se interpreta como ``solo_urgente`` si se pasa explícito.
+    El chip «Solo urgentes» aplica en modo Par; en Pack se lista toda la demanda a fabricar
+    (incl. solo-reserva y filas con resta_urgente = 0 y resta_total > 0). ``solo_urgente``
+    y ``solo_pendiente`` se ignoran en este modo.
+
+    Con ``solo_sin_receta=True`` (chip «Sin receta» en modo Pack) se excluyen filas cuyo
+    pack tiene BOM/receta; solo permanecen las marcadas con ``sin_receta``.
     """
     if not (base_empresa or "").strip():
         return []
-
-    if solo_pendiente is not None:
-        solo_urgente = bool(solo_pendiente)
 
     filas_pack = listar_demanda_pack_desde_pedidos(
         base_empresa,
@@ -15628,10 +15695,10 @@ def listar_tablero_pack(
             "pedidos_resumen_json": json.dumps(pedidos_resumen, ensure_ascii=False),
         })
 
-    filas.sort(key=lambda r: -float(r.get("resta_urgente") or 0))
+    if solo_sin_receta:
+        filas = [r for r in filas if r.get("sin_receta")]
 
-    if solo_urgente:
-        filas = [r for r in filas if float(r.get("resta_urgente") or 0) > 0]
+    filas.sort(key=lambda r: -float(r.get("resta_urgente") or 0))
 
     return filas[:limit]
 

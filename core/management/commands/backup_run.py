@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 
-from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from core.backup.models import BackupJob
+from core.backup.services import config as backup_config
 from core.backup.services.orchestrator import prune_old_backups, resolve_parent_full_job, run_job
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--prune",
             action="store_true",
-            help="Purgar backups locales más antiguos que BACKUP_RETENTION_DAYS",
+            help="Purgar backups locales más antiguos que la retención configurada en UI",
         )
 
     def handle(self, *args, **options):
@@ -84,11 +84,11 @@ class Command(BaseCommand):
 
         base_mysql = (options.get("base_mysql") or "").strip()
         if not base_mysql:
-            base_mysql = (getattr(settings, "BACKUP_SCHEDULED_BASE_MYSQL", "") or "").strip()
+            base_mysql = (backup_config.get_backup_settings().base_mysql or "").strip()
         if not base_mysql:
-            base_mysql = (getattr(settings, "DEFAULT_BASE_EMPRESA", "") or "").strip()
-        if not base_mysql:
-            raise CommandError("Indique --base-mysql o configure BACKUP_SCHEDULED_BASE_MYSQL.")
+            raise CommandError(
+                "Indique --base-mysql o configure la base MySQL en /core/backups/configuracion/."
+            )
 
         job_type = options["type"]
         parent = None
@@ -103,7 +103,12 @@ class Command(BaseCommand):
             job_type=job_type,
             status=BackupJob.STATUS_QUEUED,
             base_mysql=base_mysql,
-            include_empresas_table=bool(options.get("include_empresas")),
+            include_empresas_table=bool(options.get("include_empresas"))
+            or (
+                bool(options.get("scheduled"))
+                and backup_config.get_backup_settings().include_empresas
+                and job_type == BackupJob.JOB_TYPE_FULL
+            ),
             parent_job=parent,
             scheduled=bool(options.get("scheduled")),
         )

@@ -28,6 +28,8 @@ from .views_backup import (
     backup_detail_view,
     backup_launch_view,
     backup_job_api_view,
+    backup_config_view,
+    backup_test_sftp_view,
 )
 from .views_uom import UoMListView, UoMCreateView, UoMUpdateView, UoMDeleteView
 from .views_currency import (

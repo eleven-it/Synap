@@ -60,6 +60,27 @@ def _leer_stock_reserva_actual(
     return out
 
 
+def _idarts_tipo_terminado(base_empresa: str, idarts: list[int]) -> set[int]:
+    """IDArt con tipo_art_fab Terminado (solo ellos reciben stock_reserva desde BEST)."""
+    if not idarts:
+        return set()
+    placeholders = ",".join(["%s"] * len(idarts))
+    sql = f"""
+        SELECT IDArt
+        FROM articulo
+        WHERE IDArt IN ({placeholders})
+          AND LOWER(COALESCE(TRIM(tipo_art_fab), '')) = 'terminado'
+    """
+    out: set[int] = set()
+    with mysql_cursor(base_empresa, dict_cursor=True) as cur:
+        cur.execute(sql, tuple(idarts))
+        for row in cur.fetchall() or []:
+            aid = to_int_or_none(row.get("IDArt"))
+            if aid is not None:
+                out.add(aid)
+    return out
+
+
 def _verificar_columna_stock_reserva(base_empresa: str) -> None:
     with mysql_cursor(base_empresa, dict_cursor=False) as cur:
         if not columna_existe(cur, "articulo", "stock_reserva"):
@@ -82,6 +103,9 @@ def migrar_stock_reserva_best(
     """
     Migra MCSS (pares) desde MC (centro de costo terminado por defecto 4003)
     hacia articulo.stock_reserva en AdministraNET.
+
+    Solo escribe en artículos con ``tipo_art_fab = Terminado`` (el colchón de
+    reserva alimenta demanda pack; no aplica a fabricados/componentes BOM).
 
     Por defecto (v1) solo actualiza filas con MCSS>0 para no pisar reservas
     manuales a cero. Con incluir_ceros=True también escribe 0 en mapeados sin SS.
@@ -129,6 +153,7 @@ def migrar_stock_reserva_best(
         "leidos": leidos,
         "con_mcss": con_mcss,
         "mapeados": mapeados,
+        "omitidos_no_terminado": 0,
         "actualizados": 0,
         "sin_cambio": 0,
         "huerfanos": len(huerfanos),
@@ -138,6 +163,20 @@ def migrar_stock_reserva_best(
         "post_actualizar_ok": None,
         "post_actualizar_mensaje": None,
     }
+
+    if not candidatos:
+        result["muestra"] = []
+        return result
+
+    idarts = [c["idart"] for c in candidatos]
+    terminados = _idarts_tipo_terminado(base, idarts)
+    if terminados:
+        omitidos = [c for c in candidatos if c["idart"] not in terminados]
+        result["omitidos_no_terminado"] = len(omitidos)
+        candidatos = [c for c in candidatos if c["idart"] in terminados]
+    else:
+        result["omitidos_no_terminado"] = len(candidatos)
+        candidatos = []
 
     if not candidatos:
         result["muestra"] = []
@@ -180,7 +219,12 @@ def migrar_stock_reserva_best(
             nuevo = to_decimal_or_none(p["mcss"])
             try:
                 cur.execute(
-                    "UPDATE articulo SET stock_reserva = %s WHERE IDArt = %s",
+                    """
+                    UPDATE articulo
+                    SET stock_reserva = %s
+                    WHERE IDArt = %s
+                      AND LOWER(COALESCE(TRIM(tipo_art_fab), '')) = 'terminado'
+                    """,
                     (nuevo, idart),
                 )
                 if cur.rowcount:

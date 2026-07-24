@@ -204,9 +204,9 @@ def inventario_view(request):
         return redirect("core:dashboard")
 
     from stock.services.inventario_tabla import (
-        ETAPAS_INVENTARIO,
         build_inventario_query_string,
         consultar_inventario_tabla,
+        etapas_para_ambito,
         listar_marcas_catalogo,
         parse_inventario_filtros,
         preparar_filas_inventario_presentacion,
@@ -221,14 +221,16 @@ def inventario_view(request):
         resultado.get("filas") or [],
         filtros.presentacion,
         base_empresa=base_empresa,
+        ambito=filtros.ambito,
     )
     page = resultado.get("page", 1)
     total_pages = resultado.get("total_pages", 0)
+    etapas_columnas = resultado.get("etapas") or etapas_para_ambito(filtros.ambito)
 
     context = {
         "base_empresa": base_empresa,
         "filas": filas,
-        "etapas_columnas": ETAPAS_INVENTARIO,
+        "etapas_columnas": etapas_columnas,
         "filtros": filtros,
         "marcas_catalogo": listar_marcas_catalogo(base_empresa),
         "total_registros": resultado.get("total_registros", 0),

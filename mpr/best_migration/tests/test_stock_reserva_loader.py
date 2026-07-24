@@ -22,12 +22,13 @@ class MigrarStockReservaBestTest(SimpleTestCase):
         m.admin_idart = idart
         return m
 
+    @patch("mpr.best_migration.stock_reserva_loader._idarts_tipo_terminado")
     @patch("mpr.best_migration.stock_reserva_loader._leer_stock_reserva_actual")
     @patch("mpr.best_migration.stock_reserva_loader._cargar_mapa_articulos")
     @patch("mpr.best_migration.stock_reserva_loader.connect_best")
     @patch("mpr.best_migration.stock_reserva_loader.fetch_dict")
     def test_dry_run_cuenta_mapeados_y_huerfanos(
-        self, mock_fetch, mock_connect, mock_mapa, mock_actuales
+        self, mock_fetch, mock_connect, mock_mapa, mock_actuales, mock_terminados
     ):
         mock_connect.return_value = MagicMock()
         mock_fetch.return_value = _best_rows(
@@ -36,6 +37,7 @@ class MigrarStockReservaBestTest(SimpleTestCase):
             ("9999", "100"),
         )
         mock_mapa.return_value = {"1001": 10, "1002": 20}
+        mock_terminados.return_value = {10, 20}
         mock_actuales.return_value = {10: Decimal("50"), 20: Decimal("0")}
 
         result = migrar_stock_reserva_best("administranet1", dry_run=True)
@@ -45,21 +47,24 @@ class MigrarStockReservaBestTest(SimpleTestCase):
         self.assertEqual(result["con_mcss"], 3)
         self.assertEqual(result["mapeados"], 2)
         self.assertEqual(result["huerfanos"], 1)
+        self.assertEqual(result["omitidos_no_terminado"], 0)
         self.assertEqual(result["actualizados"], 1)
         self.assertEqual(result["sin_cambio"], 1)
         self.assertEqual(len(result["huerfanos_muestra"]), 1)
         self.assertEqual(result["huerfanos_muestra"][0]["best_id"], "9999")
 
+    @patch("mpr.best_migration.stock_reserva_loader._idarts_tipo_terminado")
     @patch("mpr.best_migration.stock_reserva_loader._leer_stock_reserva_actual")
     @patch("mpr.best_migration.stock_reserva_loader._cargar_mapa_articulos")
     @patch("mpr.best_migration.stock_reserva_loader.connect_best")
     @patch("mpr.best_migration.stock_reserva_loader.fetch_dict")
     def test_ignora_mcss_cero_sin_incluir_ceros(
-        self, mock_fetch, mock_connect, mock_mapa, mock_actuales
+        self, mock_fetch, mock_connect, mock_mapa, mock_actuales, mock_terminados
     ):
         mock_connect.return_value = MagicMock()
         mock_fetch.return_value = _best_rows(("1001", "0"), ("1002", "10"))
         mock_mapa.return_value = {"1001": 10, "1002": 20}
+        mock_terminados.return_value = {20}
         mock_actuales.return_value = {20: Decimal("0")}
 
         result = migrar_stock_reserva_best("administranet1", dry_run=True)
@@ -67,8 +72,29 @@ class MigrarStockReservaBestTest(SimpleTestCase):
         self.assertEqual(result["mapeados"], 1)
         self.assertEqual(result["actualizados"], 1)
 
+    @patch("mpr.best_migration.stock_reserva_loader._idarts_tipo_terminado")
+    @patch("mpr.best_migration.stock_reserva_loader._leer_stock_reserva_actual")
+    @patch("mpr.best_migration.stock_reserva_loader._cargar_mapa_articulos")
+    @patch("mpr.best_migration.stock_reserva_loader.connect_best")
+    @patch("mpr.best_migration.stock_reserva_loader.fetch_dict")
+    def test_omite_no_terminados(
+        self, mock_fetch, mock_connect, mock_mapa, mock_actuales, mock_terminados
+    ):
+        mock_connect.return_value = MagicMock()
+        mock_fetch.return_value = _best_rows(("1001", "50"), ("1002", "30"))
+        mock_mapa.return_value = {"1001": 10, "1002": 20}
+        mock_terminados.return_value = {10}  # 20 es fabricado
+        mock_actuales.return_value = {10: Decimal("0")}
+
+        result = migrar_stock_reserva_best("administranet1", dry_run=True)
+
+        self.assertEqual(result["mapeados"], 2)
+        self.assertEqual(result["omitidos_no_terminado"], 1)
+        self.assertEqual(result["actualizados"], 1)
+
     @patch("mpr.best_migration.stock_reserva_loader.mysql_cursor")
     @patch("mpr.best_migration.stock_reserva_loader._verificar_columna_stock_reserva")
+    @patch("mpr.best_migration.stock_reserva_loader._idarts_tipo_terminado")
     @patch("mpr.best_migration.stock_reserva_loader._leer_stock_reserva_actual")
     @patch("mpr.best_migration.stock_reserva_loader._cargar_mapa_articulos")
     @patch("mpr.best_migration.stock_reserva_loader.connect_best")
@@ -79,12 +105,14 @@ class MigrarStockReservaBestTest(SimpleTestCase):
         mock_connect,
         mock_mapa,
         mock_actuales,
+        mock_terminados,
         mock_verificar,
         mock_mysql,
     ):
         mock_connect.return_value = MagicMock()
         mock_fetch.return_value = _best_rows(("1001", "25"))
         mock_mapa.return_value = {"1001": 10}
+        mock_terminados.return_value = {10}
         mock_actuales.return_value = {10: Decimal("0")}
 
         mock_cur = MagicMock()

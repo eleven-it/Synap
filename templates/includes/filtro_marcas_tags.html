@@ -1,7 +1,7 @@
 {# Filtro multi-marca — tags + búsqueda predictiva (tags_filter.mjs). variant: light | dark #}
 {% with fid=field_id|default:"marcas_incluidos" %}
 {% with v=variant|default:"light" %}
-<div class="relative z-20 flex min-w-0 flex-col gap-0.5 overflow-visible {% if equal %}w-full{% else %}min-w-[10rem] sm:min-w-[12rem] sm:max-w-xs md:max-w-sm{% endif %}">
+<div class="relative z-50 flex min-w-0 flex-col gap-0.5 overflow-visible {% if equal %}w-full{% else %}min-w-[10rem] sm:min-w-[12rem] sm:max-w-xs md:max-w-sm{% endif %}">
     {% if v == "dark" %}
     <span class="text-[10px] font-medium text-slate-400">Marcas</span>
     {% else %}
@@ -26,7 +26,7 @@
                    aria-expanded="false">
             <div id="{{ fid }}_dropdown"
                  role="listbox"
-                 class="tags-dropdown synap-filtro-marcas-dropdown absolute left-0 right-0 top-[calc(100%+0.25rem)] z-[250] hidden max-h-60 overflow-y-auto rounded-md border shadow-lg {% if v == 'dark' %}border-slate-600 bg-slate-800 text-slate-100{% else %}border-slate-200 bg-white text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100{% endif %}"
+                 class="tags-dropdown synap-filtro-marcas-dropdown absolute left-0 right-0 top-[calc(100%+0.25rem)] z-[80] hidden max-h-60 overflow-y-auto rounded-md border shadow-lg {% if v == 'dark' %}border-slate-600 bg-slate-800 text-slate-100{% else %}border-slate-200 bg-white text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100{% endif %}"
                  {% if v == 'dark' %}data-tags-theme="dark"{% endif %}></div>
         </div>
     </div>
