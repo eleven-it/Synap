@@ -48,6 +48,16 @@ Documento normativo para **equipo humano y agentes**: define qué superficies de
 - **Feedback en envíos:** formularios con clase `mpr-post-loading` y `mpr/templates/mpr/includes/mpr_post_loading_modal.html`.
 - **Contenedor de página:** clase **`mpr-contenedor-pagina`** (o include `mpr/includes/contenedor_pagina_open.html`) en todas las pantallas del módulo: **`w-full max-w-none`** con padding horizontal responsive (`px-3 … 2xl:px-12`). No usar `max-w-7xl`, `max-w-4xl` ni otros topes de ancho en el shell principal; las tablas usan `overflow-x-auto` cuando hace falta.
 
+### 2.3 Implementaciones alineadas al canon (no fuentes de verdad)
+
+Las pantillas siguientes **implementan** los patrones de §2.2 y pueden usarse como **referencia secundaria** al migrar flujos similares (filtros server-side, tabla densa, feedback Synap). **No** sustituyen a `wizard.html`, `opt_list.html` ni `dashboard_detail.html` como fuente de verdad normativa.
+
+| Ruta | Plantilla | Uso como referencia |
+|------|-----------|---------------------|
+| `/mpr/parte-produccion/` | `mpr/templates/mpr/parte_produccion.html` | Planilla analista con filtros MPR, columnas sticky, turnos M/T/N, docenas/pares, modales/toast Synap (change `mpr-parte-produccion-grilla-planilla-qc`). Ver `docs/mpr/PARTE_PRODUCCION.md` § planilla QC. |
+
+Al copiar patrones desde estas pantallas, MUST mantener `base_mpr.html`, `mpr-contenedor-pagina` y la política de modales sin diálogos nativos (`.cursor/rules/modales-sin-dialogos-nativos.mdc`).
+
 ## 3. Exclusiones explícitas (hasta nuevo aviso)
 
 No usar como **referencia visual** para nuevas migraciones:

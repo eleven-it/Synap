@@ -1,5 +1,6 @@
 {% extends "mpr/base_mpr.html" %}
 {% load static %}
+{% load mpr_filters %}
 
 {% block title %}Parte de producción — MPR — Synap{% endblock %}
 
@@ -9,31 +10,13 @@
   .parte-grilla input[type="number"]::-webkit-outer-spin-button,
   .parte-grilla input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .parte-grilla input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
-  /* Tonos alternados por operario (máx. 4; se repite) */
-  .parte-op-tint-0 { border-left-color: rgb(192 132 252 / 0.55) !important; background-color: rgb(250 245 255 / 0.85); }
-  .dark .parte-op-tint-0 { border-left-color: rgb(107 33 168 / 0.45) !important; background-color: rgb(59 7 100 / 0.18); }
-  .parte-op-tint-1 { border-left-color: rgb(125 211 252 / 0.65) !important; background-color: rgb(240 249 255 / 0.9); }
-  .dark .parte-op-tint-1 { border-left-color: rgb(3 105 161 / 0.45) !important; background-color: rgb(12 74 110 / 0.2); }
-  .parte-op-tint-2 { border-left-color: rgb(253 186 116 / 0.65) !important; background-color: rgb(255 251 235 / 0.9); }
-  .dark .parte-op-tint-2 { border-left-color: rgb(180 83 9 / 0.4) !important; background-color: rgb(120 53 15 / 0.18); }
-  .parte-op-tint-3 { border-left-color: rgb(134 239 172 / 0.55) !important; background-color: rgb(240 253 244 / 0.9); }
-  .dark .parte-op-tint-3 { border-left-color: rgb(21 128 61 / 0.4) !important; background-color: rgb(20 83 45 / 0.18); }
-  .parte-op-col[data-op-idx="4"], .parte-op-col.parte-op-tint-4 { border-left-color: rgb(192 132 252 / 0.55) !important; background-color: rgb(250 245 255 / 0.85); }
-  .dark .parte-op-col[data-op-idx="4"], .dark .parte-op-col.parte-op-tint-4 { border-left-color: rgb(107 33 168 / 0.45) !important; background-color: rgb(59 7 100 / 0.18); }
-  .parte-op-col[data-op-idx="5"], .parte-op-col.parte-op-tint-5 { border-left-color: rgb(125 211 252 / 0.65) !important; background-color: rgb(240 249 255 / 0.9); }
-  .dark .parte-op-col[data-op-idx="5"], .dark .parte-op-col.parte-op-tint-5 { border-left-color: rgb(3 105 161 / 0.45) !important; background-color: rgb(12 74 110 / 0.2); }
-  .parte-op-col[data-op-idx="6"], .parte-op-col.parte-op-tint-6 { border-left-color: rgb(253 186 116 / 0.65) !important; background-color: rgb(255 251 235 / 0.9); }
-  .dark .parte-op-col[data-op-idx="6"], .dark .parte-op-col.parte-op-tint-6 { border-left-color: rgb(180 83 9 / 0.4) !important; background-color: rgb(120 53 15 / 0.18); }
-  .parte-op-col[data-op-idx="7"], .parte-op-col.parte-op-tint-7 { border-left-color: rgb(134 239 172 / 0.55) !important; background-color: rgb(240 253 244 / 0.9); }
-  .dark .parte-op-col[data-op-idx="7"], .dark .parte-op-col.parte-op-tint-7 { border-left-color: rgb(21 128 61 / 0.4) !important; background-color: rgb(20 83 45 / 0.18); }
-  tr.group\/row:hover .parte-op-col.parte-op-tint-0 { background-color: rgb(243 232 255 / 0.95); }
-  tr.group\/row:hover .parte-op-col.parte-op-tint-1 { background-color: rgb(224 242 254 / 0.95); }
-  tr.group\/row:hover .parte-op-col.parte-op-tint-2 { background-color: rgb(254 243 199 / 0.95); }
-  tr.group\/row:hover .parte-op-col.parte-op-tint-3 { background-color: rgb(220 252 231 / 0.95); }
-  .dark tr.group\/row:hover .parte-op-col.parte-op-tint-0 { background-color: rgb(88 28 135 / 0.28); }
-  .dark tr.group\/row:hover .parte-op-col.parte-op-tint-1 { background-color: rgb(7 89 133 / 0.28); }
-  .dark tr.group\/row:hover .parte-op-col.parte-op-tint-2 { background-color: rgb(146 64 14 / 0.28); }
-  .dark tr.group\/row:hover .parte-op-col.parte-op-tint-3 { background-color: rgb(22 101 52 / 0.28); }
+  /* Tintes suaves por turno (Mañana / Tarde / Noche) */
+  .parte-turno-tint-manana { border-left-color: rgb(253 224 71 / 0.55) !important; background-color: rgb(254 252 232 / 0.75); }
+  .dark .parte-turno-tint-manana { border-left-color: rgb(161 98 7 / 0.4) !important; background-color: rgb(66 32 6 / 0.16); }
+  .parte-turno-tint-tarde { border-left-color: rgb(125 211 252 / 0.6) !important; background-color: rgb(240 249 255 / 0.8); }
+  .dark .parte-turno-tint-tarde { border-left-color: rgb(3 105 161 / 0.4) !important; background-color: rgb(12 74 110 / 0.18); }
+  .parte-turno-tint-noche { border-left-color: rgb(196 181 253 / 0.6) !important; background-color: rgb(245 243 255 / 0.8); }
+  .dark .parte-turno-tint-noche { border-left-color: rgb(109 40 217 / 0.4) !important; background-color: rgb(46 16 101 / 0.18); }
 </style>
 <section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
     <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
@@ -48,7 +31,7 @@
             {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="parte-supervisor" only %}
         </nav>
 
-        {# Frame de encabezado compacto: título + filtros + Tablero en una fila #}
+        {# Encabezado compacto: título + filtros canon MPR + accesos #}
         <div class="mb-2 rounded-lg border border-slate-700 bg-slate-800 p-2 shadow-md dark:border-slate-800 dark:bg-slate-900 sm:mb-3 sm:p-3">
             <header class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
                 <div class="min-w-0 shrink-0">
@@ -66,81 +49,71 @@
                           x-init="init()"
                           @submit="onSubmit($event)">
 
+                        {# Fecha (obligatoria) — se envía como dd/MM/yyyy #}
                         <label class="flex flex-col gap-0.5">
-                            <span class="text-[10px] font-medium text-slate-400">Fecha</span>
+                            <span class="text-[10px] font-medium text-slate-400">Fecha <span class="text-purple-300">*</span></span>
                             <input type="date"
                                    x-model="fechaIso"
                                    required
+                                   aria-label="Fecha del parte"
                                    class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white [color-scheme:dark] focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
                             <input type="hidden" name="fecha" :value="fechaDdmmyyyy">
                         </label>
 
-                        <div class="relative flex flex-col gap-0.5" @click.outside="open = false">
-                            <span class="text-[10px] font-medium text-slate-400">Turno</span>
+                        {# Línea #}
+                        <label class="flex flex-col gap-0.5">
+                            <span class="text-[10px] font-medium text-slate-400">Línea</span>
+                            <select x-model="lineaSel"
+                                    aria-label="Filtrar por línea"
+                                    class="w-36 rounded-md border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 sm:w-40">
+                                <option value="">Todas las líneas</option>
+                                {% for l in lineas_filtro %}
+                                <option value="{{ l.id }}">{{ l.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                            <input type="hidden" name="id_linea" :value="lineaSel">
+                        </label>
+
+                        {# Máquina (se acota por línea seleccionada) #}
+                        <label class="flex flex-col gap-0.5">
+                            <span class="text-[10px] font-medium text-slate-400">Máquina</span>
+                            <select x-model="maquinaSel"
+                                    aria-label="Filtrar por máquina"
+                                    class="w-40 rounded-md border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 sm:w-44">
+                                <option value="">Todas las máquinas</option>
+                                <template x-for="m in maquinasVisibles" :key="m.id">
+                                    <option :value="m.id" x-text="m.label"></option>
+                                </template>
+                            </select>
+                            <input type="hidden" name="id_maquina" :value="maquinaSel">
+                        </label>
+
+                        {# Búsqueda de artículo (código o descripción) — server-side #}
+                        <label class="flex flex-col gap-0.5">
+                            <span class="text-[10px] font-medium text-slate-400">Buscar artículo</span>
                             <div class="relative">
-                                <span class="material-icons pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-slate-400" aria-hidden="true">schedule</span>
+                                <span class="material-icons pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-slate-400" aria-hidden="true">search</span>
                                 <input type="text"
-                                       x-model="query"
-                                       @focus="open = true"
-                                       @click="open = true"
-                                       @input="onInput()"
-                                       @keydown.arrow-down.prevent="move(1)"
-                                       @keydown.arrow-up.prevent="move(-1)"
-                                       @keydown.enter.prevent="enter()"
-                                       @keydown.escape="open = false"
-                                       role="combobox"
-                                       aria-autocomplete="list"
-                                       :aria-expanded="open"
+                                       name="q"
+                                       value="{{ q }}"
                                        autocomplete="off"
-                                       placeholder="Buscar turno…"
-                                       class="w-44 rounded-md border border-slate-600 bg-slate-700 py-1.5 pl-8 pr-8 text-xs text-white placeholder:text-slate-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 sm:w-48"/>
-                                <button type="button"
-                                        x-show="selectedId"
-                                        x-cloak
-                                        @click="clearSel()"
-                                        aria-label="Limpiar turno"
-                                        class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 transition-colors hover:text-white">
-                                    <span class="material-icons text-sm" aria-hidden="true">close</span>
-                                </button>
-                                <input type="hidden" name="turno_id" :value="selectedId">
-
-                                <ul x-show="open"
-                                    x-cloak
-                                    x-transition.opacity.duration.150ms
-                                    role="listbox"
-                                    class="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-800">
-                                    <template x-for="(opt, idx) in filtered" :key="opt.id">
-                                        <li role="option"
-                                            :aria-selected="String(opt.id) === String(selectedId)"
-                                            @click="select(opt)"
-                                            @mouseenter="highlight = idx"
-                                            :class="{
-                                                'bg-purple-50 dark:bg-purple-900/30': idx === highlight,
-                                                'font-semibold text-purple-700 dark:text-purple-300': String(opt.id) === String(selectedId)
-                                            }"
-                                            class="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs text-slate-700 transition-colors dark:text-slate-200">
-                                            <span class="material-icons text-sm text-slate-400" aria-hidden="true">schedule</span>
-                                            <span x-text="opt.nombre"></span>
-                                        </li>
-                                    </template>
-                                    <li x-show="filtered.length === 0"
-                                        class="px-3 py-2 text-xs text-slate-400">
-                                        Sin turnos que coincidan
-                                    </li>
-                                </ul>
+                                       placeholder="Código o descripción…"
+                                       aria-label="Buscar artículo por código o descripción"
+                                       class="w-44 rounded-md border border-slate-600 bg-slate-700 py-1.5 pl-8 pr-2 text-xs text-white placeholder:text-slate-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 sm:w-48"/>
                             </div>
-                        </div>
+                        </label>
 
+                        {# Marcas #}
                         {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
 
                         <button type="submit"
                                 class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                            <span class="material-icons text-base" aria-hidden="true">search</span>
+                            <span class="material-icons text-base" aria-hidden="true">grid_on</span>
                             Cargar grilla
                         </button>
                     </form>
 
-                    {% include "mpr/includes/btn_control_calidad.html" with variant="solid" fecha_str=fecha_str turno_id=turno_id only %}
+                    {% include "mpr/includes/btn_control_calidad.html" with variant="solid" fecha_str=fecha_str only %}
 
                     <a href="{% url 'mpr:tablero_produccion' %}"
                        class="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
@@ -151,7 +124,7 @@
             </header>
         </div>
 
-        {# Banner warnings OPP #}
+        {# Banner warnings OPP (cupo no bloqueante heredado) #}
         {% if warnings_opp %}
         <div class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-900/20 sm:mb-4">
             <div class="flex items-start gap-3">
@@ -163,168 +136,220 @@
                         <li>{{ w }}</li>
                         {% endfor %}
                     </ul>
-                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">El parte fue guardado. Activá el bloqueo en Config. Depósitos para evitar desvíos de stock.</p>
                 </div>
             </div>
         </div>
         {% endif %}
 
-        {% if grilla %}
-
-        {# Avisos de grilla vacía #}
-        {% if grilla.roster_vacio %}
-        <div class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-900/20 sm:mb-4">
-            <div class="flex items-start gap-3">
-                <span class="material-icons text-amber-600 dark:text-amber-400" aria-hidden="true">group_off</span>
-                <p class="text-sm font-semibold text-amber-800 dark:text-amber-200">No hay operarios asignados a este turno/fecha.</p>
-            </div>
+        {% if not grilla_planilla %}
+        {# Estado inicial: sin fecha cargada #}
+        <div class="rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-12">
+            <span class="material-icons mb-3 text-5xl text-slate-300 dark:text-slate-600" aria-hidden="true">event</span>
+            <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Seleccioná una fecha y pulsá «Cargar grilla»</p>
+            <p class="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+                La grilla se arma con las máquinas y artículos de la planilla de control de calidad de la fecha elegida. Podés acotar por línea, máquina, marcas o buscar un artículo.
+            </p>
         </div>
-        {% elif grilla.componentes_vacio %}
-        <div class="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-700/50 dark:bg-blue-900/20 sm:mb-4">
+
+        {% elif grilla_planilla.filas_vacio %}
+        {# Grilla vacía (sin cupo/planilla para los filtros) #}
+        <div class="rounded-lg border border-blue-200 bg-blue-50 p-6 dark:border-blue-700/50 dark:bg-blue-900/20 sm:p-8">
             <div class="flex items-start gap-3">
                 <span class="material-icons text-blue-600 dark:text-blue-400" aria-hidden="true">info</span>
                 <div class="text-sm text-blue-800 dark:text-blue-200">
-                    <p class="font-medium">No hay componentes con cupo en Fabricando para esta fecha y turno.</p>
+                    <p class="font-medium">No hay artículos en planilla para <strong>{{ fecha_str }}</strong> con los filtros aplicados.</p>
                     <p class="mt-1 text-xs text-blue-700/90 dark:text-blue-300/90">
-                        Los envíos ya están cubiertos por stock en pipeline, clasificación de calidad o partes registrados.
-                        Si ves filas antiguas en pantalla, recargá la página (F5) antes de guardar.
+                        Verificá la fecha, la línea o la máquina, o quitá filtros de marcas y búsqueda. Los artículos aparecen cuando hay cupo en Fabricando y planilla de control de calidad para ese día.
                     </p>
                 </div>
             </div>
         </div>
+
         {% else %}
 
         <div class="mb-3 rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-700/50 dark:bg-purple-900/20 sm:mb-4">
             <p class="text-xs text-purple-900 dark:text-purple-100">
-                <strong>Validación activa:</strong> la suma por fila (todos los operarios) no puede superar la columna Fabricando ni el techo de envíos a fabricación. El guardado se rechaza si se excede cualquiera de esos topes.
+                <strong>Validación activa:</strong> la suma de los tres turnos (docenas × {{ unidades_por_docena_parte|default:12 }} + pares) de cada fila no puede superar el cupo <strong>Fabricando</strong>. Si se excede, el guardado se rechaza.
             </p>
         </div>
 
-        {# Grilla de captura #}
-        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <form method="post" action="{% url 'mpr:parte_produccion_registrar' %}" class="mpr-post-loading" id="form-parte-produccion"
-                  data-bloquear-fabricando="1"
+        {# Grilla de captura planilla QC #}
+        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
+             x-data="{ filtro: '' }">
+            <form method="post" action="{% url 'mpr:parte_produccion_registrar' %}" class="mpr-post-loading flex flex-col" id="form-parte-produccion"
+                  data-bloquear-fabricando="{% if bloquear_parte_supera_fabricando %}1{% else %}0{% endif %}"
+                  data-pares-por-docena="{{ unidades_por_docena_parte|default:12 }}"
                   data-mpr-loading-title="Registrando parte..."
-                  data-mpr-loading-subtitle="Guardando las cantidades ingresadas.">
+                  data-mpr-loading-subtitle="Guardando las cantidades por turno.">
                 {% csrf_token %}
                 <input type="hidden" name="fecha" value="{{ fecha_str }}">
-                <input type="hidden" name="turno_id" value="{{ turno_id }}">
+                <input type="hidden" name="id_linea" value="{{ id_linea }}">
+                <input type="hidden" name="id_maquina" value="{{ id_maquina }}">
+                <input type="hidden" name="q" value="{{ q }}">
 
-                <div x-data="{ busqueda: '' }" class="flex flex-col">
-                {# Buscador predictivo de artículos #}
+                {# Filtro rápido dentro de la grilla ya cargada #}
                 <div class="border-b border-slate-100 bg-slate-50/80 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50 sm:px-4">
-                    <label for="parte-busqueda-articulo" class="sr-only">Buscar artículo en la grilla</label>
-                    <div class="relative max-w-lg">
-                        <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-slate-400" aria-hidden="true">search</span>
+                    <label for="parte-filtro-grilla" class="sr-only">Filtrar artículos en la grilla</label>
+                    <div class="relative max-w-md">
+                        <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-slate-400" aria-hidden="true">filter_list</span>
                         <input type="search"
-                               id="parte-busqueda-articulo"
-                               x-model="busqueda"
-                               placeholder="Buscar por código o descripción…"
+                               id="parte-filtro-grilla"
+                               x-model="filtro"
+                               placeholder="Filtrar en la grilla cargada…"
                                autocomplete="off"
                                class="h-9 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"/>
                         <button type="button"
-                                x-show="busqueda.trim() !== ''"
+                                x-show="filtro.trim() !== ''"
                                 x-cloak
-                                @click="busqueda = ''"
+                                @click="filtro = ''"
                                 class="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                                aria-label="Limpiar búsqueda">
+                                aria-label="Limpiar filtro">
                             <span class="material-icons text-base" aria-hidden="true">close</span>
                         </button>
                     </div>
-                    <p class="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400" x-show="busqueda.trim() !== ''" x-cloak>
-                        Mostrando coincidencias para «<span x-text="busqueda" class="font-medium text-slate-700 dark:text-slate-300"></span>»
-                    </p>
                 </div>
 
-                <div class="overflow-x-auto" role="region" aria-label="Grilla parte de producción">
-                    <table class="parte-grilla w-full border-collapse" style="min-width: 42rem;">
-                        <caption class="sr-only">Grilla de producción — {{ fecha_str }}</caption>
+                <div class="overflow-x-auto" role="region" aria-label="Grilla parte de producción (planilla QC)">
+                    <table class="parte-grilla w-full border-collapse" style="min-width: 56rem;">
+                        <caption class="sr-only">Grilla de producción máquina × artículo — {{ fecha_str }}</caption>
                         <thead>
                             <tr class="border-b border-slate-200 bg-slate-50/95 dark:border-slate-600 dark:bg-slate-800/90">
-                                <th scope="col" class="sticky left-0 z-10 min-w-[18rem] max-w-[28rem] bg-slate-50/95 px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400 sm:min-w-[20rem] sm:px-5">
+                                <th scope="col" class="sticky left-0 z-30 w-16 min-w-[4rem] bg-slate-50/95 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400">
+                                    Máq.
+                                </th>
+                                <th scope="col" class="sticky left-16 z-30 min-w-[13rem] max-w-[22rem] border-r border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
                                     Artículo
                                 </th>
-                                <th scope="col" class="min-w-[8.5rem] px-3 py-2.5 text-center text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                                    Fabricando
-                                </th>
-                                {% for op in grilla.operarios %}
-                                <th scope="col" class="parte-op-col min-w-[8.5rem] border-l-2 px-2 py-2.5 text-center parte-op-tint-{{ forloop.counter0 }}" data-op-idx="{{ forloop.counter0 }}">
-                                    <span class="block text-xs font-semibold text-slate-800 dark:text-slate-100">{{ op.nombre }}</span>
-                                    <span class="mt-0.5 block text-[10px] font-normal text-slate-500 dark:text-slate-400">Docenas de pares · Pares</span>
+                                {% for col in grilla_planilla.turnos_columnas %}
+                                <th scope="col" class="parte-turno-tint-{{ col.franja }} min-w-[11rem] border-l-2 px-2 py-2.5 text-center">
+                                    <span class="block text-xs font-semibold text-slate-800 dark:text-slate-100">{{ col.nombre }}</span>
+                                    <span class="mt-0.5 block text-[10px] font-normal text-slate-500 dark:text-slate-400">Docenas · Pares</span>
                                 </th>
                                 {% endfor %}
+                                <th scope="col" class="sticky right-0 z-30 min-w-[7.5rem] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
+                                    Cupo Fabricando
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-700/80">
-                            {% for comp in grilla.componentes %}
-                            <tr class="group/row parte-grilla-fila transition-colors hover:bg-purple-50/20 dark:hover:bg-purple-950/10"
-                                data-fabricando="{{ comp.fabricando }}"
-                                data-id-art="{{ comp.id_articulo }}"
-                                data-descripcion="{{ comp.codigo_manual|lower }} {{ comp.descripcion|lower }}"
-                                x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase().trim())">
-                                <td class="sticky left-0 z-10 min-w-[18rem] max-w-[28rem] border-r border-slate-100 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800 sm:min-w-[20rem] sm:px-5 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
-                                    <div class="flex flex-col gap-1">
-                                        <span class="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">{{ comp.codigo_manual }}</span>
-                                        <span class="text-sm leading-snug text-slate-600 dark:text-slate-300">{{ comp.descripcion }}</span>
-                                    </div>
+                            {% for fila in grilla_planilla.filas %}
+                            <tr class="group/row parte-grilla-fila transition-colors hover:bg-purple-50/20 dark:hover:bg-purple-950/10{% if not fila.inputs_habilitados %} opacity-70{% endif %}"
+                                data-fabricando="{{ fila.fabricando|floatformat:'0' }}"
+                                data-id-art="{{ fila.id_articulo }}"
+                                data-id-maq="{{ fila.id_mpr_maquina }}"
+                                data-articulo="{{ fila.descripcion|escape }}"
+                                data-descripcion="{{ fila.descripcion|lower }} {{ fila.codigo_tooltip|lower }}"
+                                x-show="filtro === '' || $el.dataset.descripcion.includes(filtro.toLowerCase().trim())">
+                                {# Máquina (sticky) #}
+                                <td class="sticky left-0 z-20 w-16 min-w-[4rem] bg-white px-2 py-3 text-center align-middle dark:bg-slate-800 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
+                                    <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                                          title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
+                                    <input type="hidden" name="parte_maq_{{ fila.id_mpr_maquina }}_nombre" value="{{ fila.maquina_nombre }}">
                                 </td>
-                                <td class="px-3 py-3 align-middle text-center">
-                                    <div class="parte-fabricando-badge inline-flex flex-col items-center gap-1 rounded-lg border border-emerald-200/90 bg-emerald-50 px-2.5 py-2 dark:border-emerald-800/60 dark:bg-emerald-950/30">
-                                        <span class="text-xs font-semibold tabular-nums leading-tight text-emerald-800 dark:text-emerald-300">{{ comp.fabricando_texto }}</span>
-                                        <span class="parte-fila-ingresado text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400" aria-live="polite">Ingresado: 0 pares</span>
-                                    </div>
+                                {# Artículo (sticky) — sin código visible, código en tooltip #}
+                                <td class="sticky left-16 z-20 min-w-[13rem] max-w-[22rem] border-r border-slate-100 bg-white px-3 py-3 align-middle dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
+                                    <span class="block text-sm leading-snug text-slate-700 dark:text-slate-200"
+                                          title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
                                 </td>
-                                {% for cel in comp.celdas_ops %}
-                                <td class="parte-op-col border-l-2 px-2 py-3 align-middle parte-op-tint-{{ forloop.counter0 }}" data-op-idx="{{ forloop.counter0 }}">
-                                    <div class="parte-celda-cantidad mx-auto w-full max-w-[9rem]" data-id-art="{{ comp.id_articulo }}" data-id-op="{{ cel.id_operario }}">
-                                        <div class="parte-qty-group flex overflow-hidden rounded-lg border border-slate-300/90 bg-white shadow-sm transition-shadow focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-500 dark:bg-slate-900 dark:focus-within:border-purple-400">
-                                            <label class="flex min-w-0 flex-1 flex-col">
-                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400" title="Docenas de pares (×12)">Docenas</span>
-                                                <input type="number"
-                                                       name="parte_art_{{ comp.id_articulo }}_op_{{ cel.id_operario }}_docenas"
-                                                       min="0" step="1" inputmode="numeric"
-                                                       value="{{ cel.docenas }}"
-                                                       data-parte-part="docenas"
-                                                       data-parte-qty-input
-                                                       data-id-art="{{ comp.id_articulo }}"
-                                                       data-id-op="{{ cel.id_operario }}"
-                                                       class="parte-input-docenas h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 focus:outline-none focus:ring-0 dark:text-slate-100"
-                                                       aria-label="Docenas de pares {{ comp.codigo_manual }} — {{ cel.nombre }}">
-                                            </label>
-                                            <div class="flex w-5 shrink-0 flex-col items-center justify-center border-x border-slate-200 bg-slate-50/90 dark:border-slate-600 dark:bg-slate-800/80" aria-hidden="true">
-                                                <span class="text-[10px] font-bold leading-none text-slate-300 dark:text-slate-600">+</span>
-                                            </div>
-                                            <label class="flex min-w-0 flex-1 flex-col">
-                                                <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Pares</span>
-                                                <input type="number"
-                                                       name="parte_art_{{ comp.id_articulo }}_op_{{ cel.id_operario }}_unidades"
-                                                       min="0" step="1" inputmode="numeric"
-                                                       value="{{ cel.unidades_sueltas }}"
-                                                       data-parte-part="unidades"
-                                                       data-parte-qty-input
-                                                       data-id-art="{{ comp.id_articulo }}"
-                                                       data-id-op="{{ cel.id_operario }}"
-                                                       class="parte-input-unidades h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 focus:outline-none focus:ring-0 dark:text-slate-100"
-                                                       aria-label="Pares sueltos {{ comp.codigo_manual }} — {{ cel.nombre }}">
-                                            </label>
+                                {# Celdas por turno #}
+                                {% for col in grilla_planilla.turnos_columnas %}
+                                {% with cel=fila.turnos|dict_get:col.id %}
+                                <td class="parte-turno-tint-{{ col.franja }} border-l-2 px-2 py-3 align-top">
+                                    {% if fila.inputs_habilitados and cel and cel.operarios %}
+                                        {# Operario del roster: 1 → hidden; varios → select #}
+                                        <div class="mb-1.5">
+                                            {% if cel.operarios|length == 1 %}
+                                                {% with op=cel.operarios.0 %}
+                                                <input type="hidden" name="parte_maq_{{ fila.id_mpr_maquina }}_art_{{ fila.id_articulo }}_turno_{{ col.id }}_op" value="{{ op.id_operario }}">
+                                                <p class="truncate text-center text-[10px] font-medium text-slate-500 dark:text-slate-400" title="{{ op.nombre }}">
+                                                    <span class="material-icons align-text-bottom text-[11px]" aria-hidden="true">person</span>
+                                                    {{ op.nombre }}
+                                                </p>
+                                                {% endwith %}
+                                            {% else %}
+                                                <select name="parte_maq_{{ fila.id_mpr_maquina }}_art_{{ fila.id_articulo }}_turno_{{ col.id }}_op"
+                                                        data-parte-op-select
+                                                        aria-label="Operario {{ col.nombre }} — {{ fila.descripcion }}"
+                                                        class="h-7 w-full rounded-md border border-slate-300 bg-white px-1 text-[11px] text-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
+                                                    <option value="">— Operario —</option>
+                                                    {% for op in cel.operarios %}
+                                                    <option value="{{ op.id_operario }}">{{ op.nombre }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                            {% endif %}
                                         </div>
-                                        <p class="parte-celda-subtotal mt-1 hidden text-center text-[10px] font-medium tabular-nums text-purple-600 dark:text-purple-400" aria-hidden="true"></p>
+                                        <div class="parte-celda-cantidad mx-auto w-full max-w-[9.5rem]"
+                                             data-id-art="{{ fila.id_articulo }}"
+                                             data-id-maq="{{ fila.id_mpr_maquina }}"
+                                             data-id-turno="{{ col.id }}">
+                                            <div class="parte-qty-group flex overflow-hidden rounded-lg border border-slate-300/90 bg-white shadow-sm transition-shadow focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-500 dark:bg-slate-900 dark:focus-within:border-purple-400">
+                                                <label class="flex min-w-0 flex-1 flex-col">
+                                                    <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400" title="Docenas de pares (× {{ unidades_por_docena_parte|default:12 }})">Docenas</span>
+                                                    <input type="number"
+                                                           name="parte_maq_{{ fila.id_mpr_maquina }}_art_{{ fila.id_articulo }}_turno_{{ col.id }}_docenas"
+                                                           min="0" step="1" inputmode="numeric"
+                                                           value="{{ cel.docenas|default:'' }}"
+                                                           placeholder="0"
+                                                           data-parte-part="docenas"
+                                                           data-parte-qty-input
+                                                           class="parte-input-docenas h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-600"
+                                                           aria-label="Docenas {{ col.nombre }} {{ fila.descripcion }}">
+                                                </label>
+                                                <div class="flex w-5 shrink-0 flex-col items-center justify-center border-x border-slate-200 bg-slate-50/90 dark:border-slate-600 dark:bg-slate-800/80" aria-hidden="true">
+                                                    <span class="text-[10px] font-bold leading-none text-slate-300 dark:text-slate-600">+</span>
+                                                </div>
+                                                <label class="flex min-w-0 flex-1 flex-col">
+                                                    <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Pares</span>
+                                                    <input type="number"
+                                                           name="parte_maq_{{ fila.id_mpr_maquina }}_art_{{ fila.id_articulo }}_turno_{{ col.id }}_pares"
+                                                           min="0" step="1" inputmode="numeric"
+                                                           value="{{ cel.pares|default:'' }}"
+                                                           placeholder="0"
+                                                           data-parte-part="pares"
+                                                           data-parte-qty-input
+                                                           class="parte-input-pares h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-600"
+                                                           aria-label="Pares sueltos {{ col.nombre }} {{ fila.descripcion }}">
+                                                </label>
+                                            </div>
+                                        </div>
+                                    {% elif fila.inputs_habilitados %}
+                                        {# Habilitada pero sin roster para el turno #}
+                                        <div class="flex min-h-[3.5rem] items-center justify-center rounded-lg border border-dashed border-slate-300 px-2 text-center dark:border-slate-600">
+                                            <p class="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                                                <span class="material-icons align-text-bottom text-[13px]" aria-hidden="true">person_off</span>
+                                                Sin operario en el roster de este turno
+                                            </p>
+                                        </div>
+                                    {% else %}
+                                        {# Sin cupo Fabricando: inputs deshabilitados #}
+                                        <div class="flex min-h-[3.5rem] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 text-center dark:border-slate-700 dark:bg-slate-900/40">
+                                            <p class="text-[10px] font-medium text-slate-400 dark:text-slate-500">Sin cupo Fabricando</p>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                {% endwith %}
+                                {% endfor %}
+                                {# Cupo Fabricando (sticky derecha) + ingresado en vivo #}
+                                <td class="sticky right-0 z-20 min-w-[7.5rem] border-l border-slate-100 bg-white px-3 py-3 text-center align-middle dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
+                                    <div class="parte-fabricando-badge inline-flex flex-col items-center gap-1 rounded-lg border border-emerald-200/90 bg-emerald-50 px-2.5 py-2 dark:border-emerald-800/60 dark:bg-emerald-950/30">
+                                        <span class="text-xs font-semibold tabular-nums leading-tight text-emerald-800 dark:text-emerald-300">{{ fila.fabricando|floatformat:'0' }} pares</span>
+                                        <span class="parte-fila-ingresado text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400" aria-live="polite">Ingresado: {{ fila.ingresado }} pares</span>
                                     </div>
                                 </td>
-                                {% endfor %}
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
+
                 <div class="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
-                     x-show="busqueda.trim() !== '' && Array.from($root.querySelectorAll('tbody tr.parte-grilla-fila')).every(function(el) { return !el.offsetParent; })"
+                     x-show="filtro.trim() !== '' && Array.from($root.querySelectorAll('tbody tr.parte-grilla-fila')).every(function(el) { return !el.offsetParent; })"
                      x-cloak>
-                    Ningún artículo coincide con la búsqueda.
+                    Ningún artículo coincide con el filtro.
                 </div>
-                </div>{# fin x-data busqueda #}
+
                 <div class="flex flex-wrap items-end justify-end gap-3 border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
-                    <div class="flex flex-1 flex-col gap-1 min-w-[12rem] max-w-xs">
+                    <div class="flex min-w-[12rem] max-w-xs flex-1 flex-col gap-1">
                         <label for="id_notas" class="text-xs font-medium text-slate-600 dark:text-slate-400">Notas (opcional)</label>
                         <input type="text" id="id_notas" name="notas" maxlength="500" placeholder="Observaciones del parte..."
                                class="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
@@ -339,17 +364,16 @@
         </div>
 
         {% endif %}
-        {% endif %}
 
     </div>
 </section>
 
 <script>
 (function () {
-    var PARES_POR_DOCENA = {{ unidades_por_docena_parte|default:12 }};
     var form = document.getElementById('form-parte-produccion');
     if (!form) { return; }
 
+    var PARES_POR_DOCENA = parseInt(form.getAttribute('data-pares-por-docena'), 10) || 12;
     var qtyInputs = Array.prototype.slice.call(form.querySelectorAll('[data-parte-qty-input]'));
 
     function parseQty(val) {
@@ -357,68 +381,57 @@
         return isNaN(n) || n < 0 ? 0 : n;
     }
 
-    function paresCelda(idArt, idOp) {
-        var docInp = form.querySelector('[data-parte-part="docenas"][data-id-art="' + idArt + '"][data-id-op="' + idOp + '"]');
-        var parInp = form.querySelector('[data-parte-part="unidades"][data-id-art="' + idArt + '"][data-id-op="' + idOp + '"]');
-        return parseQty(docInp && docInp.value) * PARES_POR_DOCENA + parseQty(parInp && parInp.value);
+    function paresCelda(cel) {
+        var doc = cel.querySelector('[data-parte-part="docenas"]');
+        var par = cel.querySelector('[data-parte-part="pares"]');
+        return parseQty(doc && doc.value) * PARES_POR_DOCENA + parseQty(par && par.value);
     }
 
-    function actualizarSubtotales(tr) {
-        if (!tr) { return; }
-        var idArt = tr.getAttribute('data-id-art');
-        var sumaFila = 0;
+    function sumaFilaPares(tr) {
+        var suma = 0;
         tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
-            var idOp = cel.getAttribute('data-id-op');
-            var u = paresCelda(idArt, idOp);
-            sumaFila += u;
-            var sub = cel.querySelector('.parte-celda-subtotal');
-            if (sub) {
-                if (u > 0) {
-                    sub.textContent = '= ' + u + ' pares';
-                    sub.classList.remove('hidden', 'text-slate-400', 'dark:text-slate-500');
-                    sub.classList.add('text-purple-600', 'dark:text-purple-400');
-                } else {
-                    sub.textContent = '';
-                    sub.classList.add('hidden');
-                }
-            }
+            suma += paresCelda(cel);
         });
+        return suma;
+    }
+
+    function actualizarIngresado(tr) {
+        if (!tr) { return; }
+        var suma = sumaFilaPares(tr);
+        var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
         var ing = tr.querySelector('.parte-fila-ingresado');
         var badge = tr.querySelector('.parte-fabricando-badge');
-        var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
+        var excede = suma > tope + 1e-9;
         if (ing) {
-            ing.textContent = 'Ingresado: ' + sumaFila + ' pares';
+            ing.textContent = 'Ingresado: ' + suma + ' pares';
             ing.classList.remove('text-red-600', 'dark:text-red-400', 'text-emerald-700', 'dark:text-emerald-400', 'text-slate-500', 'dark:text-slate-400');
-            if (sumaFila > tope + 1e-9) {
+            if (excede) {
                 ing.classList.add('text-red-600', 'dark:text-red-400');
-            } else if (sumaFila > 0) {
+            } else if (suma > 0) {
                 ing.classList.add('text-emerald-700', 'dark:text-emerald-400');
             } else {
                 ing.classList.add('text-slate-500', 'dark:text-slate-400');
             }
         }
         if (badge) {
-            badge.classList.toggle('border-red-300', sumaFila > tope + 1e-9);
-            badge.classList.toggle('bg-red-50', sumaFila > tope + 1e-9);
-            badge.classList.toggle('dark:border-red-800/60', sumaFila > tope + 1e-9);
-            badge.classList.toggle('dark:bg-red-950/30', sumaFila > tope + 1e-9);
+            badge.classList.toggle('border-red-300', excede);
+            badge.classList.toggle('bg-red-50', excede);
+            badge.classList.toggle('dark:border-red-800/60', excede);
+            badge.classList.toggle('dark:bg-red-950/30', excede);
         }
-    }
-
-    function indiceInput(inp) {
-        return qtyInputs.indexOf(inp);
     }
 
     function filaVisible(tr) {
         return tr && tr.offsetParent !== null;
     }
 
+    // Tab order por fila: M → T → N (docenas antes que pares en cada celda),
+    // luego pasa a la siguiente fila visible. El orden del DOM ya es correcto.
     function focoSiguiente(inp) {
-        var idx = indiceInput(inp);
+        var idx = qtyInputs.indexOf(inp);
         for (var i = idx + 1; i < qtyInputs.length; i++) {
-            var candidato = qtyInputs[i];
-            if (filaVisible(candidato.closest('tr[data-id-art]'))) {
-                return candidato;
+            if (filaVisible(qtyInputs[i].closest('tr[data-id-art]'))) {
+                return qtyInputs[i];
             }
         }
         return null;
@@ -427,28 +440,19 @@
     qtyInputs.forEach(function (inp) {
         inp.addEventListener('focus', function () {
             this.select();
-            var group = this.closest('.parte-qty-group');
-            if (group) { group.classList.add('ring-2', 'ring-purple-500/20'); }
-        });
-        inp.addEventListener('blur', function () {
-            var group = this.closest('.parte-qty-group');
-            if (group) { group.classList.remove('ring-2', 'ring-purple-500/20'); }
         });
         inp.addEventListener('input', function () {
-            actualizarSubtotales(this.closest('tr[data-id-art]'));
+            actualizarIngresado(this.closest('tr[data-id-art]'));
         });
         inp.addEventListener('keydown', function (ev) {
             if (ev.key !== 'Enter') { return; }
             ev.preventDefault();
             var siguiente = null;
             if (this.classList.contains('parte-input-docenas')) {
-                var par = this.closest('.parte-celda-cantidad');
-                if (par) {
-                    siguiente = par.querySelector('.parte-input-unidades');
-                }
-            } else {
-                siguiente = focoSiguiente(this);
+                var cel = this.closest('.parte-celda-cantidad');
+                if (cel) { siguiente = cel.querySelector('.parte-input-pares'); }
             }
+            if (!siguiente) { siguiente = focoSiguiente(this); }
             if (siguiente) {
                 siguiente.focus();
             } else {
@@ -458,48 +462,50 @@
         });
     });
 
-    form.querySelectorAll('tbody tr[data-id-art]').forEach(function (tr) {
-        actualizarSubtotales(tr);
-    });
+    form.querySelectorAll('tbody tr[data-id-art]').forEach(actualizarIngresado);
 
-    function sumaFilaPares(tr) {
-        var idArt = tr.getAttribute('data-id-art');
-        var suma = 0;
-        tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
-            suma += paresCelda(idArt, cel.getAttribute('data-id-op'));
-        });
-        return suma;
-    }
-
-    if (form.getAttribute('data-bloquear-fabricando') === '1') {
-        form.addEventListener('submit', function (ev) {
-            var errores = [];
-            form.querySelectorAll('tbody tr[data-fabricando]').forEach(function (tr) {
-                var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
-                var suma = sumaFilaPares(tr);
-                if (suma > tope + 1e-9) {
-                    var cod = tr.querySelector('td span.font-semibold');
-                    errores.push((cod ? cod.textContent.trim() : 'Componente') + ': ' + suma + ' pares > ' + tope.toFixed(1) + ' pares en Fabricando');
+    // Validación de guardado sin diálogos nativos (usa mprShowAviso).
+    form.addEventListener('submit', function (ev) {
+        var erroresCupo = [];
+        var faltaOperario = [];
+        form.querySelectorAll('tbody tr[data-fabricando]').forEach(function (tr) {
+            var articulo = tr.getAttribute('data-articulo') || 'Artículo';
+            // Cupo por fila (suma de los tres turnos).
+            var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
+            var suma = sumaFilaPares(tr);
+            if (suma > tope + 1e-9) {
+                erroresCupo.push('• ' + articulo + ': ' + suma + ' pares supera Fabricando (' + tope + ' pares).');
+            }
+            // Operario obligatorio cuando se cargó cantidad en una celda con selector.
+            tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
+                if (paresCelda(cel) <= 0) { return; }
+                var sel = cel.parentElement.querySelector('[data-parte-op-select]');
+                if (sel && !String(sel.value || '').trim()) {
+                    faltaOperario.push('• ' + articulo + ': seleccioná el operario del turno antes de guardar.');
                 }
             });
-            if (errores.length) {
-                ev.preventDefault();
-                alert('No se puede guardar:\n\n' + errores.join('\n'));
-            }
         });
-    }
+
+        var errores = erroresCupo.concat(faltaOperario);
+        if (errores.length) {
+            ev.preventDefault();
+            var titulo = erroresCupo.length ? 'No se puede guardar: cupo superado' : 'No se puede guardar';
+            if (window.mprShowAviso) {
+                window.mprShowAviso(errores.join('\n'), { tipo: 'error', titulo: titulo });
+            }
+            if (window.mprHidePostLoading) { window.mprHidePostLoading(); }
+        }
+    });
 })();
 
 document.addEventListener('alpine:init', function () {
     Alpine.data('parteFiltros', function () {
         return {
-            open: false,
-            query: '',
-            selectedId: '{{ turno_id|default:"" }}',
-            highlight: -1,
             fechaIso: '',
-            options: [
-                {% for t in turnos_activos %}{ id: '{{ t.id }}', nombre: '{{ t.nombre|escapejs }}' }{% if not forloop.last %},{% endif %}
+            lineaSel: '{{ id_linea|default:"" }}',
+            maquinaSel: '{{ id_maquina|default:"" }}',
+            maquinas: [
+                {% for m in maquinas_filtro %}{ id: '{{ m.id }}', label: '{{ m.codigo|escapejs }}{% if m.codigo and m.nombre %} · {% endif %}{{ m.nombre|escapejs }}', idLinea: '{{ m.id_linea_actual|default:"" }}' }{% if not forloop.last %},{% endif %}
                 {% endfor %}
             ],
             init: function () {
@@ -508,8 +514,6 @@ document.addEventListener('alpine:init', function () {
                     var p = raw.split('/');
                     this.fechaIso = p[2] + '-' + p[1] + '-' + p[0];
                 }
-                var m = this.options.find(function (o) { return String(o.id) === String(this.selectedId); }, this);
-                if (m) { this.query = m.nombre; }
             },
             get fechaDdmmyyyy() {
                 if (!this.fechaIso) { return ''; }
@@ -517,49 +521,26 @@ document.addEventListener('alpine:init', function () {
                 if (p.length !== 3) { return ''; }
                 return p[2] + '/' + p[1] + '/' + p[0];
             },
-            seleccionExacta: function () {
+            get maquinasVisibles() {
                 var self = this;
-                var m = this.options.find(function (o) { return String(o.id) === String(self.selectedId); });
-                return !!m && m.nombre === this.query;
-            },
-            get filtered() {
-                var q = (this.query || '').trim().toLowerCase();
-                if (!q || this.seleccionExacta()) { return this.options; }
-                return this.options.filter(function (o) {
-                    return o.nombre.toLowerCase().indexOf(q) > -1;
+                if (!this.lineaSel) { return this.maquinas; }
+                return this.maquinas.filter(function (m) {
+                    return String(m.idLinea) === String(self.lineaSel);
                 });
             },
-            onInput: function () {
-                this.open = true;
-                this.selectedId = '';
-                this.highlight = -1;
-            },
-            select: function (opt) {
-                this.selectedId = opt.id;
-                this.query = opt.nombre;
-                this.open = false;
-                this.highlight = -1;
-            },
-            clearSel: function () {
-                this.selectedId = '';
-                this.query = '';
-                this.open = true;
-            },
-            move: function (dir) {
-                if (!this.open) { this.open = true; return; }
-                var n = this.filtered.length;
-                if (!n) { return; }
-                this.highlight = (this.highlight + dir + n) % n;
-            },
-            enter: function () {
-                if (this.open && this.highlight >= 0 && this.filtered[this.highlight]) {
-                    this.select(this.filtered[this.highlight]);
-                }
-            },
             onSubmit: function (e) {
-                if (!this.selectedId) {
+                // Si la máquina elegida no pertenece a la línea, se limpia.
+                if (this.maquinaSel && this.lineaSel) {
+                    var ok = this.maquinasVisibles.some(function (m) {
+                        return String(m.id) === String(this.maquinaSel);
+                    }, this);
+                    if (!ok) { this.maquinaSel = ''; }
+                }
+                if (!this.fechaDdmmyyyy) {
                     e.preventDefault();
-                    this.open = true;
+                    if (window.mprShowAviso) {
+                        window.mprShowAviso('Seleccioná una fecha para cargar la planilla.', { tipo: 'warning', titulo: 'Falta la fecha' });
+                    }
                 }
             }
         };

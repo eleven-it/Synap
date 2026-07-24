@@ -1,0 +1,15 @@
+change: mpr-parte-produccion-grilla-planilla-qc
+status: apply-complete
+created: 2026-07-24
+phase: apply
+next: verify
+note: "T1-T18 completadas (T11-T14 template/UX planilla QC recién implementadas)."
+artifact_store: hybrid
+depends_on: []
+artifacts:
+  exploration: skipped
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete

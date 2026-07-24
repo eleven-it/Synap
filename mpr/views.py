@@ -412,10 +412,67 @@ def _envio_cantidad_unidades_desde_post(post, id_art: int) -> int:
     return max(0, pares)
 
 
-def _parte_lineas_desde_post(post) -> List[Dict[str, Any]]:
-    """Arma líneas del parte desde POST (docenas + unidades por operario)."""
+def _parte_cantidad_pares_planilla_desde_post(
+    post, id_maq: int, id_art: int, id_turno: int
+) -> int:
+    """Pares equivalentes docenas×12 + pares sueltos (celda planilla QC)."""
+    doc_key = f"parte_maq_{id_maq}_art_{id_art}_turno_{id_turno}_docenas"
+    par_key = f"parte_maq_{id_maq}_art_{id_art}_turno_{id_turno}_pares"
+    try:
+        docenas = int((post.get(doc_key) or "0").strip())
+    except (ValueError, TypeError):
+        docenas = 0
+    try:
+        pares = int((post.get(par_key) or "0").strip())
+    except (ValueError, TypeError):
+        pares = 0
+    return max(0, docenas) * UNIDADES_POR_DOCENA_OPP + max(0, pares)
+
+
+def _parte_lineas_desde_post(post, *, modo_planilla: bool = False) -> List[Dict[str, Any]]:
+    """Arma líneas del parte desde POST (E8 operario×componente o planilla QC)."""
     from decimal import Decimal
     import re as _re
+
+    if modo_planilla or any(
+        _re.match(r"^parte_maq_\d+_art_\d+_turno_\d+_", k) for k in post.keys()
+    ):
+        vistos: set = set()
+        lineas: List[Dict[str, Any]] = []
+        for key in post.keys():
+            m = _re.match(
+                r"^parte_maq_(\d+)_art_(\d+)_turno_(\d+)_(docenas|pares)$", key
+            )
+            if not m or m.group(4) != "docenas":
+                continue
+            id_maq = int(m.group(1))
+            id_art = int(m.group(2))
+            id_turno = int(m.group(3))
+            clave = (id_maq, id_art, id_turno)
+            if clave in vistos:
+                continue
+            vistos.add(clave)
+            cantidad = Decimal(
+                _parte_cantidad_pares_planilla_desde_post(post, id_maq, id_art, id_turno)
+            )
+            if cantidad <= 0:
+                continue
+            op_key = f"parte_maq_{id_maq}_art_{id_art}_turno_{id_turno}_op"
+            try:
+                id_op = int((post.get(op_key) or "0").strip())
+            except (ValueError, TypeError):
+                id_op = 0
+            if id_op <= 0:
+                continue
+            lineas.append({
+                "id_articulo": id_art,
+                "id_operario": id_op,
+                "cantidad": cantidad,
+                "id_mpr_maquina": id_maq,
+                "maquina_nombre": (post.get(f"parte_maq_{id_maq}_nombre") or "").strip() or "-",
+                "turno_id": id_turno,
+            })
+        return lineas
 
     vistos: set = set()
     lineas: List[Dict[str, Any]] = []
@@ -6087,13 +6144,18 @@ class EliminarAsignacionRosterView(MprLoginRequiredMixin, View):
 # ---------------------------------------------------------------------------
 
 class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
-    """Vista de captura de parte de producción (grilla packs × operarios)."""
+    """Vista de captura de parte de producción (grilla planilla QC analista)."""
 
     template_name = "mpr/parte_produccion.html"
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        from mpr.services import construir_grilla_parte, listar_turnos, obtener_config_mpr
+        from mpr.services import listar_turnos, obtener_config_mpr
+        from mpr.services_maquina_linea import (
+            construir_grilla_parte_planilla,
+            listar_lineas,
+            listar_maquinas,
+        )
 
         base_empresa = _get_base_empresa(self.request)
         context.update(_context_filtro_marcas(self.request, base_empresa))
@@ -6106,41 +6168,54 @@ class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
         )
         context["unidades_por_docena_parte"] = UNIDADES_POR_DOCENA_OPP
         context["turnos_activos"] = listar_turnos(base_empresa, solo_activos=True)
+        context["lineas_filtro"] = listar_lineas(base_empresa, solo_activas=True)
+        context["maquinas_filtro"] = listar_maquinas(base_empresa, solo_activas=True)
         from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
 
         context["modo_presentacion"] = resolver_modo_presentacion_operativa(self.request)
         marcas_incluidos = _parse_marcas_incluidos(self.request)
 
         fecha_str = (self.request.GET.get("fecha") or "").strip()
-        turno_id_raw = (self.request.GET.get("turno_id") or "").strip()
+        id_linea_raw = (self.request.GET.get("id_linea") or "").strip()
+        id_maquina_raw = (self.request.GET.get("id_maquina") or "").strip()
+        q_busqueda = (self.request.GET.get("q") or "").strip()
         context["fecha_str"] = fecha_str
-        context["turno_id"] = turno_id_raw
+        context["id_linea"] = id_linea_raw
+        context["id_maquina"] = id_maquina_raw
+        context["q"] = q_busqueda
 
         warnings_opp = self.request.session.pop("parte_warnings", None)
         if warnings_opp:
             context["warnings_opp"] = warnings_opp
 
-        if fecha_str and turno_id_raw:
-            try:
-                from datetime import datetime
-                fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
-                turno_id = int(turno_id_raw)
-                grilla = construir_grilla_parte(
-                    base_empresa,
-                    fecha_obj,
-                    turno_id,
-                    marcas_incluidos=marcas_incluidos or None,
-                )
-                context["grilla"] = grilla
-                context["fecha_obj"] = fecha_obj
-            except (ValueError, TypeError):
-                messages.error(self.request, "Fecha o turno inválidos.")
+        if not fecha_str:
+            messages.info(self.request, "Seleccione una fecha para cargar la planilla.")
+            return context
+
+        try:
+            from datetime import datetime
+
+            fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
+            id_linea = int(id_linea_raw) if id_linea_raw else None
+            id_maquina = int(id_maquina_raw) if id_maquina_raw else None
+            grilla_planilla = construir_grilla_parte_planilla(
+                base_empresa,
+                fecha_obj,
+                id_linea=id_linea,
+                id_maquina=id_maquina,
+                marcas_incluidos=marcas_incluidos or None,
+                q=q_busqueda or None,
+            )
+            context["grilla_planilla"] = grilla_planilla
+            context["fecha_obj"] = fecha_obj
+        except (ValueError, TypeError):
+            messages.error(self.request, "Fecha o filtros inválidos.")
 
         return context
 
 
 class RegistrarParteProduccionView(MprLoginRequiredMixin, View):
-    """POST: Registra un parte de producción completo (lote de celdas)."""
+    """POST: Registra un parte de producción completo (planilla QC multi-turno)."""
 
     def post(self, request):
         from datetime import datetime
@@ -6152,29 +6227,43 @@ class RegistrarParteProduccionView(MprLoginRequiredMixin, View):
             return redirect("mpr:parte_produccion")
 
         fecha_str = (request.POST.get("fecha") or "").strip()
-        turno_id_raw = (request.POST.get("turno_id") or "").strip()
 
-        if not fecha_str or not turno_id_raw:
-            messages.error(request, "Fecha y turno son requeridos.")
+        if not fecha_str:
+            messages.error(request, "La fecha es obligatoria.")
             return redirect("mpr:parte_produccion")
 
         try:
             fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
-            turno_id = int(turno_id_raw)
         except (ValueError, TypeError):
-            messages.error(request, "Fecha o turno inválidos.")
+            messages.error(request, "Fecha inválida.")
             return redirect("mpr:parte_produccion")
 
-        # Parsear celdas: parte_art_{id_art}_op_{id_op}_docenas / _unidades
         lineas = _parte_lineas_desde_post(request.POST)
+        modo_planilla = any(ln.get("id_mpr_maquina") for ln in lineas)
+        turno_id_raw = (request.POST.get("turno_id") or "").strip()
 
         notas = (request.POST.get("notas") or "").strip()
         id_usuario = getattr(request.user, "id", 0) or 0
 
         try:
-            parte, warnings = registrar_parte_produccion(
-                base_empresa, fecha_obj, turno_id, id_usuario, lineas, notas
-            )
+            if modo_planilla:
+                partes, warnings = registrar_parte_produccion(
+                    base_empresa,
+                    fecha_obj,
+                    None,
+                    id_usuario,
+                    lineas,
+                    notas,
+                    modo_planilla=True,
+                )
+            else:
+                if not turno_id_raw:
+                    messages.error(request, "Fecha y turno son requeridos.")
+                    return redirect("mpr:parte_produccion")
+                turno_id = int(turno_id_raw)
+                partes, warnings = registrar_parte_produccion(
+                    base_empresa, fecha_obj, turno_id, id_usuario, lineas, notas
+                )
             if warnings:
                 request.session["parte_warnings"] = warnings
             messages.success(request, "Parte de producción registrado exitosamente.")
@@ -6185,10 +6274,17 @@ class RegistrarParteProduccionView(MprLoginRequiredMixin, View):
             messages.error(request, f"Error al registrar el parte: {e}")
 
         redirect_url = reverse("mpr:parte_produccion")
-        qs = _urlencode_con_marcas(
-            {"fecha": fecha_str, "turno_id": turno_id_raw},
-            _parse_marcas_incluidos(request),
-        )
+        qs_params = {"fecha": fecha_str}
+        id_linea_raw = (request.POST.get("id_linea") or request.GET.get("id_linea") or "").strip()
+        id_maquina_raw = (request.POST.get("id_maquina") or request.GET.get("id_maquina") or "").strip()
+        q_raw = (request.POST.get("q") or request.GET.get("q") or "").strip()
+        if id_linea_raw:
+            qs_params["id_linea"] = id_linea_raw
+        if id_maquina_raw:
+            qs_params["id_maquina"] = id_maquina_raw
+        if q_raw:
+            qs_params["q"] = q_raw
+        qs = _urlencode_con_marcas(qs_params, _parse_marcas_incluidos(request))
         return redirect(f"{redirect_url}?{qs}")
 
 

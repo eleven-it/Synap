@@ -16,7 +16,8 @@ Implementado en **Etapa 8**: parte por componente, conectado a la columna **Fabr
 5. [Flujo de dos etapas (estado/origen/asiento diferido)](#flujo-de-dos-etapas)
 6. [Limitaciones — compatibilidad E6 (trazabilidad OPT)](#limitaciones-e6)
 7. [Modelo de datos](#modelo-de-datos)
-8. [Flujo de pantalla](#flujo-de-pantalla)
+8. [Flujo de pantalla E8 (componente × operario)](#flujo-de-pantalla)
+9. [Flujo analista — planilla QC (máquina × artículo)](#flujo-analista-planilla-qc)
 
 ---
 
@@ -270,6 +271,114 @@ Migración: `0015_mprpartelinea_id_articulo_componente.py` — `AlterField` help
    e. Warnings si cantidad > Fabricando (no bloqueante)
 9. Redirect → grilla actualizada; Fabricando reducido en el próximo render
 ```
+
+> **Nota:** el flujo anterior corresponde al modo **E8 legacy** (componente × operario, un turno por pantalla). Desde el change `mpr-parte-produccion-grilla-planilla-qc`, la pantalla analista usa la **planilla QC** descrita en la sección siguiente. El POST legacy (`parte_art_{id}_op_{id}`) se conserva cuando no hay celdas planilla en el formulario.
+
+---
+
+## Flujo analista — planilla QC (máquina × artículo) {#flujo-analista-planilla-qc}
+
+Pantalla: **`/mpr/parte-produccion/`** (`ParteProduccionView`, `RegistrarParteProduccionView`).  
+Builder: `construir_grilla_parte_planilla` en `mpr/services_maquina_linea.py` (no modifica `construir_grilla_parte` de E8).
+
+### Filtros (server-side)
+
+| Filtro | Obligatorio | Comportamiento |
+|--------|-------------|----------------|
+| **Fecha** | Sí | Formato **dd/MM/yyyy**. Sin fecha → aviso informativo, grilla vacía. |
+| **Línea** | No | Restringe máquinas/artículos de la planilla QC. |
+| **Máquina** | No | Filtra por `id_mpr_maquina`. |
+| **Marcas** | No | Tags de marcas incluidas (mismo patrón que otros informes MPR). |
+| **Búsqueda (`q`)** | No | Filtra por descripción o código de artículo. |
+
+**Ya no** se usa un filtro de **turno único** como eje principal: los tres turnos se muestran como columnas fijas.
+
+### Grilla (orden planilla QC)
+
+Filas: **máquina × artículo**, mismo orden que `construir_datos_planilla_control_calidad`.
+
+Columnas sticky (izquierda):
+
+- **Máquina** (`maquina_nombre`, `id_mpr_maquina`)
+- **Artículo** (solo descripción visible; código en tooltip / búsqueda)
+- **Cupo Fabricando** (pares equivalentes disponibles)
+
+Columnas de turno (fijas):
+
+| Mañana | Tarde | Noche |
+|--------|-------|-------|
+| docenas + pares por celda | idem | idem |
+
+Columna **Ingresado**: suma en pares de docenas×12 + pares de los tres turnos (precarga incluida).
+
+Celdas con **Fabricando = 0**: inputs deshabilitados (`inputs_habilitados=false`).
+
+### Precarga y re-edición
+
+Al abrir con fecha, `precarga_planilla_por_fecha` lee partes existentes por tupla  
+`(fecha, id_mpr_maquina, id_articulo, id_mpr_turno)` y rellena docenas/pares en cada columna turno.
+
+El guardado es **idempotente** vía `uk_mpr_parte_linea_maq` (`ON DUPLICATE KEY UPDATE`): un re-envío del formulario actualiza las cantidades del turno correspondiente.
+
+### Registro (POST planilla)
+
+URL: **`/mpr/parte-produccion/registrar/`**
+
+Campos por celda turno:
+
+| Campo POST | Significado |
+|------------|-------------|
+| `parte_maq_{id_maq}_art_{id_art}_turno_{id_turno}_docenas` | Docenas (entero ≥ 0) |
+| `parte_maq_{id_maq}_art_{id_art}_turno_{id_turno}_pares` | Pares sueltos (entero ≥ 0) |
+| `parte_maq_{id_maq}_art_{id_art}_turno_{id_turno}_op` | Operario de la celda |
+| `parte_maq_{id_maq}_nombre` | Snapshot nombre máquina (opcional) |
+
+Un POST con cantidades en varios turnos genera **un `MprParte` por turno** (hasta 3) dentro de una sola `transaction.atomic()`.
+
+Cada `MprParteLinea` persiste:
+
+- `id_mpr_maquina`, `maquina_nombre`
+- `cantidad_declarada` = `cantidad_aprobada` = pares registrados
+- `gap = 0` (parte directo supervisor, sin circuito móvil)
+
+### Validación cupo (planilla)
+
+Por fila máquina×artículo: Σ pares (Mañana + Tarde + Noche) ≤ **Fabricando**.  
+Además, agregado por artículo (todas sus máquinas × turnos) ≤ Fabricando.
+
+Si falla → `ValidationError` con mensaje en español; **no** se persiste ningún parte (rechazo atómico).
+
+### Operario por celda (roster)
+
+Heredado de `operadores_por_linea` / roster del builder de planilla:
+
+| Caso roster | UI |
+|-------------|-----|
+| 1 operario en el turno | `<input type="hidden">` con el ID |
+| Varios operarios | `<select>` Synap |
+| Sin roster | celda deshabilitada + aviso en español |
+
+### UX (canon MPR)
+
+- Extiende `mpr/base_mpr.html`, contenedor `mpr-contenedor-pagina`.
+- Tab order por fila: Mañana → Tarde → Noche → siguiente fila (docenas antes que pares).
+- Feedback vía `mprShowAviso` / `SynapMessages` y modales Synap; **sin** `alert`/`confirm`/`prompt`.
+
+### Flujo resumido
+
+```
+1. Analista abre /mpr/parte-produccion/?fecha=dd/MM/yyyy[&filtros]
+2. construir_grilla_parte_planilla → filas máquina×artículo + cupo + precarga M/T/N
+3. Completa docenas/pares por turno y operario
+4. POST /mpr/parte-produccion/registrar/
+5. registrar_parte_produccion(modo_planilla=True):
+   a. Valida cupo cross-turno (bloqueante)
+   b. Por turno con cantidades: crear_parte_con_lineas(id_mpr_maquina, ...)
+   c. Asiento físico OPP (ya_componentes=True) por cada parte creado
+6. Redirect con filtros preservados; mensaje éxito/error en español
+```
+
+Tests: `mpr/tests/test_parte_planilla_qc.py` (`docker exec Synap_app python manage.py test mpr.tests.test_parte_planilla_qc`).
 
 ---
 
