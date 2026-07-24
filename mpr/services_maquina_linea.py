@@ -9,11 +9,11 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 import MySQLdb
 
-from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
+from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 from mpr.db import mysql_cursor
 from mpr.repositories import maquina_articulo as repo_art
 from mpr.repositories import maquina_linea as repo
@@ -440,6 +440,264 @@ def construir_datos_planilla_control_calidad(
         "maquinas": maquinas,
         "operadores_por_linea": operadores_json,
     }
+
+
+def _operarios_roster_celda_por_linea(
+    base_empresa: str,
+    fecha: date,
+    id_lineas: Iterable[Any],
+) -> Dict[int, Dict[str, List[Dict[str, Any]]]]:
+    """
+    Operarios del roster por línea y franja, con id y nombre para celdas planilla.
+    """
+    from mpr.services import _franja_horaria_turno, listar_empleados_operarios, listar_turnos
+
+    lineas_set = {
+        id_linea
+        for valor in (id_lineas or [])
+        if (id_linea := _to_int(valor)) is not None
+    }
+    vacio = {
+        id_linea: {"manana": [], "tarde": [], "noche": []}
+        for id_linea in lineas_set
+    }
+    if not (base_empresa or "").strip() or fecha is None or not lineas_set:
+        return vacio
+    try:
+        from mpr.repositories.operario_linea import lineas_habituales_vigentes
+        from mpr.repositories.turno_roster import listar_roster_rango
+
+        filas = listar_roster_rango(base_empresa, fecha, fecha)
+        if not filas:
+            return vacio
+        turnos_por_id = {
+            t["id"]: t for t in listar_turnos(base_empresa, solo_activos=False)
+        }
+        nombres_por_id = {
+            op["id"]: (op.get("label") or "").strip()
+            for op in listar_empleados_operarios(base_empresa, busqueda=None, limit=500)
+        }
+        resultado = {
+            id_linea: {"manana": [], "tarde": [], "noche": []}
+            for id_linea in lineas_set
+        }
+        vistos: Dict[int, Dict[str, set]] = {
+            id_linea: {"manana": set(), "tarde": set(), "noche": set()}
+            for id_linea in lineas_set
+        }
+        lineas_habituales = lineas_habituales_vigentes(base_empresa, fecha)
+        for fila in filas:
+            id_operario = _to_int(fila.get("id_operario"))
+            if id_operario is None:
+                continue
+            id_linea = (
+                _to_int(fila.get("id_mpr_linea"))
+                or lineas_habituales.get(id_operario)
+            )
+            if id_linea not in lineas_set:
+                continue
+            id_turno = _to_int(fila.get("id_mpr_turno"))
+            turno = turnos_por_id.get(id_turno) or {}
+            franja = _franja_horaria_turno(
+                str(fila.get("nombre_turno") or turno.get("nombre") or ""),
+                turno.get("hora_inicio"),
+            )
+            if not franja or id_operario in vistos[id_linea][franja]:
+                continue
+            nombre = nombres_por_id.get(id_operario) or ""
+            if not nombre:
+                continue
+            vistos[id_linea][franja].add(id_operario)
+            resultado[id_linea][franja].append(
+                {"id_operario": id_operario, "nombre": nombre.upper()}
+            )
+        return resultado
+    except Exception as e:
+        logger.warning(
+            "Error operarios roster celda planilla %s (%s): %s",
+            base_empresa, fecha, e, exc_info=True,
+        )
+        return vacio
+
+
+def _turnos_columnas_planilla(base_empresa: str) -> List[Dict[str, Any]]:
+    from mpr.services import _franja_horaria_turno, listar_turnos
+
+    columnas: List[Dict[str, Any]] = []
+    for turno in listar_turnos(base_empresa, solo_activos=True):
+        tid = turno.get("id")
+        if tid is None:
+            continue
+        franja = _franja_horaria_turno(
+            str(turno.get("nombre") or ""),
+            turno.get("hora_inicio"),
+        )
+        if not franja:
+            continue
+        columnas.append({
+            "id": int(tid),
+            "nombre": str(turno.get("nombre") or ""),
+            "franja": franja,
+        })
+    orden = {"manana": 0, "tarde": 1, "noche": 2}
+    columnas.sort(key=lambda c: (orden.get(c["franja"], 9), c["id"]))
+    return columnas
+
+
+def _franja_a_turno_id(turnos_columnas: List[Dict[str, Any]]) -> Dict[str, int]:
+    mapping: Dict[str, int] = {}
+    for col in turnos_columnas:
+        franja = col.get("franja")
+        if franja and franja not in mapping:
+            mapping[str(franja)] = int(col["id"])
+    return mapping
+
+
+def construir_grilla_parte_planilla(
+    base_empresa: str,
+    fecha: date,
+    *,
+    id_linea: Optional[int] = None,
+    id_maquina: Optional[int] = None,
+    marcas_incluidos: Optional[Sequence[int]] = None,
+    q: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Grilla analista máquina×artículo con columnas turno M/T/N (planilla QC).
+
+    Envuelve ``construir_datos_planilla_control_calidad`` + cupo Fabricando +
+    precarga por (fecha, máquina, artículo, turno). No altera ``construir_grilla_parte``.
+    """
+    from mpr.repositories.parte import precarga_planilla_por_fecha
+    from mpr.services import (
+        _fabricando_por_componentes,
+        _fetch_descripciones_articulo,
+        _filtrar_ids_por_marcas,
+        _pivot_stock_por_tipo_mpr,
+        _query_enviados_todos_componentes,
+    )
+
+    resultado: Dict[str, Any] = {
+        "filas": [],
+        "filas_vacio": True,
+        "turnos_columnas": [],
+        "fecha": fecha.isoformat() if fecha else None,
+    }
+    base = (base_empresa or "").strip()
+    if not base or fecha is None:
+        return resultado
+
+    turnos_columnas = _turnos_columnas_planilla(base)
+    resultado["turnos_columnas"] = turnos_columnas
+    franja_turno = _franja_a_turno_id(turnos_columnas)
+
+    id_linea_filtro = _to_int(id_linea) if id_linea is not None else None
+    id_maquina_filtro = _to_int(id_maquina) if id_maquina is not None else None
+    q_norm = (q or "").strip().lower()
+
+    planilla = construir_datos_planilla_control_calidad(
+        base, fecha, id_linea=id_linea_filtro
+    )
+    maquinas_raw = planilla.get("maquinas") or []
+    if id_maquina_filtro is not None:
+        maquinas_raw = [m for m in maquinas_raw if m.get("id") == id_maquina_filtro]
+
+    articulo_ids: List[int] = []
+    for maq in maquinas_raw:
+        for art in maq.get("articulos") or []:
+            aid = _to_int(art.get("id_articulo"))
+            if aid is not None:
+                articulo_ids.append(aid)
+    articulo_ids = list(dict.fromkeys(articulo_ids))
+
+    fabricando_map: Dict[int, float] = {}
+    desc_map: Dict[int, Tuple[str, str]] = {}
+    if articulo_ids:
+        try:
+            envios_map = _query_enviados_todos_componentes(base)
+            stock_pivot, _ = _pivot_stock_por_tipo_mpr(base, articulo_ids)
+            fabricando_map = _fabricando_por_componentes(
+                base, articulo_ids, envios_map, stock_pivot
+            )
+            desc_map = _fetch_descripciones_articulo(base, articulo_ids)
+        except Exception as exc:
+            logger.warning(
+                "construir_grilla_parte_planilla cupo %s: %s", base, exc, exc_info=True
+            )
+
+    if marcas_incluidos and articulo_ids:
+        permitidos = _filtrar_ids_por_marcas(base, articulo_ids, marcas_incluidos)
+        articulo_ids_set = set(permitidos)
+    else:
+        articulo_ids_set = set(articulo_ids)
+
+    id_lineas_planilla = {
+        m.get("id_linea_actual")
+        for m in maquinas_raw
+        if m.get("id_linea_actual") is not None
+    }
+    operarios_celda = _operarios_roster_celda_por_linea(base, fecha, id_lineas_planilla)
+
+    precarga: Dict[Tuple[int, int, int], Dict[str, int]] = {}
+    if not planilla.get("es_futuro"):
+        precarga = precarga_planilla_por_fecha(base, fecha)
+
+    filas: List[Dict[str, Any]] = []
+    for maq in maquinas_raw:
+        mid = maq.get("id")
+        if mid is None:
+            continue
+        maq_nombre = str(maq.get("nombre") or "")
+        id_linea_maq = maq.get("id_linea_actual")
+        ops_linea = operarios_celda.get(int(id_linea_maq or 0), {})
+        for art in maq.get("articulos") or []:
+            aid = _to_int(art.get("id_articulo"))
+            if aid is None or aid not in articulo_ids_set:
+                continue
+            descripcion = str(art.get("descripcion_articulo") or "")
+            codigo = str(art.get("codigo_manual") or art.get("codigo_articulo") or "")
+            if q_norm:
+                busqueda = f"{descripcion} {codigo}".lower()
+                if q_norm not in busqueda:
+                    continue
+            fab = float(fabricando_map.get(aid, 0.0) or 0.0)
+            turnos_payload: Dict[int, Dict[str, Any]] = {}
+            ingresado = 0
+            cant_franjas = art.get("cantidades") or {}
+            for col in turnos_columnas:
+                tid = int(col["id"])
+                franja = col["franja"]
+                prec = precarga.get((int(mid), aid, tid), {})
+                doc = int(prec.get("docenas") or 0)
+                par = int(prec.get("pares") or 0)
+                if doc == 0 and par == 0 and not planilla.get("es_futuro"):
+                    raw = cant_franjas.get(franja)
+                    if raw is not None:
+                        entero = int(float(raw))
+                        doc, par = entero // 12, entero % 12
+                ingresado += doc * 12 + par
+                turnos_payload[tid] = {
+                    "docenas": doc,
+                    "pares": par,
+                    "operarios": list(ops_linea.get(franja) or []),
+                    "franja": franja,
+                }
+            cod_desc = desc_map.get(aid, (codigo, descripcion))
+            filas.append({
+                "id_mpr_maquina": int(mid),
+                "maquina_nombre": maq_nombre,
+                "id_articulo": aid,
+                "descripcion": descripcion or str_or_default(cod_desc[1], "-"),
+                "codigo_tooltip": str(cod_desc[0] or codigo or ""),
+                "fabricando": fab,
+                "ingresado": ingresado,
+                "inputs_habilitados": fab > 0,
+                "turnos": turnos_payload,
+            })
+
+    resultado["filas"] = filas
+    resultado["filas_vacio"] = len(filas) == 0
+    return resultado
 
 
 def construir_grilla_carga_articulos(

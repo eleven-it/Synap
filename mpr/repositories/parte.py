@@ -302,23 +302,53 @@ def crear_parte_con_lineas(
             cantidad = to_decimal_or_none(cel.get("cantidad"))
             if id_art is None or id_op is None or cantidad is None or cantidad <= 0:
                 continue
-            cursor.execute(
-                """
-                INSERT INTO mpr_parte_linea
-                    (id_mpr_parte, id_articulo, id_operario, operario_nombre, cantidad)
-                VALUES (%s, %s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                    cantidad = VALUES(cantidad),
-                    operario_nombre = VALUES(operario_nombre)
-                """,
-                [
-                    id_parte,
-                    id_art,
-                    id_op,
-                    str_or_default(cel.get("operario_nombre"), "-"),
-                    cantidad,
-                ],
-            )
+            id_maq = to_int_or_none(cel.get("id_mpr_maquina"))
+            if id_maq is not None:
+                cursor.execute(
+                    """
+                    INSERT INTO mpr_parte_linea
+                        (id_mpr_parte, id_articulo, id_operario, operario_nombre, cantidad,
+                         id_mpr_maquina, maquina_nombre, cantidad_declarada, cantidad_aprobada, gap, motivo)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 0, NULL)
+                    ON DUPLICATE KEY UPDATE
+                        cantidad = VALUES(cantidad),
+                        operario_nombre = VALUES(operario_nombre),
+                        maquina_nombre = VALUES(maquina_nombre),
+                        cantidad_declarada = VALUES(cantidad_declarada),
+                        cantidad_aprobada = VALUES(cantidad_aprobada),
+                        gap = 0,
+                        motivo = NULL
+                    """,
+                    [
+                        id_parte,
+                        id_art,
+                        id_op,
+                        str_or_default(cel.get("operario_nombre"), "-"),
+                        cantidad,
+                        id_maq,
+                        str_or_default(cel.get("maquina_nombre"), "-"),
+                        cantidad,
+                        cantidad,
+                    ],
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO mpr_parte_linea
+                        (id_mpr_parte, id_articulo, id_operario, operario_nombre, cantidad)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                        cantidad = VALUES(cantidad),
+                        operario_nombre = VALUES(operario_nombre)
+                    """,
+                    [
+                        id_parte,
+                        id_art,
+                        id_op,
+                        str_or_default(cel.get("operario_nombre"), "-"),
+                        cantidad,
+                    ],
+                )
     parte = obtener_parte_por_pk(base, uid, with_relations=True)
     if parte is None:
         raise RuntimeError("No se pudo leer el parte recién creado.")
@@ -419,6 +449,65 @@ def eliminar_ajuste(base_empresa: str, id_mpr_parte_ajuste: int) -> None:
             "DELETE FROM mpr_parte_ajuste WHERE id_mpr_parte_ajuste = %s",
             [int(id_mpr_parte_ajuste)],
         )
+
+
+def _pares_a_docenas_pares(total: Decimal) -> Tuple[int, int]:
+    """Descompone pares equivalentes en docenas enteras + pares sueltos (×12)."""
+    entero = int(total or 0)
+    if entero < 0:
+        entero = 0
+    return entero // 12, entero % 12
+
+
+def precarga_planilla_por_fecha(
+    base_empresa: str,
+    fecha: date,
+) -> Dict[Tuple[int, int, int], Dict[str, int]]:
+    """
+    Cantidades precargadas por (id_mpr_maquina, id_articulo, id_mpr_turno).
+
+    Parte aprobado → cantidad_aprobada; otro estado → cantidad_declarada.
+    Solo líneas con id_mpr_maquina no null (upsert vía uk_mpr_parte_linea_maq).
+    """
+    base = (base_empresa or "").strip()
+    if not base or fecha is None:
+        return {}
+    resultado: Dict[Tuple[int, int, int], Dict[str, int]] = {}
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT pl.id_mpr_maquina, pl.id_articulo, p.id_mpr_turno, p.estado,
+                   pl.cantidad_declarada, pl.cantidad_aprobada
+            FROM mpr_parte p
+            INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
+            WHERE p.fecha_produccion = %s
+              AND pl.id_mpr_maquina IS NOT NULL
+            """,
+            [fecha],
+        )
+        for row in cursor.fetchall() or []:
+            mid = to_int_or_none(row.get("id_mpr_maquina"))
+            aid = to_int_or_none(row.get("id_articulo"))
+            tid = to_int_or_none(row.get("id_mpr_turno"))
+            if mid is None or aid is None or tid is None:
+                continue
+            estado = str(row.get("estado") or "").strip().lower()
+            if estado == "aprobado":
+                cant = to_decimal_or_none(row.get("cantidad_aprobada")) or Decimal("0")
+            else:
+                cant = to_decimal_or_none(row.get("cantidad_declarada")) or Decimal("0")
+            if cant <= 0:
+                continue
+            clave = (mid, aid, tid)
+            prev = resultado.get(clave, {"docenas": 0, "pares": 0})
+            doc, par = _pares_a_docenas_pares(cant)
+            prev_doc, prev_par = _pares_a_docenas_pares(
+                Decimal(prev["docenas"] * 12 + prev["pares"])
+            )
+            total = Decimal(prev_doc * 12 + prev_par) + cant
+            d, p = _pares_a_docenas_pares(total)
+            resultado[clave] = {"docenas": d, "pares": p}
+    return resultado
 
 
 def acumular_celdas_grilla(

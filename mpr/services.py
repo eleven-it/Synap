@@ -16477,6 +16477,49 @@ def actualizar_config_mpr_bloqueo_fabricando(
     return actualizar_bloqueo_fabricando(base_empresa, bloquear)
 
 
+def _validar_cupo_planilla_qc(
+    base_empresa: str,
+    lineas: List[Dict[str, Any]],
+) -> List[str]:
+    """Valida cupo Fabricando por fila máquina×artículo y agregado por artículo."""
+    por_fila: Dict[Tuple[int, int], Decimal] = {}
+    por_articulo: Dict[int, Decimal] = {}
+    ids_art: set = set()
+    for cel in lineas or []:
+        aid = to_int_or_none(cel.get("id_articulo"))
+        mid = to_int_or_none(cel.get("id_mpr_maquina"))
+        cant = to_decimal_or_none(cel.get("cantidad"))
+        if aid is None or mid is None or cant is None or cant <= 0:
+            continue
+        ids_art.add(aid)
+        clave_fila = (mid, aid)
+        por_fila[clave_fila] = por_fila.get(clave_fila, Decimal("0")) + cant
+        por_articulo[aid] = por_articulo.get(aid, Decimal("0")) + cant
+
+    if not ids_art:
+        return []
+
+    fab_map = cupo_fabricando_por_articulo(base_empresa, list(ids_art))
+    errores: List[str] = []
+    for (mid, aid), total in por_fila.items():
+        fab = float(fab_map.get(aid, 0.0) or 0.0)
+        if float(total) > fab + 1e-9:
+            errores.append(
+                f"Artículo {aid} (máquina {mid}): ingresado {float(total):.0f} pares "
+                f"supera cupo Fabricando {fab:.0f} pares."
+            )
+    for aid, total in por_articulo.items():
+        fab = float(fab_map.get(aid, 0.0) or 0.0)
+        if float(total) > fab + 1e-9:
+            msg = (
+                f"Artículo {aid}: suma agregada {float(total):.0f} pares "
+                f"(todas las máquinas y turnos) supera cupo Fabricando {fab:.0f} pares."
+            )
+            if msg not in errores:
+                errores.append(msg)
+    return errores
+
+
 def registrar_parte_produccion(
     base_empresa: str,
     fecha_produccion,
@@ -16484,13 +16527,16 @@ def registrar_parte_produccion(
     id_usuario: int,
     lineas: List[Dict[str, Any]],
     notas: str = "",
+    *,
+    modo_planilla: bool = False,
 ) -> Tuple[Any, List[str]]:
     """
     Crea parte de producción en mpr_parte / mpr_parte_linea (MySQL).
     NO escribe stock_deposito ni movimiento_stock.
 
     lineas: [{id_articulo: int, id_operario: int, cantidad: Decimal/float/str}]
-    Returns: (parte, warnings_español)
+    modo_planilla: un POST con líneas multi-turno/máquina → hasta 3 MprParte atómicos.
+    Returns: (parte | list[parte], warnings_español)
     """
     from django.core.exceptions import ValidationError as DjValidationError
     from django.db import transaction
@@ -16498,6 +16544,19 @@ def registrar_parte_produccion(
 
     if not (base_empresa or "").strip():
         raise ValueError("Empresa inválida.")
+
+    if modo_planilla or any(
+        to_int_or_none(c.get("turno_id")) is not None
+        or to_int_or_none(c.get("id_mpr_maquina")) is not None
+        for c in (lineas or [])
+    ):
+        return _registrar_parte_produccion_planilla(
+            base_empresa,
+            fecha_produccion,
+            id_usuario,
+            lineas,
+            notas=notas,
+        )
 
     warnings: List[str] = []
 
@@ -16569,6 +16628,104 @@ def registrar_parte_produccion(
             parte.save(update_fields=["movimiento_fisico_ok"])
 
     return parte, warnings
+
+
+def _registrar_parte_produccion_planilla(
+    base_empresa: str,
+    fecha_produccion,
+    id_usuario: int,
+    lineas: List[Dict[str, Any]],
+    notas: str = "",
+) -> Tuple[List[Any], List[str]]:
+    """Registro analista planilla QC: validación cupo + un MprParte por turno."""
+    from django.core.exceptions import ValidationError as DjValidationError
+    from django.db import transaction
+    from mpr.repositories.parte import crear_parte_con_lineas
+
+    lineas_norm: List[Dict[str, Any]] = []
+    for cel in lineas or []:
+        id_art = to_int_or_none(cel.get("id_articulo"))
+        id_op = to_int_or_none(cel.get("id_operario"))
+        id_maq = to_int_or_none(cel.get("id_mpr_maquina"))
+        turno_cel = to_int_or_none(cel.get("turno_id"))
+        cantidad = to_decimal_or_none(cel.get("cantidad"))
+        if (
+            id_art is None
+            or id_op is None
+            or id_maq is None
+            or turno_cel is None
+            or cantidad is None
+            or cantidad <= 0
+        ):
+            continue
+        op_data = obtener_operario(base_empresa, id_op)
+        nombre_snap = str_or_default(
+            op_data.get("nombre_empleado") if op_data else None, "-"
+        )
+        lineas_norm.append({
+            "id_articulo": id_art,
+            "id_operario": id_op,
+            "cantidad": cantidad,
+            "operario_nombre": nombre_snap,
+            "id_mpr_maquina": id_maq,
+            "maquina_nombre": str_or_default(cel.get("maquina_nombre"), "-"),
+            "turno_id": turno_cel,
+        })
+
+    if not lineas_norm:
+        raise DjValidationError("No hay cantidades válidas para registrar.")
+
+    errores_cupo = _validar_cupo_planilla_qc(base_empresa, lineas_norm)
+    if errores_cupo:
+        raise DjValidationError(" ".join(errores_cupo))
+
+    deposito_produccion = get_deposito_produccion_mpr(base_empresa)
+    por_turno: Dict[int, List[Dict[str, Any]]] = {}
+    for ln in lineas_norm:
+        por_turno.setdefault(int(ln["turno_id"]), []).append(ln)
+
+    import uuid as _uuid
+
+    partes_creados: List[Any] = []
+    with transaction.atomic():
+        for tid, lineas_turno in sorted(por_turno.items()):
+            turno = obtener_turno(base_empresa, tid)
+            if not turno:
+                raise DjValidationError(f"Turno {tid} no encontrado.")
+            id_mpr_turno = getattr(turno, "id_mpr_turno", None) or getattr(turno, "id", tid)
+            uuid_parte = str(_uuid.uuid4())
+            lineas_creadas = [
+                ({"id_articulo": ln["id_articulo"]}, ln["cantidad"])
+                for ln in lineas_turno
+            ]
+            parte = crear_parte_con_lineas(
+                base_empresa,
+                fecha_produccion,
+                int(id_mpr_turno),
+                to_int_or_none(id_usuario) or 0,
+                lineas_turno,
+                notas=str_or_default(notas, ""),
+                id_lista_produccion=None,
+                uuid_parte=uuid_parte,
+            )
+            if hasattr(parte, "id_lista_produccion"):
+                parte.id_lista_produccion = None
+                parte.save(update_fields=["id_lista_produccion"])
+            if not getattr(parte, "movimiento_fisico_ok", False):
+                if deposito_produccion and lineas_creadas:
+                    _registrar_asiento_fisico_opp_parte(
+                        base_empresa=base_empresa,
+                        id_usuario=to_int_or_none(id_usuario) or 0,
+                        parte=parte,
+                        lineas_pack_qty=lineas_creadas,
+                        deposito_produccion=deposito_produccion,
+                        ya_componentes=True,
+                    )
+                parte.movimiento_fisico_ok = True
+                parte.save(update_fields=["movimiento_fisico_ok"])
+            partes_creados.append(parte)
+
+    return partes_creados, []
 
 
 def aprobar_parte_produccion(
