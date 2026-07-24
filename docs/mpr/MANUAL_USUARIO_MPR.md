@@ -45,7 +45,9 @@ Es la pantalla principal del día: muestra la demanda (según pedidos), cuánto 
 
 ### Modo Pack y packs sin receta
 
-En **Pack** cada fila es un **artículo terminado** (demanda del pedido y reserva, sin desglosar componentes). El filtro **Solo urgentes** no aplica en Pack: se listan todos los packs con demanda a fabricar, incluidos quiebres solo-reserva. Puede activar el chip **Sin receta** para ver solo packs sin lista de materiales (BOM).
+En **Pack** cada fila es un **artículo terminado** (Pedido, Reserva maestro y columna **Urgente** = cantidad a fabricar, sin desglosar componentes). El filtro **Solo urgentes** no aplica en Pack: se listan todos los packs con demanda a fabricar, incluidos quiebres solo-reserva. Puede activar el chip **Sin receta** para ver solo packs sin lista de materiales (BOM).
+
+En **Par**, la columna **Urgente** incluye pedido y reserva (demanda total menos stock en proceso); es la base del envío a producción.
 
 Si el pack **no tiene receta** (lista de materiales / BOM) en AdministraNET:
 
@@ -57,7 +59,7 @@ Si el pack **no tiene receta** (lista de materiales / BOM) en AdministraNET:
 ### Avisos frecuentes
 
 - «Sin cantidades a enviar»: cargue al menos una cantidad antes de confirmar.
-- «Sin artículos/packs con demanda…», «Sin packs sin receta…» o «Sin resta urgente…»: no hay filas con el filtro actual; amplíe fechas o quite filtros.
+- «Sin artículos/packs con demanda…», «Sin packs sin receta…» o «Sin Urgente…»: no hay filas con el filtro actual; amplíe fechas o quite filtros.
 - «Ningún artículo coincide con la búsqueda.»
 - Tras un envío correcto: mensaje de componentes enviados a producción.
 - Badge **Sin receta** (modo Pack): el terminado no tiene lista de materiales; revise pedidos en el tooltip y complete la receta del artículo.

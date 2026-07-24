@@ -558,8 +558,9 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         resultado = self._call_con_parches(patches)
         fila = resultado[0]
         self.assertAlmostEqual(fila["stock_proceso"], 5.0)
-        # dem_ped=20, stock_proceso=5 → resta_urgente=15
+        # dem_ped=20, stock_proceso=5 → resta_urgente=resta_total=15 (demanda total)
         self.assertAlmostEqual(fila["resta_urgente"], 15.0)
+        self.assertAlmostEqual(fila["resta_total"], 15.0)
         self.assertAlmostEqual(fila["total"], 5.0)
 
     def test_articulo_sin_bom_no_aparece(self):

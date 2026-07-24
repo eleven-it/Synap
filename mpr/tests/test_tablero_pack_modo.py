@@ -71,9 +71,10 @@ class TestListarTableroPack(SimpleTestCase):
         filas = self._call()
         pack1 = next(f for f in filas if f["id_articulo"] == 1)
         self.assertAlmostEqual(pack1["dem_ped"], 120.0)
+        # dem_res = stock_reserva (R maestro), no cantidad_demanda_reserva
         self.assertAlmostEqual(pack1["dem_res"], 24.0)
         self.assertAlmostEqual(pack1["resta_total"], 114.0)
-        self.assertAlmostEqual(pack1["resta_urgente"], 90.0)
+        self.assertAlmostEqual(pack1["resta_urgente"], 114.0)
         self.assertAlmostEqual(pack1["terminado"], 30.0)
         self.assertAlmostEqual(pack1["total"], 30.0)
         self.assertEqual(pack1["codigo_manual"], "PACK-1")

@@ -34,25 +34,23 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 
 ---
 
-## Columnas del tablero (alineación PCP — 07/07/2026)
+## Columnas del tablero (alineación PCP — actualizado 24/07/2026)
 
 | # | Columna | Tipo | Descripción |
 |---|---------|------|-------------|
 | 1 | **Artículo** | metadato | Código manual + descripción. Sticky-left. |
 | 2 | **Pedido** | `dem_ped` | Pares (entero) |
-| 3 | **Reserva** | `dem_res` | Pares (entero); explosión BOM reserva pack |
-| 4 | **Resta total** | `resta_total` | Pares + Docenas (÷12, decimal PCP) |
-| 5 | **Resta urgente** | `resta_urgente` | Pares + Docenas; base del **Enviar** |
-| 6 | **Fabricando** | virtual | `max(0, Σ envíos − acreditado)`. Acreditado = `max(stock físico, clasificado CC, partes acumulados)`. |
-| 7–10 | **Etapas stock** | físico | Producido, 2da, Semi, Desperdicio (no suma). **Sin Terminado** (componentes). |
-| 11 | **Total** | derivado | Suma etapas sin Desperdicio ni Terminado. |
-| 12 | **Enviar** | acción | Inputs docenas/pares; tope = `a_enviar`. |
+| 3 | **Reserva** | `dem_res` | Pares (entero); explosión BOM reserva pack (modo Par) |
+| 4 | **Urgente** | `resta_urgente` | Pares + Docenas (÷12, decimal PCP); base del **Enviar** |
+| 5 | **Fabricando** | virtual | `max(0, Σ envíos − acreditado)`. Acreditado = `max(stock físico, clasificado CC, partes acumulados)`. |
+| 6–9 | **Etapas stock** | físico | Producido, 2da, Semi, Desperdicio (no suma). **Sin Terminado** (componentes). |
+| 10 | **Total** | derivado | Suma etapas sin Desperdicio ni Terminado. |
+| 11 | **Enviar** | acción | Inputs docenas/pares; tope = `a_enviar`. |
 
 `stock_proceso` = total sin Terminado (paridad PCP col G).
 
 ```
-resta_urgente = MAX(0, dem_ped − stock_proceso)      # PCP col L — sin envíos ledger
-resta_total   = MAX(0, demanda − stock_proceso)      # PCP col H — demanda = dem_ped + dem_res
+resta_urgente = resta_total = MAX(0, demanda − stock_proceso)   # demanda = dem_ped + dem_res
 fabricando    = MAX(0, Σ envíos_tablero − acreditado)   # acreditado ver REPORTES_MPR.md
 a_enviar      = si Fabricando>0: MAX(0, MIN(urgente − Σ envíos, resta_total));
                 si Fabricando=0 y urgente>0: MIN(urgente, resta_total)  # reabre
@@ -66,9 +64,9 @@ anterior acreditado; el hueco urgente es demanda nueva). El tope no puede supera
 `resta_total`. En UI modo docenas el input se deshabilita si `a_enviar_docenas_pcp = 0`
 (pares sueltos sin docena entera).
 
-La columna **Resta urgente** sigue mostrando la brecha PCP; **Enviar** usa `a_enviar` para precargar, deshabilitar inputs y validar el POST (hidden `pendiente_*` / `resta_urgente_*`).
+La columna **Urgente** muestra la brecha PCP unificada; **Enviar** usa `a_enviar` para precargar, deshabilitar inputs y validar el POST (hidden `pendiente_*` / `resta_urgente_*`).
 
-Filtro por defecto: **Solo urgentes** (`resta_urgente > 0`). Diseño UX: `docs/mpr/DISENO_TABLERO_PRODUCCION_REFACTOR_PCP.md`.
+Filtro por defecto: **Solo urgentes** (`resta_urgente > 0`, demanda total). Diseño UX: `docs/mpr/DISENO_TABLERO_PRODUCCION_REFACTOR_PCP.md`.
 
 ---
 
