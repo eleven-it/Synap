@@ -40,6 +40,16 @@ cursor.close()
 if [ "$FRESH_DB" = "YES" ]; then
     echo "🆕 Instalación nueva detectada (PostgreSQL sin django_migrations)"
 else
+    echo "🔍 Base existente: diagnosticando historial de migraciones (core/ia)..."
+    python manage.py diagnose_migration_history 2>&1 || {
+        echo "⚠️  Advertencia: diagnose_migration_history falló, continuando..."
+    }
+
+    echo "🔧 Reparando historial inconsistente core/ia (si aplica)..."
+    python manage.py fix_inconsistent_migration_history --force 2>&1 || {
+        echo "⚠️  Advertencia: fix_inconsistent_migration_history falló, continuando..."
+    }
+
     echo "🔍 Base existente: verificando migraciones de reports..."
     python manage.py fix_reports_migrations --force 2>&1 || {
         echo "⚠️  Advertencia: Error al corregir migraciones de reports, continuando..."

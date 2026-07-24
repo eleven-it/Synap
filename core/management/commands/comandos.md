@@ -63,6 +63,8 @@ En algunas carpetas existen archivos cuyo nombre termina en **` 2.py`** (copias 
 | `activate_reports` | Activa el módulo `reports` en base de datos. | |
 | `setup_reports_installation` | Configura instalación de Reports (migraciones, módulo activo, etc.). | `--force`, `--skip-migrations`. |
 | `fix_reports_migrations` | Corrige estado de migraciones de `reports` en Django. | `--force`. |
+| `diagnose_migration_history` | Diagnostica inconsistencias `core`/`ia` en `django_migrations` (solo lectura). | |
+| `fix_inconsistent_migration_history` | Repara `ia.0001` aplicada sin `core.0011` (marca `0011` y asegura ModuleConfig logistica). | `--force`, `--dry-run`. |
 | `apply_schema_mpr` | Aplica columnas MPR en MySQL: `deposito.suma_stock`, `deposito.tipo_mpr`, `articulo.stock_reserva`. | `apply_schema_mpr administranet89 [--dry-run]` |
 | `apply_alter_detalle_trazabilidad` | Aplica ALTER de trazabilidad `lista_produccion_detalle` (script SQL de MPR). | `base_empresa` + `--dry-run` opcional. |
 | `inspect_lista_produccion_tables` | Muestra estructura de tablas de lista de producción y relaciones. | `[base_empresa]` (default en código). |

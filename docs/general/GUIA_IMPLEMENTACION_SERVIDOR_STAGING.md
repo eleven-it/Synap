@@ -227,6 +227,7 @@ docker compose up -d --build
 |---------|--------|
 | Loop de reinicio en DB nueva (versiones antiguas) | Actualizar código con entrypoint corregido o `bootstrap_instalacion --force` |
 | `django_migrations does not exist` | `migrate` antes de `fix_reports_migrations` |
+| `ia.0001_initial is applied before its dependency core.0011_moduleconfig_logistica` | En BD existente el entrypoint ejecuta `fix_inconsistent_migration_history --force` (marca `core.0011` y asegura ModuleConfig logistica). Manual: `python manage.py fix_inconsistent_migration_history --force` y luego `migrate --noinput`. |
 | Módulos inactivos | `python manage.py bootstrap_instalacion --force` |
 | `--activate reports` falla | Activar cadena: `core login dashboard reports` (lo hace `bootstrap_instalacion`) |
 | Menú MPR u otros sin activar módulo | Controlado por permisos MySQL (`mpr.ver`), no por Module Management |
