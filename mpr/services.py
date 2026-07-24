@@ -18442,6 +18442,60 @@ def _construir_grilla_transicion_lote(
     return componentes
 
 
+def _orden_maquina_clasificacion(
+    id_mpr_maquina: int,
+    maquina_nombre: str,
+) -> Tuple[int, int, str]:
+    """Orden 1..N por número en nombre/código; sin máquina (0 / —) al final."""
+    if not id_mpr_maquina or id_mpr_maquina <= 0:
+        return (1, 999999, maquina_nombre or "—")
+    texto = (maquina_nombre or "").strip()
+    m = re.search(r"(\d+)", texto)
+    if m:
+        return (0, int(m.group(1)), texto.lower())
+    return (0, 999998, texto.lower())
+
+
+def _anotar_rowspan_maquina_clasificacion(filas: List[Dict[str, Any]]) -> None:
+    """Marca show_maquina / rowspan_maquina para combinar celdas consecutivas."""
+    if not filas:
+        return
+    i = 0
+    n = len(filas)
+    while i < n:
+        mid = filas[i].get("id_mpr_maquina")
+        j = i + 1
+        while j < n and filas[j].get("id_mpr_maquina") == mid:
+            j += 1
+        span = j - i
+        filas[i]["show_maquina"] = True
+        filas[i]["rowspan_maquina"] = span
+        for k in range(i + 1, j):
+            filas[k]["show_maquina"] = False
+            filas[k]["rowspan_maquina"] = 1
+        i = j
+
+
+def _anotar_rowspan_articulo_clasificacion(filas: List[Dict[str, Any]]) -> None:
+    """Marca show_articulo / rowspan_articulo para artículos consecutivos."""
+    if not filas:
+        return
+    i = 0
+    n = len(filas)
+    while i < n:
+        aid = filas[i].get("id_articulo")
+        j = i + 1
+        while j < n and filas[j].get("id_articulo") == aid:
+            j += 1
+        span = j - i
+        filas[i]["show_articulo"] = True
+        filas[i]["rowspan_articulo"] = span
+        for k in range(i + 1, j):
+            filas[k]["show_articulo"] = False
+            filas[k]["rowspan_articulo"] = 1
+        i = j
+
+
 def construir_grilla_clasificacion_produccion(
     base_empresa: str,
     fecha: "Optional[date]" = None,
@@ -18450,109 +18504,156 @@ def construir_grilla_clasificacion_produccion(
     ver_roster_completo: bool = False,
     marcas_incluidos: Optional[Sequence[int]] = None,
 ) -> Dict[str, Any]:
-    """Grilla clasificación por (artículo × operario fabricante).
+    """Grilla clasificación por máquina × artículo × turno × operario fabricante.
 
-    Si no hay fecha/turno, devuelve grilla vacía con metadatos para que la UI
-    solicite selección (comportamiento operativo docenas + rendimiento).
+    Fecha obligatoria para cargar filas; turno opcional (vacío = todos los turnos del día).
     """
     vacio: Dict[str, Any] = {
         "filas": [],
         "filas_vacio": True,
         "arrastre": [],
         "bloqueos": [],
-        "requiere_fecha_turno": fecha is None or turno_id is None,
+        "requiere_fecha": fecha is None,
+        "requiere_fecha_turno": fecha is None,
     }
     if not (base_empresa or "").strip():
         return vacio
-    if fecha is None or turno_id is None:
+    if fecha is None:
         from mpr.repositories.parte import listar_pares_fecha_turno_con_pendiente_clasificacion
 
         vacio["arrastre"] = listar_pares_fecha_turno_con_pendiente_clasificacion(base_empresa)
         return vacio
 
     from mpr.repositories.parte import (
-        acumular_celdas_grilla_con_nombre,
+        acumular_celdas_clasificacion_maquina_turno,
         listar_pares_fecha_turno_con_pendiente_clasificacion,
     )
     from mpr.repositories.transicion_lote import sumar_clasificado_por_operario_fecha_turno
 
-    celdas = acumular_celdas_grilla_con_nombre(base_empresa, fecha, int(turno_id))
+    celdas = acumular_celdas_clasificacion_maquina_turno(
+        base_empresa, fecha, int(turno_id) if turno_id is not None else None
+    )
     if marcas_incluidos:
-        art_ids_celdas = sorted({clave[0] for clave in celdas})
+        art_ids_celdas = sorted({clave[1] for clave in celdas})
         permitidos = _filtrar_ids_por_marcas(
             base_empresa, art_ids_celdas, marcas_incluidos
         )
-        celdas = {k: v for k, v in celdas.items() if k[0] in permitidos}
-    clasificado = sumar_clasificado_por_operario_fecha_turno(
-        base_empresa, fecha, int(turno_id)
-    )
-    art_ids = sorted({clave[0] for clave in celdas})
-    descripciones = _fetch_descripciones_articulo(base_empresa, art_ids) if art_ids else {}
+        celdas = {k: v for k, v in celdas.items() if k[1] in permitidos}
 
-    filas: List[Dict[str, Any]] = []
-    bloqueos: List[Dict[str, Any]] = []
-    parte_por_art: Dict[int, Decimal] = {}
-    for (aid, oid), datos in celdas.items():
-        parte_por_art[aid] = parte_por_art.get(aid, Decimal("0")) + (
-            to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+    turnos_presentes = sorted({clave[3] for clave in celdas})
+    clasificado_por_turno: Dict[int, Dict[Tuple[int, int], Decimal]] = {}
+    for tid in turnos_presentes:
+        clasificado_por_turno[tid] = sumar_clasificado_por_operario_fecha_turno(
+            base_empresa, fecha, tid
         )
 
-    for (aid, oid), datos in sorted(celdas.items(), key=lambda x: (x[0][0], x[0][1])):
-        fabricado = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+    art_ids = sorted({clave[1] for clave in celdas})
+    descripciones = _fetch_descripciones_articulo(base_empresa, art_ids) if art_ids else {}
+
+    parte_por_art: Dict[int, Decimal] = {}
+    grupos_art_op_turno: Dict[Tuple[int, int, int], List[Tuple[int, Decimal, Dict[str, Any]]]] = {}
+    for (mid, aid, oid, tid), datos in celdas.items():
+        fab = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+        if fab <= 0:
+            continue
+        parte_por_art[aid] = parte_por_art.get(aid, Decimal("0")) + fab
         if oid is None or int(oid) <= 0:
             continue
-        cls = clasificado.get((aid, oid), Decimal("0"))
-        pendiente = fabricado - cls
-        solo_lectura = bool(ver_roster_completo and pendiente <= 0)
-        if pendiente <= 0 and not ver_roster_completo:
+        grupos_art_op_turno.setdefault((aid, oid, tid), []).append((mid, fab, datos))
+
+    filas_raw: List[Dict[str, Any]] = []
+    bloqueos: List[Dict[str, Any]] = []
+
+    for (aid, oid, tid), maquinas in grupos_art_op_turno.items():
+        if oid is None or int(oid) <= 0:
             continue
-        codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
-        if solo_lectura:
-            disp_int = int(round(float(cls)))
-            disp_texto = (
-                f"Completo · {texto_docenas_unidades(disp_int, unidades_por_docena_fijo=12)} clasificado"
-            )
-        else:
-            disp_int = int(round(float(pendiente)))
-            disp_texto = texto_docenas_unidades(disp_int, unidades_por_docena_fijo=12)
-        du = descomponer_docenas_unidades(disp_int, unidades_por_docena_fijo=12)
-        filas.append({
-            "id_articulo": aid,
-            "id_operario": oid,
-            "operario_nombre": str_or_default(datos.get("operario_nombre"), "-"),
-            "codigo_manual": str_or_default(codigo_manual, "-"),
-            "descripcion": str_or_default(descripcion, "-"),
-            "fabricado": float(fabricado),
-            "clasificado": float(cls),
-            "disponible": float(pendiente if pendiente > 0 else Decimal("0")),
-            "disponible_texto": disp_texto,
-            "disponible_docenas": du["docenas"],
-            "disponible_unidades": du["unidades"],
-            "solo_lectura": solo_lectura,
-        })
+        cls_map = clasificado_por_turno.get(tid, {})
+        cls_restante = cls_map.get((aid, oid), Decimal("0"))
+        maquinas_ord = sorted(
+            maquinas,
+            key=lambda x: _orden_maquina_clasificacion(
+                x[0], str_or_default(x[2].get("maquina_nombre"), "—")
+            ),
+        )
+        fabricado_total = sum(fab for _, fab, _ in maquinas_ord)
+
+        for mid, fab_maq, datos in maquinas_ord:
+            asignado_cls = min(fab_maq, cls_restante)
+            cls_restante -= asignado_cls
+            pendiente = fab_maq - asignado_cls
+            solo_lectura = bool(ver_roster_completo and pendiente <= 0)
+            if pendiente <= 0 and not ver_roster_completo:
+                continue
+
+            codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
+            cls_total = cls_map.get((aid, oid), Decimal("0"))
+            if solo_lectura:
+                disp_int = int(round(float(asignado_cls)))
+                disp_texto = (
+                    f"Completo · {texto_docenas_unidades(disp_int, unidades_por_docena_fijo=12)} clasificado"
+                )
+            else:
+                disp_int = int(round(float(pendiente)))
+                disp_texto = texto_docenas_unidades(disp_int, unidades_por_docena_fijo=12)
+            du = descomponer_docenas_unidades(disp_int, unidades_por_docena_fijo=12)
+            maq_nom = str_or_default(datos.get("maquina_nombre"), "—")
+            filas_raw.append({
+                "id_mpr_maquina": int(mid),
+                "maquina_nombre": maq_nom,
+                "id_articulo": aid,
+                "id_mpr_turno": tid,
+                "turno_nombre": str_or_default(datos.get("turno_nombre"), "-"),
+                "id_operario": oid,
+                "operario_nombre": str_or_default(datos.get("operario_nombre"), "-"),
+                "codigo_manual": str_or_default(codigo_manual, "-"),
+                "descripcion": str_or_default(descripcion, "-"),
+                "codigo_tooltip": str_or_default(codigo_manual, ""),
+                "fabricado": float(fab_maq),
+                "clasificado": float(cls_total),
+                "disponible": float(pendiente if pendiente > 0 else Decimal("0")),
+                "disponible_texto": disp_texto,
+                "disponible_docenas": du["docenas"],
+                "disponible_unidades": du["unidades"],
+                "solo_lectura": solo_lectura,
+                "show_maquina": False,
+                "rowspan_maquina": 1,
+                "show_articulo": False,
+                "rowspan_articulo": 1,
+            })
+
+    filas_raw.sort(
+        key=lambda f: (
+            _orden_maquina_clasificacion(f["id_mpr_maquina"], f.get("maquina_nombre") or ""),
+            f["id_articulo"],
+            f["id_mpr_turno"],
+            f["id_operario"],
+        )
+    )
+    _anotar_rowspan_maquina_clasificacion(filas_raw)
+    _anotar_rowspan_articulo_clasificacion(filas_raw)
 
     for aid, total_parte in parte_por_art.items():
         if total_parte <= 0:
             continue
         sin_operario = Decimal("0")
-        pendiente_con_operario = Decimal("0")
-        for (a, oid), datos in celdas.items():
+        fab_por_op_turno: Dict[Tuple[int, int], Decimal] = {}
+        for (mid, a, oid, tid), datos in celdas.items():
             if a != aid:
                 continue
             qty = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
             if oid is None or int(oid) <= 0:
                 sin_operario += qty
                 continue
-            cls_op = clasificado.get((a, oid), Decimal("0"))
-            pendiente_con_operario += max(Decimal("0"), qty - cls_op)
+            fab_por_op_turno[(oid, tid)] = fab_por_op_turno.get((oid, tid), Decimal("0")) + qty
 
-        if sin_operario > 0:
-            motivo = True
-        elif pendiente_con_operario > 0 and not any(f["id_articulo"] == aid for f in filas):
-            motivo = True
-        else:
-            motivo = False
+        pendiente_con_operario = Decimal("0")
+        for (oid, tid), fab_total in fab_por_op_turno.items():
+            cls_op = clasificado_por_turno.get(tid, {}).get((aid, oid), Decimal("0"))
+            pendiente_con_operario += max(Decimal("0"), fab_total - cls_op)
 
+        motivo = sin_operario > 0 or (
+            pendiente_con_operario > 0 and not any(f["id_articulo"] == aid for f in filas_raw)
+        )
         if motivo:
             codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
             bloqueos.append({
@@ -18562,20 +18663,25 @@ def construir_grilla_clasificacion_produccion(
                 "mensaje": "Corregí el parte: falta desglose por operario para clasificar rendimiento.",
             })
 
-    arrastre = listar_pares_fecha_turno_con_pendiente_clasificacion(
+    arrastre_raw = listar_pares_fecha_turno_con_pendiente_clasificacion(
         base_empresa,
-        excluir_fecha=fecha,
-        excluir_turno=int(turno_id),
+        excluir_fecha=fecha if turno_id is not None else None,
+        excluir_turno=int(turno_id) if turno_id is not None else None,
     )
+    if turno_id is None:
+        arrastre = [a for a in arrastre_raw if a.get("fecha") != fecha]
+    else:
+        arrastre = arrastre_raw
+
     return {
-        "filas": filas,
-        "filas_vacio": len(filas) == 0,
+        "filas": filas_raw,
+        "filas_vacio": len(filas_raw) == 0,
         "arrastre": arrastre,
         "bloqueos": bloqueos,
+        "requiere_fecha": False,
         "requiere_fecha_turno": False,
-        # Compatibilidad tests legacy (componentes agregados)
         "componentes": [],
-        "componentes_vacio": len(filas) == 0,
+        "componentes_vacio": len(filas_raw) == 0,
     }
 
 

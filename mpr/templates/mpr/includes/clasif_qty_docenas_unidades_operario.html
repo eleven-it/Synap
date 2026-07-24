@@ -2,13 +2,15 @@
 <div class="clasif-celda-cantidad mx-auto flex w-full max-w-[9rem] flex-col items-center"
      data-clasif-dest="{{ prefix }}"
      data-id-art="{{ id_art }}"
-     data-id-operario="{{ id_operario }}">
+     data-id-operario="{{ id_operario }}"
+     {% if id_turno %}data-id-turno="{{ id_turno }}"{% endif %}
+     {% if id_maquina is not None %}data-id-maquina="{{ id_maquina }}"{% endif %}>
     <div class="clasif-qty-group flex w-full overflow-hidden rounded-lg border bg-white shadow-sm transition-shadow dark:bg-slate-900 {{ ring_class }}"
          :class="excede ? 'border-red-400 ring-2 ring-red-500/30' : 'border-slate-300/90 dark:border-slate-500'">
         <label class="flex min-w-0 flex-1 flex-col">
             <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Docenas</span>
             <input type="number"
-                   name="{{ prefix }}_{{ id_art }}_op_{{ id_operario }}_docenas"
+                   name="{% if id_turno %}{{ prefix }}_{{ id_art }}_op_{{ id_operario }}_turno_{{ id_turno }}_maq_{{ id_maquina|default:0 }}_docenas{% else %}{{ prefix }}_{{ id_art }}_op_{{ id_operario }}_docenas{% endif %}"
                    min="0" step="1" inputmode="numeric"
                    placeholder="0"
                    x-model.number="{{ model_doc }}"
@@ -27,7 +29,7 @@
         <label class="flex min-w-0 flex-1 flex-col">
             <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Unidades</span>
             <input type="number"
-                   name="{{ prefix }}_{{ id_art }}_op_{{ id_operario }}_unidades"
+                   name="{% if id_turno %}{{ prefix }}_{{ id_art }}_op_{{ id_operario }}_turno_{{ id_turno }}_maq_{{ id_maquina|default:0 }}_unidades{% else %}{{ prefix }}_{{ id_art }}_op_{{ id_operario }}_unidades{% endif %}"
                    min="0" step="1" inputmode="numeric"
                    placeholder="0"
                    x-model.number="{{ model_uni }}"

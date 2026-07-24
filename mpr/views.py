@@ -308,10 +308,21 @@ def _opp_cantidad_unidades_desde_post(post, id_comp: int, cod_dep: int) -> int:
 
 
 def _clasificacion_cantidad_unidades_desde_post(
-    post, id_art: int, prefijo: str, id_operario: int | None = None,
+    post,
+    id_art: int,
+    prefijo: str,
+    id_operario: int | None = None,
+    *,
+    id_turno: int | None = None,
+    id_maquina: int | None = None,
 ) -> int:
     """Cantidad en unidades por destino de clasificación: docenas × 12 + unidades sueltas."""
-    if id_operario is not None:
+    if id_operario is not None and id_turno is not None and id_maquina is not None:
+        base = f"{prefijo}_{id_art}_op_{id_operario}_turno_{id_turno}_maq_{id_maquina}"
+        doc_key = f"{base}_docenas"
+        uni_key = f"{base}_unidades"
+        legacy_key = base
+    elif id_operario is not None:
         doc_key = f"{prefijo}_{id_art}_op_{id_operario}_docenas"
         uni_key = f"{prefijo}_{id_art}_op_{id_operario}_unidades"
         legacy_key = f"{prefijo}_{id_art}_op_{id_operario}"
@@ -338,21 +349,28 @@ def _clasificacion_cantidad_unidades_desde_post(
 
 
 def _clasificacion_filas_desde_post(post) -> List[tuple]:
-    """Pares (id_articulo, id_operario) presentes en POST de clasificación."""
+    """Tuplas (id_articulo, id_operario, id_turno, id_maquina) en POST de clasificación."""
     import re
 
     filas: set = set()
     for key in post:
         m = re.match(
-            r"^(semi|seg2da|scrap)_(\d+)_op_(\d+)(?:_(docenas|unidades))?$",
+            r"^(semi|seg2da|scrap)_(\d+)_op_(\d+)_turno_(\d+)_maq_(\d+)(?:_(docenas|unidades))?$",
             key,
         )
         if m:
-            filas.add((int(m.group(2)), int(m.group(3))))
+            filas.add((int(m.group(2)), int(m.group(3)), int(m.group(4)), int(m.group(5))))
             continue
-        m2 = re.match(r"^(semi|seg2da|scrap)_(\d+)(?:_(docenas|unidades))?$", key)
+        m2 = re.match(
+            r"^(semi|seg2da|scrap)_(\d+)_op_(\d+)(?:_(docenas|unidades))?$",
+            key,
+        )
         if m2:
-            filas.add((int(m2.group(2)), 0))
+            filas.add((int(m2.group(2)), int(m2.group(3)), 0, 0))
+            continue
+        m3 = re.match(r"^(semi|seg2da|scrap)_(\d+)(?:_(docenas|unidades))?$", key)
+        if m3:
+            filas.add((int(m3.group(2)), 0, 0, 0))
     return sorted(filas)
 
 
@@ -6697,7 +6715,8 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
             "filas_vacio": True,
             "arrastre": [],
             "bloqueos": [],
-            "requiere_fecha_turno": fecha_obj is None or turno_id is None,
+            "requiere_fecha": fecha_obj is None,
+            "requiere_fecha_turno": fecha_obj is None,
             "componentes": [],
             "componentes_vacio": True,
         }
@@ -6713,6 +6732,7 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
                 if base_empresa
                 else {
                     **grilla_vacia,
+                    "requiere_fecha": True,
                     "requiere_fecha_turno": True,
                 }
             )
@@ -6745,7 +6765,8 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
             "filas_vacio": grilla.get("filas_vacio", True),
             "arrastre": grilla.get("arrastre", []),
             "bloqueos": grilla.get("bloqueos", []),
-            "requiere_fecha_turno": grilla.get("requiere_fecha_turno", True),
+            "requiere_fecha": grilla.get("requiere_fecha", grilla.get("requiere_fecha_turno", True)),
+            "requiere_fecha_turno": grilla.get("requiere_fecha_turno", grilla.get("requiere_fecha", True)),
             "ver_roster": ver_roster,
             "puede_ver_roster_completo": _usuario_puede_anular_envios(self.request.user),
             "componentes": grilla.get("componentes", grilla.get("filas", [])),
@@ -6811,13 +6832,15 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
             return _redirect_clasificacion_produccion(request, fecha_str=fecha_str)
 
         turno_id_raw = (request.POST.get("turno_id") or "").strip()
-        try:
-            turno_id = int(turno_id_raw)
-        except (TypeError, ValueError):
-            dj_messages.error(request, "Turno inválido.")
-            return _redirect_clasificacion_produccion(
-                request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
-            )
+        turno_id_filtro: int | None = None
+        if turno_id_raw:
+            try:
+                turno_id_filtro = int(turno_id_raw)
+            except (TypeError, ValueError):
+                dj_messages.error(request, "Turno inválido.")
+                return _redirect_clasificacion_produccion(
+                    request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
+                )
 
         filas_post = _clasificacion_filas_desde_post(request.POST)
 
@@ -6828,10 +6851,17 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
             )
 
         tiene_cantidad = False
-        for id_art, id_operario in filas_post:
+        for id_art, id_operario, id_turno, id_maquina in filas_post:
             id_op = id_operario if id_operario > 0 else None
+            tid = id_turno if id_turno > 0 else (turno_id_filtro or None)
+            mid = id_maquina if id_maquina > 0 else None
             for pref in ("semi", "seg2da", "scrap"):
-                if _clasificacion_cantidad_unidades_desde_post(request.POST, id_art, pref, id_op) > 0:
+                kwargs_qty: Dict[str, int | None] = {}
+                if tid is not None and mid is not None and id_op is not None:
+                    kwargs_qty = {"id_turno": tid, "id_maquina": mid}
+                if _clasificacion_cantidad_unidades_desde_post(
+                    request.POST, id_art, pref, id_op, **kwargs_qty
+                ) > 0:
                     tiene_cantidad = True
                     break
             if tiene_cantidad:
@@ -6844,68 +6874,133 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
 
         ids_post = {f[0] for f in filas_post if f[1] > 0}
 
-        from mpr.repositories.parte import acumular_celdas_grilla_con_nombre
+        from mpr.repositories.parte import acumular_celdas_clasificacion_maquina_turno
         from mpr.repositories.transicion_lote import sumar_clasificado_por_operario_fecha_turno
 
-        celdas_parte = acumular_celdas_grilla_con_nombre(base_empresa, fecha_obj, turno_id)
-        clasificado_prev = sumar_clasificado_por_operario_fecha_turno(
-            base_empresa, fecha_obj, turno_id
+        celdas_parte = acumular_celdas_clasificacion_maquina_turno(
+            base_empresa, fecha_obj, turno_id_filtro
         )
+        turnos_post = {
+            (f[2] if f[2] > 0 else turno_id_filtro)
+            for f in filas_post
+            if f[1] > 0
+        }
+        turnos_post.discard(None)
+        clasificado_prev: Dict[Tuple[int, int, int], Decimal] = {}
+        fabricado_por_grupo: Dict[Tuple[int, int, int], Decimal] = {}
+        meta_celda: Dict[Tuple[int, int, int, int], Dict[str, Any]] = {}
+
+        for (mid, aid, oid, tid), datos in celdas_parte.items():
+            meta_celda[(mid, aid, oid, tid)] = datos
+            if oid is None or int(oid) <= 0:
+                continue
+            fabricado_por_grupo[(aid, oid, tid)] = (
+                fabricado_por_grupo.get((aid, oid, tid), Decimal("0"))
+                + (to_decimal_or_none(datos.get("cantidad")) or Decimal("0"))
+            )
+
+        for tid in turnos_post:
+            cls_turno = sumar_clasificado_por_operario_fecha_turno(
+                base_empresa, fecha_obj, int(tid)
+            )
+            for (aid, oid), val in cls_turno.items():
+                clasificado_prev[(aid, oid, tid)] = val
 
         stock_real, _ = _pivot_stock_por_tipo_mpr(base_empresa, list(ids_post))
+
+        filas_con_cantidad: List[Dict[str, Any]] = []
+        suma_post_por_grupo: Dict[Tuple[int, int, int], Decimal] = {}
+
+        for id_art, id_operario, id_turno, id_maquina in filas_post:
+            if id_operario <= 0:
+                continue
+            id_turno_ef = id_turno if id_turno > 0 else turno_id_filtro
+            if id_turno_ef is None or int(id_turno_ef) <= 0:
+                continue
+            id_turno_ef = int(id_turno_ef)
+            id_maq_ef = int(id_maquina) if id_maquina >= 0 else 0
+            if id_turno > 0:
+                qty_kwargs = {"id_turno": id_turno_ef, "id_maquina": id_maq_ef}
+            else:
+                qty_kwargs = {}
+            cant_semi = Decimal(
+                _clasificacion_cantidad_unidades_desde_post(
+                    request.POST, id_art, "semi", id_operario, **qty_kwargs
+                )
+            )
+            cant_2da = Decimal(
+                _clasificacion_cantidad_unidades_desde_post(
+                    request.POST, id_art, "seg2da", id_operario, **qty_kwargs
+                )
+            )
+            cant_scrap = Decimal(
+                _clasificacion_cantidad_unidades_desde_post(
+                    request.POST, id_art, "scrap", id_operario, **qty_kwargs
+                )
+            )
+            if cant_semi <= 0 and cant_2da <= 0 and cant_scrap <= 0:
+                continue
+            grupo = (id_art, id_operario, id_turno_ef)
+            suma_fila = cant_semi + cant_2da + cant_scrap
+            suma_post_por_grupo[grupo] = suma_post_por_grupo.get(grupo, Decimal("0")) + suma_fila
+            filas_con_cantidad.append({
+                "id_art": id_art,
+                "id_operario": id_operario,
+                "id_turno_ef": id_turno_ef,
+                "id_maq_ef": id_maq_ef,
+                "cant_semi": cant_semi,
+                "cant_2da": cant_2da,
+                "cant_scrap": cant_scrap,
+            })
+
+        grupos_invalidos: set = set()
+        for grupo, suma_grupo in suma_post_por_grupo.items():
+            id_art, id_operario, id_turno_ef = grupo
+            fabricado = fabricado_por_grupo.get(grupo, Decimal("0"))
+            ya_cls = clasificado_prev.get(grupo, Decimal("0"))
+            atribuible = fabricado - ya_cls
+            if suma_grupo > atribuible:
+                grupos_invalidos.add(grupo)
+                dj_messages.error(
+                    request,
+                    f"Exceso operario {id_operario} artículo {id_art} turno {id_turno_ef}: "
+                    f"atribuible {atribuible:g}, solicitado {suma_grupo:g}. Filas ignoradas.",
+                )
 
         items = []
         clasificado_turno_por_art: Dict[int, Decimal] = {}
 
-        for id_art, id_operario in filas_post:
-            if id_operario <= 0:
-                dj_messages.error(
-                    request,
-                    f"Artículo {id_art}: clasificación por rendimiento requiere operario. Corregí el parte.",
-                )
+        for fila in filas_con_cantidad:
+            grupo = (fila["id_art"], fila["id_operario"], fila["id_turno_ef"])
+            if grupo in grupos_invalidos:
                 continue
-            cant_semi = Decimal(
-                _clasificacion_cantidad_unidades_desde_post(request.POST, id_art, "semi", id_operario)
-            )
-            cant_2da = Decimal(
-                _clasificacion_cantidad_unidades_desde_post(request.POST, id_art, "seg2da", id_operario)
-            )
-            cant_scrap = Decimal(
-                _clasificacion_cantidad_unidades_desde_post(request.POST, id_art, "scrap", id_operario)
-            )
-            if cant_semi <= 0 and cant_2da <= 0 and cant_scrap <= 0:
-                continue
+            id_art = fila["id_art"]
+            id_operario = fila["id_operario"]
+            id_turno_ef = fila["id_turno_ef"]
+            id_maq_ef = fila["id_maq_ef"]
 
-            fabricado = to_decimal_or_none(
-                (celdas_parte.get((id_art, id_operario)) or {}).get("cantidad")
+            fabricado_celda = to_decimal_or_none(
+                (meta_celda.get((id_maq_ef, id_art, id_operario, id_turno_ef)) or {}).get("cantidad")
             ) or Decimal("0")
-            if fabricado <= 0:
+            if fabricado_celda <= 0:
                 dj_messages.error(
                     request,
-                    f"Sin producción en parte para artículo {id_art} y operario {id_operario}.",
-                )
-                continue
-
-            ya_cls = clasificado_prev.get((id_art, id_operario), Decimal("0"))
-            atribuible = fabricado - ya_cls
-            suma = cant_semi + cant_2da + cant_scrap
-            if suma > atribuible:
-                dj_messages.error(
-                    request,
-                    f"Exceso operario {id_operario} artículo {id_art}: "
-                    f"atribuible {atribuible:g}, solicitado {suma:g}. Fila ignorada.",
+                    f"Sin producción en parte para artículo {id_art}, operario {id_operario}, "
+                    f"turno {id_turno_ef}.",
                 )
                 continue
 
             operario_nombre = str_or_default(
-                (celdas_parte.get((id_art, id_operario)) or {}).get("operario_nombre"),
+                (meta_celda.get((id_maq_ef, id_art, id_operario, id_turno_ef)) or {}).get(
+                    "operario_nombre"
+                ),
                 "-",
             )
 
             for cant, destino in (
-                (cant_semi, TIPO_MPR_SEMI_ELABORADO),
-                (cant_2da, TIPO_MPR_2DA_SELECCION),
-                (cant_scrap, TIPO_MPR_SCRAP),
+                (fila["cant_semi"], TIPO_MPR_SEMI_ELABORADO),
+                (fila["cant_2da"], TIPO_MPR_2DA_SELECCION),
+                (fila["cant_scrap"], TIPO_MPR_SCRAP),
             ):
                 if cant > 0:
                     items.append({
@@ -6916,7 +7011,7 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
                         "id_operario": id_operario,
                         "operario_nombre": operario_nombre,
                         "fecha_produccion": fecha_obj,
-                        "id_mpr_turno": turno_id,
+                        "id_mpr_turno": id_turno_ef,
                     })
                     clasificado_turno_por_art[id_art] = (
                         clasificado_turno_por_art.get(id_art, Decimal("0")) + cant

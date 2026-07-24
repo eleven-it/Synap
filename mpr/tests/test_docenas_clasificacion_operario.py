@@ -194,7 +194,7 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
     @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
     @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 100.0}}, {}))
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno")
-    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     def test_grilla_filas_por_operario(
         self,
@@ -206,8 +206,18 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         from mpr.services import construir_grilla_clasificacion_produccion
 
         mock_celdas.return_value = {
-            (10, 5): {"cantidad": Decimal("48"), "operario_nombre": "López"},
-            (10, 6): {"cantidad": Decimal("36"), "operario_nombre": "García"},
+            (0, 10, 5, 1): {
+                "cantidad": Decimal("48"),
+                "operario_nombre": "López",
+                "maquina_nombre": "—",
+                "turno_nombre": "Mañana",
+            },
+            (0, 10, 6, 1): {
+                "cantidad": Decimal("36"),
+                "operario_nombre": "García",
+                "maquina_nombre": "—",
+                "turno_nombre": "Mañana",
+            },
         }
         mock_clasif.return_value = {(10, 5): Decimal("12")}
         grilla = construir_grilla_clasificacion_produccion(
@@ -223,7 +233,7 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
         return_value={(10, 5): Decimal("48")},
     )
-    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
     @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 100.0}}, {}))
     def test_grilla_ver_roster_muestra_completadas(
@@ -232,7 +242,12 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         from mpr.services import construir_grilla_clasificacion_produccion
 
         mock_celdas.return_value = {
-            (10, 5): {"cantidad": Decimal("48"), "operario_nombre": "López"},
+            (0, 10, 5, 1): {
+                "cantidad": Decimal("48"),
+                "operario_nombre": "López",
+                "maquina_nombre": "—",
+                "turno_nombre": "Mañana",
+            },
         }
         grilla = construir_grilla_clasificacion_produccion(
             "empresa92", date(2026, 7, 8), 1, ver_roster_completo=True,
@@ -246,7 +261,7 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
         return_value={(10, 5): Decimal("48")},
     )
-    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
     @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 100.0}}, {}))
     def test_grilla_sin_bloqueo_si_clasificacion_completa(
@@ -255,7 +270,12 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         from mpr.services import construir_grilla_clasificacion_produccion
 
         mock_celdas.return_value = {
-            (10, 5): {"cantidad": Decimal("48"), "operario_nombre": "López"},
+            (0, 10, 5, 1): {
+                "cantidad": Decimal("48"),
+                "operario_nombre": "López",
+                "maquina_nombre": "—",
+                "turno_nombre": "Mañana",
+            },
         }
         grilla = construir_grilla_clasificacion_produccion(
             "empresa92", date(2026, 7, 8), 1,
@@ -265,7 +285,7 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
 
     @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
-    @patch("mpr.repositories.parte.acumular_celdas_grilla_con_nombre")
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value={99: ("X", "Sin operario")})
     @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({99: {"Produccion": 12.0}}, {}))
     def test_grilla_bloqueo_cantidad_sin_operario(
@@ -274,7 +294,12 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         from mpr.services import construir_grilla_clasificacion_produccion
 
         mock_celdas.return_value = {
-            (99, 0): {"cantidad": Decimal("12"), "operario_nombre": "-"},
+            (0, 99, 0, 1): {
+                "cantidad": Decimal("12"),
+                "operario_nombre": "-",
+                "maquina_nombre": "—",
+                "turno_nombre": "Mañana",
+            },
         }
         grilla = construir_grilla_clasificacion_produccion(
             "empresa92", date(2026, 7, 8), 1,
