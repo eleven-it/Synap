@@ -693,11 +693,34 @@ def construir_grilla_parte_planilla(
                 "ingresado": ingresado,
                 "inputs_habilitados": fab > 0,
                 "turnos": turnos_payload,
+                "show_maquina": False,
+                "rowspan_maquina": 1,
             })
 
+    _anotar_rowspan_maquina_filas(filas)
     resultado["filas"] = filas
     resultado["filas_vacio"] = len(filas) == 0
     return resultado
+
+
+def _anotar_rowspan_maquina_filas(filas: List[Dict[str, Any]]) -> None:
+    """Marca show_maquina / rowspan_maquina para combinar celdas de la misma máquina."""
+    if not filas:
+        return
+    i = 0
+    n = len(filas)
+    while i < n:
+        mid = filas[i].get("id_mpr_maquina")
+        j = i + 1
+        while j < n and filas[j].get("id_mpr_maquina") == mid:
+            j += 1
+        span = j - i
+        filas[i]["show_maquina"] = True
+        filas[i]["rowspan_maquina"] = span
+        for k in range(i + 1, j):
+            filas[k]["show_maquina"] = False
+            filas[k]["rowspan_maquina"] = 1
+        i = j
 
 
 def construir_grilla_carga_articulos(

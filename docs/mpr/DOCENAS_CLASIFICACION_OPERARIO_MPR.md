@@ -32,8 +32,9 @@ Dos mejoras coordinadas para alinear MPR con la planta textil:
 | Default presentación | Docenas en flujo operativo |
 | Toggle | Sesión `mpr_presentacion_cantidad` |
 | Divisor componentes | 12 u./docena |
-| Filas clasificación | (artículo × operario), solo pendiente > 0 |
-| Alcance pendiente | Fecha + turno del clasificador |
+| Filas clasificación | (máquina × artículo × turno × operario), solo pendiente > 0 |
+| Alcance pendiente | Fecha obligatoria; turno opcional (vacío = todos los turnos del día) |
+| Columnas grilla CC | Máquina (badge), Artículo, Turno, Operario, Pendiente, Semi, 2da, Scrap |
 | Arrastre | Sección separada turnos anteriores |
 | Clasificación parcial | Sí |
 | Parte sin operario | Bloquear clasificación por rendimiento |

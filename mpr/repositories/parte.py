@@ -599,6 +599,148 @@ def acumular_celdas_grilla_con_nombre(
     return resultado
 
 
+def acumular_celdas_clasificacion_maquina_turno(
+    base_empresa: str,
+    fecha: date,
+    id_mpr_turno: Optional[int] = None,
+) -> Dict[Tuple[int, int, int, int], Dict[str, Any]]:
+    """Cantidades efectivas por (id_mpr_maquina|0, id_articulo, id_operario, id_mpr_turno).
+
+    Lee partes de la fecha (y turno si se indica). Líneas sin máquina → id_mpr_maquina=0,
+    maquina_nombre «—». Los ajustes por (artículo, operario) se suman al bucket de máquina
+    con mayor cantidad en ese parte, o a máquina 0 si no hay líneas.
+    """
+    base = (base_empresa or "").strip()
+    resultado: Dict[Tuple[int, int, int, int], Dict[str, Any]] = {}
+    if not base or fecha is None:
+        return resultado
+
+    params: List[Any] = [fecha]
+    filtro_turno = ""
+    if id_mpr_turno is not None:
+        filtro_turno = " AND p.id_mpr_turno = %s"
+        params.append(int(id_mpr_turno))
+
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            f"""
+            SELECT p.id_mpr_parte, p.id_mpr_turno, t.nombre AS turno_nombre
+            FROM mpr_parte p
+            INNER JOIN mpr_turno t ON t.id_mpr_turno = p.id_mpr_turno
+            WHERE p.fecha_produccion = %s{filtro_turno}
+            """,
+            params,
+        )
+        partes = cursor.fetchall() or []
+
+        for parte in partes:
+            pid = to_int_or_none(parte.get("id_mpr_parte"))
+            tid = to_int_or_none(parte.get("id_mpr_turno"))
+            turno_nombre = str_or_default(parte.get("turno_nombre"), "-")
+            if pid is None or tid is None:
+                continue
+
+            cursor.execute(
+                """
+                SELECT id_articulo, id_operario, operario_nombre, cantidad,
+                       id_mpr_maquina, maquina_nombre
+                FROM mpr_parte_linea
+                WHERE id_mpr_parte = %s
+                """,
+                [pid],
+            )
+            lineas = cursor.fetchall() or []
+            ajustes_map: Dict[Tuple[int, int], Decimal] = {}
+            cursor.execute(
+                """
+                SELECT id_articulo, id_operario, delta
+                FROM mpr_parte_ajuste
+                WHERE id_mpr_parte = %s
+                """,
+                [pid],
+            )
+            for aj in cursor.fetchall() or []:
+                aid = to_int_or_none(aj.get("id_articulo"))
+                oid = to_int_or_none(aj.get("id_operario"))
+                if aid is None or oid is None:
+                    continue
+                clave_aj = (aid, oid)
+                ajustes_map[clave_aj] = ajustes_map.get(clave_aj, Decimal("0")) + (
+                    to_decimal_or_none(aj.get("delta")) or Decimal("0")
+                )
+
+            qty_por_clave: Dict[Tuple[int, int, int, int], Decimal] = {}
+            meta_por_clave: Dict[Tuple[int, int, int, int], Dict[str, Any]] = {}
+
+            for ln in lineas:
+                aid = to_int_or_none(ln.get("id_articulo"))
+                oid = to_int_or_none(ln.get("id_operario"))
+                if aid is None or oid is None:
+                    continue
+                mid = to_int_or_none(ln.get("id_mpr_maquina")) or 0
+                maq_nom = (
+                    str_or_default(ln.get("maquina_nombre"), "-").strip()
+                    if mid > 0
+                    else "—"
+                )
+                if mid > 0 and (not maq_nom or maq_nom == "-"):
+                    maq_nom = "—"
+                qty = to_decimal_or_none(ln.get("cantidad")) or Decimal("0")
+                clave = (mid, aid, oid, tid)
+                qty_por_clave[clave] = qty_por_clave.get(clave, Decimal("0")) + qty
+                prev = meta_por_clave.get(clave, {})
+                nom_op = str_or_default(ln.get("operario_nombre"), "-").strip()
+                meta_por_clave[clave] = {
+                    "operario_nombre": nom_op if nom_op else prev.get("operario_nombre", "-"),
+                    "maquina_nombre": maq_nom,
+                    "turno_nombre": turno_nombre,
+                    "id_mpr_turno": tid,
+                }
+
+            for (aid, oid), delta in ajustes_map.items():
+                if delta == 0:
+                    continue
+                candidatos = [
+                    k for k in qty_por_clave
+                    if k[1] == aid and k[2] == oid and k[3] == tid
+                ]
+                if candidatos:
+                    dest = max(candidatos, key=lambda k: qty_por_clave[k])
+                else:
+                    dest = (0, aid, oid, tid)
+                    meta_por_clave.setdefault(
+                        dest,
+                        {
+                            "operario_nombre": "-",
+                            "maquina_nombre": "—",
+                            "turno_nombre": turno_nombre,
+                            "id_mpr_turno": tid,
+                        },
+                    )
+                qty_por_clave[dest] = qty_por_clave.get(dest, Decimal("0")) + delta
+
+            for clave, cantidad in qty_por_clave.items():
+                if cantidad == 0:
+                    continue
+                meta = meta_por_clave.get(clave, {})
+                prev = resultado.get(clave, {})
+                resultado[clave] = {
+                    "cantidad": (to_decimal_or_none(prev.get("cantidad")) or Decimal("0")) + cantidad,
+                    "operario_nombre": meta.get("operario_nombre")
+                    or prev.get("operario_nombre")
+                    or "-",
+                    "maquina_nombre": meta.get("maquina_nombre")
+                    or prev.get("maquina_nombre")
+                    or "—",
+                    "turno_nombre": meta.get("turno_nombre")
+                    or prev.get("turno_nombre")
+                    or turno_nombre,
+                    "id_mpr_turno": tid,
+                }
+
+    return resultado
+
+
 def listar_pares_fecha_turno_con_pendiente_clasificacion(
     base_empresa: str,
     *,

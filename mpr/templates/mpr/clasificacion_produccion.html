@@ -56,7 +56,7 @@
         </div>
         {% endif %}
 
-        {% if not requiere_fecha_turno and not filas_vacio %}
+        {% if not requiere_fecha and not filas_vacio %}
         <form method="post" action="{{ url_registrar }}"
               id="form-clasificacion-produccion"
               class="mpr-post-loading flex flex-col gap-2 sm:gap-3"
@@ -68,17 +68,17 @@
               @fila-excede.window="setExcede($event.detail.id, $event.detail.excede)">
             {% csrf_token %}
             <input type="hidden" name="fecha" value="{{ fecha_str }}">
-            <input type="hidden" name="turno_id" value="{{ turno_id }}">
+            {% if turno_id %}<input type="hidden" name="turno_id" value="{{ turno_id }}">{% endif %}
         {% endif %}
 
-        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800{% if not requiere_fecha_turno and not filas_vacio %}{% else %} mb-2{% endif %}">
-            {% if requiere_fecha_turno %}
+        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800{% if not requiere_fecha and not filas_vacio %}{% else %} mb-2{% endif %}">
+            {% if requiere_fecha %}
             <div class="border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/50 dark:bg-blue-950/30 sm:px-5">
                 <div class="flex items-start gap-3">
                     <span class="material-icons text-blue-600 dark:text-blue-400" aria-hidden="true">info</span>
                     <div>
-                        <p class="text-sm font-medium text-blue-900 dark:text-blue-100">Seleccioná fecha y turno del parte a controlar.</p>
-                        <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">Usá los filtros del encabezado y pulsá <strong>Cargar grilla</strong> para ver el pendiente por operario.</p>
+                        <p class="text-sm font-medium text-blue-900 dark:text-blue-100">Seleccioná la fecha del parte a controlar.</p>
+                        <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">El turno es opcional: vacío carga todos los turnos del día. Pulsá <strong>Cargar grilla</strong>.</p>
                     </div>
                 </div>
             </div>
@@ -123,7 +123,7 @@
                     Mostrando coincidencias para «<span x-text="busqueda" class="font-medium text-slate-700 dark:text-slate-300"></span>»
                     · {{ filas|length }} filas
                 </p>
-                {% if puede_ver_roster_completo and not requiere_fecha_turno %}
+                {% if puede_ver_roster_completo and not requiere_fecha %}
                 <div class="mt-2 flex flex-wrap items-center gap-2">
                     {% if ver_roster %}
                     <a href="?fecha={{ fecha_str|urlencode }}&amp;turno_id={{ turno_id }}&amp;presentacion={{ modo_presentacion }}"
@@ -150,57 +150,82 @@
             {% endif %}
             {% endif %}
 
-            <div class="overflow-x-auto" role="region" aria-label="Grilla control de calidad por operario">
-                <table class="clasif-grilla w-full border-collapse" style="min-width: 58rem;">
-                    <caption class="sr-only">Control de calidad por operario fabricante — {% if filas %}{{ filas|length }} filas{% else %}sin filas{% endif %}</caption>
+            <div class="overflow-x-auto" role="region" aria-label="Grilla control de calidad por máquina, artículo y operario">
+                <table class="clasif-grilla w-full border-collapse" style="min-width: 72rem;">
+                    <caption class="sr-only">Control de calidad — {% if filas %}{{ filas|length }} filas{% else %}sin filas{% endif %}</caption>
                     {% include "mpr/includes/clasificacion_tabla_thead.html" %}
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/80">
-                        {% if not requiere_fecha_turno and not filas_vacio %}
+                        {% if not requiere_fecha and not filas_vacio %}
                             {% for fila in filas %}
                             <tr class="group/row clasif-grilla-fila{% if fila.solo_lectura %} opacity-70{% endif %}"
-                                data-descripcion="{{ fila.codigo_manual|lower }} {{ fila.descripcion|lower }} {{ fila.operario_nombre|lower }}"
+                                data-descripcion="{{ fila.maquina_nombre|lower }} {{ fila.descripcion|lower }} {{ fila.codigo_tooltip|lower }} {{ fila.turno_nombre|lower }} {{ fila.operario_nombre|lower }}"
                                 x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase().trim())"
                                 x-data="clasificacionFila({{ fila.id_articulo }}, {{ fila.disponible|floatformat:0 }}, {{ unidades_por_docena_clasificacion|default:12 }})"
                                 :class="excede ? 'bg-red-50/40 dark:bg-red-950/15' : ''">
-                                <td class="sticky left-0 z-10 border-r border-slate-100 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-800">
-                                    <span class="text-sm font-semibold tabular-nums">{{ fila.codigo_manual }}</span>
-                                    <span class="block text-sm text-slate-600 dark:text-slate-300">{{ fila.descripcion }}</span>
+                                {# Máquina — al buscar se muestra en cada fila #}
+                                <td x-show="busqueda.trim() !== ''"
+                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 bg-white px-2 py-3 text-center align-middle dark:border-slate-700 dark:bg-slate-800">
+                                    <span class="inline-flex max-w-full items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-sm font-semibold leading-tight text-slate-800 dark:bg-slate-700 dark:text-slate-100"
+                                          title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
                                 </td>
-                                <td class="px-3 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">{{ fila.operario_nombre }}</td>
+                                {% if fila.show_maquina %}
+                                <td x-show="busqueda.trim() === ''"
+                                    rowspan="{{ fila.rowspan_maquina|default:1 }}"
+                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 bg-white px-2 py-3 text-center align-middle dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
+                                    <span class="inline-flex max-w-full items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-sm font-semibold leading-tight text-slate-800 dark:bg-slate-700 dark:text-slate-100"
+                                          title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
+                                </td>
+                                {% endif %}
+                                {# Artículo — rowspan o repetido al buscar #}
+                                <td x-show="busqueda.trim() !== ''"
+                                    class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-3 align-middle dark:border-slate-700 dark:bg-slate-800">
+                                    <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
+                                          title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
+                                </td>
+                                {% if fila.show_articulo %}
+                                <td x-show="busqueda.trim() === ''"
+                                    rowspan="{{ fila.rowspan_articulo|default:1 }}"
+                                    class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-3 align-middle dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
+                                    <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
+                                          title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
+                                </td>
+                                {% endif %}
+                                <td class="px-3 py-3 text-sm text-slate-700 dark:text-slate-300">{{ fila.turno_nombre }}</td>
+                                <td class="px-3 py-3 text-sm font-bold text-slate-800 dark:text-slate-100">{{ fila.operario_nombre }}</td>
                                 <td class="px-3 py-3 text-center text-xs font-semibold tabular-nums {% if fila.solo_lectura %}text-slate-500 dark:text-slate-400{% else %}text-emerald-800 dark:text-emerald-300{% endif %}">{{ fila.disponible_texto }}</td>
                                 <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-0" {% if fila.solo_lectura %}aria-hidden="true"{% endif %}>
                                     {% if not fila.solo_lectura %}
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=fila.id_articulo id_operario=fila.id_operario operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="semi elaborado" model_doc="semiDoc" model_uni="semiUni" subtotal_alpine="semiUnidades" ring_class="focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/25" only %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="semi elaborado" model_doc="semiDoc" model_uni="semiUni" subtotal_alpine="semiUnidades" ring_class="focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/25" only %}
                                     {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
                                 </td>
                                 <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-1" {% if fila.solo_lectura %}aria-hidden="true"{% endif %}>
                                     {% if not fila.solo_lectura %}
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="seg2da" id_art=fila.id_articulo id_operario=fila.id_operario operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="2da selección" model_doc="seg2daDoc" model_uni="seg2daUni" subtotal_alpine="seg2daUnidades" ring_class="focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/25" only %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="seg2da" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="2da selección" model_doc="seg2daDoc" model_uni="seg2daUni" subtotal_alpine="seg2daUnidades" ring_class="focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/25" only %}
                                     {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
                                 </td>
                                 <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-2" {% if fila.solo_lectura %}aria-hidden="true"{% endif %}>
                                     {% if not fila.solo_lectura %}
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="scrap" id_art=fila.id_articulo id_operario=fila.id_operario operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="desperdicio" model_doc="scrapDoc" model_uni="scrapUni" subtotal_alpine="scrapUnidades" ring_class="focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/25" only %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="scrap" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="desperdicio" model_doc="scrapDoc" model_uni="scrapUni" subtotal_alpine="scrapUnidades" ring_class="focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/25" only %}
                                     {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
                         {% else %}
                             <tr>
-                                <td colspan="6" class="px-4 py-12 text-center sm:px-6 sm:py-16">
-                                    <span class="material-icons mb-3 text-5xl text-slate-300 dark:text-slate-600" aria-hidden="true">{% if requiere_fecha_turno %}event{% else %}inventory_2{% endif %}</span>
+                                <td colspan="8" class="px-4 py-12 text-center sm:px-6 sm:py-16">
+                                    <span class="material-icons mb-3 text-5xl text-slate-300 dark:text-slate-600" aria-hidden="true">{% if requiere_fecha %}event{% else %}inventory_2{% endif %}</span>
                                     <p class="text-sm font-medium text-slate-600 dark:text-slate-300">
-                                        {% if requiere_fecha_turno %}
+                                        {% if requiere_fecha %}
                                             Aún no cargaste una grilla
                                         {% else %}
                                             Sin filas pendientes de clasificar
                                         {% endif %}
                                     </p>
                                     <p class="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                                        {% if requiere_fecha_turno %}
-                                            Las columnas Semi elaborado, 2da selección y Desperdicio se habilitan cuando haya parte registrado por operario.
+                                        {% if requiere_fecha %}
+                                            Elegí fecha (turno opcional) y cargá la grilla para ver pendiente por máquina, artículo y operario.
                                         {% else %}
-                                            Todo lo producido en este turno ya fue clasificado, o no hay parte con desglose por operario.
+                                            Todo lo producido en esta fecha ya fue clasificado, o no hay parte con desglose por operario.
                                         {% endif %}
                                     </p>
                                 </td>
@@ -210,7 +235,7 @@
                 </table>
             </div>
 
-            {% if not requiere_fecha_turno and not filas_vacio %}
+            {% if not requiere_fecha and not filas_vacio %}
             <div class="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
                  x-show="busqueda.trim() !== '' && Array.from($root.querySelectorAll('tbody tr.clasif-grilla-fila')).every(function(el) { return !el.offsetParent; })"
                  x-cloak>
@@ -236,7 +261,7 @@
             {% endif %}
         </div>
 
-        {% if not requiere_fecha_turno and not filas_vacio %}
+        {% if not requiere_fecha and not filas_vacio %}
         </form>
         {% endif %}
 
@@ -335,9 +360,8 @@ document.addEventListener('alpine:init', function () {
                 }
             },
             onSubmit: function (e) {
-                if (!this.selectedId) {
+                if (!this.fechaDdmmyyyy) {
                     e.preventDefault();
-                    this.open = true;
                 }
             }
         };

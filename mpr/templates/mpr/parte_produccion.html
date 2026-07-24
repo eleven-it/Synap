@@ -214,10 +214,10 @@
                         <caption class="sr-only">Grilla de producción máquina × artículo — {{ fecha_str }}</caption>
                         <thead>
                             <tr class="border-b border-slate-200 bg-slate-50/95 dark:border-slate-600 dark:bg-slate-800/90">
-                                <th scope="col" class="sticky left-0 z-30 w-16 min-w-[4rem] bg-slate-50/95 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400">
+                                <th scope="col" class="sticky left-0 z-30 w-20 min-w-[5rem] bg-slate-50/95 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400">
                                     Máq.
                                 </th>
-                                <th scope="col" class="sticky left-16 z-30 min-w-[13rem] max-w-[22rem] border-r border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
+                                <th scope="col" class="sticky left-20 z-30 min-w-[13rem] max-w-[22rem] border-r border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
                                     Artículo
                                 </th>
                                 {% for col in grilla_planilla.turnos_columnas %}
@@ -240,15 +240,24 @@
                                 data-articulo="{{ fila.descripcion|escape }}"
                                 data-descripcion="{{ fila.descripcion|lower }} {{ fila.codigo_tooltip|lower }}"
                                 x-show="filtro === '' || $el.dataset.descripcion.includes(filtro.toLowerCase().trim())">
-                                {# Máquina (sticky) #}
-                                <td class="sticky left-0 z-20 w-16 min-w-[4rem] bg-white px-2 py-3 text-center align-middle dark:bg-slate-800 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
-                                    <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                                {# Máquina (sticky): rowspan cuando hay varios artículos; al filtrar se muestra en cada fila #}
+                                <td x-show="filtro.trim() !== ''"
+                                    class="sticky left-0 z-20 w-20 min-w-[5rem] bg-white px-2 py-3 text-center align-middle dark:bg-slate-800 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
+                                    <span class="inline-flex max-w-full items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-sm font-semibold leading-tight text-slate-800 dark:bg-slate-700 dark:text-slate-100"
                                           title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
-                                    <input type="hidden" name="parte_maq_{{ fila.id_mpr_maquina }}_nombre" value="{{ fila.maquina_nombre }}">
                                 </td>
+                                {% if fila.show_maquina %}
+                                <td x-show="filtro.trim() === ''"
+                                    rowspan="{{ fila.rowspan_maquina|default:1 }}"
+                                    class="sticky left-0 z-20 w-20 min-w-[5rem] bg-white px-2 py-3 text-center align-middle dark:bg-slate-800 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
+                                    <span class="inline-flex max-w-full items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-sm font-semibold leading-tight text-slate-800 dark:bg-slate-700 dark:text-slate-100"
+                                          title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
+                                </td>
+                                {% endif %}
                                 {# Artículo (sticky) — sin código visible, código en tooltip #}
-                                <td class="sticky left-16 z-20 min-w-[13rem] max-w-[22rem] border-r border-slate-100 bg-white px-3 py-3 align-middle dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
-                                    <span class="block text-sm leading-snug text-slate-700 dark:text-slate-200"
+                                <td class="sticky left-20 z-20 min-w-[13rem] max-w-[22rem] border-r border-slate-100 bg-white px-3 py-3 align-middle dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
+                                    <input type="hidden" name="parte_maq_{{ fila.id_mpr_maquina }}_nombre" value="{{ fila.maquina_nombre }}">
+                                    <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
                                           title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
                                 </td>
                                 {# Celdas por turno #}
@@ -261,8 +270,8 @@
                                             {% if cel.operarios|length == 1 %}
                                                 {% with op=cel.operarios.0 %}
                                                 <input type="hidden" name="parte_maq_{{ fila.id_mpr_maquina }}_art_{{ fila.id_articulo }}_turno_{{ col.id }}_op" value="{{ op.id_operario }}">
-                                                <p class="truncate text-center text-[10px] font-medium text-slate-500 dark:text-slate-400" title="{{ op.nombre }}">
-                                                    <span class="material-icons align-text-bottom text-[11px]" aria-hidden="true">person</span>
+                                                <p class="truncate text-center text-xs font-bold text-slate-700 dark:text-slate-200" title="{{ op.nombre }}">
+                                                    <span class="material-icons align-text-bottom text-[13px]" aria-hidden="true">person</span>
                                                     {{ op.nombre }}
                                                 </p>
                                                 {% endwith %}
@@ -270,7 +279,7 @@
                                                 <select name="parte_maq_{{ fila.id_mpr_maquina }}_art_{{ fila.id_articulo }}_turno_{{ col.id }}_op"
                                                         data-parte-op-select
                                                         aria-label="Operario {{ col.nombre }} — {{ fila.descripcion }}"
-                                                        class="h-7 w-full rounded-md border border-slate-300 bg-white px-1 text-[11px] text-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
+                                                        class="h-7 w-full rounded-md border border-slate-300 bg-white px-1 text-[11px] font-bold text-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
                                                     <option value="">— Operario —</option>
                                                     {% for op in cel.operarios %}
                                                     <option value="{{ op.id_operario }}">{{ op.nombre }}</option>
