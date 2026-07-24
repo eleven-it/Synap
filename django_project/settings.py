@@ -239,6 +239,13 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Grillas MPR (tablero enviar, parte planilla QC, clasificación) envían varios
+# campos por fila; el default de Django (1000) dispara TooManyFieldsSent.
+# Override: DATA_UPLOAD_MAX_NUMBER_FIELDS en el entorno.
+DATA_UPLOAD_MAX_NUMBER_FIELDS = config(
+    'DATA_UPLOAD_MAX_NUMBER_FIELDS', default=30000, cast=int
+)
+
 # -----------------------------------------------------------------------------
 # AFIP / ARCA: certificados y claves privadas
 # -----------------------------------------------------------------------------
