@@ -163,6 +163,32 @@ APPS_MENU = [
                 ]
             },
             {
+                "seccion": _("Crédito"),
+                "items": [
+                    {
+                        "label": _("Cola crédito Finanzas"),
+                        "url": "ecom:credito_cola",
+                        "icon": "account_balance",
+                        "permission": "finance.credito.aprobar",
+                        "menu_item_id": "ventas_credito_cola",
+                    },
+                    {
+                        "label": _("Políticas de crédito"),
+                        "url": "ecom:credito_politicas",
+                        "icon": "rule",
+                        "permission": "finance.credito.configurar",
+                        "menu_item_id": "ventas_credito_politicas",
+                    },
+                    {
+                        "label": _("Plantillas aviso crédito"),
+                        "url": "ecom:credito_plantillas",
+                        "icon": "mail",
+                        "permission": "finance.credito.configurar",
+                        "menu_item_id": "ventas_credito_plantillas",
+                    },
+                ]
+            },
+            {
                 "seccion": _("Gestión"),
                 "items": [
                     {
@@ -712,6 +738,32 @@ APPS_MENU = [
                         "icon": "local_shipping",
                         "permission": "ecom.logistica.ver",
                         "menu_item_id": "ecom_logistica_entregas",
+                    },
+                ],
+            },
+            {
+                "seccion": _("Crédito"),
+                "items": [
+                    {
+                        "label": _("Cola crédito Finanzas"),
+                        "url": "ecom:credito_cola",
+                        "icon": "account_balance",
+                        "permission": "finance.credito.aprobar",
+                        "menu_item_id": "ecom_credito_cola",
+                    },
+                    {
+                        "label": _("Políticas de crédito"),
+                        "url": "ecom:credito_politicas",
+                        "icon": "rule",
+                        "permission": "finance.credito.configurar",
+                        "menu_item_id": "ecom_credito_politicas",
+                    },
+                    {
+                        "label": _("Plantillas aviso crédito"),
+                        "url": "ecom:credito_plantillas",
+                        "icon": "mail",
+                        "permission": "finance.credito.configurar",
+                        "menu_item_id": "ecom_credito_plantillas",
                     },
                 ],
             },

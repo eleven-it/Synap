@@ -74,6 +74,24 @@ MENU_CONFIG = [
                 "url": "logistica:entregas",
                 "permission": "ecom.logistica.ver",
             },
+            {
+                "name": "ecom_credito_cola",
+                "label": "Cola crédito Finanzas",
+                "url": "ecom:credito_cola",
+                "permission": "finance.credito.aprobar",
+            },
+            {
+                "name": "ecom_credito_politicas",
+                "label": "Políticas de crédito",
+                "url": "ecom:credito_politicas",
+                "permission": "finance.credito.configurar",
+            },
+            {
+                "name": "ecom_credito_plantillas",
+                "label": "Plantillas aviso crédito",
+                "url": "ecom:credito_plantillas",
+                "permission": "finance.credito.configurar",
+            },
         ],
     },
 ]
