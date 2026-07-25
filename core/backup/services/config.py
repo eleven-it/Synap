@@ -106,6 +106,20 @@ def set_sftp_password(settings_obj: BackupSettings, plain: str | None) -> None:
     settings_obj.sftp_password_encrypted = backup_secrets.encrypt_secret(value)
 
 
+def bootstrap_passphrase_plain(settings_obj: BackupSettings | None = None) -> str:
+    bs = settings_obj or get_backup_settings()
+    if bs.bootstrap_passphrase_encrypted:
+        return backup_secrets.decrypt_secret(bs.bootstrap_passphrase_encrypted)
+    return ""
+
+
+def set_bootstrap_passphrase(settings_obj: BackupSettings, plain: str | None) -> None:
+    value = (plain or "").strip()
+    if not value:
+        return
+    settings_obj.bootstrap_passphrase_encrypted = backup_secrets.encrypt_secret(value)
+
+
 def normalize_schedule(rules: list | None) -> list:
     if not rules:
         return default_backup_schedule()

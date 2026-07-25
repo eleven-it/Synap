@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from core.backup.models import BackupArtifact, BackupJob
 from core.backup.services import config as backup_config
+from core.backup.services import bootstrap as bootstrap_svc
 from core.backup.services import manifest as manifest_svc
 from core.backup.services import mysql_backup, postgres_backup, prechecks, sftp_upload
 
@@ -109,6 +110,7 @@ def run_job(job: BackupJob, *, dry_run: bool = False) -> BackupJob:
     postgres_wal_range = None
     mysql_ok = False
     postgres_ok = False
+    bootstrap_notes: List[str] = []
 
     disk = prechecks.check_disk_space(job_dir)
     if not disk.ok:
@@ -225,6 +227,26 @@ def run_job(job: BackupJob, *, dry_run: bool = False) -> BackupJob:
         else:
             engine_errors["postgres"] = pg_result.error
 
+        # Capa B: bootstrap (.env cifrado + AFIP + inventory) — solo full
+        boot = bootstrap_svc.build_bootstrap_bundle(
+            job_dir,
+            job_id=str(job.id),
+            base_mysql=job.base_mysql,
+            dry_run=dry_run,
+        )
+        if boot.success and boot.relative_paths:
+            manifest_entries.extend(
+                _artifact_entries_from_paths(
+                    BackupArtifact.ENGINE_BOOTSTRAP,
+                    boot.relative_paths,
+                    boot.absolute_paths,
+                )
+            )
+        # Avisos (p. ej. sin frase → sin .env) no marcan fallo de engines de datos
+        bootstrap_notes = list(boot.warnings or [])
+        if not boot.success:
+            bootstrap_notes.append(boot.error or "Error al generar paquete bootstrap.")
+
     manifest_path = job_dir / "manifest.json"
     manifest_data = manifest_svc.build_manifest_data(
         job_id=str(job.id),
@@ -251,7 +273,7 @@ def run_job(job: BackupJob, *, dry_run: bool = False) -> BackupJob:
 
     _register_artifacts(job, manifest_entries)
 
-    _write_log(log_path, job, engine_errors, mysql_ok, postgres_ok)
+    _write_log(log_path, job, engine_errors, mysql_ok, postgres_ok, bootstrap_notes=bootstrap_notes)
 
     if job.job_type == BackupJob.JOB_TYPE_INCREMENTAL:
         if mysql_ok and postgres_ok:
@@ -306,7 +328,11 @@ def run_job(job: BackupJob, *, dry_run: bool = False) -> BackupJob:
 def _format_engine_errors(errors: Dict[str, str]) -> str:
     parts = []
     for engine, msg in errors.items():
-        label = {"mysql": "MySQL", "postgres": "PostgreSQL"}.get(engine, engine)
+        label = {
+            "mysql": "MySQL",
+            "postgres": "PostgreSQL",
+            "bootstrap": "Bootstrap",
+        }.get(engine, engine)
         parts.append(f"{label}: {msg}")
     return "\n".join(parts)
 
@@ -328,6 +354,7 @@ def _write_log(
     engine_errors: Dict[str, str],
     mysql_ok: bool,
     postgres_ok: bool,
+    bootstrap_notes: Optional[List[str]] = None,
 ) -> None:
     lines = [
         f"Job {job.id} tipo={job.job_type} base={job.base_mysql}",
@@ -339,6 +366,10 @@ def _write_log(
         lines.append("Errores por engine:")
         for eng, msg in engine_errors.items():
             lines.append(f"  - {eng}: {msg}")
+    if bootstrap_notes:
+        lines.append("Avisos bootstrap:")
+        for note in bootstrap_notes:
+            lines.append(f"  - {note}")
     log_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

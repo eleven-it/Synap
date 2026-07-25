@@ -274,6 +274,41 @@
           </p>
         </div>
       </div>
+
+      {# ══ F. Bootstrap / frase .env ══ #}
+      <div class="mb-5 rounded-2xl border border-amber-200/80 bg-white shadow-sm dark:border-amber-900/50 dark:bg-slate-800">
+        <div class="flex items-center gap-3 border-b border-amber-100 px-5 py-4 dark:border-amber-900/40">
+          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
+            <span class="material-icons text-lg" aria-hidden="true">vpn_key</span>
+          </span>
+          <div>
+            <h2 class="font-semibold text-slate-900 dark:text-white">Paquete bootstrap (restore)</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              En cada full se genera <code class="rounded bg-slate-100 px-1 dark:bg-slate-900">bootstrap/</code>
+              con <code class="rounded bg-slate-100 px-1 dark:bg-slate-900">.env</code> cifrado, AFIP e inventario.
+            </p>
+          </div>
+        </div>
+        <div class="space-y-3 p-5">
+          <label for="bootstrap_passphrase" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Frase de cifrado del archivo <code>.env</code>
+          </label>
+          <input type="password" id="bootstrap_passphrase" name="bootstrap_passphrase" value=""
+                 autocomplete="new-password"
+                 class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                 placeholder="{% if has_bootstrap_passphrase %}•••• (sin cambiar){% else %}Defina una frase larga y única{% endif %}">
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="bootstrap_clear_passphrase" name="bootstrap_clear_passphrase" value="1"
+                   class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+            <label for="bootstrap_clear_passphrase" class="text-xs text-slate-600 dark:text-slate-300">Borrar frase guardada</label>
+          </div>
+          <p class="flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-200/90">
+            <span class="material-icons text-sm" aria-hidden="true">warning</span>
+            Guarde esta frase en un gestor de contraseñas <strong>fuera</strong> de Synap.
+            Sin ella no podrá descifrar <code>env.enc</code> en un restore. No la suba junto al backup.
+          </p>
+        </div>
+      </div>
     </div>
 
     {# ══ Footer sticky ══ #}

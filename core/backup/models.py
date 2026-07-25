@@ -60,6 +60,15 @@ class BackupSettings(models.Model):
         default="",
         verbose_name="Ruta a clave privada SFTP (opcional)",
     )
+    bootstrap_passphrase_encrypted = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Frase de cifrado del paquete .env (bootstrap)",
+        help_text=(
+            "Se usa para cifrar .env en cada full. Guarde una copia fuera de Synap "
+            "(gestor de contraseñas). Sin ella el restore no puede descifrar env.enc."
+        ),
+    )
     schedule_json = models.JSONField(
         default=default_backup_schedule,
         verbose_name="Reglas de programación",
@@ -179,12 +188,14 @@ class BackupArtifact(models.Model):
     ENGINE_POSTGRES = "postgres"
     ENGINE_MYSQL_BINLOG = "mysql_binlog"
     ENGINE_POSTGRES_WAL = "postgres_wal"
+    ENGINE_BOOTSTRAP = "bootstrap"
     ENGINE_MANIFEST = "manifest"
     ENGINE_CHOICES = [
         (ENGINE_MYSQL, "MySQL"),
         (ENGINE_POSTGRES, "PostgreSQL"),
         (ENGINE_MYSQL_BINLOG, "MySQL binlog"),
         (ENGINE_POSTGRES_WAL, "PostgreSQL WAL"),
+        (ENGINE_BOOTSTRAP, "Bootstrap (.env/AFIP)"),
         (ENGINE_MANIFEST, "Manifest"),
     ]
 

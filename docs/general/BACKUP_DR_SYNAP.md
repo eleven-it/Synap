@@ -26,6 +26,7 @@ Toda la configuración operativa vive en el singleton **`BackupSettings`** (pk=1
 | Directorio WAL | Segmentos WAL archivados (PostgreSQL incremental) |
 | SFTP | Host, puerto, usuario, ruta remota, clave opcional |
 | Contraseña SFTP | Cifrada en Postgres (Fernet derivado de `SECRET_KEY`) |
+| Frase bootstrap `.env` | Cifrada en Postgres; cifra el `.env` empaquetado en cada **full** (`env.enc`) |
 | Programación semanal | JSON `{dow, time, job_type}` — **dow: 0=lunes … 6=domingo** |
 
 **Default programación:** lun–sáb 02:00 incremental, dom 03:00 full.
@@ -90,7 +91,25 @@ docker exec Synap_app python manage.py backup_run --prune
 
 # Restore asistido (MVP — muestra pasos, no ejecuta)
 docker exec Synap_app python manage.py backup_restore --manifest=/ruta/manifest.json
+
+# Descifrar .env del paquete bootstrap (frase offline; no requiere Postgres)
+docker exec Synap_app python manage.py backup_decrypt_env \
+  --input=/ruta/bootstrap/env.enc --output=./.env
 ```
+
+## Paquete bootstrap (capa B, solo full)
+
+En cada job **full** el orquestador genera `bootstrap/` junto a dumps MySQL/Postgres:
+
+| Archivo | Contenido |
+|---------|-----------|
+| `env.enc` | `.env` cifrado (Fernet derivado de la frase de la UI) |
+| `env.sha256` | Checksum del `.env` en claro (verificación post-descifrado) |
+| `inventory.json` | Git SHA, hosts/puertos DB, `SITE_URL`, sin secretos |
+| `afip/` | Certificados si existen en el volumen AFIP |
+| `RESTORE.md` | Puntero al runbook |
+
+Sin frase configurada: se generan inventory/AFIP/RESTORE y el job **sigue** (avisos en `backup.log`); no se incluye `.env`. La frase debe guardarse **fuera** de Synap (gestor de contraseñas). Migración: `0017_backupsettings_bootstrap_passphrase`.
 
 ## Estructura local
 
@@ -102,6 +121,11 @@ docker exec Synap_app python manage.py backup_restore --manifest=/ruta/manifest.
         manifest.json
         mysql/<base>.sql.gz
         postgres/full.dump
+        bootstrap/
+          env.enc
+          inventory.json
+          afip/...
+          RESTORE.md
         mysql_binlog/...
         postgres_wal/...
         backup.log
@@ -109,11 +133,18 @@ docker exec Synap_app python manage.py backup_restore --manifest=/ruta/manifest.
 
 ## Restore (MVP)
 
+Runbook completo (inventario de instalación, mapa `.env`/AFIP, estrategia 3 capas, sin VHDX):
+
+**[RESTORE_RUNBOOK_SYNAP.md](RESTORE_RUNBOOK_SYNAP.md)**
+
+Pasos resumidos:
+
 1. Obtener manifest + artefactos desde local o SFTP.
-2. Verificar SHA256 del manifest contra archivos.
-3. **PostgreSQL:** `pg_restore -d $POSTGRES_DB --clean --if-exists postgres/full.dump`
-4. **MySQL:** `gunzip -c mysql/<base>.sql.gz | mysql ... <base>`
-5. Aplicar binlog/WAL incrementales según procedimiento DBA (PITR).
+2. Descifrar `bootstrap/env.enc` → `.env` (`backup_decrypt_env`) y restaurar AFIP.
+3. Verificar SHA256 del manifest contra archivos.
+4. **PostgreSQL:** `pg_restore -d $POSTGRES_DB --clean --if-exists postgres/full.dump`
+5. **MySQL:** `gunzip -c mysql/<base>.sql.gz | mysql ... <base>`
+6. Aplicar binlog/WAL incrementales según procedimiento DBA (PITR).
 
 Use `manage.py backup_restore --manifest=...` para ver comandos sugeridos.
 
@@ -164,6 +195,7 @@ Página única con secciones (una por área de la job), Alpine para interacción
 | **C. Destino local** | Ruta en disco; días de retención | `local_root`, `retention_days` |
 | **D. Copia remota SFTP** | Toggle habilitar; host/puerto/usuario/ruta remota; password (vacío = no cambiar; casilla «borrar»); ruta clave SSH; botón «Probar conexión» (AJAX) | `sftp_enabled`, `sftp_host`, `sftp_port`, `sftp_user`, `sftp_remote_path`, `sftp_password`, `sftp_clear_password`, `sftp_key_path` |
 | **E. Incremental Postgres** | Directorio WAL archivados (ayuda: lo configura el DBA, el supervisor solo indica la carpeta) | `pg_wal_archive_dir` |
+| **F. Bootstrap / frase `.env`** | Password (vacío = no cambiar; casilla «borrar»); aviso de guardar fuera de Synap | `bootstrap_passphrase`, `bootstrap_clear_passphrase` |
 
 Notas de comportamiento:
 
