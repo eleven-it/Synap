@@ -27,6 +27,7 @@ Toda la configuración operativa vive en el singleton **`BackupSettings`** (pk=1
 | SFTP | Host, puerto, usuario, ruta remota, clave opcional |
 | Contraseña SFTP | Cifrada en Postgres (Fernet derivado de `SECRET_KEY`) |
 | Frase bootstrap `.env` | Cifrada en Postgres; cifra el `.env` empaquetado en cada **full** (`env.enc`) |
+| Notificaciones correo | Destinatarios + eventos (éxito / parcial·SFTP / fallo); usa correo saliente Synap |
 | Programación semanal | JSON `{dow, time, job_type}` — **dow: 0=lunes … 6=domingo** |
 
 **Default programación:** lun–sáb 02:00 incremental, dom 03:00 full.
@@ -110,6 +111,20 @@ En cada job **full** el orquestador genera `bootstrap/` junto a dumps MySQL/Post
 | `RESTORE.md` | Puntero al runbook |
 
 Sin frase configurada: se generan inventory/AFIP/RESTORE y el job **sigue** (avisos en `backup.log`); no se incluye `.env`. La frase debe guardarse **fuera** de Synap (gestor de contraseñas). Migración: `0017_backupsettings_bootstrap_passphrase`.
+
+## Notificaciones por correo
+
+Al finalizar cada job (también fallos de precheck), Synap puede enviar un mail de texto con estado, errores, enlace al detalle y **acciones de remediación** sugeridas.
+
+| Campo UI | Default | Efecto |
+|----------|---------|--------|
+| Activar notificaciones | off | Master switch |
+| Destinatarios | — | Lista de emails |
+| Fallo total | on | `failed` |
+| Parcial / SFTP fallido | on | `partial_failed` o `completed` + SFTP `failed` |
+| Éxito completo | off | `completed` sin fallo SFTP |
+
+Requisito: **Correo saliente** configurado (`/core/configuracion/correo-saliente/`). Si SMTP no está listo, el job **no falla**: solo se registra warning en log. Implementación: `core/backup/services/notify.py` + helper `enviar_correo_saliente` en `core/services/outbound_email.py`. Migración: `0018_backupsettings_notify_email`.
 
 ## Estructura local
 
@@ -196,6 +211,7 @@ Página única con secciones (una por área de la job), Alpine para interacción
 | **D. Copia remota SFTP** | Toggle habilitar; host/puerto/usuario/ruta remota; password (vacío = no cambiar; casilla «borrar»); ruta clave SSH; botón «Probar conexión» (AJAX) | `sftp_enabled`, `sftp_host`, `sftp_port`, `sftp_user`, `sftp_remote_path`, `sftp_password`, `sftp_clear_password`, `sftp_key_path` |
 | **E. Incremental Postgres** | Directorio WAL archivados (ayuda: lo configura el DBA, el supervisor solo indica la carpeta) | `pg_wal_archive_dir` |
 | **F. Bootstrap / frase `.env`** | Password (vacío = no cambiar; casilla «borrar»); aviso de guardar fuera de Synap | `bootstrap_passphrase`, `bootstrap_clear_passphrase` |
+| **G. Notificaciones correo** | Toggle; destinatarios; checkboxes éxito/parcial/fallo; enlace a correo saliente | `notify_email_enabled`, `notify_email_to`, `notify_on_success`, `notify_on_partial`, `notify_on_failure` |
 
 Notas de comportamiento:
 

@@ -69,6 +69,28 @@ class BackupSettings(models.Model):
             "(gestor de contraseñas). Sin ella el restore no puede descifrar env.enc."
         ),
     )
+    notify_email_enabled = models.BooleanField(
+        default=False,
+        verbose_name="Notificar por correo el resultado del backup",
+    )
+    notify_email_to = models.TextField(
+        blank=True,
+        default="",
+        verbose_name="Destinatarios de notificación",
+        help_text="Uno o más emails separados por coma, punto y coma o salto de línea.",
+    )
+    notify_on_success = models.BooleanField(
+        default=False,
+        verbose_name="Avisar también cuando el backup termina OK",
+    )
+    notify_on_partial = models.BooleanField(
+        default=True,
+        verbose_name="Avisar en fallo parcial o SFTP fallido",
+    )
+    notify_on_failure = models.BooleanField(
+        default=True,
+        verbose_name="Avisar cuando el backup falla",
+    )
     schedule_json = models.JSONField(
         default=default_backup_schedule,
         verbose_name="Reglas de programación",

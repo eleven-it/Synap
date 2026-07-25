@@ -309,6 +309,65 @@
           </p>
         </div>
       </div>
+
+      {# ══ G. Notificaciones por correo ══ #}
+      <div class="mb-5 rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+        <div class="flex items-center gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+          <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-200">
+            <span class="material-icons text-lg" aria-hidden="true">mail</span>
+          </span>
+          <div>
+            <h2 class="font-semibold text-slate-900 dark:text-white">Notificaciones por correo</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              Avisos al terminar cada job (éxito, parcial, fallo o SFTP). Requiere
+              <a href="{% url 'core:outbound_email_config' %}" class="font-medium text-emerald-700 underline dark:text-emerald-300">correo saliente</a>
+              configurado.
+            </p>
+          </div>
+        </div>
+        <div class="space-y-4 p-5" x-data="{ notifyOn: {{ backup_settings.notify_email_enabled|yesno:'true,false' }} }">
+          <label class="flex cursor-pointer items-center gap-3">
+            <input type="checkbox" name="notify_email_enabled" value="1" x-model="notifyOn"
+                   class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                   {% if backup_settings.notify_email_enabled %}checked{% endif %}>
+            <span class="text-sm font-medium text-slate-800 dark:text-slate-100">Activar notificaciones de backup</span>
+          </label>
+          <div x-show="notifyOn" x-cloak class="space-y-3">
+            <div>
+              <label for="notify_email_to" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Destinatarios</label>
+              <textarea id="notify_email_to" name="notify_email_to" rows="2"
+                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
+                        placeholder="ops@empresa.com, supervisor@empresa.com">{{ backup_settings.notify_email_to }}</textarea>
+              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Separe con coma o una dirección por línea.</p>
+            </div>
+            <fieldset class="space-y-2">
+              <legend class="text-sm font-medium text-slate-700 dark:text-slate-300">Cuándo enviar</legend>
+              <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input type="checkbox" name="notify_on_failure" value="1"
+                       class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                       {% if backup_settings.notify_on_failure %}checked{% endif %}>
+                Fallo total (dumps no generados / prechecks)
+              </label>
+              <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input type="checkbox" name="notify_on_partial" value="1"
+                       class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                       {% if backup_settings.notify_on_partial %}checked{% endif %}>
+                Fallo parcial o subida SFTP fallida
+              </label>
+              <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input type="checkbox" name="notify_on_success" value="1"
+                       class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                       {% if backup_settings.notify_on_success %}checked{% endif %}>
+                Éxito completo (también si SFTP está omitido)
+              </label>
+            </fieldset>
+            <p class="flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+              <span class="material-icons text-sm text-slate-400" aria-hidden="true">info</span>
+              El mail incluye estado, errores y acciones sugeridas de remediación, con enlace al detalle del job.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
 
     {# ══ Footer sticky ══ #}
