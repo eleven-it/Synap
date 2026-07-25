@@ -928,40 +928,70 @@ def enriquecer_filas_tablero_indicadores_fabricando(
         fila["fabricando_sin_maquina"] = fabricando_sin_maquina
         fila["maquinas_asignadas"] = maquinas_asignadas
 
-        roster_por_linea: Dict[str, Dict[str, List[str]]] = {}
+        grupos_por_linea: Dict[Any, Dict[str, Any]] = {}
         for m in maquinas_asignadas:
             lid = _to_int(m.get("id_linea"))
-            if lid is None:
-                continue
-            linea_nom = linea_nombre_por_id.get(lid, m.get("linea_nombre") or f"Línea {lid}")
-            if linea_nom in roster_por_linea:
-                continue
-            ops = operarios_celda.get(lid, {})
-            roster_por_linea[linea_nom] = {
-                "manana": [o.get("nombre", "") for o in (ops.get("manana") or []) if o.get("nombre")],
-                "tarde": [o.get("nombre", "") for o in (ops.get("tarde") or []) if o.get("nombre")],
-                "noche": [o.get("nombre", "") for o in (ops.get("noche") or []) if o.get("nombre")],
-            }
-
-        parte_hoy: List[Dict[str, Any]] = []
-        for m in maquinas_asignadas:
+            key = lid if lid is not None else "__sin_linea__"
+            if key not in grupos_por_linea:
+                linea_nom = (
+                    linea_nombre_por_id.get(lid, m.get("linea_nombre") or f"Línea {lid}")
+                    if lid is not None
+                    else "Sin fila"
+                )
+                ops = operarios_celda.get(lid, {}) if lid is not None else {}
+                grupos_por_linea[key] = {
+                    "nombre": linea_nom,
+                    "id_linea": lid,
+                    "roster": {
+                        "manana": [
+                            o.get("nombre", "")
+                            for o in (ops.get("manana") or [])
+                            if o.get("nombre")
+                        ],
+                        "tarde": [
+                            o.get("nombre", "")
+                            for o in (ops.get("tarde") or [])
+                            if o.get("nombre")
+                        ],
+                        "noche": [
+                            o.get("nombre", "")
+                            for o in (ops.get("noche") or [])
+                            if o.get("nombre")
+                        ],
+                    },
+                    "maquinas": [],
+                }
             mid = m["id"]
             cant = cantidades_map.get((mid, aid), _franjas_cantidad_vacias())
-            etiqueta = f"{m['codigo']} {m['nombre']}".strip() or m["nombre"]
-            parte_hoy.append(
+            franjas = _serializar_cantidad_franjas(cant)
+            grupos_por_linea[key]["maquinas"].append(
                 {
-                    "maquina": etiqueta,
-                    **_serializar_cantidad_franjas(cant),
+                    "id": mid,
+                    "codigo": m.get("codigo") or "",
+                    "nombre": m.get("nombre") or "",
+                    "manana": franjas.get("manana", 0),
+                    "tarde": franjas.get("tarde", 0),
+                    "noche": franjas.get("noche", 0),
+                    "tiene_parte": any(
+                        float(franjas.get(f) or 0) > 0
+                        for f in ("manana", "tarde", "noche")
+                    ),
                 }
             )
+
+        def _ord_grupo(item: Tuple[Any, Dict[str, Any]]) -> Tuple[int, str]:
+            key, g = item
+            if key == "__sin_linea__":
+                return (9_999_999, g.get("nombre") or "")
+            return (int(key) if isinstance(key, int) else 9_999_998, g.get("nombre") or "")
+
+        grupos_fila = [g for _, g in sorted(grupos_por_linea.items(), key=_ord_grupo)]
 
         fabricando_detalle = {
             "articulo": str(fila.get("descripcion_articulo") or ""),
             "codigo": str(fila.get("codigo_manual") or ""),
             "fabricando_pares": enviado,
-            "maquinas": maquinas_asignadas,
-            "roster_por_linea": roster_por_linea,
-            "parte_hoy": parte_hoy,
+            "grupos_fila": grupos_fila,
             "fecha_iso": fecha_iso,
             "fecha_ddmmyyyy": fecha_ddmmyyyy,
         }

@@ -201,106 +201,123 @@
                     </div>
                 </div>
 
-                {# Modal detalle Fabricando (máquinas / roster / parte) — solo modo Par #}
+                {# Modal detalle Fabricando — agrupado por fila (máquinas + parte + operarios) #}
                 <div x-show="fabDetalleOpen"
                      x-cloak
-                     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+                     class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm"
                      @keydown.escape.window="cerrarFabDetalle()"
                      x-transition.opacity>
-                    <div class="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-600 dark:bg-slate-800"
+                    <div class="flex max-h-[min(90dvh,40rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-violet-200/80 bg-gradient-to-b from-violet-50/90 via-white to-slate-50 shadow-2xl dark:border-violet-800/50 dark:from-violet-950/40 dark:via-slate-800 dark:to-slate-900"
                          @click.stop
                          role="dialog"
                          aria-modal="true"
                          aria-labelledby="fab-detalle-titulo">
                         <template x-if="fabDetalle">
-                            <div>
-                                <div class="mb-4 flex items-start gap-3">
-                                    <span class="material-icons text-violet-500" aria-hidden="true">precision_manufacturing</span>
-                                    <div class="min-w-0 flex-1">
-                                        <h3 id="fab-detalle-titulo" class="text-sm font-semibold text-slate-800 dark:text-slate-100">Fabricando — detalle</h3>
-                                        <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                                            <span x-text="fabDetalle.codigo"></span>
-                                            <span x-show="fabDetalle.codigo && fabDetalle.articulo"> — </span>
-                                            <span x-text="fabDetalle.articulo"></span>
-                                        </p>
-                                        <p class="mt-1 text-xs tabular-nums text-violet-700 dark:text-violet-300">
-                                            Cupo fabricando:
-                                            <strong x-text="Math.round(fabDetalle.fabricando_pares || 0)"></strong> pares
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div class="mb-4 space-y-3 text-xs text-slate-600 dark:text-slate-300">
-                                    <div x-show="fabDetalle.maquinas && fabDetalle.maquinas.length">
-                                        <p class="mb-1 font-semibold uppercase tracking-wide text-[10px] text-slate-500 dark:text-slate-400">Máquinas asignadas</p>
-                                        <ul class="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-600 dark:bg-slate-900/50">
-                                            <template x-for="m in fabDetalle.maquinas" :key="m.id">
-                                                <li class="flex flex-wrap gap-1">
-                                                    <span class="font-medium text-slate-800 dark:text-slate-100" x-text="(m.codigo ? m.codigo + ' — ' : '') + m.nombre"></span>
-                                                    <span x-show="m.linea_nombre" class="text-slate-500 dark:text-slate-400" x-text="'(' + m.linea_nombre + ')'"></span>
-                                                </li>
-                                            </template>
-                                        </ul>
-                                    </div>
-
-                                    <template x-for="[linea, franjas] in Object.entries(fabDetalle.roster_por_linea || {})" :key="linea">
-                                        <div>
-                                            <p class="mb-1 font-semibold uppercase tracking-wide text-[10px] text-slate-500 dark:text-slate-400">
-                                                Roster — <span x-text="linea"></span>
+                            <div class="flex min-h-0 flex-1 flex-col">
+                                <header class="flex-shrink-0 border-b border-violet-200/70 bg-violet-600 px-5 py-4 text-white dark:border-violet-700 dark:bg-violet-800">
+                                    <div class="flex items-start gap-3">
+                                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/15" aria-hidden="true">
+                                            <span class="material-icons text-2xl">precision_manufacturing</span>
+                                        </span>
+                                        <div class="min-w-0 flex-1">
+                                            <h3 id="fab-detalle-titulo" class="text-sm font-bold tracking-tight">Fabricando</h3>
+                                            <p class="mt-0.5 truncate text-xs text-violet-100">
+                                                <span x-show="fabDetalle.codigo" x-text="fabDetalle.codigo"></span>
+                                                <span x-show="fabDetalle.codigo && fabDetalle.articulo"> · </span>
+                                                <span x-text="fabDetalle.articulo"></span>
                                             </p>
-                                            <div class="grid grid-cols-3 gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-600 dark:bg-slate-900/50">
-                                                <div>
-                                                    <p class="text-[10px] font-medium text-slate-400">Mañana</p>
-                                                    <p class="text-[11px] leading-snug" x-text="(franjas.manana && franjas.manana.length) ? franjas.manana.join(', ') : '—'"></p>
+                                            <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-400/95 px-2.5 py-1 text-xs font-bold tabular-nums text-amber-950 shadow-sm">
+                                                <span class="material-icons text-sm" aria-hidden="true">inventory_2</span>
+                                                Cupo:
+                                                <span x-text="Math.round(fabDetalle.fabricando_pares || 0).toLocaleString('es-AR')"></span>
+                                                pares
+                                                <span class="font-medium text-amber-800/80">· <span x-text="fabDetalle.fecha_ddmmyyyy"></span></span>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </header>
+
+                                <div class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
+                                    <template x-for="(grupo, gIdx) in (fabDetalle.grupos_fila || [])" :key="grupo.id_linea != null ? grupo.id_linea : ('g-' + gIdx)">
+                                        <section class="overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-600 dark:bg-slate-800/80">
+                                            <div class="flex items-center gap-2 border-b border-teal-200/80 bg-teal-600 px-3 py-2 dark:border-teal-800 dark:bg-teal-800">
+                                                <span class="material-icons text-base text-teal-100" aria-hidden="true">view_week</span>
+                                                <h4 class="text-sm font-bold text-white" x-text="grupo.nombre"></h4>
+                                            </div>
+
+                                            {# Operarios por turno — chips de color #}
+                                            <div class="grid grid-cols-3 gap-px bg-slate-200/80 dark:bg-slate-700">
+                                                <div class="bg-amber-50 px-2.5 py-2 dark:bg-amber-950/35">
+                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Mañana</p>
+                                                    <p class="mt-0.5 text-[11px] font-semibold leading-snug text-amber-950 dark:text-amber-100"
+                                                       x-text="(grupo.roster && grupo.roster.manana && grupo.roster.manana.length) ? grupo.roster.manana.join(', ') : '—'"></p>
                                                 </div>
-                                                <div>
-                                                    <p class="text-[10px] font-medium text-slate-400">Tarde</p>
-                                                    <p class="text-[11px] leading-snug" x-text="(franjas.tarde && franjas.tarde.length) ? franjas.tarde.join(', ') : '—'"></p>
+                                                <div class="bg-sky-50 px-2.5 py-2 dark:bg-sky-950/35">
+                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-sky-700 dark:text-sky-300">Tarde</p>
+                                                    <p class="mt-0.5 text-[11px] font-semibold leading-snug text-sky-950 dark:text-sky-100"
+                                                       x-text="(grupo.roster && grupo.roster.tarde && grupo.roster.tarde.length) ? grupo.roster.tarde.join(', ') : '—'"></p>
                                                 </div>
-                                                <div>
-                                                    <p class="text-[10px] font-medium text-slate-400">Noche</p>
-                                                    <p class="text-[11px] leading-snug" x-text="(franjas.noche && franjas.noche.length) ? franjas.noche.join(', ') : '—'"></p>
+                                                <div class="bg-violet-50 px-2.5 py-2 dark:bg-violet-950/40">
+                                                    <p class="text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300">Noche</p>
+                                                    <p class="mt-0.5 text-[11px] font-semibold leading-snug text-violet-950 dark:text-violet-100"
+                                                       x-text="(grupo.roster && grupo.roster.noche && grupo.roster.noche.length) ? grupo.roster.noche.join(', ') : '—'"></p>
                                                 </div>
                                             </div>
-                                        </div>
+
+                                            {# Máquinas + parte del día unificados #}
+                                            <ul class="divide-y divide-slate-100 dark:divide-slate-700/80">
+                                                <template x-for="m in (grupo.maquinas || [])" :key="m.id">
+                                                    <li class="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                                                        :class="m.tiene_parte ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''">
+                                                        <div class="flex min-w-0 items-center gap-2">
+                                                            <span class="inline-flex h-7 min-w-[2rem] items-center justify-center rounded-md bg-slate-800 px-1.5 text-[11px] font-bold tabular-nums text-white dark:bg-violet-700"
+                                                                  x-text="m.codigo || m.id"></span>
+                                                            <span class="truncate text-xs font-medium text-slate-800 dark:text-slate-100"
+                                                                  x-text="m.nombre"></span>
+                                                        </div>
+                                                        <div class="flex flex-wrap items-center gap-1.5" title="Parte del día (pares)">
+                                                            <span class="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+                                                                  :class="(m.manana || 0) > 0 ? 'bg-amber-200 text-amber-950 dark:bg-amber-700 dark:text-amber-50' : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500'">
+                                                                M <span x-text="(m.manana || 0) > 0 ? m.manana : '—'"></span>
+                                                            </span>
+                                                            <span class="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+                                                                  :class="(m.tarde || 0) > 0 ? 'bg-sky-200 text-sky-950 dark:bg-sky-700 dark:text-sky-50' : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500'">
+                                                                T <span x-text="(m.tarde || 0) > 0 ? m.tarde : '—'"></span>
+                                                            </span>
+                                                            <span class="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+                                                                  :class="(m.noche || 0) > 0 ? 'bg-violet-200 text-violet-950 dark:bg-violet-700 dark:text-violet-50' : 'bg-slate-100 text-slate-400 dark:bg-slate-700 dark:text-slate-500'">
+                                                                N <span x-text="(m.noche || 0) > 0 ? m.noche : '—'"></span>
+                                                            </span>
+                                                        </div>
+                                                    </li>
+                                                </template>
+                                            </ul>
+                                        </section>
                                     </template>
 
-                                    <div x-show="fabDetalle.parte_hoy && fabDetalle.parte_hoy.length">
-                                        <p class="mb-1 font-semibold uppercase tracking-wide text-[10px] text-slate-500 dark:text-slate-400">
-                                            Parte del día (<span x-text="fabDetalle.fecha_ddmmyyyy"></span>)
-                                        </p>
-                                        <ul class="space-y-1 rounded-lg border border-slate-200 bg-slate-50 p-2 dark:border-slate-600 dark:bg-slate-900/50">
-                                            <template x-for="(p, idx) in fabDetalle.parte_hoy" :key="idx">
-                                                <li class="flex flex-wrap items-baseline justify-between gap-2">
-                                                    <span class="font-medium text-slate-800 dark:text-slate-100" x-text="p.maquina"></span>
-                                                    <span class="tabular-nums text-slate-500 dark:text-slate-400">
-                                                        M: <span x-text="p.manana != null ? p.manana : '—'"></span>
-                                                        · T: <span x-text="p.tarde != null ? p.tarde : '—'"></span>
-                                                        · N: <span x-text="p.noche != null ? p.noche : '—'"></span>
-                                                    </span>
-                                                </li>
-                                            </template>
-                                        </ul>
-                                    </div>
+                                    <p x-show="!(fabDetalle.grupos_fila && fabDetalle.grupos_fila.length)"
+                                       class="rounded-lg border border-dashed border-slate-300 bg-white px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-600 dark:bg-slate-800/50 dark:text-slate-400">
+                                        Sin máquinas asignadas para este artículo.
+                                    </p>
                                 </div>
 
-                                <div class="flex flex-wrap justify-end gap-2">
+                                <footer class="flex flex-shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 bg-white/90 px-4 py-3 dark:border-slate-600 dark:bg-slate-800/90 sm:px-5">
                                     <button type="button"
                                             @click="cerrarFabDetalle()"
-                                            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+                                            class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
                                         Cerrar
                                     </button>
                                     <a :href="'{% url 'mpr:parte_produccion' %}?fecha=' + encodeURIComponent(fabDetalle.fecha_ddmmyyyy)"
-                                       class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
+                                       class="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400">
                                         <span class="material-icons text-sm" aria-hidden="true">assignment</span>
                                         Ir al parte
                                     </a>
                                     <a :href="'{% url 'mpr:clasificacion_produccion' %}?fecha=' + encodeURIComponent(fabDetalle.fecha_ddmmyyyy)"
-                                       class="inline-flex items-center gap-1 rounded-lg bg-teal-600 px-4 py-2 text-xs font-medium text-white hover:bg-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 dark:bg-teal-700 dark:hover:bg-teal-600">
+                                       class="inline-flex items-center gap-1 rounded-lg bg-teal-600 px-4 py-2 text-xs font-semibold text-white hover:bg-teal-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400">
                                         <span class="material-icons text-sm" aria-hidden="true">fact_check</span>
                                         Ir a CC
                                     </a>
-                                </div>
+                                </footer>
                             </div>
                         </template>
                     </div>
