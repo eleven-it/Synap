@@ -2,6 +2,8 @@
 
 Ruta: `/mpr/tablero-produccion/` · Vista: `mpr.views.TableroProduccionView`
 
+**Chrome / densidad del encabezado:** ver [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) (toolbar clara, iconos+tooltips, sin hero oscuro).
+
 ## Objetivo
 
 El tablero de producción ofrece dos consolidaciones de la demanda en vivo (desde

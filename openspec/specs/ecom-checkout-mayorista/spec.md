@@ -96,15 +96,16 @@ Escenario: Presupuesto no valida stock
 
 ### REQ-CHK-004: Validación de crédito y autorización
 
-El sistema **MUST** calcular la **autorización** del comprobante replicando el legacy: si el cliente tiene comprobantes sin cancelar con **días de atraso mayores a `cliente.credito_limite_dias`** (límite > 0), el comprobante se marca `autorizacion_sistema = 'No Autorizado'`; en caso contrario `'Autorizado'`. Un pedido originado por un **cliente** (autogestión) **MUST** quedar siempre `'No Autorizado'` (revisión backoffice). El exceso de crédito **NO** bloquea el alta (se registra el estado); el alta procede igual con el estado correspondiente.
+El sistema **MUST** calcular la **autorización** del comprobante mediante el evaluador unificado de `ecom-credito-pedidos` cuando `ecom_credito_pedidos_activa` está ON: MUST considerar política por cliente/canal, exposición Balance+All (capas ON/OFF), monto y mora en días; MUST persistir snapshot de evaluación (motivos, capas, totales) junto al alta. Si `cliente.Credito=0`, MUST NOT rechazar por tope monetario. Con flag OFF MUST mantener evaluación legacy solo-días. Un pedido originado por **cliente** (autogestión) **MUST** quedar siempre `'No Autorizado'`. El exceso de crédito MUST NOT bloquear el alta; MUST registrarse el estado correspondiente y, en fase B, activar hold de preparación cuando aplique.
 
 **Acceptance Scenarios:**
 
 ```gherkin
 Escenario: Cliente al día autorizado
-  DADO un cliente sin comprobantes vencidos más allá de su límite de días
+  DADO un cliente sin comprobantes vencidos más allá de su límite de días y exposición dentro de cupo
   CUANDO el vendedor confirma el pedido
   ENTONCES comp_ped.autorizacion_sistema = 'Autorizado'
+  Y MUST persistir snapshot de evaluación cuando flag crédito ON
 ```
 
 ```gherkin
@@ -112,6 +113,24 @@ Escenario: Cliente con atraso excede límite
   DADO un cliente con credito_limite_dias = 30 y un comprobante impago de hace 45 días
   CUANDO el vendedor confirma el pedido
   ENTONCES el pedido se crea con autorizacion_sistema = 'No Autorizado'
+  Y MUST registrarse motivo por días en snapshot
+```
+
+```gherkin
+Escenario: Exceso de exposición monetaria
+  DADO flag crédito ON, cliente con cupo $ finito y exposición + total pedido superan límite
+  CUANDO el vendedor confirma PED
+  ENTONCES MUST crearse comprobante con autorizacion_sistema = 'No Autorizado'
+  Y MUST NOT abortar la transacción de alta por crédito
+  Y MUST incluir motivo por monto en snapshot
+```
+
+```gherkin
+Escenario: Flag crédito OFF — solo días
+  DADO ecom_credito_pedidos_activa desactivado
+  CUANDO se confirma pedido
+  ENTONCES MUST evaluarse únicamente mora en días según reglas legacy
+  Y MUST NOT persistir snapshot de exposición $
 ```
 
 ---

@@ -47,6 +47,8 @@ Documentación del módulo MPR en Synap: flujos, esquema de datos, manual de usu
 | [DISENO_ARMADO_TABLERO_PCP.md](DISENO_ARMADO_TABLERO_PCP.md) | Vista tabla armado PCP (resta armar, 1er fecha entrega, terminado pack). |
 | [ACCIONES_LOTE_TABLERO.md](ACCIONES_LOTE_TABLERO.md) | **Etapa 9 + 10** — Acciones de lote (supersedido por clasificación global E10). Ver también clasificación única desde Producción. |
 | [NAVIGACION_MPR_ETAPA11.md](NAVIGACION_MPR_ETAPA11.md) | **Etapa 11** — Hub de navegación: tablero consolidado como operación diaria; ventana pack/wizard como trazabilidad OPT avanzada; menú, CTAs y `crear_opp_url` → parte de producción. |
+| [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) | **UX** — Toolbar densa del tablero (sin hero oscuro); iconos+tooltips; deprecación UI OPT/ventana_pack salvo procesos no cubiertos por Tablero/Parte/CC. |
+| [TABLERO_PRODUCCION_MODO_PACK_PAR.md](TABLERO_PRODUCCION_MODO_PACK_PAR.md) | Toggle Pack\|Par, envío solo en Par, indicadores Fabricando. |
 
 ## Scripts SQL
 

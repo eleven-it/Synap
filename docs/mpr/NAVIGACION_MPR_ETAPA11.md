@@ -25,6 +25,8 @@ Ver catálogo: [REPORTES_MPR.md](./REPORTES_MPR.md).
 
 Las URLs `/mpr/opt/`, `/mpr/wizard/` y `/mpr/demanda/ventana-pack/` pueden seguir existiendo en código pero **no** aparecen en el menú. Requieren tablas `lista_produccion_*` eliminadas en bases migradas.
 
+**Canon UX (25/07/2026):** el flujo diario de planta es **Tablero → Parte → Control de calidad**. La UI OPT/ventana_pack está **deprecada** como referencia visual y como atajo del tablero, salvo procesos MPR no cubiertos por esas tres pantallas (p. ej. armado). Detalle: [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md).
+
 ## Cambios de menú (`core/utils/utils.py` → `APPS_MENU`)
 
 - **URL del módulo:** `mpr:tablero_produccion` (antes `mpr:tablero`).
