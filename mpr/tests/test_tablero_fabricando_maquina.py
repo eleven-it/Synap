@@ -279,6 +279,8 @@ class TestTableroProduccionViewIndicadoresFabricando(TestCase):
         self.assertIsNotNone(parser.x_data)
         self.assertIn("JSON.parse(raw)", parser.x_data)
         self.assertIn("cerrarFabDetalle", parser.x_data)
+        self.assertIn("mostrarFabMaqTip", parser.x_data)
+        self.assertIn("fabMaqTipOpen", parser.x_data)
 
     @patch("mpr.services_maquina_linea.enriquecer_filas_tablero_indicadores_fabricando")
     @patch("mpr.presentacion_operativa.enriquecer_filas_tablero_presentacion")
