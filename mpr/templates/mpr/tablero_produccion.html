@@ -14,6 +14,10 @@
             masMenuOpen: false,
             fabDetalleOpen: false,
             fabDetalle: null,
+            fabMaqTipOpen: false,
+            fabMaqTipText: '',
+            fabMaqTipX: 0,
+            fabMaqTipY: 0,
             abrirFabDetalle(raw) {
                 let d = raw;
                 if (typeof raw === 'string') {
@@ -27,86 +31,131 @@
             cerrarFabDetalle() {
                 this.fabDetalleOpen = false;
                 this.fabDetalle = null;
+                this.ocultarFabMaqTip();
+            },
+            mostrarFabMaqTip(event, m) {
+                const codigo = (m && (m.codigo || m.id)) != null ? String(m.codigo || m.id) : '';
+                this.fabMaqTipText = codigo ? ('Máquina ' + codigo) : 'Máquina';
+                const pad = 12;
+                let left = event.clientX + pad;
+                let top = event.clientY + pad;
+                const maxW = 220;
+                if (left + maxW > window.innerWidth - 8) {
+                    left = Math.max(8, event.clientX - maxW - pad);
+                }
+                if (top + 40 > window.innerHeight - 8) {
+                    top = Math.max(8, event.clientY - 40 - pad);
+                }
+                this.fabMaqTipX = left;
+                this.fabMaqTipY = top;
+                this.fabMaqTipOpen = true;
+            },
+            moverFabMaqTip(event) {
+                if (!this.fabMaqTipOpen) return;
+                const pad = 12;
+                let left = event.clientX + pad;
+                let top = event.clientY + pad;
+                const maxW = 220;
+                if (left + maxW > window.innerWidth - 8) {
+                    left = Math.max(8, event.clientX - maxW - pad);
+                }
+                if (top + 40 > window.innerHeight - 8) {
+                    top = Math.max(8, event.clientY - 40 - pad);
+                }
+                this.fabMaqTipX = left;
+                this.fabMaqTipY = top;
+            },
+            ocultarFabMaqTip() {
+                this.fabMaqTipOpen = false;
+                this.fabMaqTipText = '';
             }
          }"
          @keydown.escape.window="masMenuOpen = false">
 
-        {# Chrome denso — ver docs/mpr/TABLERO_PRODUCCION_CHROME_DENSIDAD.md #}
-        <div class="mb-2 flex-shrink-0 space-y-2">
-            {# Fila 1: título + modo + KPI + atajos #}
-            <div class="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-800/80 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-3 sm:gap-y-2 sm:px-3">
-                <div class="flex min-w-0 flex-wrap items-center gap-2 sm:items-end">
-                    <h1 class="shrink-0 text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-100 sm:border-r sm:border-slate-200 sm:pr-2.5 dark:sm:border-slate-600">
-                        Tablero de producción
-                    </h1>
-                    <div class="inline-flex h-8 min-w-[8rem] overflow-hidden rounded-lg border border-slate-300 bg-white p-0.5 dark:border-slate-600 dark:bg-slate-900"
-                         role="group" aria-label="Modo de consolidación Pack o Par">
-                        <a href="?{% if modo_query_base %}{{ modo_query_base }}&amp;{% endif %}modo=pack"
-                           {% if modo_tablero == "pack" %}aria-current="true"{% endif %}
-                           title="Pack = terminado (PCP, pedido + reserva, sin explosión BOM)"
-                           class="inline-flex min-h-7 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap {% if modo_tablero == 'pack' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800{% endif %}">Pack</a>
-                        <a href="?{% if modo_query_base %}{{ modo_query_base }}&amp;{% endif %}modo=par"
-                           {% if modo_tablero == "par" %}aria-current="true"{% endif %}
-                           title="Par = componente BOM (base del envío a producción)"
-                           class="inline-flex min-h-7 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap {% if modo_tablero == 'par' %}bg-purple-600 text-white shadow-sm{% else %}text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800{% endif %}">Par</a>
+        {# Chrome estilo hub Pedidos (slate-800) — docs/mpr/TABLERO_PRODUCCION_CHROME_DENSIDAD.md #}
+        <div class="mb-3 flex-shrink-0">
+            <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
+                <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl">Tablero de producción</h1>
+
+                    <div class="relative min-w-[10rem] flex-1 max-w-md">
+                        <label class="sr-only" for="tablero-prod-busqueda">Buscar artículo</label>
+                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400" aria-hidden="true">
+                            <span class="material-icons text-lg">search</span>
+                        </span>
+                        <input id="tablero-prod-busqueda"
+                               type="search"
+                               x-model="busqueda"
+                               placeholder="Buscar artículo…"
+                               autocomplete="off"
+                               class="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-1.5 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
+                        <button type="button"
+                                x-show="busqueda.trim()"
+                                x-cloak
+                                @click="busqueda=''"
+                                class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                                title="Limpiar búsqueda"
+                                aria-label="Limpiar búsqueda">
+                            <span class="material-icons text-base">close</span>
+                        </button>
                     </div>
-                    {% if modo_tablero == "pack" %}
-                    {% if solo_sin_receta %}
-                    <a href="?{% if presentacion_query_base %}{{ presentacion_query_base }}&amp;{% endif %}solo_sin_receta=0"
-                       class="inline-flex h-8 items-center gap-1 rounded-lg bg-amber-600 px-2 text-[11px] font-semibold text-white transition-colors hover:bg-amber-500"
-                       title="Mostrar solo packs sin BOM/receta">
-                        <span class="material-icons text-xs" aria-hidden="true">filter_alt</span>
-                        Sin receta
-                    </a>
-                    {% else %}
-                    <a href="?{% if presentacion_query_base %}{{ presentacion_query_base }}&amp;{% endif %}solo_sin_receta=1"
-                       class="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 text-[11px] font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                       title="Mostrar solo packs sin BOM/receta">
-                        <span class="material-icons text-xs" aria-hidden="true">filter_alt</span>
-                        Sin receta
-                    </a>
-                    {% endif %}
-                    {% endif %}
-                    {# Filtros fecha/marcas/Filtrar: ocultos (conservados en DOM para reactivar) — TABLERO_PRODUCCION_CHROME_DENSIDAD.md #}
+
+                    {# Filtros fecha/marcas/Filtrar: ocultos (conservados en DOM) #}
                     <form method="get" action="" class="hidden" aria-hidden="true" aria-label="Filtro de fechas del pedido">
-                        <label class="flex flex-col gap-0.5">
-                            <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Desde</span>
-                            <input type="date" name="fecha_desde" value="{{ fecha_desde|default:'' }}"
-                                   class="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"/>
-                        </label>
-                        <label class="flex flex-col gap-0.5">
-                            <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Hasta</span>
-                            <input type="date" name="fecha_hasta" value="{{ fecha_hasta|default:'' }}"
-                                   class="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs text-slate-800 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"/>
-                        </label>
+                        <input type="date" name="fecha_desde" value="{{ fecha_desde|default:'' }}"/>
+                        <input type="date" name="fecha_hasta" value="{{ fecha_hasta|default:'' }}"/>
                         {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
                         <input type="hidden" name="solo_urgente" value="{% if solo_urgente %}1{% else %}0{% endif %}"/>
                         <input type="hidden" name="solo_sin_receta" value="{% if solo_sin_receta %}1{% else %}0{% endif %}"/>
                         <input type="hidden" name="presentacion" value="{{ modo_presentacion|default:'docenas' }}"/>
                         <input type="hidden" name="modo" value="{{ modo_tablero|default:'par' }}"/>
-                        <button type="submit"
-                                title="Filtrar"
-                                aria-label="Filtrar"
-                                class="inline-flex h-8 items-center gap-1 rounded-lg bg-purple-600 px-2.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400">
-                            <span class="material-icons text-base leading-none" aria-hidden="true">filter_list</span>
-                            <span class="hidden sm:inline">Filtrar</span>
-                        </button>
+                        <button type="submit">Filtrar</button>
                     </form>
-                </div>
 
-                <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-                    {% if filas %}
-                    <div class="flex items-center gap-2" role="status" aria-label="Totales del tablero">
-                        <div class="inline-flex items-baseline gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 dark:border-rose-900/50 dark:bg-rose-950/30">
-                            <span class="text-[10px] font-semibold uppercase tracking-wide text-rose-700/80 dark:text-rose-300/80">{% if modo_presentacion == "docenas" %}Docenas{% else %}Pares{% endif %} urgente</span>
-                            <span class="text-sm font-bold tabular-nums text-rose-700 dark:text-rose-200">
+                    <div class="ml-auto flex flex-wrap items-center gap-2">
+                        <div class="inline-flex rounded-lg border border-slate-600 bg-slate-700 p-0.5"
+                             role="group" aria-label="Modo de consolidación Pack o Par">
+                            <a href="?{% if modo_query_base %}{{ modo_query_base }}&amp;{% endif %}modo=pack"
+                               {% if modo_tablero == "pack" %}aria-current="true"{% endif %}
+                               title="Pack = terminado (PCP, pedido + reserva, sin explosión BOM)"
+                               class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {% if modo_tablero == 'pack' %}bg-purple-600 text-white{% else %}text-slate-300 hover:text-white{% endif %}">Pack</a>
+                            <a href="?{% if modo_query_base %}{{ modo_query_base }}&amp;{% endif %}modo=par"
+                               {% if modo_tablero == "par" %}aria-current="true"{% endif %}
+                               title="Par = componente BOM (base del envío a producción)"
+                               class="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors {% if modo_tablero == 'par' %}bg-purple-600 text-white{% else %}text-slate-300 hover:text-white{% endif %}">Par</a>
+                        </div>
+
+                        {% if modo_tablero == "pack" %}
+                        {% if solo_sin_receta %}
+                        <a href="?{% if presentacion_query_base %}{{ presentacion_query_base }}&amp;{% endif %}solo_sin_receta=0"
+                           class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-amber-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-amber-500"
+                           title="Mostrar solo packs sin BOM/receta">
+                            <span class="material-icons text-xs" aria-hidden="true">filter_alt</span>
+                            Sin receta
+                        </a>
+                        {% else %}
+                        <a href="?{% if presentacion_query_base %}{{ presentacion_query_base }}&amp;{% endif %}solo_sin_receta=1"
+                           class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-2.5 py-1.5 text-[11px] font-medium text-slate-200 hover:bg-slate-600"
+                           title="Mostrar solo packs sin BOM/receta">
+                            <span class="material-icons text-xs" aria-hidden="true">filter_alt</span>
+                            Sin receta
+                        </a>
+                        {% endif %}
+                        {% endif %}
+
+                        {% include "includes/toggle_docenas_pares.html" with interaction="link" variant="dark" modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
+
+                        {% if filas %}
+                        <div class="inline-flex items-baseline gap-1.5 rounded-md border border-rose-500/40 bg-rose-950/40 px-2 py-1" role="status" aria-label="Totales del tablero">
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-rose-300/90">{% if modo_presentacion == "docenas" %}Docenas{% else %}Pares{% endif %} urgente</span>
+                            <span class="text-sm font-bold tabular-nums text-rose-200">
                                 {% if modo_presentacion == "docenas" %}{{ kpis_tablero.docenas_resta_urgente }}{% else %}{{ kpis_tablero.pares_resta_urgente }}{% endif %}
                             </span>
                         </div>
                         {% if modo_tablero != "pack" %}
                         {% if solo_urgente %}
                         <a href="?solo_urgente=0&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}&amp;presentacion={{ modo_presentacion }}&amp;modo={{ modo_tablero }}"
-                           class="inline-flex h-8 items-center gap-1 rounded-md bg-rose-600 px-2 text-[11px] font-semibold text-white transition-colors hover:bg-rose-500"
+                           class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-rose-500"
                            title="Quitar filtro solo urgentes"
                            aria-label="Solo urgentes activo — clic para quitar">
                             <span class="material-icons text-xs" aria-hidden="true">filter_alt</span>
@@ -114,7 +163,7 @@
                         </a>
                         {% else %}
                         <a href="?solo_urgente=1&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}&amp;presentacion={{ modo_presentacion }}&amp;modo={{ modo_tablero }}"
-                           class="inline-flex h-8 items-center gap-1 rounded-md border border-slate-300 bg-white px-2 text-[11px] font-medium text-slate-600 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+                           class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-2.5 py-1.5 text-[11px] font-medium text-slate-200 hover:bg-slate-600"
                            title="Mostrar solo artículos con resta urgente"
                            aria-label="Activar solo urgentes">
                             <span class="material-icons text-xs" aria-hidden="true">filter_alt</span>
@@ -122,36 +171,42 @@
                         </a>
                         {% endif %}
                         {% endif %}
-                    </div>
-                    {% endif %}
+                        {% endif %}
 
-                    <div class="flex items-center gap-1">
                         <form method="post" action="{% url 'mpr:tablero_produccion_actualizar' %}"
                               class="mpr-post-loading"
                               data-mpr-loading-title="Actualizando vista"
                               data-mpr-loading-subtitle="Recalculando demanda desde pedidos PED…">
                             {% csrf_token %}
                             <button type="submit"
+                                    class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600"
                                     title="Actualizar vista — Última: {{ ultima_actualizacion|default:'—' }}"
-                                    aria-label="Actualizar vista"
-                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-700 transition-colors hover:bg-purple-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 dark:border-purple-800/60 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/50">
-                                <span class="material-icons text-lg leading-none" aria-hidden="true">refresh</span>
+                                    aria-label="Actualizar vista">
+                                <span class="material-icons text-base" aria-hidden="true">refresh</span>
+                                Actualizar
                             </button>
                         </form>
+
                         <a href="{% url 'mpr:parte_produccion' %}"
                            title="Parte de producción"
                            aria-label="Parte de producción"
-                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-white hover:bg-slate-600">
                             <span class="material-icons text-lg leading-none" aria-hidden="true">assignment</span>
                         </a>
-                        {% include "mpr/includes/btn_control_calidad.html" with variant="icon" only %}
+                        <a href="{% url 'mpr:clasificacion_produccion' %}"
+                           title="Control de calidad"
+                           aria-label="Control de calidad"
+                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-teal-500/50 bg-teal-900/40 text-teal-100 hover:bg-teal-800/50">
+                            <span class="material-icons text-lg leading-none" aria-hidden="true">verified</span>
+                        </a>
+
                         <div class="relative" @click.outside="masMenuOpen = false">
                             <button type="button"
                                     @click="masMenuOpen = !masMenuOpen"
                                     title="Más acciones"
                                     aria-label="Más acciones"
                                     :aria-expanded="masMenuOpen.toString()"
-                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800">
+                                    class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-white hover:bg-slate-600">
                                 <span class="material-icons text-lg leading-none" aria-hidden="true">more_horiz</span>
                             </button>
                             <div x-show="masMenuOpen"
@@ -182,50 +237,38 @@
                                 {% endif %}
                             </div>
                         </div>
+
                         <a href="{% url 'mpr:manual_usuario' %}#tablero-produccion"
                            target="_blank"
                            rel="noopener noreferrer"
                            title="Manual del tablero"
                            aria-label="Manual del tablero"
-                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-500 transition-colors hover:bg-slate-50 hover:text-sky-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-400 dark:hover:text-sky-400">
+                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600 hover:text-white">
                             <span class="material-icons text-lg leading-none" aria-hidden="true">help_outline</span>
                         </a>
-                    </div>
-                </div>
-            </div>
 
-            {# Fila 2: búsqueda + presentación + enviar #}
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                <div class="relative min-w-0 flex-1 sm:max-w-md">
-                    <span class="material-icons absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
-                    <input type="text"
-                           x-model="busqueda"
-                           placeholder="Buscar artículo…"
-                           class="h-8 w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-3 text-xs text-slate-900 placeholder-slate-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/40 dark:border-slate-600 dark:bg-slate-800 dark:text-white dark:placeholder-slate-500 dark:focus:border-purple-500"/>
-                </div>
-                <div class="flex flex-wrap items-center justify-end gap-2">
-                    {% include "includes/toggle_docenas_pares.html" with interaction="link" variant="light" modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
-                    {% if modo_tablero == "pack" %}
-                    <a href="?{% if modo_query_base %}{{ modo_query_base }}&amp;{% endif %}modo=par"
-                       class="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50"
-                       title="El envío a producción se realiza por componente (modo Par).">
-                        <span class="material-icons text-base leading-none" aria-hidden="true">tune</span>
-                        Ver en modo Par para enviar
-                    </a>
-                    {% else %}
-                    <button type="button"
-                            @click="
-                                const filas = window.mprLineasEnvioConCantidad();
-                                envioCount = filas.length;
-                                envioEmpty = filas.length === 0;
-                                envioModalOpen = true;
-                            "
-                            class="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-emerald-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400">
-                        <span class="material-icons text-base leading-none" aria-hidden="true">send</span>
-                        Enviar a producción
-                    </button>
-                    {% endif %}
-                </div>
+                        {% if modo_tablero == "pack" %}
+                        <a href="?{% if modo_query_base %}{{ modo_query_base }}&amp;{% endif %}modo=par"
+                           class="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg border border-emerald-500/50 bg-emerald-900/40 px-3 py-1.5 text-xs font-semibold text-emerald-100 hover:bg-emerald-800/50"
+                           title="El envío a producción se realiza por componente (modo Par).">
+                            <span class="material-icons text-base leading-none" aria-hidden="true">tune</span>
+                            Ver en Par
+                        </a>
+                        {% else %}
+                        <button type="button"
+                                @click="
+                                    const filas = window.mprLineasEnvioConCantidad();
+                                    envioCount = filas.length;
+                                    envioEmpty = filas.length === 0;
+                                    envioModalOpen = true;
+                                "
+                                class="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-500">
+                            <span class="material-icons text-base leading-none" aria-hidden="true">send</span>
+                            Enviar
+                        </button>
+                        {% endif %}
+                    </div>
+                </header>
             </div>
 
                 {# Modal confirmación envío #}
@@ -301,12 +344,16 @@
                                             <span class="material-icons text-xl">precision_manufacturing</span>
                                         </span>
                                         <div class="min-w-0 flex-1">
-                                            <h3 id="fab-detalle-titulo" class="text-sm font-semibold tracking-tight text-slate-800 dark:text-slate-100">Fabricando</h3>
-                                            <p class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
-                                                <span x-show="fabDetalle.codigo" x-text="fabDetalle.codigo"></span>
-                                                <span x-show="fabDetalle.codigo && fabDetalle.articulo"> · </span>
-                                                <span x-text="fabDetalle.articulo"></span>
-                                            </p>
+                                            <p class="text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">Fabricando</p>
+                                            <h3 id="fab-detalle-titulo"
+                                                class="mt-0.5 text-base font-bold leading-snug tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg">
+                                                <span x-show="fabDetalle.codigo"
+                                                      class="font-bold text-slate-900 dark:text-slate-50"
+                                                      x-text="fabDetalle.codigo"></span>
+                                                <span x-show="fabDetalle.codigo && fabDetalle.articulo" class="font-semibold text-slate-400 dark:text-slate-500"> · </span>
+                                                <span class="font-bold text-slate-900 dark:text-slate-50"
+                                                      x-text="fabDetalle.articulo"></span>
+                                            </h3>
                                             <p class="mt-2 inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                                                 <span class="material-icons text-[13px] leading-none" aria-hidden="true">inventory_2</span>
                                                 Cupo:
@@ -351,7 +398,12 @@
                                                     <li class="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                                                         :class="m.tiene_parte ? 'bg-emerald-50/30 dark:bg-emerald-950/15' : ''">
                                                         <div class="flex min-w-0 items-center gap-2">
-                                                            <span class="inline-flex h-6 min-w-[2rem] items-center justify-center rounded-md bg-slate-100 px-1.5 text-[11px] font-semibold tabular-nums text-slate-700 ring-1 ring-inset ring-slate-200 dark:bg-slate-700/70 dark:text-slate-200 dark:ring-slate-600/70"
+                                                            <span class="fab-maq-tooltip-trigger inline-flex h-6 min-w-[2rem] cursor-help items-center justify-center rounded-md bg-slate-100 px-1.5 text-[11px] font-semibold tabular-nums text-slate-700 ring-1 ring-inset ring-slate-200 dark:bg-slate-700/70 dark:text-slate-200 dark:ring-slate-600/70"
+                                                                  role="img"
+                                                                  :aria-label="'Máquina ' + (m.codigo || m.id || '')"
+                                                                  @mouseenter="mostrarFabMaqTip($event, m)"
+                                                                  @mousemove="moverFabMaqTip($event)"
+                                                                  @mouseleave="ocultarFabMaqTip()"
                                                                   x-text="m.codigo || m.id"></span>
                                                             <span class="truncate text-xs font-medium text-slate-700 dark:text-slate-200"
                                                                   x-text="m.nombre"></span>
@@ -403,6 +455,15 @@
                         </template>
                     </div>
                 </div>
+
+                {# Tooltip máquina (estilo BO: slate-900) — fuera del overflow del modal #}
+                <div x-show="fabMaqTipOpen"
+                     x-cloak
+                     x-transition.opacity.duration.150ms
+                     class="pointer-events-none fixed z-[10000] max-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-white shadow-2xl"
+                     :style="'left:' + fabMaqTipX + 'px; top:' + fabMaqTipY + 'px'"
+                     role="tooltip"
+                     x-text="fabMaqTipText"></div>
         </div>
 
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden">

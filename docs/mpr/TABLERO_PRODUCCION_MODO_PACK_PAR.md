@@ -53,6 +53,9 @@ con cupo Fabricando (`enviado`) y CTAs a **Parte** y **Control de calidad** (fec
 `enviado > 0` y **no** hay máquina asignada, aparece un ícono ámbar de espera con tooltip
 «Fabricando sin máquina asignada» y enlace a carga de artículos por máquina. Servicio:
 `enriquecer_filas_tablero_indicadores_fabricando` en `mpr/services_maquina_linea.py`.
+En el modal, el **nombre del artículo** es el título principal (`h3` bold); «Fabricando» queda
+como eyebrow. Hover sobre el chip de código de máquina muestra tooltip estilo BO
+(`bg-slate-900`, texto «Máquina X»).
 
 La columna **Resta total** se eliminó en ambos modos: **Urgente** unifica la brecha
 a fabricar (`max(0, Pedido + Reserva − stock)`).

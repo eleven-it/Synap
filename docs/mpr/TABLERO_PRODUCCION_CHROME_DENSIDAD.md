@@ -26,32 +26,29 @@ Ver §6.
 
 | Tema | Decisión |
 |------|----------|
-| Look | Toolbar **clara** (blanco/slate); sin caja hero `slate-800` full-bleed |
+| Look | Barra **slate-800** alineada al hub Pedidos (`pedidos_hub.html`): título blanco, búsqueda oscura, toggles púrpura, CTAs `slate-700` / primario púrpura |
 | Migas | **Eliminadas** en esta pantalla |
 | KPI cabecera | Solo **resta urgente** (+ chip Solo urgentes en Par). Sin «resta total» |
-| Atajos visibles | Actualizar, Parte, CC — **icono + tooltip** (`title` + `aria-label`) |
+| Atajos visibles | Actualizar (con label), Parte, CC — iconos + tooltip; Actualizar con texto como Pedidos |
 | Menú `⋯ Más` | Tablero KPIs, Armado, Anular envíos (si permiso) — con **texto** |
 | Ayuda | Ícono `help_outline` → manual `#tablero-produccion` |
-| CTA primario | **Enviar a producción** conserva label (no solo ícono) |
-| Estado | Pack\|Par, Docenas\|Pares, búsqueda: conservan texto |
+| CTA primario | **Enviar** en púrpura (coherente con «Nuevo» del hub Pedidos) |
+| Estado | Pack\|Par, Docenas\|Pares, búsqueda: en la misma barra |
 
-## 4. Arquitectura de información (dos filas)
+## 4. Arquitectura de información (una barra)
 
 ```
-Fila 1 — contexto y atajos
-[ Tablero de producción | Pack|Par ]  [Urgente N · Solo urgentes]  [↻][Parte][CC][⋯][?]
-
-Fila 2 — acción sobre la grilla
-[ Buscar artículo… ]                         [Docenas|Pares]  [Enviar a producción]
+[ Tablero de producción ] [ Buscar artículo… ]  [Pack|Par] [Docenas|Pares] [Urgente · Solo urgentes]
+                                                    [Actualizar] [Parte][CC][⋯][?] [Enviar]
 ```
 
-- Título de pantalla **inline** en fila 1 (`h1` `text-sm font-semibold`), antes de Pack|Par, con separador `border-r` en `sm+` (opción A — sin banda vertical extra).
-- Sin H1 grande / hero; el `<title>` de pestaña sigue siendo «Tablero de producción — MPR — Synap».
-- Filtros **Desde / Hasta / Marcas / Filtrar** permanecen en el DOM con clase `hidden` (no eliminados) por si se reactivan.
-- KPI urgente en **una sola línea** (etiqueta + valor en negrita).
-- Orden de filas (Par): primero con máquina asignada (`tiene_maquina`); entre ellos por **número de máquina 1…N** (menor código/id si hay varias); luego el resto; dentro de cada tramo por **marca** y descripción. Helper: `ordenar_filas_tablero_maquina_marca`.
-- «Última actualización» en tooltip del botón Actualizar.
-- Modales (confirmación envío, detalle Fabricando) permanecen en el mismo `x-data` de página, fuera del layout de filas.
+- Título `h1` blanco `text-lg/xl font-bold` (mismo peso que «Pedidos»).
+- Contenedor: `rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md`.
+- Filtros **Desde / Hasta / Marcas / Filtrar** permanecen en el DOM con clase `hidden`.
+- KPI urgente en **una sola línea** sobre fondo rose tenue en la barra oscura.
+- Orden de filas (Par): máquina asignada → número de máquina 1…N → marca → descripción.
+- Modal Fabricando: artículo como título principal; tooltip BO «Máquina X» en chip de código.
+- Modales (envío / Fabricando) en el mismo `x-data` de página.
 
 ## 5. Iconos y tooltips (atajos)
 
