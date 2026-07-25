@@ -4,6 +4,7 @@ Comando:
     docker exec Synap_app python manage.py test mpr.tests.test_tablero_fabricando_maquina --keepdb
 """
 from datetime import date
+from html.parser import HTMLParser
 from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase, TestCase
@@ -158,6 +159,42 @@ class TestTableroProduccionViewIndicadoresFabricando(TestCase):
 
         mock_indicadores.assert_called_once()
         self.assertEqual(response.context_data["fecha_tablero_ddmmyyyy"], "25/07/2026")
+
+    @patch("mpr.services_maquina_linea.enriquecer_filas_tablero_indicadores_fabricando")
+    @patch("mpr.presentacion_operativa.enriquecer_filas_tablero_presentacion")
+    @patch("mpr.views._context_filtro_marcas", return_value={})
+    @patch("mpr.views._usuario_puede_anular_envios", return_value=False)
+    @patch("mpr.views._get_base_empresa", return_value="empresa_test")
+    @patch("mpr.views.listar_tablero_por_articulo", return_value=[{"id_articulo": 1}])
+    def test_x_data_del_tablero_conserva_las_acciones_de_fabricando(
+        self,
+        mock_listar,
+        mock_base,
+        mock_anular,
+        mock_marcas,
+        mock_presentacion,
+        mock_indicadores,
+    ):
+        class XDataParser(HTMLParser):
+            x_data = None
+
+            def handle_starttag(self, tag, attrs):
+                attrs_dict = dict(attrs)
+                if tag == "div" and "x-data" in attrs_dict:
+                    self.x_data = attrs_dict["x-data"]
+
+        mock_presentacion.return_value = [{"id_articulo": 1}]
+        mock_indicadores.return_value = [{"id_articulo": 1, "tiene_maquina": True}]
+        view, request = self._get({"modo": "par"})
+        request.user.email = ""
+
+        response = view.get(request)
+        parser = XDataParser()
+        parser.feed(response.render().content.decode())
+
+        self.assertIsNotNone(parser.x_data)
+        self.assertIn("JSON.parse(raw)", parser.x_data)
+        self.assertIn("cerrarFabDetalle", parser.x_data)
 
     @patch("mpr.services_maquina_linea.enriquecer_filas_tablero_indicadores_fabricando")
     @patch("mpr.presentacion_operativa.enriquecer_filas_tablero_presentacion")

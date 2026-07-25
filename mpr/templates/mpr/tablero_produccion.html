@@ -17,7 +17,7 @@
                 let d = raw;
                 if (typeof raw === 'string') {
                     try {
-                        d = JSON.parse(raw.replace(/&quot;/g, '\"').replace(/&#39;/g, \"'\"));
+                        d = JSON.parse(raw);
                     } catch (e) { return; }
                 }
                 this.fabDetalle = d;
