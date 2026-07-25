@@ -316,6 +316,24 @@
       </div>
     </template>
 
+    {# Advertencia crédito antes de confirmar (REQ-VTA-11) #}
+    <template x-if="dialogKind === 'credito_advertencia'">
+      <div>
+        <h3 id="pedidos-dialog-title" class="text-lg font-semibold text-slate-900 dark:text-white" x-text="dialogTitulo"></h3>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line" x-text="dialogMensaje"></p>
+        <div class="mt-6 flex flex-wrap justify-end gap-3">
+          <button type="button"
+                  @click="cerrarDialogo()"
+                  class="pedidos-btn text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  x-text="dialogCancelarTexto"></button>
+          <button type="button"
+                  @click="confirmarDialogo()"
+                  class="pedidos-btn pedidos-btn-primary bg-amber-500 hover:bg-amber-600 text-white"
+                  x-text="dialogConfirmarTexto"></button>
+        </div>
+      </div>
+    </template>
+
     {# Aviso / advertencia (un botón; p. ej. validación de cabecera) #}
     <template x-if="dialogKind === 'aviso'">
       <div>

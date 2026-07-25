@@ -103,6 +103,7 @@ export function orderDialogsMixin() {
         this.dialogKind === 'resumen'
         || this.dialogKind === 'confirmar_cambios'
         || this.dialogKind === 'masivo_confirmar'
+        || this.dialogKind === 'credito_advertencia'
       ) {
         if (cb) await cb();
         return;

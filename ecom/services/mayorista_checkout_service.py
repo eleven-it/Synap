@@ -39,9 +39,16 @@ from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, s
 from ecom.models import EcomCart
 from ecom.services.catalogo_producto import resolver_precio_articulo
 from ecom.services.aprobacion_pedidos import aplicar_estado_inicial_checkout, evaluar_reglas
-from ecom.services.ecom_config_mysql import aprobacion_pedidos_activa, pedidos_validan_stock
+from ecom.services.credito_pedidos.aprobacion import aplicar_estado_credito_checkout
+from ecom.services.credito_pedidos.avisos import disparar_aviso_pedido_bloqueado
+from ecom.services.credito_pedidos.evaluacion import evaluar_pedido
+from ecom.services.ecom_config_mysql import (
+    aprobacion_pedidos_activa,
+    credito_pedidos_activo,
+    pedidos_validan_stock,
+)
 from ecom.services.mayorista_cart_service import recalcular_totales
-from ecom.services.mayorista_credito import evaluar_autorizacion
+from ecom.services.mayorista_credito import AUTORIZADO, NO_AUTORIZADO, evaluar_autorizacion
 from ecom.services.mayorista_percepciones import (
     PercepcionesSinConfig,
     calcular_percepciones,
@@ -159,12 +166,14 @@ def confirmar(
             conn.autocommit(False)
             cur = conn.cursor(MySQLdb.cursors.DictCursor)
 
-            autorizacion, _dias = evaluar_autorizacion(
-                cur,
-                int(cart.idcliente),
-                to_int_or_none(cli.get("credito_limite_dias")) or 0,
-                es_cliente=datos.es_cliente,
-            )
+            credito_unificado = credito_pedidos_activo(cart.base_empresa)
+            if not credito_unificado:
+                autorizacion, _dias = evaluar_autorizacion(
+                    cur,
+                    int(cart.idcliente),
+                    to_int_or_none(cli.get("credito_limite_dias")) or 0,
+                    es_cliente=datos.es_cliente,
+                )
 
             # CodigoMovimiento (lock)
             cur.execute("SELECT CodigoMovimiento FROM codmov WHERE codigo = 1 FOR UPDATE")
@@ -245,6 +254,19 @@ def confirmar(
             # comp_ped (cabecera) — totales recalculados
             neto_gravado = _q2(_dec(cart.neto_gravado_21) + _dec(cart.neto_gravado_105))
             importe_venta = _q2(_dec(cart.total) + total_percep)
+            if credito_unificado:
+                resultado_cred = evaluar_pedido(
+                    cur,
+                    id_cliente=int(cart.idcliente),
+                    canal=tipo,
+                    total_pedido=importe_venta,
+                    credito_cliente=_dec(cli.get("Credito")),
+                    credito_limite_dias=to_int_or_none(cli.get("credito_limite_dias")) or 0,
+                    es_cliente=datos.es_cliente,
+                    persistir=True,
+                    codigo_movimiento=cod_mov,
+                )
+                autorizacion = resultado_cred.autorizacion
             cur.execute(_SQL_INSERT_COMP_PED, {
                 "Fecha": hoy,
                 "TipoComprobante": tipo,
@@ -384,6 +406,35 @@ def confirmar(
                     requiere=requiere_aprob,
                     reglas=reglas,
                 )
+
+            if (
+                tipo == EcomCart.TIPO_PEDIDO
+                and cod_mov is not None
+                and credito_unificado
+                and autorizacion == NO_AUTORIZADO
+            ):
+                aplicar_estado_credito_checkout(
+                    cur,
+                    cart.base_empresa,
+                    cod_mov=int(cod_mov),
+                    cod_solicita=to_int_or_none(cod_viajante),
+                    autorizacion_sistema=autorizacion,
+                )
+                email_cli = str_or_default(cli.get("email") or cli.get("Email"), "")
+                if email_cli and "@" in email_cli:
+                    disparar_aviso_pedido_bloqueado(
+                        cur,
+                        cart.base_empresa,
+                        cod_mov=int(cod_mov),
+                        id_cliente=int(cart.idcliente),
+                        canal=tipo,
+                        to_email=email_cli,
+                        variables={
+                            "nro_comprobante": nro_comp,
+                            "nombre_cliente": str_or_default(cli.get("nombre_cliente"), ""),
+                            "importe": str(importe_venta),
+                        },
+                    )
 
             conn.commit()
         except Exception:

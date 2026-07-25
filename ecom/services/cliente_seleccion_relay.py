@@ -8,8 +8,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.mysql_pool import get_mysql_pool
-from core.utils.administranet_types import to_int_or_none
+import MySQLdb
+
+from core.mysql_pool import get_connection, get_mysql_pool
+from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
+from ecom.services.credito_pedidos.evaluacion import evaluar_pedido, resultado_credito_a_dict
+from ecom.services.ecom_config_mysql import credito_pedidos_activo
 
 
 def construir_payload_cliente_seleccionado(
@@ -108,6 +112,14 @@ def construir_payload_cliente_seleccionado(
                 autoriza = {}
         # Sin ``ultimaf`` PHP deja ``autorizaCredito`` vacío.
 
+    if credito_pedidos_activo(base_empresa):
+        autoriza = _enriquecer_credito_eval(
+            base_empresa,
+            codigo_cliente,
+            cliente_row,
+            autoriza,
+        )
+
     id_iva = to_int_or_none(cliente_row.get("IDIva"))
     iva_incluido = "no" if id_iva == 1 else "si"
 
@@ -139,6 +151,32 @@ def construir_payload_cliente_seleccionado(
             domicilios.append(_json_safe(dict(zip(cols_d, row))))
 
     return cliente_row, autoriza, domicilios, iva_incluido
+
+
+def _enriquecer_credito_eval(
+    base_empresa: str,
+    codigo_cliente: int,
+    cliente_row: Dict[str, Any],
+    autoriza: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Agrega exposición/disponible/semáforo al payload legacy cuando el flag está ON."""
+    out = dict(autoriza or {})
+    try:
+        with get_connection(base_empresa) as conn:
+            cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            resultado = evaluar_pedido(
+                cur,
+                id_cliente=int(codigo_cliente),
+                canal="PED",
+                total_pedido=Decimal("0"),
+                credito_cliente=to_decimal_or_none(cliente_row.get("Credito")) or Decimal("0"),
+                credito_limite_dias=to_int_or_none(cliente_row.get("credito_limite_dias")) or 0,
+                persistir=False,
+            )
+        out["credito_eval"] = resultado_credito_a_dict(resultado)
+    except Exception:
+        pass
+    return out
 
 
 def _json_safe(item: Dict[str, Any]) -> Dict[str, Any]:

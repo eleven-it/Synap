@@ -175,6 +175,34 @@ def usuario_puede_matriz_multi_columna(request) -> bool:
     return _user_has_perm(request, "ecom.pedido_masivo.usar")
 
 
+def _permisos_desde_sesion(sess_user: dict) -> set:
+    permisos = (sess_user or {}).get("synap_permisos") or (sess_user or {}).get("permisos") or []
+    if isinstance(permisos, str):
+        permisos = [p.strip() for p in permisos.split(",") if p.strip()]
+    return {str(p).strip() for p in permisos if p}
+
+
+def _tiene_permiso_finance(sess_user: dict, codigo: str) -> bool:
+    codigos = _permisos_desde_sesion(sess_user)
+    if "*" in codigos:
+        return True
+    if codigo in codigos:
+        return True
+    if "finance.*" in codigos:
+        return True
+    return False
+
+
+def puede_aprobar_credito(sess_user: dict) -> bool:
+    """Cola Finanzas: aprobar/rechazar PED por crédito."""
+    return _tiene_permiso_finance(sess_user, "finance.credito.aprobar")
+
+
+def puede_configurar_credito(sess_user: dict) -> bool:
+    """ABM políticas de crédito y plantillas de aviso."""
+    return _tiene_permiso_finance(sess_user, "finance.credito.configurar")
+
+
 class EcomPedidosVerPermission(BasePermission):
     """Hub / listado de pedidos."""
 

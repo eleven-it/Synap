@@ -28,11 +28,13 @@ class TestOrdenarFilasTableroMaquinaMarca(SimpleTestCase):
                 "tiene_maquina": True,
                 "marca_nombre": "Puma",
                 "descripcion_articulo": "B",
+                "maquinas_asignadas": [{"id": 2, "codigo": "26"}],
             },
             {
                 "tiene_maquina": True,
                 "marca_nombre": "Adidas",
                 "descripcion_articulo": "A",
+                "maquinas_asignadas": [{"id": 1, "codigo": "12"}],
             },
             {
                 "tiene_maquina": False,
@@ -43,11 +45,53 @@ class TestOrdenarFilasTableroMaquinaMarca(SimpleTestCase):
         ]
         out = ordenar_filas_tablero_maquina_marca(filas)
         self.assertTrue(out[0]["tiene_maquina"])
+        self.assertEqual(out[0]["maquinas_asignadas"][0]["codigo"], "12")
         self.assertEqual(out[0]["marca_nombre"], "Adidas")
-        self.assertEqual(out[1]["marca_nombre"], "Puma")
+        self.assertEqual(out[1]["maquinas_asignadas"][0]["codigo"], "26")
         self.assertFalse(out[2]["tiene_maquina"])
         self.assertEqual(out[2].get("codigo_marca"), 9)
         self.assertEqual(out[3]["marca_nombre"], "Adidas")
+
+    def test_misma_maquina_secundario_por_marca(self):
+        filas = [
+            {
+                "tiene_maquina": True,
+                "marca_nombre": "Puma",
+                "descripcion_articulo": "B",
+                "maquinas_asignadas": [{"id": 5, "codigo": "10"}],
+            },
+            {
+                "tiene_maquina": True,
+                "marca_nombre": "Adidas",
+                "descripcion_articulo": "A",
+                "maquinas_asignadas": [{"id": 5, "codigo": "10"}],
+            },
+        ]
+        out = ordenar_filas_tablero_maquina_marca(filas)
+        self.assertEqual(out[0]["marca_nombre"], "Adidas")
+        self.assertEqual(out[1]["marca_nombre"], "Puma")
+
+    def test_multi_maquina_usa_la_menor(self):
+        filas = [
+            {
+                "tiene_maquina": True,
+                "marca_nombre": "X",
+                "descripcion_articulo": "alta",
+                "maquinas_asignadas": [
+                    {"id": 9, "codigo": "50"},
+                    {"id": 2, "codigo": "3"},
+                ],
+            },
+            {
+                "tiene_maquina": True,
+                "marca_nombre": "X",
+                "descripcion_articulo": "baja",
+                "maquinas_asignadas": [{"id": 1, "codigo": "1"}],
+            },
+        ]
+        out = ordenar_filas_tablero_maquina_marca(filas)
+        self.assertEqual(out[0]["descripcion_articulo"], "baja")
+        self.assertEqual(out[1]["descripcion_articulo"], "alta")
 
 
 class TestEnriquecerFilasTableroIndicadoresFabricando(SimpleTestCase):

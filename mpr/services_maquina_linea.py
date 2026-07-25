@@ -1001,24 +1001,57 @@ def enriquecer_filas_tablero_indicadores_fabricando(
     return filas
 
 
+def _orden_numerico_maquina(maquinas: Any) -> int:
+    """Menor código/id numérico de máquinas asignadas (1…N). Sin máquinas → sentinela alto."""
+    mejor: Optional[int] = None
+    for m in maquinas or []:
+        if not isinstance(m, dict):
+            continue
+        codigo = str(m.get("codigo") or "").strip()
+        n: Optional[int] = None
+        if codigo.isdigit():
+            n = int(codigo)
+        else:
+            # p. ej. "12 — …" o solo dígitos al inicio
+            digitos = "".join(ch for ch in codigo if ch.isdigit())
+            if digitos:
+                try:
+                    n = int(digitos)
+                except ValueError:
+                    n = None
+        if n is None:
+            n = _to_int(m.get("id"))
+        if n is None:
+            continue
+        if mejor is None or n < mejor:
+            mejor = n
+    return mejor if mejor is not None else 9_999_999
+
+
 def ordenar_filas_tablero_maquina_marca(
     filas: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     """
-    Orden del tablero: primero con máquina asignada, luego el resto;
-    dentro de cada grupo, por marca (nombre o código) y descripción.
+    Orden del tablero:
+    1. Con máquina asignada, luego sin máquina.
+    2. Entre los que tienen máquina: por número de máquina 1…N (menor código/id).
+    3. Luego por marca (nombre o código) y descripción.
     """
     if not filas:
         return filas
 
-    def _clave(fila: Dict[str, Any]) -> Tuple[int, str, str]:
+    def _clave(fila: Dict[str, Any]) -> Tuple[int, int, str, str]:
         con_maquina = 0 if fila.get("tiene_maquina") else 1
+        if con_maquina == 0:
+            n_maq = _orden_numerico_maquina(fila.get("maquinas_asignadas"))
+        else:
+            n_maq = 9_999_999
         marca = str(fila.get("marca_nombre") or "").strip().casefold()
         if not marca:
             cm = fila.get("codigo_marca")
             marca = f"#{cm}" if cm is not None else "\uffff"
         desc = str(fila.get("descripcion_articulo") or "").strip().casefold()
-        return (con_maquina, marca, desc)
+        return (con_maquina, n_maq, marca, desc)
 
     return sorted(filas, key=_clave)
 

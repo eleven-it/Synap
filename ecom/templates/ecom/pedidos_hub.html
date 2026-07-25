@@ -218,6 +218,18 @@
                 Rechazar
               </button>
             </div>
+            <div x-show="it.meta && it.meta.puede_aprobar_credito" class="mt-2 flex flex-wrap gap-2 border-t border-amber-100 pt-2 dark:border-amber-900/40">
+              <button type="button" @click="aprobarCredito(it)"
+                      class="inline-flex min-h-8 flex-1 items-center justify-center rounded-lg bg-indigo-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500">
+                Aprobar crédito
+              </button>
+              <button type="button" @click="rechazarCredito(it)"
+                      class="inline-flex min-h-8 flex-1 items-center justify-center rounded-lg border border-red-300 bg-red-50 px-2 py-1.5 text-xs font-semibold text-red-800 hover:bg-red-100">
+                Rechazar crédito
+              </button>
+            </div>
+            <p x-show="it.meta && it.meta.pendiente_comercial && it.meta.pendiente_credito_finanzas"
+               class="mt-1 text-[10px] text-amber-700 dark:text-amber-300">También pendiente comercial</p>
           </div>
         </template>
         <p x-show="!itemsMovilFiltrados().length" class="py-10 text-center text-sm text-slate-500"
@@ -322,6 +334,12 @@
                             class="flex-1 rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500">Aprobar</button>
                     <button type="button" @click="rechazarPedido(it)"
                             class="flex-1 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 hover:bg-red-100">Rechazar</button>
+                  </div>
+                  <div x-show="it.meta && it.meta.puede_aprobar_credito" class="mt-2 flex gap-1 border-t border-indigo-200 pt-2 dark:border-indigo-800">
+                    <button type="button" @click="aprobarCredito(it)"
+                            class="flex-1 rounded-md bg-indigo-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-indigo-500">Crédito OK</button>
+                    <button type="button" @click="rechazarCredito(it)"
+                            class="flex-1 rounded-md border border-red-300 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-800 hover:bg-red-100">Crédito NO</button>
                   </div>
                 </div>
               </template>
@@ -548,6 +566,7 @@ function pedidosHubApp() {
     rechazoMotivo: '',
     rechazoProcesando: false,
     _rechazoIt: null,
+    _rechazoModo: 'comercial',
     listaPage: 1,
     listaPageSize: 25,
     KANBAN_PAGE_SIZE: 15,
@@ -911,10 +930,38 @@ function pedidosHubApp() {
       }
       await this.actualizar();
     },
+    async aprobarCredito(it) {
+      const cod = it && it.meta ? it.meta.codigo_movimiento : null;
+      if (!cod) return;
+      const url = this._urlAprobacion(this.urls.credito_aprobar, cod);
+      if (!url) return;
+      const resp = await fetch(url, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
+        body: JSON.stringify({ motivo: 'Aprobado crédito desde hub' }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || data.ok === false) {
+        this._aviso(data.error || 'No se pudo aprobar el crédito.', 'error');
+        return;
+      }
+      await this.actualizar();
+    },
     rechazarPedido(it) {
       const cod = it && it.meta ? it.meta.codigo_movimiento : null;
       if (!cod) return;
       this._rechazoIt = it;
+      this._rechazoModo = 'comercial';
+      this.rechazoMotivo = '';
+      this.rechazoProcesando = false;
+      this.rechazoOpen = true;
+    },
+    rechazarCredito(it) {
+      const cod = it && it.meta ? it.meta.codigo_movimiento : null;
+      if (!cod) return;
+      this._rechazoIt = it;
+      this._rechazoModo = 'credito';
       this.rechazoMotivo = '';
       this.rechazoProcesando = false;
       this.rechazoOpen = true;
@@ -934,7 +981,10 @@ function pedidosHubApp() {
         this._aviso('El motivo del rechazo es obligatorio.', 'warning');
         return;
       }
-      const url = this._urlAprobacion(this.urls.aprobacion_rechazar, cod);
+      const urlTpl = this._rechazoModo === 'credito'
+        ? this.urls.credito_rechazar
+        : this.urls.aprobacion_rechazar;
+      const url = this._urlAprobacion(urlTpl, cod);
       if (!url) return;
       this.rechazoProcesando = true;
       try {

@@ -1,0 +1,52 @@
+{% extends "base_app.html" %}
+{% block title %}Políticas de crédito | Synap{% endblock %}
+{% block content %}
+<div class="mx-auto flex w-full min-w-0 max-w-none flex-col px-3 py-3 sm:px-4 md:px-6 lg:px-8 pb-24"
+     x-data="creditoPoliticasList()" x-init="init()">
+  <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3">
+    <header class="flex flex-wrap items-center gap-3">
+      <h1 class="text-lg font-bold text-white">Políticas de crédito</h1>
+      {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="politicas-credito" class_extra="text-slate-300 hover:text-sky-300" only %}
+      <a :href="urls.nueva" class="ml-auto rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white">Nueva política</a>
+    </header>
+  </div>
+  <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+    <table class="min-w-full text-sm">
+      <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-900">
+        <tr><th class="px-4 py-2">Cliente</th><th class="px-4 py-2">Canal</th><th class="px-4 py-2">Días</th><th class="px-4 py-2">Activo</th></tr>
+      </thead>
+      <tbody>
+        <template x-for="p in items" :key="p.id">
+          <tr class="border-t border-slate-100 dark:border-slate-700">
+            <td class="px-4 py-2" x-text="p.id_cliente || 'Default empresa'"></td>
+            <td class="px-4 py-2" x-text="p.canal"></td>
+            <td class="px-4 py-2" x-text="p.limite_dias ?? '-'"></td>
+            <td class="px-4 py-2" x-text="p.activo"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    <p x-show="!items.length" class="px-4 py-8 text-center text-slate-500">Sin políticas configuradas.</p>
+  </div>
+</div>
+{{ bootstrap|json_script:"credito-pol-list-bootstrap" }}
+<script>
+function creditoPoliticasList() {
+  return {
+    urls: {}, items: [],
+    init() {
+      const raw = document.getElementById('credito-pol-list-bootstrap');
+      const data = raw ? JSON.parse(raw.textContent) : {};
+      this.urls = data.urls || {};
+      this.cargar();
+    },
+    async cargar() {
+      if (!this.urls.api) return;
+      const r = await fetch(this.urls.api, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const d = await r.json();
+      this.items = (d && d.results) || [];
+    },
+  };
+}
+</script>
+{% endblock %}

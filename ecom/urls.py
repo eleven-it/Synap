@@ -148,6 +148,18 @@ from ecom.carrito_relay_views import (
     CarritoVaciarRelayAPIView,
 )
 from ecom.checkout_relay_views import CheckoutConfirmarRelayAPIView
+from ecom.credito_views import (
+    CreditoAprobarAPIView,
+    CreditoColaFinanzasView,
+    CreditoPendientesAPIView,
+    CreditoPlantillasAPIView,
+    CreditoPlantillasView,
+    CreditoPoliticaFormView,
+    CreditoPoliticaListView,
+    CreditoPoliticasAPIView,
+    CreditoPreCheckAPIView,
+    CreditoRechazarAPIView,
+)
 from ecom.vendedor_operativo_views import (
     VendedorOperativoRelayAPIView,
     VendedoresCarteraRelayAPIView,
@@ -854,6 +866,56 @@ urlpatterns = [
         name="mayoristapp_vendedor_operativo",
     ),
     # --- Checkout mayorista (Fase P2) ---
+    path(
+        "api/credito/pre-check/",
+        CreditoPreCheckAPIView.as_view(),
+        name="credito_precheck",
+    ),
+    path(
+        "credito/cola/",
+        CreditoColaFinanzasView.as_view(),
+        name="credito_cola",
+    ),
+    path(
+        "credito/politicas/",
+        CreditoPoliticaListView.as_view(),
+        name="credito_politicas",
+    ),
+    path(
+        "credito/politicas/nueva/",
+        CreditoPoliticaFormView.as_view(),
+        name="credito_politica_nueva",
+    ),
+    path(
+        "credito/plantillas/",
+        CreditoPlantillasView.as_view(),
+        name="credito_plantillas",
+    ),
+    path(
+        "api/credito/pendientes/",
+        CreditoPendientesAPIView.as_view(),
+        name="api_credito_pendientes",
+    ),
+    path(
+        "api/credito/<int:cod_mov>/aprobar/",
+        CreditoAprobarAPIView.as_view(),
+        name="api_credito_aprobar",
+    ),
+    path(
+        "api/credito/<int:cod_mov>/rechazar/",
+        CreditoRechazarAPIView.as_view(),
+        name="api_credito_rechazar",
+    ),
+    path(
+        "api/credito/politicas/",
+        CreditoPoliticasAPIView.as_view(),
+        name="api_credito_politicas",
+    ),
+    path(
+        "api/credito/plantillas/",
+        CreditoPlantillasAPIView.as_view(),
+        name="api_credito_plantillas",
+    ),
     path(
         "api/mayoristapp/checkout/confirmar/",
         CheckoutConfirmarRelayAPIView.as_view(),

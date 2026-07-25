@@ -28,6 +28,9 @@ KEY_APROBACION_UMBRAL_DESC_PIE = "ecom_aprobacion_umbral_desc_pie"
 KEY_APROBACION_UMBRAL_DESC_RENGLON = "ecom_aprobacion_umbral_desc_renglon"
 KEY_OBJETIVOS_EN_PEDIDOS = "ecom_objetivos_en_pedidos"
 KEY_BACKORDER_EN_PEDIDOS = "ecom_backorder_en_pedidos"
+KEY_CREDITO_PEDIDOS_ACTIVA = "ecom_credito_pedidos_activa"
+KEY_CREDITO_HOLD_PREP = "ecom_credito_hold_prep_activo"
+KEY_CREDITO_AVISO_SLA_HORAS = "ecom_credito_aviso_sla_horas"
 
 _WORKFLOW_UMBRAL_KEYS = (
     KEY_APROBACION_UMBRAL_MONTO,
@@ -138,6 +141,51 @@ def backorder_en_pedidos_activo(base_empresa: str) -> bool:
         base_empresa, KEY_BACKORDER_EN_PEDIDOS, "No"
     )
     return _normalizar_si_no(raw)
+
+
+def credito_pedidos_activo(base_empresa: str) -> bool:
+    """
+    Master flag ``ecom_credito_pedidos_activa`` (default No).
+
+    Cuando está inactivo, MUST conservarse evaluación legacy solo-días.
+    """
+    raw = leer_valor_configuracion_ecom(
+        base_empresa, KEY_CREDITO_PEDIDOS_ACTIVA, "No"
+    )
+    return _normalizar_si_no(raw)
+
+
+def credito_hold_prep_activo(base_empresa: str) -> bool:
+    """
+    Subflag ``ecom_credito_hold_prep_activo`` (default No).
+
+    Si el master crédito está inactivo, MUST devolver False aunque la fila diga Sí.
+    """
+    if not credito_pedidos_activo(base_empresa):
+        return False
+    raw = leer_valor_configuracion_ecom(
+        base_empresa, KEY_CREDITO_HOLD_PREP, "No"
+    )
+    return _normalizar_si_no(raw)
+
+
+def credito_aviso_sla_horas(base_empresa: str) -> int:
+    """
+    Ventana anti-ruido de avisos crédito en horas (default 24).
+
+    Valores inválidos o <= 0 MUST normalizarse a 24.
+    """
+    raw = leer_valor_configuracion_ecom(
+        base_empresa, KEY_CREDITO_AVISO_SLA_HORAS, "24"
+    )
+    txt = (raw or "").strip()
+    try:
+        horas = int(txt)
+        if horas <= 0:
+            return 24
+        return horas
+    except (TypeError, ValueError):
+        return 24
 
 
 def _leer_umbral_aprobacion(
@@ -307,6 +355,9 @@ def _meta_fila_config(key: str) -> dict:
         KEY_APROBACION_UMBRAL_DESC_RENGLON: "Umbral descuento renglón aprobación",
         KEY_OBJETIVOS_EN_PEDIDOS: "Atajo objetivos en hub pedidos",
         KEY_BACKORDER_EN_PEDIDOS: "Atajo backorder en hub pedidos",
+        KEY_CREDITO_PEDIDOS_ACTIVA: "Workflow crédito en pedidos",
+        KEY_CREDITO_HOLD_PREP: "Hold preparación por crédito",
+        KEY_CREDITO_AVISO_SLA_HORAS: "SLA anti-ruido avisos crédito (horas)",
     }
     detalles = {
         KEY_VALIDAR_STOCK_PEDIDOS: (
@@ -336,14 +387,24 @@ def _meta_fila_config(key: str) -> dict:
         KEY_BACKORDER_EN_PEDIDOS: (
             "Si: habilita atajo backorder desde el hub de pedidos."
         ),
+        KEY_CREDITO_PEDIDOS_ACTIVA: (
+            "Si: evaluación unificada $+días+exposición y cola Finanzas. No: legacy solo-días."
+        ),
+        KEY_CREDITO_HOLD_PREP: (
+            "Si: bloquea preparación cuando el PED queda No Autorizado por crédito."
+        ),
+        KEY_CREDITO_AVISO_SLA_HORAS: (
+            "Horas de deduplicación de mails de cobranza por cliente/tipo/canal."
+        ),
     }
     es_umbral = key in _WORKFLOW_UMBRAL_KEYS
+    es_numero_credito = key == KEY_CREDITO_AVISO_SLA_HORAS
     return {
         "nombre": (nombres.get(key) or key)[:100],
         "detalle": (detalles.get(key) or "")[:1000],
         "grupo": "Ecom Ventas"[:20],
-        "tipo": ("Numero" if es_umbral else "Si/No")[:20],
-        "detalle_valor": ("" if es_umbral else "Si-No")[:200],
+        "tipo": ("Numero" if (es_umbral or es_numero_credito) else "Si/No")[:20],
+        "detalle_valor": ("" if (es_umbral or es_numero_credito) else "Si-No")[:200],
     }
 
 

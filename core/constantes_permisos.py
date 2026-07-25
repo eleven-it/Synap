@@ -137,6 +137,8 @@ PERMISOS_POR_MODULO = {
         ("finance.contabilidad", "Acceso a contabilidad"),
         ("finance.reportes", "Ver reportes financieros"),
         ("finance.exportar", "Exportar datos financieros"),
+        ("finance.credito.aprobar", "Aprobar crédito en cola Finanzas"),
+        ("finance.credito.configurar", "Configurar políticas y plantillas de crédito"),
     ],
     "Contabilidad audit": [
         ("contabilidad.auditoria.leer", "Ejecutar auditoría contable (solo lectura)"),

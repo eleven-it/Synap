@@ -1414,6 +1414,46 @@ _ECOM_AJUSTES_VENTAS_CONFIG: Tuple[Dict[str, str], ...] = (
 )
 
 
+_ECOM_CREDITO_PEDIDOS_CONFIG: Tuple[Dict[str, str], ...] = (
+    {
+        "key_permiso": "ecom_credito_pedidos_activa",
+        "nombre_permiso": "Workflow crédito en pedidos",
+        "detalle_permiso": (
+            "Si: evaluación unificada $+días+exposición, cola Finanzas y hold prep. "
+            "No: legacy solo mora en días."
+        ),
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Si/No",
+        "valor_permiso": "No",
+        "detalle_valor_permiso": "Si-No",
+    },
+    {
+        "key_permiso": "ecom_credito_hold_prep_activo",
+        "nombre_permiso": "Hold preparación por crédito",
+        "detalle_permiso": (
+            "Si: bloquea preparación cuando el PED queda No Autorizado por crédito "
+            "(requiere workflow crédito activo)."
+        ),
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Si/No",
+        "valor_permiso": "No",
+        "detalle_valor_permiso": "Si-No",
+    },
+    {
+        "key_permiso": "ecom_credito_aviso_sla_horas",
+        "nombre_permiso": "SLA anti-ruido avisos crédito (horas)",
+        "detalle_permiso": (
+            "Ventana de deduplicación de mails de cobranza por cliente/tipo/canal. "
+            "Default 24 h."
+        ),
+        "grupo_permiso": "Ecom Ventas",
+        "tipo_permiso": "Numero",
+        "valor_permiso": "24",
+        "detalle_valor_permiso": "",
+    },
+)
+
+
 def _tabla_existe(cursor, table_name: str) -> bool:
     cursor.execute(
         """
@@ -2124,6 +2164,199 @@ def run_ecom_jerarquia_aprobacion_mysql(conn) -> Dict[str, Any]:
     }
 
 
+def run_ecom_credito_pedidos_mysql(conn) -> Dict[str, Any]:
+    """
+    Workflow crédito pedidos: políticas, evaluación, eventos Finanzas, plantillas y avisos.
+
+    Ver change workflow-limite-credito-pedidos (REQ crédito DDL, ADR 1/7/9).
+    """
+    applied: List[str] = []
+    failed: List[str] = []
+    cursor = conn.cursor()
+    try:
+        if not _tabla_existe(cursor, "ecom_credito_politica"):
+            cursor.execute(
+                """
+                CREATE TABLE ecom_credito_politica (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    id_cliente INT NOT NULL DEFAULT 0
+                        COMMENT '0 = política default empresa; >0 cliente específico',
+                    canal VARCHAR(10) NOT NULL DEFAULT 'PED'
+                        COMMENT 'PED | PRE',
+                    limite_dias INT NULL COMMENT 'Días mora permitidos; NULL = sin control días',
+                    capa_cxc VARCHAR(3) NOT NULL DEFAULT 'Si',
+                    capa_ped_abiertos VARCHAR(3) NOT NULL DEFAULT 'Si',
+                    capa_remitos_nf VARCHAR(3) NOT NULL DEFAULT 'No',
+                    capa_cheques VARCHAR(3) NOT NULL DEFAULT 'No',
+                    capa_doc_actual VARCHAR(3) NOT NULL DEFAULT 'Si',
+                    incluir_mora VARCHAR(3) NOT NULL DEFAULT 'Si',
+                    sla_horas INT NULL COMMENT 'Override SLA avisos; NULL = config empresa',
+                    activo VARCHAR(3) NOT NULL DEFAULT 'Si',
+                    creado_en DATETIME NOT NULL,
+                    actualizado_en DATETIME NOT NULL,
+                    PRIMARY KEY (id),
+                    INDEX idx_ecp_cliente_canal (id_cliente, canal),
+                    INDEX idx_ecp_activo (activo)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Políticas crédito por cliente/canal (Synap ecom)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE ecom_credito_politica")
+        else:
+            _append_migration(applied, failed, True, "ecom_credito_politica ya existe (omitido)")
+
+        if not _tabla_existe(cursor, "ecom_credito_evaluacion"):
+            cursor.execute(
+                """
+                CREATE TABLE ecom_credito_evaluacion (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    codigo_movimiento INT NOT NULL COMMENT 'comp_ped.CodigoMovimiento',
+                    id_cliente INT NOT NULL,
+                    canal VARCHAR(10) NOT NULL DEFAULT 'PED',
+                    autorizacion VARCHAR(20) NOT NULL DEFAULT '-'
+                        COMMENT 'Autorizado | No Autorizado',
+                    motivos VARCHAR(255) NOT NULL DEFAULT '-',
+                    limite DECIMAL(18, 2) NULL,
+                    exposicion DECIMAL(18, 2) NULL,
+                    disponible DECIMAL(18, 2) NULL,
+                    dias_atraso INT NULL,
+                    capas_json TEXT NULL,
+                    semaforo VARCHAR(10) NOT NULL DEFAULT 'verde'
+                        COMMENT 'verde | ambar | rojo',
+                    creado_en DATETIME NOT NULL,
+                    PRIMARY KEY (id),
+                    INDEX idx_ece_cod_mov (codigo_movimiento),
+                    INDEX idx_ece_cliente (id_cliente),
+                    INDEX idx_ece_creado (creado_en)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Snapshot evaluación crédito por PED (Synap ecom)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE ecom_credito_evaluacion")
+        else:
+            _append_migration(applied, failed, True, "ecom_credito_evaluacion ya existe (omitido)")
+
+        if not _tabla_existe(cursor, "ecom_credito_evento"):
+            cursor.execute(
+                """
+                CREATE TABLE ecom_credito_evento (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    codigo_movimiento INT NOT NULL COMMENT 'comp_ped.CodigoMovimiento',
+                    accion VARCHAR(20) NOT NULL DEFAULT '-'
+                        COMMENT 'solicitud|aprobado|rechazado',
+                    cod_solicita INT NULL,
+                    cod_resuelve INT NULL,
+                    motivo VARCHAR(255) NOT NULL DEFAULT '-',
+                    creado_en DATETIME NOT NULL,
+                    PRIMARY KEY (id),
+                    INDEX idx_ecev_cod_mov (codigo_movimiento),
+                    INDEX idx_ecev_resuelve (cod_resuelve)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Auditoría aprobación Finanzas crédito (Synap ecom)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE ecom_credito_evento")
+        else:
+            _append_migration(applied, failed, True, "ecom_credito_evento ya existe (omitido)")
+
+        if not _tabla_existe(cursor, "ecom_credito_plantilla_aviso"):
+            cursor.execute(
+                """
+                CREATE TABLE ecom_credito_plantilla_aviso (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    id_cliente INT NULL COMMENT 'NULL = plantilla default empresa',
+                    canal VARCHAR(10) NOT NULL DEFAULT 'PED',
+                    tipo_aviso VARCHAR(40) NOT NULL DEFAULT '-'
+                        COMMENT 'pedido_bloqueado|cobranza|...',
+                    asunto VARCHAR(255) NOT NULL DEFAULT '-',
+                    cuerpo TEXT NULL,
+                    activo VARCHAR(3) NOT NULL DEFAULT 'Si',
+                    creado_en DATETIME NOT NULL,
+                    actualizado_en DATETIME NOT NULL,
+                    PRIMARY KEY (id),
+                    INDEX idx_ecpa_cliente_canal (id_cliente, canal),
+                    INDEX idx_ecpa_tipo (tipo_aviso)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Plantillas aviso/cobranza crédito (Synap ecom)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE ecom_credito_plantilla_aviso")
+        else:
+            _append_migration(
+                applied, failed, True, "ecom_credito_plantilla_aviso ya existe (omitido)"
+            )
+
+        if not _tabla_existe(cursor, "ecom_credito_aviso_log"):
+            cursor.execute(
+                """
+                CREATE TABLE ecom_credito_aviso_log (
+                    id BIGINT NOT NULL AUTO_INCREMENT,
+                    id_cliente INT NOT NULL,
+                    tipo_aviso VARCHAR(40) NOT NULL DEFAULT '-',
+                    canal VARCHAR(10) NOT NULL DEFAULT 'PED',
+                    codigo_movimiento INT NULL
+                        COMMENT 'Dedup por PED para pedido_bloqueado',
+                    enviado_en DATETIME NOT NULL,
+                    PRIMARY KEY (id),
+                    INDEX idx_ecal_dedup (id_cliente, tipo_aviso, canal, enviado_en),
+                    INDEX idx_ecal_ped (codigo_movimiento, tipo_aviso)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                COMMENT='Log anti-ruido avisos crédito (Synap ecom)'
+                """
+            )
+            _append_migration(applied, failed, True, "CREATE TABLE ecom_credito_aviso_log")
+        else:
+            _append_migration(applied, failed, True, "ecom_credito_aviso_log ya existe (omitido)")
+
+        tbl_cp = nombre_tabla_real(cursor, "comp_ped")
+        if tbl_cp:
+            t_cp = tbl_cp.replace("`", "``")
+            if not _columna_existe(cursor, tbl_cp, "credito_hold_prep"):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE `{t_cp}`
+                    ADD COLUMN credito_hold_prep VARCHAR(3) NOT NULL DEFAULT 'No'
+                        COMMENT 'Si: bloquea preparación hasta liberación Finanzas'
+                    """
+                )
+                _append_migration(applied, failed, True, f"{tbl_cp}.credito_hold_prep")
+            if not _columna_existe(cursor, tbl_cp, "estado_credito_finanzas"):
+                cursor.execute(
+                    f"""
+                    ALTER TABLE `{t_cp}`
+                    ADD COLUMN estado_credito_finanzas VARCHAR(20) NOT NULL DEFAULT '-'
+                        COMMENT 'Finanzas: -|pendiente|aprobado|rechazado'
+                    """
+                )
+                _append_migration(applied, failed, True, f"{tbl_cp}.estado_credito_finanzas")
+
+        conn.commit()
+
+        for row in _ECOM_CREDITO_PEDIDOS_CONFIG:
+            _insertar_ecom_config_si_falta(
+                cursor, "configuracion_ecom_conf", row, applied, failed
+            )
+            _insertar_ecom_config_si_falta(
+                cursor, "configuracion_ecom", row, applied, failed
+            )
+
+        conn.commit()
+
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_ecom_credito_pedidos_mysql: %s", e)
+        failed.append(str(e))
+    finally:
+        cursor.close()
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Registro para la UI y ejecución selectiva
 # ---------------------------------------------------------------------------
@@ -2420,6 +2653,18 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "bajo",
         "run": run_ecom_jerarquia_aprobacion_mysql,
+    },
+    {
+        "id": "ecom_credito_pedidos",
+        "title": "E-com — workflow crédito en pedidos",
+        "description": (
+            "Tablas ``ecom_credito_politica``, ``ecom_credito_evaluacion``, "
+            "``ecom_credito_evento``, ``ecom_credito_plantilla_aviso``, ``ecom_credito_aviso_log``; "
+            "columnas ``comp_ped.credito_hold_prep`` y ``estado_credito_finanzas``; "
+            "flags ``ecom_credito_pedidos_activa``, hold prep y SLA avisos (default 24 h)."
+        ),
+        "risk": "bajo",
+        "run": run_ecom_credito_pedidos_mysql,
     },
 ]
 

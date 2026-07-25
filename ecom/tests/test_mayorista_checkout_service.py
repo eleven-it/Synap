@@ -113,6 +113,30 @@ def _make_get_connection(conn):
 
 
 class CheckoutTestBase(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._credito_flag_patcher = patch.object(
+            checkout_svc, "credito_pedidos_activo", return_value=False
+        )
+        cls._aprobacion_flag_patcher = patch.object(
+            checkout_svc, "aprobacion_pedidos_activa", return_value=False
+        )
+        cls._mail_confirm_patcher = patch(
+            "ecom.services.ecom_config_mysql.pedidos_envian_mail_confirmacion",
+            return_value=False,
+        )
+        cls._credito_flag_patcher.start()
+        cls._aprobacion_flag_patcher.start()
+        cls._mail_confirm_patcher.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._mail_confirm_patcher.stop()
+        cls._aprobacion_flag_patcher.stop()
+        cls._credito_flag_patcher.stop()
+        super().tearDownClass()
+
     def _cart(self, tipo="PED", items=((1, "2", "100", "21"),)):
         cart = EcomCart.objects.create(
             base_empresa="emp1", id_usuario=5, idcliente=10, lista_id=2,

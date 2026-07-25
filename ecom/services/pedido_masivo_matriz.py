@@ -340,17 +340,18 @@ def credito_cliente_masivo(base_empresa: str, id_cliente: int) -> Dict[str, Any]
     """
     Datos de crédito/cuenta del cliente para el widget hero (REQ-PSU-07).
 
-    Reutiliza las columnas legacy ``cliente.Saldo`` y ``cliente.Credito`` (mismas
-    que usa OrderShell). No consulta autorización por pedido: eso vive en la
-    cabecera del PED cargado.
+    Expone por separado cupo monetario (``cliente.Credito``) y límite de mora
+    en días (``cliente.credito_limite_dias``). No consulta autorización por pedido.
     """
     idc = to_int_or_none(id_cliente)
+    vacio = {"saldo": 0.0, "credito_cupo": 0.0, "credito_limite_dias": 0}
     if idc is None:
-        return {"saldo": 0.0, "credito_limite_dias": 0}
+        return vacio
     sql = """
         SELECT
             COALESCE(cliente.Saldo, 0) AS saldo,
-            COALESCE(cliente.Credito, 0) AS credito
+            COALESCE(cliente.Credito, 0) AS credito_cupo,
+            COALESCE(cliente.credito_limite_dias, 0) AS credito_limite_dias
         FROM cliente
         WHERE cliente.Codigo = %s
         LIMIT 1
@@ -363,16 +364,17 @@ def credito_cliente_masivo(base_empresa: str, id_cliente: int) -> Dict[str, Any]
                 cursor.execute(sql, [idc])
                 row = cursor.fetchone()
                 if not row:
-                    return {"saldo": 0.0, "credito_limite_dias": 0}
+                    return vacio
                 return {
                     "saldo": float(_dec(row[0])),
-                    "credito_limite_dias": int(to_int_or_none(row[1]) or 0),
+                    "credito_cupo": float(_dec(row[1])),
+                    "credito_limite_dias": int(to_int_or_none(row[2]) or 0),
                 }
             finally:
                 cursor.close()
     except Exception as e:
         logger.warning("credito_cliente_masivo: %s", e)
-        return {"saldo": 0.0, "credito_limite_dias": 0}
+        return vacio
 
 
 def _nombre_cliente(base_empresa: str, id_cliente: int) -> str:

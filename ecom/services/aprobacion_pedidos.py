@@ -18,6 +18,7 @@ from core.utils.administranet_types import str_or_default, to_decimal_or_none, t
 from ecom.services.alcance_comercial import alcance_viajantes_comercial
 from ecom.services.ecom_config_mysql import (
     aprobacion_pedidos_activa,
+    credito_pedidos_activo,
     umbrales_aprobacion_pedidos,
 )
 from ecom.services.jerarquia_comercial import (
@@ -146,7 +147,8 @@ def evaluar_reglas(
         reglas.append(_REGLA_DESC_RENGLON)
 
     if (autorizacion_sistema or "").strip() == "No Autorizado":
-        reglas.append(_REGLA_CREDITO)
+        if not credito_pedidos_activo(base_empresa):
+            reglas.append(_REGLA_CREDITO)
 
     id_cliente = to_int_or_none(getattr(cart, "idcliente", None) or cli.get("Codigo"))
     if id_cliente is not None and cursor is not None:
