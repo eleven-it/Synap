@@ -18,6 +18,8 @@ services:
       - static_volume:/app/staticfiles
       # Certificados AFIP fuera del bind mount (.:/app) para I/O estable con pyafipws.
       - synap_afip_secrets:/var/lib/synap/afip
+      # WAL archivados (mismo volumen que Synap_db). En UI: /var/lib/synap/wal_archive
+      - postgres_wal_archive:/var/lib/synap/wal_archive:ro
     env_file:
       - .env
     environment:
@@ -55,6 +57,19 @@ services:
       - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Misma carpeta física que monta Synap_app en /var/lib/synap/wal_archive
+      - postgres_wal_archive:/var/lib/postgresql/wal_archive
+      - ./docker/postgres/entrypoint-wal.sh:/usr/local/bin/synap-postgres-entrypoint.sh:ro
+    # archive_mode requiere reinicio; habilita incremental Postgres (PITR / copia WAL).
+    entrypoint: ["/usr/local/bin/synap-postgres-entrypoint.sh"]
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=test ! -f /var/lib/postgresql/wal_archive/%f && cp %p /var/lib/postgresql/wal_archive/%f
     ports:
       - "5435:5432"
     healthcheck:
@@ -98,6 +113,7 @@ services:
 
 volumes:
   postgres_data:
+  postgres_wal_archive:
   redis_data:
   static_volume:
   synap_afip_secrets:
