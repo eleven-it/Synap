@@ -4978,6 +4978,22 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
             filas = enriquecer_filas_tablero_indicadores_fabricando(
                 base_empresa, filas, fecha=fecha_tablero
             )
+        ctx_marcas = _context_filtro_marcas(request, base_empresa)
+        marcas_etiqueta = {
+            int(m["value"]): str(m.get("label") or "")
+            for m in (ctx_marcas.get("marcas_catalogo") or [])
+            if m.get("value") is not None
+        }
+        for fila in filas:
+            cm = to_int_or_none(fila.get("codigo_marca"))
+            if cm is not None:
+                fila["codigo_marca"] = cm
+                fila["marca_nombre"] = marcas_etiqueta.get(cm, fila.get("marca_nombre") or "")
+            else:
+                fila["marca_nombre"] = fila.get("marca_nombre") or ""
+        from mpr.services_maquina_linea import ordenar_filas_tablero_maquina_marca
+
+        filas = ordenar_filas_tablero_maquina_marca(filas)
         kpis_tablero = calcular_kpis_tablero_produccion(filas)
         qs_params = {}
         if fecha_desde_str:
@@ -4995,7 +5011,6 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
             {**qs_params, "modo": modo_tablero}, marcas_incluidos
         )
         ultima_act = request.session.get("tablero_produccion_ultima_actualizacion", None)
-        ctx_marcas = _context_filtro_marcas(request, base_empresa)
         return self.render_to_response({
             "filas": filas,
             "fecha_desde": fecha_desde_str or "",

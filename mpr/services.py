@@ -15361,6 +15361,7 @@ def listar_tablero_por_articulo(
 
     # Paso 10: descripciones de artículos componentes
     desc_map = _fetch_descripciones_articulo(base_empresa, list(comp_ids))
+    marca_map = _fetch_codigo_marca_articulo(base_empresa, list(comp_ids))
 
     comp_ids_list = list(comp_ids)
     fabricando_map = _fabricando_por_componentes(
@@ -15401,6 +15402,7 @@ def listar_tablero_por_articulo(
             "id_articulo": comp_id,
             "codigo_manual": codigo_manual,
             "descripcion_articulo": descripcion,
+            "codigo_marca": marca_map.get(comp_id),
             "demanda": demanda,
             "dem_ped": dem_ped_val,
             "dem_res": dem_res.get(comp_id, 0.0),
@@ -15690,6 +15692,7 @@ def listar_tablero_pack(
             "primera_fecha_entrega_display": _formatear_fecha_entrega_ui(
                 fp.get("primera_fecha_entrega")
             ),
+            "codigo_marca": to_int_or_none(fp.get("codigo_marca")),
             "sin_receta": sin_receta,
             "pedidos_resumen": pedidos_resumen,
             "pedidos_resumen_json": json.dumps(pedidos_resumen, ensure_ascii=False),

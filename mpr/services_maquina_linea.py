@@ -1001,6 +1001,28 @@ def enriquecer_filas_tablero_indicadores_fabricando(
     return filas
 
 
+def ordenar_filas_tablero_maquina_marca(
+    filas: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Orden del tablero: primero con máquina asignada, luego el resto;
+    dentro de cada grupo, por marca (nombre o código) y descripción.
+    """
+    if not filas:
+        return filas
+
+    def _clave(fila: Dict[str, Any]) -> Tuple[int, str, str]:
+        con_maquina = 0 if fila.get("tiene_maquina") else 1
+        marca = str(fila.get("marca_nombre") or "").strip().casefold()
+        if not marca:
+            cm = fila.get("codigo_marca")
+            marca = f"#{cm}" if cm is not None else "\uffff"
+        desc = str(fila.get("descripcion_articulo") or "").strip().casefold()
+        return (con_maquina, marca, desc)
+
+    return sorted(filas, key=_clave)
+
+
 def _to_int(value: Any) -> Optional[int]:
     try:
         return int(value)
