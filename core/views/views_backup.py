@@ -210,6 +210,12 @@ def backup_config_view(request):
             new_password = (request.POST.get("sftp_password") or "").strip()
             backup_config.set_sftp_password(bs, new_password or None)
 
+        if request.POST.get("bootstrap_clear_passphrase") == "1":
+            bs.bootstrap_passphrase_encrypted = ""
+        else:
+            new_phrase = (request.POST.get("bootstrap_passphrase") or "").strip()
+            backup_config.set_bootstrap_passphrase(bs, new_phrase or None)
+
         session_user = request.session.get("user") or {}
         bs.updated_by_cod_usuario = str_or_default(session_user.get("cod_usuario"), "")
 
@@ -231,6 +237,7 @@ def backup_config_view(request):
             "dow_labels": DOW_LABELS,
             "errors": errors,
             "has_sftp_password": bool(bs.sftp_password_encrypted),
+            "has_bootstrap_passphrase": bool(bs.bootstrap_passphrase_encrypted),
         },
     )
 

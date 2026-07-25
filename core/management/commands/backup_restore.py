@@ -51,7 +51,22 @@ class Command(BaseCommand):
         pg_arts = [a for a in data.get("artifacts", []) if a.get("engine") == "postgres"]
         wal_arts = [a for a in data.get("artifacts", []) if a.get("engine") == "postgres_wal"]
         binlog_arts = [a for a in data.get("artifacts", []) if a.get("engine") == "mysql_binlog"]
+        boot_arts = [a for a in data.get("artifacts", []) if a.get("engine") == "bootstrap"]
 
+        self.stdout.write(self.style.HTTP_INFO("0. Bootstrap (.env / AFIP)"))
+        if boot_arts:
+            enc = next((a for a in boot_arts if str(a.get("path") or "").endswith("env.enc")), None)
+            if enc:
+                self.stdout.write(
+                    f"   docker exec Synap_app python manage.py backup_decrypt_env "
+                    f"--input={job_dir / enc['path']} --output=./.env"
+                )
+            for art in boot_arts:
+                self.stdout.write(f"   - {job_dir / art['path']}")
+        else:
+            self.stdout.write("   (sin artefactos bootstrap en este manifest)")
+
+        self.stdout.write("")
         self.stdout.write(self.style.HTTP_INFO("1. PostgreSQL (full lógico)"))
         for art in pg_arts:
             dump_path = job_dir / art["path"]
