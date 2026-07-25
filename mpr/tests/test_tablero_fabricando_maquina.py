@@ -92,7 +92,7 @@ class TestEnriquecerFilasTableroIndicadoresFabricando(SimpleTestCase):
     @patch("mpr.services_maquina_linea.cantidades_parte_planilla_por_fecha")
     @patch("mpr.services_maquina_linea.listar_articulos_vigentes_todas_maquinas")
     @patch("mpr.services_maquina_linea.listar_maquinas")
-    def test_parte_hoy_por_maquina_y_fecha(
+    def test_grupos_fila_unifica_maquinas_parte_y_roster(
         self, mock_maquinas, mock_articulos, mock_cantidades, mock_roster
     ):
         mock_maquinas.return_value = [
@@ -115,9 +115,12 @@ class TestEnriquecerFilasTableroIndicadoresFabricando(SimpleTestCase):
 
         det = out[0]["fabricando_detalle"]
         self.assertEqual(det["fecha_ddmmyyyy"], "21/07/2026")
-        self.assertEqual(det["parte_hoy"][0]["manana"], 12)
-        self.assertIn("L3", det["roster_por_linea"])
-        self.assertEqual(det["roster_por_linea"]["L3"]["manana"], ["JUAN"])
+        self.assertEqual(len(det["grupos_fila"]), 1)
+        grupo = det["grupos_fila"][0]
+        self.assertEqual(grupo["nombre"], "L3")
+        self.assertEqual(grupo["roster"]["manana"], ["JUAN"])
+        self.assertEqual(grupo["maquinas"][0]["manana"], 12)
+        self.assertTrue(grupo["maquinas"][0]["tiene_parte"])
 
 
 class TestTableroProduccionViewIndicadoresFabricando(TestCase):
