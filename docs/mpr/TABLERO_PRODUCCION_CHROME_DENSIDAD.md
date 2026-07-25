@@ -39,16 +39,17 @@ Ver §6.
 
 ```
 Fila 1 — contexto y atajos
-[Pack|Par]  [Urgente N · Solo urgentes]  [↻][Parte][CC][⋯][?]
+[ Tablero de producción | Pack|Par ]  [Urgente N · Solo urgentes]  [↻][Parte][CC][⋯][?]
 
 Fila 2 — acción sobre la grilla
 [ Buscar artículo… ]                         [Docenas|Pares]  [Enviar a producción]
 ```
 
-- Sin H1 visible grande (título de pestaña / menú Synap bastan).
+- Título de pantalla **inline** en fila 1 (`h1` `text-sm font-semibold`), antes de Pack|Par, con separador `border-r` en `sm+` (opción A — sin banda vertical extra).
+- Sin H1 grande / hero; el `<title>` de pestaña sigue siendo «Tablero de producción — MPR — Synap».
 - Filtros **Desde / Hasta / Marcas / Filtrar** permanecen en el DOM con clase `hidden` (no eliminados) por si se reactivan.
 - KPI urgente en **una sola línea** (etiqueta + valor en negrita).
-- Orden de filas (Par): primero con máquina asignada (`tiene_maquina`), luego el resto; dentro de cada grupo por **marca** y descripción. Helper: `ordenar_filas_tablero_maquina_marca`.
+- Orden de filas (Par): primero con máquina asignada (`tiene_maquina`); entre ellos por **número de máquina 1…N** (menor código/id si hay varias); luego el resto; dentro de cada tramo por **marca** y descripción. Helper: `ordenar_filas_tablero_maquina_marca`.
 - «Última actualización» en tooltip del botón Actualizar.
 - Modales (confirmación envío, detalle Fabricando) permanecen en el mismo `x-data` de página, fuera del layout de filas.
 
