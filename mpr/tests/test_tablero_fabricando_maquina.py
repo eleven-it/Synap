@@ -9,8 +9,45 @@ from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase, TestCase
 
-from mpr.services_maquina_linea import enriquecer_filas_tablero_indicadores_fabricando
+from mpr.services_maquina_linea import (
+    enriquecer_filas_tablero_indicadores_fabricando,
+    ordenar_filas_tablero_maquina_marca,
+)
 from mpr.views import TableroProduccionView
+
+
+class TestOrdenarFilasTableroMaquinaMarca(SimpleTestCase):
+    def test_con_maquina_antes_y_por_marca(self):
+        filas = [
+            {
+                "tiene_maquina": False,
+                "marca_nombre": "Adidas",
+                "descripcion_articulo": "Z",
+            },
+            {
+                "tiene_maquina": True,
+                "marca_nombre": "Puma",
+                "descripcion_articulo": "B",
+            },
+            {
+                "tiene_maquina": True,
+                "marca_nombre": "Adidas",
+                "descripcion_articulo": "A",
+            },
+            {
+                "tiene_maquina": False,
+                "marca_nombre": "",
+                "codigo_marca": 9,
+                "descripcion_articulo": "X",
+            },
+        ]
+        out = ordenar_filas_tablero_maquina_marca(filas)
+        self.assertTrue(out[0]["tiene_maquina"])
+        self.assertEqual(out[0]["marca_nombre"], "Adidas")
+        self.assertEqual(out[1]["marca_nombre"], "Puma")
+        self.assertFalse(out[2]["tiene_maquina"])
+        self.assertEqual(out[2].get("codigo_marca"), 9)
+        self.assertEqual(out[3]["marca_nombre"], "Adidas")
 
 
 class TestEnriquecerFilasTableroIndicadoresFabricando(SimpleTestCase):

@@ -64,7 +64,8 @@
                     </a>
                     {% endif %}
                     {% endif %}
-                    <form method="get" action="" class="flex flex-wrap items-end gap-1.5" aria-label="Filtro de fechas del pedido">
+                    {# Filtros fecha/marcas/Filtrar: ocultos (conservados en DOM para reactivar) — TABLERO_PRODUCCION_CHROME_DENSIDAD.md #}
+                    <form method="get" action="" class="hidden" aria-hidden="true" aria-label="Filtro de fechas del pedido">
                         <label class="flex flex-col gap-0.5">
                             <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Desde</span>
                             <input type="date" name="fecha_desde" value="{{ fecha_desde|default:'' }}"
@@ -93,11 +94,11 @@
                 <div class="flex flex-wrap items-center gap-2 sm:justify-end">
                     {% if filas %}
                     <div class="flex items-center gap-2" role="status" aria-label="Totales del tablero">
-                        <div class="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 dark:border-rose-900/50 dark:bg-rose-950/30">
+                        <div class="inline-flex items-baseline gap-1.5 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 dark:border-rose-900/50 dark:bg-rose-950/30">
                             <span class="text-[10px] font-semibold uppercase tracking-wide text-rose-700/80 dark:text-rose-300/80">{% if modo_presentacion == "docenas" %}Docenas{% else %}Pares{% endif %} urgente</span>
-                            <p class="text-sm font-bold tabular-nums leading-tight text-rose-700 dark:text-rose-200">
+                            <span class="text-sm font-bold tabular-nums text-rose-700 dark:text-rose-200">
                                 {% if modo_presentacion == "docenas" %}{{ kpis_tablero.docenas_resta_urgente }}{% else %}{{ kpis_tablero.pares_resta_urgente }}{% endif %}
-                            </p>
+                            </span>
                         </div>
                         {% if modo_tablero != "pack" %}
                         {% if solo_urgente %}
