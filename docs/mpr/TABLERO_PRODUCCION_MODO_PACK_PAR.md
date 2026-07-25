@@ -39,6 +39,18 @@ componente BOM (base del envío a producción)."*
 - **Pack:** Artículo (solo nombre) · Fecha entrega · Pedido · Reserva · **Urgente** ·
   Terminado (stock del pack).
 
+### Indicadores Fabricando (solo modo Par)
+
+En la columna **Fabricando**, cada fila con artículo asignado a al menos una máquina
+vigente (`mpr_maquina_articulo`) muestra un **chip violeta** sobre el cupo y un ícono
+**engranaje** (`precision_manufacturing`) que abre un modal Synap con máquinas (+ línea),
+roster M/T/N de las líneas involucradas, parte del día por máquina/franja si existe, cupo
+Fabricando (`enviado`) y CTAs a **Parte** y **Control de calidad** (fecha = `fecha_hasta`
+del filtro o hoy). Si `enviado > 0` y **no** hay máquina asignada, aparece un ícono ámbar
+de espera con tooltip «Fabricando sin máquina asignada» y enlace a carga de artículos por
+máquina. Servicio: `enriquecer_filas_tablero_indicadores_fabricando` en
+`mpr/services_maquina_linea.py`.
+
 La columna **Resta total** se eliminó en ambos modos: **Urgente** unifica la brecha
 a fabricar (`max(0, Pedido + Reserva − stock)`).
 
