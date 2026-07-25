@@ -267,10 +267,12 @@
           <label for="pg_wal_archive_dir" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Directorio de WAL archivados</label>
           <input type="text" id="pg_wal_archive_dir" name="pg_wal_archive_dir" value="{{ backup_settings.pg_wal_archive_dir }}"
                  class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm focus:border-emerald-500 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100"
-                 placeholder="/var/lib/postgresql/wal_archive">
+                 placeholder="/var/lib/synap/wal_archive">
           <p class="mt-2 flex items-start gap-1.5 text-xs text-slate-500 dark:text-slate-400">
             <span class="material-icons text-sm text-slate-400" aria-hidden="true">info</span>
-            Lo configura el administrador del servidor PostgreSQL; el supervisor solo indica la carpeta.
+            Con DB y app en contenedores distintos use la ruta del volumen en <strong>Synap_app</strong>
+            (compose: <code class="rounded bg-slate-100 px-1 dark:bg-slate-900">/var/lib/synap/wal_archive</code>),
+            no la de Postgres. Vacío = sin incremental de PostgreSQL (los full siguen OK).
           </p>
         </div>
       </div>

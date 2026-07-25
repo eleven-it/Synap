@@ -50,6 +50,43 @@ Si `log_bin=OFF`, el job incremental falla con mensaje en español indicando hab
 
 Si el directorio está vacío o no configurado, Postgres reporta fallo explícito (`partial_failed` o `failed`).
 
+### Contenedores separados (`Synap_db` + `Synap_app`)
+
+Postgres y la app **no comparten filesystem** por defecto. El incremental necesita un **volumen Docker compartido**:
+
+| Contenedor | Ruta del volumen `postgres_wal_archive` |
+|------------|----------------------------------------|
+| `Synap_db` | `/var/lib/postgresql/wal_archive` (escribe el `archive_command`) |
+| `Synap_app` | `/var/lib/synap/wal_archive` (**esta** va en la UI) |
+
+En el `docker-compose.yml` del repo ya está cableado:
+
+- Volumen `postgres_wal_archive` montado en ambos servicios.
+- Entrypoint `docker/postgres/entrypoint-wal.sh` (crea carpeta + permisos).
+- `wal_level=replica`, `archive_mode=on` y  
+  `archive_command=test ! -f /var/lib/postgresql/wal_archive/%f && cp %p /var/lib/postgresql/wal_archive/%f`
+
+**En la UI** (`/core/backups/configuracion/` → Incremental PostgreSQL) configure:
+
+```text
+/var/lib/synap/wal_archive
+```
+
+No use la ruta del contenedor DB (`/var/lib/postgresql/...`): Synap_app no la ve.
+
+Aplicar cambios de compose (reinicia Postgres; `archive_mode` no cambia en caliente):
+
+```bash
+docker compose up -d db app
+# Verificar archive
+docker exec Synap_db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SHOW archive_mode; SHOW archive_command;"
+docker exec Synap_app ls -la /var/lib/synap/wal_archive
+```
+
+Si solo usa **full** (sin incremental Postgres), puede dejar el campo vacío: los full no dependen del WAL.
+
+**Importante:** si `archive_command` falla de forma reiterada, Postgres puede llenar `pg_wal` y dejar de aceptar escrituras. Monitoree el directorio y los logs de `Synap_db`.
+
 ## Cron (host)
 
 Ejemplo (contenedor Synap, cada minuto):
@@ -209,7 +246,7 @@ Página única con secciones (una por área de la job), Alpine para interacción
 | **B. Calendario semanal** | 7 tarjetas L→D (Lun=0…Dom=6): select Completo/Incremental/No respaldar + hora `HH:MM`; preset «L–S incremental 02:00 · D completo 03:00»; toggle grande «Activar programación automática» | `enabled_auto`; por día `schedule_enabled_{dow}`, `schedule_type_{dow}`, `schedule_time_{dow}` → normalizados a `schedule_json` |
 | **C. Destino local** | Ruta en disco; días de retención | `local_root`, `retention_days` |
 | **D. Copia remota SFTP** | Toggle habilitar; host/puerto/usuario/ruta remota; password (vacío = no cambiar; casilla «borrar»); ruta clave SSH; botón «Probar conexión» (AJAX) | `sftp_enabled`, `sftp_host`, `sftp_port`, `sftp_user`, `sftp_remote_path`, `sftp_password`, `sftp_clear_password`, `sftp_key_path` |
-| **E. Incremental Postgres** | Directorio WAL archivados (ayuda: lo configura el DBA, el supervisor solo indica la carpeta) | `pg_wal_archive_dir` |
+| **E. Incremental Postgres** | Directorio WAL **como lo ve Synap_app** (compose: `/var/lib/synap/wal_archive`) | `pg_wal_archive_dir` |
 | **F. Bootstrap / frase `.env`** | Password (vacío = no cambiar; casilla «borrar»); aviso de guardar fuera de Synap | `bootstrap_passphrase`, `bootstrap_clear_passphrase` |
 | **G. Notificaciones correo** | Toggle; destinatarios; checkboxes éxito/parcial/fallo; enlace a correo saliente | `notify_email_enabled`, `notify_email_to`, `notify_on_success`, `notify_on_partial`, `notify_on_failure` |
 
