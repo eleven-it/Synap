@@ -46,6 +46,9 @@ export function compraMayoristaCheckoutMixin() {
     condicionesVenta: [],
     listasPrecio: [],
 
+    creditoPedidosActivo: false,
+    creditoPrecheckUrl: '',
+
     clienteLabel(c) {
       const cod = c.Codigo != null ? c.Codigo : c.codigo;
       const nombre = (c.nombre_cliente || c.nombre || '').trim();
@@ -174,6 +177,8 @@ export function compraMayoristaCheckoutMixin() {
       this.puntosVenta = data.puntos_venta || [];
       if (data.id_punto_venta_default) this.pv = data.id_punto_venta_default;
       this.puedeEditarCabecera = !!data.puede_editar_cabecera;
+      this.creditoPedidosActivo = !!data.credito_pedidos_activo;
+      this.creditoPrecheckUrl = data.credito_precheck_url || this.urls.credito_precheck || '';
       if (data.cliente) {
         this.clienteActivo = data.idcliente;
         this.clienteActivoLabel = this.clienteLabel(data.cliente);
@@ -181,6 +186,9 @@ export function compraMayoristaCheckoutMixin() {
         this._setListaPrecio(data.cliente, data);
         this._hidratarCabeceraDesdeApi(data.cabecera || {});
         await this._cargarCatalogosCabecera(this.cabecera?.id_condventa);
+        if (this.creditoPedidosActivo) {
+          await this.refrescarCreditoPrecheck();
+        }
       } else {
         this.clienteActivo = null;
         this.clienteActivoLabel = '';
@@ -220,17 +228,75 @@ export function compraMayoristaCheckoutMixin() {
       ).trim();
     },
 
+    _mensajeSemaforoCredito(credito) {
+      const motivos = (credito && credito.motivos) || [];
+      const partes = [];
+      if (motivos.includes('monto')) partes.push('exceso de cupo');
+      if (motivos.includes('dias')) partes.push('mora en días');
+      if (credito && credito.autorizacion === 'No Autorizado' && !partes.length) {
+        partes.push('revisión de crédito');
+      }
+      const detalle = partes.length ? partes.join(' y ') : 'condición de crédito';
+      if (credito && credito.semaforo === 'rojo') {
+        return `Crédito en rojo: ${detalle}. El pedido se registrará como No Autorizado.`;
+      }
+      if (credito && credito.semaforo === 'ambar') {
+        return `Advertencia de crédito: ${detalle}. Podés confirmar igual.`;
+      }
+      return 'Autorizado para operar';
+    },
+
     _setCreditoWidget(cliente, autoriza) {
       const saldo = Number(cliente.saldo || cliente.Saldo || 0);
-      const lim = Number(cliente.credito_limite_dias || cliente.Credito || 0);
+      const limDias = Number(cliente.credito_limite_dias || 0);
       const aut = autoriza || {};
+      const evalu = aut.credito_eval || null;
       const limTxt = (aut.limite_credito_dias || '').toString();
+
+      if (this.creditoPedidosActivo && evalu) {
+        this.creditoWidget = {
+          ampliado: true,
+          saldo,
+          limite_dias: limDias,
+          exposicion: Number(evalu.exposicion || 0),
+          disponible: evalu.disponible != null ? Number(evalu.disponible) : null,
+          sin_tope_monetario: !!evalu.sin_tope_monetario,
+          dias_atraso: evalu.dias_atraso,
+          semaforo: evalu.semaforo || 'verde',
+          autorizado: evalu.autorizacion === 'Autorizado',
+          dias_exceso: Number(aut.dias_exceso_limite || 0),
+          mensaje: this._mensajeSemaforoCredito(evalu),
+          motivos: evalu.motivos || [],
+        };
+        return;
+      }
+
       this.creditoWidget = {
+        ampliado: false,
         saldo,
-        limite_dias: lim,
+        limite_dias: limDias,
         autorizado: limTxt.toLowerCase() !== 'no autorizado',
         dias_exceso: Number(aut.dias_exceso_limite || 0),
       };
+    },
+
+    async refrescarCreditoPrecheck() {
+      const url = this.creditoPrecheckUrl || this.urls.credito_precheck;
+      if (!this.creditoPedidosActivo || !url || !this.clienteActivo) return;
+      const total = Number(this.tot?.total || this.cart?.total || 0);
+      const body = {
+        id_cliente: this.clienteActivo,
+        canal: this.tipo,
+        total_pedido: String(total),
+      };
+      if (this.esCliente) body.es_cliente = true;
+      const { ok, data } = await this.api(url, 'POST', body);
+      if (!ok || !data || !data.activo || !data.credito) return;
+      const aut = { ...(this.creditoWidget || {}), credito_eval: data.credito };
+      this._setCreditoWidget(
+        { saldo: this.creditoWidget?.saldo, credito_limite_dias: this.creditoWidget?.limite_dias },
+        aut,
+      );
     },
 
     detalleUrl(codMov) {
@@ -277,12 +343,31 @@ export function compraMayoristaCheckoutMixin() {
       if (ok && data && data.results) this.pedidosRecientes = data.results;
     },
 
-    abrirResumen() {
+    async abrirResumen() {
       if (!this._requiereCliente()) return;
       if (!this.cart?.items?.length) {
         this.flash('Agregá al menos una línea al pedido.', false);
         return;
       }
+      if (this.creditoPedidosActivo) {
+        await this.refrescarCreditoPrecheck();
+        const sem = this.creditoWidget?.semaforo;
+        if (sem === 'rojo' || sem === 'ambar') {
+          this.abrirDialogo('credito_advertencia', {
+            titulo: sem === 'rojo' ? 'Crédito — atención' : 'Advertencia de crédito',
+            mensaje: this.creditoWidget?.mensaje
+              || 'El pedido podría quedar No Autorizado. Podés continuar igual.',
+            confirmarTexto: 'Continuar con la confirmación',
+            cancelarTexto: 'Volver',
+            onConfirm: () => this._abrirResumenConfirmacion(),
+          });
+          return;
+        }
+      }
+      this._abrirResumenConfirmacion();
+    },
+
+    _abrirResumenConfirmacion() {
       this.abrirDialogo('resumen', {
         titulo: `Resumen — ${this.tipoLabel}`,
         confirmarTexto: 'Confirmar',

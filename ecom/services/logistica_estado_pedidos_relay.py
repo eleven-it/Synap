@@ -9,8 +9,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from core.mysql_pool import get_mysql_pool
+from core.mysql_pool import get_mysql_pool, mysql_cursor
 from core.utils.administranet_types import to_int_or_none
+
+from ecom.services.credito_pedidos.aprobacion import puede_avanzar_a_preparacion
+from ecom.services.ecom_config_mysql import credito_pedidos_activo
 
 
 def _filtro_sucursal_sql(cod_sucursal: Optional[int]) -> tuple[str, List[Any]]:
@@ -159,3 +162,17 @@ def parse_cod_sucursal_request(value: Any) -> Optional[int]:
     if value is None or value == "":
         return None
     return to_int_or_none(value)
+
+
+def validar_gate_credito_preparacion(base_empresa: str, cod_mov: int) -> tuple[bool, str]:
+    """
+    Gate Synap antes de transicionar un PED a «En preparación».
+    Delega en ``puede_avanzar_a_preparacion`` cuando el workflow de crédito está activo.
+    """
+    if not credito_pedidos_activo(base_empresa):
+        return True, ""
+    try:
+        with mysql_cursor(base_empresa) as cursor:
+            return puede_avanzar_a_preparacion(cursor, int(cod_mov))
+    except Exception:
+        return True, ""

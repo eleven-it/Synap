@@ -22,8 +22,10 @@ from ecom.services.pedido_masivo_matriz import listar_sucursales_cliente, obtene
 from ecom.services.pedido_plantilla_service import _salida_a_packs_matriz
 from ecom.services.pedido_cabecera_relay import puede_anular_pedido_relay
 from ecom.services.aprobacion_pedidos import puede_aprobar_lote, puede_aprobar_pedido
+from ecom.services.credito_pedidos.aprobacion import puede_aprobar_credito_pedido
 from ecom.services.ecom_config_mysql import (
     aprobacion_pedidos_activa,
+    credito_pedidos_activo,
 )
 from ecom.services.pedido_permisos import puede_ver_todos_pedidos
 
@@ -41,6 +43,7 @@ COLUMNAS_CON_APROBACION = (
     "borrador",
     "enviado",
     "por_autorizar",
+    "credito_finanzas",
     "aprobado",
     "en_curso",
     "cerrado",
@@ -54,6 +57,7 @@ _LABELS = {
     "borrador": "Borrador",
     "enviado": "Pendiente",
     "por_autorizar": "Por autorizar",
+    "credito_finanzas": "Pendiente crédito Finanzas",
     "aprobado": "Aprobado",
     "en_curso": "En preparación",
     "cerrado": "Entregado / Cerrado",
@@ -79,10 +83,13 @@ _ESTADOS_EN_CURSO = frozenset(
 )
 
 
-def columnas_hub_visibles(*, aprobacion_activa: bool) -> tuple:
-    """Columnas Kanban/Lista: sin Por autorizar/Aprobado si la aprobación comercial está off."""
+def columnas_hub_visibles(*, aprobacion_activa: bool, credito_activo: bool = False) -> tuple:
+    """Columnas Kanban/Lista según flags comercial y crédito."""
     if aprobacion_activa:
-        return COLUMNAS_CON_APROBACION
+        cols = list(COLUMNAS_CON_APROBACION)
+        if not credito_activo:
+            cols = [c for c in cols if c != "credito_finanzas"]
+        return tuple(cols)
     return COLUMNAS_SIN_APROBACION
 
 
@@ -433,6 +440,8 @@ def _columna_ped_mysql(
     *,
     estado_aprobacion_comercial: str = "-",
     aprobacion_activa: bool = False,
+    credito_activo: bool = False,
+    estado_credito_finanzas: str = "-",
 ) -> str:
     if (anulado or "").strip().lower() in ("si", "sí"):
         return "anulado"
@@ -441,13 +450,18 @@ def _columna_ped_mysql(
         return "cerrado"
 
     est_com = (estado_aprobacion_comercial or "-").strip().lower()
+    est_fin = (estado_credito_finanzas or "-").strip().lower()
+
+    if credito_activo and est_fin == "pendiente":
+        return "credito_finanzas"
+
     if aprobacion_activa:
         if est_com == "pendiente":
             return "por_autorizar"
         if est_com == "rechazado":
             return "enviado"
         auth = (autorizacion or "").strip()
-        if auth == "No Autorizado":
+        if auth == "No Autorizado" and not credito_activo:
             return "por_autorizar"
         if est in ("pendiente",):
             return "enviado"
@@ -787,6 +801,7 @@ def _pedidos_mysql(
     dias: Optional[int] = None,
     limit: int = 5000,
     aprobacion_on: Optional[bool] = None,
+    credito_on: Optional[bool] = None,
     mapa_lotes: Optional[Dict[int, int]] = None,
     contexto_lotes: Optional[Dict[int, Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
@@ -827,6 +842,8 @@ def _pedidos_mysql(
     params.append(max(1, min(int(limit), 5000)))
     if aprobacion_on is None:
         aprobacion_on = aprobacion_pedidos_activa(base_empresa)
+    if credito_on is None:
+        credito_on = credito_pedidos_activo(base_empresa)
     mapa_lotes = mapa_lotes or {}
     contexto_lotes = contexto_lotes or {}
     sql = f"""
@@ -840,6 +857,7 @@ def _pedidos_mysql(
             cp.Anulado,
             TRIM(COALESCE(cp.autorizacion_sistema, '')) AS autorizacion,
             TRIM(COALESCE(cp.estado_aprobacion_comercial, '-')) AS estado_aprobacion_comercial,
+            TRIM(COALESCE(cp.estado_credito_finanzas, '-')) AS estado_credito_finanzas,
             cp.CodViajante,
             cp.Codigo AS id_cliente,
             COALESCE(c.nombre_cliente, '') AS nombre_cliente,
@@ -877,6 +895,8 @@ def _pedidos_mysql(
                     row.get("estado_aprobacion_comercial") or "-"
                 ),
                 aprobacion_activa=aprobacion_on,
+                credito_activo=credito_on,
+                estado_credito_finanzas=str(row.get("estado_credito_finanzas") or "-"),
             )
             cod = int(row["CodigoMovimiento"])
             nro = str(row.get("NroComprobante") or cod)
@@ -906,19 +926,34 @@ def _pedidos_mysql(
                 "CodViajante": cod_viajante,
                 "estado_aprobacion_comercial": row.get("estado_aprobacion_comercial"),
             }
+            ped_cred = {
+                **ped_aprob,
+                "estado_credito_finanzas": row.get("estado_credito_finanzas"),
+            }
             puede_aprobar = (
                 aprobacion_on
                 and col == "por_autorizar"
                 and puede_aprobar_pedido(base_empresa, sess_user, ped_aprob)
             )
+            puede_aprobar_cred = (
+                credito_on
+                and col == "credito_finanzas"
+                and puede_aprobar_credito_pedido(base_empresa, sess_user, ped_cred)
+            )
             est_com = str(row.get("estado_aprobacion_comercial") or "-").strip().lower()
+            est_fin = str(row.get("estado_credito_finanzas") or "-").strip().lower()
             meta: Dict[str, Any] = {
                 "codigo_movimiento": cod,
                 "estado": row.get("Estado"),
                 "autorizacion": row.get("autorizacion"),
                 "estado_aprobacion_comercial": row.get("estado_aprobacion_comercial"),
+                "estado_credito_finanzas": row.get("estado_credito_finanzas"),
                 "puede_aprobar": puede_aprobar,
+                "puede_aprobar_credito": puede_aprobar_cred,
+                "pendiente_comercial": est_com == "pendiente",
+                "pendiente_credito_finanzas": est_fin == "pendiente",
                 "aprobacion_comercial_activa": aprobacion_on,
+                "credito_pedidos_activo": credito_on,
                 "id_cliente": id_cliente,
                 "nombre_cliente": nombre_cliente,
                 "id_cliente_domicilio": id_dom,
@@ -996,7 +1031,11 @@ def construir_hub_pedidos(
     """
     id_u = to_int_or_none(id_usuario if id_usuario is not None else sess_user.get("id_usuario"))
     aprobacion_on = aprobacion_pedidos_activa(base_empresa) if base_empresa else False
-    ids_visibles = columnas_hub_visibles(aprobacion_activa=aprobacion_on)
+    credito_on = credito_pedidos_activo(base_empresa) if base_empresa else False
+    ids_visibles = columnas_hub_visibles(
+        aprobacion_activa=aprobacion_on,
+        credito_activo=credito_on,
+    )
     items: List[Dict[str, Any]] = []
     mapa_lotes: Dict[int, int] = {}
     contexto_lotes: Dict[int, Dict[str, Any]] = {}
@@ -1045,6 +1084,7 @@ def construir_hub_pedidos(
             dias=dias,
             limit=5000,
             aprobacion_on=aprobacion_on,
+            credito_on=credito_on,
             mapa_lotes=mapa_lotes,
             contexto_lotes=contexto_lotes,
         )
@@ -1077,6 +1117,7 @@ def construir_hub_pedidos(
         "vista": vista if vista in ("lista", "kanban") else "kanban",
         "layout_movil": "chips_cards",
         "aprobacion_comercial_activa": aprobacion_on,
+        "credito_pedidos_activo": credito_on,
         "columnas": [
             {
                 "id": cid,

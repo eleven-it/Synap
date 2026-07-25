@@ -47,9 +47,10 @@ class TestEvaluarReglas(unittest.TestCase):
         self.assertTrue(req)
         self.assertIn("monto", reglas)
 
+    @patch("ecom.services.aprobacion_pedidos.credito_pedidos_activo", return_value=False)
     @patch("ecom.services.aprobacion_pedidos.umbrales_aprobacion_pedidos")
     @patch("ecom.services.aprobacion_pedidos.aprobacion_pedidos_activa", return_value=True)
-    def test_credito_no_autorizado(self, _flag, mock_umbral):
+    def test_credito_no_autorizado(self, _flag, mock_umbral, _credito_off):
         mock_umbral.return_value = {"monto": None, "desc_pie": None, "desc_renglon": None}
         cart = _FakeCart(total="100")
         req, reglas = evaluar_reglas(

@@ -61,7 +61,7 @@ ECOM_ALIASES: dict[str, str] = {
     "presupuestos": "2. Presupuestos",
     "pedidos": "3. Pedidos (hub)",
     "pedidos-hub": "3. Pedidos (hub)",
-    "pedido-masivo": "4. Pedido masivo por sucursales",
+    "pedido-masivo": "4. Pedido masivo por sucursales (y pedido simple)",
     "vendedor-cliente-marca": "5. Vendedor · Cliente · Marca",
     "actualizacion-precios": "6. Actualización de precios",
     "precios-terminados": "6. Actualización de precios",
@@ -69,6 +69,14 @@ ECOM_ALIASES: dict[str, str] = {
     "ajustes-ventas": "8. Ajustes de ventas",
     "asignacion-vendedor": "9. Asignación vendedor",
     "objetivos-venta": "10. Objetivos de venta",
+    "credito-pedidos": "11. Flujo de crédito en pedidos",
+    "credito": "11. Flujo de crédito en pedidos",
+    "semaforo-credito": "11.2. Semáforo de crédito en la toma",
+    "cola-finanzas": "11.4. Qué ve Finanzas / Créditos",
+    "politicas-credito": "11.5. Políticas de crédito (configuración)",
+    "plantillas-credito": "11.6. Plantillas de aviso / cobranza",
+    "hold-preparacion": "11.7. Preparación de pedidos y hold",
+    "credito-roles": "12. Resumen rápido por rol",
 }
 
 ALIASES_BY_MODULE: dict[str, dict[str, str]] = {

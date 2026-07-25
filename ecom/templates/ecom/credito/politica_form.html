@@ -1,0 +1,64 @@
+{% extends "base_app.html" %}
+{% block title %}Nueva política de crédito | Synap{% endblock %}
+{% block content %}
+{% csrf_token %}
+<div class="mx-auto flex w-full min-w-0 max-w-none flex-col px-3 py-3 sm:px-4 md:px-6 lg:px-8 pb-24"
+     x-data="creditoPoliticaForm()" x-init="init()">
+  <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3">
+    <header class="flex flex-wrap items-center gap-3">
+      <h1 class="text-lg font-bold text-white">Alta política de crédito</h1>
+      {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="politicas-credito" class_extra="text-slate-300 hover:text-sky-300" only %}
+    </header>
+  </div>
+  <form @submit.prevent="guardar" class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+    <div class="grid gap-4 sm:grid-cols-2">
+      <label class="block text-sm">ID cliente (vacío = default)
+        <input type="number" x-model="form.id_cliente" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900">
+      </label>
+      <label class="block text-sm">Canal
+        <select x-model="form.canal" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900">
+          <option value="PED">PED</option><option value="PRE">PRE</option>
+        </select>
+      </label>
+      <label class="block text-sm">Límite días
+        <input type="number" x-model="form.limite_dias" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900">
+      </label>
+    </div>
+    <div class="mt-4 flex gap-2">
+      <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">Guardar</button>
+      <a :href="urls.lista" class="rounded-lg border px-4 py-2 text-sm">Cancelar</a>
+    </div>
+  </form>
+</div>
+{{ bootstrap|json_script:"credito-pol-form-bootstrap" }}
+<script>
+function creditoPoliticaForm() {
+  return {
+    urls: {}, form: { id_cliente: '', canal: 'PED', limite_dias: 30, activo: true },
+    init() {
+      const raw = document.getElementById('credito-pol-form-bootstrap');
+      const data = raw ? JSON.parse(raw.textContent) : {};
+      this.urls = data.urls || {};
+    },
+    _csrf() {
+      const m = document.cookie.match(/csrftoken=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : '';
+    },
+    async guardar() {
+      const body = { ...this.form, id_cliente: this.form.id_cliente || null };
+      const r = await fetch(this.urls.api, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || d.ok === false) {
+        if (window.mprShowAviso) window.mprShowAviso(d.error || 'Error al guardar', 'error');
+        return;
+      }
+      window.location.href = this.urls.lista;
+    },
+  };
+}
+</script>
+{% endblock %}

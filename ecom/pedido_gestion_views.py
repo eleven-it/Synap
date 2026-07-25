@@ -44,7 +44,7 @@ from ecom.services.pedidos_hub_pipeline import (
     migrar_carrito_legacy_a_draft,
     url_pedido_masivo_modo_simple,
 )
-from ecom.services.ecom_config_mysql import aprobacion_pedidos_activa
+from ecom.services.ecom_config_mysql import aprobacion_pedidos_activa, credito_pedidos_activo
 from ecom.checkout_relay_views import _session_dias_no_laborables
 from ecom.services.pedido_cabecera_comercial import (
     cabecera_defaults_json,
@@ -314,6 +314,8 @@ class CompraMayoristaContextoAPIView(APIView):
                 "idcliente": idcliente,
                 "cliente": cliente,
                 "autoriza_credito": autoriza_credito,
+                "credito_pedidos_activo": credito_pedidos_activo(base),
+                "credito_precheck_url": reverse("ecom:credito_precheck"),
                 "embalaje": embalaje_cfg,
                 "listaPrecio": lista_payload,
                 "lista_precio_pdf_url": _url_pdf_lista_precio(request) if cliente else "",
@@ -546,6 +548,13 @@ class PedidosHubView(MayoristappWebSessionMixin, TemplateView):
                         "aprobacion_rechazar": reverse(
                             "ecom:api_aprobacion_pedido_rechazar", kwargs={"cod_mov": 0}
                         ).replace("/0/", "/{cod_mov}/"),
+                        "credito_aprobar": reverse(
+                            "ecom:api_credito_aprobar", kwargs={"cod_mov": 0}
+                        ).replace("/0/", "/{cod_mov}/"),
+                        "credito_rechazar": reverse(
+                            "ecom:api_credito_rechazar", kwargs={"cod_mov": 0}
+                        ).replace("/0/", "/{cod_mov}/"),
+                        "credito_cola": reverse("ecom:credito_cola"),
                         # Destino canónico del lote desde el hub (matriz readonly).
                         "lote_matriz_tpl": (
                             reverse("ecom:mayoristapp_pedido_masivo_sucursales")
