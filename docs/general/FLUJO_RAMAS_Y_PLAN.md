@@ -18,15 +18,28 @@ Las ramas **Reports** y **Reports-1.0** se mantienen para historial y compatibil
 
 ### Carpetas de documentación solo en Desarrollo
 
-La documentación de desarrollo en **`docs/`**, **`openspec/`** y los archivos **`.md`** (raíz del repo) se versionan y suben **solo en la rama Desarrollo**. **No subir a Staging** esas carpetas ni archivos `.md`. Tras hacer **merge Desarrollo → Staging**, en la rama Staging ejecutar:
+La documentación de desarrollo en **`docs/`**, **`openspec/`** y los archivos **`.md`** (raíz del repo) se versionan y suben **solo en la rama Desarrollo**. **No deben quedar** en el tip de Staging ni Produccion.
+
+#### Forma recomendada (un solo commit de merge, sin tip con docs)
+
+En el worktree de Staging, mergear **sin** crear el commit todavía, sacar docs/openspec del índice y recién ahí cerrar el merge. Así Staging **nunca** apunta a un árbol que tenga esas carpetas:
 
 ```bash
-git rm -r docs
-git rm -r openspec
-# Si hubiera .md en la raíz que no deban estar en Staging: git rm *.md
-git commit -m "Release: quitar docs, openspec y .md (solo en Desarrollo)"
+# Desde el worktree de Staging (rama Staging limpia)
+git fetch origin
+git merge --no-commit --no-ff origin/Desarrollo
+git rm -rf --ignore-unmatch docs openspec
+# .md solo en la raíz del repo (no borrar README de paquetes internos):
+git ls-files '*.md' | awk -F/ 'NF==1' | xargs -r git rm -f --ignore-unmatch
+git commit -m "Merge branch 'Desarrollo' into Staging"
 git push origin Staging
 ```
+
+En macOS (sin `xargs -r`) se puede omitir la línea de `.md` raíz si no hay ninguno, o usar `xargs git rm -f` con cuidado.
+
+#### Forma legacy (evitar)
+
+Merge completo + segundo commit `git rm -r docs openspec`. Funciona, pero deja un commit intermedio (o un tip momentáneo) con documentación que no debe vivir en Staging.
 
 **Scripts SQL operativos** (DDL ejecutado en runtime por comandos o la herramienta global de esquema) deben vivir **fuera de `docs/`**, en la app correspondiente (ej. `mpr/sql/`, `self_checkout/sql/`), para que Staging y Produccion los incluyan al desplegar.
 
