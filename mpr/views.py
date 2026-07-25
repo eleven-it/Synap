@@ -4965,6 +4965,19 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
 
         modo_presentacion = resolver_modo_presentacion_operativa(request)
         filas = enriquecer_filas_tablero_presentacion(filas, modo_presentacion)
+        from datetime import date as _date_tablero
+
+        fecha_tablero = _date_tablero.today()
+        if fecha_hasta_str:
+            fecha_iso = to_date_or_none(fecha_hasta_str)
+            if fecha_iso:
+                fecha_tablero = _date_tablero.fromisoformat(fecha_iso)
+        if modo_tablero == "par":
+            from mpr.services_maquina_linea import enriquecer_filas_tablero_indicadores_fabricando
+
+            filas = enriquecer_filas_tablero_indicadores_fabricando(
+                base_empresa, filas, fecha=fecha_tablero
+            )
         kpis_tablero = calcular_kpis_tablero_produccion(filas)
         qs_params = {}
         if fecha_desde_str:
@@ -4999,6 +5012,7 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
             "presentacion_query_base": presentacion_query_base,
             "modo_query_base": modo_query_base,
             "unidades_por_docena_tablero": UNIDADES_POR_DOCENA_OPP,
+            "fecha_tablero_ddmmyyyy": fecha_tablero.strftime("%d/%m/%Y"),
             **ctx_marcas,
         })
 

@@ -6,6 +6,7 @@ empresa), siguiendo el estándar AdministraNET.
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date
 from decimal import Decimal
@@ -842,6 +843,132 @@ def deshabilitar_articulo_maquina(
             aid, id_maquina, base_empresa, e, exc_info=True,
         )
         return False, "Error al deshabilitar el artículo."
+
+
+def enriquecer_filas_tablero_indicadores_fabricando(
+    base_empresa: str,
+    filas: List[Dict[str, Any]],
+    *,
+    fecha: Optional[date] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Enriquece filas del tablero Par con indicadores de máquina en columna Fabricando.
+
+    Idempotente: filas sin ``id_articulo`` (p. ej. Pack) se omiten sin error.
+    """
+    if not filas:
+        return filas
+
+    fecha_ref = fecha or date.today()
+    fecha_iso = fecha_ref.isoformat()
+    fecha_ddmmyyyy = fecha_ref.strftime("%d/%m/%Y")
+    base = (base_empresa or "").strip()
+    if not base:
+        return filas
+
+    maquinas_raw = listar_maquinas(base, solo_activas=True)
+    maquina_por_id = {
+        int(m["id"]): m for m in maquinas_raw if _to_int(m.get("id")) is not None
+    }
+    articulos_por_maquina = listar_articulos_vigentes_todas_maquinas(base, fecha_ref)
+
+    maquinas_por_articulo: Dict[int, List[Dict[str, Any]]] = {}
+    linea_nombre_por_id: Dict[int, str] = {}
+    for mid, articulos in (articulos_por_maquina or {}).items():
+        maq = maquina_por_id.get(int(mid))
+        if not maq:
+            continue
+        id_linea = _to_int(maq.get("id_linea_actual"))
+        linea_nombre = str(maq.get("linea_actual_nombre") or "")
+        if id_linea is not None and linea_nombre:
+            linea_nombre_por_id[id_linea] = linea_nombre
+        for art in articulos or []:
+            aid = _to_int(art.get("id_articulo"))
+            if aid is None:
+                continue
+            maquinas_por_articulo.setdefault(aid, []).append(
+                {
+                    "id": int(mid),
+                    "codigo": str(maq.get("codigo") or ""),
+                    "nombre": str(maq.get("nombre") or ""),
+                    "id_linea": id_linea,
+                    "linea_nombre": linea_nombre,
+                }
+            )
+
+    for aid, asignadas in list(maquinas_por_articulo.items()):
+        vistos: set = set()
+        unicas: List[Dict[str, Any]] = []
+        for m in asignadas:
+            if m["id"] not in vistos:
+                vistos.add(m["id"])
+                unicas.append(m)
+        maquinas_por_articulo[aid] = unicas
+
+    cantidades_map = cantidades_parte_planilla_por_fecha(base, fecha_ref)
+    id_lineas = {
+        m["id_linea"]
+        for maqs in maquinas_por_articulo.values()
+        for m in maqs
+        if m.get("id_linea") is not None
+    }
+    operarios_celda = _operarios_roster_celda_por_linea(base, fecha_ref, id_lineas)
+
+    for fila in filas:
+        aid = _to_int(fila.get("id_articulo"))
+        if aid is None:
+            continue
+
+        enviado = float(fila.get("enviado") or 0)
+        maquinas_asignadas = list(maquinas_por_articulo.get(aid, []))
+        tiene_maquina = bool(maquinas_asignadas)
+        fabricando_sin_maquina = enviado > 0 and not tiene_maquina
+
+        fila["tiene_maquina"] = tiene_maquina
+        fila["fabricando_sin_maquina"] = fabricando_sin_maquina
+        fila["maquinas_asignadas"] = maquinas_asignadas
+
+        roster_por_linea: Dict[str, Dict[str, List[str]]] = {}
+        for m in maquinas_asignadas:
+            lid = _to_int(m.get("id_linea"))
+            if lid is None:
+                continue
+            linea_nom = linea_nombre_por_id.get(lid, m.get("linea_nombre") or f"Línea {lid}")
+            if linea_nom in roster_por_linea:
+                continue
+            ops = operarios_celda.get(lid, {})
+            roster_por_linea[linea_nom] = {
+                "manana": [o.get("nombre", "") for o in (ops.get("manana") or []) if o.get("nombre")],
+                "tarde": [o.get("nombre", "") for o in (ops.get("tarde") or []) if o.get("nombre")],
+                "noche": [o.get("nombre", "") for o in (ops.get("noche") or []) if o.get("nombre")],
+            }
+
+        parte_hoy: List[Dict[str, Any]] = []
+        for m in maquinas_asignadas:
+            mid = m["id"]
+            cant = cantidades_map.get((mid, aid), _franjas_cantidad_vacias())
+            etiqueta = f"{m['codigo']} {m['nombre']}".strip() or m["nombre"]
+            parte_hoy.append(
+                {
+                    "maquina": etiqueta,
+                    **_serializar_cantidad_franjas(cant),
+                }
+            )
+
+        fabricando_detalle = {
+            "articulo": str(fila.get("descripcion_articulo") or ""),
+            "codigo": str(fila.get("codigo_manual") or ""),
+            "fabricando_pares": enviado,
+            "maquinas": maquinas_asignadas,
+            "roster_por_linea": roster_por_linea,
+            "parte_hoy": parte_hoy,
+            "fecha_iso": fecha_iso,
+            "fecha_ddmmyyyy": fecha_ddmmyyyy,
+        }
+        fila["fabricando_detalle"] = fabricando_detalle
+        fila["fabricando_detalle_json"] = json.dumps(fabricando_detalle, ensure_ascii=False)
+
+    return filas
 
 
 def _to_int(value: Any) -> Optional[int]:
