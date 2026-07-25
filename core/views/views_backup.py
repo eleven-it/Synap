@@ -18,6 +18,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from core.backup.models import BackupJob
 from core.backup.services import config as backup_config
+from core.backup.services.notify import parse_notify_recipients
 from core.backup.services.sftp_upload import test_sftp_connection
 from core.decorators import administranet_login_required, tiene_permiso
 from core.utils.administranet_types import to_int_or_none, str_or_default
@@ -215,6 +216,17 @@ def backup_config_view(request):
         else:
             new_phrase = (request.POST.get("bootstrap_passphrase") or "").strip()
             backup_config.set_bootstrap_passphrase(bs, new_phrase or None)
+
+        bs.notify_email_enabled = request.POST.get("notify_email_enabled") == "1"
+        bs.notify_email_to = (request.POST.get("notify_email_to") or "").strip()
+        bs.notify_on_success = request.POST.get("notify_on_success") == "1"
+        bs.notify_on_partial = request.POST.get("notify_on_partial") == "1"
+        bs.notify_on_failure = request.POST.get("notify_on_failure") == "1"
+        if bs.notify_email_enabled and not parse_notify_recipients(bs.notify_email_to):
+            errors.append(
+                "Active las notificaciones solo si indica al menos un email válido "
+                "(ej. admin@empresa.com)."
+            )
 
         session_user = request.session.get("user") or {}
         bs.updated_by_cod_usuario = str_or_default(session_user.get("cod_usuario"), "")

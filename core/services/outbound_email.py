@@ -228,6 +228,64 @@ def from_email_correo_saliente() -> str:
     return str(resolver_parametros_smtp().get("from_email") or "no-reply@synap.local")
 
 
+def enviar_correo_saliente(
+    *,
+    subject: str,
+    body: str,
+    to: list[str] | tuple[str, ...] | str,
+    fail_silently: bool = False,
+) -> dict:
+    """
+    Envía un correo de texto plano con el SMTP de Synap.
+
+    ``to`` puede ser una lista o una cadena con direcciones separadas por coma.
+    Devuelve ``{ok, message, recipients}``.
+    """
+    if isinstance(to, str):
+        recipients = [p.strip() for p in to.replace(";", ",").split(",") if p.strip()]
+    else:
+        recipients = [str(p).strip() for p in (to or []) if str(p).strip()]
+    if not recipients:
+        return {"ok": False, "message": "Sin destinatarios.", "recipients": []}
+    if not correo_saliente_configurado():
+        return {
+            "ok": False,
+            "message": "Correo saliente no configurado.",
+            "recipients": recipients,
+        }
+
+    conn = None
+    try:
+        conn = get_connection_correo_saliente()
+        msg = EmailMessage(
+            subject=subject,
+            body=body,
+            from_email=from_email_correo_saliente(),
+            to=recipients,
+            connection=conn,
+        )
+        msg.send(fail_silently=fail_silently)
+        return {
+            "ok": True,
+            "message": f"Correo enviado a {', '.join(recipients)}.",
+            "recipients": recipients,
+        }
+    except Exception as exc:
+        if fail_silently:
+            return {
+                "ok": False,
+                "message": f"No se pudo enviar: {exc}",
+                "recipients": recipients,
+            }
+        raise
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 def probar_conexion_correo_saliente(*, to_email: str | None = None) -> dict:
     """Abre conexión SMTP y opcionalmente envía un correo de prueba. Devuelve ``{ok, message}``."""
     if not correo_saliente_configurado():

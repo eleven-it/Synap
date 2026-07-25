@@ -13,7 +13,7 @@ from core.backup.models import BackupArtifact, BackupJob
 from core.backup.services import config as backup_config
 from core.backup.services import bootstrap as bootstrap_svc
 from core.backup.services import manifest as manifest_svc
-from core.backup.services import mysql_backup, postgres_backup, prechecks, sftp_upload
+from core.backup.services import mysql_backup, notify as backup_notify, postgres_backup, prechecks, sftp_upload
 
 logger = logging.getLogger(__name__)
 
@@ -114,11 +114,11 @@ def run_job(job: BackupJob, *, dry_run: bool = False) -> BackupJob:
 
     disk = prechecks.check_disk_space(job_dir)
     if not disk.ok:
-        return _finalize_failed(job, disk.message)
+        return _finalize_failed(job, disk.message, dry_run=dry_run)
 
     mysql_conn = prechecks.check_mysql_connectivity(job.base_mysql)
     if not mysql_conn.ok:
-        return _finalize_failed(job, mysql_conn.message)
+        return _finalize_failed(job, mysql_conn.message, dry_run=dry_run)
 
     if job.job_type == BackupJob.JOB_TYPE_INCREMENTAL:
         parent = job.parent_job or resolve_incremental_parent(job.base_mysql)
@@ -126,13 +126,14 @@ def run_job(job: BackupJob, *, dry_run: bool = False) -> BackupJob:
             return _finalize_failed(
                 job,
                 "No hay un backup full completado para esta base MySQL. Ejecute un full primero.",
+                dry_run=dry_run,
             )
         job.parent_job = parent
         job.save(update_fields=["parent_job"])
 
         binlog_check = prechecks.check_mysql_binlog_enabled(job.base_mysql)
         if not binlog_check.ok:
-            return _finalize_failed(job, binlog_check.message)
+            return _finalize_failed(job, binlog_check.message, dry_run=dry_run)
 
         wal_check = prechecks.check_postgres_wal_archive_dir(for_incremental=True)
         if not wal_check.ok:
@@ -322,6 +323,7 @@ def run_job(job: BackupJob, *, dry_run: bool = False) -> BackupJob:
         job.remote_upload_status = BackupJob.REMOTE_SKIPPED
         job.save(update_fields=["remote_upload_status"])
 
+    backup_notify.notify_backup_job(job, dry_run=dry_run)
     return job
 
 
@@ -337,7 +339,7 @@ def _format_engine_errors(errors: Dict[str, str]) -> str:
     return "\n".join(parts)
 
 
-def _finalize_failed(job: BackupJob, message: str) -> BackupJob:
+def _finalize_failed(job: BackupJob, message: str, *, dry_run: bool = False) -> BackupJob:
     job.status = BackupJob.STATUS_FAILED
     job.error_summary = message
     job.finished_at = timezone.now()
@@ -345,6 +347,7 @@ def _finalize_failed(job: BackupJob, message: str) -> BackupJob:
     job.save(
         update_fields=["status", "error_summary", "finished_at", "remote_upload_status"]
     )
+    backup_notify.notify_backup_job(job, dry_run=dry_run)
     return job
 
 
