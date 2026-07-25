@@ -282,9 +282,10 @@ Con workflow **inactivo**, verá el resumen clásico (saldo CC y límite en día
 
 ### 11.4. Qué ve Finanzas / Créditos
 
-**Pantalla dedicada:** `/ecom/credito/cola/`  
+**Pantalla dedicada:** menú **Ventas → Crédito → Cola crédito Finanzas** (también en **E-commerce → Crédito**).  
+**Ruta:** `/ecom/credito/cola/`  
 **Título:** Pendiente crédito Finanzas.  
-**Permiso:** `finance.credito.aprobar` (asignado al **puesto** del usuario).
+**Permiso para ver el ítem de menú y entrar:** `finance.credito.aprobar` (asignado al **puesto** del usuario).
 
 #### Pasos en la cola
 
@@ -309,9 +310,10 @@ Con workflow **inactivo**, verá el resumen clásico (saldo CC y límite en día
 
 ### 11.5. Políticas de crédito (configuración)
 
+**Menú:** Ventas → Crédito → **Políticas de crédito** (también E-commerce → Crédito).  
 **Ruta:** `/ecom/credito/politicas/`  
 **Alta:** `/ecom/credito/politicas/nueva/`  
-**Permiso:** `finance.credito.configurar` (distinto del de aprobar).
+**Permiso para ver el menú y entrar:** `finance.credito.configurar` (distinto del de aprobar).
 
 #### Para qué sirve
 
@@ -335,6 +337,7 @@ Si deja **ID cliente vacío**, la política aplica como **default de empresa** p
 
 ### 11.6. Plantillas de aviso / cobranza
 
+**Menú:** Ventas → Crédito → **Plantillas aviso crédito**.  
 **Ruta:** `/ecom/credito/plantillas/`  
 **Permiso:** `finance.credito.configurar`.
 
@@ -388,11 +391,11 @@ Documentación técnica: [CREDITO_PEDIDOS_WORKFLOW.md](CREDITO_PEDIDOS_WORKFLOW.
 
 ### 11.9. Permisos — resumen rápido
 
-| Acción | Permiso | Pantalla |
-|--------|---------|----------|
+| Acción | Permiso | Pantalla / menú |
+|--------|---------|-----------------|
 | Ver / tomar pedidos | Sesión mayorista + permisos ecom habituales | Hub / toma |
-| Aprobar o rechazar crédito | `finance.credito.aprobar` | Hub CTAs · `/ecom/credito/cola/` |
-| ABM políticas y plantillas | `finance.credito.configurar` | `/ecom/credito/politicas/` · `/ecom/credito/plantillas/` |
+| Aprobar o rechazar crédito | `finance.credito.aprobar` | **Ventas → Crédito → Cola crédito Finanzas** · hub CTAs · `/ecom/credito/cola/` |
+| ABM políticas y plantillas | `finance.credito.configurar` | **Ventas → Crédito → Políticas / Plantillas** |
 | Aprobación comercial (descuentos, etc.) | `ecom.pedidos.aprobar` | Columna Por autorizar |
 
 Los permisos se asignan por **Puesto** en la administración de permisos Synap (`/core/permisos-puesto/` o flujo equivalente de su instalación).

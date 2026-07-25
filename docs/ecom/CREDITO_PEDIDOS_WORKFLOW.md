@@ -106,9 +106,9 @@ Parche VB6 documentado aquí; implementación fuera del árbol Python Synap (com
 
 | Ruta | Permiso | Descripción |
 |------|---------|-------------|
-| `/ecom/credito/cola/` | `finance.credito.aprobar` | Cola Finanzas |
-| `/ecom/credito/politicas/` | `finance.credito.configurar` | ABM políticas |
-| `/ecom/credito/plantillas/` | `finance.credito.configurar` | ABM plantillas aviso |
+| `/ecom/credito/cola/` | `finance.credito.aprobar` | Cola Finanzas — menú **Ventas / E-commerce → Crédito → Cola crédito Finanzas** |
+| `/ecom/credito/politicas/` | `finance.credito.configurar` | ABM políticas — menú **→ Políticas de crédito** |
+| `/ecom/credito/plantillas/` | `finance.credito.configurar` | ABM plantillas aviso — menú **→ Plantillas aviso crédito** |
 | Hub pedidos | CTAs gateados | Columna crédito Finanzas (REQ-HUB-02/11) |
 
 Look visual: hero `slate-800`, patrón Alta Movimiento (`docs/stock/ALTA_MOVIMIENTO_UX.md`).
