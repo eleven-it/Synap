@@ -1,0 +1,1 @@
+# Documentación funcional MVP — ver AUDITORIA_IMPUTACION_CONTABILIDAD_SYNAP.md
