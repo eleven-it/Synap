@@ -3,13 +3,27 @@ set -e
 
 echo "🚀 Iniciando Synap..."
 
-# Esperar a que PostgreSQL esté listo
+# Esperar a que PostgreSQL esté listo (pg_isready: no oculta errores de Django/MySQL)
 echo "⏳ Esperando a que PostgreSQL esté listo..."
-until python manage.py shell -c "from django.db import connection; connection.ensure_connection()" 2>/dev/null; do
-    echo "   PostgreSQL no está listo, esperando..."
+PG_HOST="${POSTGRES_HOST:-db}"
+PG_PORT="${POSTGRES_PORT:-5432}"
+PG_USER="${POSTGRES_USER:-myuser}"
+PG_DB="${POSTGRES_DB:-mydatabase}"
+until pg_isready -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DB" >/dev/null 2>&1; do
+    echo "   PostgreSQL no está listo en ${PG_HOST}:${PG_PORT}, esperando..."
     sleep 2
 done
-echo "✅ PostgreSQL está listo"
+echo "✅ PostgreSQL acepta conexiones (${PG_HOST})"
+# Verificación Django (mostrar error real si falla; no silenciar stderr)
+echo "⏳ Verificando conexión Django a PostgreSQL..."
+if ! python manage.py shell -c "from django.db import connection; connection.ensure_connection(); print('django_db_ok')"; then
+    echo "❌ Django no pudo conectar a PostgreSQL (ver error arriba). Reintentando..."
+    until python manage.py shell -c "from django.db import connection; connection.ensure_connection(); print('django_db_ok')"; do
+        echo "   Reintentando conexión Django..."
+        sleep 3
+    done
+fi
+echo "✅ PostgreSQL está listo (Django)"
 
 # Esperar a que Redis esté listo
 echo "⏳ Esperando a que Redis esté listo..."
