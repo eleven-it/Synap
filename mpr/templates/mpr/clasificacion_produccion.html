@@ -22,13 +22,15 @@
   .dark tr.group\/row:hover .clasif-col.clasif-col-tint-1 { background-color: rgb(7 89 133 / 0.28); }
   .dark tr.group\/row:hover .clasif-col.clasif-col-tint-2 { background-color: rgb(146 64 14 / 0.28); }
 </style>
-<section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
-    <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
         {% include "mpr/includes/clasificacion_encabezado.html" %}
 
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+
         {% if arrastre %}
-        <div class="mb-3 overflow-hidden rounded-lg border border-teal-200 bg-teal-50/80 p-4 shadow-sm dark:border-teal-800/50 dark:bg-teal-950/25 sm:mb-4">
+        <div class="mb-3 flex-shrink-0 overflow-hidden rounded-lg border border-teal-200 bg-teal-50/80 p-4 shadow-sm dark:border-teal-800/50 dark:bg-teal-950/25 sm:mb-4">
             <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-teal-900 dark:text-teal-100">
                 <span class="material-icons text-base text-teal-600 dark:text-teal-400" aria-hidden="true">history</span>
                 Pendiente de turnos anteriores
@@ -50,7 +52,7 @@
         {% if not requiere_fecha and not filas_vacio %}
         <form method="post" action="{{ url_registrar }}"
               id="form-clasificacion-produccion"
-              class="mpr-post-loading flex flex-col gap-2 sm:gap-3"
+              class="mpr-post-loading flex min-h-0 flex-1 flex-col"
               data-mpr-loading-title="Registrando control de calidad..."
               data-mpr-loading-subtitle="Transfiriendo stock entre depósitos."
               x-data="clasificacionProduccion()"
@@ -62,9 +64,9 @@
             {% if turno_id %}<input type="hidden" name="turno_id" value="{{ turno_id }}">{% endif %}
         {% endif %}
 
-        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800{% if not requiere_fecha and not filas_vacio %}{% else %} mb-2{% endif %}">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
             {% if requiere_fecha %}
-            <div class="border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/50 dark:bg-blue-950/30 sm:px-5">
+            <div class="flex-shrink-0 border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/50 dark:bg-blue-950/30 sm:px-5">
                 <div class="flex items-start gap-3">
                     <span class="material-icons text-blue-600 dark:text-blue-400" aria-hidden="true">info</span>
                     <div>
@@ -74,7 +76,7 @@
                 </div>
             </div>
             {% elif filas_vacio %}
-            <div class="border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/50 dark:bg-blue-950/30 sm:px-5">
+            <div class="flex-shrink-0 border-b border-blue-200 bg-blue-50 px-4 py-3 dark:border-blue-800/50 dark:bg-blue-950/30 sm:px-5">
                 <div class="flex items-start gap-3">
                     <span class="material-icons text-blue-600 dark:text-blue-400" aria-hidden="true">info</span>
                     <div>
@@ -91,7 +93,7 @@
                 </div>
             </div>
             {% else %}
-            <div class="border-b border-slate-100 bg-slate-50/80 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50 sm:px-4">
+            <div class="flex-shrink-0 border-b border-slate-100 bg-slate-50/80 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50 sm:px-4">
                 <label for="clasif-busqueda-articulo" class="sr-only">Buscar artículo en la grilla</label>
                 <div class="relative max-w-lg">
                     <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-slate-400" aria-hidden="true">search</span>
@@ -133,7 +135,7 @@
             </div>
 
             {% if bloqueos %}
-            <div class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            <div class="flex-shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
                 {% for b in bloqueos %}
                 <p>{{ b.codigo_manual }} — {{ b.mensaje }} <a href="{% url 'mpr:parte_produccion' %}?fecha={{ fecha_str }}&amp;turno_id={{ turno_id }}" class="font-semibold underline">Ir al parte</a></p>
                 {% endfor %}
@@ -141,7 +143,7 @@
             {% endif %}
             {% endif %}
 
-            <div class="overflow-x-auto" role="region" aria-label="Grilla control de calidad por máquina, artículo y operario">
+            <div class="min-h-0 flex-1 overflow-auto" role="region" aria-label="Grilla control de calidad por máquina, artículo y operario">
                 <table class="clasif-grilla w-full border-collapse" style="min-width: 72rem;">
                     <caption class="sr-only">Control de calidad — {% if filas %}{{ filas|length }} filas{% else %}sin filas{% endif %}</caption>
                     {% include "mpr/includes/clasificacion_tabla_thead.html" %}
@@ -252,13 +254,13 @@
             </div>
 
             {% if not requiere_fecha and not filas_vacio %}
-            <div class="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
+            <div class="flex-shrink-0 border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
                  x-show="busqueda.trim() !== '' && Array.from($root.querySelectorAll('tbody tr.clasif-grilla-fila')).every(function(el) { return !el.offsetParent; })"
                  x-cloak>
                 Ningún artículo coincide con la búsqueda.
             </div>
 
-            <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
+            <div class="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
                 <p x-show="hayExcedida" x-cloak class="text-xs font-medium text-red-600 dark:text-red-400">
                     <span class="material-icons align-text-bottom text-sm" aria-hidden="true">error_outline</span>
                     Corregí las filas donde 2da + desperdicio superan lo clasificable antes de guardar.
@@ -280,6 +282,8 @@
         {% if not requiere_fecha and not filas_vacio %}
         </form>
         {% endif %}
+
+        </div>{# /flex-1: chrome fijo, datos en viewport #}
 
     </div>
 </section>

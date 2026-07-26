@@ -6246,11 +6246,9 @@ class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
         fecha_str = (self.request.GET.get("fecha") or "").strip()
         id_linea_raw = (self.request.GET.get("id_linea") or "").strip()
         id_maquina_raw = (self.request.GET.get("id_maquina") or "").strip()
-        q_busqueda = (self.request.GET.get("q") or "").strip()
         context["fecha_str"] = fecha_str
         context["id_linea"] = id_linea_raw
         context["id_maquina"] = id_maquina_raw
-        context["q"] = q_busqueda
 
         warnings_opp = self.request.session.pop("parte_warnings", None)
         if warnings_opp:
@@ -6266,13 +6264,14 @@ class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
             fecha_obj = datetime.strptime(fecha_str, "%d/%m/%Y").date()
             id_linea = int(id_linea_raw) if id_linea_raw else None
             id_maquina = int(id_maquina_raw) if id_maquina_raw else None
+            # La búsqueda de artículo es filtro predictivo en cliente (chrome), no GET.
             grilla_planilla = construir_grilla_parte_planilla(
                 base_empresa,
                 fecha_obj,
                 id_linea=id_linea,
                 id_maquina=id_maquina,
                 marcas_incluidos=marcas_incluidos or None,
-                q=q_busqueda or None,
+                q=None,
             )
             context["grilla_planilla"] = grilla_planilla
             context["fecha_obj"] = fecha_obj
@@ -6345,13 +6344,10 @@ class RegistrarParteProduccionView(MprLoginRequiredMixin, View):
         qs_params = {"fecha": fecha_str}
         id_linea_raw = (request.POST.get("id_linea") or request.GET.get("id_linea") or "").strip()
         id_maquina_raw = (request.POST.get("id_maquina") or request.GET.get("id_maquina") or "").strip()
-        q_raw = (request.POST.get("q") or request.GET.get("q") or "").strip()
         if id_linea_raw:
             qs_params["id_linea"] = id_linea_raw
         if id_maquina_raw:
             qs_params["id_maquina"] = id_maquina_raw
-        if q_raw:
-            qs_params["q"] = q_raw
         qs = _urlencode_con_marcas(qs_params, _parse_marcas_incluidos(request))
         return redirect(f"{redirect_url}?{qs}")
 

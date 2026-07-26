@@ -18,8 +18,9 @@
   .parte-turno-tint-noche { border-left-color: rgb(196 181 253 / 0.6) !important; background-color: rgb(245 243 255 / 0.8); }
   .dark .parte-turno-tint-noche { border-left-color: rgb(109 40 217 / 0.4) !important; background-color: rgb(46 16 101 / 0.18); }
 </style>
-<section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
-    <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5"
+         x-data="partePagina()">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
         {# Chrome denso slate-800 — mismo look que Tablero (docs/mpr/TABLERO_PRODUCCION_CHROME_DENSIDAD.md) #}
         <div class="mb-3 flex-shrink-0">
@@ -31,8 +32,6 @@
                     <form method="get"
                           action="{% url 'mpr:parte_produccion' %}"
                           class="flex min-w-0 flex-1 flex-wrap items-end gap-2"
-                          x-data="parteFiltros()"
-                          x-init="init()"
                           @submit="onSubmit($event)">
 
                         <label class="flex flex-col gap-0.5">
@@ -71,20 +70,6 @@
                             <input type="hidden" name="id_maquina" :value="maquinaSel">
                         </label>
 
-                        <label class="flex min-w-[12rem] flex-1 flex-col gap-0.5 sm:min-w-[14rem]">
-                            <span class="text-[10px] font-medium text-slate-400">Buscar artículo</span>
-                            <div class="relative">
-                                <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
-                                <input type="text"
-                                       name="q"
-                                       value="{{ q }}"
-                                       autocomplete="off"
-                                       placeholder="Código o descripción…"
-                                       aria-label="Buscar artículo por código o descripción"
-                                       class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 pl-9 pr-2 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
-                            </div>
-                        </label>
-
                         {# Marcas ocultas: conservadas en DOM (altura del tags filter rompe alineación del chrome) #}
                         <div class="hidden" aria-hidden="true">
                             {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
@@ -96,6 +81,29 @@
                             Cargar grilla
                         </button>
                     </form>
+
+                    {# Búsqueda predictiva en grilla ya cargada (no envía a Cargar grilla) #}
+                    <label class="flex min-w-[12rem] flex-1 flex-col gap-0.5 sm:min-w-[14rem] sm:max-w-md">
+                        <span class="text-[10px] font-medium text-slate-400">Buscar artículo</span>
+                        <div class="relative">
+                            <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
+                            <input type="search"
+                                   x-model="filtro"
+                                   @keydown.enter.prevent
+                                   autocomplete="off"
+                                   placeholder="Código o descripción…"
+                                   aria-label="Filtrar artículo por código o descripción en la grilla"
+                                   class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 py-0 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
+                            <button type="button"
+                                    x-show="filtro.trim() !== ''"
+                                    x-cloak
+                                    @click="filtro = ''"
+                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                                    aria-label="Limpiar búsqueda">
+                                <span class="material-icons text-base" aria-hidden="true">close</span>
+                            </button>
+                        </div>
+                    </label>
 
                     <div class="ml-auto flex flex-wrap items-center gap-2">
                         {% include "mpr/includes/chrome_nav_flujo.html" with current="parte" fecha_str=fecha_str only %}
@@ -112,9 +120,11 @@
             </div>
         </div>
 
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+
         {# Banner warnings OPP (cupo no bloqueante heredado) #}
         {% if warnings_opp %}
-        <div class="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-900/20 sm:mb-4">
+        <div class="mb-3 flex-shrink-0 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-900/20 sm:mb-4">
             <div class="flex items-start gap-3">
                 <span class="material-icons text-amber-600 dark:text-amber-400" aria-hidden="true">warning</span>
                 <div>
@@ -135,7 +145,7 @@
             <span class="material-icons mb-3 text-5xl text-slate-300 dark:text-slate-600" aria-hidden="true">event</span>
             <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Seleccioná una fecha y pulsá «Cargar grilla»</p>
             <p class="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
-                La grilla se arma con las máquinas y artículos de la planilla de control de calidad de la fecha elegida. Podés acotar por línea, máquina, marcas o buscar un artículo.
+                La grilla se arma con las máquinas y artículos de la planilla de control de calidad de la fecha elegida. Podés acotar por línea o máquina; luego filtrá artículos con la búsqueda del encabezado.
             </p>
         </div>
 
@@ -147,7 +157,7 @@
                 <div class="text-sm text-blue-800 dark:text-blue-200">
                     <p class="font-medium">No hay artículos en planilla para <strong>{{ fecha_str }}</strong> con los filtros aplicados.</p>
                     <p class="mt-1 text-xs text-blue-700/90 dark:text-blue-300/90">
-                        Verificá la fecha, la línea o la máquina, o quitá filtros de marcas y búsqueda. Los artículos aparecen cuando hay cupo en Fabricando y planilla de control de calidad para ese día.
+                        Verificá la fecha, la línea o la máquina. Los artículos aparecen cuando hay cupo en Fabricando y planilla de control de calidad para ese día.
                     </p>
                 </div>
             </div>
@@ -155,14 +165,14 @@
 
         {% else %}
 
-        <div class="mb-3 rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-700/50 dark:bg-purple-900/20 sm:mb-4">
+        <div class="mb-3 flex-shrink-0 rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-700/50 dark:bg-purple-900/20 sm:mb-4">
             <p class="text-xs text-purple-900 dark:text-purple-100">
                 <strong>Validación activa:</strong> la suma de los tres turnos (docenas × {{ unidades_por_docena_parte|default:12 }} + pares) de cada fila no puede superar el cupo <strong>Fabricando</strong>. Si se excede, el guardado se rechaza.
             </p>
         </div>
 
         {% if grilla_planilla.turnos_bloqueados %}
-        <div class="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/60 dark:bg-amber-950/30 sm:mb-4">
+        <div class="mb-3 flex-shrink-0 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/60 dark:bg-amber-950/30 sm:mb-4">
             <p class="flex items-start gap-2 text-sm font-medium text-amber-900 dark:text-amber-100">
                 <span class="material-icons text-base text-amber-600 dark:text-amber-400" aria-hidden="true">lock</span>
                 Uno o más turnos de esta fecha ya tienen control de calidad registrado. Esos turnos no se pueden modificar en el parte.
@@ -171,9 +181,8 @@
         {% endif %}
 
         {# Grilla de captura planilla QC #}
-        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
-             x-data="{ filtro: '' }">
-            <form method="post" action="{% url 'mpr:parte_produccion_registrar' %}" class="mpr-post-loading flex flex-col" id="form-parte-produccion"
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <form method="post" action="{% url 'mpr:parte_produccion_registrar' %}" class="mpr-post-loading flex min-h-0 flex-1 flex-col" id="form-parte-produccion"
                   data-bloquear-fabricando="{% if bloquear_parte_supera_fabricando %}1{% else %}0{% endif %}"
                   data-pares-por-docena="{{ unidades_por_docena_parte|default:12 }}"
                   data-mpr-loading-title="Registrando parte..."
@@ -182,32 +191,9 @@
                 <input type="hidden" name="fecha" value="{{ fecha_str }}">
                 <input type="hidden" name="id_linea" value="{{ id_linea }}">
                 <input type="hidden" name="id_maquina" value="{{ id_maquina }}">
-                <input type="hidden" name="q" value="{{ q }}">
 
-                {# Filtro rápido dentro de la grilla ya cargada #}
-                <div class="border-b border-slate-100 bg-slate-50/80 px-3 py-2 dark:border-slate-700 dark:bg-slate-800/50 sm:px-4">
-                    <label for="parte-filtro-grilla" class="sr-only">Filtrar artículos en la grilla</label>
-                    <div class="relative max-w-md">
-                        <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-slate-400" aria-hidden="true">filter_list</span>
-                        <input type="search"
-                               id="parte-filtro-grilla"
-                               x-model="filtro"
-                               placeholder="Filtrar en la grilla cargada…"
-                               autocomplete="off"
-                               class="h-9 w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-8 text-sm text-slate-800 shadow-sm placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"/>
-                        <button type="button"
-                                x-show="filtro.trim() !== ''"
-                                x-cloak
-                                @click="filtro = ''"
-                                class="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
-                                aria-label="Limpiar filtro">
-                            <span class="material-icons text-base" aria-hidden="true">close</span>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="overflow-x-auto" role="region" aria-label="Grilla parte de producción (planilla QC)">
-                    <table class="parte-grilla w-full border-collapse" style="min-width: 56rem;">
+                <div class="min-h-0 flex-1 overflow-auto" role="region" aria-label="Grilla parte de producción (planilla QC)">
+                <table class="parte-grilla w-full border-collapse" style="min-width: 56rem;">
                         <caption class="sr-only">Grilla de producción máquina × artículo — {{ fecha_str }}</caption>
                         <thead>
                             <tr class="border-b border-slate-200 bg-slate-50/95 dark:border-slate-600 dark:bg-slate-800/90">
@@ -358,13 +344,13 @@
                     </table>
                 </div>
 
-                <div class="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
+                <div class="flex-shrink-0 border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
                      x-show="filtro.trim() !== '' && Array.from($root.querySelectorAll('tbody tr.parte-grilla-fila')).every(function(el) { return !el.offsetParent; })"
                      x-cloak>
-                    Ningún artículo coincide con el filtro.
+                    Ningún artículo coincide con la búsqueda.
                 </div>
 
-                <div class="flex flex-wrap items-end justify-end gap-3 border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
+                <div class="flex flex-shrink-0 flex-wrap items-end justify-end gap-3 border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
                     <div class="flex min-w-[12rem] max-w-xs flex-1 flex-col gap-1">
                         <label for="id_notas" class="text-xs font-medium text-slate-600 dark:text-slate-400">Notas (opcional)</label>
                         <input type="text" id="id_notas" name="notas" maxlength="500" placeholder="Observaciones del parte..."
@@ -380,6 +366,8 @@
         </div>
 
         {% endif %}
+
+        </div>{# /flex-1: chrome fijo, datos en viewport #}
 
     </div>
 </section>
@@ -515,8 +503,9 @@
 })();
 
 document.addEventListener('alpine:init', function () {
-    Alpine.data('parteFiltros', function () {
+    Alpine.data('partePagina', function () {
         return {
+            filtro: '',
             fechaIso: '',
             lineaSel: '{{ id_linea|default:"" }}',
             maquinaSel: '{{ id_maquina|default:"" }}',

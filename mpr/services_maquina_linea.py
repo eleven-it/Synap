@@ -908,6 +908,7 @@ def enriquecer_filas_tablero_indicadores_fabricando(
             if m["id"] not in vistos:
                 vistos.add(m["id"])
                 unicas.append(m)
+        unicas.sort(key=_clave_orden_maquina_item)
         maquinas_por_articulo[aid] = unicas
 
     cantidades_map = cantidades_parte_planilla_por_fecha(base, fecha_ref)
@@ -991,6 +992,8 @@ def enriquecer_filas_tablero_indicadores_fabricando(
             return (int(key) if isinstance(key, int) else 9_999_998, g.get("nombre") or "")
 
         grupos_fila = [g for _, g in sorted(grupos_por_linea.items(), key=_ord_grupo)]
+        for g in grupos_fila:
+            g["maquinas"] = sorted(g.get("maquinas") or [], key=_clave_orden_maquina_item)
 
         fabricando_detalle = {
             "articulo": str(fila.get("descripcion_articulo") or ""),
@@ -1006,27 +1009,34 @@ def enriquecer_filas_tablero_indicadores_fabricando(
     return filas
 
 
+def _clave_orden_maquina_item(m: Any) -> Tuple[int, str]:
+    """Clave de orden: número de máquina (código/id) y código textual."""
+    if not isinstance(m, dict):
+        return (9_999_999, "")
+    codigo = str(m.get("codigo") or "").strip()
+    n: Optional[int] = None
+    if codigo.isdigit():
+        n = int(codigo)
+    else:
+        digitos = "".join(ch for ch in codigo if ch.isdigit())
+        if digitos:
+            try:
+                n = int(digitos)
+            except ValueError:
+                n = None
+    if n is None:
+        n = _to_int(m.get("id"))
+    if n is None:
+        n = 9_999_999
+    return (n, codigo.lower())
+
+
 def _orden_numerico_maquina(maquinas: Any) -> int:
     """Menor código/id numérico de máquinas asignadas (1…N). Sin máquinas → sentinela alto."""
     mejor: Optional[int] = None
     for m in maquinas or []:
-        if not isinstance(m, dict):
-            continue
-        codigo = str(m.get("codigo") or "").strip()
-        n: Optional[int] = None
-        if codigo.isdigit():
-            n = int(codigo)
-        else:
-            # p. ej. "12 — …" o solo dígitos al inicio
-            digitos = "".join(ch for ch in codigo if ch.isdigit())
-            if digitos:
-                try:
-                    n = int(digitos)
-                except ValueError:
-                    n = None
-        if n is None:
-            n = _to_int(m.get("id"))
-        if n is None:
+        n, _ = _clave_orden_maquina_item(m)
+        if n >= 9_999_999:
             continue
         if mejor is None or n < mejor:
             mejor = n

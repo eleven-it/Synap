@@ -94,6 +94,38 @@ class TestOrdenarFilasTableroMaquinaMarca(SimpleTestCase):
         self.assertEqual(out[1]["descripcion_articulo"], "alta")
 
 
+class TestOrdenMaquinasAsignadasTooltip(SimpleTestCase):
+    """Las máquinas del tooltip/modal van ordenadas por código numérico."""
+
+    @patch("mpr.services_maquina_linea._operarios_roster_celda_por_linea")
+    @patch("mpr.services_maquina_linea.cantidades_parte_planilla_por_fecha")
+    @patch("mpr.services_maquina_linea.listar_articulos_vigentes_todas_maquinas")
+    @patch("mpr.services_maquina_linea.listar_maquinas")
+    def test_maquinas_asignadas_orden_numerico(
+        self, mock_maquinas, mock_articulos, mock_cantidades, mock_roster
+    ):
+        mock_maquinas.return_value = [
+            {"id": 58, "codigo": "58", "nombre": "", "id_linea_actual": 1, "linea_actual_nombre": "L1"},
+            {"id": 4, "codigo": "4", "nombre": "", "id_linea_actual": 1, "linea_actual_nombre": "L1"},
+            {"id": 51, "codigo": "51", "nombre": "", "id_linea_actual": 1, "linea_actual_nombre": "L1"},
+            {"id": 29, "codigo": "29", "nombre": "", "id_linea_actual": 1, "linea_actual_nombre": "L1"},
+        ]
+        mock_articulos.return_value = {
+            58: [{"id_articulo": 7}],
+            4: [{"id_articulo": 7}],
+            51: [{"id_articulo": 7}],
+            29: [{"id_articulo": 7}],
+        }
+        mock_cantidades.return_value = {}
+        mock_roster.return_value = {1: {"manana": [], "tarde": [], "noche": []}}
+        filas = [{"id_articulo": 7, "enviado": 3.0, "descripcion_articulo": "Art"}]
+        out = enriquecer_filas_tablero_indicadores_fabricando("emp", filas)
+        codigos = [m["codigo"] for m in out[0]["maquinas_asignadas"]]
+        self.assertEqual(codigos, ["4", "29", "51", "58"])
+        maqs_modal = out[0]["fabricando_detalle"]["grupos_fila"][0]["maquinas"]
+        self.assertEqual([m["codigo"] for m in maqs_modal], ["4", "29", "51", "58"])
+
+
 class TestEnriquecerFilasTableroIndicadoresFabricando(SimpleTestCase):
     """Enriquecimiento batch de filas Par con máquinas vigentes."""
 
