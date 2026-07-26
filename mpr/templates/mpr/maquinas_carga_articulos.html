@@ -259,8 +259,8 @@
                             <th scope="col" class="w-16 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Código</th>
                             <th scope="col" class="w-36 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Nombre</th>
                             <th scope="col" class="w-24 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Línea</th>
-                            <th scope="col" class="w-[22%] max-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Asignar artículo a máquina</th>
-                            <th scope="col" class="min-w-[16rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Observación (planilla)</th>
+                            <th scope="col" class="w-[36%] min-w-[22rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Asignar artículo a máquina</th>
+                            <th scope="col" class="min-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Observación (planilla)</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -279,13 +279,13 @@
                                     <span x-show="m.linea_actual_nombre" x-text="m.linea_actual_nombre"></span>
                                     <span x-show="!m.linea_actual_nombre" class="text-gray-400 dark:text-gray-500">Sin línea</span>
                                 </td>
-                                <td class="w-[22%] max-w-[18rem] px-3 py-2.5 sm:px-4">
-                                    {# Multiselección densa: columna acotada; resto del ancho va a Observación #}
-                                    <div class="relative w-full max-w-[18rem]">
-                                        <div class="tags-filter-container relative flex min-h-8 flex-wrap items-center gap-0.5 overflow-visible rounded-lg border border-slate-300 bg-white px-1.5 py-0.5 shadow-sm focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:focus-within:border-purple-400 dark:focus-within:ring-purple-500/40"
+                                <td class="w-[36%] min-w-[22rem] px-3 py-2.5 sm:px-4">
+                                    {# Una sola línea: chips + búsqueda; scroll horizontal si hay muchos #}
+                                    <div class="relative w-full">
+                                        <div class="tags-filter-container relative flex h-8 min-h-8 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden rounded-lg border border-slate-300 bg-white px-1.5 shadow-sm focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:focus-within:border-purple-400 dark:focus-within:ring-purple-500/40"
                                              @click="$el.querySelector('.tags-input')?.focus()">
                                             <template x-for="art in m.articulos" :key="art.id_articulo">
-                                                <span class="inline-flex max-w-[min(100%,14rem)] items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                                                <span class="inline-flex max-w-[12rem] shrink-0 items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-purple-800 dark:bg-purple-900 dark:text-purple-200"
                                                       :title="(codigoCorto(art) + ' ' + (art.descripcion_articulo || '')).trim()">
                                                     <span class="min-w-0 truncate">
                                                         <span class="font-semibold" x-text="codigoCorto(art)"></span>
@@ -311,7 +311,7 @@
                                                    placeholder="Agregar artículo Fabricado…"
                                                    autocomplete="off"
                                                    :aria-label="'Agregar artículo a ' + (m.nombre || m.codigo || 'máquina')"
-                                                   class="tags-input min-w-[6rem] flex-1 basis-[6rem] border-none bg-transparent py-0.5 text-xs leading-tight text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"/>
+                                                   class="tags-input min-w-[9rem] flex-1 border-none bg-transparent py-0.5 text-xs leading-tight text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"/>
                                         </div>
 
                                         {# Dropdown de sugerencias #}
