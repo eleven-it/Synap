@@ -256,11 +256,11 @@
                     <caption class="sr-only">Asignar artículo a máquina</caption>
                     <thead class="bg-gray-50/90 dark:bg-gray-800/80">
                         <tr>
-                            <th scope="col" class="w-20 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Código</th>
-                            <th scope="col" class="w-40 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Nombre</th>
-                            <th scope="col" class="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Línea</th>
-                            <th scope="col" class="min-w-[14rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Asignar artículo a máquina</th>
-                            <th scope="col" class="w-[22rem] min-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:w-[26rem] sm:px-4">Observación (planilla)</th>
+                            <th scope="col" class="w-16 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Código</th>
+                            <th scope="col" class="w-36 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Nombre</th>
+                            <th scope="col" class="w-24 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Línea</th>
+                            <th scope="col" class="w-[22%] max-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Asignar artículo a máquina</th>
+                            <th scope="col" class="min-w-[16rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Observación (planilla)</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -279,13 +279,13 @@
                                     <span x-show="m.linea_actual_nombre" x-text="m.linea_actual_nombre"></span>
                                     <span x-show="!m.linea_actual_nombre" class="text-gray-400 dark:text-gray-500">Sin línea</span>
                                 </td>
-                                <td class="px-3 py-2.5 sm:px-4">
-                                    {# Multiselección densa: chips + input; ancho completo de la celda #}
-                                    <div class="relative w-full">
-                                        <div class="tags-filter-container relative flex min-h-8 flex-wrap items-center gap-0.5 overflow-visible rounded-lg border border-slate-300 bg-white px-1.5 py-1 shadow-sm focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:focus-within:border-purple-400 dark:focus-within:ring-purple-500/40"
+                                <td class="w-[22%] max-w-[18rem] px-3 py-2.5 sm:px-4">
+                                    {# Multiselección densa: columna acotada; resto del ancho va a Observación #}
+                                    <div class="relative w-full max-w-[18rem]">
+                                        <div class="tags-filter-container relative flex min-h-8 flex-wrap items-center gap-0.5 overflow-visible rounded-lg border border-slate-300 bg-white px-1.5 py-0.5 shadow-sm focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:focus-within:border-purple-400 dark:focus-within:ring-purple-500/40"
                                              @click="$el.querySelector('.tags-input')?.focus()">
                                             <template x-for="art in m.articulos" :key="art.id_articulo">
-                                                <span class="inline-flex max-w-[min(100%,18rem)] items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                                                <span class="inline-flex max-w-[min(100%,14rem)] items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-purple-800 dark:bg-purple-900 dark:text-purple-200"
                                                       :title="(codigoCorto(art) + ' ' + (art.descripcion_articulo || '')).trim()">
                                                     <span class="min-w-0 truncate">
                                                         <span class="font-semibold" x-text="codigoCorto(art)"></span>
@@ -347,18 +347,17 @@
                                     <p x-show="m.ta.error" x-cloak x-text="m.ta.error"
                                        class="mt-1 text-xs font-medium text-red-600 dark:text-red-400" role="alert"></p>
                                 </td>
-                                <td class="w-[22rem] min-w-[18rem] px-3 py-2.5 align-top sm:w-[26rem] sm:px-4">
-                                    <textarea x-model="m.observacion" maxlength="220" rows="2"
+                                <td class="min-w-[16rem] px-3 py-2.5 align-top sm:px-4">
+                                    <textarea x-model="m.observacion" maxlength="220" rows="1"
                                               placeholder="Observación para la planilla…"
                                               @blur="onObservacionBlur(m)"
-                                              class="min-h-14 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"></textarea>
-                                    <div class="mt-1 flex items-center justify-between gap-2 text-[11px]">
-                                        <p x-show="m.obsEstado === 'guardando'" x-cloak class="text-purple-600 dark:text-purple-400">Guardando…</p>
-                                        <p x-show="m.obsEstado === 'guardado'" x-cloak class="text-green-600 dark:text-green-400">Guardado</p>
-                                        <p x-show="m.obsError" x-cloak x-text="m.obsError" class="font-medium text-red-600 dark:text-red-400" role="alert"></p>
-                                        <p class="ml-auto text-gray-400 dark:text-gray-500">
-                                            <span x-text="(m.observacion || '').length"></span>/220
-                                        </p>
+                                              class="box-border h-8 min-h-8 w-full resize-none rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm leading-tight text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"></textarea>
+                                    <div class="mt-0.5 flex flex-wrap items-center gap-2 text-[11px]"
+                                         x-show="m.obsEstado === 'guardando' || m.obsEstado === 'guardado' || m.obsError"
+                                         x-cloak>
+                                        <p x-show="m.obsEstado === 'guardando'" class="text-purple-600 dark:text-purple-400">Guardando…</p>
+                                        <p x-show="m.obsEstado === 'guardado'" class="text-green-600 dark:text-green-400">Guardado</p>
+                                        <p x-show="m.obsError" x-text="m.obsError" class="font-medium text-red-600 dark:text-red-400" role="alert"></p>
                                     </div>
                                 </td>
                             </tr>
