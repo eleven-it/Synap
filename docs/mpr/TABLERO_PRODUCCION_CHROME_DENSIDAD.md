@@ -34,6 +34,7 @@ Ver §6.
 | Ayuda | Ícono `help_outline` → manual `#tablero-produccion` |
 | CTA primario | **Enviar** en púrpura (coherente con «Nuevo» del hub Pedidos) |
 | Estado | Pack\|Par, Docenas\|Pares, búsqueda: en la misma barra |
+| Toggles | **Pack\|Par** activo púrpura; **Docenas\|Pares** activo sky (`variant=dark`) para no confundir modo vs unidad |
 
 ## 4. Arquitectura de información (una barra)
 
@@ -49,6 +50,7 @@ Ver §6.
 - Orden de filas (Par): máquina asignada → número de máquina 1…N → marca → descripción.
 - Modal Fabricando: artículo como título principal; tooltip BO «Máquina X» en chip de código.
 - Modales (envío / Fabricando) en el mismo `x-data` de página.
+- **Thead tabla (Par):** columna Artículo en una sola celda `rowspan="2"` (sin etiqueta duplicada). Fondos del `thead` (Pack y Par) **opacos** (sin alpha) para que el sticky no deje ver las filas al scrollear.
 
 ## 5. Iconos y tooltips (atajos)
 
