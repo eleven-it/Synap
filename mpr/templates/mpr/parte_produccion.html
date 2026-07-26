@@ -21,51 +21,34 @@
 <section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
     <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
-        {# Migas de pan #}
-        <nav class="mb-2 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
-            <ol class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <li><a href="{% url 'mpr:tablero_produccion' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-slate-900">Producción</a></li>
-                <li class="text-slate-300 dark:text-slate-600" aria-hidden="true">/</li>
-                <li><span class="font-medium text-slate-800 dark:text-slate-200" aria-current="page">Parte de producción</span></li>
-            </ol>
-            {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="parte-supervisor" only %}
-        </nav>
+        {# Chrome denso slate-800 — mismo look que Tablero (docs/mpr/TABLERO_PRODUCCION_CHROME_DENSIDAD.md) #}
+        <div class="mb-3 flex-shrink-0">
+            <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
+                <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                    <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl">Parte de producción</h1>
 
-        {# Encabezado compacto: título + filtros canon MPR + accesos #}
-        <div class="mb-2 rounded-lg border border-slate-700 bg-slate-800 p-2 shadow-md dark:border-slate-800 dark:bg-slate-900 sm:mb-3 sm:p-3">
-            <header class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between lg:gap-3">
-                <div class="min-w-0 shrink-0">
-                    <h1 class="flex items-center gap-2 text-lg font-bold tracking-tight text-white sm:text-xl">
-                        <span class="material-icons text-2xl text-purple-400" aria-hidden="true">assignment</span>
-                        Parte de producción
-                    </h1>
-                </div>
-
-                <div class="flex flex-wrap items-end gap-2 sm:gap-2.5 lg:shrink-0">
                     <form method="get"
                           action="{% url 'mpr:parte_produccion' %}"
-                          class="flex flex-wrap items-end gap-2"
+                          class="flex min-w-0 flex-1 flex-wrap items-end gap-2"
                           x-data="parteFiltros()"
                           x-init="init()"
                           @submit="onSubmit($event)">
 
-                        {# Fecha (obligatoria) — se envía como dd/MM/yyyy #}
                         <label class="flex flex-col gap-0.5">
                             <span class="text-[10px] font-medium text-slate-400">Fecha <span class="text-purple-300">*</span></span>
                             <input type="date"
                                    x-model="fechaIso"
                                    required
                                    aria-label="Fecha del parte"
-                                   class="rounded-md border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white [color-scheme:dark] focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50"/>
+                                   class="rounded-lg border border-slate-600 bg-slate-900/80 px-2 py-1.5 text-xs text-white [color-scheme:dark] focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
                             <input type="hidden" name="fecha" :value="fechaDdmmyyyy">
                         </label>
 
-                        {# Línea #}
                         <label class="flex flex-col gap-0.5">
                             <span class="text-[10px] font-medium text-slate-400">Línea</span>
                             <select x-model="lineaSel"
                                     aria-label="Filtrar por línea"
-                                    class="w-36 rounded-md border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 sm:w-40">
+                                    class="w-36 rounded-lg border border-slate-600 bg-slate-900/80 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-40">
                                 <option value="">Todas las líneas</option>
                                 {% for l in lineas_filtro %}
                                 <option value="{{ l.id }}">{{ l.nombre }}</option>
@@ -74,12 +57,11 @@
                             <input type="hidden" name="id_linea" :value="lineaSel">
                         </label>
 
-                        {# Máquina (se acota por línea seleccionada) #}
                         <label class="flex flex-col gap-0.5">
                             <span class="text-[10px] font-medium text-slate-400">Máquina</span>
                             <select x-model="maquinaSel"
                                     aria-label="Filtrar por máquina"
-                                    class="w-40 rounded-md border border-slate-600 bg-slate-700 px-2 py-1.5 text-xs text-white focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 sm:w-44">
+                                    class="w-40 rounded-lg border border-slate-600 bg-slate-900/80 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-44">
                                 <option value="">Todas las máquinas</option>
                                 <template x-for="m in maquinasVisibles" :key="m.id">
                                     <option :value="m.id" x-text="m.label"></option>
@@ -88,40 +70,48 @@
                             <input type="hidden" name="id_maquina" :value="maquinaSel">
                         </label>
 
-                        {# Búsqueda de artículo (código o descripción) — server-side #}
-                        <label class="flex flex-col gap-0.5">
+                        <label class="flex min-w-[12rem] flex-1 flex-col gap-0.5 sm:min-w-[14rem]">
                             <span class="text-[10px] font-medium text-slate-400">Buscar artículo</span>
                             <div class="relative">
-                                <span class="material-icons pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-sm text-slate-400" aria-hidden="true">search</span>
+                                <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
                                 <input type="text"
                                        name="q"
                                        value="{{ q }}"
                                        autocomplete="off"
                                        placeholder="Código o descripción…"
                                        aria-label="Buscar artículo por código o descripción"
-                                       class="w-44 rounded-md border border-slate-600 bg-slate-700 py-1.5 pl-8 pr-2 text-xs text-white placeholder:text-slate-400 focus:border-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 sm:w-48"/>
+                                       class="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-1.5 pl-9 pr-2 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
                             </div>
                         </label>
 
-                        {# Marcas #}
                         {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
 
                         <button type="submit"
-                                class="inline-flex min-h-8 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                             <span class="material-icons text-base" aria-hidden="true">grid_on</span>
                             Cargar grilla
                         </button>
                     </form>
 
-                    {% include "mpr/includes/btn_control_calidad.html" with variant="solid" fecha_str=fecha_str only %}
-
-                    <a href="{% url 'mpr:tablero_produccion' %}"
-                       class="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                        <span class="material-icons text-base" aria-hidden="true">dashboard</span>
-                        Tablero
-                    </a>
-                </div>
-            </header>
+                    <div class="ml-auto flex flex-wrap items-center gap-2">
+                        <a href="{% url 'mpr:tablero_produccion' %}"
+                           title="Tablero de producción"
+                           aria-label="Tablero de producción"
+                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-white hover:bg-slate-600">
+                            <span class="material-icons text-lg leading-none" aria-hidden="true">dashboard</span>
+                        </a>
+                        {% include "mpr/includes/btn_control_calidad.html" with variant="icon" fecha_str=fecha_str only %}
+                        <a href="{% url 'mpr:manual_usuario' %}#parte-supervisor"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           title="Manual del parte"
+                           aria-label="Manual del parte"
+                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600 hover:text-white">
+                            <span class="material-icons text-lg leading-none" aria-hidden="true">help_outline</span>
+                        </a>
+                    </div>
+                </header>
+            </div>
         </div>
 
         {# Banner warnings OPP (cupo no bloqueante heredado) #}

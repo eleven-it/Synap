@@ -22,19 +22,30 @@ Cualquier UI de **OPT / ventana_pack** (y pantallas hermanas de demanda→OPT) q
 
 Ver §6.
 
-## 3. Decisiones de producto (cerradas 25/07/2026)
+## 3. Decisiones de producto (cerradas 25/07/2026 · chrome compartido 26/07/2026)
 
 | Tema | Decisión |
 |------|----------|
-| Look | Barra **slate-800** alineada al hub Pedidos (`pedidos_hub.html`): título blanco, búsqueda oscura, toggles púrpura, CTAs `slate-700` / primario púrpura |
-| Migas | **Eliminadas** en esta pantalla |
-| KPI cabecera | Solo **resta urgente** (+ chip Solo urgentes en Par). Sin «resta total» |
-| Atajos visibles | Actualizar (con label), Parte, CC — iconos + tooltip; Actualizar con texto como Pedidos |
-| Menú `⋯ Más` | Tablero KPIs, Armado, Anular envíos (si permiso) — con **texto** |
-| Ayuda | Ícono `help_outline` → manual `#tablero-produccion` |
-| CTA primario | **Enviar** en púrpura (coherente con «Nuevo» del hub Pedidos) |
-| Estado | Pack\|Par, Docenas\|Pares, búsqueda: en la misma barra |
-| Toggles | **Pack\|Par** activo púrpura; **Docenas\|Pares** activo sky (`variant=dark`) para no confundir modo vs unidad |
+| Look | Barra **slate-800** alineada al hub Pedidos (`pedidos_hub.html`): título blanco, búsqueda oscura, toggles púrpura/sky, CTAs `slate-700` / primario púrpura |
+| Migas | **Eliminadas** en Tablero, **Parte** y **Control de calidad** |
+| KPI cabecera | Solo **resta urgente** (+ chip Solo urgentes en Par). Sin «resta total» — solo Tablero |
+| Atajos visibles | Iconos `h-8 w-8` slate (+ CC teal): entre Tablero ↔ Parte ↔ CC + `help_outline` |
+| Menú `⋯ Más` | Tablero KPIs, Armado, Anular envíos (si permiso) — **solo Tablero** |
+| Ayuda | Ícono `help_outline` → ancla del manual de cada pantalla |
+| CTA cargar filtros | **Cargar grilla** = secundario `slate-700` (Parte / CC); Tablero usa Actualizar |
+| CTA primario acción | Tablero **Enviar** púrpura; Parte **Guardar** púrpura; CC **Guardar** teal |
+| Estado | Pack\|Par, Docenas\|Pares, búsqueda: en la misma barra (**Pack\|Par solo Tablero**) |
+| Toggles | **Pack\|Par** activo púrpura; **Docenas\|Pares** activo sky (`variant=dark`) |
+
+## 3.1 Alcance chrome compartido (flujo planta)
+
+Misma barra densa en:
+
+1. `tablero_produccion.html`
+2. `parte_produccion.html`
+3. `clasificacion_encabezado.html` (+ sin migas en `clasificacion_produccion.html`)
+
+Sin Pack\|Par ni KPI urgente fuera del Tablero. Fecha / línea / máquina / turno siguen visibles y operativos en Parte y CC.
 
 ## 4. Arquitectura de información (una barra)
 

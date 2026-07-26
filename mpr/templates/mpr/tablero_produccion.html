@@ -37,7 +37,12 @@
             mostrarFabMaqTip(event, m) {
                 let texto = '';
                 if (typeof m === 'string') {
-                    texto = m.trim();
+                    texto = m.trim()
+                        .split(/\s*\|\s*/)
+                        .flatMap(function (parte) { return parte.split(/,\s*/); })
+                        .map(function (s) { return s.trim(); })
+                        .filter(Boolean)
+                        .join('\n');
                 } else if (m && typeof m === 'object') {
                     const codigo = (m.codigo || m.id) != null ? String(m.codigo || m.id) : '';
                     const nombre = (m.nombre || '').trim();
@@ -479,7 +484,7 @@
                 <div x-show="fabMaqTipOpen"
                      x-cloak
                      x-transition.opacity.duration.150ms
-                     class="pointer-events-none fixed z-[10000] max-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-white shadow-2xl"
+                     class="pointer-events-none fixed z-[10000] max-w-[16rem] whitespace-pre-line rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium leading-relaxed text-white shadow-2xl"
                      :style="'left:' + fabMaqTipX + 'px; top:' + fabMaqTipY + 'px'"
                      role="tooltip"
                      x-text="fabMaqTipText"></div>
@@ -680,7 +685,7 @@
                                             @mousemove="moverFabMaqTip($event)"
                                             @mouseleave="ocultarFabMaqTip()"
                                             data-fab-detalle="{{ fila.fabricando_detalle_json|escape }}"
-                                            data-maq-tip="{% for m in fila.maquinas_asignadas %}Máquina {{ m.codigo|default:m.id }}{% if not forloop.last %}, {% endif %}{% endfor %}"
+                                            data-maq-tip="{% for m in fila.maquinas_asignadas %}Máquina {{ m.codigo|default:m.id }}{% if not forloop.last %}|{% endif %}{% endfor %}"
                                             class="inline-flex h-6 w-6 shrink-0 cursor-help items-center justify-center rounded text-violet-600 transition-colors hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:text-violet-400 dark:hover:bg-violet-950/50"
                                             aria-label="Máquinas: {% for m in fila.maquinas_asignadas %}{{ m.codigo|default:m.id }}{% if not forloop.last %}, {% endif %}{% empty %}asignadas{% endfor %}. Clic para ver detalle de {{ fila.descripcion_articulo }}">
                                         <span class="material-icons text-base" aria-hidden="true">precision_manufacturing</span>
