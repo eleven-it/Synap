@@ -2,6 +2,18 @@
 
 Contenedor persistente para trabajar la conexión a la DB administraNET en local.
 
+## Pool Synap y conexiones Sleep
+
+Synap reutiliza conexiones MySQL vía `core/mysql_pool.py`. Tras cada request/comando la conexión vuelve al pool y aparece como `Sleep` en el servidor **solo un tiempo breve** (`OPTIONS.POOL_IDLE_SECONDS`, default **30 s**); luego se cierra sola. Al salir del proceso (`atexit`) se llama `close_all`.
+
+Antes de un **restore** o mantenimiento exclusivo:
+
+```bash
+docker exec Synap_app python manage.py cerrar_pool_mysql
+# Si hay varios workers, reiniciar la app o esperar el idle; conexiones ajenas: KILL en MySQL.
+docker compose restart Synap_app   # opcional, limpia workers
+```
+
 ## Levantar el contenedor
 
 ```bash

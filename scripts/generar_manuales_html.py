@@ -98,6 +98,7 @@ CONTABILIDAD_ALIASES: dict[str, str] = {
     "permisos": "9. Permisos (resumen)",
     "problemas": "10. Problemas frecuentes",
     "resumen": "11. Resumen rápido por rol",
+    "eliminar-asientos": "12. Eliminar asientos (borrado físico)",
 }
 
 ALIASES_BY_MODULE: dict[str, dict[str, str]] = {

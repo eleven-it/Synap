@@ -96,6 +96,8 @@ CHECKS_INCLUIDOS = [
     CHECK_SALDOS,
     CHECK_SALDOS_PERIODO,
 ]
+CHECKS_SALDOS = frozenset({CHECK_FILAS_SALDO, CHECK_SALDOS, CHECK_SALDOS_PERIODO})
+CHECKS_MOTOR_DRY_RUN = frozenset(CHECKS_INCLUIDOS) | {CHECK_REI}
 CHECKS_REGENERACION_ASIENTO = frozenset({CHECK_REGENERACION, CHECK_REGENERACION_VENTA})
 CONCEPTO_ANUL = {"FA": 4, "FC": 4, "OP": 8}
 DESC_CONCEPTO_ANUL = {4: "Anulación-Compra", 8: "Anulación-Pago"}
@@ -1643,10 +1645,18 @@ def _sincronizar_aprobaciones_rei(dry_run_id, propuestas: list[dict]) -> int:
     return AprobacionREI.objects.filter(dry_run_id=dry_run_id).count()
 
 
+def _check_ids_alcance(alcance: dict) -> set[str]:
+    raw = alcance.get("check_ids") or []
+    if isinstance(raw, str):
+        raw = [raw]
+    return {str(cid) for cid in raw if cid}
+
+
 def _calcular_impacto(
     items: list[dict],
     asientos_por_tipo: dict[str, int],
     propuestas_rei: Optional[list[dict]] = None,
+    checks_incluidos: Optional[list[str]] = None,
 ) -> dict[str, Any]:
     totales_tabla: dict[str, int] = defaultdict(int)
     cuentas_delta: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
@@ -1686,7 +1696,7 @@ def _calcular_impacto(
         "total_excluidos": len(items) - aplicables,
         "asientos_regenerar_por_tipo": asientos_por_tipo,
         "cuentas_impactadas": cuentas_impactadas,
-        "checks_incluidos": list(CHECKS_INCLUIDOS),
+        "checks_incluidos": list(checks_incluidos or CHECKS_INCLUIDOS),
         "propuestas_rei_total": len(propuestas_rei),
         "propuestas_rei_pendientes": len(propuestas_rei),
         "anulaciones_bloqueadas": anulaciones_bloqueadas,
@@ -1699,17 +1709,26 @@ def dry_run(
     alcance: dict,
     politica: dict,
     usuario: str = "",
+    dry_run_id=None,
 ) -> dict[str, Any]:
     """
     Ejecuta dry-run de corrección (100 % SELECT en legacy).
 
     Genera plan de items, persiste ``PlanCorreccion`` en Postgres y devuelve
     payload con guards (TTL, config_hash, data_fingerprint) e impacto.
+
+    Si ``dry_run_id`` está seteado, actualiza in-place el plan existente
+    (mismo UUID): recalcula plan, hashes y ``expira_en``, mantiene ``creado_en``
+    y ``dry_run_id``. Solo permitido si ``estado == "propuesto"`` y no expirado.
     """
     if not base_empresa:
         raise ValueError("base_empresa es obligatorio.")
     if not alcance.get("id_ejercicio") and politica.get("alcance_recompute") == "ejercicio_seleccionado":
         raise ValueError("id_ejercicio es obligatorio en el alcance.")
+
+    check_ids = _check_ids_alcance(alcance)
+    if not check_ids:
+        raise ValueError("Seleccioná al menos un diagnóstico.")
 
     config_hash = calcular_config_hash(politica)
     tolerancia = _d(politica.get("tolerancia_decimal", Decimal("0.005")))
@@ -1717,26 +1736,60 @@ def dry_run(
     expira = ahora + timedelta(minutes=PLAN_TTL_MIN)
     timestamp_bkp = ahora.strftime("%Y%m%d_%H%M%S")
 
+    checks_planificados: list[str] = []
+
     pool = get_mysql_pool()
     with pool.get_connection(base_empresa) as conn:
         repo = _RepoLectura(conn)
         ejercicios_alcance = _ejercicios_en_alcance(alcance, politica, repo)
 
-        items_concepto = _plan_concepto_anulacion_incoherente(repo, ejercicios_alcance)
-        items_asientos, asientos_por_tipo = _plan_regeneracion_asientos(repo, ejercicios_alcance)
-        items_asientos_venta, asientos_venta_por_tipo = _plan_regeneracion_asientos_venta(
-            repo, ejercicios_alcance
-        )
-        for tipo, cant in asientos_venta_por_tipo.items():
-            asientos_por_tipo[tipo] = asientos_por_tipo.get(tipo, 0) + cant
+        items_concepto: list[dict] = []
+        if CHECK_CONCEPTO_ANUL in check_ids:
+            checks_planificados.append(CHECK_CONCEPTO_ANUL)
+            items_concepto = _plan_concepto_anulacion_incoherente(repo, ejercicios_alcance)
+
+        items_asientos: list[dict] = []
+        asientos_por_tipo: dict[str, int] = {}
+        if CHECK_REGENERACION in check_ids:
+            checks_planificados.append(CHECK_REGENERACION)
+            items_asientos, asientos_por_tipo = _plan_regeneracion_asientos(repo, ejercicios_alcance)
+
+        items_asientos_venta: list[dict] = []
+        if CHECK_REGENERACION_VENTA in check_ids:
+            checks_planificados.append(CHECK_REGENERACION_VENTA)
+            items_asientos_venta, asientos_venta_por_tipo = _plan_regeneracion_asientos_venta(
+                repo, ejercicios_alcance
+            )
+            for tipo, cant in asientos_venta_por_tipo.items():
+                asientos_por_tipo[tipo] = asientos_por_tipo.get(tipo, 0) + cant
+
         items_asientos_todos = items_asientos + items_asientos_venta
-        items_anulacion = _plan_reparacion_anulaciones(conn, repo, politica, alcance)
-        items_saldos = _plan_reconstruccion_saldos(
-            repo,
-            items_asientos_todos,
-            ejercicios_alcance,
-            tolerancia,
+
+        items_anulacion: list[dict] = []
+        if CHECK_ANULACION in check_ids:
+            checks_planificados.append(CHECK_ANULACION)
+            items_anulacion = _plan_reparacion_anulaciones(conn, repo, politica, alcance)
+
+        incluir_saldos = bool(check_ids & CHECKS_SALDOS) or bool(
+            check_ids & CHECKS_REGENERACION_ASIENTO
         )
+        items_saldos: list[dict] = []
+        if incluir_saldos:
+            if check_ids & CHECKS_SALDOS:
+                checks_planificados.extend(
+                    [cid for cid in CHECKS_INCLUIDOS if cid in check_ids and cid in CHECKS_SALDOS]
+                )
+            elif check_ids & CHECKS_REGENERACION_ASIENTO:
+                checks_planificados.extend(
+                    [CHECK_FILAS_SALDO, CHECK_SALDOS, CHECK_SALDOS_PERIODO]
+                )
+            items_saldos = _plan_reconstruccion_saldos(
+                repo,
+                items_asientos_todos,
+                ejercicios_alcance,
+                tolerancia,
+            )
+
         items = items_asientos_todos + items_anulacion + items_concepto + items_saldos
         _marcar_exclusiones(items, politica, repo)
         data_fingerprint = _calcular_fingerprint_desde_legacy(
@@ -1745,35 +1798,79 @@ def dry_run(
 
         id_ejercicio = to_int_or_none(alcance.get("id_ejercicio"))
         propuestas_rei: list[dict] = []
-        if id_ejercicio is not None:
+        if CHECK_REI in check_ids and id_ejercicio is not None:
+            checks_planificados.append(CHECK_REI)
             propuestas_rei = _plan_propuestas_rei(
                 repo, id_ejercicio, tolerancia, ejercicios_alcance
             )
 
+    checks_incluidos = list(dict.fromkeys(checks_planificados))
+
     tablas_afectadas = {item["tabla"] for item in items if not item.get("excluido")}
     backups_propuestos = _generar_backups_propuestos(timestamp_bkp, tablas_afectadas)
-    impacto = _calcular_impacto(items, asientos_por_tipo, propuestas_rei)
+    impacto = _calcular_impacto(
+        items,
+        asientos_por_tipo,
+        propuestas_rei,
+        checks_incluidos=checks_incluidos,
+    )
 
     plan_json = {
         "items": items,
         "items_anulacion": items_anulacion,
         "backups_propuestos": backups_propuestos,
         "impacto": impacto,
-        "checks_incluidos": CHECKS_INCLUIDOS,
+        "checks_incluidos": checks_incluidos,
         "propuestas_rei": propuestas_rei,
     }
 
-    plan_obj = PlanCorreccion.objects.create(
-        base_empresa=base_empresa,
-        alcance=dict(alcance),
-        config_hash=config_hash,
-        data_fingerprint=data_fingerprint,
-        plan=plan_json,
-        estado="propuesto",
-        creado_por=usuario or "sistema",
-        creado_en=ahora,
-        expira_en=expira,
-    )
+    if dry_run_id:
+        try:
+            plan_obj = PlanCorreccion.objects.get(dry_run_id=dry_run_id)
+        except PlanCorreccion.DoesNotExist as exc:
+            raise ValueError(
+                "No existe un plan de diagnóstico con ese identificador."
+            ) from exc
+        if plan_obj.base_empresa != base_empresa:
+            raise ValueError("El plan no corresponde a la empresa indicada.")
+        if plan_obj.estado != "propuesto":
+            raise ValueError(
+                f"El plan está en estado «{plan_obj.estado}» y no puede actualizarse."
+            )
+        if plan_obj.expira_en and plan_obj.expira_en <= ahora:
+            raise ValueError(
+                "El plan de diagnóstico expiró. Generá uno nuevo desde el tablero."
+            )
+        plan_obj.alcance = dict(alcance)
+        plan_obj.config_hash = config_hash
+        plan_obj.data_fingerprint = data_fingerprint
+        plan_obj.plan = plan_json
+        plan_obj.estado = "propuesto"
+        plan_obj.creado_por = usuario or "sistema"
+        plan_obj.expira_en = expira
+        plan_obj.save(
+            update_fields=[
+                "alcance",
+                "config_hash",
+                "data_fingerprint",
+                "plan",
+                "estado",
+                "creado_por",
+                "expira_en",
+            ]
+        )
+    else:
+        plan_obj = PlanCorreccion.objects.create(
+            base_empresa=base_empresa,
+            alcance=dict(alcance),
+            config_hash=config_hash,
+            data_fingerprint=data_fingerprint,
+            plan=plan_json,
+            estado="propuesto",
+            creado_por=usuario or "sistema",
+            creado_en=ahora,
+            expira_en=expira,
+        )
 
     total_rei = _sincronizar_aprobaciones_rei(plan_obj.dry_run_id, propuestas_rei)
     impacto["propuestas_rei_total"] = total_rei

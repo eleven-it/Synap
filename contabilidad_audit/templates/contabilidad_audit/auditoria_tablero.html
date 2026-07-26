@@ -7,6 +7,8 @@
 
 {% block content %}
 {{ checks_disponibles|json_script:"contabilidad-checks-data" }}
+{{ checks_seleccionados|json_script:"contabilidad-checks-seleccionados" }}
+{{ checks_corregibles|json_script:"contabilidad-checks-corregibles" }}
 <section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24"
          x-data="auditoriaTablero({
             tableroUrl: '{{ tablero_url }}',
@@ -14,182 +16,205 @@
             dryRunUrl: '{{ dry_run_url }}',
             baseEmpresa: '{{ base_empresa|escapejs }}',
             idEjercicio: '{{ id_ejercicio|escapejs }}',
-            idPeriodo: '{{ id_periodo|escapejs }}',
             autoEjecutar: {% if auto_ejecutar %}true{% else %}false{% endif %}
          })"
          x-init="init()">
 
-    <!-- Encabezado (canon reportes) -->
-    <div class="relative overflow-hidden">
-        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 dark:from-slate-800 dark:via-slate-900 dark:to-slate-950 opacity-95"></div>
-        <div class="relative w-full px-4 sm:px-6 lg:px-12 pt-8 pb-20">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">
-                        Contabilidad · Auditoría solo lectura
-                    </p>
-                    <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">
-                        {{ titulo_pagina }}
-                    </h1>
-                    <p class="text-sm text-slate-300 mt-2 max-w-2xl">
-                        Detecta inconsistencias entre el diario contable y las tablas de saldos derivadas.
-                        Motor determinista, sin escritura en el sistema legacy.
-                    </p>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
-                    {% include "includes/btn_manual_ayuda.html" with url_name="contabilidad_audit:manual_usuario" seccion="tablero-auditoria" class_extra="text-slate-300 hover:text-sky-300 border border-slate-600 hover:border-slate-400 rounded-full px-3 py-2" only %}
-                    <a href="{{ configuracion_url }}"
-                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-slate-200 hover:text-white border border-slate-600 hover:border-slate-400 transition-all">
-                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-width="1.5"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-width="1.5"/></svg>
-                        <span class="hidden sm:inline">Configuración</span>
-                    </a>
-                    <a :href="dryRunLink()"
-                       @click="mostrarEsperaDryRun($event)"
-                       :class="!puedeEjecutar() ? 'opacity-40 pointer-events-none' : ''"
-                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-indigo-300 hover:text-indigo-200 border border-indigo-700 hover:border-indigo-500 transition-all">
-                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        <span class="hidden sm:inline">Generar dry-run</span>
-                    </a>
-                    <a href="{{ lotes_url }}"
-                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-violet-300 hover:text-violet-200 border border-violet-700 hover:border-violet-500 transition-all">
-                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7h16M4 12h16M4 17h10" stroke-width="1.5" stroke-linecap="round"/></svg>
-                        <span class="hidden sm:inline">Lotes aplicados</span>
-                    </a>
-                    <a :href="exportUrl('csv')"
-                       :class="!puedeEjecutar() ? 'opacity-40 pointer-events-none' : ''"
-                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-sky-300 hover:text-sky-200 border border-sky-700 hover:border-sky-500 transition-all">
-                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        <span class="hidden sm:inline">CSV</span>
-                    </a>
-                    <a :href="exportUrl('xlsx')"
-                       :class="!puedeEjecutar() ? 'opacity-40 pointer-events-none' : ''"
-                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-green-400 hover:text-green-300 border border-green-700 hover:border-green-500 transition-all">
-                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12m0 0l-4-4m4 4l4-4M3 21h18" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        <span class="hidden sm:inline">Excel</span>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div class="w-full px-4 sm:px-6 lg:px-12 py-4">
 
-    <div class="w-full px-4 sm:px-6 lg:px-12 -mt-12 relative z-20 space-y-6">
+    <!-- Encabezado denso sticky (no se oculta al scrollear; bajo navbar fijo h-14/h-16) -->
+    <div class="mb-3 sticky top-14 z-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md md:top-16">
+        <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl">
+                {{ titulo_pagina|default:"Auditoría de imputación contable" }}
+            </h1>
 
-        <!-- Panel de filtros -->
-        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <!-- Empresa base: fija desde la sesión (solo lectura) -->
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Empresa (base)</label>
-                    <div class="w-full flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/60 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 cursor-not-allowed"
-                         title="La empresa base proviene de la sesión y no puede modificarse.">
-                        <svg class="w-4 h-4 text-slate-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        <span class="truncate font-medium" x-text="filtros.baseEmpresa || '—'"></span>
-                        <svg class="w-3.5 h-3.5 text-slate-400 ml-auto flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </div>
-                    <input type="hidden" x-model="filtros.baseEmpresa">
-                </div>
-
-                <!-- Ejercicio: dropdown con búsqueda predictiva -->
-                <div class="relative" @click.outside="ejercicioAbierto = false">
-                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Ejercicio <span class="text-rose-500">*</span></label>
-                    <div class="relative">
-                        <input type="text" x-model="ejercicioBusqueda"
-                               @focus="ejercicioAbierto = true" @click="ejercicioAbierto = true"
-                               @keydown.escape.stop="ejercicioAbierto = false"
-                               placeholder="Buscar ejercicio…" autocomplete="off"
-                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3 pr-8 py-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:outline-none">
-                        <button type="button" x-show="filtros.idEjercicio" @click="limpiarEjercicio()"
-                                class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500" title="Limpiar ejercicio">
-                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="1.5" stroke-linecap="round"/></svg>
-                        </button>
-                        <div x-show="ejercicioAbierto" x-cloak x-transition.opacity
-                             class="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                            <template x-if="cargandoDatos">
-                                <div class="px-3 py-2 text-xs text-slate-400">Cargando ejercicios…</div>
-                            </template>
-                            <template x-if="!cargandoDatos && ejerciciosFiltrados.length === 0">
-                                <div class="px-3 py-2 text-xs text-slate-400">Sin ejercicios disponibles.</div>
-                            </template>
-                            <template x-for="ej in ejerciciosFiltrados" :key="ej.id">
-                                <button type="button" @click="seleccionarEjercicio(ej)"
-                                        class="w-full text-left px-3 py-2 text-sm hover:bg-sky-50 dark:hover:bg-slate-700/60 flex items-center justify-between gap-2"
-                                        :class="String(filtros.idEjercicio) === String(ej.id) ? 'bg-sky-50 dark:bg-slate-700/60 font-semibold' : ''">
-                                    <span class="text-slate-700 dark:text-slate-100 truncate" x-text="ej.label"></span>
-                                    <span x-show="ej.cerrado" class="text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-400 flex-shrink-0">Cerrado</span>
-                                </button>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Período: dropdown predictivo (depende del ejercicio) -->
-                <div class="relative" @click.outside="periodoAbierto = false">
-                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">Período (opcional)</label>
-                    <div class="relative">
-                        <input type="text" x-model="periodoBusqueda"
-                               @focus="filtros.idEjercicio && (periodoAbierto = true)" @click="filtros.idEjercicio && (periodoAbierto = true)"
-                               @keydown.escape.stop="periodoAbierto = false"
-                               :disabled="!filtros.idEjercicio"
-                               :placeholder="filtros.idEjercicio ? 'Todos' : 'Elegí un ejercicio primero'" autocomplete="off"
-                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3 pr-8 py-2 text-sm text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-sky-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed">
-                        <button type="button" x-show="filtros.idPeriodo" @click="limpiarPeriodo()"
-                                class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500" title="Limpiar período">
-                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M6 18L18 6M6 6l12 12" stroke-width="1.5" stroke-linecap="round"/></svg>
-                        </button>
-                        <div x-show="periodoAbierto" x-cloak x-transition.opacity
-                             class="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                            <template x-if="periodosFiltrados.length === 0">
-                                <div class="px-3 py-2 text-xs text-slate-400">Sin períodos para el ejercicio elegido.</div>
-                            </template>
-                            <template x-for="pe in periodosFiltrados" :key="pe.id">
-                                <button type="button" @click="seleccionarPeriodo(pe)"
-                                        class="w-full text-left px-3 py-2 text-sm hover:bg-sky-50 dark:hover:bg-slate-700/60 flex items-center justify-between gap-2"
-                                        :class="String(filtros.idPeriodo) === String(pe.id) ? 'bg-sky-50 dark:bg-slate-700/60 font-semibold' : ''">
-                                    <span class="text-slate-700 dark:text-slate-100 truncate" x-text="pe.label"></span>
-                                    <span x-show="pe.cerrado" class="text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-400 flex-shrink-0">Cerrado</span>
-                                </button>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex items-end">
-                    <button type="button" @click="ejecutar()"
-                            :disabled="!puedeEjecutar() || cargando"
-                            class="w-full inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white bg-slate-900 dark:bg-sky-600 hover:bg-slate-700 dark:hover:bg-sky-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-                        <svg x-show="!cargando" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                        <svg x-show="cargando" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9" stroke-width="2" class="opacity-25"/><path d="M21 12a9 9 0 00-9-9" stroke-width="2" stroke-linecap="round"/></svg>
-                        <span x-text="cargando ? 'Ejecutando…' : 'Ejecutar auditoría'"></span>
+            <!-- Ejercicio en chrome (empresa = sesión; sin período en UI) -->
+            <div class="relative min-w-[12rem] flex-1 max-w-md" @click.outside="ejercicioAbierto = false">
+                <label class="sr-only" for="auditoria-ejercicio">Ejercicio</label>
+                <div class="relative">
+                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400" aria-hidden="true">
+                        <span class="material-icons text-lg">event</span>
+                    </span>
+                    <input id="auditoria-ejercicio" type="text" x-model="ejercicioBusqueda"
+                           @focus="ejercicioAbierto = true" @click="ejercicioAbierto = true"
+                           @keydown.escape.stop="ejercicioAbierto = false"
+                           placeholder="Ejercicio…" autocomplete="off"
+                           class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 pl-9 pr-8 text-sm text-white placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    <button type="button" x-show="filtros.idEjercicio" x-cloak @click="limpiarEjercicio()"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-300" title="Limpiar ejercicio">
+                        <span class="material-icons text-base">close</span>
                     </button>
-                </div>
-            </div>
-
-            <!-- Selección de checks -->
-            <div class="mt-4 border-t border-slate-200 dark:border-slate-800 pt-4">
-                <button type="button" @click="mostrarChecks = !mostrarChecks"
-                        class="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-sky-600">
-                    <svg class="w-4 h-4 transition-transform" :class="mostrarChecks ? 'rotate-90' : ''" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5l7 7-7 7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span>Selección de checks (<span x-text="checksSeleccionados.length"></span> de <span x-text="checks.length"></span>)</span>
-                </button>
-                <div x-show="mostrarChecks" x-transition class="mt-3">
-                    <div class="flex gap-3 mb-3">
-                        <button type="button" @click="seleccionarTodos()" class="text-xs font-medium text-sky-600 hover:text-sky-500">Seleccionar todos</button>
-                        <button type="button" @click="limpiarSeleccion()" class="text-xs font-medium text-slate-500 hover:text-slate-400">Limpiar</button>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                        <template x-for="c in checks" :key="c.check_id">
-                            <label class="flex items-start gap-2 rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60">
-                                <input type="checkbox" :value="c.check_id" x-model="checksSeleccionados" class="mt-0.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500">
-                                <span class="text-xs text-slate-700 dark:text-slate-200">
-                                    <span x-text="c.titulo" class="font-medium"></span>
-                                    <span class="block text-[10px] uppercase tracking-wide mt-0.5"
-                                          :class="severidadTexto(c.severidad)" x-text="c.severidad_label"></span>
-                                </span>
-                            </label>
+                    <div x-show="ejercicioAbierto" x-cloak x-transition.opacity
+                         class="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-slate-600 bg-slate-900 shadow-lg">
+                        <template x-if="cargandoDatos">
+                            <div class="px-3 py-2 text-xs text-slate-400">Cargando ejercicios…</div>
+                        </template>
+                        <template x-if="!cargandoDatos && ejerciciosFiltrados.length === 0">
+                            <div class="px-3 py-2 text-xs text-slate-400">Sin ejercicios disponibles.</div>
+                        </template>
+                        <template x-for="ej in ejerciciosFiltrados" :key="ej.id">
+                            <button type="button" @click="seleccionarEjercicio(ej)"
+                                    class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-800"
+                                    :class="String(filtros.idEjercicio) === String(ej.id) ? 'bg-slate-800 font-semibold text-sky-300' : 'text-slate-100'">
+                                <span class="truncate" x-text="ej.label"></span>
+                                <span x-show="ej.cerrado" class="flex-shrink-0 text-[10px] uppercase tracking-wide text-amber-400">Cerrado</span>
+                            </button>
                         </template>
                     </div>
                 </div>
             </div>
+
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+                <button type="button" @click="ejecutar()"
+                        :disabled="!puedeAuditar() || cargando"
+                        :title="!checksSeleccionados.length ? 'Elegí al menos un diagnóstico para ejecutar la auditoría.' : (!filtros.idEjercicio ? 'Elegí un ejercicio.' : 'Ejecutar auditoría')"
+                        class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40">
+                    <span x-show="!cargando" class="material-icons text-base leading-none" aria-hidden="true">bolt</span>
+                    <span x-show="cargando" class="material-icons animate-spin text-base leading-none" aria-hidden="true">progress_activity</span>
+                    <span class="hidden sm:inline" x-text="cargando ? 'Ejecutando…' : 'Ejecutar'"></span>
+                </button>
+                <a href="{% url 'contabilidad_audit:manual_usuario' %}#tablero-auditoria"
+                   target="_blank" rel="noopener noreferrer"
+                   aria-label="Manual del tablero de auditoría"
+                   title="Manual del tablero de auditoría"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">help_outline</span>
+                    <span class="hidden sm:inline">Ayuda</span>
+                </a>
+                <a href="{{ configuracion_url }}"
+                   title="Configuración de la auditoría"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">settings</span>
+                    <span class="hidden sm:inline">Configuración</span>
+                </a>
+                <a href="{{ lotes_url }}"
+                   title="Lotes de corrección aplicados"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">layers</span>
+                    <span class="hidden sm:inline">Lotes</span>
+                </a>
+                <a href="{{ asientos_url|default:'#' }}"
+                   title="Eliminar asientos contables"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">delete_sweep</span>
+                    <span class="hidden sm:inline">Eliminar asientos</span>
+                </a>
+                <a :href="exportUrl('xlsx')"
+                   :class="!puedeAuditar() ? 'opacity-40 pointer-events-none' : ''"
+                   title="Exportar el resultado a Excel"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">table_view</span>
+                    <span class="hidden sm:inline">Excel</span>
+                </a>
+            </div>
+        </header>
+    </div>
+
+    <div class="space-y-4">
+
+        <!-- Diagnósticos (empresa = sesión; sin período en UI) -->
+        <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+            <section class="relative"
+                     aria-label="Selección de diagnósticos"
+                     @click.outside="diagAbierto = false"
+                     @keydown.escape.window="diagAbierto = false">
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                    <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                        Diagnósticos
+                    </h2>
+                    <span class="inline-flex items-center rounded-full bg-sky-100 dark:bg-sky-900/40 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:text-sky-300"
+                          x-text="checksSeleccionados.length + ' de ' + checks.length"></span>
+
+                    <span x-show="!checksSeleccionados.length" x-cloak
+                          class="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                        Ninguno seleccionado
+                    </span>
+
+                    <template x-for="c in chipsSeleccion" :key="'chip-' + c.check_id">
+                        <span class="inline-flex max-w-[12rem] items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 px-1.5 py-0.5 text-[11px] text-slate-600 dark:text-slate-300"
+                              :title="c.titulo">
+                            <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full" :class="severidadDot(c.severidad)"></span>
+                            <span class="truncate" x-text="c.titulo"></span>
+                        </span>
+                    </template>
+                    <button type="button" x-show="chipsRestantes > 0" x-cloak @click="diagAbierto = true"
+                            class="text-[11px] font-medium text-slate-500 hover:text-sky-600 dark:text-slate-400"
+                            x-text="'+' + chipsRestantes + ' más'"></button>
+
+                    <div class="ml-auto flex items-center gap-2">
+                        <button type="button" @click="seleccionarTodos()"
+                                class="text-[11px] font-medium text-sky-600 hover:text-sky-500">Todos</button>
+                        <span class="text-[11px] text-slate-300 dark:text-slate-700">|</span>
+                        <button type="button" @click="limpiarSeleccion()"
+                                class="text-[11px] font-medium text-slate-500 hover:text-slate-400">Ninguno</button>
+                        <span class="text-[11px] text-slate-300 dark:text-slate-700">|</span>
+                        <button type="button" @click="seleccionarSoloCriticos()"
+                                class="text-[11px] font-medium text-rose-600 hover:text-rose-500">Solo críticos</button>
+                        <button type="button" @click="diagAbierto = !diagAbierto"
+                                :aria-expanded="diagAbierto ? 'true' : 'false'"
+                                class="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                            <span class="material-icons text-sm leading-none" aria-hidden="true">tune</span>
+                            Elegir
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Panel desplegable -->
+                <div x-show="diagAbierto" x-cloak x-transition.opacity
+                     class="absolute right-0 z-40 mt-2 w-full max-w-xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+                    <div class="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 p-2.5">
+                        <div class="relative flex-1">
+                            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-slate-400" aria-hidden="true">
+                                <span class="material-icons text-base">search</span>
+                            </span>
+                            <label class="sr-only" for="diag-busqueda">Filtrar diagnósticos</label>
+                            <input id="diag-busqueda" type="search" x-model="diagBusqueda"
+                                   placeholder="Filtrar diagnósticos…" autocomplete="off"
+                                   class="h-8 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 pl-8 pr-2 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                        </div>
+                        <button type="button" @click="diagAbierto = false"
+                                class="inline-flex h-8 items-center rounded-lg bg-slate-900 dark:bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-slate-700 dark:hover:bg-sky-500">
+                            Listo
+                        </button>
+                    </div>
+
+                    <div class="max-h-64 overflow-y-auto py-1">
+                        <template x-if="!gruposFiltrados.length">
+                            <p class="px-3 py-4 text-center text-xs text-slate-400">Ningún diagnóstico coincide con el filtro.</p>
+                        </template>
+                        <template x-for="grupo in gruposFiltrados" :key="grupo.severidad">
+                            <div>
+                                <button type="button" @click="seleccionarGrupo(grupo.severidad)"
+                                        :title="'Seleccionar o quitar todos los de severidad ' + grupo.label"
+                                        class="sticky top-0 z-10 flex w-full items-center gap-2 border-y border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/90 px-3 py-1 text-left">
+                                    <span class="h-2 w-2 flex-shrink-0 rounded-full" :class="severidadDot(grupo.severidad)"></span>
+                                    <span class="text-[10px] font-semibold uppercase tracking-wide"
+                                          :class="severidadTexto(grupo.severidad)" x-text="grupo.label"></span>
+                                    <span class="ml-auto text-[10px] text-slate-400 dark:text-slate-500"
+                                          x-text="grupo.seleccionados + '/' + grupo.checks.length"></span>
+                                </button>
+                                <template x-for="c in grupo.checks" :key="c.check_id">
+                                    <button type="button" @click="toggleCheck(c.check_id)"
+                                            :aria-pressed="estaSeleccionado(c.check_id) ? 'true' : 'false'"
+                                            :title="c.titulo + ' · ' + c.severidad_label"
+                                            class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-sky-50 dark:hover:bg-slate-800/60 focus:outline-none focus-visible:bg-sky-50">
+                                        <span class="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors"
+                                              :class="estaSeleccionado(c.check_id)
+                                                  ? 'border-sky-600 bg-sky-600 text-white'
+                                                  : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'">
+                                            <svg x-show="estaSeleccionado(c.check_id)" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                        </span>
+                                        <span class="flex-1 truncate text-xs text-slate-700 dark:text-slate-200" x-text="c.titulo"></span>
+                                        <span class="flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                                              :class="severidadBadge(c.severidad)" x-text="severidadLabel(c.severidad)"></span>
+                                    </button>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </section>
         </div>
 
         <!-- Mensaje de error -->
@@ -200,14 +225,17 @@
         <!-- Estado vacío -->
         <div x-show="!resultado && !cargando && !error" x-cloak class="text-center py-16">
             <svg class="w-14 h-14 mx-auto text-slate-300 dark:text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 17v-6h6v6M3 7l9-4 9 4M4 7v13h16V7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">Ingresá un ejercicio y ejecutá la auditoría para ver los resultados.</p>
+            <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                Elegí el ejercicio en la barra superior, seleccioná diagnósticos con «Elegir» y pulsá Ejecutar.
+                Después, desde cada tarjeta con diferencias, podés generar el diagnóstico de corrección.
+            </p>
         </div>
 
         <!-- Metadatos de corrida -->
-        <div x-show="resultado" x-cloak class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
+        <div x-show="resultado" x-cloak class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4">
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                 <div>
-                    <p class="text-[10px] uppercase tracking-wide text-slate-400">Checks OK</p>
+                    <p class="text-[10px] uppercase tracking-wide text-slate-400">Diagnósticos OK</p>
                     <p class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400" x-text="conteoOk"></p>
                 </div>
                 <div>
@@ -228,7 +256,7 @@
         <!-- Tarjetas por check -->
         <div x-show="resultado" x-cloak class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <template x-for="check in resultado?.checks || []" :key="check.check_id">
-                <div class="rounded-2xl border overflow-hidden transition-all"
+                <div class="rounded-xl border overflow-hidden transition-all"
                      :class="check.error ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/10'
                              : (check.ok ? 'border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900'
                                          : 'border-rose-300 dark:border-rose-700 bg-white dark:bg-slate-900')">
@@ -268,10 +296,12 @@
                         <div class="border-t border-slate-200 dark:border-slate-800 px-4 py-2 flex flex-wrap items-center justify-between gap-2 bg-slate-50/80 dark:bg-slate-800/40">
                             <p class="text-[11px] text-slate-600 dark:text-slate-300"
                                x-text="ayudaHuerfanosComprobante(check)"></p>
-                            <a :href="dryRunLink()"
-                               @click.stop="mostrarEsperaDryRun($event)"
+                            <a x-show="puedeAbrirDiagnostico(check)"
+                               :href="diagnosticoLink(check.check_id)"
+                               @click.stop="mostrarEsperaDiagnostico($event, check.check_id)"
+                               title="Generar el diagnóstico de corrección de este hallazgo (solo lectura)"
                                class="inline-flex items-center rounded-lg px-3 py-1.5 text-[11px] font-semibold text-white bg-sky-600 hover:bg-sky-500">
-                                Generar dry-run de regeneración
+                                Generar diagnóstico
                             </a>
                         </div>
                         <div class="overflow-x-auto">
@@ -284,7 +314,7 @@
                                         <th class="px-2 py-1.5 text-right">Importe</th>
                                         <th class="px-2 py-1.5 text-right">Sucursal</th>
                                         <th class="px-2 py-1.5 text-right">P.V.</th>
-                                        <th class="px-2 py-1.5 text-left">Cód. movimiento</th>
+                                        <th class="px-2 py-1.5 text-left">CodigoMovimiento</th>
                                         <th class="px-2 py-1.5 text-left">Ref.</th>
                                     </tr>
                                 </thead>
@@ -345,50 +375,79 @@
                     <div x-show="!check.error && check.ok" class="px-4 pb-3 -mt-1">
                         <p class="text-xs text-emerald-600 dark:text-emerald-400">Sin diferencias detectadas.</p>
                     </div>
+
+                    <!-- Pie de tarjeta: acceso al diagnóstico de corrección de ESTE check -->
+                    <div x-show="mostrarPieDiagnostico(check)" x-cloak
+                         class="flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800 px-4 py-2">
+                        <a x-show="puedeAbrirDiagnostico(check)"
+                           :href="diagnosticoLink(check.check_id)"
+                           @click.stop="mostrarEsperaDiagnostico($event, check.check_id)"
+                           title="Generar el diagnóstico de corrección de este hallazgo (solo lectura)"
+                           class="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-sky-500">
+                            <span class="material-icons text-sm leading-none" aria-hidden="true">fact_check</span>
+                            Generar diagnóstico
+                        </a>
+                        <span x-show="!puedeAbrirDiagnostico(check)"
+                              class="text-[11px] text-slate-400 dark:text-slate-500">
+                            Sin corrección automática
+                        </span>
+                    </div>
                 </div>
             </template>
         </div>
+    </div>
     </div>
 </section>
 
 <script>
 function auditoriaTablero(cfg) {
-    let checks = [];
-    try {
-        const el = document.getElementById('contabilidad-checks-data');
-        if (el) { checks = JSON.parse(el.textContent) || []; }
-    } catch (e) { checks = []; }
+    function leerJson(id) {
+        try {
+            const el = document.getElementById(id);
+            return el ? (JSON.parse(el.textContent) || []) : [];
+        } catch (e) { return []; }
+    }
+    const checks = leerJson('contabilidad-checks-data');
+    const idsValidos = checks.map(c => c.check_id);
+    // Por defecto no hay diagnósticos activos: el usuario elige cuáles correr.
+    // Si el servidor recibió `check_ids` en la URL, se respeta esa selección previa.
+    const seleccionPrevia = leerJson('contabilidad-checks-seleccionados')
+        .map(String)
+        .filter(cid => idsValidos.includes(cid));
+    // Checks que el motor de corrección sabe planificar (CHECKS_INCLUIDOS).
+    const checksCorregibles = leerJson('contabilidad-checks-corregibles').map(String);
     return {
         tableroUrl: cfg.tableroUrl,
         ejerciciosPeriodosUrl: cfg.ejerciciosPeriodosUrl,
         dryRunUrl: cfg.dryRunUrl || '',
         checks: checks,
-        checksSeleccionados: checks.map(c => c.check_id),
-        mostrarChecks: false,
+        checksCorregibles: checksCorregibles,
+        checksSeleccionados: seleccionPrevia,
+        severidadesOrden: ['critico', 'alto', 'medio'],
         filtros: {
             baseEmpresa: cfg.baseEmpresa || '',
             idEjercicio: cfg.idEjercicio || '',
-            idPeriodo: cfg.idPeriodo || '',
         },
         cargando: false,
         error: '',
         resultado: null,
         detalleAbierto: null,
 
-        // Dropdowns predictivos de ejercicio / período
+        // Panel de selección de diagnósticos (cerrado por defecto)
+        diagAbierto: false,
+        diagBusqueda: '',
+
+        // Dropdown predictivo de ejercicio (en chrome)
         ejercicios: [],
-        periodos: [],
         cargandoDatos: false,
         ejercicioBusqueda: '',
-        periodoBusqueda: '',
         ejercicioLabel: '',
-        periodoLabel: '',
         ejercicioAbierto: false,
-        periodoAbierto: false,
 
         async init() {
             await this.cargarEjerciciosPeriodos();
-            if (cfg.autoEjecutar) { this.ejecutar(); }
+            // Sólo se auto-ejecuta si la URL traía diagnósticos seleccionados.
+            if (cfg.autoEjecutar && this.puedeAuditar()) { this.ejecutar(); }
         },
         async cargarEjerciciosPeriodos() {
             if (!this.ejerciciosPeriodosUrl) { return; }
@@ -397,11 +456,9 @@ function auditoriaTablero(cfg) {
                 const resp = await fetch(this.ejerciciosPeriodosUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
                 const data = await resp.json();
                 this.ejercicios = data.ejercicios || [];
-                this.periodos = data.periodos || [];
                 this.sincronizarLabels();
             } catch (e) {
                 this.ejercicios = [];
-                this.periodos = [];
             } finally {
                 this.cargandoDatos = false;
             }
@@ -411,115 +468,175 @@ function auditoriaTablero(cfg) {
                 const ej = this.ejercicios.find(e => String(e.id) === String(this.filtros.idEjercicio));
                 if (ej) { this.ejercicioLabel = ej.label; this.ejercicioBusqueda = ej.label; }
             }
-            if (this.filtros.idPeriodo) {
-                const pe = this.periodos.find(p => String(p.id) === String(this.filtros.idPeriodo));
-                if (pe) { this.periodoLabel = pe.label; this.periodoBusqueda = pe.label; }
-            }
         },
         get ejerciciosFiltrados() {
             const q = (this.ejercicioBusqueda || '').toLowerCase().trim();
             if (!q || this.ejercicioBusqueda === this.ejercicioLabel) { return this.ejercicios; }
             return this.ejercicios.filter(e => (e.label || '').toLowerCase().includes(q));
         },
-        get periodosDelEjercicio() {
-            if (!this.filtros.idEjercicio) { return []; }
-            return this.periodos.filter(p => String(p.id_ejercicio) === String(this.filtros.idEjercicio));
-        },
-        get periodosFiltrados() {
-            const base = this.periodosDelEjercicio;
-            const q = (this.periodoBusqueda || '').toLowerCase().trim();
-            if (!q || this.periodoBusqueda === this.periodoLabel) { return base; }
-            return base.filter(p => (p.label || '').toLowerCase().includes(q));
-        },
         seleccionarEjercicio(ej) {
             this.filtros.idEjercicio = ej.id;
             this.ejercicioLabel = ej.label;
             this.ejercicioBusqueda = ej.label;
             this.ejercicioAbierto = false;
-            if (this.filtros.idPeriodo) {
-                const pertenece = this.periodos.some(p =>
-                    String(p.id) === String(this.filtros.idPeriodo) &&
-                    String(p.id_ejercicio) === String(ej.id));
-                if (!pertenece) { this.limpiarPeriodo(); }
-            }
         },
         limpiarEjercicio() {
             this.filtros.idEjercicio = '';
             this.ejercicioLabel = '';
             this.ejercicioBusqueda = '';
             this.ejercicioAbierto = false;
-            this.limpiarPeriodo();
         },
-        seleccionarPeriodo(pe) {
-            this.filtros.idPeriodo = pe.id;
-            this.periodoLabel = pe.label;
-            this.periodoBusqueda = pe.label;
-            this.periodoAbierto = false;
+        // Ejecutar auditoría y exportar exigen al menos un diagnóstico elegido.
+        puedeAuditar() {
+            return !!(this.filtros.baseEmpresa && this.filtros.idEjercicio && this.checksSeleccionados.length);
         },
-        limpiarPeriodo() {
-            this.filtros.idPeriodo = '';
-            this.periodoLabel = '';
-            this.periodoBusqueda = '';
-            this.periodoAbierto = false;
+        // El diagnóstico de corrección se abre desde la tarjeta, nunca global:
+        // sólo si el check tiene diferencias y entra en el motor de corrección.
+        puedeAbrirDiagnostico(check) {
+            if (!check || check.error) { return false; }
+            return (check.total_diferencias || 0) > 0
+                && this.checksCorregibles.includes(check.check_id)
+                && !!this.filtros.idEjercicio;
         },
-        puedeEjecutar() {
-            return !!(this.filtros.baseEmpresa && this.filtros.idEjercicio);
+        mostrarPieDiagnostico(check) {
+            if (!check || check.error || (check.total_diferencias || 0) === 0) { return false; }
+            // Con el drill-down de huérfanos abierto el CTA ya está en su franja.
+            const ctaEnDrillDown = this.puedeAbrirDiagnostico(check)
+                && this.detalleAbierto === check.check_id
+                && this.esCheckHuerfanosComprobante(check)
+                && (check.diferencias || []).length > 0;
+            return !ctaEnDrillDown;
+        },
+        get checksPorSeveridad() {
+            const grupos = [];
+            for (const sev of this.severidadesOrden) {
+                const delGrupo = this.checks.filter(c => c.severidad === sev);
+                if (!delGrupo.length) { continue; }
+                grupos.push({
+                    severidad: sev,
+                    label: this.severidadLabel(sev),
+                    checks: delGrupo,
+                    seleccionados: delGrupo.filter(c => this.estaSeleccionado(c.check_id)).length,
+                });
+            }
+            const otros = this.checks.filter(c => !this.severidadesOrden.includes(c.severidad));
+            if (otros.length) {
+                grupos.push({
+                    severidad: 'otros',
+                    label: 'Otros',
+                    checks: otros,
+                    seleccionados: otros.filter(c => this.estaSeleccionado(c.check_id)).length,
+                });
+            }
+            return grupos;
+        },
+        // Grupos visibles en el panel, acotados por el buscador (los contadores
+        // siguen refiriendo al grupo completo, no al subconjunto filtrado).
+        get gruposFiltrados() {
+            const q = (this.diagBusqueda || '').toLowerCase().trim();
+            return this.checksPorSeveridad
+                .map(g => ({
+                    ...g,
+                    checks: q ? g.checks.filter(c => (c.titulo || '').toLowerCase().includes(q)) : g.checks,
+                }))
+                .filter(g => g.checks.length);
+        },
+        get chipsSeleccion() {
+            return this.checks
+                .filter(c => this.estaSeleccionado(c.check_id))
+                .slice(0, 3);
+        },
+        get chipsRestantes() {
+            return Math.max(0, this.checksSeleccionados.length - 3);
+        },
+        estaSeleccionado(checkId) { return this.checksSeleccionados.includes(checkId); },
+        toggleCheck(checkId) {
+            if (this.estaSeleccionado(checkId)) {
+                this.checksSeleccionados = this.checksSeleccionados.filter(cid => cid !== checkId);
+            } else {
+                this.checksSeleccionados = [...this.checksSeleccionados, checkId];
+            }
+        },
+        seleccionarGrupo(severidad) {
+            const grupo = this.checksPorSeveridad.find(g => g.severidad === severidad);
+            if (!grupo) { return; }
+            const ids = grupo.checks.map(c => c.check_id);
+            const todosActivos = ids.every(cid => this.estaSeleccionado(cid));
+            if (todosActivos) {
+                this.checksSeleccionados = this.checksSeleccionados.filter(cid => !ids.includes(cid));
+            } else {
+                const nuevos = ids.filter(cid => !this.estaSeleccionado(cid));
+                this.checksSeleccionados = [...this.checksSeleccionados, ...nuevos];
+            }
         },
         seleccionarTodos() { this.checksSeleccionados = this.checks.map(c => c.check_id); },
         limpiarSeleccion() { this.checksSeleccionados = []; },
+        seleccionarSoloCriticos() {
+            this.checksSeleccionados = this.checks
+                .filter(c => c.severidad === 'critico')
+                .map(c => c.check_id);
+        },
         queryParams(extra) {
             const p = new URLSearchParams();
             p.set('base_empresa', this.filtros.baseEmpresa);
             p.set('id_ejercicio', this.filtros.idEjercicio);
-            if (this.filtros.idPeriodo) { p.set('id_periodo', this.filtros.idPeriodo); }
-            // Sólo enviar check_ids si es un subconjunto (no todos).
-            if (this.checksSeleccionados.length && this.checksSeleccionados.length < this.checks.length) {
-                this.checksSeleccionados.forEach(cid => p.append('check_ids', cid));
-            }
+            // La UI siempre envía la selección explícita (nunca se omite habiendo diagnósticos elegidos).
+            this.checksSeleccionados.forEach(cid => p.append('check_ids', cid));
             if (extra) { Object.entries(extra).forEach(([k, v]) => p.set(k, v)); }
             return p;
         },
         exportUrl(formato) {
-            if (!this.puedeEjecutar()) { return '#'; }
+            if (!this.puedeAuditar()) { return '#'; }
             return this.tableroUrl + '?' + this.queryParams({ format: formato }).toString();
         },
-        dryRunLink() {
-            if (!this.puedeEjecutar() || !this.dryRunUrl) { return '#'; }
+        // Un diagnóstico por vez: la URL lleva sólo el check de la tarjeta.
+        diagnosticoLink(checkId) {
+            if (!this.dryRunUrl || !this.filtros.idEjercicio || !checkId) { return '#'; }
             const p = new URLSearchParams();
             p.set('id_ejercicio', this.filtros.idEjercicio);
-            if (this.filtros.idPeriodo) { p.set('id_periodo', this.filtros.idPeriodo); }
+            p.append('check_ids', checkId);
             return this.dryRunUrl + '?' + p.toString();
         },
-        mostrarEsperaDryRun(event) {
-            // Navegación GET: el dry-run se calcula en el servidor al cargar la página destino.
-            // Mostrar modal aquí; permanece hasta que el navegador reemplaza el documento.
-            if (!this.puedeEjecutar() || !this.dryRunUrl) {
-                if (event) { event.preventDefault(); }
-                return;
-            }
-            const href = this.dryRunLink();
+        tituloDiagnostico(checkId) {
+            const fromResult = (this.resultado?.checks || []).find(c => c.check_id === checkId);
+            if (fromResult && fromResult.titulo) { return fromResult.titulo; }
+            const fromCatalogo = (this.checks || []).find(c => c.check_id === checkId);
+            return (fromCatalogo && fromCatalogo.titulo) || checkId || 'Diagnóstico';
+        },
+        mostrarEsperaDiagnostico(event, checkId) {
+            // Navegación GET: el diagnóstico se calcula en el servidor al cargar la página
+            // destino. El modal permanece hasta que el navegador reemplaza el documento.
+            const href = this.diagnosticoLink(checkId);
             if (!href || href === '#') {
                 if (event) { event.preventDefault(); }
                 return;
             }
+            const nombre = this.tituloDiagnostico(checkId);
             if (typeof window.synapShowPostLoadingProgress === 'function') {
                 window.synapShowPostLoadingProgress({
-                    title: 'Generando dry-run',
+                    title: 'Generando diagnóstico…',
                     subtitle: 'Calculando plan de corrección. No cierres esta ventana.',
-                    label: 'Preparando regeneración de asientos',
+                    label: nombre,
                     indeterminate: true,
                 });
             }
         },
         async ejecutar() {
-            if (!this.puedeEjecutar()) { this.error = 'Ingresá empresa y ejercicio.'; return; }
+            if (!this.filtros.baseEmpresa || !this.filtros.idEjercicio) {
+                this.error = 'Ingresá empresa y ejercicio.';
+                return;
+            }
+            if (!this.checksSeleccionados.length) {
+                this.error = 'Elegí al menos un diagnóstico para ejecutar la auditoría.';
+                return;
+            }
             this.cargando = true;
             this.error = '';
             if (typeof window.synapShowPostLoadingProgress === 'function') {
                 window.synapShowPostLoadingProgress({
                     title: 'Ejecutando auditoría',
                     subtitle: 'Corrida de diagnóstico sobre MySQL legacy…',
-                    label: 'Evaluando checks',
+                    label: 'Evaluando diagnósticos seleccionados',
                     indeterminate: true,
                 });
             }
@@ -564,9 +681,9 @@ function auditoriaTablero(cfg) {
         },
         ayudaHuerfanosComprobante(check) {
             if (check && check.check_id === 'comprobante_venta_cobranza_sin_asiento') {
-                return 'Cada fila es un FA/FB/FC/FE/FM o REC en cuentacliente sin asiento. Usá «Generar dry-run de regeneración» para proponer asientos.';
+                return 'Cada fila es un FA/FB/FC/FE/FM o REC en cuentacliente sin asiento. Usá «Generar diagnóstico» para proponer asientos.';
             }
-            return 'Cada fila es un FA/FC/OP en cuentaproveedor sin asiento. Usá «Generar dry-run de regeneración» para proponer asientos.';
+            return 'Cada fila es un FA/FC/OP en cuentaproveedor sin asiento. Usá «Generar diagnóstico» para proponer asientos.';
         },
         importeHuerfano(dif) {
             const det = (dif && dif.detalle) || {};
@@ -599,6 +716,9 @@ function auditoriaTablero(cfg) {
         },
         severidadTexto(sev) {
             return { critico: 'text-rose-500', alto: 'text-orange-500', medio: 'text-amber-500' }[sev] || 'text-slate-500';
+        },
+        severidadDot(sev) {
+            return { critico: 'bg-rose-500', alto: 'bg-orange-500', medio: 'bg-amber-500' }[sev] || 'bg-slate-400';
         },
         severidadBadge(sev) {
             return {

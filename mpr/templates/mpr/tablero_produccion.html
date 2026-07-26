@@ -286,6 +286,7 @@
                     </div>
                 </header>
             </div>
+        </div>{# /chrome sticky — fixed (modales/tooltip) fuera: sticky crea containing block #}
 
                 {# Modal confirmación envío #}
                 <div x-show="envioModalOpen"
@@ -472,7 +473,7 @@
                     </div>
                 </div>
 
-                {# Tooltip máquina (estilo BO: slate-900) — fuera del overflow del modal #}
+                {# Tooltip máquina (estilo BO: slate-900) — fixed al viewport (fuera del chrome sticky) #}
                 <div x-show="fabMaqTipOpen"
                      x-cloak
                      x-transition.opacity.duration.150ms
@@ -480,7 +481,6 @@
                      :style="'left:' + fabMaqTipX + 'px; top:' + fabMaqTipY + 'px'"
                      role="tooltip"
                      x-text="fabMaqTipText"></div>
-        </div>
 
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div class="relative z-0 min-h-0 flex-1 overflow-auto overscroll-contain rounded-lg border border-slate-200 shadow-sm dark:border-slate-700 h-[min(28rem,52vh)] min-h-[14rem]"

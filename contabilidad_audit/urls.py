@@ -28,8 +28,24 @@ urlpatterns = [
     path("auditoria/apply/ejecutar/", views.auditoria_apply, name="auditoria_apply_ejecutar"),
     path("auditoria/lotes/", views.auditoria_lotes, name="auditoria_lotes"),
     path(
+        "auditoria/lotes/<str:lote_id>/",
+        views.auditoria_lote_detalle,
+        name="auditoria_lote_detalle",
+    ),
+    path(
         "auditoria/lotes/<str:lote_id>/rollback/",
         views.auditoria_lote_rollback,
         name="auditoria_lote_rollback",
+    ),
+    path("auditoria/asientos/", views.auditoria_asientos_eliminar, name="auditoria_asientos"),
+    path(
+        "auditoria/asientos/preview/",
+        views.auditoria_asientos_preview,
+        name="auditoria_asientos_preview",
+    ),
+    path(
+        "auditoria/asientos/eliminar/",
+        views.auditoria_asientos_eliminar_ejecutar,
+        name="auditoria_asientos_eliminar",
     ),
 ]

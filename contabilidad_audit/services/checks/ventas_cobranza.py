@@ -3,6 +3,12 @@ from __future__ import annotations
 
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, str_or_default
 
+from contabilidad_audit.services.checks._sql import (
+    filtro_periodo_comprobante_por_fecha_sql,
+    filtro_periodo_dentro_exists_por_fecha_sql,
+    id_ejercicio_filtro,
+    join_cont_ejercicio_por_fecha,
+)
 from contabilidad_audit.services.resultados import (
     CorridaContexto,
     Diferencia,
@@ -24,16 +30,19 @@ def comprobante_venta_cobranza_sin_asiento(base_empresa, filtros, politica, cont
 
     Gating: solo punto de venta con ``cont='Si'`` (regla AdministraNET para clientes).
     Excluye anulados y marcadores ``CodigoMovimiento=0``.
+    Filtra por ejercicio (fecha del comprobante), alineado con el dry-run de regeneración.
     """
-    del base_empresa, filtros, politica  # firma uniforme del registry
+    del base_empresa, politica
     check_id = "comprobante_venta_cobranza_sin_asiento"
     titulo = "Comprobante venta/cobranza sin asiento contable"
     severidad = "critico"
     try:
+        id_ejercicio = id_ejercicio_filtro(filtros)
         cur = contexto.cursor
         tipos_sql = ", ".join(f"'{t}'" for t in TIPOS_VENTA_COBRANZA)
-        cur.execute(
-            f"""
+        join_ej = join_cont_ejercicio_por_fecha("cc")
+        extra_periodo, params_periodo = filtro_periodo_comprobante_por_fecha_sql(filtros, "cc")
+        sql = f"""
             SELECT cc.CodigoMovimiento, cc.TipoComprobante, cc.NroComprobante,
                    cc.CodSucursal, cc.id_pv,
                    COALESCE(cc.ImporteVenta, 0) AS ImporteVenta,
@@ -41,6 +50,7 @@ def comprobante_venta_cobranza_sin_asiento(base_empresa, filtros, politica, cont
                    cc.Fecha
             FROM cuentacliente cc
             JOIN punto_venta pv ON pv.id_punto_venta = cc.id_pv
+            {join_ej}
             WHERE COALESCE(cc.Anulado, 'No') <> 'Si'
               AND cc.TipoComprobante IN ({tipos_sql})
               AND COALESCE(cc.CodigoMovimiento, 0) <> 0
@@ -50,8 +60,10 @@ def comprobante_venta_cobranza_sin_asiento(base_empresa, filtros, politica, cont
                   WHERE ca.codigo_movimiento = cc.CodigoMovimiento
                     AND COALESCE(ca.codigo_movimiento, 0) <> 0
               )
+            {extra_periodo}
             """
-        )
+        params: list = [id_ejercicio, *params_periodo]
+        cur.execute(sql, params)
         rows = cur.fetchall()
         diferencias = []
         for r in rows:
@@ -73,6 +85,7 @@ def comprobante_venta_cobranza_sin_asiento(base_empresa, filtros, politica, cont
             diferencias.append(
                 Diferencia(
                     codigo_movimiento=str_or_default(cm),
+                    id_ejercicio=id_ejercicio,
                     referencia_hallazgo=ref,
                     detalle={
                         "TipoComprobante": tipo,
@@ -101,6 +114,7 @@ def comprobante_venta_cobranza_sin_asiento(base_empresa, filtros, politica, cont
                 "tipos": list(TIPOS_VENTA_COBRANZA),
                 "por_tipo": por_tipo,
                 "conceptos": {"venta": 1, "cobranza": 5},
+                "id_ejercicio": id_ejercicio,
             },
             contexto=contexto,
         )

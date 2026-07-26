@@ -1,0 +1,164 @@
+{% extends "base_app.html" %}
+
+{% block title %}{{ titulo_pagina }} - Synap{% endblock %}
+
+{% block extra_css %}<style>[x-cloak]{display:none !important;}</style>{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24">
+
+    <div class="w-full px-4 sm:px-6 lg:px-12 py-4">
+
+    {% if messages %}
+    <div class="mb-3 space-y-2">
+        {% for message in messages %}
+        <div class="rounded-lg px-3 py-2 text-sm border
+            {% if message.tags == 'error' %}bg-rose-50 border-rose-300 text-rose-800 dark:bg-rose-900/20 dark:border-rose-700 dark:text-rose-200
+            {% else %}bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-700 dark:text-emerald-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Encabezado denso sticky (no se oculta al scrollear; bajo navbar fijo h-14/h-16) -->
+    <div class="mb-3 sticky top-14 z-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md md:top-16">
+        <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl">
+                {{ titulo_pagina|default:"Detalle del lote de corrección" }}
+            </h1>
+            <p class="hidden text-xs text-slate-400 lg:block">
+                Log de correcciones aplicadas · {{ base_empresa|default:"—" }}
+            </p>
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+                <a href="{% url 'contabilidad_audit:manual_usuario' %}#lotes"
+                   target="_blank" rel="noopener noreferrer"
+                   aria-label="Manual de lotes"
+                   title="Manual de lotes"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">help_outline</span>
+                    <span class="hidden sm:inline">Ayuda</span>
+                </a>
+                <a href="{{ lotes_url }}"
+                   title="Volver a lotes y planes"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">layers</span>
+                    <span class="hidden sm:inline">Lotes</span>
+                </a>
+                <a href="{{ tablero_url }}"
+                   title="Tablero de auditoría"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">dashboard</span>
+                    <span class="hidden sm:inline">Tablero</span>
+                </a>
+                <a href="{{ excel_url }}"
+                   title="Exportar detalle del lote a Excel"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">table_view</span>
+                    <span class="hidden sm:inline">Excel</span>
+                </a>
+            </div>
+        </header>
+    </div>
+
+    <!-- Card resumen del lote -->
+    <div class="mb-3 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Resumen del lote</h2>
+        </div>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 px-4 py-4 text-sm">
+            <div>
+                <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Lote</dt>
+                <dd class="mt-0.5 font-mono text-xs text-slate-800 dark:text-slate-100">{{ lote.lote_id }}</dd>
+            </div>
+            <div>
+                <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Fecha</dt>
+                <dd class="mt-0.5 text-slate-800 dark:text-slate-100">{{ lote.fecha|default:"—" }}</dd>
+            </div>
+            <div>
+                <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Usuario</dt>
+                <dd class="mt-0.5 text-slate-800 dark:text-slate-100">{{ lote.usuario|default:"—" }}</dd>
+            </div>
+            <div>
+                <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Estado</dt>
+                <dd class="mt-0.5">
+                    {% if lote.estado == 'revertido' %}
+                    <span class="inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">Revertido</span>
+                    {% elif lote.estado == 'aplicado' %}
+                    <span class="inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Aplicado</span>
+                    {% else %}
+                    <span class="inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700">{{ lote.estado }}</span>
+                    {% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Id diagnóstico</dt>
+                <dd class="mt-0.5 font-mono text-xs text-slate-800 dark:text-slate-100" title="{{ lote.dry_run_id }}">{{ lote.dry_run_id_corto|default:lote.dry_run_id|default:"—" }}</dd>
+            </div>
+            <div>
+                <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Filas en log</dt>
+                <dd class="mt-0.5 tabular-nums font-mono text-slate-800 dark:text-slate-100">{{ total_filas|default:0 }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <!-- Tabla detalle -->
+    <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+            <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Correcciones del lote</h2>
+            <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">{{ filas|length }} fila(s) mostradas</span>
+        </div>
+
+        {% if filas %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-[11px]">
+                <thead class="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Diagnóstico</th>
+                        <th class="px-3 py-2 text-left">Nro asiento</th>
+                        <th class="px-3 py-2 text-left">CodigoMovimiento</th>
+                        <th class="px-3 py-2 text-left">Tabla</th>
+                        <th class="px-3 py-2 text-left">Cambios aplicados</th>
+                        <th class="px-3 py-2 text-left">Valor anterior</th>
+                        <th class="px-3 py-2 text-left">Fecha</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    {% for fila in filas %}
+                    <tr class="text-slate-700 dark:text-slate-200">
+                        <td class="px-3 py-2 max-w-[14rem]">
+                            <span class="block truncate font-medium" title="{{ fila.titulo_check }}">{{ fila.titulo_check }}</span>
+                            <span class="block truncate font-mono text-[10px] text-slate-400" title="{{ fila.check_id }}">{{ fila.check_id }}</span>
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap tabular-nums font-mono">{{ fila.nro_asiento }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap tabular-nums font-mono">{{ fila.codigo_movimiento }}</td>
+                        <td class="px-3 py-2 whitespace-nowrap font-mono text-[10px]">{{ fila.tabla }}</td>
+                        <td class="px-3 py-2 max-w-md">
+                            <span class="block truncate font-medium text-slate-800 dark:text-slate-100"
+                                  title="{{ fila.cambio_resumen }}">{{ fila.cambio_resumen }}</span>
+                        </td>
+                        <td class="px-3 py-2 max-w-[10rem]">
+                            <span class="block truncate text-slate-600 dark:text-slate-300"
+                                  title="{{ fila.valor_anterior_corto }}">{{ fila.valor_anterior_corto }}</span>
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap">{{ fila.fecha }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if total_filas > filas|length %}
+        <div class="px-4 py-2 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+            Se muestran las primeras {{ filas|length }} filas de {{ total_filas }}. Descargue Excel para el detalle completo.
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
+            Este lote no tiene filas registradas en el log de corrección.
+        </div>
+        {% endif %}
+    </div>
+
+    </div>
+</section>
+{% endblock %}

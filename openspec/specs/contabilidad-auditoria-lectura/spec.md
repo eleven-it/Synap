@@ -149,7 +149,7 @@ El check `nro_asiento_duplicado` DEBE detectar `nro_asiento` repetidos dentro de
 
 ### Requirement: AUD-LECT-10 — Check codigo_movimiento_huerfano
 
-El check `codigo_movimiento_huerfano` DEBE detectar registros en tablas satélite (p. ej. `cont_cc_asiento`) sin renglones correspondientes en `cont_asiento`, y huecos de integridad referencial por ausencia de FKs. DEBE mapear H01, H08.
+El check `codigo_movimiento_huerfano` DEBE detectar registros en tablas satélite (p. ej. `cont_cc_asiento`) sin renglones correspondientes en `cont_asiento` del **mismo ejercicio**, limitando el alcance a códigos de movimiento cuyo comprobante (`cuentaproveedor` o `cuentacliente`) tenga `Fecha` dentro del rango del ejercicio filtrado (`cont_ejercicio`). Si se indica `id_periodo`, DEBE acotar además la fecha del comprobante al intervalo del período. DEBE mapear H01, H08.
 
 #### Scenario: CC sin asiento padre
 
@@ -383,7 +383,7 @@ El check `comprobante_venta_cobranza_sin_asiento` DEBE detectar comprobantes de 
 
 ### Requirement: AUD-LECT-23 — Check integridad_anulacion_compra_pago
 
-El check `integridad_anulacion_compra_pago` DEBE validar que toda anulación de compra/pago esté correctamente registrada en partida doble. Para cada comprobante original con `Anulado='Si'`, DEBE verificar: (a) que exista un registro marcador en `cuentaproveedor` con `CodigoMovimiento=0` y `codigo_movimiento_anul = CodigoMovimiento` del original; (b) que las filas del asiento original (`cont_asiento.codigo_movimiento = CodigoMovimiento`) estén marcadas `anulado='Si'`; (c) que exista un **contra-asiento** (`cont_asiento.codigo_movimiento_anul = CodigoMovimiento` del original, `id_concepto_asiento IN (4,8)`, `anulado='No'`) cuyos importes **inviertan** exactamente el asiento original (Σdebe/Σhaber espejados). DEBE reportar como diferencia toda anulación incompleta (falta contra-asiento, o contra no balancea con el original). DEBE mapear la sección §6.8 del informe. NO DEBE escribir en legacy.
+El check `integridad_anulacion_compra_pago` DEBE validar que toda anulación de compra/pago esté correctamente registrada en partida doble, **solo para comprobantes cuya `Fecha` cae en el ejercicio (y período opcional) del tablero**. Para cada comprobante original con `Anulado='Si'`, DEBE verificar: (a) que exista un registro marcador en `cuentaproveedor` con `CodigoMovimiento=0` y `codigo_movimiento_anul = CodigoMovimiento` del original; (b) que las filas del asiento original (`cont_asiento.codigo_movimiento = CodigoMovimiento`) estén marcadas `anulado='Si'`; (c) que exista un **contra-asiento** (`cont_asiento.codigo_movimiento_anul = CodigoMovimiento` del original, `id_concepto_asiento IN (4,8)`, `anulado='No'`) cuyos importes **inviertan** exactamente el asiento original (Σdebe/Σhaber espejados). DEBE reportar como diferencia toda anulación incompleta (falta contra-asiento, o contra no balancea con el original). DEBE mapear la sección §6.8 del informe. NO DEBE escribir en legacy.
 
 #### Scenario: Anulación correcta (partida doble completa)
 
@@ -401,7 +401,7 @@ El check `integridad_anulacion_compra_pago` DEBE validar que toda anulación de 
 
 ### Requirement: AUD-LECT-22 — Check asiento_compra_pago_desbalanceado_saldo_null
 
-El check `asiento_compra_pago_desbalanceado_saldo_null` DEBE evaluar asientos vinculados a comprobantes de compra/pago (`cuentaproveedor.TipoComprobante IN ('FA','FC','OP')`, comprobante no anulado, `codigo_movimiento<>0`) agrupando por `codigo_movimiento`. DEBE marcar asientos donde `|SUM(debe_asiento) − SUM(haber_asiento)| > tolerancia_decimal` o donde exista al menos un renglón con `saldo_asiento IS NULL`. DEBE respetar `tratamiento_anulados` de la política. DEBE mapear H53, H10, H17. NO DEBE escribir en legacy.
+El check `asiento_compra_pago_desbalanceado_saldo_null` DEBE evaluar asientos vinculados a comprobantes de compra/pago (`cuentaproveedor.TipoComprobante IN ('FA','FC','OP')`, comprobante no anulado, `codigo_movimiento<>0`) cuya **`Fecha` cae en el ejercicio (y período opcional) del tablero**, enlazando `cont_asiento.id_ejercicio` con `cont_ejercicio` y agrupando por `codigo_movimiento`. DEBE marcar asientos donde `|SUM(debe_asiento) − SUM(haber_asiento)| > tolerancia_decimal` o donde exista al menos un renglón con `saldo_asiento IS NULL`. DEBE respetar `tratamiento_anulados` de la política. DEBE mapear H53, H10, H17. NO DEBE escribir en legacy.
 
 #### Scenario: Asiento desbalanceado detectado
 

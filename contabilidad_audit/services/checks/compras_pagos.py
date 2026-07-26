@@ -8,7 +8,9 @@ from core.utils.administranet_types import to_decimal_or_none, to_int_or_none, s
 from contabilidad_audit.services.checks._sql import (
     clasificar_delta,
     filtro_anulados_sql,
+    filtro_periodo_comprobante_por_fecha_sql,
     id_ejercicio_filtro,
+    join_cont_ejercicio_por_fecha,
 )
 from contabilidad_audit.services.resultados import (
     CorridaContexto,
@@ -21,18 +23,26 @@ TIPOS_COMPRA_PAGO = ("FA", "FC", "OP")
 
 
 def comprobante_compra_pago_sin_asiento(base_empresa, filtros, politica, contexto: CorridaContexto):
-    """Portado de cont_reconstruccion_compras_pagos.py dryrun-missing (solo lectura)."""
+    """Portado de cont_reconstruccion_compras_pagos.py dryrun-missing (solo lectura).
+
+    Filtra por ejercicio (fecha del comprobante dentro de ``cont_ejercicio``),
+    alineado con el dry-run de regeneración.
+    """
+    del base_empresa, politica
     check_id = "comprobante_compra_pago_sin_asiento"
     titulo = "Comprobante compra/pago sin asiento contable"
     severidad = "critico"
     try:
+        id_ejercicio = id_ejercicio_filtro(filtros)
         cur = contexto.cursor
-        cur.execute(
-            """
+        join_ej = join_cont_ejercicio_por_fecha("cp")
+        extra_periodo, params_periodo = filtro_periodo_comprobante_por_fecha_sql(filtros, "cp")
+        sql = f"""
             SELECT cp.CodigoMovimiento, cp.TipoComprobante, cp.NroComprobante,
                    cp.CodSucursal, cp.ImporteCompra, cp.Fecha
             FROM cuentaproveedor cp
             JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
+            {join_ej}
             WHERE s.cont = 'Si'
               AND COALESCE(cp.Anulado, 'No') <> 'Si'
               AND cp.TipoComprobante IN ('FA', 'FC', 'OP')
@@ -42,12 +52,15 @@ def comprobante_compra_pago_sin_asiento(base_empresa, filtros, politica, context
                   WHERE ca.codigo_movimiento = cp.CodigoMovimiento
                     AND COALESCE(ca.codigo_movimiento, 0) <> 0
               )
+            {extra_periodo}
             """
-        )
+        params: list = [id_ejercicio, *params_periodo]
+        cur.execute(sql, params)
         rows = cur.fetchall()
         diferencias = [
             Diferencia(
                 codigo_movimiento=str_or_default(r[0]),
+                id_ejercicio=id_ejercicio,
                 referencia_hallazgo="H51" if str_or_default(r[1]) in ("FA", "FC") else "H52",
                 detalle={
                     "TipoComprobante": str_or_default(r[1]),
@@ -66,7 +79,7 @@ def comprobante_compra_pago_sin_asiento(base_empresa, filtros, politica, context
             ok=len(diferencias) == 0,
             total_evaluado=len(rows),
             diferencias=diferencias,
-            resumen={"tipos": list(TIPOS_COMPRA_PAGO)},
+            resumen={"tipos": list(TIPOS_COMPRA_PAGO), "id_ejercicio": id_ejercicio},
             contexto=contexto,
         )
     except Exception as exc:
@@ -88,6 +101,8 @@ def asiento_compra_pago_desbalanceado_saldo_null(base_empresa, filtros, politica
         id_ejercicio = id_ejercicio_filtro(filtros)
         cur = contexto.cursor
         filtro_anul = filtro_anulados_sql(politica, "a")
+        join_ej = join_cont_ejercicio_por_fecha("cp")
+        extra_periodo, params_periodo = filtro_periodo_comprobante_por_fecha_sql(filtros, "cp")
         cur.execute(
             f"""
             SELECT cp.CodigoMovimiento,
@@ -96,17 +111,19 @@ def asiento_compra_pago_desbalanceado_saldo_null(base_empresa, filtros, politica
                    SUM(CASE WHEN a.saldo_asiento IS NULL THEN 1 ELSE 0 END) AS renglones_saldo_null
             FROM cuentaproveedor cp
             JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
+            {join_ej}
             JOIN cont_asiento a ON a.codigo_movimiento = cp.CodigoMovimiento
+             AND a.id_ejercicio = ej.id_ejercicio
             WHERE s.cont = 'Si'
               AND COALESCE(cp.Anulado, 'No') <> 'Si'
               AND cp.TipoComprobante IN ('FA', 'FC', 'OP')
               AND COALESCE(cp.CodigoMovimiento, 0) <> 0
               AND COALESCE(a.codigo_movimiento, 0) <> 0
-              AND a.id_ejercicio = %s
               {filtro_anul}
+            {extra_periodo}
             GROUP BY cp.CodigoMovimiento
             """,
-            (id_ejercicio,),
+            [id_ejercicio, *params_periodo],
         )
         rows = cur.fetchall()
         diferencias: list[Diferencia] = []
@@ -160,21 +177,28 @@ asiento_compra_pago_desbalanceado_saldo_null.severidad = "alto"
 
 
 def integridad_anulacion_compra_pago(base_empresa, filtros, politica, contexto: CorridaContexto):
+    del base_empresa, politica
     check_id = "integridad_anulacion_compra_pago"
     titulo = "Integridad de anulación compra/pago"
     severidad = "alto"
     try:
+        id_ejercicio = id_ejercicio_filtro(filtros)
         cur = contexto.cursor
+        join_ej = join_cont_ejercicio_por_fecha("cp")
+        extra_periodo, params_periodo = filtro_periodo_comprobante_por_fecha_sql(filtros, "cp")
         cur.execute(
-            """
+            f"""
             SELECT cp.CodigoMovimiento, cp.TipoComprobante, cp.NroComprobante
             FROM cuentaproveedor cp
             JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
+            {join_ej}
             WHERE s.cont = 'Si'
               AND COALESCE(cp.Anulado, 'No') = 'Si'
               AND cp.TipoComprobante IN ('FA', 'FC', 'OP')
               AND COALESCE(cp.CodigoMovimiento, 0) <> 0
-            """
+            {extra_periodo}
+            """,
+            [id_ejercicio, *params_periodo],
         )
         originales = cur.fetchall()
         diferencias: list[Diferencia] = []
@@ -248,6 +272,7 @@ def integridad_anulacion_compra_pago(base_empresa, filtros, politica, contexto: 
                 diferencias.append(
                     Diferencia(
                         codigo_movimiento=cm_str,
+                        id_ejercicio=id_ejercicio,
                         referencia_hallazgo="H53",
                         detalle={
                             "TipoComprobante": str_or_default(row[1]),
@@ -263,7 +288,7 @@ def integridad_anulacion_compra_pago(base_empresa, filtros, politica, contexto: 
             ok=len(diferencias) == 0,
             total_evaluado=len(originales),
             diferencias=diferencias,
-            resumen={},
+            resumen={"id_ejercicio": id_ejercicio},
             contexto=contexto,
         )
     except Exception as exc:

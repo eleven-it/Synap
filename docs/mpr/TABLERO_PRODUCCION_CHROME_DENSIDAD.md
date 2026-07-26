@@ -76,7 +76,7 @@ Sin Pack\|Par ni KPI urgente fuera del Tablero. Fecha / línea / máquina / turn
 - Modal Fabricando: artículo como título; tabla por fila
   (`Fila | Mañana/Tarde/Noche + operarios` + una fila de datos por máquina).
 - Ícono máquina en columna Fabricando: tooltip al hover («Máquina N»); clic abre el modal.
-- Modales (envío / Fabricando) en el mismo `x-data` de página.
+- Modales (envío / Fabricando) y tooltip de máquina en el mismo `x-data` de página, **fuera** del wrapper `sticky` del chrome (un ancestro `sticky`/`transform` crea containing block y desplaza el `position: fixed` respecto de `clientX/Y`).
 - **Thead tabla (Par):** columna Artículo en una sola celda `rowspan="2"` (sin etiqueta duplicada). Fondos del `thead` (Pack y Par) **opacos** (sin alpha) para que el sticky no deje ver las filas al scrollear.
 
 ## 5. Iconos y tooltips (atajos)

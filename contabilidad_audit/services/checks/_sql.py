@@ -4,7 +4,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Optional
 
-from core.utils.administranet_types import to_decimal_or_none
+from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
 
 CENTAVO = Decimal("0.01")
 
@@ -116,3 +116,55 @@ def cod_pc_coincide_prefijo(cod_pc: str, prefijos: list[str]) -> bool:
 
 def id_ejercicio_filtro(filtros: dict) -> int:
     return int(filtros["id_ejercicio"])
+
+
+def join_cont_ejercicio_por_fecha(alias: str, ej_alias: str = "ej") -> str:
+    """JOIN ``cont_ejercicio`` acotando ``{alias}.Fecha`` al rango del ejercicio filtrado."""
+    return f"""
+            JOIN cont_ejercicio {ej_alias} ON {ej_alias}.id_ejercicio = %s
+             AND {alias}.Fecha BETWEEN {ej_alias}.fecdesde_ejercicio AND {ej_alias}.fechasta_ejercicio
+            """
+
+
+def filtro_periodo_comprobante_por_fecha_sql(
+    filtros: dict | None,
+    alias: str,
+) -> tuple[str, list]:
+    """Fragmento ``AND EXISTS (cont_periodo …)`` opcional por ``Fecha`` del comprobante."""
+    if not filtros:
+        return "", []
+    id_periodo = to_int_or_none(filtros.get("id_periodo"))
+    if id_periodo is None:
+        return "", []
+    return (
+        f"""
+              AND EXISTS (
+                  SELECT 1 FROM cont_periodo pe
+                  WHERE pe.id_periodo = %s
+                    AND {alias}.Fecha BETWEEN pe.fecdesde_periodo AND pe.fechasta_periodo
+              )
+        """,
+        [id_periodo],
+    )
+
+
+def filtro_periodo_dentro_exists_por_fecha_sql(
+    filtros: dict | None,
+    alias: str,
+) -> tuple[str, list]:
+    """Condición ``AND EXISTS (cont_periodo …)`` para usar dentro de subconsultas EXISTS."""
+    if not filtros:
+        return "", []
+    id_periodo = to_int_or_none(filtros.get("id_periodo"))
+    if id_periodo is None:
+        return "", []
+    return (
+        f"""
+                    AND EXISTS (
+                        SELECT 1 FROM cont_periodo pe
+                        WHERE pe.id_periodo = %s
+                          AND {alias}.Fecha BETWEEN pe.fecdesde_periodo AND pe.fechasta_periodo
+                    )
+        """,
+        [id_periodo],
+    )

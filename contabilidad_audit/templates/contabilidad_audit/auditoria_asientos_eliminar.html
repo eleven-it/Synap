@@ -1,0 +1,639 @@
+{% extends "base_app.html" %}
+
+{% block title %}{{ titulo_pagina }} - Synap{% endblock %}
+
+{% block extra_css %}<style>[x-cloak]{display:none !important;}</style>{% endblock %}
+
+{% block content %}
+{{ conceptos|default_if_none:"[]"|json_script:"asientos-conceptos-data" }}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-36"
+         x-data="auditoriaAsientosEliminar({
+            asientosUrl: '{{ asientos_url }}',
+            previewUrl: '{{ preview_url }}',
+            eliminarUrl: '{{ eliminar_url }}',
+            ejerciciosPeriodosUrl: '{{ ejercicios_periodos_url }}',
+            lotesUrl: '{{ lotes_url }}',
+            puedeCorregir: {{ puede_corregir|yesno:'true,false' }},
+            idEjercicioInicial: '{{ id_ejercicio|escapejs }}',
+            errorParametros: '{{ error_parametros|default:''|escapejs }}'
+         })"
+         x-init="init()">
+
+    <div class="w-full px-4 sm:px-6 lg:px-12 py-4">
+
+    <div class="mb-3 sticky top-14 z-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md md:top-16">
+        <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl">
+                {{ titulo_pagina|default:"Eliminar asientos" }}
+            </h1>
+            <p class="hidden text-xs text-slate-400 lg:block">
+                Borrado físico + recálculo de saldos · {{ base_empresa|default:"—" }}
+            </p>
+            <div class="relative min-w-[12rem] flex-1 max-w-md" @click.outside="ejercicioAbierto = false">
+                <label class="sr-only" for="asientos-ejercicio">Ejercicio</label>
+                <div class="relative">
+                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400" aria-hidden="true">
+                        <span class="material-icons text-lg">event</span>
+                    </span>
+                    <input id="asientos-ejercicio" type="text" x-model="ejercicioBusqueda"
+                           @focus="ejercicioAbierto = true" @click="ejercicioAbierto = true"
+                           @keydown.escape.stop="ejercicioAbierto = false"
+                           placeholder="Ejercicio (obligatorio)…" autocomplete="off"
+                           class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 pl-9 pr-8 text-sm text-white placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    <button type="button" x-show="filtros.idEjercicio" x-cloak @click="limpiarEjercicio()"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-300" title="Limpiar ejercicio">
+                        <span class="material-icons text-base">close</span>
+                    </button>
+                    <div x-show="ejercicioAbierto" x-cloak x-transition.opacity
+                         class="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-slate-600 bg-slate-900 shadow-lg">
+                        <template x-if="cargandoEjercicios">
+                            <div class="px-3 py-2 text-xs text-slate-400">Cargando ejercicios…</div>
+                        </template>
+                        <template x-if="!cargandoEjercicios && ejerciciosFiltrados.length === 0">
+                            <div class="px-3 py-2 text-xs text-slate-400">Sin ejercicios disponibles.</div>
+                        </template>
+                        <template x-for="ej in ejerciciosFiltrados" :key="ej.id">
+                            <button type="button" @click="seleccionarEjercicio(ej)"
+                                    class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-800"
+                                    :class="String(filtros.idEjercicio) === String(ej.id) ? 'bg-slate-800 font-semibold text-sky-300' : 'text-slate-100'">
+                                <span class="truncate" x-text="ej.label"></span>
+                                <span x-show="ej.cerrado" class="flex-shrink-0 text-[10px] uppercase tracking-wide text-amber-400">Cerrado</span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+                <a href="{% url 'contabilidad_audit:manual_usuario' %}#eliminar-asientos"
+                   target="_blank" rel="noopener noreferrer"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none">help_outline</span>
+                    <span class="hidden sm:inline">Ayuda</span>
+                </a>
+                <a href="{{ tablero_url }}"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none">dashboard</span>
+                    <span class="hidden sm:inline">Tablero</span>
+                </a>
+                <a href="{{ lotes_url }}"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none">layers</span>
+                    <span class="hidden sm:inline">Lotes</span>
+                </a>
+                <a href="{{ dry_run_url }}"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none">fact_check</span>
+                    <span class="hidden sm:inline">Diagnóstico</span>
+                </a>
+            </div>
+        </header>
+    </div>
+
+    <div x-show="errorParametros" x-cloak
+         class="mb-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-700 dark:bg-rose-900/20 dark:text-rose-200"
+         x-text="errorParametros"></div>
+
+    <div class="mb-3 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+            <div>
+                <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Fecha desde</label>
+                <input type="date" x-model="filtros.fechaDesde"
+                       class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 text-slate-800 dark:text-slate-100">
+            </div>
+            <div>
+                <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Fecha hasta</label>
+                <input type="date" x-model="filtros.fechaHasta"
+                       class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 text-slate-800 dark:text-slate-100">
+            </div>
+            <div>
+                <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Concepto</label>
+                <select x-model="filtros.idConcepto"
+                        class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 text-slate-800 dark:text-slate-100">
+                    <option value="">Todos</option>
+                    <template x-for="c in conceptos" :key="c.id_concepto_asiento">
+                        <option :value="c.id_concepto_asiento" x-text="c.desc_concepto_asiento + ' (' + c.id_concepto_asiento + ')'"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Tipo comprobante</label>
+                <input type="text" x-model="filtros.tipoComprobante" placeholder="OP, FA, AJ…"
+                       class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 text-slate-800 dark:text-slate-100">
+            </div>
+            <div>
+                <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">CodigoMovimiento</label>
+                <input type="text" x-model="filtros.codigoMovimiento"
+                       class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 text-slate-800 dark:text-slate-100">
+            </div>
+            <div>
+                <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Anulado</label>
+                <select x-model="filtros.anulado"
+                        class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 text-slate-800 dark:text-slate-100">
+                    <option value="">Todos</option>
+                    <option value="No">No</option>
+                    <option value="Si">Sí</option>
+                </select>
+            </div>
+            <div class="md:col-span-2">
+                <label class="block font-semibold text-slate-600 dark:text-slate-300 mb-1">Texto en descripción</label>
+                <input type="search" x-model="filtros.q" placeholder="Buscar en desc_asiento…"
+                       class="w-full h-9 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 text-slate-800 dark:text-slate-100">
+            </div>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-2">
+            <button type="button" @click="buscar()" :disabled="!filtros.idEjercicio || cargando"
+                    class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
+                <span class="material-icons text-base">search</span>
+                Buscar
+            </button>
+            <button type="button" @click="panelImportar = !panelImportar"
+                    class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800">
+                <span class="material-icons text-base">playlist_add</span>
+                Importar nros
+            </button>
+            <button type="button" @click="seleccionarVisibles()" :disabled="!items.length"
+                    class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40">
+                Seleccionar visibles
+            </button>
+            <button type="button" @click="limpiarSeleccion()"
+                    class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-xs font-semibold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
+                Limpiar selección
+            </button>
+            <span class="ml-auto text-xs text-slate-500" x-show="total > 0" x-cloak>
+                <span x-text="total"></span> asiento(s) · página <span x-text="page"></span>
+            </span>
+        </div>
+        <div x-show="panelImportar" x-cloak class="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
+            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                Números de asiento (uno por línea o separados por coma)
+            </label>
+            <textarea x-model="filtros.nrosTexto" rows="3"
+                      class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-800 dark:text-slate-100"></textarea>
+            <button type="button" @click="aplicarImportacionNros(); buscar()"
+                    class="mt-2 inline-flex h-8 items-center rounded-lg bg-slate-800 dark:bg-slate-700 px-3 text-xs font-semibold text-white">
+                Aplicar e buscar
+            </button>
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Asientos</h2>
+            <span x-show="cargando" class="text-xs text-sky-600 animate-pulse">Cargando…</span>
+        </div>
+        <div x-show="errorBusqueda" x-cloak class="px-4 py-3 text-sm text-rose-600 dark:text-rose-300" x-text="errorBusqueda"></div>
+        <template x-if="!cargando && items.length === 0">
+            <div class="px-4 py-10 text-center text-sm text-slate-500">
+                Elegí un ejercicio y presioná Buscar para listar asientos.
+            </div>
+        </template>
+        <div x-show="items.length" x-cloak class="overflow-x-auto">
+            <table class="w-full text-[11px]">
+                <thead class="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase">
+                    <tr>
+                        <th class="px-2 py-2 w-8"></th>
+                        <th class="px-2 py-2 text-left">Nro</th>
+                        <th class="px-2 py-2 text-left">Fecha</th>
+                        <th class="px-2 py-2 text-left">Concepto</th>
+                        <th class="px-2 py-2 text-left">CM</th>
+                        <th class="px-2 py-2 text-left">Tipo</th>
+                        <th class="px-2 py-2 text-left">Descripción</th>
+                        <th class="px-2 py-2 text-right">Líneas</th>
+                        <th class="px-2 py-2 text-right">Debe</th>
+                        <th class="px-2 py-2 text-right">Haber</th>
+                        <th class="px-2 py-2 text-center">Anul.</th>
+                        <th class="px-2 py-2 text-right">Detalle</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                    <template x-for="item in items" :key="claveItem(item)">
+                        <tr class="text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                            <td class="px-2 py-2">
+                                <input type="checkbox" :checked="estaSeleccionado(item)"
+                                       @change="toggleSeleccion(item)"
+                                       class="rounded border-slate-300 text-sky-600 focus:ring-sky-500">
+                            </td>
+                            <td class="px-2 py-2 font-mono tabular-nums" x-text="item.nro_asiento"></td>
+                            <td class="px-2 py-2 whitespace-nowrap" x-text="item.fecha_asiento"></td>
+                            <td class="px-2 py-2 max-w-[8rem] truncate" :title="item.desc_concepto_asiento" x-text="item.desc_concepto_asiento"></td>
+                            <td class="px-2 py-2 font-mono" x-text="item.codigo_movimiento"></td>
+                            <td class="px-2 py-2" x-text="item.tipo_comprobante || '—'"></td>
+                            <td class="px-2 py-2 max-w-xs truncate" :title="item.desc_asiento" x-text="item.desc_asiento"></td>
+                            <td class="px-2 py-2 text-right tabular-nums" x-text="item.cant_lineas"></td>
+                            <td class="px-2 py-2 text-right tabular-nums font-mono" x-text="formatMonto(item.total_debe)"></td>
+                            <td class="px-2 py-2 text-right tabular-nums font-mono" x-text="formatMonto(item.total_haber)"></td>
+                            <td class="px-2 py-2 text-center">
+                                <span x-show="item.anulado === 'Si'" class="text-rose-600 font-semibold">Sí</span>
+                                <span x-show="item.anulado !== 'Si'" class="text-slate-400">No</span>
+                            </td>
+                            <td class="px-2 py-2 text-right">
+                                <button type="button" @click="abrirDetalle(item)"
+                                        class="text-sky-600 hover:text-sky-500 font-semibold">Ver</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div x-show="total > pageSize" x-cloak class="px-4 py-3 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs">
+            <button type="button" @click="irPagina(page - 1)" :disabled="page <= 1"
+                    class="rounded-lg border px-3 py-1.5 disabled:opacity-40">Anterior</button>
+            <span>Página <span x-text="page"></span></span>
+            <button type="button" @click="irPagina(page + 1)" :disabled="page * pageSize >= total"
+                    class="rounded-lg border px-3 py-1.5 disabled:opacity-40">Siguiente</button>
+        </div>
+    </div>
+
+    <!-- Barra de selección: encima del pie de estado (status-bar ~2rem / bottom-8) -->
+    <div class="fixed bottom-8 left-0 right-0 z-40 border-t border-slate-700 bg-slate-800 px-4 py-3 shadow-lg">
+        <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3">
+            <p class="text-sm text-slate-200">
+                <span class="font-semibold text-white" x-text="seleccionados.length"></span> asiento(s) seleccionado(s)
+            </p>
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button" @click="vistaPrevia()" :disabled="!seleccionados.length || !puedeCorregir || procesando"
+                        class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-sky-400 bg-sky-600 px-4 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
+                    Vista previa
+                </button>
+                <span x-show="!puedeCorregir" class="text-[11px] text-amber-300">Requiere permiso de corregir para eliminar</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal vista previa -->
+    <div x-show="previewOpen" x-cloak
+         class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+         @keydown.escape.window="cerrarPreview()">
+        <div class="w-full max-w-lg rounded-xl bg-white dark:bg-slate-900 shadow-xl border border-slate-200 dark:border-slate-700"
+             @click.outside="!procesando && cerrarPreview()">
+            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800">
+                <h3 class="text-base font-bold text-slate-800 dark:text-white">Vista previa de eliminación</h3>
+            </div>
+            <div class="px-5 py-4 space-y-3 text-sm text-slate-700 dark:text-slate-200">
+                <template x-if="previewData">
+                    <div class="space-y-2">
+                        <p><strong x-text="previewData.asientos_solicitados"></strong> asiento(s) ·
+                           <strong x-text="previewData.total_renglones"></strong> renglón(es)</p>
+                        <p>Cuentas impactadas: <strong x-text="previewData.cuentas_impactadas"></strong> ·
+                           Períodos: <strong x-text="previewData.periodos_impactados"></strong></p>
+                        <template x-if="previewData.avisos && previewData.avisos.length">
+                            <ul class="list-disc pl-5 text-amber-700 dark:text-amber-300 text-xs">
+                                <template x-for="(av, i) in previewData.avisos" :key="i">
+                                    <li x-text="av"></li>
+                                </template>
+                            </ul>
+                        </template>
+                    </div>
+                </template>
+                <p x-show="previewError" class="text-rose-600" x-text="previewError"></p>
+            </div>
+            <div class="px-5 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-2">
+                <button type="button" @click="cerrarPreview()" :disabled="procesando"
+                        class="rounded-lg px-4 py-2 text-sm font-semibold border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300">
+                    Cancelar
+                </button>
+                <button type="button" @click="confirmOpen = true" :disabled="!previewData || procesando"
+                        class="rounded-lg px-4 py-2 text-sm font-semibold text-white bg-rose-700 hover:bg-rose-800 disabled:opacity-40">
+                    Continuar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal confirmación destructiva -->
+    <div x-show="confirmOpen" x-cloak
+         class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div class="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 shadow-xl border border-rose-200 dark:border-rose-800">
+            <div class="px-5 py-4 border-b border-rose-100 dark:border-rose-900/50 flex items-start gap-3">
+                <span class="material-icons text-rose-600 text-2xl">warning</span>
+                <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white">Confirmar eliminación</h3>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                        Se borrarán <strong x-text="seleccionados.length"></strong> asiento(s) de forma irreversible
+                        (con backup y log de auditoría). Los saldos de las cuentas impactadas se recalcularán.
+                    </p>
+                </div>
+            </div>
+            <div class="px-5 py-4 flex justify-end gap-2">
+                <button type="button" @click="confirmOpen = false" :disabled="procesando"
+                        class="rounded-lg px-4 py-2 text-sm font-semibold border border-slate-300 text-slate-600">
+                    Cancelar
+                </button>
+                <button type="button" @click="ejecutarEliminar()" :disabled="procesando"
+                        class="rounded-lg px-4 py-2 text-sm font-semibold text-white bg-rose-700 hover:bg-rose-800 disabled:opacity-50">
+                    <span x-text="procesando ? 'Eliminando…' : 'Eliminar definitivamente'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal detalle líneas (resumen del item) -->
+    <div x-show="detalleOpen" x-cloak
+         class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+         @keydown.escape.window="detalleOpen = false">
+        <div class="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 shadow-xl p-5">
+            <h3 class="text-base font-bold mb-3">Asiento <span x-text="detalleItem?.nro_asiento"></span></h3>
+            <dl class="text-xs space-y-1 text-slate-700 dark:text-slate-200">
+                <div class="flex justify-between"><dt>Fecha</dt><dd x-text="detalleItem?.fecha_asiento"></dd></div>
+                <div class="flex justify-between"><dt>Concepto</dt><dd x-text="detalleItem?.desc_concepto_asiento"></dd></div>
+                <div class="flex justify-between"><dt>CM</dt><dd x-text="detalleItem?.codigo_movimiento"></dd></div>
+                <div class="flex justify-between"><dt>Líneas</dt><dd x-text="detalleItem?.cant_lineas"></dd></div>
+                <div class="flex justify-between"><dt>Debe / Haber</dt>
+                    <dd><span x-text="formatMonto(detalleItem?.total_debe)"></span> / <span x-text="formatMonto(detalleItem?.total_haber)"></span></dd>
+                </div>
+                <div><dt class="font-semibold">Descripción</dt><dd class="mt-1" x-text="detalleItem?.desc_asiento"></dd></div>
+            </dl>
+            <button type="button" @click="detalleOpen = false"
+                    class="mt-4 w-full rounded-lg bg-slate-800 py-2 text-sm font-semibold text-white">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Resultado eliminación -->
+    <div x-show="resultadoOpen" x-cloak
+         class="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div class="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 shadow-xl p-5 text-sm">
+            <h3 class="text-base font-bold text-emerald-700 dark:text-emerald-300 mb-2">Eliminación completada</h3>
+            <template x-if="resultado">
+                <div class="space-y-1 text-slate-700 dark:text-slate-200">
+                    <p>Lote: <code class="text-xs" x-text="resultado.lote_id"></code></p>
+                    <p>Asientos eliminados: <strong x-text="resultado.asientos_eliminados"></strong></p>
+                    <p>Renglones borrados: <strong x-text="resultado.filas_borradas"></strong></p>
+                    <p>Cuentas recalculadas: <strong x-text="resultado.cuentas_recalculadas"></strong></p>
+                </div>
+            </template>
+            <div class="mt-4 flex gap-2">
+                <a :href="lotesUrl" class="flex-1 text-center rounded-lg bg-sky-600 py-2 text-sm font-semibold text-white">Ver lotes</a>
+                <button type="button" @click="cerrarResultado()" class="flex-1 rounded-lg border py-2 text-sm font-semibold">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+function auditoriaAsientosEliminar(cfg) {
+    const conceptosEl = document.getElementById('asientos-conceptos-data');
+    const conceptosInicial = conceptosEl ? JSON.parse(conceptosEl.textContent) : [];
+
+    return {
+        asientosUrl: cfg.asientosUrl,
+        previewUrl: cfg.previewUrl,
+        eliminarUrl: cfg.eliminarUrl,
+        ejerciciosPeriodosUrl: cfg.ejerciciosPeriodosUrl,
+        lotesUrl: cfg.lotesUrl,
+        puedeCorregir: !!cfg.puedeCorregir,
+        errorParametros: cfg.errorParametros || '',
+        ejercicios: [],
+        ejercicioBusqueda: '',
+        ejercicioAbierto: false,
+        cargandoEjercicios: false,
+        conceptos: conceptosInicial,
+        filtros: {
+            idEjercicio: cfg.idEjercicioInicial || '',
+            fechaDesde: '',
+            fechaHasta: '',
+            idConcepto: '',
+            tipoComprobante: '',
+            codigoMovimiento: '',
+            anulado: '',
+            q: '',
+            nrosTexto: '',
+        },
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 200,
+        cargando: false,
+        errorBusqueda: '',
+        seleccionados: [],
+        panelImportar: false,
+        previewOpen: false,
+        previewData: null,
+        previewError: '',
+        confirmOpen: false,
+        procesando: false,
+        detalleOpen: false,
+        detalleItem: null,
+        resultadoOpen: false,
+        resultado: null,
+
+        get ejerciciosFiltrados() {
+            const q = (this.ejercicioBusqueda || '').toLowerCase();
+            if (!q) return this.ejercicios;
+            return this.ejercicios.filter(e => (e.label || '').toLowerCase().includes(q));
+        },
+
+        async init() {
+            await this.cargarEjercicios();
+            if (this.filtros.idEjercicio) {
+                const ej = this.ejercicios.find(e => String(e.id) === String(this.filtros.idEjercicio));
+                if (ej) this.ejercicioBusqueda = ej.label;
+                this.buscar();
+            }
+        },
+
+        async cargarEjercicios() {
+            this.cargandoEjercicios = true;
+            try {
+                const resp = await fetch(this.ejerciciosPeriodosUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const data = await resp.json();
+                this.ejercicios = data.ejercicios || [];
+            } catch (e) {
+                this.errorBusqueda = 'No se pudieron cargar los ejercicios.';
+            } finally {
+                this.cargandoEjercicios = false;
+            }
+        },
+
+        seleccionarEjercicio(ej) {
+            this.filtros.idEjercicio = ej.id;
+            this.ejercicioBusqueda = ej.label;
+            this.ejercicioAbierto = false;
+            this.page = 1;
+            this.recargarConceptos();
+        },
+
+        limpiarEjercicio() {
+            this.filtros.idEjercicio = '';
+            this.ejercicioBusqueda = '';
+            this.conceptos = [];
+            this.items = [];
+            this.total = 0;
+        },
+
+        async recargarConceptos() {
+            if (!this.filtros.idEjercicio) return;
+            window.location.href = this.asientosUrl + '?id_ejercicio=' + encodeURIComponent(this.filtros.idEjercicio);
+        },
+
+        buildUrl(json) {
+            const p = new URLSearchParams();
+            p.set('id_ejercicio', this.filtros.idEjercicio);
+            if (this.filtros.fechaDesde) p.set('fecha_desde', this.filtros.fechaDesde);
+            if (this.filtros.fechaHasta) p.set('fecha_hasta', this.filtros.fechaHasta);
+            if (this.filtros.idConcepto) p.set('id_concepto_asiento', this.filtros.idConcepto);
+            if (this.filtros.tipoComprobante) p.set('tipo_comprobante', this.filtros.tipoComprobante);
+            if (this.filtros.codigoMovimiento) p.set('codigo_movimiento', this.filtros.codigoMovimiento);
+            if (this.filtros.anulado) p.set('anulado', this.filtros.anulado);
+            if (this.filtros.q) p.set('q', this.filtros.q);
+            if (this.filtros.nrosTexto.trim()) p.set('nros_asiento', this.filtros.nrosTexto.trim());
+            p.set('page', String(this.page));
+            p.set('page_size', String(this.pageSize));
+            if (json) p.set('format', 'json');
+            return this.asientosUrl + '?' + p.toString();
+        },
+
+        aplicarImportacionNros() { /* nros ya en filtros.nrosTexto */ },
+
+        async buscar() {
+            if (!this.filtros.idEjercicio) {
+                this.errorBusqueda = 'Elegí un ejercicio.';
+                return;
+            }
+            this.cargando = true;
+            this.errorBusqueda = '';
+            try {
+                const resp = await fetch(this.buildUrl(true), { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Error al buscar');
+                this.items = data.items || [];
+                this.total = data.total || 0;
+                this.page = data.page || 1;
+            } catch (e) {
+                this.errorBusqueda = e.message || String(e);
+                this.items = [];
+            } finally {
+                this.cargando = false;
+            }
+        },
+
+        irPagina(n) {
+            if (n < 1) return;
+            this.page = n;
+            this.buscar();
+        },
+
+        claveItem(item) {
+            return String(item.id_ejercicio) + '-' + String(item.nro_asiento);
+        },
+
+        estaSeleccionado(item) {
+            const k = this.claveItem(item);
+            return this.seleccionados.some(s => this.claveItem(s) === k);
+        },
+
+        toggleSeleccion(item) {
+            const k = this.claveItem(item);
+            const idx = this.seleccionados.findIndex(s => this.claveItem(s) === k);
+            if (idx >= 0) this.seleccionados.splice(idx, 1);
+            else this.seleccionados.push({ id_ejercicio: item.id_ejercicio, nro_asiento: item.nro_asiento, _item: item });
+        },
+
+        seleccionarVisibles() {
+            for (const item of this.items) {
+                if (!this.estaSeleccionado(item)) {
+                    this.seleccionados.push({ id_ejercicio: item.id_ejercicio, nro_asiento: item.nro_asiento, _item: item });
+                }
+            }
+        },
+
+        limpiarSeleccion() { this.seleccionados = []; },
+
+        abrirDetalle(item) {
+            this.detalleItem = item;
+            this.detalleOpen = true;
+        },
+
+        formatMonto(v) {
+            const n = parseFloat(v);
+            if (isNaN(n)) return v || '—';
+            return '$ ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+
+        payloadAsientos() {
+            return this.seleccionados.map(s => ({ id_ejercicio: s.id_ejercicio, nro_asiento: s.nro_asiento }));
+        },
+
+        async vistaPrevia() {
+            this.previewError = '';
+            this.previewData = null;
+            this.previewOpen = true;
+            try {
+                const resp = await fetch(this.previewUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': this.csrfToken(),
+                    },
+                    body: JSON.stringify({ asientos: this.payloadAsientos() }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Error en vista previa');
+                this.previewData = data;
+            } catch (e) {
+                this.previewError = e.message || String(e);
+            }
+        },
+
+        cerrarPreview() {
+            if (this.procesando) return;
+            this.previewOpen = false;
+            this.confirmOpen = false;
+        },
+
+        csrfToken() {
+            const m = document.cookie.match(/csrftoken=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        },
+
+        async ejecutarEliminar() {
+            this.procesando = true;
+            if (typeof window.synapShowPostLoadingProgress === 'function') {
+                window.synapShowPostLoadingProgress({
+                    title: 'Eliminando asientos…',
+                    subtitle: 'Backup, borrado y recálculo de saldos. No cierres esta ventana.',
+                    indeterminate: true,
+                });
+            }
+            try {
+                const resp = await fetch(this.eliminarUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': this.csrfToken(),
+                    },
+                    body: JSON.stringify({ asientos: this.payloadAsientos() }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || 'Error al eliminar');
+                this.resultado = data;
+                this.confirmOpen = false;
+                this.previewOpen = false;
+                this.resultadoOpen = true;
+                this.limpiarSeleccion();
+                this.buscar();
+            } catch (e) {
+                this.previewError = e.message || String(e);
+                this.confirmOpen = false;
+            } finally {
+                this.procesando = false;
+                if (typeof window.synapHidePostLoadingProgress === 'function') {
+                    window.synapHidePostLoadingProgress();
+                }
+            }
+        },
+
+        cerrarResultado() {
+            this.resultadoOpen = false;
+            this.resultado = null;
+        },
+    };
+}
+</script>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{% include "partials/synap_post_loading_modal.html" %}
+{% endblock %}
