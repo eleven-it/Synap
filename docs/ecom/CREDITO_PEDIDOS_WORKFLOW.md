@@ -113,6 +113,37 @@ Parche VB6 documentado aquí; implementación fuera del árbol Python Synap (com
 
 Look visual: hero `slate-800`, patrón Alta Movimiento (`docs/stock/ALTA_MOVIMIENTO_UX.md`).
 
+### UX de las pantallas (cupos AdministraNET visibles)
+
+Principio de producto: el **cupo $** y los **días base** viven en AdministraNET (`cliente.Credito`,
+`cliente.saldo`, `cliente.credito_limite_dias`). Las pantallas Synap los **muestran** y solo
+administran los overrides de política (días por canal + capas de exposición); nunca los mutan.
+
+- **Cola Finanzas** (`cola_finanzas.html`): cada fila muestra PED, cliente, fecha, **importe**,
+ cupo AdministraNET, saldo, disponible (de la evaluación o aproximado), límite de días y
+ **semáforo** verde/ámbar/rojo con motivos (misma paleta que `pedidos_order_header.html`).
+ Banner cuando el workflow está desactivado por empresa, filtro de texto local + select de
+ antigüedad (30/60/90 días, recarga `?dias=`) y empty state educativo. Aprobar y Rechazar usan
+ **modales Synap** (sin `alert`/`confirm`) y feedback por `mprShowAviso`.
+- **Políticas** (`politica_list.html`): panel *Consultar cupo AdministraNET* con búsqueda
+ predictiva de cliente que solo lee `api_credito_cliente_resumen` (no crea política); tabla con
+ cliente o «Default empresa», canal, días de política (o «Usa AdministraNET»), cupo, saldo,
+ límite de días Adminet, chips de capas activas y estado.
+- **Alta política** (`politica_form.html`): el input numérico de ID cliente fue reemplazado por
+ **búsqueda predictiva** (combobox Alpine, debounce 280 ms, teclado), toggle *Usar política default
+ empresa* (`id_cliente = null`), panel read-only **Límites AdministraNET** al seleccionar cliente,
+ prefill editable de `limite_dias` desde `credito_limite_dias` (vacío = usar el del cliente) y
+ toggles Activo/Inactivo para las capas (`capa_cxc`, `capa_ped_abiertos`, `capa_remitos_nf`,
+ `capa_cheques`, `capa_doc_actual`, `incluir_mora`) que viajan en el POST.
+- **Plantillas** (`plantillas.html`): `tipo_aviso` como `select` (`pedido_bloqueado`, `cobranza`,
+ u otro identificador libre), cliente opcional por búsqueda predictiva (vacío = default empresa),
+ chips para insertar variables (`nro_comprobante`, `nombre_cliente`, `importe`, `fecha`, `saldo`)
+ y listado con jerarquía tipo · canal · estado · alcance.
+
+Includes compartidos: `ecom/templates/ecom/credito/includes/cliente_predictivo.html` (combobox) y
+`cliente_credito_panel.html` (panel read-only de límites Adminet). Contratos verificados en
+`ecom/tests/test_credito_pedidos_ui_static.py`.
+
 ## Rollout recomendado
 
 1. Ejecutar proveedor DDL `ecom_credito_pedidos` (`run_ecom_credito_pedidos_mysql` vía herramienta global).

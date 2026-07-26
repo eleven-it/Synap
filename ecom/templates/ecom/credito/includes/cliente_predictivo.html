@@ -1,0 +1,73 @@
+{% comment %}
+  Búsqueda predictiva de cliente (patrón combobox de pedido masivo).
+
+  Requiere en el componente Alpine: qCliente, panelCli, clientes, idxCli, cargandoCli,
+  clienteSel, buscarClientes(), elegirCliente(c), abrirPanelCli(), cerrarPanelCli(),
+  moverSelCli(n), elegirResaltadoCli(), limpiarCliente().
+
+  Params (via {% include ... with %}):
+    input_id      → id del input
+    label         → etiqueta visible
+    hint          → ayuda debajo del campo
+    placeholder   → placeholder del input
+    disabled_expr → expresión Alpine que deshabilita el campo (usar "false" si nunca)
+{% endcomment %}
+<div @click.outside="cerrarPanelCli()">
+  <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="{{ input_id }}">
+    {{ label|default:"Cliente" }}
+  </label>
+  <div class="relative">
+    <input type="text" id="{{ input_id }}" autocomplete="off" role="combobox"
+           aria-autocomplete="list" aria-haspopup="listbox"
+           :aria-expanded="panelCli"
+           x-model="qCliente"
+           :disabled="{{ disabled_expr|default:"false" }}"
+           @focus="abrirPanelCli()"
+           @input="clienteSel = null"
+           @input.debounce.280ms="buscarClientes()"
+           @keydown.arrow-down.prevent="moverSelCli(1)"
+           @keydown.arrow-up.prevent="moverSelCli(-1)"
+           @keydown.enter.prevent="elegirResaltadoCli()"
+           @keydown.escape="cerrarPanelCli()"
+           placeholder="{{ placeholder|default:"Nombre, código o CUIT (mín. 2 caracteres)…" }}"
+           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-600 dark:bg-slate-900 dark:text-white dark:disabled:bg-slate-800" />
+
+    <ul x-show="panelCli && clientes.length" x-cloak role="listbox"
+        aria-label="Resultados de búsqueda de cliente"
+        class="absolute z-40 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800">
+      <template x-for="(c, i) in clientes" :key="c.id">
+        <li role="option" :aria-selected="i === idxCli"
+            @mousedown.prevent="elegirCliente(c)"
+            :class="i === idxCli ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
+            class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+          <span class="font-semibold tabular-nums" x-text="'#' + c.id"></span>
+          <span class="text-slate-400"> — </span>
+          <span x-text="c.text"></span>
+        </li>
+      </template>
+    </ul>
+    <p x-show="panelCli && cargandoCli" x-cloak
+       class="absolute z-40 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+      Buscando…
+    </p>
+    <p x-show="panelCli && !cargandoCli && busquedaHecha && !clientes.length" x-cloak
+       class="absolute z-40 mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
+      Sin clientes para esa búsqueda
+    </p>
+  </div>
+
+  <div x-show="clienteSel" x-cloak class="mt-2 flex flex-wrap items-center gap-2">
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-2.5 py-1 text-xs font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+      <span class="material-icons text-sm" aria-hidden="true">person</span>
+      <span x-text="clienteSel ? ('#' + clienteSel.id + ' · ' + clienteSel.text) : ''"></span>
+    </span>
+    <button type="button" @click="limpiarCliente()"
+            class="text-xs font-medium text-slate-500 underline hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+      Quitar
+    </button>
+  </div>
+
+  {% if hint %}
+  <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{{ hint }}</p>
+  {% endif %}
+</div>

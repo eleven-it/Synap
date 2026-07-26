@@ -69,16 +69,44 @@ class EcomCreditoConfigurarPermission(BasePermission):
         return puede_configurar_credito(sess)
 
 
+class EcomCreditoConsultarPermission(BasePermission):
+    """Permite consultar datos de crédito del cliente (configurar o aprobar)."""
+
+    message = "Se requiere permiso finance.credito.configurar o finance.credito.aprobar."
+
+    def has_permission(self, request, view):
+        if not EcomMayoristappSessionPermission().has_permission(request, view):
+            return False
+        user = getattr(request, "user", None)
+        if getattr(user, "is_superuser", False):
+            return True
+        sess = (getattr(request, "session", None) or {}).get("user") or {}
+        return puede_configurar_credito(sess) or puede_aprobar_credito(sess)
+
+
 def _session_user(request: Request) -> Dict[str, Any]:
     return (getattr(request, "session", None) or {}).get("user") or {}
+
+
+def _bool_a_si_no_capa(raw: Any, default: bool = True) -> str:
+    if raw is None:
+        return "Si" if default else "No"
+    if raw in (True, "true", "True", 1, "1", "Si", "si", "Sí", "sí"):
+        return "Si"
+    if raw in (False, "false", "False", 0, "0", "No", "no"):
+        return "No"
+    return "Si" if default else "No"
 
 
 def _fetch_cliente_credito(base_empresa: str, id_cliente: int) -> Optional[Dict[str, Any]]:
     sql = """
         SELECT
+            cliente.Codigo AS Codigo,
             cliente.Credito AS Credito,
+            COALESCE(cliente.saldo, 0) AS saldo,
             cliente.credito_limite_dias AS credito_limite_dias,
-            COALESCE(cliente.nombre_cliente, '') AS nombre_cliente
+            COALESCE(cliente.nombre_cliente, '') AS nombre_cliente,
+            COALESCE(cliente.CUIT, '') AS cuit
         FROM cliente
         WHERE cliente.Codigo = %s
         LIMIT 1
@@ -87,6 +115,45 @@ def _fetch_cliente_credito(base_empresa: str, id_cliente: int) -> Optional[Dict[
         cur = conn.cursor(MySQLdb.cursors.DictCursor)
         cur.execute(sql, [id_cliente])
         return cur.fetchone()
+
+
+def _cliente_credito_resumen(cli: Dict[str, Any]) -> Dict[str, Any]:
+    cupo = to_decimal_or_none(cli.get("Credito")) or Decimal("0")
+    saldo = to_decimal_or_none(cli.get("saldo")) or Decimal("0")
+    sin_tope = cupo == Decimal("0")
+    disponible = None
+    if not sin_tope:
+        disponible = float(max(Decimal("0"), cupo - saldo))
+    return {
+        "id_cliente": int(to_int_or_none(cli.get("Codigo")) or 0),
+        "nombre_cliente": str_or_default(cli.get("nombre_cliente"), ""),
+        "cuit": str_or_default(cli.get("cuit"), ""),
+        "credito_cupo": float(cupo),
+        "saldo": float(saldo),
+        "credito_limite_dias": to_int_or_none(cli.get("credito_limite_dias")) or 0,
+        "sin_tope_monetario": sin_tope,
+        "disponible_aprox": disponible,
+    }
+
+
+def _normalizar_politica_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    item = dict(row)
+    id_cliente = to_int_or_none(item.get("id_cliente"))
+    if id_cliente is None or id_cliente == 0:
+        item["id_cliente"] = 0
+        item["es_default"] = True
+    else:
+        item["id_cliente"] = id_cliente
+        item["es_default"] = False
+    for key in ("credito_cupo", "saldo"):
+        if key in item and item[key] is not None:
+            item[key] = float(to_decimal_or_none(item[key]) or Decimal("0"))
+        elif key in item:
+            item[key] = None
+    limite_dias_cli = item.get("credito_limite_dias")
+    if limite_dias_cli is not None:
+        item["credito_limite_dias"] = to_int_or_none(limite_dias_cli)
+    return item
 
 
 class CreditoPreCheckAPIView(APIView):
@@ -149,17 +216,24 @@ class CreditoColaFinanzasView(_StubMayoristappPermisoView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         base = _session_base_empresa(self.request)
+        urls = {
+            "api_pendientes": reverse("ecom:api_credito_pendientes"),
+            "aprobar_tpl": reverse(
+                "ecom:api_credito_aprobar", kwargs={"cod_mov": 0}
+            ).replace("/0/", "/{cod_mov}/"),
+            "rechazar_tpl": reverse(
+                "ecom:api_credito_rechazar", kwargs={"cod_mov": 0}
+            ).replace("/0/", "/{cod_mov}/"),
+            "hub": reverse("ecom:mayoristapp_pedidos_hub"),
+            "buscar_clientes": reverse("ecom:mayoristapp_clientes_buscar"),
+            "cliente_resumen": reverse("ecom:api_credito_cliente_resumen"),
+        }
+        # El atajo a Políticas solo se ofrece a quien puede configurarlas.
+        sess = _session_user(self.request)
+        if getattr(getattr(self.request, "user", None), "is_superuser", False) or puede_configurar_credito(sess):
+            urls["politicas"] = reverse("ecom:credito_politicas")
         ctx["bootstrap"] = {
-            "urls": {
-                "api_pendientes": reverse("ecom:api_credito_pendientes"),
-                "aprobar_tpl": reverse(
-                    "ecom:api_credito_aprobar", kwargs={"cod_mov": 0}
-                ).replace("/0/", "/{cod_mov}/"),
-                "rechazar_tpl": reverse(
-                    "ecom:api_credito_rechazar", kwargs={"cod_mov": 0}
-                ).replace("/0/", "/{cod_mov}/"),
-                "hub": reverse("ecom:mayoristapp_pedidos_hub"),
-            },
+            "urls": urls,
             "activo": credito_pedidos_activo(base) if base else False,
         }
         return ctx
@@ -176,6 +250,8 @@ class CreditoPoliticaListView(_StubMayoristappPermisoView):
                 "nueva": reverse("ecom:credito_politica_nueva"),
                 "api": reverse("ecom:api_credito_politicas"),
                 "cola": reverse("ecom:credito_cola"),
+                "buscar_clientes": reverse("ecom:mayoristapp_clientes_buscar"),
+                "cliente_resumen": reverse("ecom:api_credito_cliente_resumen"),
             }
         }
         return ctx
@@ -193,6 +269,8 @@ class CreditoPoliticaFormView(_StubMayoristappPermisoView):
             "urls": {
                 "api": reverse("ecom:api_credito_politicas"),
                 "lista": reverse("ecom:credito_politicas"),
+                "buscar_clientes": reverse("ecom:mayoristapp_clientes_buscar"),
+                "cliente_resumen": reverse("ecom:api_credito_cliente_resumen"),
             },
         }
         return ctx
@@ -208,9 +286,28 @@ class CreditoPlantillasView(_StubMayoristappPermisoView):
             "urls": {
                 "api": reverse("ecom:api_credito_plantillas"),
                 "politicas": reverse("ecom:credito_politicas"),
+                "buscar_clientes": reverse("ecom:mayoristapp_clientes_buscar"),
             }
         }
         return ctx
+
+
+class CreditoClienteResumenAPIView(APIView):
+    """GET ``/ecom/api/credito/cliente-resumen/?id_cliente=N`` — cupo Adminet del cliente."""
+
+    permission_classes = [EcomCreditoConsultarPermission]
+
+    def get(self, request: Request) -> Response:
+        base = _session_base_empresa(request)
+        if not base:
+            return Response({"ok": False, "error": "Sin base_empresa."}, status=400)
+        id_cliente = to_int_or_none(request.query_params.get("id_cliente"))
+        if id_cliente is None:
+            return Response({"ok": False, "error": "Falta id_cliente."}, status=400)
+        cli = _fetch_cliente_credito(base, int(id_cliente))
+        if not cli:
+            return Response({"ok": False, "error": "Cliente no encontrado."}, status=404)
+        return Response({"ok": True, "cliente": _cliente_credito_resumen(cli)})
 
 
 class CreditoPendientesAPIView(APIView):
@@ -281,16 +378,23 @@ class CreditoPoliticasAPIView(APIView):
         if not base:
             return Response({"ok": False, "error": "Sin base_empresa."}, status=400)
         sql = """
-            SELECT id, id_cliente, canal, limite_dias, activo,
-                   capa_cxc, capa_ped_abiertos, capa_remitos_nf, capa_cheques, capa_doc_actual
-            FROM ecom_credito_politica
-            ORDER BY id_cliente IS NULL, id_cliente, canal
+            SELECT
+                p.id, p.id_cliente, p.canal, p.limite_dias, p.activo,
+                p.capa_cxc, p.capa_ped_abiertos, p.capa_remitos_nf, p.capa_cheques,
+                p.capa_doc_actual, p.incluir_mora,
+                COALESCE(c.nombre_cliente, '') AS nombre_cliente,
+                c.Credito AS credito_cupo,
+                COALESCE(c.saldo, 0) AS saldo,
+                c.credito_limite_dias AS credito_limite_dias
+            FROM ecom_credito_politica p
+            LEFT JOIN cliente c ON c.Codigo = p.id_cliente AND COALESCE(p.id_cliente, 0) > 0
+            ORDER BY p.id_cliente IS NULL, p.id_cliente, p.canal
             LIMIT 500
         """
         try:
             with mysql_cursor(base, dict_cursor=True) as cur:
                 cur.execute(sql)
-                rows = [dict(r) for r in cur.fetchall() or []]
+                rows = [_normalizar_politica_row(dict(r)) for r in cur.fetchall() or []]
         except Exception as exc:
             return Response({"ok": False, "error": str(exc)}, status=500)
         return Response({"ok": True, "results": rows})
@@ -304,6 +408,12 @@ class CreditoPoliticasAPIView(APIView):
         canal = str_or_default(data.get("canal"), "PED").upper()
         limite_dias = to_int_or_none(data.get("limite_dias"))
         activo = "Si" if data.get("activo", True) else "No"
+        capa_cxc = _bool_a_si_no_capa(data.get("capa_cxc"), default=True)
+        capa_ped_abiertos = _bool_a_si_no_capa(data.get("capa_ped_abiertos"), default=True)
+        capa_remitos_nf = _bool_a_si_no_capa(data.get("capa_remitos_nf"), default=False)
+        capa_cheques = _bool_a_si_no_capa(data.get("capa_cheques"), default=False)
+        capa_doc_actual = _bool_a_si_no_capa(data.get("capa_doc_actual"), default=True)
+        incluir_mora = _bool_a_si_no_capa(data.get("incluir_mora"), default=True)
         error_canal = _validar_canal_credito(canal)
         if error_canal:
             return error_canal
@@ -315,9 +425,20 @@ class CreditoPoliticasAPIView(APIView):
                         (id_cliente, canal, limite_dias, activo,
                          capa_cxc, capa_ped_abiertos, capa_remitos_nf, capa_cheques, capa_doc_actual,
                          incluir_mora, creado_en, actualizado_en)
-                    VALUES (%s, %s, %s, %s, 'Si', 'Si', 'No', 'No', 'Si', 'Si', NOW(), NOW())
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
                     """,
-                    (id_cliente, canal, limite_dias, activo),
+                    (
+                        id_cliente,
+                        canal,
+                        limite_dias,
+                        activo,
+                        capa_cxc,
+                        capa_ped_abiertos,
+                        capa_remitos_nf,
+                        capa_cheques,
+                        capa_doc_actual,
+                        incluir_mora,
+                    ),
                 )
         except Exception as exc:
             return Response({"ok": False, "error": str(exc)}, status=500)

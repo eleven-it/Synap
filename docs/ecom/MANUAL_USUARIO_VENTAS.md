@@ -290,10 +290,13 @@ Con workflow **inactivo**, verá el resumen clásico (saldo CC y límite en día
 #### Pasos en la cola
 
 1. Abra la cola (o use los CTAs del hub).
-2. Revise cada renglón: número de PED, cliente, fecha.
-3. **Aprobar crédito:** libera ese PED. El cupo del cliente **no se modifica**.
-4. **Rechazar:** escriba el **motivo** (obligatorio) y confirme en el modal. El PED sigue retenido.
-5. Use **Volver al hub** para seguir el resto del pipeline.
+2. Revise cada renglón: número de PED, cliente, fecha, **importe**, **cupo / saldo AdministraNET**, disponible, días de mora y **semáforo** (verde / ámbar / rojo) con motivos.
+3. Filtre por cliente o número, o cambie la antigüedad (30 / 60 / 90 días).
+4. **Aprobar crédito:** confirme en el modal Synap. Libera ese PED; el cupo del cliente **no se modifica**.
+5. **Rechazar:** escriba el **motivo** (obligatorio) y confirme en el modal. El PED sigue retenido.
+6. Use **Volver al hub** para seguir el resto del pipeline.
+
+Si la cola está vacía: es normal cuando no hay PED **No Autorizado** recientes, o si el workflow está desactivado para la empresa. Los cupos cargados en AdministraNET se consultan en **Políticas de crédito** (panel «Consultar cupo»).
 
 #### Qué implica aprobar
 
@@ -317,21 +320,22 @@ Con workflow **inactivo**, verá el resumen clásico (saldo CC y límite en día
 
 #### Para qué sirve
 
-Definir, por **cliente** y **canal** (PED o PRE), cómo se calcula el crédito:
+El **cupo en pesos** (`Credito`), el **saldo** y los **días base** viven en AdministraNET (ficha del cliente). En Synap se definen **overrides de política** por cliente y canal (PED o PRE):
 
-- Límite de mora en días (si aplica).
-- Capas de exposición a sumar: cuenta corriente, pedidos abiertos, remitos no facturados, cheques, documento actual.
+- Límite de mora en días (si se completa, reemplaza el de AdministraNET para ese canal; vacío = usar el del cliente).
+- Capas de exposición a sumar: cuenta corriente, pedidos abiertos, remitos no facturados, cheques, documento actual, incluir mora.
 - Activo / inactivo.
 
-Si deja **ID cliente vacío**, la política aplica como **default de empresa** para ese canal.
+En el listado use el panel **Consultar cupo AdministraNET** (búsqueda predictiva) para ver cupo, saldo y días **sin crear** una política. Con la opción **Usar política default empresa** activa, la política aplica a todos los clientes sin política propia.
 
 #### Pasos
 
-1. Abra el listado de políticas.
-2. Pulse alta / **Nueva**.
-3. Complete canal (**solo PED o PRE**; no hay WhatsApp en esta versión).
-4. Indique límite de días y guarde.
-5. Verifique en una toma de pedido de prueba el semáforo y el resultado al confirmar.
+1. Abra el listado de políticas (revise cupos Adminet en el panel de consulta si lo necesita).
+2. Pulse **Nueva política**.
+3. Busque el cliente por **nombre, código o CUIT** (dropdown predictivo) o active default empresa.
+4. Revise el panel **Límites AdministraNET** (solo lectura).
+5. Complete canal (**solo PED o PRE**), días de política y capas; guarde.
+6. Verifique en una toma de pedido de prueba el semáforo y el resultado al confirmar.
 
 **Segregación:** un usuario que solo puede **aprobar** no puede cambiar políticas. Un usuario que solo puede **configurar** no puede aprobar/rechazar en la cola.
 
@@ -347,10 +351,10 @@ Editar textos de correo que se disparan cuando un pedido queda bloqueado por cr�
 
 #### Campos habituales
 
-- Tipo de aviso (p. ej. **pedido bloqueado**).
+- Tipo de aviso (selector: **pedido bloqueado**, cobranza u otro).
 - Canal (PED / PRE).
-- Asunto y cuerpo del mensaje.
-- Cliente opcional (vacío = plantilla general).
+- Asunto y cuerpo del mensaje (puede insertar variables con los chips).
+- Cliente opcional por búsqueda predictiva (vacío = plantilla general).
 
 #### Anti-ruido (para no spam)
 

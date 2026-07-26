@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.mysql_pool import get_mysql_pool, mysql_cursor
-from core.utils.administranet_types import str_or_default, to_int_or_none
+from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
 
 from ecom.permissions import puede_aprobar_credito
 from ecom.services.ecom_config_mysql import (
@@ -261,6 +261,55 @@ def resolver_finanzas(
         return False, "No se pudo resolver la aprobación Finanzas.", None
 
 
+def _decimal_a_float(val: Any) -> Optional[float]:
+    dec = to_decimal_or_none(val)
+    if dec is None:
+        return None
+    return float(dec)
+
+
+def _motivos_evaluacion_a_lista(motivos: Any) -> List[str]:
+    txt = str(motivos or "").strip()
+    if not txt or txt == "-":
+        return []
+    return [m.strip() for m in txt.split(",") if m.strip()]
+
+
+def _normalizar_fila_pendiente(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Serializa fila SQL a dict JSON-friendly para la cola Finanzas."""
+    item = dict(row)
+    item["ImporteVenta"] = _decimal_a_float(item.get("ImporteVenta"))
+    item["credito_cupo"] = _decimal_a_float(item.get("credito_cupo"))
+    item["saldo"] = _decimal_a_float(item.get("saldo")) or 0.0
+    item["credito_limite_dias"] = to_int_or_none(item.get("credito_limite_dias"))
+
+    eval_id = to_int_or_none(item.pop("eval_id", None))
+    if eval_id is not None:
+        item["evaluacion"] = {
+            "limite": _decimal_a_float(item.pop("eval_limite", None)),
+            "exposicion": _decimal_a_float(item.pop("eval_exposicion", None)),
+            "disponible": _decimal_a_float(item.pop("eval_disponible", None)),
+            "dias_atraso": to_int_or_none(item.pop("eval_dias_atraso", None)),
+            "semaforo": str_or_default(item.pop("eval_semaforo", None), "verde"),
+            "motivos": _motivos_evaluacion_a_lista(item.pop("eval_motivos", None)),
+            "autorizacion": str_or_default(item.pop("eval_autorizacion", None), "-"),
+        }
+    else:
+        for key in (
+            "eval_limite",
+            "eval_exposicion",
+            "eval_disponible",
+            "eval_dias_atraso",
+            "eval_semaforo",
+            "eval_motivos",
+            "eval_autorizacion",
+        ):
+            item.pop(key, None)
+        item["evaluacion"] = None
+
+    return item
+
+
 def listar_pendientes_finanzas(
     base_empresa: str,
     *,
@@ -282,9 +331,29 @@ def listar_pendientes_finanzas(
             TRIM(COALESCE(cp.estado_credito_finanzas, '-')) AS estado_credito_finanzas,
             cp.ImporteVenta,
             COALESCE(c.nombre_cliente, '') AS nombre_cliente,
-            cp.Codigo AS id_cliente
+            cp.Codigo AS id_cliente,
+            c.Credito AS credito_cupo,
+            COALESCE(c.saldo, 0) AS saldo,
+            c.credito_limite_dias AS credito_limite_dias,
+            ev.id AS eval_id,
+            ev.limite AS eval_limite,
+            ev.exposicion AS eval_exposicion,
+            ev.disponible AS eval_disponible,
+            ev.dias_atraso AS eval_dias_atraso,
+            ev.semaforo AS eval_semaforo,
+            ev.motivos AS eval_motivos,
+            ev.autorizacion AS eval_autorizacion
         FROM comp_ped cp
         LEFT JOIN cliente c ON c.Codigo = cp.Codigo
+        LEFT JOIN (
+            SELECT e1.*
+            FROM ecom_credito_evaluacion e1
+            INNER JOIN (
+                SELECT codigo_movimiento, MAX(id) AS max_id
+                FROM ecom_credito_evaluacion
+                GROUP BY codigo_movimiento
+            ) e2 ON e1.codigo_movimiento = e2.codigo_movimiento AND e1.id = e2.max_id
+        ) ev ON ev.codigo_movimiento = cp.CodigoMovimiento
         WHERE cp.TipoComprobante = 'PED'
           AND cp.estado_credito_finanzas = %s
           AND COALESCE(cp.Anulado, 'No') = 'No'
@@ -297,7 +366,7 @@ def listar_pendientes_finanzas(
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             cursor.execute(sql, params)
             for row in cursor.fetchall() or []:
-                out.append(dict(row))
+                out.append(_normalizar_fila_pendiente(dict(row)))
     except Exception as exc:
         logger.warning("listar_pendientes_finanzas: %s", exc)
     return out
