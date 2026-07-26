@@ -71,7 +71,15 @@ def _item_concepto_anul(codmov: str, nro: int, id_pc: int, anterior: int, nuevo:
     }
 
 
-def _item_asiento(codmov: str, id_pc: int, id_ej: int) -> dict:
+def _item_asiento(
+    codmov: str,
+    id_pc: int,
+    id_ej: int,
+    *,
+    check_id: str = "comprobante_compra_pago_sin_asiento",
+    concepto: int = 3,
+    desc_concepto: str = "Compra",
+) -> dict:
     return {
         "tabla": "cont_asiento",
         "clave": {"codigo_movimiento": codmov, "id_pc": id_pc, "nro_asiento": 100},
@@ -87,11 +95,11 @@ def _item_asiento(codmov: str, id_pc: int, id_ej: int) -> dict:
             "haber_asiento": "0.00",
             "id_pc": id_pc,
             "desc_renglon_asiento": "REGEN test",
-            "desc_concepto_asiento": "Compra",
-            "id_concepto_asiento": 3,
-            "desc_asiento": "Compra test",
+            "desc_concepto_asiento": desc_concepto,
+            "id_concepto_asiento": concepto,
+            "desc_asiento": f"{desc_concepto} test",
         },
-        "check_id": "comprobante_compra_pago_sin_asiento",
+        "check_id": check_id,
         "excluido": False,
     }
 
@@ -122,18 +130,18 @@ def _crear_plan(items: list[dict], base_empresa: str = "test_empresa") -> PlanCo
 
 class ContRecalculoApplyTestCase(TestCase):
     @override_settings(ENVIRONMENT="development")
-    def test_apply_bloqueado_fuera_de_produccion(self):
+    def test_apply_rechaza_sin_permiso_en_development(self):
         plan = _crear_plan([_item_saldo(10, 1, "100.00", "110.00")])
         with self.assertRaises(CorreccionContableError) as ctx:
             apply(
                 plan.base_empresa,
                 str(plan.dry_run_id),
                 "tester",
-                tiene_permiso_corregir=True,
+                tiene_permiso_corregir=False,
             )
-        self.assertIn("producción", str(ctx.exception).lower())
+        self.assertIn("permiso", str(ctx.exception).lower())
 
-    @override_settings(ENVIRONMENT="production")
+    @override_settings(ENVIRONMENT="development")
     @patch("legacy_db.services.cont_recalculo_service.get_mysql_pool")
     @patch("legacy_db.services.cont_recalculo_service.resolver_politica")
     def test_apply_rechaza_concurrencia_por_fingerprint(self, mock_politica, mock_pool):
@@ -194,7 +202,7 @@ class ContRecalculoApplyTestCase(TestCase):
         conn_tx_cm.__exit__ = MagicMock(return_value=False)
 
         pool = MagicMock()
-        pool.get_connection.side_effect = [conn_ro, conn_tx_cm, conn_tx]
+        pool.get_connection.side_effect = [conn_ro, conn_tx_cm, conn_tx_cm]
         mock_pool.return_value = pool
 
         with patch(
@@ -278,7 +286,76 @@ class ContRecalculoApplyTestCase(TestCase):
         ):
             with patch(
                 "legacy_db.services.cont_recalculo_service._asiento_ya_existe",
-                side_effect=[False, True],
+                return_value=True,
+            ):
+                with patch(
+                    "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
+                    return_value=plan.data_fingerprint,
+                ):
+                    resultado = apply(
+                        plan.base_empresa,
+                        str(plan.dry_run_id),
+                        "tester",
+                        tiene_permiso_corregir=True,
+                    )
+
+        insert_asiento = [
+            c for c in cur_tx.execute.call_args_list
+            if c[0] and "INSERT INTO cont_asiento" in str(c[0][0])
+        ]
+        self.assertEqual(len(insert_asiento), 0)
+        self.assertTrue(resultado["ok"])
+
+    @override_settings(ENVIRONMENT="production")
+    @patch("legacy_db.services.cont_recalculo_service.get_mysql_pool")
+    @patch("legacy_db.services.cont_recalculo_service.resolver_politica")
+    def test_regeneracion_venta_no_duplica_si_asiento_existe(self, mock_politica, mock_pool):
+        mock_politica.return_value = _politica_base()
+        items = [
+            _item_asiento(
+                "58305",
+                60,
+                1,
+                check_id="comprobante_venta_cobranza_sin_asiento",
+                concepto=1,
+                desc_concepto="Venta",
+            )
+        ]
+        plan = _crear_plan(items)
+
+        conn_ro = MagicMock()
+        dict_ro = MagicMock()
+        dict_ro.fetchone.side_effect = [{"saldo_ejercicio_cta": None}, {"1": 1}]
+        conn_ro.cursor.return_value = dict_ro
+        conn_ro.__enter__ = MagicMock(return_value=conn_ro)
+        conn_ro.__exit__ = MagicMock(return_value=False)
+
+        conn_tx = MagicMock()
+        cur_tx = MagicMock()
+        dict_tx = MagicMock()
+        dict_tx.fetchone.side_effect = [None, {"1": 1}]
+        conn_tx.cursor.side_effect = lambda *a, **k: dict_tx if a and a[0] else cur_tx
+
+        pool = MagicMock()
+        call_n = {"v": 0}
+
+        def _get_conn(base):
+            call_n["v"] += 1
+            ctx = MagicMock()
+            ctx.__enter__.return_value = conn_ro if call_n["v"] == 1 else conn_tx
+            ctx.__exit__.return_value = False
+            return ctx
+
+        pool.get_connection.side_effect = _get_conn
+        mock_pool.return_value = pool
+
+        with patch(
+            "legacy_db.services.cont_recalculo_service._crear_backups",
+            return_value={"cont_asiento": "cont_asiento_bkp_x"},
+        ):
+            with patch(
+                "legacy_db.services.cont_recalculo_service._asiento_ya_existe",
+                return_value=True,
             ):
                 with patch(
                     "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
@@ -394,7 +471,7 @@ class ContRecalculoApplyTestCase(TestCase):
         conn_tx_cm.__exit__ = MagicMock(return_value=False)
 
         pool = MagicMock()
-        pool.get_connection.side_effect = [conn_ro, conn_tx_cm, conn_tx]
+        pool.get_connection.side_effect = [conn_ro, conn_tx_cm, conn_tx_cm]
         mock_pool.return_value = pool
 
         orden_aplicacion: list[str] = []

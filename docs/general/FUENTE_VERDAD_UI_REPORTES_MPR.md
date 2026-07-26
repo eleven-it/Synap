@@ -45,7 +45,7 @@ Documento normativo para **equipo humano y agentes**: define qué superficies de
   - `mpr/templates/mpr/imputacion_armado_1ra.html` — cola MSTOCK e imputación supervisor.
   - `mpr/templates/mpr/opt_list.html` — listado con filtros, búsqueda con Alpine, tabla responsive.
   - `mpr/templates/mpr/opt_detail.html` — detalle con hero, estado, pasos y tablas.
-- **Feedback en envíos:** formularios con clase `mpr-post-loading` y `mpr/templates/mpr/includes/mpr_post_loading_modal.html`.
+- **Feedback en envíos:** formularios con clase `mpr-post-loading` / `synap-post-loading` y modal compartido `theme/templates/partials/synap_post_loading_modal.html` (API `synapShowPostLoading*`; aliases `mprShowPostLoading*`). El include legacy `mpr/includes/mpr_post_loading_modal.html` reexporta el de theme.
 - **Contenedor de página:** clase **`mpr-contenedor-pagina`** (o include `mpr/includes/contenedor_pagina_open.html`) en todas las pantallas del módulo: **`w-full max-w-none`** con padding horizontal responsive (`px-3 … 2xl:px-12`). No usar `max-w-7xl`, `max-w-4xl` ni otros topes de ancho en el shell principal; las tablas usan `overflow-x-auto` cuando hace falta.
 
 ### 2.3 Implementaciones alineadas al canon (no fuentes de verdad)

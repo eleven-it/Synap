@@ -14,6 +14,9 @@ from contabilidad_audit.services.checks.compras_pagos import (
     comprobante_compra_pago_sin_asiento,
     integridad_anulacion_compra_pago,
 )
+from contabilidad_audit.services.checks.ventas_cobranza import (
+    comprobante_venta_cobranza_sin_asiento,
+)
 from contabilidad_audit.services.checks.conceptos import (
     concepto_anulacion_incoherente,
     concepto_no_normal,
@@ -46,6 +49,7 @@ CHECKS: dict[str, Check] = {
     "rei_recalculo": rei_recalculo,
     "concepto_no_normal": concepto_no_normal,
     "comprobante_compra_pago_sin_asiento": comprobante_compra_pago_sin_asiento,
+    "comprobante_venta_cobranza_sin_asiento": comprobante_venta_cobranza_sin_asiento,
     "asiento_compra_pago_desbalanceado_saldo_null": asiento_compra_pago_desbalanceado_saldo_null,
     "integridad_anulacion_compra_pago": integridad_anulacion_compra_pago,
 }

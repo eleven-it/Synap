@@ -1,0 +1,216 @@
+{% extends "base_app.html" %}
+
+{% block title %}{{ titulo_pagina }} - Synap{% endblock %}
+
+{% block extra_css %}<style>[x-cloak]{display:none !important;}</style>{% endblock %}
+
+{% block content %}
+<section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24"
+         x-data="auditoriaLotes({
+            puedeCorregir: {% if puede_corregir %}true{% else %}false{% endif %}
+         })">
+
+    <div class="relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-violet-900 to-slate-900 opacity-95"></div>
+        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.25em] text-violet-200 font-semibold mb-2">
+                        Contabilidad · Log de correcciones
+                    </p>
+                    <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">{{ titulo_pagina }}</h1>
+                    <p class="text-sm text-slate-300 mt-2 max-w-2xl">
+                        Lotes registrados en <code class="text-violet-200">cont_audit_correccion_lote</code>
+                        para la empresa <strong>{{ base_empresa|default:"—" }}</strong>.
+                        El rollback restaura desde backup (requiere permiso de corregir).
+                    </p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    {% include "includes/btn_manual_ayuda.html" with url_name="contabilidad_audit:manual_usuario" seccion="lotes" class_extra="text-slate-300 hover:text-sky-300 border border-slate-600 hover:border-slate-400 rounded-full px-3 py-2" only %}
+                    <a href="{{ tablero_url }}"
+                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-slate-200 border border-slate-600 hover:border-slate-400">
+                        Tablero auditoría
+                    </a>
+                    <a href="{{ dry_run_url }}"
+                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-indigo-300 border border-indigo-700 hover:border-indigo-500">
+                        Generar dry-run
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full px-4 sm:px-6 lg:px-12 -mt-4 relative z-10 space-y-6">
+
+        {% if messages %}
+        <div class="space-y-2">
+            {% for message in messages %}
+            <div class="rounded-xl px-4 py-3 text-sm border
+                {% if message.tags == 'error' %}bg-rose-50 border-rose-300 text-rose-800 dark:bg-rose-900/20 dark:border-rose-700 dark:text-rose-200
+                {% else %}bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-700 dark:text-emerald-200{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if error_lotes %}
+        <div class="bg-rose-50 dark:bg-rose-900/20 border border-rose-300 dark:border-rose-700 rounded-xl px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
+            {{ error_lotes }}
+        </div>
+        {% endif %}
+
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Lotes aplicados</h2>
+                <span class="text-xs text-slate-500">{{ lotes|length }} lote(s)</span>
+            </div>
+
+            {% if lotes %}
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-800/70 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wide">
+                        <tr>
+                            <th class="px-4 py-2.5 text-left">Lote</th>
+                            <th class="px-4 py-2.5 text-left">Fecha</th>
+                            <th class="px-4 py-2.5 text-left">Usuario</th>
+                            <th class="px-4 py-2.5 text-left">Estado</th>
+                            <th class="px-4 py-2.5 text-left">dry_run_id</th>
+                            <th class="px-4 py-2.5 text-right">Filas log</th>
+                            {% if puede_corregir %}
+                            <th class="px-4 py-2.5 text-right">Acciones</th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        {% for lote in lotes %}
+                        <tr class="text-slate-700 dark:text-slate-200">
+                            <td class="px-4 py-2.5 font-mono text-xs">{{ lote.lote_id }}</td>
+                            <td class="px-4 py-2.5 whitespace-nowrap">{{ lote.fecha }}</td>
+                            <td class="px-4 py-2.5">{{ lote.usuario|default:"—" }}</td>
+                            <td class="px-4 py-2.5">
+                                {% if lote.estado == 'revertido' %}
+                                <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">Revertido</span>
+                                {% elif lote.estado == 'aplicado' %}
+                                <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">Aplicado</span>
+                                {% else %}
+                                <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase bg-amber-100 text-amber-700">{{ lote.estado }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-2.5 font-mono text-[11px] truncate max-w-[10rem]" title="{{ lote.dry_run_id }}">{{ lote.dry_run_id|default:"—" }}</td>
+                            <td class="px-4 py-2.5 text-right font-mono">{{ lote.filas_correccion }}</td>
+                            {% if puede_corregir %}
+                            <td class="px-4 py-2.5 text-right">
+                                {% if lote.estado != 'revertido' %}
+                                <button type="button"
+                                        @click="abrirRollback('{{ lote.lote_id|escapejs }}', '{{ lote.filas_correccion }}')"
+                                        class="inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700 hover:bg-rose-50 dark:hover:bg-rose-900/20">
+                                    Revertir lote
+                                </button>
+                                {% else %}
+                                <span class="text-xs text-slate-400">—</span>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="px-5 py-12 text-center text-sm text-slate-500 dark:text-slate-400">
+                {% if error_lotes %}
+                No se pudo cargar el listado de lotes.
+                {% elif not base_empresa %}
+                Iniciá sesión con una empresa base para ver los lotes aplicados.
+                {% else %}
+                No hay lotes de corrección registrados para esta empresa.
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if puede_corregir %}
+        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+            El rollback requiere permiso <code>{{ permiso_corregir }}</code>
+            (también en development para pruebas). Restaura tablas productivas desde el backup del lote.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Modal confirmación rollback (Synap — sin window.confirm) -->
+    <div x-show="confirmOpen" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="cerrarRollback()">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="cerrarRollback()"></div>
+        <div class="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-6"
+             @click.stop>
+            <div class="flex items-start gap-3 mb-4">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center">
+                    <svg class="w-5 h-5 text-rose-600 dark:text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-base font-semibold text-slate-900 dark:text-white">Revertir lote de corrección</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                        Se restaurarán las tablas contables desde el backup asociado al lote
+                        <code class="font-mono text-xs" x-text="loteSeleccionado"></code>
+                        (<span x-text="filasSeleccionadas"></span> filas en el log).
+                    </p>
+                    <p class="text-xs text-rose-600 dark:text-rose-400 mt-2 font-medium">
+                        Esta operación no se puede deshacer automáticamente.
+                    </p>
+                </div>
+            </div>
+            <form :action="rollbackUrl" method="post"
+                  class="synap-post-loading flex flex-wrap justify-end gap-2"
+                  data-synap-loading-title="Revirtiendo lote"
+                  data-synap-loading-subtitle="Restaurando tablas desde backup. No cierres esta ventana."
+                  @submit="procesando = true">
+                {% csrf_token %}
+                <button type="button" @click="cerrarRollback()" :disabled="procesando"
+                        class="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
+                    Cancelar
+                </button>
+                <button type="submit" :disabled="procesando"
+                        class="rounded-lg px-4 py-2 text-sm font-semibold text-white bg-rose-700 hover:bg-rose-800 disabled:opacity-50">
+                    <span x-text="procesando ? 'Revertiendo…' : 'Confirmar rollback'"></span>
+                </button>
+            </form>
+        </div>
+    </div>
+</section>
+
+<script>
+function auditoriaLotes(cfg) {
+    return {
+        puedeCorregir: !!cfg.puedeCorregir,
+        confirmOpen: false,
+        loteSeleccionado: '',
+        filasSeleccionadas: 0,
+        rollbackUrl: '',
+        procesando: false,
+        abrirRollback(loteId, filas) {
+            if (!this.puedeCorregir) { return; }
+            this.loteSeleccionado = loteId;
+            this.filasSeleccionadas = filas;
+            this.rollbackUrl = '{% url "contabilidad_audit:auditoria_lote_rollback" lote_id="__LOTE__" %}'.replace('__LOTE__', encodeURIComponent(loteId));
+            this.confirmOpen = true;
+            this.procesando = false;
+        },
+        cerrarRollback() {
+            if (this.procesando) { return; }
+            this.confirmOpen = false;
+            this.loteSeleccionado = '';
+            this.rollbackUrl = '';
+        },
+    };
+}
+</script>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{% include "partials/synap_post_loading_modal.html" %}
+{% endblock %}

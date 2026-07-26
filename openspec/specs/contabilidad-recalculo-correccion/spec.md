@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Habilitar un motor de **corrección transaccional** sobre tablas derivadas `cont_*` del MySQL legacy, con dry-run obligatorio, backup previo, detección de concurrencia, log de auditoría y cumplimiento de políticas por empresa. La fuente de verdad DEBE ser `cont_asiento`; las tablas de saldo son reconstruibles. Regla de oro: ninguna escritura hasta validar auditoría en lectura; apply solo bajo salvaguardas de producción.
+Habilitar un motor de **corrección transaccional** sobre tablas derivadas `cont_*` del MySQL legacy, con dry-run obligatorio, backup previo, detección de concurrencia, log de auditoría y cumplimiento de políticas por empresa. La fuente de verdad DEBE ser `cont_asiento`; las tablas de saldo son reconstruibles. Regla de oro: ninguna escritura hasta validar auditoría en lectura; apply solo con permiso reforzado y confirmación explícita (disponible también en development para pruebas).
 
 *Archivado desde el cambio OpenSpec `contabilidad-auditoria-recalculo` (19/07/2026).*
 
@@ -27,19 +27,19 @@ El servicio `legacy_db/services/cont_recalculo_service.py` DEBE exponer dos modo
 
 ---
 
-### Requirement: REC-02 — Escritura solo en producción con permiso reforzado
+### Requirement: REC-02 — Escritura con permiso reforzado (cualquier entorno)
 
-`apply` DEBE verificar `ENVIRONMENT=production` (o `produccion` según convención del proyecto) y permiso Synap dedicado de corrección contable reforzado. Fuera de producción, `apply` MUST NOT estar disponible aunque el usuario tenga permiso. `dry_run` DEBE estar disponible en todos los entornos con permiso de lectura/auditoría.
+`apply` y `rollback_lote` DEBEN verificar permiso Synap dedicado de corrección contable (`contabilidad.auditoria.corregir`). NO DEBEN exigir `ENVIRONMENT=production`: deben poder ejecutarse también en `development` (y otros entornos) para pruebas, siempre con el mismo permiso, backup previo y confirmación UI (checkbox; sin token escrito). `dry_run` DEBE estar disponible en todos los entornos con permiso de lectura/auditoría.
 
-#### Scenario: Apply bloqueado en desarrollo
+#### Scenario: Apply rechazado sin permiso
 
-- **Dado** `ENVIRONMENT=development` y usuario con permiso de corrección
+- **Dado** cualquier `ENVIRONMENT` y usuario sin permiso de corrección
 - **Cuando** intenta confirmar apply
 - **Entonces** la operación es rechazada y no se escribe en legacy
 
-#### Scenario: Apply permitido en producción
+#### Scenario: Apply permitido en development con permiso
 
-- **Dado** `ENVIRONMENT=production`, permiso reforzado y dry-run aprobado
+- **Dado** `ENVIRONMENT=development`, permiso reforzado y dry-run aprobado
 - **Cuando** confirma apply explícitamente
 - **Entonces** inicia flujo transaccional con backup previo
 
@@ -109,13 +109,14 @@ Cada mutación aplicada DEBE registrarse en log `cont_audit_correccion` (DDL ví
 
 El motor DEBE aplicar correcciones en este orden fijo salvo bloqueo explícito documentado:
 
-1. `asiento_balanceado` — solo diagnóstico; NO auto-corrige montos de negocio sin regla explícita  
-2. `concepto_anulacion_incoherente` — UPDATE puntual de `id_concepto_asiento`  
-3. `cuentas_sin_fila_saldo` — INSERT de filas faltantes con saldo recalculado  
-4. `saldo_ejercicio_vs_diario` / `saldo_periodo_vs_diario` — recompute maestro de tablas derivadas desde `cont_asiento`  
-5. `rei_recalculo` — regeneración caso a caso; requiere aprobación explícita adicional  
+1. `comprobante_compra_pago_sin_asiento` / `comprobante_venta_cobranza_sin_asiento` — regeneración de asientos huérfanos (REC-18 / REC-20)  
+2. `integridad_anulacion_compra_pago` — reparación de anulaciones incompletas (REC-19)  
+3. `concepto_anulacion_incoherente` — UPDATE puntual de `id_concepto_asiento`  
+4. `cuentas_sin_fila_saldo` — INSERT de filas faltantes con saldo recalculado  
+5. `saldo_ejercicio_vs_diario` / `saldo_periodo_vs_diario` — recompute maestro de tablas derivadas desde `cont_asiento`  
+6. `rei_recalculo` — regeneración caso a caso; requiere aprobación explícita adicional  
 
-NO DEBE ejecutar paso 4 antes de completar 2–3 cuando el plan los incluya.
+NO DEBE ejecutar paso 5 antes de completar 2–4 cuando el plan los incluya. NO DEBE ejecutar paso 2 antes de completar paso 1 cuando el plan incluya regeneración de huérfanos para el mismo comprobante.
 
 #### Scenario: Recompute maestro post-inserts
 
@@ -123,15 +124,24 @@ NO DEBE ejecutar paso 4 antes de completar 2–3 cuando el plan los incluya.
 - **Cuando** apply ejecuta el lote
 - **Entonces** primero INSERT de filas saldo, luego recálculo de saldos derivados, respetando el orden
 
+#### Scenario: Reparación anulación tras regen huérfano
+
+- **Dado** un comprobante sin asiento (huérfano) y anulación incompleta simultánea
+- **Cuando** apply ejecuta el lote
+- **Entonces** primero regenera el asiento original (REC-18)
+- **Y** después aplica reparación de anulación (REC-19) sobre el cm existente
+
 ---
 
 ### Requirement: REC-08 — Estrategias de corrección por tipo
 
 | Tipo detectado | Acción permitida | Auto-apply |
 |----------------|------------------|------------|
-| Saldos derivados desincronizados | Recalcular desde `cont_asiento` | Sí (paso 4) |
-| Filas saldo faltantes | INSERT con saldo recalculado | Sí (paso 3) |
-| Concepto anulación erróneo | UPDATE a `id_concepto_anul` del original | Sí (paso 2) |
+| Saldos derivados desincronizados | Recalcular desde `cont_asiento` | Sí (paso 5) |
+| Filas saldo faltantes | INSERT con saldo recalculado | Sí (paso 4) |
+| Anulación compra/pago incompleta | Reparar marcador / marcar original / insertar contra | Sí (paso 2, REC-19) |
+| Contra-asiento que no invierte original | Marcar revisión manual | NO auto-corrige |
+| Concepto anulación erróneo | UPDATE a `id_concepto_anul` del original | Sí (paso 3) |
 | Asiento desbalanceado centavo | Según `politica_centavo`; re-derivar saldos | Condicional |
 | REI mal calculado | Anular/regenerar REI | Solo manual/aprobación |
 | Cierre PyG / cuentas resultado | Marcar revisión manual | NO auto-corrige |
@@ -139,8 +149,22 @@ NO DEBE ejecutar paso 4 antes de completar 2–3 cuando el plan los incluya.
 #### Scenario: Corrección de concepto de anulación
 
 - **Dado** contra-asiento con concepto incorrecto (H05) detectado por auditoría
-- **Cuando** apply ejecuta paso 2
+- **Cuando** apply ejecuta paso 3
 - **Entonces** actualiza `id_concepto_asiento` al `id_concepto_anul` esperado y registra log
+
+#### Scenario: Anulación incompleta auto-reparable
+
+- **Dado** hallazgo `falta_contra_asiento` sin `contra_no_invierte_original`
+- **Cuando** apply ejecuta paso 2 (REC-19)
+- **Entonces** inserta contra-asiento con concepto 4 u 8 e invierte importes
+- **Y** registra log con `check_id=integridad_anulacion_compra_pago`
+
+#### Scenario: Contra desbalanceado no auto-corrige
+
+- **Dado** hallazgo `contra_no_invierte_original`
+- **Cuando** se solicita apply genérico
+- **Entonces** ese comprobante queda excluido del apply automático
+- **Y** permanece visible en auditoría para revisión manual
 
 #### Scenario: Cierre resultado no auto-corregido
 
@@ -308,7 +332,7 @@ El servicio DEBE poder recomputar **desde cero** (reconstrucción total, no incr
 
 ### Requirement: REC-18 — Regeneración idempotente de asientos faltantes de compras/pagos
 
-El servicio DEBE poder regenerar el asiento contable de un comprobante detectado por `comprobante_compra_pago_sin_asiento` (AUD-LECT-21). DEBE **reconstruir los insumos desde las tablas persistidas** (`cuentaproveedor`, `stock`, `percep_prov`, `transferencia`, `otro_egreso`, `caja`, retenciones…), porque `generar_asiento_cont` (VB6) los tomaba de temporales de sesión inexistentes; la lógica de cuentas portada está validada contra los asientos existentes (facturas 100 %). DEBE usar `id_concepto_asiento=3` para `FA/FC` (y `FB/FM` si existieran) y `7` para `OP`. DEBE **reusar el `CodigoMovimiento` existente** del comprobante (preserva el enlace; NO asignar `codmov` nuevo) y asignar **`nro_asiento` nuevo** del contador `cont_ejercicio.nro_asiento_ejercicio` del ejercicio que contiene la **fecha original** del comprobante, con locking pesimista; la fecha del asiento DEBE ser la **original**. El alcance de esta capacidad son los **331 huérfanos linkables** (`CodigoMovimiento>0`); los **86 registros de anulación** (`CodigoMovimiento=0`) quedan **fuera** (requieren asignación de `codmov` nuevo, tratamiento separado). DEBE ser **idempotente**: si ya existen renglones en `cont_asiento` para el `codigo_movimiento`, NO DEBE duplicar. Un **desbalance residual** de reconstrucción menor o igual a un umbral configurable (referencia: $1,00) DEBE imputarse a la **cuenta de diferencias/redondeo** (`cont_pc` 'Redondeo'; en `administranet89` `id_pc=300`) — ajuste tipo `Balancea_asiento` extendido; por encima del umbral DEBE bloquearse el caso. El `apply` DEBE ejecutarse solo con `ENVIRONMENT=production` (o `produccion`) y permiso reforzado; el `dry-run` es siempre solo lectura. DEBE incluir backup previo (salvo entornos de testing), transacción (InnoDB) por asiento con rollback y log (REC-06), y marcar cada renglón regenerado de forma trazable (p. ej. `desc_renglon_asiento`) para permitir reversión. Tras regenerar asiento, DEBE encadenar reconstrucción de saldos afectados (REC-17). DEBE mapear H51, H52. Ejecución de referencia en testing: 331 regenerados (1.012 renglones), 1 con ajuste de redondeo, 0 bloqueados; verificación 0 huérfanos y validaciones 100%.
+El servicio DEBE poder regenerar el asiento contable de un comprobante detectado por `comprobante_compra_pago_sin_asiento` (AUD-LECT-21). DEBE **reconstruir los insumos desde las tablas persistidas** (`cuentaproveedor`, `stock`, `percep_prov`, `transferencia`, `otro_egreso`, `caja`, retenciones…), porque `generar_asiento_cont` (VB6) los tomaba de temporales de sesión inexistentes; la lógica de cuentas portada está validada contra los asientos existentes (facturas 100 %). DEBE usar `id_concepto_asiento=3` para `FA/FC` (y `FB/FM` si existieran) y `7` para `OP`. DEBE **reusar el `CodigoMovimiento` existente** del comprobante (preserva el enlace; NO asignar `codmov` nuevo) y asignar **`nro_asiento` nuevo** del contador `cont_ejercicio.nro_asiento_ejercicio` del ejercicio que contiene la **fecha original** del comprobante, con locking pesimista; la fecha del asiento DEBE ser la **original**. El alcance de esta capacidad son los **331 huérfanos linkables** (`CodigoMovimiento>0`); los **86 registros de anulación** (`CodigoMovimiento=0`) quedan **fuera** (requieren asignación de `codmov` nuevo, tratamiento separado). DEBE ser **idempotente**: si ya existen renglones en `cont_asiento` para el `codigo_movimiento`, NO DEBE duplicar. Un **desbalance residual** de reconstrucción menor o igual a un umbral configurable (referencia: $1,00) DEBE imputarse a la **cuenta de diferencias/redondeo** (`cont_pc` 'Redondeo'; en `administranet89` `id_pc=300`) — ajuste tipo `Balancea_asiento` extendido; por encima del umbral DEBE bloquearse el caso. El `apply` DEBE ejecutarse con permiso reforzado (cualquier entorno, incluido development para pruebas); el `dry-run` es siempre solo lectura. DEBE incluir backup previo (salvo entornos de testing), transacción (InnoDB) por asiento con rollback y log (REC-06), y marcar cada renglón regenerado de forma trazable (p. ej. `desc_renglon_asiento`) para permitir reversión. Tras regenerar asiento, DEBE encadenar reconstrucción de saldos afectados (REC-17). DEBE mapear H51, H52. Ejecución de referencia en testing: 331 regenerados (1.012 renglones), 1 con ajuste de redondeo, 0 bloqueados; verificación 0 huérfanos y validaciones 100%.
 
 #### Scenario: Regeneración de factura de compra sin asiento
 
@@ -328,9 +352,9 @@ El servicio DEBE poder regenerar el asiento contable de un comprobante detectado
 - **Cuando** se reintenta apply de regeneración para el mismo `CodigoMovimiento`
 - **Entonces** el plan está vacío o apply no inserta filas duplicadas
 
-#### Scenario: Apply bloqueado fuera de producción
+#### Scenario: Apply de regeneración exige permiso reforzado
 
-- **Dado** `ENVIRONMENT=development` y comprobante sin asiento detectado
+- **Dado** un comprobante sin asiento detectado y usuario sin permiso de corrección
 - **Cuando** se intenta apply de regeneración
 - **Entonces** la operación es rechazada sin escritura en legacy
 
@@ -342,6 +366,106 @@ El servicio DEBE poder regenerar el asiento contable de un comprobante detectado
 
 ---
 
+### Requirement: REC-20 — Regeneración idempotente de asientos faltantes de ventas/cobranzas
+
+El servicio DEBE poder regenerar el asiento contable de un comprobante detectado por `comprobante_venta_cobranza_sin_asiento` (AUD-LECT-24). DEBE reconstruir insumos desde tablas persistidas (`cuentacliente`, `stock`, `percep_cli`, `caja`, `chequetercero`, `transferencia`, `retenciones`, `tc_comprobante`, `articulo.id_pc_vta`, matriz de cuentas). DEBE usar `id_concepto_asiento=1` (Venta) para `FA`/`FB`/`FC`/`FE`/`FM` y `5` (Cobranza) para `REC`. DEBE aplicar gating **`punto_venta.cont='Si'`** (no `sucursales.cont`). DEBE **reusar el `CodigoMovimiento` existente**, asignar **`nro_asiento` nuevo** del ejercicio de la fecha original, y marcar renglones con `"REGEN auditoria (bug factura/REC sin asiento)"`. DEBE ser idempotente (no duplicar si ya hay filas en `cont_asiento`). Desbalance ≤ umbral de redondeo → cuenta Redondeo (`id_pc=300` en referencia); por encima → omitir el caso del plan. DEBE incluir `comprobante_venta_cobranza_sin_asiento` en `CHECKS_INCLUIDOS` y ejecutar regeneración venta en el **mismo paso de orden** que REC-18 (antes de REC-19/saldos). Apply con permiso reforzado (cualquier entorno, incluido development). DEBE mapear H54/H55. Fuera de alcance: integridad de anulación venta/REC y NC/ND.
+
+#### Scenario: Dry-run propone asiento de factura de venta
+
+- **Dado** un `FA` en `cuentacliente` con `CodigoMovimiento` huérfano, PV con `cont='Si'`, reconstrucción balanceada
+- **Cuando** se ejecuta dry-run de corrección
+- **Entonces** el plan incluye INSERT en `cont_asiento` con `check_id=comprobante_venta_cobranza_sin_asiento`, `id_concepto_asiento=1` y reuso del `codigo_movimiento`
+
+#### Scenario: Dry-run propone asiento de REC
+
+- **Dado** un `REC` huérfano con medios de cobro persistidos y total coherente
+- **Cuando** se ejecuta dry-run
+- **Entonces** el plan incluye INSERT con `id_concepto_asiento=5` y referencia H55
+
+#### Scenario: Apply idempotente venta sin duplicar
+
+- **Dado** un plan REC-20 ya aplicado para un `CodigoMovimiento`
+- **Cuando** se reintenta apply
+- **Entonces** no se insertan filas duplicadas en `cont_asiento`
+
+---
+
+### Requirement: REC-19 — Reparación auto-apply de anulaciones incompletas compra/pago
+
+El servicio `legacy_db/services/cont_recalculo_service.py` DEBE extender dry-run y apply para reparar hallazgos del check `integridad_anulacion_compra_pago` (AUD-LECT-23) en comprobantes `FA`/`FC`/`OP` con `Anulado='Si'` y `CodigoMovimiento>0`. DEBE incluir `integridad_anulacion_compra_pago` en `CHECKS_INCLUIDOS`. DEBE ampliar `TABLAS_BACKUP_PERMITIDAS` con `cuentaproveedor`. DEBE marcar renglones insertados en `cont_asiento` con `"REGEN auditoria (anulacion incompleta)"` en `desc_renglon_asiento` (o campo trazable equivalente ya usado por REC-18).
+
+El mapeo problema → remedio DEBE ser:
+
+| Problema | Remedio auto-apply |
+|----------|-------------------|
+| `falta_marcador_cuentaproveedor_cm0` | INSERT marcador en `cuentaproveedor` con `CodigoMovimiento=0`, `codigo_movimiento_anul` = cm original, `Detalle="Anulacion - <Tipo> - <Nro>"`, `Anulado='No'` |
+| `asiento_original_no_anulado` | UPDATE `cont_asiento` SET `anulado='Si'` en renglones con `codigo_movimiento` = cm original |
+| `falta_contra_asiento` | INSERT contra-asiento con `id_concepto_asiento` 4 (FA/FC) u 8 (OP), debe/haber invertidos respecto al original, **`codigo_movimiento` nuevo** del contador global, `codigo_movimiento_anul` = cm original, `anulado='No'`, `nro_asiento` nuevo |
+| `contra_no_invierte_original` | **EXCLUIDO** del auto-apply (item `excluido=True`; revisión manual) |
+
+El orden de apply DEBE ser: (1) regeneración huérfanos REC-18/REC-20 → (2) reparación anulaciones REC-19 → (3) concepto anulación REC-07 paso 3 → (4) INSERT filas saldo → (5) recompute saldos. DEBE respetar REC-01, REC-03, REC-04, REC-05, REC-06, REC-09, REC-11 y REC-12. DEBE mapear §6.8 de `AUDITORIA_IMPUTACION_CONTABILIDAD_VB6.md` y H53.
+
+#### Scenario: Dry-run propone INSERT marcador cm=0
+
+- **Dado** un comprobante `OP` con `Anulado='Si'`, cm=12345, sin fila marcador en `cuentaproveedor`
+- **Cuando** se ejecuta dry-run de corrección con alcance que incluye el ejercicio del comprobante
+- **Entonces** el plan incluye un item INSERT sobre `cuentaproveedor` con `CodigoMovimiento=0`, `codigo_movimiento_anul=12345` y `check_id=integridad_anulacion_compra_pago`
+- **Y** no se ejecuta DML en legacy
+
+#### Scenario: Dry-run propone UPDATE asiento original
+
+- **Dado** un comprobante anulado cuyo asiento (cm=12345) tiene renglones con `anulado='No'`
+- **Cuando** se ejecuta dry-run
+- **Entonces** el plan incluye items UPDATE sobre `cont_asiento` marcando `anulado='Si'` para esos renglones
+
+#### Scenario: Dry-run propone INSERT contra-asiento invertido
+
+- **Dado** un comprobante `FA` anulado con asiento original balanceado y sin contra-asiento (concepto 4)
+- **Cuando** se ejecuta dry-run
+- **Entonces** el plan propone INSERT de renglones en `cont_asiento` con `id_concepto_asiento=4`, debe/haber invertidos respecto al original, `codigo_movimiento` nuevo estimado, `codigo_movimiento_anul=12345` y marca `"REGEN auditoria (anulacion incompleta)"`
+
+#### Scenario: Contra mal invertido queda excluido
+
+- **Dado** un comprobante anulado con contra-asiento existente cuyos totales no espejan al original (`contra_no_invierte_original`)
+- **Cuando** se ejecuta dry-run
+- **Entonces** el plan marca el caso como `excluido=True` con motivo en español
+- **Y** no propone INSERT ni UPDATE que modifiquen el contra existente
+
+#### Scenario: Apply respeta orden regen → repair → concepto → saldos
+
+- **Dado** un plan con items de REC-18, REC-19, concepto anulación y recompute de saldos
+- **Cuando** se confirma apply en producción con permiso reforzado
+- **Entonces** las escrituras se ejecutan en el orden: regeneración huérfanos, reparación anulaciones, concepto anulación, INSERT filas saldo, recompute saldos
+- **Y** todas las mutaciones quedan en una transacción única con log `cont_audit_correccion`
+
+#### Scenario: Backup incluye cuentaproveedor
+
+- **Dado** un plan REC-19 que INSERTA marcador en `cuentaproveedor`
+- **Cuando** se confirma apply
+- **Entonces** existe tabla backup `cuentaproveedor_bkp_<timestamp>` antes del primer DML
+- **Y** el log referencia esa tabla
+
+#### Scenario: Idempotencia post-reparación
+
+- **Dado** un apply exitoso que reparó una anulación incompleta para cm=12345
+- **Cuando** se repite dry-run sobre el mismo alcance
+- **Entonces** no se proponen items aplicables para ese cm
+- **Y** el check `integridad_anulacion_compra_pago` no reporta problemas reparables para ese cm en el alcance
+
+#### Scenario: Apply de anulación exige permiso reforzado
+
+- **Dado** hallazgos de anulación incompleta y usuario sin permiso de corrección
+- **Cuando** se intenta apply
+- **Entonces** la operación es rechazada sin escritura en legacy (REC-02)
+
+#### Scenario: Ejercicio cerrado excluido
+
+- **Dado** política con `ejercicios_cerrados=no_tocar` y comprobante anulado en ejercicio cerrado
+- **Cuando** se genera dry-run
+- **Entonces** los items REC-19 de ese ejercicio quedan `excluido=True` según REC-09
+
+---
+
 ## Referencias
 
 - Arquitectura §5–§6: `docs/general/PROPUESTA_ARQUITECTURA_AUDITORIA_RECALCULO_CONTABILIDAD_SYNAP.md`
@@ -349,3 +473,4 @@ El servicio DEBE poder regenerar el asiento contable de un comprobante detectado
 - Compras/pagos: `docs/general/AUDITORIA_IMPUTACION_CONTABILIDAD_VB6.md` §6
 - Capabilities relacionadas: `contabilidad-auditoria-lectura`, `contabilidad-politicas-configurables`
 - Escritura legacy: app `legacy_db`; DDL log: `core/services/legacy_mysql_schema/catalog.py`
+- Change REC-19: `openspec/changes/archive/2026-07-25-contabilidad-auditoria-anulaciones-apply/`

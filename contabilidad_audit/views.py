@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -155,6 +156,9 @@ def _contexto_tablero(request, filtros: dict | None = None) -> dict:
         "tablero_url": reverse("contabilidad_audit:auditoria_tablero"),
         "configuracion_url": reverse("contabilidad_audit:auditoria_configuracion"),
         "ejercicios_periodos_url": reverse("contabilidad_audit:auditoria_ejercicios_periodos"),
+        "dry_run_url": reverse("contabilidad_audit:auditoria_dry_run"),
+        "lotes_url": reverse("contabilidad_audit:auditoria_lotes"),
+        "puede_corregir": _tiene_permiso(user, PERMISO_CORREGIR),
     }
 
 
@@ -551,7 +555,20 @@ def _parse_alcance_dry_run(request) -> dict:
 def _fecha_ui(dt) -> str:
     if dt is None:
         return ""
-    return timezone.localtime(dt).strftime("%d/%m/%Y %H:%M")
+    if isinstance(dt, str):
+        try:
+            from datetime import datetime as dt_cls
+
+            parsed = dt_cls.strptime(dt[:19], "%Y-%m-%d %H:%M:%S")
+            return parsed.strftime("%d/%m/%Y %H:%M")
+        except ValueError:
+            return dt
+    try:
+        if timezone.is_naive(dt):
+            return dt.strftime("%d/%m/%Y %H:%M")
+        return timezone.localtime(dt).strftime("%d/%m/%Y %H:%M")
+    except (AttributeError, ValueError):
+        return str(dt)
 
 
 def _fecha_date_ui(valor) -> str:
@@ -578,7 +595,9 @@ def _contexto_dry_run(request, payload: dict | None = None, alcance_recompute: s
         "tablero_url": reverse("contabilidad_audit:auditoria_tablero"),
         "configuracion_url": reverse("contabilidad_audit:auditoria_configuracion"),
         "dry_run_url": reverse("contabilidad_audit:auditoria_dry_run"),
+        "lotes_url": reverse("contabilidad_audit:auditoria_lotes"),
         "apply_url": reverse("contabilidad_audit:auditoria_apply"),
+        "check_anulacion_id": "integridad_anulacion_compra_pago",
         "payload": payload,
         "auto_ejecutar": bool(
             base_empresa
@@ -765,7 +784,7 @@ def auditoria_rei_aprobacion(request, dry_run_id):
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# Fase 3 — Confirmación apply (doble confirmación)
+# Fase 3 — Confirmación apply (checkbox + permiso)
 # ──────────────────────────────────────────────────────────────────────────
 
 
@@ -802,7 +821,7 @@ def _contexto_apply(request, plan: PlanCorreccion | None = None, error: str = ""
 @tiene_permiso(PERMISO_CORREGIR)
 @require_GET
 def auditoria_apply_confirmacion(request):
-    """GET /contabilidad/auditoria/apply/ — formulario de doble confirmación (solo lectura)."""
+    """GET /contabilidad/auditoria/apply/ — formulario de confirmación (solo lectura)."""
     dry_run_id = request.GET.get("dry_run_id")
     if not dry_run_id:
         messages.error(request, "Falta el identificador dry_run_id.")
@@ -825,7 +844,7 @@ def auditoria_apply(request):
     """
     POST /contabilidad/auditoria/apply/ejecutar/
 
-    Ejecuta ``apply()`` con doble confirmación explícita. No disponible por GET.
+    Ejecuta ``apply()`` con confirmación explícita (checkbox). No disponible por GET.
     """
     from legacy_db.services.cont_recalculo_service import CorreccionContableError, apply
 
@@ -833,7 +852,6 @@ def auditoria_apply(request):
     base_empresa = request.POST.get("base_empresa")
     modo = request.POST.get("modo") or "general"
     confirmacion_1 = request.POST.get("confirmacion_entiendo") == "on"
-    confirmacion_2 = (request.POST.get("confirmacion_final") or "").strip().upper()
     confirmar_reapertura = request.POST.get("confirmar_reapertura") == "on"
 
     if not dry_run_id or not base_empresa:
@@ -843,17 +861,7 @@ def auditoria_apply(request):
     if not confirmacion_1:
         messages.error(
             request,
-            "Debe marcar la primera confirmación: entiende que se modificarán datos contables.",
-        )
-        return redirect(
-            f"{reverse('contabilidad_audit:auditoria_apply')}?dry_run_id={dry_run_id}&base_empresa={base_empresa}&modo={modo}"
-        )
-
-    token_esperado = f"APLICAR-{dry_run_id}".upper()
-    if confirmacion_2 != token_esperado and confirmacion_2 != "APLICAR DEFINITIVAMENTE":
-        messages.error(
-            request,
-            f"Confirmación final incorrecta. Escriba exactamente: {token_esperado}",
+            "Debe marcar la confirmación: entiende que se modificarán datos contables.",
         )
         return redirect(
             f"{reverse('contabilidad_audit:auditoria_apply')}?dry_run_id={dry_run_id}&base_empresa={base_empresa}&modo={modo}"
@@ -892,3 +900,144 @@ def auditoria_apply(request):
     ctx = _contexto_apply(request, plan)
     ctx["resultado_apply"] = resultado
     return render(request, "contabilidad_audit/auditoria_apply.html", ctx)
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Lotes de corrección aplicados (lectura legacy + rollback)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def _listar_lotes_correccion(base_empresa: str) -> list[dict]:
+    """Lista lotes desde MySQL legacy (solo lectura) con conteo de filas de detalle."""
+    pool = get_mysql_pool()
+    with pool.get_connection(base_empresa) as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT l.lote_id, l.fecha, l.usuario, l.estado, l.dry_run_id,
+                       (SELECT COUNT(*) FROM cont_audit_correccion c
+                        WHERE c.lote_id = l.lote_id) AS filas_correccion
+                FROM cont_audit_correccion_lote l
+                WHERE l.base_empresa = %s
+                ORDER BY l.fecha DESC
+                LIMIT 200
+                """,
+                (base_empresa,),
+            )
+            rows = cursor.fetchall()
+        finally:
+            cursor.close()
+
+    lotes: list[dict] = []
+    for row in rows:
+        lotes.append(
+            {
+                "lote_id": str(row[0] or ""),
+                "fecha": _fecha_ui(row[1]),
+                "usuario": str(row[2] or ""),
+                "estado": str(row[3] or ""),
+                "dry_run_id": str(row[4] or ""),
+                "filas_correccion": int(row[5] or 0),
+            }
+        )
+    return lotes
+
+
+def _contexto_lotes(request, lotes: list[dict] | None = None, error: str = "") -> dict:
+    user = getattr(request, "user", None)
+    base_empresa = _base_empresa_sesion(request) or ""
+    return {
+        "titulo_pagina": "Lotes de corrección aplicados",
+        "base_empresa": base_empresa,
+        "lotes": lotes or [],
+        "error_lotes": error,
+        "permiso_corregir": PERMISO_CORREGIR,
+        "puede_corregir": _tiene_permiso(user, PERMISO_CORREGIR),
+        "tablero_url": reverse("contabilidad_audit:auditoria_tablero"),
+        "dry_run_url": reverse("contabilidad_audit:auditoria_dry_run"),
+        "lotes_url": reverse("contabilidad_audit:auditoria_lotes"),
+    }
+
+
+@administranet_login_required
+@tiene_permiso(PERMISO_LEER)
+@require_GET
+def auditoria_lotes(request):
+    """
+    GET /contabilidad/auditoria/lotes/
+
+    Lista lotes de corrección desde ``cont_audit_correccion_lote`` (solo lectura)
+    de la empresa base de sesión, con conteo de filas en ``cont_audit_correccion``.
+    """
+    base_empresa = _base_empresa_sesion(request)
+    if not base_empresa:
+        ctx = _contexto_lotes(request, error="No hay empresa base en la sesión.")
+        return render(request, "contabilidad_audit/auditoria_lotes.html", ctx)
+
+    try:
+        lotes = _listar_lotes_correccion(base_empresa)
+    except Exception as exc:  # noqa: BLE001 — degradación tolerable en UI
+        logger.exception("Error listando lotes de corrección para %s", base_empresa)
+        ctx = _contexto_lotes(request, error=f"No se pudieron obtener los lotes: {exc}")
+        return render(request, "contabilidad_audit/auditoria_lotes.html", ctx)
+
+    ctx = _contexto_lotes(request, lotes=lotes)
+    return render(request, "contabilidad_audit/auditoria_lotes.html", ctx)
+
+
+@administranet_login_required
+@tiene_permiso(PERMISO_CORREGIR)
+@require_POST
+def auditoria_lote_rollback(request, lote_id):
+    """
+    POST /contabilidad/auditoria/lotes/<lote_id>/rollback/
+
+    Revierte un lote aplicado vía ``rollback_lote`` (requiere permiso de corregir).
+    """
+    from legacy_db.services.cont_recalculo_service import CorreccionContableError, rollback_lote
+
+    base_empresa = _base_empresa_sesion(request)
+    if not base_empresa:
+        messages.error(request, "No hay empresa base en la sesión.")
+        return redirect(reverse("contabilidad_audit:auditoria_lotes"))
+
+    usuario = _usuario_identificador(request)
+    try:
+        rollback_lote(
+            base_empresa,
+            lote_id,
+            usuario,
+            tiene_permiso_corregir=True,
+        )
+    except CorreccionContableError as exc:
+        messages.error(request, str(exc))
+    except Exception as exc:
+        logger.exception("Rollback lote %s base=%s", lote_id, base_empresa)
+        messages.error(request, f"Error inesperado al revertir el lote: {exc}")
+    else:
+        messages.success(
+            request,
+            f"Lote «{lote_id}» revertido correctamente desde los backups registrados.",
+        )
+
+    return redirect(reverse("contabilidad_audit:auditoria_lotes"))
+
+
+def manual_usuario_view(request):
+    """Manual de usuario Contabilidad (HTML estático). Solo requiere sesión activa."""
+    if "user" not in request.session or not request.session.get("user"):
+        return redirect("login:login")
+    manual_path = (
+        Path(__file__).resolve().parent
+        / "static"
+        / "contabilidad_audit"
+        / "manuales"
+        / "manual_usuario_contabilidad.html"
+    )
+    if not manual_path.is_file():
+        raise Http404("Manual de usuario Contabilidad no encontrado.")
+    return FileResponse(
+        manual_path.open("rb"),
+        content_type="text/html; charset=utf-8",
+    )

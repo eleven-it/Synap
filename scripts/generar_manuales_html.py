@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Genera HTML navegable desde los manuales Markdown de MPR, Stock y Ventas (ecom).
-Sin dependencias externas. Fuente: docs/mpr|stock|ecom/MANUAL_USUARIO_*.md
+Genera HTML navegable desde los manuales Markdown de MPR, Stock, Ventas (ecom) y Contabilidad.
+Sin dependencias externas. Fuente: docs/mpr|stock|ecom|contabilidad/MANUAL_USUARIO_*.md
 
 El HTML de usuario final usa branding administraNET (colores website, Plus Jakarta Sans)
 y el logo del login (`Logo_Signo_administraNET.png` → logo-administranet.png por módulo),
-embebido en base64 para funcionar vía /mpr/manual/, /stock/manual/, /ecom/manual/ o docs/.
+embebido en base64 para funcionar vía /mpr/manual/, /stock/manual/, /ecom/manual/,
+/contabilidad/manual/ o docs/.
 """
 from __future__ import annotations
 
@@ -79,10 +80,30 @@ ECOM_ALIASES: dict[str, str] = {
     "credito-roles": "12. Resumen rápido por rol",
 }
 
+CONTABILIDAD_ALIASES: dict[str, str] = {
+    "acceso": "1. Acceso al módulo",
+    "conceptos": "2. Conceptos clave",
+    "tablero": "3. Tablero de auditoría",
+    "tablero-auditoria": "3. Tablero de auditoría",
+    "huerfanos": "Comprobantes sin asiento (huérfanos)",
+    "dry-run": "4. Dry-run (plan de corrección)",
+    "aplicar": "5. Aplicar corrección",
+    "apply": "5. Aplicar corrección",
+    "lotes": "6. Lotes aplicados y rollback",
+    "rollback": "6. Lotes aplicados y rollback",
+    "configuracion": "7. Configuración de políticas",
+    "politicas": "7. Configuración de políticas",
+    "rei": "8. Aprobación REI (casos especiales)",
+    "permisos": "9. Permisos (resumen)",
+    "problemas": "10. Problemas frecuentes",
+    "resumen": "11. Resumen rápido por rol",
+}
+
 ALIASES_BY_MODULE: dict[str, dict[str, str]] = {
     "mpr": MPR_ALIASES,
     "stock": STOCK_ALIASES,
     "ecom": ECOM_ALIASES,
+    "contabilidad": CONTABILIDAD_ALIASES,
 }
 
 # alias -> título exacto del encabezado en el MD
@@ -138,6 +159,11 @@ MODULE_CONFIG: dict[str, dict[str, str | Path]] = {
         "module_label": "Ventas",
         "static_logo": "/static/ecom/manuales/logo-administranet.png",
         "logo_path": ROOT / "ecom/static/ecom/manuales/logo-administranet.png",
+    },
+    "contabilidad": {
+        "module_label": "Contabilidad",
+        "static_logo": "/static/contabilidad_audit/manuales/logo-administranet.png",
+        "logo_path": ROOT / "contabilidad_audit/static/contabilidad_audit/manuales/logo-administranet.png",
     },
 }
 
@@ -612,6 +638,13 @@ def main() -> None:
         ROOT / "ecom/static/ecom/manuales/manual_usuario_ventas.html",
         ROOT / "docs/ecom/manual_usuario_ventas.html",
         "ecom",
+    )
+    generate_one(
+        ROOT / "docs/contabilidad/MANUAL_USUARIO_CONTABILIDAD.md",
+        ROOT
+        / "contabilidad_audit/static/contabilidad_audit/manuales/manual_usuario_contabilidad.html",
+        ROOT / "docs/contabilidad/manual_usuario_contabilidad.html",
+        "contabilidad",
     )
 
 

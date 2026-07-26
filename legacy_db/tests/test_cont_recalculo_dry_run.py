@@ -147,6 +147,9 @@ class ContRecalculoDryRunTestCase(TestCase):
         with patch(
             "legacy_db.services.cont_recalculo_service._plan_propuestas_rei",
             return_value=[],
+        ), patch(
+            "legacy_db.services.cont_recalculo_service._plan_reparacion_anulaciones",
+            return_value=[],
         ):
             payload = dry_run(
                 base_empresa="administranet89",
@@ -163,6 +166,7 @@ class ContRecalculoDryRunTestCase(TestCase):
         self.assertEqual(concepto["campo"], "id_concepto_asiento")
         self.assertEqual(concepto["referencia"], "H05")
         self.assertIn("concepto_anulacion_incoherente", payload["impacto"]["checks_incluidos"])
+        self.assertIn("integridad_anulacion_compra_pago", payload["impacto"]["checks_incluidos"])
         self.assertIn("cuentas_sin_fila_saldo", payload["impacto"]["checks_incluidos"])
 
     @patch("legacy_db.services.cont_recalculo_service.get_mysql_pool")

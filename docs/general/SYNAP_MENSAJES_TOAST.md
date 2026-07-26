@@ -67,7 +67,21 @@ En pantallas MPR (o que extienden `mpr/base_mpr.html`) el feedback de **acciones
 | Mensajes Django tras recarga/redirección (`messages.success/error`) | Toast global `SynapMessages` (partial `synap_messages_toast.html`) |
 | Feedback AJAX genérico sin recargar en cualquier pantalla | `SynapMessages.show('Texto', 'success')` |
 | Feedback operativo MPR en la propia página (validación, conflicto, éxito de acción AJAX) | **Modal `mprShowAviso`** |
-| Carga/progreso de un POST MPR largo | Modal de loading (`mprShowPostLoading` / `mpr_post_loading_modal.html`) |
+| Carga/progreso de un POST/GET/fetch largo | Modal de espera (`synapShowPostLoading` / `theme/templates/partials/synap_post_loading_modal.html`; aliases MPR `mprShowPostLoading*`) |
+
+### Modal de espera / progreso (operaciones largas)
+
+Partial: `theme/templates/partials/synap_post_loading_modal.html` (incluido desde `mpr/base_mpr.html` y desde pantallas `base_app` que lo necesiten, p. ej. Auditoría contable). Overlay `z-[10050]`, estética slate/sky.
+
+| Uso | Cómo |
+|-----|------|
+| Formulario clásico (GET o POST) | Clase `synap-post-loading` (o `mpr-post-loading`) + `data-synap-loading-title` / `data-synap-loading-subtitle` |
+| Fetch / AJAX largo | `synapShowPostLoadingProgress({ title, subtitle, label, indeterminate: true })` al inicio y `synapHidePostLoading()` al terminar |
+| Lote con barra determinada | `synapShowPostLoadingProgress` + `synapUpdatePostLoadingProgress({ current, total, label })`; forms AJAX con `data-synap-progress-lote=1` omiten el modal indeterminado del submit |
+
+Aliases de compatibilidad MPR: `mprShowPostLoading`, `mprHidePostLoading`, `mprShowPostLoadingProgress`, `mprUpdatePostLoadingProgress`. El include legacy `mpr/includes/mpr_post_loading_modal.html` reexporta el partial de theme.
+
+**No** usar este modal para feedback corto de éxito/error (usar toast o `mprShowAviso`).
 
 ### API
 

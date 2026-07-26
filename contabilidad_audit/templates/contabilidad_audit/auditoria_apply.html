@@ -7,14 +7,19 @@
     <div class="relative overflow-hidden">
         <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-rose-900 to-slate-900 opacity-95"></div>
         <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
-            <p class="text-[11px] uppercase tracking-[0.25em] text-rose-200 font-semibold mb-2">
-                Contabilidad · Apply (producción)
-            </p>
-            <h1 class="text-3xl font-semibold text-white">{{ titulo_pagina }}</h1>
-            <p class="text-sm text-slate-300 mt-2 max-w-3xl">
-                Esta operación escribe en MySQL legacy. Requiere doble confirmación explícita y permiso
-                <code class="text-rose-200">{{ permiso_corregir }}</code>.
-            </p>
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <p class="text-[11px] uppercase tracking-[0.25em] text-rose-200 font-semibold mb-2">
+                        Contabilidad · Apply
+                    </p>
+                    <h1 class="text-3xl font-semibold text-white">{{ titulo_pagina }}</h1>
+                    <p class="text-sm text-slate-300 mt-2 max-w-3xl">
+                        Esta operación escribe en MySQL legacy. Requiere confirmación explícita y permiso
+                        <code class="text-rose-200">{{ permiso_corregir }}</code>.
+                    </p>
+                </div>
+                {% include "includes/btn_manual_ayuda.html" with url_name="contabilidad_audit:manual_usuario" seccion="aplicar" class_extra="text-rose-100 hover:text-white border border-rose-700/60 hover:border-rose-400 rounded-full px-3 py-2" only %}
+            </div>
         </div>
     </div>
 
@@ -44,6 +49,14 @@
         {% endif %}
 
         {% if plan %}
+        <div class="bg-rose-50 dark:bg-rose-900/30 border-2 border-rose-400 dark:border-rose-600 rounded-xl px-4 py-3 text-sm text-rose-950 dark:text-rose-100">
+            <p class="font-semibold">Esta es la única acción que escribe en MySQL legacy.</p>
+            <p class="mt-1">
+                Dry-run y tablero <strong>no</strong> modifican asientos ni saldos. Solo al marcar la confirmación
+                y pulsar aplicar se ejecuta DML (con backup y log).
+            </p>
+        </div>
+
         <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5 text-sm grid md:grid-cols-2 gap-4">
             <div>
                 <p class="text-[10px] uppercase text-slate-400">Empresa</p>
@@ -71,14 +84,52 @@
             </div>
         </div>
 
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5 text-sm space-y-3">
+            <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Resumen del plan a aplicar</h2>
+            <div class="grid sm:grid-cols-3 gap-3">
+                <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                    <p class="text-[10px] uppercase text-slate-400">Total aplicables</p>
+                    <p class="text-xl font-semibold">{{ plan.plan.impacto.total_aplicables|default:0 }}</p>
+                </div>
+                <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                    <p class="text-[10px] uppercase text-slate-400">Anulaciones reparables</p>
+                    <p class="text-xl font-semibold">{{ plan.plan.impacto.anulaciones_reparables|default:0 }}</p>
+                </div>
+                <div class="rounded-xl border border-slate-200 dark:border-slate-700 p-3">
+                    <p class="text-[10px] uppercase text-slate-400">Anulaciones bloqueadas</p>
+                    <p class="text-xl font-semibold">{{ plan.plan.impacto.anulaciones_bloqueadas|default:0 }}</p>
+                </div>
+            </div>
+            <div>
+                <p class="text-[10px] uppercase text-slate-400 mb-2">Asientos huérfanos a regenerar (compra/venta)</p>
+                {% with regen=plan.plan.impacto.asientos_regenerar_por_tipo %}
+                {% if regen %}
+                <ul class="space-y-1">
+                    {% for tipo, cant in regen.items %}
+                    <li class="flex justify-between border-b border-slate-100 dark:border-slate-800 py-1">
+                        <span>{{ tipo }}</span>
+                        <span class="font-mono">{{ cant }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-slate-600 dark:text-slate-300">0 — no hay comprobantes sin asiento regenerables en este plan</p>
+                {% endif %}
+                {% endwith %}
+            </div>
+        </div>
+
         <div class="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-sm text-amber-900">
-            Solo disponible con <strong>ENVIRONMENT=production</strong>. Se creará backup previo y log transaccional
+            Requiere permiso <code>contabilidad.auditoria.corregir</code> (también en development para pruebas).
+            Se creará backup previo y log transaccional
             (<code>cont_audit_correccion_lote</code> / <code>cont_audit_correccion</code>).
         </div>
 
         {% if not resultado_apply %}
         <form method="post" action="{% url 'contabilidad_audit:auditoria_apply_ejecutar' %}"
-              class="bg-white dark:bg-slate-900 rounded-2xl border p-6 space-y-5">
+              class="synap-post-loading bg-white dark:bg-slate-900 rounded-2xl border p-6 space-y-5"
+              data-synap-loading-title="Aplicando corrección contable"
+              data-synap-loading-subtitle="Escribiendo en MySQL legacy con backup previo. No cierres esta ventana.">
             {% csrf_token %}
             <input type="hidden" name="dry_run_id" value="{{ dry_run_id }}">
             <input type="hidden" name="base_empresa" value="{{ base_empresa }}">
@@ -87,8 +138,8 @@
             <label class="flex items-start gap-3 text-sm">
                 <input type="checkbox" name="confirmacion_entiendo" class="mt-1 rounded border-slate-300" required>
                 <span>
-                    <strong>Primera confirmación:</strong> entiendo que se modificarán datos contables en la base
-                    legacy de producción y que la operación quedará registrada en el log de auditoría.
+                    <strong>Confirmación:</strong> entiendo que se modificarán datos contables en la base
+                    legacy y que la operación quedará registrada en el log de auditoría.
                 </span>
             </label>
 
@@ -99,19 +150,6 @@
                     <em>permitir_con_reapertura</em>).
                 </span>
             </label>
-
-            <div>
-                <label class="block text-sm font-semibold mb-1">
-                    Segunda confirmación (escriba el token exacto)
-                </label>
-                <p class="text-xs text-slate-500 mb-2">
-                    Token: <code class="font-mono">APLICAR-{{ dry_run_id|upper }}</code>
-                    (alternativa aceptada: <code>APLICAR DEFINITIVAMENTE</code>)
-                </p>
-                <input type="text" name="confirmacion_final" required autocomplete="off"
-                       class="w-full rounded-lg border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-mono"
-                       placeholder="APLICAR-{{ dry_run_id|upper }}">
-            </div>
 
             <div class="flex flex-wrap gap-3">
                 <button type="submit"
@@ -132,4 +170,9 @@
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{% include "partials/synap_post_loading_modal.html" %}
 {% endblock %}

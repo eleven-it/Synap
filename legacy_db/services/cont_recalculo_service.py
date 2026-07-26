@@ -2,7 +2,7 @@
 
 Fase 2: ``dry_run`` es 100 % SELECT sobre MySQL legacy; persiste el plan en
 PostgreSQL (``PlanCorreccion``). Fase 3: ``apply`` / ``rollback_lote`` escriben
-en legacy bajo salvaguardas de producción y permiso reforzado.
+en legacy con permiso reforzado (cualquier entorno, incluido development).
 """
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ from typing import Any, Optional
 
 import MySQLdb.cursors
 
-from django.conf import settings
 from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import (
     str_or_default,
@@ -42,7 +41,13 @@ logger = logging.getLogger(__name__)
 PLAN_TTL_MIN = 30
 PERMISO_CORREGIR = "contabilidad.auditoria.corregir"
 TABLAS_BACKUP_PERMITIDAS = frozenset(
-    {"cont_asiento", "cont_ejercicio_saldo_cta", "cont_periodo_saldo_cta"}
+    {
+        "cont_asiento",
+        "cont_ejercicio_saldo_cta",
+        "cont_periodo_saldo_cta",
+        "cuentaproveedor",
+        "cuentacliente",
+    }
 )
 CHECKS_EXCLUIDOS_AUTO_APPLY = frozenset(
     {
@@ -55,13 +60,28 @@ CHECKS_EXCLUIDOS_AUTO_APPLY = frozenset(
 
 TIPOS_FACTURA = ("FA", "FC")
 TIPOS_REGENERABLES = ("FA", "FC", "OP")
+TIPOS_FACTURA_VENTA = ("FA", "FB", "FC", "FE", "FM")
+TIPOS_REGENERABLES_VENTA = TIPOS_FACTURA_VENTA + ("REC",)
 CONCEPTO = {"FA": 3, "FC": 3, "OP": 7}
+CONCEPTO_VENTA = {
+    "FA": 1,
+    "FB": 1,
+    "FC": 1,
+    "FE": 1,
+    "FM": 1,
+    "REC": 5,
+}
 DESC_CONCEPTO = {3: "Compra", 7: "Pago"}
+DESC_CONCEPTO_VENTA = {1: "Venta", 5: "Cobranza"}
 REDONDEO_PC = 300
 UMBRAL_REDONDEO = Decimal("1.00")
 MARCA_REGEN = "REGEN auditoria (bug factura/OP sin asiento)"
+MARCA_REGEN_VENTA = "REGEN auditoria (bug factura/REC sin asiento)"
+MARCA_ANUL_REGEN = "REGEN auditoria (anulacion incompleta)"
 
 CHECK_REGENERACION = "comprobante_compra_pago_sin_asiento"
+CHECK_REGENERACION_VENTA = "comprobante_venta_cobranza_sin_asiento"
+CHECK_ANULACION = "integridad_anulacion_compra_pago"
 CHECK_CONCEPTO_ANUL = "concepto_anulacion_incoherente"
 CHECK_FILAS_SALDO = "cuentas_sin_fila_saldo"
 CHECK_SALDOS = "saldo_ejercicio_vs_diario"
@@ -69,11 +89,16 @@ CHECK_SALDOS_PERIODO = "saldo_periodo_vs_diario"
 CHECK_REI = "rei_recalculo"
 CHECKS_INCLUIDOS = [
     CHECK_REGENERACION,
+    CHECK_REGENERACION_VENTA,
+    CHECK_ANULACION,
     CHECK_CONCEPTO_ANUL,
     CHECK_FILAS_SALDO,
     CHECK_SALDOS,
     CHECK_SALDOS_PERIODO,
 ]
+CHECKS_REGENERACION_ASIENTO = frozenset({CHECK_REGENERACION, CHECK_REGENERACION_VENTA})
+CONCEPTO_ANUL = {"FA": 4, "FC": 4, "OP": 8}
+DESC_CONCEPTO_ANUL = {4: "Anulación-Compra", 8: "Anulación-Pago"}
 MARCA_REI_REGEN = "REI auditoria (recalculo aprobado)"
 
 Q2 = Decimal("0.01")
@@ -101,8 +126,10 @@ class _RepoLectura:
         self.conn = conn
         self._matriz: dict[int, Optional[int]] = {}
         self._prov_pc: dict[Any, Optional[int]] = {}
+        self._cli_pc: dict[Any, Optional[int]] = {}
         self._gasto_pc: dict[Any, Optional[int]] = {}
         self._art: dict[Any, dict | None] = {}
+        self._percep_cli_pc: dict[Any, Optional[int]] = {}
         self._caja: dict[tuple, Optional[int]] = {}
         self._impuesto_pc: dict[Any, Optional[int]] = {}
         self._deuda_pc: dict[Any, Optional[int]] = {}
@@ -133,6 +160,14 @@ class _RepoLectura:
             self._prov_pc[codigo] = to_int_or_none(rows[0]["id_pc"]) if len(rows) == 1 else None
         return self._prov_pc[codigo]
 
+    def cliente_pc(self, codigo) -> Optional[int]:
+        if codigo not in self._cli_pc:
+            cur = self.cur()
+            cur.execute("SELECT id_pc FROM cliente WHERE Codigo=%s", (codigo,))
+            rows = cur.fetchall()
+            self._cli_pc[codigo] = to_int_or_none(rows[0]["id_pc"]) if len(rows) == 1 else None
+        return self._cli_pc[codigo]
+
     def gasto_pc(self, codigo) -> Optional[int]:
         if codigo not in self._gasto_pc:
             cur = self.cur()
@@ -145,11 +180,27 @@ class _RepoLectura:
         if idart not in self._art:
             cur = self.cur()
             cur.execute(
-                "SELECT idart, id_pc_comp, cod_gasto FROM articulo WHERE idart=%s",
+                "SELECT idart, id_pc_comp, id_pc_vta, cod_gasto FROM articulo WHERE idart=%s",
                 (idart,),
             )
             self._art[idart] = cur.fetchone()
         return self._art[idart]
+
+    def percep_cli_pc(self, id_percep_cli_tipo) -> Optional[int]:
+        if id_percep_cli_tipo not in self._percep_cli_pc:
+            cur = self.cur()
+            cur.execute(
+                """SELECT a.id_pc
+                   FROM percep_cli_tipo t
+                   JOIN percep_cli_abm a ON a.id_percep_cli_abm = t.id_percep_cli_abm
+                   WHERE t.id_percep_cli_tipo=%s""",
+                (id_percep_cli_tipo,),
+            )
+            row = cur.fetchone()
+            self._percep_cli_pc[id_percep_cli_tipo] = (
+                to_int_or_none(row["id_pc"]) if row else None
+            )
+        return self._percep_cli_pc[id_percep_cli_tipo]
 
     def impuesto_pc(self, id_impuesto) -> Optional[int]:
         if id_impuesto not in self._impuesto_pc:
@@ -345,6 +396,154 @@ def reconstruir_factura(repo: _RepoLectura, cab: dict) -> tuple[dict, list]:
     return renglones, errores
 
 
+def reconstruir_factura_venta(repo: _RepoLectura, cab: dict) -> tuple[dict, list]:
+    """Reconstruye asiento de factura de venta (concepto 1) desde tablas persistidas.
+
+    Espejo invertido de ``reconstruir_factura`` (compras): neto/IVA/percepciones en HABER,
+    cliente o caja (contado) en DEBE. Gating de contabilidad: punto_venta.cont (check).
+    """
+    renglones: dict[Any, list] = defaultdict(lambda: [Decimal("0"), Decimal("0")])
+    errores: list[str] = []
+    codmov = cab["CodigoMovimiento"]
+    cur = repo.cur()
+
+    cur.execute(
+        "SELECT IDArt, PrecioNetoxR FROM stock WHERE CodigoMovimiento=%s",
+        (codmov,),
+    )
+    filas = cur.fetchall()
+    if not filas:
+        errores.append("sin_detalle_stock")
+    for f in filas:
+        art = repo.articulo(f["IDArt"])
+        cuenta = None
+        if art and to_int_or_none(art.get("id_pc_vta")) not in (None, 0):
+            cuenta = to_int_or_none(art["id_pc_vta"])
+        else:
+            cuenta = repo.matriz(4)
+        _add_renglon(renglones, cuenta, haber=f["PrecioNetoxR"])
+
+    for campo, idm in (("IVA1", 2), ("IVA2", 3)):
+        val = _d(cab.get(campo))
+        if val > 0:
+            _add_renglon(renglones, repo.matriz(idm), haber=val)
+
+    for campo, idm in (("impuesto_interno", 6), ("OtrosImp", 15)):
+        val = _d(cab.get(campo))
+        if val > 0:
+            _add_renglon(renglones, repo.matriz(idm), haber=val)
+
+    cur.execute(
+        """SELECT p.importe_percep_cli, p.id_percep_cli_tipo
+           FROM percep_cli p
+           WHERE p.codigo_movimiento=%s AND COALESCE(p.anulado,'No')<>'Si'
+             AND COALESCE(p.importe_percep_cli,0)<>0""",
+        (codmov,),
+    )
+    for f in cur.fetchall():
+        cuenta = repo.percep_cli_pc(f["id_percep_cli_tipo"]) or repo.matriz(18)
+        _add_renglon(renglones, cuenta, haber=f["importe_percep_cli"])
+
+    desc = _d(cab.get("ImpDesc1")) + _d(cab.get("ImpDesc2"))
+    if desc > 0:
+        _add_renglon(renglones, repo.matriz(8), debe=desc)
+
+    importe_total = _d(cab.get("ImporteVenta"))
+    if to_int_or_none(cab.get("id_condventa")) == 1:
+        cur.execute(
+            """SELECT ingreso, id_caja_abm_origen
+               FROM caja
+               WHERE codigo_movimiento=%s AND COALESCE(anulado,'No')<>'Si'
+                 AND COALESCE(ingreso,0)<>0""",
+            (codmov,),
+        )
+        filas_caja = cur.fetchall()
+        if not filas_caja:
+            errores.append("contado_sin_caja")
+        for fila in filas_caja:
+            cuenta = repo.caja_pc(fila["id_caja_abm_origen"]) or repo.matriz(23)
+            _add_renglon(renglones, cuenta, debe=fila["ingreso"])
+    else:
+        cuenta_cli = repo.cliente_pc(cab["Codigo"])
+        if cuenta_cli is None:
+            cuenta_cli = repo.matriz(1)
+        _add_renglon(renglones, cuenta_cli, debe=importe_total)
+
+    return renglones, errores
+
+
+def reconstruir_rec(repo: _RepoLectura, cab: dict) -> tuple[dict, list]:
+    """Reconstruye asiento de REC (concepto 5) desde medios de cobro persistidos."""
+    renglones: dict[Any, list] = defaultdict(lambda: [Decimal("0"), Decimal("0")])
+    errores: list[str] = []
+    codmov = cab["CodigoMovimiento"]
+    cur = repo.cur()
+
+    cur.execute(
+        """SELECT ingreso, id_caja_abm_origen, id_chequetercero
+           FROM caja
+           WHERE codigo_movimiento=%s AND COALESCE(anulado,'No')<>'Si'
+             AND COALESCE(ingreso,0)<>0""",
+        (codmov,),
+    )
+    for fila in cur.fetchall():
+        # Entrega de cheque tercero: se imputa desde chequetercero, no como efectivo.
+        if fila.get("id_chequetercero") not in (None, 0):
+            continue
+        cuenta = repo.caja_pc(fila["id_caja_abm_origen"]) or repo.matriz(23)
+        _add_renglon(renglones, cuenta, debe=fila["ingreso"])
+
+    cur.execute(
+        """SELECT Importe FROM chequetercero
+           WHERE CodigoMovimientoREC=%s AND COALESCE(Anulado,'No')<>'Si'""",
+        (codmov,),
+    )
+    for fila in cur.fetchall():
+        _add_renglon(renglones, repo.matriz(5) or repo.matriz(23), debe=fila["Importe"])
+
+    cur.execute(
+        """SELECT importe_transf, id_cuentabancaria FROM transferencia
+           WHERE codigo_movimiento=%s AND COALESCE(anulado,'No')<>'Si'""",
+        (codmov,),
+    )
+    for fila in cur.fetchall():
+        cuenta = repo.cuenta_banco_pc(fila["id_cuentabancaria"]) or repo.matriz(22)
+        _add_renglon(renglones, cuenta, debe=fila["importe_transf"])
+
+    cur.execute(
+        """SELECT Importe, CodRetencion FROM retenciones
+           WHERE codigo_movimiento=%s AND COALESCE(Anulado,'No')<>'Si'""",
+        (codmov,),
+    )
+    for fila in cur.fetchall():
+        cur.execute(
+            "SELECT id_pc FROM tipo_retencion_cli WHERE CodRetencion=%s LIMIT 1",
+            (fila["CodRetencion"],),
+        )
+        row_pc = cur.fetchone()
+        cuenta = to_int_or_none(row_pc["id_pc"]) if row_pc else repo.matriz(18)
+        _add_renglon(renglones, cuenta, debe=fila["Importe"])
+
+    cur.execute(
+        """SELECT importe_tc_comprobante FROM tc_comprobante
+           WHERE codigo_movimiento=%s AND COALESCE(anulado,'No')<>'Si'""",
+        (codmov,),
+    )
+    for fila in cur.fetchall():
+        _add_renglon(renglones, repo.matriz(5), debe=fila["importe_tc_comprobante"])
+
+    total = _d(cab.get("ImporteCobro") or cab.get("TotalRecibo") or cab.get("ImporteVenta"))
+    if total <= 0:
+        errores.append("rec_sin_total")
+    cuenta_cli = repo.cliente_pc(cab["Codigo"]) or repo.matriz(1)
+    _add_renglon(renglones, cuenta_cli, haber=total)
+
+    if not any(k != "_ERR_" for k in renglones):
+        errores.append("rec_sin_medios")
+
+    return renglones, errores
+
+
 def reconstruir_op(repo: _RepoLectura, cab: dict) -> tuple[dict, list]:
     renglones: dict[Any, list] = defaultdict(lambda: [Decimal("0"), Decimal("0")])
     errores: list[str] = []
@@ -474,6 +673,286 @@ def _marcar_exclusiones(items: list[dict], politica: dict, repo: _RepoLectura) -
         if id_ej in cerrados:
             item["excluido"] = True
             item["motivo_exclusion"] = "ejercicio_cerrado"
+
+
+def _evaluar_problemas_anulacion_cm(cur, cm) -> tuple[list[str], dict[str, Any]]:
+    """Paridad con check integridad_anulacion_compra_pago (AUD-LECT-23)."""
+    cur.execute(
+        """
+        SELECT COUNT(*) AS cnt FROM cuentaproveedor
+        WHERE CodigoMovimiento = 0 AND codigo_movimiento_anul = %s
+        """,
+        (cm,),
+    )
+    row_m = cur.fetchone()
+    tiene_marcador = (row_m.get("cnt") if isinstance(row_m, dict) else row_m[0] or 0) > 0
+
+    cur.execute(
+        """
+        SELECT
+          SUM(CASE WHEN COALESCE(anulado, 'No') <> 'Si' THEN 1 ELSE 0 END) AS pendientes,
+          COUNT(*) AS total
+        FROM cont_asiento
+        WHERE codigo_movimiento = %s
+        """,
+        (cm,),
+    )
+    row_a = cur.fetchone()
+    if isinstance(row_a, dict):
+        pendientes_orig = to_int_or_none(row_a.get("pendientes")) or 0
+        total_orig = to_int_or_none(row_a.get("total")) or 0
+    else:
+        pendientes_orig = to_int_or_none(row_a[0]) or 0
+        total_orig = to_int_or_none(row_a[1]) or 0
+
+    cur.execute(
+        """
+        SELECT codigo_movimiento,
+               SUM(COALESCE(debe_asiento, 0)) AS d,
+               SUM(COALESCE(haber_asiento, 0)) AS h
+        FROM cont_asiento
+        WHERE codigo_movimiento = %s
+        GROUP BY codigo_movimiento
+        """,
+        (cm,),
+    )
+    orig_tot = cur.fetchone()
+
+    cur.execute(
+        """
+        SELECT codigo_movimiento,
+               SUM(COALESCE(debe_asiento, 0)) AS d,
+               SUM(COALESCE(haber_asiento, 0)) AS h
+        FROM cont_asiento
+        WHERE codigo_movimiento_anul = %s
+          AND id_concepto_asiento IN (4, 8)
+          AND COALESCE(anulado, 'No') = 'No'
+          AND COALESCE(codigo_movimiento, 0) <> 0
+        GROUP BY codigo_movimiento
+        """,
+        (cm,),
+    )
+    contra_tot = cur.fetchone()
+
+    problemas: list[str] = []
+    if not tiene_marcador:
+        problemas.append("falta_marcador_cuentaproveedor_cm0")
+    # Solo si hay renglones pendientes de marcar (no vacíos: COUNT=0 no es problema de anulado).
+    if total_orig > 0 and pendientes_orig > 0:
+        problemas.append("asiento_original_no_anulado")
+    if contra_tot is None:
+        problemas.append("falta_contra_asiento")
+    elif orig_tot is not None:
+        if isinstance(orig_tot, dict):
+            od = to_decimal_or_none(orig_tot.get("d")) or Decimal("0")
+            oh = to_decimal_or_none(orig_tot.get("h")) or Decimal("0")
+            cd = to_decimal_or_none(contra_tot.get("d")) or Decimal("0")
+            ch = to_decimal_or_none(contra_tot.get("h")) or Decimal("0")
+        else:
+            od = to_decimal_or_none(orig_tot[1]) or Decimal("0")
+            oh = to_decimal_or_none(orig_tot[2]) or Decimal("0")
+            cd = to_decimal_or_none(contra_tot[1]) or Decimal("0")
+            ch = to_decimal_or_none(contra_tot[2]) or Decimal("0")
+        if abs(od - ch) > Decimal("0.005") or abs(oh - cd) > Decimal("0.005"):
+            problemas.append("contra_no_invierte_original")
+
+    return problemas, {"orig_tot": orig_tot, "contra_tot": contra_tot}
+
+
+def _plan_reparacion_anulaciones(
+    conn,
+    repo: _RepoLectura,
+    politica: dict,
+    alcance: dict,
+) -> list[dict]:
+    """Plan REC-19: reparación de anulaciones incompletas (100 % SELECT)."""
+    del conn  # lectura vía repo
+    ejercicios_alcance = _ejercicios_en_alcance(alcance, politica, repo)
+    cur = repo.cur()
+    cur.execute(
+        """
+        SELECT cp.CodigoMovimiento, cp.TipoComprobante, cp.NroComprobante, cp.Fecha,
+               cp.CodSucursal, cp.Codigo, cp.ImporteCompra, cp.ImportePago
+        FROM cuentaproveedor cp
+        JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
+        WHERE s.cont = 'Si'
+          AND COALESCE(cp.Anulado, 'No') = 'Si'
+          AND cp.TipoComprobante IN ('FA', 'FC', 'OP')
+          AND COALESCE(cp.CodigoMovimiento, 0) <> 0
+        """
+    )
+    originales = cur.fetchall()
+    items: list[dict] = []
+
+    for row in originales:
+        cm = row.get("CodigoMovimiento") if isinstance(row, dict) else row[0]
+        cm_str = str_or_default(cm)
+        tipo = str_or_default(row.get("TipoComprobante") if isinstance(row, dict) else row[1])
+        nro_comp = str_or_default(row.get("NroComprobante") if isinstance(row, dict) else row[2])
+        fecha = row.get("Fecha") if isinstance(row, dict) else row[3]
+
+        if ejercicios_alcance is not None:
+            ejercicio = repo.ejercicio_por_fecha(fecha)
+            id_ej = to_int_or_none(ejercicio["id_ejercicio"]) if ejercicio else None
+            if id_ej is None or id_ej not in ejercicios_alcance:
+                continue
+
+        problemas, _diag = _evaluar_problemas_anulacion_cm(cur, cm)
+        if not problemas:
+            continue
+
+        detalle_base = {
+            "TipoComprobante": tipo,
+            "NroComprobante": nro_comp,
+            "problemas": problemas,
+            "codigo_movimiento_original": cm_str,
+        }
+
+        if "contra_no_invierte_original" in problemas:
+            items.append(
+                {
+                    "tabla": "cont_asiento",
+                    "clave": {"codigo_movimiento_original": cm_str},
+                    "accion": "bloqueado",
+                    "valor_anterior": None,
+                    "valor_nuevo": None,
+                    "delta": "0",
+                    "check_id": CHECK_ANULACION,
+                    "referencia": "H53",
+                    "excluido": True,
+                    "bloqueado": True,
+                    "motivo_bloqueo": "contra_no_invierte_original",
+                    "detalle": detalle_base,
+                }
+            )
+            continue
+
+        if "falta_marcador_cuentaproveedor_cm0" in problemas:
+            detalle_marcador = f"Anulacion - {tipo} - {nro_comp}"
+            items.append(
+                {
+                    "tabla": "cuentaproveedor",
+                    "clave": {
+                        "codigo_movimiento_original": cm_str,
+                        "codigo_movimiento_anul": cm_str,
+                    },
+                    "accion": "insert_marcador",
+                    "valor_anterior": None,
+                    "valor_nuevo": {
+                        "CodigoMovimiento": "0",
+                        "codigo_movimiento_anul": cm_str,
+                        "Detalle": detalle_marcador,
+                        "Anulado": "No",
+                        "TipoComprobante": tipo,
+                        "NroComprobante": nro_comp,
+                        "Fecha": str(fecha) if fecha is not None else "",
+                        "CodSucursal": to_int_or_none(
+                            row.get("CodSucursal") if isinstance(row, dict) else row[4]
+                        ),
+                    },
+                    "delta": "0",
+                    "check_id": CHECK_ANULACION,
+                    "referencia": "H53",
+                    "excluido": False,
+                    "bloqueado": False,
+                    "detalle": detalle_base,
+                }
+            )
+
+        if "asiento_original_no_anulado" in problemas:
+            items.append(
+                {
+                    "tabla": "cont_asiento",
+                    "clave": {"codigo_movimiento": cm_str},
+                    "accion": "marcar_original_anulado",
+                    "valor_anterior": "No",
+                    "valor_nuevo": "Si",
+                    "delta": "0",
+                    "check_id": CHECK_ANULACION,
+                    "referencia": "H53",
+                    "excluido": False,
+                    "bloqueado": False,
+                    "detalle": detalle_base,
+                }
+            )
+
+        if "falta_contra_asiento" in problemas:
+            cur.execute(
+                """
+                SELECT id_pc, id_ejercicio, debe_asiento, haber_asiento,
+                       desc_renglon_asiento, desc_concepto_asiento, desc_asiento, fecha_asiento
+                FROM cont_asiento
+                WHERE codigo_movimiento = %s
+                ORDER BY id_pc
+                """,
+                (cm,),
+            )
+            renglones_orig = cur.fetchall()
+            if not renglones_orig:
+                continue
+
+            id_concepto_anul = CONCEPTO_ANUL.get(tipo, 4)
+            desc_concepto_anul = DESC_CONCEPTO_ANUL.get(id_concepto_anul, "Anulación")
+            primera = renglones_orig[0]
+            id_ejercicio = to_int_or_none(
+                primera.get("id_ejercicio") if isinstance(primera, dict) else None
+            )
+            fecha_asiento = to_date_or_none(
+                primera.get("fecha_asiento") if isinstance(primera, dict) else None
+            ) or to_date_or_none(fecha)
+            desc_asiento = str_or_default(
+                primera.get("desc_asiento") if isinstance(primera, dict) else "",
+                f"Anulación - {tipo} - {nro_comp}",
+            )
+
+            renglones_preview: list[dict] = []
+            for r in renglones_orig:
+                debe = _r2(r.get("debe_asiento"))
+                haber = _r2(r.get("haber_asiento"))
+                if debe == 0 and haber == 0:
+                    continue
+                renglones_preview.append(
+                    {
+                        "id_pc": to_int_or_none(r.get("id_pc")),
+                        "debe_asiento": str(_r2(haber)),
+                        "haber_asiento": str(_r2(debe)),
+                        "desc_renglon_asiento": MARCA_ANUL_REGEN,
+                        "desc_concepto_asiento": desc_concepto_anul,
+                        "id_concepto_asiento": id_concepto_anul,
+                    }
+                )
+
+            if not renglones_preview:
+                continue
+
+            cm_estimado = repo.nro_asiento_ejercicio(id_ejercicio) if id_ejercicio else 0
+            items.append(
+                {
+                    "tabla": "cont_asiento",
+                    "clave": {"codigo_movimiento_original": cm_str},
+                    "accion": "insert_contra_asiento",
+                    "valor_anterior": None,
+                    "valor_nuevo": {
+                        "codigo_movimiento_original": cm_str,
+                        "id_concepto_asiento": id_concepto_anul,
+                        "desc_concepto_asiento": desc_concepto_anul,
+                        "id_ejercicio": id_ejercicio,
+                        "fecha_asiento": fecha_asiento,
+                        "desc_asiento": desc_asiento,
+                        "desc_renglon_asiento": MARCA_ANUL_REGEN,
+                        "renglones_preview": renglones_preview,
+                        "nro_asiento_estimado": cm_estimado,
+                    },
+                    "delta": "0",
+                    "check_id": CHECK_ANULACION,
+                    "referencia": "H53",
+                    "excluido": False,
+                    "bloqueado": False,
+                    "detalle": detalle_base,
+                }
+            )
+
+    return items
 
 
 def _plan_concepto_anulacion_incoherente(
@@ -656,6 +1135,131 @@ def _plan_regeneracion_asientos(
                     "valor_nuevo": valor_nuevo,
                     "delta": str(_r2(vdebe - vhaber)),
                     "check_id": CHECK_REGENERACION,
+                    "referencia": referencia,
+                    "excluido": False,
+                }
+            )
+
+    return items, dict(asientos_por_tipo)
+
+
+def _plan_regeneracion_asientos_venta(
+    repo: _RepoLectura,
+    ejercicios_alcance: Optional[set[int]],
+) -> tuple[list[dict], dict[str, int]]:
+    """Items INSERT cont_asiento para FA/FB/…/REC huérfanos en cuentacliente (solo lectura)."""
+    cur = repo.cur()
+    tipos_sql = ", ".join(f"'{t}'" for t in TIPOS_REGENERABLES_VENTA)
+    cur.execute(
+        f"""SELECT cc.* FROM cuentacliente cc
+           JOIN punto_venta pv ON pv.id_punto_venta = cc.id_pv
+           WHERE COALESCE(pv.cont,'No')='Si'
+             AND COALESCE(cc.Anulado,'No')<>'Si'
+             AND cc.TipoComprobante IN ({tipos_sql})
+             AND COALESCE(cc.CodigoMovimiento, 0) <> 0
+             AND NOT EXISTS (
+                 SELECT 1 FROM cont_asiento ca
+                 WHERE ca.codigo_movimiento = cc.CodigoMovimiento
+                   AND COALESCE(ca.codigo_movimiento, 0) <> 0
+             )"""
+    )
+    cabs = cur.fetchall()
+    items: list[dict] = []
+    contadores_nro: dict[int, int] = {}
+    asientos_por_tipo: dict[str, int] = defaultdict(int)
+
+    for cab in cabs:
+        tipo = str_or_default(cab.get("TipoComprobante"))
+        codmov = cab["CodigoMovimiento"]
+        if tipo == "REC":
+            renglones, errores = reconstruir_rec(repo, cab)
+            referencia = "H55"
+            desc_asiento = f"Cobranza - Nro Comp. REC - {cab.get('NroComprobante')}"
+        elif tipo in TIPOS_FACTURA_VENTA:
+            renglones, errores = reconstruir_factura_venta(repo, cab)
+            referencia = "H54"
+            desc_asiento = f"Venta - Nro Comp. {cab.get('NroComprobante')}"
+        else:
+            continue
+
+        if "_ERR_" in renglones or errores:
+            # Errores bloqueantes: sin stock/caja/medios.
+            bloqueantes = {
+                "sin_detalle_stock",
+                "contado_sin_caja",
+                "rec_sin_total",
+                "rec_sin_medios",
+            }
+            if any(e in bloqueantes or e.startswith("tipo_") for e in errores) or "_ERR_" in renglones:
+                continue
+
+        debe = _r2(sum(v[0] for k, v in renglones.items() if k != "_ERR_"))
+        haber = _r2(sum(v[1] for k, v in renglones.items() if k != "_ERR_"))
+        dif = _r2(debe - haber)
+        if abs(dif) > Q2:
+            if abs(dif) <= UMBRAL_REDONDEO:
+                if dif > 0:
+                    _add_renglon(renglones, REDONDEO_PC, haber=dif)
+                else:
+                    _add_renglon(renglones, REDONDEO_PC, debe=-dif)
+            else:
+                continue
+
+        fecha = cab.get("Fecha")
+        ejercicio = repo.ejercicio_por_fecha(fecha)
+        if not ejercicio:
+            continue
+        id_ejercicio = to_int_or_none(ejercicio["id_ejercicio"])
+        if id_ejercicio is None:
+            continue
+        if ejercicios_alcance is not None and id_ejercicio not in ejercicios_alcance:
+            continue
+
+        if id_ejercicio not in contadores_nro:
+            contadores_nro[id_ejercicio] = repo.nro_asiento_ejercicio(id_ejercicio) or 0
+        nro_asiento = contadores_nro[id_ejercicio]
+        contadores_nro[id_ejercicio] = nro_asiento + 1
+
+        concepto = CONCEPTO_VENTA.get(tipo, 1)
+        desc_concepto = DESC_CONCEPTO_VENTA.get(concepto, "Venta")
+        fecha_norm = to_date_or_none(fecha)
+        codmov_str = str_or_default(codmov)
+        asientos_por_tipo[tipo] += 1
+
+        for id_pc in sorted(k for k in renglones if k != "_ERR_"):
+            vdebe, vhaber = _r2(renglones[id_pc][0]), _r2(renglones[id_pc][1])
+            if vdebe == 0 and vhaber == 0:
+                continue
+            valor_nuevo = {
+                "nro_asiento": nro_asiento,
+                "fecha_asiento": fecha_norm,
+                "id_ejercicio": id_ejercicio,
+                "id_periodo": None,
+                "codigo_movimiento": codmov_str,
+                "debe_asiento": str(vdebe),
+                "haber_asiento": str(vhaber),
+                "id_pc": int(id_pc),
+                "desc_renglon_asiento": MARCA_REGEN_VENTA,
+                "desc_concepto_asiento": desc_concepto,
+                "id_concepto_asiento": concepto,
+                "balanceado_asiento": "Si",
+                "desc_asiento": desc_asiento,
+                "tipo_asiento": "Proceso",
+                "anulado": "No",
+            }
+            items.append(
+                {
+                    "tabla": "cont_asiento",
+                    "clave": {
+                        "codigo_movimiento": codmov_str,
+                        "id_pc": int(id_pc),
+                        "nro_asiento": nro_asiento,
+                    },
+                    "accion": "insert",
+                    "valor_anterior": None,
+                    "valor_nuevo": valor_nuevo,
+                    "delta": str(_r2(vdebe - vhaber)),
+                    "check_id": CHECK_REGENERACION_VENTA,
                     "referencia": referencia,
                     "excluido": False,
                 }
@@ -1065,6 +1669,16 @@ def _calcular_impacto(
     ]
 
     propuestas_rei = propuestas_rei or []
+    anulaciones_bloqueadas = sum(
+        1
+        for item in items
+        if item.get("check_id") == CHECK_ANULACION and item.get("bloqueado")
+    )
+    anulaciones_reparables = sum(
+        1
+        for item in items
+        if item.get("check_id") == CHECK_ANULACION and not item.get("bloqueado") and not item.get("excluido")
+    )
     return {
         "totales_por_tabla": dict(totales_tabla),
         "total_items": len(items),
@@ -1075,6 +1689,8 @@ def _calcular_impacto(
         "checks_incluidos": list(CHECKS_INCLUIDOS),
         "propuestas_rei_total": len(propuestas_rei),
         "propuestas_rei_pendientes": len(propuestas_rei),
+        "anulaciones_bloqueadas": anulaciones_bloqueadas,
+        "anulaciones_reparables": anulaciones_reparables,
     }
 
 
@@ -1108,14 +1724,24 @@ def dry_run(
 
         items_concepto = _plan_concepto_anulacion_incoherente(repo, ejercicios_alcance)
         items_asientos, asientos_por_tipo = _plan_regeneracion_asientos(repo, ejercicios_alcance)
+        items_asientos_venta, asientos_venta_por_tipo = _plan_regeneracion_asientos_venta(
+            repo, ejercicios_alcance
+        )
+        for tipo, cant in asientos_venta_por_tipo.items():
+            asientos_por_tipo[tipo] = asientos_por_tipo.get(tipo, 0) + cant
+        items_asientos_todos = items_asientos + items_asientos_venta
+        items_anulacion = _plan_reparacion_anulaciones(conn, repo, politica, alcance)
         items_saldos = _plan_reconstruccion_saldos(
             repo,
-            items_asientos,
+            items_asientos_todos,
             ejercicios_alcance,
             tolerancia,
         )
-        items = items_concepto + items_asientos + items_saldos
+        items = items_asientos_todos + items_anulacion + items_concepto + items_saldos
         _marcar_exclusiones(items, politica, repo)
+        data_fingerprint = _calcular_fingerprint_desde_legacy(
+            conn, _filtrar_items_aplicables(items)
+        )
 
         id_ejercicio = to_int_or_none(alcance.get("id_ejercicio"))
         propuestas_rei: list[dict] = []
@@ -1124,13 +1750,13 @@ def dry_run(
                 repo, id_ejercicio, tolerancia, ejercicios_alcance
             )
 
-    data_fingerprint = calcular_data_fingerprint(items)
     tablas_afectadas = {item["tabla"] for item in items if not item.get("excluido")}
     backups_propuestos = _generar_backups_propuestos(timestamp_bkp, tablas_afectadas)
     impacto = _calcular_impacto(items, asientos_por_tipo, propuestas_rei)
 
     plan_json = {
         "items": items,
+        "items_anulacion": items_anulacion,
         "backups_propuestos": backups_propuestos,
         "impacto": impacto,
         "checks_incluidos": CHECKS_INCLUIDOS,
@@ -1191,15 +1817,12 @@ class CorreccionContableError(Exception):
     """Error controlado del motor de corrección Fase 3."""
 
 
-def _es_entorno_produccion() -> bool:
-    env = (getattr(settings, "ENVIRONMENT", "") or "").strip().lower()
-    return env in ("production", "produccion")
-
-
 def _filtrar_items_aplicables(items: list[dict]) -> list[dict]:
     aplicables: list[dict] = []
     for item in items:
         if item.get("excluido"):
+            continue
+        if item.get("bloqueado"):
             continue
         if item.get("check_id") in CHECKS_EXCLUIDOS_AUTO_APPLY:
             continue
@@ -1247,6 +1870,38 @@ def _leer_valor_actual_item(cur, item: dict) -> Optional[str]:
             return None
         concepto = to_int_or_none(row.get("id_concepto_asiento") if isinstance(row, dict) else row[0])
         return str(concepto) if concepto is not None else ""
+
+    if item.get("check_id") == CHECK_ANULACION:
+        if accion == "insert_marcador":
+            cm_anul = clave.get("codigo_movimiento_anul") or clave.get("codigo_movimiento_original")
+            cur.execute(
+                """SELECT 1 FROM cuentaproveedor
+                   WHERE CodigoMovimiento=0 AND codigo_movimiento_anul=%s LIMIT 1""",
+                (cm_anul,),
+            )
+            return "EXISTE" if cur.fetchone() else ""
+        if accion == "marcar_original_anulado":
+            codmov = str_or_default(clave.get("codigo_movimiento"))
+            cur.execute(
+                """SELECT COUNT(*) AS cnt FROM cont_asiento
+                   WHERE codigo_movimiento=%s AND COALESCE(anulado,'No')<>'Si'""",
+                (codmov,),
+            )
+            row = cur.fetchone()
+            pendientes = row.get("cnt") if isinstance(row, dict) else row[0]
+            return "Si" if (pendientes or 0) == 0 else "No"
+        if accion == "insert_contra_asiento":
+            cm_orig = clave.get("codigo_movimiento_original")
+            cur.execute(
+                """SELECT 1 FROM cont_asiento
+                   WHERE codigo_movimiento_anul=%s
+                     AND id_concepto_asiento IN (4, 8)
+                     AND COALESCE(anulado,'No')='No'
+                     AND COALESCE(codigo_movimiento,0)<>0
+                   LIMIT 1""",
+                (cm_orig,),
+            )
+            return "EXISTE" if cur.fetchone() else ""
 
     if tabla == "cont_ejercicio_saldo_cta":
         id_pc = to_int_or_none(clave.get("id_pc"))
@@ -1301,23 +1956,34 @@ def _calcular_fingerprint_desde_legacy(conn, items: list[dict]) -> str:
 
 
 def _orden_apply_items(items: list[dict]) -> list[dict]:
-    """Orden seguro REC-07: regen → concepto(2) → filas saldo(3) → recompute(4)."""
+    """Orden seguro REC-07: regen → anulación(1.5) → concepto(2) → filas saldo(3) → recompute(4)."""
+
+    def _prioridad_accion_anulacion(accion: str) -> int:
+        return {
+            "insert_marcador": 1,
+            "marcar_original_anulado": 2,
+            "insert_contra_asiento": 3,
+        }.get(accion, 99)
 
     def _prioridad(item: dict) -> tuple:
         check = item.get("check_id", "")
         accion = item.get("accion", "update")
-        if check == CHECK_REGENERACION and accion == "insert":
-            paso = 1
+        if check in CHECKS_REGENERACION_ASIENTO and accion == "insert":
+            paso = 10
+        elif check == CHECK_ANULACION:
+            paso = 15
         elif check == CHECK_CONCEPTO_ANUL:
-            paso = 2
+            paso = 20
         elif check == CHECK_FILAS_SALDO:
-            paso = 3
+            paso = 30
         elif check in (CHECK_SALDOS, CHECK_SALDOS_PERIODO):
-            paso = 4
+            paso = 40
         else:
             paso = 99
+        sub = _prioridad_accion_anulacion(accion) if check == CHECK_ANULACION else 0
         return (
             paso,
+            sub,
             item.get("tabla", ""),
             json.dumps(item.get("clave") or {}, sort_keys=True),
         )
@@ -1378,12 +2044,26 @@ def _bloquear_filas_objetivo(cur, items: list[dict]) -> None:
     saldos_ej: set[tuple[int, int]] = set()
     saldos_per: set[tuple[int, int, int]] = set()
     asientos_update: set[tuple[str, int, int]] = set()
+    asientos_cm_anul: set[str] = set()
+    cuentaproveedor_cm: set[str] = set()
 
     for item in items:
         clave = item.get("clave") or {}
         tabla = item.get("tabla")
         accion = item.get("accion", "update")
-        if tabla == "cont_asiento" and accion == "update":
+        if item.get("check_id") == CHECK_ANULACION and accion == "insert_marcador":
+            cm = str_or_default(clave.get("codigo_movimiento_anul") or clave.get("codigo_movimiento_original"))
+            if cm:
+                cuentaproveedor_cm.add(cm)
+        elif item.get("check_id") == CHECK_ANULACION and accion == "marcar_original_anulado":
+            cm = str_or_default(clave.get("codigo_movimiento"))
+            if cm:
+                asientos_cm_anul.add(cm)
+        elif item.get("check_id") == CHECK_ANULACION and accion == "insert_contra_asiento":
+            id_ej = to_int_or_none((item.get("valor_nuevo") or {}).get("id_ejercicio"))
+            if id_ej is not None:
+                ejercicios.add(id_ej)
+        elif tabla == "cont_asiento" and accion == "update":
             codmov = str_or_default(clave.get("codigo_movimiento"))
             nro = to_int_or_none(clave.get("nro_asiento"))
             id_pc = to_int_or_none(clave.get("id_pc"))
@@ -1410,6 +2090,18 @@ def _bloquear_filas_objetivo(cur, items: list[dict]) -> None:
             """SELECT id_concepto_asiento FROM cont_asiento
                WHERE codigo_movimiento=%s AND nro_asiento=%s AND id_pc=%s FOR UPDATE""",
             (codmov, nro, id_pc),
+        )
+    for cm in sorted(asientos_cm_anul):
+        cur.execute(
+            """SELECT codigo_movimiento FROM cont_asiento
+               WHERE codigo_movimiento=%s LIMIT 1 FOR UPDATE""",
+            (cm,),
+        )
+    for cm in sorted(cuentaproveedor_cm):
+        cur.execute(
+            """SELECT CodigoMovimiento FROM cuentaproveedor
+               WHERE CodigoMovimiento=%s LIMIT 1 FOR UPDATE""",
+            (cm,),
         )
     for id_ej in sorted(ejercicios):
         cur.execute(
@@ -1664,6 +2356,226 @@ def _aplicar_item_saldo(
         raise CorreccionContableError(f"Tabla de saldo no soportada: {tabla}")
 
     _insertar_log_detalle(cur, lote_id, item, valor_anterior, valor_nuevo, usuario, fecha_db)
+
+
+def _aplicar_insert_marcador_anulacion(
+    cur,
+    dict_cur,
+    item: dict,
+    lote_id: str,
+    usuario: str,
+    fecha_db,
+) -> int:
+    clave = item.get("clave") or {}
+    cm_orig = clave.get("codigo_movimiento_anul") or clave.get("codigo_movimiento_original")
+    vn = item.get("valor_nuevo") or {}
+
+    dict_cur.execute(
+        """SELECT 1 FROM cuentaproveedor
+           WHERE CodigoMovimiento=0 AND codigo_movimiento_anul=%s LIMIT 1""",
+        (cm_orig,),
+    )
+    if dict_cur.fetchone():
+        return 0
+
+    dict_cur.execute(
+        """SELECT * FROM cuentaproveedor
+           WHERE CodigoMovimiento=%s AND COALESCE(Anulado,'No')='Si' LIMIT 1 FOR UPDATE""",
+        (cm_orig,),
+    )
+    orig = dict_cur.fetchone()
+    if not orig:
+        raise CorreccionContableError(
+            f"No existe comprobante original anulado con CodigoMovimiento={cm_orig}."
+        )
+
+    dict_cur.execute("SELECT COALESCE(MAX(id_cuentaproveedor),0)+1 AS nid FROM cuentaproveedor")
+    row_id = dict_cur.fetchone()
+    new_id = to_int_or_none(row_id.get("nid") if isinstance(row_id, dict) else row_id[0])
+    if new_id is None:
+        raise CorreccionContableError("No se pudo reservar id_cuentaproveedor para marcador.")
+
+    fila = dict(orig)
+    fila["id_cuentaproveedor"] = new_id
+    fila["CodigoMovimiento"] = 0
+    fila["codigo_movimiento_anul"] = cm_orig
+    fila["Detalle"] = str_or_default(
+        vn.get("Detalle"),
+        f"Anulacion - {fila.get('TipoComprobante')} - {fila.get('NroComprobante')}",
+    )
+    fila["Anulado"] = "No"
+
+    columnas = list(fila.keys())
+    placeholders = ",".join(["%s"] * len(columnas))
+    cols_sql = ",".join(f"`{c}`" for c in columnas)
+    cur.execute(
+        f"INSERT INTO cuentaproveedor ({cols_sql}) VALUES ({placeholders})",
+        tuple(fila[c] for c in columnas),
+    )
+    _insertar_log_detalle(cur, lote_id, item, None, str(new_id), usuario, fecha_db)
+    return 1
+
+
+def _aplicar_marcar_original_anulado(
+    cur,
+    dict_cur,
+    item: dict,
+    lote_id: str,
+    usuario: str,
+    fecha_db,
+) -> int:
+    clave = item.get("clave") or {}
+    codmov = str_or_default(clave.get("codigo_movimiento"))
+    valor_anterior = str_or_default(item.get("valor_anterior"), "No")
+
+    dict_cur.execute(
+        """SELECT COUNT(*) AS cnt FROM cont_asiento
+           WHERE codigo_movimiento=%s AND COALESCE(anulado,'No')<>'Si'""",
+        (codmov,),
+    )
+    row = dict_cur.fetchone()
+    pendientes = to_int_or_none(row.get("cnt") if isinstance(row, dict) else row[0]) or 0
+    if pendientes == 0:
+        return 0
+
+    cur.execute(
+        """UPDATE cont_asiento SET anulado='Si'
+           WHERE codigo_movimiento=%s AND COALESCE(anulado,'No')<>'Si'""",
+        (codmov,),
+    )
+    filas = cur.rowcount or pendientes
+    _insertar_log_detalle(cur, lote_id, item, valor_anterior, "Si", usuario, fecha_db)
+    return filas
+
+
+def _aplicar_insert_contra_anulacion(
+    cur,
+    dict_cur,
+    repo: _RepoLectura,
+    item: dict,
+    saldos_run: dict[tuple[int, int], Decimal],
+    lote_id: str,
+    usuario: str,
+    fecha_db,
+) -> int:
+    clave = item.get("clave") or {}
+    vn = item.get("valor_nuevo") or {}
+    cm_orig = clave.get("codigo_movimiento_original") or vn.get("codigo_movimiento_original")
+
+    dict_cur.execute(
+        """SELECT 1 FROM cont_asiento
+           WHERE codigo_movimiento_anul=%s
+             AND id_concepto_asiento IN (4, 8)
+             AND COALESCE(anulado,'No')='No'
+             AND COALESCE(codigo_movimiento,0)<>0
+           LIMIT 1""",
+        (cm_orig,),
+    )
+    if dict_cur.fetchone():
+        return 0
+
+    preview = vn.get("renglones_preview") or []
+    if not preview:
+        dict_cur.execute(
+            """SELECT id_pc, debe_asiento, haber_asiento, desc_concepto_asiento,
+                      desc_asiento, fecha_asiento, id_ejercicio
+               FROM cont_asiento WHERE codigo_movimiento=%s""",
+            (cm_orig,),
+        )
+        orig_rows = dict_cur.fetchall()
+        if not orig_rows:
+            return 0
+        id_concepto_anul = to_int_or_none(vn.get("id_concepto_asiento")) or 4
+        desc_concepto_anul = str_or_default(vn.get("desc_concepto_asiento"), "Anulación")
+        preview = [
+            {
+                "id_pc": to_int_or_none(r.get("id_pc")),
+                "debe_asiento": str(_r2(r.get("haber_asiento"))),
+                "haber_asiento": str(_r2(r.get("debe_asiento"))),
+                "desc_renglon_asiento": MARCA_ANUL_REGEN,
+                "desc_concepto_asiento": desc_concepto_anul,
+                "id_concepto_asiento": id_concepto_anul,
+            }
+            for r in orig_rows
+            if _r2(r.get("debe_asiento")) != 0 or _r2(r.get("haber_asiento")) != 0
+        ]
+
+    id_ejercicio = to_int_or_none(vn.get("id_ejercicio"))
+    if id_ejercicio is None and preview:
+        id_ejercicio = to_int_or_none(vn.get("id_ejercicio"))
+    if id_ejercicio is None:
+        raise CorreccionContableError(
+            f"Item contra-asiento anulación incompleto para cm={cm_orig} (sin id_ejercicio)."
+        )
+
+    id_concepto_anul = to_int_or_none(vn.get("id_concepto_asiento")) or 4
+    desc_concepto_anul = str_or_default(vn.get("desc_concepto_asiento"), "Anulación")
+    desc_asiento = str_or_default(vn.get("desc_asiento"), f"Anulación cm {cm_orig}")
+    fecha = to_date_or_none(vn.get("fecha_asiento")) or fecha_db.date()
+
+    cm_contra = _reservar_codigo_movimiento(cur)
+    nro_asiento = _reservar_nro_asiento_ejercicio(cur, id_ejercicio)
+    insertados = 0
+    for r in preview:
+        id_pc = to_int_or_none(r.get("id_pc"))
+        if id_pc is None:
+            continue
+        _insertar_renglon_asiento_generico(
+            cur,
+            repo,
+            nro_asiento=nro_asiento,
+            fecha=fecha,
+            id_ejercicio=id_ejercicio,
+            codigo_movimiento=cm_contra,
+            id_pc=id_pc,
+            debe=_r2(r.get("debe_asiento")),
+            haber=_r2(r.get("haber_asiento")),
+            id_concepto=to_int_or_none(r.get("id_concepto_asiento")) or id_concepto_anul,
+            desc_concepto=str_or_default(r.get("desc_concepto_asiento"), desc_concepto_anul),
+            desc_asiento=desc_asiento,
+            desc_renglon=str_or_default(r.get("desc_renglon_asiento"), MARCA_ANUL_REGEN),
+            codigo_movimiento_anul=to_int_or_none(cm_orig),
+            saldos_run=saldos_run,
+        )
+        insertados += 1
+
+    if insertados == 0:
+        return 0
+
+    item_log = {
+        **item,
+        "clave": {
+            **(item.get("clave") or {}),
+            "codigo_movimiento": str(cm_contra),
+            "codigo_movimiento_anul": str(cm_orig),
+        },
+    }
+    _insertar_log_detalle(cur, lote_id, item_log, None, str(cm_contra), usuario, fecha_db)
+    return insertados
+
+
+def _aplicar_item_anulacion(
+    cur,
+    dict_cur,
+    repo: _RepoLectura,
+    item: dict,
+    saldos_run: dict[tuple[int, int], Decimal],
+    lote_id: str,
+    usuario: str,
+    fecha_db,
+) -> int:
+    if item.get("bloqueado"):
+        return 0
+    accion = item.get("accion")
+    if accion == "insert_marcador":
+        return _aplicar_insert_marcador_anulacion(cur, dict_cur, item, lote_id, usuario, fecha_db)
+    if accion == "marcar_original_anulado":
+        return _aplicar_marcar_original_anulado(cur, dict_cur, item, lote_id, usuario, fecha_db)
+    if accion == "insert_contra_asiento":
+        return _aplicar_insert_contra_anulacion(
+            cur, dict_cur, repo, item, saldos_run, lote_id, usuario, fecha_db
+        )
+    return 0
 
 
 def _reservar_codigo_movimiento(cur) -> int:
@@ -2061,8 +2973,8 @@ def _apply_modo_rei(
     ) else 0
 
     filas_aplicadas = 0
-    conn = pool.get_connection(base_empresa)
-    try:
+    with pool.get_connection(base_empresa) as conn:
+      try:
         conn.autocommit(False)
         cur = conn.cursor()
         dict_cur = conn.cursor(MySQLdb.cursors.DictCursor)
@@ -2144,21 +3056,27 @@ def _apply_modo_rei(
             )
 
         conn.commit()
-    except CorreccionContableError:
+        for caso in aprobados:
+            caso.estado = "aplicado"
+            caso.save(update_fields=["estado"])
+      except CorreccionContableError:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
-    except Exception as exc:
+      except Exception as exc:
         try:
             conn.rollback()
         except Exception:
             pass
         logger.exception("apply rei: error transaccional base=%s lote=%s", base_empresa, lote_id)
         raise CorreccionContableError(f"Error al aplicar corrección REI: {exc}") from exc
-    finally:
+      finally:
         try:
             conn.autocommit(True)
         except Exception:
             pass
-        conn.close()
 
     plan_obj.estado = "aplicado"
     plan_obj.save(update_fields=["estado"])
@@ -2203,16 +3121,13 @@ def apply(
     """
     Aplica un plan dry-run en MySQL legacy (Fase 3).
 
-    Requiere ``ENVIRONMENT=production`` (o ``produccion``) y permiso
-    ``contabilidad.auditoria.corregir``. El flag ``tiene_permiso_corregir`` debe
-    venir validado desde la vista.
+    Requiere permiso ``contabilidad.auditoria.corregir``. El flag
+    ``tiene_permiso_corregir`` debe venir validado desde la vista.
+    Disponible en cualquier entorno (development incluido) para pruebas;
+    la salvaguarda operativa es el permiso + confirmación explícita en UI.
 
     ``modo='rei'`` procesa únicamente casos ``AprobacionREI`` con estado aprobado.
     """
-    if not _es_entorno_produccion():
-        raise CorreccionContableError(
-            "La corrección contable solo está disponible en entorno de producción."
-        )
     if not tiene_permiso_corregir:
         raise CorreccionContableError(
             "No tiene permiso para aplicar correcciones contables (contabilidad.auditoria.corregir)."
@@ -2310,98 +3225,109 @@ def apply(
             ) from exc
 
     filas_aplicadas = 0
-    conn = pool.get_connection(base_empresa)
-    try:
-        conn.autocommit(False)
-        cur = conn.cursor()
-        dict_cur = conn.cursor(MySQLdb.cursors.DictCursor)
-        repo = _RepoLectura(conn)
-        fecha_db = timezone.localtime(ahora).replace(tzinfo=None)
+    with pool.get_connection(base_empresa) as conn:
+        try:
+            conn.autocommit(False)
+            cur = conn.cursor()
+            dict_cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            repo = _RepoLectura(conn)
+            fecha_db = timezone.localtime(ahora).replace(tzinfo=None)
 
-        cur.execute(
-            """INSERT INTO cont_audit_correccion_lote
-               (lote_id, base_empresa, dry_run_id, config_hash, usuario, fecha,
-                estado, reapertura_flag, autorizador, backups_json)
-               VALUES (%s,%s,%s,%s,%s,%s,'aplicado',%s,%s,%s)""",
-            (
-                lote_id,
-                base_empresa,
-                str(plan_obj.dry_run_id),
-                plan_obj.config_hash,
-                usuario,
-                fecha_db,
-                reapertura_flag,
-                autorizador or None,
-                json.dumps(backups, sort_keys=True),
-            ),
-        )
-
-        _bloquear_filas_objetivo(dict_cur, items)
-
-        fp_tx = _calcular_fingerprint_desde_legacy(conn, items)
-        if fp_tx != plan_obj.data_fingerprint:
-            conn.rollback()
-            plan_obj.estado = "invalidado"
-            plan_obj.save(update_fields=["estado"])
-            raise CorreccionContableError(
-                "Concurrencia detectada durante la transacción. Ejecute un nuevo dry-run."
+            cur.execute(
+                """INSERT INTO cont_audit_correccion_lote
+                   (lote_id, base_empresa, dry_run_id, config_hash, usuario, fecha,
+                    estado, reapertura_flag, autorizador, backups_json)
+                   VALUES (%s,%s,%s,%s,%s,%s,'aplicado',%s,%s,%s)""",
+                (
+                    lote_id,
+                    base_empresa,
+                    str(plan_obj.dry_run_id),
+                    plan_obj.config_hash,
+                    usuario,
+                    fecha_db,
+                    reapertura_flag,
+                    autorizador or None,
+                    json.dumps(backups, sort_keys=True),
+                ),
             )
 
-        items_ordenados = _orden_apply_items(items)
-        saldos_run: dict[tuple[int, int], Decimal] = {}
+            _bloquear_filas_objetivo(dict_cur, items)
 
-        # Pre-regeneración de asientos (REC-18, antes del orden REC-07 2→3→4).
-        asientos_por_cm: dict[str, list[dict]] = defaultdict(list)
-        for item in items_ordenados:
-            if (
-                item.get("tabla") == "cont_asiento"
-                and item.get("accion") == "insert"
-                and item.get("check_id") == CHECK_REGENERACION
-            ):
-                cm = str_or_default((item.get("valor_nuevo") or {}).get("codigo_movimiento"))
-                asientos_por_cm[cm].append(item)
+            fp_tx = _calcular_fingerprint_desde_legacy(conn, items)
+            if fp_tx != plan_obj.data_fingerprint:
+                conn.rollback()
+                plan_obj.estado = "invalidado"
+                plan_obj.save(update_fields=["estado"])
+                raise CorreccionContableError(
+                    "Concurrencia detectada durante la transacción. Ejecute un nuevo dry-run."
+                )
 
-        for renglones in asientos_por_cm.values():
-            filas_aplicadas += _aplicar_asiento_completo(
-                cur, repo, renglones, saldos_run, lote_id, usuario, fecha_db
-            )
+            items_ordenados = _orden_apply_items(items)
+            saldos_run: dict[tuple[int, int], Decimal] = {}
 
-        # REC-07 paso 2: concepto_anulacion_incoherente (UPDATE cont_asiento).
-        for item in items_ordenados:
-            if item.get("check_id") != CHECK_CONCEPTO_ANUL:
-                continue
-            _aplicar_item_concepto(cur, item, lote_id, usuario, fecha_db)
-            filas_aplicadas += 1
+            # Pre-regeneración de asientos (REC-18, antes del orden REC-07 2→3→4).
+            asientos_por_cm: dict[str, list[dict]] = defaultdict(list)
+            for item in items_ordenados:
+                if (
+                    item.get("tabla") == "cont_asiento"
+                    and item.get("accion") == "insert"
+                    and item.get("check_id") in CHECKS_REGENERACION_ASIENTO
+                ):
+                    cm = str_or_default((item.get("valor_nuevo") or {}).get("codigo_movimiento"))
+                    asientos_por_cm[cm].append(item)
 
-        # REC-07 pasos 3 y 4: filas saldo faltantes (INSERT) → recompute (UPDATE).
-        for item in items_ordenados:
-            tabla = item.get("tabla")
-            if tabla not in ("cont_ejercicio_saldo_cta", "cont_periodo_saldo_cta"):
-                continue
-            id_pc = to_int_or_none((item.get("clave") or {}).get("id_pc"))
-            if id_pc is not None and repo.saldo_pc(id_pc) is None:
-                continue
-            if item.get("accion") == "insert" and _fila_saldo_existe(cur, item):
-                continue
-            _aplicar_item_saldo(cur, item, lote_id, usuario, fecha_db)
-            filas_aplicadas += 1
+            for renglones in asientos_por_cm.values():
+                filas_aplicadas += _aplicar_asiento_completo(
+                    cur, repo, renglones, saldos_run, lote_id, usuario, fecha_db
+                )
 
-        conn.commit()
-    except CorreccionContableError:
-        raise
-    except Exception as exc:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        logger.exception("apply: error transaccional base=%s lote=%s", base_empresa, lote_id)
-        raise CorreccionContableError(f"Error al aplicar corrección: {exc}") from exc
-    finally:
-        try:
-            conn.autocommit(True)
-        except Exception:
-            pass
-        conn.close()
+            # REC-19: reparación anulaciones incompletas (antes de concepto REC-07 paso 2).
+            for item in items_ordenados:
+                if item.get("check_id") != CHECK_ANULACION:
+                    continue
+                filas_aplicadas += _aplicar_item_anulacion(
+                    cur, dict_cur, repo, item, saldos_run, lote_id, usuario, fecha_db
+                )
+
+            # REC-07 paso 2: concepto_anulacion_incoherente (UPDATE cont_asiento).
+            for item in items_ordenados:
+                if item.get("check_id") != CHECK_CONCEPTO_ANUL:
+                    continue
+                _aplicar_item_concepto(cur, item, lote_id, usuario, fecha_db)
+                filas_aplicadas += 1
+
+            # REC-07 pasos 3 y 4: filas saldo faltantes (INSERT) → recompute (UPDATE).
+            for item in items_ordenados:
+                tabla = item.get("tabla")
+                if tabla not in ("cont_ejercicio_saldo_cta", "cont_periodo_saldo_cta"):
+                    continue
+                id_pc = to_int_or_none((item.get("clave") or {}).get("id_pc"))
+                if id_pc is not None and repo.saldo_pc(id_pc) is None:
+                    continue
+                if item.get("accion") == "insert" and _fila_saldo_existe(cur, item):
+                    continue
+                _aplicar_item_saldo(cur, item, lote_id, usuario, fecha_db)
+                filas_aplicadas += 1
+
+            conn.commit()
+        except CorreccionContableError:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
+        except Exception as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            logger.exception("apply: error transaccional base=%s lote=%s", base_empresa, lote_id)
+            raise CorreccionContableError(f"Error al aplicar corrección: {exc}") from exc
+        finally:
+            try:
+                conn.autocommit(True)
+            except Exception:
+                pass
 
     plan_obj.estado = "aplicado"
     plan_obj.save(update_fields=["estado"])
@@ -2424,19 +3350,19 @@ def rollback_lote(
     *,
     tiene_permiso_corregir: bool = False,
 ) -> dict[str, Any]:
-    """Restaura tablas productivas desde backups del lote en transacción única."""
-    if not _es_entorno_produccion():
-        raise CorreccionContableError(
-            "El rollback solo está disponible en entorno de producción."
-        )
+    """Restaura tablas productivas desde backups del lote en transacción única.
+
+    Requiere permiso ``contabilidad.auditoria.corregir``. Disponible en cualquier
+    entorno (development incluido) para pruebas.
+    """
     if not tiene_permiso_corregir:
         raise CorreccionContableError(
             "No tiene permiso para revertir correcciones contables."
         )
 
     pool = get_mysql_pool()
-    conn = pool.get_connection(base_empresa)
-    try:
+    with pool.get_connection(base_empresa) as conn:
+      try:
         conn.autocommit(False)
         cur = conn.cursor(MySQLdb.cursors.DictCursor)
         cur.execute(
@@ -2489,21 +3415,24 @@ def rollback_lote(
             (lote_id, json.dumps(backups, sort_keys=True), usuario, fecha_db),
         )
         conn.commit()
-    except CorreccionContableError:
+      except CorreccionContableError:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
-    except Exception as exc:
+      except Exception as exc:
         try:
             conn.rollback()
         except Exception:
             pass
         logger.exception("rollback_lote: error base=%s lote=%s", base_empresa, lote_id)
         raise CorreccionContableError(f"Error al revertir lote: {exc}") from exc
-    finally:
+      finally:
         try:
             conn.autocommit(True)
         except Exception:
             pass
-        conn.close()
 
     return {
         "ok": True,

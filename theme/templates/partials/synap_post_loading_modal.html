@@ -1,0 +1,219 @@
+{# Modal de espera para POST/GET/fetch largos. #}
+{# Activar con clase synap-post-loading (o mpr-post-loading) en el <form> y data-synap-loading-title / data-synap-loading-subtitle. #}
+{# API: synapShowPostLoading, synapShowPostLoadingProgress, synapUpdatePostLoadingProgress, synapHidePostLoading #}
+{# Aliases MPR: mprShowPostLoading* / mprHidePostLoading (compat). #}
+<div id="synap-post-loading-modal"
+     class="hidden fixed inset-0 z-[10050] p-4 sm:p-8 bg-slate-950/65 backdrop-blur-sm pointer-events-auto transition-opacity duration-200"
+     aria-hidden="true"
+     aria-busy="false"
+     role="alertdialog"
+     aria-labelledby="synap-post-loading-title">
+    <div class="relative w-full max-w-md rounded-2xl border border-slate-200/80 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-2xl shadow-sky-900/10 overflow-hidden mx-auto">
+        {# Barra indeterminada #}
+        <div id="synap-post-loading-bar-indet"
+             class="absolute inset-x-0 top-0 h-1.5 overflow-hidden bg-slate-200/50 dark:bg-slate-700/50">
+            <div class="h-full w-1/3 rounded-full bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-400 animate-[synap-post-loading-bar_1.4s_ease-in-out_infinite]"></div>
+        </div>
+        {# Barra determinada #}
+        <div id="synap-post-loading-bar-det"
+             class="absolute inset-x-0 top-0 hidden h-1.5 overflow-hidden bg-slate-200/50 dark:bg-slate-700/50">
+            <div id="synap-post-loading-progress-bar"
+                 class="h-full rounded-full bg-gradient-to-r from-sky-500 via-cyan-500 to-emerald-400 transition-[width] duration-300 ease-out"
+                 style="width: 0%"></div>
+        </div>
+        <div class="px-8 pt-10 pb-8 flex flex-col items-center text-center gap-5">
+            <div class="relative w-16 h-16">
+                <div class="absolute inset-0 rounded-full border-4 border-slate-200 dark:border-slate-600"></div>
+                <div class="absolute inset-0 rounded-full border-4 border-transparent border-t-sky-500 border-r-cyan-500 animate-spin" style="animation-duration: 0.9s;"></div>
+                <div class="absolute inset-2 rounded-full border-2 border-transparent border-b-emerald-400/80 animate-spin" style="animation-duration: 1.4s; animation-direction: reverse;"></div>
+            </div>
+            <div class="w-full">
+                <p id="synap-post-loading-title" class="text-sm font-semibold text-slate-800 dark:text-slate-100 tracking-tight">Procesando solicitud</p>
+                <p id="synap-post-loading-subtitle" class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">Esperá un momento. No cierres esta ventana.</p>
+                <p id="synap-post-loading-progress-text"
+                   class="mt-3 hidden text-sm font-semibold tabular-nums text-sky-700 dark:text-sky-300"
+                   aria-live="polite">0 de 0</p>
+                <p id="synap-post-loading-current"
+                   class="mt-1 hidden truncate text-[11px] text-slate-500 dark:text-slate-400"
+                   title=""></p>
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+    @keyframes synap-post-loading-bar {
+        0%, 100% { transform: translateX(-100%); width: 40%; }
+        50% { transform: translateX(200%); width: 55%; }
+    }
+</style>
+<script>
+(function () {
+    function _el(id) {
+        return document.getElementById(id);
+    }
+
+    function _modalEls() {
+        return {
+            modal: _el('synap-post-loading-modal') || _el('mpr-post-loading-modal'),
+            titleEl: _el('synap-post-loading-title') || _el('mpr-post-loading-title'),
+            subEl: _el('synap-post-loading-subtitle') || _el('mpr-post-loading-subtitle'),
+            barIndet: _el('synap-post-loading-bar-indet') || _el('mpr-post-loading-bar-indet'),
+            barDet: _el('synap-post-loading-bar-det') || _el('mpr-post-loading-bar-det'),
+            barFill: _el('synap-post-loading-progress-bar') || _el('mpr-post-loading-progress-bar'),
+            progText: _el('synap-post-loading-progress-text') || _el('mpr-post-loading-progress-text'),
+            currentEl: _el('synap-post-loading-current') || _el('mpr-post-loading-current'),
+        };
+    }
+
+    function _showModalShell(els) {
+        if (!els.modal) return;
+        els.modal.classList.remove('hidden');
+        els.modal.classList.add('flex', 'items-center', 'justify-center');
+        els.modal.setAttribute('aria-hidden', 'false');
+        els.modal.setAttribute('aria-busy', 'true');
+    }
+
+    function _formAttr(form, synapKey, mprKey) {
+        return form.getAttribute(synapKey) || form.getAttribute(mprKey) || '';
+    }
+
+    window.synapHidePostLoading = function () {
+        var els = _modalEls();
+        if (!els.modal) return;
+        els.modal.classList.add('hidden');
+        els.modal.classList.remove('flex', 'items-center', 'justify-center');
+        els.modal.setAttribute('aria-hidden', 'true');
+        els.modal.setAttribute('aria-busy', 'false');
+        if (els.progText) els.progText.classList.add('hidden');
+        if (els.currentEl) {
+            els.currentEl.classList.add('hidden');
+            els.currentEl.textContent = '';
+        }
+        if (els.barIndet) els.barIndet.classList.remove('hidden');
+        if (els.barDet) els.barDet.classList.add('hidden');
+        if (els.barFill) els.barFill.style.width = '0%';
+    };
+
+    window.synapUpdatePostLoadingProgress = function (opts) {
+        opts = opts || {};
+        var els = _modalEls();
+        if (!els.modal) return;
+        var current = Number(opts.current) || 0;
+        var total = Number(opts.total) || 0;
+        var pct = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
+        if (els.barIndet) els.barIndet.classList.add('hidden');
+        if (els.barDet) els.barDet.classList.remove('hidden');
+        if (els.barFill) els.barFill.style.width = pct + '%';
+        if (els.progText) {
+            els.progText.classList.remove('hidden');
+            els.progText.textContent = total > 0
+                ? (current + ' de ' + total + ' (' + pct + '%)')
+                : String(current);
+        }
+        if (els.currentEl) {
+            var label = opts.label || opts.item || '';
+            if (label) {
+                els.currentEl.classList.remove('hidden');
+                els.currentEl.textContent = label;
+                els.currentEl.setAttribute('title', label);
+            }
+        }
+        if (opts.title && els.titleEl) els.titleEl.textContent = opts.title;
+        if (opts.subtitle && els.subEl) els.subEl.textContent = opts.subtitle;
+    };
+
+    window.synapShowPostLoadingProgress = function (opts) {
+        opts = opts || {};
+        var els = _modalEls();
+        if (!els.modal) return;
+        if (els.titleEl) els.titleEl.textContent = opts.title || 'Procesando solicitud';
+        if (els.subEl) {
+            els.subEl.textContent = opts.subtitle || 'Esperá un momento. No cierres esta ventana.';
+        }
+        _showModalShell(els);
+        // Sin total → barra indeterminada (diagnóstico/fetch); con total → progreso determinado.
+        var hasTotal = Number(opts.total) > 0;
+        if (opts.indeterminate || !hasTotal) {
+            if (els.barIndet) els.barIndet.classList.remove('hidden');
+            if (els.barDet) els.barDet.classList.add('hidden');
+            if (els.progText) els.progText.classList.add('hidden');
+            if (els.currentEl) {
+                if (opts.label) {
+                    els.currentEl.classList.remove('hidden');
+                    els.currentEl.textContent = opts.label;
+                    els.currentEl.setAttribute('title', opts.label);
+                } else {
+                    els.currentEl.classList.add('hidden');
+                }
+            }
+            return;
+        }
+        window.synapUpdatePostLoadingProgress({
+            current: opts.current || 0,
+            total: opts.total || 0,
+            label: opts.label || '',
+            title: opts.title,
+            subtitle: opts.subtitle,
+        });
+    };
+
+    window.synapShowPostLoading = function (form, submitter) {
+        if (!form) return;
+        var els = _modalEls();
+        if (!els.modal) return;
+        var title = _formAttr(form, 'data-synap-loading-title', 'data-mpr-loading-title')
+            || 'Procesando solicitud';
+        var sub = _formAttr(form, 'data-synap-loading-subtitle', 'data-mpr-loading-subtitle')
+            || 'Esperá un momento. No cierres esta ventana.';
+        if (els.titleEl) els.titleEl.textContent = title;
+        if (els.subEl) els.subEl.textContent = sub;
+        if (els.barIndet) els.barIndet.classList.remove('hidden');
+        if (els.barDet) els.barDet.classList.add('hidden');
+        if (els.progText) els.progText.classList.add('hidden');
+        if (els.currentEl) els.currentEl.classList.add('hidden');
+        _showModalShell(els);
+        // Los botones disabled no viajan en el POST: preservar name/value del submitter.
+        if (submitter && submitter.name) {
+            var preserve = form.querySelector(
+                'input[data-synap-submitter-preserve="1"], input[data-mpr-submitter-preserve="1"]'
+            );
+            if (!preserve) {
+                preserve = document.createElement('input');
+                preserve.type = 'hidden';
+                preserve.setAttribute('data-synap-submitter-preserve', '1');
+                form.appendChild(preserve);
+            }
+            preserve.name = submitter.name;
+            preserve.value = submitter.value || '';
+        }
+        form.querySelectorAll('button[type="submit"], button[type="button"], button:not([type])').forEach(function (btn) {
+            btn.disabled = true;
+            btn.setAttribute('aria-busy', 'true');
+        });
+        form.querySelectorAll('input[type="submit"]').forEach(function (inp) {
+            inp.disabled = true;
+        });
+    };
+
+    // Aliases MPR (compat)
+    window.mprHidePostLoading = window.synapHidePostLoading;
+    window.mprUpdatePostLoadingProgress = window.synapUpdatePostLoadingProgress;
+    window.mprShowPostLoadingProgress = window.synapShowPostLoadingProgress;
+    window.mprShowPostLoading = window.synapShowPostLoading;
+
+    document.addEventListener('submit', function (e) {
+        var form = e.target;
+        if (!form || form.tagName !== 'FORM') return;
+        if (e.defaultPrevented) return;
+        var hasClass = form.classList.contains('synap-post-loading')
+            || form.classList.contains('mpr-post-loading');
+        if (!hasClass) return;
+        // Lotes con progreso AJAX: no usar el modal indeterminado del submit clásico.
+        if (form.getAttribute('data-mpr-progress-lote') === '1'
+            || form.getAttribute('data-synap-progress-lote') === '1') {
+            return;
+        }
+        window.synapShowPostLoading(form, e.submitter || null);
+    });
+})();
+</script>

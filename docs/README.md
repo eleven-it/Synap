@@ -20,6 +20,7 @@ Toda la documentación del proyecto está en **`docs/`** en la raíz del reposit
 | **mpr/** | Producción (MPR): manual ([mpr/MANUAL_USUARIO_MPR.md](mpr/MANUAL_USUARIO_MPR.md)), CE talle/color ([mpr/ARTICULO_CE_TALLES_COLOR.md](mpr/ARTICULO_CE_TALLES_COLOR.md)), índice [mpr/README.md](mpr/README.md). |
 | **ecom/** | E-commerce y Ventas (pedidos mayorista, portal): manual ([ecom/MANUAL_USUARIO_VENTAS.md](ecom/MANUAL_USUARIO_VENTAS.md), HTML en **`/ecom/manual/`**), índice [ecom/README.md](ecom/README.md). |
 | **stock/** | Stock e inventario por etapa: manual ([stock/MANUAL_USUARIO_STOCK.md](stock/MANUAL_USUARIO_STOCK.md)), inventario MPR ([stock/INVENTARIO_TABLA_MPR.md](stock/INVENTARIO_TABLA_MPR.md)), índice [stock/README.md](stock/README.md). |
+| **contabilidad/** | Auditoría contable: manual ([contabilidad/MANUAL_USUARIO_CONTABILIDAD.md](contabilidad/MANUAL_USUARIO_CONTABILIDAD.md), HTML en **`/contabilidad/manual/`**), índice [contabilidad/README.md](contabilidad/README.md). Técnico: [general/AUDITORIA_IMPUTACION_CONTABILIDAD_SYNAP.md](general/AUDITORIA_IMPUTACION_CONTABILIDAD_SYNAP.md). |
 
 Los README de proyecto (`README_REPORTS.md`, `README_INSTALLATION.md`) permanecen en la raíz del repo como punto de entrada.
 

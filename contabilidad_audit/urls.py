@@ -5,6 +5,7 @@ from contabilidad_audit import views
 app_name = "contabilidad_audit"
 
 urlpatterns = [
+    path("manual/", views.manual_usuario_view, name="manual_usuario"),
     path("auditoria/", views.auditoria_tablero, name="auditoria_tablero"),
     path(
         "auditoria/ejercicios-periodos/",
@@ -25,4 +26,10 @@ urlpatterns = [
     ),
     path("auditoria/apply/", views.auditoria_apply_confirmacion, name="auditoria_apply"),
     path("auditoria/apply/ejecutar/", views.auditoria_apply, name="auditoria_apply_ejecutar"),
+    path("auditoria/lotes/", views.auditoria_lotes, name="auditoria_lotes"),
+    path(
+        "auditoria/lotes/<str:lote_id>/rollback/",
+        views.auditoria_lote_rollback,
+        name="auditoria_lote_rollback",
+    ),
 ]

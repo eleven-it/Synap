@@ -299,6 +299,14 @@ Herramienta (solo lectura / dry-run): `legacy_db/scripts/cont_reconstruccion_com
 - **OP (concepto 7): 1.671/1.672 match exacto + 1 remap = 100 % de fidelidad** (0 estructurales, 0 `_ERR_`). DEBE: `proveedor.id_pc = TotalOP` (Imputación/A cuenta) u `otro_egreso` (Egreso: `gastos.id_pc`/m24, `impuesto.id_pc_deuda`/m27, `deuda_abm.id_pc`/m43, `percepcion_abm.id_pc`/m49). HABER: transferencia (`cuenta_banco.id_pc` vía `id_cuentabancaria`/m42), efectivo (`caja.egreso` WHERE `codigo_movimiento` → `id_caja_abm_origen`→`caja_abm.id_pc`), cheque propio (`chequepropio.CodigoMovimientoOP`→m32), cheque tercero (`chequetercero.CodigoMovimientoOP`→`caja_abm.id_pc`/m31), retenciones (`retenciones_prov`→m30, `retenciones_provg`→m29, `retenciones_prov_IVA`→m62).
   - **Ajuste clave validado:** las filas de `caja` con `id_chequetercero` seteado representan la **entrega del cheque de tercero** y deben **excluirse del efectivo** (ya se reconstruye el HABER desde `chequetercero`), para no duplicar. `Tipo_OP` se normaliza (valor persistido `"A Cuenta"`).
 
+### 6.7bis Ventas y cobranzas (`cuentacliente`) — diagnóstico Synap
+
+Conceptos verificados en `administranet89` (`cont_concepto_asiento`): **1** Venta, **2** Anulación-Venta, **5** Cobranza, **6** Anulación-Cobranza (además NC/ND cliente 9–12).
+
+Enlace a diario: `cuentacliente.CodigoMovimiento` → `cont_asiento.codigo_movimiento` (igual patrón que compras). Tipos de factura de venta en esta base: principalmente `FA`/`FB`; cobranzas `REC`. Gating de contabilidad: **clientes → `punto_venta.cont='Si'`**; **proveedores → `sucursales.cont='Si'`** (no intercambiar).
+
+Check Synap: `comprobante_venta_cobranza_sin_asiento` (AUD-LECT-24, H54/H55). Regeneración automática en el motor (`reconstruir_factura_venta` / `reconstruir_rec`, REC-20): dry-run/apply con reuso de `CodigoMovimiento`, conceptos 1/5 y marca `REGEN auditoria (bug factura/REC sin asiento)`. **Fuera de alcance aún:** integridad de anulación venta/REC (análogo REC-19).
+
 ### 6.8 Mecanismo de anulación de compras/pagos (validado)
 
 La anulación de una factura/OP es **partida doble correcta** y toca tres lugares. Motor contable en `Cont_ProcesosC.frm:2758-2861` (también `Cont_ProcAsientosM.frm`, `Cont_CargaAsientoM.frm`).
@@ -314,6 +322,8 @@ La anulación de una factura/OP es **partida doble correcta** y toca tres lugare
 
 **c) Efecto en saldos — corrección importante:**
 Como el original (`anulado='Si'`) y su contra (`anulado='No'`) **se netean a cero**, los saldos denormalizados **no** quedan sobrevaluados por anulaciones. Verificación empírica: comparando el saldo almacenado contra la reconstrucción, difieren en 31/111 cuentas si se **excluyen** anulados, pero solo en 6/111 si se **incluyen todas** las filas → **la base correcta de reconstrucción es sumar TODAS las filas de `cont_asiento`** (el contra ya revierte). Con esa base, el desfase material real es solo **7 cuentas (ej.1) + 3 (ej.2)**.
+
+**Remediación Synap (REC-19, 25/07/2026):** el motor `cont_recalculo_service` repara automáticamente `falta_marcador_cuentaproveedor_cm0`, `asiento_original_no_anulado` y `falta_contra_asiento` (si existe asiento original); excluye `contra_no_invierte_original`. Flujo: dry-run → apply con backup de `cuentaproveedor`/`cont_asiento` → log `cont_audit_correccion_*`. Detalle operativo y piloto `administranet89`: `docs/general/AUDITORIA_IMPUTACION_CONTABILIDAD_SYNAP.md` (sección REC-19 / piloto). Spec: `openspec/specs/contabilidad-recalculo-correccion/spec.md` REC-19.
 
 ### 6.9 Plan de reconstrucción de saldos y regeneración de asientos
 

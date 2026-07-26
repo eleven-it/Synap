@@ -1,8 +1,8 @@
 # Auditoría de imputación contable en Synap (MVP Fase 1)
 
-**Change SDD:** `contabilidad-auditoria-recalculo`  
-**Estado:** **Fase 1 + Fase 2 + Fase 3 implementadas** — auditoría solo lectura (MVP) + dry-run + apply/rollback transaccional + flujo REI caso a caso + vista apply con doble confirmación.  
-**Fecha:** 18/07/2026
+**Change SDD:** `contabilidad-auditoria-recalculo` (+ delta `contabilidad-auditoria-anulaciones-apply` / REC-19)  
+**Estado:** **Fase 1 + Fase 2 + Fase 3 + REC-19** — auditoría solo lectura + dry-run + apply/rollback + REI + **reparación de anulaciones incompletas** (marcador / marcar original / contra) + UI lotes.  
+**Fecha:** 25/07/2026
 
 ## Objetivo
 
@@ -12,6 +12,7 @@ Motor de auditoría **determinista y solo lectura** sobre tablas `cont_*` del My
 
 | Ruta | Vista | Permiso |
 |------|-------|---------|
+| `/contabilidad/manual/` | Manual de usuario HTML (sesión activa) | Sesión |
 | `/contabilidad/auditoria/` | Tablero canon reportes (Alpine fetch al JSON); `?format=json` ejecuta corrida; `?format=csv` / `?format=xlsx` descargan el detalle | `contabilidad.auditoria.leer` |
 | `/contabilidad/auditoria/ejercicios-periodos/` | JSON de ejercicios y períodos de la **empresa base de la sesión** (solo lectura legacy) para los dropdowns predictivos del tablero. Orden fecha desc | `contabilidad.auditoria.leer` |
 | `/contabilidad/auditoria/configuracion/` | Configuración de políticas (GET consulta, POST guarda). Lectura con `.leer`; edición requiere `.configurar` (POL-12) | `contabilidad.auditoria.leer` (ver) / `contabilidad.auditoria.configurar` (editar) |
@@ -19,11 +20,15 @@ Motor de auditoría **determinista y solo lectura** sobre tablas `cont_*` del My
 | `/contabilidad/auditoria/dry-run/` | Dry-run Fase 2: genera plan de corrección (SELECT legacy), persiste `PlanCorreccion`, muestra guards; `?format=json|csv|xlsx` | `contabilidad.auditoria.leer` |
 | `/contabilidad/auditoria/rei/<uuid>/` | Aprobación REI caso a caso | `contabilidad.auditoria.rei` |
 | `/contabilidad/auditoria/apply/` | Confirmación apply (GET formulario) | `contabilidad.auditoria.corregir` |
-| `/contabilidad/auditoria/apply/ejecutar/` | Ejecutar apply (POST, doble confirmación) | `contabilidad.auditoria.corregir` |
+| `/contabilidad/auditoria/apply/ejecutar/` | Ejecutar apply (POST, confirmación checkbox) | `contabilidad.auditoria.corregir` |
+| `/contabilidad/auditoria/lotes/` | Lotes aplicados (`cont_audit_correccion_lote`) | `contabilidad.auditoria.leer` |
+| `/contabilidad/auditoria/lotes/<lote_id>/rollback/` | Rollback de lote (POST, modal Synap) | `contabilidad.auditoria.corregir` |
 
 Montaje: `django_project/urls.py` → `path('contabilidad/', include('contabilidad_audit.urls'))`.
 
-Menú Synap: módulo **Contabilidad** (`core/utils/utils.py::APPS_MENU`, id `contabilidad`, orden 6.2) con ítems *Tablero de auditoría* (`contabilidad.auditoria.leer`) y *Configuración de políticas* (`contabilidad.auditoria.configurar`). El módulo es core-visible (siempre activo si hay permiso).
+Flujo operativo guiado desde el tablero: **Tablero → Generar dry-run → Apply → Lotes aplicados** (con rollback).
+
+Menú Synap: módulo **Contabilidad** (`core/utils/utils.py::APPS_MENU`, id `contabilidad`, orden 6.2) con ítems *Tablero de auditoría* (`contabilidad.auditoria.leer`), *Configuración de políticas* (`contabilidad.auditoria.configurar`) y *Manual de usuario*. El módulo es core-visible (siempre activo si hay permiso). Manual operativo: [`docs/contabilidad/MANUAL_USUARIO_CONTABILIDAD.md`](../contabilidad/MANUAL_USUARIO_CONTABILIDAD.md) · HTML `/contabilidad/manual/`.
 
 ## Permisos Synap
 
@@ -49,7 +54,7 @@ Fila global `base_empresa='__default__'` con defaults:
 
 Resolución: `resolver_politica(base_empresa)` (default → override). Hash: `calcular_config_hash` prefijo `v1:` + SHA-256 JSON canónico.
 
-## Checks registrados (17)
+## Checks registrados (18)
 
 | check_id | Severidad | Descripción breve |
 |----------|-----------|-------------------|
@@ -67,9 +72,19 @@ Resolución: `resolver_politica(base_empresa)` (default → override). Hash: `ca
 | reparto_cc_incompleto | medio | Σ CC vs renglón |
 | rei_recalculo | alto | REI teórico vs registrado |
 | concepto_no_normal | medio | tipo_concepto_asiento ≠ Normal |
-| comprobante_compra_pago_sin_asiento | critico | FA/FC/OP sin cont_asiento |
+| comprobante_compra_pago_sin_asiento | critico | FA/FC/OP (`cuentaproveedor`) sin cont_asiento |
+| comprobante_venta_cobranza_sin_asiento | critico | FA/FB/FC/FE/FM/REC (`cuentacliente`) sin cont_asiento |
 | asiento_compra_pago_desbalanceado_saldo_null | alto | Desbalance o saldo_asiento NULL |
 | integridad_anulacion_compra_pago | alto | Anulación partida doble incompleta |
+
+### Check venta/cobranza (AUD-LECT-24)
+
+- Tabla: `cuentacliente` (no mezclar con compras).
+- Tipos: facturas venta `FA`/`FB`/`FC`/`FE`/`FM` (concepto 1) + `REC` (concepto 5).
+- Gating (regla AdministraNET): **`punto_venta.cont='Si'`** (clientes). Compras/pagos usan **`sucursales.cont='Si'`** (proveedores).
+- Referencias: H54 (venta), H55 (REC).
+- **Regeneración (REC-20):** dry-run/apply vía el mismo motor que compras (`cont_recalculo_service`); marca `REGEN auditoria (bug factura/REC sin asiento)`; conceptos 1/5; gating `punto_venta.cont`. Fuera de alcance: integridad de anulación venta/REC y NC/ND.
+- Baseline `administranet89` (25/07/2026, post-restore, solo `pv.cont='Si'`): 2 huérfanos FA/FB balanceables (cm `58305`, `88621`); no usar `sucursales.cont` como alternativa para clientes.
 
 Registry: `contabilidad_audit/services/registry.py` → `CHECKS`.
 
@@ -94,6 +109,8 @@ Filtros obligatorios: `base_empresa`, `id_ejercicio`. Opcionales: `id_periodo`, 
 
 Plantillas en `contabilidad_audit/templates/contabilidad_audit/`, extienden `base_app.html` y reutilizan los patrones Tailwind/Alpine del canon (`reports/dashboard_detail.html`): encabezado con degradado slate, panel de filtros, tarjetas y tablas. **No** se usa como referencia visual `ventas/objetivos-venta/` ni `ventas/presupuestos/` (regla `FUENTE_VERDAD_UI_REPORTES_MPR.md`).
 
+**Modal de espera:** las operaciones largas (diagnóstico del tablero, generar dry-run, apply y rollback de lote) muestran el overlay compartido `partials/synap_post_loading_modal.html` con título/subtítulo de estado en español. Ver `docs/general/SYNAP_MENSAJES_TOAST.md` (§ modal de espera). No usar diálogos nativos ni dejar al usuario sin feedback durante la espera. Los enlaces «Generar dry-run» / «Generar dry-run de regeneración» del tablero llaman `mostrarEsperaDryRun` antes de la navegación GET (el plan se calcula al cargar la página destino).
+
 ### Tablero (`auditoria_tablero.html`)
 
 - **Filtros:**
@@ -108,7 +125,7 @@ Plantillas en `contabilidad_audit/templates/contabilidad_audit/`, extienden `bas
   }
   ```
   Consultas: `cont_ejercicio ORDER BY fecdesde_ejercicio DESC, id_ejercicio DESC` y `cont_periodo ORDER BY fecdesde_periodo DESC, id_periodo DESC`. Los `id` (DOUBLE en legacy) se castean a `int`; las fechas DATE se formatean dd/MM/yyyy (`_fecha_date_ui`); `cerrado` normaliza 'Si'/'No' a bool. Ante error de conexión devuelve `{"error": "...", "ejercicios": [], "periodos": []}` con status 500 (el front degrada mostrando listas vacías).
-- **Ejecución:** Alpine hace `fetch` a `?format=json`. Auto-ejecuta si la URL trae `id_ejercicio` (empresa siempre de sesión).
+- **Ejecución:** Alpine hace `fetch` a `?format=json`. Mientras corre, abre `synapShowPostLoadingProgress` («Ejecutando auditoría» / «Evaluando checks») y lo cierra en `finally`. Auto-ejecuta si la URL trae `id_ejercicio` (empresa siempre de sesión).
 - **Layout (fix solapamiento):** el encabezado oscuro usa `pt-8 pb-20` (más padding inferior) y el panel de filtros `-mt-12 relative z-20`, de modo que la tarjeta blanca queda claramente **debajo** de la banda oscura sin superponerse al título/texto, manteniendo el efecto de tarjeta flotante del canon. Los dropdowns desplegados usan `z-50` sobre el panel `z-20`.
 - **Tarjetas verde/rojo por check:** verde = `ok` sin diferencias; rojo = con diferencias; ámbar = check con `error`. Muestran severidad (Crítico/Alto/Medio), evaluados y `total_diferencias`.
 - **Drill-down:** al abrir una tarjeta con diferencias, tabla con `referencia_hallazgo`, `cod_pc`/`id_pc`, `id_ejercicio`, `nro_asiento`, `codigo_movimiento`, `valor_esperado`, `valor_actual`, `delta`.
@@ -161,12 +178,25 @@ Regla de oro: **cero DML/DDL en MySQL legacy**. El plan se persiste en PostgreSQ
 
 `legacy_db/services/cont_recalculo_service.py` → `dry_run(base_empresa, alcance, politica, usuario)`:
 
-1. **Concepto anulación incoherente** (REC-07 paso 2 / REC-08): contra-asientos con `id_concepto_asiento` ≠ `id_concepto_anul` del original; items `accion=update`, `campo=id_concepto_asiento`, `check_id=concepto_anulacion_incoherente`, `referencia=H05`.
-2. **Regeneración de asientos faltantes** (REC-18): comprobantes FA/FC/OP con `CodigoMovimiento>0` sin filas en `cont_asiento`; concepto 3/7; reuso de `codigo_movimiento`; `nro_asiento` simulado desde contador del ejercicio; ajuste de redondeo en `id_pc=300` si aplica.
-3. **Filas saldo faltantes** (REC-07 paso 3 / REC-08): cuentas con movimientos sin fila en `cont_ejercicio_saldo_cta` / `cont_periodo_saldo_cta`; items `accion=insert`, `check_id=cuentas_sin_fila_saldo`, `referencia=H10` (ejercicio) o `H17` (periodo).
-4. **Reconstrucción de saldos** (REC-07 paso 4 / REC-17): modelo sin arrastre, Σ firmada de **todas** las filas de `cont_asiento` (incluye anulados neutralizados) más los asientos simulados del paso 2; solo `accion=update` sobre filas existentes, `check_id=saldo_ejercicio_vs_diario` / `saldo_periodo_vs_diario`, `referencia=H53`.
+1. **Regeneración de asientos faltantes compra/pago** (REC-18): comprobantes FA/FC/OP con `CodigoMovimiento>0` sin filas en `cont_asiento`; concepto 3/7; reuso de `codigo_movimiento`; `nro_asiento` simulado; ajuste de redondeo en `id_pc=300` si aplica.
+2. **Regeneración de asientos faltantes venta/cobranza** (REC-20): FA/FB/FC/FE/FM/REC en `cuentacliente` sin asiento; conceptos 1/5; gating `punto_venta.cont`; marca `REGEN auditoria (bug factura/REC sin asiento)`. Mismo paso de apply que REC-18 (antes de anulaciones/saldos).
+3. **Reparación de anulaciones incompletas** (REC-19): hallazgos de `integridad_anulacion_compra_pago` — ver tabla problema→remedio más abajo; sección UI «Reparación de anulaciones» con `anulaciones_reparables` / `anulaciones_bloqueadas`.
+4. **Concepto anulación incoherente** (REC-07 / REC-08): contra-asientos con `id_concepto_asiento` ≠ `id_concepto_anul` del original; items `accion=update`, `campo=id_concepto_asiento`, `check_id=concepto_anulacion_incoherente`, `referencia=H05`.
+5. **Filas saldo faltantes**: cuentas con movimientos sin fila en `cont_ejercicio_saldo_cta` / `cont_periodo_saldo_cta`; items `accion=insert`, `check_id=cuentas_sin_fila_saldo`, `referencia=H10` / `H17`.
+6. **Reconstrucción de saldos** (REC-17): modelo sin arrastre, Σ firmada de **todas** las filas de `cont_asiento`; `accion=update`, `check_id=saldo_*_vs_diario`, `referencia=H53`.
 
 Respeta `alcance_recompute` (`ejercicio_seleccionado`, `ejercicio_activo`, `historico`) y `ejercicios_cerrados=no_tocar` (items marcados `excluido=True`, motivo `ejercicio_cerrado`).
+
+### REC-19 — Problema → remedio (anulaciones compra/pago)
+
+| Problema | Remedio auto-apply | Acción plan |
+|----------|-------------------|-------------|
+| `falta_marcador_cuentaproveedor_cm0` | INSERT marcador `CodigoMovimiento=0`, `Detalle="Anulacion - …"`, `codigo_movimiento_anul=cm` | `insert_marcador` |
+| `asiento_original_no_anulado` | UPDATE `cont_asiento` del cm → `anulado='Si'` (solo si hay renglones pendientes) | `marcar_original_anulado` |
+| `falta_contra_asiento` | INSERT contra (concepto 4/8, debe/haber invertidos, cm nuevo); requiere asiento original | `insert_contra_asiento` |
+| `contra_no_invierte_original` | **Excluido** (revisión manual) | `bloqueado` |
+
+Marca trazable en renglones del contra: `REGEN auditoria (anulacion incompleta)`. Backup incluye `cuentaproveedor`. Si el comprobante anulado no tiene filas en `cont_asiento`, el check puede reportar `falta_contra_asiento` pero el dry-run **no** propone contra (no hay original que invertir).
 
 ### Estructura de un item del plan
 
@@ -184,7 +214,7 @@ Respeta `alcance_recompute` (`ejercicio_seleccionado`, `ejercicio_activo`, `hist
 }
 ```
 
-Para saldos desincronizados (paso 4): `tabla=cont_ejercicio_saldo_cta`, `accion=update`, `valor_anterior`/`valor_nuevo`/`delta` numéricos en string, `check_id=saldo_ejercicio_vs_diario`, `referencia=H53`.
+Para saldos desincronizados (paso 6): `tabla=cont_ejercicio_saldo_cta`, `accion=update`, `valor_anterior`/`valor_nuevo`/`delta` numéricos en string, `check_id=saldo_ejercicio_vs_diario`, `referencia=H53`.
 
 Para filas faltantes (paso 3): `accion=insert`, `valor_anterior=null`, `check_id=cuentas_sin_fila_saldo`, `referencia=H10`.
 
@@ -221,7 +251,7 @@ En `plan.backups_propuestos`: nombres simulados `{tabla}_bkp_{YYYYMMDD_HHMMSS}` 
 
 - GET `/contabilidad/auditoria/dry-run/?base_empresa=administranet89&id_ejercicio=7`
 - JSON: `?format=json` — CSV/Excel: `?format=csv` / `?format=xlsx` (`contabilidad_audit/services/export.py`: `exportar_dry_run_csv`, `exportar_dry_run_xlsx`)
-- Plantilla: `auditoria_dry_run.html` (canon reportes; muestra guards, impacto, muestra de items; **sin** botón apply)
+- Plantilla: `auditoria_dry_run.html` (canon reportes; guards, impacto, sección anulaciones reparables/bloqueadas; enlace a apply si hay permiso)
 
 ### Tests Fase 2
 
@@ -252,7 +282,7 @@ Equivalente vía catálogo: provider `contabilidad_audit_correccion_log` en `cor
 
 | Guard | Verificación |
 |-------|----------------|
-| Producción | `settings.ENVIRONMENT in ('production','produccion')` |
+| Entorno | Cualquiera (development incluido para pruebas); ya no se exige `ENVIRONMENT=production` |
 | Permiso | `contabilidad.auditoria.corregir` (flag `tiene_permiso_corregir` desde vista) |
 | Plan | `PlanCorreccion.estado='propuesto'`, TTL, `config_hash`, `data_fingerprint` |
 | Backup | `CREATE TABLE {tabla}_bkp_{timestamp} AS SELECT * FROM {tabla}` antes de DML |
@@ -263,20 +293,26 @@ Equivalente vía catálogo: provider `contabilidad_audit_correccion_log` en `cor
 1. `INSERT cont_audit_correccion_lote`
 2. `SELECT … FOR UPDATE` contadores/filas objetivo
 3. Re-validación `data_fingerprint`
-4. Regeneración asientos (`cont_asiento` INSERT, REC-18, agrupados por `codigo_movimiento`)
-5. **Paso 2** — `concepto_anulacion_incoherente`: `UPDATE cont_asiento SET id_concepto_asiento=…` con re-validación del valor anterior
-6. **Paso 3** — `cuentas_sin_fila_saldo`: `INSERT` filas faltantes en `cont_ejercicio_saldo_cta` / `cont_periodo_saldo_cta` (idempotente si la fila ya existe)
-7. **Paso 4** — `saldo_ejercicio_vs_diario` / `saldo_periodo_vs_diario`: `UPDATE` recompute maestro sobre filas existentes (REC-17)
-8. `INSERT cont_audit_correccion` por mutación
-9. `COMMIT` → `PlanCorreccion.estado='aplicado'`
+4. **REC-18 / REC-20** — regeneración asientos huérfanos compra y venta (`cont_asiento` INSERT)
+5. **REC-19** — reparación anulaciones: marcador → marcar original → INSERT contra
+6. **Concepto anulación** — `UPDATE cont_asiento SET id_concepto_asiento=…`
+7. **Filas saldo** — `INSERT` en `cont_ejercicio_saldo_cta` / `cont_periodo_saldo_cta`
+8. **Recompute saldos** — `UPDATE` maestro (REC-17)
+9. `INSERT cont_audit_correccion` por mutación
+10. `COMMIT` → `PlanCorreccion.estado='aplicado'`
 
-NO se ejecuta el paso 4 antes de completar 2–3 cuando el plan los incluye.
+NO se ejecuta el recompute de saldos antes de completar regen/repair/concepto/INSERT saldo cuando el plan los incluye.
 
-Excluidos del auto-apply: `cierre_resultado_no_cero`, asientos desbalanceados sin regla, `rei_recalculo`, cuentas con `saldo_pc` NULL.
+Excluidos del auto-apply: `cierre_resultado_no_cero`, `concepto_no_normal`, asientos desbalanceados sin regla, `contra_no_invierte_original`, `rei_recalculo` (salvo modo REI), cuentas con `saldo_pc` NULL.
+
+### UI lotes y rollback
+
+- Listado: `/contabilidad/auditoria/lotes/` (lectura del log legacy `cont_audit_correccion_lote`).
+- Rollback: POST a `/contabilidad/auditoria/lotes/<lote_id>/rollback/` con **modal Synap** (sin `confirm` nativo); llama `rollback_lote` con las mismas salvaguardas que apply.
 
 ### Rollback (REC-14)
 
-`rollback_lote(base_empresa, lote_id, usuario, tiene_permiso_corregir=True)` restaura desde `backups_json` del lote en **transacción única** (`DELETE` + `INSERT SELECT * FROM {tabla}_bkp_{ts}` por tabla), marca el lote `estado='revertido'` y registra evento `check_id=rollback_lote` en `cont_audit_correccion`. Exige las mismas salvaguardas que apply (`ENVIRONMENT=production` + permiso `contabilidad.auditoria.corregir`). Si falta alguna tabla backup (p. ej. purgada manualmente), aborta con error explícito sin cambios parciales.
+`rollback_lote(base_empresa, lote_id, usuario, tiene_permiso_corregir=True)` restaura desde `backups_json` del lote en **transacción única** (`DELETE` + `INSERT SELECT * FROM {tabla}_bkp_{ts}` por tabla), marca el lote `estado='revertido'` y registra evento `check_id=rollback_lote` en `cont_audit_correccion`. Exige permiso `contabilidad.auditoria.corregir` (igual que apply; disponible también en development). Si falta alguna tabla backup (p. ej. purgada manualmente), aborta con error explícito sin cambios parciales.
 
 ### Hook REI (Fase 3.C — implementado)
 
@@ -291,7 +327,7 @@ Flujo caso a caso (design §5 decisión 6):
    - Actualiza `cont_ejercicio_saldo_cta` al saldo corrido tras anulación + nuevo asiento
    - Misma transacción y log `cont_audit_correccion_*` que apply general
 
-Apply REI desde UI: `/contabilidad/auditoria/apply/?modo=rei&dry_run_id=...` (doble confirmación).
+Apply REI desde UI: `/contabilidad/auditoria/apply/?modo=rei&dry_run_id=...` (confirmación checkbox).
 
 ### REI refinado (fórmula VB6 + fix H02)
 
@@ -321,12 +357,10 @@ Fuente de verdad: `Cont_ProcesosC.frm` — `GeneraAsientoInflacion` / `generar_a
 
 Tests: `contabilidad_audit/tests/test_rei.py`, apply en `legacy_db/tests/test_cont_recalculo_apply.py`.
 
-### Vista apply — doble confirmación (3.15)
+### Vista apply — confirmación (3.15)
 
 - **GET** `/contabilidad/auditoria/apply/` — resumen del plan + formulario (no ejecuta).
-- **POST** `/contabilidad/auditoria/apply/ejecutar/` — requiere:
-  1. Checkbox «entiendo que se modificarán datos contables»
-  2. Token escrito `APLICAR-<dry_run_id>` (o frase `APLICAR DEFINITIVAMENTE`)
+- **POST** `/contabilidad/auditoria/apply/ejecutar/` — requiere checkbox «entiendo que se modificarán datos contables» (sin token escrito).
 - Pasa `tiene_permiso_corregir=True` al servicio. Muestra `lote_id`, filas afectadas o error de guard/concurrencia.
 
 ### Test integración piloto (3.17)
@@ -344,12 +378,47 @@ Variables opcionales: `SYNAP_PILOTO_BASE_EMPRESA`, `SYNAP_PILOTO_ID_EJERCICIO`. 
 ### Tests Fase 3 completos
 
 ```bash
-docker exec Synap_app python manage.py test contabilidad_audit legacy_db.tests.test_cont_recalculo_dry_run legacy_db.tests.test_cont_recalculo_apply legacy_db.tests.test_cont_recalculo_rollback legacy_db.tests.test_cont_recalculo_apply_integracion --keepdb
+docker exec Synap_app python manage.py test contabilidad_audit legacy_db.tests.test_cont_recalculo_dry_run legacy_db.tests.test_cont_recalculo_apply legacy_db.tests.test_cont_recalculo_anulaciones legacy_db.tests.test_cont_recalculo_rollback legacy_db.tests.test_cont_recalculo_apply_integracion --keepdb
 ```
+
+## Piloto administranet89 — re-run 25/07/2026 (REC-19)
+
+Entorno: MySQL `administranet89` @ `190.15.214.142` (piloto, **no** producción de cliente). Apply con contenedor `ENVIRONMENT=production` (`.env` base sigue en development). Empresa de sesión debe tener `base_empresa=administranet89`.
+
+**Autorización de escritura:** el apply del lote `L20260725_175235-16b64871` se ejecutó por **shell del agente**, **no** por la UI. La vía canónica de autorización es `/contabilidad/auditoria/apply/` (checkbox de confirmación + permiso). Ese lote fue **revertido** el 25/07/2026 a pedido del usuario (`rollback_lote`, estado `revertido`). Tablero y dry-run siguen siendo solo lectura; solo apply/rollback escriben en MySQL legacy.
+
+### Baseline (solo lectura, ejercicio 1)
+
+| Check | Diferencias |
+|-------|-------------|
+| `comprobante_compra_pago_sin_asiento` | **0** (idempotente post regeneración previa de 331) |
+| `integridad_anulacion_compra_pago` | **81** |
+| `saldo_ejercicio_vs_diario` | **90** |
+| `saldo_periodo_vs_diario` | **0** |
+
+DDL log: `apply_contabilidad_audit_correccion_log administranet89` OK. Esquema `verificar_esquema_cont` OK.
+
+### Apply vía módulo (no script CLI)
+
+1. Dry-run ej.1: **57** `insert_marcador` (0 bloqueados).
+2. Apply producción: lote `L20260725_175235-16b64871`, **60** filas afectadas.
+3. Post-apply dry-run ej.1: **0** anulaciones reparables / **0** aplicables (idempotente para el alcance).
+4. Tablero post-apply (check global, sin filtro de fecha del check): **26** residuales en `integridad_anulacion_compra_pago`:
+   - **18** `falta_contra_asiento` sin renglones en `cont_asiento` del cm → dry-run no propone contra (no hay original que invertir).
+   - **10** `falta_marcador_…` fuera del alcance `ejercicio_seleccionado` (aparecen con política `alcance_recompute=historico`; para apply hay que **persistir** esa política en UI/Postgres — mutar el dict en shell invalida `config_hash` en apply).
+5. Huérfanos: siguen en **0**. Saldos ejercicio: ~91 diffs (recompute aparte si se desea alinear; dry-run ej.1 post-repair no listó updates de saldo en esta corrida).
+
+### Gates y fuera de alcance
+
+- Apply / rollback exigen `contabilidad.auditoria.corregir` (cualquier entorno; no se bloquea por `ENVIRONMENT`).
+- **No** usar `legacy_db/scripts/cont_reconstruccion_compras_pagos.py` en este ciclo (credenciales hardcodeadas).
+- Fuera de auto-apply: `cierre_resultado_no_cero`, `concepto_no_normal`, `contra_no_invierte_original`, clave rota cm=0 (§6.9 VB6).
 
 ## Referencias
 
-- Design: `openspec/changes/contabilidad-auditoria-recalculo/design.md`
+- Design original: `openspec/changes/archive/2026-07-19-contabilidad-auditoria-recalculo/`
+- Delta REC-19: `openspec/changes/archive/2026-07-25-contabilidad-auditoria-anulaciones-apply/`
+- Spec main: `openspec/specs/contabilidad-recalculo-correccion/spec.md`
 - Hallazgos VB6: `docs/general/AUDITORIA_IMPUTACION_CONTABILIDAD_VB6.md`
 - Esquema verificado: `docs/general/INVENTARIO_ESQUEMA_CONT_AUDITORIA.md`
-- Script validado compras/pagos: `legacy_db/scripts/cont_reconstruccion_compras_pagos.py`
+- Script CLI (legado; preferir módulo Synap): `legacy_db/scripts/cont_reconstruccion_compras_pagos.py`

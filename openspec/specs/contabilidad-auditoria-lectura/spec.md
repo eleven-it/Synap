@@ -357,6 +357,30 @@ El check `comprobante_compra_pago_sin_asiento` DEBE detectar comprobantes de `cu
 
 ---
 
+### Requirement: AUD-LECT-24 — Check comprobante_venta_cobranza_sin_asiento
+
+El check `comprobante_venta_cobranza_sin_asiento` DEBE detectar comprobantes de **`cuentacliente`** (ventas y cobranzas) con `CodigoMovimiento>0` que carecen de filas en `cont_asiento` enlazadas por `cuentacliente.CodigoMovimiento = cont_asiento.codigo_movimiento`. DEBE evaluar tipos de factura de venta `FA`, `FB`, `FC`, `FE`, `FM` (concepto típico **1** Venta) y `REC` (concepto **5** Cobranza). DEBE excluir anulados (`Anulado='Si'`) y marcadores `CodigoMovimiento=0`. DEBE aplicar gating de contabilidad **solo** `punto_venta.cont='Si'` (clientes); NO DEBE usar `sucursales.cont` como criterio para `cuentacliente` (ese gating aplica a proveedores/`cuentaproveedor`). NO DEBE mezclar filas de `cuentaproveedor` (compra). DEBE mapear H54 (venta) y H55 (REC). NO DEBE escribir en legacy (la regeneración es REC-20 en el motor de corrección). Fuera de alcance de este check: integridad de anulación venta/cobranza, NC/ND.
+
+#### Scenario: Factura de venta sin asiento
+
+- **Dado** un `FB` en `cuentacliente` no anulado, `CodigoMovimiento>0`, PV o sucursal con contabilidad activa, sin filas en `cont_asiento`
+- **Cuando** se ejecuta `comprobante_venta_cobranza_sin_asiento`
+- **Entonces** se reporta el `CodigoMovimiento` con referencia `H54`
+
+#### Scenario: REC sin asiento
+
+- **Dado** un `REC` en `cuentacliente` no anulado, `CodigoMovimiento>0`, con gating contable activo, sin filas en `cont_asiento`
+- **Cuando** se ejecuta `comprobante_venta_cobranza_sin_asiento`
+- **Entonces** se reporta con referencia `H55`
+
+#### Scenario: Marcador CodigoMovimiento=0 excluido
+
+- **Dado** un registro de `cuentacliente` con `CodigoMovimiento=0` (marcador de anulación)
+- **Cuando** se ejecuta `comprobante_venta_cobranza_sin_asiento`
+- **Entonces** NO se reporta como huérfano
+
+---
+
 ### Requirement: AUD-LECT-23 — Check integridad_anulacion_compra_pago
 
 El check `integridad_anulacion_compra_pago` DEBE validar que toda anulación de compra/pago esté correctamente registrada en partida doble. Para cada comprobante original con `Anulado='Si'`, DEBE verificar: (a) que exista un registro marcador en `cuentaproveedor` con `CodigoMovimiento=0` y `codigo_movimiento_anul = CodigoMovimiento` del original; (b) que las filas del asiento original (`cont_asiento.codigo_movimiento = CodigoMovimiento`) estén marcadas `anulado='Si'`; (c) que exista un **contra-asiento** (`cont_asiento.codigo_movimiento_anul = CodigoMovimiento` del original, `id_concepto_asiento IN (4,8)`, `anulado='No'`) cuyos importes **inviertan** exactamente el asiento original (Σdebe/Σhaber espejados). DEBE reportar como diferencia toda anulación incompleta (falta contra-asiento, o contra no balancea con el original). DEBE mapear la sección §6.8 del informe. NO DEBE escribir en legacy.
