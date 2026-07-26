@@ -40,7 +40,6 @@ Dos mejoras coordinadas para alinear MPR con la planta textil:
 | Validación CC | `2da + desperdicio ≤ base` (UI Alpine + servidor) |
 | Bloqueo parte | Si un turno tiene CC en `mpr_transicion_lote` (fecha+turno), ese turno del parte queda bloqueado |
 | Corrección post-CC | No se edita ni se revierte en la grilla CC. Reclasificar Semi/2da/Desperdicio vía **Ingreso de movimiento de stock** → transferencia interna (AdministraNET) |
-| Arrastre | Sección separada turnos anteriores |
 | Clasificación parcial | Sí |
 | Parte sin operario | Bloquear clasificación por rendimiento |
 | Reportes | Mismo release que la grilla |

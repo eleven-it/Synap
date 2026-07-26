@@ -99,17 +99,6 @@ Si el parte del artículo en fecha/turno no tiene líneas con `id_operario` vál
 
 ---
 
-### Requirement: Arrastre de turnos anteriores
-
-El sistema SHALL mostrar en sección separada («Pendiente de turnos anteriores») los pares (artículo, operario) con parte en fechas/turnos anteriores no totalmente clasificados, sin mezclarlos con el turno actual.
-
-#### Scenario: Arrastre visible
-
-- **WHEN** quedó pendiente de clasificar del turno Noche del día anterior
-- **THEN** aparece en la sección de arrastre con fecha y turno de origen legibles (dd/MM/yyyy)
-
----
-
 ### Requirement: Presentación docenas en clasificación
 
 Los inputs y columnas de lectura de la grilla de clasificación SHALL respetar el toggle global `mpr_presentacion_cantidad`; en modo docenas los inputs principales son docenas.

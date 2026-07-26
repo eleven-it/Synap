@@ -29,26 +29,6 @@
 
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
 
-        {% if arrastre %}
-        <div class="mb-3 flex-shrink-0 overflow-hidden rounded-lg border border-teal-200 bg-teal-50/80 p-4 shadow-sm dark:border-teal-800/50 dark:bg-teal-950/25 sm:mb-4">
-            <h2 class="mb-2 flex items-center gap-2 text-sm font-semibold text-teal-900 dark:text-teal-100">
-                <span class="material-icons text-base text-teal-600 dark:text-teal-400" aria-hidden="true">history</span>
-                Pendiente de turnos anteriores
-            </h2>
-            <ul class="space-y-1.5 text-sm text-teal-800 dark:text-teal-200">
-                {% for a in arrastre %}
-                <li>
-                    <a href="?fecha={{ a.fecha|date:'d/m/Y' }}&amp;turno_id={{ a.id_mpr_turno }}&amp;presentacion={{ modo_presentacion|default:'docenas' }}"
-                       class="inline-flex items-center gap-1.5 rounded-md font-medium text-teal-700 underline decoration-teal-300 underline-offset-2 transition-colors hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-100">
-                        <span class="material-icons text-sm" aria-hidden="true">open_in_new</span>
-                        {{ a.fecha|date:"d/m/Y" }} — {{ a.turno_nombre }}
-                    </a>
-                </li>
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-
         {% if not requiere_fecha and not filas_vacio %}
         <form method="post" action="{{ url_registrar }}"
               id="form-clasificacion-produccion"

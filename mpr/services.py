@@ -18604,7 +18604,6 @@ def construir_grilla_clasificacion_produccion(
     vacio: Dict[str, Any] = {
         "filas": [],
         "filas_vacio": True,
-        "arrastre": [],
         "bloqueos": [],
         "requiere_fecha": fecha is None,
         "requiere_fecha_turno": fecha is None,
@@ -18612,14 +18611,10 @@ def construir_grilla_clasificacion_produccion(
     if not (base_empresa or "").strip():
         return vacio
     if fecha is None:
-        from mpr.repositories.parte import listar_pares_fecha_turno_con_pendiente_clasificacion
-
-        vacio["arrastre"] = listar_pares_fecha_turno_con_pendiente_clasificacion(base_empresa)
         return vacio
 
     from mpr.repositories.parte import (
         acumular_celdas_clasificacion_maquina_turno,
-        listar_pares_fecha_turno_con_pendiente_clasificacion,
     )
     from mpr.repositories.transicion_lote import (
         sumar_clasificado_desglose_por_operario_fecha_turno,
@@ -18801,20 +18796,9 @@ def construir_grilla_clasificacion_produccion(
                 "mensaje": "Corregí el parte: falta desglose por operario para clasificar rendimiento.",
             })
 
-    arrastre_raw = listar_pares_fecha_turno_con_pendiente_clasificacion(
-        base_empresa,
-        excluir_fecha=fecha if turno_id is not None else None,
-        excluir_turno=int(turno_id) if turno_id is not None else None,
-    )
-    if turno_id is None:
-        arrastre = [a for a in arrastre_raw if a.get("fecha") != fecha]
-    else:
-        arrastre = arrastre_raw
-
     return {
         "filas": filas_raw,
         "filas_vacio": len(filas_raw) == 0,
-        "arrastre": arrastre,
         "bloqueos": bloqueos,
         "requiere_fecha": False,
         "requiere_fecha_turno": False,

@@ -205,6 +205,22 @@ location = /sw.js {
 
 ---
 
+## Manuales de usuario (FAB volver a la app)
+
+Los HTML de manual (`scripts/generar_manuales_html.py` → `*/static/*/manuales/manual_usuario_*.html`) incluyen un botón flotante **«Volver a la app»**:
+
+- **Visible solo en PWA** (`display-mode` standalone / iOS `navigator.standalone` / `SynapPwa.isPwaStandalone()`).
+- En navegador normal permanece oculto.
+- Al pulsar: `history.back()` si hay historial; si no navega, fallback al hub del módulo (`/mpr/`, `/stock/inventario/`, `/ecom/mayoristapp/pedidos/`, `/contabilidad/auditoria/`).
+
+Regenerar tras cambiar el generador:
+
+```bash
+python3 scripts/generar_manuales_html.py
+```
+
+---
+
 ## Tests
 
 ```bash

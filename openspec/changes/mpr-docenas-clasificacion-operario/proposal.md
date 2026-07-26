@@ -43,7 +43,7 @@ El clasificador registra en Synap el reparto de calidad **por bulto de operario*
 | P0-6 | Pendiente por operario = parte(fecha,turno) − clasificado(operario) |
 | P0-7 | Validaciones: por fila y global stock Producción |
 | P0-8 | Bloqueo si parte sin desglose por operario |
-| P0-9 | Sección **Pendiente turnos anteriores** (arrastre visible) |
+| P0-9 | ~~Sección Pendiente turnos anteriores~~ — **retirada** 26/07/2026 (sin utilidad vs. costo de UI) |
 | P0-10 | Reporte **Producción → Por operario** ampliado (semi, 2da, scrap, %) |
 | P0-11 | Tests servicio, POST, esquema, reporte |
 | P0-12 | Docs `docs/mpr/` |

@@ -104,42 +104,34 @@ def _add_messages(request):
 
 class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
     """La grilla lista filas (artículo × operario) con pendiente de clasificación."""
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
-    def test_sin_fecha_requiere_seleccion(self, _arr):
+    def test_sin_fecha_requiere_seleccion(self):
         resultado = construir_grilla_clasificacion_produccion(EMPRESA)
         self.assertTrue(resultado["requiere_fecha"])
         self.assertTrue(resultado["requiere_fecha_turno"])
         self.assertEqual(resultado["filas"], [])
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    def test_grilla_sin_turno_lista_filas(self, _fetch, mock_celdas, _cls, _desglose, _arr):
+    def test_grilla_sin_turno_lista_filas(self, _fetch, mock_celdas, _cls, _desglose):
         mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
         resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ)
         self.assertFalse(resultado["filas_vacio"])
         self.assertEqual(len(resultado["filas"]), 1)
         self.assertEqual(resultado["filas"][0]["id_mpr_turno"], TURNO_ID)
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    def test_con_turno_id_filtra_acumular(self, _fetch, mock_celdas, _cls, _desglose, _arr):
+    def test_con_turno_id_filtra_acumular(self, _fetch, mock_celdas, _cls, _desglose):
         mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
         construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
         mock_celdas.assert_called_once_with(EMPRESA, FECHA_OBJ, TURNO_ID)
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    def test_rowspan_maquina_y_articulo_coherentes(self, _fetch, mock_celdas, _cls, _desglose, _arr):
+    def test_rowspan_maquina_y_articulo_coherentes(self, _fetch, mock_celdas, _cls, _desglose):
         mock_celdas.return_value = {
             (1, 42, ID_OPERARIO, TURNO_ID): {
                 "cantidad": Decimal("10"),
@@ -160,14 +152,12 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
         self.assertTrue(filas[0]["show_maquina"])
         self.assertEqual(filas[0]["rowspan_maquina"], 2)
         self.assertFalse(filas[1]["show_maquina"])
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
     @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(), _pivot_con_produccion()))
-    def test_retorna_fila_con_pendiente_operario(self, _pivot, _fetch, mock_celdas, _cls, _desglose, _arr):
+    def test_retorna_fila_con_pendiente_operario(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
         mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
         resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
         self.assertFalse(resultado["filas_vacio"])
@@ -176,8 +166,6 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
         self.assertEqual(fila["id_articulo"], 42)
         self.assertEqual(fila["id_operario"], ID_OPERARIO)
         self.assertAlmostEqual(fila["disponible"], 15.0)
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno", return_value={})
@@ -190,8 +178,6 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
         resultado = construir_grilla_clasificacion_produccion("")
         self.assertTrue(resultado["filas_vacio"])
         self.assertEqual(resultado["filas"], [])
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch(
         "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
         return_value={(42, ID_OPERARIO): {"semi": Decimal("6"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
@@ -203,7 +189,7 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
-    def test_pendiente_resta_clasificado_previo(self, mock_pivot, _fetch, mock_celdas, _cls, _desglose, _arr):
+    def test_pendiente_resta_clasificado_previo(self, mock_pivot, _fetch, mock_celdas, _cls, _desglose):
         mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
         pivot = _pivot_con_produccion(id_art=42, saldo=15.0)
         mock_pivot.return_value = (pivot, pivot)
@@ -211,13 +197,11 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
         self.assertAlmostEqual(resultado["filas"][0]["base_clasificable"], 9.0)
         self.assertAlmostEqual(resultado["filas"][0]["disponible"], 9.0)
         self.assertAlmostEqual(resultado["filas"][0]["parte"], 15.0)
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    def test_grilla_expone_parte_y_base_editable(self, _fetch, mock_celdas, _cls, _desglose, _arr):
+    def test_grilla_expone_parte_y_base_editable(self, _fetch, mock_celdas, _cls, _desglose):
         mock_celdas.return_value = _celdas_parte_mock(cantidad=24.0)
         resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
         fila = resultado["filas"][0]
@@ -226,8 +210,6 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
         self.assertEqual(fila["ini_seg2da"], 0)
         self.assertEqual(fila["ini_scrap"], 0)
         self.assertFalse(fila["solo_lectura"])
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch(
         "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
         return_value={(42, ID_OPERARIO): {"semi": Decimal("15"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
@@ -238,7 +220,7 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
     )
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
-    def test_fila_completa_solo_lectura_con_desglose(self, _fetch, mock_celdas, _cls, _desglose, _arr):
+    def test_fila_completa_solo_lectura_con_desglose(self, _fetch, mock_celdas, _cls, _desglose):
         mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
         resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
         fila = resultado["filas"][0]
@@ -321,10 +303,8 @@ class TestClasificacionProduccionViewGet(TestCase):
             request.user = MagicMock(is_authenticated=False)
         _add_messages(request)
         return ClasificacionProduccionView.as_view()(request)
-
-    @patch("mpr.repositories.parte.listar_pares_fecha_turno_con_pendiente_clasificacion", return_value=[])
     @patch("mpr.services.listar_turnos", return_value=[])
-    def test_get_200_con_contexto(self, _turnos, _arr):
+    def test_get_200_con_contexto(self, _turnos):
         resp = self._get()
         self.assertEqual(resp.status_code, 200)
 

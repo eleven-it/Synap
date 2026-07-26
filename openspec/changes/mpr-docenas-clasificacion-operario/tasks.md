@@ -24,7 +24,7 @@
 ## Phase 3: Grilla clasificación por operario
 
 - [ ] 3.1 `construir_grilla_clasificacion_operario` (pendiente por artículo × operario, fecha, turno)
-- [ ] 3.2 Sección arrastre turnos anteriores
+- [x] 3.2 Sección arrastre turnos anteriores — **retirada** (26/07/2026): producto decidió no mostrar el chequeo; sin utilidad operativa frente al costo de UI.
 - [ ] 3.3 Validaciones por fila y global stock Producción
 - [ ] 3.4 Bloqueo si parte sin operarios
 - [ ] 3.5 Plantilla `clasificacion_produccion.html` (grilla nueva)

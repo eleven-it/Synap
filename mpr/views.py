@@ -6738,7 +6738,6 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
         grilla_vacia = {
             "filas": [],
             "filas_vacio": True,
-            "arrastre": [],
             "bloqueos": [],
             "requiere_fecha": fecha_obj is None,
             "requiere_fecha_turno": fecha_obj is None,
@@ -6788,7 +6787,6 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
             "turnos_activos": listar_turnos(base_empresa, solo_activos=True) if base_empresa else [],
             "filas": grilla.get("filas", []),
             "filas_vacio": grilla.get("filas_vacio", True),
-            "arrastre": grilla.get("arrastre", []),
             "bloqueos": grilla.get("bloqueos", []),
             "requiere_fecha": grilla.get("requiere_fecha", grilla.get("requiere_fecha_turno", True)),
             "requiere_fecha_turno": grilla.get("requiere_fecha_turno", grilla.get("requiere_fecha", True)),
