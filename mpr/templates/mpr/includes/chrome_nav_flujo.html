@@ -1,9 +1,4 @@
-{# Atajos de navegación del flujo planta — orden y colores canónicos.
-   current: tablero_prod | parte | cc
-   Opcional: fecha_str, turno_id (para deep-link Parte/CC)
-   Orden: Tablero prod → Parte → CC → Tablero KPI → (ayuda va fuera de este include)
-   Colores: prod=emerald · parte=púrpura · cc=teal · kpi=ámbar
-#}
+{# Atajos flujo: tablero_prod|parte|cc; fecha_str/turno_id opc.; orden prod→parte→cc→KPI; colores emerald/púrpura/teal/ámbar. #}
 {% with cur=current|default:"tablero_prod" %}
 {% if cur != "tablero_prod" %}
 <a href="{% url 'mpr:tablero_produccion' %}"
