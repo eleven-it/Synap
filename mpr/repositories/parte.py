@@ -741,56 +741,6 @@ def acumular_celdas_clasificacion_maquina_turno(
     return resultado
 
 
-def listar_pares_fecha_turno_con_pendiente_clasificacion(
-    base_empresa: str,
-    *,
-    excluir_fecha: Optional[date] = None,
-    excluir_turno: Optional[int] = None,
-) -> List[Dict[str, Any]]:
-    """Pares fecha+turno con parte registrado y clasificación pendiente (arrastre)."""
-    from mpr.repositories.transicion_lote import sumar_clasificado_por_operario_fecha_turno
-
-    base = (base_empresa or "").strip()
-    if not base:
-        return []
-    pares: List[Dict[str, Any]] = []
-    with mysql_cursor(base, dict_cursor=True) as cursor:
-        cursor.execute(
-            """
-            SELECT DISTINCT p.fecha_produccion, p.id_mpr_turno, t.nombre AS turno_nombre
-            FROM mpr_parte p
-            INNER JOIN mpr_turno t ON t.id_mpr_turno = p.id_mpr_turno
-            ORDER BY p.fecha_produccion DESC, p.id_mpr_turno DESC
-            """
-        )
-        rows = cursor.fetchall() or []
-    for row in rows:
-        f = to_date_or_none(row.get("fecha_produccion"))
-        tid = to_int_or_none(row.get("id_mpr_turno"))
-        if f is None or tid is None:
-            continue
-        if excluir_fecha == f and excluir_turno == tid:
-            continue
-        celdas = acumular_celdas_grilla(base, f, tid)
-        if not celdas:
-            continue
-        clasif = sumar_clasificado_por_operario_fecha_turno(base, f, tid)
-        pendiente_total = Decimal("0")
-        for clave, qty in celdas.items():
-            cls = clasif.get(clave, Decimal("0"))
-            resto = qty - cls
-            if resto > 0:
-                pendiente_total += resto
-        if pendiente_total > 0:
-            pares.append({
-                "fecha": f,
-                "id_mpr_turno": tid,
-                "turno_nombre": str_or_default(row.get("turno_nombre"), "-"),
-                "pendiente_unidades": float(pendiente_total),
-            })
-    return pares
-
-
 def listar_partes_trazabilidad(
     base_empresa: str,
     id_lista_produccion: int,

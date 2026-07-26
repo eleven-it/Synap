@@ -86,7 +86,8 @@ CONTABILIDAD_ALIASES: dict[str, str] = {
     "tablero": "3. Tablero de auditoría",
     "tablero-auditoria": "3. Tablero de auditoría",
     "huerfanos": "Comprobantes sin asiento (huérfanos)",
-    "dry-run": "4. Dry-run (plan de corrección)",
+    "dry-run": "4. Diagnóstico de corrección (plan)",
+    "diagnostico": "4. Diagnóstico de corrección (plan)",
     "aplicar": "5. Aplicar corrección",
     "apply": "5. Aplicar corrección",
     "lotes": "6. Lotes aplicados y rollback",
@@ -149,21 +150,25 @@ MODULE_CONFIG: dict[str, dict[str, str | Path]] = {
         "module_label": "Producción",
         "static_logo": "/static/mpr/manuales/logo-administranet.png",
         "logo_path": ROOT / "mpr/static/mpr/manuales/logo-administranet.png",
+        "return_url": "/mpr/",
     },
     "stock": {
         "module_label": "Stock",
         "static_logo": "/static/stock/manuales/logo-administranet.png",
         "logo_path": ROOT / "stock/static/stock/manuales/logo-administranet.png",
+        "return_url": "/stock/inventario/",
     },
     "ecom": {
         "module_label": "Ventas",
         "static_logo": "/static/ecom/manuales/logo-administranet.png",
         "logo_path": ROOT / "ecom/static/ecom/manuales/logo-administranet.png",
+        "return_url": "/ecom/mayoristapp/pedidos/",
     },
     "contabilidad": {
         "module_label": "Contabilidad",
         "static_logo": "/static/contabilidad_audit/manuales/logo-administranet.png",
         "logo_path": ROOT / "contabilidad_audit/static/contabilidad_audit/manuales/logo-administranet.png",
+        "return_url": "/contabilidad/auditoria/",
     },
 }
 
@@ -309,6 +314,37 @@ h2:target, h3:target, h4:target {
   .layout { flex-direction: column; }
   .main { margin-left: 0; padding: 1.25rem; }
 }
+/* FAB «Volver a la app»: oculto por defecto; JS lo muestra solo en PWA standalone */
+.pwa-back-fab {
+  display: none;
+  position: fixed;
+  z-index: 300;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 1.1rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-dark);
+  color: #fff;
+  font: 600 0.875rem/1.2 var(--font);
+  text-decoration: none;
+  box-shadow: 0 4px 18px rgba(30, 58, 76, 0.35);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pwa-back-fab.is-visible { display: inline-flex; }
+.pwa-back-fab:hover,
+.pwa-back-fab:focus-visible {
+  background: #152a36;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pwa-back-fab svg { flex-shrink: 0; }
+@media print {
+  .pwa-back-fab { display: none !important; }
+}
 """
 
 HASH_JS = """
@@ -328,6 +364,69 @@ HASH_JS = """
     highlightHash();
   }
   window.addEventListener('hashchange', highlightHash);
+})();
+"""
+
+PWA_BACK_JS = """
+(function () {
+  function matchMode(mode) {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(display-mode: ' + mode + ')').matches);
+    } catch (e) { return false; }
+  }
+  function isLivePwa() {
+    if (matchMode('standalone') || matchMode('fullscreen') || matchMode('minimal-ui') || matchMode('window-controls-overlay')) {
+      return true;
+    }
+    if (window.navigator && window.navigator.standalone === true) return true;
+    try {
+      if ((document.referrer || '').indexOf('android-app://') === 0) return true;
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+  function isPwa() {
+    if (isLivePwa()) return true;
+    if (window.SynapPwa && typeof window.SynapPwa.isPwaStandalone === 'function') {
+      return !!window.SynapPwa.isPwaStandalone();
+    }
+    return false;
+  }
+  function initFab() {
+    var fab = document.getElementById('pwa-back-app');
+    if (!fab || fab.dataset.pwaReady === '1') return;
+    if (!isPwa()) return;
+    fab.dataset.pwaReady = '1';
+    fab.classList.add('is-visible');
+    fab.addEventListener('click', function (ev) {
+      var fallback = fab.getAttribute('href') || '/core/dashboard/';
+      if (window.history.length > 1) {
+        ev.preventDefault();
+        var left = false;
+        var markLeft = function () { left = true; };
+        window.addEventListener('pagehide', markLeft, { once: true });
+        window.addEventListener('blur', markLeft, { once: true });
+        window.history.back();
+        window.setTimeout(function () {
+          if (!left) {
+            window.location.href = fallback;
+          }
+        }, 450);
+      }
+    });
+  }
+  function boot() {
+    initFab();
+    // Si pwa-standalone.js llega tarde, reintentar una vez
+    if (!document.getElementById('pwa-back-app') || document.getElementById('pwa-back-app').classList.contains('is-visible')) {
+      return;
+    }
+    window.setTimeout(initFab, 200);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
 })();
 """
 
@@ -552,6 +651,7 @@ def build_html(
     module_label = str(cfg["module_label"])
     static_logo = str(cfg["static_logo"])
     logo_path = Path(cfg["logo_path"])
+    return_url = str(cfg.get("return_url") or "/")
     logo_src = _logo_data_uri(logo_path)
     today = date.today().strftime("%d/%m/%Y")
     return f"""<!DOCTYPE html>
@@ -597,7 +697,18 @@ def build_html(
       {body}
     </main>
   </div>
+  <a id="pwa-back-app"
+     class="pwa-back-fab"
+     href="{html.escape(return_url, quote=True)}"
+     aria-label="Volver a la aplicación Synap">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M15 18l-6-6 6-6"/>
+    </svg>
+    Volver a la app
+  </a>
+  <script src="/static/login/pwa-standalone.js"></script>
   <script>{HASH_JS}</script>
+  <script>{PWA_BACK_JS}</script>
 </body>
 </html>
 """
