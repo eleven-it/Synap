@@ -42,15 +42,16 @@ Ver §6.
 | Altura controles | **`h-9`** (36px) canónica = búsqueda «Código o descripción…» / Tablero. Inputs, selects, atajos `h-9 w-9`, CTAs y toggles Pack\|Par / Docenas\|Pares comparten esa altura (`text-sm` en campos). |
 | Layout viewport | Tablero, Parte y CC: `section` con **`h-[calc(100dvh-4.5rem)]`**, chrome **`flex-shrink-0`**, zona de datos **`flex-1 min-h-0 overflow-hidden`**. La grilla scrollea dentro. Chrome además **`sticky top-14 md:top-16 z-40`** (bajo el navbar fijo) por si scrollea el documento (padding de `base_app`). Footer «Guardar» fijo al pie de la tarjeta. |
 
-## 3.1 Alcance chrome compartido (flujo planta)
+## 3.1 Alcance chrome compartido (flujo planta + config operativa)
 
 Misma barra densa en:
 
 1. `tablero_produccion.html`
 2. `parte_produccion.html`
 3. `clasificacion_encabezado.html` (+ sin migas en `clasificacion_produccion.html`)
+4. `maquinas_carga_articulos.html` (Asignar artículo a máquina — config planta; sin migas; filtros búsqueda/línea en chrome; chips de artículo en formato multiselección/`tags-filter`, color púrpura)
 
-Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual).
+Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual; en Asignar artículo muestra los cuatro atajos).
 
 | Destino | Color | Ícono |
 |---------|-------|-------|

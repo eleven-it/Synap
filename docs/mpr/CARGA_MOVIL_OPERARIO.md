@@ -133,6 +133,9 @@ Pantalla de escritorio para habilitar/deshabilitar artículos en la grilla de m�
 - Filtro MVP por línea: query `?id_linea=<id_mpr_linea>`.
 - Búsqueda predictiva de artículos (API GET `/mpr/maquinas/api/articulos/buscar/`): solo
   artículos con `tipo_art_fab = 'Fabricado'`.
+- En la grilla, los vigentes se muestran como **chips de multiselección** (pill
+  `rounded-full` púrpura + input en el mismo contenedor tipo `tags-filter`), no como
+  lista de tags aparte del campo «Agregar».
 - Habilitar/deshabilitar vía API POST `/mpr/maquinas/api/articulos/accion/` (`accion`:
   `habilitar` | `deshabilitar`). Deshabilitar cierra la vigencia (`vigencia_hasta = hoy`);
   no hay undo silencioso ni cierre automático diario.

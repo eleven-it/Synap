@@ -148,109 +148,110 @@
             idLineaFiltro: '{% if id_linea_filtro %}{{ id_linea_filtro }}{% endif %}',
             filtroLineaLabel: '{% if id_linea_filtro %}{% for linea in lineas %}{% if linea.id == id_linea_filtro %}{{ linea.nombre|escapejs }}{% endif %}{% endfor %}{% else %}{% endif %}'
          })" x-init="init()">
-<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10 print:hidden">
-    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5 print:hidden">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
-        {# Migas de pan #}
-        <nav class="mb-6 flex items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
-            <ol class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                <li>
-                    <a href="{% url 'mpr:tablero' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Producción</a>
-                </li>
-                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
-                <li>
-                    <a href="{% url 'mpr:maquinas_list' %}" class="rounded font-medium text-purple-600 transition-colors hover:text-purple-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:text-purple-400 dark:hover:text-purple-300 dark:focus-visible:ring-offset-gray-900">Máquinas</a>
-                </li>
-                <li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
-                <li><span class="font-medium text-gray-800 dark:text-gray-200" aria-current="page">Asignar artículo a máquina</span></li>
-            </ol>
-            {% include "includes/btn_manual_ayuda.html" with url_name="mpr:manual_usuario" seccion="asignar-articulo-maquina" only %}
-        </nav>
+        {# Chrome denso slate-800 — sticky bajo navbar (canon Tablero / Parte / CC) #}
+        <div class="sticky top-14 z-40 mb-3 flex-shrink-0 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16">
+            <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
+                <header class="flex flex-wrap items-end gap-x-3 gap-y-2">
+                    <h1 class="shrink-0 self-center text-lg font-bold tracking-tight text-white sm:text-xl">Asignar artículo a máquina</h1>
 
-        {# Encabezado #}
-        <header class="mb-6 flex flex-col gap-4 border-b border-gray-200/80 pb-6 dark:border-gray-700/80 lg:flex-row lg:items-end lg:justify-between">
-            <div class="min-w-0 max-w-3xl">
-                <h1 class="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Asignar artículo a máquina</h1>
-            </div>
-            <div class="flex shrink-0 flex-col items-start gap-2 lg:items-end">
-                <div class="flex flex-wrap items-center gap-2">
-                    <button type="button" @click="imprimirPlanilla()"
-                            class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:bg-purple-600 dark:hover:bg-purple-500 dark:focus-visible:ring-offset-gray-900"
-                            title="Imprime la planilla de Control de Calidad (A4 horizontal)">
-                        <span class="material-icons text-lg" aria-hidden="true">print</span>
-                        Imprimir Control de Calidad
-                    </button>
-                    <a href="{% url 'mpr:maquinas_list' %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-800 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700 dark:focus-visible:ring-offset-gray-900">
-                        <span class="material-icons text-lg" aria-hidden="true">arrow_back</span>
-                        Volver a Máquinas
-                    </a>
-                </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400">Fecha de hoy: <span class="font-semibold text-gray-700 dark:text-gray-200">{{ fecha_hoy|date:"d/m/Y" }}</span></p>
-            </div>
-        </header>
-
-        {# Barra de filtros #}
-        <div class="sticky top-0 z-20 mb-4 rounded-2xl border border-gray-200/90 bg-white/95 p-4 shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
-                    {# Buscador predictivo de máquinas (client-side) #}
-                    <label class="flex min-w-0 flex-col gap-1">
-                        <span class="text-xs font-semibold text-gray-600 dark:text-gray-300">Buscar máquina</span>
-                        <span class="relative flex items-center">
-                            <span class="material-icons pointer-events-none absolute left-2.5 text-base text-gray-400" aria-hidden="true">search</span>
-                            <input type="search" x-model="filtroMaquina" placeholder="Código o nombre…" autocomplete="off"
-                                   class="min-h-10 w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-8 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500 sm:w-64"/>
-                            <button type="button" x-show="filtroMaquina" x-cloak @click="filtroMaquina=''"
-                                    class="absolute right-2 flex h-6 w-6 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700"
+                    <label class="flex min-w-[11rem] flex-1 flex-col gap-0.5 sm:min-w-[13rem] sm:max-w-xs">
+                        <span class="text-[10px] font-medium text-slate-400">Buscar máquina</span>
+                        <div class="relative">
+                            <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400" aria-hidden="true">search</span>
+                            <input type="search"
+                                   x-model="filtroMaquina"
+                                   placeholder="Código o nombre…"
+                                   autocomplete="off"
+                                   aria-label="Buscar máquina por código o nombre"
+                                   class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 py-0 pl-9 pr-9 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
+                            <button type="button"
+                                    x-show="filtroMaquina"
+                                    x-cloak
+                                    @click="filtroMaquina=''"
+                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
                                     aria-label="Limpiar búsqueda">
                                 <span class="material-icons text-base" aria-hidden="true">close</span>
                             </button>
-                        </span>
+                        </div>
                     </label>
 
-                    {# Filtro por línea (GET) #}
-                    <form method="get" class="flex flex-col gap-1">
-                        <label for="filtro-linea" class="text-xs font-semibold text-gray-600 dark:text-gray-300">Línea</label>
-                        <select id="filtro-linea" name="id_linea" onchange="this.form.submit()"
-                                class="min-h-10 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white sm:w-56">
+                    <form method="get" class="flex flex-col gap-0.5">
+                        <label for="filtro-linea" class="text-[10px] font-medium text-slate-400">Línea</label>
+                        <select id="filtro-linea"
+                                name="id_linea"
+                                onchange="this.form.submit()"
+                                aria-label="Filtrar por línea"
+                                class="h-9 w-40 rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-48">
                             <option value="" {% if id_linea_filtro is None %}selected{% endif %}>Todas las líneas</option>
                             {% for linea in lineas %}
                             <option value="{{ linea.id }}" {% if linea.id == id_linea_filtro %}selected{% endif %}>{{ linea.nombre }}</option>
                             {% endfor %}
                         </select>
                     </form>
-                </div>
 
-                {# Contador dinámico #}
-                <div class="flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-2 text-sm font-medium text-purple-800 dark:bg-purple-900/20 dark:text-purple-200">
-                    <span class="material-icons text-base" aria-hidden="true">precision_manufacturing</span>
-                    <span>Mostrando <span class="font-bold" x-text="totalMostradas"></span> · <span class="font-bold" x-text="totalConArticulos"></span> con artículos</span>
-                </div>
+                    <p class="self-center text-[11px] tabular-nums text-slate-400" title="Fecha de planilla / impresión">
+                        Hoy <span class="font-semibold text-slate-200">{{ fecha_hoy|date:"d/m/Y" }}</span>
+                    </p>
+
+                    <div class="ml-auto flex flex-wrap items-center gap-2">
+                        <button type="button"
+                                @click="imprimirPlanilla()"
+                                class="inline-flex h-9 items-center gap-1 rounded-lg bg-purple-600 px-3 text-sm font-semibold text-white hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400"
+                                title="Imprime la planilla de Control de Calidad (A4 horizontal)"
+                                aria-label="Imprimir Control de Calidad">
+                            <span class="material-icons text-base" aria-hidden="true">print</span>
+                            Imprimir CC
+                        </button>
+                        <a href="{% url 'mpr:maquinas_list' %}"
+                           class="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 text-sm font-medium text-white hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                            <span class="material-icons text-base" aria-hidden="true">arrow_back</span>
+                            Máquinas
+                        </a>
+                        {% include "mpr/includes/chrome_nav_flujo.html" with current="" only %}
+                        <a href="{% url 'mpr:manual_usuario' %}#asignar-articulo-maquina"
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           aria-label="Manual de asignar artículo a máquina"
+                           class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600 hover:text-white">
+                            <span class="material-icons text-lg leading-none" aria-hidden="true">help_outline</span>
+                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Manual de asignar artículo" only %}
+                        </a>
+                    </div>
+                </header>
             </div>
+        </div>{# /chrome sticky #}
 
-        </div>
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <p class="mb-2 flex-shrink-0 text-[11px] font-medium text-slate-500 dark:text-slate-400">
+            <span class="material-icons align-text-bottom text-sm text-violet-500 dark:text-violet-400" aria-hidden="true">precision_manufacturing</span>
+            Mostrando <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200" x-text="totalMostradas"></span>
+            · <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200" x-text="totalConArticulos"></span> con artículos
+        </p>
 
         {# Grilla #}
-        <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
             {# Sin máquinas en absoluto #}
             <template x-if="maquinas.length === 0">
                 <div class="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-                    <span class="material-icons text-4xl text-gray-300 dark:text-gray-600" aria-hidden="true">precision_manufacturing</span>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-300">No hay máquinas activas para la línea seleccionada.</p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Probá con otra línea o registrá máquinas desde el catálogo.</p>
+                    <span class="material-icons text-4xl text-slate-300 dark:text-slate-600" aria-hidden="true">precision_manufacturing</span>
+                    <p class="text-sm font-medium text-slate-600 dark:text-slate-300">No hay máquinas activas para la línea seleccionada.</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Probá con otra línea o registrá máquinas desde el catálogo.</p>
                 </div>
             </template>
 
             {# Filtro sin resultados #}
             <template x-if="maquinas.length > 0 && maquinasVisibles.length === 0">
                 <div class="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
-                    <span class="material-icons text-4xl text-gray-300 dark:text-gray-600" aria-hidden="true">search_off</span>
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-300">Ninguna máquina coincide con “<span x-text="filtroMaquina"></span>”.</p>
+                    <span class="material-icons text-4xl text-slate-300 dark:text-slate-600" aria-hidden="true">search_off</span>
+                    <p class="text-sm font-medium text-slate-600 dark:text-slate-300">Ninguna máquina coincide con “<span x-text="filtroMaquina"></span>”.</p>
                     <button type="button" @click="filtroMaquina=''" class="text-sm font-semibold text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300">Limpiar búsqueda</button>
                 </div>
             </template>
 
-            <div class="overflow-x-auto" x-show="maquinasVisibles.length > 0" role="region" aria-label="Asignar artículo a máquina">
+            <div class="min-h-0 flex-1 overflow-auto" x-show="maquinasVisibles.length > 0" role="region" aria-label="Asignar artículo a máquina">
                 <table class="min-w-[52rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
                     <caption class="sr-only">Asignar artículo a máquina</caption>
                     <thead class="bg-gray-50/90 dark:bg-gray-800/80">
@@ -272,51 +273,51 @@
                                     <span x-show="!m.linea_actual_nombre" class="text-gray-400 dark:text-gray-500">Sin línea</span>
                                 </td>
                                 <td class="px-4 py-3.5 sm:px-5">
-                                    {# Chips de artículos vigentes #}
-                                    <div class="flex flex-wrap items-center gap-1.5">
-                                        <template x-for="art in m.articulos" :key="art.id_articulo">
-                                            <span class="group inline-flex max-w-full items-start gap-1.5 rounded-lg border border-purple-200 bg-purple-50 py-1.5 pl-2.5 pr-1 text-xs text-purple-800 dark:border-purple-800 dark:bg-purple-900/25 dark:text-purple-200">
-                                                <span class="min-w-0">
-                                                    <span class="font-semibold whitespace-nowrap" x-text="codigoCorto(art)"></span>
-                                                    <span class="ml-1 break-words text-purple-700/90 dark:text-purple-300/90" x-text="art.descripcion_articulo"></span>
+                                    {# Multiselección (mismo formato tags-filter): chips + input en un contenedor #}
+                                    <div class="relative max-w-xl">
+                                        <div class="tags-filter-container relative flex min-h-9 flex-wrap items-center gap-1 overflow-visible rounded-lg border border-slate-300 bg-white px-2 py-1.5 shadow-sm focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:focus-within:border-purple-400 dark:focus-within:ring-purple-500/40"
+                                             @click="$el.querySelector('.tags-input')?.focus()">
+                                            <template x-for="art in m.articulos" :key="art.id_articulo">
+                                                <span class="inline-flex max-w-full items-center gap-1 rounded-full bg-purple-100 px-2 py-1 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                                                      :title="(codigoCorto(art) + ' ' + (art.descripcion_articulo || '')).trim()">
+                                                    <span class="min-w-0 truncate">
+                                                        <span class="font-semibold" x-text="codigoCorto(art)"></span>
+                                                        <span class="ml-1 font-normal opacity-90" x-text="art.descripcion_articulo"></span>
+                                                    </span>
+                                                    <button type="button"
+                                                            @click.stop="quitar(m, art)"
+                                                            class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-purple-700 transition-colors hover:bg-purple-200 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-purple-200 dark:hover:bg-purple-800 dark:hover:text-red-300"
+                                                            :aria-label="'Deshabilitar ' + codigoCorto(art)">×</button>
                                                 </span>
-                                                <button type="button" @click="quitar(m, art)"
-                                                        class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-purple-500 transition-colors hover:bg-red-100 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-purple-300 dark:hover:bg-red-900/30 dark:hover:text-red-300"
-                                                        :aria-label="'Deshabilitar ' + codigoCorto(art)">
-                                                    <span class="material-icons text-sm" aria-hidden="true">close</span>
-                                                </button>
-                                            </span>
-                                        </template>
-                                        <span x-show="m.articulos.length === 0" class="text-xs italic text-gray-400 dark:text-gray-500">Sin artículos vigentes</span>
-                                    </div>
-
-                                    {# Typeahead para habilitar #}
-                                    <div class="relative mt-2 max-w-md">
-                                        <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-gray-400" aria-hidden="true">add</span>
-                                        <input type="text"
-                                               :id="'ta-input-' + m.id"
-                                               x-model="m.ta.q"
-                                               @input="onInput(m)"
-                                               @focus="if (m.ta.q) m.ta.abierto = true"
-                                               @blur="setTimeout(() => m.ta.abierto = false, 150)"
-                                               @keydown.arrow-down.prevent="mover(m, 1)"
-                                               @keydown.arrow-up.prevent="mover(m, -1)"
-                                               @keydown.enter.prevent="elegirActivo(m)"
-                                               @keydown.escape="m.ta.abierto = false"
-                                               placeholder="Agregar artículo Fabricado…" autocomplete="off"
-                                               class="min-h-10 w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"/>
+                                            </template>
+                                            <input type="text"
+                                                   :id="'ta-input-' + m.id"
+                                                   x-model="m.ta.q"
+                                                   @input="onInput(m)"
+                                                   @focus="if (m.ta.q) m.ta.abierto = true"
+                                                   @blur="setTimeout(() => m.ta.abierto = false, 150)"
+                                                   @keydown.arrow-down.prevent="mover(m, 1)"
+                                                   @keydown.arrow-up.prevent="mover(m, -1)"
+                                                   @keydown.enter.prevent="elegirActivo(m)"
+                                                   @keydown.escape="m.ta.abierto = false"
+                                                   @click.stop
+                                                   placeholder="Agregar artículo Fabricado…"
+                                                   autocomplete="off"
+                                                   :aria-label="'Agregar artículo a ' + (m.nombre || m.codigo || 'máquina')"
+                                                   class="tags-input min-w-[8rem] flex-1 basis-[8rem] border-none bg-transparent py-0.5 text-xs text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"/>
+                                        </div>
 
                                         {# Dropdown de sugerencias #}
                                         <div x-show="m.ta.abierto" x-cloak
-                                             class="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-600 dark:bg-gray-900">
+                                             class="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-900">
                                             <template x-if="m.ta.cargando">
-                                                <div class="flex items-center gap-2 px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">
+                                                <div class="flex items-center gap-2 px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">
                                                     <span class="material-icons animate-spin text-sm" aria-hidden="true">autorenew</span>
                                                     Buscando…
                                                 </div>
                                             </template>
-                                            <template x-if="!m.ta.cargando && m.ta.resultados.length === 0">
-                                                <div class="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">Sin artículos Fabricado que coincidan.</div>
+                                            <template x-if="!m.ta.cargando && m.ta.q && m.ta.resultados.length === 0">
+                                                <div class="px-3 py-2.5 text-xs text-slate-500 dark:text-slate-400">Sin artículos Fabricado que coincidan.</div>
                                             </template>
                                             <template x-for="(art, idx) in m.ta.resultados" :key="art.id_articulo">
                                                 <button type="button"
@@ -326,8 +327,8 @@
                                                         :class="{ 'bg-purple-50 dark:bg-purple-900/30': m.ta.activo === idx, 'cursor-not-allowed opacity-60': art.yaCargado }"
                                                         class="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors hover:bg-purple-50 focus:outline-none dark:hover:bg-purple-900/30">
                                                     <span class="min-w-0">
-                                                        <span class="text-sm font-semibold text-gray-900 dark:text-white" x-text="codigoCorto(art)"></span>
-                                                        <span class="mt-0.5 block break-words text-xs text-gray-500 dark:text-gray-400" x-text="art.descripcion_articulo"></span>
+                                                        <span class="text-sm font-semibold text-slate-900 dark:text-white" x-text="codigoCorto(art)"></span>
+                                                        <span class="mt-0.5 block break-words text-xs text-slate-500 dark:text-slate-400" x-text="art.descripcion_articulo"></span>
                                                     </span>
                                                     <span x-show="art.yaCargado" class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-300" aria-hidden="true">Ya cargado</span>
                                                     <span x-show="!art.yaCargado" class="material-icons shrink-0 text-base text-purple-500 dark:text-purple-400" aria-hidden="true">add_circle_outline</span>
@@ -340,7 +341,7 @@
                                     <div class="mt-1.5 flex flex-wrap items-center justify-between gap-2">
                                         <p x-show="m.ta.error" x-cloak x-text="m.ta.error" class="text-xs font-medium text-red-600 dark:text-red-400" role="alert"></p>
                                         <a :href="historicoUrl(m.id)"
-                                           class="ml-auto inline-flex items-center gap-1 text-xs font-medium text-gray-500 transition-colors hover:text-purple-600 dark:text-gray-400 dark:hover:text-purple-300">
+                                           class="ml-auto inline-flex items-center gap-1 text-xs font-medium text-slate-500 transition-colors hover:text-purple-600 dark:text-slate-400 dark:hover:text-purple-300">
                                             <span class="material-icons text-sm" aria-hidden="true">history</span>
                                             Histórico
                                         </a>
@@ -365,7 +366,8 @@
                     </tbody>
                 </table>
             </div>
-        </div>
+        </div>{# /grilla card #}
+        </div>{# /flex-1 datos #}
     </div>
 </section>
 
