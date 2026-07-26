@@ -40,7 +40,7 @@ Ver §6.
 | Búsqueda Parte | En chrome: filtro **predictivo cliente** sobre la grilla cargada (mismo criterio que el viejo «Filtrar en la grilla»). **No** forma parte del GET de «Cargar grilla» |
 | Alineación atajos | En Parte/CC el `header` usa **`items-end`** (formulario con labels encima de inputs) para que los íconos compartan línea base con los campos y «Cargar grilla»; el `h1` lleva `self-center`. Tablero (sin labels visibles) sigue con `items-center`. |
 | Altura controles | **`h-9`** (36px) canónica = búsqueda «Código o descripción…» / Tablero. Inputs, selects, atajos `h-9 w-9`, CTAs y toggles Pack\|Par / Docenas\|Pares comparten esa altura (`text-sm` en campos). |
-| Layout viewport | Tablero, Parte y CC: `section` con **`h-[calc(100dvh-4.5rem)]`**, chrome **`flex-shrink-0`**, zona de datos **`flex-1 min-h-0 overflow-hidden`**. La grilla scrollea dentro; la barra oscura **no** se mueve con el scroll de la página. Footer «Guardar» fijo al pie de la tarjeta. |
+| Layout viewport | Tablero, Parte y CC: `section` con **`h-[calc(100dvh-4.5rem)]`**, chrome **`flex-shrink-0`**, zona de datos **`flex-1 min-h-0 overflow-hidden`**. La grilla scrollea dentro. Chrome además **`sticky top-14 md:top-16 z-40`** (bajo el navbar fijo) por si scrollea el documento (padding de `base_app`). Footer «Guardar» fijo al pie de la tarjeta. |
 
 ## 3.1 Alcance chrome compartido (flujo planta)
 
@@ -128,7 +128,7 @@ Las URLs pueden existir en código por compatibilidad; **no** son el hub ni el l
 3. Atajos Parte/CC/Actualizar usables solo con ícono + tooltip; menú Más con labels.
 4. Ningún enlace del chrome apunta a ventana_pack / opt_list como flujo primario.
 5. Pack\|Par, filtros, envío y búsqueda siguen funcionando igual (solo reubicación).
-6. Al scrollear la grilla en **Tablero**, **Parte** y **Control de calidad**, la barra slate-800 permanece fija; solo scrollean datos (y el footer Guardar no se pierde fuera del viewport).
+6. Al scrollear la grilla en **Tablero**, **Parte** y **Control de calidad**, la barra slate-800 permanece fija (viewport + `sticky` bajo el menú); solo scrollean datos (y el footer Guardar no se pierde fuera del viewport).
 
 ## 8. Implementación
 

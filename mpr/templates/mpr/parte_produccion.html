@@ -22,8 +22,8 @@
          x-data="partePagina()">
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
-        {# Chrome denso slate-800 — mismo look que Tablero (docs/mpr/TABLERO_PRODUCCION_CHROME_DENSIDAD.md) #}
-        <div class="mb-3 flex-shrink-0">
+        {# Chrome denso slate-800 — sticky bajo navbar (mismo criterio que Tablero) #}
+        <div class="sticky top-14 z-40 mb-3 flex-shrink-0 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16">
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
                 {# items-end: atajos alineados con inputs (no con labels); título centrado en el bloque #}
                 <header class="flex flex-wrap items-end gap-x-3 gap-y-2">
