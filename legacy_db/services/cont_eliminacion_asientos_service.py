@@ -11,6 +11,7 @@ import logging
 import uuid
 from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import MySQLdb.cursors
@@ -26,7 +27,6 @@ from django.utils import timezone
 
 from legacy_db.services.cont_recalculo_service import (
     CorreccionContableError,
-    TABLAS_BACKUP_PERMITIDAS,
     _crear_backups,
     _insertar_log_detalle,
 )
@@ -36,6 +36,13 @@ logger = logging.getLogger(__name__)
 CHECK_ID_ELIMINACION = "eliminacion_asiento"
 CONFIG_HASH_ELIMINACION = "eliminacion_asiento_v1"
 Q2 = Decimal("0.01")
+TABLAS_BACKUP_ELIMINACION = frozenset(
+    {
+        "cont_asiento",
+        "cont_ejercicio_saldo_cta",
+        "cont_periodo_saldo_cta",
+    }
+)
 
 
 class EliminacionAsientosError(Exception):
@@ -245,34 +252,26 @@ def listar_conceptos(base_empresa: str, id_ejercicio: int) -> list[dict]:
 
 
 def listar_asientos(base_empresa: str, filtros: dict) -> dict:
-    """Lista asientos agrupados por (id_ejercicio, nro_asiento) con paginación."""
-    where_sql, params = _where_listar(filtros)
-    page = max(1, to_int_or_none(filtros.get("page")) or 1)
-    page_size = min(200, max(1, to_int_or_none(filtros.get("page_size")) or 200))
-    offset = (page - 1) * page_size
+    """Lista todos los asientos del filtro, agrupados por (id_ejercicio, nro_asiento).
 
+    Sin paginación: el operador puede seleccionar el universo filtrado completo
+    y enviar un único lote de eliminación + recálculo.
+    """
+    where_sql, params = _where_listar(filtros)
     sql_base = _sql_agrupado(where_sql)
     pool = get_mysql_pool()
     with pool.get_connection(base_empresa) as conn:
         cur = conn.cursor(MySQLdb.cursors.DictCursor)
         try:
-            cur.execute(f"SELECT COUNT(*) AS total FROM ({sql_base}) AS sub", params)
-            total_row = cur.fetchone() or {}
-            total = int(total_row.get("total") or 0)
-
-            cur.execute(
-                f"{sql_base} ORDER BY a.nro_asiento DESC LIMIT %s OFFSET %s",
-                params + [page_size, offset],
-            )
+            cur.execute(f"{sql_base} ORDER BY a.nro_asiento DESC", params)
             filas = cur.fetchall()
         finally:
             cur.close()
 
+    items = [_item_desde_fila(r) for r in filas]
     return {
-        "items": [_item_desde_fila(r) for r in filas],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
+        "items": items,
+        "total": len(items),
     }
 
 
@@ -307,67 +306,87 @@ def _cargar_renglones_asientos(
     return renglones
 
 
+def _where_claves_asientos(asientos: list[tuple[int, int]]) -> tuple[str, list[int]]:
+    """Construye un filtro agrupado por ejercicio para un lote de asientos."""
+    por_ejercicio: dict[int, list[int]] = defaultdict(list)
+    for id_ejercicio, nro_asiento in asientos:
+        por_ejercicio[id_ejercicio].append(nro_asiento)
+
+    partes: list[str] = []
+    params: list[int] = []
+    for id_ejercicio, nros_asiento in sorted(por_ejercicio.items()):
+        placeholders = ",".join(["%s"] * len(nros_asiento))
+        partes.append(f"(id_ejercicio = %s AND nro_asiento IN ({placeholders}))")
+        params.extend([id_ejercicio, *nros_asiento])
+    return " OR ".join(partes), params
+
+
 def preview_eliminacion(base_empresa: str, asientos: list[dict]) -> dict:
-    """Vista previa de impacto antes de eliminar."""
+    """Vista previa agregada de impacto antes de eliminar, sin bloquear ni respaldar."""
     claves = _normalizar_asientos(asientos)
+    where_sql, params = _where_claves_asientos(claves)
     pool = get_mysql_pool()
     with pool.get_connection(base_empresa) as conn:
         dict_cur = conn.cursor(MySQLdb.cursors.DictCursor)
         try:
-            renglones = _cargar_renglones_asientos(dict_cur, claves)
+            # La consulta agrupada sustituye una consulta por asiento. El preview
+            # solo necesita totales, no el detalle completo de cada renglón.
+            dict_cur.execute(
+                f"""
+                SELECT
+                    COUNT(*) AS total_renglones,
+                    COUNT(DISTINCT id_ejercicio, id_pc) AS cuentas_impactadas,
+                    COUNT(DISTINCT id_ejercicio, id_pc, id_periodo) AS periodos_impactados,
+                    COUNT(DISTINCT CASE
+                        WHEN COALESCE(anulado, 'No') = 'Si'
+                        THEN CONCAT(id_ejercicio, ':', nro_asiento)
+                    END) AS asientos_con_renglones_anulados
+                FROM cont_asiento
+                WHERE {where_sql}
+                """,
+                params,
+            )
+            resumen = dict_cur.fetchone() or {}
+
+            # Se conserva la validación de existencia sin cargar los renglones.
+            dict_cur.execute(
+                f"""
+                SELECT DISTINCT id_ejercicio, nro_asiento
+                FROM cont_asiento
+                WHERE {where_sql}
+                """,
+                params,
+            )
+            existentes = {
+                (
+                    to_int_or_none(fila.get("id_ejercicio")),
+                    to_int_or_none(fila.get("nro_asiento")),
+                )
+                for fila in dict_cur.fetchall()
+            }
         finally:
             dict_cur.close()
 
-    cuentas: set[tuple[int, int]] = set()
-    periodos: set[tuple[int, int, int]] = set()
-    por_concepto: dict[str, int] = defaultdict(int)
-    avisos: list[str] = []
+    faltantes = [clave for clave in claves if clave not in existentes]
+    if faltantes:
+        id_ejercicio, nro_asiento = faltantes[0]
+        raise EliminacionAsientosError(
+            f"No existe el asiento ejercicio {id_ejercicio} nro {nro_asiento}."
+        )
 
-    items_detalle: list[dict] = []
-    agrupados: dict[tuple[int, int], list[dict]] = defaultdict(list)
-    for r in renglones:
-        clave = (to_int_or_none(r.get("id_ejercicio")) or 0, to_int_or_none(r.get("nro_asiento")) or 0)
-        agrupados[clave].append(r)
-        id_pc = to_int_or_none(r.get("id_pc"))
-        id_ej = to_int_or_none(r.get("id_ejercicio"))
-        id_per = to_int_or_none(r.get("id_periodo"))
-        if id_pc is not None and id_ej is not None:
-            cuentas.add((id_pc, id_ej))
-        if id_pc is not None and id_ej is not None and id_per is not None:
-            periodos.add((id_pc, id_ej, id_per))
-        concepto = str_or_default(r.get("desc_concepto_asiento"), "—")
-        por_concepto[concepto] += 1
-        if str_or_default(r.get("anulado"), "No") == "Si":
-            avisos.append(
-                f"Asiento {clave[1]} incluye renglones ya anulados; se eliminarán igualmente."
-            )
-
-    avisos = list(dict.fromkeys(avisos))
-
-    for (id_ej, nro), filas_asiento in sorted(agrupados.items()):
-        total_debe = sum(_r2(f.get("debe_asiento")) for f in filas_asiento)
-        total_haber = sum(_r2(f.get("haber_asiento")) for f in filas_asiento)
-        items_detalle.append(
-            {
-                "id_ejercicio": id_ej,
-                "nro_asiento": nro,
-                "fecha_asiento": _fecha_ui(filas_asiento[0].get("fecha_asiento")),
-                "cant_lineas": len(filas_asiento),
-                "total_debe": str(total_debe),
-                "total_haber": str(total_haber),
-                "desc_asiento": str_or_default(filas_asiento[0].get("desc_asiento")),
-            }
+    asientos_anulados = int(resumen.get("asientos_con_renglones_anulados") or 0)
+    avisos = []
+    if asientos_anulados:
+        avisos.append(
+            f"{asientos_anulados} asiento(s) incluye(n) renglones ya anulados; se eliminarán igualmente."
         )
 
     return {
         "asientos_solicitados": len(claves),
-        "total_renglones": len(renglones),
-        "cuentas_impactadas": len(cuentas),
-        "periodos_impactados": len(periodos),
-        "por_concepto": dict(sorted(por_concepto.items(), key=lambda x: (-x[1], x[0]))),
+        "total_renglones": int(resumen.get("total_renglones") or 0),
+        "cuentas_impactadas": int(resumen.get("cuentas_impactadas") or 0),
+        "periodos_impactados": int(resumen.get("periodos_impactados") or 0),
         "avisos": avisos,
-        "items": items_detalle,
-        "cuentas": [{"id_pc": pc, "id_ejercicio": ej} for pc, ej in sorted(cuentas)],
     }
 
 
@@ -475,6 +494,54 @@ def _recalcular_saldos(
     return recalculadas
 
 
+def _evento_progreso(
+    *,
+    phase: str,
+    current: int,
+    total: int,
+    label: str = "",
+) -> dict:
+    return {
+        "type": "progress",
+        "phase": phase,
+        "current": current,
+        "total": total,
+        "label": label,
+    }
+
+
+def _nombre_backup_eliminacion_valido(tabla: str, nombre_bkp: str) -> bool:
+    if tabla not in TABLAS_BACKUP_ELIMINACION:
+        return False
+    prefijo = f"{tabla}_bkp_"
+    return nombre_bkp.startswith(prefijo) and len(nombre_bkp) > len(prefijo)
+
+
+def _eliminar_tablas_backup(pool, base_empresa: str, backups: dict[str, str]) -> list[str]:
+    """Elimina tablas de backup efímeras creadas durante una corrida de eliminación."""
+    if not backups:
+        return []
+
+    dropeadas: list[str] = []
+    with pool.get_connection(base_empresa) as conn:
+        cur = conn.cursor()
+        try:
+            for tabla, nombre_bkp in sorted(backups.items()):
+                if not _nombre_backup_eliminacion_valido(tabla, nombre_bkp):
+                    logger.warning(
+                        "eliminar_asientos: omitiendo drop backup no permitido tabla=%s bkp=%s",
+                        tabla,
+                        nombre_bkp,
+                    )
+                    continue
+                cur.execute(f"DROP TABLE IF EXISTS `{nombre_bkp}`")
+                dropeadas.append(nombre_bkp)
+            conn.commit()
+        finally:
+            cur.close()
+    return dropeadas
+
+
 def _resumen_asiento_json(renglones: list[dict]) -> str:
     payload = []
     for r in renglones:
@@ -492,32 +559,37 @@ def _resumen_asiento_json(renglones: list[dict]) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
-def eliminar_asientos(
+def _eliminar_asientos_iter(
     base_empresa: str,
     asientos: list[dict],
     usuario: str,
     *,
     tiene_permiso_corregir: bool = False,
-) -> dict:
-    """Elimina asientos completos y recalcula saldos impactados en transacción."""
+) -> Iterator[dict]:
+    """Generador interno: eventos progress y result al eliminar asientos."""
     if not tiene_permiso_corregir:
         raise EliminacionAsientosError(
             "No tiene permiso para eliminar asientos contables (contabilidad.auditoria.corregir)."
         )
 
     claves = _normalizar_asientos(asientos)
+    total_asientos = len(claves)
     ahora = timezone.now()
     timestamp = timezone.localtime(ahora).strftime("%Y%m%d_%H%M%S")
     lote_id = f"L{timestamp}-{uuid.uuid4().hex[:8]}"
-    tablas_backup = {
-        t for t in TABLAS_BACKUP_PERMITIDAS
-        if t in ("cont_asiento", "cont_ejercicio_saldo_cta", "cont_periodo_saldo_cta")
-    }
-
+    backups: dict[str, str] = {}
     pool = get_mysql_pool()
+
+    yield _evento_progreso(
+        phase="backup",
+        current=0,
+        total=total_asientos,
+        label="Creando respaldo de seguridad…",
+    )
+
     try:
         with pool.get_connection(base_empresa) as conn:
-            backups = _crear_backups(conn, tablas_backup, timestamp)
+            backups = _crear_backups(conn, set(TABLAS_BACKUP_ELIMINACION), timestamp)
     except Exception as exc:
         logger.exception("eliminar_asientos: fallo backup base=%s", base_empresa)
         raise EliminacionAsientosError(f"No se pudo crear el backup previo: {exc}") from exc
@@ -525,102 +597,159 @@ def eliminar_asientos(
     filas_borradas = 0
     cuentas_recalculadas = 0
     asientos_eliminados = 0
+    intervalo_progreso = 5 if total_asientos > 100 else 1
 
-    with pool.get_connection(base_empresa) as conn:
-        try:
-            conn.autocommit(False)
-            cur = conn.cursor()
-            dict_cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            fecha_db = timezone.localtime(ahora).replace(tzinfo=None)
+    try:
+        with pool.get_connection(base_empresa) as conn:
+            try:
+                conn.autocommit(False)
+                cur = conn.cursor()
+                dict_cur = conn.cursor(MySQLdb.cursors.DictCursor)
+                fecha_db = timezone.localtime(ahora).replace(tzinfo=None)
 
-            renglones = _cargar_renglones_asientos(dict_cur, claves, for_update=True)
+                renglones = _cargar_renglones_asientos(dict_cur, claves, for_update=True)
 
-            cuentas_ej: set[tuple[int, int]] = set()
-            cuentas_per: set[tuple[int, int, int]] = set()
-            agrupados: dict[tuple[int, int], list[dict]] = defaultdict(list)
-            for r in renglones:
-                clave = (
-                    to_int_or_none(r.get("id_ejercicio")) or 0,
-                    to_int_or_none(r.get("nro_asiento")) or 0,
-                )
-                agrupados[clave].append(r)
-                id_pc = to_int_or_none(r.get("id_pc"))
-                id_ej = to_int_or_none(r.get("id_ejercicio"))
-                id_per = to_int_or_none(r.get("id_periodo"))
-                if id_pc is not None and id_ej is not None:
-                    cuentas_ej.add((id_pc, id_ej))
-                if id_pc is not None and id_ej is not None and id_per is not None:
-                    cuentas_per.add((id_pc, id_ej, id_per))
+                cuentas_ej: set[tuple[int, int]] = set()
+                cuentas_per: set[tuple[int, int, int]] = set()
+                agrupados: dict[tuple[int, int], list[dict]] = defaultdict(list)
+                for r in renglones:
+                    clave = (
+                        to_int_or_none(r.get("id_ejercicio")) or 0,
+                        to_int_or_none(r.get("nro_asiento")) or 0,
+                    )
+                    agrupados[clave].append(r)
+                    id_pc = to_int_or_none(r.get("id_pc"))
+                    id_ej = to_int_or_none(r.get("id_ejercicio"))
+                    id_per = to_int_or_none(r.get("id_periodo"))
+                    if id_pc is not None and id_ej is not None:
+                        cuentas_ej.add((id_pc, id_ej))
+                    if id_pc is not None and id_ej is not None and id_per is not None:
+                        cuentas_per.add((id_pc, id_ej, id_per))
 
-            cur.execute(
-                """INSERT INTO cont_audit_correccion_lote
-                   (lote_id, base_empresa, dry_run_id, config_hash, usuario, fecha,
-                    estado, reapertura_flag, autorizador, backups_json)
-                   VALUES (%s,%s,%s,%s,%s,%s,'aplicado',0,%s,%s)""",
-                (
-                    lote_id,
-                    base_empresa,
-                    CHECK_ID_ELIMINACION,
-                    CONFIG_HASH_ELIMINACION,
-                    usuario,
-                    fecha_db,
-                    usuario,
-                    json.dumps(backups, sort_keys=True),
-                ),
-            )
-
-            for id_ej, nro in claves:
                 cur.execute(
-                    "DELETE FROM cont_asiento WHERE id_ejercicio=%s AND nro_asiento=%s",
-                    (id_ej, nro),
+                    """INSERT INTO cont_audit_correccion_lote
+                       (lote_id, base_empresa, dry_run_id, config_hash, usuario, fecha,
+                        estado, reapertura_flag, autorizador, backups_json)
+                       VALUES (%s,%s,%s,%s,%s,%s,'aplicado',0,%s,%s)""",
+                    (
+                        lote_id,
+                        base_empresa,
+                        CHECK_ID_ELIMINACION,
+                        CONFIG_HASH_ELIMINACION,
+                        usuario,
+                        fecha_db,
+                        usuario,
+                        "{}",
+                    ),
                 )
-                filas_borradas += cur.rowcount
-                asientos_eliminados += 1
 
-            cuentas_recalculadas = _recalcular_saldos(cur, dict_cur, cuentas_ej, cuentas_per)
+                for idx, (id_ej, nro) in enumerate(claves, start=1):
+                    cur.execute(
+                        "DELETE FROM cont_asiento WHERE id_ejercicio=%s AND nro_asiento=%s",
+                        (id_ej, nro),
+                    )
+                    filas_borradas += cur.rowcount
+                    asientos_eliminados += 1
+                    if idx == 1 or idx == total_asientos or idx % intervalo_progreso == 0:
+                        yield _evento_progreso(
+                            phase="delete",
+                            current=idx,
+                            total=total_asientos,
+                            label=f"Asiento {nro} (ejercicio {id_ej})",
+                        )
 
-            for (id_ej, nro), filas_asiento in sorted(agrupados.items()):
-                item_log = {
-                    "check_id": CHECK_ID_ELIMINACION,
-                    "tabla": "cont_asiento",
-                    "clave": {"id_ejercicio": id_ej, "nro_asiento": nro},
-                }
-                _insertar_log_detalle(
-                    cur,
+                yield _evento_progreso(
+                    phase="recalc",
+                    current=total_asientos,
+                    total=total_asientos,
+                    label="Recalculando saldos…",
+                )
+
+                cuentas_recalculadas = _recalcular_saldos(cur, dict_cur, cuentas_ej, cuentas_per)
+
+                for (id_ej, nro), filas_asiento in sorted(agrupados.items()):
+                    item_log = {
+                        "check_id": CHECK_ID_ELIMINACION,
+                        "tabla": "cont_asiento",
+                        "clave": {"id_ejercicio": id_ej, "nro_asiento": nro},
+                    }
+                    _insertar_log_detalle(
+                        cur,
+                        lote_id,
+                        item_log,
+                        _resumen_asiento_json(filas_asiento),
+                        None,
+                        usuario,
+                        fecha_db,
+                    )
+
+                conn.commit()
+            except EliminacionAsientosError:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
+            except Exception as exc:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                logger.exception(
+                    "eliminar_asientos: error transaccional base=%s lote=%s",
+                    base_empresa,
                     lote_id,
-                    item_log,
-                    _resumen_asiento_json(filas_asiento),
-                    None,
-                    usuario,
-                    fecha_db,
+                )
+                raise EliminacionAsientosError(f"Error al eliminar asientos: {exc}") from exc
+            finally:
+                try:
+                    conn.autocommit(True)
+                except Exception:
+                    pass
+    finally:
+        if backups:
+            try:
+                _eliminar_tablas_backup(pool, base_empresa, backups)
+            except Exception:
+                logger.exception(
+                    "eliminar_asientos: fallo al eliminar tablas backup efímeras base=%s lote=%s",
+                    base_empresa,
+                    lote_id,
                 )
 
-            conn.commit()
-        except EliminacionAsientosError:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            raise
-        except Exception as exc:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            logger.exception("eliminar_asientos: error transaccional base=%s lote=%s", base_empresa, lote_id)
-            raise EliminacionAsientosError(f"Error al eliminar asientos: {exc}") from exc
-        finally:
-            try:
-                conn.autocommit(True)
-            except Exception:
-                pass
-
-    return {
+    payload = {
         "ok": True,
         "lote_id": lote_id,
         "filas_borradas": filas_borradas,
         "asientos_eliminados": asientos_eliminados,
-        "backups": backups,
+        "backups": {},
+        "backup_efimero": True,
         "cuentas_recalculadas": cuentas_recalculadas,
         "fecha": _fecha_db_ui(ahora),
     }
+    yield {"type": "result", "payload": payload}
+
+
+def eliminar_asientos(
+    base_empresa: str,
+    asientos: list[dict],
+    usuario: str,
+    *,
+    tiene_permiso_corregir: bool = False,
+    on_progress: Callable[[dict], None] | None = None,
+) -> dict:
+    """Elimina asientos completos y recalcula saldos impactados en transacción."""
+    resultado: dict | None = None
+    for evento in _eliminar_asientos_iter(
+        base_empresa,
+        asientos,
+        usuario,
+        tiene_permiso_corregir=tiene_permiso_corregir,
+    ):
+        if evento.get("type") == "progress" and on_progress is not None:
+            on_progress(evento)
+        elif evento.get("type") == "result":
+            resultado = evento["payload"]
+    if resultado is None:
+        raise EliminacionAsientosError("No se obtuvo resultado de la eliminación.")
+    return resultado

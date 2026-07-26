@@ -103,10 +103,38 @@
     </div>
 
     <!-- Tabla detalle -->
-    <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+    {{ filas|json_script:"lote-detalle-filas" }}
+    <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden"
+         x-data="auditoriaLoteDetalleTabla()"
+         x-cloak>
+        <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">Correcciones del lote</h2>
-            <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300">{{ filas|length }} fila(s) mostradas</span>
+            <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                {% if filas %}
+                <label class="sr-only" for="lote-detalle-buscar">Buscar en correcciones del lote</label>
+                <div class="relative min-w-[14rem] flex-1 sm:max-w-md sm:flex-none">
+                    <span class="material-icons pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-base text-slate-400"
+                          aria-hidden="true">search</span>
+                    <input id="lote-detalle-buscar"
+                           type="search"
+                           x-model="q"
+                           autocomplete="off"
+                           placeholder="Buscar en toda la tabla…"
+                           class="w-full rounded-lg border border-slate-300 bg-white py-1.5 pl-8 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500">
+                    <button type="button"
+                            x-show="q.length"
+                            x-cloak
+                            @click="q = ''"
+                            class="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"
+                            title="Limpiar búsqueda"
+                            aria-label="Limpiar búsqueda">
+                        <span class="material-icons text-base leading-none" aria-hidden="true">close</span>
+                    </button>
+                </div>
+                {% endif %}
+                <span class="inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300"
+                      x-text="etiquetaContador"></span>
+            </div>
         </div>
 
         {% if filas %}
@@ -124,32 +152,38 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                    {% for fila in filas %}
-                    <tr class="text-slate-700 dark:text-slate-200">
-                        <td class="px-3 py-2 max-w-[14rem]">
-                            <span class="block truncate font-medium" title="{{ fila.titulo_check }}">{{ fila.titulo_check }}</span>
-                            <span class="block truncate font-mono text-[10px] text-slate-400" title="{{ fila.check_id }}">{{ fila.check_id }}</span>
-                        </td>
-                        <td class="px-3 py-2 whitespace-nowrap tabular-nums font-mono">{{ fila.nro_asiento }}</td>
-                        <td class="px-3 py-2 whitespace-nowrap tabular-nums font-mono">{{ fila.codigo_movimiento }}</td>
-                        <td class="px-3 py-2 whitespace-nowrap font-mono text-[10px]">{{ fila.tabla }}</td>
-                        <td class="px-3 py-2 max-w-md">
-                            <span class="block truncate font-medium text-slate-800 dark:text-slate-100"
-                                  title="{{ fila.cambio_resumen }}">{{ fila.cambio_resumen }}</span>
-                        </td>
-                        <td class="px-3 py-2 max-w-[10rem]">
-                            <span class="block truncate text-slate-600 dark:text-slate-300"
-                                  title="{{ fila.valor_anterior_corto }}">{{ fila.valor_anterior_corto }}</span>
-                        </td>
-                        <td class="px-3 py-2 whitespace-nowrap">{{ fila.fecha }}</td>
-                    </tr>
-                    {% endfor %}
+                    <template x-for="fila in filtradas" :key="fila.id">
+                        <tr class="text-slate-700 dark:text-slate-200">
+                            <td class="px-3 py-2 max-w-[14rem]">
+                                <span class="block truncate font-medium" x-text="fila.titulo_check" :title="fila.titulo_check"></span>
+                                <span class="block truncate font-mono text-[10px] text-slate-400" x-text="fila.check_id" :title="fila.check_id"></span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap tabular-nums font-mono" x-text="fila.nro_asiento"></td>
+                            <td class="px-3 py-2 whitespace-nowrap tabular-nums font-mono" x-text="fila.codigo_movimiento"></td>
+                            <td class="px-3 py-2 whitespace-nowrap font-mono text-[10px]" x-text="fila.tabla"></td>
+                            <td class="px-3 py-2 max-w-md">
+                                <span class="block truncate font-medium text-slate-800 dark:text-slate-100"
+                                      x-text="fila.cambio_resumen"
+                                      :title="fila.cambio_resumen"></span>
+                            </td>
+                            <td class="px-3 py-2 max-w-[10rem]">
+                                <span class="block truncate text-slate-600 dark:text-slate-300"
+                                      x-text="fila.valor_anterior_corto"
+                                      :title="fila.valor_anterior_corto"></span>
+                            </td>
+                            <td class="px-3 py-2 whitespace-nowrap" x-text="fila.fecha"></td>
+                        </tr>
+                    </template>
                 </tbody>
             </table>
         </div>
+        <div x-show="filtradas.length === 0 && q.trim()"
+             class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+            No hay filas que coincidan con «<span class="font-medium text-slate-700 dark:text-slate-200" x-text="q.trim()"></span>».
+        </div>
         {% if total_filas > filas|length %}
         <div class="px-4 py-2 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
-            Se muestran las primeras {{ filas|length }} filas de {{ total_filas }}. Descargue Excel para el detalle completo.
+            Se cargaron las primeras {{ filas|length }} filas de {{ total_filas }}. Descargue Excel para el detalle completo.
         </div>
         {% endif %}
         {% else %}
@@ -161,4 +195,66 @@
 
     </div>
 </section>
+<script>
+function auditoriaLoteDetalleTabla() {
+    var el = document.getElementById('lote-detalle-filas');
+    var filas = [];
+    try {
+        filas = el ? JSON.parse(el.textContent || '[]') : [];
+    } catch (e) {
+        filas = [];
+    }
+    return {
+        q: '',
+        filas: filas,
+        textoFila: function (f) {
+            var partes = [
+                f.titulo_check,
+                f.check_id,
+                f.nro_asiento,
+                f.codigo_movimiento,
+                f.tabla,
+                f.cambio_resumen,
+                f.valor_anterior_corto,
+                f.clave_texto,
+                f.usuario,
+                f.fecha,
+            ];
+            try {
+                if (f.valor_anterior != null) {
+                    partes.push(typeof f.valor_anterior === 'string'
+                        ? f.valor_anterior
+                        : JSON.stringify(f.valor_anterior));
+                }
+                if (f.valor_nuevo != null) {
+                    partes.push(typeof f.valor_nuevo === 'string'
+                        ? f.valor_nuevo
+                        : JSON.stringify(f.valor_nuevo));
+                }
+                if (f.clave != null && typeof f.clave !== 'string') {
+                    partes.push(JSON.stringify(f.clave));
+                }
+            } catch (err) { /* ignore */ }
+            return partes.join(' ').toLowerCase();
+        },
+        get filtradas() {
+            var q = (this.q || '').trim().toLowerCase();
+            if (!q) return this.filas;
+            var self = this;
+            return this.filas.filter(function (f) {
+                return self.textoFila(f).indexOf(q) !== -1;
+            });
+        },
+        get etiquetaContador() {
+            var n = this.filtradas.length;
+            var total = this.filas.length;
+            var q = (this.q || '').trim();
+            if (q && n !== total) {
+                return n + ' de ' + total + ' fila(s)';
+            }
+            return n + ' fila(s) mostradas';
+        },
+    };
+}
+</script>
 {% endblock %}

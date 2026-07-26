@@ -236,7 +236,7 @@ La tabla inferior lista los lotes de corrección ya ejecutados en MySQL legacy:
 2. Se abre el detalle con resumen del lote y tabla de correcciones (diagnóstico, tabla, cambio a realizar, valor anterior corto, fecha).
 3. Use **Excel** en el encabezado o el enlace **Excel** del listado para descargar el log completo (hojas **Resumen** y **Detalle**).
 
-El Excel está pensado para análisis contable: columnas legibles (Diagnóstico, tipo de cambio, Nro asiento, Fecha, Cuenta, Debe/Haber en pesos argentinos, Descripción, Concepto, valores). En un **diagnóstico** las cabeceras van en potencial (**Cambios a realizar**, valor nuevo previsto); en un **lote aplicado**, en pasado (**Cambios aplicados**, valor aplicado). No incluye JSON técnico ni identificadores internos de check.
+El Excel está pensado para análisis contable: columnas legibles (Diagnóstico, tipo de cambio, Nro asiento, Fecha, Cuenta, Debe/Haber en pesos argentinos, Descripción, Concepto, valores). En un **diagnóstico** las cabeceras van en potencial (**Cambios a realizar**, valor nuevo previsto); en un **lote aplicado**, en pasado (**Cambios aplicados**, valor aplicado). No incluye JSON técnico ni identificadores internos de check. En lotes de **eliminación de asientos**, cada renglón borrado aparece en su propia fila (cuenta, debe/haber y código de movimiento), con tipo **Asiento eliminado**.
 
 El detalle muestra hasta 500 filas en pantalla; si hay más, el aviso indica descargar Excel para el listado completo.
 
@@ -344,11 +344,11 @@ Use este flujo solo cuando deba **quitar asientos completos** del diario (todos 
 
 1. Elija el **ejercicio** (obligatorio).
 2. Opcional: filtros por fecha, concepto, tipo de comprobante, CodigoMovimiento, anulado o texto en la descripción.
-3. **Buscar** y marque los asientos con el checkbox (o **Seleccionar visibles** / **Importar nros**).
-4. **Vista previa**: revisa renglones, cuentas impactadas y avisos.
-5. **Eliminar definitivamente** (requiere `contabilidad.auditoria.corregir`): se crea backup, se borran los renglones y se recalculan saldos de cuentas/períodos afectados. El resultado queda en **Lotes** con `check_id` eliminación de asiento.
+3. **Buscar** (lista **completa** del filtro, sin paginación) y marque los asientos con el checkbox (o **Seleccionar todos** / **Importar nros**) para enviarlos en un solo lote de eliminación + recálculo.
+4. **Vista previa**: revisa renglones, cuentas impactadas y avisos sin crear backup ni modificar la contabilidad. Mientras calcula, verá el estado «Calculando impacto…» dentro del modal.
+5. **Eliminar definitivamente** (requiere `contabilidad.auditoria.corregir`): se crea un respaldo efímero de seguridad, se borran los renglones y se recalculan saldos; verá el avance en una barra de progreso. El resultado queda en **Lotes** con `check_id` eliminación de asiento.
 
-**Importante:** la operación es irreversible salvo **rollback** del lote si los backups siguen disponibles.
+**Importante:** la operación es irreversible; el respaldo solo protege ante fallos durante el proceso y no permite rollback posterior del lote.
 
 ---
 

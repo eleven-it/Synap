@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from typing import Any
 
 from django.http import HttpResponse
@@ -712,6 +713,8 @@ def _tipo_cambio_contador(tabla: str, valor_nuevo, valor_anterior) -> str:
     t = (tabla or "").lower()
     if t == "cont_asiento" and isinstance(valor_nuevo, dict):
         return "Asiento insertado"
+    if t == "cont_asiento" and _renglones_asiento_eliminado(valor_anterior):
+        return "Asiento eliminado"
     if "saldo" in t:
         if valor_anterior in (None, "") and valor_nuevo not in (None, ""):
             return "Saldo creado"
@@ -725,12 +728,82 @@ def _tipo_cambio_contador(tabla: str, valor_nuevo, valor_anterior) -> str:
     return "Corrección"
 
 
+def _renglones_asiento_eliminado(valor_anterior) -> list[dict] | None:
+    """Detecta el payload de eliminación (lista de renglones en valor_anterior)."""
+    va = valor_anterior
+    if isinstance(va, str):
+        txt = va.strip()
+        if not (txt.startswith("[") or txt.startswith("{")):
+            return None
+        try:
+            va = json.loads(txt)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+    if not isinstance(va, list) or not va:
+        return None
+    if not isinstance(va[0], dict):
+        return None
+    sample = va[0]
+    if any(k in sample for k in ("debe_asiento", "haber_asiento", "id_pc", "codigo_movimiento")):
+        return [r for r in va if isinstance(r, dict)]
+    return None
+
+
+def _nro_asiento_fila_lote(fila: dict) -> Any:
+    nro = fila.get("nro_asiento")
+    if nro not in (None, "", "—"):
+        return nro
+    clave = fila.get("clave") if isinstance(fila.get("clave"), dict) else {}
+    if clave.get("nro_asiento") is not None:
+        return clave.get("nro_asiento")
+    return ""
+
+
+def _filas_export_eliminacion(fila: dict, renglones: list[dict]) -> list[dict[str, Any]]:
+    """Una fila Excel por renglón eliminado (legible para contador)."""
+    nro = _nro_asiento_fila_lote(fila)
+    diagnostico = fila.get("titulo_check") or fila.get("check_id") or "Eliminación de asiento"
+    if str(diagnostico) in ("eliminacion_asiento", ""):
+        diagnostico = "Eliminación de asiento"
+    fecha_aplicacion = fila.get("fecha") or ""
+    out: list[dict[str, Any]] = []
+    for r in renglones:
+        anulado = str(r.get("anulado") or "No")
+        desc = str(r.get("desc_renglon_asiento") or "").strip()
+        if anulado == "Si" and desc:
+            desc = f"{desc} (anulado)"
+        elif anulado == "Si":
+            desc = "Renglón anulado"
+        out.append(
+            {
+                "diagnostico": diagnostico,
+                "tipo_cambio": "Asiento eliminado",
+                "nro_asiento": nro,
+                "fecha_asiento": "",
+                "codigo_movimiento": r.get("codigo_movimiento") or "",
+                "cuenta": r.get("id_pc") if r.get("id_pc") is not None else "",
+                "debe": _monto_export(r.get("debe_asiento")),
+                "haber": _monto_export(r.get("haber_asiento")),
+                "descripcion": desc,
+                "concepto": "",
+                "valor_anterior": "",
+                "valor_nuevo": "",
+                "cambio": "Renglón eliminado",
+                "fecha_aplicacion": fecha_aplicacion,
+            }
+        )
+    return out
+
+
 def _fila_lote_contador(fila: dict) -> dict[str, Any]:
     """Aplana una fila del log a columnas interpretables por un contador."""
     va = fila.get("valor_anterior")
     vn = fila.get("valor_nuevo")
     tabla = str(fila.get("tabla") or "")
     cambio = fila.get("cambio_resumen") or ""
+    # No volcar JSON técnico en «Cambios aplicados».
+    if isinstance(cambio, str) and cambio.strip()[:1] in ("{", "["):
+        cambio = ""
 
     out: dict[str, Any] = {
         "diagnostico": fila.get("titulo_check") or fila.get("check_id") or "—",
@@ -778,26 +851,43 @@ def _fila_lote_contador(fila: dict) -> dict[str, Any]:
         out["cuenta"] = clave.get("id_pc", "") if isinstance(clave, dict) else ""
         if _es_numerico_export(va):
             out["valor_anterior"] = _monto_export(va)
-        elif va not in (None, ""):
+        elif va not in (None, "") and not isinstance(va, (dict, list)):
             out["valor_anterior"] = str(va)
         if _es_numerico_export(vn):
             out["valor_nuevo"] = _monto_export(vn)
-        elif vn not in (None, ""):
+        elif vn not in (None, "") and not isinstance(vn, (dict, list)):
             out["valor_nuevo"] = str(vn)
         if not cambio and out["valor_anterior"] and out["valor_nuevo"]:
             out["cambio"] = f"{out['valor_anterior']} → {out['valor_nuevo']}"
         return out
 
-    if va not in (None, ""):
-        out["valor_anterior"] = str(va) if not isinstance(va, (dict, list)) else ""
+    if va not in (None, "") and not isinstance(va, (dict, list)):
+        out["valor_anterior"] = str(va)
     if vn not in (None, "") and not isinstance(vn, (dict, list)):
         out["valor_nuevo"] = str(vn)
+    if not out["cambio"] and out["tipo_cambio"] == "Asiento eliminado":
+        out["cambio"] = "Asiento eliminado"
+        out["nro_asiento"] = _nro_asiento_fila_lote(fila)
     return out
 
 
 def _filas_lote_export(filas: list[dict]) -> list[dict[str, Any]]:
-    return [_fila_lote_contador(f) for f in filas]
-
+    """Expande eliminaciones a una fila por renglón; el resto se aplana 1:1."""
+    resultado: list[dict[str, Any]] = []
+    for fila in filas:
+        renglones = _renglones_asiento_eliminado(fila.get("valor_anterior"))
+        check_id = str(fila.get("check_id") or "")
+        tabla = str(fila.get("tabla") or "").lower()
+        es_eliminacion = check_id == "eliminacion_asiento" or (
+            tabla == "cont_asiento"
+            and renglones is not None
+            and fila.get("valor_nuevo") in (None, "")
+        )
+        if es_eliminacion and renglones:
+            resultado.extend(_filas_export_eliminacion(fila, renglones))
+        else:
+            resultado.append(_fila_lote_contador(fila))
+    return resultado
 
 def exportar_lote_xlsx(lote: dict, filas: list[dict]) -> HttpResponse:
     """Excel del lote en formato contador: Resumen + Detalle (sin JSON técnico)."""

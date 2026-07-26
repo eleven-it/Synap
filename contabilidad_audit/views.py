@@ -13,7 +13,7 @@ from pathlib import Path
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -1348,10 +1348,31 @@ def _texto_corto(valor, limite: int = 80) -> str:
     return texto[: limite - 3] + "..."
 
 
+def _renglones_eliminacion_log(valor_anterior) -> list | None:
+    """Lista de renglones guardados en valor_anterior al eliminar un asiento."""
+    va = valor_anterior
+    if isinstance(va, str):
+        txt = va.strip()
+        if not txt.startswith("["):
+            return None
+        try:
+            va = json.loads(txt)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+    if isinstance(va, list) and va and isinstance(va[0], dict):
+        if any(k in va[0] for k in ("debe_asiento", "haber_asiento", "id_pc")):
+            return va
+    return None
+
+
 def _cambio_resumen(valor_anterior, valor_nuevo, tabla: str = "") -> str:
     """Texto corto contable del cambio (paridad con resumenValor del dry-run)."""
     vn = valor_nuevo
     va = valor_anterior
+
+    renglones_elim = _renglones_eliminacion_log(va)
+    if renglones_elim is not None and vn in (None, ""):
+        return f"Asiento eliminado · {len(renglones_elim)} renglón(es)"
 
     if isinstance(vn, dict) and vn.get("nro_asiento") is not None:
         partes = [f"Asiento {vn.get('nro_asiento')}"]
@@ -1466,6 +1487,7 @@ def _listar_detalle_lote(base_empresa: str, lote_id: str, limite: int = 500) -> 
             cursor.close()
 
     titulos_por_id = {c["check_id"]: c["titulo"] for c in _checks_disponibles()}
+    titulos_por_id.setdefault("eliminacion_asiento", "Eliminación de asiento")
     filas: list[dict] = []
     for row in rows:
         clave = _parse_json_o_string(row[3])
@@ -1478,6 +1500,21 @@ def _listar_detalle_lote(base_empresa: str, lote_id: str, limite: int = 500) -> 
             nro_asiento = valor_nuevo.get("nro_asiento")
         elif isinstance(clave, dict) and clave.get("nro_asiento") is not None:
             nro_asiento = clave.get("nro_asiento")
+        renglones_elim = _renglones_eliminacion_log(valor_anterior)
+        if renglones_elim is not None:
+            cms = sorted(
+                {
+                    str(r.get("codigo_movimiento"))
+                    for r in renglones_elim
+                    if r.get("codigo_movimiento") not in (None, "")
+                }
+            )
+            if not codigo_movimiento and len(cms) == 1:
+                codigo_movimiento = cms[0]
+            valor_anterior_corto = f"{len(renglones_elim)} renglón(es)"
+        else:
+            valor_anterior_corto = _texto_corto(valor_anterior, 60)
+
         filas.append(
             {
                 "id": int(row[0]),
@@ -1489,7 +1526,7 @@ def _listar_detalle_lote(base_empresa: str, lote_id: str, limite: int = 500) -> 
                 "nro_asiento": nro_asiento if nro_asiento != "" else "—",
                 "codigo_movimiento": codigo_movimiento if codigo_movimiento not in (None, "") else "—",
                 "valor_anterior": valor_anterior,
-                "valor_anterior_corto": _texto_corto(valor_anterior, 60),
+                "valor_anterior_corto": valor_anterior_corto,
                 "valor_nuevo": valor_nuevo,
                 "cambio_resumen": _cambio_resumen(valor_anterior, valor_nuevo, tabla),
                 "usuario": str(row[6] or ""),
@@ -1527,7 +1564,8 @@ def _listar_lotes_correccion(base_empresa: str) -> list[dict]:
                 """
                 SELECT l.lote_id, l.fecha, l.usuario, l.estado, l.dry_run_id,
                        (SELECT COUNT(*) FROM cont_audit_correccion c
-                        WHERE c.lote_id = l.lote_id) AS filas_correccion
+                        WHERE c.lote_id = l.lote_id) AS filas_correccion,
+                       l.backups_json
                 FROM cont_audit_correccion_lote l
                 WHERE l.base_empresa = %s
                 ORDER BY l.fecha DESC
@@ -1541,14 +1579,34 @@ def _listar_lotes_correccion(base_empresa: str) -> list[dict]:
 
     lotes: list[dict] = []
     for row in rows:
+        dry_run_id = str(row[4] or "")
+        backups_raw = row[6]
+        tiene_backups = False
+        if backups_raw:
+            try:
+                backups_data = (
+                    json.loads(backups_raw)
+                    if isinstance(backups_raw, (str, bytes, bytearray))
+                    else backups_raw
+                )
+                tiene_backups = isinstance(backups_data, dict) and bool(backups_data)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                tiene_backups = False
+        # Eliminación usa backup efímero: no es revertible vía rollback_lote.
+        puede_revertir = (
+            str(row[3] or "") != "revertido"
+            and dry_run_id != "eliminacion_asiento"
+            and tiene_backups
+        )
         lotes.append(
             {
                 "lote_id": str(row[0] or ""),
                 "fecha": _fecha_ui(row[1]),
                 "usuario": str(row[2] or ""),
                 "estado": str(row[3] or ""),
-                "dry_run_id": str(row[4] or ""),
+                "dry_run_id": dry_run_id,
                 "filas_correccion": int(row[5] or 0),
+                "puede_revertir": puede_revertir,
             }
         )
     return lotes
@@ -1562,14 +1620,16 @@ def _contexto_lotes(
 ) -> dict:
     user = getattr(request, "user", None)
     base_empresa = _base_empresa_sesion(request) or ""
+    lotes_ctx = lotes or []
     return {
         "titulo_pagina": "Lotes y planes de diagnóstico",
         "base_empresa": base_empresa,
-        "lotes": lotes or [],
+        "lotes": lotes_ctx,
         "planes": planes or [],
         "error_lotes": error,
         "permiso_corregir": PERMISO_CORREGIR,
         "puede_corregir": _tiene_permiso(user, PERMISO_CORREGIR),
+        "hay_lotes_revertibles": any(bool(l.get("puede_revertir")) for l in lotes_ctx),
         "tablero_url": reverse("contabilidad_audit:auditoria_tablero"),
         "dry_run_url": reverse("contabilidad_audit:auditoria_dry_run"),
         "lotes_url": reverse("contabilidad_audit:auditoria_lotes"),
@@ -1672,6 +1732,7 @@ def auditoria_lote_rollback(request, lote_id):
     POST /contabilidad/auditoria/lotes/<lote_id>/rollback/
 
     Revierte un lote aplicado vía ``rollback_lote`` (requiere permiso de corregir).
+    Los lotes de eliminación de asientos no son revertibles (backup efímero).
     """
     from legacy_db.services.cont_recalculo_service import CorreccionContableError, rollback_lote
 
@@ -1681,6 +1742,15 @@ def auditoria_lote_rollback(request, lote_id):
         return redirect(reverse("contabilidad_audit:auditoria_lotes"))
 
     usuario = _usuario_identificador(request)
+    lote = _obtener_lote(base_empresa, lote_id)
+    if lote and str(lote.get("dry_run_id") or "") == "eliminacion_asiento":
+        messages.error(
+            request,
+            "Los lotes de eliminación de asientos no se pueden revertir: "
+            "el respaldo solo protege ante fallos durante el proceso.",
+        )
+        return redirect(reverse("contabilidad_audit:auditoria_lotes"))
+
     try:
         rollback_lote(
             base_empresa,
@@ -1753,14 +1823,10 @@ def _parse_filtros_asientos(request, *, exigir_ejercicio: bool = True) -> dict:
     nros = _parse_nros_asiento(request.GET.get("nros_asiento", ""))
     if nros:
         filtros["nros_asiento"] = nros
-    if request.GET.get("page"):
-        filtros["page"] = int(request.GET["page"])
-    if request.GET.get("page_size"):
-        filtros["page_size"] = int(request.GET["page_size"])
     return filtros
 
 
-def _parse_asientos_json_body(request) -> list[dict]:
+def _parse_asientos_eliminar_body(request) -> tuple[list[dict], bool]:
     try:
         payload = json.loads(request.body.decode("utf-8") or "{}")
     except json.JSONDecodeError as exc:
@@ -1768,7 +1834,39 @@ def _parse_asientos_json_body(request) -> list[dict]:
     asientos = payload.get("asientos")
     if not isinstance(asientos, list):
         raise ValueError("El cuerpo debe incluir una lista «asientos».")
+    accept = (request.headers.get("Accept") or "").lower()
+    stream = bool(payload.get("stream")) or "application/x-ndjson" in accept
+    return asientos, stream
+
+
+def _parse_asientos_json_body(request) -> list[dict]:
+    asientos, _ = _parse_asientos_eliminar_body(request)
     return asientos
+
+
+def _stream_eliminar_asientos_ndjson(base_empresa: str, asientos: list[dict], usuario: str):
+    from legacy_db.services.cont_eliminacion_asientos_service import (
+        EliminacionAsientosError,
+        _eliminar_asientos_iter,
+    )
+
+    try:
+        for evento in _eliminar_asientos_iter(
+            base_empresa,
+            asientos,
+            usuario,
+            tiene_permiso_corregir=True,
+        ):
+            if evento.get("type") == "progress":
+                yield json.dumps(evento, ensure_ascii=False) + "\n"
+            elif evento.get("type") == "result":
+                fin = {"type": "done", **evento["payload"]}
+                yield json.dumps(fin, ensure_ascii=False) + "\n"
+    except EliminacionAsientosError as exc:
+        yield json.dumps({"type": "error", "error": str(exc)}, ensure_ascii=False) + "\n"
+    except Exception as exc:
+        logger.exception("Error eliminando asientos (stream) base=%s", base_empresa)
+        yield json.dumps({"type": "error", "error": str(exc)}, ensure_ascii=False) + "\n"
 
 
 def _contexto_asientos_eliminar(request, filtros: dict | None = None) -> dict:
@@ -1886,15 +1984,28 @@ def auditoria_asientos_eliminar_ejecutar(request):
         return JsonResponse({"error": "No hay empresa base en la sesión."}, status=400)
 
     try:
-        asientos = _parse_asientos_json_body(request)
+        asientos, stream = _parse_asientos_eliminar_body(request)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    usuario = _usuario_identificador(request)
+
+    if stream:
+        response = StreamingHttpResponse(
+            _stream_eliminar_asientos_ndjson(base_empresa, asientos, usuario),
+            content_type="application/x-ndjson; charset=utf-8",
+        )
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
+
+    try:
         resultado = eliminar_asientos(
             base_empresa,
             asientos,
-            _usuario_identificador(request),
+            usuario,
             tiene_permiso_corregir=True,
         )
-    except ValueError as exc:
-        return JsonResponse({"error": str(exc)}, status=400)
     except EliminacionAsientosError as exc:
         return JsonResponse({"error": str(exc)}, status=409)
     except Exception as exc:

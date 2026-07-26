@@ -435,15 +435,18 @@ Proceso operativo para borrar asientos completos `(id_ejercicio, nro_asiento)` c
 |---------|---------|
 | Servicio | `legacy_db/services/cont_eliminacion_asientos_service.py` |
 | UI | `/contabilidad/auditoria/asientos/` |
+| Listado | Sin paginación: `listar_asientos` devuelve **todos** los asientos del filtro (ejercicio + filtros opcionales) para poder seleccionar el universo completo y enviar un solo lote de eliminación + recálculo. |
 | Permiso listar / preview | `contabilidad.auditoria.leer` |
 | Permiso eliminar | `contabilidad.auditoria.corregir` |
 | Unidad de borrado | `(id_ejercicio, nro_asiento)` — DELETE físico de **todos** los renglones |
-| Backup previo | `cont_asiento`, `cont_ejercicio_saldo_cta`, `cont_periodo_saldo_cta` vía `_crear_backups` |
+| Backup previo | Efímero durante el proceso: `cont_asiento`, `cont_ejercicio_saldo_cta`, `cont_periodo_saldo_cta` vía `_crear_backups`; al finalizar (éxito o fallo post-backup) se hace `DROP` de las tablas `*_bkp_*` de la corrida. `backups_json` del lote queda `{}` — **no** es revertible con `rollback_lote`. Si falla a mitad de la transacción DML, el rollback revierte los cambios automáticamente. |
+| Progreso en vivo | POST con `"stream": true` o `Accept: application/x-ndjson` → `StreamingHttpResponse` NDJSON (`type: progress` / `done` / `error`). UI: barra determinada con `synapShowPostLoadingProgress` + `synapUpdatePostLoadingProgress`. |
 | Recálculo | Saldo teórico post-delete (excluye anulados) → UPDATE o INSERT en tablas de saldo |
 | Log | `cont_audit_correccion_lote` + `cont_audit_correccion` con `check_id=eliminacion_asiento` |
+| Excel del lote | Expande `valor_anterior` (lista de renglones) a **una fila por renglón**: tipo «Asiento eliminado», Nro asiento, CM, Cuenta, Debe/Haber (`$ x.xxx,xx`), «Renglón eliminado». Sin JSON en «Cambios aplicados». En UI del detalle, resumen «Asiento eliminado · N renglón(es)». |
 | Empresa | Siempre la de sesión (`_base_empresa_sesion`) |
 
-Flujo UI: filtrar → seleccionar → vista previa (POST JSON) → modal confirmación Synap → POST eliminar con `synapShowPostLoadingProgress` → lote registrado (consultar en Lotes).
+Flujo UI: filtrar → seleccionar → vista previa (POST JSON) → modal confirmación Synap → POST eliminar con barra de progreso determinada (`synapShowPostLoadingProgress` + NDJSON) → lote registrado (consultar en Lotes).
 
 Tests:
 
