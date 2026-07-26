@@ -12,7 +12,12 @@ from contabilidad_audit.models import PREFIJOS_CUENTA_DEFAULT, PoliticaAuditoria
 from contabilidad_audit.services.checks.saldos import saldo_ejercicio_vs_diario
 from contabilidad_audit.services.politicas import resolver_politica
 from contabilidad_audit.services.resultados import CorridaContexto
-from legacy_db.services.cont_recalculo_service import apply, dry_run
+from legacy_db.services.cont_recalculo_service import (
+    CHECK_REI,
+    CHECKS_INCLUIDOS,
+    apply,
+    dry_run,
+)
 
 
 def _es_piloto_cont() -> bool:
@@ -62,7 +67,10 @@ class ContRecalculoApplyIntegracionPilotoTestCase(TestCase):
         politica = resolver_politica(self.base_empresa)
         payload = dry_run(
             base_empresa=self.base_empresa,
-            alcance={"id_ejercicio": self.id_ejercicio},
+            alcance={
+                "id_ejercicio": self.id_ejercicio,
+                "check_ids": list(CHECKS_INCLUIDOS) + [CHECK_REI],
+            },
             politica=politica,
             usuario="piloto_integracion",
         )

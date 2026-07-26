@@ -7,157 +7,261 @@
 
 {% block content %}
 {% if payload %}{{ payload|json_script:"dry-run-payload" }}{% endif %}
+{{ checks_disponibles|json_script:"contabilidad-checks-data" }}
+{{ checks_seleccionados|json_script:"contabilidad-checks-seleccionados" }}
 <section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24"
          x-data="auditoriaDryRun({
             dryRunUrl: '{{ dry_run_url }}',
             tableroUrl: '{{ tablero_url }}',
-            baseEmpresa: '{{ base_empresa|escapejs }}',
+            ejerciciosPeriodosUrl: '{{ ejercicios_periodos_url }}',
+            applyEjecutarUrl: '{% url "contabilidad_audit:auditoria_apply_ejecutar" %}',
+            puedeCorregir: {{ puede_corregir|yesno:"true,false" }},
             idEjercicio: '{{ id_ejercicio|escapejs }}',
-            idPeriodo: '{{ id_periodo|escapejs }}',
             alcanceRecompute: '{{ alcance_recompute|default:''|escapejs }}',
             errorParametros: '{{ error_parametros|default:''|escapejs }}',
             errorEjecucion: '{{ error_ejecucion|default:''|escapejs }}'
          })"
          x-init="init()">
 
-    <div class="relative overflow-hidden">
-        <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 opacity-95"></div>
-        <div class="relative w-full px-4 sm:px-6 lg:px-12 py-8">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <p class="text-[11px] uppercase tracking-[0.25em] text-slate-300 font-semibold mb-2">
-                        Contabilidad · Dry-run (sin escritura legacy)
-                    </p>
-                    <h1 class="text-3xl md:text-4xl font-semibold text-white tracking-tight">{{ titulo_pagina }}</h1>
-                    <p class="text-sm text-slate-300 mt-2 max-w-2xl">
-                        Vista previa del plan de corrección. Los cambios se persisten solo en PostgreSQL;
-                        MySQL legacy no se modifica. La Fase 3 (apply) requiere aprobación contable previa.
-                    </p>
-                </div>
-                <div class="flex flex-wrap items-center gap-2">
-                    {% include "includes/btn_manual_ayuda.html" with url_name="contabilidad_audit:manual_usuario" seccion="dry-run" class_extra="text-slate-300 hover:text-sky-300 border border-slate-600 hover:border-slate-400 rounded-full px-3 py-2" only %}
-                    <a href="{{ tablero_url }}"
-                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-slate-200 border border-slate-600 hover:border-slate-400">
-                        Tablero auditoría
-                    </a>
-                    <a href="{{ lotes_url|default:'#' }}"
-                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-violet-300 border border-violet-700 hover:border-violet-500">
-                        Lotes aplicados
-                    </a>
-                    <a :href="exportUrl('csv')" :class="!payload ? 'opacity-40 pointer-events-none' : ''"
-                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-sky-300 border border-sky-700">CSV</a>
-                    <a :href="exportUrl('xlsx')" :class="!payload ? 'opacity-40 pointer-events-none' : ''"
-                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-green-400 border border-green-700">Excel</a>
+    <div class="w-full px-4 sm:px-6 lg:px-12 py-4">
+    {% if messages %}
+    <div class="mb-3 space-y-2">
+        {% for message in messages %}
+        <div class="rounded-lg px-3 py-2 text-sm border
+            {% if message.tags == 'success' %}bg-emerald-50 border-emerald-300 text-emerald-800 dark:bg-emerald-900/20 dark:border-emerald-700 dark:text-emerald-200
+            {% elif message.tags == 'error' %}bg-rose-50 border-rose-300 text-rose-800 dark:bg-rose-900/20 dark:border-rose-700 dark:text-rose-200
+            {% else %}bg-slate-50 border-slate-300 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Encabezado denso sticky (no se oculta al scrollear; bajo navbar fijo h-14/h-16) -->
+    <div class="mb-3 sticky top-14 z-40 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md md:top-16">
+        <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl">
+                {{ titulo_pagina|default:"Diagnóstico de corrección contable" }}
+            </h1>
+
+            <!-- Ejercicio en chrome (empresa = sesión; sin período en UI) -->
+            <div class="relative min-w-[12rem] flex-1 max-w-md" @click.outside="ejercicioAbierto = false">
+                <label class="sr-only" for="auditoria-ejercicio">Ejercicio</label>
+                <div class="relative">
+                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2.5 text-slate-400" aria-hidden="true">
+                        <span class="material-icons text-lg">event</span>
+                    </span>
+                    <input id="auditoria-ejercicio" type="text" x-model="ejercicioBusqueda"
+                           @focus="ejercicioAbierto = true" @click="ejercicioAbierto = true"
+                           @keydown.escape.stop="ejercicioAbierto = false"
+                           placeholder="Ejercicio…" autocomplete="off"
+                           class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 pl-9 pr-8 text-sm text-white placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    <button type="button" x-show="filtros.idEjercicio" x-cloak @click="limpiarEjercicio()"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-300" title="Limpiar ejercicio">
+                        <span class="material-icons text-base">close</span>
+                    </button>
+                    <div x-show="ejercicioAbierto" x-cloak x-transition.opacity
+                         class="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto rounded-lg border border-slate-600 bg-slate-900 shadow-lg">
+                        <template x-if="cargandoDatos">
+                            <div class="px-3 py-2 text-xs text-slate-400">Cargando ejercicios…</div>
+                        </template>
+                        <template x-if="!cargandoDatos && ejerciciosFiltrados.length === 0">
+                            <div class="px-3 py-2 text-xs text-slate-400">Sin ejercicios disponibles.</div>
+                        </template>
+                        <template x-for="ej in ejerciciosFiltrados" :key="ej.id">
+                            <button type="button" @click="seleccionarEjercicio(ej)"
+                                    class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-slate-800"
+                                    :class="String(filtros.idEjercicio) === String(ej.id) ? 'bg-slate-800 font-semibold text-sky-300' : 'text-slate-100'">
+                                <span class="truncate" x-text="ej.label"></span>
+                                <span x-show="ej.cerrado" class="flex-shrink-0 text-[10px] uppercase tracking-wide text-amber-400">Cerrado</span>
+                            </button>
+                        </template>
+                    </div>
                 </div>
             </div>
-        </div>
+
+            <div class="ml-auto flex flex-wrap items-center gap-2">
+                <button type="button" @click="generar()"
+                        :disabled="!puedeGenerar()"
+                        :title="!checksSeleccionados.length ? 'Elegí al menos un diagnóstico para generarlo.' : (!filtros.idEjercicio ? 'Elegí un ejercicio.' : (payload?.dry_run_id ? 'Actualizar el diagnóstico del plan de corrección' : 'Generar el diagnóstico del plan de corrección'))"
+                        class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-40">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">fact_check</span>
+                    <span class="hidden sm:inline" x-text="payload?.dry_run_id ? 'Actualizar diagnóstico' : 'Generar diagnóstico'"></span>
+                </button>
+                <a href="{% url 'contabilidad_audit:manual_usuario' %}#dry-run"
+                   target="_blank" rel="noopener noreferrer"
+                   aria-label="Manual del diagnóstico de corrección"
+                   title="Manual del diagnóstico de corrección"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">help_outline</span>
+                    <span class="hidden sm:inline">Ayuda</span>
+                </a>
+                <a href="{{ tablero_url }}"
+                   title="Volver al tablero de auditoría"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">dashboard</span>
+                    <span class="hidden sm:inline">Tablero</span>
+                </a>
+                <a href="{{ lotes_url|default:'#' }}"
+                   title="Lotes de corrección aplicados"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">layers</span>
+                    <span class="hidden sm:inline">Lotes</span>
+                </a>
+                <a :href="exportUrl('xlsx')"
+                   :class="!payload ? 'opacity-40 pointer-events-none' : ''"
+                   title="Exportar el plan a Excel"
+                   class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-xs font-medium text-slate-200 hover:bg-slate-600 hover:text-white">
+                    <span class="material-icons text-base leading-none" aria-hidden="true">table_view</span>
+                    <span class="hidden sm:inline">Excel</span>
+                </a>
+            </div>
+        </header>
     </div>
 
-    <div class="w-full px-4 sm:px-6 lg:px-12 -mt-4 relative z-10 space-y-6">
+    <!-- Diagnósticos (mismo patrón compacto que el tablero) -->
+    <div class="mb-3 bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-4">
+        <section class="relative"
+                 aria-label="Selección de diagnósticos"
+                 @click.outside="diagAbierto = false"
+                 @keydown.escape.window="diagAbierto = false">
+            <div class="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                    Diagnósticos
+                </h2>
+                <span class="inline-flex items-center rounded-full bg-sky-100 dark:bg-sky-900/40 px-2 py-0.5 text-[11px] font-semibold text-sky-700 dark:text-sky-300"
+                      x-text="checksSeleccionados.length + ' de ' + checks.length"></span>
+                <span x-show="!checksSeleccionados.length" x-cloak
+                      class="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                    Ninguno seleccionado
+                </span>
+                <template x-for="c in chipsSeleccion" :key="'chip-' + c.check_id">
+                    <span class="inline-flex max-w-[12rem] items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 px-1.5 py-0.5 text-[11px] text-slate-600 dark:text-slate-300"
+                          :title="c.titulo">
+                        <span class="h-1.5 w-1.5 flex-shrink-0 rounded-full" :class="severidadDot(c.severidad)"></span>
+                        <span class="truncate" x-text="c.titulo"></span>
+                    </span>
+                </template>
+                <button type="button" x-show="chipsRestantes > 0" x-cloak @click="diagAbierto = true"
+                        class="text-[11px] font-medium text-slate-500 hover:text-sky-600 dark:text-slate-400"
+                        x-text="'+' + chipsRestantes + ' más'"></button>
+                <div class="ml-auto flex items-center gap-2">
+                    <button type="button" @click="seleccionarTodos()"
+                            class="text-[11px] font-medium text-sky-600 hover:text-sky-500">Todos</button>
+                    <span class="text-[11px] text-slate-300 dark:text-slate-700">|</span>
+                    <button type="button" @click="limpiarSeleccion()"
+                            class="text-[11px] font-medium text-slate-500 hover:text-slate-400">Ninguno</button>
+                    <span class="text-[11px] text-slate-300 dark:text-slate-700">|</span>
+                    <button type="button" @click="seleccionarSoloCriticos()"
+                            class="text-[11px] font-medium text-rose-600 hover:text-rose-500">Solo críticos</button>
+                    <button type="button" @click="diagAbierto = !diagAbierto"
+                            :aria-expanded="diagAbierto ? 'true' : 'false'"
+                            class="inline-flex h-8 items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+                        <span class="material-icons text-sm leading-none" aria-hidden="true">tune</span>
+                        Elegir
+                    </button>
+                </div>
+            </div>
+            <div x-show="diagAbierto" x-cloak x-transition.opacity
+                 class="absolute right-0 z-40 mt-2 w-full max-w-xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+                <div class="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 p-2.5">
+                    <div class="relative flex-1">
+                        <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-slate-400" aria-hidden="true">
+                            <span class="material-icons text-base">search</span>
+                        </span>
+                        <label class="sr-only" for="dry-run-diag-busqueda">Filtrar diagnósticos</label>
+                        <input id="dry-run-diag-busqueda" type="search" x-model="diagBusqueda"
+                               placeholder="Filtrar diagnósticos…" autocomplete="off"
+                               class="h-8 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 pl-8 pr-2 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500">
+                    </div>
+                    <button type="button" @click="diagAbierto = false"
+                            class="inline-flex h-8 items-center rounded-lg bg-slate-900 dark:bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-slate-700 dark:hover:bg-sky-500">
+                        Listo
+                    </button>
+                </div>
+                <div class="max-h-64 overflow-y-auto py-1">
+                    <template x-if="!gruposFiltrados.length">
+                        <p class="px-3 py-4 text-center text-xs text-slate-400">Ningún diagnóstico coincide con el filtro.</p>
+                    </template>
+                    <template x-for="grupo in gruposFiltrados" :key="grupo.severidad">
+                        <div>
+                            <button type="button" @click="seleccionarGrupo(grupo.severidad)"
+                                    class="sticky top-0 z-10 flex w-full items-center gap-2 border-y border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/90 px-3 py-1 text-left">
+                                <span class="h-2 w-2 flex-shrink-0 rounded-full" :class="severidadDot(grupo.severidad)"></span>
+                                <span class="text-[10px] font-semibold uppercase tracking-wide"
+                                      :class="severidadTexto(grupo.severidad)" x-text="grupo.label"></span>
+                                <span class="ml-auto text-[10px] text-slate-400 dark:text-slate-500"
+                                      x-text="grupo.seleccionados + '/' + grupo.checks.length"></span>
+                            </button>
+                            <template x-for="c in grupo.checks" :key="c.check_id">
+                                <button type="button" @click="toggleCheck(c.check_id)"
+                                        :aria-pressed="estaSeleccionado(c.check_id) ? 'true' : 'false'"
+                                        :title="c.titulo + ' · ' + c.severidad_label"
+                                        class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-sky-50 dark:hover:bg-slate-800/60 focus:outline-none focus-visible:bg-sky-50">
+                                    <span class="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border transition-colors"
+                                          :class="estaSeleccionado(c.check_id)
+                                              ? 'border-sky-600 bg-sky-600 text-white'
+                                              : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'">
+                                        <svg x-show="estaSeleccionado(c.check_id)" class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 13l4 4L19 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                    </span>
+                                    <span class="flex-1 truncate text-xs text-slate-700 dark:text-slate-200" x-text="c.titulo"></span>
+                                    <span class="flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                                          :class="severidadBadge(c.severidad)" x-text="severidadLabel(c.severidad)"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </section>
+    </div>
 
-        <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-300 dark:border-amber-700 rounded-xl px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-            Este dry-run <strong>no aplica</strong> correcciones. Solo genera un plan con validez de {{ payload.guards.ttl_minutos|default:30 }} minutos
-            (tres guards: TTL, config_hash, data_fingerprint).
-        </div>
+    <!-- Banner diagnóstico (sin escritura) -->
+    <div class="mb-4 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+        Diagnóstico <strong>sin escritura</strong> en la base contable. El plan tiene validez limitada
+        ({{ payload.guards.ttl_minutos|default:30 }} min). La aplicación real requiere aprobación contable.
+    </div>
+
+    <div class="space-y-4">
 
         <div x-show="alcanceRecompute === 'historico'" x-cloak
              class="bg-orange-50 dark:bg-orange-900/20 border border-orange-300 dark:border-orange-700 rounded-xl px-4 py-3 text-sm text-orange-900 dark:text-orange-200">
             <p class="font-semibold mb-1">Advertencia de performance (POL-07)</p>
             <p>
-                La política efectiva usa alcance de recálculo <strong>histórico</strong>. Este dry-run puede tardar mucho
+                La política efectiva usa alcance de recálculo <strong>histórico</strong>. Este diagnóstico puede tardar mucho
                 y consumir recursos significativos. Ejecutelo por lotes y preferentemente fuera del horario operativo.
             </p>
         </div>
 
-        <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
-            <form method="get" :action="dryRunUrl"
-                  class="synap-post-loading grid grid-cols-1 md:grid-cols-4 gap-4"
-                  data-synap-loading-title="Generando dry-run"
-                  data-synap-loading-subtitle="Calculando plan de corrección. No cierres esta ventana.">
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Empresa (base)</label>
-                    <input type="text" name="base_empresa" x-model="filtros.baseEmpresa" required
-                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Ejercicio *</label>
-                    <input type="number" name="id_ejercicio" x-model="filtros.idEjercicio" required
-                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Período (opc.)</label>
-                    <input type="number" name="id_periodo" x-model="filtros.idPeriodo"
-                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm">
-                </div>
-                <div class="flex items-end">
-                    <button type="submit"
-                            class="w-full rounded-lg px-4 py-2 text-sm font-semibold text-white bg-slate-900 dark:bg-sky-600 hover:bg-slate-700">
-                        Generar dry-run
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <div x-show="error" x-cloak class="bg-rose-50 dark:bg-rose-900/20 border border-rose-300 rounded-xl px-4 py-3 text-sm text-rose-700">
+        <div x-show="error" x-cloak class="bg-rose-50 dark:bg-rose-900/20 border border-rose-300 rounded-xl px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
             <span x-text="error"></span>
         </div>
 
-        <div x-show="payload" x-cloak class="space-y-6">
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5">
-                <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-4">Guards de validez del plan</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                    <div>
-                        <p class="text-[10px] uppercase text-slate-400">TTL</p>
-                        <p class="font-medium" x-text="(payload?.guards?.ttl_minutos || 30) + ' min'"></p>
-                        <p class="text-xs text-slate-500 mt-1">Expira: <span x-text="payload?.expira_en"></span></p>
-                    </div>
-                    <div>
-                        <p class="text-[10px] uppercase text-slate-400">config_hash</p>
-                        <p class="text-[11px] font-mono truncate" :title="payload?.config_hash" x-text="payload?.config_hash"></p>
-                    </div>
-                    <div>
-                        <p class="text-[10px] uppercase text-slate-400">data_fingerprint</p>
-                        <p class="text-[11px] font-mono truncate" :title="payload?.data_fingerprint" x-text="payload?.data_fingerprint"></p>
-                    </div>
-                    <div>
-                        <p class="text-[10px] uppercase text-slate-400">dry_run_id</p>
-                        <p class="text-[11px] font-mono truncate" x-text="payload?.dry_run_id"></p>
-                    </div>
-                </div>
-            </div>
+        <div x-show="!payload && !error" x-cloak class="text-center py-16">
+            <span class="material-icons text-5xl text-slate-300 dark:text-slate-700">fact_check</span>
+            <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+                Elegí el ejercicio, seleccioná al menos un diagnóstico y pulsá <strong>Generar diagnóstico</strong> para armar el plan de corrección.
+            </p>
+        </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5">
-                    <p class="text-[10px] uppercase text-slate-400">Items totales</p>
-                    <p class="text-3xl font-semibold text-slate-800 dark:text-white" x-text="payload?.impacto?.total_items ?? 0"></p>
-                </div>
-                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-emerald-200 p-5">
-                    <p class="text-[10px] uppercase text-slate-400">Aplicables</p>
-                    <p class="text-3xl font-semibold text-emerald-600" x-text="payload?.impacto?.total_aplicables ?? 0"></p>
-                </div>
-                <div class="bg-white dark:bg-slate-900 rounded-2xl border border-amber-200 p-5">
-                    <p class="text-[10px] uppercase text-slate-400">Excluidos (ej. cerrados)</p>
-                    <p class="text-3xl font-semibold text-amber-600" x-text="payload?.impacto?.total_excluidos ?? 0"></p>
-                </div>
-            </div>
-
+        <div x-show="payload" x-cloak class="space-y-4">
             <div x-show="(payload?.impacto?.total_aplicables ?? 0) === 0"
                  class="rounded-xl border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/20 px-4 py-3 text-sm text-sky-900 dark:text-sky-100">
                 <p class="font-semibold">Plan vacío</p>
                 <p class="mt-1 text-sky-800/90 dark:text-sky-200/90">
-                    No hay correcciones automáticas para este alcance (idempotente o fuera de auto-apply).
-                    El tablero puede seguir en rojo por checks que no entran en este dry-run.
+                    No hay correcciones automáticas para este alcance.
+                    El tablero puede seguir en rojo por diagnósticos que no entran en este plan.
+                    Si viste comprobantes sin asiento, verificá que el
+                    <strong>ejercicio</strong> coincida con la fecha del comprobante
+                    (ej. fechas desde 01/04/2026 suelen ser ejercicio 2).
                 </p>
             </div>
 
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5">
+            <div class="bg-white dark:bg-slate-900 rounded-xl border p-4">
                 <h2 class="text-sm font-semibold mb-1">Asientos huérfanos a regenerar</h2>
                 <p class="text-xs text-slate-500 mb-4">
-                    Comprobantes con <code class="font-mono">CodigoMovimiento</code> sin filas en
-                    <code class="font-mono">cont_asiento</code>: compras/pagos
-                    (<code class="font-mono">comprobante_compra_pago_sin_asiento</code>, FA/FC/OP) y
-                    ventas/cobranzas
-                    (<code class="font-mono">comprobante_venta_cobranza_sin_asiento</code>, FA/FB/FC/FE/FM/REC).
+                    Comprobantes de compra/pago (FA, FC, OP) o venta/cobranza (FA, FB, FC, FE, FM, REC)
+                    que no tienen asiento contable y se regenerarán al aplicar el plan.
                 </p>
                 <div x-show="totalHuerfanosRegenerar > 0" class="space-y-1 text-sm">
                     <template x-for="tipo in ['FA', 'FB', 'FC', 'FE', 'FM', 'OP', 'REC']" :key="'regen-' + tipo">
@@ -177,25 +281,11 @@
                 </p>
             </div>
 
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5">
-                <h2 class="text-sm font-semibold mb-3">Impacto por tabla</h2>
-                <div class="text-sm">
-                    <template x-for="(cnt, tabla) in (payload?.impacto?.totales_por_tabla || {})" :key="tabla">
-                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                            <span x-text="tabla"></span>
-                            <span class="font-mono" x-text="cnt"></span>
-                        </div>
-                    </template>
-                    <p x-show="!Object.keys(payload?.impacto?.totales_por_tabla || {}).length"
-                       class="text-xs text-slate-500">Sin impacto por tabla en este plan.</p>
-                </div>
-            </div>
-
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5"
+            <div class="bg-white dark:bg-slate-900 rounded-xl border p-4"
                  x-show="anulacionesReparables > 0 || anulacionesBloqueadas > 0 || anulacionesItems.length">
                 <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Reparación de anulaciones</h2>
                 <p class="text-xs text-slate-500 mb-4">
-                    Check <code class="font-mono">integridad_anulacion_compra_pago</code> — piloto de anulaciones incompletas.
+                    Anulaciones incompletas detectadas en el diagnóstico.
                 </p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                     <div class="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 p-4">
@@ -242,19 +332,11 @@
                 </p>
             </div>
 
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5" x-show="Object.keys(payload?.backups_propuestos || {}).length">
-                <h2 class="text-sm font-semibold mb-2">Backups propuestos (simulados)</h2>
-                <p class="text-xs text-slate-500 mb-3">Nombres que se usarían en Fase 3; no se crean tablas en dry-run.</p>
-                <template x-for="(nombre, tabla) in (payload?.backups_propuestos || {})" :key="tabla">
-                    <div class="text-xs font-mono py-1"><span x-text="tabla"></span> → <span x-text="nombre"></span></div>
-                </template>
-            </div>
-
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5" x-show="(payload?.propuestas_rei || []).length">
-                <h2 class="text-sm font-semibold mb-2">Propuestas REI (aprobación caso a caso)</h2>
+            <div class="bg-white dark:bg-slate-900 rounded-xl border p-4" x-show="(payload?.propuestas_rei || []).length">
+                <h2 class="text-sm font-semibold mb-2">Propuestas REI</h2>
                 <p class="text-xs text-slate-500 mb-3">
-                    <span x-text="(payload?.propuestas_rei || []).length"></span> cuenta(s) con delta REI.
-                    Requiere permiso <code>contabilidad.auditoria.rei</code> antes del apply modo REI.
+                    <span x-text="(payload?.propuestas_rei || []).length"></span> cuenta(s) con diferencia de REI.
+                    Requieren aprobación contable caso a caso antes de aplicar.
                 </p>
                 <a :href="'/contabilidad/auditoria/rei/' + (payload?.dry_run_id || '') + '/'"
                    class="inline-flex rounded-lg px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700">
@@ -262,46 +344,342 @@
                 </a>
             </div>
 
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5 flex flex-wrap items-center gap-3"
-                 x-show="payload?.impacto?.total_aplicables > 0">
-                <div class="flex-1 text-sm">
-                    <p class="font-semibold">Apply general (saldos / regeneración compras-pagos)</p>
-                    <p class="text-xs text-slate-500">Requiere permiso corregir + confirmación (también en development).</p>
-                </div>
-                <a :href="'/contabilidad/auditoria/apply/?dry_run_id=' + (payload?.dry_run_id || '') + '&base_empresa=' + encodeURIComponent(payload?.base_empresa || '') + '&modo=general'"
-                   class="inline-flex rounded-lg px-4 py-2 text-xs font-semibold text-white bg-rose-700 hover:bg-rose-800">
-                    Confirmar apply general
-                </a>
-            </div>
-
-            <div class="bg-white dark:bg-slate-900 rounded-2xl border overflow-hidden">
-                <div class="px-5 py-3 border-b">
-                    <h2 class="text-sm font-semibold">Muestra del plan (primeros 50 items)</h2>
+            <div class="bg-white dark:bg-slate-900 rounded-xl border overflow-hidden">
+                <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0">
+                        <h2 class="text-sm font-semibold">Detalle de correcciones (muestra)</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Primeros 50 ítems del plan diagnosticado. Tocá una fila para ver el detalle completo.</p>
+                    </div>
+                    <div class="flex flex-col items-end gap-1 shrink-0" x-show="payload?.impacto?.total_aplicables > 0">
+                        <button type="button" x-show="puedeCorregir" @click="abrirConfirmacionApply()"
+                                class="inline-flex rounded-lg px-4 py-2 text-xs font-semibold text-white bg-rose-700 hover:bg-rose-800">
+                            Aplicar correcciones
+                        </button>
+                        <p x-show="!puedeCorregir" x-cloak class="text-xs text-amber-700 dark:text-amber-300">
+                            Sin permiso para aplicar correcciones.
+                        </p>
+                    </div>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-[11px]">
                         <thead class="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase">
                             <tr>
-                                <th class="px-2 py-2 text-left">Tabla</th>
+                                <th class="px-2 py-2 text-left">Diagnóstico</th>
                                 <th class="px-2 py-2 text-left">Acción</th>
-                                <th class="px-2 py-2 text-left">Check</th>
+                                <th class="px-2 py-2 text-left">Nro asiento</th>
+                                <th class="px-2 py-2 text-left">CodigoMovimiento</th>
+                                <th class="px-2 py-2 text-left">Fecha</th>
+                                <th class="px-2 py-2 text-left">Cuenta</th>
+                                <th class="px-2 py-2 text-right">Debe</th>
+                                <th class="px-2 py-2 text-right">Haber</th>
+                                <th class="px-2 py-2 text-left">Descripción</th>
                                 <th class="px-2 py-2 text-right">Delta</th>
                                 <th class="px-2 py-2 text-left">Excluido</th>
+                                <th class="px-2 py-2 text-right">Detalle</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                            <template x-for="(item, idx) in (payload?.plan?.items || []).slice(0, 50)" :key="idx">
-                                <tr>
-                                    <td class="px-2 py-1.5" x-text="item.tabla"></td>
-                                    <td class="px-2 py-1.5" x-text="item.accion"></td>
-                                    <td class="px-2 py-1.5" x-text="item.check_id"></td>
-                                    <td class="px-2 py-1.5 text-right font-mono" x-text="item.delta ?? '—'"></td>
-                                    <td class="px-2 py-1.5" x-text="item.excluido ? 'Sí' : 'No'"></td>
+                            <template x-for="fila in filasTablaPlan()" :key="fila.idx">
+                                <tr class="text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer"
+                                    @click="abrirDetalleItem(fila.item)">
+                                    <template x-if="fila.span.diagnostico > 0">
+                                        <td :rowspan="fila.span.diagnostico"
+                                            class="px-2 py-1.5 align-middle max-w-[12rem]"
+                                            :title="tituloDiagnostico(fila.item.check_id)">
+                                            <span class="block truncate" x-text="tituloDiagnostico(fila.item.check_id)"></span>
+                                        </td>
+                                    </template>
+                                    <template x-if="fila.span.accion > 0">
+                                        <td :rowspan="fila.span.accion"
+                                            class="px-2 py-1.5 align-middle whitespace-nowrap"
+                                            x-text="accionLabel(fila.item.accion)"></td>
+                                    </template>
+                                    <template x-if="fila.span.asiento > 0">
+                                        <td :rowspan="fila.span.asiento"
+                                            class="px-2 py-1.5 align-middle tabular-nums whitespace-nowrap"
+                                            x-text="campoAsiento(fila.item)"></td>
+                                    </template>
+                                    <template x-if="fila.span.codigoMovimiento > 0">
+                                        <td :rowspan="fila.span.codigoMovimiento"
+                                            class="px-2 py-1.5 align-middle font-mono tabular-nums whitespace-nowrap"
+                                            x-text="campoCodigoMovimiento(fila.item)"></td>
+                                    </template>
+                                    <template x-if="fila.span.fecha > 0">
+                                        <td :rowspan="fila.span.fecha"
+                                            class="px-2 py-1.5 align-middle whitespace-nowrap"
+                                            x-text="campoFecha(fila.item)"></td>
+                                    </template>
+                                    <template x-if="fila.span.cuenta > 0">
+                                        <td :rowspan="fila.span.cuenta"
+                                            class="px-2 py-1.5 align-middle tabular-nums whitespace-nowrap"
+                                            x-text="campoCuenta(fila.item)"></td>
+                                    </template>
+                                    <template x-if="fila.span.debe > 0">
+                                        <td :rowspan="fila.span.debe"
+                                            class="px-2 py-1.5 align-middle text-right tabular-nums whitespace-nowrap"
+                                            x-text="campoDebe(fila.item)"></td>
+                                    </template>
+                                    <template x-if="fila.span.haber > 0">
+                                        <td :rowspan="fila.span.haber"
+                                            class="px-2 py-1.5 align-middle text-right tabular-nums whitespace-nowrap"
+                                            x-text="campoHaber(fila.item)"></td>
+                                    </template>
+                                    <template x-if="fila.span.descripcion > 0">
+                                        <td :rowspan="fila.span.descripcion"
+                                            class="px-2 py-1.5 align-middle max-w-[16rem]">
+                                            <span class="block truncate font-medium text-slate-800 dark:text-slate-100"
+                                                  :title="campoDescripcion(fila.item)"
+                                                  x-text="campoDescripcion(fila.item)"></span>
+                                        </td>
+                                    </template>
+                                    <template x-if="fila.span.delta > 0">
+                                        <td :rowspan="fila.span.delta"
+                                            class="px-2 py-1.5 align-middle text-right tabular-nums"
+                                            x-text="formatearMonto(fila.item.delta)"></td>
+                                    </template>
+                                    <template x-if="fila.span.excluido > 0">
+                                        <td :rowspan="fila.span.excluido"
+                                            class="px-2 py-1.5 align-middle"
+                                            x-text="fila.item.excluido ? 'Sí' : 'No'"></td>
+                                    </template>
+                                    <td class="px-2 py-1.5 text-right align-middle">
+                                        <button type="button"
+                                                class="inline-flex items-center justify-center rounded-md p-1.5 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30"
+                                                title="Ver detalle"
+                                                aria-label="Ver detalle"
+                                                @click.stop="abrirDetalleItem(fila.item)">
+                                            <span class="material-icons text-base leading-none" aria-hidden="true">description</span>
+                                        </button>
+                                    </td>
                                 </tr>
                             </template>
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            <!-- Técnico: oculto por defecto (soporte / auditoría IT) -->
+            <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40">
+                <button type="button" @click="tecnicoPlanAbierto = !tecnicoPlanAbierto"
+                        class="flex w-full items-center justify-between gap-2 px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                    <span>Información técnica del plan</span>
+                    <span class="material-icons text-base leading-none" aria-hidden="true"
+                          x-text="tecnicoPlanAbierto ? 'expand_less' : 'expand_more'"></span>
+                </button>
+                <div x-show="tecnicoPlanAbierto" x-cloak class="space-y-4 border-t border-slate-200 dark:border-slate-800 px-4 py-4">
+                    <div>
+                        <h3 class="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Validez del plan</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                            <div>
+                                <p class="text-[10px] uppercase text-slate-400">TTL</p>
+                                <p class="font-medium" x-text="(payload?.guards?.ttl_minutos || 30) + ' min'"></p>
+                                <p class="text-xs text-slate-500 mt-1">Expira: <span x-text="payload?.expira_en"></span></p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] uppercase text-slate-400">config_hash</p>
+                                <p class="text-[11px] font-mono truncate" :title="payload?.config_hash" x-text="payload?.config_hash"></p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] uppercase text-slate-400">data_fingerprint</p>
+                                <p class="text-[11px] font-mono truncate" :title="payload?.data_fingerprint" x-text="payload?.data_fingerprint"></p>
+                            </div>
+                            <div>
+                                <p class="text-[10px] uppercase text-slate-400">Id diagnóstico</p>
+                                <p class="text-[11px] font-mono truncate" :title="payload?.dry_run_id" x-text="payload?.dry_run_id"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Impacto por tabla</h3>
+                        <template x-for="(cnt, tabla) in (payload?.impacto?.totales_por_tabla || {})" :key="'tech-tabla-' + tabla">
+                            <div class="flex justify-between py-1 text-xs border-b border-slate-100 dark:border-slate-800">
+                                <span class="font-mono" x-text="tabla"></span>
+                                <span class="font-mono" x-text="cnt"></span>
+                            </div>
+                        </template>
+                        <p x-show="!Object.keys(payload?.impacto?.totales_por_tabla || {}).length"
+                           class="text-xs text-slate-500">Sin impacto por tabla.</p>
+                    </div>
+                    <div x-show="Object.keys(payload?.backups_propuestos || {}).length">
+                        <h3 class="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Backups propuestos</h3>
+                        <p class="text-[11px] text-slate-500 mb-2">Nombres que se usarían al aplicar; el diagnóstico no crea tablas.</p>
+                        <template x-for="(nombre, tabla) in (payload?.backups_propuestos || {})" :key="'tech-bkp-' + tabla">
+                            <div class="text-xs font-mono py-1"><span x-text="tabla"></span> → <span x-text="nombre"></span></div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <!-- Modal confirmación apply (en la misma pantalla; sin navegar a /apply/) -->
+    <div x-show="applyOpen" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="cerrarConfirmacionApply()"
+         role="dialog" aria-modal="true" aria-labelledby="dry-run-apply-titulo">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="cerrarConfirmacionApply()"></div>
+        <div class="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-5"
+             @click.stop>
+            <div class="flex items-start gap-3 mb-4">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center">
+                    <span class="material-icons text-rose-600 dark:text-rose-400" aria-hidden="true">warning</span>
+                </div>
+                <div>
+                    <h3 id="dry-run-apply-titulo" class="text-base font-semibold text-slate-900 dark:text-white">Aplicar correcciones</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                        Se escribirán los cambios del plan en la base contable.
+                        Se crea backup previo y queda registrado en el historial de lotes.
+                    </p>
+                    <p class="text-xs text-slate-500 mt-2">
+                        Ítems aplicables:
+                        <span class="font-semibold text-slate-700 dark:text-slate-200"
+                              x-text="payload?.impacto?.total_aplicables ?? 0"></span>
+                        <span x-show="totalHuerfanosRegenerar > 0">
+                            · Asientos a regenerar:
+                            <span class="font-semibold" x-text="totalHuerfanosRegenerar"></span>
+                        </span>
+                    </p>
+                </div>
+            </div>
+            <form method="post" :action="applyEjecutarUrl"
+                  class="synap-post-loading space-y-4"
+                  data-synap-loading-title="Aplicando corrección contable"
+                  data-synap-loading-subtitle="Escribiendo cambios con backup previo. No cierres esta ventana."
+                  @submit="applyProcesando = true">
+                {% csrf_token %}
+                <input type="hidden" name="dry_run_id" :value="payload?.dry_run_id || ''">
+                <input type="hidden" name="base_empresa" :value="payload?.base_empresa || ''">
+                <input type="hidden" name="modo" value="general">
+                <label class="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-200">
+                    <input type="checkbox" name="confirmacion_entiendo" value="on" required
+                           class="mt-1 rounded border-slate-300" x-model="applyConfirmado">
+                    <span>Entiendo que se modificarán datos contables y que la operación quedará registrada.</span>
+                </label>
+                <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+                    <input type="checkbox" name="confirmar_reapertura" value="on"
+                           class="mt-1 rounded border-slate-300">
+                    <span>Si el plan afecta ejercicios cerrados, confirmo la reapertura explícita.</span>
+                </label>
+                <div class="flex flex-wrap justify-end gap-2 pt-1">
+                    <button type="button" @click="cerrarConfirmacionApply()" :disabled="applyProcesando"
+                            class="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
+                        Cancelar
+                    </button>
+                    <button type="submit" :disabled="applyProcesando || !applyConfirmado"
+                            class="rounded-lg px-4 py-2 text-sm font-semibold text-white bg-rose-700 hover:bg-rose-800 disabled:opacity-50">
+                        <span x-text="applyProcesando ? 'Aplicando…' : 'Aplicar definitivamente'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal detalle de ítem (formato contador + técnico colapsable) -->
+    <div x-show="detalleOpen" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="cerrarDetalleItem()"
+         role="dialog" aria-modal="true" aria-labelledby="dry-run-detalle-titulo">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="cerrarDetalleItem()"></div>
+        <div class="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-5"
+             @click.stop>
+            <div class="flex items-start justify-between gap-3 mb-4">
+                <div>
+                    <h3 id="dry-run-detalle-titulo" class="text-base font-semibold text-slate-900 dark:text-white">Detalle de la corrección</h3>
+                    <p class="text-xs text-slate-500 mt-0.5" x-text="tituloDiagnostico(detalleItem?.check_id)"></p>
+                </div>
+                <button type="button" @click="cerrarDetalleItem()"
+                        class="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Cerrar">
+                    <span class="material-icons text-xl leading-none" aria-hidden="true">close</span>
+                </button>
+            </div>
+
+            <div class="space-y-3 text-sm" x-show="detalleItem">
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
+                        <div class="text-[10px] uppercase tracking-wide text-slate-500">Acción</div>
+                        <div class="font-medium text-slate-800 dark:text-slate-100" x-text="accionLabel(detalleItem?.accion)"></div>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 dark:bg-slate-800/60 px-3 py-2">
+                        <div class="text-[10px] uppercase tracking-wide text-slate-500">Excluido</div>
+                        <div class="font-medium" x-text="detalleItem?.excluido ? 'Sí' : 'No'"></div>
+                    </div>
+                </div>
+
+                <template x-if="esAsientoInsert(detalleItem)">
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                        <div class="px-3 py-2 flex justify-between gap-2">
+                            <span class="text-slate-500">Asiento</span>
+                            <span class="font-semibold tabular-nums" x-text="detalleItem?.valor_nuevo?.nro_asiento ?? '—'"></span>
+                        </div>
+                        <div class="px-3 py-2 flex justify-between gap-2">
+                            <span class="text-slate-500">Fecha</span>
+                            <span class="font-medium" x-text="formatearFecha(detalleItem?.valor_nuevo?.fecha_asiento)"></span>
+                        </div>
+                        <div class="px-3 py-2 flex justify-between gap-2">
+                            <span class="text-slate-500">Cód. movimiento</span>
+                            <span class="font-medium tabular-nums" x-text="detalleItem?.valor_nuevo?.codigo_movimiento ?? '—'"></span>
+                        </div>
+                        <div class="px-3 py-2 flex justify-between gap-2">
+                            <span class="text-slate-500">Cuenta (id_pc)</span>
+                            <span class="font-medium tabular-nums" x-text="detalleItem?.valor_nuevo?.id_pc ?? '—'"></span>
+                        </div>
+                        <div class="px-3 py-2 flex justify-between gap-2">
+                            <span class="text-slate-500">Debe</span>
+                            <span class="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400" x-text="formatearMonto(detalleItem?.valor_nuevo?.debe_asiento)"></span>
+                        </div>
+                        <div class="px-3 py-2 flex justify-between gap-2">
+                            <span class="text-slate-500">Haber</span>
+                            <span class="font-semibold tabular-nums text-sky-700 dark:text-sky-400" x-text="formatearMonto(detalleItem?.valor_nuevo?.haber_asiento)"></span>
+                        </div>
+                        <div class="px-3 py-2 flex justify-between gap-2">
+                            <span class="text-slate-500">Concepto</span>
+                            <span class="font-medium text-right" x-text="detalleItem?.valor_nuevo?.desc_concepto_asiento || '—'"></span>
+                        </div>
+                        <div class="px-3 py-2">
+                            <div class="text-slate-500 mb-0.5">Descripción</div>
+                            <div class="font-medium text-slate-800 dark:text-slate-100" x-text="detalleItem?.valor_nuevo?.desc_asiento || '—'"></div>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="!esAsientoInsert(detalleItem)">
+                    <div class="space-y-2 text-xs">
+                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+                            <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Valor anterior</div>
+                            <div class="font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap" x-text="resumenValor(detalleItem, 'anterior')"></div>
+                        </div>
+                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-2">
+                            <div class="text-[10px] uppercase tracking-wide text-slate-500 mb-1">Valor nuevo</div>
+                            <div class="font-medium text-slate-800 dark:text-slate-100 whitespace-pre-wrap" x-text="resumenValor(detalleItem, 'nuevo')"></div>
+                        </div>
+                    </div>
+                </template>
+
+                <div class="flex justify-between text-xs px-1">
+                    <span class="text-slate-500">Delta</span>
+                    <span class="font-semibold tabular-nums" x-text="formatearMonto(detalleItem?.delta)"></span>
+                </div>
+                <p class="text-[11px] text-slate-500" x-show="detalleItem?.motivo_exclusion" x-text="'Motivo exclusión: ' + (detalleItem?.motivo_exclusion || '')"></p>
+                <p class="text-[11px] text-rose-600 dark:text-rose-400" x-show="detalleItem?.motivo_bloqueo" x-text="'Bloqueo: ' + (detalleItem?.motivo_bloqueo || '')"></p>
+
+                <div class="border-t border-slate-200 dark:border-slate-700 pt-3">
+                    <button type="button" @click="detalleTecnico = !detalleTecnico"
+                            class="flex w-full items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white">
+                        <span>Datos técnicos</span>
+                        <span class="material-icons text-lg leading-none" aria-hidden="true" x-text="detalleTecnico ? 'expand_less' : 'expand_more'"></span>
+                    </button>
+                    <pre x-show="detalleTecnico" x-cloak
+                         class="mt-2 max-h-48 overflow-auto rounded-lg bg-slate-950 text-[10px] text-slate-200 p-3 font-mono whitespace-pre-wrap break-all"
+                         x-text="valorTexto(detalleItem)"></pre>
+                </div>
+            </div>
+
+            <div class="mt-5 flex justify-end">
+                <button type="button" @click="cerrarDetalleItem()"
+                        class="rounded-lg px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800">
+                    Cerrar
+                </button>
             </div>
         </div>
     </div>
@@ -309,24 +687,195 @@
 
 <script>
 function auditoriaDryRun(cfg) {
+    function leerJson(id) {
+        try {
+            const el = document.getElementById(id);
+            return el ? (JSON.parse(el.textContent) || []) : [];
+        } catch (e) { return []; }
+    }
     let payloadInicial = null;
     try {
         const el = document.getElementById('dry-run-payload');
         if (el) { payloadInicial = JSON.parse(el.textContent); }
     } catch (e) { payloadInicial = null; }
+    const checks = leerJson('contabilidad-checks-data');
+    const idsValidos = checks.map(c => c.check_id);
+    const seleccionPrevia = leerJson('contabilidad-checks-seleccionados')
+        .map(String)
+        .filter(cid => idsValidos.includes(cid));
     return {
         dryRunUrl: cfg.dryRunUrl,
         tableroUrl: cfg.tableroUrl,
+        ejerciciosPeriodosUrl: cfg.ejerciciosPeriodosUrl,
+        applyEjecutarUrl: cfg.applyEjecutarUrl || '',
+        puedeCorregir: !!cfg.puedeCorregir,
         filtros: {
-            baseEmpresa: cfg.baseEmpresa || '',
             idEjercicio: cfg.idEjercicio || '',
-            idPeriodo: cfg.idPeriodo || '',
         },
         alcanceRecompute: cfg.alcanceRecompute || '',
         payload: payloadInicial,
         error: cfg.errorParametros || cfg.errorEjecucion || '',
         checkAnulacionId: 'integridad_anulacion_compra_pago',
-        init() {},
+        checks: checks,
+        checksSeleccionados: seleccionPrevia,
+        severidadesOrden: ['critico', 'alto', 'medio'],
+        diagAbierto: false,
+        diagBusqueda: '',
+        detalleOpen: false,
+        detalleItem: null,
+        detalleTecnico: false,
+        tecnicoPlanAbierto: false,
+        applyOpen: false,
+        applyConfirmado: false,
+        applyProcesando: false,
+
+        ejercicios: [],
+        cargandoDatos: false,
+        ejercicioBusqueda: '',
+        ejercicioLabel: '',
+        ejercicioAbierto: false,
+
+        async init() {
+            await this.cargarEjerciciosPeriodos();
+        },
+        async cargarEjerciciosPeriodos() {
+            if (!this.ejerciciosPeriodosUrl) { return; }
+            this.cargandoDatos = true;
+            try {
+                const resp = await fetch(this.ejerciciosPeriodosUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const data = await resp.json();
+                this.ejercicios = data.ejercicios || [];
+                this.sincronizarLabels();
+            } catch (e) {
+                this.ejercicios = [];
+            } finally {
+                this.cargandoDatos = false;
+            }
+        },
+        sincronizarLabels() {
+            if (this.filtros.idEjercicio) {
+                const ej = this.ejercicios.find(e => String(e.id) === String(this.filtros.idEjercicio));
+                if (ej) { this.ejercicioLabel = ej.label; this.ejercicioBusqueda = ej.label; }
+            }
+        },
+        get ejerciciosFiltrados() {
+            const q = (this.ejercicioBusqueda || '').toLowerCase().trim();
+            if (!q || this.ejercicioBusqueda === this.ejercicioLabel) { return this.ejercicios; }
+            return this.ejercicios.filter(e => (e.label || '').toLowerCase().includes(q));
+        },
+        seleccionarEjercicio(ej) {
+            this.filtros.idEjercicio = ej.id;
+            this.ejercicioLabel = ej.label;
+            this.ejercicioBusqueda = ej.label;
+            this.ejercicioAbierto = false;
+        },
+        limpiarEjercicio() {
+            this.filtros.idEjercicio = '';
+            this.ejercicioLabel = '';
+            this.ejercicioBusqueda = '';
+            this.ejercicioAbierto = false;
+        },
+        get checksPorSeveridad() {
+            const grupos = [];
+            for (const sev of this.severidadesOrden) {
+                const delGrupo = this.checks.filter(c => c.severidad === sev);
+                if (!delGrupo.length) { continue; }
+                grupos.push({
+                    severidad: sev,
+                    label: this.severidadLabel(sev),
+                    checks: delGrupo,
+                    seleccionados: delGrupo.filter(c => this.estaSeleccionado(c.check_id)).length,
+                });
+            }
+            const otros = this.checks.filter(c => !this.severidadesOrden.includes(c.severidad));
+            if (otros.length) {
+                grupos.push({
+                    severidad: 'otros',
+                    label: 'Otros',
+                    checks: otros,
+                    seleccionados: otros.filter(c => this.estaSeleccionado(c.check_id)).length,
+                });
+            }
+            return grupos;
+        },
+        get gruposFiltrados() {
+            const q = (this.diagBusqueda || '').toLowerCase().trim();
+            return this.checksPorSeveridad
+                .map(g => ({
+                    ...g,
+                    checks: q ? g.checks.filter(c => (c.titulo || '').toLowerCase().includes(q)) : g.checks,
+                }))
+                .filter(g => g.checks.length);
+        },
+        get chipsSeleccion() {
+            return this.checks
+                .filter(c => this.estaSeleccionado(c.check_id))
+                .slice(0, 3);
+        },
+        get chipsRestantes() {
+            return Math.max(0, this.checksSeleccionados.length - 3);
+        },
+        estaSeleccionado(checkId) { return this.checksSeleccionados.includes(checkId); },
+        toggleCheck(checkId) {
+            if (this.estaSeleccionado(checkId)) {
+                this.checksSeleccionados = this.checksSeleccionados.filter(cid => cid !== checkId);
+            } else {
+                this.checksSeleccionados = [...this.checksSeleccionados, checkId];
+            }
+        },
+        seleccionarGrupo(severidad) {
+            const grupo = this.checksPorSeveridad.find(g => g.severidad === severidad);
+            if (!grupo) { return; }
+            const ids = grupo.checks.map(c => c.check_id);
+            const todosActivos = ids.every(cid => this.estaSeleccionado(cid));
+            if (todosActivos) {
+                this.checksSeleccionados = this.checksSeleccionados.filter(cid => !ids.includes(cid));
+            } else {
+                const nuevos = ids.filter(cid => !this.estaSeleccionado(cid));
+                this.checksSeleccionados = [...this.checksSeleccionados, ...nuevos];
+            }
+        },
+        seleccionarTodos() { this.checksSeleccionados = this.checks.map(c => c.check_id); },
+        limpiarSeleccion() { this.checksSeleccionados = []; },
+        seleccionarSoloCriticos() {
+            this.checksSeleccionados = this.checks
+                .filter(c => c.severidad === 'critico')
+                .map(c => c.check_id);
+        },
+        puedeGenerar() {
+            return !!(this.filtros.idEjercicio && this.checksSeleccionados.length);
+        },
+        titulosDiagnosticosSeleccionados() {
+            const nombres = this.checksSeleccionados.map(cid => {
+                const c = (this.checks || []).find(x => x.check_id === cid);
+                return (c && c.titulo) || cid;
+            });
+            if (!nombres.length) { return 'Diagnóstico'; }
+            if (nombres.length === 1) { return nombres[0]; }
+            if (nombres.length <= 3) { return nombres.join(' · '); }
+            return nombres.slice(0, 2).join(' · ') + ' · +' + (nombres.length - 2) + ' más';
+        },
+        generar() {
+            if (!this.puedeGenerar()) { return; }
+            const esActualizacion = !!this.payload?.dry_run_id;
+            if (typeof window.synapShowPostLoadingProgress === 'function') {
+                window.synapShowPostLoadingProgress({
+                    title: esActualizacion ? 'Actualizando diagnóstico…' : 'Generando diagnóstico…',
+                    subtitle: esActualizacion
+                        ? 'Recalculando plan de corrección. No cierres esta ventana.'
+                        : 'Calculando plan de corrección. No cierres esta ventana.',
+                    label: this.titulosDiagnosticosSeleccionados(),
+                    indeterminate: true,
+                });
+            }
+            const p = new URLSearchParams();
+            p.set('id_ejercicio', this.filtros.idEjercicio);
+            this.checksSeleccionados.forEach(cid => p.append('check_ids', cid));
+            if (this.payload?.dry_run_id) {
+                p.set('dry_run_id', this.payload.dry_run_id);
+            }
+            window.location.href = this.dryRunUrl + '?' + p.toString();
+        },
         get anulacionesItems() {
             return (this.payload?.plan?.items || []).filter(
                 i => i.check_id === this.checkAnulacionId
@@ -349,17 +898,348 @@ function auditoriaDryRun(cfg) {
                 || clave.codigo_movimiento_anul
                 || '—';
         },
+        tituloDiagnostico(checkId) {
+            if (!checkId) { return '—'; }
+            const c = (this.checks || []).find(x => x.check_id === checkId);
+            return (c && c.titulo) || checkId;
+        },
+        accionLabel(accion) {
+            return {
+                insert: 'Insertar',
+                update: 'Actualizar',
+                insert_marcador: 'Insertar marcador',
+                marcar_original_anulado: 'Marcar anulado',
+                insert_contra_asiento: 'Contra-asiento',
+                bloqueado: 'Bloqueado',
+            }[accion] || (accion || '—');
+        },
+        formatearFecha(valor) {
+            if (valor === null || valor === undefined || valor === '') { return '—'; }
+            const s = String(valor).slice(0, 10);
+            const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+            if (m) { return m[3] + '/' + m[2] + '/' + m[1]; }
+            return String(valor);
+        },
+        formatearMonto(valor) {
+            if (valor === null || valor === undefined || valor === '') { return '—'; }
+            const n = Number(valor);
+            if (Number.isNaN(n)) { return String(valor); }
+            // Moneda ARS en formato argentino: $ 1.234.567,89
+            return n.toLocaleString('es-AR', {
+                style: 'currency',
+                currency: 'ARS',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            });
+        },
+        esNumerico(valor) {
+            if (valor === null || valor === undefined || valor === '') { return false; }
+            if (typeof valor === 'number') { return !Number.isNaN(valor); }
+            return /^-?\d+(\.\d+)?$/.test(String(valor).trim());
+        },
+        esCambioSaldo(item) {
+            const t = (item && item.tabla) || '';
+            return t.indexOf('saldo') !== -1;
+        },
+        textoEscalar(valor, comoMoneda) {
+            if (comoMoneda && this.esNumerico(valor)) { return this.formatearMonto(valor); }
+            return this.valorTexto(valor);
+        },
+        esAsientoInsert(item) {
+            return !!(item && item.tabla === 'cont_asiento' && item.accion === 'insert'
+                && item.valor_nuevo && typeof item.valor_nuevo === 'object');
+        },
+        valorNuevoObj(item) {
+            const vn = item && item.valor_nuevo;
+            return (vn && typeof vn === 'object' && !Array.isArray(vn)) ? vn : null;
+        },
+        esFilaSaldoNumerico(item) {
+            if (!item) { return false; }
+            const vn = item.valor_nuevo;
+            const va = item.valor_anterior;
+            if (this.valorNuevoObj(item) && this.valorNuevoObj(item).nro_asiento != null) { return false; }
+            return this.esCambioSaldo(item)
+                && (this.esNumerico(va) || this.esNumerico(vn));
+        },
+        montoCeldaTabla(valor) {
+            if (valor === null || valor === undefined || valor === '') { return ''; }
+            const n = Number(valor);
+            if (Number.isNaN(n) || n === 0) { return ''; }
+            return this.formatearMonto(n);
+        },
+        campoAsiento(item) {
+            if (!item || this.esFilaSaldoNumerico(item)) { return ''; }
+            const vn = this.valorNuevoObj(item);
+            if (vn && vn.nro_asiento != null) { return String(vn.nro_asiento); }
+            return '';
+        },
+        campoCodigoMovimiento(item) {
+            if (!item) { return ''; }
+            const vn = this.valorNuevoObj(item);
+            const clave = item.clave || {};
+            if (vn && vn.codigo_movimiento != null && vn.codigo_movimiento !== '') {
+                return String(vn.codigo_movimiento);
+            }
+            if (clave.codigo_movimiento != null && clave.codigo_movimiento !== '') {
+                return String(clave.codigo_movimiento);
+            }
+            if (clave.codigo_movimiento_original != null && clave.codigo_movimiento_original !== '') {
+                return String(clave.codigo_movimiento_original);
+            }
+            return '';
+        },
+        campoFecha(item) {
+            if (!item || this.esFilaSaldoNumerico(item)) { return ''; }
+            const vn = this.valorNuevoObj(item);
+            if (vn && vn.fecha_asiento) { return this.formatearFecha(vn.fecha_asiento); }
+            return '';
+        },
+        campoCuenta(item) {
+            if (!item) { return ''; }
+            const vn = this.valorNuevoObj(item);
+            const clave = item.clave || {};
+            if (vn && vn.id_pc != null) { return String(vn.id_pc); }
+            if (clave.id_pc != null) { return String(clave.id_pc); }
+            return '';
+        },
+        campoDebe(item) {
+            if (!item || this.esFilaSaldoNumerico(item)) { return ''; }
+            const vn = this.valorNuevoObj(item);
+            if (vn) { return this.montoCeldaTabla(vn.debe_asiento); }
+            return '';
+        },
+        campoHaber(item) {
+            if (!item || this.esFilaSaldoNumerico(item)) { return ''; }
+            const vn = this.valorNuevoObj(item);
+            if (vn) { return this.montoCeldaTabla(vn.haber_asiento); }
+            return '';
+        },
+        campoDescripcion(item) {
+            if (!item) { return '—'; }
+            const vn = item.valor_nuevo;
+            const va = item.valor_anterior;
+            const vnObj = this.valorNuevoObj(item);
+
+            if (vnObj && vnObj.nro_asiento != null) {
+                return vnObj.desc_asiento || '—';
+            }
+
+            if (this.esFilaSaldoNumerico(item)) {
+                const comoMoneda = true;
+                if (va != null && va !== '' && (item.accion === 'update' || item.campo)) {
+                    return this.textoEscalar(va, comoMoneda)
+                        + ' → '
+                        + this.textoEscalar(vn, comoMoneda);
+                }
+                return this.textoEscalar(vn, comoMoneda);
+            }
+
+            if (typeof vn === 'object' && vn) {
+                if (vn.TipoComprobante || vn.NroComprobante) {
+                    return [vn.TipoComprobante, vn.NroComprobante].filter(Boolean).join(' ')
+                        || 'Marcador de anulación';
+                }
+                if (Array.isArray(vn.renglones_preview)) {
+                    return 'Contra-asiento · ' + vn.renglones_preview.length + ' renglones';
+                }
+                if (vn.codigo_movimiento != null && vn.nro_asiento != null) {
+                    return 'Asiento ' + vn.nro_asiento + ' · CM ' + vn.codigo_movimiento;
+                }
+            }
+
+            const resumen = this.resumenValor(item, 'nuevo');
+            return resumen === '—' ? '—' : resumen;
+        },
+        _esValorMergeable(valor) {
+            if (valor === null || valor === undefined) { return false; }
+            const s = String(valor);
+            return s !== '' && s !== '—';
+        },
+        /** Spans por columna, solo dentro de rachas del mismo nro de asiento. */
+        _spansMergePorAsiento(valores, asientos) {
+            const spans = valores.map(() => 1);
+            let i = 0;
+            while (i < valores.length) {
+                if (!this._esValorMergeable(asientos[i])) {
+                    i += 1;
+                    continue;
+                }
+                let j = i + 1;
+                while (j < valores.length && String(asientos[j]) === String(asientos[i])) {
+                    j += 1;
+                }
+                // Dentro del bloque del mismo asiento [i, j)
+                let k = i;
+                while (k < j) {
+                    if (!this._esValorMergeable(valores[k])) {
+                        k += 1;
+                        continue;
+                    }
+                    let m = k + 1;
+                    while (m < j
+                        && this._esValorMergeable(valores[m])
+                        && String(valores[m]) === String(valores[k])) {
+                        m += 1;
+                    }
+                    if (m - k >= 2) {
+                        spans[k] = m - k;
+                        for (let t = k + 1; t < m; t += 1) { spans[t] = 0; }
+                    }
+                    k = m;
+                }
+                i = j;
+            }
+            return spans;
+        },
+        filasTablaPlan() {
+            const items = (this.payload?.plan?.items || []).slice(0, 50);
+            const getters = {
+                diagnostico: (item) => this.tituloDiagnostico(item.check_id),
+                accion: (item) => this.accionLabel(item.accion),
+                asiento: (item) => this.campoAsiento(item),
+                codigoMovimiento: (item) => this.campoCodigoMovimiento(item),
+                fecha: (item) => this.campoFecha(item),
+                cuenta: (item) => this.campoCuenta(item),
+                debe: (item) => this.campoDebe(item),
+                haber: (item) => this.campoHaber(item),
+                descripcion: (item) => this.campoDescripcion(item),
+                delta: (item) => this.formatearMonto(item.delta),
+                excluido: (item) => (item.excluido ? 'Sí' : 'No'),
+            };
+            const asientos = items.map((item) => this.campoAsiento(item));
+            const spansPorCol = {};
+            for (const [col, fn] of Object.entries(getters)) {
+                spansPorCol[col] = this._spansMergePorAsiento(items.map(fn), asientos);
+            }
+            return items.map((item, idx) => ({
+                item,
+                idx,
+                span: {
+                    diagnostico: spansPorCol.diagnostico[idx],
+                    accion: spansPorCol.accion[idx],
+                    asiento: spansPorCol.asiento[idx],
+                    codigoMovimiento: spansPorCol.codigoMovimiento[idx],
+                    fecha: spansPorCol.fecha[idx],
+                    cuenta: spansPorCol.cuenta[idx],
+                    debe: spansPorCol.debe[idx],
+                    haber: spansPorCol.haber[idx],
+                    descripcion: spansPorCol.descripcion[idx],
+                    delta: spansPorCol.delta[idx],
+                    excluido: spansPorCol.excluido[idx],
+                    detalle: 1,
+                },
+            }));
+        },
+        resumenValor(item, lado) {
+            if (!item) { return '—'; }
+            const valor = lado === 'anterior' ? item.valor_anterior : item.valor_nuevo;
+            if (valor === null || valor === undefined || valor === '') { return '—'; }
+
+            if (lado === 'nuevo' && this.esAsientoInsert(item)) {
+                const vn = item.valor_nuevo || {};
+                const partes = [];
+                if (vn.nro_asiento != null) { partes.push('Asiento ' + vn.nro_asiento); }
+                if (vn.fecha_asiento) { partes.push(this.formatearFecha(vn.fecha_asiento)); }
+                if (vn.id_pc != null) { partes.push('Cta ' + vn.id_pc); }
+                const debe = Number(vn.debe_asiento);
+                const haber = Number(vn.haber_asiento);
+                if (!Number.isNaN(debe) && debe !== 0) { partes.push('Debe ' + this.formatearMonto(debe)); }
+                else if (!Number.isNaN(haber) && haber !== 0) { partes.push('Haber ' + this.formatearMonto(haber)); }
+                else {
+                    partes.push('D ' + this.formatearMonto(vn.debe_asiento) + ' / H ' + this.formatearMonto(vn.haber_asiento));
+                }
+                if (vn.desc_asiento) { partes.push(vn.desc_asiento); }
+                return partes.join(' · ');
+            }
+
+            if (typeof valor === 'object') {
+                if (Array.isArray(valor)) { return valor.length + ' elemento(s)'; }
+                // Contra-asiento / marcador / otros dicts
+                if (valor.TipoComprobante || valor.NroComprobante) {
+                    return [valor.TipoComprobante, valor.NroComprobante].filter(Boolean).join(' ')
+                        || 'Marcador de anulación';
+                }
+                if (Array.isArray(valor.renglones_preview)) {
+                    return 'Contra-asiento · ' + valor.renglones_preview.length + ' renglones';
+                }
+                if (valor.codigo_movimiento != null && valor.nro_asiento != null) {
+                    return 'Asiento ' + valor.nro_asiento + ' · CM ' + valor.codigo_movimiento;
+                }
+                const keys = Object.keys(valor);
+                if (keys.length <= 3) {
+                    return keys.map(k => k + ': ' + this.valorTexto(valor[k])).join(' · ');
+                }
+                return keys.length + ' campos (ver detalle)';
+            }
+
+            // Escalares: saldos (moneda) / conceptos (texto)
+            const comoMoneda = this.esCambioSaldo(item)
+                || (this.esNumerico(valor) && String(valor).indexOf('.') !== -1);
+            if (lado === 'nuevo' && item.valor_anterior != null && item.valor_anterior !== ''
+                && (item.accion === 'update' || item.campo)) {
+                return this.textoEscalar(item.valor_anterior, comoMoneda)
+                    + ' → '
+                    + this.textoEscalar(valor, comoMoneda);
+            }
+            if (item.accion === 'marcar_original_anulado') {
+                return lado === 'nuevo' ? ('Anulado: ' + this.valorTexto(valor)) : this.valorTexto(valor);
+            }
+            return this.textoEscalar(valor, comoMoneda);
+        },
+        abrirDetalleItem(item) {
+            this.detalleItem = item || null;
+            this.detalleTecnico = false;
+            this.detalleOpen = !!item;
+        },
+        cerrarDetalleItem() {
+            this.detalleOpen = false;
+            this.detalleItem = null;
+            this.detalleTecnico = false;
+        },
+        abrirConfirmacionApply() {
+            if (!this.puedeCorregir || !(this.payload?.impacto?.total_aplicables > 0)) { return; }
+            this.applyConfirmado = false;
+            this.applyProcesando = false;
+            this.applyOpen = true;
+        },
+        cerrarConfirmacionApply() {
+            if (this.applyProcesando) { return; }
+            this.applyOpen = false;
+            this.applyConfirmado = false;
+        },
+        valorTexto(valor) {
+            if (valor === null || valor === undefined || valor === '') { return '—'; }
+            if (typeof valor === 'object') {
+                try { return JSON.stringify(valor, null, 2); } catch (e) { return String(valor); }
+            }
+            return String(valor);
+        },
         queryParams(extra) {
             const p = new URLSearchParams();
-            p.set('base_empresa', this.filtros.baseEmpresa);
             p.set('id_ejercicio', this.filtros.idEjercicio);
-            if (this.filtros.idPeriodo) { p.set('id_periodo', this.filtros.idPeriodo); }
+            this.checksSeleccionados.forEach(cid => p.append('check_ids', cid));
             if (extra) { Object.entries(extra).forEach(([k, v]) => p.set(k, v)); }
             return p;
         },
         exportUrl(formato) {
             if (!this.payload) { return '#'; }
             return this.dryRunUrl + '?' + this.queryParams({ format: formato }).toString();
+        },
+        severidadLabel(sev) {
+            return { critico: 'Crítico', alto: 'Alto', medio: 'Medio' }[sev] || sev;
+        },
+        severidadTexto(sev) {
+            return { critico: 'text-rose-500', alto: 'text-orange-500', medio: 'text-amber-500' }[sev] || 'text-slate-500';
+        },
+        severidadDot(sev) {
+            return { critico: 'bg-rose-500', alto: 'bg-orange-500', medio: 'bg-amber-500' }[sev] || 'bg-slate-400';
+        },
+        severidadBadge(sev) {
+            return {
+                critico: 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+                alto: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+                medio: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+            }[sev] || 'bg-slate-100 text-slate-600';
         },
     };
 }

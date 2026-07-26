@@ -7,6 +7,10 @@ asigna una conexión para el request, get_connection/mysql_cursor la reutilizan
 vía request_mysql_conn_var (contextvars) y no la devuelven al pool; el middleware
 la libera al final del request.
 
+Las conexiones ociosas en el pool NO se mantienen indefinidamente: si superan
+``idle_seconds`` (OPTIONS.POOL_IDLE_SECONDS, default 30) se cierran. Al salir
+del proceso se llama ``close_all`` (atexit).
+
 Uso:
     from core.mysql_pool import mysql_cursor, get_connection, get_mysql_pool
 
@@ -19,12 +23,14 @@ Uso:
         ...
         conn.commit()
 """
+import atexit
 import MySQLdb
 import threading
 import logging
+import time
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -37,27 +43,46 @@ request_mysql_conn_var: ContextVar[Optional[Tuple[str, Any]]] = ContextVar(
     "request_mysql_conn", default=None
 )
 
+# Segundos máximos que una conexión puede quedar en Sleep en el pool.
+DEFAULT_POOL_IDLE_SECONDS = 30
+
 
 class MySQLConnectionPool:
     """
     Pool de conexiones MySQL (thread-safe).
-    Reutiliza conexiones para limitar el número abierto y reducir overhead.
+    Reutiliza conexiones recientes; cierra las ociosas para no dejar Sleep abiertos
+    en el servidor MySQL (restore, mantenimiento, límites de conexión).
     """
 
     _pools: Dict[str, 'MySQLConnectionPool'] = {}
     _pools_lock = threading.Lock()
+    _atexit_registered = False
 
-    def __init__(self, host: str, port: int, user: str, password: str, max_connections: int = 5):
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        user: str,
+        password: str,
+        max_connections: int = 5,
+        idle_seconds: int = DEFAULT_POOL_IDLE_SECONDS,
+    ):
         self.host = host
         self.port = port
         self.user = user
         self.password = password
         self.max_connections = max_connections
-        self._available_connections = []
+        self.idle_seconds = max(0, int(idle_seconds))
+        # (conn, database, returned_at_monotonic)
+        self._available_connections: List[Tuple[Any, str, float]] = []
         self._in_use_connections = set()
         self._lock = threading.Lock()
         self._connection_count = 0
-        logger.info("MySQL connection pool inicializado: max_connections=%s", max_connections)
+        logger.info(
+            "MySQL connection pool inicializado: max_connections=%s idle_seconds=%s",
+            max_connections,
+            self.idle_seconds,
+        )
 
     @classmethod
     def get_pool(
@@ -67,12 +92,71 @@ class MySQLConnectionPool:
         user: str,
         password: str,
         max_connections: int = 5,
+        idle_seconds: int = DEFAULT_POOL_IDLE_SECONDS,
     ) -> 'MySQLConnectionPool':
         pool_key = f"{host}:{port}:{user}"
         with cls._pools_lock:
             if pool_key not in cls._pools:
-                cls._pools[pool_key] = cls(host, port, user, password, max_connections)
+                cls._pools[pool_key] = cls(
+                    host, port, user, password, max_connections, idle_seconds=idle_seconds
+                )
+                cls._ensure_atexit()
             return cls._pools[pool_key]
+
+    @classmethod
+    def _ensure_atexit(cls) -> None:
+        if cls._atexit_registered:
+            return
+        cls._atexit_registered = True
+
+        def _cerrar_pools_al_salir() -> None:
+            with cls._pools_lock:
+                pools = list(cls._pools.values())
+            for pool in pools:
+                try:
+                    pool.close_all()
+                except Exception:
+                    pass
+
+        atexit.register(_cerrar_pools_al_salir)
+
+    @classmethod
+    def close_all_pools(cls) -> int:
+        """Cierra todos los pools del proceso. Devuelve cuántos pools cerró."""
+        with cls._pools_lock:
+            pools = list(cls._pools.values())
+        for pool in pools:
+            pool.close_all()
+        return len(pools)
+
+    def _discard_connection(self, conn: Any) -> None:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        self._connection_count = max(0, self._connection_count - 1)
+
+    def _purge_idle_unlocked(self, now: Optional[float] = None) -> int:
+        """Cierra conexiones disponibles ociosas. Requiere self._lock."""
+        if self.idle_seconds <= 0:
+            # idle_seconds=0 → no retener: cerrar todo lo disponible
+            closed = 0
+            for conn, _db, _ts in self._available_connections:
+                self._discard_connection(conn)
+                closed += 1
+            self._available_connections.clear()
+            return closed
+        now = time.monotonic() if now is None else now
+        kept: List[Tuple[Any, str, float]] = []
+        closed = 0
+        for conn, db, returned_at in self._available_connections:
+            if (now - returned_at) >= self.idle_seconds:
+                self._discard_connection(conn)
+                closed += 1
+            else:
+                kept.append((conn, db, returned_at))
+        self._available_connections = kept
+        return closed
 
     def _create_connection(self, database: str) -> MySQLdb.Connection:
         conn = MySQLdb.connect(
@@ -112,14 +196,22 @@ class MySQLConnectionPool:
     @contextmanager
     def get_connection(self, database: str):
         conn = None
+        temporal = False  # conexión extra sobre el tope: no vuelve al pool
         try:
             with self._lock:
-                for i, (pool_conn, pool_db) in enumerate(self._available_connections):
-                    if pool_db == database and self._is_connection_alive(pool_conn):
-                        conn = self._available_connections.pop(i)[0]
-                        self._in_use_connections.add(conn)
-                        logger.debug("Conexión reutilizada del pool para %s", database)
-                        break
+                self._purge_idle_unlocked()
+                kept: List[Tuple[Any, str, float]] = []
+                for pool_conn, pool_db, returned_at in self._available_connections:
+                    if conn is None and pool_db == database:
+                        if self._is_connection_alive(pool_conn):
+                            conn = pool_conn
+                            self._in_use_connections.add(conn)
+                            logger.debug("Conexión reutilizada del pool para %s", database)
+                        else:
+                            self._discard_connection(pool_conn)
+                        continue
+                    kept.append((pool_conn, pool_db, returned_at))
+                self._available_connections = kept
                 if conn is None:
                     if self._connection_count < self.max_connections:
                         conn = self._create_connection(database)
@@ -129,6 +221,7 @@ class MySQLConnectionPool:
                         logger.warning("Pool lleno, creando conexión temporal para %s", database)
                         conn = self._create_connection(database)
                         self._in_use_connections.add(conn)
+                        temporal = True
                 else:
                     # Reutilizada: asegurar que está en la base correcta (evita leer de otra empresa)
                     if database:
@@ -143,27 +236,21 @@ class MySQLConnectionPool:
                 with self._lock:
                     if conn in self._in_use_connections:
                         self._in_use_connections.remove(conn)
-                        if self._is_connection_alive(conn):
-                            try:
-                                conn.select_db(database)
-                                self._available_connections.append((conn, database))
-                            except Exception as e:
-                                logger.warning("Error devolviendo conexión al pool: %s", e)
-                                try:
-                                    conn.close()
-                                    self._connection_count -= 1
-                                except Exception:
-                                    pass
+                        # idle_seconds=0 o temporal → cerrar siempre (no Sleep ocioso)
+                        if temporal or self.idle_seconds <= 0 or not self._is_connection_alive(conn):
+                            self._discard_connection(conn)
                         else:
                             try:
-                                conn.close()
-                                self._connection_count -= 1
-                            except Exception:
-                                pass
+                                conn.select_db(database)
+                                self._available_connections.append((conn, database, time.monotonic()))
+                                self._purge_idle_unlocked()
+                            except Exception as e:
+                                logger.warning("Error devolviendo conexión al pool: %s", e)
+                                self._discard_connection(conn)
 
     def close_all(self) -> None:
         with self._lock:
-            for c, _ in self._available_connections:
+            for c, _db, _ts in self._available_connections:
                 try:
                     c.close()
                 except Exception:
@@ -189,12 +276,14 @@ def get_mysql_pool() -> MySQLConnectionPool:
             "está en el entorno del contenedor, no afecta runserver tras actualizar settings; "
             "reiniciá el proceso. Revisá DB_HOST, DB_USER, DB_PASSWORD y DB_NAME en .env."
         ) from exc
+    opts = cfg.get('OPTIONS') or {}
     return MySQLConnectionPool.get_pool(
         host=cfg['HOST'],
         port=int(cfg.get('PORT', 3306)),
         user=cfg['USER'],
         password=cfg['PASSWORD'],
-        max_connections=int(cfg.get('OPTIONS', {}).get('MAX_CONNECTIONS', 5)),
+        max_connections=int(opts.get('MAX_CONNECTIONS', 5)),
+        idle_seconds=int(opts.get('POOL_IDLE_SECONDS', DEFAULT_POOL_IDLE_SECONDS)),
     )
 
 

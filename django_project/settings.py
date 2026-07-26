@@ -190,6 +190,9 @@ DATABASES = {
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
             'charset': 'latin1',
+            # Pool Synap (core.mysql_pool): tope y segundos máximos en Sleep ocioso.
+            'MAX_CONNECTIONS': config('MYSQL_POOL_MAX_CONNECTIONS', default=5, cast=int),
+            'POOL_IDLE_SECONDS': config('MYSQL_POOL_IDLE_SECONDS', default=30, cast=int),
         },
     }
 }

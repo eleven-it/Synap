@@ -130,6 +130,24 @@ class ChecksTestCase(SimpleTestCase):
         )
         self.assertFalse(result.ok)
         self.assertEqual(result.diferencias[0].referencia_hallazgo, "H51")
+        sql = cursor.execute.call_args[0][0]
+        self.assertIn("cont_ejercicio", sql)
+        self.assertEqual(cursor.execute.call_args[0][1], [1])
+
+    def test_comprobante_sin_asiento_filtra_periodo(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+        ctx = _contexto(cursor)
+        result = comprobante_compra_pago_sin_asiento(
+            "empresa",
+            {"id_ejercicio": 2, "id_periodo": 84},
+            _politica(),
+            ctx,
+        )
+        self.assertTrue(result.ok)
+        sql = cursor.execute.call_args[0][0]
+        self.assertIn("cont_periodo", sql)
+        self.assertEqual(cursor.execute.call_args[0][1], [2, 84])
 
     def test_comprobante_venta_cobranza_sin_asiento_factura(self):
         cursor = MagicMock()
@@ -155,6 +173,8 @@ class ChecksTestCase(SimpleTestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.diferencias[0].referencia_hallazgo, "H54")
         self.assertEqual(result.diferencias[0].detalle["TipoComprobante"], "FB")
+        self.assertIn("cont_ejercicio", cursor.execute.call_args[0][0])
+        self.assertEqual(cursor.execute.call_args[0][1], [1])
 
     def test_comprobante_venta_cobranza_sin_asiento_rec(self):
         cursor = MagicMock()
@@ -193,6 +213,9 @@ class ChecksTestCase(SimpleTestCase):
         )
         self.assertFalse(result.ok)
         self.assertEqual(result.diferencias[0].referencia_hallazgo, "H53")
+        sql = cursor.execute.call_args[0][0]
+        self.assertIn("cont_ejercicio", sql)
+        self.assertEqual(cursor.execute.call_args[0][1], [1])
 
     def test_regla_centavo_clasificar_delta(self):
         politica = _politica(politica_centavo="conservar_compensacion")
@@ -335,6 +358,9 @@ class ChecksSinCoberturaTestCase(SimpleTestCase):
         )
         self.assertFalse(result.ok)
         self.assertEqual(result.diferencias[0].referencia_hallazgo, "H08")
+        sql = cursor.execute.call_args[0][0]
+        self.assertIn("cont_ejercicio", sql)
+        self.assertEqual(cursor.execute.call_args[0][1], [1])
 
     def test_fecha_fuera_de_periodo(self):
         cursor = MagicMock()
@@ -453,9 +479,13 @@ class ChecksSinCoberturaTestCase(SimpleTestCase):
         )
         self.assertFalse(result.ok)
         self.assertEqual(result.diferencias[0].referencia_hallazgo, "H53")
+        self.assertEqual(result.diferencias[0].id_ejercicio, 1)
         self.assertIn("falta_marcador_cuentaproveedor_cm0", result.diferencias[0].detalle["problemas"])
         self.assertIn("falta_contra_asiento", result.diferencias[0].detalle["problemas"])
         self.assertNotIn("asiento_original_no_anulado", result.diferencias[0].detalle["problemas"])
+        sql = cursor.execute.call_args_list[0][0][0]
+        self.assertIn("cont_ejercicio", sql)
+        self.assertEqual(cursor.execute.call_args_list[0][0][1], [1])
 
     def test_integridad_anulacion_compra_pago_ok(self):
         cursor = MagicMock()

@@ -10,6 +10,7 @@ from contabilidad_audit.services.checks._sql import (
     clasificar_delta,
     filtro_anulados_sql,
     filtro_fechas_sql,
+    filtro_periodo_dentro_exists_por_fecha_sql,
     filtro_periodo_sql,
     id_ejercicio_filtro,
 )
@@ -205,23 +206,42 @@ nro_asiento_duplicado.severidad = "alto"
 
 
 def codigo_movimiento_huerfano(base_empresa, filtros, politica, contexto: CorridaContexto):
+    del base_empresa, politica
     check_id = "codigo_movimiento_huerfano"
     titulo = "Código de movimiento huérfano (CC sin asiento)"
     severidad = "alto"
     try:
         id_ejercicio = id_ejercicio_filtro(filtros)
         cur = contexto.cursor
+        extra_periodo_cp, params_periodo_cp = filtro_periodo_dentro_exists_por_fecha_sql(filtros, "cp")
+        extra_periodo_cl, params_periodo_cl = filtro_periodo_dentro_exists_por_fecha_sql(filtros, "cl")
         cur.execute(
-            """
+            f"""
             SELECT DISTINCT cc.codigo_movimiento
             FROM cont_cc_asiento cc
-            LEFT JOIN cont_asiento a
-              ON a.codigo_movimiento = cc.codigo_movimiento
-             AND a.id_ejercicio = %s
-            WHERE a.id_asiento IS NULL
-              AND COALESCE(cc.codigo_movimiento, 0) <> 0
+            JOIN cont_ejercicio ej ON ej.id_ejercicio = %s
+            WHERE COALESCE(cc.codigo_movimiento, 0) <> 0
+              AND NOT EXISTS (
+                SELECT 1 FROM cont_asiento a
+                WHERE a.codigo_movimiento = cc.codigo_movimiento
+                  AND a.id_ejercicio = ej.id_ejercicio
+              )
+              AND (
+                EXISTS (
+                  SELECT 1 FROM cuentaproveedor cp
+                  WHERE cp.CodigoMovimiento = cc.codigo_movimiento
+                    AND cp.Fecha BETWEEN ej.fecdesde_ejercicio AND ej.fechasta_ejercicio
+                    {extra_periodo_cp}
+                )
+                OR EXISTS (
+                  SELECT 1 FROM cuentacliente cl
+                  WHERE cl.CodigoMovimiento = cc.codigo_movimiento
+                    AND cl.Fecha BETWEEN ej.fecdesde_ejercicio AND ej.fechasta_ejercicio
+                    {extra_periodo_cl}
+                )
+              )
             """,
-            (id_ejercicio,),
+            [id_ejercicio, *params_periodo_cp, *params_periodo_cl],
         )
         rows = cur.fetchall()
         diferencias = [
