@@ -3,48 +3,286 @@
 {% block content %}
 <div class="mx-auto flex w-full min-w-0 max-w-none flex-col px-3 py-3 sm:px-4 md:px-6 lg:px-8 pb-24"
      x-data="creditoPoliticasList()" x-init="init()">
-  <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3">
+
+  {# Hero Alta Movimiento #}
+  <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 shadow-md">
     <header class="flex flex-wrap items-center gap-3">
-      <h1 class="text-lg font-bold text-white">Políticas de crédito</h1>
+      <div class="min-w-0">
+        <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Políticas de crédito</h1>
+        <p class="mt-1 max-w-3xl text-xs text-slate-300 sm:text-sm">
+          El <strong>cupo $</strong> y los <strong>días base</strong> viven en AdministraNET (ficha del cliente).
+          Acá se definen los <strong>overrides de política Synap</strong>: días por canal y capas de exposición.
+        </p>
+      </div>
       {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="politicas-credito" class_extra="text-slate-300 hover:text-sky-300" only %}
-      <a :href="urls.nueva" class="ml-auto rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white">Nueva política</a>
+      <a :href="urls.nueva"
+         class="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500">
+        <span class="material-icons text-base" aria-hidden="true">add</span>
+        Nueva política
+      </a>
     </header>
   </div>
-  <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
-    <table class="min-w-full text-sm">
-      <thead class="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-900">
-        <tr><th class="px-4 py-2">Cliente</th><th class="px-4 py-2">Canal</th><th class="px-4 py-2">Días</th><th class="px-4 py-2">Activo</th></tr>
-      </thead>
-      <tbody>
-        <template x-for="p in items" :key="p.id">
-          <tr class="border-t border-slate-100 dark:border-slate-700">
-            <td class="px-4 py-2" x-text="p.id_cliente || 'Default empresa'"></td>
-            <td class="px-4 py-2" x-text="p.canal"></td>
-            <td class="px-4 py-2" x-text="p.limite_dias ?? '-'"></td>
-            <td class="px-4 py-2" x-text="p.activo"></td>
+
+  <div x-show="mensaje" x-cloak role="status"
+       class="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-200"
+       x-text="mensaje"></div>
+
+  {# Consulta de cupo AdministraNET sin crear política #}
+  <section class="mb-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="mb-3">
+      <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Consultar cupo AdministraNET</h2>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        Buscá un cliente para ver su cupo, saldo y límite de días. Es solo consulta: no crea ni modifica políticas.
+      </p>
+    </div>
+    <div class="grid gap-4 lg:grid-cols-2">
+      {% include "ecom/credito/includes/cliente_predictivo.html" with input_id="pol-list-cliente" label="Cliente a consultar" placeholder="Nombre, código o CUIT (mín. 2 caracteres)…" disabled_expr="false" only %}
+      <div>
+        <p x-show="!clienteResumen && !cargandoResumen" x-cloak
+           class="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          Elegí un cliente para ver sus límites cargados en AdministraNET.
+        </p>
+        <p x-show="cargandoResumen" x-cloak
+           class="rounded-lg border border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+          Consultando cupo…
+        </p>
+        {% include "ecom/credito/includes/cliente_credito_panel.html" with fuente="clienteResumen" titulo="Límites AdministraNET" nota="Estos valores se cargan en AdministraNET; la aprobación Finanzas no los modifica." only %}
+      </div>
+    </div>
+  </section>
+
+  {# Listado de políticas #}
+  <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+    <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3 dark:border-slate-700">
+      <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Políticas configuradas</h2>
+      <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-600 dark:bg-slate-700 dark:text-slate-200"
+            x-text="items.length"></span>
+      <button type="button" @click="cargar()" :disabled="cargando"
+              class="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+        <span class="material-icons text-base" aria-hidden="true">refresh</span>
+        <span x-text="cargando ? 'Actualizando…' : 'Actualizar'"></span>
+      </button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900 dark:text-slate-400">
+          <tr>
+            <th scope="col" class="px-4 py-2">Cliente</th>
+            <th scope="col" class="px-4 py-2">Canal</th>
+            <th scope="col" class="px-4 py-2 text-right">Días política</th>
+            <th scope="col" class="px-4 py-2 text-right">Cupo AdministraNET</th>
+            <th scope="col" class="px-4 py-2 text-right">Saldo</th>
+            <th scope="col" class="px-4 py-2 text-right">Límite días AdministraNET</th>
+            <th scope="col" class="px-4 py-2">Capas activas</th>
+            <th scope="col" class="px-4 py-2">Estado</th>
           </tr>
-        </template>
-      </tbody>
-    </table>
-    <p x-show="!items.length" class="px-4 py-8 text-center text-slate-500">Sin políticas configuradas.</p>
+        </thead>
+        <tbody>
+          <template x-for="p in items" :key="p.id">
+            <tr class="border-t border-slate-100 dark:border-slate-700">
+              <td class="px-4 py-2">
+                <template x-if="p.es_default">
+                  <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800 dark:bg-sky-900/40 dark:text-sky-200">
+                    <span class="material-icons text-sm" aria-hidden="true">domain</span>
+                    Default empresa
+                  </span>
+                </template>
+                <template x-if="!p.es_default">
+                  <div class="min-w-0">
+                    <p class="font-medium text-slate-900 dark:text-white" x-text="p.nombre_cliente || ('Cliente #' + p.id_cliente)"></p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 tabular-nums" x-text="'#' + p.id_cliente"></p>
+                  </div>
+                </template>
+              </td>
+              <td class="px-4 py-2 font-medium text-slate-700 dark:text-slate-200" x-text="p.canal"></td>
+              <td class="px-4 py-2 text-right tabular-nums">
+                <span x-show="p.limite_dias != null" x-text="p.limite_dias + ' días'"></span>
+                <span x-show="p.limite_dias == null" class="text-xs text-slate-500 dark:text-slate-400">Usa AdministraNET</span>
+              </td>
+              <td class="px-4 py-2 text-right tabular-nums" x-text="cupoTexto(p)"></td>
+              <td class="px-4 py-2 text-right tabular-nums" x-text="p.saldo != null ? money(p.saldo) : '-'"></td>
+              <td class="px-4 py-2 text-right tabular-nums"
+                  x-text="p.credito_limite_dias != null ? (p.credito_limite_dias + ' días') : '-'"></td>
+              <td class="px-4 py-2">
+                <div class="flex flex-wrap gap-1">
+                  <template x-for="capa in capasActivas(p)" :key="capa">
+                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                          x-text="capa"></span>
+                  </template>
+                  <span x-show="!capasActivas(p).length" class="text-xs text-slate-500 dark:text-slate-400">Sin capas</span>
+                </div>
+              </td>
+              <td class="px-4 py-2">
+                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                      :class="esActivo(p)
+                        ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'">
+                  <span class="material-icons text-sm" aria-hidden="true" x-text="esActivo(p) ? 'check_circle' : 'cancel'"></span>
+                  <span x-text="esActivo(p) ? 'Activo' : 'Inactivo'"></span>
+                </span>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+    <div x-show="!cargando && !items.length" x-cloak class="px-4 py-10 text-center">
+      <span class="material-icons text-4xl text-slate-300 dark:text-slate-600" aria-hidden="true">policy</span>
+      <p class="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">Sin políticas configuradas.</p>
+      <p class="mx-auto mt-1 max-w-xl text-xs text-slate-500 dark:text-slate-400">
+        Sin políticas Synap la evaluación usa el cupo y los días de AdministraNET.
+        Creá una política solo si necesitás días distintos por canal o cambiar las capas de exposición.
+      </p>
+    </div>
+    <p x-show="cargando" x-cloak class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">
+      Cargando políticas…
+    </p>
   </div>
 </div>
 {{ bootstrap|json_script:"credito-pol-list-bootstrap" }}
 <script>
 function creditoPoliticasList() {
   return {
-    urls: {}, items: [],
+    urls: {},
+    items: [],
+    cargando: false,
+    mensaje: '',
+    // Búsqueda predictiva de cliente (consulta de cupo)
+    qCliente: '', clientes: [], panelCli: false, idxCli: 0, cargandoCli: false,
+    busquedaHecha: false, clienteSel: null,
+    clienteResumen: null, cargandoResumen: false,
+    _reqCli: 0,
+
     init() {
       const raw = document.getElementById('credito-pol-list-bootstrap');
       const data = raw ? JSON.parse(raw.textContent) : {};
       this.urls = data.urls || {};
       this.cargar();
     },
+
+    money(valor) {
+      const num = Number(valor || 0);
+      return '$' + num.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
+    _aviso(txt, tipo) {
+      this.mensaje = tipo === 'error' ? txt : '';
+      if (typeof window.mprShowAviso === 'function') {
+        window.mprShowAviso(txt, tipo === 'error' ? 'error' : 'success');
+      }
+    },
+
     async cargar() {
       if (!this.urls.api) return;
-      const r = await fetch(this.urls.api, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
-      const d = await r.json();
-      this.items = (d && d.results) || [];
+      this.cargando = true;
+      try {
+        const r = await fetch(this.urls.api, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) {
+          this._aviso(d.error || 'No se pudieron cargar las políticas.', 'error');
+          return;
+        }
+        this.items = (d && d.results) || [];
+      } finally {
+        this.cargando = false;
+      }
+    },
+
+    _siNo(valor) {
+      if (valor === true) return true;
+      return ['si', 'sí', '1', 'true'].includes(String(valor == null ? '' : valor).trim().toLowerCase());
+    },
+
+    esActivo(p) {
+      return this._siNo(p.activo);
+    },
+
+    cupoTexto(p) {
+      if (p.credito_cupo == null) return '-';
+      return Number(p.credito_cupo) === 0 ? 'Sin tope' : this.money(p.credito_cupo);
+    },
+
+    capasActivas(p) {
+      const capas = [
+        ['capa_cxc', 'CxC'],
+        ['capa_ped_abiertos', 'PED abiertos'],
+        ['capa_remitos_nf', 'Remitos NF'],
+        ['capa_cheques', 'Cheques'],
+        ['capa_doc_actual', 'Doc. actual'],
+        ['incluir_mora', 'Mora'],
+      ];
+      return capas.filter(([clave]) => this._siNo(p[clave])).map(([, etiqueta]) => etiqueta);
+    },
+
+    // --- Búsqueda predictiva de cliente ---
+    abrirPanelCli() { this.panelCli = true; },
+    cerrarPanelCli() { this.panelCli = false; },
+    moverSelCli(paso) {
+      if (!this.clientes.length) return;
+      this.panelCli = true;
+      const total = this.clientes.length;
+      this.idxCli = (this.idxCli + paso + total) % total;
+    },
+    elegirResaltadoCli() {
+      const c = this.clientes[this.idxCli];
+      if (c) this.elegirCliente(c);
+    },
+    limpiarCliente() {
+      this.clienteSel = null;
+      this.clienteResumen = null;
+      this.qCliente = '';
+      this.clientes = [];
+      this.busquedaHecha = false;
+    },
+
+    async buscarClientes() {
+      const q = (this.qCliente || '').trim();
+      if (!this.urls.buscar_clientes || q.length < 2) {
+        this.clientes = [];
+        this.busquedaHecha = q.length >= 2;
+        return;
+      }
+      const req = ++this._reqCli;
+      this.cargandoCli = true;
+      try {
+        const url = this.urls.buscar_clientes
+          + '?ajax=1&modoBus=texto&patron=' + encodeURIComponent(q)
+          + '&q=' + encodeURIComponent(q) + '&limit=15';
+        const r = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const d = await r.json().catch(() => ({}));
+        if (req !== this._reqCli) return;
+        this.clientes = (d && d.results) || [];
+        this.idxCli = 0;
+        this.busquedaHecha = true;
+        this.panelCli = true;
+      } finally {
+        if (req === this._reqCli) this.cargandoCli = false;
+      }
+    },
+
+    async elegirCliente(c) {
+      this.clienteSel = c;
+      this.qCliente = c.text || String(c.id);
+      this.panelCli = false;
+      await this.cargarResumen(c.id);
+    },
+
+    async cargarResumen(idCliente) {
+      if (!this.urls.cliente_resumen || idCliente == null) return;
+      this.cargandoResumen = true;
+      this.clienteResumen = null;
+      try {
+        const url = this.urls.cliente_resumen + '?id_cliente=' + encodeURIComponent(idCliente);
+        const r = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) {
+          this._aviso(d.error || 'No se pudo consultar el cupo del cliente.', 'error');
+          return;
+        }
+        this.clienteResumen = d.cliente || null;
+      } finally {
+        this.cargandoResumen = false;
+      }
     },
   };
 }

@@ -150,6 +150,7 @@ from ecom.carrito_relay_views import (
 from ecom.checkout_relay_views import CheckoutConfirmarRelayAPIView
 from ecom.credito_views import (
     CreditoAprobarAPIView,
+    CreditoClienteResumenAPIView,
     CreditoColaFinanzasView,
     CreditoPendientesAPIView,
     CreditoPlantillasAPIView,
@@ -870,6 +871,11 @@ urlpatterns = [
         "api/credito/pre-check/",
         CreditoPreCheckAPIView.as_view(),
         name="credito_precheck",
+    ),
+    path(
+        "api/credito/cliente-resumen/",
+        CreditoClienteResumenAPIView.as_view(),
+        name="api_credito_cliente_resumen",
     ),
     path(
         "credito/cola/",

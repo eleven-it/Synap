@@ -11,11 +11,26 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from ecom.credito_views import (
     CreditoAprobarAPIView,
+    CreditoClienteResumenAPIView,
     CreditoColaFinanzasView,
     CreditoPlantillasAPIView,
     CreditoPoliticaListView,
     CreditoPoliticasAPIView,
 )
+
+
+def _request_get(path, permisos, query=None):
+    request = APIRequestFactory().get(path, data=query or {})
+    middleware = SessionMiddleware(lambda req: HttpResponse())
+    middleware.process_request(request)
+    request.session["user"] = {
+        "id_usuario": 7,
+        "base_empresa": "empresa_test",
+        "synap_permisos": permisos,
+    }
+    user = MagicMock(is_authenticated=True, is_superuser=False, id=7)
+    force_authenticate(request, user=user)
+    return request
 
 
 def _request_post(path, payload, permisos):
@@ -50,7 +65,10 @@ class CreditoPoliticasHttpTests(SimpleTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["ok"])
         cursor.execute.assert_called_once()
-        self.assertEqual(cursor.execute.call_args.args[1], (25, "PED", 30, "Si"))
+        self.assertEqual(
+            cursor.execute.call_args.args[1],
+            (25, "PED", 30, "Si", "Si", "Si", "No", "No", "Si", "Si"),
+        )
 
     def test_sin_permiso_configurar_recibe_403(self):
         request = _request_post(
@@ -109,6 +127,48 @@ class CreditoPoliticasHttpTests(SimpleTestCase):
 
         self.assertEqual(config_response.status_code, 200)
         self.assertEqual(aprobar_response.status_code, 403)
+
+
+class CreditoClienteResumenHttpTests(SimpleTestCase):
+    @patch("ecom.credito_views._fetch_cliente_credito")
+    def test_aprobar_puede_consultar_resumen(self, mock_fetch):
+        mock_fetch.return_value = {
+            "Codigo": 25,
+            "Credito": 100000,
+            "saldo": 25000,
+            "credito_limite_dias": 30,
+            "nombre_cliente": "Cliente Test",
+            "cuit": "30-12345678-9",
+        }
+        request = _request_get(
+            "/ecom/api/credito/cliente-resumen/",
+            ["finance.credito.aprobar"],
+            {"id_cliente": "25"},
+        )
+
+        response = CreditoClienteResumenAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["ok"])
+        cliente = response.data["cliente"]
+        self.assertEqual(cliente["id_cliente"], 25)
+        self.assertEqual(cliente["credito_cupo"], 100000.0)
+        self.assertEqual(cliente["saldo"], 25000.0)
+        self.assertEqual(cliente["disponible_aprox"], 75000.0)
+        self.assertFalse(cliente["sin_tope_monetario"])
+
+    @patch("ecom.credito_views._fetch_cliente_credito")
+    def test_sin_permiso_recibe_403(self, mock_fetch):
+        request = _request_get(
+            "/ecom/api/credito/cliente-resumen/",
+            [],
+            {"id_cliente": "25"},
+        )
+
+        response = CreditoClienteResumenAPIView.as_view()(request)
+
+        self.assertEqual(response.status_code, 403)
+        mock_fetch.assert_not_called()
 
 
 class CreditoSegregacionVistasTests(SimpleTestCase):

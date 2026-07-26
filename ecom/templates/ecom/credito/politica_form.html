@@ -4,29 +4,171 @@
 {% csrf_token %}
 <div class="mx-auto flex w-full min-w-0 max-w-none flex-col px-3 py-3 sm:px-4 md:px-6 lg:px-8 pb-24"
      x-data="creditoPoliticaForm()" x-init="init()">
-  <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3">
+
+  {# Hero Alta Movimiento #}
+  <div class="mb-3 rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 shadow-md">
     <header class="flex flex-wrap items-center gap-3">
-      <h1 class="text-lg font-bold text-white">Alta política de crédito</h1>
+      <div class="min-w-0">
+        <h1 class="text-lg font-bold tracking-tight text-white sm:text-xl">Alta política de crédito</h1>
+        <p class="mt-1 max-w-3xl text-xs text-slate-300 sm:text-sm">
+          La política Synap define <strong>días por canal</strong> y <strong>capas de exposición</strong>.
+          El cupo $ y los días base siguen viviendo en AdministraNET.
+        </p>
+      </div>
       {% include "includes/btn_manual_ayuda.html" with url_name="ecom:manual_usuario" seccion="politicas-credito" class_extra="text-slate-300 hover:text-sky-300" only %}
+      <a :href="urls.lista" class="ml-auto inline-flex items-center gap-1.5 text-sm text-slate-300 underline hover:text-white">
+        <span class="material-icons text-base" aria-hidden="true">arrow_back</span>
+        Volver al listado
+      </a>
     </header>
   </div>
-  <form @submit.prevent="guardar" class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
-    <div class="grid gap-4 sm:grid-cols-2">
-      <label class="block text-sm">ID cliente (vacío = default)
-        <input type="number" x-model="form.id_cliente" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900">
-      </label>
-      <label class="block text-sm">Canal
-        <select x-model="form.canal" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900">
-          <option value="PED">PED</option><option value="PRE">PRE</option>
-        </select>
-      </label>
-      <label class="block text-sm">Límite días
-        <input type="number" x-model="form.limite_dias" class="mt-1 w-full rounded-lg border px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-900">
-      </label>
-    </div>
-    <div class="mt-4 flex gap-2">
-      <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">Guardar</button>
-      <a :href="urls.lista" class="rounded-lg border px-4 py-2 text-sm">Cancelar</a>
+
+  <div x-show="mensaje" x-cloak role="alert"
+       class="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-200"
+       x-text="mensaje"></div>
+
+  <form @submit.prevent="guardar" class="flex flex-col gap-4">
+
+    {# Alcance de la política #}
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Alcance</h2>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        Elegí un cliente con la búsqueda predictiva o aplicá la política como default de la empresa.
+      </p>
+
+      <div class="mt-3 flex flex-col gap-3 border-b border-slate-100 pb-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Usar política default empresa</p>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            En modo <strong>Activo</strong> la política no se asocia a un cliente y aplica a todos los que no tengan una propia.
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <input type="hidden" id="pol-usar-default" x-model="usarDefaultSiNo" />
+          <button type="button" @click="toggleUsarDefault()"
+                  :class="usarDefault
+                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300'"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1"
+                  :aria-pressed="usarDefault">
+            <span class="material-icons text-base" aria-hidden="true" x-text="usarDefault ? 'check_circle' : 'cancel'"></span>
+            <span x-text="usarDefault ? 'Activo' : 'Inactivo'"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-4 lg:grid-cols-2" :class="usarDefault ? 'opacity-60' : ''">
+        {% include "ecom/credito/includes/cliente_predictivo.html" with input_id="pol-form-cliente" label="Cliente de la política" placeholder="Nombre, código o CUIT (mín. 2 caracteres)…" hint="Buscá por nombre, código o CUIT. La política queda asociada al cliente elegido." disabled_expr="usarDefault" only %}
+        <div>
+          <p x-show="!clienteResumen && !cargandoResumen && !usarDefault" x-cloak
+             class="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+            Al elegir un cliente se muestran sus límites de AdministraNET.
+          </p>
+          <p x-show="usarDefault" x-cloak
+             class="rounded-lg border border-dashed border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+            Política default de empresa: no hay cupo de cliente para mostrar.
+          </p>
+          <p x-show="cargandoResumen" x-cloak
+             class="rounded-lg border border-slate-200 px-3 py-6 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">
+            Consultando límites…
+          </p>
+          {% include "ecom/credito/includes/cliente_credito_panel.html" with fuente="clienteResumen" titulo="Límites AdministraNET" nota="Estos valores se cargan en AdministraNET; la aprobación Finanzas no los modifica." only %}
+        </div>
+      </div>
+    </section>
+
+    {# Parámetros de la política #}
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Parámetros</h2>
+      <div class="mt-3 grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="pol-canal">Canal</label>
+          <select id="pol-canal" x-model="form.canal"
+                  class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
+            <option value="PED">PED — Pedidos</option>
+            <option value="PRE">PRE — Presupuestos</option>
+          </select>
+          <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">La política aplica solo al canal elegido.</p>
+        </div>
+        <div>
+          <label class="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-300" for="pol-limite-dias">
+            Límite días (política Synap)
+          </label>
+          <input type="number" id="pol-limite-dias" min="0" max="365" inputmode="numeric"
+                 x-model="form.limite_dias" placeholder="Vacío = usar AdministraNET"
+                 class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm tabular-nums text-slate-900 focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-500/40 dark:border-slate-600 dark:bg-slate-900 dark:text-white" />
+          <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+            Vacío = se usa <strong>credito_limite_dias</strong> del cliente en AdministraNET.
+            Si lo completás, este valor lo sobrescribe para el canal.
+          </p>
+          <p x-show="clienteResumen" x-cloak class="mt-1 text-xs text-sky-700 dark:text-sky-300"
+             x-text="clienteResumen ? ('Precargado desde AdministraNET: ' + clienteResumen.credito_limite_dias + ' días.') : ''"></p>
+        </div>
+      </div>
+
+      <div class="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-4 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-700 dark:text-slate-200">Política activa</p>
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            En modo <strong>Inactivo</strong> la política queda guardada pero no se aplica en la evaluación.
+          </p>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <input type="hidden" id="pol-activo" x-model="activoSiNo" />
+          <button type="button" @click="form.activo = !form.activo"
+                  :class="form.activo
+                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300'"
+                  class="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1"
+                  :aria-pressed="form.activo">
+            <span class="material-icons text-base" aria-hidden="true" x-text="form.activo ? 'check_circle' : 'cancel'"></span>
+            <span x-text="form.activo ? 'Activo' : 'Inactivo'"></span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    {# Capas de exposición #}
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
+      <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Capas de exposición</h2>
+      <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        Definen qué se suma al calcular la exposición del cliente frente al cupo de AdministraNET.
+      </p>
+      <div class="mt-3 divide-y divide-slate-100 dark:divide-slate-700">
+        <template x-for="capa in capasDefinicion" :key="capa.clave">
+          <div class="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-slate-700 dark:text-slate-200" x-text="capa.titulo"></p>
+              <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400" x-text="capa.detalle"></p>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              <input type="hidden" :id="'pol-' + capa.clave" :value="capas[capa.clave] ? 'Si' : 'No'" />
+              <button type="button" @click="capas[capa.clave] = !capas[capa.clave]"
+                      :class="capas[capa.clave]
+                        ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300'"
+                      class="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-1"
+                      :aria-pressed="capas[capa.clave]"
+                      :aria-label="capa.titulo">
+                <span class="material-icons text-base" aria-hidden="true" x-text="capas[capa.clave] ? 'check_circle' : 'cancel'"></span>
+                <span x-text="capas[capa.clave] ? 'Activo' : 'Inactivo'"></span>
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <div class="flex flex-wrap gap-2">
+      <button type="submit" :disabled="guardando"
+              class="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-60">
+        <span class="material-icons text-base" aria-hidden="true">save</span>
+        <span x-text="guardando ? 'Guardando…' : 'Guardar política'"></span>
+      </button>
+      <a :href="urls.lista"
+         class="inline-flex min-h-9 items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700">
+        Cancelar
+      </a>
     </div>
   </form>
 </div>
@@ -34,29 +176,172 @@
 <script>
 function creditoPoliticaForm() {
   return {
-    urls: {}, form: { id_cliente: '', canal: 'PED', limite_dias: 30, activo: true },
+    urls: {},
+    guardando: false,
+    mensaje: '',
+    form: { canal: 'PED', limite_dias: '', activo: true },
+    usarDefault: false,
+    capas: {
+      capa_cxc: true,
+      capa_ped_abiertos: true,
+      capa_remitos_nf: false,
+      capa_cheques: false,
+      capa_doc_actual: true,
+      incluir_mora: true,
+    },
+    capasDefinicion: [
+      { clave: 'capa_cxc', titulo: 'Cuentas por cobrar (CxC)', detalle: 'Suma el saldo de facturas pendientes del cliente.' },
+      { clave: 'capa_ped_abiertos', titulo: 'Pedidos abiertos', detalle: 'Suma los PED aún no facturados.' },
+      { clave: 'capa_remitos_nf', titulo: 'Remitos no facturados', detalle: 'Suma mercadería entregada sin factura.' },
+      { clave: 'capa_cheques', titulo: 'Cheques en cartera', detalle: 'Suma cheques recibidos y no acreditados.' },
+      { clave: 'capa_doc_actual', titulo: 'Documento actual', detalle: 'Incluye el importe del pedido que se está evaluando.' },
+      { clave: 'incluir_mora', titulo: 'Incluir mora', detalle: 'Evalúa días de atraso además del cupo monetario.' },
+    ],
+    // Búsqueda predictiva de cliente
+    qCliente: '', clientes: [], panelCli: false, idxCli: 0, cargandoCli: false,
+    busquedaHecha: false, clienteSel: null,
+    clienteResumen: null, cargandoResumen: false,
+    _reqCli: 0,
+
     init() {
       const raw = document.getElementById('credito-pol-form-bootstrap');
       const data = raw ? JSON.parse(raw.textContent) : {};
       this.urls = data.urls || {};
     },
+
+    /** Espejos legibles del estado para los inputs hidden (patrón toggle Synap). */
+    get usarDefaultSiNo() { return this.usarDefault ? 'Si' : 'No'; },
+    get activoSiNo() { return this.form.activo ? 'Si' : 'No'; },
+
+    money(valor) {
+      const num = Number(valor || 0);
+      return '$' + num.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    },
+
     _csrf() {
       const m = document.cookie.match(/csrftoken=([^;]+)/);
       return m ? decodeURIComponent(m[1]) : '';
     },
-    async guardar() {
-      const body = { ...this.form, id_cliente: this.form.id_cliente || null };
-      const r = await fetch(this.urls.api, {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
-        body: JSON.stringify(body),
-      });
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || d.ok === false) {
-        if (window.mprShowAviso) window.mprShowAviso(d.error || 'Error al guardar', 'error');
+
+    _aviso(txt, tipo) {
+      this.mensaje = tipo === 'error' ? txt : '';
+      if (typeof window.mprShowAviso === 'function') {
+        window.mprShowAviso(txt, tipo === 'error' ? 'error' : 'success');
+      }
+    },
+
+    toggleUsarDefault() {
+      this.usarDefault = !this.usarDefault;
+      if (this.usarDefault) this.limpiarCliente();
+    },
+
+    // --- Búsqueda predictiva de cliente ---
+    abrirPanelCli() { if (!this.usarDefault) this.panelCli = true; },
+    cerrarPanelCli() { this.panelCli = false; },
+    moverSelCli(paso) {
+      if (!this.clientes.length) return;
+      this.panelCli = true;
+      const total = this.clientes.length;
+      this.idxCli = (this.idxCli + paso + total) % total;
+    },
+    elegirResaltadoCli() {
+      const c = this.clientes[this.idxCli];
+      if (c) this.elegirCliente(c);
+    },
+    limpiarCliente() {
+      this.clienteSel = null;
+      this.clienteResumen = null;
+      this.qCliente = '';
+      this.clientes = [];
+      this.busquedaHecha = false;
+      this.panelCli = false;
+    },
+
+    async buscarClientes() {
+      if (this.usarDefault) return;
+      const q = (this.qCliente || '').trim();
+      if (!this.urls.buscar_clientes || q.length < 2) {
+        this.clientes = [];
+        this.busquedaHecha = q.length >= 2;
         return;
       }
-      window.location.href = this.urls.lista;
+      const req = ++this._reqCli;
+      this.cargandoCli = true;
+      try {
+        const url = this.urls.buscar_clientes
+          + '?ajax=1&modoBus=texto&patron=' + encodeURIComponent(q)
+          + '&q=' + encodeURIComponent(q) + '&limit=15';
+        const r = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const d = await r.json().catch(() => ({}));
+        if (req !== this._reqCli) return;
+        this.clientes = (d && d.results) || [];
+        this.idxCli = 0;
+        this.busquedaHecha = true;
+        this.panelCli = true;
+      } finally {
+        if (req === this._reqCli) this.cargandoCli = false;
+      }
+    },
+
+    async elegirCliente(c) {
+      this.clienteSel = c;
+      this.qCliente = c.text || String(c.id);
+      this.panelCli = false;
+      await this.cargarResumen(c.id);
+    },
+
+    /** Carga los límites Adminet y precarga límite días (editable). */
+    async cargarResumen(idCliente) {
+      if (!this.urls.cliente_resumen || idCliente == null) return;
+      this.cargandoResumen = true;
+      this.clienteResumen = null;
+      try {
+        const url = this.urls.cliente_resumen + '?id_cliente=' + encodeURIComponent(idCliente);
+        const r = await fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) {
+          this._aviso(d.error || 'No se pudieron cargar los límites del cliente.', 'error');
+          return;
+        }
+        this.clienteResumen = d.cliente || null;
+        if (this.clienteResumen && this.clienteResumen.credito_limite_dias != null) {
+          this.form.limite_dias = String(this.clienteResumen.credito_limite_dias);
+        }
+      } finally {
+        this.cargandoResumen = false;
+      }
+    },
+
+    async guardar() {
+      if (!this.usarDefault && !this.clienteSel) {
+        this._aviso('Elegí un cliente con la búsqueda predictiva o activá la política default empresa.', 'error');
+        return;
+      }
+      const limite = String(this.form.limite_dias || '').trim();
+      const body = {
+        id_cliente: this.usarDefault ? null : Number(this.clienteSel.id),
+        canal: this.form.canal,
+        limite_dias: limite === '' ? null : Number(limite),
+        activo: this.form.activo,
+        ...this.capas,
+      };
+      this.guardando = true;
+      try {
+        const r = await fetch(this.urls.api, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRFToken': this._csrf() },
+          body: JSON.stringify(body),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) {
+          this._aviso(d.error || 'No se pudo guardar la política.', 'error');
+          return;
+        }
+        window.location.href = this.urls.lista;
+      } finally {
+        this.guardando = false;
+      }
     },
   };
 }
