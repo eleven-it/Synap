@@ -42,6 +42,15 @@
                         .flatMap(function (parte) { return parte.split(/,\s*/); })
                         .map(function (s) { return s.trim(); })
                         .filter(Boolean)
+                        .sort(function (a, b) {
+                            function num(s) {
+                                var m = String(s).match(/\d+/);
+                                return m ? parseInt(m[0], 10) : 9999999;
+                            }
+                            var na = num(a), nb = num(b);
+                            if (na !== nb) { return na - nb; }
+                            return a.localeCompare(b, 'es');
+                        })
                         .join('\n');
                 } else if (m && typeof m === 'object') {
                     const codigo = (m.codigo || m.id) != null ? String(m.codigo || m.id) : '';

@@ -73,9 +73,11 @@ Hay dos formas de cargar lo producido.
 
 **Menú:** Producción → Parte de producción.
 
-1. Elija **Fecha**, **Turno** y marcas → **Cargar grilla**.
-2. Por artículo y operario, cargue **Docenas** y/o **Pares**. La fila indica cuánto queda en **Fabricando**.
-3. Pulse **Guardar parte de producción**.
+1. Elija **Fecha** (y opcionalmente línea/máquina) → **Cargar grilla**.
+2. Use **Buscar artículo** en el encabezado para filtrar en vivo la grilla ya cargada (no recarga).
+3. Por artículo y operario, cargue **Docenas** y/o **Pares**. La fila indica cuánto queda en **Fabricando**.
+4. Pulse **Guardar parte de producción**.
+5. Si el turno ya tiene control de calidad, ese turno queda bloqueado.
 
 **Avisos frecuentes**
 

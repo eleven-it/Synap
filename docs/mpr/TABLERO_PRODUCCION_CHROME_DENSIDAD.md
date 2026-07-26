@@ -37,8 +37,10 @@ Ver §6.
 | Estado | Pack\|Par, Docenas\|Pares, búsqueda: en la misma barra (**Pack\|Par solo Tablero**) |
 | Toggles | **Pack\|Par** activo púrpura; **Docenas\|Pares** activo sky (`variant=dark`) |
 | Marcas (Parte/CC) | **Ocultas** en chrome (`hidden`, DOM conservado): el tags-filter `min-h-9` rompía la alineación |
+| Búsqueda Parte | En chrome: filtro **predictivo cliente** sobre la grilla cargada (mismo criterio que el viejo «Filtrar en la grilla»). **No** forma parte del GET de «Cargar grilla» |
 | Alineación atajos | En Parte/CC el `header` usa **`items-end`** (formulario con labels encima de inputs) para que los íconos compartan línea base con los campos y «Cargar grilla»; el `h1` lleva `self-center`. Tablero (sin labels visibles) sigue con `items-center`. |
 | Altura controles | **`h-9`** (36px) canónica = búsqueda «Código o descripción…» / Tablero. Inputs, selects, atajos `h-9 w-9`, CTAs y toggles Pack\|Par / Docenas\|Pares comparten esa altura (`text-sm` en campos). |
+| Layout viewport | Tablero, Parte y CC: `section` con **`h-[calc(100dvh-4.5rem)]`**, chrome **`flex-shrink-0`**, zona de datos **`flex-1 min-h-0 overflow-hidden`**. La grilla scrollea dentro; la barra oscura **no** se mueve con el scroll de la página. Footer «Guardar» fijo al pie de la tarjeta. |
 
 ## 3.1 Alcance chrome compartido (flujo planta)
 
@@ -126,10 +128,12 @@ Las URLs pueden existir en código por compatibilidad; **no** son el hub ni el l
 3. Atajos Parte/CC/Actualizar usables solo con ícono + tooltip; menú Más con labels.
 4. Ningún enlace del chrome apunta a ventana_pack / opt_list como flujo primario.
 5. Pack\|Par, filtros, envío y búsqueda siguen funcionando igual (solo reubicación).
+6. Al scrollear la grilla en **Tablero**, **Parte** y **Control de calidad**, la barra slate-800 permanece fija; solo scrollean datos (y el footer Guardar no se pierde fuera del viewport).
 
 ## 8. Implementación
 
-- Plantilla: `mpr/templates/mpr/tablero_produccion.html` (bloque `flex-shrink-0` + fusión con barra Pack/Par).
-- Alpine: `masMenuOpen` (+ cierre Escape / click outside opcional).
-- Include CC: variant `icon` en `mpr/includes/btn_control_calidad.html` si se reutiliza.
+- Plantillas: `tablero_produccion.html`, `parte_produccion.html`, `clasificacion_produccion.html` + `clasificacion_encabezado.html`.
+- Layout compartido: `h-[calc(100dvh-4.5rem)]` + chrome `flex-shrink-0` + datos `flex-1 min-h-0`.
+- Alpine: `masMenuOpen` (+ cierre Escape / click outside opcional) en Tablero.
+- Include navegación: `chrome_nav_flujo.html`; tooltips: `chrome_icon_tooltip.html`.
 - Docs índice: entrada en [README.md](README.md).
