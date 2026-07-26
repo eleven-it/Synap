@@ -570,6 +570,7 @@ def construir_grilla_parte_planilla(
     precarga por (fecha, máquina, artículo, turno). No altera ``construir_grilla_parte``.
     """
     from mpr.repositories.parte import precarga_planilla_por_fecha
+    from mpr.repositories.transicion_lote import turnos_con_control_calidad
     from mpr.services import (
         _fabricando_por_componentes,
         _fetch_descripciones_articulo,
@@ -643,6 +644,8 @@ def construir_grilla_parte_planilla(
     if not planilla.get("es_futuro"):
         precarga = precarga_planilla_por_fecha(base, fecha)
 
+    turnos_bloqueados = turnos_con_control_calidad(base, fecha)
+
     filas: List[Dict[str, Any]] = []
     for maq in maquinas_raw:
         mid = maq.get("id")
@@ -682,6 +685,7 @@ def construir_grilla_parte_planilla(
                     "pares": par,
                     "operarios": list(ops_linea.get(franja) or []),
                     "franja": franja,
+                    "bloqueado": tid in turnos_bloqueados,
                 }
             cod_desc = desc_map.get(aid, (codigo, descripcion))
             filas.append({
@@ -701,6 +705,7 @@ def construir_grilla_parte_planilla(
     _anotar_rowspan_maquina_filas(filas)
     resultado["filas"] = filas
     resultado["filas_vacio"] = len(filas) == 0
+    resultado["turnos_bloqueados"] = sorted(turnos_bloqueados)
     return resultado
 
 

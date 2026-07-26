@@ -1,36 +1,36 @@
-{# Atajos flujo: tablero_prod|parte|cc; fecha_str/turno_id opc.; orden prod→parte→cc→KPI; colores emerald/púrpura/teal/ámbar. #}
+{# Atajos flujo: tablero_prod|parte|cc; fecha_str/turno_id opc.; orden prod→parte→cc→KPI; colores emerald/púrpura/teal/ámbar. Tamaño h-9 (= búsqueda chrome). #}
 {% with cur=current|default:"tablero_prod" %}
 {% if cur != "tablero_prod" %}
 <a href="{% url 'mpr:tablero_produccion' %}"
-   title="Tablero de producción"
    aria-label="Tablero de producción"
-   class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/50 bg-emerald-900/40 text-emerald-100 transition-colors hover:bg-emerald-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50">
+   class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-500/50 bg-emerald-900/40 text-emerald-100 transition-colors hover:bg-emerald-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50">
     <span class="material-icons text-lg leading-none" aria-hidden="true">table_chart</span>
+    {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Tablero de producción" only %}
 </a>
 {% endif %}
 
 {% if cur != "parte" %}
 <a href="{% url 'mpr:parte_produccion' %}{% if fecha_str %}?fecha={{ fecha_str|urlencode }}{% if turno_id %}&amp;turno_id={{ turno_id }}{% endif %}{% endif %}"
-   title="Parte de producción"
    aria-label="Parte de producción"
-   class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-purple-500/50 bg-purple-900/40 text-purple-100 transition-colors hover:bg-purple-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50">
+   class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-purple-500/50 bg-purple-900/40 text-purple-100 transition-colors hover:bg-purple-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400/50">
     <span class="material-icons text-lg leading-none" aria-hidden="true">assignment</span>
+    {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Parte de producción" only %}
 </a>
 {% endif %}
 
 {% if cur != "cc" %}
 <a href="{% url 'mpr:clasificacion_produccion' %}{% if fecha_str %}?fecha={{ fecha_str|urlencode }}{% if turno_id %}&amp;turno_id={{ turno_id }}{% endif %}{% endif %}"
-   title="Control de calidad"
    aria-label="Control de calidad"
-   class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-teal-500/50 bg-teal-900/40 text-teal-100 transition-colors hover:bg-teal-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50">
+   class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-teal-500/50 bg-teal-900/40 text-teal-100 transition-colors hover:bg-teal-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/50">
     <span class="material-icons text-lg leading-none" aria-hidden="true">verified</span>
+    {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Control de calidad" only %}
 </a>
 {% endif %}
 
 <a href="{% url 'mpr:tablero' %}"
-   title="Tablero KPI"
    aria-label="Tablero KPI"
-   class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-500/50 bg-amber-900/40 text-amber-100 transition-colors hover:bg-amber-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50">
+   class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-amber-500/50 bg-amber-900/40 text-amber-100 transition-colors hover:bg-amber-800/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50">
     <span class="material-icons text-lg leading-none" aria-hidden="true">analytics</span>
+    {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Tablero KPI" only %}
 </a>
 {% endwith %}

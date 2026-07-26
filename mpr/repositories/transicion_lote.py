@@ -237,3 +237,100 @@ def sumar_clasificado_rendimiento_operario(
             elif dest == "Scrap":
                 entry["scrap"] += total
     return por_operario
+
+
+def turnos_con_control_calidad(base_empresa: str, fecha: date) -> set[int]:
+    """Turnos de ``fecha`` con al menos una clasificación CC (semi/2da/scrap) con operario."""
+    base = (base_empresa or "").strip()
+    if not base:
+        return set()
+    destinos = tuple(TIPOS_DESTINO_CLASIFICACION)
+    ph_dest = ",".join(["%s"] * len(destinos))
+    turnos: set[int] = set()
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            f"""
+            SELECT DISTINCT id_mpr_turno
+            FROM mpr_transicion_lote
+            WHERE fecha_produccion = %s
+              AND id_operario IS NOT NULL
+              AND id_mpr_turno IS NOT NULL
+              AND tipo_destino IN ({ph_dest})
+            """,
+            [fecha, *destinos],
+        )
+        for row in cursor.fetchall() or []:
+            tid = to_int_or_none(row.get("id_mpr_turno"))
+            if tid is not None:
+                turnos.add(tid)
+    return turnos
+
+
+def turno_tiene_control_calidad(
+    base_empresa: str,
+    fecha: date,
+    id_mpr_turno: int,
+) -> bool:
+    """True si existe clasificación CC registrada para fecha+turno."""
+    tid = to_int_or_none(id_mpr_turno)
+    if tid is None:
+        return False
+    return tid in turnos_con_control_calidad(base_empresa, fecha)
+
+
+def sumar_clasificado_desglose_por_operario_fecha_turno(
+    base_empresa: str,
+    fecha: date,
+    id_mpr_turno: int,
+    *,
+    id_articulos: Optional[List[int]] = None,
+) -> Dict[Tuple[int, int], Dict[str, Decimal]]:
+    """Desglose semi / 2da / scrap por (id_articulo, id_operario) en fecha+turno."""
+    base = (base_empresa or "").strip()
+    if not base:
+        return {}
+    params: List[Any] = [fecha, int(id_mpr_turno)]
+    filtro_art = ""
+    if id_articulos is not None:
+        if not id_articulos:
+            return {}
+        clean = [int(a) for a in id_articulos]
+        filtro_art = f" AND id_articulo IN ({','.join(['%s'] * len(clean))})"
+        params.extend(clean)
+    destinos = tuple(TIPOS_DESTINO_CLASIFICACION)
+    ph_dest = ",".join(["%s"] * len(destinos))
+    params.extend(destinos)
+    acum: Dict[Tuple[int, int], Dict[str, Decimal]] = {}
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            f"""
+            SELECT id_articulo, id_operario, tipo_destino,
+                   COALESCE(SUM(cantidad), 0) AS total
+            FROM mpr_transicion_lote
+            WHERE fecha_produccion = %s
+              AND id_mpr_turno = %s
+              AND id_operario IS NOT NULL
+              AND tipo_destino IN ({ph_dest})
+              {filtro_art}
+            GROUP BY id_articulo, id_operario, tipo_destino
+            """,
+            params,
+        )
+        for row in cursor.fetchall() or []:
+            aid = to_int_or_none(row.get("id_articulo"))
+            oid = to_int_or_none(row.get("id_operario"))
+            if aid is None or oid is None:
+                continue
+            dest = str(row.get("tipo_destino") or "")
+            total = to_decimal_or_none(row.get("total")) or Decimal("0")
+            entry = acum.setdefault(
+                (aid, oid),
+                {"semi": Decimal("0"), "segunda": Decimal("0"), "scrap": Decimal("0")},
+            )
+            if dest == "SemiElaborado":
+                entry["semi"] += total
+            elif dest == "2daSeleccion":
+                entry["segunda"] += total
+            elif dest == "Scrap":
+                entry["scrap"] += total
+    return acum

@@ -16634,6 +16634,12 @@ def registrar_parte_produccion(
     if not turno:
         raise ValueError(f"Turno {turno_id} no encontrado.")
 
+    errores_cc = _validar_turnos_parte_sin_control_calidad(
+        base_empresa, fecha_produccion, [turno_id]
+    )
+    if errores_cc:
+        raise DjValidationError(" ".join(errores_cc))
+
     deposito_produccion = get_deposito_produccion_mpr(base_empresa)
 
     errores_tope = validar_cupo_parte(base_empresa, lineas)
@@ -16744,6 +16750,14 @@ def _registrar_parte_produccion_planilla(
 
     if not lineas_norm:
         raise DjValidationError("No hay cantidades válidas para registrar.")
+
+    errores_cc = _validar_turnos_parte_sin_control_calidad(
+        base_empresa,
+        fecha_produccion,
+        {ln["turno_id"] for ln in lineas_norm},
+    )
+    if errores_cc:
+        raise DjValidationError(" ".join(errores_cc))
 
     errores_cupo = _validar_cupo_planilla_qc(base_empresa, lineas_norm)
     if errores_cupo:
@@ -16919,6 +16933,15 @@ def agregar_ajuste_parte(
     parte = obtener_parte_por_pk(base_empresa, parte_id)
     if not parte:
         raise ValidationError(f"Parte {parte_id} no encontrada para empresa {base_empresa}.")
+
+    fecha_parte = getattr(parte, "fecha_produccion", None)
+    id_turno_parte = getattr(parte, "id_mpr_turno", None)
+    if fecha_parte and id_turno_parte is not None:
+        errores_cc = _validar_turnos_parte_sin_control_calidad(
+            base_empresa, fecha_parte, [id_turno_parte]
+        )
+        if errores_cc:
+            raise ValidationError(" ".join(errores_cc))
 
     delta_dec = to_decimal_or_none(delta)
     if delta_dec is None:
@@ -18479,6 +18502,73 @@ def _anotar_rowspan_maquina_clasificacion(filas: List[Dict[str, Any]]) -> None:
         i = j
 
 
+def _atribuible_clasificacion_por_celda(
+    celdas: Dict[Tuple[int, int, int, int], Dict[str, Any]],
+    desglose_por_turno: Dict[int, Dict[Tuple[int, int], Dict[str, Decimal]]],
+) -> Dict[Tuple[int, int, int, int], Decimal]:
+    """Remanente clasificable por celda (máquina × artículo × operario × turno)."""
+    grupos: Dict[Tuple[int, int, int], List[Tuple[int, Decimal, Dict[str, Any]]]] = {}
+    for (mid, aid, oid, tid), datos in celdas.items():
+        if oid is None or int(oid) <= 0:
+            continue
+        fab = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+        if fab <= 0:
+            continue
+        grupos.setdefault((aid, oid, tid), []).append((mid, fab, datos))
+
+    atribuible: Dict[Tuple[int, int, int, int], Decimal] = {}
+    for (aid, oid, tid), maquinas in grupos.items():
+        desglose = desglose_por_turno.get(tid, {}).get(
+            (aid, oid),
+            {"semi": Decimal("0"), "segunda": Decimal("0"), "scrap": Decimal("0")},
+        )
+        semi_rest = desglose.get("semi", Decimal("0"))
+        seg2da_rest = desglose.get("segunda", Decimal("0"))
+        scrap_rest = desglose.get("scrap", Decimal("0"))
+        maquinas_ord = sorted(
+            maquinas,
+            key=lambda x: _orden_maquina_clasificacion(
+                x[0], str_or_default(x[2].get("maquina_nombre"), "—")
+            ),
+        )
+        for mid, fab_maq, _datos in maquinas_ord:
+            asignado_semi = min(fab_maq, semi_rest)
+            semi_rest -= asignado_semi
+            asignado_seg2da = min(fab_maq, seg2da_rest)
+            seg2da_rest -= asignado_seg2da
+            asignado_scrap = min(fab_maq, scrap_rest)
+            scrap_rest -= asignado_scrap
+            asignado_total = asignado_semi + asignado_seg2da + asignado_scrap
+            rem = max(Decimal("0"), fab_maq - asignado_total)
+            atribuible[(mid, aid, oid, tid)] = rem
+    return atribuible
+
+
+def _validar_turnos_parte_sin_control_calidad(
+    base_empresa: str,
+    fecha,
+    turno_ids,
+) -> List[str]:
+    """Errores en español si algún turno ya tiene CC y bloquea edición del parte."""
+    from mpr.repositories.transicion_lote import turno_tiene_control_calidad
+
+    errores: List[str] = []
+    vistos: set[int] = set()
+    for raw_tid in turno_ids or []:
+        tid = to_int_or_none(raw_tid)
+        if tid is None or tid in vistos:
+            continue
+        vistos.add(tid)
+        if turno_tiene_control_calidad(base_empresa, fecha, tid):
+            turno = obtener_turno(base_empresa, tid)
+            nombre = str(getattr(turno, "nombre", "") or tid) if turno else str(tid)
+            errores.append(
+                f"El turno {nombre} ya tiene control de calidad registrado "
+                f"y no se puede modificar el parte."
+            )
+    return errores
+
+
 def _anotar_rowspan_articulo_clasificacion(filas: List[Dict[str, Any]]) -> None:
     """Marca show_articulo / rowspan_articulo para artículos consecutivos."""
     if not filas:
@@ -18531,7 +18621,10 @@ def construir_grilla_clasificacion_produccion(
         acumular_celdas_clasificacion_maquina_turno,
         listar_pares_fecha_turno_con_pendiente_clasificacion,
     )
-    from mpr.repositories.transicion_lote import sumar_clasificado_por_operario_fecha_turno
+    from mpr.repositories.transicion_lote import (
+        sumar_clasificado_desglose_por_operario_fecha_turno,
+        sumar_clasificado_por_operario_fecha_turno,
+    )
 
     celdas = acumular_celdas_clasificacion_maquina_turno(
         base_empresa, fecha, int(turno_id) if turno_id is not None else None
@@ -18545,8 +18638,12 @@ def construir_grilla_clasificacion_produccion(
 
     turnos_presentes = sorted({clave[3] for clave in celdas})
     clasificado_por_turno: Dict[int, Dict[Tuple[int, int], Decimal]] = {}
+    desglose_por_turno: Dict[int, Dict[Tuple[int, int], Dict[str, Decimal]]] = {}
     for tid in turnos_presentes:
         clasificado_por_turno[tid] = sumar_clasificado_por_operario_fecha_turno(
+            base_empresa, fecha, tid
+        )
+        desglose_por_turno[tid] = sumar_clasificado_desglose_por_operario_fecha_turno(
             base_empresa, fecha, tid
         )
 
@@ -18571,34 +18668,61 @@ def construir_grilla_clasificacion_produccion(
         if oid is None or int(oid) <= 0:
             continue
         cls_map = clasificado_por_turno.get(tid, {})
-        cls_restante = cls_map.get((aid, oid), Decimal("0"))
+        desglose = desglose_por_turno.get(tid, {}).get(
+            (aid, oid),
+            {"semi": Decimal("0"), "segunda": Decimal("0"), "scrap": Decimal("0")},
+        )
+        semi_rest = desglose.get("semi", Decimal("0"))
+        seg2da_rest = desglose.get("segunda", Decimal("0"))
+        scrap_rest = desglose.get("scrap", Decimal("0"))
         maquinas_ord = sorted(
             maquinas,
             key=lambda x: _orden_maquina_clasificacion(
                 x[0], str_or_default(x[2].get("maquina_nombre"), "—")
             ),
         )
-        fabricado_total = sum(fab for _, fab, _ in maquinas_ord)
 
         for mid, fab_maq, datos in maquinas_ord:
-            asignado_cls = min(fab_maq, cls_restante)
-            cls_restante -= asignado_cls
-            pendiente = fab_maq - asignado_cls
-            solo_lectura = bool(ver_roster_completo and pendiente <= 0)
-            if pendiente <= 0 and not ver_roster_completo:
+            if fab_maq <= 0:
                 continue
+
+            asignado_semi = min(fab_maq, semi_rest)
+            semi_rest -= asignado_semi
+            asignado_seg2da = min(fab_maq, seg2da_rest)
+            seg2da_rest -= asignado_seg2da
+            asignado_scrap = min(fab_maq, scrap_rest)
+            scrap_rest -= asignado_scrap
+            asignado_total = asignado_semi + asignado_seg2da + asignado_scrap
+            pendiente = fab_maq - asignado_total
+            completo = pendiente <= 0
+            solo_lectura = completo
 
             codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
             cls_total = cls_map.get((aid, oid), Decimal("0"))
+            base_clasificable = max(Decimal("0"), pendiente)
+            base_int = int(round(float(base_clasificable)))
+
+            parte_int = int(round(float(fab_maq)))
+            parte_du = descomponer_docenas_unidades(parte_int, unidades_por_docena_fijo=12)
+            parte_texto = texto_docenas_unidades(parte_int, unidades_por_docena_fijo=12)
+
             if solo_lectura:
-                disp_int = int(round(float(asignado_cls)))
                 disp_texto = (
-                    f"Completo · {texto_docenas_unidades(disp_int, unidades_por_docena_fijo=12)} clasificado"
+                    f"Completo · {texto_docenas_unidades(int(round(float(asignado_total))), unidades_por_docena_fijo=12)} clasificado"
                 )
+                ini_semi = int(round(float(asignado_semi)))
+                ini_seg2da = int(round(float(asignado_seg2da)))
+                ini_scrap = int(round(float(asignado_scrap)))
             else:
-                disp_int = int(round(float(pendiente)))
-                disp_texto = texto_docenas_unidades(disp_int, unidades_por_docena_fijo=12)
-            du = descomponer_docenas_unidades(disp_int, unidades_por_docena_fijo=12)
+                disp_texto = texto_docenas_unidades(base_int, unidades_por_docena_fijo=12)
+                ini_semi = 0
+                ini_seg2da = 0
+                ini_scrap = 0
+
+            du = descomponer_docenas_unidades(
+                base_int if not solo_lectura else int(round(float(asignado_total))),
+                unidades_por_docena_fijo=12,
+            )
             maq_nom = str_or_default(datos.get("maquina_nombre"), "—")
             filas_raw.append({
                 "id_mpr_maquina": int(mid),
@@ -18612,11 +18736,22 @@ def construir_grilla_clasificacion_produccion(
                 "descripcion": str_or_default(descripcion, "-"),
                 "codigo_tooltip": str_or_default(codigo_manual, ""),
                 "fabricado": float(fab_maq),
+                "parte": float(fab_maq),
+                "parte_texto": parte_texto,
+                "parte_docenas": parte_du["docenas"],
+                "parte_unidades": parte_du["unidades"],
                 "clasificado": float(cls_total),
-                "disponible": float(pendiente if pendiente > 0 else Decimal("0")),
+                "base_clasificable": float(base_clasificable),
+                "disponible": float(base_clasificable),
                 "disponible_texto": disp_texto,
                 "disponible_docenas": du["docenas"],
                 "disponible_unidades": du["unidades"],
+                "ini_semi": ini_semi,
+                "ini_seg2da": ini_seg2da,
+                "ini_scrap": ini_scrap,
+                "ini_semi_texto": texto_docenas_unidades(ini_semi, unidades_por_docena_fijo=12) if solo_lectura else "",
+                "ini_seg2da_texto": texto_docenas_unidades(ini_seg2da, unidades_por_docena_fijo=12) if solo_lectura else "",
+                "ini_scrap_texto": texto_docenas_unidades(ini_scrap, unidades_por_docena_fijo=12) if solo_lectura else "",
                 "solo_lectura": solo_lectura,
                 "show_maquina": False,
                 "rowspan_maquina": 1,

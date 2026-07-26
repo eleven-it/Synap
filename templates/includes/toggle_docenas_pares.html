@@ -8,15 +8,15 @@
     {% if interaction == "alpine" %}
     <button type="button" @click="cambiarPresentacion('docenas')"
             :class="presentacion === 'docenas' ? '{{ active_cls }}' : '{{ inactive_cls }}'"
-            class="inline-flex min-h-8 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap">Docenas</button>
+            class="inline-flex h-full flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap">Docenas</button>
     <button type="button" @click="cambiarPresentacion('unidades')"
             :class="presentacion === 'unidades' ? '{{ active_cls }}' : '{{ inactive_cls }}'"
-            class="inline-flex min-h-8 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap">Pares</button>
+            class="inline-flex h-full flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap">Pares</button>
     {% else %}
     <a href="?{% if query_base %}{{ query_base }}&{% endif %}presentacion=docenas"
-       class="inline-flex min-h-8 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo == 'docenas' %}{{ active_cls }}{% else %}{{ inactive_cls }}{% endif %}">Docenas</a>
+       class="inline-flex h-full flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo == 'docenas' %}{{ active_cls }}{% else %}{{ inactive_cls }}{% endif %}">Docenas</a>
     <a href="?{% if query_base %}{{ query_base }}&{% endif %}presentacion=unidades"
-       class="inline-flex min-h-8 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo == 'unidades' %}{{ active_cls }}{% else %}{{ inactive_cls }}{% endif %}">Pares</a>
+       class="inline-flex h-full flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo == 'unidades' %}{{ active_cls }}{% else %}{{ inactive_cls }}{% endif %}">Pares</a>
     {% endif %}
 </div>
   {% endwith %}
@@ -27,15 +27,15 @@
     {% if interaction == "alpine" %}
     <button type="button" @click="cambiarPresentacion('docenas')"
             :class="presentacion === 'docenas' ? '{{ active_cls }}' : '{{ inactive_cls }}'"
-            class="inline-flex min-h-8 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap">Docenas</button>
+            class="inline-flex h-full flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap">Docenas</button>
     <button type="button" @click="cambiarPresentacion('unidades')"
             :class="presentacion === 'unidades' ? '{{ active_cls }}' : '{{ inactive_cls }}'"
-            class="inline-flex min-h-8 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap">Pares</button>
+            class="inline-flex h-full flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors whitespace-nowrap">Pares</button>
     {% else %}
     <a href="?{% if query_base %}{{ query_base }}&{% endif %}presentacion=docenas"
-       class="inline-flex min-h-8 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo == 'docenas' %}{{ active_cls }}{% else %}{{ inactive_cls }}{% endif %}">Docenas</a>
+       class="inline-flex h-full flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo == 'docenas' %}{{ active_cls }}{% else %}{{ inactive_cls }}{% endif %}">Docenas</a>
     <a href="?{% if query_base %}{{ query_base }}&{% endif %}presentacion=unidades"
-       class="inline-flex min-h-8 flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo == 'unidades' %}{{ active_cls }}{% else %}{{ inactive_cls }}{% endif %}">Pares</a>
+       class="inline-flex h-full flex-1 items-center justify-center rounded-md px-2.5 text-xs font-semibold transition-colors {% if modo == 'unidades' %}{{ active_cls }}{% else %}{{ inactive_cls }}{% endif %}">Pares</a>
     {% endif %}
 </div>
   {% endwith %}
