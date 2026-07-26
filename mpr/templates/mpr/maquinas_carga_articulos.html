@@ -256,37 +256,44 @@
                     <caption class="sr-only">Asignar artículo a máquina</caption>
                     <thead class="bg-gray-50/90 dark:bg-gray-800/80">
                         <tr>
-                            <th scope="col" class="w-24 px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Código</th>
-                            <th scope="col" class="w-48 px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Nombre</th>
-                            <th scope="col" class="w-40 px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Línea</th>
-                            <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Asignar artículo a máquina</th>
-                            <th scope="col" class="w-56 px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Observación (planilla)</th>
+                            <th scope="col" class="w-20 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Código</th>
+                            <th scope="col" class="w-40 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Nombre</th>
+                            <th scope="col" class="w-28 px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Línea</th>
+                            <th scope="col" class="min-w-[14rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-4">Asignar artículo a máquina</th>
+                            <th scope="col" class="w-[22rem] min-w-[18rem] px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:w-[26rem] sm:px-4">Observación (planilla)</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                         <template x-for="m in maquinasVisibles" :key="m.id">
                             <tr class="align-top transition-colors hover:bg-gray-50/60 dark:hover:bg-gray-700/30">
-                                <td class="px-4 py-3.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-5" x-text="m.codigo || '—'"></td>
-                                <td class="px-4 py-3.5 text-sm font-bold text-gray-900 dark:text-white sm:px-5" x-text="m.nombre || '—'"></td>
-                                <td class="px-4 py-3.5 text-sm text-gray-700 dark:text-gray-300 sm:px-5">
+                                <td class="px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-white sm:px-4" x-text="m.codigo || '—'"></td>
+                                <td class="px-3 py-2.5 sm:px-4">
+                                    <div class="text-sm font-bold text-gray-900 dark:text-white" x-text="m.nombre || '—'"></div>
+                                    <a :href="historicoUrl(m.id)"
+                                       class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-slate-500 transition-colors hover:text-purple-600 dark:text-slate-400 dark:hover:text-purple-300">
+                                        <span class="material-icons text-sm" aria-hidden="true">history</span>
+                                        Histórico
+                                    </a>
+                                </td>
+                                <td class="px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 sm:px-4">
                                     <span x-show="m.linea_actual_nombre" x-text="m.linea_actual_nombre"></span>
                                     <span x-show="!m.linea_actual_nombre" class="text-gray-400 dark:text-gray-500">Sin línea</span>
                                 </td>
-                                <td class="px-4 py-3.5 sm:px-5">
-                                    {# Multiselección (mismo formato tags-filter): chips + input en un contenedor #}
-                                    <div class="relative max-w-xl">
-                                        <div class="tags-filter-container relative flex min-h-9 flex-wrap items-center gap-1 overflow-visible rounded-lg border border-slate-300 bg-white px-2 py-1.5 shadow-sm focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:focus-within:border-purple-400 dark:focus-within:ring-purple-500/40"
+                                <td class="px-3 py-2.5 sm:px-4">
+                                    {# Multiselección densa: chips + input; ancho completo de la celda #}
+                                    <div class="relative w-full">
+                                        <div class="tags-filter-container relative flex min-h-8 flex-wrap items-center gap-0.5 overflow-visible rounded-lg border border-slate-300 bg-white px-1.5 py-1 shadow-sm focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:focus-within:border-purple-400 dark:focus-within:ring-purple-500/40"
                                              @click="$el.querySelector('.tags-input')?.focus()">
                                             <template x-for="art in m.articulos" :key="art.id_articulo">
-                                                <span class="inline-flex max-w-full items-center gap-1 rounded-full bg-purple-100 px-2 py-1 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+                                                <span class="inline-flex max-w-[min(100%,18rem)] items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-purple-800 dark:bg-purple-900 dark:text-purple-200"
                                                       :title="(codigoCorto(art) + ' ' + (art.descripcion_articulo || '')).trim()">
                                                     <span class="min-w-0 truncate">
                                                         <span class="font-semibold" x-text="codigoCorto(art)"></span>
-                                                        <span class="ml-1 font-normal opacity-90" x-text="art.descripcion_articulo"></span>
+                                                        <span class="ml-0.5 font-normal opacity-90" x-text="art.descripcion_articulo"></span>
                                                     </span>
                                                     <button type="button"
                                                             @click.stop="quitar(m, art)"
-                                                            class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-purple-700 transition-colors hover:bg-purple-200 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-purple-200 dark:hover:bg-purple-800 dark:hover:text-red-300"
+                                                            class="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-purple-700 transition-colors hover:bg-purple-200 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-purple-200 dark:hover:bg-purple-800 dark:hover:text-red-300"
                                                             :aria-label="'Deshabilitar ' + codigoCorto(art)">×</button>
                                                 </span>
                                             </template>
@@ -304,7 +311,7 @@
                                                    placeholder="Agregar artículo Fabricado…"
                                                    autocomplete="off"
                                                    :aria-label="'Agregar artículo a ' + (m.nombre || m.codigo || 'máquina')"
-                                                   class="tags-input min-w-[8rem] flex-1 basis-[8rem] border-none bg-transparent py-0.5 text-xs text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"/>
+                                                   class="tags-input min-w-[6rem] flex-1 basis-[6rem] border-none bg-transparent py-0.5 text-xs leading-tight text-slate-800 outline-none placeholder:text-slate-400 dark:text-slate-100 dark:placeholder:text-slate-500"/>
                                         </div>
 
                                         {# Dropdown de sugerencias #}
@@ -337,21 +344,14 @@
                                         </div>
                                     </div>
 
-                                    {# Error inline y link histórico #}
-                                    <div class="mt-1.5 flex flex-wrap items-center justify-between gap-2">
-                                        <p x-show="m.ta.error" x-cloak x-text="m.ta.error" class="text-xs font-medium text-red-600 dark:text-red-400" role="alert"></p>
-                                        <a :href="historicoUrl(m.id)"
-                                           class="ml-auto inline-flex items-center gap-1 text-xs font-medium text-slate-500 transition-colors hover:text-purple-600 dark:text-slate-400 dark:hover:text-purple-300">
-                                            <span class="material-icons text-sm" aria-hidden="true">history</span>
-                                            Histórico
-                                        </a>
-                                    </div>
+                                    <p x-show="m.ta.error" x-cloak x-text="m.ta.error"
+                                       class="mt-1 text-xs font-medium text-red-600 dark:text-red-400" role="alert"></p>
                                 </td>
-                                <td class="px-4 py-3.5 align-top sm:px-5">
+                                <td class="w-[22rem] min-w-[18rem] px-3 py-2.5 align-top sm:w-[26rem] sm:px-4">
                                     <textarea x-model="m.observacion" maxlength="220" rows="2"
                                               placeholder="Observación para la planilla…"
                                               @blur="onObservacionBlur(m)"
-                                              class="min-h-16 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"></textarea>
+                                              class="min-h-14 w-full resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white dark:placeholder:text-gray-500"></textarea>
                                     <div class="mt-1 flex items-center justify-between gap-2 text-[11px]">
                                         <p x-show="m.obsEstado === 'guardando'" x-cloak class="text-purple-600 dark:text-purple-400">Guardando…</p>
                                         <p x-show="m.obsEstado === 'guardado'" x-cloak class="text-green-600 dark:text-green-400">Guardado</p>
