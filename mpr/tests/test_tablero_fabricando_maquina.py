@@ -281,6 +281,12 @@ class TestTableroProduccionViewIndicadoresFabricando(TestCase):
         self.assertIn("cerrarFabDetalle", parser.x_data)
         self.assertIn("mostrarFabMaqTip", parser.x_data)
         self.assertIn("fabMaqTipOpen", parser.x_data)
+        html = response.render().content.decode()
+        self.assertIn("data-maq-tip=", html)
+        self.assertIn("@mouseenter=\"mostrarFabMaqTip($event, $el.dataset.maqTip)\"", html)
+        self.assertIn("Máquina <span class=\"tabular-nums\" x-text=\"m.codigo || m.id\"></span>", html)
+        self.assertIn("grupo.roster.manana", html)
+        self.assertIn("m.manana", html)
 
     @patch("mpr.services_maquina_linea.enriquecer_filas_tablero_indicadores_fabricando")
     @patch("mpr.presentacion_operativa.enriquecer_filas_tablero_presentacion")

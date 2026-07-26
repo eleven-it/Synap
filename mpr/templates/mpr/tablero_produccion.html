@@ -19,6 +19,7 @@
             fabMaqTipX: 0,
             fabMaqTipY: 0,
             abrirFabDetalle(raw) {
+                this.ocultarFabMaqTip();
                 let d = raw;
                 if (typeof raw === 'string') {
                     try {
@@ -34,8 +35,26 @@
                 this.ocultarFabMaqTip();
             },
             mostrarFabMaqTip(event, m) {
-                const codigo = (m && (m.codigo || m.id)) != null ? String(m.codigo || m.id) : '';
-                this.fabMaqTipText = codigo ? ('Máquina ' + codigo) : 'Máquina';
+                let texto = '';
+                if (typeof m === 'string') {
+                    texto = m.trim();
+                } else if (m && typeof m === 'object') {
+                    const codigo = (m.codigo || m.id) != null ? String(m.codigo || m.id) : '';
+                    const nombre = (m.nombre || '').trim();
+                    if (codigo && nombre) {
+                        texto = 'Máquina ' + codigo + ' — ' + nombre;
+                    } else if (codigo) {
+                        texto = 'Máquina ' + codigo;
+                    } else if (nombre) {
+                        texto = nombre;
+                    } else {
+                        texto = 'Máquina';
+                    }
+                }
+                if (!texto) {
+                    texto = 'Máquina asignada';
+                }
+                this.fabMaqTipText = texto;
                 const pad = 12;
                 let left = event.clientX + pad;
                 let top = event.clientY + pad;
@@ -331,7 +350,7 @@
                      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-4 backdrop-blur-sm"
                      @keydown.escape.window="cerrarFabDetalle()"
                      x-transition.opacity>
-                    <div class="flex max-h-[min(90dvh,40rem)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl ring-1 ring-slate-900/5 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/5"
+                    <div class="flex max-h-[min(90dvh,40rem)] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl ring-1 ring-slate-900/5 dark:border-slate-700 dark:bg-slate-900 dark:ring-white/5"
                          @click.stop
                          role="dialog"
                          aria-modal="true"
@@ -367,64 +386,64 @@
 
                                 <div class="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5">
                                     <template x-for="(grupo, gIdx) in (fabDetalle.grupos_fila || [])" :key="grupo.id_linea != null ? grupo.id_linea : ('g-' + gIdx)">
-                                        <section class="overflow-hidden rounded-xl border border-slate-200 border-l-[3px] border-l-teal-400/70 bg-white shadow-sm dark:border-slate-700 dark:border-l-teal-500/60 dark:bg-slate-800/50">
-                                            <div class="flex items-center gap-2 border-b border-slate-200/70 bg-slate-50/70 px-3 py-2 dark:border-slate-700/70 dark:bg-slate-800/60">
-                                                <span class="material-icons text-base text-teal-600 dark:text-teal-400" aria-hidden="true">view_week</span>
-                                                <h4 class="text-sm font-semibold text-slate-700 dark:text-slate-200" x-text="grupo.nombre"></h4>
+                                        <section class="overflow-hidden rounded-xl border border-slate-200 border-l-[3px] border-l-teal-400/70 bg-white shadow-sm dark:border-slate-700 dark:border-l-teal-500/60 dark:bg-slate-800/50"
+                                                 role="group"
+                                                 :aria-label="grupo.nombre || ('Fila ' + (gIdx + 1))">
+                                            <div class="overflow-x-auto">
+                                                <table class="w-full min-w-[28rem] border-collapse text-left">
+                                                    <thead>
+                                                        <tr class="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/80">
+                                                            <th scope="col"
+                                                                class="whitespace-nowrap px-3 py-2.5 align-bottom text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                                                <span class="inline-flex items-center gap-1.5">
+                                                                    <span class="material-icons text-base text-teal-600 dark:text-teal-400" aria-hidden="true">view_week</span>
+                                                                    <span x-text="grupo.nombre"></span>
+                                                                </span>
+                                                            </th>
+                                                            <th scope="col" class="min-w-[6.5rem] border-l border-slate-200 px-2.5 py-2 align-bottom dark:border-slate-700">
+                                                                <p class="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400/90">Mañana</p>
+                                                                <p class="mt-0.5 text-[11px] font-medium leading-snug text-slate-700 dark:text-slate-200"
+                                                                   x-text="(grupo.roster && grupo.roster.manana && grupo.roster.manana.length) ? grupo.roster.manana.join(', ') : '—'"></p>
+                                                            </th>
+                                                            <th scope="col" class="min-w-[6.5rem] border-l border-slate-200 px-2.5 py-2 align-bottom dark:border-slate-700">
+                                                                <p class="text-[10px] font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400/90">Tarde</p>
+                                                                <p class="mt-0.5 text-[11px] font-medium leading-snug text-slate-700 dark:text-slate-200"
+                                                                   x-text="(grupo.roster && grupo.roster.tarde && grupo.roster.tarde.length) ? grupo.roster.tarde.join(', ') : '—'"></p>
+                                                            </th>
+                                                            <th scope="col" class="min-w-[6.5rem] border-l border-slate-200 px-2.5 py-2 align-bottom dark:border-slate-700">
+                                                                <p class="text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400/90">Noche</p>
+                                                                <p class="mt-0.5 text-[11px] font-medium leading-snug text-slate-700 dark:text-slate-200"
+                                                                   x-text="(grupo.roster && grupo.roster.noche && grupo.roster.noche.length) ? grupo.roster.noche.join(', ') : '—'"></p>
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700/80">
+                                                        <template x-for="m in (grupo.maquinas || [])" :key="m.id">
+                                                            <tr :class="m.tiene_parte ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : 'bg-white dark:bg-transparent'">
+                                                                <th scope="row" class="whitespace-nowrap px-3 py-2.5 text-left font-normal">
+                                                                    <button type="button"
+                                                                            class="cursor-help text-left text-xs font-semibold text-slate-800 hover:text-violet-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:text-slate-100 dark:hover:text-violet-300"
+                                                                            :aria-label="'Máquina ' + (m.codigo || m.id || '') + (m.nombre ? (' — ' + m.nombre) : '')"
+                                                                            @mouseenter="mostrarFabMaqTip($event, m)"
+                                                                            @mousemove="moverFabMaqTip($event)"
+                                                                            @mouseleave="ocultarFabMaqTip()">
+                                                                        Máquina <span class="tabular-nums" x-text="m.codigo || m.id"></span>
+                                                                    </button>
+                                                                </th>
+                                                                <td class="border-l border-slate-100 px-2.5 py-2.5 text-right text-sm font-semibold tabular-nums dark:border-slate-700/80"
+                                                                    :class="(m.manana || 0) > 0 ? 'text-amber-800 dark:text-amber-200' : 'text-slate-400 dark:text-slate-500'"
+                                                                    x-text="(m.manana || 0) > 0 ? m.manana : '—'"></td>
+                                                                <td class="border-l border-slate-100 px-2.5 py-2.5 text-right text-sm font-semibold tabular-nums dark:border-slate-700/80"
+                                                                    :class="(m.tarde || 0) > 0 ? 'text-sky-800 dark:text-sky-200' : 'text-slate-400 dark:text-slate-500'"
+                                                                    x-text="(m.tarde || 0) > 0 ? m.tarde : '—'"></td>
+                                                                <td class="border-l border-slate-100 px-2.5 py-2.5 text-right text-sm font-semibold tabular-nums dark:border-slate-700/80"
+                                                                    :class="(m.noche || 0) > 0 ? 'text-violet-800 dark:text-violet-200' : 'text-slate-400 dark:text-slate-500'"
+                                                                    x-text="(m.noche || 0) > 0 ? m.noche : '—'"></td>
+                                                            </tr>
+                                                        </template>
+                                                    </tbody>
+                                                </table>
                                             </div>
-
-                                            {# Operarios por turno — label con color de acento sutil, fondo neutro #}
-                                            <div class="grid grid-cols-3 gap-px bg-slate-200/70 dark:bg-slate-700/60">
-                                                <div class="bg-slate-50/70 px-2.5 py-2 dark:bg-slate-800/40">
-                                                    <p class="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400/90">Mañana</p>
-                                                    <p class="mt-0.5 text-[11px] font-medium leading-snug text-slate-700 dark:text-slate-200"
-                                                       x-text="(grupo.roster && grupo.roster.manana && grupo.roster.manana.length) ? grupo.roster.manana.join(', ') : '—'"></p>
-                                                </div>
-                                                <div class="bg-slate-50/70 px-2.5 py-2 dark:bg-slate-800/40">
-                                                    <p class="text-[10px] font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400/90">Tarde</p>
-                                                    <p class="mt-0.5 text-[11px] font-medium leading-snug text-slate-700 dark:text-slate-200"
-                                                       x-text="(grupo.roster && grupo.roster.tarde && grupo.roster.tarde.length) ? grupo.roster.tarde.join(', ') : '—'"></p>
-                                                </div>
-                                                <div class="bg-slate-50/70 px-2.5 py-2 dark:bg-slate-800/40">
-                                                    <p class="text-[10px] font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400/90">Noche</p>
-                                                    <p class="mt-0.5 text-[11px] font-medium leading-snug text-slate-700 dark:text-slate-200"
-                                                       x-text="(grupo.roster && grupo.roster.noche && grupo.roster.noche.length) ? grupo.roster.noche.join(', ') : '—'"></p>
-                                                </div>
-                                            </div>
-
-                                            {# Máquinas + parte del día unificados #}
-                                            <ul class="divide-y divide-slate-100 dark:divide-slate-700/80">
-                                                <template x-for="m in (grupo.maquinas || [])" :key="m.id">
-                                                    <li class="flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
-                                                        :class="m.tiene_parte ? 'bg-emerald-50/30 dark:bg-emerald-950/15' : ''">
-                                                        <div class="flex min-w-0 items-center gap-2">
-                                                            <span class="fab-maq-tooltip-trigger inline-flex h-6 min-w-[2rem] cursor-help items-center justify-center rounded-md bg-slate-100 px-1.5 text-[11px] font-semibold tabular-nums text-slate-700 ring-1 ring-inset ring-slate-200 dark:bg-slate-700/70 dark:text-slate-200 dark:ring-slate-600/70"
-                                                                  role="img"
-                                                                  :aria-label="'Máquina ' + (m.codigo || m.id || '')"
-                                                                  @mouseenter="mostrarFabMaqTip($event, m)"
-                                                                  @mousemove="moverFabMaqTip($event)"
-                                                                  @mouseleave="ocultarFabMaqTip()"
-                                                                  x-text="m.codigo || m.id"></span>
-                                                            <span class="truncate text-xs font-medium text-slate-700 dark:text-slate-200"
-                                                                  x-text="m.nombre"></span>
-                                                        </div>
-                                                        <div class="flex flex-wrap items-center gap-1.5" title="Parte del día (pares)">
-                                                            <span class="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ring-inset"
-                                                                  :class="(m.manana || 0) > 0 ? 'bg-amber-50 text-amber-800 ring-amber-200/70 dark:bg-amber-950/35 dark:text-amber-200 dark:ring-amber-900/50' : 'bg-slate-50 text-slate-400 ring-slate-200 dark:bg-slate-800/60 dark:text-slate-500 dark:ring-slate-700/60'">
-                                                                M <span x-text="(m.manana || 0) > 0 ? m.manana : '—'"></span>
-                                                            </span>
-                                                            <span class="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ring-inset"
-                                                                  :class="(m.tarde || 0) > 0 ? 'bg-sky-50 text-sky-800 ring-sky-200/70 dark:bg-sky-950/35 dark:text-sky-200 dark:ring-sky-900/50' : 'bg-slate-50 text-slate-400 ring-slate-200 dark:bg-slate-800/60 dark:text-slate-500 dark:ring-slate-700/60'">
-                                                                T <span x-text="(m.tarde || 0) > 0 ? m.tarde : '—'"></span>
-                                                            </span>
-                                                            <span class="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ring-1 ring-inset"
-                                                                  :class="(m.noche || 0) > 0 ? 'bg-violet-50 text-violet-800 ring-violet-200/70 dark:bg-violet-950/35 dark:text-violet-200 dark:ring-violet-900/50' : 'bg-slate-50 text-slate-400 ring-slate-200 dark:bg-slate-800/60 dark:text-slate-500 dark:ring-slate-700/60'">
-                                                                N <span x-text="(m.noche || 0) > 0 ? m.noche : '—'"></span>
-                                                            </span>
-                                                        </div>
-                                                    </li>
-                                                </template>
-                                            </ul>
                                         </section>
                                     </template>
 
@@ -434,7 +453,7 @@
                                     </p>
                                 </div>
 
-                                <footer class="flex flex-shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50/60 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/80 sm:px-5">
+                                <footer class="flex flex-shrink-0 flex-wrap justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900 sm:px-5">
                                     <button type="button"
                                             @click="cerrarFabDetalle()"
                                             class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
@@ -657,9 +676,13 @@
                                     </span>
                                     <button type="button"
                                             @click="abrirFabDetalle($el.dataset.fabDetalle)"
+                                            @mouseenter="mostrarFabMaqTip($event, $el.dataset.maqTip)"
+                                            @mousemove="moverFabMaqTip($event)"
+                                            @mouseleave="ocultarFabMaqTip()"
                                             data-fab-detalle="{{ fila.fabricando_detalle_json|escape }}"
-                                            class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-violet-600 transition-colors hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:text-violet-400 dark:hover:bg-violet-950/50"
-                                            aria-label="Ver máquinas y roster de {{ fila.descripcion_articulo }}">
+                                            data-maq-tip="{% for m in fila.maquinas_asignadas %}Máquina {{ m.codigo|default:m.id }}{% if not forloop.last %}, {% endif %}{% endfor %}"
+                                            class="inline-flex h-6 w-6 shrink-0 cursor-help items-center justify-center rounded text-violet-600 transition-colors hover:bg-violet-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 dark:text-violet-400 dark:hover:bg-violet-950/50"
+                                            aria-label="Máquinas: {% for m in fila.maquinas_asignadas %}{{ m.codigo|default:m.id }}{% if not forloop.last %}, {% endif %}{% empty %}asignadas{% endfor %}. Clic para ver detalle de {{ fila.descripcion_articulo }}">
                                         <span class="material-icons text-base" aria-hidden="true">precision_manufacturing</span>
                                     </button>
                                     {% else %}
