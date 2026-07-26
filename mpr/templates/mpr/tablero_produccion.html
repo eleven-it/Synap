@@ -211,18 +211,7 @@
                             </button>
                         </form>
 
-                        <a href="{% url 'mpr:parte_produccion' %}"
-                           title="Parte de producción"
-                           aria-label="Parte de producción"
-                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-white hover:bg-slate-600">
-                            <span class="material-icons text-lg leading-none" aria-hidden="true">assignment</span>
-                        </a>
-                        <a href="{% url 'mpr:clasificacion_produccion' %}"
-                           title="Control de calidad"
-                           aria-label="Control de calidad"
-                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-teal-500/50 bg-teal-900/40 text-teal-100 hover:bg-teal-800/50">
-                            <span class="material-icons text-lg leading-none" aria-hidden="true">verified</span>
-                        </a>
+                        {% include "mpr/includes/chrome_nav_flujo.html" with current="tablero_prod" only %}
 
                         <div class="relative" @click.outside="masMenuOpen = false">
                             <button type="button"
@@ -239,12 +228,6 @@
                                  class="absolute right-0 z-40 mt-1 w-52 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
                                  role="menu"
                                  aria-label="Más acciones">
-                                <a href="{{ tablero_url }}"
-                                   role="menuitem"
-                                   class="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700">
-                                    <span class="material-icons text-base text-slate-400" aria-hidden="true">dashboard</span>
-                                    Tablero KPIs
-                                </a>
                                 <a href="{% url 'mpr:armado' %}?modo=1ra"
                                    role="menuitem"
                                    class="flex items-center gap-2 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-700">

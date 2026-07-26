@@ -29,13 +29,14 @@ Ver §6.
 | Look | Barra **slate-800** alineada al hub Pedidos (`pedidos_hub.html`): título blanco, búsqueda oscura, toggles púrpura/sky, CTAs `slate-700` / primario púrpura |
 | Migas | **Eliminadas** en Tablero, **Parte** y **Control de calidad** |
 | KPI cabecera | Solo **resta urgente** (+ chip Solo urgentes en Par). Sin «resta total» — solo Tablero |
-| Atajos visibles | Iconos `h-8 w-8` slate (+ CC teal): entre Tablero ↔ Parte ↔ CC + `help_outline` |
-| Menú `⋯ Más` | Tablero KPIs, Armado, Anular envíos (si permiso) — **solo Tablero** |
+| Atajos visibles | Orden canónico: Tablero prod (emerald) → Parte (púrpura) → CC (teal) → Tablero KPI (ámbar) → `help_outline` (slate). Include: `chrome_nav_flujo.html` |
+| Menú `⋯ Más` | Armado, Anular envíos (si permiso) — **solo Tablero**; KPI ya no está en el menú (ícono ámbar) |
 | Ayuda | Ícono `help_outline` → ancla del manual de cada pantalla |
-| CTA cargar filtros | **Cargar grilla** = secundario `slate-700` (Parte / CC); Tablero usa Actualizar |
+| CTA cargar filtros | **Cargar grilla** / **Actualizar** = secundario `slate-700` |
 | CTA primario acción | Tablero **Enviar** púrpura; Parte **Guardar** púrpura; CC **Guardar** teal |
 | Estado | Pack\|Par, Docenas\|Pares, búsqueda: en la misma barra (**Pack\|Par solo Tablero**) |
 | Toggles | **Pack\|Par** activo púrpura; **Docenas\|Pares** activo sky (`variant=dark`) |
+| Marcas (Parte/CC) | **Ocultas** en chrome (`hidden`, DOM conservado): el tags-filter `min-h-9` rompía la alineación |
 
 ## 3.1 Alcance chrome compartido (flujo planta)
 
@@ -44,6 +45,15 @@ Misma barra densa en:
 1. `tablero_produccion.html`
 2. `parte_produccion.html`
 3. `clasificacion_encabezado.html` (+ sin migas en `clasificacion_produccion.html`)
+
+Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual).
+
+| Destino | Color | Ícono |
+|---------|-------|-------|
+| Tablero de producción | emerald | `table_chart` |
+| Parte | púrpura | `assignment` |
+| Control de calidad | teal | `verified` |
+| Tablero KPI (`/mpr/`) | ámbar | `analytics` |
 
 Sin Pack\|Par ni KPI urgente fuera del Tablero. Fecha / línea / máquina / turno siguen visibles y operativos en Parte y CC.
 

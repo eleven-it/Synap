@@ -84,7 +84,10 @@
                             </div>
                         </label>
 
-                        {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
+                        {# Marcas ocultas: conservadas en DOM (altura del tags filter rompe alineación del chrome) #}
+                        <div class="hidden" aria-hidden="true">
+                            {% include "mpr/includes/filtro_marcas_tags.html" with marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos only %}
+                        </div>
 
                         <button type="submit"
                                 class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
@@ -94,13 +97,7 @@
                     </form>
 
                     <div class="ml-auto flex flex-wrap items-center gap-2">
-                        <a href="{% url 'mpr:tablero_produccion' %}"
-                           title="Tablero de producción"
-                           aria-label="Tablero de producción"
-                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-white hover:bg-slate-600">
-                            <span class="material-icons text-lg leading-none" aria-hidden="true">dashboard</span>
-                        </a>
-                        {% include "mpr/includes/btn_control_calidad.html" with variant="icon" fecha_str=fecha_str only %}
+                        {% include "mpr/includes/chrome_nav_flujo.html" with current="parte" fecha_str=fecha_str only %}
                         <a href="{% url 'mpr:manual_usuario' %}#parte-supervisor"
                            target="_blank"
                            rel="noopener noreferrer"
