@@ -48,7 +48,9 @@ Ver §6.
 - Filtros **Desde / Hasta / Marcas / Filtrar** permanecen en el DOM con clase `hidden`.
 - KPI urgente en **una sola línea** sobre fondo rose tenue en la barra oscura.
 - Orden de filas (Par): máquina asignada → número de máquina 1…N → marca → descripción.
-- Modal Fabricando: artículo como título principal; tooltip BO «Máquina X» en chip de código.
+- Modal Fabricando: artículo como título; tabla por fila
+  (`Fila | Mañana/Tarde/Noche + operarios` + una fila de datos por máquina).
+- Ícono máquina en columna Fabricando: tooltip al hover («Máquina N»); clic abre el modal.
 - Modales (envío / Fabricando) en el mismo `x-data` de página.
 - **Thead tabla (Par):** columna Artículo en una sola celda `rowspan="2"` (sin etiqueta duplicada). Fondos del `thead` (Pack y Par) **opacos** (sin alpha) para que el sticky no deje ver las filas al scrollear.
 

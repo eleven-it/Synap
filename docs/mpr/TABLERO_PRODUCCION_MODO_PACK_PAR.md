@@ -45,17 +45,18 @@ componente BOM (base del envío a producción)."*
 
 En la columna **Fabricando**, cada fila con artículo asignado a al menos una máquina
 vigente (`mpr_maquina_articulo`) muestra un **chip violeta** sobre el cupo y un ícono
-**engranaje** (`precision_manufacturing`) que abre un modal Synap agrupado por **Fila**
-(sin la etiqueta «Roster»): en cada fila, operarios M/T/N (chips ámbar / sky / violeta) y
-la lista unificada de máquinas con badges del parte del día (pares por franja). Header
-con cupo Fabricando (`enviado`) y CTAs a **Parte** y **Control de calidad** (fecha =
-`fecha_hasta` del filtro o hoy). Payload: `fabricando_detalle.grupos_fila`. Si
-`enviado > 0` y **no** hay máquina asignada, aparece un ícono ámbar de espera con tooltip
-«Fabricando sin máquina asignada» y enlace a carga de artículos por máquina. Servicio:
+**engranaje** (`precision_manufacturing`). Hover sobre el ícono: tooltip BO con
+«Máquina N» (lista si hay varias); clic abre el modal. El modal agrupa por **Fila**
+en tabla: encabezado `Fila | Mañana (operarios) | Tarde | Noche` y **una fila de datos
+por máquina** (`Máquina N | pares M | pares T | pares N`). Header con cupo Fabricando
+(`enviado`) y CTAs a **Parte** y **Control de calidad** (fecha = `fecha_hasta` del
+filtro o hoy). Payload: `fabricando_detalle.grupos_fila`. Si `enviado > 0` y **no** hay
+máquina asignada, aparece un ícono ámbar de espera con tooltip «Fabricando sin máquina
+asignada» y enlace a carga de artículos por máquina. Servicio:
 `enriquecer_filas_tablero_indicadores_fabricando` en `mpr/services_maquina_linea.py`.
-En el modal, el **nombre del artículo** es el título principal (`h3` bold); «Fabricando» queda
-como eyebrow. Hover sobre el chip de código de máquina muestra tooltip estilo BO
-(`bg-slate-900`, texto «Máquina X»).
+En el modal, el **nombre del artículo** es el título principal (`h3` bold); «Fabricando»
+queda como eyebrow. Hover sobre «Máquina N» muestra tooltip estilo BO
+(`bg-slate-900`, «Máquina X — nombre»).
 
 La columna **Resta total** se eliminó en ambos modos: **Urgente** unifica la brecha
 a fabricar (`max(0, Pedido + Reserva − stock)`).
