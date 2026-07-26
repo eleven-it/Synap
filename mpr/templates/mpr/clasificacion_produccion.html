@@ -79,7 +79,7 @@
                     <span class="material-icons text-blue-600 dark:text-blue-400" aria-hidden="true">info</span>
                     <div>
                         <p class="text-sm font-medium text-blue-900 dark:text-blue-100">
-                            No hay pendiente de control de calidad para <strong>{{ fecha_str }}</strong>
+                            No hay filas de control de calidad para <strong>{{ fecha_str }}</strong>
                             {% if turno_nombre %}· turno <strong>{{ turno_nombre }}</strong>{% endif %}.
                         </p>
                         <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">
@@ -151,7 +151,7 @@
                             <tr class="group/row clasif-grilla-fila{% if fila.solo_lectura %} opacity-70{% endif %}"
                                 data-descripcion="{{ fila.maquina_nombre|lower }} {{ fila.descripcion|lower }} {{ fila.codigo_tooltip|lower }} {{ fila.turno_nombre|lower }} {{ fila.operario_nombre|lower }}"
                                 x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase().trim())"
-                                x-data="clasificacionFila({{ fila.id_articulo }}, {{ fila.disponible|floatformat:0 }}, {{ unidades_por_docena_clasificacion|default:12 }})"
+                                x-data="clasificacionFila({{ fila.id_articulo }}, {{ fila.base_clasificable|floatformat:0 }}, {{ unidades_por_docena_clasificacion|default:12 }}, {{ fila.ini_seg2da|default:0 }}, {{ fila.ini_scrap|default:0 }}, {{ fila.solo_lectura|yesno:'true,false' }}, {{ fila.ini_semi|default:0 }})"
                                 :class="excede ? 'bg-red-50/40 dark:bg-red-950/15' : ''">
                                 {# Máquina — al buscar se muestra en cada fila #}
                                 <td x-show="busqueda.trim() !== ''"
@@ -183,21 +183,46 @@
                                 {% endif %}
                                 <td class="px-3 py-3 text-sm text-slate-700 dark:text-slate-300">{{ fila.turno_nombre }}</td>
                                 <td class="px-3 py-3 text-sm font-bold text-slate-800 dark:text-slate-100">{{ fila.operario_nombre }}</td>
-                                <td class="px-3 py-3 text-center text-xs font-semibold tabular-nums {% if fila.solo_lectura %}text-slate-500 dark:text-slate-400{% else %}text-emerald-800 dark:text-emerald-300{% endif %}">{{ fila.disponible_texto }}</td>
-                                <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-0" {% if fila.solo_lectura %}aria-hidden="true"{% endif %}>
-                                    {% if not fila.solo_lectura %}
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="semi elaborado" model_doc="semiDoc" model_uni="semiUni" subtotal_alpine="semiUnidades" ring_class="focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/25" only %}
-                                    {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+                                <td class="px-3 py-3 text-center text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ fila.parte_texto }}</td>
+                                <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-0">
+                                    {% if fila.solo_lectura %}
+                                    <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_semi_texto }}</p>
+                                    {% else %}
+                                    <div class="clasif-celda-cantidad mx-auto flex w-full max-w-[9rem] flex-col items-center">
+                                        <div class="flex w-full overflow-hidden rounded-lg border border-slate-300/90 bg-slate-50 shadow-sm dark:border-slate-500 dark:bg-slate-900/80">
+                                            <div class="flex min-w-0 flex-1 flex-col px-1 py-1.5 text-center">
+                                                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400">Docenas</span>
+                                                <span class="text-sm font-semibold tabular-nums text-emerald-800 dark:text-emerald-300" x-text="Math.floor(semiUnidades / upd)"></span>
+                                            </div>
+                                            <div class="flex w-5 shrink-0 items-center justify-center border-x border-slate-200 text-[10px] font-bold text-slate-300 dark:border-slate-600" aria-hidden="true">+</div>
+                                            <div class="flex min-w-0 flex-1 flex-col px-1 py-1.5 text-center">
+                                                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400">Unidades</span>
+                                                <span class="text-sm font-semibold tabular-nums text-emerald-800 dark:text-emerald-300" x-text="semiUnidades % upd"></span>
+                                            </div>
+                                        </div>
+                                        <p class="mt-1 min-h-[1rem] w-full text-center text-[10px] font-medium tabular-nums text-emerald-700 dark:text-emerald-400" x-text="'= ' + semiUnidades + ' u.'"></p>
+                                        <input type="hidden"
+                                               name="semi_{{ fila.id_articulo }}_op_{{ fila.id_operario }}_turno_{{ fila.id_mpr_turno }}_maq_{{ fila.id_mpr_maquina }}_docenas"
+                                               :value="Math.floor(semiUnidades / upd)">
+                                        <input type="hidden"
+                                               name="semi_{{ fila.id_articulo }}_op_{{ fila.id_operario }}_turno_{{ fila.id_mpr_turno }}_maq_{{ fila.id_mpr_maquina }}_unidades"
+                                               :value="semiUnidades % upd">
+                                    </div>
+                                    {% endif %}
                                 </td>
-                                <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-1" {% if fila.solo_lectura %}aria-hidden="true"{% endif %}>
-                                    {% if not fila.solo_lectura %}
+                                <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-1">
+                                    {% if fila.solo_lectura %}
+                                    <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_seg2da_texto }}</p>
+                                    {% else %}
                                     {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="seg2da" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="2da selección" model_doc="seg2daDoc" model_uni="seg2daUni" subtotal_alpine="seg2daUnidades" ring_class="focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/25" only %}
-                                    {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+                                    {% endif %}
                                 </td>
-                                <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-2" {% if fila.solo_lectura %}aria-hidden="true"{% endif %}>
-                                    {% if not fila.solo_lectura %}
+                                <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-2">
+                                    {% if fila.solo_lectura %}
+                                    <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_scrap_texto }}</p>
+                                    {% else %}
                                     {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="scrap" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="desperdicio" model_doc="scrapDoc" model_uni="scrapUni" subtotal_alpine="scrapUnidades" ring_class="focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/25" only %}
-                                    {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -209,12 +234,12 @@
                                         {% if requiere_fecha %}
                                             Aún no cargaste una grilla
                                         {% else %}
-                                            Sin filas pendientes de clasificar
+                                            Sin filas de control de calidad
                                         {% endif %}
                                     </p>
                                     <p class="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
                                         {% if requiere_fecha %}
-                                            Elegí fecha (turno opcional) y cargá la grilla para ver pendiente por máquina, artículo y operario.
+                                            Elegí fecha (turno opcional) y cargá la grilla para ver el parte por máquina, artículo y operario.
                                         {% else %}
                                             Todo lo producido en esta fecha ya fue clasificado, o no hay parte con desglose por operario.
                                         {% endif %}
@@ -236,10 +261,10 @@
             <div class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
                 <p x-show="hayExcedida" x-cloak class="text-xs font-medium text-red-600 dark:text-red-400">
                     <span class="material-icons align-text-bottom text-sm" aria-hidden="true">error_outline</span>
-                    Corregí las filas que superan el saldo en Producción antes de guardar.
+                    Corregí las filas donde 2da + desperdicio superan lo clasificable antes de guardar.
                 </p>
                 <p x-show="!hayExcedida" class="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
-                    {{ filas|length }} fila{% if filas|length != 1 %}s{% endif %} con pendiente
+                    {{ filas|length }} fila{% if filas|length != 1 %}s{% endif %} en la grilla
                 </p>
                 <button type="submit"
                         :disabled="hayExcedida"
@@ -357,14 +382,15 @@ document.addEventListener('alpine:init', function () {
             }
         };
     });
-    Alpine.data('clasificacionFila', function (idArt, disp, upd) {
+    Alpine.data('clasificacionFila', function (idArt, base, upd, ini2da, iniScrap, soloLectura, iniSemi) {
         return {
             idArt: idArt,
-            semiDoc: 0, semiUni: 0,
+            base: base || 0,
+            upd: upd || 12,
+            soloLectura: !!soloLectura,
+            iniSemi: iniSemi || 0,
             seg2daDoc: 0, seg2daUni: 0,
             scrapDoc: 0, scrapUni: 0,
-            upd: upd || 12,
-            disp: disp || 0,
             parseQty: function (v) {
                 var n = parseInt(String(v || '0').trim(), 10);
                 return isNaN(n) || n < 0 ? 0 : n;
@@ -372,34 +398,13 @@ document.addEventListener('alpine:init', function () {
             unidadesDest: function (doc, uni) {
                 return this.parseQty(doc) * this.upd + this.parseQty(uni);
             },
-            get semiUnidades() { return this.unidadesDest(this.semiDoc, this.semiUni); },
             get seg2daUnidades() { return this.unidadesDest(this.seg2daDoc, this.seg2daUni); },
             get scrapUnidades() { return this.unidadesDest(this.scrapDoc, this.scrapUni); },
-            get suma() {
-                return this.semiUnidades + this.seg2daUnidades + this.scrapUnidades;
+            get semiUnidades() {
+                if (this.soloLectura) { return this.iniSemi; }
+                return Math.max(0, this.base - this.seg2daUnidades - this.scrapUnidades);
             },
-            get excede() { return this.suma > this.disp + 1e-9; },
-            get clasificadoTexto() {
-                var s = this.suma;
-                var d = Math.floor(s / this.upd);
-                var u = s % this.upd;
-                return d + ' docenas · ' + u + ' unidades';
-            },
-            etiquetaClasificado: function () {
-                if (this.suma === 0) {
-                    return 'Clasificado: 0 docenas · 0 unidades';
-                }
-                return (this.excede ? 'Excede: ' : 'Clasificado: ') + this.clasificadoTexto;
-            },
-            claseClasificado: function () {
-                if (this.excede) {
-                    return 'text-red-600 dark:text-red-400';
-                }
-                if (this.suma > 0) {
-                    return 'text-emerald-700 dark:text-emerald-400';
-                }
-                return 'text-slate-500 dark:text-slate-400';
-            },
+            get excede() { return this.seg2daUnidades + this.scrapUnidades > this.base + 1e-9; },
             coerceQtyField: function (field, el) {
                 var v = el.value;
                 if (v === '' || v === null || v === undefined) {
@@ -418,10 +423,18 @@ document.addEventListener('alpine:init', function () {
             },
             init: function () {
                 var self = this;
-                this.$watch(function () { return self.suma; }, function () {
+                if (!this.soloLectura) {
+                    var i2 = ini2da || 0;
+                    this.seg2daDoc = Math.floor(i2 / this.upd);
+                    this.seg2daUni = i2 % this.upd;
+                    var isc = iniScrap || 0;
+                    this.scrapDoc = Math.floor(isc / this.upd);
+                    this.scrapUni = isc % this.upd;
+                }
+                this.$watch(function () { return self.seg2daUnidades + self.scrapUnidades; }, function () {
                     self.$dispatch('fila-excede', { id: self.idArt, excede: self.excede });
                 });
-                ['semiDoc', 'semiUni', 'seg2daDoc', 'seg2daUni', 'scrapDoc', 'scrapUni'].forEach(function (field) {
+                ['seg2daDoc', 'seg2daUni', 'scrapDoc', 'scrapUni'].forEach(function (field) {
                     self.$watch(field, function (val) {
                         if (val === '' || val === null || (typeof val === 'number' && isNaN(val))) {
                             self[field] = 0;

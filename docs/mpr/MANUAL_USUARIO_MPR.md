@@ -117,18 +117,23 @@ Hasta que el supervisor apruebe, el stock **no** ingresa.
 
 ### Para qué sirve
 
-Distribuir lo que está en **Producción** entre **Semi elaborado**, **2da selección** y **Desperdicio**, según el resultado del control.
+Distribuir lo del **Parte** entre **Semi elaborado** (primera), **2da selección** y **Desperdicio**.
 
 ### Cómo usarlo
 
-1. Elija **Fecha** y **Turno** → **Cargar grilla**.
-2. Por fila, cargue cantidades en las columnas de clasificación (sin superar el pendiente).
+1. Elija **Fecha** (y **Turno** opcional) → **Cargar grilla**.
+2. La columna **Parte** muestra lo fabricado (referencial). **Semi elaborado** se precarga/calcula solo; cargue solo **2da selección** y **Desperdicio** (Semi = Parte remanente − 2da − Desperdicio).
 3. Pulse **Guardar control de calidad**.
+4. Si el turno ya tiene control de calidad, el **Parte** de ese turno queda bloqueado y no se puede modificar.
+
+**Correcciones después de guardar**
+
+Para reclasificar entre Semi / 2da / Desperdicio use **Ingreso de movimiento de stock** con una **transferencia interna**. No se edita ni se deshace desde esta pantalla.
 
 **Avisos frecuentes**
 
-- «No hay pendiente de control de calidad…»: primero debe existir un parte aprobado/registrado para esa fecha y turno.
-- Corrija las filas en rojo (superan el saldo) antes de guardar.
+- Sin filas: falta parte con desglose por operario para esa fecha, o todo ya está clasificado (las filas completas se ven en solo lectura).
+- Corrija las filas en rojo (2da + desperdicio superan el remanente) antes de guardar.
 
 ---
 

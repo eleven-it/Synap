@@ -37,6 +37,8 @@ Ver §6.
 | Estado | Pack\|Par, Docenas\|Pares, búsqueda: en la misma barra (**Pack\|Par solo Tablero**) |
 | Toggles | **Pack\|Par** activo púrpura; **Docenas\|Pares** activo sky (`variant=dark`) |
 | Marcas (Parte/CC) | **Ocultas** en chrome (`hidden`, DOM conservado): el tags-filter `min-h-9` rompía la alineación |
+| Alineación atajos | En Parte/CC el `header` usa **`items-end`** (formulario con labels encima de inputs) para que los íconos compartan línea base con los campos y «Cargar grilla»; el `h1` lleva `self-center`. Tablero (sin labels visibles) sigue con `items-center`. |
+| Altura controles | **`h-9`** (36px) canónica = búsqueda «Código o descripción…» / Tablero. Inputs, selects, atajos `h-9 w-9`, CTAs y toggles Pack\|Par / Docenas\|Pares comparten esa altura (`text-sm` en campos). |
 
 ## 3.1 Alcance chrome compartido (flujo planta)
 
@@ -77,15 +79,19 @@ Sin Pack\|Par ni KPI urgente fuera del Tablero. Fecha / línea / máquina / turn
 
 ## 5. Iconos y tooltips (atajos)
 
+Los atajos de solo ícono usan tooltip Synap inmediato al hover/foco (`mpr/includes/chrome_icon_tooltip.html`: burbuja `slate-900`, sin `title` nativo duplicado). Fuente de atajos de flujo: `chrome_nav_flujo.html`.
+
 | Acción | Material icon | Tooltip / aria-label |
 |--------|---------------|----------------------|
-| Actualizar vista | `refresh` | Actualizar vista |
-| Parte de producción | `assignment` | Parte de producción |
-| Control de calidad | `verified` (canon MPR) o `fact_check` | Control de calidad |
+| Tablero de producción | `table_chart` | Tablero de producción (emerald) |
+| Parte de producción | `assignment` | Parte de producción (púrpura) |
+| Control de calidad | `verified` | Control de calidad (teal) |
+| Tablero KPI | `analytics` | Tablero KPI (ámbar) |
+| Actualizar vista | `refresh` | Actualizar vista (botón con label; `title` con última hora) |
 | Más acciones | `more_horiz` | Más acciones |
-| Ayuda | `help_outline` | Manual del tablero |
+| Ayuda | `help_outline` | Manual del tablero / parte / CC |
 
-Botón icono: ~`h-8 w-8`, borde slate suave, foco visible. Sin `alert`/`confirm` nativos.
+Botón icono: **`h-9 w-9`**, borde slate suave, foco visible. Sin `alert`/`confirm` nativos.
 
 ## 6. Deprecación OPT / ventana_pack (UI)
 

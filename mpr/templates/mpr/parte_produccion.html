@@ -24,8 +24,9 @@
         {# Chrome denso slate-800 — mismo look que Tablero (docs/mpr/TABLERO_PRODUCCION_CHROME_DENSIDAD.md) #}
         <div class="mb-3 flex-shrink-0">
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
-                <header class="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <h1 class="shrink-0 text-lg font-bold tracking-tight text-white sm:text-xl">Parte de producción</h1>
+                {# items-end: atajos alineados con inputs (no con labels); título centrado en el bloque #}
+                <header class="flex flex-wrap items-end gap-x-3 gap-y-2">
+                    <h1 class="shrink-0 self-center text-lg font-bold tracking-tight text-white sm:text-xl">Parte de producción</h1>
 
                     <form method="get"
                           action="{% url 'mpr:parte_produccion' %}"
@@ -40,7 +41,7 @@
                                    x-model="fechaIso"
                                    required
                                    aria-label="Fecha del parte"
-                                   class="rounded-lg border border-slate-600 bg-slate-900/80 px-2 py-1.5 text-xs text-white [color-scheme:dark] focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
+                                   class="h-9 rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white [color-scheme:dark] focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
                             <input type="hidden" name="fecha" :value="fechaDdmmyyyy">
                         </label>
 
@@ -48,7 +49,7 @@
                             <span class="text-[10px] font-medium text-slate-400">Línea</span>
                             <select x-model="lineaSel"
                                     aria-label="Filtrar por línea"
-                                    class="w-36 rounded-lg border border-slate-600 bg-slate-900/80 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-40">
+                                    class="h-9 w-36 rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-40">
                                 <option value="">Todas las líneas</option>
                                 {% for l in lineas_filtro %}
                                 <option value="{{ l.id }}">{{ l.nombre }}</option>
@@ -61,7 +62,7 @@
                             <span class="text-[10px] font-medium text-slate-400">Máquina</span>
                             <select x-model="maquinaSel"
                                     aria-label="Filtrar por máquina"
-                                    class="w-40 rounded-lg border border-slate-600 bg-slate-900/80 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-44">
+                                    class="h-9 w-40 rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 sm:w-44">
                                 <option value="">Todas las máquinas</option>
                                 <template x-for="m in maquinasVisibles" :key="m.id">
                                     <option :value="m.id" x-text="m.label"></option>
@@ -80,7 +81,7 @@
                                        autocomplete="off"
                                        placeholder="Código o descripción…"
                                        aria-label="Buscar artículo por código o descripción"
-                                       class="w-full rounded-lg border border-slate-600 bg-slate-900/80 py-1.5 pl-9 pr-2 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
+                                       class="h-9 w-full rounded-lg border border-slate-600 bg-slate-900/80 pl-9 pr-2 text-sm text-white placeholder:text-slate-400 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
                             </div>
                         </label>
 
@@ -90,7 +91,7 @@
                         </div>
 
                         <button type="submit"
-                                class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
+                                class="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 text-sm font-medium text-white hover:bg-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                             <span class="material-icons text-base" aria-hidden="true">grid_on</span>
                             Cargar grilla
                         </button>
@@ -101,10 +102,10 @@
                         <a href="{% url 'mpr:manual_usuario' %}#parte-supervisor"
                            target="_blank"
                            rel="noopener noreferrer"
-                           title="Manual del parte"
                            aria-label="Manual del parte"
-                           class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600 hover:text-white">
+                           class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600 hover:text-white">
                             <span class="material-icons text-lg leading-none" aria-hidden="true">help_outline</span>
+                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Manual del parte" only %}
                         </a>
                     </div>
                 </header>
@@ -159,6 +160,15 @@
                 <strong>Validación activa:</strong> la suma de los tres turnos (docenas × {{ unidades_por_docena_parte|default:12 }} + pares) de cada fila no puede superar el cupo <strong>Fabricando</strong>. Si se excede, el guardado se rechaza.
             </p>
         </div>
+
+        {% if grilla_planilla.turnos_bloqueados %}
+        <div class="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/60 dark:bg-amber-950/30 sm:mb-4">
+            <p class="flex items-start gap-2 text-sm font-medium text-amber-900 dark:text-amber-100">
+                <span class="material-icons text-base text-amber-600 dark:text-amber-400" aria-hidden="true">lock</span>
+                Uno o más turnos de esta fecha ya tienen control de calidad registrado. Esos turnos no se pueden modificar en el parte.
+            </p>
+        </div>
+        {% endif %}
 
         {# Grilla de captura planilla QC #}
         <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800"
@@ -250,8 +260,18 @@
                                 {# Celdas por turno #}
                                 {% for col in grilla_planilla.turnos_columnas %}
                                 {% with cel=fila.turnos|dict_get:col.id %}
-                                <td class="parte-turno-tint-{{ col.franja }} border-l-2 px-2 py-3 align-top">
-                                    {% if fila.inputs_habilitados and cel and cel.operarios %}
+                                <td class="parte-turno-tint-{{ col.franja }} border-l-2 px-2 py-3 align-top{% if cel.bloqueado %} bg-amber-50/60 dark:bg-amber-950/20{% endif %}">
+                                    {% if cel.bloqueado %}
+                                        <div class="flex min-h-[3.5rem] flex-col items-center justify-center rounded-lg border border-amber-200 bg-amber-50/80 px-2 py-2 text-center dark:border-amber-800/50 dark:bg-amber-950/30">
+                                            <span class="material-icons mb-1 text-base text-amber-600 dark:text-amber-400" aria-hidden="true">lock</span>
+                                            <p class="text-[10px] font-medium leading-snug text-amber-800 dark:text-amber-200">
+                                                Este turno ya tiene control de calidad y no se puede modificar el parte.
+                                            </p>
+                                            {% if cel.docenas or cel.pares %}
+                                            <p class="mt-1 text-[10px] tabular-nums text-amber-700/90 dark:text-amber-300/90">{{ cel.docenas|default:0 }} doc. + {{ cel.pares|default:0 }} pares</p>
+                                            {% endif %}
+                                        </div>
+                                    {% elif fila.inputs_habilitados and cel and cel.operarios %}
                                         {# Operario del roster: 1 → hidden; varios → select #}
                                         <div class="mb-1.5">
                                             {% if cel.operarios|length == 1 %}

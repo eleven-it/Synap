@@ -32,9 +32,14 @@ Dos mejoras coordinadas para alinear MPR con la planta textil:
 | Default presentación | Docenas en flujo operativo |
 | Toggle | Sesión `mpr_presentacion_cantidad` |
 | Divisor componentes | 12 u./docena |
-| Filas clasificación | (máquina × artículo × turno × operario), solo pendiente > 0 |
+| Filas clasificación | (máquina × artículo × turno × operario), pendiente > 0 o ya clasificadas (roster completo) |
 | Alcance pendiente | Fecha obligatoria; turno opcional (vacío = todos los turnos del día) |
-| Columnas grilla CC | Máquina (badge), Artículo, Turno, Operario, Pendiente, Semi, 2da, Scrap |
+| Columnas grilla CC | Máquina, Artículo, Turno, Operario, **Parte** (referencial, fab. del parte), Semi (calculado), 2da, Scrap |
+| Semi elaborado | Solo lectura calculado: `base − 2da − desperdicio`; `base` = remanente clasificable de la fila |
+| Edición CC | Solo **2da selección** y **Desperdicio**; el servidor recalcula semi |
+| Validación CC | `2da + desperdicio ≤ base` (UI Alpine + servidor) |
+| Bloqueo parte | Si un turno tiene CC en `mpr_transicion_lote` (fecha+turno), ese turno del parte queda bloqueado |
+| Corrección post-CC | No se edita ni se revierte en la grilla CC. Reclasificar Semi/2da/Desperdicio vía **Ingreso de movimiento de stock** → transferencia interna (AdministraNET) |
 | Arrastre | Sección separada turnos anteriores |
 | Clasificación parcial | Sí |
 | Parte sin operario | Bloquear clasificación por rendimiento |
@@ -87,3 +92,4 @@ Migración vía `core/services/legacy_mysql_schema/catalog.py`.
 - **Bloqueos CC (08/07/2026):** no bloquear fila si ya está 100 % clasificada o sin cantidad sin operario asignado (`construir_grilla_clasificacion_produccion`).
 - **Fabricando unificado (08/07/2026):** tablero, parte y reporte pendientes usan `acreditado = max(stock, clasificado CC, partes acumulados)`; componentes sin columna Terminado. Ver [REPORTES_MPR.md](REPORTES_MPR.md), [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md).
 - **Guarda física CC corregida (08/07/2026):** al guardar Control de calidad, la validación agregada de stock ahora compara **solo lo que se clasifica ahora** contra el **saldo vivo de Producción** (`total_cls > disponible_real`). Antes sumaba el acumulado ya clasificado del turno (`prev_cls_art + total_cls`), lo que **duplicaba el descuento** y bloqueaba falsamente con "Stock Producción insuficiente" cuando parte del stock clasificado ya había salido del pipeline (p. ej. Semi Elaborado consumido en el armado del pack BOM). El tope por operario (`atribuible = fabricado − ya_clasificado`) se mantiene. Ref: `mpr/views.py::RegistrarClasificacionProduccionView.post`; tests `test_clasificado_previo_consumido_no_bloquea` y `test_bloqueo_si_supera_saldo_vivo_produccion` en `mpr/tests/test_etapa10_clasificacion_produccion.py`.
+- **Columna Parte + semi calculado + bloqueo parte (26/07/2026):** la grilla CC muestra **Parte** (cantidad referencial del parte, sin restar clasificado). **Semi elaborado** es solo lectura y se calcula como `base − 2da − desperdicio`, donde `base` es el remanente clasificable de la fila. Solo se editan 2da y desperdicio; el servidor recalcula semi e ignora manipulación. Validación: `2da + desperdicio ≤ base`. Filas 100 % clasificadas se muestran en solo lectura con desglose persistido. Si un turno tiene CC registrada para la fecha, el **parte** bloquea la edición de ese turno (UI + `ValidationError` en registro/ajustes). Para **corregir** Semi/2da/Desperdicio después de guardar: **Ingreso de movimiento de stock** → transferencia interna (no hay reverse en el pipeline MPR). Ref: `mpr/repositories/transicion_lote.py` (`turno_tiene_control_calidad`), `construir_grilla_clasificacion_produccion`, `parte_produccion.html`.

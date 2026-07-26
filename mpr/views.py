@@ -6879,22 +6879,7 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
                 request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
             )
 
-        tiene_cantidad = False
-        for id_art, id_operario, id_turno, id_maquina in filas_post:
-            id_op = id_operario if id_operario > 0 else None
-            tid = id_turno if id_turno > 0 else (turno_id_filtro or None)
-            mid = id_maquina if id_maquina > 0 else None
-            for pref in ("semi", "seg2da", "scrap"):
-                kwargs_qty: Dict[str, int | None] = {}
-                if tid is not None and mid is not None and id_op is not None:
-                    kwargs_qty = {"id_turno": tid, "id_maquina": mid}
-                if _clasificacion_cantidad_unidades_desde_post(
-                    request.POST, id_art, pref, id_op, **kwargs_qty
-                ) > 0:
-                    tiene_cantidad = True
-                    break
-            if tiene_cantidad:
-                break
+        tiene_cantidad = any(f[1] > 0 for f in filas_post)
         if not tiene_cantidad:
             dj_messages.warning(request, "No se enviaron cantidades.")
             return _redirect_clasificacion_produccion(
@@ -6904,7 +6889,10 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
         ids_post = {f[0] for f in filas_post if f[1] > 0}
 
         from mpr.repositories.parte import acumular_celdas_clasificacion_maquina_turno
-        from mpr.repositories.transicion_lote import sumar_clasificado_por_operario_fecha_turno
+        from mpr.repositories.transicion_lote import (
+            sumar_clasificado_desglose_por_operario_fecha_turno,
+        )
+        from mpr.services import _atribuible_clasificacion_por_celda
 
         celdas_parte = acumular_celdas_clasificacion_maquina_turno(
             base_empresa, fecha_obj, turno_id_filtro
@@ -6915,30 +6903,24 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
             if f[1] > 0
         }
         turnos_post.discard(None)
-        clasificado_prev: Dict[Tuple[int, int, int], Decimal] = {}
-        fabricado_por_grupo: Dict[Tuple[int, int, int], Decimal] = {}
+        desglose_por_turno: Dict[int, Dict[Tuple[int, int], Dict[str, Decimal]]] = {}
         meta_celda: Dict[Tuple[int, int, int, int], Dict[str, Any]] = {}
 
         for (mid, aid, oid, tid), datos in celdas_parte.items():
             meta_celda[(mid, aid, oid, tid)] = datos
-            if oid is None or int(oid) <= 0:
-                continue
-            fabricado_por_grupo[(aid, oid, tid)] = (
-                fabricado_por_grupo.get((aid, oid, tid), Decimal("0"))
-                + (to_decimal_or_none(datos.get("cantidad")) or Decimal("0"))
-            )
 
         for tid in turnos_post:
-            cls_turno = sumar_clasificado_por_operario_fecha_turno(
+            desglose_por_turno[int(tid)] = sumar_clasificado_desglose_por_operario_fecha_turno(
                 base_empresa, fecha_obj, int(tid)
             )
-            for (aid, oid), val in cls_turno.items():
-                clasificado_prev[(aid, oid, tid)] = val
+
+        atribuible_por_celda = _atribuible_clasificacion_por_celda(
+            celdas_parte, desglose_por_turno
+        )
 
         stock_real, _ = _pivot_stock_por_tipo_mpr(base_empresa, list(ids_post))
 
         filas_con_cantidad: List[Dict[str, Any]] = []
-        suma_post_por_grupo: Dict[Tuple[int, int, int], Decimal] = {}
 
         for id_art, id_operario, id_turno, id_maquina in filas_post:
             if id_operario <= 0:
@@ -6952,11 +6934,6 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
                 qty_kwargs = {"id_turno": id_turno_ef, "id_maquina": id_maq_ef}
             else:
                 qty_kwargs = {}
-            cant_semi = Decimal(
-                _clasificacion_cantidad_unidades_desde_post(
-                    request.POST, id_art, "semi", id_operario, **qty_kwargs
-                )
-            )
             cant_2da = Decimal(
                 _clasificacion_cantidad_unidades_desde_post(
                     request.POST, id_art, "seg2da", id_operario, **qty_kwargs
@@ -6967,11 +6944,19 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
                     request.POST, id_art, "scrap", id_operario, **qty_kwargs
                 )
             )
+            clave_celda = (id_maq_ef, id_art, id_operario, id_turno_ef)
+            atribuible = atribuible_por_celda.get(clave_celda, Decimal("0"))
+            if cant_2da + cant_scrap > atribuible:
+                dj_messages.error(
+                    request,
+                    f"Exceso operario {id_operario} artículo {id_art} turno {id_turno_ef}: "
+                    f"2da+desperdicio ({cant_2da + cant_scrap:g}) supera lo clasificable "
+                    f"({atribuible:g}). Fila ignorada.",
+                )
+                continue
+            cant_semi = max(Decimal("0"), atribuible - cant_2da - cant_scrap)
             if cant_semi <= 0 and cant_2da <= 0 and cant_scrap <= 0:
                 continue
-            grupo = (id_art, id_operario, id_turno_ef)
-            suma_fila = cant_semi + cant_2da + cant_scrap
-            suma_post_por_grupo[grupo] = suma_post_por_grupo.get(grupo, Decimal("0")) + suma_fila
             filas_con_cantidad.append({
                 "id_art": id_art,
                 "id_operario": id_operario,
@@ -6982,27 +6967,10 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
                 "cant_scrap": cant_scrap,
             })
 
-        grupos_invalidos: set = set()
-        for grupo, suma_grupo in suma_post_por_grupo.items():
-            id_art, id_operario, id_turno_ef = grupo
-            fabricado = fabricado_por_grupo.get(grupo, Decimal("0"))
-            ya_cls = clasificado_prev.get(grupo, Decimal("0"))
-            atribuible = fabricado - ya_cls
-            if suma_grupo > atribuible:
-                grupos_invalidos.add(grupo)
-                dj_messages.error(
-                    request,
-                    f"Exceso operario {id_operario} artículo {id_art} turno {id_turno_ef}: "
-                    f"atribuible {atribuible:g}, solicitado {suma_grupo:g}. Filas ignoradas.",
-                )
-
         items = []
         clasificado_turno_por_art: Dict[int, Decimal] = {}
 
         for fila in filas_con_cantidad:
-            grupo = (fila["id_art"], fila["id_operario"], fila["id_turno_ef"])
-            if grupo in grupos_invalidos:
-                continue
             id_art = fila["id_art"]
             id_operario = fila["id_operario"]
             id_turno_ef = fila["id_turno_ef"]
