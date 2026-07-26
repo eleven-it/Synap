@@ -116,6 +116,10 @@
                 els.currentEl.classList.remove('hidden');
                 els.currentEl.textContent = label;
                 els.currentEl.setAttribute('title', label);
+            } else {
+                els.currentEl.classList.add('hidden');
+                els.currentEl.textContent = '';
+                els.currentEl.setAttribute('title', '');
             }
         }
         if (opts.title && els.titleEl) els.titleEl.textContent = opts.title;

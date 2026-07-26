@@ -151,16 +151,16 @@
                 <span class="material-icons text-base">playlist_add</span>
                 Importar nros
             </button>
-            <button type="button" @click="seleccionarVisibles()" :disabled="!items.length"
+            <button type="button" @click="seleccionarTodos()" :disabled="!items.length"
                     class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40">
-                Seleccionar visibles
+                Seleccionar todos
             </button>
             <button type="button" @click="limpiarSeleccion()"
                     class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-xs font-semibold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
                 Limpiar selección
             </button>
             <span class="ml-auto text-xs text-slate-500" x-show="total > 0" x-cloak>
-                <span x-text="total"></span> asiento(s) · página <span x-text="page"></span>
+                <span x-text="total"></span> asiento(s) en el filtro
             </span>
         </div>
         <div x-show="panelImportar" x-cloak class="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
@@ -235,13 +235,6 @@
                 </tbody>
             </table>
         </div>
-        <div x-show="total > pageSize" x-cloak class="px-4 py-3 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs">
-            <button type="button" @click="irPagina(page - 1)" :disabled="page <= 1"
-                    class="rounded-lg border px-3 py-1.5 disabled:opacity-40">Anterior</button>
-            <span>Página <span x-text="page"></span></span>
-            <button type="button" @click="irPagina(page + 1)" :disabled="page * pageSize >= total"
-                    class="rounded-lg border px-3 py-1.5 disabled:opacity-40">Siguiente</button>
-        </div>
     </div>
 
     <!-- Barra de selección: encima del pie de estado (status-bar ~2rem / bottom-8) -->
@@ -270,6 +263,13 @@
                 <h3 class="text-base font-bold text-slate-800 dark:text-white">Vista previa de eliminación</h3>
             </div>
             <div class="px-5 py-4 space-y-3 text-sm text-slate-700 dark:text-slate-200">
+                <div x-show="previewCargando" x-cloak class="flex items-center gap-3 py-4" role="status" aria-live="polite">
+                    <span class="inline-block h-5 w-5 animate-spin rounded-full border-2 border-sky-200 border-t-sky-600 dark:border-sky-900 dark:border-t-sky-400"></span>
+                    <div>
+                        <p class="font-semibold text-slate-800 dark:text-slate-100">Calculando impacto…</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Consultando los renglones seleccionados sin modificar la contabilidad.</p>
+                    </div>
+                </div>
                 <template x-if="previewData">
                     <div class="space-y-2">
                         <p><strong x-text="previewData.asientos_solicitados"></strong> asiento(s) ·
@@ -400,8 +400,6 @@ function auditoriaAsientosEliminar(cfg) {
         },
         items: [],
         total: 0,
-        page: 1,
-        pageSize: 200,
         cargando: false,
         errorBusqueda: '',
         seleccionados: [],
@@ -409,6 +407,7 @@ function auditoriaAsientosEliminar(cfg) {
         previewOpen: false,
         previewData: null,
         previewError: '',
+        previewCargando: false,
         confirmOpen: false,
         procesando: false,
         detalleOpen: false,
@@ -448,7 +447,6 @@ function auditoriaAsientosEliminar(cfg) {
             this.filtros.idEjercicio = ej.id;
             this.ejercicioBusqueda = ej.label;
             this.ejercicioAbierto = false;
-            this.page = 1;
             this.recargarConceptos();
         },
 
@@ -476,8 +474,6 @@ function auditoriaAsientosEliminar(cfg) {
             if (this.filtros.anulado) p.set('anulado', this.filtros.anulado);
             if (this.filtros.q) p.set('q', this.filtros.q);
             if (this.filtros.nrosTexto.trim()) p.set('nros_asiento', this.filtros.nrosTexto.trim());
-            p.set('page', String(this.page));
-            p.set('page_size', String(this.pageSize));
             if (json) p.set('format', 'json');
             return this.asientosUrl + '?' + p.toString();
         },
@@ -497,19 +493,12 @@ function auditoriaAsientosEliminar(cfg) {
                 if (!resp.ok) throw new Error(data.error || 'Error al buscar');
                 this.items = data.items || [];
                 this.total = data.total || 0;
-                this.page = data.page || 1;
             } catch (e) {
                 this.errorBusqueda = e.message || String(e);
                 this.items = [];
             } finally {
                 this.cargando = false;
             }
-        },
-
-        irPagina(n) {
-            if (n < 1) return;
-            this.page = n;
-            this.buscar();
         },
 
         claveItem(item) {
@@ -528,7 +517,7 @@ function auditoriaAsientosEliminar(cfg) {
             else this.seleccionados.push({ id_ejercicio: item.id_ejercicio, nro_asiento: item.nro_asiento, _item: item });
         },
 
-        seleccionarVisibles() {
+        seleccionarTodos() {
             for (const item of this.items) {
                 if (!this.estaSeleccionado(item)) {
                     this.seleccionados.push({ id_ejercicio: item.id_ejercicio, nro_asiento: item.nro_asiento, _item: item });
@@ -556,6 +545,7 @@ function auditoriaAsientosEliminar(cfg) {
         async vistaPrevia() {
             this.previewError = '';
             this.previewData = null;
+            this.previewCargando = true;
             this.previewOpen = true;
             try {
                 const resp = await fetch(this.previewUrl, {
@@ -572,6 +562,8 @@ function auditoriaAsientosEliminar(cfg) {
                 this.previewData = data;
             } catch (e) {
                 this.previewError = e.message || String(e);
+            } finally {
+                this.previewCargando = false;
             }
         },
 
@@ -587,12 +579,14 @@ function auditoriaAsientosEliminar(cfg) {
         },
 
         async ejecutarEliminar() {
+            const total = this.seleccionados.length;
             this.procesando = true;
             if (typeof window.synapShowPostLoadingProgress === 'function') {
                 window.synapShowPostLoadingProgress({
                     title: 'Eliminando asientos…',
-                    subtitle: 'Backup, borrado y recálculo de saldos. No cierres esta ventana.',
-                    indeterminate: true,
+                    subtitle: 'Backup, borrado y recálculo de saldos. No cierre esta ventana.',
+                    current: 0,
+                    total: total,
                 });
             }
             try {
@@ -600,14 +594,76 @@ function auditoriaAsientosEliminar(cfg) {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/x-ndjson',
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRFToken': this.csrfToken(),
                     },
-                    body: JSON.stringify({ asientos: this.payloadAsientos() }),
+                    body: JSON.stringify({ asientos: this.payloadAsientos(), stream: true }),
                 });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.error || 'Error al eliminar');
-                this.resultado = data;
+
+                const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+                if (!resp.ok && contentType.includes('application/json')) {
+                    const errData = await resp.json();
+                    throw new Error(errData.error || 'Error al eliminar');
+                }
+                if (!resp.body) {
+                    throw new Error('Respuesta vacía del servidor');
+                }
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let resultado = null;
+
+                const procesarLinea = (linea) => {
+                    const txt = linea.trim();
+                    if (!txt) return;
+                    const evt = JSON.parse(txt);
+                    if (evt.type === 'progress') {
+                        if (typeof window.synapUpdatePostLoadingProgress === 'function') {
+                            let subtitle = 'Eliminando asientos…';
+                            let label = '';
+                            if (evt.phase === 'backup') {
+                                subtitle = 'Creando respaldo de seguridad…';
+                            } else if (evt.phase === 'recalc') {
+                                subtitle = 'Recalculando saldos…';
+                            } else if (evt.phase === 'delete') {
+                                subtitle = 'Borrando asientos…';
+                                label = evt.label || '';
+                            }
+                            window.synapUpdatePostLoadingProgress({
+                                current: evt.current ?? 0,
+                                total: evt.total ?? total,
+                                label: label,
+                                title: 'Eliminando asientos…',
+                                subtitle: subtitle,
+                            });
+                        }
+                    } else if (evt.type === 'done') {
+                        resultado = evt;
+                    } else if (evt.type === 'error') {
+                        throw new Error(evt.error || 'Error al eliminar');
+                    }
+                };
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lineas = buffer.split('\n');
+                    buffer = lineas.pop() || '';
+                    for (const linea of lineas) {
+                        procesarLinea(linea);
+                    }
+                }
+                if (buffer.trim()) {
+                    procesarLinea(buffer);
+                }
+
+                if (!resultado) {
+                    throw new Error('Sin respuesta del servidor');
+                }
+                this.resultado = resultado;
                 this.confirmOpen = false;
                 this.previewOpen = false;
                 this.resultadoOpen = true;
@@ -618,8 +674,8 @@ function auditoriaAsientosEliminar(cfg) {
                 this.confirmOpen = false;
             } finally {
                 this.procesando = false;
-                if (typeof window.synapHidePostLoadingProgress === 'function') {
-                    window.synapHidePostLoadingProgress();
+                if (typeof window.synapHidePostLoading === 'function') {
+                    window.synapHidePostLoading();
                 }
             }
         },

@@ -1,5 +1,6 @@
 """Tests mínimos de vistas de auditoría contable (URLs y mocks)."""
 import io
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -295,12 +296,20 @@ class AuditoriaClaridadUiTemplatesTestCase(SimpleTestCase):
         self.assertIn("CodigoMovimiento", html)
         self.assertIn("Resumen del lote", html)
         self.assertIn("table_view", html)
+        self.assertIn("auditoriaLoteDetalleTabla", html)
+        self.assertIn("lote-detalle-buscar", html)
+        self.assertIn("Buscar en toda la tabla", html)
+        self.assertIn('json_script:"lote-detalle-filas"', html)
+        self.assertIn("filtradas", html)
 
     def test_lotes_lista_tiene_ver_y_excel(self):
         html = (_TEMPLATES / "auditoria_lotes.html").read_text(encoding="utf-8")
         self.assertIn("auditoria_lote_detalle", html)
         self.assertIn("?format=xlsx", html)
         self.assertIn("visibility", html)
+        self.assertIn("lote.puede_revertir", html)
+        self.assertIn("hay_lotes_revertibles", html)
+        self.assertIn("no son revertibles", html)
 
 
 class AuditoriaChecksCorregiblesTestCase(SimpleTestCase):
@@ -408,6 +417,7 @@ class AuditoriaLotesViewsTestCase(TestCase):
                 "estado": "aplicado",
                 "dry_run_id": "abc-123",
                 "filas_correccion": 5,
+                "puede_revertir": True,
             }
         ],
     )
@@ -422,14 +432,21 @@ class AuditoriaLotesViewsTestCase(TestCase):
         self.assertEqual(len(ctx["lotes"]), 1)
         self.assertEqual(ctx["lotes"][0]["lote_id"], "L20260718-001")
         self.assertEqual(ctx["planes"], [])
+        self.assertTrue(ctx["hay_lotes_revertibles"])
 
     def test_rollback_sin_permiso_403(self):
         request = self._request_post_rollback("L20260718-001", _UserSinPermiso())
         with self.assertRaises(PermissionDenied):
             auditoria_lote_rollback(request, "L20260718-001")
 
+    @patch("contabilidad_audit.views._obtener_lote")
     @patch("legacy_db.services.cont_recalculo_service.rollback_lote")
-    def test_rollback_con_permiso_redirige(self, mock_rollback):
+    def test_rollback_con_permiso_redirige(self, mock_rollback, mock_obtener):
+        mock_obtener.return_value = {
+            "lote_id": "L20260718-001",
+            "dry_run_id": "abc-123",
+            "estado": "aplicado",
+        }
         mock_rollback.return_value = {"ok": True, "lote_id": "L20260718-001"}
         request = self._request_post_rollback("L20260718-001")
         response = auditoria_lote_rollback(request, "L20260718-001")
@@ -441,6 +458,19 @@ class AuditoriaLotesViewsTestCase(TestCase):
         self.assertEqual(args[1], "L20260718-001")
         self.assertTrue(kwargs.get("tiene_permiso_corregir"))
 
+    @patch("contabilidad_audit.views._obtener_lote")
+    @patch("legacy_db.services.cont_recalculo_service.rollback_lote")
+    def test_rollback_eliminacion_asiento_bloqueado(self, mock_rollback, mock_obtener):
+        mock_obtener.return_value = {
+            "lote_id": "L-elim",
+            "dry_run_id": "eliminacion_asiento",
+            "estado": "aplicado",
+        }
+        request = self._request_post_rollback("L-elim")
+        response = auditoria_lote_rollback(request, "L-elim")
+        self.assertEqual(response.status_code, 302)
+        mock_rollback.assert_not_called()
+
     @patch("contabilidad_audit.views.get_mysql_pool")
     def test_listar_lotes_helper(self, mock_pool):
         from contabilidad_audit.views import _listar_lotes_correccion
@@ -448,16 +478,36 @@ class AuditoriaLotesViewsTestCase(TestCase):
         conn = MagicMock()
         cursor = MagicMock()
         cursor.fetchall.return_value = [
-            ("L1", datetime(2026, 7, 18, 14, 30, 0), "u1", "aplicado", "dry-1", 3),
+            (
+                "L1",
+                datetime(2026, 7, 18, 14, 30, 0),
+                "u1",
+                "aplicado",
+                "dry-1",
+                3,
+                '{"cont_asiento": "cont_asiento_bkp_20260718_143000"}',
+            ),
+            (
+                "L2",
+                datetime(2026, 7, 18, 15, 0, 0),
+                "u1",
+                "aplicado",
+                "eliminacion_asiento",
+                10,
+                "{}",
+            ),
         ]
         conn.cursor.return_value = cursor
         mock_pool.return_value.get_connection.return_value.__enter__.return_value = conn
 
         lotes = _listar_lotes_correccion("empresa_test")
-        self.assertEqual(len(lotes), 1)
+        self.assertEqual(len(lotes), 2)
         self.assertEqual(lotes[0]["lote_id"], "L1")
         self.assertEqual(lotes[0]["filas_correccion"], 3)
+        self.assertTrue(lotes[0]["puede_revertir"])
         self.assertIn("/", lotes[0]["fecha"])
+        self.assertEqual(lotes[1]["lote_id"], "L2")
+        self.assertFalse(lotes[1]["puede_revertir"])
 
 
 class AuditoriaLoteDetalleTestCase(TestCase):
@@ -535,6 +585,96 @@ class AuditoriaLoteDetalleTestCase(TestCase):
         response = auditoria_lote_detalle(request, "L-inexistente")
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("contabilidad_audit:auditoria_lotes"))
+
+    def test_exportar_lote_eliminacion_sin_json(self):
+        """Eliminación: una fila Excel por renglón, montos y CM legibles (sin JSON)."""
+        from contabilidad_audit.services.export import exportar_lote_xlsx
+
+        lote = {
+            "lote_id": "L20260726-elim",
+            "base_empresa": "empresa_test",
+            "dry_run_id": "eliminacion_asiento",
+            "fecha": "26/07/2026 19:38",
+            "usuario": "Supervisor",
+            "estado": "aplicado",
+            "filas_correccion": 1,
+        }
+        filas = [
+            {
+                "check_id": "eliminacion_asiento",
+                "titulo_check": "Eliminación de asiento",
+                "tabla": "cont_asiento",
+                "clave": {"id_ejercicio": 1, "nro_asiento": 223},
+                "nro_asiento": 223,
+                "codigo_movimiento": "10079",
+                "valor_anterior": [
+                    {
+                        "anulado": "No",
+                        "codigo_movimiento": "10079",
+                        "debe_asiento": "560085.78",
+                        "haber_asiento": "0.00",
+                        "id_pc": 57,
+                        "desc_renglon_asiento": "",
+                    },
+                    {
+                        "anulado": "No",
+                        "codigo_movimiento": "10079",
+                        "debe_asiento": "0.00",
+                        "haber_asiento": "560085.78",
+                        "id_pc": 5,
+                        "desc_renglon_asiento": "",
+                    },
+                ],
+                "valor_nuevo": None,
+                "cambio_resumen": "Asiento eliminado · 2 renglón(es)",
+                "usuario": "Supervisor",
+                "fecha": "26/07/2026 19:38",
+            }
+        ]
+        from contabilidad_audit.services.export import _filas_lote_export
+
+        filas_export = _filas_lote_export(filas)
+        self.assertEqual(len(filas_export), 2)
+        for fe in filas_export:
+            self.assertEqual(fe["tipo_cambio"], "Asiento eliminado")
+            self.assertEqual(fe["nro_asiento"], 223)
+            self.assertEqual(fe["codigo_movimiento"], "10079")
+            self.assertIn(fe["cuenta"], (57, 5))
+            self.assertTrue(
+                any(isinstance(v, str) and v.startswith("$") for v in (fe["debe"], fe["haber"]))
+            )
+            self.assertEqual(fe["cambio"], "Renglón eliminado")
+            self.assertFalse(str(fe.get("cambio") or "").strip().startswith("["))
+            blob = json.dumps(fe, default=str)
+            self.assertNotIn("debe_asiento", blob)
+
+        response = exportar_lote_xlsx(lote, filas)
+        self.assertEqual(response.status_code, 200)
+        import openpyxl
+
+        wb = openpyxl.load_workbook(io.BytesIO(response.content))
+        detalle = wb["Detalle"]
+        headers = [c.value for c in detalle[1]]
+        idx = {h: i for i, h in enumerate(headers)}
+        self.assertEqual(detalle.max_row, 3)  # header + 2 renglones
+        # Columnas iguales del mismo asiento se mergean (valor solo en la 1.ª fila).
+        vals2 = [c.value for c in detalle[2]]
+        vals3 = [c.value for c in detalle[3]]
+        self.assertEqual(vals2[idx["Tipo de cambio aplicado"]], "Asiento eliminado")
+        self.assertEqual(vals2[idx["Nro asiento"]], 223)
+        self.assertEqual(vals2[idx["CodigoMovimiento"]], "10079")
+        self.assertEqual(vals2[idx["Cuenta"]], 57)
+        self.assertEqual(vals3[idx["Cuenta"]], 5)
+        self.assertTrue(str(vals2[idx["Debe"]]).startswith("$"))
+        self.assertTrue(str(vals3[idx["Haber"]]).startswith("$"))
+        self.assertEqual(vals2[idx["Cambios aplicados"]], "Renglón eliminado")
+        # «Cambios aplicados» también se mergea si el texto es idéntico.
+        self.assertIn(vals3[idx["Cambios aplicados"]], ("Renglón eliminado", None))
+        for vals in (vals2, vals3):
+            self.assertFalse(any(isinstance(v, str) and v.strip().startswith("[") for v in vals if v))
+            self.assertFalse(
+                any(isinstance(v, str) and "debe_asiento" in v for v in vals if isinstance(v, str))
+            )
 
     def test_exportar_lote_xlsx_smoke(self):
         from contabilidad_audit.services.export import exportar_lote_xlsx

@@ -1,4 +1,5 @@
 """Tests de vistas de eliminación de asientos contables."""
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -135,6 +136,65 @@ class AsientosEliminarVistasTestCase(SimpleTestCase):
         with self.assertRaises(PermissionDenied):
             auditoria_asientos_eliminar_ejecutar(request)
 
+    @patch("legacy_db.services.cont_eliminacion_asientos_service.eliminar_asientos")
+    def test_post_eliminar_json_clasico(self, mock_eliminar):
+        mock_eliminar.return_value = {
+            "ok": True,
+            "lote_id": "L1",
+            "backups": {},
+            "asientos_eliminados": 1,
+        }
+        request = self.factory.post(
+            "/contabilidad/auditoria/asientos/eliminar/",
+            data='{"asientos":[{"id_ejercicio":1,"nro_asiento":79}]}',
+            content_type="application/json",
+        )
+        request.user = _UserConPermisoCorregir()
+        self._attach_session(request)
+
+        response = auditoria_asientos_eliminar_ejecutar(request)
+        self.assertEqual(response.status_code, 200)
+        body = json.loads(response.content)
+        self.assertTrue(body["ok"])
+        mock_eliminar.assert_called_once()
+
+    @patch("legacy_db.services.cont_eliminacion_asientos_service._eliminar_asientos_iter")
+    def test_post_eliminar_stream_ndjson(self, mock_iter):
+        mock_iter.return_value = iter(
+            [
+                {"type": "progress", "phase": "backup", "current": 0, "total": 1, "label": ""},
+                {
+                    "type": "result",
+                    "payload": {
+                        "ok": True,
+                        "lote_id": "L1",
+                        "backups": {},
+                        "asientos_eliminados": 1,
+                    },
+                },
+            ]
+        )
+        request = self.factory.post(
+            "/contabilidad/auditoria/asientos/eliminar/",
+            data='{"asientos":[{"id_ejercicio":1,"nro_asiento":79}],"stream":true}',
+            content_type="application/json",
+            HTTP_ACCEPT="application/x-ndjson",
+        )
+        request.user = _UserConPermisoCorregir()
+        self._attach_session(request)
+
+        response = auditoria_asientos_eliminar_ejecutar(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/x-ndjson", response["Content-Type"])
+        self.assertEqual(response["Cache-Control"], "no-cache")
+        self.assertEqual(response["X-Accel-Buffering"], "no")
+
+        lineas = [ln for ln in response.streaming_content if ln]
+        eventos = [json.loads(ln.decode("utf-8")) for ln in lineas]
+        self.assertEqual(eventos[0]["type"], "progress")
+        self.assertEqual(eventos[-1]["type"], "done")
+        self.assertTrue(eventos[-1]["ok"])
+
 
 class AsientosEliminarTemplateTestCase(SimpleTestCase):
     def test_template_contiene_elementos_ui(self):
@@ -143,6 +203,13 @@ class AsientosEliminarTemplateTestCase(SimpleTestCase):
         self.assertIn('type="checkbox"', html)
         self.assertIn("auditoriaAsientosEliminar", html)
         self.assertIn("synapShowPostLoadingProgress", html)
+        self.assertIn("synapUpdatePostLoadingProgress", html)
+        self.assertIn("application/x-ndjson", html)
+        self.assertIn("stream: true", html)
+        self.assertIn("previewCargando", html)
+        self.assertIn("Calculando impacto", html)
+        self.assertIn("synapHidePostLoading()", html)
+        self.assertNotIn("synapHidePostLoadingProgress", html)
         self.assertNotIn("window.alert", html)
         self.assertNotIn("window.confirm", html)
         self.assertNotIn("alert(", html)
