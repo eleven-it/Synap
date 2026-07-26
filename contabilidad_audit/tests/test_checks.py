@@ -21,6 +21,9 @@ from contabilidad_audit.services.checks.compras_pagos import (
     comprobante_compra_pago_sin_asiento,
     integridad_anulacion_compra_pago,
 )
+from contabilidad_audit.services.checks.ventas_cobranza import (
+    comprobante_venta_cobranza_sin_asiento,
+)
 from contabilidad_audit.services.checks.conceptos import (
     concepto_anulacion_incoherente,
     concepto_no_normal,
@@ -127,6 +130,56 @@ class ChecksTestCase(SimpleTestCase):
         )
         self.assertFalse(result.ok)
         self.assertEqual(result.diferencias[0].referencia_hallazgo, "H51")
+
+    def test_comprobante_venta_cobranza_sin_asiento_factura(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            (
+                Decimal("999"),
+                "FB",
+                "0001-00005555",
+                1,
+                2,
+                Decimal("2500"),
+                Decimal("0"),
+                "2025-06-10",
+            )
+        ]
+        ctx = _contexto(cursor)
+        result = comprobante_venta_cobranza_sin_asiento(
+            "empresa",
+            {"id_ejercicio": 1},
+            _politica(),
+            ctx,
+        )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.diferencias[0].referencia_hallazgo, "H54")
+        self.assertEqual(result.diferencias[0].detalle["TipoComprobante"], "FB")
+
+    def test_comprobante_venta_cobranza_sin_asiento_rec(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [
+            (
+                Decimal("888"),
+                "REC",
+                "0001-00009999",
+                1,
+                2,
+                Decimal("0"),
+                Decimal("1800"),
+                "2025-07-01",
+            )
+        ]
+        ctx = _contexto(cursor)
+        result = comprobante_venta_cobranza_sin_asiento(
+            "empresa",
+            {"id_ejercicio": 1},
+            _politica(),
+            ctx,
+        )
+        self.assertFalse(result.ok)
+        self.assertEqual(result.diferencias[0].referencia_hallazgo, "H55")
+        self.assertEqual(result.diferencias[0].detalle["Importe"], "1800")
 
     def test_asiento_compra_pago_desbalanceado(self):
         cursor = MagicMock()
@@ -386,10 +439,10 @@ class ChecksSinCoberturaTestCase(SimpleTestCase):
         cursor = MagicMock()
         cursor.fetchall.return_value = [(Decimal("100"), "FA", "0001-00001234")]
         cursor.fetchone.side_effect = [
-            (0,),
-            (0,),
-            None,
-            None,
+            (0,),  # sin marcador
+            (0, 2),  # pendientes=0, total=2
+            (Decimal("100"), Decimal("100"), Decimal("100")),  # orig_tot
+            None,  # sin contra
         ]
         ctx = _contexto(cursor)
         result = integridad_anulacion_compra_pago(
@@ -402,6 +455,7 @@ class ChecksSinCoberturaTestCase(SimpleTestCase):
         self.assertEqual(result.diferencias[0].referencia_hallazgo, "H53")
         self.assertIn("falta_marcador_cuentaproveedor_cm0", result.diferencias[0].detalle["problemas"])
         self.assertIn("falta_contra_asiento", result.diferencias[0].detalle["problemas"])
+        self.assertNotIn("asiento_original_no_anulado", result.diferencias[0].detalle["problemas"])
 
     def test_integridad_anulacion_compra_pago_ok(self):
         cursor = MagicMock()

@@ -35,9 +35,14 @@
                     </p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2">
+                    {% include "includes/btn_manual_ayuda.html" with url_name="contabilidad_audit:manual_usuario" seccion="dry-run" class_extra="text-slate-300 hover:text-sky-300 border border-slate-600 hover:border-slate-400 rounded-full px-3 py-2" only %}
                     <a href="{{ tablero_url }}"
                        class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-slate-200 border border-slate-600 hover:border-slate-400">
                         Tablero auditoría
+                    </a>
+                    <a href="{{ lotes_url|default:'#' }}"
+                       class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-violet-300 border border-violet-700 hover:border-violet-500">
+                        Lotes aplicados
                     </a>
                     <a :href="exportUrl('csv')" :class="!payload ? 'opacity-40 pointer-events-none' : ''"
                        class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-sky-300 border border-sky-700">CSV</a>
@@ -65,7 +70,10 @@
         </div>
 
         <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6">
-            <form method="get" :action="dryRunUrl" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <form method="get" :action="dryRunUrl"
+                  class="synap-post-loading grid grid-cols-1 md:grid-cols-4 gap-4"
+                  data-synap-loading-title="Generando dry-run"
+                  data-synap-loading-subtitle="Calculando plan de corrección. No cierres esta ventana.">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Empresa (base)</label>
                     <input type="text" name="base_empresa" x-model="filtros.baseEmpresa" required
@@ -133,28 +141,105 @@
                 </div>
             </div>
 
+            <div x-show="(payload?.impacto?.total_aplicables ?? 0) === 0"
+                 class="rounded-xl border border-sky-300 dark:border-sky-700 bg-sky-50 dark:bg-sky-900/20 px-4 py-3 text-sm text-sky-900 dark:text-sky-100">
+                <p class="font-semibold">Plan vacío</p>
+                <p class="mt-1 text-sky-800/90 dark:text-sky-200/90">
+                    No hay correcciones automáticas para este alcance (idempotente o fuera de auto-apply).
+                    El tablero puede seguir en rojo por checks que no entran en este dry-run.
+                </p>
+            </div>
+
             <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5">
-                <h2 class="text-sm font-semibold mb-3">Impacto por tabla y tipo</h2>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <p class="font-medium mb-2">Totales por tabla</p>
-                        <template x-for="(cnt, tabla) in (payload?.impacto?.totales_por_tabla || {})" :key="tabla">
-                            <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                                <span x-text="tabla"></span>
-                                <span class="font-mono" x-text="cnt"></span>
-                            </div>
-                        </template>
+                <h2 class="text-sm font-semibold mb-1">Asientos huérfanos a regenerar</h2>
+                <p class="text-xs text-slate-500 mb-4">
+                    Comprobantes con <code class="font-mono">CodigoMovimiento</code> sin filas en
+                    <code class="font-mono">cont_asiento</code>: compras/pagos
+                    (<code class="font-mono">comprobante_compra_pago_sin_asiento</code>, FA/FC/OP) y
+                    ventas/cobranzas
+                    (<code class="font-mono">comprobante_venta_cobranza_sin_asiento</code>, FA/FB/FC/FE/FM/REC).
+                </p>
+                <div x-show="totalHuerfanosRegenerar > 0" class="space-y-1 text-sm">
+                    <template x-for="tipo in ['FA', 'FB', 'FC', 'FE', 'FM', 'OP', 'REC']" :key="'regen-' + tipo">
+                        <div class="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800"
+                             x-show="(payload?.impacto?.asientos_regenerar_por_tipo || {})[tipo]">
+                            <span class="font-medium" x-text="tipo"></span>
+                            <span class="font-mono" x-text="(payload?.impacto?.asientos_regenerar_por_tipo || {})[tipo] || 0"></span>
+                        </div>
+                    </template>
+                    <p class="pt-2 text-xs text-slate-500">
+                        Total a regenerar:
+                        <span class="font-semibold text-slate-700 dark:text-slate-200" x-text="totalHuerfanosRegenerar"></span>
+                    </p>
+                </div>
+                <p x-show="totalHuerfanosRegenerar === 0" class="text-sm text-slate-600 dark:text-slate-300">
+                    0 — no hay comprobantes sin asiento regenerables en el alcance
+                </p>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5">
+                <h2 class="text-sm font-semibold mb-3">Impacto por tabla</h2>
+                <div class="text-sm">
+                    <template x-for="(cnt, tabla) in (payload?.impacto?.totales_por_tabla || {})" :key="tabla">
+                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
+                            <span x-text="tabla"></span>
+                            <span class="font-mono" x-text="cnt"></span>
+                        </div>
+                    </template>
+                    <p x-show="!Object.keys(payload?.impacto?.totales_por_tabla || {}).length"
+                       class="text-xs text-slate-500">Sin impacto por tabla en este plan.</p>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5"
+                 x-show="anulacionesReparables > 0 || anulacionesBloqueadas > 0 || anulacionesItems.length">
+                <h2 class="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-1">Reparación de anulaciones</h2>
+                <p class="text-xs text-slate-500 mb-4">
+                    Check <code class="font-mono">integridad_anulacion_compra_pago</code> — piloto de anulaciones incompletas.
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div class="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-900/10 p-4">
+                        <p class="text-[10px] uppercase tracking-wide text-slate-400">Reparables</p>
+                        <p class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400" x-text="anulacionesReparables"></p>
                     </div>
-                    <div>
-                        <p class="font-medium mb-2">Asientos a regenerar (FA/FC/OP)</p>
-                        <template x-for="(cnt, tipo) in (payload?.impacto?.asientos_regenerar_por_tipo || {})" :key="tipo">
-                            <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800">
-                                <span x-text="tipo"></span>
-                                <span class="font-mono" x-text="cnt"></span>
-                            </div>
-                        </template>
+                    <div class="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10 p-4">
+                        <p class="text-[10px] uppercase tracking-wide text-slate-400">Bloqueadas</p>
+                        <p class="text-2xl font-semibold text-amber-600 dark:text-amber-400" x-text="anulacionesBloqueadas"></p>
                     </div>
                 </div>
+                <div class="overflow-x-auto" x-show="anulacionesItems.length">
+                    <table class="w-full text-[11px]">
+                        <thead class="bg-slate-50 dark:bg-slate-800 text-slate-500 uppercase">
+                            <tr>
+                                <th class="px-2 py-2 text-left">Acción</th>
+                                <th class="px-2 py-2 text-left">Código mov.</th>
+                                <th class="px-2 py-2 text-left">Estado</th>
+                                <th class="px-2 py-2 text-left">Motivo</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <template x-for="(item, idx) in anulacionesItems.slice(0, 30)" :key="idx">
+                                <tr>
+                                    <td class="px-2 py-1.5" x-text="item.accion || '—'"></td>
+                                    <td class="px-2 py-1.5 font-mono" x-text="codigoAnulacion(item)"></td>
+                                    <td class="px-2 py-1.5">
+                                        <span x-show="item.bloqueado" class="text-amber-700 dark:text-amber-300 font-medium">Bloqueado</span>
+                                        <span x-show="!item.bloqueado && !item.excluido" class="text-emerald-700 dark:text-emerald-300 font-medium">Reparable</span>
+                                        <span x-show="!item.bloqueado && item.excluido" class="text-slate-500">Excluido</span>
+                                    </td>
+                                    <td class="px-2 py-1.5 text-slate-600 dark:text-slate-300" x-text="item.motivo_bloqueo || '—'"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <p x-show="anulacionesItems.length > 30" class="text-xs text-slate-500 mt-2 px-2">
+                        Mostrando 30 de <span x-text="anulacionesItems.length"></span> ítems de anulación.
+                    </p>
+                </div>
+                <p x-show="!anulacionesItems.length && (anulacionesReparables > 0 || anulacionesBloqueadas > 0)"
+                   class="text-xs text-slate-500">
+                    Hay impacto contabilizado pero no hay ítems detallados en la muestra del plan.
+                </p>
             </div>
 
             <div class="bg-white dark:bg-slate-900 rounded-2xl border p-5" x-show="Object.keys(payload?.backups_propuestos || {}).length">
@@ -181,7 +266,7 @@
                  x-show="payload?.impacto?.total_aplicables > 0">
                 <div class="flex-1 text-sm">
                     <p class="font-semibold">Apply general (saldos / regeneración compras-pagos)</p>
-                    <p class="text-xs text-slate-500">Requiere permiso corregir + doble confirmación + producción.</p>
+                    <p class="text-xs text-slate-500">Requiere permiso corregir + confirmación (también en development).</p>
                 </div>
                 <a :href="'/contabilidad/auditoria/apply/?dry_run_id=' + (payload?.dry_run_id || '') + '&base_empresa=' + encodeURIComponent(payload?.base_empresa || '') + '&modo=general'"
                    class="inline-flex rounded-lg px-4 py-2 text-xs font-semibold text-white bg-rose-700 hover:bg-rose-800">
@@ -240,7 +325,30 @@ function auditoriaDryRun(cfg) {
         alcanceRecompute: cfg.alcanceRecompute || '',
         payload: payloadInicial,
         error: cfg.errorParametros || cfg.errorEjecucion || '',
+        checkAnulacionId: 'integridad_anulacion_compra_pago',
         init() {},
+        get anulacionesItems() {
+            return (this.payload?.plan?.items || []).filter(
+                i => i.check_id === this.checkAnulacionId
+            );
+        },
+        get anulacionesReparables() {
+            return this.payload?.impacto?.anulaciones_reparables ?? 0;
+        },
+        get anulacionesBloqueadas() {
+            return this.payload?.impacto?.anulaciones_bloqueadas ?? 0;
+        },
+        get totalHuerfanosRegenerar() {
+            const porTipo = this.payload?.impacto?.asientos_regenerar_por_tipo || {};
+            return Object.values(porTipo).reduce((acc, n) => acc + (Number(n) || 0), 0);
+        },
+        codigoAnulacion(item) {
+            const clave = item?.clave || {};
+            return clave.codigo_movimiento_original
+                || clave.codigo_movimiento
+                || clave.codigo_movimiento_anul
+                || '—';
+        },
         queryParams(extra) {
             const p = new URLSearchParams();
             p.set('base_empresa', this.filtros.baseEmpresa);
@@ -256,4 +364,9 @@ function auditoriaDryRun(cfg) {
     };
 }
 </script>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+{% include "partials/synap_post_loading_modal.html" %}
 {% endblock %}

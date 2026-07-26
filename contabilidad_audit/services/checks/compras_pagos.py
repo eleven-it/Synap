@@ -192,12 +192,17 @@ def integridad_anulacion_compra_pago(base_empresa, filtros, politica, contexto: 
             tiene_marcador = (cur.fetchone()[0] or 0) > 0
             cur.execute(
                 """
-                SELECT COUNT(*) FROM cont_asiento
-                WHERE codigo_movimiento = %s AND COALESCE(anulado, 'No') = 'Si'
+                SELECT
+                  SUM(CASE WHEN COALESCE(anulado, 'No') <> 'Si' THEN 1 ELSE 0 END) AS pendientes,
+                  COUNT(*) AS total
+                FROM cont_asiento
+                WHERE codigo_movimiento = %s
                 """,
                 (cm,),
             )
-            original_anulado = (cur.fetchone()[0] or 0) > 0
+            row_a = cur.fetchone()
+            pendientes_orig = to_int_or_none(row_a[0]) or 0
+            total_orig = to_int_or_none(row_a[1]) or 0
             cur.execute(
                 """
                 SELECT codigo_movimiento,
@@ -228,7 +233,7 @@ def integridad_anulacion_compra_pago(base_empresa, filtros, politica, contexto: 
             problemas = []
             if not tiene_marcador:
                 problemas.append("falta_marcador_cuentaproveedor_cm0")
-            if not original_anulado:
+            if total_orig > 0 and pendientes_orig > 0:
                 problemas.append("asiento_original_no_anulado")
             if contra_tot is None:
                 problemas.append("falta_contra_asiento")

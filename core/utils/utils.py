@@ -586,6 +586,13 @@ APPS_MENU = [
                         "permission": "contabilidad.auditoria.configurar",
                         "menu_item_id": "contabilidad_auditoria_configuracion",
                     },
+                    {
+                        "label": _("Manual de usuario"),
+                        "url": "contabilidad_audit:manual_usuario",
+                        "icon": "menu_book",
+                        "permission": "contabilidad.auditoria.leer",
+                        "menu_item_id": "contabilidad_manual_usuario",
+                    },
                 ],
             }
         ],
