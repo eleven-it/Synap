@@ -66,7 +66,12 @@ from mpr.best_migration.services import (
     validar_deposito,
     validar_operario,
 )
-from mpr.views import MprLoginRequiredMixin, _get_base_empresa, _usuario_tiene_permiso_mpr
+from mpr.views import (
+    MprEscritorioVerMixin,
+    MprLoginRequiredMixin,
+    _get_base_empresa,
+    _usuario_tiene_permiso_mpr,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +166,7 @@ def _aplicar_filtro_alcance_articulos(
     return qs
 
 
-class MigracionBestHubView(MprLoginRequiredMixin, TemplateView):
+class MigracionBestHubView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     template_name = "mpr/best_migration/hub.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -186,7 +191,7 @@ class MigracionBestHubView(MprLoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MigracionBestReiniciarView(MprLoginRequiredMixin, View):
+class MigracionBestReiniciarView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST: borra mapas/paridad BEST en Postgres para la empresa activa."""
 
     def post(self, request, *args, **kwargs):
@@ -225,7 +230,7 @@ class MigracionBestReiniciarView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_hub")
 
 
-class MigracionBestArticulosView(MprLoginRequiredMixin, TemplateView):
+class MigracionBestArticulosView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     template_name = "mpr/best_migration/articulos.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -287,7 +292,7 @@ class MigracionBestArticulosView(MprLoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MigracionBestClientesView(MprLoginRequiredMixin, TemplateView):
+class MigracionBestClientesView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     template_name = "mpr/best_migration/clientes.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -326,7 +331,7 @@ class MigracionBestClientesView(MprLoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MigracionBestDepositosView(MprLoginRequiredMixin, TemplateView):
+class MigracionBestDepositosView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     template_name = "mpr/best_migration/depositos.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -365,7 +370,7 @@ class MigracionBestDepositosView(MprLoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MigracionBestStockInicialView(MprLoginRequiredMixin, TemplateView):
+class MigracionBestStockInicialView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     template_name = "mpr/best_migration/stock_inicial.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -443,7 +448,7 @@ class MigracionBestStockInicialView(MprLoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MigracionBestRecalcularArticulosView(MprLoginRequiredMixin, View):
+class MigracionBestRecalcularArticulosView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -468,7 +473,7 @@ class MigracionBestRecalcularArticulosView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_articulos")
 
 
-class MigracionBestAceptarInferidosArticulosView(MprLoginRequiredMixin, View):
+class MigracionBestAceptarInferidosArticulosView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -486,7 +491,7 @@ class MigracionBestAceptarInferidosArticulosView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_articulos")
 
 
-class MigracionBestSincronizarClientesView(MprLoginRequiredMixin, View):
+class MigracionBestSincronizarClientesView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -505,7 +510,7 @@ class MigracionBestSincronizarClientesView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_clientes")
 
 
-class MigracionBestSincronizarDepositosView(MprLoginRequiredMixin, View):
+class MigracionBestSincronizarDepositosView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -524,7 +529,7 @@ class MigracionBestSincronizarDepositosView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_depositos")
 
 
-class MigracionBestValidarDepositoView(MprLoginRequiredMixin, View):
+class MigracionBestValidarDepositoView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -590,7 +595,7 @@ class MigracionBestValidarDepositoView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_depositos")
 
 
-class MigracionBestOperariosView(MprLoginRequiredMixin, TemplateView):
+class MigracionBestOperariosView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     template_name = "mpr/best_migration/operarios.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -629,7 +634,7 @@ class MigracionBestOperariosView(MprLoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MigracionBestSincronizarOperariosView(MprLoginRequiredMixin, View):
+class MigracionBestSincronizarOperariosView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -648,7 +653,7 @@ class MigracionBestSincronizarOperariosView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_operarios")
 
 
-class MigracionBestValidarOperarioView(MprLoginRequiredMixin, View):
+class MigracionBestValidarOperarioView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -714,7 +719,7 @@ class MigracionBestValidarOperarioView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_operarios")
 
 
-class MigracionBestSincronizarStockInicialView(MprLoginRequiredMixin, View):
+class MigracionBestSincronizarStockInicialView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -733,7 +738,7 @@ class MigracionBestSincronizarStockInicialView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_stock_inicial")
 
 
-class MigracionBestValidarStockInicialView(MprLoginRequiredMixin, View):
+class MigracionBestValidarStockInicialView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -765,7 +770,7 @@ class MigracionBestValidarStockInicialView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_stock_inicial")
 
 
-class MigracionBestCargarStockInicialView(MprLoginRequiredMixin, View):
+class MigracionBestCargarStockInicialView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -827,7 +832,7 @@ class MigracionBestCargarStockInicialView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_stock_inicial")
 
 
-class MigracionBestValidarClienteView(MprLoginRequiredMixin, View):
+class MigracionBestValidarClienteView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -890,7 +895,7 @@ class MigracionBestValidarClienteView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_clientes")
 
 
-class MigracionBestValidarArticuloView(MprLoginRequiredMixin, View):
+class MigracionBestValidarArticuloView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         wants_json = (
@@ -1038,7 +1043,7 @@ def _aplicar_filtro_alcance_fabricados(qs, *, cola_trabajo: bool, alcance: str):
     return qs
 
 
-class MigracionBestArticulosFabricadosView(MprLoginRequiredMixin, TemplateView):
+class MigracionBestArticulosFabricadosView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     template_name = "mpr/best_migration/articulos_fabricados.html"
 
     def dispatch(self, request, *args, **kwargs):
@@ -1093,7 +1098,7 @@ class MigracionBestArticulosFabricadosView(MprLoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MigracionBestResolverFabricadosView(MprLoginRequiredMixin, View):
+class MigracionBestResolverFabricadosView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -1116,7 +1121,7 @@ class MigracionBestResolverFabricadosView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_articulos_fabricados")
 
 
-class MigracionBestAceptarInferidosFabricadosView(MprLoginRequiredMixin, View):
+class MigracionBestAceptarInferidosFabricadosView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -1134,7 +1139,7 @@ class MigracionBestAceptarInferidosFabricadosView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_articulos_fabricados")
 
 
-class MigracionBestSincronizarStockFabricadosSemiView(MprLoginRequiredMixin, View):
+class MigracionBestSincronizarStockFabricadosSemiView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -1153,7 +1158,7 @@ class MigracionBestSincronizarStockFabricadosSemiView(MprLoginRequiredMixin, Vie
         return redirect("mpr:migracion_best_stock_inicial")
 
 
-class MigracionBestSkuComponentesSearchView(MprLoginRequiredMixin, View):
+class MigracionBestSkuComponentesSearchView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """GET JSON: búsqueda de SKUs BEST (inventario 4000/4002) para componentes fabricados."""
 
     def get(self, request, *args, **kwargs):
@@ -1172,7 +1177,7 @@ class MigracionBestSkuComponentesSearchView(MprLoginRequiredMixin, View):
         return JsonResponse({"results": results})
 
 
-class MigracionBestValidarArticuloFabricadoView(MprLoginRequiredMixin, View):
+class MigracionBestValidarArticuloFabricadoView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST fabricados: asignar SKU BEST, aceptar sugerencia, descartar, reabrir."""
 
     def post(self, request, *args, **kwargs):
@@ -1304,7 +1309,7 @@ class MigracionBestValidarArticuloFabricadoView(MprLoginRequiredMixin, View):
         return redirect(redirect_to)
 
 
-class MigracionBestConfirmarUnidadesView(MprLoginRequiredMixin, View):
+class MigracionBestConfirmarUnidadesView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     def post(self, request, *args, **kwargs):
         base = _require_base(request)
         if not base:
@@ -1321,7 +1326,7 @@ class MigracionBestConfirmarUnidadesView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_hub")
 
 
-class MigracionBestPedidosGateView(MprLoginRequiredMixin, TemplateView):
+class MigracionBestPedidosGateView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Pantalla de migración de pedidos: gate de paridad + ensayo/confirmación."""
 
     template_name = "mpr/best_migration/pedidos_gate.html"
@@ -1346,7 +1351,7 @@ class MigracionBestPedidosGateView(MprLoginRequiredMixin, TemplateView):
         return ctx
 
 
-class MigracionBestMigrarPedidosView(MprLoginRequiredMixin, View):
+class MigracionBestMigrarPedidosView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST: ensayo o confirmación de siembra PED desde pedidos abiertos BEST."""
 
     def post(self, request, *args, **kwargs):
@@ -1415,7 +1420,7 @@ class MigracionBestMigrarPedidosView(MprLoginRequiredMixin, View):
         return redirect("mpr:migracion_best_pedidos")
 
 
-class MigracionBestCargarStockReservaView(MprLoginRequiredMixin, View):
+class MigracionBestCargarStockReservaView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST: ensayo o confirmación MCSS BEST → articulo.stock_reserva."""
 
     def post(self, request, *args, **kwargs):

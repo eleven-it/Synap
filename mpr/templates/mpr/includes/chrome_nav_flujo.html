@@ -1,4 +1,5 @@
 {# Atajos flujo: tablero_prod|parte|cc; fecha_str/turno_id opc.; orden prod→parte→cc→KPI; colores emerald/púrpura/teal/ámbar. Tamaño h-9 (= búsqueda chrome). #}
+{# solo_lectura_tablero=True (operario con mpr.tablero_ver): solo queda el atajo al Tablero de producción. #}
 {% with cur=current|default:"tablero_prod" %}
 {% if cur != "tablero_prod" %}
 <a href="{% url 'mpr:tablero_produccion' %}"
@@ -9,6 +10,7 @@
 </a>
 {% endif %}
 
+{% if not solo_lectura_tablero %}
 {% if cur != "parte" %}
 <a href="{% url 'mpr:parte_produccion' %}{% if fecha_str %}?fecha={{ fecha_str|urlencode }}{% if turno_id %}&amp;turno_id={{ turno_id }}{% endif %}{% endif %}"
    aria-label="Parte de producción"
@@ -33,4 +35,5 @@
     <span class="material-icons text-lg leading-none" aria-hidden="true">analytics</span>
     {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Tablero KPI" only %}
 </a>
+{% endif %}
 {% endwith %}

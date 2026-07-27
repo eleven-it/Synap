@@ -220,8 +220,9 @@
                             </button>
                         </form>
 
-                        {% include "mpr/includes/chrome_nav_flujo.html" with current="tablero_prod" only %}
+                        {% include "mpr/includes/chrome_nav_flujo.html" with current="tablero_prod" solo_lectura_tablero=solo_lectura_tablero only %}
 
+                        {% if puede_enviar %}
                         <div class="relative" @click.outside="masMenuOpen = false">
                             <button type="button"
                                     @click="masMenuOpen = !masMenuOpen"
@@ -253,6 +254,7 @@
                                 {% endif %}
                             </div>
                         </div>
+                        {% endif %}
 
                         <a href="{% url 'mpr:manual_usuario' %}#tablero-produccion"
                            target="_blank"
@@ -263,6 +265,7 @@
                             {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Manual del tablero" only %}
                         </a>
 
+                        {% if puede_enviar %}
                         {% if modo_tablero == "pack" %}
                         <a href="?{% if modo_query_base %}{{ modo_query_base }}&amp;{% endif %}modo=par"
                            class="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-emerald-500/50 bg-emerald-900/40 px-3 text-sm font-semibold text-emerald-100 hover:bg-emerald-800/50"
@@ -283,12 +286,14 @@
                             Enviar
                         </button>
                         {% endif %}
+                        {% endif %}
                     </div>
                 </header>
             </div>
         </div>{# /chrome sticky — fixed (modales/tooltip) fuera: sticky crea containing block #}
 
                 {# Modal confirmación envío #}
+                {% if puede_enviar %}
                 <div x-show="envioModalOpen"
                      x-cloak
                      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
@@ -341,6 +346,7 @@
                         </template>
                     </div>
                 </div>
+                {% endif %}
 
                 {# Modal detalle Fabricando — agrupado por fila (máquinas + parte + operarios) #}
                 <div x-show="fabDetalleOpen"
@@ -457,6 +463,7 @@
                                             class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
                                         Cerrar
                                     </button>
+                                    {% if not solo_lectura_tablero %}
                                     <a :href="'{% url 'mpr:clasificacion_produccion' %}?fecha=' + encodeURIComponent(fabDetalle.fecha_ddmmyyyy)"
                                        class="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-teal-50 px-4 py-2 text-xs font-semibold text-teal-700 hover:bg-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 focus-visible:ring-offset-2 dark:border-teal-800/60 dark:bg-teal-950/30 dark:text-teal-200 dark:hover:bg-teal-950/50 dark:focus-visible:ring-offset-slate-900">
                                         <span class="material-icons text-sm" aria-hidden="true">fact_check</span>
@@ -467,6 +474,7 @@
                                         <span class="material-icons text-sm" aria-hidden="true">assignment</span>
                                         Ir al parte
                                     </a>
+                                    {% endif %}
                                 </footer>
                             </div>
                         </template>
@@ -613,10 +621,12 @@
                                 class="sticky top-0 z-10 border-b border-l border-slate-200 bg-slate-100 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                                 Stock en pipeline
                             </th>
+                            {% if puede_enviar %}
                             <th scope="colgroup" colspan="1"
                                 class="sticky top-0 z-10 border-b border-l border-emerald-200/80 bg-emerald-50 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950 dark:text-emerald-200">
                                 Acción
                             </th>
+                            {% endif %}
                         </tr>
                         <tr>
                             <th scope="col"
@@ -643,9 +653,11 @@
                             <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">Semi Elaborado</th>
                             <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs font-semibold italic text-slate-400 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-500" title="No suma al Total">Desperdicio</th>
                             <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-2 py-2 text-right text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">Total</th>
+                            {% if puede_enviar %}
                             <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-l border-emerald-200/60 bg-emerald-50 px-3 py-2 text-right text-xs font-semibold text-emerald-900 dark:border-emerald-900/40 dark:bg-emerald-950 dark:text-emerald-200">
                                 Enviar {% if modo_presentacion == "docenas" %}docenas{% else %}pares{% endif %}
                             </th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
@@ -685,12 +697,20 @@
                                     {% else %}
                                     <span>{{ fila.enviado_display }}</span>
                                     {% if fila.fabricando_sin_maquina %}
+                                    {% if solo_lectura_tablero %}
+                                    <span class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-amber-600 dark:text-amber-400"
+                                          title="Fabricando sin máquina asignada"
+                                          aria-label="Fabricando sin máquina asignada">
+                                        <span class="material-icons text-base" aria-hidden="true">hourglass_empty</span>
+                                    </span>
+                                    {% else %}
                                     <a href="{% url 'mpr:maquinas_carga_articulos' %}"
                                        class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-amber-600 transition-colors hover:bg-amber-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 dark:text-amber-400 dark:hover:bg-amber-950/40"
                                        title="Fabricando sin máquina asignada"
                                        aria-label="Fabricando sin máquina asignada — ir a carga de artículos">
                                         <span class="material-icons text-base" aria-hidden="true">hourglass_empty</span>
                                     </a>
+                                    {% endif %}
                                     {% endif %}
                                     {% endif %}
                                 </div>
@@ -710,6 +730,7 @@
                             <td class="whitespace-nowrap px-2 py-2 text-right text-xs font-medium tabular-nums text-slate-800 dark:text-slate-200 sm:text-sm">
                                 {{ fila.total_display }}
                             </td>
+                            {% if puede_enviar %}
                             <td class="whitespace-nowrap border-l border-emerald-100 bg-emerald-50/20 px-3 py-2.5 text-right dark:border-emerald-900/30 dark:bg-emerald-950/10">
                                 {% if modo_presentacion == "docenas" %}
                                 <input form="form-enviar-lote"
@@ -746,10 +767,11 @@
                                 <input form="form-enviar-lote" type="hidden" name="pendiente_{{ fila.id_articulo }}" value="{{ fila.a_enviar }}">
                                 <input form="form-enviar-lote" type="hidden" name="resta_total_{{ fila.id_articulo }}" value="{{ fila.resta_total }}">
                             </td>
+                            {% endif %}
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="11" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
+                            <td colspan="{% if puede_enviar %}11{% else %}10{% endif %}" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400 sm:px-5">
                                 {% if modo_tablero == "pack" and solo_sin_receta %}Sin packs sin receta con demanda en el rango especificado{% elif solo_urgente %}Sin artículos con Urgente &gt; 0 en el rango especificado{% else %}Sin artículos con demanda en el rango especificado{% endif %}
                             </td>
                         </tr>
@@ -773,15 +795,18 @@
                 El envío a producción se realiza por <strong>componente</strong>: cambiá a <strong>modo Par</strong> para enviar docenas/pares.
                 {% else %}
                 El toggle <strong>Docenas / Pares</strong> cambia la unidad mostrada en toda la tabla (docenas enteras = pares ÷ 12 redondeado).
+                {% if puede_enviar %}
                 En modo docenas el envío es en docenas enteras; en modo pares, en pares enteros (sin decimales).
                 El envío admite hasta <strong>a enviar</strong> = max(0, Urgente − Σ envíos), sin superar <strong>Urgente</strong>.
                 Si el tope en la unidad mostrada es 0, el input queda deshabilitado.
+                {% endif %}
                 <strong>Fabricando</strong> = envíos no acreditados en stock del pipeline.
                 {% endif %}
             </p>
         </div>
     </div>
 
+    {% if puede_enviar %}
     <form id="form-enviar-lote"
           method="post"
           action="{% url 'mpr:tablero_produccion_enviar' %}">
@@ -790,6 +815,7 @@
         <input type="hidden" name="filtros_qs"
                value="fecha_desde={{ fecha_desde|urlencode }}&amp;fecha_hasta={{ fecha_hasta|urlencode }}&amp;solo_urgente={{ solo_urgente|yesno:'1,0' }}&amp;solo_sin_receta={{ solo_sin_receta|yesno:'1,0' }}&amp;presentacion={{ modo_presentacion|urlencode }}&amp;modo={{ modo_tablero|urlencode }}">
     </form>
+    {% endif %}
 
     <script>
     (function () {

@@ -216,6 +216,29 @@ def _usuario_puede_anular_envios(user) -> bool:
     return _usuario_tiene_permiso_mpr(user, "")
 
 
+PERMISO_TABLERO_VER = "mpr.tablero_ver"
+
+
+def _usuario_puede_ver_tablero_produccion(user) -> bool:
+    return (
+        _usuario_tiene_permiso_mpr(user, "mpr.ver")
+        or _usuario_tiene_permiso_mpr(user, PERMISO_TABLERO_VER)
+    )
+
+
+def _usuario_puede_enviar_desde_tablero(user) -> bool:
+    return _usuario_tiene_permiso_mpr(user, "mpr.ver")
+
+
+def _context_flags_tablero(user) -> dict:
+    puede_enviar = _usuario_puede_enviar_desde_tablero(user)
+    return {
+        "puede_enviar": puede_enviar,
+        "solo_lectura_tablero": _usuario_puede_ver_tablero_produccion(user) and not puede_enviar,
+        "puede_anular_envios": _usuario_puede_anular_envios(user) and puede_enviar,
+    }
+
+
 class MprPermisoMixin:
     """Exige permiso administraNET en vista basada en clase."""
 
@@ -230,6 +253,21 @@ class MprPermisoMixin:
         ):
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
+
+
+class MprTableroVerMixin:
+    """GET tablero / actualizar / manual: exige mpr.ver OR mpr.tablero_ver."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not _usuario_puede_ver_tablero_produccion(getattr(request, "user", None)):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+
+class MprEscritorioVerMixin(MprPermisoMixin):
+    """Vistas escritorio MPR sin permiso específico: exigen mpr.ver."""
+
+    permiso_requerido = "mpr.ver"
 
 
 def _get_base_empresa(request):
@@ -632,7 +670,7 @@ def _build_renglones_modal_map(base_empresa, opp_list, opa_list):
     return out
 
 
-class TableroView(MprLoginRequiredMixin, TemplateView):
+class TableroView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Tablero de control MPR: KPIs del flujo diario y accesos rápidos."""
 
     template_name = "mpr/tablero.html"
@@ -688,7 +726,7 @@ def _limpiar_mpr_wizard(request, id_lista=None) -> None:
     request.session.modified = True
 
 
-class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
+class WizardProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """
     Asistente de producción: 1.Crear OPT → 2.Confirmar (crear+liberar) → 3.Crear OPP → 4.Cierre.
     El armado 1ra/2da es independiente (menú Producción → Armado). Depósito de producción (config) al confirmar.
@@ -1123,7 +1161,7 @@ class WizardProduccionView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class OpListView(MprLoginRequiredMixin, TemplateView):
+class OpListView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """
     Demanda de producción agrupada por artículo (lista_produccion_agrupada), solo líneas con pendiente > 0.
     Distinto del listado de OPT (OptListView / opt_list.html), que incluye fases del asistente y demanda sin liberar.
@@ -1173,7 +1211,7 @@ class OpListView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class OptListView(MprLoginRequiredMixin, TemplateView):
+class OptListView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Órdenes de Producción de Trabajo (OPT). Listado con columna Estado (fase operativa / etiqueta_fase) según flujo del asistente."""
 
     template_name = "mpr/opt_list.html"
@@ -1385,7 +1423,7 @@ class OptListView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class OptDetailView(MprLoginRequiredMixin, TemplateView):
+class OptDetailView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Detalle de una OPT por id_lista_produccion (incluye todas las líneas si es OPT agrupada)."""
 
     template_name = "mpr/opt_detail.html"
@@ -1670,7 +1708,7 @@ class OptDetailView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
+class RegistrarOppView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """
     DEPRECATED (E6): pendiente eliminación hasta migrar wizard paso 3.
     Usar RegistrarParteProduccionView / ParteProduccionView en su lugar.
@@ -1825,7 +1863,7 @@ class RegistrarOppView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:opt_detail", id_lista=id_lista)
 
 
-class ArmadoOptView(MprLoginRequiredMixin, View):
+class ArmadoOptView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """Deprecado: redirige a Armado 1ra unificado."""
 
     def get(self, request, *args, **kwargs):
@@ -1837,7 +1875,7 @@ class ArmadoOptView(MprLoginRequiredMixin, View):
         return self.get(request, *args, **kwargs)
 
 
-class _ArmadoOptViewLegacy(MprLoginRequiredMixin, TemplateView):
+class _ArmadoOptViewLegacy(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Legacy — armado multi-artículo desde detalle OPT (deprecado)."""
 
     template_name = "mpr/armado_opt.html"
@@ -1980,7 +2018,7 @@ class _ArmadoOptViewLegacy(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:opt_detail", id_lista=id_lista)
 
 
-class CerrarOptView(MprLoginRequiredMixin, TemplateView):
+class CerrarOptView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Cierra la OPT (en_proceso_produccion='No' en todas sus líneas) cuando el pendiente total es 0. Solo POST."""
 
     def post(self, request, *args, **kwargs):
@@ -2434,6 +2472,8 @@ def opt_comprobante_pdf_view(request, id_lista):
     from django.contrib import messages
     if "user" not in request.session or not getattr(request.user, "is_authenticated", False):
         return redirect("login:login")
+    if not _usuario_tiene_permiso_mpr(request.user, "mpr.ver"):
+        raise PermissionDenied
     base_empresa = _get_base_empresa(request)
     if not base_empresa:
         messages.error(request, "No se pudo determinar la empresa activa.")
@@ -2454,7 +2494,7 @@ def opt_comprobante_pdf_view(request, id_lista):
     return response
 
 
-class NuevaOptView(MprLoginRequiredMixin, TemplateView):
+class NuevaOptView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Redirige al asistente de producción. La creación manual de OPT ya no está disponible en MPR."""
 
     def get(self, request, *args, **kwargs):
@@ -2464,7 +2504,7 @@ class NuevaOptView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:wizard")
 
 
-class BomListView(MprLoginRequiredMixin, TemplateView):
+class BomListView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Listado de conjuntos de armado (Lista de materiales / en_abm)."""
 
     template_name = "mpr/bom_list.html"
@@ -2499,7 +2539,7 @@ class BomListView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class BomDetailView(MprLoginRequiredMixin, TemplateView):
+class BomDetailView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Detalle de un conjunto de armado (Lista de materiales): cabecera y componentes."""
 
     template_name = "mpr/bom_detail.html"
@@ -2526,7 +2566,7 @@ class BomDetailView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class BomCreateView(MprLoginRequiredMixin, TemplateView):
+class BomCreateView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Alta de conjunto de armado (en_abm)."""
 
     template_name = "mpr/bom_form.html"
@@ -2565,7 +2605,7 @@ class BomCreateView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:bom_create")
 
 
-class BomEditView(MprLoginRequiredMixin, TemplateView):
+class BomEditView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Edición de conjunto (en_abm) y componentes (en_abm_formula)."""
 
     template_name = "mpr/bom_edit.html"
@@ -2697,7 +2737,7 @@ ESTADOS_PEDIDO_OPT_CHOICES = [
 ]
 
 
-class PedidosFabricaListView(MprLoginRequiredMixin, TemplateView):
+class PedidosFabricaListView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Listado de pedidos con estado de producción (comp_ped estado_pedido_opt: Pendiente, Produccion, Parcial, Terminado)."""
 
     template_name = "mpr/pedidos_fabrica_list.html"
@@ -2726,7 +2766,7 @@ class PedidosFabricaListView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class OptsPorPedidoView(MprLoginRequiredMixin, TemplateView):
+class OptsPorPedidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Trazabilidad: OPTs vinculadas a un pedido (codigo_movimiento). GET ?codigo=."""
 
     template_name = "mpr/opts_por_pedido.html"
@@ -2776,7 +2816,7 @@ TIPOS_MPR_CON_ETIQUETA = [
 ]
 
 
-class ConfigDepositosView(MprLoginRequiredMixin, TemplateView):
+class ConfigDepositosView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Configuración MPR: depósitos, suma_stock y tipo (Producción, Semi Elaborado, Terminado, Scrap, 2da Selección)."""
 
     template_name = "mpr/config_depositos.html"
@@ -2889,7 +2929,7 @@ class ConfigDepositosView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:config_depositos")
 
 
-class OperariosListView(MprLoginRequiredMixin, TemplateView):
+class OperariosListView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Listado de operarios (sue_abm_empleado) para CRUD."""
 
     template_name = "mpr/operarios_list.html"
@@ -2917,7 +2957,7 @@ class OperariosListView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class OperarioCreateView(MprLoginRequiredMixin, TemplateView):
+class OperarioCreateView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Alta de operario (sue_abm_empleado)."""
 
     template_name = "mpr/operario_form.html"
@@ -2954,7 +2994,7 @@ class OperarioCreateView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:operario_create")
 
 
-class OperarioUpdateView(MprLoginRequiredMixin, TemplateView):
+class OperarioUpdateView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Edición de operario (sue_abm_empleado)."""
 
     template_name = "mpr/operario_form.html"
@@ -3001,7 +3041,7 @@ class OperarioUpdateView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:operario_edit", id_operario=id_operario)
 
 
-class OperarioAnularView(MprLoginRequiredMixin, View):
+class OperarioAnularView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """Anula un operario (anulado='Si'). Solo POST."""
 
     def post(self, request, *args, **kwargs):
@@ -3019,7 +3059,7 @@ class OperarioAnularView(MprLoginRequiredMixin, View):
         return _redirect_operarios_list_preserve_filters(request)
 
 
-class OperarioReactivarView(MprLoginRequiredMixin, View):
+class OperarioReactivarView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """Reactiva un operario (anulado='No'). Solo POST."""
 
     def post(self, request, *args, **kwargs):
@@ -3037,7 +3077,7 @@ class OperarioReactivarView(MprLoginRequiredMixin, View):
         return _redirect_operarios_list_preserve_filters(request)
 
 
-class ArmadoLegacyView(MprLoginRequiredMixin, TemplateView):
+class ArmadoLegacyView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Legacy — armado por OPT (deprecado; usar Armado 1ra unificado)."""
 
     template_name = "mpr/armado.html"
@@ -3203,7 +3243,7 @@ class ArmadoLegacyView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:opt_detail", id_lista=id_lista)
 
 
-class ReclasificacionView(MprLoginRequiredMixin, TemplateView):
+class ReclasificacionView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Reclasificación (2da selección / Scrap): movimiento de artículo entre depósitos."""
 
     template_name = "mpr/reclasificacion.html"
@@ -3391,7 +3431,7 @@ def _redirect_armado_surtido(id_lista=None):
     return _redirect_armado("2da", id_lista)
 
 
-class ArmadoPacksCatalogAPIView(MprLoginRequiredMixin, View):
+class ArmadoPacksCatalogAPIView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """API: catálogo de packs Armado (lazy). GET ?modo=1ra|2da&q=&limit=25"""
 
     def get(self, request, *args, **kwargs):
@@ -3421,7 +3461,7 @@ class ArmadoPacksCatalogAPIView(MprLoginRequiredMixin, View):
             return JsonResponse({"packs": [], "error": "No se pudo cargar el catálogo."})
 
 
-class ArmadoBomPackAPIView(MprLoginRequiredMixin, View):
+class ArmadoBomPackAPIView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """API: líneas BOM para pack Armado 1ra. GET ?id_articulo="""
 
     def get(self, request, *args, **kwargs):
@@ -3437,7 +3477,7 @@ class ArmadoBomPackAPIView(MprLoginRequiredMixin, View):
         return JsonResponse({"lineas": lineas, "max_packs": max_p})
 
 
-class ArmadoSurtidoStockOrigenAPIView(MprLoginRequiredMixin, View):
+class ArmadoSurtidoStockOrigenAPIView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """API: artículos con saldo > 0 en depósito origen. GET ?deposito=&q="""
 
     def get(self, request, *args, **kwargs):
@@ -3457,7 +3497,7 @@ class ArmadoSurtidoStockOrigenAPIView(MprLoginRequiredMixin, View):
             return JsonResponse({"articulos": []})
 
 
-class ArmadoSurtidoValidarItemLoteAPIView(MprLoginRequiredMixin, View):
+class ArmadoSurtidoValidarItemLoteAPIView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """
     GET: valida ítem candidato contra lote actual (reglas + stock agregado en origen).
     Query: deposito, lote_json (URL-encoded), item_json (URL-encoded).
@@ -3516,7 +3556,7 @@ class ArmadoSurtidoValidarItemLoteAPIView(MprLoginRequiredMixin, View):
         return JsonResponse({"ok": bool(ok_stock), "conflictos": conflictos if not ok_stock else []})
 
 
-class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
+class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Armado unificado 1ra/2da: grilla tabla (default) o POS + carrito (?vista=pos)."""
 
     template_name = "mpr/armado_surtido.html"
@@ -3881,7 +3921,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, TemplateView):
 ArmadoView = ArmadoSurtidoView
 
 
-class ArmadoSurtidoRedirectView(MprLoginRequiredMixin, View):
+class ArmadoSurtidoRedirectView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """Alias legacy /mpr/armado-surtido/ → /mpr/armado/?modo=2da."""
 
     def get(self, request, *args, **kwargs):
@@ -4215,7 +4255,7 @@ def _agrupar_resumen_por_mes(dias: List[Dict[str, Any]], modo: str) -> List[Dict
     return grupos
 
 
-class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
+class ReportesMPRView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Hub de reportes MPR: producción, demanda y trazabilidad (flujo MPR diario)."""
 
     template_name = "mpr/reportes.html"
@@ -4429,7 +4469,7 @@ class ReportesMPRView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class VentanaPackActualizarView(MprLoginRequiredMixin, TemplateView):
+class VentanaPackActualizarView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """POST: ejecuta actualizar_pedidos_produccion y redirige a Orden de Producción de Trabajo (OPT) con mensaje."""
 
     http_method_names = ["post"]
@@ -4470,7 +4510,7 @@ class VentanaPackActualizarView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:ventana_pack")
 
 
-class EmpleadosOperariosAPIView(MprLoginRequiredMixin, View):
+class EmpleadosOperariosAPIView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """API para búsqueda de operarios (sue_abm_empleado) en Confirmar OPT. GET ?q=busqueda."""
 
     def get(self, request, *args, **kwargs):
@@ -4498,7 +4538,7 @@ def _tiene_receta(fila: dict) -> bool:
     return isinstance(receta, list) and len(receta) > 0
 
 
-class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
+class VentanaPackAgruparView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Pantalla 2: recibe selección desde Orden de Producción de Trabajo (OPT), muestra tabla con cantidades editables y tooltip; POST 'Generar OPT' crea la OPT."""
 
     template_name = "mpr/ventana_pack_agrupar.html"
@@ -4723,7 +4763,7 @@ class VentanaPackAgruparView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class VentanaPackView(MprLoginRequiredMixin, TemplateView):
+class VentanaPackView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Orden de Producción de Trabajo (OPT) Pantalla 1: demanda por artículo; formulario envía a ventana_pack_agrupar (Continuar)."""
 
     template_name = "mpr/ventana_pack.html"
@@ -4915,7 +4955,7 @@ def _redirect_tablero_produccion(request, query_string: str | None = None):
     return redirect(url)
 
 
-class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
+class TableroProduccionView(MprLoginRequiredMixin, MprTableroVerMixin, TemplateView):
     """Tablero de producción por artículo/componente (PCP). Etapa 2 MPR."""
 
     template_name = "mpr/tablero_produccion.html"
@@ -5021,7 +5061,6 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
             "kpis_tablero": kpis_tablero,
             "ultima_actualizacion": ultima_act,
             "tablero_url": reverse("mpr:tablero"),
-            "puede_anular_envios": _usuario_puede_anular_envios(request.user),
             "modo_presentacion": modo_presentacion,
             "modo_tablero": modo_tablero,
             "presentacion_query_base": presentacion_query_base,
@@ -5029,10 +5068,11 @@ class TableroProduccionView(MprLoginRequiredMixin, TemplateView):
             "unidades_por_docena_tablero": UNIDADES_POR_DOCENA_OPP,
             "fecha_tablero_ddmmyyyy": fecha_tablero.strftime("%d/%m/%Y"),
             **ctx_marcas,
+            **_context_flags_tablero(request.user),
         })
 
 
-class TableroProduccionActualizarView(MprLoginRequiredMixin, TemplateView):
+class TableroProduccionActualizarView(MprLoginRequiredMixin, MprTableroVerMixin, TemplateView):
     """POST: refresca timestamp de sesión; la demanda se calcula en vivo desde pedidos PED."""
 
     http_method_names = ["post"]
@@ -5057,7 +5097,7 @@ class TableroProduccionActualizarView(MprLoginRequiredMixin, TemplateView):
 # Etapa 3: Turnos (CRUD) + Roster Rotativo
 # =============================================================================
 
-class TurnosListView(MprLoginRequiredMixin, TemplateView):
+class TurnosListView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """
     Listado de turnos de producción con toggle Activo/Inactivo.
     GET: lista todos los turnos (activos e inactivos).
@@ -5097,7 +5137,7 @@ class TurnosListView(MprLoginRequiredMixin, TemplateView):
         return redirect("mpr:turnos_list")
 
 
-class TurnoCreateView(MprLoginRequiredMixin, TemplateView):
+class TurnoCreateView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """
     Alta de turno de producción.
     GET: muestra formulario.
@@ -5134,7 +5174,7 @@ class TurnoCreateView(MprLoginRequiredMixin, TemplateView):
         return self.render_to_response(context)
 
 
-class TurnoUpdateView(MprLoginRequiredMixin, TemplateView):
+class TurnoUpdateView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """
     Edición de turno de producción.
     GET: muestra formulario con datos actuales.
@@ -6026,7 +6066,7 @@ class PartePendienteDetailView(MprLoginRequiredMixin, MprPermisoMixin, TemplateV
         return redirect("mpr:parte_pendiente_detail", id_parte=id_parte)
 
 
-class PlanificacionTurnosView(MprLoginRequiredMixin, TemplateView):
+class PlanificacionTurnosView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """
     Pantalla de planificación semanal (roster): grilla operadores × 7 días.
     GET: muestra grilla de la semana seleccionada (default: semana actual).
@@ -6075,7 +6115,7 @@ class PlanificacionTurnosView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class AsignarTurnoRosterView(MprLoginRequiredMixin, View):
+class AsignarTurnoRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """
     POST: asigna (o reasigna) turno a un operario en una fecha.
     Params POST: fecha (dd/MM/yyyy), id_operario, id_turno, semana (YYYY-MM-DD para redirect).
@@ -6118,7 +6158,7 @@ class AsignarTurnoRosterView(MprLoginRequiredMixin, View):
         return redirect(base_url)
 
 
-class AsignarTurnoRosterMasivoView(MprLoginRequiredMixin, View):
+class AsignarTurnoRosterMasivoView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """
     POST: asignación masiva de turno a varios operarios en un rango de fechas.
     Params POST: ids_operario (lista), id_turno, fecha_desde/fecha_hasta (YYYY-MM-DD), semana.
@@ -6174,7 +6214,7 @@ class AsignarTurnoRosterMasivoView(MprLoginRequiredMixin, View):
         return redirect(base_url)
 
 
-class EliminarAsignacionRosterView(MprLoginRequiredMixin, View):
+class EliminarAsignacionRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """
     POST: elimina asignación de turno de un operario en una fecha.
     Params POST: fecha (dd/MM/yyyy), id_operario, semana (YYYY-MM-DD para redirect).
@@ -6211,7 +6251,7 @@ class EliminarAsignacionRosterView(MprLoginRequiredMixin, View):
 # ETAPA 4: Parte de Producción (Ledger OPP-parte)
 # ---------------------------------------------------------------------------
 
-class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
+class ParteProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Vista de captura de parte de producción (grilla planilla QC analista)."""
 
     template_name = "mpr/parte_produccion.html"
@@ -6281,7 +6321,7 @@ class ParteProduccionView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class RegistrarParteProduccionView(MprLoginRequiredMixin, View):
+class RegistrarParteProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST: Registra un parte de producción completo (planilla QC multi-turno)."""
 
     def post(self, request):
@@ -6352,7 +6392,7 @@ class RegistrarParteProduccionView(MprLoginRequiredMixin, View):
         return redirect(f"{redirect_url}?{qs}")
 
 
-class AjusteParteView(MprLoginRequiredMixin, View):
+class AjusteParteView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST: Registra un ajuste delta sobre una línea de parte de producción."""
 
     def post(self, request, parte_id):
@@ -6393,7 +6433,7 @@ class AjusteParteView(MprLoginRequiredMixin, View):
 # Etapa 5: Transiciones de lote (TransicionLoteView)
 # =============================================================================
 
-class TransicionLoteView(MprLoginRequiredMixin, View):
+class TransicionLoteView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST: registra una transferencia de stock entre etapas MPR (Producción, Planchado, etc.).
 
     Parámetros POST esperados:
@@ -6458,7 +6498,7 @@ class TransicionLoteView(MprLoginRequiredMixin, View):
 # =============================================================================
 
 
-class TrazabilidadOptView(MprLoginRequiredMixin, TemplateView):
+class TrazabilidadOptView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """GET: Trazabilidad detallada de una OPT por id_lista_produccion (E6).
 
     Integra 6 fuentes de datos para mostrar un timeline cronológico de todos los eventos
@@ -6502,10 +6542,9 @@ class TrazabilidadOptView(MprLoginRequiredMixin, TemplateView):
 # =============================================================================
 
 
-class EnviosProduccionListView(MprLoginRequiredMixin, MprPermisoMixin, TemplateView):
+class EnviosProduccionListView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Lista envíos del tablero con saldo anulable (FIFO vs partes)."""
 
-    permiso_requerido = ""
     template_name = "mpr/envios_produccion.html"
 
     def get(self, request, *args, **kwargs):
@@ -6553,10 +6592,9 @@ class EnviosProduccionListView(MprLoginRequiredMixin, MprPermisoMixin, TemplateV
         )
 
 
-class AnularEnviosProduccionView(MprLoginRequiredMixin, MprPermisoMixin, View):
+class AnularEnviosProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST: anula envíos seleccionados (ledger-only)."""
 
-    permiso_requerido = ""
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
@@ -6618,7 +6656,7 @@ class AnularEnviosProduccionView(MprLoginRequiredMixin, MprPermisoMixin, View):
 # =============================================================================
 
 
-class EnviarProduccionLoteView(MprLoginRequiredMixin, View):
+class EnviarProduccionLoteView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST: registra un lote de envíos a producción desde el tablero (E7).
 
     Parsea inputs con prefijo envio_{id_art} y pendiente_{id_art};
@@ -6699,7 +6737,7 @@ class EnviarProduccionLoteView(MprLoginRequiredMixin, View):
 # =============================================================================
 
 
-class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
+class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """GET: pantalla de Clasificación de Producción en lote (E10).
 
     Muestra los componentes con saldo en Producción y permite distribuirlos a
@@ -6811,7 +6849,7 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, TemplateView):
         return context
 
 
-class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
+class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
     """POST: registra la clasificación Producción → {Semi | 2da | Scrap} en lote (E10).
 
     Parsea semi_{id}_docenas/unidades (o legacy semi_{id}), seg2da_* y scrap_*,
@@ -7041,7 +7079,7 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, View):
         )
 
 
-class ManualUsuarioMprView(MprLoginRequiredMixin, View):
+class ManualUsuarioMprView(MprLoginRequiredMixin, MprTableroVerMixin, View):
     """Sirve el manual de usuario MPR (HTML estático generado desde Markdown)."""
 
     def get(self, request, *args, **kwargs):

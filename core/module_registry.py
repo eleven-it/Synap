@@ -400,6 +400,7 @@ MODULE_CONFIGS = {
             'mpr.ver',
             'mpr.imputar_armado_1ra',
             'mpr.parte_operario',
+            'mpr.tablero_ver',
             'mpr.maquinas_lineas',
             'mpr.aprobar_parte',
             'mpr.*',

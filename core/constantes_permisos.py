@@ -162,6 +162,7 @@ PERMISOS_POR_MODULO = {
         ("mpr.maquinas_lineas", "Gestionar líneas, máquinas y habilitación de artículos (supervisor)"),
         ("mpr.aprobar_parte", "Aprobar partes de producción y registrar desvíos (supervisor)"),
         ("mpr.parte_operario", "Carga de parte de producción desde el móvil (operario)"),
+        ("mpr.tablero_ver", "Ver tablero de producción (solo lectura)"),
     ],
     "Migración Odoo": [
         ("odoo_migracion.ver", "Ver módulo Migración Odoo (solo usuario supervisor en menú)"),
