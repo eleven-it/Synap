@@ -12,6 +12,7 @@ import logging
 import uuid
 from collections import defaultdict
 from datetime import timedelta
+from collections.abc import Callable, Iterator
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, Optional
 
@@ -1734,7 +1735,6 @@ def dry_run(
     tolerancia = _d(politica.get("tolerancia_decimal", Decimal("0.005")))
     ahora = timezone.now()
     expira = ahora + timedelta(minutes=PLAN_TTL_MIN)
-    timestamp_bkp = ahora.strftime("%Y%m%d_%H%M%S")
 
     checks_planificados: list[str] = []
 
@@ -1806,8 +1806,7 @@ def dry_run(
 
     checks_incluidos = list(dict.fromkeys(checks_planificados))
 
-    tablas_afectadas = {item["tabla"] for item in items if not item.get("excluido")}
-    backups_propuestos = _generar_backups_propuestos(timestamp_bkp, tablas_afectadas)
+    backups_propuestos: dict[str, str] = {}
     impacto = _calcular_impacto(
         items,
         asientos_por_tipo,
@@ -3004,7 +3003,6 @@ def _apply_modo_rei(
     ahora = timezone.now()
     timestamp = ahora.strftime("%Y%m%d_%H%M%S")
     lote_id = f"L{timestamp}-{uuid.uuid4().hex[:8]}"
-    tablas = {"cont_asiento", "cont_ejercicio_saldo_cta"}
     plan_json = plan_obj.plan or {}
     propuestas_map = {
         (to_int_or_none(p.get("id_pc")), to_int_or_none(p.get("id_ejercicio"))): p
@@ -3057,13 +3055,6 @@ def _apply_modo_rei(
                     f"difiere del dry-run ({caso.rei_actual}). Ejecute un nuevo dry-run."
                 )
 
-    try:
-        with pool.get_connection(base_empresa) as conn:
-            backups = _crear_backups(conn, tablas, timestamp)
-    except Exception as exc:
-        logger.exception("apply rei: fallo backup base=%s", base_empresa)
-        raise CorreccionContableError(f"No se pudo crear el backup previo: {exc}") from exc
-
     reapertura_flag = 1 if (
         politica.get("ejercicios_cerrados") == "permitir_con_reapertura"
         and confirmar_reapertura
@@ -3092,7 +3083,7 @@ def _apply_modo_rei(
                 fecha_db,
                 reapertura_flag,
                 autorizador or None,
-                json.dumps(backups, sort_keys=True),
+                "{}",
             ),
         )
 
@@ -3184,7 +3175,7 @@ def _apply_modo_rei(
         "mensaje": f"Corrección REI aplicada ({len(aprobados)} caso(s) aprobado(s)).",
         "filas_aplicadas": filas_aplicadas,
         "casos_rei": len(aprobados),
-        "backups": backups,
+        "backups": {},
         "fecha": _fecha_ui(ahora),
         "reapertura_flag": bool(reapertura_flag),
         "modo": "rei",
@@ -3205,6 +3196,287 @@ def _requiere_reapertura(items: list[dict], repo: _RepoLectura) -> bool:
     return False
 
 
+def _evento_progreso_apply(
+    *,
+    phase: str,
+    current: int,
+    total: int,
+    label: str = "",
+) -> dict:
+    return {
+        "type": "progress",
+        "phase": phase,
+        "current": current,
+        "total": total,
+        "label": label,
+    }
+
+
+def _label_progreso_apply_item(item: dict, idx: int, total: int) -> str:
+    check_id = str_or_default(item.get("check_id"))
+    tabla = str_or_default(item.get("tabla"))
+    if check_id:
+        return f"{check_id} ({idx}/{total})"
+    if tabla:
+        return f"{tabla} ({idx}/{total})"
+    return f"Aplicando ítem {idx}/{total}"
+
+
+def _yield_progreso_write(
+    progress_idx: list[int],
+    total: int,
+    item: dict,
+    intervalo: int,
+) -> dict | None:
+    progress_idx[0] += 1
+    idx = progress_idx[0]
+    if idx == 1 or idx == total or idx % intervalo == 0:
+        return _evento_progreso_apply(
+            phase="write",
+            current=idx,
+            total=total,
+            label=_label_progreso_apply_item(item, idx, total),
+        )
+    return None
+
+
+def _apply_iter(
+    base_empresa: str,
+    dry_run_id: str,
+    usuario: str,
+    *,
+    tiene_permiso_corregir: bool = False,
+    confirmar_reapertura: bool = False,
+    autorizador: str = "",
+) -> Iterator[dict]:
+    """Generador interno: eventos progress y result al aplicar corrección (modo general)."""
+    if not tiene_permiso_corregir:
+        raise CorreccionContableError(
+            "No tiene permiso para aplicar correcciones contables (contabilidad.auditoria.corregir)."
+        )
+
+    try:
+        plan_obj = PlanCorreccion.objects.get(dry_run_id=dry_run_id)
+    except PlanCorreccion.DoesNotExist as exc:
+        raise CorreccionContableError("No existe un plan dry-run con ese identificador.") from exc
+
+    if plan_obj.base_empresa != base_empresa:
+        raise CorreccionContableError("El plan no corresponde a la empresa indicada.")
+
+    if plan_obj.estado != "propuesto":
+        raise CorreccionContableError(
+            f"El plan está en estado «{plan_obj.estado}»; no se puede aplicar."
+        )
+
+    ahora = timezone.now()
+    if plan_obj.expira_en and ahora >= plan_obj.expira_en:
+        plan_obj.estado = "expirado"
+        plan_obj.save(update_fields=["estado"])
+        raise CorreccionContableError(
+            "El plan expiró; ejecute un nuevo dry-run antes de aplicar."
+        )
+
+    politica = resolver_politica(base_empresa)
+    config_actual = calcular_config_hash(politica)
+    if plan_obj.config_hash != config_actual:
+        plan_obj.estado = "invalidado"
+        plan_obj.save(update_fields=["estado"])
+        raise CorreccionContableError(
+            "La política cambió desde el dry-run; ejecute un nuevo dry-run."
+        )
+
+    plan_json = plan_obj.plan or {}
+    items_raw = plan_json.get("items") or []
+    items = _filtrar_items_aplicables(items_raw)
+
+    pool = get_mysql_pool()
+    with pool.get_connection(base_empresa) as conn:
+        repo = _RepoLectura(conn)
+        if politica.get("ejercicios_cerrados") == "permitir_con_reapertura":
+            if _requiere_reapertura(items, repo) and not confirmar_reapertura:
+                raise CorreccionContableError(
+                    "El plan afecta ejercicios cerrados; confirme la reapertura explícita."
+                )
+        elif politica.get("ejercicios_cerrados") == "no_tocar":
+            _marcar_exclusiones(items, politica, repo)
+            items = _filtrar_items_aplicables(items)
+
+        fp_actual = _calcular_fingerprint_desde_legacy(conn, items)
+        if fp_actual != plan_obj.data_fingerprint:
+            plan_obj.estado = "invalidado"
+            plan_obj.save(update_fields=["estado"])
+            raise CorreccionContableError(
+                "Concurrencia detectada: los datos cambiaron desde el dry-run. "
+                "Ejecute un nuevo dry-run."
+            )
+
+    if not items:
+        plan_obj.estado = "aplicado"
+        plan_obj.save(update_fields=["estado"])
+        yield {
+            "type": "result",
+            "payload": {
+                "ok": True,
+                "lote_id": None,
+                "mensaje": "Plan vacío; no hubo cambios que aplicar.",
+                "filas_aplicadas": 0,
+            },
+        }
+        return
+
+    total_items = len(items)
+    timestamp = ahora.strftime("%Y%m%d_%H%M%S")
+    lote_id = f"L{timestamp}-{uuid.uuid4().hex[:8]}"
+    reapertura_flag = 1 if (
+        politica.get("ejercicios_cerrados") == "permitir_con_reapertura"
+        and confirmar_reapertura
+    ) else 0
+
+    filas_aplicadas = 0
+    with pool.get_connection(base_empresa) as conn:
+        try:
+            conn.autocommit(False)
+            cur = conn.cursor()
+            dict_cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            repo = _RepoLectura(conn)
+            fecha_db = timezone.localtime(ahora).replace(tzinfo=None)
+
+            cur.execute(
+                """INSERT INTO cont_audit_correccion_lote
+                   (lote_id, base_empresa, dry_run_id, config_hash, usuario, fecha,
+                    estado, reapertura_flag, autorizador, backups_json)
+                   VALUES (%s,%s,%s,%s,%s,%s,'aplicado',%s,%s,%s)""",
+                (
+                    lote_id,
+                    base_empresa,
+                    str(plan_obj.dry_run_id),
+                    plan_obj.config_hash,
+                    usuario,
+                    fecha_db,
+                    reapertura_flag,
+                    autorizador or None,
+                    "{}",
+                ),
+            )
+
+            _bloquear_filas_objetivo(dict_cur, items)
+
+            fp_tx = _calcular_fingerprint_desde_legacy(conn, items)
+            if fp_tx != plan_obj.data_fingerprint:
+                conn.rollback()
+                plan_obj.estado = "invalidado"
+                plan_obj.save(update_fields=["estado"])
+                raise CorreccionContableError(
+                    "Concurrencia detectada durante la transacción. Ejecute un nuevo dry-run."
+                )
+
+            items_ordenados = _orden_apply_items(items)
+            total = len(items_ordenados)
+            intervalo = 5 if total > 100 else 1
+            progress_idx = [0]
+            saldos_run: dict[tuple[int, int], Decimal] = {}
+
+            # Pre-regeneración de asientos (REC-18, antes del orden REC-07 2→3→4).
+            asientos_por_cm: dict[str, list[dict]] = defaultdict(list)
+            for item in items_ordenados:
+                if (
+                    item.get("tabla") == "cont_asiento"
+                    and item.get("accion") == "insert"
+                    and item.get("check_id") in CHECKS_REGENERACION_ASIENTO
+                ):
+                    cm = str_or_default((item.get("valor_nuevo") or {}).get("codigo_movimiento"))
+                    asientos_por_cm[cm].append(item)
+
+            for renglones in asientos_por_cm.values():
+                filas_aplicadas += _aplicar_asiento_completo(
+                    cur, repo, renglones, saldos_run, lote_id, usuario, fecha_db
+                )
+                for item in renglones:
+                    evt = _yield_progreso_write(progress_idx, total, item, intervalo)
+                    if evt is not None:
+                        yield evt
+
+            # REC-19: reparación anulaciones incompletas (antes de concepto REC-07 paso 2).
+            for item in items_ordenados:
+                if item.get("check_id") != CHECK_ANULACION:
+                    continue
+                filas_aplicadas += _aplicar_item_anulacion(
+                    cur, dict_cur, repo, item, saldos_run, lote_id, usuario, fecha_db
+                )
+                evt = _yield_progreso_write(progress_idx, total, item, intervalo)
+                if evt is not None:
+                    yield evt
+
+            # REC-07 paso 2: concepto_anulacion_incoherente (UPDATE cont_asiento).
+            for item in items_ordenados:
+                if item.get("check_id") != CHECK_CONCEPTO_ANUL:
+                    continue
+                _aplicar_item_concepto(cur, item, lote_id, usuario, fecha_db)
+                filas_aplicadas += 1
+                evt = _yield_progreso_write(progress_idx, total, item, intervalo)
+                if evt is not None:
+                    yield evt
+
+            # REC-07 pasos 3 y 4: filas saldo faltantes (INSERT) → recompute (UPDATE).
+            for item in items_ordenados:
+                tabla = item.get("tabla")
+                if tabla not in ("cont_ejercicio_saldo_cta", "cont_periodo_saldo_cta"):
+                    continue
+                id_pc = to_int_or_none((item.get("clave") or {}).get("id_pc"))
+                if id_pc is not None and repo.saldo_pc(id_pc) is None:
+                    continue
+                if item.get("accion") == "insert" and _fila_saldo_existe(cur, item):
+                    continue
+                _aplicar_item_saldo(cur, item, lote_id, usuario, fecha_db)
+                filas_aplicadas += 1
+                evt = _yield_progreso_write(progress_idx, total, item, intervalo)
+                if evt is not None:
+                    yield evt
+
+            yield _evento_progreso_apply(
+                phase="finalize",
+                current=total,
+                total=total,
+                label="Finalizando…",
+            )
+
+            conn.commit()
+        except CorreccionContableError:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            raise
+        except Exception as exc:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            logger.exception("apply: error transaccional base=%s lote=%s", base_empresa, lote_id)
+            raise CorreccionContableError(f"Error al aplicar corrección: {exc}") from exc
+        finally:
+            try:
+                conn.autocommit(True)
+            except Exception:
+                pass
+
+    plan_obj.estado = "aplicado"
+    plan_obj.save(update_fields=["estado"])
+
+    yield {
+        "type": "result",
+        "payload": {
+            "ok": True,
+            "lote_id": lote_id,
+            "mensaje": "Corrección aplicada correctamente.",
+            "filas_aplicadas": filas_aplicadas,
+            "backups": {},
+            "fecha": _fecha_ui(ahora),
+            "reapertura_flag": bool(reapertura_flag),
+        },
+    }
+
+
 def apply(
     base_empresa: str,
     dry_run_id: str,
@@ -3214,6 +3486,7 @@ def apply(
     confirmar_reapertura: bool = False,
     autorizador: str = "",
     modo: str = "general",
+    on_progress: Callable[[dict], None] | None = None,
 ) -> dict[str, Any]:
     """
     Aplica un plan dry-run en MySQL legacy (Fase 3).
@@ -3269,175 +3542,22 @@ def apply(
             autorizador=autorizador,
         )
 
-    plan_json = plan_obj.plan or {}
-    items_raw = plan_json.get("items") or []
-    items = _filtrar_items_aplicables(items_raw)
-
-    pool = get_mysql_pool()
-    with pool.get_connection(base_empresa) as conn:
-        repo = _RepoLectura(conn)
-        if politica.get("ejercicios_cerrados") == "permitir_con_reapertura":
-            if _requiere_reapertura(items, repo) and not confirmar_reapertura:
-                raise CorreccionContableError(
-                    "El plan afecta ejercicios cerrados; confirme la reapertura explícita."
-                )
-        elif politica.get("ejercicios_cerrados") == "no_tocar":
-            _marcar_exclusiones(items, politica, repo)
-            items = _filtrar_items_aplicables(items)
-
-        fp_actual = _calcular_fingerprint_desde_legacy(conn, items)
-        if fp_actual != plan_obj.data_fingerprint:
-            plan_obj.estado = "invalidado"
-            plan_obj.save(update_fields=["estado"])
-            raise CorreccionContableError(
-                "Concurrencia detectada: los datos cambiaron desde el dry-run. "
-                "Ejecute un nuevo dry-run."
-            )
-
-    if not items:
-        plan_obj.estado = "aplicado"
-        plan_obj.save(update_fields=["estado"])
-        return {
-            "ok": True,
-            "lote_id": None,
-            "mensaje": "Plan vacío; no hubo cambios que aplicar.",
-            "filas_aplicadas": 0,
-        }
-
-    timestamp = ahora.strftime("%Y%m%d_%H%M%S")
-    tablas = {item["tabla"] for item in items}
-    lote_id = f"L{timestamp}-{uuid.uuid4().hex[:8]}"
-    reapertura_flag = 1 if (
-        politica.get("ejercicios_cerrados") == "permitir_con_reapertura"
-        and confirmar_reapertura
-    ) else 0
-
-    with pool.get_connection(base_empresa) as conn:
-        try:
-            backups = _crear_backups(conn, tablas, timestamp)
-        except Exception as exc:
-            logger.exception("apply: fallo backup base=%s", base_empresa)
-            raise CorreccionContableError(
-                f"No se pudo crear el backup previo: {exc}"
-            ) from exc
-
-    filas_aplicadas = 0
-    with pool.get_connection(base_empresa) as conn:
-        try:
-            conn.autocommit(False)
-            cur = conn.cursor()
-            dict_cur = conn.cursor(MySQLdb.cursors.DictCursor)
-            repo = _RepoLectura(conn)
-            fecha_db = timezone.localtime(ahora).replace(tzinfo=None)
-
-            cur.execute(
-                """INSERT INTO cont_audit_correccion_lote
-                   (lote_id, base_empresa, dry_run_id, config_hash, usuario, fecha,
-                    estado, reapertura_flag, autorizador, backups_json)
-                   VALUES (%s,%s,%s,%s,%s,%s,'aplicado',%s,%s,%s)""",
-                (
-                    lote_id,
-                    base_empresa,
-                    str(plan_obj.dry_run_id),
-                    plan_obj.config_hash,
-                    usuario,
-                    fecha_db,
-                    reapertura_flag,
-                    autorizador or None,
-                    json.dumps(backups, sort_keys=True),
-                ),
-            )
-
-            _bloquear_filas_objetivo(dict_cur, items)
-
-            fp_tx = _calcular_fingerprint_desde_legacy(conn, items)
-            if fp_tx != plan_obj.data_fingerprint:
-                conn.rollback()
-                plan_obj.estado = "invalidado"
-                plan_obj.save(update_fields=["estado"])
-                raise CorreccionContableError(
-                    "Concurrencia detectada durante la transacción. Ejecute un nuevo dry-run."
-                )
-
-            items_ordenados = _orden_apply_items(items)
-            saldos_run: dict[tuple[int, int], Decimal] = {}
-
-            # Pre-regeneración de asientos (REC-18, antes del orden REC-07 2→3→4).
-            asientos_por_cm: dict[str, list[dict]] = defaultdict(list)
-            for item in items_ordenados:
-                if (
-                    item.get("tabla") == "cont_asiento"
-                    and item.get("accion") == "insert"
-                    and item.get("check_id") in CHECKS_REGENERACION_ASIENTO
-                ):
-                    cm = str_or_default((item.get("valor_nuevo") or {}).get("codigo_movimiento"))
-                    asientos_por_cm[cm].append(item)
-
-            for renglones in asientos_por_cm.values():
-                filas_aplicadas += _aplicar_asiento_completo(
-                    cur, repo, renglones, saldos_run, lote_id, usuario, fecha_db
-                )
-
-            # REC-19: reparación anulaciones incompletas (antes de concepto REC-07 paso 2).
-            for item in items_ordenados:
-                if item.get("check_id") != CHECK_ANULACION:
-                    continue
-                filas_aplicadas += _aplicar_item_anulacion(
-                    cur, dict_cur, repo, item, saldos_run, lote_id, usuario, fecha_db
-                )
-
-            # REC-07 paso 2: concepto_anulacion_incoherente (UPDATE cont_asiento).
-            for item in items_ordenados:
-                if item.get("check_id") != CHECK_CONCEPTO_ANUL:
-                    continue
-                _aplicar_item_concepto(cur, item, lote_id, usuario, fecha_db)
-                filas_aplicadas += 1
-
-            # REC-07 pasos 3 y 4: filas saldo faltantes (INSERT) → recompute (UPDATE).
-            for item in items_ordenados:
-                tabla = item.get("tabla")
-                if tabla not in ("cont_ejercicio_saldo_cta", "cont_periodo_saldo_cta"):
-                    continue
-                id_pc = to_int_or_none((item.get("clave") or {}).get("id_pc"))
-                if id_pc is not None and repo.saldo_pc(id_pc) is None:
-                    continue
-                if item.get("accion") == "insert" and _fila_saldo_existe(cur, item):
-                    continue
-                _aplicar_item_saldo(cur, item, lote_id, usuario, fecha_db)
-                filas_aplicadas += 1
-
-            conn.commit()
-        except CorreccionContableError:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            raise
-        except Exception as exc:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            logger.exception("apply: error transaccional base=%s lote=%s", base_empresa, lote_id)
-            raise CorreccionContableError(f"Error al aplicar corrección: {exc}") from exc
-        finally:
-            try:
-                conn.autocommit(True)
-            except Exception:
-                pass
-
-    plan_obj.estado = "aplicado"
-    plan_obj.save(update_fields=["estado"])
-
-    return {
-        "ok": True,
-        "lote_id": lote_id,
-        "mensaje": "Corrección aplicada correctamente.",
-        "filas_aplicadas": filas_aplicadas,
-        "backups": backups,
-        "fecha": _fecha_ui(ahora),
-        "reapertura_flag": bool(reapertura_flag),
-    }
+    resultado: dict | None = None
+    for evento in _apply_iter(
+        base_empresa,
+        dry_run_id,
+        usuario,
+        tiene_permiso_corregir=tiene_permiso_corregir,
+        confirmar_reapertura=confirmar_reapertura,
+        autorizador=autorizador,
+    ):
+        if evento.get("type") == "progress" and on_progress is not None:
+            on_progress(evento)
+        elif evento.get("type") == "result":
+            resultado = evento["payload"]
+    if resultado is None:
+        raise CorreccionContableError("No se obtuvo resultado del apply.")
+    return resultado
 
 
 def rollback_lote(
@@ -3447,94 +3567,12 @@ def rollback_lote(
     *,
     tiene_permiso_corregir: bool = False,
 ) -> dict[str, Any]:
-    """Restaura tablas productivas desde backups del lote en transacción única.
-
-    Requiere permiso ``contabilidad.auditoria.corregir``. Disponible en cualquier
-    entorno (development incluido) para pruebas.
-    """
+    """Reversión de lotes deshabilitada: las correcciones ya no generan backup de tablas."""
     if not tiene_permiso_corregir:
         raise CorreccionContableError(
             "No tiene permiso para revertir correcciones contables."
         )
 
-    pool = get_mysql_pool()
-    with pool.get_connection(base_empresa) as conn:
-      try:
-        conn.autocommit(False)
-        cur = conn.cursor(MySQLdb.cursors.DictCursor)
-        cur.execute(
-            """SELECT lote_id, estado, backups_json FROM cont_audit_correccion_lote
-               WHERE lote_id=%s FOR UPDATE""",
-            (lote_id,),
-        )
-        lote = cur.fetchone()
-        if not lote:
-            conn.rollback()
-            raise CorreccionContableError(f"No existe el lote «{lote_id}».")
-        if lote.get("estado") == "revertido":
-            conn.rollback()
-            raise CorreccionContableError(f"El lote «{lote_id}» ya fue revertido.")
-
-        backups_raw = lote.get("backups_json")
-        if not backups_raw:
-            conn.rollback()
-            raise CorreccionContableError(
-                f"El lote «{lote_id}» no tiene referencias de backup; no se puede revertir."
-            )
-        backups = json.loads(backups_raw)
-        fecha_db = timezone.localtime(timezone.now()).replace(tzinfo=None)
-
-        for tabla, bkp in sorted(backups.items()):
-            if tabla not in TABLAS_BACKUP_PERMITIDAS:
-                conn.rollback()
-                raise CorreccionContableError(f"Backup no permitido para tabla {tabla}.")
-            cur.execute(
-                """SELECT 1 FROM information_schema.tables
-                   WHERE table_schema = DATABASE() AND table_name = %s LIMIT 1""",
-                (bkp,),
-            )
-            if not cur.fetchone():
-                conn.rollback()
-                raise CorreccionContableError(
-                    f"Backup incompleto: falta la tabla «{bkp}». No se aplicaron cambios."
-                )
-            cur.execute(f"DELETE FROM `{tabla}`")
-            cur.execute(f"INSERT INTO `{tabla}` SELECT * FROM `{bkp}`")
-
-        cur.execute(
-            """UPDATE cont_audit_correccion_lote SET estado='revertido' WHERE lote_id=%s""",
-            (lote_id,),
-        )
-        cur.execute(
-            """INSERT INTO cont_audit_correccion
-               (lote_id, check_id, tabla, clave, valor_anterior, valor_nuevo, usuario, fecha)
-               VALUES (%s,'rollback_lote','*',%s,NULL,'revertido',%s,%s)""",
-            (lote_id, json.dumps(backups, sort_keys=True), usuario, fecha_db),
-        )
-        conn.commit()
-      except CorreccionContableError:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        raise
-      except Exception as exc:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        logger.exception("rollback_lote: error base=%s lote=%s", base_empresa, lote_id)
-        raise CorreccionContableError(f"Error al revertir lote: {exc}") from exc
-      finally:
-        try:
-            conn.autocommit(True)
-        except Exception:
-            pass
-
-    return {
-        "ok": True,
-        "lote_id": lote_id,
-        "mensaje": "Lote revertido correctamente desde backup.",
-        "backups_restaurados": backups,
-        "fecha": _fecha_ui(timezone.now()),
-    }
+    raise CorreccionContableError(
+        "La reversión de lotes ya no está disponible: las correcciones no generan backup de tablas."
+    )

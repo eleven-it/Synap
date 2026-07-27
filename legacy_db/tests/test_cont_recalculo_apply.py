@@ -12,9 +12,9 @@ from contabilidad_audit.models import AprobacionREI, PREFIJOS_CUENTA_DEFAULT, Pl
 from contabilidad_audit.services.politicas import calcular_config_hash
 from legacy_db.services.cont_recalculo_service import (
     CorreccionContableError,
+    _apply_iter,
     apply,
     calcular_data_fingerprint,
-    rollback_lote,
 )
 
 
@@ -117,9 +117,7 @@ def _crear_plan(items: list[dict], base_empresa: str = "test_empresa") -> PlanCo
         data_fingerprint=fp,
         plan={
             "items": items,
-            "backups_propuestos": {
-                "cont_ejercicio_saldo_cta": "cont_ejercicio_saldo_cta_bkp_test",
-            },
+            "backups_propuestos": {},
         },
         estado="propuesto",
         creado_por="tester",
@@ -202,7 +200,7 @@ class ContRecalculoApplyTestCase(TestCase):
         conn_tx_cm.__exit__ = MagicMock(return_value=False)
 
         pool = MagicMock()
-        pool.get_connection.side_effect = [conn_ro, conn_tx_cm, conn_tx_cm]
+        pool.get_connection.side_effect = [conn_ro, conn_tx_cm]
         mock_pool.return_value = pool
 
         with patch(
@@ -210,26 +208,29 @@ class ContRecalculoApplyTestCase(TestCase):
             return_value="Deudor",
         ):
             with patch(
-                "legacy_db.services.cont_recalculo_service._crear_backups",
-                return_value={"cont_ejercicio_saldo_cta": "cont_ejercicio_saldo_cta_bkp_x"},
+                "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
+                return_value=plan.data_fingerprint,
             ):
                 with patch(
-                    "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
-                    return_value=plan.data_fingerprint,
-                ):
-                    with patch(
-                        "legacy_db.services.cont_recalculo_service._insertar_log_detalle"
-                    ) as mock_log:
-                        resultado = apply(
-                            plan.base_empresa,
-                            str(plan.dry_run_id),
-                            "tester",
-                            tiene_permiso_corregir=True,
-                        )
+                    "legacy_db.services.cont_recalculo_service._insertar_log_detalle"
+                ) as mock_log:
+                    resultado = apply(
+                        plan.base_empresa,
+                        str(plan.dry_run_id),
+                        "tester",
+                        tiene_permiso_corregir=True,
+                    )
 
         self.assertTrue(resultado["ok"])
+        self.assertEqual(resultado.get("backups"), {})
         sqls = [str(c[0][0]) for c in cur_tx.execute.call_args_list if c[0]]
         self.assertTrue(any("cont_audit_correccion_lote" in s for s in sqls))
+        insert_lote = [
+            c for c in cur_tx.execute.call_args_list
+            if c[0] and "cont_audit_correccion_lote" in str(c[0][0])
+        ]
+        self.assertTrue(insert_lote)
+        self.assertIn("{}", str(insert_lote[0]))
         mock_log.assert_called()
         self.assertEqual(conn_tx.commit.call_count, 1)
         plan.refresh_from_db()
@@ -281,23 +282,19 @@ class ContRecalculoApplyTestCase(TestCase):
         mock_pool.return_value = pool
 
         with patch(
-            "legacy_db.services.cont_recalculo_service._crear_backups",
-            return_value={"cont_asiento": "cont_asiento_bkp_x"},
+            "legacy_db.services.cont_recalculo_service._asiento_ya_existe",
+            return_value=True,
         ):
             with patch(
-                "legacy_db.services.cont_recalculo_service._asiento_ya_existe",
-                return_value=True,
+                "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
+                return_value=plan.data_fingerprint,
             ):
-                with patch(
-                    "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
-                    return_value=plan.data_fingerprint,
-                ):
-                    resultado = apply(
-                        plan.base_empresa,
-                        str(plan.dry_run_id),
-                        "tester",
-                        tiene_permiso_corregir=True,
-                    )
+                resultado = apply(
+                    plan.base_empresa,
+                    str(plan.dry_run_id),
+                    "tester",
+                    tiene_permiso_corregir=True,
+                )
 
         insert_asiento = [
             c for c in cur_tx.execute.call_args_list
@@ -305,6 +302,7 @@ class ContRecalculoApplyTestCase(TestCase):
         ]
         self.assertEqual(len(insert_asiento), 0)
         self.assertTrue(resultado["ok"])
+        self.assertEqual(resultado.get("backups"), {})
 
     @override_settings(ENVIRONMENT="production")
     @patch("legacy_db.services.cont_recalculo_service.get_mysql_pool")
@@ -350,23 +348,19 @@ class ContRecalculoApplyTestCase(TestCase):
         mock_pool.return_value = pool
 
         with patch(
-            "legacy_db.services.cont_recalculo_service._crear_backups",
-            return_value={"cont_asiento": "cont_asiento_bkp_x"},
+            "legacy_db.services.cont_recalculo_service._asiento_ya_existe",
+            return_value=True,
         ):
             with patch(
-                "legacy_db.services.cont_recalculo_service._asiento_ya_existe",
-                return_value=True,
+                "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
+                return_value=plan.data_fingerprint,
             ):
-                with patch(
-                    "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
-                    return_value=plan.data_fingerprint,
-                ):
-                    resultado = apply(
-                        plan.base_empresa,
-                        str(plan.dry_run_id),
-                        "tester",
-                        tiene_permiso_corregir=True,
-                    )
+                resultado = apply(
+                    plan.base_empresa,
+                    str(plan.dry_run_id),
+                    "tester",
+                    tiene_permiso_corregir=True,
+                )
 
         insert_asiento = [
             c for c in cur_tx.execute.call_args_list
@@ -471,7 +465,7 @@ class ContRecalculoApplyTestCase(TestCase):
         conn_tx_cm.__exit__ = MagicMock(return_value=False)
 
         pool = MagicMock()
-        pool.get_connection.side_effect = [conn_ro, conn_tx_cm, conn_tx_cm]
+        pool.get_connection.side_effect = [conn_ro, conn_tx_cm]
         mock_pool.return_value = pool
 
         orden_aplicacion: list[str] = []
@@ -493,39 +487,134 @@ class ContRecalculoApplyTestCase(TestCase):
             return_value="Deudor",
         ):
             with patch(
-                "legacy_db.services.cont_recalculo_service._crear_backups",
-                return_value={
-                    "cont_asiento": "cont_asiento_bkp_x",
-                    "cont_ejercicio_saldo_cta": "cont_ejercicio_saldo_cta_bkp_x",
-                },
+                "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
+                return_value=plan.data_fingerprint,
             ):
                 with patch(
-                    "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
-                    return_value=plan.data_fingerprint,
+                    "legacy_db.services.cont_recalculo_service._fila_saldo_existe",
+                    return_value=False,
                 ):
                     with patch(
-                        "legacy_db.services.cont_recalculo_service._fila_saldo_existe",
-                        return_value=False,
+                        "legacy_db.services.cont_recalculo_service._aplicar_item_concepto",
+                        side_effect=_concepto,
                     ):
                         with patch(
-                            "legacy_db.services.cont_recalculo_service._aplicar_item_concepto",
-                            side_effect=_concepto,
+                            "legacy_db.services.cont_recalculo_service._aplicar_item_saldo",
+                            side_effect=_saldo,
                         ):
                             with patch(
-                                "legacy_db.services.cont_recalculo_service._aplicar_item_saldo",
-                                side_effect=_saldo,
+                                "legacy_db.services.cont_recalculo_service._insertar_log_detalle"
                             ):
-                                with patch(
-                                    "legacy_db.services.cont_recalculo_service._insertar_log_detalle"
-                                ):
-                                    apply(
-                                        plan.base_empresa,
-                                        str(plan.dry_run_id),
-                                        "tester",
-                                        tiene_permiso_corregir=True,
-                                    )
+                                apply(
+                                    plan.base_empresa,
+                                    str(plan.dry_run_id),
+                                    "tester",
+                                    tiene_permiso_corregir=True,
+                                )
 
         self.assertEqual(
             orden_aplicacion,
             ["concepto", "insert_saldo", "update_saldo"],
         )
+
+    @override_settings(ENVIRONMENT="development")
+    @patch("legacy_db.services.cont_recalculo_service.resolver_politica")
+    @patch("legacy_db.services.cont_recalculo_service._apply_iter")
+    def test_apply_on_progress_recibe_eventos(self, mock_iter, mock_politica):
+        mock_politica.return_value = _politica_base()
+        plan = _crear_plan([_item_saldo(10, 1, "100.00", "110.00")])
+        mock_iter.return_value = iter(
+            [
+                {
+                    "type": "progress",
+                    "phase": "write",
+                    "current": 1,
+                    "total": 1,
+                    "label": "saldo_ejercicio_vs_diario (1/1)",
+                },
+                {
+                    "type": "result",
+                    "payload": {
+                        "ok": True,
+                        "lote_id": "L1",
+                        "filas_aplicadas": 1,
+                        "mensaje": "Corrección aplicada correctamente.",
+                        "backups": {},
+                    },
+                },
+            ]
+        )
+        eventos: list[dict] = []
+        resultado = apply(
+            plan.base_empresa,
+            str(plan.dry_run_id),
+            "tester",
+            tiene_permiso_corregir=True,
+            on_progress=eventos.append,
+        )
+        self.assertEqual(len(eventos), 1)
+        self.assertEqual(eventos[0]["phase"], "write")
+        self.assertTrue(resultado["ok"])
+        mock_iter.assert_called_once()
+
+    @override_settings(ENVIRONMENT="production")
+    @patch("legacy_db.services.cont_recalculo_service.get_mysql_pool")
+    @patch("legacy_db.services.cont_recalculo_service.resolver_politica")
+    def test_apply_iter_emite_fases_progreso(self, mock_politica, mock_pool):
+        mock_politica.return_value = _politica_base()
+        items = [_item_saldo(10, 1, "100.00", "110.00")]
+        plan = _crear_plan(items)
+
+        conn_ro = MagicMock()
+        dict_ro = MagicMock()
+        dict_ro.fetchone.return_value = {"saldo_ejercicio_cta": "100.00"}
+        conn_ro.cursor.return_value = dict_ro
+        conn_ro.__enter__ = MagicMock(return_value=conn_ro)
+        conn_ro.__exit__ = MagicMock(return_value=False)
+
+        conn_tx = MagicMock()
+        cur_tx = MagicMock()
+        dict_tx = MagicMock()
+
+        import MySQLdb.cursors as mysql_cursors
+
+        def _cursor(*args, **kwargs):
+            if args and args[0] is mysql_cursors.DictCursor:
+                return dict_tx
+            return cur_tx
+
+        conn_tx.cursor.side_effect = _cursor
+        conn_tx.__enter__ = MagicMock(return_value=conn_tx)
+        conn_tx.__exit__ = MagicMock(return_value=False)
+
+        pool = MagicMock()
+        pool.get_connection.side_effect = [conn_ro, conn_tx]
+        mock_pool.return_value = pool
+
+        with patch(
+            "legacy_db.services.cont_recalculo_service._calcular_fingerprint_desde_legacy",
+            return_value=plan.data_fingerprint,
+        ):
+            with patch(
+                "legacy_db.services.cont_recalculo_service._aplicar_item_saldo",
+                return_value=None,
+            ):
+                with patch(
+                    "legacy_db.services.cont_recalculo_service._insertar_log_detalle"
+                ):
+                    eventos = list(
+                        _apply_iter(
+                            plan.base_empresa,
+                            str(plan.dry_run_id),
+                            "tester",
+                            tiene_permiso_corregir=True,
+                        )
+                    )
+
+        phases = [e["phase"] for e in eventos if e.get("type") == "progress"]
+        self.assertNotIn("backup", phases)
+        self.assertIn("write", phases)
+        self.assertIn("finalize", phases)
+        self.assertEqual(eventos[-1]["type"], "result")
+        self.assertTrue(eventos[-1]["payload"]["ok"])
+        self.assertEqual(eventos[-1]["payload"].get("backups"), {})

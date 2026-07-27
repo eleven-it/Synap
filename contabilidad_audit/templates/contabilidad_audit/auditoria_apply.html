@@ -53,7 +53,7 @@
             <p class="font-semibold">Esta es la única acción que escribe en MySQL legacy.</p>
             <p class="mt-1">
                 El diagnóstico y el tablero <strong>no</strong> modifican asientos ni saldos. Solo al marcar la confirmación
-                y pulsar aplicar se ejecuta DML (con backup y log).
+                y pulsar aplicar se ejecuta DML (con log transaccional).
             </p>
         </div>
 
@@ -121,15 +121,16 @@
 
         <div class="bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-sm text-amber-900">
             Requiere permiso <code>contabilidad.auditoria.corregir</code> (también en development para pruebas).
-            Se creará backup previo y log transaccional
+            Se registrará log transaccional
             (<code>cont_audit_correccion_lote</code> / <code>cont_audit_correccion</code>).
         </div>
 
         {% if not resultado_apply %}
+        {# v1 REI: apply sin stream NDJSON; modal indeterminado synap-post-loading #}
         <form method="post" action="{% url 'contabilidad_audit:auditoria_apply_ejecutar' %}"
               class="synap-post-loading bg-white dark:bg-slate-900 rounded-2xl border p-6 space-y-5"
               data-synap-loading-title="Aplicando corrección contable"
-              data-synap-loading-subtitle="Escribiendo en MySQL legacy con backup previo. No cierres esta ventana.">
+              data-synap-loading-subtitle="Escribiendo en MySQL legacy. No cierres esta ventana.">
             {% csrf_token %}
             <input type="hidden" name="dry_run_id" value="{{ dry_run_id }}">
             <input type="hidden" name="base_empresa" value="{{ base_empresa }}">

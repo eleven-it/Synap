@@ -1077,6 +1077,79 @@ def auditoria_apply_confirmacion(request):
     return render(request, "contabilidad_audit/auditoria_apply.html", ctx)
 
 
+def _confirmacion_apply_ok(valor) -> bool:
+    if valor is True:
+        return True
+    if isinstance(valor, str):
+        return valor.lower() in ("on", "true", "1", "yes")
+    return False
+
+
+def _confirmar_reapertura_ok(valor) -> bool:
+    if valor is True:
+        return True
+    if isinstance(valor, str):
+        return valor.lower() in ("on", "true", "1", "yes")
+    return False
+
+
+def _parse_apply_body(request) -> tuple[dict, bool]:
+    content_type = (request.content_type or "").lower()
+    accept = (request.headers.get("Accept") or "").lower()
+
+    if "application/json" in content_type:
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except json.JSONDecodeError as exc:
+            raise ValueError("JSON inválido en el cuerpo de la solicitud.") from exc
+        stream = bool(payload.get("stream")) or "application/x-ndjson" in accept
+        return payload, stream
+
+    payload = {
+        "dry_run_id": request.POST.get("dry_run_id"),
+        "base_empresa": request.POST.get("base_empresa"),
+        "modo": request.POST.get("modo") or "general",
+        "confirmacion_entiendo": request.POST.get("confirmacion_entiendo"),
+        "confirmar_reapertura": request.POST.get("confirmar_reapertura"),
+    }
+    stream = request.POST.get("stream") == "1" or "application/x-ndjson" in accept
+    return payload, stream
+
+
+def _stream_apply_ndjson(
+    base_empresa: str,
+    dry_run_id: str,
+    usuario: str,
+    *,
+    confirmar_reapertura: bool = False,
+    autorizador: str = "",
+):
+    from legacy_db.services.cont_recalculo_service import (
+        CorreccionContableError,
+        _apply_iter,
+    )
+
+    try:
+        for evento in _apply_iter(
+            base_empresa,
+            dry_run_id,
+            usuario,
+            tiene_permiso_corregir=True,
+            confirmar_reapertura=confirmar_reapertura,
+            autorizador=autorizador,
+        ):
+            if evento.get("type") == "progress":
+                yield json.dumps(evento, ensure_ascii=False) + "\n"
+            elif evento.get("type") == "result":
+                fin = {"type": "done", **evento["payload"]}
+                yield json.dumps(fin, ensure_ascii=False) + "\n"
+    except CorreccionContableError as exc:
+        yield json.dumps({"type": "error", "error": str(exc)}, ensure_ascii=False) + "\n"
+    except Exception as exc:
+        logger.exception("Error aplicando corrección (stream) base=%s", base_empresa)
+        yield json.dumps({"type": "error", "error": str(exc)}, ensure_ascii=False) + "\n"
+
+
 @administranet_login_required
 @tiene_permiso(PERMISO_CORREGIR)
 @require_POST
@@ -1085,25 +1158,48 @@ def auditoria_apply(request):
     POST /contabilidad/auditoria/apply/ejecutar/
 
     Ejecuta ``apply()`` con confirmación explícita (checkbox). No disponible por GET.
+    Con ``stream: true`` o ``Accept: application/x-ndjson`` responde NDJSON de progreso.
     """
     from legacy_db.services.cont_recalculo_service import CorreccionContableError, apply
 
-    dry_run_id = request.POST.get("dry_run_id")
-    base_empresa = request.POST.get("base_empresa")
-    modo = request.POST.get("modo") or "general"
-    confirmacion_1 = request.POST.get("confirmacion_entiendo") == "on"
-    confirmar_reapertura = request.POST.get("confirmar_reapertura") == "on"
+    try:
+        payload, stream = _parse_apply_body(request)
+    except ValueError as exc:
+        if "application/x-ndjson" in (request.headers.get("Accept") or "").lower():
+            return StreamingHttpResponse(
+                iter([json.dumps({"type": "error", "error": str(exc)}, ensure_ascii=False) + "\n"]),
+                content_type="application/x-ndjson; charset=utf-8",
+                status=400,
+            )
+        messages.error(request, str(exc))
+        return redirect(reverse("contabilidad_audit:auditoria_dry_run"))
+
+    dry_run_id = payload.get("dry_run_id")
+    base_empresa = payload.get("base_empresa")
+    modo = payload.get("modo") or "general"
+    confirmacion_1 = _confirmacion_apply_ok(payload.get("confirmacion_entiendo"))
+    confirmar_reapertura = _confirmar_reapertura_ok(payload.get("confirmar_reapertura"))
 
     if not dry_run_id or not base_empresa:
-        messages.error(request, "Faltan parámetros obligatorios (dry_run_id, base_empresa).")
+        msg = "Faltan parámetros obligatorios (dry_run_id, base_empresa)."
+        if stream:
+            return StreamingHttpResponse(
+                iter([json.dumps({"type": "error", "error": msg}, ensure_ascii=False) + "\n"]),
+                content_type="application/x-ndjson; charset=utf-8",
+                status=400,
+            )
+        messages.error(request, msg)
         return redirect(reverse("contabilidad_audit:auditoria_dry_run"))
 
     if not confirmacion_1:
-        messages.error(
-            request,
-            "Debe marcar la confirmación: entiende que se modificarán datos contables.",
-        )
-        # Confirmación fallida: volver al diagnóstico (modal en dry-run) o a apply REI.
+        msg = "Debe marcar la confirmación: entiende que se modificarán datos contables."
+        if stream:
+            return StreamingHttpResponse(
+                iter([json.dumps({"type": "error", "error": msg}, ensure_ascii=False) + "\n"]),
+                content_type="application/x-ndjson; charset=utf-8",
+                status=400,
+            )
+        messages.error(request, msg)
         if modo == "rei":
             return redirect(
                 f"{reverse('contabilidad_audit:auditoria_apply')}"
@@ -1114,10 +1210,33 @@ def auditoria_apply(request):
     try:
         plan = PlanCorreccion.objects.get(dry_run_id=dry_run_id)
     except PlanCorreccion.DoesNotExist:
-        messages.error(request, "No existe un plan dry-run con ese identificador.")
+        msg = "No existe un plan dry-run con ese identificador."
+        if stream:
+            return StreamingHttpResponse(
+                iter([json.dumps({"type": "error", "error": msg}, ensure_ascii=False) + "\n"]),
+                content_type="application/x-ndjson; charset=utf-8",
+                status=404,
+            )
+        messages.error(request, msg)
         return redirect(reverse("contabilidad_audit:auditoria_dry_run"))
 
     usuario = _usuario_identificador(request)
+
+    if stream and modo != "rei":
+        response = StreamingHttpResponse(
+            _stream_apply_ndjson(
+                base_empresa,
+                str(dry_run_id),
+                usuario,
+                confirmar_reapertura=confirmar_reapertura,
+                autorizador=usuario,
+            ),
+            content_type="application/x-ndjson; charset=utf-8",
+        )
+        response["Cache-Control"] = "no-cache"
+        response["X-Accel-Buffering"] = "no"
+        return response
+
     try:
         resultado = apply(
             base_empresa=base_empresa,
@@ -1580,24 +1699,6 @@ def _listar_lotes_correccion(base_empresa: str) -> list[dict]:
     lotes: list[dict] = []
     for row in rows:
         dry_run_id = str(row[4] or "")
-        backups_raw = row[6]
-        tiene_backups = False
-        if backups_raw:
-            try:
-                backups_data = (
-                    json.loads(backups_raw)
-                    if isinstance(backups_raw, (str, bytes, bytearray))
-                    else backups_raw
-                )
-                tiene_backups = isinstance(backups_data, dict) and bool(backups_data)
-            except (TypeError, ValueError, json.JSONDecodeError):
-                tiene_backups = False
-        # Eliminación usa backup efímero: no es revertible vía rollback_lote.
-        puede_revertir = (
-            str(row[3] or "") != "revertido"
-            and dry_run_id != "eliminacion_asiento"
-            and tiene_backups
-        )
         lotes.append(
             {
                 "lote_id": str(row[0] or ""),
@@ -1606,7 +1707,7 @@ def _listar_lotes_correccion(base_empresa: str) -> list[dict]:
                 "estado": str(row[3] or ""),
                 "dry_run_id": dry_run_id,
                 "filas_correccion": int(row[5] or 0),
-                "puede_revertir": puede_revertir,
+                "puede_revertir": False,
             }
         )
     return lotes
@@ -1629,7 +1730,7 @@ def _contexto_lotes(
         "error_lotes": error,
         "permiso_corregir": PERMISO_CORREGIR,
         "puede_corregir": _tiene_permiso(user, PERMISO_CORREGIR),
-        "hay_lotes_revertibles": any(bool(l.get("puede_revertir")) for l in lotes_ctx),
+        "hay_lotes_revertibles": False,
         "tablero_url": reverse("contabilidad_audit:auditoria_tablero"),
         "dry_run_url": reverse("contabilidad_audit:auditoria_dry_run"),
         "lotes_url": reverse("contabilidad_audit:auditoria_lotes"),
@@ -1731,44 +1832,17 @@ def auditoria_lote_rollback(request, lote_id):
     """
     POST /contabilidad/auditoria/lotes/<lote_id>/rollback/
 
-    Revierte un lote aplicado vía ``rollback_lote`` (requiere permiso de corregir).
-    Los lotes de eliminación de asientos no son revertibles (backup efímero).
+    Reversión de lotes deshabilitada: las correcciones ya no generan backup de tablas.
     """
-    from legacy_db.services.cont_recalculo_service import CorreccionContableError, rollback_lote
-
     base_empresa = _base_empresa_sesion(request)
     if not base_empresa:
         messages.error(request, "No hay empresa base en la sesión.")
         return redirect(reverse("contabilidad_audit:auditoria_lotes"))
 
-    usuario = _usuario_identificador(request)
-    lote = _obtener_lote(base_empresa, lote_id)
-    if lote and str(lote.get("dry_run_id") or "") == "eliminacion_asiento":
-        messages.error(
-            request,
-            "Los lotes de eliminación de asientos no se pueden revertir: "
-            "el respaldo solo protege ante fallos durante el proceso.",
-        )
-        return redirect(reverse("contabilidad_audit:auditoria_lotes"))
-
-    try:
-        rollback_lote(
-            base_empresa,
-            lote_id,
-            usuario,
-            tiene_permiso_corregir=True,
-        )
-    except CorreccionContableError as exc:
-        messages.error(request, str(exc))
-    except Exception as exc:
-        logger.exception("Rollback lote %s base=%s", lote_id, base_empresa)
-        messages.error(request, f"Error inesperado al revertir el lote: {exc}")
-    else:
-        messages.success(
-            request,
-            f"Lote «{lote_id}» revertido correctamente desde los backups registrados.",
-        )
-
+    messages.error(
+        request,
+        "La reversión de lotes ya no está disponible: las correcciones no generan backup de tablas.",
+    )
     return redirect(reverse("contabilidad_audit:auditoria_lotes"))
 
 
@@ -1823,6 +1897,10 @@ def _parse_filtros_asientos(request, *, exigir_ejercicio: bool = True) -> dict:
     nros = _parse_nros_asiento(request.GET.get("nros_asiento", ""))
     if nros:
         filtros["nros_asiento"] = nros
+    if request.GET.get("page"):
+        filtros["page"] = int(request.GET["page"])
+    if request.GET.get("page_size"):
+        filtros["page_size"] = int(request.GET["page_size"])
     return filtros
 
 

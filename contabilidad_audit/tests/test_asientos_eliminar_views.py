@@ -162,7 +162,7 @@ class AsientosEliminarVistasTestCase(SimpleTestCase):
     def test_post_eliminar_stream_ndjson(self, mock_iter):
         mock_iter.return_value = iter(
             [
-                {"type": "progress", "phase": "backup", "current": 0, "total": 1, "label": ""},
+                {"type": "progress", "phase": "delete", "current": 1, "total": 1, "label": "Asiento 79"},
                 {
                     "type": "result",
                     "payload": {
