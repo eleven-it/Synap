@@ -224,6 +224,7 @@ PERMISOS_POR_MODULO = {
         ("reports.components", "Gestionar componentes de reportes"),
         ("reports.schedules", "Gestionar programación de reportes"),
         ("reports.ai", "Usar funcionalidades de IA para reportes"),
+        ("reports.dabra_consolidado_remitos", "Informe DABRA consolidado remitos"),
     ],
     "Usuarios": [
         ("usuarios.ver", "Ver usuarios"),

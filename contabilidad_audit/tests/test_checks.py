@@ -463,7 +463,7 @@ class ChecksSinCoberturaTestCase(SimpleTestCase):
 
     def test_integridad_anulacion_compra_pago_faltantes(self):
         cursor = MagicMock()
-        cursor.fetchall.return_value = [(Decimal("100"), "FA", "0001-00001234")]
+        cursor.fetchall.return_value = [(Decimal("100"), "FA", "0001-00001234", "")]
         cursor.fetchone.side_effect = [
             (0,),  # sin marcador
             (0, 2),  # pendientes=0, total=2
@@ -483,9 +483,49 @@ class ChecksSinCoberturaTestCase(SimpleTestCase):
         self.assertIn("falta_marcador_cuentaproveedor_cm0", result.diferencias[0].detalle["problemas"])
         self.assertIn("falta_contra_asiento", result.diferencias[0].detalle["problemas"])
         self.assertNotIn("asiento_original_no_anulado", result.diferencias[0].detalle["problemas"])
+        self.assertEqual(result.diferencias[0].detalle["TipoOP"], "")
         sql = cursor.execute.call_args_list[0][0][0]
         self.assertIn("cont_ejercicio", sql)
         self.assertEqual(cursor.execute.call_args_list[0][0][1], [1])
+
+    def test_integridad_anulacion_op_egreso_sin_marcador_ok(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [(Decimal("200"), "OP", "OP-001", "Egreso")]
+        cursor.fetchone.side_effect = [
+            (0,),  # sin marcador (VB6 no lo graba en Egreso)
+            (0, 2),  # original ya anulado
+            (Decimal("200"), Decimal("100"), Decimal("100")),  # orig_tot
+            (Decimal("200"), Decimal("100"), Decimal("100")),  # contra invierte OK
+        ]
+        ctx = _contexto(cursor)
+        result = integridad_anulacion_compra_pago(
+            "empresa",
+            {"id_ejercicio": 1},
+            _politica(),
+            ctx,
+        )
+        self.assertTrue(result.ok)
+        self.assertEqual(len(result.diferencias), 0)
+
+    def test_integridad_anulacion_op_imputacion_sin_marcador(self):
+        cursor = MagicMock()
+        cursor.fetchall.return_value = [(Decimal("300"), "OP", "OP-002", "Imputacion")]
+        cursor.fetchone.side_effect = [
+            (0,),  # sin marcador
+            (0, 2),
+            (Decimal("300"), Decimal("50"), Decimal("50")),
+            None,
+        ]
+        ctx = _contexto(cursor)
+        result = integridad_anulacion_compra_pago(
+            "empresa",
+            {"id_ejercicio": 1},
+            _politica(),
+            ctx,
+        )
+        self.assertFalse(result.ok)
+        self.assertIn("falta_marcador_cuentaproveedor_cm0", result.diferencias[0].detalle["problemas"])
+        self.assertEqual(result.diferencias[0].detalle["TipoOP"], "Imputacion")
 
     def test_integridad_anulacion_compra_pago_ok(self):
         cursor = MagicMock()

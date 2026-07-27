@@ -2439,6 +2439,43 @@ def run_stock_inv_fisico_tables_mysql(conn) -> Dict[str, Any]:
     }
 
 
+def run_cont_asiento_recalc_corrido_index_mysql(conn) -> Dict[str, Any]:
+    """
+    Índice compuesto para el recálculo set-based del corrido Libro Mayor
+    (``cont_recalculo_service._recalcular_saldo_asiento_setbased``).
+    """
+    applied: List[str] = []
+    failed: List[str] = []
+    cursor = conn.cursor()
+    idx_name = "idx_cont_asiento_recalc_corrido"
+    try:
+        if not indice_existe(cursor, "cont_asiento", idx_name):
+            cursor.execute(
+                "CREATE INDEX `{}` ON `cont_asiento` "
+                "(id_ejercicio, id_pc, fecha_asiento, nro_asiento, id_asiento)".format(idx_name)
+            )
+            _append_migration(applied, failed, True, f"CREATE INDEX {idx_name} en cont_asiento")
+        else:
+            _append_migration(applied, failed, True, f"{idx_name} ya existe (omitido)")
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.exception("run_cont_asiento_recalc_corrido_index_mysql: %s", e)
+        _append_migration(applied, failed, False, idx_name, str(e))
+    finally:
+        try:
+            cursor.close()
+        except Exception:
+            pass
+
+    return {
+        "success": len(failed) == 0,
+        "message": mensaje_final(applied, failed),
+        "migrations_applied": applied,
+        "migrations_failed": failed,
+    }
+
+
 def run_contabilidad_audit_correccion_log_mysql(conn) -> Dict[str, Any]:
     """
     Crea ``cont_audit_correccion_lote`` y ``cont_audit_correccion`` en la base de la empresa.
@@ -2592,6 +2629,17 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         ),
         "risk": "bajo",
         "run": run_synap_permisos_tables_mysql,
+    },
+    {
+        "id": "cont_asiento_recalc_corrido_index",
+        "title": "Contabilidad — índice recálculo corrido Libro Mayor",
+        "description": (
+            "Crea ``idx_cont_asiento_recalc_corrido`` en ``cont_asiento`` "
+            "(id_ejercicio, id_pc, fecha_asiento, nro_asiento, id_asiento) "
+            "para acelerar el recálculo set-based de ``saldo_asiento``."
+        ),
+        "risk": "bajo",
+        "run": run_cont_asiento_recalc_corrido_index_mysql,
     },
     {
         "id": "contabilidad_audit_correccion_log",

@@ -43,7 +43,7 @@ def _modelo_a_dict(politica: PoliticaAuditoriaContable) -> dict[str, Any]:
 
 def _defaults_globales() -> dict[str, Any]:
     return {
-        "tratamiento_anulados": "excluir",
+        "tratamiento_anulados": "incluir_neutralizado",
         "politica_centavo": "diario_manda",
         "prefijos_cuenta": dict(PREFIJOS_CUENTA_DEFAULT),
         "ejercicios_cerrados": "no_tocar",

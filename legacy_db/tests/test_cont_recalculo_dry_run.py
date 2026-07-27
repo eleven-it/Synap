@@ -14,8 +14,11 @@ from legacy_db.services.cont_recalculo_service import (
     CHECK_REI,
     CHECKS_INCLUIDOS,
     PLAN_TTL_MIN,
+    _acumular_saldos_corridos,
+    _movimientos_diario,
     calcular_data_fingerprint,
     dry_run,
+    recalcular_saldo_asiento_cuenta,
 )
 
 
@@ -340,3 +343,110 @@ class ContRecalculoDryRunTestCase(TestCase):
                 dry_run_id=plan.dry_run_id,
             )
         self.assertIn("expiró", str(ctx.exception))
+
+
+class ContRecalculoMovimientosDiarioTestCase(TestCase):
+    def _mock_repo(self):
+        conn = MagicMock()
+        cursor = MagicMock()
+        cursor.fetchall.return_value = []
+        conn.cursor.return_value = cursor
+        repo = MagicMock()
+        repo.cur.return_value = cursor
+        return repo, cursor
+
+    def test_movimientos_diario_excluir_filtra_anulados(self):
+        repo, cursor = self._mock_repo()
+        _movimientos_diario(repo, [], tratamiento_anulados="excluir")
+        sql = cursor.execute.call_args[0][0]
+        self.assertIn("COALESCE(anulado, 'No') <> 'Si'", sql)
+
+    def test_movimientos_diario_incluir_neutralizado_sin_filtro_anulado(self):
+        repo, cursor = self._mock_repo()
+        _movimientos_diario(repo, [], tratamiento_anulados="incluir_neutralizado")
+        sql = cursor.execute.call_args[0][0]
+        self.assertNotIn("anulado", sql.lower())
+
+
+class ContRecalculoLibroMayorTestCase(TestCase):
+    def test_acumular_saldos_corridos_acreedor_incluye_anulado(self):
+        """Libro Mayor: el corrido siempre suma anulados (regla canónica)."""
+        filas = [
+            {"id_asiento": 1, "debe_asiento": "0", "haber_asiento": "100", "anulado": "No"},
+            {"id_asiento": 2, "debe_asiento": "0", "haber_asiento": "50", "anulado": "Si"},
+            {"id_asiento": 3, "debe_asiento": "20", "haber_asiento": "0", "anulado": "No"},
+        ]
+        resultado = _acumular_saldos_corridos(filas, "Acreedor")
+        self.assertEqual(
+            resultado,
+            [
+                (1, Decimal("100.00")),
+                (2, Decimal("150.00")),  # anulado también avanza el corrido
+                (3, Decimal("130.00")),
+            ],
+        )
+
+    def test_saldo_corrido_acreedor_incluye_renglon_anulado(self):
+        """Delegación set-based: staging + UPDATE JOIN (sin UPDATE por fila)."""
+        cur = MagicMock()
+        dict_cur = MagicMock()
+        dict_cur.fetchall.return_value = [
+            {
+                "id_asiento": 1,
+                "id_pc": 28,
+                "id_ejercicio": 1,
+                "debe_asiento": "0",
+                "haber_asiento": "100",
+                "saldo_pc": "Acreedor",
+            },
+            {
+                "id_asiento": 2,
+                "id_pc": 28,
+                "id_ejercicio": 1,
+                "debe_asiento": "0",
+                "haber_asiento": "50",
+                "saldo_pc": "Acreedor",
+            },
+            {
+                "id_asiento": 3,
+                "id_pc": 28,
+                "id_ejercicio": 1,
+                "debe_asiento": "20",
+                "haber_asiento": "0",
+                "saldo_pc": "Acreedor",
+            },
+        ]
+        cur.rowcount = 3
+
+        actualizadas = recalcular_saldo_asiento_cuenta(
+            cur,
+            dict_cur,
+            28,
+            1,
+            tratamiento_anulados="excluir",  # se ignora: corrido LM siempre incluye anulados
+        )
+
+        self.assertEqual(actualizadas, 3)
+        sqls = [llamada.args[0] for llamada in cur.execute.call_args_list]
+        self.assertTrue(any("CREATE TEMPORARY TABLE tmp_lm_saldos" in s for s in sqls))
+        self.assertTrue(any("INSERT INTO tmp_lm_saldos" in s for s in sqls))
+        self.assertTrue(
+            any("UPDATE cont_asiento a" in s and "JOIN tmp_lm_saldos" in s for s in sqls)
+        )
+        self.assertFalse(any("WHERE id_asiento=%s" in s for s in sqls))
+        insert_params = next(
+            llamada.args[1]
+            for llamada in cur.execute.call_args_list
+            if llamada.args and "INSERT INTO tmp_lm_saldos" in llamada.args[0]
+        )
+        self.assertEqual(
+            insert_params,
+            [
+                1,
+                "100.00",
+                2,
+                "150.00",
+                3,
+                "130.00",
+            ],
+        )
