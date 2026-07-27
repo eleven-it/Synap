@@ -386,6 +386,32 @@ def _clasificacion_cantidad_unidades_desde_post(
     return int(d)
 
 
+def _clasificacion_tiene_prefijo_en_post(
+    post,
+    id_art: int,
+    prefijo: str,
+    id_operario: int | None = None,
+    *,
+    id_turno: int | None = None,
+    id_maquina: int | None = None,
+) -> bool:
+    """True si el POST incluye claves docenas/unidades/legacy para el prefijo."""
+    if id_operario is not None and id_turno is not None and id_maquina is not None:
+        base = f"{prefijo}_{id_art}_op_{id_operario}_turno_{id_turno}_maq_{id_maquina}"
+        doc_key = f"{base}_docenas"
+        uni_key = f"{base}_unidades"
+        legacy_key = base
+    elif id_operario is not None:
+        doc_key = f"{prefijo}_{id_art}_op_{id_operario}_docenas"
+        uni_key = f"{prefijo}_{id_art}_op_{id_operario}_unidades"
+        legacy_key = f"{prefijo}_{id_art}_op_{id_operario}"
+    else:
+        doc_key = f"{prefijo}_{id_art}_docenas"
+        uni_key = f"{prefijo}_{id_art}_unidades"
+        legacy_key = f"{prefijo}_{id_art}"
+    return doc_key in post or uni_key in post or legacy_key in post
+
+
 def _clasificacion_filas_desde_post(post) -> List[tuple]:
     """Tuplas (id_articulo, id_operario, id_turno, id_maquina) en POST de clasificación."""
     import re
@@ -7011,15 +7037,24 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
             atribuible = atribuible_por_celda.get(clave_celda, Decimal("0"))
             extra_rest = extra_restante_por_art.get(id_art, Decimal("0"))
             max_clasificable = _max_clasificable_celda(atribuible, extra_rest)
-            if cant_2da + cant_scrap > max_clasificable:
+            if _clasificacion_tiene_prefijo_en_post(
+                request.POST, id_art, "semi", id_operario, **qty_kwargs
+            ):
+                cant_semi = Decimal(
+                    _clasificacion_cantidad_unidades_desde_post(
+                        request.POST, id_art, "semi", id_operario, **qty_kwargs
+                    )
+                )
+            else:
+                cant_semi = max(Decimal("0"), atribuible - cant_2da - cant_scrap)
+            if cant_semi + cant_2da + cant_scrap > max_clasificable:
                 dj_messages.error(
                     request,
                     f"Exceso operario {id_operario} artículo {id_art} turno {id_turno_ef}: "
-                    f"2da+desperdicio ({cant_2da + cant_scrap:g}) supera lo clasificable "
+                    f"semi+2da+desperdicio ({cant_semi + cant_2da + cant_scrap:g}) supera lo clasificable "
                     f"({max_clasificable:g}, incluye extra producción). Fila ignorada.",
                 )
                 continue
-            cant_semi = max(Decimal("0"), max_clasificable - cant_2da - cant_scrap)
             if cant_semi <= 0 and cant_2da <= 0 and cant_scrap <= 0:
                 continue
             total_celda = cant_semi + cant_2da + cant_scrap

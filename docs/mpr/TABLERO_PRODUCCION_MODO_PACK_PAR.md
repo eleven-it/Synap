@@ -36,9 +36,9 @@ componente BOM (base del envío a producción)."*
 
 ## Columnas por modo
 
-- **Par:** Artículo (solo nombre) · Pedido · Reserva · **Urgente** · Fabricando ·
+- **Par:** Artículo (`N` listados; se actualiza con el buscador) · Pedido · Reserva · **Urgente** · Fabricando ·
   Producido · 2da Selección · Semi Elaborado · Desperdicio · Total · Enviar.
-- **Pack:** Artículo (solo nombre) · Fecha entrega · Pedido · Reserva · **Urgente** ·
+- **Pack:** Artículo (`N` listados; se actualiza con el buscador) · Fecha entrega · Pedido · Reserva · **Urgente** ·
   Terminado (stock del pack).
 
 ### Indicadores Fabricando (solo modo Par)
