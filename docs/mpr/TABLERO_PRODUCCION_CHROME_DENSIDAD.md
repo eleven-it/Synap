@@ -50,8 +50,9 @@ Misma barra densa en:
 2. `parte_produccion.html`
 3. `clasificacion_encabezado.html` (+ sin migas en `clasificacion_produccion.html`)
 4. `maquinas_carga_articulos.html` (Asignar artículo a máquina — config planta; sin migas; filtros búsqueda/línea en chrome; chips de artículo en formato multiselección/`tags-filter`, color púrpura)
+5. `armado_tablero.html` (Armado 1ra/2da vista tablero — sin migas; sin Desde/Hasta/Marcas/Filtrar/Solo con resta ni KPI cabecera; búsqueda cliente; Docenas|Pares `variant=dark`; atajos Tablero/Imputación/Carrito; CTA **Ejecutar armado** emerald en 1ra; `chrome_nav_flujo` con `current=armado`)
 
-Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual; en Asignar artículo muestra los cuatro atajos).
+Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual; en Asignar artículo muestra los cuatro atajos; en Armado muestra los cuatro atajos del flujo planta).
 
 | Destino | Color | Ícono |
 |---------|-------|-------|

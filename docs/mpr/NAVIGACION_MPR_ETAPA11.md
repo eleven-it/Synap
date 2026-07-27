@@ -13,7 +13,7 @@ Priorizar el **tablero de producción consolidado** como entrada y flujo operati
 |-----------|----------|-----|
 | Demanda / stock por componente | Tablero de producción | `/mpr/tablero-produccion/` |
 | Enviar a fabricar | Columna Enviar (tablero) | POST `/mpr/tablero-produccion/enviar/` |
-| Registrar producido | Parte de producción | `/mpr/parte-produccion/` |
+| Registrar producido | Parte de producción (Carga) | `/mpr/parte-produccion/` |
 | Clasificar salida (control de calidad) | Control de calidad | `/mpr/clasificacion-produccion/` |
 | Armado | Armado | `/mpr/armado/` |
 | KPIs / urgencias | Tablero de control | `/mpr/tablero/` |
@@ -25,7 +25,7 @@ Ver catálogo: [REPORTES_MPR.md](./REPORTES_MPR.md).
 
 Las URLs `/mpr/opt/`, `/mpr/wizard/` y `/mpr/demanda/ventana-pack/` pueden seguir existiendo en código pero **no** aparecen en el menú. Requieren tablas `lista_produccion_*` eliminadas en bases migradas.
 
-**Canon UX (25/07/2026 · chrome compartido 26/07/2026):** el flujo diario de planta es **Tablero → Parte → Control de calidad**, con la misma barra densa `slate-800` (sin migas; atajos coloreados: prod emerald · parte púrpura · CC teal · KPI ámbar). Detalle: [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md). La UI OPT/ventana_pack está **deprecada** como referencia visual y como atajo del tablero, salvo procesos MPR no cubiertos por esas tres pantallas (p. ej. armado).
+**Canon UX (25/07/2026 · chrome compartido 26/07/2026):** el flujo diario de planta es **Tablero → Parte → Control de calidad**, con la misma barra densa `slate-800` (sin migas; atajos coloreados: prod emerald · parte púrpura · CC teal · KPI ámbar). **Armado** (`/mpr/armado/?vista=tablero`) comparte el mismo chrome en la vista grilla. Detalle: [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md). La UI OPT/ventana_pack está **deprecada** como referencia visual y como atajo del tablero, salvo procesos MPR no cubiertos por esas tres pantallas (p. ej. armado).
 
 ## Cambios de menú (`core/utils/utils.py` → `APPS_MENU`)
 

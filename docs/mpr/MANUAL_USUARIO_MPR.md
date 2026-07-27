@@ -71,7 +71,7 @@ Hay dos formas de cargar lo producido.
 
 ### 4.1 Parte de producción (supervisor)
 
-**Menú:** Producción → Parte de producción.
+**Menú:** Producción → Parte de producción (Carga).
 
 1. Elija **Fecha** (y opcionalmente línea/máquina) → **Cargar grilla**.
 2. Use **Buscar artículo** en el encabezado para filtrar en vivo la grilla ya cargada (no recarga).

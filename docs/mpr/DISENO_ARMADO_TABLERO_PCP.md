@@ -131,4 +131,5 @@ flowchart LR
 | Presentación | `mpr/presentacion_operativa.py` → `enriquecer_filas_tablero_armado` |
 | Vista | `mpr/views.py` → `ArmadoSurtidoView` + `vista=tablero\|pos` |
 | Template | `mpr/templates/mpr/armado_tablero.html` |
+| Chrome UI | Misma barra densa `slate-800` que Tablero/Parte/CC ([TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) §3.1); vista carrito (`armado_surtido.html`) conserva layout POS propio |
 | Ejecución | `ejecutar_lote_armado` (sin cambios de contrato) |
