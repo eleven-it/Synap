@@ -186,8 +186,9 @@ class TransicionLoteOperarioTests(SimpleTestCase):
         sql = cursor.execute.call_args[0][0]
         self.assertIn("id_operario", sql)
         params = cursor.execute.call_args[0][1]
-        self.assertEqual(params[6], 3)
-        self.assertEqual(params[7], "García")
+        self.assertEqual(params[7], 3)
+        self.assertEqual(params[8], "García")
+        self.assertIn("cantidad_extra", sql)
 
 
 class ClasificacionOperarioServicioTests(SimpleTestCase):
@@ -227,9 +228,9 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
             "empresa92", date(2026, 7, 8), 1,
         )
         self.assertEqual(len(grilla["filas"]), 2)
-        pendientes = {f["id_operario"]: f["disponible"] for f in grilla["filas"]}
-        self.assertEqual(pendientes[5], 36.0)
-        self.assertEqual(pendientes[6], 36.0)
+        pendientes = {f["id_operario"]: f["max_clasificable"] for f in grilla["filas"]}
+        self.assertEqual(pendientes[5], 64.0)
+        self.assertEqual(pendientes[6], 64.0)
     @patch(
         "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
         return_value={(10, 5): {"semi": Decimal("48"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
@@ -240,7 +241,7 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
     )
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
-    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 100.0}}, {}))
+    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 0.0}}, {}))
     def test_grilla_ver_roster_muestra_completadas(
         self, _pivot, _fetch, mock_celdas, _cls, _desglose,
     ):
@@ -289,7 +290,7 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
             "empresa92", date(2026, 7, 8), 1,
         )
         self.assertEqual(len(grilla["filas"]), 1)
-        self.assertTrue(grilla["filas"][0]["solo_lectura"])
+        self.assertFalse(grilla["filas"][0]["solo_lectura"])
         self.assertEqual(grilla["bloqueos"], [])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
