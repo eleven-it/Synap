@@ -285,12 +285,9 @@
                                         <div class="tags-filter-container relative flex h-8 min-h-8 flex-nowrap items-center gap-1 overflow-x-auto overflow-y-hidden rounded-lg border border-slate-300 bg-white px-1.5 shadow-sm focus-within:border-purple-500 focus-within:ring-2 focus-within:ring-purple-500/25 dark:border-slate-600 dark:bg-slate-900 dark:focus-within:border-purple-400 dark:focus-within:ring-purple-500/40"
                                              @click="$el.querySelector('.tags-input')?.focus()">
                                             <template x-for="art in m.articulos" :key="art.id_articulo">
-                                                <span class="inline-flex max-w-[12rem] shrink-0 items-center gap-0.5 rounded-full bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-                                                      :title="(codigoCorto(art) + ' ' + (art.descripcion_articulo || '')).trim()">
-                                                    <span class="min-w-0 truncate">
-                                                        <span class="font-semibold" x-text="codigoCorto(art)"></span>
-                                                        <span class="ml-0.5 font-normal opacity-90" x-text="art.descripcion_articulo"></span>
-                                                    </span>
+                                                <span class="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full bg-purple-100 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                                                    <span class="font-semibold" x-text="codigoCorto(art)"></span>
+                                                    <span class="font-normal opacity-90" x-text="art.descripcion_articulo"></span>
                                                     <button type="button"
                                                             @click.stop="quitar(m, art)"
                                                             class="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-purple-700 transition-colors hover:bg-purple-200 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 dark:text-purple-200 dark:hover:bg-purple-800 dark:hover:text-red-300"
