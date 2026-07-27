@@ -4986,7 +4986,7 @@ class TableroProduccionView(MprLoginRequiredMixin, MprTableroVerMixin, TemplateV
             "fecha_desde": to_date_or_none(fecha_desde_str) if fecha_desde_str else None,
             "fecha_hasta": to_date_or_none(fecha_hasta_str) if fecha_hasta_str else None,
             "solo_urgente": solo_urgente,
-            "limit": 200,
+            "limit": 500,
             "marcas_incluidos": marcas_incluidos or None,
         }
         if modo_tablero == "pack":
