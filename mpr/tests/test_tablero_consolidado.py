@@ -69,11 +69,12 @@ def _desc_map_simple():
 # ---------------------------------------------------------------------------
 
 class TestCalcularFabricandoComponente(SimpleTestCase):
-    """Fabricando no repunta al clasificar fuera de Producido."""
+    """Fabricando: Producción no acredita; Semi/2da/Scrap/parte/CC sí."""
 
-    def test_solo_producido_descuenta_envios(self):
+    def test_stock_produccion_no_descuenta_envios(self):
+        """Stock preexistente en Producción no anula Fabricando tras Enviar."""
         stock = {TIPO_MPR_PRODUCCION: 286.0}
-        self.assertAlmostEqual(_calcular_fabricando_componente(300.0, stock), 14.0)
+        self.assertAlmostEqual(_calcular_fabricando_componente(300.0, stock), 300.0)
 
     def test_clasificacion_no_repunta_fabricando(self):
         stock = {
@@ -118,9 +119,19 @@ class TestCalcularFabricandoComponente(SimpleTestCase):
             0.0,
         )
 
+    def test_gmel_envio_con_stock_produccion_preexistente(self):
+        """Caso planta: Producción 288 + Semi/2da; tras Enviar 78 queda cupo de parte."""
+        stock = {
+            TIPO_MPR_PRODUCCION: 288.0,
+            TIPO_MPR_SEMI_ELABORADO: 38.0,
+            TIPO_MPR_2DA_SELECCION: 17.0,
+        }
+        # Acreditan solo Semi+2da (55); Fabricando = 78 − 55 = 23
+        self.assertAlmostEqual(_calcular_fabricando_componente(78.0, stock), 23.0)
+
 
 class TestCalcularFabricandoParaParte(SimpleTestCase):
-    """Parte usa el mismo cupo Fabricando que el tablero (incluye Semi/2da tras clasificar)."""
+    """Parte usa el mismo cupo Fabricando que el tablero."""
 
     def test_igual_a_tablero_con_semi_acreditado(self):
         stock = {
@@ -133,9 +144,9 @@ class TestCalcularFabricandoParaParte(SimpleTestCase):
             _calcular_fabricando_componente(12.0, stock),
         )
 
-    def test_con_stock_solo_produccion(self):
+    def test_con_stock_solo_produccion_no_anula_cupo(self):
         stock = {TIPO_MPR_PRODUCCION: 4.0}
-        self.assertAlmostEqual(_calcular_fabricando_para_parte(12.0, stock), 8.0)
+        self.assertAlmostEqual(_calcular_fabricando_para_parte(12.0, stock), 12.0)
 
 
 class TestCalcularPendienteComponente(SimpleTestCase):

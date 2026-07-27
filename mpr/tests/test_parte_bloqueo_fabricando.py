@@ -38,10 +38,11 @@ class TestBloqueoFabricandoConfigurable(TestCase):
         return patch("mpr.services.obtener_turno", return_value=turno)
 
     def _patches_fabricando(self, fab_map, *, stock_extra=None, acum_parte=None):
+        # Prod no acredita: el delta envío−fab va a Semi para armar el cupo deseado.
         enviado_map = {art: Decimal(str(fab + 10)) for art, fab in fab_map.items()}
         stock = {}
         for art, fab in fab_map.items():
-            row = {TIPO_MPR_PRODUCCION: float(enviado_map[art] - Decimal(str(fab)))}
+            row = {TIPO_MPR_SEMI_ELABORADO: float(enviado_map[art] - Decimal(str(fab)))}
             if stock_extra and art in stock_extra:
                 row.update(stock_extra[art])
             stock[art] = row
@@ -56,6 +57,14 @@ class TestBloqueoFabricandoConfigurable(TestCase):
             patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"}),
             patch("mpr.services.get_deposito_produccion_mpr", return_value=5),
             patch("mpr.repositories.parte.opp_acumulado_por_pack", return_value=acum),
+            patch(
+                "mpr.repositories.transicion_lote.turno_tiene_control_calidad",
+                return_value=False,
+            ),
+            patch(
+                "mpr.repositories.transicion_lote.sumar_salidas_desde_produccion_por_articulo",
+                return_value={},
+            ),
         )
 
     def test_bloqueo_activo_rechaza_exceso_fabricando(self):
@@ -73,7 +82,7 @@ class TestBloqueoFabricandoConfigurable(TestCase):
         with self._mock_turno():
             with patch("mpr.repositories.parte.crear_parte_con_lineas") as mock_crear:
                 mock_crear.return_value = type("P", (), {"movimiento_fisico_ok": False, "save": lambda *a, **k: None})()
-                with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
+                with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8]:
                     with self.assertRaises(ValidationError) as ctx:
                         registrar_parte_produccion(
                             EMPRESA, date(2026, 7, 3), self.turno.pk, 1, lineas,
@@ -94,7 +103,7 @@ class TestBloqueoFabricandoConfigurable(TestCase):
         ]
         patches = self._patches_fabricando({42: 6.0})
         with self._mock_turno():
-            with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
+            with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8]:
                 with self.assertRaises(ValidationError):
                     registrar_parte_produccion(
                         EMPRESA, date(2026, 7, 3), self.turno.pk, 1, lineas,
@@ -119,7 +128,7 @@ class TestBloqueoFabricandoConfigurable(TestCase):
         enviado_map = {1275: Decimal("12")}
         with self._mock_turno():
             with patch("mpr.services._query_enviado_tablero_componente", return_value=enviado_map):
-                with patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
+                with patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8]:
                     with self.assertRaises(ValidationError) as ctx:
                         registrar_parte_produccion(
                             EMPRESA, date(2026, 7, 7), self.turno.pk, 1, lineas,
@@ -138,7 +147,7 @@ class TestBloqueoFabricandoConfigurable(TestCase):
         enviado_map = {99: Decimal("12")}
         with self._mock_turno():
             with patch("mpr.services._query_enviado_tablero_componente", return_value=enviado_map):
-                with patches[1], patches[2], patches[3], patches[4], patches[5], patches[6]:
+                with patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8]:
                     with self.assertRaises(ValidationError) as ctx:
                         registrar_parte_produccion(
                             EMPRESA, date(2026, 7, 7), self.turno.pk, 1, lineas,

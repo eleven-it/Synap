@@ -83,6 +83,10 @@ def _patches_cupo_parte(envios_map, stock_map=None, acum_map=None, clasif_map=No
             "mpr.repositories.transicion_lote.sumar_salidas_desde_produccion_por_articulo",
             return_value=clasif_map,
         ),
+        patch(
+            "mpr.repositories.transicion_lote.turno_tiene_control_calidad",
+            return_value=False,
+        ),
     )
 
 
@@ -97,6 +101,14 @@ def _patch_fabricando_acreditado(clasif_map=None, parte_map=None):
         return_value=parte_map or {},
     ):
         yield
+
+
+def _patch_sin_control_calidad():
+    """Evita MySQL al validar turnos con CC en registrar_parte."""
+    return patch(
+        "mpr.repositories.transicion_lote.turno_tiene_control_calidad",
+        return_value=False,
+    )
 
 
 def _patch_grilla_sin_mysql_roster():
@@ -189,15 +201,35 @@ class TestGrillaParteComponente(TestCase):
         self.assertEqual(fila["id_articulo"], 1)
         self.assertAlmostEqual(fila["fabricando"], 30.0)
 
-    # -- 7.3: grilla no aparece cuando fabricando=0
-    def test_grilla_no_aparece_cuando_produccion_iguala_enviado(self):
-        """Componente con envío=30 y stock_prod=30 → fabricando=0 → no aparece."""
+    # -- 7.3: grilla aparece aunque haya stock en Producción (no acredita)
+    def test_grilla_aparece_con_stock_produccion_preexistente(self):
+        """Envío=30 y stock_prod=30 → Fabricando=30 (Producción no acredita)."""
         from mpr.services import construir_grilla_parte
 
         with _patch_grilla_sin_mysql_roster(), \
              _patch_fabricando_acreditado(), \
              patch("mpr.services._query_enviados_todos_componentes", return_value={1: Decimal("30")}), \
              patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({1: {TIPO_PROD: 30.0}}, {})), \
+             patch("mpr.services._fetch_descripciones_articulo", return_value={1: ("COD1", "Comp1")}):
+
+            resultado = construir_grilla_parte(EMPRESA, self.fecha, self.turno.pk)
+
+        self.assertFalse(resultado["componentes_vacio"])
+        self.assertEqual(len(resultado["componentes"]), 1)
+        self.assertAlmostEqual(resultado["componentes"][0]["fabricando"], 30.0)
+
+    def test_grilla_no_aparece_cuando_semi_iguala_enviado(self):
+        """Envío=30 y Semi=30 → Fabricando=0 → no aparece."""
+        from mpr.services import construir_grilla_parte
+        from mpr.pipeline import TIPO_MPR_SEMI_ELABORADO
+
+        with _patch_grilla_sin_mysql_roster(), \
+             _patch_fabricando_acreditado(), \
+             patch("mpr.services._query_enviados_todos_componentes", return_value={1: Decimal("30")}), \
+             patch(
+                 "mpr.services._pivot_stock_por_tipo_mpr",
+                 return_value=({1: {TIPO_MPR_SEMI_ELABORADO: 30.0}}, {}),
+             ), \
              patch("mpr.services._fetch_descripciones_articulo", return_value={1: ("COD1", "Comp1")}):
 
             resultado = construir_grilla_parte(EMPRESA, self.fecha, self.turno.pk)
@@ -335,10 +367,10 @@ class TestRegistroParteComponente(TestCase):
              patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"}), \
              patch("mpr.services.get_deposito_produccion_mpr", return_value=5), \
              patch("mpr.services._fetch_descripciones_articulo", return_value={}):
-            p_env, p_st, p_ac = _patches_cupo_parte(
+            p_env, p_st, p_ac, p_cl, p_cc = _patches_cupo_parte(
                 {101: Decimal("100"), 102: Decimal("100")},
             )
-            with p_env, p_st, p_ac, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
+            with p_env, p_st, p_ac, p_cl, p_cc, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
                 parte, warnings = registrar_parte_produccion(
                     base_empresa=EMPRESA,
                     fecha_produccion=date(2026, 7, 3),
@@ -360,8 +392,8 @@ class TestRegistroParteComponente(TestCase):
              patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"}), \
              patch("mpr.services.get_deposito_produccion_mpr", return_value=5), \
              patch("mpr.services._fetch_descripciones_articulo", return_value={}):
-            p_env, p_st, p_ac = _patches_cupo_parte({50: Decimal("100")})
-            with p_env, p_st, p_ac, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
+            p_env, p_st, p_ac, p_cl, p_cc = _patches_cupo_parte({50: Decimal("100")})
+            with p_env, p_st, p_ac, p_cl, p_cc, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
                 parte, _ = registrar_parte_produccion(
                     base_empresa=EMPRESA,
                     fecha_produccion=date(2026, 7, 3),
@@ -461,8 +493,8 @@ class TestAsientoDirectoSinBOM(TestCase):
              patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"}), \
              patch("mpr.services.get_deposito_produccion_mpr", return_value=5), \
              patch("mpr.services._fetch_descripciones_articulo", return_value={}):
-            p_env, p_st, p_ac = _patches_cupo_parte({10: Decimal("100")})
-            with p_env, p_st, p_ac, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
+            p_env, p_st, p_ac, p_cl, p_cc = _patches_cupo_parte({10: Decimal("100")})
+            with p_env, p_st, p_ac, p_cl, p_cc, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
                 parte, _ = registrar_parte_produccion(
                     base_empresa=EMPRESA,
                     fecha_produccion=date(2026, 7, 3),
@@ -531,11 +563,11 @@ class TestWarningFabricando(TestCase):
              patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"}), \
              patch("mpr.services.get_deposito_produccion_mpr", return_value=5), \
              patch("mpr.services._fetch_descripciones_articulo", return_value={50: ("COMP50", "Comp 50")}):
-            p_env, p_st, p_ac = _patches_cupo_parte(
+            p_env, p_st, p_ac, p_cl, p_cc = _patches_cupo_parte(
                 {50: Decimal("50")},
-                stock_map={50: {TIPO_PROD: 30.0}},
+                stock_map={50: {"SemiElaborado": 30.0}},
             )
-            with p_env, p_st, p_ac, _mock_turno(self.turno):
+            with p_env, p_st, p_ac, p_cl, p_cc, _mock_turno(self.turno):
                 with self.assertRaises(ValidationError) as ctx:
                     registrar_parte_produccion(
                         base_empresa=EMPRESA,
@@ -548,18 +580,18 @@ class TestWarningFabricando(TestCase):
 
     # -- 7.14: sin warning si dentro del fabricando
     def test_sin_warning_bajo_tope_fabricando(self):
-        """Cantidad=10 y Fabricando=20 → warnings vacío."""
+        """Cantidad=10 y Fabricando=50 (Prod no acredita) → warnings vacío."""
         from mpr.services import registrar_parte_produccion
 
         with patch("mpr.services._registrar_asiento_fisico_opp_parte"), \
              patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"}), \
              patch("mpr.services.get_deposito_produccion_mpr", return_value=5), \
              patch("mpr.services._fetch_descripciones_articulo", return_value={50: ("COMP50", "Comp 50")}):
-            p_env, p_st, p_ac = _patches_cupo_parte(
+            p_env, p_st, p_ac, p_cl, p_cc = _patches_cupo_parte(
                 {50: Decimal("50")},
                 stock_map={50: {TIPO_PROD: 30.0}},
             )
-            with p_env, p_st, p_ac, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
+            with p_env, p_st, p_ac, p_cl, p_cc, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
                 parte, warnings = registrar_parte_produccion(
                     base_empresa=EMPRESA,
                     fecha_produccion=date(2026, 7, 3),
@@ -568,7 +600,7 @@ class TestWarningFabricando(TestCase):
                     lineas=[{"id_articulo": 50, "id_operario": 1, "cantidad": Decimal("10")}],
                 )
 
-        # Fabricando_pre = 20; cantidad=10 ≤ 20 → sin warning
+        # Fabricando_pre = 50 (Prod no acredita); cantidad=10 ≤ 50 → sin warning
         self.assertEqual(warnings, [])
 
     # -- Integración: parte E8 registra stock → Fabricando siguiente render se reduce
@@ -580,8 +612,8 @@ class TestWarningFabricando(TestCase):
              patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"}), \
              patch("mpr.services.get_deposito_produccion_mpr", return_value=5), \
              patch("mpr.services._fetch_descripciones_articulo", return_value={}):
-            p_env, p_st, p_ac = _patches_cupo_parte({77: Decimal("100")})
-            with p_env, p_st, p_ac, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
+            p_env, p_st, p_ac, p_cl, p_cc = _patches_cupo_parte({77: Decimal("100")})
+            with p_env, p_st, p_ac, p_cl, p_cc, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
                 registrar_parte_produccion(
                     base_empresa=EMPRESA,
                     fecha_produccion=date(2026, 7, 3),
@@ -610,8 +642,8 @@ class TestIntegracionFabricandoE7(TestCase):
     # -- 7.12: consumo Fabricando E7
     def test_consumo_fabricando_formula_correcta(self):
         """
-        MprEnvioProduccion[C]=50, stock_prod[C]=35 → Fabricando=15.
-        Tras registrar parte cantidad=10, siguiente render: Fabricando=max(0,50-45)=5.
+        Envío=50, stock_prod no acredita → Fabricando=50.
+        Tras parte cantidad=10 (parte_acumulado=10), siguiente render: Fabricando=40.
         """
         from mpr.services import construir_grilla_parte
 
@@ -625,11 +657,10 @@ class TestIntegracionFabricandoE7(TestCase):
 
         fila = next((c for c in grilla1["componentes"] if c["id_articulo"] == 300), None)
         self.assertIsNotNone(fila)
-        self.assertAlmostEqual(fila["fabricando"], 15.0)
+        self.assertAlmostEqual(fila["fabricando"], 50.0)
 
-        # Simular segundo render tras registrar 10 (stock_prod=35+10=45) → Fabricando=5
         with _patch_grilla_sin_mysql_roster(), \
-             _patch_fabricando_acreditado(), \
+             _patch_fabricando_acreditado(parte_map={300: Decimal("10")}), \
              patch("mpr.services._query_enviados_todos_componentes", return_value={300: Decimal("50")}), \
              patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({300: {TIPO_PROD: 45.0}}, {})), \
              patch("mpr.services._fetch_descripciones_articulo", return_value={300: ("C300", "Comp 300")}):
@@ -638,7 +669,7 @@ class TestIntegracionFabricandoE7(TestCase):
 
         fila2 = next((c for c in grilla2["componentes"] if c["id_articulo"] == 300), None)
         self.assertIsNotNone(fila2)
-        self.assertAlmostEqual(fila2["fabricando"], 5.0)
+        self.assertAlmostEqual(fila2["fabricando"], 40.0)
 
 
 # ---------------------------------------------------------------------------
@@ -661,8 +692,8 @@ class TestE6CompatibilidadIdLista(TestCase):
              patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"}), \
              patch("mpr.services.get_deposito_produccion_mpr", return_value=5), \
              patch("mpr.services._fetch_descripciones_articulo", return_value={}):
-            p_env, p_st, p_ac = _patches_cupo_parte({400: Decimal("100")})
-            with p_env, p_st, p_ac, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
+            p_env, p_st, p_ac, p_cl, p_cc = _patches_cupo_parte({400: Decimal("100")})
+            with p_env, p_st, p_ac, p_cl, p_cc, _mock_turno(self.turno), _mock_crear_parte_django(self.turno):
                 parte, _ = registrar_parte_produccion(
                     base_empresa=EMPRESA,
                     fecha_produccion=date(2026, 7, 3),
