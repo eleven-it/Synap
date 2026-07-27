@@ -8,7 +8,6 @@ from django.test import SimpleTestCase
 from legacy_db.services.cont_eliminacion_asientos_service import (
     CHECK_ID_ELIMINACION,
     EliminacionAsientosError,
-    _eliminar_tablas_backup,
     eliminar_asientos,
     listar_asientos,
     preview_eliminacion,
@@ -27,6 +26,7 @@ class ListarAsientosTestCase(SimpleTestCase):
         cur = MagicMock()
         conn.cursor.return_value = cur
 
+        cur.fetchone.return_value = {"total": 1}
         cur.fetchall.return_value = [
             {
                 "id_ejercicio": 1,
@@ -45,14 +45,15 @@ class ListarAsientosTestCase(SimpleTestCase):
             }
         ]
 
-        resultado = listar_asientos("empresa_test", {"id_ejercicio": 1})
+        resultado = listar_asientos("empresa_test", {"id_ejercicio": 1, "page": 1})
         self.assertEqual(resultado["total"], 1)
+        self.assertEqual(resultado["page_size"], 500)
         self.assertEqual(len(resultado["items"]), 1)
         self.assertEqual(resultado["items"][0]["nro_asiento"], 79)
         self.assertEqual(resultado["items"][0]["fecha_asiento"], "15/03/2024")
         sql_ejecutados = " ".join(str(c) for c in cur.execute.call_args_list)
         self.assertIn("GROUP BY", sql_ejecutados)
-        self.assertNotIn("LIMIT", sql_ejecutados.upper())
+        self.assertIn("LIMIT", sql_ejecutados.upper())
 
 
 class PreviewEliminacionTestCase(SimpleTestCase):
@@ -80,13 +81,9 @@ class PreviewEliminacionTestCase(SimpleTestCase):
             "empresa_test",
             [{"id_ejercicio": 1, "nro_asiento": 79}],
         )
-        self.assertEqual(payload["total_renglones"], 2)
         self.assertEqual(payload["asientos_solicitados"], 1)
+        self.assertEqual(payload["total_renglones"], 2)
         self.assertEqual(payload["cuentas_impactadas"], 2)
-        self.assertEqual(dict_cur.execute.call_count, 2)
-        sql_ejecutados = [str(c[0][0]) for c in dict_cur.execute.call_args_list]
-        self.assertTrue(any("COUNT(DISTINCT id_ejercicio, id_pc)" in sql for sql in sql_ejecutados))
-        self.assertFalse(any("FOR UPDATE" in sql for sql in sql_ejecutados))
 
 
 class EliminarAsientosTestCase(SimpleTestCase):
@@ -100,24 +97,11 @@ class EliminarAsientosTestCase(SimpleTestCase):
             )
         self.assertIn("permiso", str(ctx.exception).lower())
 
-    @patch("legacy_db.services.cont_eliminacion_asientos_service._eliminar_tablas_backup")
     @patch("legacy_db.services.cont_eliminacion_asientos_service._insertar_log_detalle")
-    @patch("legacy_db.services.cont_eliminacion_asientos_service._crear_backups")
     @patch("legacy_db.services.cont_eliminacion_asientos_service.get_mysql_pool")
-    def test_eliminar_mock_delete_update_log(self, mock_pool, mock_backup, mock_log, mock_drop):
-        mock_backup.return_value = {
-            "cont_asiento": "cont_asiento_bkp_test",
-            "cont_ejercicio_saldo_cta": "cont_ejercicio_saldo_cta_bkp_test",
-            "cont_periodo_saldo_cta": "cont_periodo_saldo_cta_bkp_test",
-        }
-        mock_drop.return_value = list(mock_backup.return_value.values())
-
-        conn_backup = MagicMock()
+    def test_eliminar_mock_delete_update_log(self, mock_pool, mock_log):
         conn_tx = MagicMock()
-        mock_pool.return_value.get_connection.return_value.__enter__.side_effect = [
-            conn_backup,
-            conn_tx,
-        ]
+        mock_pool.return_value.get_connection.return_value.__enter__.return_value = conn_tx
 
         dict_cur = MagicMock()
         cur = MagicMock()
@@ -146,7 +130,6 @@ class EliminarAsientosTestCase(SimpleTestCase):
             {"saldo_teorico": "0.00"},
         ]
         cur.fetchone.side_effect = [None, (1,)]
-
         cur.rowcount = 1
 
         resultado = eliminar_asientos(
@@ -159,46 +142,32 @@ class EliminarAsientosTestCase(SimpleTestCase):
         self.assertTrue(resultado["ok"])
         self.assertEqual(resultado["asientos_eliminados"], 1)
         self.assertEqual(resultado["backups"], {})
-        self.assertTrue(resultado.get("backup_efimero"))
+        self.assertNotIn("backup_efimero", resultado)
         self.assertIn("lote_id", resultado)
 
         sql_ejecutados = [str(c[0][0]) for c in cur.execute.call_args_list]
         self.assertTrue(any("DELETE FROM cont_asiento" in s for s in sql_ejecutados))
         self.assertTrue(
-            any("INSERT INTO cont_ejercicio_saldo_cta" in s or "UPDATE cont_ejercicio_saldo_cta" in s for s in sql_ejecutados)
+            any(
+                "INSERT INTO cont_ejercicio_saldo_cta" in s or "UPDATE cont_ejercicio_saldo_cta" in s
+                for s in sql_ejecutados
+            )
         )
         self.assertTrue(any("cont_audit_correccion_lote" in s for s in sql_ejecutados))
         insert_lote = next(c for c in cur.execute.call_args_list if "cont_audit_correccion_lote" in str(c[0][0]))
         self.assertEqual(insert_lote[0][1][-1], "{}")
         mock_log.assert_called()
-        mock_drop.assert_called_once()
-        args_drop = mock_drop.call_args[0]
-        self.assertEqual(args_drop[0], mock_pool.return_value)
-        self.assertEqual(args_drop[1], "empresa_test")
-        self.assertEqual(args_drop[2], mock_backup.return_value)
         args_log = mock_log.call_args[0]
         item_log = args_log[2]
         self.assertEqual(item_log["check_id"], CHECK_ID_ELIMINACION)
+        # Una sola conexión de trabajo (sin fase backup).
+        self.assertEqual(mock_pool.return_value.get_connection.call_count, 1)
 
-    @patch("legacy_db.services.cont_eliminacion_asientos_service._eliminar_tablas_backup")
     @patch("legacy_db.services.cont_eliminacion_asientos_service._insertar_log_detalle")
-    @patch("legacy_db.services.cont_eliminacion_asientos_service._crear_backups")
     @patch("legacy_db.services.cont_eliminacion_asientos_service.get_mysql_pool")
-    def test_eliminar_fallo_post_backup_dropea_tablas(self, mock_pool, mock_backup, mock_log, mock_drop):
-        backups = {
-            "cont_asiento": "cont_asiento_bkp_test",
-            "cont_ejercicio_saldo_cta": "cont_ejercicio_saldo_cta_bkp_test",
-            "cont_periodo_saldo_cta": "cont_periodo_saldo_cta_bkp_test",
-        }
-        mock_backup.return_value = backups
-        mock_drop.return_value = list(backups.values())
-
-        conn_backup = MagicMock()
+    def test_eliminar_fallo_hace_rollback(self, mock_pool, mock_log):
         conn_tx = MagicMock()
-        mock_pool.return_value.get_connection.return_value.__enter__.side_effect = [
-            conn_backup,
-            conn_tx,
-        ]
+        mock_pool.return_value.get_connection.return_value.__enter__.return_value = conn_tx
 
         dict_cur = MagicMock()
         cur = MagicMock()
@@ -213,23 +182,14 @@ class EliminarAsientosTestCase(SimpleTestCase):
                 tiene_permiso_corregir=True,
             )
 
-        mock_drop.assert_called_once_with(mock_pool.return_value, "empresa_test", backups)
+        conn_tx.rollback.assert_called()
         mock_log.assert_not_called()
 
-    @patch("legacy_db.services.cont_eliminacion_asientos_service._eliminar_tablas_backup")
     @patch("legacy_db.services.cont_eliminacion_asientos_service._insertar_log_detalle")
-    @patch("legacy_db.services.cont_eliminacion_asientos_service._crear_backups")
     @patch("legacy_db.services.cont_eliminacion_asientos_service.get_mysql_pool")
-    def test_eliminar_emite_callbacks_progreso(self, mock_pool, mock_backup, mock_log, mock_drop):
-        mock_backup.return_value = {"cont_asiento": "cont_asiento_bkp_test"}
-        mock_drop.return_value = ["cont_asiento_bkp_test"]
-
-        conn_backup = MagicMock()
+    def test_eliminar_emite_callbacks_progreso(self, mock_pool, mock_log):
         conn_tx = MagicMock()
-        mock_pool.return_value.get_connection.return_value.__enter__.side_effect = [
-            conn_backup,
-            conn_tx,
-        ]
+        mock_pool.return_value.get_connection.return_value.__enter__.return_value = conn_tx
 
         dict_cur = MagicMock()
         cur = MagicMock()
@@ -268,40 +228,15 @@ class EliminarAsientosTestCase(SimpleTestCase):
         )
 
         fases = [e.get("phase") for e in eventos if e.get("type") == "progress"]
-        self.assertIn("backup", fases)
+        self.assertNotIn("backup", fases)
+        self.assertIn("prepare", fases)
         self.assertIn("delete", fases)
         self.assertIn("recalc", fases)
-
-
-class EliminarTablasBackupTestCase(SimpleTestCase):
-    def test_drop_solo_allowlist_y_patron(self):
-        conn = MagicMock()
-        pool = MagicMock()
-        pool.get_connection.return_value.__enter__.return_value = conn
-        cur = MagicMock()
-        conn.cursor.return_value = cur
-
-        backups = {
-            "cont_asiento": "cont_asiento_bkp_20260726_120000",
-            "cont_ejercicio_saldo_cta": "cont_ejercicio_saldo_cta_bkp_20260726_120000",
-            "cuentaproveedor": "cuentaproveedor_bkp_20260726_120000",
-            "cont_asiento": "tabla_invalida",
-        }
-        # última clave gana en dict — usar dict limpio
-        backups = {
-            "cont_asiento": "cont_asiento_bkp_20260726_120000",
-            "cont_ejercicio_saldo_cta": "cont_ejercicio_saldo_cta_bkp_20260726_120000",
-            "cuentaproveedor": "cuentaproveedor_bkp_20260726_120000",
-        }
-
-        dropeadas = _eliminar_tablas_backup(pool, "empresa_test", backups)
-        self.assertEqual(
-            dropeadas,
-            [
-                "cont_asiento_bkp_20260726_120000",
-                "cont_ejercicio_saldo_cta_bkp_20260726_120000",
-            ],
-        )
-        sqls = [str(c[0][0]) for c in cur.execute.call_args_list]
-        self.assertEqual(len(sqls), 2)
-        self.assertTrue(all("DROP TABLE IF EXISTS" in s for s in sqls))
+        self.assertEqual(fases[0], "prepare")
+        recalc_evts = [e for e in eventos if e.get("type") == "progress" and e.get("phase") == "recalc"]
+        self.assertGreaterEqual(len(recalc_evts), 1)
+        self.assertEqual(recalc_evts[0]["current"], 0)
+        self.assertGreaterEqual(recalc_evts[-1]["current"], 1)
+        self.assertEqual(recalc_evts[-1]["total"], recalc_evts[0]["total"])
+        sql_ejecutados = [str(c[0][0]) for c in cur.execute.call_args_list]
+        self.assertTrue(any("DELETE FROM cont_asiento" in s and "IN (" in s for s in sql_ejecutados))

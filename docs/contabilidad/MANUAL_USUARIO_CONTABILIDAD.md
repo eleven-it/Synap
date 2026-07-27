@@ -21,7 +21,7 @@ Guía práctica del módulo **Contabilidad** en Synap para contadores, superviso
 | **Configuración de políticas** | Contabilidad → Configuración de políticas | `contabilidad.auditoria.configurar` (editar) |
 | **Diagnóstico de corrección** | Desde el tablero → tarjeta con diferencias → **Generar diagnóstico** | Lectura |
 | **Aplicar corrección** | Desde el diagnóstico | `contabilidad.auditoria.corregir` |
-| **Lotes aplicados** | Enlace en el tablero / diagnóstico | Lectura; rollback requiere corregir |
+| **Lotes aplicados** | Enlace en el tablero / diagnóstico | Lectura (consulta de lotes y planes) |
 | **Eliminar asientos** | `/contabilidad/auditoria/asientos/` | Lectura + vista previa; eliminar requiere corregir |
 | **Manual de usuario** | Contabilidad → Manual de usuario, o **Ayuda** | Sesión activa |
 
@@ -35,8 +35,7 @@ Guía práctica del módulo **Contabilidad** en Synap para contadores, superviso
 |--------|---------------------------|----------------|
 | **Ejecutar** (tablero) | No | Solo lectura: detecta diferencias y arma el tablero de tarjetas |
 | **Generar diagnóstico** | No | Arma un **plan** de corrección de **un** diagnóstico (se guarda en Synap/Postgres) |
-| **Aplicar corrección** | **Sí** | Ejecuta el plan (backup + escritura + log) |
-| **Revertir lote** | **Sí** | Restaura tablas desde el backup del lote |
+| **Aplicar corrección** | **Sí** | Ejecuta el plan (escritura + log transaccional) |
 
 ### Flujo obligatorio
 
@@ -170,8 +169,8 @@ Desde el diagnóstico puede descargar el plan en **Excel** (mismas columnas cont
 
 1. En el diagnóstico, revise el detalle de correcciones (ya formateado para decidir).
 2. Pulse **Aplicar correcciones**: se abre un modal en la misma pantalla (no una página aparte).
-3. Marque que entiende la escritura en la base contable y pulse **Aplicar definitivamente**. Verá el modal de espera «Aplicando corrección contable…».
-4. Al terminar, Synap lo lleva a **Lotes** con el mensaje de éxito (anote el lote para eventual rollback).
+3. Marque que entiende la escritura en la base contable y pulse **Aplicar definitivamente**. Verá el modal de espera «Aplicando corrección contable…» con **barra de progreso determinada** (aplicación de ítems → finalización), alimentada por NDJSON del servidor.
+4. Al terminar, Synap lo lleva a **Lotes** con el mensaje de éxito (anote el identificador del lote para trazabilidad).
 
 ### Qué hace el apply (orden)
 
@@ -181,17 +180,17 @@ Desde el diagnóstico puede descargar el plan en **Excel** (mismas columnas cont
 4. Inserta filas de saldo faltantes.
 5. Actualiza saldos de ejercicio/período.
 
-Cada apply crea **backup** previo de las tablas tocadas y deja log en `cont_audit_correccion_lote` / `cont_audit_correccion`.
+Cada apply deja log en `cont_audit_correccion_lote` / `cont_audit_correccion`. **No** se crean tablas backup de tablas contables (la operación no es reversible desde Synap).
 
 ---
 
-## 6. Lotes aplicados, planes de diagnóstico y rollback
+## 6. Lotes aplicados y planes de diagnóstico
 
 **Cómo llegar:** enlace **Lotes** en el tablero o en el diagnóstico.
 
 ### Para qué sirve
 
-Consultar el **historial de planes de diagnóstico** generados (Postgres Synap) y los **lotes de corrección ya aplicados** (MySQL legacy). Desde un plan **vigente** puede **Abrir** el diagnóstico sin regenerarlo, o **Actualizar** para recalcular el plan con los mismos diagnósticos (mismo identificador). Si corresponde y tiene permiso, puede **revertir** un lote restaurando desde su backup.
+Consultar el **historial de planes de diagnóstico** generados (Postgres Synap) y los **lotes de corrección ya aplicados** (MySQL legacy). Desde un plan **vigente** puede **Abrir** el diagnóstico sin regenerarlo, o **Actualizar** para recalcular el plan con los mismos diagnósticos (mismo identificador).
 
 ### Planes de diagnóstico
 
@@ -228,7 +227,7 @@ La tabla inferior lista los lotes de corrección ya ejecutados en MySQL legacy:
 | **Estado** | **Aplicado** o **Revertido**. |
 | **Id diagnóstico** | Plan dry-run origen (truncado en pantalla). |
 | **Filas log** | Cantidad de filas en `cont_audit_correccion`. |
-| **Acción** | **Ver** (detalle), **Excel** (export) y, con permiso, **Revertir**. |
+| **Acción** | **Ver** (detalle) y **Excel** (export). |
 
 #### Ver detalle de un lote
 
@@ -240,14 +239,7 @@ El Excel está pensado para análisis contable: columnas legibles (Diagnóstico,
 
 El detalle muestra hasta 500 filas en pantalla; si hay más, el aviso indica descargar Excel para el listado completo.
 
-### Cómo revertir un lote
-
-1. Ubique el lote (estado aplicado).
-2. Pulse revertir y confirme en el **modal Synap** (no use diálogos del navegador).
-3. Aparecerá el modal de espera «Revirtiendo lote».
-4. El lote queda marcado como revertido.
-
-El rollback requiere permiso de corregir (también en development). Si falta alguna tabla de backup, la operación se aborta sin cambios parciales.
+**Nota:** la reversión de lotes ya no está disponible en Synap. Los lotes aplicados son consulta y exportación únicamente.
 
 ---
 
@@ -286,7 +278,7 @@ Algunos hallazgos de **REI** (ajuste por inflación) requieren aprobación caso 
 |---------|----------------|
 | `contabilidad.auditoria.leer` | Tablero, diagnóstico de corrección, lotes y planes (consulta), ver configuración, **eliminar asientos (listar y vista previa)** |
 | `contabilidad.auditoria.configurar` | Editar políticas |
-| `contabilidad.auditoria.corregir` | Apply, rollback y **eliminación definitiva de asientos** (cualquier entorno) |
+| `contabilidad.auditoria.corregir` | Apply y **eliminación definitiva de asientos** (cualquier entorno) |
 | `contabilidad.auditoria.rei` | Aprobar/rechazar REI |
 
 Si no ve un botón o recibe error de permiso, solicite el alta al administrador Synap.
@@ -307,7 +299,7 @@ Si no ve un botón o recibe error de permiso, solicite el alta al administrador 
 | Apply pide confirmar | Debe marcar el checkbox de confirmación antes de aplicar. |
 | Huérfanos de venta = 0 pero había muchos | Las ventas usan gating por **punto de venta** (`cont = Si`), no por sucursal. |
 | Regeneré asientos y cambiaron saldos | Es esperado: el plan encadena recálculo de saldos del ejercicio. |
-| Rollback no disponible | Verifique permiso de corregir y que el lote tenga backups intactos. |
+| Reversión de lote | No disponible: las correcciones no generan backup de tablas. Consulte el detalle/Excel del lote para trazabilidad. |
 
 ---
 
@@ -330,7 +322,7 @@ Si no ve un botón o recibe error de permiso, solicite el alta al administrador 
 
 1. Configurar políticas (alcance, tolerancia, ejercicios cerrados).  
 2. Revisar historial de políticas y lotes aplicados.  
-3. Coordinar rollbacks solo cuando sea necesario.
+3. Coordinar correcciones con el equipo contable antes del apply (no hay reverso automático).
 
 ---
 
@@ -344,11 +336,11 @@ Use este flujo solo cuando deba **quitar asientos completos** del diario (todos 
 
 1. Elija el **ejercicio** (obligatorio).
 2. Opcional: filtros por fecha, concepto, tipo de comprobante, CodigoMovimiento, anulado o texto en la descripción.
-3. **Buscar** (lista **completa** del filtro, sin paginación) y marque los asientos con el checkbox (o **Seleccionar todos** / **Importar nros**) para enviarlos en un solo lote de eliminación + recálculo.
-4. **Vista previa**: revisa renglones, cuentas impactadas y avisos sin crear backup ni modificar la contabilidad. Mientras calcula, verá el estado «Calculando impacto…» dentro del modal.
-5. **Eliminar definitivamente** (requiere `contabilidad.auditoria.corregir`): se crea un respaldo efímero de seguridad, se borran los renglones y se recalculan saldos; verá el avance en una barra de progreso. El resultado queda en **Lotes** con `check_id` eliminación de asiento.
+3. **Buscar** (páginas de **500** asientos) y marque los asientos con el checkbox (o **Seleccionar visibles** / **Importar nros**). La selección se conserva al cambiar de página; puede enviar varios asientos en un solo lote.
+4. **Vista previa**: revisa renglones, cuentas impactadas y avisos sin modificar la contabilidad. Mientras calcula, verá el estado «Calculando impacto…» dentro del modal.
+5. **Eliminar definitivamente** (requiere `contabilidad.auditoria.corregir`): se borran los renglones y se recalculan saldos en una sola transacción; verá el avance en una barra de progreso. El resultado queda en **Lotes** con log de auditoría (sin reverso del lote).
 
-**Importante:** la operación es irreversible; el respaldo solo protege ante fallos durante el proceso y no permite rollback posterior del lote.
+**Importante:** la operación es irreversible; no se crean tablas de backup ni se puede revertir el lote desde la UI.
 
 ---
 

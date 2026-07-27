@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
@@ -21,6 +22,7 @@ from contabilidad_audit.views import (
     _parse_alcance_dry_run,
     _purgar_planes_vencidos,
     auditoria_dry_run,
+    auditoria_apply,
     auditoria_lote_detalle,
     auditoria_lote_rollback,
     auditoria_lotes,
@@ -245,6 +247,10 @@ class AuditoriaClaridadUiTemplatesTestCase(SimpleTestCase):
         self.assertIn('x-show="payload?.impacto?.total_aplicables > 0"', html)
         self.assertIn("abrirConfirmacionApply", html)
         self.assertIn("auditoria_apply_ejecutar", html)
+        self.assertIn("ejecutarApplyConProgreso", html)
+        self.assertIn("application/x-ndjson", html)
+        self.assertIn("synapUpdatePostLoadingProgress", html)
+        self.assertIn("data-synap-progress-managed", html)
         self.assertNotIn("/contabilidad/auditoria/apply/?dry_run_id=", html)
 
     def test_dry_run_titulo_pagina_es_diagnostico(self):
@@ -307,9 +313,9 @@ class AuditoriaClaridadUiTemplatesTestCase(SimpleTestCase):
         self.assertIn("auditoria_lote_detalle", html)
         self.assertIn("?format=xlsx", html)
         self.assertIn("visibility", html)
-        self.assertIn("lote.puede_revertir", html)
-        self.assertIn("hay_lotes_revertibles", html)
-        self.assertIn("no son revertibles", html)
+        self.assertNotIn("Revertir", html)
+        self.assertNotIn("abrirRollback", html)
+        self.assertNotIn("Revirtiendo lote", html)
 
 
 class AuditoriaChecksCorregiblesTestCase(SimpleTestCase):
@@ -367,12 +373,65 @@ class AuditoriaDryRunParseTestCase(SimpleTestCase):
         self.assertIn("synap-post-loading", html)
         self.assertIn("Aplicando corrección contable", html)
 
-    def test_lotes_rollback_tiene_modal_espera(self):
+    def test_lotes_sin_modal_rollback(self):
         html = (_TEMPLATES / "auditoria_lotes.html").read_text(encoding="utf-8")
-        self.assertIn("synap-post-loading", html)
-        self.assertIn("Revirtiendo lote", html)
-        self.assertIn('procesando = true', html)
-        self.assertIn("partials/synap_post_loading_modal.html", html)
+        self.assertNotIn("auditoria_lote_rollback", html)
+        self.assertNotIn("Confirmar rollback", html)
+
+    @patch("legacy_db.services.cont_recalculo_service._apply_iter")
+    def test_post_apply_stream_ndjson(self, mock_iter):
+        mock_iter.return_value = iter(
+            [
+                {
+                    "type": "progress",
+                    "phase": "write",
+                    "current": 1,
+                    "total": 1,
+                    "label": "saldo_ejercicio_vs_diario (1/1)",
+                },
+                {
+                    "type": "result",
+                    "payload": {
+                        "ok": True,
+                        "lote_id": "L1",
+                        "filas_aplicadas": 1,
+                        "mensaje": "Corrección aplicada correctamente.",
+                        "backups": {},
+                    },
+                },
+            ]
+        )
+        request = RequestFactory().post(
+            "/contabilidad/auditoria/apply/ejecutar/",
+            data=json.dumps(
+                {
+                    "dry_run_id": "abc-123",
+                    "base_empresa": "empresa_test",
+                    "modo": "general",
+                    "confirmacion_entiendo": True,
+                    "stream": True,
+                }
+            ),
+            content_type="application/json",
+            HTTP_ACCEPT="application/x-ndjson",
+        )
+        request.session = {"user": _session_user()}
+        request.user = _UserConPermisoCorregir()
+        with patch(
+            "contabilidad_audit.views.PlanCorreccion.objects.get",
+            return_value=MagicMock(dry_run_id="abc-123"),
+        ):
+            response = auditoria_apply(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("application/x-ndjson", response["Content-Type"])
+        self.assertEqual(response["Cache-Control"], "no-cache")
+        self.assertEqual(response["X-Accel-Buffering"], "no")
+        lineas = [ln for ln in response.streaming_content if ln]
+        eventos = [json.loads(ln.decode("utf-8")) for ln in lineas]
+        self.assertEqual(eventos[0]["type"], "progress")
+        self.assertEqual(eventos[0]["phase"], "write")
+        self.assertEqual(eventos[-1]["type"], "done")
+        self.assertTrue(eventos[-1]["ok"])
 
 
 class AuditoriaLotesViewsTestCase(TestCase):
@@ -432,44 +491,27 @@ class AuditoriaLotesViewsTestCase(TestCase):
         self.assertEqual(len(ctx["lotes"]), 1)
         self.assertEqual(ctx["lotes"][0]["lote_id"], "L20260718-001")
         self.assertEqual(ctx["planes"], [])
-        self.assertTrue(ctx["hay_lotes_revertibles"])
+        self.assertFalse(ctx["hay_lotes_revertibles"])
 
     def test_rollback_sin_permiso_403(self):
         request = self._request_post_rollback("L20260718-001", _UserSinPermiso())
         with self.assertRaises(PermissionDenied):
             auditoria_lote_rollback(request, "L20260718-001")
 
-    @patch("contabilidad_audit.views._obtener_lote")
-    @patch("legacy_db.services.cont_recalculo_service.rollback_lote")
-    def test_rollback_con_permiso_redirige(self, mock_rollback, mock_obtener):
-        mock_obtener.return_value = {
-            "lote_id": "L20260718-001",
-            "dry_run_id": "abc-123",
-            "estado": "aplicado",
-        }
-        mock_rollback.return_value = {"ok": True, "lote_id": "L20260718-001"}
+    def test_rollback_con_permiso_bloqueado(self):
         request = self._request_post_rollback("L20260718-001")
         response = auditoria_lote_rollback(request, "L20260718-001")
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("contabilidad_audit:auditoria_lotes"))
-        mock_rollback.assert_called_once()
-        args, kwargs = mock_rollback.call_args
-        self.assertEqual(args[0], "empresa_test")
-        self.assertEqual(args[1], "L20260718-001")
-        self.assertTrue(kwargs.get("tiene_permiso_corregir"))
+        messages = list(get_messages(request))
+        self.assertTrue(any("reversión de lotes ya no está disponible" in str(m).lower() for m in messages))
 
-    @patch("contabilidad_audit.views._obtener_lote")
-    @patch("legacy_db.services.cont_recalculo_service.rollback_lote")
-    def test_rollback_eliminacion_asiento_bloqueado(self, mock_rollback, mock_obtener):
-        mock_obtener.return_value = {
-            "lote_id": "L-elim",
-            "dry_run_id": "eliminacion_asiento",
-            "estado": "aplicado",
-        }
+    def test_rollback_eliminacion_asiento_bloqueado(self):
         request = self._request_post_rollback("L-elim")
         response = auditoria_lote_rollback(request, "L-elim")
         self.assertEqual(response.status_code, 302)
-        mock_rollback.assert_not_called()
+        messages = list(get_messages(request))
+        self.assertTrue(any("reversión de lotes ya no está disponible" in str(m).lower() for m in messages))
 
     @patch("contabilidad_audit.views.get_mysql_pool")
     def test_listar_lotes_helper(self, mock_pool):
@@ -504,7 +546,7 @@ class AuditoriaLotesViewsTestCase(TestCase):
         self.assertEqual(len(lotes), 2)
         self.assertEqual(lotes[0]["lote_id"], "L1")
         self.assertEqual(lotes[0]["filas_correccion"], 3)
-        self.assertTrue(lotes[0]["puede_revertir"])
+        self.assertFalse(lotes[0]["puede_revertir"])
         self.assertIn("/", lotes[0]["fecha"])
         self.assertEqual(lotes[1]["lote_id"], "L2")
         self.assertFalse(lotes[1]["puede_revertir"])

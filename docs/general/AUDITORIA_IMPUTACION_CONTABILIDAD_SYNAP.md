@@ -1,7 +1,7 @@
 # Auditoría de imputación contable en Synap (MVP Fase 1)
 
 **Change SDD:** `contabilidad-auditoria-recalculo` (+ delta `contabilidad-auditoria-anulaciones-apply` / REC-19)  
-**Estado:** **Fase 1 + Fase 2 + Fase 3 + REC-19** — auditoría solo lectura + dry-run + apply/rollback + REI + **reparación de anulaciones incompletas** (marcador / marcar original / contra) + UI lotes.  
+**Estado:** **Fase 1 + Fase 2 + Fase 3 + REC-19** — auditoría solo lectura + dry-run + apply (sin backup de tablas) + REI + **reparación de anulaciones incompletas** (marcador / marcar original / contra) + UI lotes (sin rollback).  
 **Fecha:** 25/07/2026
 
 ## Objetivo
@@ -23,11 +23,11 @@ Motor de auditoría **determinista y solo lectura** sobre tablas `cont_*` del My
 | `/contabilidad/auditoria/apply/ejecutar/` | Ejecutar apply (POST, confirmación checkbox) | `contabilidad.auditoria.corregir` |
 | `/contabilidad/auditoria/lotes/` | Lotes aplicados (`cont_audit_correccion_lote`) | `contabilidad.auditoria.leer` |
 | `/contabilidad/auditoria/lotes/<lote_id>/` | Detalle del lote aplicado; `?format=xlsx` export Excel | `contabilidad.auditoria.leer` |
-| `/contabilidad/auditoria/lotes/<lote_id>/rollback/` | Rollback de lote (POST, modal Synap) | `contabilidad.auditoria.corregir` |
+| `/contabilidad/auditoria/lotes/<lote_id>/rollback/` | Endpoint legacy bloqueado (reversión deshabilitada) | `contabilidad.auditoria.corregir` |
 
 Montaje: `django_project/urls.py` → `path('contabilidad/', include('contabilidad_audit.urls'))`.
 
-Flujo operativo guiado desde el tablero: **Tablero → Ejecutar → tarjeta con diferencias → Generar diagnóstico → Apply → Lotes aplicados** (con rollback).
+Flujo operativo guiado desde el tablero: **Tablero → Ejecutar → tarjeta con diferencias → Generar diagnóstico → Apply → Lotes aplicados**.
 
 El acceso al plan de corrección (`/contabilidad/auditoria/dry-run/`, ruta y payload internos sin renombrar) es **siempre por tarjeta**: el tablero no expone CTA global. El CTA de la tarjeta sólo aparece si el check tiene diferencias y está en `CHECKS_INCLUIDOS` (`legacy_db/services/cont_recalculo_service.py`), que la vista publica al front como `checks_corregibles`; en caso contrario se muestra «Sin corrección automática». La UI usa el término **Diagnóstico** (con «Id diagnóstico» para el `dry_run_id`).
 
@@ -114,11 +114,11 @@ Filtros obligatorios: `base_empresa`, `id_ejercicio`. Opcionales: `id_periodo`, 
 
 Plantillas en `contabilidad_audit/templates/contabilidad_audit/`, extienden `base_app.html` y reutilizan los patrones Tailwind/Alpine del canon (`reports/dashboard_detail.html`): encabezado con degradado slate, panel de filtros, tarjetas y tablas. **No** se usa como referencia visual `ventas/objetivos-venta/` ni `ventas/presupuestos/` (regla `FUENTE_VERDAD_UI_REPORTES_MPR.md`).
 
-**Modal de espera:** las operaciones largas (corrida del tablero, generar diagnóstico, apply y rollback de lote) muestran el overlay compartido `partials/synap_post_loading_modal.html` con título/subtítulo de estado en español. Ver `docs/general/SYNAP_MENSAJES_TOAST.md` (§ modal de espera). No usar diálogos nativos ni dejar al usuario sin feedback durante la espera. El CTA «Generar diagnóstico» de cada tarjeta llama `mostrarEsperaDiagnostico(evento, check_id)` antes de la navegación GET (el plan se calcula al cargar la página destino) y arma la URL con `diagnosticoLink(check_id)`, que envía **un solo** `check_ids`. En el overlay, el `label` muestra el **título del diagnóstico** (no texto genérico).
+**Modal de espera:** las operaciones largas (corrida del tablero, generar diagnóstico, apply) muestran el overlay compartido `partials/synap_post_loading_modal.html` con título/subtítulo de estado en español. Ver `docs/general/SYNAP_MENSAJES_TOAST.md` (§ modal de espera). No usar diálogos nativos ni dejar al usuario sin feedback durante la espera. El CTA «Generar diagnóstico» de cada tarjeta llama `mostrarEsperaDiagnostico(evento, check_id)` antes de la navegación GET (el plan se calcula al cargar la página destino) y arma la URL con `diagnosticoLink(check_id)`, que envía **un solo** `check_ids`. En el overlay, el `label` muestra el **título del diagnóstico** (no texto genérico).
 
-**Detalle del plan (dry-run):** la tabla «Detalle de correcciones (muestra)» desglosa cada ítem en columnas contables planas (Diagnóstico, Acción, **Nro asiento**, **Fecha** dd/MM/yyyy, **Cuenta**, **Debe**, **Haber**, **Descripción**, Delta, Excluido, Detalle), sin «Valor anterior» ni JSON crudo. **Celdas iguales y no vacías se combinan solo dentro del mismo nro de asiento** (no cruzan asientos distintos): `rowspan` en la UI y merge en Excel (hoja Plan / Detalle del lote). En filas de saldo numérico solo se muestran cuenta y descripción tipo «$ ant → $ nuevo»; asiento/fecha/debe/haber quedan vacíos. Al hacer clic en la fila o en el ícono de documento se abre un modal Synap con el detalle estructurado; el JSON completo queda bajo «Datos técnicos» (colapsable). Los datos de validez técnica (TTL, `config_hash`, `data_fingerprint`, id, impacto por tabla, backups propuestos) van en el acordeón colapsado **Información técnica del plan**, ocultos por defecto al auditor contable.
+**Detalle del plan (dry-run):** la tabla «Detalle de correcciones (muestra)» desglosa cada ítem en columnas contables planas (Diagnóstico, Acción, **Nro asiento**, **Fecha** dd/MM/yyyy, **Cuenta**, **Debe**, **Haber**, **Descripción**, Delta, Excluido, Detalle), sin «Valor anterior» ni JSON crudo. **Celdas iguales y no vacías se combinan solo dentro del mismo nro de asiento** (no cruzan asientos distintos): `rowspan` en la UI y merge en Excel (hoja Plan / Detalle del lote). En filas de saldo numérico solo se muestran cuenta y descripción tipo «$ ant → $ nuevo»; asiento/fecha/debe/haber quedan vacíos. Al hacer clic en la fila o en el ícono de documento se abre un modal Synap con el detalle estructurado; el JSON completo queda bajo «Datos técnicos» (colapsable). Los datos de validez técnica (TTL, `config_hash`, `data_fingerprint`, id, impacto por tabla) van en el acordeón colapsado **Información técnica del plan**, ocultos por defecto al auditor contable.
 
-**Apply desde diagnóstico:** no se navega a `/contabilidad/auditoria/apply/` para el modo general. El CTA **Aplicar correcciones** abre un modal Synap en la misma pantalla (aviso corto + checkbox de confirmación) y hace POST a `/contabilidad/auditoria/apply/ejecutar/`. Éxito → redirect a **Lotes** con mensaje; error → vuelve al diagnóstico con mensaje. La página GET de apply se conserva para el flujo REI (`modo=rei`).
+**Apply desde diagnóstico:** no se navega a `/contabilidad/auditoria/apply/` para el modo general. El CTA **Aplicar correcciones** abre un modal Synap en la misma pantalla (aviso corto + checkbox de confirmación) y hace POST JSON a `/contabilidad/auditoria/apply/ejecutar/` con `"stream": true` (o `Accept: application/x-ndjson`) → `StreamingHttpResponse` NDJSON (`type: progress` / `done` / `error`). Fases: `write`, `finalize`. UI: barra determinada con `synapShowPostLoadingProgress` + `synapUpdatePostLoadingProgress` (mismo patrón que eliminación de asientos). Éxito → redirect del front a **Lotes**; error → toast/mensaje en diagnóstico. La página GET de apply se conserva para el flujo REI (`modo=rei`, sin stream en v1).
 
 ### Tablero (`auditoria_tablero.html`)
 
@@ -252,9 +252,9 @@ Para concepto anulación (paso 2):
 
 Cambiar la política entre dry-run y apply **invalida** el plan (REC-15).
 
-### Backups propuestos (REC-03 preparación)
+### Backups propuestos (histórico REC-03)
 
-En `plan.backups_propuestos`: nombres simulados `{tabla}_bkp_{YYYYMMDD_HHMMSS}` por tabla afectada. **No** se crean tablas en Fase 2.
+El dry-run ya **no** simula nombres de tablas backup: `plan.backups_propuestos` queda `{}`. Tampoco se crean tablas en Fase 2 ni en apply.
 
 ### Vista y export
 
@@ -271,7 +271,7 @@ docker exec Synap_app python manage.py test legacy_db.tests.test_cont_recalculo_
 
 ## Fase 3 tramo 1 — Apply transaccional (REC-02..REC-18 parcial)
 
-Servicio: `legacy_db/services/cont_recalculo_service.py` → `apply()`, `rollback_lote()`.
+Servicio: `legacy_db/services/cont_recalculo_service.py` → `apply()`, `rollback_lote()` (inoperativo: reversión deshabilitada).
 
 ### DDL log legacy (3.1–3.3)
 
@@ -295,7 +295,7 @@ Equivalente vía catálogo: provider `contabilidad_audit_correccion_log` en `cor
 | Entorno | Cualquiera (development incluido para pruebas); ya no se exige `ENVIRONMENT=production` |
 | Permiso | `contabilidad.auditoria.corregir` (flag `tiene_permiso_corregir` desde vista) |
 | Plan | `PlanCorreccion.estado='propuesto'`, TTL, `config_hash`, `data_fingerprint` |
-| Backup | `CREATE TABLE {tabla}_bkp_{timestamp} AS SELECT * FROM {tabla}` antes de DML |
+| Backup | **No** (por diseño de producto). Atomicidad vía una sola transacción MySQL. `backups_json` del lote queda `{}`. Si falla a mitad, `ROLLBACK` deshace los cambios. |
 | Concurrencia | Re-lectura fingerprint intra-transacción + `SELECT … FOR UPDATE` |
 
 ### Orden de escritura (transacción única, REC-07)
@@ -315,17 +315,17 @@ NO se ejecuta el recompute de saldos antes de completar regen/repair/concepto/IN
 
 Excluidos del auto-apply: `cierre_resultado_no_cero`, `concepto_no_normal`, asientos desbalanceados sin regla, `contra_no_invierte_original`, `rei_recalculo` (salvo modo REI), cuentas con `saldo_pc` NULL.
 
-### UI lotes y rollback
+### UI lotes (sin rollback)
 
 - Listado: `/contabilidad/auditoria/lotes/` — muestra **planes de diagnóstico** recientes (Postgres `PlanCorreccion`, hasta 50 por empresa) y **lotes aplicados** (lectura del log legacy `cont_audit_correccion_lote`).
 - **Detalle de lote:** `/contabilidad/auditoria/lotes/<lote_id>/` — resumen del lote + filas de `cont_audit_correccion` (UI con `cambio_resumen` contable, fechas dd/MM/yyyy; columna **Cambios aplicados**). Export Excel `?format=xlsx` (`exportar_lote_xlsx`): hojas **Resumen** (sin hashes) + **Detalle** en formato contador y **redacción en pasado** (Diagnóstico, Tipo de cambio aplicado, Nro asiento, Fecha, CM, Cuenta, Debe/Haber, Descripción, Concepto, Valor ant/aplicado, **Cambios aplicados**, Fecha de aplicación). Sin columnas Clave/Check/JSON. Filename `lote_correccion_{base}_{lote_id_corto}.xlsx`. En el listado, acciones **Ver** y **Excel** por fila.
 - **Historial de planes:** cada dry-run persistido aparece con estado **Vigente** (propuesto dentro del TTL) o **Aplicado**. Los vigentes tienen acción **Abrir** (reabre `/contabilidad/auditoria/dry-run/?dry_run_id=…` sin regenerar) y **Actualizar** (`?dry_run_id=…&refresh=1`, re-ejecuta el diagnóstico in-place con el mismo UUID).
 - **Purge lazy:** al entrar a lotes o antes de generar un plan nuevo, `_purgar_planes_vencidos` marca propuesto vencido → `expirado` y elimina planes `expirado`/`invalidado` junto con sus `AprobacionREI`. No borra `aplicado` ni propuesto vigente.
-- Rollback: POST a `/contabilidad/auditoria/lotes/<lote_id>/rollback/` con **modal Synap** (sin `confirm` nativo); llama `rollback_lote` con las mismas salvaguardas que apply.
+- **Reversión de lotes:** deshabilitada. El endpoint POST `/contabilidad/auditoria/lotes/<lote_id>/rollback/` responde con error en UI; `rollback_lote()` en servicio lanza `CorreccionContableError` sin restaurar tablas.
 
-### Rollback (REC-14)
+### Rollback (REC-14 — deshabilitado)
 
-`rollback_lote(base_empresa, lote_id, usuario, tiene_permiso_corregir=True)` restaura desde `backups_json` del lote en **transacción única** (`DELETE` + `INSERT SELECT * FROM {tabla}_bkp_{ts}` por tabla), marca el lote `estado='revertido'` y registra evento `check_id=rollback_lote` en `cont_audit_correccion`. Exige permiso `contabilidad.auditoria.corregir` (igual que apply; disponible también en development). Si falta alguna tabla backup (p. ej. purgada manualmente), aborta con error explícito sin cambios parciales.
+`rollback_lote()` se mantiene por compatibilidad de imports pero **no restaura tablas**. Las correcciones contables ya no generan backup (`backups_json='{}'`). Lotes históricos con backups antiguos tampoco son revertibles desde Synap.
 
 ### Hook REI (Fase 3.C — implementado)
 
@@ -398,7 +398,7 @@ docker exec Synap_app python manage.py test contabilidad_audit legacy_db.tests.t
 
 Entorno: MySQL `administranet89` @ `190.15.214.142` (piloto, **no** producción de cliente). Apply con contenedor `ENVIRONMENT=production` (`.env` base sigue en development). Empresa de sesión debe tener `base_empresa=administranet89`.
 
-**Autorización de escritura:** el apply del lote `L20260725_175235-16b64871` se ejecutó por **shell del agente**, **no** por la UI. La vía canónica de autorización es `/contabilidad/auditoria/apply/` (checkbox de confirmación + permiso). Ese lote fue **revertido** el 25/07/2026 a pedido del usuario (`rollback_lote`, estado `revertido`). Tablero y dry-run siguen siendo solo lectura; solo apply/rollback escriben en MySQL legacy.
+**Autorización de escritura:** el apply del lote `L20260725_175235-16b64871` se ejecutó por **shell del agente**, **no** por la UI. La vía canónica de autorización es `/contabilidad/auditoria/apply/` (checkbox de confirmación + permiso). Ese lote fue **revertido** el 25/07/2026 en una versión anterior que sí generaba backups (`rollback_lote`). Desde julio/2026 la reversión de lotes está deshabilitada. Tablero y dry-run siguen siendo solo lectura; solo apply (y eliminación de asientos) escriben en MySQL legacy.
 
 ### Baseline (solo lectura, ejercicio 1)
 
@@ -423,7 +423,7 @@ DDL log: `apply_contabilidad_audit_correccion_log administranet89` OK. Esquema `
 
 ### Gates y fuera de alcance
 
-- Apply / rollback exigen `contabilidad.auditoria.corregir` (cualquier entorno; no se bloquea por `ENVIRONMENT`).
+- Apply exige `contabilidad.auditoria.corregir` (cualquier entorno; no se bloquea por `ENVIRONMENT`). Rollback deshabilitado.
 - **No** usar `legacy_db/scripts/cont_reconstruccion_compras_pagos.py` en este ciclo (credenciales hardcodeadas).
 - Fuera de auto-apply: `cierre_resultado_no_cero`, `concepto_no_normal`, `contra_no_invierte_original`, clave rota cm=0 (§6.9 VB6).
 
@@ -435,12 +435,12 @@ Proceso operativo para borrar asientos completos `(id_ejercicio, nro_asiento)` c
 |---------|---------|
 | Servicio | `legacy_db/services/cont_eliminacion_asientos_service.py` |
 | UI | `/contabilidad/auditoria/asientos/` |
-| Listado | Sin paginación: `listar_asientos` devuelve **todos** los asientos del filtro (ejercicio + filtros opcionales) para poder seleccionar el universo completo y enviar un solo lote de eliminación + recálculo. |
+| Listado | Paginado: `listar_asientos` con `page_size` por defecto **500** (máx. 500). La UI permite **Seleccionar visibles** y conservar selección entre páginas. |
 | Permiso listar / preview | `contabilidad.auditoria.leer` |
 | Permiso eliminar | `contabilidad.auditoria.corregir` |
 | Unidad de borrado | `(id_ejercicio, nro_asiento)` — DELETE físico de **todos** los renglones |
-| Backup previo | Efímero durante el proceso: `cont_asiento`, `cont_ejercicio_saldo_cta`, `cont_periodo_saldo_cta` vía `_crear_backups`; al finalizar (éxito o fallo post-backup) se hace `DROP` de las tablas `*_bkp_*` de la corrida. `backups_json` del lote queda `{}` — **no** es revertible con `rollback_lote`. Si falla a mitad de la transacción DML, el rollback revierte los cambios automáticamente. |
-| Progreso en vivo | POST con `"stream": true` o `Accept: application/x-ndjson` → `StreamingHttpResponse` NDJSON (`type: progress` / `done` / `error`). UI: barra determinada con `synapShowPostLoadingProgress` + `synapUpdatePostLoadingProgress`. |
+| Backup previo | **No** (por diseño de producto: la eliminación no es revertible). Atomicidad vía una sola transacción MySQL (`DELETE` + recálculo + log). `backups_json` del lote queda `{}`. Si falla a mitad, `ROLLBACK` deshace los cambios. |
+| Progreso en vivo | POST con `"stream": true` o `Accept: application/x-ndjson` → `StreamingHttpResponse` NDJSON (`type: progress` / `done` / `error`). Fases: `prepare` (primer byte inmediato) → `delete` (DELETE por lotes) → `recalc`. Carga de renglones en consulta agrupada (no N+1). UI: barra determinada con `synapShowPostLoadingProgress` + `synapUpdatePostLoadingProgress`. |
 | Recálculo | Saldo teórico post-delete (excluye anulados) → UPDATE o INSERT en tablas de saldo |
 | Log | `cont_audit_correccion_lote` + `cont_audit_correccion` con `check_id=eliminacion_asiento` |
 | Excel del lote | Expande `valor_anterior` (lista de renglones) a **una fila por renglón**: tipo «Asiento eliminado», Nro asiento, CM, Cuenta, Debe/Haber (`$ x.xxx,xx`), «Renglón eliminado». Sin JSON en «Cambios aplicados». En UI del detalle, resumen «Asiento eliminado · N renglón(es)». |

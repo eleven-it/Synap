@@ -141,7 +141,7 @@
             </div>
         </div>
         <div class="mt-3 flex flex-wrap items-center gap-2">
-            <button type="button" @click="buscar()" :disabled="!filtros.idEjercicio || cargando"
+            <button type="button" @click="page = 1; buscar()" :disabled="!filtros.idEjercicio || cargando"
                     class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40">
                 <span class="material-icons text-base">search</span>
                 Buscar
@@ -151,16 +151,17 @@
                 <span class="material-icons text-base">playlist_add</span>
                 Importar nros
             </button>
-            <button type="button" @click="seleccionarTodos()" :disabled="!items.length"
+            <button type="button" @click="seleccionarVisibles()" :disabled="!items.length"
                     class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40">
-                Seleccionar todos
+                Seleccionar visibles
             </button>
             <button type="button" @click="limpiarSeleccion()"
                     class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 px-3 text-xs font-semibold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
                 Limpiar selección
             </button>
             <span class="ml-auto text-xs text-slate-500" x-show="total > 0" x-cloak>
-                <span x-text="total"></span> asiento(s) en el filtro
+                <span x-text="total"></span> asiento(s) · página <span x-text="page"></span>
+                · <span x-text="pageSize"></span>/página
             </span>
         </div>
         <div x-show="panelImportar" x-cloak class="mt-3 border-t border-slate-200 dark:border-slate-700 pt-3">
@@ -169,7 +170,7 @@
             </label>
             <textarea x-model="filtros.nrosTexto" rows="3"
                       class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-800 dark:text-slate-100"></textarea>
-            <button type="button" @click="aplicarImportacionNros(); buscar()"
+            <button type="button" @click="aplicarImportacionNros(); page = 1; buscar()"
                     class="mt-2 inline-flex h-8 items-center rounded-lg bg-slate-800 dark:bg-slate-700 px-3 text-xs font-semibold text-white">
                 Aplicar e buscar
             </button>
@@ -234,6 +235,15 @@
                     </template>
                 </tbody>
             </table>
+        </div>
+        <div x-show="total > pageSize" x-cloak class="px-4 py-3 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs">
+            <button type="button" @click="irPagina(page - 1)" :disabled="page <= 1"
+                    class="rounded-lg border px-3 py-1.5 disabled:opacity-40">Anterior</button>
+            <span>Página <span x-text="page"></span>
+                · <span x-text="items.length"></span> de <span x-text="total"></span>
+            </span>
+            <button type="button" @click="irPagina(page + 1)" :disabled="page * pageSize >= total"
+                    class="rounded-lg border px-3 py-1.5 disabled:opacity-40">Siguiente</button>
         </div>
     </div>
 
@@ -310,7 +320,7 @@
                     <h3 class="text-base font-bold text-slate-900 dark:text-white">Confirmar eliminación</h3>
                     <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">
                         Se borrarán <strong x-text="seleccionados.length"></strong> asiento(s) de forma irreversible
-                        (con backup y log de auditoría). Los saldos de las cuentas impactadas se recalcularán.
+                        (queda log de auditoría; no hay reverso). Los saldos de las cuentas impactadas se recalcularán.
                     </p>
                 </div>
             </div>
@@ -400,6 +410,8 @@ function auditoriaAsientosEliminar(cfg) {
         },
         items: [],
         total: 0,
+        page: 1,
+        pageSize: 500,
         cargando: false,
         errorBusqueda: '',
         seleccionados: [],
@@ -447,6 +459,7 @@ function auditoriaAsientosEliminar(cfg) {
             this.filtros.idEjercicio = ej.id;
             this.ejercicioBusqueda = ej.label;
             this.ejercicioAbierto = false;
+            this.page = 1;
             this.recargarConceptos();
         },
 
@@ -474,6 +487,8 @@ function auditoriaAsientosEliminar(cfg) {
             if (this.filtros.anulado) p.set('anulado', this.filtros.anulado);
             if (this.filtros.q) p.set('q', this.filtros.q);
             if (this.filtros.nrosTexto.trim()) p.set('nros_asiento', this.filtros.nrosTexto.trim());
+            p.set('page', String(this.page));
+            p.set('page_size', String(this.pageSize));
             if (json) p.set('format', 'json');
             return this.asientosUrl + '?' + p.toString();
         },
@@ -493,12 +508,20 @@ function auditoriaAsientosEliminar(cfg) {
                 if (!resp.ok) throw new Error(data.error || 'Error al buscar');
                 this.items = data.items || [];
                 this.total = data.total || 0;
+                this.page = data.page || 1;
+                if (data.page_size) this.pageSize = data.page_size;
             } catch (e) {
                 this.errorBusqueda = e.message || String(e);
                 this.items = [];
             } finally {
                 this.cargando = false;
             }
+        },
+
+        irPagina(n) {
+            if (n < 1) return;
+            this.page = n;
+            this.buscar();
         },
 
         claveItem(item) {
@@ -517,7 +540,7 @@ function auditoriaAsientosEliminar(cfg) {
             else this.seleccionados.push({ id_ejercicio: item.id_ejercicio, nro_asiento: item.nro_asiento, _item: item });
         },
 
-        seleccionarTodos() {
+        seleccionarVisibles() {
             for (const item of this.items) {
                 if (!this.estaSeleccionado(item)) {
                     this.seleccionados.push({ id_ejercicio: item.id_ejercicio, nro_asiento: item.nro_asiento, _item: item });
@@ -584,7 +607,7 @@ function auditoriaAsientosEliminar(cfg) {
             if (typeof window.synapShowPostLoadingProgress === 'function') {
                 window.synapShowPostLoadingProgress({
                     title: 'Eliminando asientos…',
-                    subtitle: 'Backup, borrado y recálculo de saldos. No cierre esta ventana.',
+                    subtitle: 'Borrado y recálculo de saldos. No cierre esta ventana.',
                     current: 0,
                     total: total,
                 });
@@ -621,21 +644,27 @@ function auditoriaAsientosEliminar(cfg) {
                     const evt = JSON.parse(txt);
                     if (evt.type === 'progress') {
                         if (typeof window.synapUpdatePostLoadingProgress === 'function') {
+                            let title = 'Eliminando asientos…';
                             let subtitle = 'Eliminando asientos…';
-                            let label = '';
-                            if (evt.phase === 'backup') {
-                                subtitle = 'Creando respaldo de seguridad…';
-                            } else if (evt.phase === 'recalc') {
-                                subtitle = 'Recalculando saldos…';
+                            let label = evt.label || '';
+                            let progressTotal = evt.total ?? total;
+                            let progressCurrent = evt.current ?? 0;
+                            if (evt.phase === 'prepare') {
+                                subtitle = 'Preparando eliminación…';
                             } else if (evt.phase === 'delete') {
                                 subtitle = 'Borrando asientos…';
-                                label = evt.label || '';
+                            } else if (evt.phase === 'recalc') {
+                                title = 'Recalculando saldos…';
+                                subtitle = 'Actualizando saldos de ejercicio y período.';
+                                // Barra propia del recálculo (cuentas/períodos), no la de asientos.
+                                progressTotal = evt.total ?? 0;
+                                progressCurrent = evt.current ?? 0;
                             }
                             window.synapUpdatePostLoadingProgress({
-                                current: evt.current ?? 0,
-                                total: evt.total ?? total,
+                                current: progressCurrent,
+                                total: progressTotal,
                                 label: label,
-                                title: 'Eliminando asientos…',
+                                title: title,
                                 subtitle: subtitle,
                             });
                         }
@@ -670,8 +699,19 @@ function auditoriaAsientosEliminar(cfg) {
                 this.limpiarSeleccion();
                 this.buscar();
             } catch (e) {
-                this.previewError = e.message || String(e);
+                let msg = e.message || String(e);
+                if (
+                    msg === 'Failed to fetch'
+                    || msg === 'NetworkError when attempting to fetch resource.'
+                    || (e.name === 'TypeError' && /fetch/i.test(msg))
+                ) {
+                    msg = 'Se cortó la conexión con el servidor durante la eliminación. '
+                        + 'Si el proceso era largo, reintente (no guarde código ni reinicie Docker mientras corre). '
+                        + 'Verifique en Lotes si el lote llegó a registrarse antes de volver a eliminar.';
+                }
+                this.previewError = msg;
                 this.confirmOpen = false;
+                this.previewOpen = true;
             } finally {
                 this.procesando = false;
                 if (typeof window.synapHidePostLoading === 'function') {

@@ -6,9 +6,7 @@
 
 {% block content %}
 <section class="min-h-screen bg-slate-50 dark:bg-slate-950 pb-24"
-         x-data="auditoriaLotes({
-            puedeCorregir: {% if puede_corregir %}true{% else %}false{% endif %}
-         })">
+         x-data="auditoriaLotes()">
 
     <div class="w-full px-4 sm:px-6 lg:px-12 py-4">
 
@@ -197,13 +195,6 @@
                                        class="inline-flex h-8 items-center rounded-lg border border-slate-300 dark:border-slate-600 px-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
                                         Excel
                                     </a>
-                                    {% if puede_corregir and lote.puede_revertir %}
-                                    <button type="button"
-                                            @click="abrirRollback('{{ lote.lote_id|escapejs }}', '{{ lote.filas_correccion }}')"
-                                            class="inline-flex h-8 items-center rounded-lg border border-rose-300 dark:border-rose-700 px-2.5 text-xs font-semibold text-rose-700 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-900/20">
-                                        Revertir
-                                    </button>
-                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -223,80 +214,13 @@
             </div>
             {% endif %}
         </div>
-
-        {% if puede_corregir and hay_lotes_revertibles %}
-        <div class="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
-            El rollback restaura tablas desde el backup del lote (permiso de corregir). Los lotes de eliminación de asientos no son revertibles.
-        </div>
-        {% endif %}
     </div>
-    </div>
-
-    <!-- Modal confirmación rollback (Synap — sin window.confirm) -->
-    <div x-show="confirmOpen" x-cloak
-         class="fixed inset-0 z-50 flex items-center justify-center p-4"
-         @keydown.escape.window="cerrarRollback()">
-        <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="cerrarRollback()"></div>
-        <div class="relative w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-6"
-             @click.stop>
-            <div class="flex items-start gap-3 mb-4">
-                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/40 flex items-center justify-center">
-                    <span class="material-icons text-rose-600 dark:text-rose-400" aria-hidden="true">warning</span>
-                </div>
-                <div>
-                    <h3 class="text-base font-semibold text-slate-900 dark:text-white">Revertir lote de corrección</h3>
-                    <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                        Se restaurarán las tablas contables desde el backup asociado al lote
-                        <code class="font-mono text-xs" x-text="loteSeleccionado"></code>
-                        (<span x-text="filasSeleccionadas"></span> filas en el log).
-                    </p>
-                    <p class="text-xs text-rose-600 dark:text-rose-400 mt-2 font-medium">
-                        Esta operación no se puede deshacer automáticamente.
-                    </p>
-                </div>
-            </div>
-            <form :action="rollbackUrl" method="post"
-                  class="synap-post-loading flex flex-wrap justify-end gap-2"
-                  data-synap-loading-title="Revirtiendo lote"
-                  data-synap-loading-subtitle="Restaurando tablas desde backup. No cierres esta ventana."
-                  @submit="procesando = true">
-                {% csrf_token %}
-                <button type="button" @click="cerrarRollback()" :disabled="procesando"
-                        class="rounded-lg px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50">
-                    Cancelar
-                </button>
-                <button type="submit" :disabled="procesando"
-                        class="rounded-lg px-4 py-2 text-sm font-semibold text-white bg-rose-700 hover:bg-rose-800 disabled:opacity-50">
-                    <span x-text="procesando ? 'Revertiendo…' : 'Confirmar rollback'"></span>
-                </button>
-            </form>
-        </div>
     </div>
 </section>
 
 <script>
-function auditoriaLotes(cfg) {
+function auditoriaLotes() {
     return {
-        puedeCorregir: !!cfg.puedeCorregir,
-        confirmOpen: false,
-        loteSeleccionado: '',
-        filasSeleccionadas: 0,
-        rollbackUrl: '',
-        procesando: false,
-        abrirRollback(loteId, filas) {
-            if (!this.puedeCorregir) { return; }
-            this.loteSeleccionado = loteId;
-            this.filasSeleccionadas = filas;
-            this.rollbackUrl = '{% url "contabilidad_audit:auditoria_lote_rollback" lote_id="__LOTE__" %}'.replace('__LOTE__', encodeURIComponent(loteId));
-            this.confirmOpen = true;
-            this.procesando = false;
-        },
-        cerrarRollback() {
-            if (this.procesando) { return; }
-            this.confirmOpen = false;
-            this.loteSeleccionado = '';
-            this.rollbackUrl = '';
-        },
         actualizarDiagnostico(url) {
             if (typeof window.synapShowPostLoadingProgress === 'function') {
                 window.synapShowPostLoadingProgress({

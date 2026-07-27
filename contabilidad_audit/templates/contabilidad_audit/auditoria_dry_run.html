@@ -15,6 +15,7 @@
             tableroUrl: '{{ tablero_url }}',
             ejerciciosPeriodosUrl: '{{ ejercicios_periodos_url }}',
             applyEjecutarUrl: '{% url "contabilidad_audit:auditoria_apply_ejecutar" %}',
+            lotesUrl: '{% url "contabilidad_audit:auditoria_lotes" %}',
             puedeCorregir: {{ puede_corregir|yesno:"true,false" }},
             idEjercicio: '{{ id_ejercicio|escapejs }}',
             alcanceRecompute: '{{ alcance_recompute|default:''|escapejs }}',
@@ -500,13 +501,6 @@
                         <p x-show="!Object.keys(payload?.impacto?.totales_por_tabla || {}).length"
                            class="text-xs text-slate-500">Sin impacto por tabla.</p>
                     </div>
-                    <div x-show="Object.keys(payload?.backups_propuestos || {}).length">
-                        <h3 class="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">Backups propuestos</h3>
-                        <p class="text-[11px] text-slate-500 mb-2">Nombres que se usarían al aplicar; el diagnóstico no crea tablas.</p>
-                        <template x-for="(nombre, tabla) in (payload?.backups_propuestos || {})" :key="'tech-bkp-' + tabla">
-                            <div class="text-xs font-mono py-1"><span x-text="tabla"></span> → <span x-text="nombre"></span></div>
-                        </template>
-                    </div>
                 </div>
             </div>
         </div>
@@ -529,7 +523,7 @@
                     <h3 id="dry-run-apply-titulo" class="text-base font-semibold text-slate-900 dark:text-white">Aplicar correcciones</h3>
                     <p class="text-sm text-slate-600 dark:text-slate-300 mt-1">
                         Se escribirán los cambios del plan en la base contable.
-                        Se crea backup previo y queda registrado en el historial de lotes.
+                        La operación quedará registrada en el historial de lotes.
                     </p>
                     <p class="text-xs text-slate-500 mt-2">
                         Ítems aplicables:
@@ -543,10 +537,9 @@
                 </div>
             </div>
             <form method="post" :action="applyEjecutarUrl"
-                  class="synap-post-loading space-y-4"
-                  data-synap-loading-title="Aplicando corrección contable"
-                  data-synap-loading-subtitle="Escribiendo cambios con backup previo. No cierres esta ventana."
-                  @submit="applyProcesando = true">
+                  class="space-y-4"
+                  data-synap-progress-managed="1"
+                  @submit.prevent="ejecutarApplyConProgreso($event)">
                 {% csrf_token %}
                 <input type="hidden" name="dry_run_id" :value="payload?.dry_run_id || ''">
                 <input type="hidden" name="base_empresa" :value="payload?.base_empresa || ''">
@@ -558,7 +551,7 @@
                 </label>
                 <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
                     <input type="checkbox" name="confirmar_reapertura" value="on"
-                           class="mt-1 rounded border-slate-300">
+                           class="mt-1 rounded border-slate-300" x-model="applyConfirmarReapertura">
                     <span>Si el plan afecta ejercicios cerrados, confirmo la reapertura explícita.</span>
                 </label>
                 <div class="flex flex-wrap justify-end gap-2 pt-1">
@@ -708,6 +701,7 @@ function auditoriaDryRun(cfg) {
         tableroUrl: cfg.tableroUrl,
         ejerciciosPeriodosUrl: cfg.ejerciciosPeriodosUrl,
         applyEjecutarUrl: cfg.applyEjecutarUrl || '',
+        lotesUrl: cfg.lotesUrl || '',
         puedeCorregir: !!cfg.puedeCorregir,
         filtros: {
             idEjercicio: cfg.idEjercicio || '',
@@ -727,6 +721,7 @@ function auditoriaDryRun(cfg) {
         tecnicoPlanAbierto: false,
         applyOpen: false,
         applyConfirmado: false,
+        applyConfirmarReapertura: false,
         applyProcesando: false,
 
         ejercicios: [],
@@ -1199,6 +1194,7 @@ function auditoriaDryRun(cfg) {
         abrirConfirmacionApply() {
             if (!this.puedeCorregir || !(this.payload?.impacto?.total_aplicables > 0)) { return; }
             this.applyConfirmado = false;
+            this.applyConfirmarReapertura = false;
             this.applyProcesando = false;
             this.applyOpen = true;
         },
@@ -1206,6 +1202,120 @@ function auditoriaDryRun(cfg) {
             if (this.applyProcesando) { return; }
             this.applyOpen = false;
             this.applyConfirmado = false;
+            this.applyConfirmarReapertura = false;
+        },
+        csrfToken() {
+            const m = document.cookie.match(/csrftoken=([^;]+)/);
+            return m ? decodeURIComponent(m[1]) : '';
+        },
+        async ejecutarApplyConProgreso() {
+            if (!this.applyConfirmado || this.applyProcesando) { return; }
+            const totalRaw = Number(this.payload?.impacto?.total_aplicables || 0);
+            const total = Math.max(totalRaw, 1);
+            this.applyProcesando = true;
+            if (typeof window.synapShowPostLoadingProgress === 'function') {
+                window.synapShowPostLoadingProgress({
+                    title: 'Aplicando corrección contable',
+                    subtitle: 'Escribiendo cambios. No cierres esta ventana.',
+                    current: 0,
+                    total: total,
+                });
+            }
+            try {
+                const resp = await fetch(this.applyEjecutarUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/x-ndjson',
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRFToken': this.csrfToken(),
+                    },
+                    body: JSON.stringify({
+                        dry_run_id: this.payload?.dry_run_id || '',
+                        base_empresa: this.payload?.base_empresa || '',
+                        modo: 'general',
+                        confirmacion_entiendo: true,
+                        confirmar_reapertura: !!this.applyConfirmarReapertura,
+                        stream: true,
+                    }),
+                });
+
+                const contentType = (resp.headers.get('content-type') || '').toLowerCase();
+                if (!resp.ok && contentType.includes('application/json')) {
+                    const errData = await resp.json();
+                    throw new Error(errData.error || 'Error al aplicar corrección');
+                }
+                if (!resp.body) {
+                    throw new Error('Respuesta vacía del servidor');
+                }
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let resultado = null;
+
+                const procesarLinea = (linea) => {
+                    const txt = linea.trim();
+                    if (!txt) { return; }
+                    const evt = JSON.parse(txt);
+                    if (evt.type === 'progress') {
+                        if (typeof window.synapUpdatePostLoadingProgress === 'function') {
+                            let subtitle = 'Escribiendo cambios. No cierres esta ventana.';
+                            let label = '';
+                            if (evt.phase === 'write') {
+                                label = evt.label || '';
+                            } else if (evt.phase === 'finalize') {
+                                subtitle = 'Finalizando…';
+                            }
+                            window.synapUpdatePostLoadingProgress({
+                                current: evt.current ?? 0,
+                                total: evt.total ?? total,
+                                label: label,
+                                title: 'Aplicando corrección contable',
+                                subtitle: subtitle,
+                            });
+                        }
+                    } else if (evt.type === 'done') {
+                        resultado = evt;
+                    } else if (evt.type === 'error') {
+                        throw new Error(evt.error || 'Error al aplicar corrección');
+                    }
+                };
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) { break; }
+                    buffer += decoder.decode(value, { stream: true });
+                    const lineas = buffer.split('\n');
+                    buffer = lineas.pop() || '';
+                    for (const linea of lineas) {
+                        procesarLinea(linea);
+                    }
+                }
+                if (buffer.trim()) {
+                    procesarLinea(buffer);
+                }
+
+                if (!resultado) {
+                    throw new Error('Sin respuesta del servidor');
+                }
+                this.applyOpen = false;
+                window.location.href = this.lotesUrl || this.tableroUrl;
+            } catch (e) {
+                const msg = e.message || String(e);
+                if (typeof window.mprShowAviso === 'function') {
+                    window.mprShowAviso(msg, 'error');
+                } else if (typeof window.SynapMessages !== 'undefined' && window.SynapMessages.show) {
+                    window.SynapMessages.show(msg, 'error');
+                } else {
+                    this.error = msg;
+                }
+                this.applyProcesando = false;
+            } finally {
+                if (typeof window.synapHidePostLoading === 'function') {
+                    window.synapHidePostLoading();
+                }
+            }
         },
         valorTexto(valor) {
             if (valor === null || valor === undefined || valor === '') { return '—'; }
