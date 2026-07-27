@@ -248,6 +248,8 @@ Defina los turnos (por ejemplo Mañana, Tarde, Noche) con su horario. Solo los *
 
 Asigne el turno de cada operario **día a día** (hoy y fechas futuras). Puede usar asignación masiva para varios operarios y un rango de fechas.
 
+La pantalla usa la **barra densa de producción**: en la barra superior están la navegación de semana (Anterior / Siguiente), **Asignación masiva**, **Gestionar turnos** y los atajos al Tablero, Parte y Control de calidad. La grilla ocupa el resto de la pantalla y se desplaza sola. Al **quitar** un turno se pide confirmación en una ventana de Synap.
+
 Sin turno del día, el operario no podrá cargar su parte.
 
 ---

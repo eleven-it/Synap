@@ -190,13 +190,19 @@ Sigue el mismo patrón que `operarios_list.html`:
 
 ### Grilla Semanal (planificacion_turnos.html)
 
-- Tabla con sticky-left en columna Operario.
+> **UI:** la pantalla usa el **chrome denso MPR** (barra `slate-800` sticky, sin migas de pan) descrito en
+> [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) §3.1: navegación de semana,
+> **Asignación masiva**, **Gestionar turnos**, atajos `chrome_nav_flujo` (`current=roster`) y ayuda al manual.
+
+- Tabla con sticky-left en columna Operario; `thead` compacto (`text-[10px]`) con fondo opaco.
 - 7 columnas de días (lunes a domingo).
-- Celdas **fecha pasada**: solo lectura (badge gris).
-- Celdas **hoy/futuro con asignación**: badge verde + botón "Quitar".
+- Celdas **fecha pasada**: solo lectura (badge atenuado).
+- Celdas **hoy/futuro con asignación**: badge de color del turno + botón "Quitar".
 - Celdas **hoy/futuro sin asignación**: `<select>` de turnos activos + botón confirmar.
 - `<select>` con JS `onchange` dispara el form automáticamente.
 - Fechas en cabecera: `"Lu dd/MM/yyyy"`.
+- **Quitar turno** abre un **modal Synap** de confirmación (Alpine `confirmOpen`); no se usan
+  `confirm()` / `alert()` nativos (ver `.cursor/rules/modales-sin-dialogos-nativos.mdc`).
 
 #### Color por turno (diferenciación visual) {#color-por-turno}
 

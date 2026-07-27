@@ -51,8 +51,11 @@ Misma barra densa en:
 3. `clasificacion_encabezado.html` (+ sin migas en `clasificacion_produccion.html`)
 4. `maquinas_carga_articulos.html` (Asignar artículo a máquina — config planta; sin migas; filtros búsqueda/línea en chrome; chips de artículo en formato multiselección/`tags-filter`, color púrpura)
 5. `armado_tablero.html` (Armado 1ra/2da vista tablero — sin migas; sin Desde/Hasta/Marcas/Filtrar/Solo con resta ni KPI cabecera; búsqueda cliente; Docenas|Pares `variant=dark`; atajos Tablero/Imputación/Carrito; CTA **Ejecutar armado** emerald en 1ra; `chrome_nav_flujo` con `current=armado`)
+6. `planificacion_turnos.html` (Planificación de turnos / roster — **config operativa**; sin migas; navegación de semana **Anterior · «Semana del dd/MM/yyyy» · Siguiente** en la barra; CTA **Asignación masiva** púrpura (si hay turnos activos y operarios); **Gestionar turnos** secundario `slate-700` → `turnos_list`; `chrome_nav_flujo` con `current=roster`; ayuda `help_outline` → `#planificacion-turnos`)
 
-Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual; en Asignar artículo muestra los cuatro atajos; en Armado muestra los cuatro atajos del flujo planta).
+Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual; en Asignar artículo, Armado y Planificación de turnos muestra los cuatro atajos del flujo planta).
+
+**Planificación de turnos — detalle:** la grilla operarios × 7 días vive en la zona de datos (`flex-1 min-h-0 overflow-hidden`) dentro de una tarjeta `rounded-lg border border-slate-200`; `thead` compacto `text-[10px] uppercase` con fondo opaco y columna Operario sticky. Se conservan los badges de color por turno (`.mpr-turno-badge--<slug>`) y la regla editar hoy/futuro vs. solo lectura en pasado. **Quitar turno usa un modal Synap de confirmación** (`confirmOpen` + overlay `bg-black/50 backdrop-blur-sm`, Cancelar + CTA destructivo rojo) — **sin `confirm()` nativo**; el aviso de «Seleccioná al menos un operario» del alta masiva usa `mprShowAviso` — **sin `alert()`**. Los modales (masivo y confirmación) quedan **fuera** del wrapper `sticky`.
 
 | Destino | Color | Ícono |
 |---------|-------|-------|
