@@ -797,10 +797,12 @@
                 El toggle <strong>Docenas / Pares</strong> cambia la unidad mostrada en toda la tabla (docenas enteras = pares ÷ 12 redondeado).
                 {% if puede_enviar %}
                 En modo docenas el envío es en docenas enteras; en modo pares, en pares enteros (sin decimales).
-                El envío admite hasta <strong>a enviar</strong> = max(0, Urgente − Σ envíos), sin superar <strong>Urgente</strong>.
+                El envío admite hasta <strong>a enviar</strong> = max(0, Urgente − Σ envíos del ledger), sin superar <strong>Urgente</strong>.
+                El tope no se reabre si Fabricando = 0: el ledger ya cuenta como compromiso.
                 Si el tope en la unidad mostrada es 0, el input queda deshabilitado.
                 {% endif %}
-                <strong>Fabricando</strong> = envíos no acreditados en stock del pipeline.
+                <strong>Fabricando</strong> = envíos no acreditados en stock del pipeline
+                (si el stock ya supera los envíos, Fabricando queda en 0).
                 {% endif %}
             </p>
         </div>

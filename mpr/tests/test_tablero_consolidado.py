@@ -152,7 +152,7 @@ class TestCalcularPendienteComponente(SimpleTestCase):
 
 
 class TestCalcularAEnviarComponente(SimpleTestCase):
-    """Tope Enviar: urgente−envíos si Fabricando>0; reabre a urgente si Fabricando=0."""
+    """Tope Enviar: siempre max(0, urgente − Σ envíos); sin reapertura por Fabricando=0."""
 
     def test_resta_menos_envios(self):
         from mpr.services import _calcular_a_enviar_componente
@@ -186,13 +186,22 @@ class TestCalcularAEnviarComponente(SimpleTestCase):
             0.0,
         )
 
-    def test_reabre_cuando_fabricando_cero_y_urgente_positiva(self):
-        """Ciclo acreditado (Fabricando=0): si el recálculo deja urgente>0, reabre Enviar."""
+    def test_no_reabre_cuando_fabricando_cero_y_ledger_cubre_urgente(self):
+        """Stock preexistente deja Fabricando=0: no reenviar el mismo hueco."""
         from mpr.services import _calcular_a_enviar_componente
 
         self.assertAlmostEqual(
             _calcular_a_enviar_componente(100.0, 100.0, fabricando=0.0),
-            100.0,
+            0.0,
+        )
+
+    def test_stock_absorbe_envios_parciales_resta_resto(self):
+        """Urgente 78, ya enviados 234 (reenvíos fantasma): tope 0 aunque fab=0."""
+        from mpr.services import _calcular_a_enviar_componente
+
+        self.assertAlmostEqual(
+            _calcular_a_enviar_componente(78.0, 234.0, fabricando=0.0),
+            0.0,
         )
 
     def test_a_enviar_no_supera_resta_total(self):
