@@ -226,9 +226,16 @@ Snapshot **por componente** en el período. El embudo muestra las 4 etapas del p
 
 UTF-8 BOM en reportes principales de Producción y Demanda; en modo docenas exporta columnas `*_display`.
 
-### UI compacta
+### UI compacta (chrome denso alineado al Tablero — 26/07/2026)
 
-Panel **sticky** en una tarjeta: contexto (título + período), filtros, navegación con KPIs en chips. Área de datos con scroll interno (`h-[calc(100dvh-4.5rem)]`).
+El hub usa el **chrome denso slate-800** del Tablero de producción ([TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) §3.1), **sin migas de pan**:
+
+- Barra `sticky top-14 md:top-16 z-40` bajo el navbar, `rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md`, en **dos filas densas**.
+- Fila 1: `h1` blanco con el título del reporte + subtítulo `dd/MM/yyyy — dd/MM/yyyy · presentación`; Desde/Hasta (`h-9` oscuros) + presets Hoy / 7 días / Mes; toggle **Docenas | Pares** (`includes/toggle_docenas_pares.html` con `variant="dark"`, activo sky); **Actualizar** secundario `slate-700` y **Exportar CSV** secundario slate (solo ícono + tooltip por debajo de `2xl`); a la derecha CTA **Tablero de producción** (emerald → `mpr:tablero_produccion`), `chrome_nav_flujo.html` (`current="tablero_prod"`) y ayuda `help_outline` → manual MPR.
+- Fila 2: grupos (Producción / Demanda / Trazabilidad, activo púrpura) + pills de reporte (activo slate-600) y chips KPI densos sobre fondo oscuro.
+- Zona de datos: tarjeta `rounded-lg border-slate-200` con scroll interno dentro del viewport (`h-[calc(100dvh-4.5rem)]`); fondo de página `bg-slate-50`.
+
+El **Tablero KPI** (`mpr:tablero`) ya no es CTA primario: queda como ícono ámbar dentro de `chrome_nav_flujo`.
 
 ### Infraestructura gráficos
 
