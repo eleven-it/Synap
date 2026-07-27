@@ -1,9 +1,11 @@
 # Envío a Producción desde el Tablero — MPR Etapa 7
 
-**Fecha:** 03/07/2026  
+**Fecha:** 03/07/2026 — **actualizado 27/07/2026** (límite de filas del Tablero Par/Pack)  
 **Change:** `mpr-pipeline-etapa7-enviar-desde-tablero`  
 **Capability:** `mpr-envio-produccion-tablero`  
 **Artefactos SDD:** Proposal, Spec, Design #1024, Tasks #1025  
+
+**Límite UI:** `TableroProduccionView` pide `limit=500` a `listar_tablero_por_articulo` / `listar_tablero_pack`. Filas más allá de ese tope (ordenadas por resta urgente) no se muestran ni se incluyen en el POST de Enviar. Antes era 200; con ~288 componentes en planta se cortaban filas con `a_enviar > 0` (p. ej. Gmel fuera del top 200).
 
 ---
 
