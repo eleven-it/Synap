@@ -21,6 +21,13 @@
   .dark tr.group\/row:hover .clasif-col.clasif-col-tint-0 { background-color: rgb(22 101 52 / 0.28); }
   .dark tr.group\/row:hover .clasif-col.clasif-col-tint-1 { background-color: rgb(7 89 133 / 0.28); }
   .dark tr.group\/row:hover .clasif-col.clasif-col-tint-2 { background-color: rgb(146 64 14 / 0.28); }
+  /* Separador entre bloques de máquina (más marcado que divide-y interno) */
+  tr.clasif-inicio-maquina > td {
+    border-top: 2px solid rgb(148 163 184); /* slate-400 */
+  }
+  .dark tr.clasif-inicio-maquina > td {
+    border-top-color: rgb(100 116 139); /* slate-500 */
+  }
 </style>
 <section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5">
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
@@ -130,43 +137,43 @@
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/80">
                         {% if not requiere_fecha and not filas_vacio %}
                             {% for fila in filas %}
-                            <tr class="group/row clasif-grilla-fila{% if fila.solo_lectura %} opacity-70{% endif %}"
+                            <tr class="group/row clasif-grilla-fila{% if fila.solo_lectura %} opacity-70{% endif %}{% if fila.show_maquina and not forloop.first %} clasif-inicio-maquina{% endif %}"
                                 data-descripcion="{{ fila.maquina_nombre|lower }} {{ fila.descripcion|lower }} {{ fila.codigo_tooltip|lower }} {{ fila.turno_nombre|lower }} {{ fila.operario_nombre|lower }}"
                                 x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase().trim())"
                                 x-data="clasificacionFila({{ fila.id_articulo }}, {{ fila.base_clasificable|floatformat:0 }}, {{ unidades_por_docena_clasificacion|default:12 }}, {{ fila.ini_seg2da|default:0 }}, {{ fila.ini_scrap|default:0 }}, {{ fila.solo_lectura|yesno:'true,false' }}, {{ fila.ini_semi|default:0 }})"
                                 :class="excede ? 'bg-red-50/40 dark:bg-red-950/15' : ''">
-                                {# Máquina — al buscar se muestra en cada fila #}
+                                {# Máquina — al buscar se muestra en cada fila; con rowspan alinea al primer turno (align-top) #}
                                 <td x-show="busqueda.trim() !== ''"
-                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 bg-white px-2 py-3 text-center align-middle dark:border-slate-700 dark:bg-slate-800">
+                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 bg-white px-2 py-2 text-center align-top dark:border-slate-700 dark:bg-slate-800">
                                     <span class="inline-flex max-w-full items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-sm font-semibold leading-tight text-slate-800 dark:bg-slate-700 dark:text-slate-100"
                                           title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
                                 </td>
                                 {% if fila.show_maquina %}
                                 <td x-show="busqueda.trim() === ''"
                                     rowspan="{{ fila.rowspan_maquina|default:1 }}"
-                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 bg-white px-2 py-3 text-center align-middle dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
+                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 bg-white px-2 py-2 text-center align-top dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
                                     <span class="inline-flex max-w-full items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-sm font-semibold leading-tight text-slate-800 dark:bg-slate-700 dark:text-slate-100"
                                           title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
                                 </td>
                                 {% endif %}
-                                {# Artículo — rowspan o repetido al buscar #}
+                                {# Artículo — rowspan o repetido al buscar; align-top = primera línea de turnos #}
                                 <td x-show="busqueda.trim() !== ''"
-                                    class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-3 align-middle dark:border-slate-700 dark:bg-slate-800">
+                                    class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-2 align-top dark:border-slate-700 dark:bg-slate-800">
                                     <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
                                           title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
                                 </td>
                                 {% if fila.show_articulo %}
                                 <td x-show="busqueda.trim() === ''"
                                     rowspan="{{ fila.rowspan_articulo|default:1 }}"
-                                    class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-3 align-middle dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
+                                    class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-2 align-top dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
                                     <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
                                           title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
                                 </td>
                                 {% endif %}
-                                <td class="px-3 py-3 text-sm text-slate-700 dark:text-slate-300">{{ fila.turno_nombre }}</td>
-                                <td class="px-3 py-3 text-sm font-bold text-slate-800 dark:text-slate-100">{{ fila.operario_nombre }}</td>
-                                <td class="px-3 py-3 text-center text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ fila.parte_texto }}</td>
-                                <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-0">
+                                <td class="px-3 py-2 text-sm text-slate-700 dark:text-slate-300 align-top">{{ fila.turno_nombre }}</td>
+                                <td class="px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-100 align-top">{{ fila.operario_nombre }}</td>
+                                <td class="px-3 py-2 text-center text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200 align-top">{{ fila.parte_texto }}</td>
+                                <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-0">
                                     {% if fila.solo_lectura %}
                                     <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_semi_texto }}</p>
                                     {% else %}
@@ -192,14 +199,14 @@
                                     </div>
                                     {% endif %}
                                 </td>
-                                <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-1">
+                                <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-1">
                                     {% if fila.solo_lectura %}
                                     <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_seg2da_texto }}</p>
                                     {% else %}
                                     {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="seg2da" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="2da selección" model_doc="seg2daDoc" model_uni="seg2daUni" subtotal_alpine="seg2daUnidades" ring_class="focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/25" only %}
                                     {% endif %}
                                 </td>
-                                <td class="clasif-col border-l-2 px-2 py-3 clasif-col-tint-2">
+                                <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-2">
                                     {% if fila.solo_lectura %}
                                     <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_scrap_texto }}</p>
                                     {% else %}
