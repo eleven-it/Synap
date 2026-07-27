@@ -302,7 +302,7 @@ El servicio DEBE manear sin crash: cuentas con `saldo_pc` NULL (abortar correcci
 
 ### Requirement: REC-17 — Reconstrucción total de saldos por cuenta
 
-El servicio DEBE poder recomputar **desde cero** (reconstrucción total, no incremento) las tablas derivadas `cont_ejercicio_saldo_cta` y `cont_periodo_saldo_cta` a partir de los renglones de `cont_asiento`, aplicando la regla de signo según `cont_pc.saldo_pc` (**Deudor:** `+debe − haber`; **Acreedor:** `+haber − debe`). Con `tratamiento_anulados=incluir_neutralizado` (default validado) DEBE **sumar TODAS las filas** —incluidas las marcadas `anulado='Si'`—, porque cada anulación tiene su **contra-asiento reversante** (`anulado='No'`) y ambos se netean; excluir solo las `anulado='Si'` dejaría el contra sin su original y desbalancearía (validado empíricamente: 31 vs 6 cuentas divergentes). **Modelo de arrastre validado en `administranet89`: NO hay arrastre de apertura** — `saldo_ejercicio_cta` = Σ firmada de los movimientos del propio ejercicio (con arrastre 1/2/3 las diferencias empeoraban de 25 a 109). El servicio DEBE reproducir el modelo sin-arrastre salvo que una empresa documente lo contrario (parámetro configurable). Ejecución de referencia: 83 cuentas/ejercicio recompuestas, idempotente en re-corrida. DEBE respetar `alcance_recompute`, `ejercicios_cerrados` y el flujo dry-run → backup → transacción única (REC-01, REC-03, REC-04). DEBE mapear H53, H10, H17, H33.
+El servicio DEBE poder recomputar **desde cero** (reconstrucción total, no incremento) las tablas derivadas `cont_ejercicio_saldo_cta` y `cont_periodo_saldo_cta` a partir de los renglones de `cont_asiento`, aplicando la regla de signo según `cont_pc.saldo_pc` (**Deudor:** `+debe − haber`; **Acreedor:** `+haber − debe`). Con `tratamiento_anulados=incluir_neutralizado` (default) DEBE **sumar TODAS las filas** —incluidas las marcadas `anulado='Si'`—, porque cada anulación tiene su **contra-asiento reversante** (`anulado='No'`) y ambos se netean; excluir solo las `anulado='Si'` dejaría el contra sin su original y desbalancearía (validado empíricamente: 31 vs 6 cuentas divergentes). **Modelo de arrastre validado en `administranet89`: NO hay arrastre de apertura** — `saldo_ejercicio_cta` = Σ firmada de los movimientos del propio ejercicio (con arrastre 1/2/3 las diferencias empeoraban de 25 a 109). El servicio DEBE reproducir el modelo sin-arrastre salvo que una empresa documente lo contrario (parámetro configurable). Al reescribir `cont_asiento.saldo_asiento` (columna del informe VB6 `conta_libro_mayor.rpt` / `Conta_Info` 130) el servicio DEBE acumular todas las filas del ejercicio de la cuenta con la misma regla canónica (`incluir_neutralizado` por defecto). Pie (`cont_*_saldo_cta`), corrido y checks DEBEN quedar alineados con la política activa. Ejecución de referencia: 83 cuentas/ejercicio recompuestas, idempotente en re-corrida. DEBE respetar `alcance_recompute`, `ejercicios_cerrados` y el flujo dry-run → backup → transacción única (REC-01, REC-03, REC-04). DEBE mapear H53, H10, H17, H33.
 
 #### Scenario: Dry-run de reconstrucción de saldos
 
@@ -327,6 +327,18 @@ El servicio DEBE poder recomputar **desde cero** (reconstrucción total, no incr
 - **Dado** una cuenta imputable con `saldo_pc` NULL usada en movimientos
 - **Cuando** apply intenta reconstruir saldos
 - **Entonces** excluye esa cuenta del apply automático, registra error en log y continúa con el resto según política
+
+#### Scenario: Corrido Libro Mayor incluye anulados
+
+- **Dado** una cuenta con renglones `anulado='Si'` y política global `tratamiento_anulados=incluir_neutralizado` (default)
+- **Cuando** se ejecuta `recalcular_saldo_asiento_cuenta` / `recalcular_libro_mayor`
+- **Entonces** el saldo corrido suma también las filas anuladas (paridad Conta_Info) y el rebuild de `cont_ejercicio_saldo_cta` usa la misma regla; pie == último corrido
+
+#### Scenario: Política explícita excluir omite anulados en pie y checks
+
+- **Dado** una cuenta con renglones `anulado='Si'` y política global `tratamiento_anulados=excluir`
+- **Cuando** se ejecuta dry-run de reconstrucción de saldos o `saldo_ejercicio_vs_diario`
+- **Entonces** los renglones anulados no participan del saldo teórico del pie; el corrido del Libro Mayor sigue incluyendo anulados (regla fija Conta_Info)
 
 ---
 

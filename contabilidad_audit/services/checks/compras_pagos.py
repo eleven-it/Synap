@@ -22,6 +22,12 @@ from contabilidad_audit.services.resultados import (
 TIPOS_COMPRA_PAGO = ("FA", "FC", "OP")
 
 
+def _exige_marcador_anulacion(tipo_comprobante, tipo_op) -> bool:
+    if str_or_default(tipo_comprobante).upper() != "OP":
+        return True
+    return str_or_default(tipo_op).strip().lower() != "egreso"
+
+
 def comprobante_compra_pago_sin_asiento(base_empresa, filtros, politica, contexto: CorridaContexto):
     """Portado de cont_reconstruccion_compras_pagos.py dryrun-missing (solo lectura).
 
@@ -188,7 +194,7 @@ def integridad_anulacion_compra_pago(base_empresa, filtros, politica, contexto: 
         extra_periodo, params_periodo = filtro_periodo_comprobante_por_fecha_sql(filtros, "cp")
         cur.execute(
             f"""
-            SELECT cp.CodigoMovimiento, cp.TipoComprobante, cp.NroComprobante
+            SELECT cp.CodigoMovimiento, cp.TipoComprobante, cp.NroComprobante, cp.TipoOP
             FROM cuentaproveedor cp
             JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
             {join_ej}
@@ -254,8 +260,10 @@ def integridad_anulacion_compra_pago(base_empresa, filtros, politica, contexto: 
                 (cm,),
             )
             contra_tot = cur.fetchone()
+            tipo_comp = str_or_default(row[1])
+            tipo_op = str_or_default(row[3])
             problemas = []
-            if not tiene_marcador:
+            if not tiene_marcador and _exige_marcador_anulacion(tipo_comp, tipo_op):
                 problemas.append("falta_marcador_cuentaproveedor_cm0")
             if total_orig > 0 and pendientes_orig > 0:
                 problemas.append("asiento_original_no_anulado")
@@ -275,8 +283,9 @@ def integridad_anulacion_compra_pago(base_empresa, filtros, politica, contexto: 
                         id_ejercicio=id_ejercicio,
                         referencia_hallazgo="H53",
                         detalle={
-                            "TipoComprobante": str_or_default(row[1]),
+                            "TipoComprobante": tipo_comp,
                             "NroComprobante": str_or_default(row[2]),
+                            "TipoOP": tipo_op,
                             "problemas": problemas,
                         },
                     )

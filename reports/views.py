@@ -12,7 +12,12 @@ from django.views.generic import TemplateView
 from core.utils.permissions import user_has_full_access
 from .domain import build_catalog_for_user
 from .models import ReportDefinition, ReportWorkspace
-from .permissions import OperationalReportsPermission, ManagerialReportsPermission, BuilderReportsPermission
+from .permissions import (
+    OperationalReportsPermission,
+    ManagerialReportsPermission,
+    BuilderReportsPermission,
+    DabraConsolidadoRemitosPermission,
+)
 
 # Reportes con UI/dashboard propio (runner legacy por slug) que deben listarse también bajo «Declarativos»
 # en el Builder, sin marcar config como declarative-v1 (evita que QueryRunner delegue al motor declarativo).
@@ -128,6 +133,7 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
     COMMAND_CENTER_SLUG = "command-center-gerencial"
     CLIENTES_SIN_VENTAS_SLUG = "clientes-sin-ventas-vendedor"
     COBRANZAS_VENDEDOR_SLUG = "cobranzas-por-vendedor"
+    DABRA_CONSOLIDADO_REMITOS_SLUG = "dabra-consolidado-remitos"
     UTILIDAD_GERENCIAL_SLUG = "utilidad-gerencial"
 
     def get_template_names(self):
@@ -140,6 +146,8 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             return ["reports/dashboard_clientes_sin_ventas_vendedor.html"]
         if slug == self.COBRANZAS_VENDEDOR_SLUG:
             return ["reports/dashboard_cobranzas_por_vendedor.html"]
+        if slug == self.DABRA_CONSOLIDADO_REMITOS_SLUG:
+            return ["reports/dashboard_dabra_consolidado_remitos.html"]
         if slug == self.UTILIDAD_GERENCIAL_SLUG:
             return ["reports/dashboard_utilidad_gerencial.html"]
         return [self.template_name]
@@ -155,9 +163,12 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
         report = ReportDefinition.objects.filter(filters).first()
         if not report:
             raise Http404("Report not found")
-        if report.is_operational() and not OperationalReportsPermission().has_permission(self.request, self):
+        if report.slug == self.DABRA_CONSOLIDADO_REMITOS_SLUG:
+            if not DabraConsolidadoRemitosPermission().has_permission(self.request, self):
+                raise Http404("Not authorized for DABRA consolidated report")
+        elif report.is_operational() and not OperationalReportsPermission().has_permission(self.request, self):
             raise Http404("Not authorized for operational reports")
-        if report.is_managerial() and not ManagerialReportsPermission().has_permission(self.request, self):
+        elif report.is_managerial() and not ManagerialReportsPermission().has_permission(self.request, self):
             raise Http404("Not authorized for managerial reports")
         from reports.services.report_visibility import report_visible_for_user
 
@@ -199,6 +210,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 else "reports-api:reports-cobranzas-vendedor-relay"
             )
             context["cobranzas_scope"] = "gerencia" if es_gerencial else "operativo"
+        if report.slug == self.DABRA_CONSOLIDADO_REMITOS_SLUG:
+            context["dabra_api_url"] = reverse("reports-api:reports-dabra-consolidado-remitos-relay")
+            context["dabra_export_url"] = reverse("reports-api:reports-dabra-consolidado-remitos-relay-export")
         if report.slug == self.UTILIDAD_GERENCIAL_SLUG:
             es_gerencial = ManagerialReportsPermission().has_permission(self.request, self)
             context["utilidad_api_url"] = reverse(

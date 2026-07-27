@@ -135,6 +135,8 @@ Severidad: 🔴 crítico (corrompe saldos/balance) · 🟠 alto (coherencia rela
 | H46 | 🔵 | `Cont_Conceptos_Cont.frm` incoherente (referencia formularios de banco) — código muerto | `Cont_Conceptos_Cont.frm:372-407` |
 | H47 | 🔵 | Credenciales MySQL embebidas y schema `administranet` hardcodeado en launcher de reportes | `Conta_Info.frm:823,1303,1985-1997` |
 
+**Libro Mayor (`Conta_Info` reporte 130 / `conta_libro_mayor.rpt`):** el launcher filtra solo `id_pc` + rango `Fecha_asiento`; **no** filtra `anulado='No'` (hay variantes comentadas). La columna de saldo corrido lee `cont_asiento.saldo_asiento` (precalculado al imputar / recalculado en Synap **incluyendo** anulados). El pie «Saldo ejercicio» y los checks `saldo_*_vs_diario` usan la misma regla canónica (`incluir_neutralizado` por defecto). Ver REC-17 en `AUDITORIA_IMPUTACION_CONTABILIDAD_SYNAP.md`.
+
 ### 3.5 Transversal
 
 | # | Sev | Hallazgo |

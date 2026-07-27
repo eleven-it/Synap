@@ -48,7 +48,7 @@ class PoliticaAuditoriaContable(models.Model):
     tratamiento_anulados = models.CharField(
         max_length=32,
         choices=TRATAMIENTO_ANULADOS_CHOICES,
-        default="excluir",
+        default="incluir_neutralizado",
     )
     politica_centavo = models.CharField(
         max_length=32,

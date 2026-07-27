@@ -48,7 +48,7 @@ Fila global `base_empresa='__default__'` con defaults:
 
 | Campo | Default |
 |-------|---------|
-| tratamiento_anulados | excluir |
+| tratamiento_anulados | incluir_neutralizado |
 | politica_centavo | diario_manda |
 | prefijos_cuenta | resultado `["4"]`, activo `["1"]`, pasivo `["2"]`, pn `["3"]` |
 | ejercicios_cerrados | no_tocar |
@@ -192,7 +192,7 @@ Regla de oro: **cero DML/DDL en MySQL legacy**. El plan se persiste en PostgreSQ
 3. **Reparación de anulaciones incompletas** (REC-19): hallazgos de `integridad_anulacion_compra_pago` — ver tabla problema→remedio más abajo; sección UI «Reparación de anulaciones» con `anulaciones_reparables` / `anulaciones_bloqueadas`.
 4. **Concepto anulación incoherente** (REC-07 / REC-08): contra-asientos con `id_concepto_asiento` ≠ `id_concepto_anul` del original; items `accion=update`, `campo=id_concepto_asiento`, `check_id=concepto_anulacion_incoherente`, `referencia=H05`.
 5. **Filas saldo faltantes**: cuentas con movimientos sin fila en `cont_ejercicio_saldo_cta` / `cont_periodo_saldo_cta`; items `accion=insert`, `check_id=cuentas_sin_fila_saldo`, `referencia=H10` / `H17`.
-6. **Reconstrucción de saldos** (REC-17): modelo sin arrastre, Σ firmada de **todas** las filas de `cont_asiento`; `accion=update`, `check_id=saldo_*_vs_diario`, `referencia=H53`.
+6. **Reconstrucción de saldos** (REC-17): modelo sin arrastre, Σ firmada de `cont_asiento` respetando `tratamiento_anulados` de la política (`incluir_neutralizado` por defecto = suma todas las filas; original + contra se netean; `excluir` omite `anulado='Si'`). La Σ usa precisión plena y redondea a 2 decimales solo al final. Aplica a `cont_ejercicio_saldo_cta` / `cont_periodo_saldo_cta`. Pie, corrido (`saldo_asiento`) y checks `saldo_*_vs_diario` comparten la misma regla canónica. Desde 27/07/2026 el recálculo del corrido usa staging temporal + `UPDATE JOIN` (set-based) para evitar N+1 de `UPDATE` por fila en bases remotas. `accion=update`, `check_id=saldo_*_vs_diario`, `referencia=H53`.
 
 Respeta `alcance_recompute` (`ejercicio_seleccionado`, `ejercicio_activo`, `historico`) y `ejercicios_cerrados=no_tocar` (items marcados `excluido=True`, motivo `ejercicio_cerrado`).
 
@@ -202,10 +202,13 @@ Respeta `alcance_recompute` (`ejercicio_seleccionado`, `ejercicio_activo`, `hist
 |----------|-------------------|-------------|
 | `falta_marcador_cuentaproveedor_cm0` | INSERT marcador `CodigoMovimiento=0`, `Detalle="Anulacion - …"`, `codigo_movimiento_anul=cm` | `insert_marcador` |
 | `asiento_original_no_anulado` | UPDATE `cont_asiento` del cm → `anulado='Si'` (solo si hay renglones pendientes) | `marcar_original_anulado` |
-| `falta_contra_asiento` | INSERT contra (concepto 4/8, debe/haber invertidos, cm nuevo); requiere asiento original | `insert_contra_asiento` |
+| `falta_contra_asiento` | INSERT contra (concepto 4/8, debe/haber invertidos, cm nuevo); si **no hay** asiento original en `cont_asiento`, **reconstruye** el original desde el comprobante anulado (`reconstruir_factura` / `reconstruir_op`, `anulado='Si'`) y luego inserta el contra | `insert_contra_asiento` (`regenerar_original=True` cuando aplica) |
 | `contra_no_invierte_original` | **Excluido** (revisión manual) | `bloqueado` |
+| `sin_asiento_original_ni_reconstruible` | **Excluido** (comprobante no reconstruible o desbalanceado) | `bloqueado` |
 
-Marca trazable en renglones del contra: `REGEN auditoria (anulacion incompleta)`. Backup incluye `cuentaproveedor`. Si el comprobante anulado no tiene filas en `cont_asiento`, el check puede reportar `falta_contra_asiento` pero el dry-run **no** propone contra (no hay original que invertir).
+**Excepción VB6 (paridad):** las OP con `TipoOP='Egreso'` (trim, case-insensitive) **no exigen** marcador `CodigoMovimiento=0` en `cuentaproveedor`; VB6 no lo graba en ese subtipo. FA/FC y OP con `TipoOP` distinto (`A Cuenta`, `Imputacion`, etc.) sí lo exigen. El resto de controles (asiento original anulado, contra-asiento) aplican igual a Egreso.
+
+Marca trazable en renglones del contra: `REGEN auditoria (anulacion incompleta)`. En el original regenerado: `REGEN auditoria (bug factura/OP sin asiento)`. Backup incluye `cuentaproveedor`. Si el comprobante anulado no tiene filas en `cont_asiento` y no es reconstruible desde cabecera/stock, el item queda **bloqueado** (`sin_asiento_original_ni_reconstruible`).
 
 ### Estructura de un item del plan
 

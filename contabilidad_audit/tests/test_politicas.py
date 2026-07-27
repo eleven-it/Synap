@@ -23,7 +23,7 @@ class PoliticasTestCase(TestCase):
         PoliticaAuditoriaContable.objects.get_or_create(
             base_empresa=PoliticaAuditoriaContable.BASE_DEFAULT,
             defaults={
-                "tratamiento_anulados": "excluir",
+                "tratamiento_anulados": "incluir_neutralizado",
                 "politica_centavo": "diario_manda",
                 "prefijos_cuenta": dict(PREFIJOS_CUENTA_DEFAULT),
                 "ejercicios_cerrados": "no_tocar",
@@ -36,7 +36,7 @@ class PoliticasTestCase(TestCase):
     def test_empresa_sin_override_usa_default(self):
         politica = resolver_politica("empresa_test")
         self.assertEqual(politica["tolerancia_decimal"], Decimal("0.005"))
-        self.assertEqual(politica["tratamiento_anulados"], "excluir")
+        self.assertEqual(politica["tratamiento_anulados"], "incluir_neutralizado")
 
     def test_override_parcial(self):
         PoliticaAuditoriaContable.objects.create(
@@ -47,7 +47,7 @@ class PoliticasTestCase(TestCase):
         )
         politica = resolver_politica("empresa_a")
         self.assertEqual(politica["tolerancia_decimal"], Decimal("0.01"))
-        self.assertEqual(politica["tratamiento_anulados"], "excluir")
+        self.assertEqual(politica["tratamiento_anulados"], "incluir_neutralizado")
 
     def test_config_hash_estable(self):
         p1 = resolver_politica("empresa_test")
@@ -57,7 +57,7 @@ class PoliticasTestCase(TestCase):
     def test_config_hash_cambia_con_politica(self):
         base = resolver_politica("empresa_test")
         h1 = calcular_config_hash(base)
-        base["tratamiento_anulados"] = "incluir_neutralizado"
+        base["tratamiento_anulados"] = "excluir"
         h2 = calcular_config_hash(base)
         self.assertNotEqual(h1, h2)
 

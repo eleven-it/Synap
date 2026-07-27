@@ -116,6 +116,583 @@ def _r2(valor: Any) -> Decimal:
     return _d(valor).quantize(Q2, rounding=ROUND_HALF_UP)
 
 
+def _incluir_anulado(tratamiento_anulados: str) -> bool:
+    return tratamiento_anulados == "incluir_neutralizado"
+
+
+# Conta_Info / conta_libro_mayor.rpt lee cont_asiento.saldo_asiento sin filtrar
+# anulado. Regla canónica Synap (pie, corrido, checks): incluir_neutralizado
+# (contra-asiento + original se netean). Alias explícito para el corrido LM.
+TRATAMIENTO_ANULADOS_LIBRO_MAYOR = "incluir_neutralizado"
+
+
+def _saldo_teorico_cuenta(
+    dict_cur,
+    id_pc: int,
+    id_ejercicio: int,
+    *,
+    tratamiento_anulados: str = "incluir_neutralizado",
+    id_periodo: int | None = None,
+) -> Decimal:
+    """Devuelve la suma firmada de una cuenta, con precisión plena hasta el final."""
+    filtro_anulado = ""
+    if not _incluir_anulado(tratamiento_anulados):
+        filtro_anulado = " AND COALESCE(a.anulado, 'No') <> 'Si'"
+    filtro_periodo = ""
+    params: list[Any] = [id_ejercicio, id_pc]
+    if id_periodo is not None:
+        filtro_periodo = " AND a.id_periodo = %s"
+        params.append(id_periodo)
+
+    dict_cur.execute(
+        f"""
+        SELECT
+            pc.saldo_pc,
+            SUM(
+                CASE pc.saldo_pc
+                    WHEN 'Deudor' THEN COALESCE(a.debe_asiento, 0) - COALESCE(a.haber_asiento, 0)
+                    WHEN 'Acreedor' THEN COALESCE(a.haber_asiento, 0) - COALESCE(a.debe_asiento, 0)
+                    ELSE 0
+                END
+            ) AS saldo_teorico
+        FROM cont_asiento a
+        JOIN cont_pc pc ON pc.id_pc = a.id_pc
+        WHERE a.id_ejercicio = %s AND a.id_pc = %s
+          {filtro_periodo}
+          {filtro_anulado}
+        GROUP BY a.id_pc, a.id_ejercicio, pc.saldo_pc
+        """,
+        params,
+    )
+    fila = dict_cur.fetchone() or {}
+    return _r2(fila.get("saldo_teorico"))
+
+
+def _guardar_saldo_ejercicio(
+    cur,
+    dict_cur,
+    id_pc: int,
+    id_ejercicio: int,
+    saldo: Decimal,
+) -> None:
+    dict_cur.execute(
+        """SELECT 1 FROM cont_ejercicio_saldo_cta
+           WHERE id_pc=%s AND id_ejercicio=%s LIMIT 1""",
+        (id_pc, id_ejercicio),
+    )
+    if dict_cur.fetchone():
+        cur.execute(
+            """UPDATE cont_ejercicio_saldo_cta SET saldo_ejercicio_cta=%s
+               WHERE id_pc=%s AND id_ejercicio=%s""",
+            (str(_r2(saldo)), id_pc, id_ejercicio),
+        )
+    else:
+        cur.execute(
+            """INSERT INTO cont_ejercicio_saldo_cta
+               (id_pc, id_ejercicio, saldo_ejercicio_cta) VALUES (%s,%s,%s)""",
+            (id_pc, id_ejercicio, str(_r2(saldo))),
+        )
+
+
+def _guardar_saldo_periodo(
+    cur,
+    dict_cur,
+    id_pc: int,
+    id_ejercicio: int,
+    id_periodo: int,
+    saldo: Decimal,
+) -> None:
+    dict_cur.execute(
+        """SELECT 1 FROM cont_periodo_saldo_cta
+           WHERE id_pc=%s AND id_ejercicio=%s AND id_periodo=%s LIMIT 1""",
+        (id_pc, id_ejercicio, id_periodo),
+    )
+    if dict_cur.fetchone():
+        cur.execute(
+            """UPDATE cont_periodo_saldo_cta SET saldo_periodo_cta=%s
+               WHERE id_pc=%s AND id_ejercicio=%s AND id_periodo=%s""",
+            (str(_r2(saldo)), id_pc, id_ejercicio, id_periodo),
+        )
+    else:
+        cur.execute(
+            """INSERT INTO cont_periodo_saldo_cta
+               (id_pc, id_ejercicio, id_periodo, saldo_periodo_cta) VALUES (%s,%s,%s,%s)""",
+            (id_pc, id_ejercicio, id_periodo, str(_r2(saldo))),
+        )
+
+
+_TMP_LM_SALDOS = "tmp_lm_saldos"
+_CHUNK_STAGING_LM = 1000
+
+
+def _acumular_saldos_corridos(
+    filas: list[dict],
+    naturaleza: str,
+) -> list[tuple[Any, Decimal]]:
+    """Acumula saldo corrido Libro Mayor por renglón (orden ya aplicado en ``filas``)."""
+    saldo = Decimal("0")
+    resultado: list[tuple[Any, Decimal]] = []
+    for fila in filas:
+        debe = _d(fila.get("debe_asiento"))
+        haber = _d(fila.get("haber_asiento"))
+        saldo += haber - debe if naturaleza == "Acreedor" else debe - haber
+        resultado.append((fila.get("id_asiento"), _r2(saldo)))
+    return resultado
+
+
+def _acumular_saldos_corridos_multicuenta(
+    filas: list[dict],
+) -> list[tuple[Any, Decimal]]:
+    """Acumula corrido para varias cuentas/ejercicios (filas ordenadas por cuenta y fecha)."""
+    saldo_por_clave: dict[tuple[int | None, int | None], Decimal] = {}
+    resultado: list[tuple[Any, Decimal]] = []
+    for fila in filas:
+        clave = (to_int_or_none(fila.get("id_ejercicio")), to_int_or_none(fila.get("id_pc")))
+        naturaleza = str_or_default(fila.get("saldo_pc"), "Deudor")
+        saldo = saldo_por_clave.get(clave, Decimal("0"))
+        debe = _d(fila.get("debe_asiento"))
+        haber = _d(fila.get("haber_asiento"))
+        saldo += haber - debe if naturaleza == "Acreedor" else debe - haber
+        saldo_por_clave[clave] = saldo
+        resultado.append((fila.get("id_asiento"), _r2(saldo)))
+    return resultado
+
+
+def _crear_temp_lm_saldos(cur) -> None:
+    ddl_memory = f"""
+        CREATE TEMPORARY TABLE {_TMP_LM_SALDOS} (
+            id_asiento DOUBLE NOT NULL PRIMARY KEY,
+            saldo_asiento DECIMAL(18,2) NOT NULL
+        ) ENGINE=Memory
+    """
+    try:
+        cur.execute(ddl_memory)
+    except Exception:
+        cur.execute(
+            f"""
+            CREATE TEMPORARY TABLE {_TMP_LM_SALDOS} (
+                id_asiento DOUBLE NOT NULL PRIMARY KEY,
+                saldo_asiento DECIMAL(18,2) NOT NULL
+            ) ENGINE=InnoDB
+            """
+        )
+
+
+def _insertar_staging_lm_saldos(cur, registros: list[tuple[Any, Decimal]]) -> None:
+    for offset in range(0, len(registros), _CHUNK_STAGING_LM):
+        chunk = registros[offset : offset + _CHUNK_STAGING_LM]
+        placeholders = ",".join(["(%s,%s)"] * len(chunk))
+        params: list[Any] = []
+        for id_asiento, saldo in chunk:
+            params.extend([id_asiento, str(saldo)])
+        cur.execute(
+            f"INSERT INTO {_TMP_LM_SALDOS} (id_asiento, saldo_asiento) VALUES {placeholders}",
+            params,
+        )
+
+
+def _saldos_teoricos_agregados(
+    dict_cur,
+    id_ejercicios: list[int],
+    *,
+    tratamiento_anulados: str = "incluir_neutralizado",
+    id_periodo: int | None = None,
+) -> list[dict]:
+    """Suma firmada por cuenta (y opcionalmente periodo) en una sola consulta."""
+    if not id_ejercicios:
+        return []
+    placeholders = ",".join(["%s"] * len(id_ejercicios))
+    filtro_anulado = ""
+    if not _incluir_anulado(tratamiento_anulados):
+        filtro_anulado = " AND COALESCE(a.anulado, 'No') <> 'Si'"
+    filtro_periodo = ""
+    params: list[Any] = list(id_ejercicios)
+    group_periodo = ""
+    select_periodo = ""
+    if id_periodo is not None:
+        filtro_periodo = " AND a.id_periodo = %s"
+        params.append(id_periodo)
+        group_periodo = ", a.id_periodo"
+        select_periodo = ", a.id_periodo"
+    dict_cur.execute(
+        f"""
+        SELECT
+            a.id_pc,
+            a.id_ejercicio{select_periodo},
+            pc.saldo_pc,
+            SUM(
+                CASE pc.saldo_pc
+                    WHEN 'Deudor' THEN COALESCE(a.debe_asiento, 0) - COALESCE(a.haber_asiento, 0)
+                    WHEN 'Acreedor' THEN COALESCE(a.haber_asiento, 0) - COALESCE(a.debe_asiento, 0)
+                    ELSE 0
+                END
+            ) AS saldo_teorico
+        FROM cont_asiento a
+        JOIN cont_pc pc ON pc.id_pc = a.id_pc
+        WHERE a.id_ejercicio IN ({placeholders})
+          AND a.id_pc IS NOT NULL
+          {filtro_periodo}
+          {filtro_anulado}
+        GROUP BY a.id_pc, a.id_ejercicio{group_periodo}, pc.saldo_pc
+        ORDER BY a.id_ejercicio, a.id_pc{group_periodo}
+        """,
+        params,
+    )
+    return list(dict_cur.fetchall() or [])
+
+
+def _saldos_teoricos_periodos_agregados(
+    dict_cur,
+    id_ejercicios: list[int],
+    *,
+    tratamiento_anulados: str = "incluir_neutralizado",
+) -> list[dict]:
+    """Suma firmada por cuenta y periodo en una sola consulta."""
+    if not id_ejercicios:
+        return []
+    placeholders = ",".join(["%s"] * len(id_ejercicios))
+    filtro_anulado = ""
+    if not _incluir_anulado(tratamiento_anulados):
+        filtro_anulado = " AND COALESCE(a.anulado, 'No') <> 'Si'"
+    dict_cur.execute(
+        f"""
+        SELECT
+            a.id_pc,
+            a.id_ejercicio,
+            a.id_periodo,
+            pc.saldo_pc,
+            SUM(
+                CASE pc.saldo_pc
+                    WHEN 'Deudor' THEN COALESCE(a.debe_asiento, 0) - COALESCE(a.haber_asiento, 0)
+                    WHEN 'Acreedor' THEN COALESCE(a.haber_asiento, 0) - COALESCE(a.debe_asiento, 0)
+                    ELSE 0
+                END
+            ) AS saldo_teorico
+        FROM cont_asiento a
+        JOIN cont_pc pc ON pc.id_pc = a.id_pc
+        WHERE a.id_ejercicio IN ({placeholders})
+          AND a.id_pc IS NOT NULL
+          AND a.id_periodo IS NOT NULL
+          {filtro_anulado}
+        GROUP BY a.id_pc, a.id_ejercicio, a.id_periodo, pc.saldo_pc
+        ORDER BY a.id_ejercicio, a.id_pc, a.id_periodo
+        """,
+        list(id_ejercicios),
+    )
+    return list(dict_cur.fetchall() or [])
+
+
+def _recalcular_saldo_asiento_setbased(
+    cur,
+    dict_cur,
+    *,
+    id_ejercicios: list[int],
+    id_pcs: list[int] | None = None,
+) -> int:
+    """Recalcula ``cont_asiento.saldo_asiento`` con staging temporal + UPDATE JOIN."""
+    if not id_ejercicios:
+        return 0
+
+    placeholders_ej = ",".join(["%s"] * len(id_ejercicios))
+    params: list[Any] = list(id_ejercicios)
+    filtro_pc = ""
+    if id_pcs:
+        placeholders_pc = ",".join(["%s"] * len(id_pcs))
+        filtro_pc = f" AND a.id_pc IN ({placeholders_pc})"
+        params.extend(id_pcs)
+
+    dict_cur.execute(
+        f"""
+        SELECT
+            a.id_asiento,
+            a.id_pc,
+            a.id_ejercicio,
+            a.debe_asiento,
+            a.haber_asiento,
+            pc.saldo_pc
+        FROM cont_asiento a
+        JOIN cont_pc pc ON pc.id_pc = a.id_pc
+        WHERE a.id_ejercicio IN ({placeholders_ej})
+          AND a.id_pc IS NOT NULL
+          {filtro_pc}
+        ORDER BY a.id_ejercicio, a.id_pc, a.fecha_asiento, a.nro_asiento, a.id_asiento
+        """,
+        params,
+    )
+    filas = dict_cur.fetchall() or []
+    if not filas:
+        return 0
+
+    registros = _acumular_saldos_corridos_multicuenta(filas)
+    cur.execute(f"DROP TEMPORARY TABLE IF EXISTS {_TMP_LM_SALDOS}")
+    _crear_temp_lm_saldos(cur)
+    try:
+        _insertar_staging_lm_saldos(cur, registros)
+        cur.execute(
+            f"""
+            UPDATE cont_asiento a
+            JOIN {_TMP_LM_SALDOS} t ON t.id_asiento = a.id_asiento
+            SET a.saldo_asiento = t.saldo_asiento
+            """
+        )
+        actualizadas = cur.rowcount if cur.rowcount is not None and cur.rowcount >= 0 else len(registros)
+    finally:
+        cur.execute(f"DROP TEMPORARY TABLE IF EXISTS {_TMP_LM_SALDOS}")
+    return actualizadas
+
+
+def recalcular_saldo_asiento_cuenta(
+    cur,
+    dict_cur,
+    id_pc: int,
+    id_ejercicio: int,
+    *,
+    tratamiento_anulados: str | None = None,
+) -> int:
+    """Reescribe el saldo corrido del Libro Mayor (`cont_asiento.saldo_asiento`).
+
+    Siempre acumula **todas** las filas (incluidas `anulado='Si'`), paridad con
+    Conta_Info / ``conta_libro_mayor.rpt``. El argumento ``tratamiento_anulados``
+    se ignora (compatibilidad de firma); el corrido usa la regla canónica
+    ``incluir_neutralizado``.
+    """
+    del tratamiento_anulados  # corrido LM: siempre incluir anulados (regla canónica)
+    return _recalcular_saldo_asiento_setbased(
+        cur,
+        dict_cur,
+        id_ejercicios=[id_ejercicio],
+        id_pcs=[id_pc],
+    )
+
+
+def _validar_saldos_libro_mayor_setbased(
+    dict_cur,
+    id_ejercicios: list[int],
+    *,
+    tratamiento_anulados: str,
+) -> list[dict]:
+    """Compara pie denormalizado y último corrido vs teóricos (consultas agregadas)."""
+    if not id_ejercicios:
+        return []
+
+    placeholders = ",".join(["%s"] * len(id_ejercicios))
+    params = list(id_ejercicios)
+
+    teoricos_politica = {
+        (to_int_or_none(f["id_pc"]), to_int_or_none(f["id_ejercicio"])): _r2(f.get("saldo_teorico"))
+        for f in _saldos_teoricos_agregados(dict_cur, id_ejercicios, tratamiento_anulados=tratamiento_anulados)
+    }
+    teoricos_libro = {
+        (to_int_or_none(f["id_pc"]), to_int_or_none(f["id_ejercicio"])): _r2(f.get("saldo_teorico"))
+        for f in _saldos_teoricos_agregados(
+            dict_cur, id_ejercicios, tratamiento_anulados=TRATAMIENTO_ANULADOS_LIBRO_MAYOR
+        )
+    }
+
+    dict_cur.execute(
+        f"""
+        SELECT es.id_pc, es.id_ejercicio, es.saldo_ejercicio_cta
+        FROM cont_ejercicio_saldo_cta es
+        WHERE es.id_ejercicio IN ({placeholders})
+        """,
+        params,
+    )
+    almacenados = {
+        (to_int_or_none(f["id_pc"]), to_int_or_none(f["id_ejercicio"])): _d(f.get("saldo_ejercicio_cta"))
+        for f in dict_cur.fetchall() or []
+    }
+
+    dict_cur.execute(
+        f"""
+        SELECT a1.id_pc, a1.id_ejercicio, a1.saldo_asiento
+        FROM cont_asiento a1
+        LEFT JOIN cont_asiento a2 ON
+            a1.id_pc = a2.id_pc
+            AND a1.id_ejercicio = a2.id_ejercicio
+            AND (
+                a2.fecha_asiento > a1.fecha_asiento
+                OR (a2.fecha_asiento = a1.fecha_asiento AND a2.nro_asiento > a1.nro_asiento)
+                OR (
+                    a2.fecha_asiento = a1.fecha_asiento
+                    AND a2.nro_asiento = a1.nro_asiento
+                    AND a2.id_asiento > a1.id_asiento
+                )
+            )
+        WHERE a1.id_ejercicio IN ({placeholders})
+          AND a1.id_pc IS NOT NULL
+          AND a2.id_asiento IS NULL
+        """,
+        params,
+    )
+    ultimos = {
+        (to_int_or_none(f["id_pc"]), to_int_or_none(f["id_ejercicio"])): _d(f.get("saldo_asiento"))
+        for f in dict_cur.fetchall() or []
+    }
+
+    claves = set(teoricos_politica) | set(teoricos_libro) | set(almacenados) | set(ultimos)
+    mismatches: list[dict] = []
+    for clave in sorted(claves):
+        id_pc, id_ejercicio = clave
+        if id_pc is None or id_ejercicio is None:
+            continue
+        teorico = teoricos_politica.get(clave, Decimal("0"))
+        teorico_libro = teoricos_libro.get(clave, Decimal("0"))
+        almacenado = almacenados.get(clave, Decimal("0"))
+        ultimo = ultimos.get(clave, Decimal("0"))
+        if abs(almacenado - teorico) > Decimal("0.005") or abs(ultimo - teorico_libro) > Decimal("0.005"):
+            mismatches.append(
+                {
+                    "id_pc": id_pc,
+                    "id_ejercicio": id_ejercicio,
+                    "teorico": str(teorico),
+                    "teorico_libro_mayor": str(teorico_libro),
+                    "saldo_ejercicio_cta": str(almacenado),
+                    "ultimo_saldo_asiento": str(ultimo),
+                }
+            )
+    return mismatches
+
+
+def recalcular_libro_mayor(
+    base_empresa: str,
+    *,
+    id_ejercicios: list[int],
+    tratamiento_anulados: str = "incluir_neutralizado",
+    usuario: str = "",
+) -> dict:
+    """Alinea saldos derivados y corrido del Libro Mayor en una transacción.
+
+    Pie (``cont_ejercicio_saldo_cta`` / ``cont_periodo_saldo_cta``) y corrido
+    (``cont_asiento.saldo_asiento``) respetan ``tratamiento_anulados`` (default
+    ``incluir_neutralizado``). Con la política por defecto, pie == último corrido.
+    El corrido del Libro Mayor usa ``TRATAMIENTO_ANULADOS_LIBRO_MAYOR`` (alias).
+    """
+    ejercicios = sorted(
+        {
+            id_ejercicio
+            for valor in id_ejercicios
+            if (id_ejercicio := to_int_or_none(valor)) is not None
+        }
+    )
+    if not ejercicios:
+        raise CorreccionContableError("Debe indicar al menos un ejercicio válido.")
+
+    placeholders = ",".join(["%s"] * len(ejercicios))
+    metricas = {
+        "base_empresa": str_or_default(base_empresa),
+        "usuario": str_or_default(usuario),
+        "ejercicios": ejercicios,
+        "tratamiento_anulados": tratamiento_anulados,
+        "tratamiento_anulados_libro_mayor": TRATAMIENTO_ANULADOS_LIBRO_MAYOR,
+        "cuentas_tocadas": 0,
+        "filas_saldo_asiento": 0,
+        "periodos_tocados": 0,
+        "mismatches_finales": [],
+    }
+    pool = get_mysql_pool()
+    with pool.get_connection(base_empresa) as conn:
+        try:
+            conn.autocommit(False)
+            cur = conn.cursor()
+            dict_cur = conn.cursor(MySQLdb.cursors.DictCursor)
+            dict_cur.execute(
+                f"""
+                SELECT DISTINCT id_pc, id_ejercicio
+                FROM cont_asiento
+                WHERE id_ejercicio IN ({placeholders}) AND id_pc IS NOT NULL
+                ORDER BY id_ejercicio, id_pc
+                """,
+                ejercicios,
+            )
+            cuentas = [
+                (to_int_or_none(fila.get("id_pc")), to_int_or_none(fila.get("id_ejercicio")))
+                for fila in dict_cur.fetchall() or []
+            ]
+            cuentas = [(id_pc, id_ej) for id_pc, id_ej in cuentas if id_pc is not None and id_ej is not None]
+
+            dict_cur.execute(
+                f"""
+                SELECT DISTINCT id_pc, id_ejercicio, id_periodo
+                FROM cont_asiento
+                WHERE id_ejercicio IN ({placeholders})
+                  AND id_pc IS NOT NULL AND id_periodo IS NOT NULL
+                ORDER BY id_ejercicio, id_pc, id_periodo
+                """,
+                ejercicios,
+            )
+            periodos = [
+                (
+                    to_int_or_none(fila.get("id_pc")),
+                    to_int_or_none(fila.get("id_ejercicio")),
+                    to_int_or_none(fila.get("id_periodo")),
+                )
+                for fila in dict_cur.fetchall() or []
+            ]
+            periodos = [
+                (id_pc, id_ej, id_per)
+                for id_pc, id_ej, id_per in periodos
+                if id_pc is not None and id_ej is not None and id_per is not None
+            ]
+
+            for fila in _saldos_teoricos_agregados(
+                dict_cur, ejercicios, tratamiento_anulados=tratamiento_anulados
+            ):
+                id_pc = to_int_or_none(fila.get("id_pc"))
+                id_ejercicio = to_int_or_none(fila.get("id_ejercicio"))
+                if id_pc is None or id_ejercicio is None:
+                    continue
+                _guardar_saldo_ejercicio(
+                    cur,
+                    dict_cur,
+                    id_pc,
+                    id_ejercicio,
+                    _r2(fila.get("saldo_teorico")),
+                )
+
+            for fila in _saldos_teoricos_periodos_agregados(
+                dict_cur, ejercicios, tratamiento_anulados=tratamiento_anulados
+            ):
+                id_pc = to_int_or_none(fila.get("id_pc"))
+                id_ejercicio = to_int_or_none(fila.get("id_ejercicio"))
+                id_periodo = to_int_or_none(fila.get("id_periodo"))
+                if id_pc is None or id_ejercicio is None or id_periodo is None:
+                    continue
+                _guardar_saldo_periodo(
+                    cur,
+                    dict_cur,
+                    id_pc,
+                    id_ejercicio,
+                    id_periodo,
+                    _r2(fila.get("saldo_teorico")),
+                )
+
+            metricas["filas_saldo_asiento"] = _recalcular_saldo_asiento_setbased(
+                cur,
+                dict_cur,
+                id_ejercicios=ejercicios,
+            )
+            metricas["cuentas_tocadas"] = len(cuentas)
+            metricas["periodos_tocados"] = len(periodos)
+
+            metricas["mismatches_finales"] = _validar_saldos_libro_mayor_setbased(
+                dict_cur,
+                ejercicios,
+                tratamiento_anulados=tratamiento_anulados,
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            try:
+                conn.autocommit(True)
+            except Exception:
+                pass
+
+    metricas["total_mismatches_finales"] = len(metricas["mismatches_finales"])
+    return metricas
+
+
 def _fecha_ui(dt) -> str:
     if dt is None:
         return ""
@@ -678,8 +1255,37 @@ def _marcar_exclusiones(items: list[dict], politica: dict, repo: _RepoLectura) -
             item["motivo_exclusion"] = "ejercicio_cerrado"
 
 
-def _evaluar_problemas_anulacion_cm(cur, cm) -> tuple[list[str], dict[str, Any]]:
+def _exige_marcador_anulacion(tipo_comprobante, tipo_op) -> bool:
+    if str_or_default(tipo_comprobante).upper() != "OP":
+        return True
+    return str_or_default(tipo_op).strip().lower() != "egreso"
+
+
+def _evaluar_problemas_anulacion_cm(
+    cur,
+    cm,
+    *,
+    tipo_comprobante=None,
+    tipo_op=None,
+) -> tuple[list[str], dict[str, Any]]:
     """Paridad con check integridad_anulacion_compra_pago (AUD-LECT-23)."""
+    if tipo_comprobante is None or tipo_op is None:
+        cur.execute(
+            """
+            SELECT TipoComprobante, TipoOP FROM cuentaproveedor
+            WHERE CodigoMovimiento = %s
+            LIMIT 1
+            """,
+            (cm,),
+        )
+        row_cp = cur.fetchone()
+        if isinstance(row_cp, dict):
+            tipo_comprobante = row_cp.get("TipoComprobante")
+            tipo_op = row_cp.get("TipoOP")
+        elif row_cp is not None:
+            tipo_comprobante = row_cp[0]
+            tipo_op = row_cp[1]
+
     cur.execute(
         """
         SELECT COUNT(*) AS cnt FROM cuentaproveedor
@@ -738,7 +1344,7 @@ def _evaluar_problemas_anulacion_cm(cur, cm) -> tuple[list[str], dict[str, Any]]
     contra_tot = cur.fetchone()
 
     problemas: list[str] = []
-    if not tiene_marcador:
+    if not tiene_marcador and _exige_marcador_anulacion(tipo_comprobante, tipo_op):
         problemas.append("falta_marcador_cuentaproveedor_cm0")
     # Solo si hay renglones pendientes de marcar (no vacíos: COUNT=0 no es problema de anulado).
     if total_orig > 0 and pendientes_orig > 0:
@@ -762,6 +1368,82 @@ def _evaluar_problemas_anulacion_cm(cur, cm) -> tuple[list[str], dict[str, Any]]
     return problemas, {"orig_tot": orig_tot, "contra_tot": contra_tot}
 
 
+def _reconstruir_renglones_comprobante_anulado(
+    repo: _RepoLectura,
+    cab: dict,
+) -> tuple[list[dict], dict | None]:
+    """Reconstruye renglones del asiento original desde cabecera anulada (FA/FC/OP).
+
+    Devuelve renglones no-cero ``{id_pc, debe_asiento, haber_asiento}`` y metadatos
+    del asiento, o ``([], None)`` si no es reconstruible o no balancea.
+    """
+    tipo = str_or_default(cab.get("TipoComprobante"))
+    if tipo in TIPOS_FACTURA:
+        renglones, errores = reconstruir_factura(repo, cab)
+    elif tipo == "OP":
+        renglones, errores = reconstruir_op(repo, cab)
+    else:
+        return [], None
+
+    if "_ERR_" in renglones or "contado_requiere_caja" in errores:
+        return [], None
+
+    debe = _r2(sum(v[0] for k, v in renglones.items() if k != "_ERR_"))
+    haber = _r2(sum(v[1] for k, v in renglones.items() if k != "_ERR_"))
+    dif = _r2(debe - haber)
+    if abs(dif) > Q2:
+        if abs(dif) <= UMBRAL_REDONDEO:
+            if dif > 0:
+                _add_renglon(renglones, REDONDEO_PC, haber=dif)
+            else:
+                _add_renglon(renglones, REDONDEO_PC, debe=-dif)
+        else:
+            return [], None
+
+    fecha = cab.get("Fecha")
+    ejercicio = repo.ejercicio_por_fecha(fecha)
+    if not ejercicio:
+        return [], None
+    id_ejercicio = to_int_or_none(ejercicio["id_ejercicio"])
+    if id_ejercicio is None:
+        return [], None
+
+    concepto = CONCEPTO.get(tipo, 3)
+    desc_concepto = DESC_CONCEPTO.get(concepto, "Compra")
+    nro_comp = cab.get("NroComprobante")
+    if tipo == "OP":
+        desc_asiento = (
+            f"{str_or_default(cab.get('TipoOP')).strip()} - Nro Comp. OP - {nro_comp}"
+        )
+    else:
+        desc_asiento = f"Compra - Nro Comp. {nro_comp}"
+
+    renglones_out: list[dict] = []
+    for id_pc in sorted(k for k in renglones if k != "_ERR_"):
+        vdebe, vhaber = _r2(renglones[id_pc][0]), _r2(renglones[id_pc][1])
+        if vdebe == 0 and vhaber == 0:
+            continue
+        renglones_out.append(
+            {
+                "id_pc": int(id_pc),
+                "debe_asiento": str(vdebe),
+                "haber_asiento": str(vhaber),
+            }
+        )
+
+    if not renglones_out:
+        return [], None
+
+    meta = {
+        "id_ejercicio": id_ejercicio,
+        "fecha_asiento": to_date_or_none(fecha),
+        "desc_asiento": desc_asiento,
+        "concepto": concepto,
+        "desc_concepto": desc_concepto,
+    }
+    return renglones_out, meta
+
+
 def _plan_reparacion_anulaciones(
     conn,
     repo: _RepoLectura,
@@ -775,7 +1457,7 @@ def _plan_reparacion_anulaciones(
     cur.execute(
         """
         SELECT cp.CodigoMovimiento, cp.TipoComprobante, cp.NroComprobante, cp.Fecha,
-               cp.CodSucursal, cp.Codigo, cp.ImporteCompra, cp.ImportePago
+               cp.CodSucursal, cp.Codigo, cp.ImporteCompra, cp.ImportePago, cp.TipoOP
         FROM cuentaproveedor cp
         JOIN sucursales s ON s.id_sucursal = cp.CodSucursal
         WHERE s.cont = 'Si'
@@ -793,6 +1475,7 @@ def _plan_reparacion_anulaciones(
         tipo = str_or_default(row.get("TipoComprobante") if isinstance(row, dict) else row[1])
         nro_comp = str_or_default(row.get("NroComprobante") if isinstance(row, dict) else row[2])
         fecha = row.get("Fecha") if isinstance(row, dict) else row[3]
+        tipo_op = str_or_default(row.get("TipoOP") if isinstance(row, dict) else row[8])
 
         if ejercicios_alcance is not None:
             ejercicio = repo.ejercicio_por_fecha(fecha)
@@ -800,13 +1483,16 @@ def _plan_reparacion_anulaciones(
             if id_ej is None or id_ej not in ejercicios_alcance:
                 continue
 
-        problemas, _diag = _evaluar_problemas_anulacion_cm(cur, cm)
+        problemas, _diag = _evaluar_problemas_anulacion_cm(
+            cur, cm, tipo_comprobante=tipo, tipo_op=tipo_op
+        )
         if not problemas:
             continue
 
         detalle_base = {
             "TipoComprobante": tipo,
             "NroComprobante": nro_comp,
+            "TipoOP": tipo_op,
             "problemas": problemas,
             "codigo_movimiento_original": cm_str,
         }
@@ -891,25 +1577,98 @@ def _plan_reparacion_anulaciones(
                 (cm,),
             )
             renglones_orig = cur.fetchall()
+            regenerar_original = False
+            renglones_original_preview: list[dict] | None = None
+            detalle_contra = dict(detalle_base)
+
             if not renglones_orig:
-                continue
+                cur.execute(
+                    """
+                    SELECT * FROM cuentaproveedor
+                    WHERE CodigoMovimiento=%s AND COALESCE(Anulado,'No')='Si'
+                    LIMIT 1
+                    """,
+                    (cm,),
+                )
+                cab_anul = cur.fetchone()
+                if not cab_anul:
+                    items.append(
+                        {
+                            "tabla": "cont_asiento",
+                            "clave": {"codigo_movimiento_original": cm_str},
+                            "accion": "bloqueado",
+                            "valor_anterior": None,
+                            "valor_nuevo": None,
+                            "delta": "0",
+                            "check_id": CHECK_ANULACION,
+                            "referencia": "H53",
+                            "excluido": True,
+                            "bloqueado": True,
+                            "motivo_bloqueo": "sin_asiento_original_ni_reconstruible",
+                            "detalle": detalle_contra,
+                        }
+                    )
+                    continue
+
+                renglones_recon, meta = _reconstruir_renglones_comprobante_anulado(
+                    repo, cab_anul
+                )
+                if not renglones_recon or meta is None:
+                    items.append(
+                        {
+                            "tabla": "cont_asiento",
+                            "clave": {"codigo_movimiento_original": cm_str},
+                            "accion": "bloqueado",
+                            "valor_anterior": None,
+                            "valor_nuevo": None,
+                            "delta": "0",
+                            "check_id": CHECK_ANULACION,
+                            "referencia": "H53",
+                            "excluido": True,
+                            "bloqueado": True,
+                            "motivo_bloqueo": "sin_asiento_original_ni_reconstruible",
+                            "detalle": detalle_contra,
+                        }
+                    )
+                    continue
+
+                regenerar_original = True
+                detalle_contra["reconstruido_desde_comprobante"] = True
+                id_ejercicio = meta["id_ejercicio"]
+                fecha_asiento = meta["fecha_asiento"] or to_date_or_none(fecha)
+                desc_asiento = meta["desc_asiento"]
+                concepto_orig = meta["concepto"]
+                desc_concepto_orig = meta["desc_concepto"]
+                renglones_original_preview = [
+                    {
+                        "id_pc": r["id_pc"],
+                        "debe_asiento": r["debe_asiento"],
+                        "haber_asiento": r["haber_asiento"],
+                        "id_concepto_asiento": concepto_orig,
+                        "desc_concepto_asiento": desc_concepto_orig,
+                    }
+                    for r in renglones_recon
+                ]
+                fuente_invertir = renglones_recon
+            else:
+                primera = renglones_orig[0]
+                id_ejercicio = to_int_or_none(
+                    primera.get("id_ejercicio") if isinstance(primera, dict) else None
+                )
+                fecha_asiento = to_date_or_none(
+                    primera.get("fecha_asiento") if isinstance(primera, dict) else None
+                ) or to_date_or_none(fecha)
+                desc_asiento = str_or_default(
+                    primera.get("desc_asiento") if isinstance(primera, dict) else "",
+                    f"Anulación - {tipo} - {nro_comp}",
+                )
+                fuente_invertir = renglones_orig
 
             id_concepto_anul = CONCEPTO_ANUL.get(tipo, 4)
             desc_concepto_anul = DESC_CONCEPTO_ANUL.get(id_concepto_anul, "Anulación")
-            primera = renglones_orig[0]
-            id_ejercicio = to_int_or_none(
-                primera.get("id_ejercicio") if isinstance(primera, dict) else None
-            )
-            fecha_asiento = to_date_or_none(
-                primera.get("fecha_asiento") if isinstance(primera, dict) else None
-            ) or to_date_or_none(fecha)
-            desc_asiento = str_or_default(
-                primera.get("desc_asiento") if isinstance(primera, dict) else "",
-                f"Anulación - {tipo} - {nro_comp}",
-            )
 
             renglones_preview: list[dict] = []
-            for r in renglones_orig:
+            for r in fuente_invertir:
                 debe = _r2(r.get("debe_asiento"))
                 haber = _r2(r.get("haber_asiento"))
                 if debe == 0 and haber == 0:
@@ -926,32 +1685,54 @@ def _plan_reparacion_anulaciones(
                 )
 
             if not renglones_preview:
+                if regenerar_original:
+                    items.append(
+                        {
+                            "tabla": "cont_asiento",
+                            "clave": {"codigo_movimiento_original": cm_str},
+                            "accion": "bloqueado",
+                            "valor_anterior": None,
+                            "valor_nuevo": None,
+                            "delta": "0",
+                            "check_id": CHECK_ANULACION,
+                            "referencia": "H53",
+                            "excluido": True,
+                            "bloqueado": True,
+                            "motivo_bloqueo": "sin_asiento_original_ni_reconstruible",
+                            "detalle": detalle_contra,
+                        }
+                    )
                 continue
 
             cm_estimado = repo.nro_asiento_ejercicio(id_ejercicio) if id_ejercicio else 0
+            valor_nuevo: dict[str, Any] = {
+                "codigo_movimiento_original": cm_str,
+                "id_concepto_asiento": id_concepto_anul,
+                "desc_concepto_asiento": desc_concepto_anul,
+                "id_ejercicio": id_ejercicio,
+                "fecha_asiento": fecha_asiento,
+                "desc_asiento": desc_asiento,
+                "desc_renglon_asiento": MARCA_ANUL_REGEN,
+                "renglones_preview": renglones_preview,
+                "nro_asiento_estimado": cm_estimado,
+            }
+            if regenerar_original and renglones_original_preview:
+                valor_nuevo["regenerar_original"] = True
+                valor_nuevo["renglones_original_preview"] = renglones_original_preview
+
             items.append(
                 {
                     "tabla": "cont_asiento",
                     "clave": {"codigo_movimiento_original": cm_str},
                     "accion": "insert_contra_asiento",
                     "valor_anterior": None,
-                    "valor_nuevo": {
-                        "codigo_movimiento_original": cm_str,
-                        "id_concepto_asiento": id_concepto_anul,
-                        "desc_concepto_asiento": desc_concepto_anul,
-                        "id_ejercicio": id_ejercicio,
-                        "fecha_asiento": fecha_asiento,
-                        "desc_asiento": desc_asiento,
-                        "desc_renglon_asiento": MARCA_ANUL_REGEN,
-                        "renglones_preview": renglones_preview,
-                        "nro_asiento_estimado": cm_estimado,
-                    },
+                    "valor_nuevo": valor_nuevo,
                     "delta": "0",
                     "check_id": CHECK_ANULACION,
                     "referencia": "H53",
                     "excluido": False,
                     "bloqueado": False,
-                    "detalle": detalle_base,
+                    "detalle": detalle_contra,
                 }
             )
 
@@ -1271,15 +2052,27 @@ def _plan_regeneracion_asientos_venta(
     return items, dict(asientos_por_tipo)
 
 
-def _movimientos_diario(repo: _RepoLectura, asientos_simulados: list[dict]) -> list[dict]:
-    """Todas las filas cont_asiento (lectura) más renglones simulados del plan."""
+def _movimientos_diario(
+    repo: _RepoLectura,
+    asientos_simulados: list[dict],
+    *,
+    tratamiento_anulados: str = "incluir_neutralizado",
+) -> list[dict]:
+    """Filas cont_asiento (lectura) más renglones simulados del plan.
+
+    Con ``tratamiento_anulados=incluir_neutralizado`` (default) carga todas las
+    filas (original + contra se netean). Con ``excluir`` omite ``anulado='Si'``.
+    """
+    filtro_anul = ""
+    if tratamiento_anulados != "incluir_neutralizado":
+        filtro_anul = " AND COALESCE(anulado, 'No') <> 'Si'"
     cur = repo.cur()
     cur.execute(
-        """SELECT id_pc, id_ejercicio, id_periodo,
+        f"""SELECT id_pc, id_ejercicio, id_periodo,
                   COALESCE(debe_asiento,0) AS debe_asiento,
                   COALESCE(haber_asiento,0) AS haber_asiento
            FROM cont_asiento
-           WHERE id_ejercicio IS NOT NULL AND id_pc IS NOT NULL"""
+           WHERE id_ejercicio IS NOT NULL AND id_pc IS NOT NULL{filtro_anul}"""
     )
     movs = [dict(r) for r in cur.fetchall()]
     for item in asientos_simulados:
@@ -1299,7 +2092,7 @@ def _movimientos_diario(repo: _RepoLectura, asientos_simulados: list[dict]) -> l
 
 
 def _saldos_derivados(repo: _RepoLectura, movimientos: list[dict]) -> dict[tuple[int, int], Decimal]:
-    """Modelo sin arrastre: Σ firmada por (id_pc, id_ejercicio), incluye anulados."""
+    """Modelo sin arrastre: Σ firmada por (id_pc, id_ejercicio) sobre los movimientos dados."""
     natur: dict[int, str] = {}
     cur = repo.cur()
     cur.execute("SELECT id_pc, saldo_pc FROM cont_pc")
@@ -1309,14 +2102,15 @@ def _saldos_derivados(repo: _RepoLectura, movimientos: list[dict]) -> dict[tuple
             continue
         natur[id_pc] = str_or_default(r.get("saldo_pc"), "Deudor") or "Deudor"
 
+    # Misma precisión que el check / eliminación: Σ en precisión plena y ROUND 2 al final.
     acum: dict[tuple[int, int], Decimal] = defaultdict(lambda: Decimal("0"))
     for mov in movimientos:
         id_pc = to_int_or_none(mov.get("id_pc"))
         id_ej = to_int_or_none(mov.get("id_ejercicio"))
         if id_pc is None or id_ej is None:
             continue
-        debe = _r2(mov.get("debe_asiento"))
-        haber = _r2(mov.get("haber_asiento"))
+        debe = _d(mov.get("debe_asiento"))
+        haber = _d(mov.get("haber_asiento"))
         signo = (haber - debe) if natur.get(id_pc) == "Acreedor" else (debe - haber)
         acum[(id_pc, id_ej)] += signo
 
@@ -1343,8 +2137,8 @@ def _saldos_periodo_derivados(
         id_per = to_int_or_none(mov.get("id_periodo"))
         if id_pc is None or id_ej is None or id_per is None:
             continue
-        debe = _r2(mov.get("debe_asiento"))
-        haber = _r2(mov.get("haber_asiento"))
+        debe = _d(mov.get("debe_asiento"))
+        haber = _d(mov.get("haber_asiento"))
         signo = (haber - debe) if natur.get(id_pc) == "Acreedor" else (debe - haber)
         acum[(id_pc, id_ej, id_per)] += signo
 
@@ -1374,8 +2168,12 @@ def _plan_reconstruccion_saldos(
     asientos_simulados: list[dict],
     ejercicios_alcance: Optional[set[int]],
     tolerancia: Decimal,
+    *,
+    tratamiento_anulados: str = "incluir_neutralizado",
 ) -> list[dict]:
-    movimientos = _movimientos_diario(repo, asientos_simulados)
+    movimientos = _movimientos_diario(
+        repo, asientos_simulados, tratamiento_anulados=tratamiento_anulados
+    )
     calc = _saldos_derivados(repo, movimientos)
 
     cur = repo.cur()
@@ -1788,6 +2586,7 @@ def dry_run(
                 items_asientos_todos,
                 ejercicios_alcance,
                 tolerancia,
+                tratamiento_anulados=politica.get("tratamiento_anulados", "incluir_neutralizado"),
             )
 
         items = items_asientos_todos + items_anulacion + items_concepto + items_saldos
@@ -2570,6 +3369,44 @@ def _aplicar_insert_contra_anulacion(
     if dict_cur.fetchone():
         return 0
 
+    id_ejercicio = to_int_or_none(vn.get("id_ejercicio"))
+    if id_ejercicio is None:
+        raise CorreccionContableError(
+            f"Item contra-asiento anulación incompleto para cm={cm_orig} (sin id_ejercicio)."
+        )
+
+    insertados = 0
+    preview_original = vn.get("renglones_original_preview") or []
+    if vn.get("regenerar_original") and preview_original:
+        if not _asiento_ya_existe(dict_cur, cm_orig):
+            nro_asiento_orig = _reservar_nro_asiento_ejercicio(cur, id_ejercicio)
+            fecha_orig = to_date_or_none(vn.get("fecha_asiento")) or fecha_db.date()
+            desc_asiento_orig = str_or_default(vn.get("desc_asiento"), f"Asiento cm {cm_orig}")
+            for r in preview_original:
+                id_pc = to_int_or_none(r.get("id_pc"))
+                if id_pc is None:
+                    continue
+                _insertar_renglon_asiento_generico(
+                    cur,
+                    repo,
+                    nro_asiento=nro_asiento_orig,
+                    fecha=fecha_orig,
+                    id_ejercicio=id_ejercicio,
+                    codigo_movimiento=to_int_or_none(cm_orig) or 0,
+                    id_pc=id_pc,
+                    debe=_r2(r.get("debe_asiento")),
+                    haber=_r2(r.get("haber_asiento")),
+                    id_concepto=to_int_or_none(r.get("id_concepto_asiento"))
+                    or CONCEPTO.get(str_or_default(vn.get("tipo_comprobante")), 3),
+                    desc_concepto=str_or_default(r.get("desc_concepto_asiento"), "Compra"),
+                    desc_asiento=desc_asiento_orig,
+                    desc_renglon=MARCA_REGEN,
+                    codigo_movimiento_anul=None,
+                    anulado="Si",
+                    saldos_run=saldos_run,
+                )
+                insertados += 1
+
     preview = vn.get("renglones_preview") or []
     if not preview:
         dict_cur.execute(
@@ -2596,14 +3433,6 @@ def _aplicar_insert_contra_anulacion(
             if _r2(r.get("debe_asiento")) != 0 or _r2(r.get("haber_asiento")) != 0
         ]
 
-    id_ejercicio = to_int_or_none(vn.get("id_ejercicio"))
-    if id_ejercicio is None and preview:
-        id_ejercicio = to_int_or_none(vn.get("id_ejercicio"))
-    if id_ejercicio is None:
-        raise CorreccionContableError(
-            f"Item contra-asiento anulación incompleto para cm={cm_orig} (sin id_ejercicio)."
-        )
-
     id_concepto_anul = to_int_or_none(vn.get("id_concepto_asiento")) or 4
     desc_concepto_anul = str_or_default(vn.get("desc_concepto_asiento"), "Anulación")
     desc_asiento = str_or_default(vn.get("desc_asiento"), f"Anulación cm {cm_orig}")
@@ -2611,7 +3440,6 @@ def _aplicar_insert_contra_anulacion(
 
     cm_contra = _reservar_codigo_movimiento(cur)
     nro_asiento = _reservar_nro_asiento_ejercicio(cur, id_ejercicio)
-    insertados = 0
     for r in preview:
         id_pc = to_int_or_none(r.get("id_pc"))
         if id_pc is None:
@@ -2737,6 +3565,7 @@ def _insertar_renglon_asiento_generico(
     desc_asiento: str,
     desc_renglon: str,
     codigo_movimiento_anul: Optional[int] = None,
+    anulado: str = "No",
     saldos_run: dict[tuple[int, int], Decimal],
 ) -> Decimal:
     vdebe, vhaber = _r2(debe), _r2(haber)
@@ -2756,7 +3585,7 @@ def _insertar_renglon_asiento_generico(
             id_pc, desc_renglon_asiento, desc_concepto_asiento,
             id_concepto_asiento, balanceado_asiento, id_usuario,
             desc_asiento, tipo_asiento, anulado)
-           VALUES (%s,%s,%s,NULL,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Si',NULL,%s,'Proceso','No')""",
+           VALUES (%s,%s,%s,NULL,%s,%s,%s,%s,%s,%s,%s,%s,%s,'Si',NULL,%s,'Proceso',%s)""",
         (
             nro_asiento,
             fecha,
@@ -2771,6 +3600,7 @@ def _insertar_renglon_asiento_generico(
             desc_concepto,
             id_concepto,
             desc_asiento,
+            anulado,
         ),
     )
     return saldo_asiento
@@ -3375,6 +4205,7 @@ def _apply_iter(
             intervalo = 5 if total > 100 else 1
             progress_idx = [0]
             saldos_run: dict[tuple[int, int], Decimal] = {}
+            cuentas_libro_mayor: set[tuple[int, int]] = set()
 
             # Pre-regeneración de asientos (REC-18, antes del orden REC-07 2→3→4).
             asientos_por_cm: dict[str, list[dict]] = defaultdict(list)
@@ -3429,9 +4260,21 @@ def _apply_iter(
                     continue
                 _aplicar_item_saldo(cur, item, lote_id, usuario, fecha_db)
                 filas_aplicadas += 1
+                if tabla == "cont_ejercicio_saldo_cta":
+                    id_ejercicio = to_int_or_none((item.get("clave") or {}).get("id_ejercicio"))
+                    if id_pc is not None and id_ejercicio is not None:
+                        cuentas_libro_mayor.add((id_pc, id_ejercicio))
                 evt = _yield_progreso_write(progress_idx, total, item, intervalo)
                 if evt is not None:
                     yield evt
+
+            for id_pc, id_ejercicio in sorted(cuentas_libro_mayor):
+                recalcular_saldo_asiento_cuenta(
+                    cur,
+                    dict_cur,
+                    id_pc,
+                    id_ejercicio,
+                )
 
             yield _evento_progreso_apply(
                 phase="finalize",

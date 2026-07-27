@@ -37,6 +37,12 @@ class ManagerialReportsPermission(BaseReportsPermission):
     required_permission = "reports.view_managerial"
 
 
+class DabraConsolidadoRemitosPermission(BaseReportsPermission):
+    """Permiso dedicado al informe DABRA consolidado remitos."""
+
+    required_permission = "reports.dabra_consolidado_remitos"
+
+
 class BuilderReportsPermission(BaseReportsPermission):
     """Permiso para usar el Report Builder. Disponible para usuarios con permiso reports.builder o superusuarios."""
 

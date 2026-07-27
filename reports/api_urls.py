@@ -12,6 +12,10 @@ from .cobranzas_vendedor_relay_views import (
     CobranzasVendedorGerenciaRelayAPIView,
     CobranzasVendedorRelayAPIView,
 )
+from .dabra_consolidado_remitos_relay_views import (
+    DabraConsolidadoRemitosExportAPIView,
+    DabraConsolidadoRemitosRelayAPIView,
+)
 from .utilidad_gerencial_relay_views import (
     UtilidadGerencialGerenciaRelayAPIView,
     UtilidadGerencialRelayAPIView,
@@ -109,6 +113,16 @@ urlpatterns = [
         "cobranzas-vendedor/relay/gerencia/",
         CobranzasVendedorGerenciaRelayAPIView.as_view(),
         name="reports-cobranzas-vendedor-relay-gerencia",
+    ),
+    path(
+        "dabra-consolidado-remitos/relay/",
+        DabraConsolidadoRemitosRelayAPIView.as_view(),
+        name="reports-dabra-consolidado-remitos-relay",
+    ),
+    path(
+        "dabra-consolidado-remitos/relay/export/",
+        DabraConsolidadoRemitosExportAPIView.as_view(),
+        name="reports-dabra-consolidado-remitos-relay-export",
     ),
     path(
         "utilidad-gerencial/relay/",

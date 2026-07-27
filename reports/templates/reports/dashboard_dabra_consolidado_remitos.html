@@ -1,0 +1,651 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% comment %}
+Informe DABRA consolidado remitos — pantalla canónica de reportes (patrón
+`dashboard_cobranzas_por_vendedor.html`).
+
+Contrato del relay asumido (change `reports-dabra-consolidado-remitos`):
+
+  GET {{ dabra_api_url }}?mes=<1-12>&anio=<yyyy>
+    200 → {
+            columns: [{data, title}, ...]        // opcional; si falta se usan COLS_REPORTE
+            columns_totales: [{data, title}, ...] // opcional; si falta se usan COLS_TOTALES
+            filas: [ {fecha, punto_venta, numero_legal, item, nombre_articulo, talle,
+                      cantidad, precio_unitario, bonificacion, importe_bonificacion,
+                      importe, importe_iva, total_gravado, total, comp_ref, numero_ref,
+                      nro_cae, vto_cae, categoria}, ... ]
+            totales_facturas: [ {fecha, comprobante, nro_remito, imp_neto, imp_bruto}, ... ]
+            alarmas: ["texto", ...]   // no bloquean el export
+            errores: ["texto", ...]   // bloquean el export (relay responde 409)
+            meta: {...}
+          }
+    400 → {detail} (mes/año inválidos)   403 → sin permiso
+
+  GET {{ dabra_export_url }}?mes=&anio=
+    200 → xlsx «DABRA MMYYYY.xlsx»      409 → {detail, errores: [...]}
+
+Las claves de fila se resuelven por alias (ver `aliases` en cada columna) para
+tolerar el naming final del servicio; los importes derivados (TotalGravado,
+Total) se calculan en el cliente sólo si el backend no los envía.
+{% endcomment %}
+
+{% block title %}{{ page_title }} - Synap{% endblock %}
+
+{% block content %}
+<div class="p-4 sm:p-8"
+     id="dabra-root"
+     data-api-url="{{ dabra_api_url }}"
+     data-export-url="{{ dabra_export_url }}">
+
+  <!-- Encabezado -->
+  <div class="mb-6">
+    <nav class="text-xs text-slate-500 dark:text-slate-400 mb-2">
+      <a href="{% url 'reports:catalog' %}" class="hover:text-sky-600">Reportes</a>
+      <span class="mx-1">/</span>
+      <span class="text-slate-700 dark:text-slate-200">{{ report.name }}</span>
+    </nav>
+    <h1 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100">{{ report.name }}</h1>
+    {% if report.description %}
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ report.description }}</p>
+    {% endif %}
+  </div>
+
+  <!-- Filtros -->
+  <div class="bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-4 sm:p-5 mb-6">
+    <div class="flex flex-col gap-4">
+      {% include "reports/includes/filters_mes_anio.html" %}
+
+      <div class="flex flex-wrap items-center gap-3">
+        <button type="button" id="dabra-generar"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-sm transition-all">
+          <span class="material-icons text-sm">query_stats</span>
+          Generar informe
+        </button>
+
+        <button type="button" id="dabra-exportar" disabled
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600">
+          <span class="material-icons text-sm">file_download</span>
+          Exportar Excel
+        </button>
+
+        <span id="dabra-export-nota" class="text-xs text-slate-400 dark:text-slate-500"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mensajes inline (respaldo del toast global Synap) -->
+  <div id="dabra-msg" class="hidden mb-4 text-sm rounded-xl px-4 py-3"></div>
+
+  <!-- Errores (bloquean el export) -->
+  <div id="dabra-errores"
+       class="hidden mb-4 rounded-2xl border border-rose-200 dark:border-rose-800/50 bg-rose-50 dark:bg-rose-900/20 p-4">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="material-icons text-rose-600 dark:text-rose-400 text-base">error</span>
+      <span class="text-sm font-semibold text-rose-700 dark:text-rose-300">
+        Errores de consistencia <span id="dabra-errores-count" class="font-normal"></span>
+      </span>
+    </div>
+    <ul id="dabra-errores-lista" class="list-disc pl-8 text-xs text-rose-700 dark:text-rose-300 space-y-1"></ul>
+    <p class="text-xs text-rose-600 dark:text-rose-400 mt-2">
+      La exportación a Excel queda deshabilitada hasta resolver estas diferencias en AdministraNET.
+    </p>
+  </div>
+
+  <!-- Alarmas (informativas, no bloquean) -->
+  <div id="dabra-alarmas"
+       class="hidden mb-4 rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 p-4">
+    <div class="flex items-center gap-2 mb-2">
+      <span class="material-icons text-amber-600 dark:text-amber-400 text-base">warning_amber</span>
+      <span class="text-sm font-semibold text-amber-700 dark:text-amber-300">
+        Alarmas <span id="dabra-alarmas-count" class="font-normal"></span>
+      </span>
+    </div>
+    <ul id="dabra-alarmas-lista" class="list-disc pl-8 text-xs text-amber-700 dark:text-amber-300 space-y-1"></ul>
+    <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
+      Las alarmas son informativas: no impiden descargar el Excel.
+    </p>
+  </div>
+
+  <!-- Resultados -->
+  <div id="dabra-resultados" class="hidden bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+    <!-- Pestañas -->
+    <div class="flex flex-wrap items-center gap-2 p-4 border-b border-slate-200 dark:border-slate-700">
+      <div class="flex items-center gap-2" role="tablist" aria-label="Vistas del informe">
+        <button type="button" role="tab" data-dabra-tab="reporte" aria-selected="true"
+                class="dabra-tab-btn px-4 py-1.5 text-xs font-semibold rounded-full border transition-all duration-200 border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-sm">
+          REPORTE <span id="dabra-count-reporte" class="font-normal text-slate-400"></span>
+        </button>
+        <button type="button" role="tab" data-dabra-tab="totales" aria-selected="false"
+                class="dabra-tab-btn px-4 py-1.5 text-xs font-semibold rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400 hover:text-sky-600 dark:hover:text-sky-400">
+          TOTAL FACTURAS <span id="dabra-count-totales" class="font-normal text-slate-400"></span>
+        </button>
+      </div>
+
+      <input type="search" id="dabra-buscar" placeholder="Buscar en el informe…"
+             class="synap-input ml-auto px-3 py-1.5 text-xs rounded-full border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:ring-2 focus:ring-sky-400 min-w-[220px]">
+    </div>
+
+    <!-- Panel REPORTE -->
+    <div id="dabra-panel-reporte" role="tabpanel">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400">
+            <tr id="dabra-thead-reporte"></tr>
+          </thead>
+          <tbody id="dabra-tbody-reporte" class="divide-y divide-slate-100 dark:divide-slate-700/60"></tbody>
+        </table>
+      </div>
+      <div id="dabra-nota-reporte" class="hidden px-4 py-3 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700"></div>
+    </div>
+
+    <!-- Panel TOTAL FACTURAS -->
+    <div id="dabra-panel-totales" role="tabpanel" class="hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-900/40 text-slate-500 dark:text-slate-400">
+            <tr id="dabra-thead-totales"></tr>
+          </thead>
+          <tbody id="dabra-tbody-totales" class="divide-y divide-slate-100 dark:divide-slate-700/60"></tbody>
+          <tfoot class="bg-slate-50 dark:bg-slate-900/40 font-semibold text-slate-700 dark:text-slate-200">
+            <tr id="dabra-tfoot-totales"></tr>
+          </tfoot>
+        </table>
+      </div>
+      <div id="dabra-nota-totales" class="hidden px-4 py-3 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-200 dark:border-slate-700"></div>
+    </div>
+  </div>
+
+  <!-- Placeholder inicial -->
+  <div id="dabra-placeholder" class="text-center text-slate-400 dark:text-slate-500 py-16">
+    <span class="material-icons text-4xl mb-2 block">local_shipping</span>
+    Elegí <strong>Mes</strong> y <strong>Año</strong> y presioná <strong>Generar informe</strong>.
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  "use strict";
+  var root = document.getElementById("dabra-root");
+  if (!root) { return; }
+
+  var API_URL = root.getAttribute("data-api-url") || "";
+  var EXPORT_URL = root.getAttribute("data-export-url") || "";
+  var MAX_FILAS_PREVIEW = 500;
+
+  var elMes = document.getElementById("dabra-mes");
+  var elAnio = document.getElementById("dabra-anio");
+  var elGenerar = document.getElementById("dabra-generar");
+  var elExportar = document.getElementById("dabra-exportar");
+  var elExportNota = document.getElementById("dabra-export-nota");
+  var elBuscar = document.getElementById("dabra-buscar");
+  var elMsg = document.getElementById("dabra-msg");
+  var elPlaceholder = document.getElementById("dabra-placeholder");
+  var elResultados = document.getElementById("dabra-resultados");
+  var elAlarmas = document.getElementById("dabra-alarmas");
+  var elAlarmasLista = document.getElementById("dabra-alarmas-lista");
+  var elAlarmasCount = document.getElementById("dabra-alarmas-count");
+  var elErrores = document.getElementById("dabra-errores");
+  var elErroresLista = document.getElementById("dabra-errores-lista");
+  var elErroresCount = document.getElementById("dabra-errores-count");
+
+  var MESES = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+               "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+  var fmtMoney = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 });
+  var fmtNum = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
+  var fmtPct = new Intl.NumberFormat("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Columnas del preview REPORTE. `aliases` cubre el naming del servicio;
+  // `calc` sólo se aplica si ninguna clave está presente en la fila.
+  var COLS_REPORTE = [
+    { title: "Fecha", aliases: ["fecha"], tipo: "fecha" },
+    { title: "PuntoVenta", aliases: ["punto_venta", "puntoventa", "pv"], tipo: "texto" },
+    { title: "NumeroLegal", aliases: ["numero_legal", "numerolegal", "nro_legal"], tipo: "texto" },
+    { title: "Item", aliases: ["item", "cod_item", "articulo_item"], tipo: "texto" },
+    { title: "NombreArticulo", aliases: ["nombre_articulo", "nombrearticulo", "descripcion_articulo"], tipo: "texto" },
+    { title: "Talle", aliases: ["talle"], tipo: "texto" },
+    { title: "Cantidad", aliases: ["cantidad"], tipo: "numero" },
+    { title: "Precio", aliases: ["precio_unitario", "precio", "precio_bruto"], tipo: "monto" },
+    { title: "Bonificacion", aliases: ["bonificacion", "bonif", "porc_bonificacion"], tipo: "porcentaje" },
+    { title: "ImporteBonificacion", aliases: ["importe_bonificacion", "imp_bonificacion"], tipo: "monto", opcional: true },
+    { title: "Importe", aliases: ["importe", "importe_neto"], tipo: "monto" },
+    { title: "Iva", aliases: ["importe_iva", "iva", "imp_iva"], tipo: "monto" },
+    {
+      title: "TotalGravado", aliases: ["total_gravado", "totalgravado", "gravado"], tipo: "monto",
+      calc: function (fila) { return num(valorCrudo(fila, ["importe", "importe_neto"])); }
+    },
+    {
+      title: "Total", aliases: ["total", "importe_total"], tipo: "monto",
+      calc: function (fila) {
+        return num(valorCrudo(fila, ["importe", "importe_neto"])) + num(valorCrudo(fila, ["importe_iva", "iva", "imp_iva"]));
+      }
+    },
+    { title: "CompRef", aliases: ["comp_ref", "compref", "comprobante_ref"], tipo: "texto" },
+    { title: "NumeroRef", aliases: ["numero_ref", "numeroref", "nro_ref"], tipo: "texto" },
+    { title: "NroCAE", aliases: ["nro_cae", "cae", "nrocae", "fe_cae"], tipo: "texto" },
+    { title: "VtoCAE", aliases: ["vto_cae", "vtocae", "fe_vto_cae", "vencimiento_cae"], tipo: "fecha" },
+    { title: "Categoria", aliases: ["categoria"], tipo: "texto" }
+  ];
+
+  var COLS_TOTALES = [
+    { title: "Fecha", aliases: ["fecha"], tipo: "fecha" },
+    { title: "Comprobante", aliases: ["comprobante"], tipo: "texto" },
+    { title: "Nro Remito", aliases: ["nro_remito", "numero_remito", "nroremito"], tipo: "texto" },
+    { title: "Imp Neto", aliases: ["imp_neto", "importe_neto", "subtotal1"], tipo: "monto" },
+    { title: "Imp Bruto", aliases: ["imp_bruto", "importe_bruto", "importe_venta"], tipo: "monto" }
+  ];
+
+  var estado = {
+    colsReporte: COLS_REPORTE,
+    colsTotales: COLS_TOTALES,
+    filas: [],
+    totales: [],
+    alarmas: [],
+    errores: [],
+    tab: "reporte"
+  };
+
+  /* ---------------------------------------------------------------- utils */
+
+  function num(v) {
+    if (v === null || v === undefined || v === "") { return 0; }
+    var n = Number(v);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function valorCrudo(fila, aliases) {
+    if (!fila) { return null; }
+    for (var i = 0; i < aliases.length; i++) {
+      var v = fila[aliases[i]];
+      if (v !== undefined && v !== null) { return v; }
+    }
+    return null;
+  }
+
+  function tieneClave(fila, aliases) {
+    if (!fila) { return false; }
+    for (var i = 0; i < aliases.length; i++) {
+      if (fila[aliases[i]] !== undefined && fila[aliases[i]] !== null && fila[aliases[i]] !== "") { return true; }
+    }
+    return false;
+  }
+
+  // Fechas siempre dd/MM/yyyy en la UI, tolerando ISO del backend.
+  function formatFecha(valor) {
+    if (valor === null || valor === undefined || valor === "") { return ""; }
+    var s = String(valor).trim();
+    var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) { return iso[3] + "/" + iso[2] + "/" + iso[1]; }
+    return s;
+  }
+
+  function formatCelda(col, fila) {
+    var crudo = valorCrudo(fila, col.aliases);
+    if (crudo === null && typeof col.calc === "function") { crudo = col.calc(fila); }
+    if (crudo === null || crudo === undefined || crudo === "") { return ""; }
+    if (col.tipo === "fecha") { return formatFecha(crudo); }
+    if (col.tipo === "monto") { return fmtMoney.format(num(crudo)); }
+    if (col.tipo === "numero") { return fmtNum.format(num(crudo)); }
+    if (col.tipo === "porcentaje") { return fmtPct.format(num(crudo)) + " %"; }
+    return String(crudo);
+  }
+
+  function alineaDerecha(col) {
+    return col.tipo === "monto" || col.tipo === "numero" || col.tipo === "porcentaje";
+  }
+
+  // Permite que el backend imponga orden/títulos vía payload.columns.
+  function tipoPorClave(clave) {
+    var k = String(clave || "").toLowerCase();
+    if (/fecha|vto|vencimiento/.test(k)) { return "fecha"; }
+    if (/bonificacion|porc|alicuota/.test(k) && !/importe/.test(k)) { return "porcentaje"; }
+    if (/importe|precio|total|neto|bruto|iva|monto|subtotal/.test(k)) { return "monto"; }
+    if (/cantidad/.test(k)) { return "numero"; }
+    return "texto";
+  }
+
+  function columnasDesdePayload(columnasBackend, porDefecto) {
+    if (!Array.isArray(columnasBackend) || !columnasBackend.length) { return porDefecto; }
+    return columnasBackend.map(function (c) {
+      var clave = c.data || c.key || "";
+      var base = porDefecto.filter(function (d) { return d.aliases.indexOf(clave) !== -1; })[0];
+      return {
+        title: c.title || (base ? base.title : clave),
+        aliases: base ? base.aliases : [clave],
+        tipo: base ? base.tipo : tipoPorClave(clave),
+        calc: base ? base.calc : undefined
+      };
+    });
+  }
+
+  function getCookie(nombre) {
+    var partes = ("; " + document.cookie).split("; " + nombre + "=");
+    return partes.length === 2 ? decodeURIComponent(partes.pop().split(";").shift()) : "";
+  }
+
+  function cabeceras() {
+    var h = { "X-Requested-With": "XMLHttpRequest" };
+    var csrf = getCookie("csrftoken");
+    if (csrf) { h["X-CSRFToken"] = csrf; }
+    return h;
+  }
+
+  /* ------------------------------------------------------------- feedback */
+
+  // Sin diálogos nativos: toast global Synap + banner inline como respaldo.
+  function avisar(texto, tipo) {
+    if (window.SynapMessages && typeof window.SynapMessages.show === "function") {
+      window.SynapMessages.show(texto, tipo || "info");
+    }
+    elMsg.textContent = texto;
+    elMsg.className = "mb-4 text-sm rounded-xl px-4 py-3 " + (
+      tipo === "error"
+        ? "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-900/20 dark:text-rose-300"
+        : tipo === "warning"
+          ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300"
+          : tipo === "success"
+            ? "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300"
+            : "bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-900/20 dark:text-sky-300"
+    );
+    elMsg.classList.remove("hidden");
+  }
+
+  function ocultarMsg() { elMsg.classList.add("hidden"); }
+
+  function renderLista(contenedor, lista, elementoCount, items) {
+    lista.innerHTML = "";
+    if (!items.length) { contenedor.classList.add("hidden"); return; }
+    items.forEach(function (texto) {
+      var li = document.createElement("li");
+      li.textContent = String(texto);
+      lista.appendChild(li);
+    });
+    elementoCount.textContent = "(" + items.length + ")";
+    contenedor.classList.remove("hidden");
+  }
+
+  function actualizarExport() {
+    var hayErrores = estado.errores.length > 0;
+    var hayFilas = estado.filas.length > 0;
+    elExportar.disabled = hayErrores || !hayFilas;
+    if (hayErrores) {
+      elExportNota.textContent = "Export bloqueado: hay errores de consistencia.";
+      elExportar.title = "Resolvé los errores de consistencia para exportar.";
+    } else if (!hayFilas) {
+      elExportNota.textContent = "Generá el informe para habilitar la exportación.";
+      elExportar.title = "";
+    } else {
+      elExportNota.textContent = "";
+      elExportar.title = "";
+    }
+  }
+
+  /* --------------------------------------------------------------- tablas */
+
+  function renderCabecera(elTr, columnas) {
+    elTr.innerHTML = "";
+    columnas.forEach(function (c) {
+      var th = document.createElement("th");
+      th.className = "font-semibold px-4 py-3 whitespace-nowrap " + (alineaDerecha(c) ? "text-right" : "text-left");
+      th.textContent = c.title;
+      elTr.appendChild(th);
+    });
+  }
+
+  function coincideBusqueda(fila, columnas, q) {
+    if (!q) { return true; }
+    for (var i = 0; i < columnas.length; i++) {
+      if (String(formatCelda(columnas[i], fila)).toLowerCase().indexOf(q) !== -1) { return true; }
+    }
+    return false;
+  }
+
+  function renderCuerpo(elTbody, columnas, filas, elNota, etiqueta) {
+    var q = (elBuscar.value || "").trim().toLowerCase();
+    elTbody.innerHTML = "";
+    var visibles = filas.filter(function (f) { return coincideBusqueda(f, columnas, q); });
+    visibles.slice(0, MAX_FILAS_PREVIEW).forEach(function (fila) {
+      var tr = document.createElement("tr");
+      tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/30";
+      columnas.forEach(function (c) {
+        var td = document.createElement("td");
+        td.className = "px-4 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap " +
+                       (alineaDerecha(c) ? "text-right tabular-nums" : "text-left");
+        td.textContent = formatCelda(c, fila);
+        tr.appendChild(td);
+      });
+      elTbody.appendChild(tr);
+    });
+
+    var notas = [];
+    if (visibles.length > MAX_FILAS_PREVIEW) {
+      notas.push("Vista previa limitada a las primeras " + MAX_FILAS_PREVIEW + " de " + visibles.length +
+                 " " + etiqueta + ". El Excel incluye todas.");
+    }
+    if (q) { notas.push("Filtro aplicado: " + visibles.length + " de " + filas.length + " " + etiqueta + "."); }
+    if (!visibles.length) { notas.push("Sin " + etiqueta + " para mostrar."); }
+    if (notas.length) {
+      elNota.textContent = notas.join(" ");
+      elNota.classList.remove("hidden");
+    } else {
+      elNota.classList.add("hidden");
+    }
+    return visibles.length;
+  }
+
+  function renderPieTotales() {
+    var elTfoot = document.getElementById("dabra-tfoot-totales");
+    elTfoot.innerHTML = "";
+    if (!estado.totales.length) { return; }
+    estado.colsTotales.forEach(function (c, idx) {
+      var th = document.createElement("th");
+      th.className = "px-4 py-3 whitespace-nowrap " + (alineaDerecha(c) ? "text-right tabular-nums" : "text-left");
+      if (idx === 0) {
+        th.textContent = "Total (" + estado.totales.length + " facturas)";
+      } else if (c.tipo === "monto") {
+        var suma = estado.totales.reduce(function (acc, f) { return acc + num(valorCrudo(f, c.aliases)); }, 0);
+        th.textContent = fmtMoney.format(suma);
+      } else {
+        th.textContent = "";
+      }
+      elTfoot.appendChild(th);
+    });
+  }
+
+  function render() {
+    // «ImporteBonificacion» sólo se muestra si el servicio la envía.
+    var colsReporte = estado.colsReporte.filter(function (c) {
+      if (!c.opcional) { return true; }
+      return estado.filas.some(function (f) { return tieneClave(f, c.aliases); });
+    });
+
+    renderCabecera(document.getElementById("dabra-thead-reporte"), colsReporte);
+    renderCabecera(document.getElementById("dabra-thead-totales"), estado.colsTotales);
+
+    var visReporte = renderCuerpo(
+      document.getElementById("dabra-tbody-reporte"), colsReporte, estado.filas,
+      document.getElementById("dabra-nota-reporte"), "líneas"
+    );
+    var visTotales = renderCuerpo(
+      document.getElementById("dabra-tbody-totales"), estado.colsTotales, estado.totales,
+      document.getElementById("dabra-nota-totales"), "facturas"
+    );
+    renderPieTotales();
+
+    document.getElementById("dabra-count-reporte").textContent = "(" + visReporte + ")";
+    document.getElementById("dabra-count-totales").textContent = "(" + visTotales + ")";
+
+    renderLista(elAlarmas, elAlarmasLista, elAlarmasCount, estado.alarmas);
+    renderLista(elErrores, elErroresLista, elErroresCount, estado.errores);
+    actualizarExport();
+
+    elPlaceholder.classList.add("hidden");
+    elResultados.classList.remove("hidden");
+  }
+
+  /* -------------------------------------------------------------- filtros */
+
+  function leerFiltros() {
+    return {
+      mes: elMes ? String(elMes.value || "") : "",
+      anio: elAnio ? String(elAnio.value || "") : ""
+    };
+  }
+
+  function filtrosValidos(f) {
+    var mes = parseInt(f.mes, 10);
+    var anio = parseInt(f.anio, 10);
+    if (!mes || mes < 1 || mes > 12) { avisar("Seleccioná un mes válido (1 a 12).", "error"); return false; }
+    if (!anio || anio < 2000 || anio > 2100) { avisar("Seleccioná un año válido.", "error"); return false; }
+    return true;
+  }
+
+  function etiquetaPeriodo(f) {
+    return MESES[parseInt(f.mes, 10)] + " " + f.anio;
+  }
+
+  /* --------------------------------------------------------------- acciones */
+
+  function generar() {
+    if (!API_URL) { avisar("El relay del informe no está disponible en este entorno.", "error"); return; }
+    var f = leerFiltros();
+    if (!filtrosValidos(f)) { return; }
+    ocultarMsg();
+    elGenerar.disabled = true;
+    elGenerar.classList.add("opacity-60");
+
+    var params = new URLSearchParams({ mes: f.mes, anio: f.anio });
+    fetch(API_URL + "?" + params.toString(), { credentials: "same-origin", headers: cabeceras() })
+      .then(function (r) {
+        if (!r.ok) {
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            throw new Error(j.detail || "No se pudo generar el informe (" + r.status + ").");
+          });
+        }
+        return r.json();
+      })
+      .then(function (payload) {
+        if (!payload) { throw new Error("Respuesta vacía del servidor."); }
+        estado.colsReporte = columnasDesdePayload(payload.columns, COLS_REPORTE);
+        estado.colsTotales = columnasDesdePayload(payload.columns_totales, COLS_TOTALES);
+        estado.filas = Array.isArray(payload.filas) ? payload.filas : [];
+        estado.totales = Array.isArray(payload.totales_facturas) ? payload.totales_facturas : [];
+        estado.alarmas = Array.isArray(payload.alarmas) ? payload.alarmas : [];
+        estado.errores = Array.isArray(payload.errores) ? payload.errores : [];
+        render();
+
+        if (estado.errores.length) {
+          avisar("El informe tiene " + estado.errores.length + " error(es) de consistencia: revisá el detalle en rojo.", "error");
+        } else if (!estado.filas.length) {
+          avisar("Sin resultados: no hay facturas DABRA en " + etiquetaPeriodo(f) + ".", "info");
+        } else if (estado.alarmas.length) {
+          avisar("Informe generado con " + estado.alarmas.length + " alarma(s). Podés exportar el Excel.", "warning");
+        } else {
+          avisar("Informe generado para " + etiquetaPeriodo(f) + ".", "success");
+        }
+      })
+      .catch(function (err) { avisar(err.message || "Error al generar el informe.", "error"); })
+      .finally(function () {
+        elGenerar.disabled = false;
+        elGenerar.classList.remove("opacity-60");
+      });
+  }
+
+  function nombreArchivo(headerDisposition, f) {
+    if (headerDisposition) {
+      var m = headerDisposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+      if (m && m[1]) { return decodeURIComponent(m[1].replace(/"$/, "")); }
+    }
+    var mm = String(parseInt(f.mes, 10)).padStart(2, "0");
+    return "DABRA " + mm + f.anio + ".xlsx";
+  }
+
+  function exportar() {
+    if (!EXPORT_URL) { avisar("La exportación no está disponible en este entorno.", "error"); return; }
+    if (estado.errores.length) {
+      avisar("No se puede exportar: hay errores de consistencia sin resolver.", "error");
+      return;
+    }
+    var f = leerFiltros();
+    if (!filtrosValidos(f)) { return; }
+    ocultarMsg();
+    elExportar.disabled = true;
+    elExportar.classList.add("opacity-60");
+
+    var params = new URLSearchParams({ mes: f.mes, anio: f.anio });
+    var disposition = "";
+    fetch(EXPORT_URL + "?" + params.toString(), { credentials: "same-origin", headers: cabeceras() })
+      .then(function (r) {
+        if (r.status === 409) {
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            estado.errores = Array.isArray(j.errores) ? j.errores : [j.detail || "Diferencias de importes detectadas."];
+            renderLista(elErrores, elErroresLista, elErroresCount, estado.errores);
+            actualizarExport();
+            throw new Error(j.detail || "Export bloqueado por errores de consistencia.");
+          });
+        }
+        if (!r.ok) {
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            throw new Error(j.detail || "No se pudo exportar el informe (" + r.status + ").");
+          });
+        }
+        disposition = r.headers.get("Content-Disposition") || "";
+        return r.blob();
+      })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = nombreArchivo(disposition, f);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        avisar("Excel generado: " + nombreArchivo(disposition, f), "success");
+      })
+      .catch(function (err) { avisar(err.message || "Error al exportar el informe.", "error"); })
+      .finally(function () {
+        elExportar.classList.remove("opacity-60");
+        actualizarExport();
+      });
+  }
+
+  /* --------------------------------------------------------------- pestañas */
+
+  var CLASES_ACTIVA = ["border-sky-500", "bg-sky-50", "dark:bg-sky-900/20", "text-sky-700", "dark:text-sky-300", "shadow-sm"];
+  var CLASES_INACTIVA = ["border-slate-300", "dark:border-slate-600", "bg-white", "dark:bg-slate-800",
+                         "text-slate-700", "dark:text-slate-300", "hover:border-sky-400", "hover:text-sky-600",
+                         "dark:hover:text-sky-400"];
+
+  function activarTab(tab) {
+    estado.tab = tab;
+    document.querySelectorAll(".dabra-tab-btn").forEach(function (btn) {
+      var activa = btn.getAttribute("data-dabra-tab") === tab;
+      btn.setAttribute("aria-selected", activa ? "true" : "false");
+      CLASES_ACTIVA.forEach(function (c) { btn.classList.toggle(c, activa); });
+      CLASES_INACTIVA.forEach(function (c) { btn.classList.toggle(c, !activa); });
+    });
+    document.getElementById("dabra-panel-reporte").classList.toggle("hidden", tab !== "reporte");
+    document.getElementById("dabra-panel-totales").classList.toggle("hidden", tab !== "totales");
+    elBuscar.placeholder = tab === "reporte" ? "Buscar en el informe…" : "Buscar factura…";
+  }
+
+  document.querySelectorAll(".dabra-tab-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () { activarTab(this.getAttribute("data-dabra-tab")); });
+  });
+
+  elGenerar.addEventListener("click", generar);
+  elExportar.addEventListener("click", exportar);
+  elBuscar.addEventListener("input", function () {
+    if (!estado.filas.length && !estado.totales.length) { return; }
+    render();
+  });
+
+  activarTab("reporte");
+  actualizarExport();
+})();
+</script>
+{% endblock %}

@@ -28,6 +28,7 @@ from django.utils import timezone
 from legacy_db.services.cont_recalculo_service import (
     CorreccionContableError,
     _insertar_log_detalle,
+    recalcular_saldo_asiento_cuenta,
 )
 
 logger = logging.getLogger(__name__)
@@ -412,7 +413,6 @@ def _saldo_teorico_ejercicio(dict_cur, id_pc: int, id_ejercicio: int) -> Decimal
         FROM cont_asiento a
         JOIN cont_pc pc ON pc.id_pc = a.id_pc
         WHERE a.id_ejercicio = %s AND a.id_pc = %s
-          AND COALESCE(a.anulado, 'No') <> 'Si'
         GROUP BY a.id_pc, a.id_ejercicio, pc.saldo_pc
         """,
         (id_ejercicio, id_pc),
@@ -435,7 +435,6 @@ def _saldo_teorico_periodo(dict_cur, id_pc: int, id_ejercicio: int, id_periodo: 
         FROM cont_asiento a
         JOIN cont_pc pc ON pc.id_pc = a.id_pc
         WHERE a.id_ejercicio = %s AND a.id_pc = %s AND a.id_periodo = %s
-          AND COALESCE(a.anulado, 'No') <> 'Si'
         GROUP BY a.id_pc, a.id_ejercicio, a.id_periodo, pc.saldo_pc
         """,
         (id_ejercicio, id_pc, id_periodo),
@@ -506,6 +505,12 @@ def _recalcular_saldos(
                 "INSERT INTO cont_ejercicio_saldo_cta (id_pc, id_ejercicio, saldo_ejercicio_cta) VALUES (%s,%s,%s)",
                 (id_pc, id_ej, str(saldo)),
             )
+        recalcular_saldo_asiento_cuenta(
+            cur,
+            dict_cur,
+            id_pc,
+            id_ej,
+        )
         current += 1
         if current == 1 or current == total or current % intervalo == 0:
             yield _evento_progreso(

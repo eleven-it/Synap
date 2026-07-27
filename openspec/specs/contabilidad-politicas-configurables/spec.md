@@ -53,7 +53,7 @@ La función `resolver_politica(base_empresa)` DEBE cargar primero la fila global
 
 ### Requirement: POL-03 — Parámetro tratamiento_anulados
 
-El parámetro `tratamiento_anulados` DEBE ser enum con valores `excluir` | `incluir_neutralizado`. DEBE afectar la consulta canónica de saldo teórico desde `cont_asiento` y los checks `saldo_*_vs_diario`. Default DEBE ser `excluir`.
+El parámetro `tratamiento_anulados` DEBE ser enum con valores `excluir` | `incluir_neutralizado`. DEBE afectar la consulta canónica de saldo teórico desde `cont_asiento` y los checks `saldo_*_vs_diario`. Default DEBE ser `incluir_neutralizado`.
 
 #### Scenario: Excluir anulados en saldo teórico
 

@@ -12,11 +12,13 @@ from contabilidad_audit.services.politicas import calcular_config_hash
 from legacy_db.services.cont_recalculo_service import (
     CHECK_ANULACION,
     MARCA_ANUL_REGEN,
+    MARCA_REGEN,
     CorreccionContableError,
     _aplicar_item_anulacion,
     _evaluar_problemas_anulacion_cm,
     _filtrar_items_aplicables,
     _plan_reparacion_anulaciones,
+    _reconstruir_renglones_comprobante_anulado,
     apply,
     calcular_data_fingerprint,
 )
@@ -110,6 +112,63 @@ def _item_contra(cm: str = "12345") -> dict:
     }
 
 
+def _item_contra_regenerar(cm: str = "9001") -> dict:
+    return {
+        "tabla": "cont_asiento",
+        "clave": {"codigo_movimiento_original": cm},
+        "accion": "insert_contra_asiento",
+        "valor_anterior": None,
+        "valor_nuevo": {
+            "codigo_movimiento_original": cm,
+            "id_concepto_asiento": 4,
+            "desc_concepto_asiento": "Anulación-Compra",
+            "id_ejercicio": 1,
+            "fecha_asiento": date(2025, 4, 1),
+            "desc_asiento": "Compra - Nro Comp. A-9001",
+            "desc_renglon_asiento": MARCA_ANUL_REGEN,
+            "regenerar_original": True,
+            "renglones_original_preview": [
+                {
+                    "id_pc": 10,
+                    "debe_asiento": "200.00",
+                    "haber_asiento": "0.00",
+                    "id_concepto_asiento": 3,
+                    "desc_concepto_asiento": "Compra",
+                },
+                {
+                    "id_pc": 20,
+                    "debe_asiento": "0.00",
+                    "haber_asiento": "200.00",
+                    "id_concepto_asiento": 3,
+                    "desc_concepto_asiento": "Compra",
+                },
+            ],
+            "renglones_preview": [
+                {
+                    "id_pc": 10,
+                    "debe_asiento": "0.00",
+                    "haber_asiento": "200.00",
+                    "desc_renglon_asiento": MARCA_ANUL_REGEN,
+                    "desc_concepto_asiento": "Anulación-Compra",
+                    "id_concepto_asiento": 4,
+                },
+                {
+                    "id_pc": 20,
+                    "debe_asiento": "200.00",
+                    "haber_asiento": "0.00",
+                    "desc_renglon_asiento": MARCA_ANUL_REGEN,
+                    "desc_concepto_asiento": "Anulación-Compra",
+                    "id_concepto_asiento": 4,
+                },
+            ],
+        },
+        "delta": "0",
+        "check_id": CHECK_ANULACION,
+        "excluido": False,
+        "bloqueado": False,
+    }
+
+
 def _item_bloqueado(cm: str = "999") -> dict:
     return {
         "tabla": "cont_asiento",
@@ -150,6 +209,7 @@ class EvaluarProblemasAnulacionTestCase(TestCase):
         cur = MagicMock()
         # marcador cnt=0; pendientes=0 total>0 (ya anulado); orig_tot; contra None
         cur.fetchone.side_effect = [
+            {"TipoComprobante": "FA", "TipoOP": ""},
             {"cnt": 0},
             {"pendientes": 0, "total": 2},
             {"codigo_movimiento": "1", "d": Decimal("100"), "h": Decimal("100")},
@@ -160,9 +220,24 @@ class EvaluarProblemasAnulacionTestCase(TestCase):
         self.assertIn("falta_contra_asiento", problemas)
         self.assertNotIn("asiento_original_no_anulado", problemas)
 
+    def test_op_egreso_sin_marcador_no_reporta_falta(self):
+        cur = MagicMock()
+        cur.fetchone.side_effect = [
+            {"cnt": 0},
+            {"pendientes": 0, "total": 2},
+            {"codigo_movimiento": "1", "d": Decimal("100"), "h": Decimal("100")},
+            {"codigo_movimiento": "2", "d": Decimal("100"), "h": Decimal("100")},
+        ]
+        problemas, _ = _evaluar_problemas_anulacion_cm(
+            cur, 1, tipo_comprobante="OP", tipo_op="Egreso"
+        )
+        self.assertNotIn("falta_marcador_cuentaproveedor_cm0", problemas)
+        self.assertEqual(problemas, [])
+
     def test_sin_renglones_no_marca_original(self):
         cur = MagicMock()
         cur.fetchone.side_effect = [
+            {"TipoComprobante": "FA", "TipoOP": ""},
             {"cnt": 1},
             {"pendientes": 0, "total": 0},
             None,
@@ -175,6 +250,7 @@ class EvaluarProblemasAnulacionTestCase(TestCase):
     def test_contra_no_invierte(self):
         cur = MagicMock()
         cur.fetchone.side_effect = [
+            {"TipoComprobante": "FA", "TipoOP": ""},
             {"cnt": 1},
             {"pendientes": 0, "total": 2},
             {"codigo_movimiento": "1", "d": Decimal("100"), "h": Decimal("50")},
@@ -203,6 +279,7 @@ class PlanReparacionAnulacionesTestCase(TestCase):
                     "Codigo": 5,
                     "ImporteCompra": Decimal("100"),
                     "ImportePago": None,
+                    "TipoOP": "",
                 }
             ],
         ]
@@ -242,6 +319,7 @@ class PlanReparacionAnulacionesTestCase(TestCase):
                     "Codigo": 1,
                     "ImporteCompra": None,
                     "ImportePago": Decimal("50"),
+                    "TipoOP": "Imputacion",
                 }
             ],
             [
@@ -285,6 +363,72 @@ class PlanReparacionAnulacionesTestCase(TestCase):
             MARCA_ANUL_REGEN,
         )
 
+    @patch("legacy_db.services.cont_recalculo_service._reconstruir_renglones_comprobante_anulado")
+    def test_plan_falta_contra_sin_asiento_reconstruye(self, mock_recon):
+        repo = MagicMock()
+        cur = MagicMock()
+        repo.cur.return_value = cur
+        repo.ejercicio_por_fecha.return_value = {"id_ejercicio": 1}
+        repo.nro_asiento_ejercicio.return_value = 50
+
+        cur.fetchall.side_effect = [
+            [
+                {
+                    "CodigoMovimiento": Decimal("9001"),
+                    "TipoComprobante": "FA",
+                    "NroComprobante": "A-9001",
+                    "Fecha": date(2025, 4, 1),
+                    "CodSucursal": 1,
+                    "Codigo": 5,
+                    "ImporteCompra": Decimal("200"),
+                    "ImportePago": None,
+                    "TipoOP": "",
+                }
+            ],
+            [],  # sin renglones cont_asiento
+        ]
+        cur.fetchone.side_effect = [
+            {"cnt": 1},
+            {"pendientes": 0, "total": 0},
+            None,
+            None,
+            {
+                "CodigoMovimiento": Decimal("9001"),
+                "TipoComprobante": "FA",
+                "Anulado": "Si",
+                "ImporteCompra": Decimal("200"),
+            },
+        ]
+        mock_recon.return_value = (
+            [
+                {"id_pc": 10, "debe_asiento": "200.00", "haber_asiento": "0.00"},
+                {"id_pc": 20, "debe_asiento": "0.00", "haber_asiento": "200.00"},
+            ],
+            {
+                "id_ejercicio": 1,
+                "fecha_asiento": date(2025, 4, 1),
+                "desc_asiento": "Compra - Nro Comp. A-9001",
+                "concepto": 3,
+                "desc_concepto": "Compra",
+            },
+        )
+
+        items = _plan_reparacion_anulaciones(
+            MagicMock(), repo, _politica_base(), {"id_ejercicio": 1}
+        )
+        contra = [i for i in items if i["accion"] == "insert_contra_asiento"]
+        self.assertEqual(len(contra), 1)
+        vn = contra[0]["valor_nuevo"]
+        self.assertTrue(vn.get("regenerar_original"))
+        self.assertEqual(len(vn.get("renglones_original_preview") or []), 2)
+        self.assertEqual(len(vn.get("renglones_preview") or []), 2)
+        self.assertEqual(
+            vn["renglones_preview"][0]["debe_asiento"],
+            vn["renglones_original_preview"][0]["haber_asiento"],
+        )
+        self.assertTrue(contra[0]["detalle"].get("reconstruido_desde_comprobante"))
+        mock_recon.assert_called_once()
+
     def test_contra_no_invierte_queda_bloqueado(self):
         repo = MagicMock()
         cur = MagicMock()
@@ -301,6 +445,7 @@ class PlanReparacionAnulacionesTestCase(TestCase):
                 "Codigo": 1,
                 "ImporteCompra": Decimal("10"),
                 "ImportePago": None,
+                "TipoOP": "",
             }
         ]
         cur.fetchone.side_effect = [
@@ -397,6 +542,53 @@ class ApplyAnulacionTestCase(TestCase):
             if c[0] and "INSERT INTO cont_asiento" in c[0][0]:
                 params_flat.extend(list(c[0][1]))
         self.assertTrue(any(MARCA_ANUL_REGEN in str(p) for p in params_flat))
+
+    def test_aplicar_insert_contra_regenera_original(self):
+        cur = MagicMock()
+        dict_cur = MagicMock()
+        dict_cur.fetchone.side_effect = [
+            None,  # contra no existe
+            None,  # asiento original no existe
+        ]
+        cur.fetchone.side_effect = [
+            (50,),  # nro_asiento original
+            (Decimal("0"),),
+            (Decimal("0"),),
+            (1000,),  # codmov contra
+            (51,),  # nro_asiento contra
+            (Decimal("0"),),
+            (Decimal("0"),),
+        ]
+        repo = MagicMock()
+        repo.saldo_pc.return_value = "Deudor"
+        n = _aplicar_item_anulacion(
+            cur,
+            dict_cur,
+            repo,
+            _item_contra_regenerar(),
+            {},
+            "L1",
+            "tester",
+            date(2025, 7, 25),
+        )
+        self.assertGreaterEqual(n, 4)
+        inserts = [
+            c[0][0]
+            for c in cur.execute.call_args_list
+            if "INSERT INTO cont_asiento" in c[0][0]
+        ]
+        self.assertEqual(len(inserts), 4)
+        params_por_insert = [
+            list(c[0][1])
+            for c in cur.execute.call_args_list
+            if c[0] and "INSERT INTO cont_asiento" in c[0][0]
+        ]
+        anulados = [p[-1] for p in params_por_insert]
+        self.assertEqual(anulados[:2], ["Si", "Si"])
+        self.assertEqual(anulados[2:], ["No", "No"])
+        marcas = [p[9] for p in params_por_insert]
+        self.assertEqual(marcas[:2], [MARCA_REGEN, MARCA_REGEN])
+        self.assertTrue(all(MARCA_ANUL_REGEN in m for m in marcas[2:]))
 
     def test_aplicar_bloqueado_no_hace_nada(self):
         cur = MagicMock()
