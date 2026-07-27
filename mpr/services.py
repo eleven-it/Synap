@@ -18824,7 +18824,7 @@ def construir_grilla_clasificacion_produccion(
             ini_scrap = int(round(float(asignado_scrap)))
         else:
             disp_texto = texto_docenas_unidades(base_int, unidades_por_docena_fijo=12)
-            ini_semi = 0
+            ini_semi = int(round(float(atribuible)))
             ini_seg2da = 0
             ini_scrap = 0
 

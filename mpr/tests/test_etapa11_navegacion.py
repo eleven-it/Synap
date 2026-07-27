@@ -73,6 +73,8 @@ class TestTemplatesNavegacionEtapa11(SimpleTestCase):
         self.assertNotIn("Trazabilidad OPT", html)
         self.assertNotIn("ventana_pack_url", html)
         self.assertIn("mpr:armado", html)
+        self.assertIn("cantidadArticulosVisibles()", html)
+        self.assertIn("Artículo (", html)
 
     def test_ventana_pack_banner_legacy_sin_wizard(self):
         html = _read_template("templates", "mpr", "ventana_pack.html")

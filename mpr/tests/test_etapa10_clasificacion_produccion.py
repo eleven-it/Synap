@@ -212,6 +212,7 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
         fila = resultado["filas"][0]
         self.assertAlmostEqual(fila["parte"], 24.0)
         self.assertAlmostEqual(fila["base_clasificable"], 24.0)
+        self.assertEqual(fila["ini_semi"], 24)
         self.assertEqual(fila["ini_seg2da"], 0)
         self.assertEqual(fila["ini_scrap"], 0)
         self.assertFalse(fila["solo_lectura"])
@@ -253,6 +254,7 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
         resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
         fila = resultado["filas"][0]
         self.assertFalse(fila["solo_lectura"])
+        self.assertEqual(fila["ini_semi"], 0)
         self.assertAlmostEqual(fila["atribuible_parte"], 0.0)
         self.assertAlmostEqual(fila["extra_disponible"], 30.0)
         self.assertAlmostEqual(fila["max_clasificable"], 30.0)
@@ -437,7 +439,7 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
     def test_reparto_valido_tres_destinos(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """2da=2, scrap=1, atribuible=8 → semi=5 calculado server-side."""
+        """2da=2, scrap=1, atribuible=8 → semi=5 por fallback (atribuible − 2da − scrap)."""
         mock_celdas.return_value = _celdas_parte_mock(cantidad=8.0)
         pivot = _pivot_con_produccion(id_art=42, saldo=8.0)
         mock_pivot.return_value = (pivot, pivot)
@@ -618,7 +620,31 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._pivot_stock_por_tipo_mpr")
     def test_clasifica_mas_que_parte_con_stock_extra(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
-        """Parte=10, stock Prod=25 → puede clasificar hasta 25 como semi."""
+        """Parte=10, stock Prod=25 → debe enviar semi=25 explícito para consumir extra."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
+        pivot = _pivot_con_produccion(id_art=42, saldo=25.0)
+        mock_pivot.return_value = (pivot, pivot)
+        data = _post_clasif_base(
+            **{
+                f"semi_42_op_{ID_OPERARIO}": "25",
+                f"seg2da_42_op_{ID_OPERARIO}": "0",
+                f"scrap_42_op_{ID_OPERARIO}": "0",
+            }
+        )
+        resp = self._post(data)
+        self.assertEqual(resp.status_code, 302)
+        items = mock_lote.call_args.args[2]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(float(items[0]["cantidad"]), 25.0)
+        self.assertEqual(float(items[0]["cantidad_extra"]), 15.0)
+
+    @patch("mpr.services.transferir_stock_lote", return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+    @patch("mpr.services._pivot_stock_por_tipo_mpr")
+    def test_sin_semi_en_post_clasifica_solo_atribuible(self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote):
+        """Sin claves semi y stock extra → clasifica solo atribuible (10), cantidad_extra=0."""
         mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
         pivot = _pivot_con_produccion(id_art=42, saldo=25.0)
         mock_pivot.return_value = (pivot, pivot)
@@ -632,8 +658,8 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
         self.assertEqual(resp.status_code, 302)
         items = mock_lote.call_args.args[2]
         self.assertEqual(len(items), 1)
-        self.assertEqual(float(items[0]["cantidad"]), 25.0)
-        self.assertEqual(float(items[0]["cantidad_extra"]), 15.0)
+        self.assertEqual(float(items[0]["cantidad"]), 10.0)
+        self.assertEqual(float(items[0]["cantidad_extra"]), 0.0)
 
     @patch("mpr.services.transferir_stock_lote")
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})

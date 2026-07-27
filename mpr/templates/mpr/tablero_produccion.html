@@ -18,6 +18,22 @@
             fabMaqTipText: '',
             fabMaqTipX: 0,
             fabMaqTipY: 0,
+            articulosListadosTotal: {{ filas|length }},
+            cantidadArticulosVisibles() {
+                const total = Number(this.articulosListadosTotal) || 0;
+                const q = String(this.busqueda || '').trim().toLowerCase();
+                if (!q) {
+                    return total;
+                }
+                const rows = this.$root.querySelectorAll('tbody tr[data-descripcion]');
+                let n = 0;
+                rows.forEach(function (el) {
+                    if ((el.dataset.descripcion || '').includes(q)) {
+                        n += 1;
+                    }
+                });
+                return n;
+            },
             abrirFabDetalle(raw) {
                 this.ocultarFabMaqTip();
                 let d = raw;
@@ -519,7 +535,7 @@
                         <tr>
                             <th scope="col"
                                 class="sticky left-0 top-[1.6rem] z-20 min-w-[16rem] border-b border-slate-200 bg-slate-50 px-4 py-2 text-left text-xs font-semibold text-slate-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)] sm:min-w-[18rem]">
-                                Artículo
+                                Artículo (<span class="tabular-nums text-slate-500 dark:text-slate-400" x-text="cantidadArticulosVisibles()">{{ filas|length }}</span>)
                             </th>
                             <th scope="col" class="sticky top-[1.6rem] z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                                 Fecha entrega
@@ -607,7 +623,7 @@
                         <tr>
                             <th rowspan="2" scope="col"
                                 class="sticky left-0 top-0 z-30 min-w-[18rem] border-b border-slate-200 bg-slate-100 px-4 align-middle text-left text-xs font-semibold text-slate-600 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)] sm:min-w-[20rem]">
-                                Artículo
+                                Artículo (<span class="tabular-nums text-slate-500 dark:text-slate-400" x-text="cantidadArticulosVisibles()">{{ filas|length }}</span>)
                             </th>
                             <th scope="colgroup" colspan="3"
                                 class="sticky top-0 z-10 border-b border-l border-rose-200/80 bg-rose-50 px-2 py-1.5 text-center text-[10px] font-semibold uppercase tracking-wide text-rose-800 dark:border-rose-900/40 dark:bg-rose-950 dark:text-rose-200">

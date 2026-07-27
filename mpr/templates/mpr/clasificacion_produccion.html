@@ -194,26 +194,7 @@
                                     {% if fila.solo_lectura %}
                                     <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_semi_texto }}</p>
                                     {% else %}
-                                    <div class="clasif-celda-cantidad mx-auto flex w-full max-w-[9rem] flex-col items-center">
-                                        <div class="flex w-full overflow-hidden rounded-lg border border-slate-300/90 bg-slate-50 shadow-sm dark:border-slate-500 dark:bg-slate-900/80">
-                                            <div class="flex min-w-0 flex-1 flex-col px-1 py-1.5 text-center">
-                                                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400">Docenas</span>
-                                                <span class="text-sm font-semibold tabular-nums text-emerald-800 dark:text-emerald-300" x-text="Math.floor(semiUnidades / upd)"></span>
-                                            </div>
-                                            <div class="flex w-5 shrink-0 items-center justify-center border-x border-slate-200 text-[10px] font-bold text-slate-300 dark:border-slate-600" aria-hidden="true">+</div>
-                                            <div class="flex min-w-0 flex-1 flex-col px-1 py-1.5 text-center">
-                                                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400">Pares</span>
-                                                <span class="text-sm font-semibold tabular-nums text-emerald-800 dark:text-emerald-300" x-text="semiUnidades % upd"></span>
-                                            </div>
-                                        </div>
-                                        <p class="mt-1 min-h-[1rem] w-full text-center text-[10px] font-medium tabular-nums text-emerald-700 dark:text-emerald-400" x-text="'= ' + semiUnidades + ' pares'"></p>
-                                        <input type="hidden"
-                                               name="semi_{{ fila.id_articulo }}_op_{{ fila.id_operario }}_turno_{{ fila.id_mpr_turno }}_maq_{{ fila.id_mpr_maquina }}_docenas"
-                                               :value="Math.floor(semiUnidades / upd)">
-                                        <input type="hidden"
-                                               name="semi_{{ fila.id_articulo }}_op_{{ fila.id_operario }}_turno_{{ fila.id_mpr_turno }}_maq_{{ fila.id_mpr_maquina }}_unidades"
-                                               :value="semiUnidades % upd">
-                                    </div>
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="semi elaborado" model_doc="semiDoc" model_uni="semiUni" subtotal_alpine="semiUnidades" ring_class="focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/25" only %}
                                     {% endif %}
                                 </td>
                                 <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-1">
@@ -267,7 +248,7 @@
             <div class="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
                 <p x-show="hayExcedida" x-cloak class="text-xs font-medium text-red-600 dark:text-red-400">
                     <span class="material-icons align-text-bottom text-sm" aria-hidden="true">error_outline</span>
-                    Corregí las filas donde 2da + desperdicio superan lo clasificable (parte + extra producción) antes de guardar.
+                    Corregí las filas donde semi + 2da + desperdicio superan lo clasificable (parte + extra producción) antes de guardar.
                 </p>
                 <p x-show="!hayExcedida" class="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
                     {{ filas|length }} fila{% if filas|length != 1 %}s{% endif %} en la grilla
@@ -397,6 +378,7 @@ document.addEventListener('alpine:init', function () {
             upd: upd || 12,
             soloLectura: !!soloLectura,
             iniSemi: iniSemi || 0,
+            semiDoc: 0, semiUni: 0,
             seg2daDoc: 0, seg2daUni: 0,
             scrapDoc: 0, scrapUni: 0,
             parseQty: function (v) {
@@ -410,9 +392,11 @@ document.addEventListener('alpine:init', function () {
             get scrapUnidades() { return this.unidadesDest(this.scrapDoc, this.scrapUni); },
             get semiUnidades() {
                 if (this.soloLectura) { return this.iniSemi; }
-                return Math.max(0, this.base - this.seg2daUnidades - this.scrapUnidades);
+                return this.unidadesDest(this.semiDoc, this.semiUni);
             },
-            get excede() { return this.seg2daUnidades + this.scrapUnidades > this.base + 1e-9; },
+            get excede() {
+                return this.semiUnidades + this.seg2daUnidades + this.scrapUnidades > this.base + 1e-9;
+            },
             coerceQtyField: function (field, el) {
                 var v = el.value;
                 if (v === '' || v === null || v === undefined) {
@@ -432,6 +416,9 @@ document.addEventListener('alpine:init', function () {
             init: function () {
                 var self = this;
                 if (!this.soloLectura) {
+                    var ism = iniSemi || 0;
+                    this.semiDoc = Math.floor(ism / this.upd);
+                    this.semiUni = ism % this.upd;
                     var i2 = ini2da || 0;
                     this.seg2daDoc = Math.floor(i2 / this.upd);
                     this.seg2daUni = i2 % this.upd;
@@ -439,10 +426,12 @@ document.addEventListener('alpine:init', function () {
                     this.scrapDoc = Math.floor(isc / this.upd);
                     this.scrapUni = isc % this.upd;
                 }
-                this.$watch(function () { return self.seg2daUnidades + self.scrapUnidades; }, function () {
+                this.$watch(function () {
+                    return self.semiUnidades + self.seg2daUnidades + self.scrapUnidades;
+                }, function () {
                     self.$dispatch('fila-excede', { id: self.idArt, excede: self.excede });
                 });
-                ['seg2daDoc', 'seg2daUni', 'scrapDoc', 'scrapUni'].forEach(function (field) {
+                ['semiDoc', 'semiUni', 'seg2daDoc', 'seg2daUni', 'scrapDoc', 'scrapUni'].forEach(function (field) {
                     self.$watch(field, function (val) {
                         if (val === '' || val === null || (typeof val === 'number' && isNaN(val))) {
                             self[field] = 0;
