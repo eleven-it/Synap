@@ -18,8 +18,8 @@ El envío contribuye a la columna **Enviado** del tablero mediante la fórmula E
 ```
 Enviado[comp] = Enviado_OPT[comp] + Enviado_tablero[comp]
 Enviado_tablero[comp] = max(0, SUM(envíos_tablero) − acreditado[comp])
-acreditado = max(stock_componente, clasificado_desde_producción, partes_acumulados)
-stock_componente = Producido + Semi + 2da + Scrap
+acreditado = max(stock Semi+2da+Scrap, clasificado_desde_producción, partes_acumulados)
+stock_componente_post_CC = Semi + 2da + Scrap   # Producción NO acredita
 clasificado_desde_producción = SUM(mpr_transicion_lote.cantidad WHERE tipo_origen = 'Produccion')
 ```
 
@@ -121,7 +121,7 @@ Los modales E5 conservan sus propios `<form method="post">` sin interferencia.
 - Si el tope en la unidad mostrada es 0 (`a_enviar_docenas_pcp = 0` en docenas, o `a_enviar = 0` en pares), el input queda vacío y **deshabilitado**.
 - `max` del input = tope (`a_enviar` / docenas PCP); JS recorta cualquier valor mayor.
 - **Tope:** `a_enviar = MAX(0, MIN(resta_urgente − Σ envíos ledger, resta_total))`. El ledger **siempre** descuenta el tope, también cuando Fabricando = 0 (p. ej. stock de pipeline preexistente absorbe envíos). **No** se reabre el tope a `resta_urgente` en ese caso: eso generaba reenvíos fantasma sin subir Fabricando. El servidor **ajusta al tope** si el POST lo supera (ya no envía de más).
-- **Fabricando vs stock:** `Fabricando = max(0, Σ envíos − acreditado)`. Si hay stock en Producido/Semi/2da/Scrap mayor que los envíos, Fabricando queda en 0 aunque el Enviar haya grabado filas en el ledger.
+- **Fabricando vs stock:** `Fabricando = max(0, Σ envíos − acreditado)`. Acreditan Semi/2da/Scrap, CC y partes; **no** el saldo de Producción (destino del parte). Así un Enviar genera cupo aunque haya stock preexistente en Producción.
 - Hidden `presentacion`, `pendiente_*` / `resta_urgente_*` (con `a_enviar`) para parseo y warnings de sobreenvío en POST.
 - Al confirmar, JavaScript copia **todas** las filas con cantidad > 0 como campos ocultos dentro de `#form-enviar-lote` (evita pérdida de líneas con el atributo HTML5 `form=`).
 - El servidor omite cantidades ≤ 0.

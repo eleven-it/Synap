@@ -48,7 +48,7 @@ Concepto compartido por **tablero de producción** y **parte de producción**:
 Fabricando(comp) = max(0, Σ envíos_tablero(comp) − acreditado(comp))
 
 acreditado(comp) = max(
-  stock_físico_componente,          # Producido + Semi + 2da + Scrap
+  stock_fisico_pipeline,            # Semi + 2da + Scrap (Producción NO acredita)
   clasificado_desde_Producción,   # SUM(mpr_transicion_lote WHERE tipo_origen = 'Produccion')
   partes_acumulados                 # SUM(mpr_parte_linea + ajustes)
 )
@@ -56,7 +56,8 @@ acreditado(comp) = max(
 
 - **No** usa depósito **Terminado** del componente.
 - Tras CC + armado del pack, el semi del componente puede quedar en **0** físico; la trazabilidad en `mpr_transicion_lote` evita que Fabricando repunte.
-- Si **Fabricando = 0**, el componente **no aparece** en la grilla de parte (aunque siga en histórico de envíos del período).
+- **No** usa depósito **Producción** en el acreditado (destino del parte / cola CC). Stock preexistente ahí no anula Fabricando tras Enviar.
+- Si **Fabricando = 0**, el componente **no aparece** habilitado en la grilla de parte. Primero Enviar desde el Tablero.
 
 Ver: [TABLERO_CONSOLIDADO.md](TABLERO_CONSOLIDADO.md), [PARTE_PRODUCCION.md](PARTE_PRODUCCION.md), [ENVIO_PRODUCCION_TABLERO.md](ENVIO_PRODUCCION_TABLERO.md).
 
@@ -322,4 +323,4 @@ docker exec Synap_app python manage.py test \
 - [PARTE_PRODUCCION.md](PARTE_PRODUCCION.md) — grilla parte y validaciones
 - [TRANSICIONES_LOTE.md](TRANSICIONES_LOTE.md) — ledger `mpr_transicion_lote`
 - [DISENO_ARMADO_TABLERO_PCP.md](DISENO_ARMADO_TABLERO_PCP.md) — armado pack (terminado)
-- [NAVIGACION_MPR_ETAPA11.md](NAVIGACION_MPR_ETAPA11.md) — rutas operativas del flujo diario
+  stock_fisico_post_CC,             # Semi + 2da + Scrap (NO Producción)

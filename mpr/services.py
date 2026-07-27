@@ -14786,16 +14786,23 @@ def _calcular_fabricando_componente(
     """
     Fabricando = envíos ledger no cubiertos por unidades ya acreditadas al pipeline.
 
-    Acreditado = max(stock físico en etapas de componente, clasificación desde Producción,
-    partes ya registrados en ledger).
+    Acreditado = max(
+        stock en Semi + 2da + Scrap,
+        clasificación desde Producción (``mpr_transicion_lote``),
+        partes ya registrados en ledger,
+    ).
 
-    Los componentes del tablero no usan depósito Terminado (el armado mueve el pack).
-    La trazabilidad ``mpr_transicion_lote`` cubre unidades ya clasificadas aunque el
-    semi haya salido por armado y ya no figure en stock_deposito.
+    **Producción no acredita:** el depósito Producción es destino del parte (y cola
+    de CC). Stock preexistente ahí (corte, migración, carga previa) no debe anular
+    el cupo Fabricando tras un Enviar; si lo hiciera, el Parte quedaría en
+    «Sin cupo» con máquina asignada y demanda pendiente.
+
+    Semi/2da/Scrap sí acreditan (ya salieron de Producción vía CC). La trazabilidad
+    ``mpr_transicion_lote`` cubre unidades clasificadas aunque el semi se haya
+    consumido en armado.
     """
     acreditado_fisico = (
-        float(stock_comp.get(TIPO_MPR_PRODUCCION, 0.0) or 0)
-        + float(stock_comp.get(TIPO_MPR_SEMI_ELABORADO, 0.0) or 0)
+        float(stock_comp.get(TIPO_MPR_SEMI_ELABORADO, 0.0) or 0)
         + float(stock_comp.get(TIPO_MPR_2DA_SELECCION, 0.0) or 0)
         + float(stock_comp.get(TIPO_MPR_SCRAP, 0.0) or 0)
     )

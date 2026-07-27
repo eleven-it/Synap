@@ -35,7 +35,7 @@ acreditado(comp) = max(
 )
 ```
 
-**Misma fórmula** que el tablero consolidado (`_fabricando_por_componentes` / `_calcular_fabricando_componente`). Tras clasificar en control de calidad — o si el semi salió por armado del pack — el cupo Fabricando baja a **0** aunque el stock físico del componente sea 0.
+**Misma fórmula** que el tablero consolidado (`_fabricando_por_componentes` / `_calcular_fabricando_componente`). El saldo en **Producción** no acredita (destino del parte). Tras CC — o si el semi salió por armado — el cupo baja aunque el stock Semi físico sea 0.
 
 La validación al guardar (`_fabricando_pre_snapshot`) usa la **misma** fórmula que la grilla de parte.
 
@@ -163,7 +163,7 @@ Si se registrara un parte con cantidad **mayor** que los topes (comportamiento a
 
 1. **MySQL legacy:** el asiento físico OPP-parte ingresa **toda** la cantidad registrada al depósito **Producción** (`stock` + `stock_deposito`), sin tope.
 2. **Ledger Synap:** `MprParteLinea` guarda las cantidades completas por operario.
-3. **Fabricando posterior:** al recargar tablero/grilla, `stock Producción` sube → Fabricando baja; si `stock ≥ enviado`, Fabricando queda en **0** aunque el envío ledger no haya crecido.
+3. **Fabricando posterior:** al recargar tablero/grilla, el cupo baja por **partes acumulados** (y luego por Semi/2da/Scrap o CC). El saldo en **Producción** no acredita: stock preexistente ahí no anula Fabricando tras Enviar.
 4. **Desvío de control:** quedan unidades en Producción **no respaldadas** por envíos del tablero (`MprEnvioProduccion`). La clasificación posterior puede mover stock “de más” hacia Semi/2da/Scrap.
 5. **No hay rollback automático** del exceso; corrige con ajuste de parte o movimiento manual.
 
