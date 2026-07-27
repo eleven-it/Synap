@@ -28,6 +28,16 @@
   .dark tr.clasif-inicio-maquina > td {
     border-top-color: rgb(100 116 139); /* slate-500 */
   }
+  /* Tintes suaves por franja de turno (Turno / Operario / Parte) */
+  .clasif-turno-tint-manana { background-color: rgb(254 252 232 / 0.85); }
+  .dark .clasif-turno-tint-manana { background-color: rgb(66 32 6 / 0.2); }
+  .clasif-turno-tint-tarde { background-color: rgb(240 249 255 / 0.9); }
+  .dark .clasif-turno-tint-tarde { background-color: rgb(12 74 110 / 0.22); }
+  .clasif-turno-tint-noche { background-color: rgb(245 243 255 / 0.9); }
+  .dark .clasif-turno-tint-noche { background-color: rgb(46 16 101 / 0.22); }
+  tr.group\/row:hover .clasif-turno-tint-manana { background-color: rgb(254 243 199 / 0.95); }
+  tr.group\/row:hover .clasif-turno-tint-tarde { background-color: rgb(224 242 254 / 0.95); }
+  tr.group\/row:hover .clasif-turno-tint-noche { background-color: rgb(237 233 254 / 0.95); }
 </style>
 <section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5">
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
@@ -170,9 +180,13 @@
                                           title="{% if fila.codigo_tooltip %}Código {{ fila.codigo_tooltip }} · {% endif %}{{ fila.descripcion }}">{{ fila.descripcion }}</span>
                                 </td>
                                 {% endif %}
-                                <td class="px-3 py-2 text-sm text-slate-700 dark:text-slate-300 align-top">{{ fila.turno_nombre }}</td>
-                                <td class="px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-100 align-top">{{ fila.operario_nombre }}</td>
-                                <td class="px-3 py-2 text-center text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200 align-top">{{ fila.parte_texto }}</td>
+                                <td class="px-3 py-2 text-sm text-slate-700 dark:text-slate-300 align-top{% if fila.turno_franja %} clasif-turno-tint-{{ fila.turno_franja }}{% endif %}">{{ fila.turno_nombre }}</td>
+                                <td class="px-3 py-2 text-sm font-bold text-slate-800 dark:text-slate-100 align-top{% if fila.turno_franja %} clasif-turno-tint-{{ fila.turno_franja }}{% endif %}">{{ fila.operario_nombre }}</td>
+                                <td class="px-3 py-2 text-center text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200 align-top{% if fila.turno_franja %} clasif-turno-tint-{{ fila.turno_franja }}{% endif %}"
+                                    title="{{ fila.parte_texto }}">
+                                    <span class="block leading-tight">{{ fila.parte_docenas|default:0 }} docenas</span>
+                                    <span class="block leading-tight text-slate-500 dark:text-slate-400">{{ fila.parte_unidades|default:0 }} pares</span>
+                                </td>
                                 <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-0">
                                     {% if fila.solo_lectura %}
                                     <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_semi_texto }}</p>
@@ -185,11 +199,11 @@
                                             </div>
                                             <div class="flex w-5 shrink-0 items-center justify-center border-x border-slate-200 text-[10px] font-bold text-slate-300 dark:border-slate-600" aria-hidden="true">+</div>
                                             <div class="flex min-w-0 flex-1 flex-col px-1 py-1.5 text-center">
-                                                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400">Unidades</span>
+                                                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400">Pares</span>
                                                 <span class="text-sm font-semibold tabular-nums text-emerald-800 dark:text-emerald-300" x-text="semiUnidades % upd"></span>
                                             </div>
                                         </div>
-                                        <p class="mt-1 min-h-[1rem] w-full text-center text-[10px] font-medium tabular-nums text-emerald-700 dark:text-emerald-400" x-text="'= ' + semiUnidades + ' u.'"></p>
+                                        <p class="mt-1 min-h-[1rem] w-full text-center text-[10px] font-medium tabular-nums text-emerald-700 dark:text-emerald-400" x-text="'= ' + semiUnidades + ' pares'"></p>
                                         <input type="hidden"
                                                name="semi_{{ fila.id_articulo }}_op_{{ fila.id_operario }}_turno_{{ fila.id_mpr_turno }}_maq_{{ fila.id_mpr_maquina }}_docenas"
                                                :value="Math.floor(semiUnidades / upd)">

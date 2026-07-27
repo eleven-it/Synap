@@ -18719,12 +18719,14 @@ def construir_grilla_clasificacion_produccion(
                 unidades_por_docena_fijo=12,
             )
             maq_nom = str_or_default(datos.get("maquina_nombre"), "—")
+            turno_nom = str_or_default(datos.get("turno_nombre"), "-")
             filas_raw.append({
                 "id_mpr_maquina": int(mid),
                 "maquina_nombre": maq_nom,
                 "id_articulo": aid,
                 "id_mpr_turno": tid,
-                "turno_nombre": str_or_default(datos.get("turno_nombre"), "-"),
+                "turno_nombre": turno_nom,
+                "turno_franja": _franja_horaria_turno(turno_nom, None) or "",
                 "id_operario": oid,
                 "operario_nombre": str_or_default(datos.get("operario_nombre"), "-"),
                 "codigo_manual": str_or_default(codigo_manual, "-"),

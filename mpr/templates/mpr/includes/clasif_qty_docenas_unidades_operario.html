@@ -1,4 +1,4 @@
-{# Celda docenas + unidades para clasificación por operario fabricante. #}
+{# Celda docenas + pares para clasificación por operario fabricante. #}
 <div class="clasif-celda-cantidad mx-auto flex w-full max-w-[9rem] flex-col items-center"
      data-clasif-dest="{{ prefix }}"
      data-id-art="{{ id_art }}"
@@ -27,7 +27,7 @@
             <span class="text-[10px] font-bold leading-none text-slate-300 dark:text-slate-600">+</span>
         </div>
         <label class="flex min-w-0 flex-1 flex-col">
-            <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Unidades</span>
+            <span class="bg-slate-50/90 px-0.5 py-0.5 text-center text-[9px] font-semibold leading-tight text-slate-500 dark:bg-slate-800/90 dark:text-slate-400">Pares</span>
             <input type="number"
                    name="{% if id_turno %}{{ prefix }}_{{ id_art }}_op_{{ id_operario }}_turno_{{ id_turno }}_maq_{{ id_maquina|default:0 }}_unidades{% else %}{{ prefix }}_{{ id_art }}_op_{{ id_operario }}_unidades{% endif %}"
                    min="0" step="1" inputmode="numeric"
@@ -40,10 +40,10 @@
                    data-clasif-dest="{{ prefix }}"
                    data-id-art="{{ id_art }}"
                    class="clasif-input-unidades h-9 w-full border-0 bg-transparent px-1 text-center text-sm font-semibold tabular-nums text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-0 dark:text-slate-100 dark:placeholder:text-slate-600"
-                   aria-label="Unidades sueltas {{ destino_label }} {{ codigo }} — {{ operario_nombre }}">
+                   aria-label="Pares sueltos {{ destino_label }} {{ codigo }} — {{ operario_nombre }}">
         </label>
     </div>
     <p class="clasif-celda-subtotal mt-1 min-h-[1rem] w-full text-center text-[10px] font-medium tabular-nums leading-4"
-       x-text="'= ' + {{ subtotal_alpine }} + ' u.'"
+       x-text="'= ' + {{ subtotal_alpine }} + ' pares'"
        :class="{{ subtotal_alpine }} > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-slate-300 dark:text-slate-600'"></p>
 </div>
