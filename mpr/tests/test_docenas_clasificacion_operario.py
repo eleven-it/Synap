@@ -66,8 +66,8 @@ class PresentacionOperativaTests(SimpleTestCase):
         self.assertEqual(fila["a_enviar"], 0)
         self.assertEqual(fila["a_enviar_docenas"], 0)
 
-    def test_a_enviar_reabre_cuando_fabricando_cero(self):
-        """Fabricando=0 y Resta urgente>0: reabre tope aunque haya envíos históricos."""
+    def test_a_enviar_descuenta_envios_aunque_fabricando_cero(self):
+        """Fabricando=0 (stock absorbe): el ledger igual descuenta el tope (sin reabrir)."""
         fila = enriquecer_fila_tablero_presentacion(
             {
                 "dem_ped": 12,
@@ -79,7 +79,7 @@ class PresentacionOperativaTests(SimpleTestCase):
             },
             "unidades",
         )
-        self.assertEqual(fila["a_enviar"], 12)
+        self.assertEqual(fila["a_enviar"], 0)
 
     def test_a_enviar_no_doble_cuenta_acreditado(self):
         """Con envíos = resta y Fabricando>0, a_enviar debe ser 0 (sin residual fantasma)."""

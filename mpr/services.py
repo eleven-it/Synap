@@ -14945,25 +14945,23 @@ def _calcular_a_enviar_componente(
     *,
     fabricando: Optional[float] = None,
 ) -> float:
-    """Tope de Enviar según Resta urgente (PCP) y estado de envíos.
+    """Tope de Enviar según Resta urgente (PCP) y Σ envíos del ledger.
 
-    * Si aún hay **Fabricando** (``envíos − acreditado > 0``): tope =
-      ``max(0, resta_urgente − Σ envíos ledger)``. Evita reenviar mientras el lote
-      anterior sigue en vuelo y no doble-cuenta el stock de proceso (ya descontado
-      en ``resta_urgente``).
-    * Si **Fabricando = 0** y el recálculo deja ``resta_urgente > 0``: **reabre**
-      el tope a esa Resta urgente (ciclo anterior acreditado; el hueco urgente es
-      demanda nueva — p. ej. más PED o menos stock de proceso).
+    Siempre ``max(0, resta_urgente − Σ envíos)``. El ledger cuenta como compromiso
+    hacia la brecha aunque Fabricando=0 (p. ej. stock de pipeline preexistente
+    absorbe envíos y deja Fabricando en 0). Reabrir el tope a ``resta_urgente``
+    cuando Fabricando=0 generaba reenvíos fantasma (mismo hueco una y otra vez)
+    sin subir Fabricando.
+
+    ``fabricando`` se conserva en la firma por compatibilidad con callers/tests;
+    no altera el tope.
 
     Si se informa ``resta_total``, el tope no puede superarla (regla operativa UI).
     """
     urg = max(0.0, float(resta_urgente or 0))
     env = max(0.0, float(envios_ledger or 0))
-    fab = None if fabricando is None else max(0.0, float(fabricando or 0))
-    if fab is not None and fab <= 0 and urg > 0:
-        tope = urg
-    else:
-        tope = max(0.0, urg - env)
+    _ = fabricando  # API estable; el tope ya no depende de Fabricando
+    tope = max(0.0, urg - env)
     if resta_total is not None:
         tope = min(tope, max(0.0, float(resta_total or 0)))
     return tope
@@ -15294,8 +15292,7 @@ def listar_tablero_por_articulo(
     4.  comp_ids = demanda ∪ envíos directos
     5.  Enviado/Fabricando = max(0, Σ envíos − acreditado) por componente
     6.  stock_proceso = total sin Terminado; resta_urgente = resta_total = brecha demanda total (PCP)
-    7.  a_enviar = tope Enviar: si Fabricando>0 → max(0, urgente−envíos);
-        si Fabricando=0 y urgente>0 → reabre a urgente (ciclo acreditado)
+    7.  a_enviar = max(0, resta_urgente − Σ envíos ledger); no reabre si Fabricando=0
 
     ``solo_pendiente`` filtra filas con demanda pendiente total; ``solo_urgente``
     conserva el filtro más estricto por demanda urgente.

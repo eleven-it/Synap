@@ -120,7 +120,8 @@ Los modales E5 conservan sus propios `<form method="post">` sin interferencia.
 - **Modo pares:** campo `envio_{id}` con cantidad en pares enteros; se prellena con **`a_enviar`**.
 - Si el tope en la unidad mostrada es 0 (`a_enviar_docenas_pcp = 0` en docenas, o `a_enviar = 0` en pares), el input queda vacío y **deshabilitado**.
 - `max` del input = tope (`a_enviar` / docenas PCP); JS recorta cualquier valor mayor.
-- **Tope:** con Fabricando > 0, `a_enviar = MAX(0, MIN(resta_urgente − Σ envíos ledger, resta_total))`. Con Fabricando = 0 y Resta urgente > 0, **reabre** a `MIN(resta_urgente, resta_total)` (ciclo acreditado). El servidor **ajusta al tope** si el POST lo supera (ya no envía de más).
+- **Tope:** `a_enviar = MAX(0, MIN(resta_urgente − Σ envíos ledger, resta_total))`. El ledger **siempre** descuenta el tope, también cuando Fabricando = 0 (p. ej. stock de pipeline preexistente absorbe envíos). **No** se reabre el tope a `resta_urgente` en ese caso: eso generaba reenvíos fantasma sin subir Fabricando. El servidor **ajusta al tope** si el POST lo supera (ya no envía de más).
+- **Fabricando vs stock:** `Fabricando = max(0, Σ envíos − acreditado)`. Si hay stock en Producido/Semi/2da/Scrap mayor que los envíos, Fabricando queda en 0 aunque el Enviar haya grabado filas en el ledger.
 - Hidden `presentacion`, `pendiente_*` / `resta_urgente_*` (con `a_enviar`) para parseo y warnings de sobreenvío en POST.
 - Al confirmar, JavaScript copia **todas** las filas con cantidad > 0 como campos ocultos dentro de `#form-enviar-lote` (evita pérdida de líneas con el atributo HTML5 `form=`).
 - El servidor omite cantidades ≤ 0.
