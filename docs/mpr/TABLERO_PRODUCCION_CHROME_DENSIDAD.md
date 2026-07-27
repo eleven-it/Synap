@@ -52,6 +52,7 @@ Misma barra densa en:
 4. `maquinas_carga_articulos.html` (Asignar artículo a máquina — config planta; sin migas; filtros búsqueda/línea en chrome; chips de artículo en formato multiselección/`tags-filter`, color púrpura)
 5. `armado_tablero.html` (Armado 1ra/2da vista tablero — sin migas; sin Desde/Hasta/Marcas/Filtrar/Solo con resta ni KPI cabecera; búsqueda cliente; Docenas|Pares `variant=dark`; atajos Tablero/Imputación/Carrito; CTA **Ejecutar armado** emerald en 1ra; `chrome_nav_flujo` con `current=armado`)
 6. `planificacion_turnos.html` (Planificación de turnos / roster — **config operativa**; sin migas; navegación de semana **Anterior · «Semana del dd/MM/yyyy» · Siguiente** en la barra; CTA **Asignación masiva** púrpura (si hay turnos activos y operarios); **Gestionar turnos** secundario `slate-700` → `turnos_list`; `chrome_nav_flujo` con `current=roster`; ayuda `help_outline` → `#planificacion-turnos`)
+7. `pedidos_fabrica_list.html` (Pedidos con estado de producción — **pantalla de consulta** de demanda alineada al Tablero; sin migas; filtro **Estado** en el chrome (label `text-[10px] text-slate-400` + select `h-9` oscuro + **Filtrar** secundario `slate-700`, GET `?estado=`); chip con cantidad de pedidos listados; CTA primario **Tablero de producción** emerald → `mpr:tablero_produccion`; `chrome_nav_flujo` con `current=tablero_prod`; ayuda `help_outline` → `#tablero-produccion`. **Sin** enlaces a `ventana_pack` / `opt_list` ni textos «OPT»: la trazabilidad queda como link discreto **«Historial»** → `opts_por_pedido` (auditoría, §6.2). Fechas `dd/MM/yyyy`; empty state de una línea)
 
 Navegación: `mpr/includes/chrome_nav_flujo.html` (omite la pantalla actual; en Asignar artículo, Armado y Planificación de turnos muestra los cuatro atajos del flujo planta).
 
@@ -112,6 +113,8 @@ No enlazar desde el chrome del tablero ni usar como patrón de densidad/look par
 - Wizard OPT legacy
 
 Las URLs pueden existir en código por compatibilidad; **no** son el hub ni el look de referencia. Alineado con [NAVIGACION_MPR_ETAPA11.md](NAVIGACION_MPR_ETAPA11.md) (ya fuera del menú).
+
+`pedidos_fabrica_list.html` (26/07/2026) queda como **consulta** con chrome de Tablero (§3.1): su CTA es **Tablero de producción**; ya no ofrece «Orden de Producción de Trabajo (OPT)» ni «Ver OPTs», solo el link discreto «Historial» a `opts_por_pedido`.
 
 ### 6.2 Excepciones (mantener hasta validar retiro)
 
