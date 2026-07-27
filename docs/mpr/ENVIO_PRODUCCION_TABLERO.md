@@ -72,8 +72,10 @@ Al clasificar desde Producido, el stock en Semi/2da/Scrap sigue acreditando env�
 
 ## Vista y URL
 
-**Vista:** `EnviarProduccionLoteView(MprLoginRequiredMixin, View)`  
+**Vista:** `EnviarProduccionLoteView(MprLoginRequiredMixin, MprEscritorioVerMixin, View)`  
 **URL:** `POST /mpr/tablero-produccion/enviar/` → `mpr:tablero_produccion_enviar`
+
+**Permiso:** solo `mpr.ver`. Usuarios con únicamente `mpr.tablero_ver` reciben 403 (el tablero es solo lectura para ellos; la UI oculta el formulario de envío vía `puede_enviar` / `solo_lectura_tablero`).
 
 **Flujo POST:**
 
@@ -208,6 +210,22 @@ Borra: `mpr_envio_produccion`, partes, transiciones, armado surtido, roster. **N
 | `mpr/tests/test_opp_parte_etapa4.py` | + mock `_query_enviado_tablero_componente` backward-safe |
 | `docs/mpr/TABLERO_CONSOLIDADO.md` | + sección Enviado E7 + col Enviar |
 | `docs/mpr/ENVIO_PRODUCCION_TABLERO.md` | Nuevo — esta doc |
+
+---
+
+## Permisos y perfiles (tablero)
+
+| Acción / URL | `mpr.ver` | `mpr.tablero_ver` (sin `mpr.ver`) |
+|--------------|-----------|-----------------------------------|
+| GET `/mpr/tablero-produccion/` | Sí (completo) | Sí (solo lectura) |
+| POST `/mpr/tablero-produccion/actualizar/` | Sí | Sí |
+| GET `/mpr/manual/` | Sí | Sí |
+| POST `/mpr/tablero-produccion/enviar/` | Sí | **403** |
+| GET envíos / POST anular | Sí (supervisor) | **403** |
+| GET clasificación / POST registrar | Sí | **403** |
+| Menú MPR | Completo | Solo «Tablero de producción» |
+
+Perfil **operario + tablero:** `mpr.parte_operario` + `mpr.tablero_ver`, sin `mpr.ver`. Landing en `/mpr/mi-parte/`; consulta demanda en el tablero sin mutar ledger ni abrir CC/reportes. Flags de contexto: `puede_enviar=False`, `solo_lectura_tablero=True`.
 
 ---
 

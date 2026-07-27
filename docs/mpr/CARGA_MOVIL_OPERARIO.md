@@ -14,6 +14,7 @@ hasta esa aprobación (modelo de dos etapas).
 
 - Ruta: `/mpr/mi-parte/` (`mpr:parte_movil_operario`). Permiso: `mpr.parte_operario`.
 - El operario "puro" (con `mpr.parte_operario` y sin `mpr.ver`) aterriza aquí tras el login.
+- El operario con **`mpr.parte_operario` + `mpr.tablero_ver`** (sin `mpr.ver`) también aterriza en `/mpr/mi-parte/`; puede consultar el tablero en solo lectura desde el menú MPR (ítem «Tablero de producción»), sin acceso a enviar, CC, reportes ni resto del escritorio MPR.
 - La pantalla resuelve automáticamente, sin selección manual:
   - **Operario**: mapeo `mpr_operario_usuario` (usuario de login → `sue_abm_empleado`).
   - **Turno**: `mpr_roster_dia` del día (`turno_del_operario_dia`).
@@ -78,11 +79,22 @@ Comportamiento y decisiones de diseño:
 ### Acceso al módulo por permiso granular
 
 El middleware de permisos por módulo (`ModulePermissionMiddleware`) reconoce
-`mpr.parte_operario`, `mpr.maquinas_lineas` y `mpr.aprobar_parte` como permisos válidos del
+`mpr.parte_operario`, `mpr.tablero_ver`, `mpr.maquinas_lineas` y `mpr.aprobar_parte` como permisos válidos del
 módulo `mpr` (en `core/module_registry.py`). Así, el **operario puro** (solo
 `mpr.parte_operario`, sin `mpr.ver`) puede acceder a `/mpr/mi-parte/` sin quedar atrapado en
-un bucle dashboard ⇄ carga. El catálogo Synap (`synap_permiso`) debe tener sembrados estos
+un bucle dashboard ⇄ carga. Con **`mpr.tablero_ver`** además puede entrar al módulo MPR y ver
+`/mpr/tablero-produccion/` en solo lectura (sin `mpr.ver`). El catálogo Synap (`synap_permiso`) debe tener sembrados estos
 permisos (seed idempotente `seed_synap_permiso_catalog` desde `PERMISOS_POR_MODULO`).
+
+### Matriz de permisos — operario + tablero
+
+| Permiso | Operario puro (`parte_operario`) | Operario + tablero (`parte_operario` + `tablero_ver`) | Escritorio MPR (`mpr.ver`) |
+|---------|----------------------------------|--------------------------------------------------------|----------------------------|
+| Landing post-login | `/mpr/mi-parte/` | `/mpr/mi-parte/` | Dashboard normal |
+| Menú MPR | Oculto (sin acceso al módulo) | Solo «Tablero de producción» | Menú completo |
+| GET tablero / actualizar / manual | 403 | 200 (solo lectura) | 200 (completo) |
+| POST enviar / CC / reportes / escritorio | 403 | 403 | 200 (según pantalla) |
+| UI tablero | — | Oculta Enviar, E5, enlaces Parte/CC/KPI | Acciones completas |
 
 ## Validación (administranet96)
 

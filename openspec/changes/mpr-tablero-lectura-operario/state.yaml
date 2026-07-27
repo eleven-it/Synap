@@ -1,0 +1,17 @@
+change: mpr-tablero-lectura-operario
+status: apply-complete
+created: 2026-07-27
+phase: apply-complete
+depends_on: []
+artifacts:
+  exploration: none
+  proposal: complete
+  spec: complete
+  design: complete
+  tasks: complete
+  apply: complete
+  verify: pending
+decisions:
+  menu_mi_parte: oculto_en_mpr_operario_tablero
+  landing_operario_tablero: /mpr/mi-parte/
+  ui_solo_tablero_ver: ocultar_e5_enviar_chrome_cc_parte_kpi

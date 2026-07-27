@@ -238,7 +238,7 @@ APPS_MENU = [
     {
         "id": "mpr",
         "nombre": _("Producción (MPR)"),
-        "permiso": "mpr.ver",
+        "permiso": ["mpr.ver", "mpr.tablero_ver"],
         "url": "mpr:tablero_produccion",
         "icono_svg": """<svg class='h-6 w-6 gradient-icon mb-1' fill='none' stroke='currentColor' stroke-width='2' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' d='M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z'/></svg>""",
         "orden": 5,
@@ -247,7 +247,7 @@ APPS_MENU = [
             {
                 "seccion": _("Producción diaria"),
                 "items": [
-                    {"label": _("Tablero de producción"), "url": "mpr:tablero_produccion", "icon": "table_chart", "permission": "mpr.ver", "menu_item_id": "mpr_prod_tablero"},
+                    {"label": _("Tablero de producción"), "url": "mpr:tablero_produccion", "icon": "table_chart", "permission": ["mpr.ver", "mpr.tablero_ver"], "menu_item_id": "mpr_prod_tablero"},
                     {"label": _("Asignar artículo a máquina"), "url": "mpr:maquinas_carga_articulos", "icon": "grid_view", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_prod_carga_articulos"},
                     {"label": _("Parte de producción (Carga)"), "url": "mpr:parte_produccion", "icon": "assignment", "permission": "mpr.ver", "menu_item_id": "mpr_prod_parte"},
                     {"label": _("Partes pendientes (aprobación)"), "url": "mpr:partes_pendientes", "icon": "fact_check", "permission": "mpr.aprobar_parte", "menu_item_id": "mpr_prod_partes_pendientes"},
@@ -1249,6 +1249,16 @@ def obtener_app_por_id(app_id: str) -> Optional[Dict[str, Any]]:
             return app
     return None
 
+def _permiso_menu_ok(perm, permisos_usuario: Set[str]) -> bool:
+    """True si el usuario tiene permiso para un ítem de menú (str o lista OR)."""
+    if "*" in permisos_usuario:
+        return True
+    if not perm:
+        return True
+    if isinstance(perm, (list, tuple)):
+        return any(p in permisos_usuario for p in perm if p)
+    return perm in permisos_usuario
+
 def _resolver_url_item(item: Dict, request, permisos_usuario: Set[str]) -> Optional[Dict[str, Any]]:
     """Resuelve la URL de un ítem de menú con 'url'. Retorna dict con label, url, icon, permission o None si no aplica."""
     from django.urls import reverse
@@ -1256,7 +1266,7 @@ def _resolver_url_item(item: Dict, request, permisos_usuario: Set[str]) -> Optio
 
     if "url" not in item:
         return None
-    if "*" not in permisos_usuario and item.get("permission", "") not in permisos_usuario:
+    if not _permiso_menu_ok(item.get("permission", ""), permisos_usuario):
         return None
     try:
         url_mapping = {}
@@ -1442,7 +1452,7 @@ def apps_visibles_sin_filtro_pwa(
         # REGLA 4: Verificar permisos
         # Solo usuarios con permisos "*" (usuario supervisor) o con el permiso específico pueden acceder
         # El puesto/rol "Supervisor" solo tiene permisos específicos (reports.ver)
-        if "*" in permisos_usuario or app["permiso"] in permisos_usuario:
+        if _permiso_menu_ok(app["permiso"], permisos_usuario):
             app_copy = app.copy()
             
             # Resolver la URL principal de la app
