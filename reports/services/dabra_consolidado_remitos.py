@@ -224,12 +224,12 @@ def _sql_lineas_fa() -> str:
             s.pordesc_bonif,
             s.PorDesc,
             s.imp_alicuota_iva,
-            s.NombreArticulo,
+            COALESCE(NULLIF(TRIM(a.NombreArticulo), ''), NULLIF(TRIM(s.Descripcion), ''), '') AS NombreArticulo,
             a.CodArtProv,
             ac.nombre_articulo_categoria AS categoria_nombre
         FROM cuentacliente cc
         INNER JOIN stock s ON s.CodigoMovimiento = cc.CodigoMovimiento
-        LEFT JOIN articulo a ON a.CodigoArticulo = s.CodigoArticulo
+        LEFT JOIN articulo a ON a.IDArt = s.IDArt
         LEFT JOIN articulo_categoria ac ON ac.id_articulo_categoria = a.id_articulo_categoria
             AND (ac.anulado IS NULL OR ac.anulado = 'No')
         WHERE cc.Codigo = %s

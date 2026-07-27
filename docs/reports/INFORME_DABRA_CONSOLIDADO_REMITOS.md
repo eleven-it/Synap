@@ -44,7 +44,7 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 | X | Categoria | `articulo_categoria.nombre_articulo_categoria` o `ACCESORIOS` |
 | Y–AW | P901…PIVA3 | `0` |
 
-**Preview only:** `NombreArticulo` (`stock.NombreArticulo`) — no se exporta a Excel.
+**Preview only:** `NombreArticulo` (`COALESCE(articulo.NombreArticulo, stock.Descripcion)`) — no se exporta a Excel. Join artículo por `stock.IDArt`.
 
 ## TOTAL FACTURAS
 
