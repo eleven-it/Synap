@@ -1,100 +1,103 @@
+{# Chips KPI densos sobre chrome slate-800 (alpha por color, texto claro). #}
 {% if kpis %}
-<div class="flex flex-wrap gap-2 lg:justify-end">
+<div class="flex flex-wrap items-center gap-1.5 lg:justify-end">
     {% if grupo == "produccion" and reporte == "resumen_diario" %}
-    <div class="rounded-lg border border-emerald-200/80 bg-emerald-50/70 px-3 py-1.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Producción registrada</p>
-        <p class="text-sm font-bold tabular-nums leading-tight text-emerald-700 dark:text-emerald-300">{{ kpis.parte_display|default:kpis.parte|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Días con producción</p>
-        <p class="text-sm font-bold tabular-nums leading-tight text-gray-900 dark:text-white">{{ kpis.dias_con_parte|default:0 }}</p>
-    </div>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-emerald-300">Producción registrada</span>
+        <span class="text-sm font-bold tabular-nums text-emerald-100">{{ kpis.parte_display|default:kpis.parte|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Días con producción</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.dias_con_parte|default:0 }}</span>
+    </span>
     {% elif grupo == "produccion" and reporte == "operario" %}
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Planta</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.unidades_total_display|default:kpis.unidades_total|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Operarios</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.operarios_activos|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Promedio</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.promedio_display|default:kpis.promedio|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-purple-200/80 bg-purple-50/70 px-3 py-1.5 dark:border-purple-900/40 dark:bg-purple-950/20 min-w-[7rem]">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-purple-700 truncate" title="{{ kpis.top_operario|default:'-' }}">Top operario</p>
-        <p class="text-sm font-bold tabular-nums text-purple-700">{{ kpis.top_unidades_display|default:kpis.top_unidades|default:0 }}</p>
-    </div>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Planta</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.unidades_total_display|default:kpis.unidades_total|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Operarios</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.operarios_activos|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Promedio</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.promedio_display|default:kpis.promedio|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-900/30 px-2.5"
+          title="Top operario: {{ kpis.top_operario|default:'-' }}">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-purple-300">Top operario</span>
+        <span class="text-sm font-bold tabular-nums text-purple-100">{{ kpis.top_unidades_display|default:kpis.top_unidades|default:0 }}</span>
+    </span>
     {% elif grupo == "produccion" and reporte == "operario_mensual" %}
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Total</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.total_display|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Operarios</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.operarios_activos|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Meses</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.meses_con_datos|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-purple-200/80 bg-purple-50/70 px-3 py-1.5 dark:border-purple-900/40 dark:bg-purple-950/20 min-w-[7rem]">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-purple-700 truncate" title="{{ kpis.top_operario|default:'-' }}">Top operario</p>
-        <p class="text-sm font-bold tabular-nums text-purple-700">{{ kpis.top_display|default:0 }}</p>
-    </div>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Total</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.total_display|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Operarios</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.operarios_activos|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Meses</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.meses_con_datos|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-purple-500/40 bg-purple-900/30 px-2.5"
+          title="Top operario: {{ kpis.top_operario|default:'-' }}">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-purple-300">Top operario</span>
+        <span class="text-sm font-bold tabular-nums text-purple-100">{{ kpis.top_display|default:0 }}</span>
+    </span>
     {% elif grupo == "produccion" and reporte == "cadena" %}
-    <div class="rounded-lg border border-rose-200/80 bg-rose-50/70 px-3 py-1.5 dark:border-rose-900/40 dark:bg-rose-950/20">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-rose-700">Con gap</p>
-        <p class="text-sm font-bold tabular-nums text-rose-700">{{ kpis.componentes_gap|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">En fabricación</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.enviado_display|default:kpis.enviado|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-emerald-200/80 bg-emerald-50/70 px-3 py-1.5 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Producido</p>
-        <p class="text-sm font-bold tabular-nums text-emerald-700">{{ kpis.parte_display|default:kpis.parte|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-sky-200/80 bg-sky-50/70 px-3 py-1.5 dark:border-sky-900/40 dark:bg-sky-950/20">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-sky-700">Semi elaborado</p>
-        <p class="text-sm font-bold tabular-nums text-sky-700">{{ kpis.semi_display|default:kpis.semi|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-1.5 dark:border-amber-900/40 dark:bg-amber-950/20">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-amber-700">2da selección</p>
-        <p class="text-sm font-bold tabular-nums text-amber-700">{{ kpis.segunda_display|default:kpis.segunda|default:0 }}</p>
-    </div>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-rose-300">Con gap</span>
+        <span class="text-sm font-bold tabular-nums text-rose-100">{{ kpis.componentes_gap|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">En fabricación</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.enviado_display|default:kpis.enviado|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-emerald-300">Producido</span>
+        <span class="text-sm font-bold tabular-nums text-emerald-100">{{ kpis.parte_display|default:kpis.parte|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-sky-500/40 bg-sky-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-sky-300">Semi elaborado</span>
+        <span class="text-sm font-bold tabular-nums text-sky-100">{{ kpis.semi_display|default:kpis.semi|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-amber-300">2da selección</span>
+        <span class="text-sm font-bold tabular-nums text-amber-100">{{ kpis.segunda_display|default:kpis.segunda|default:0 }}</span>
+    </span>
     {% elif grupo == "produccion" and reporte == "pendiente" %}
-    <div class="rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-1.5 dark:border-amber-900/40 dark:bg-amber-950/20">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-amber-800">Pendientes</p>
-        <p class="text-sm font-bold tabular-nums text-amber-800">{{ kpis.componentes|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Pares</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.unidades_display|default:kpis.unidades|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-rose-200/80 bg-rose-50/70 px-3 py-1.5 dark:border-rose-900/40 dark:bg-rose-950/20">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-rose-700">Críticos</p>
-        <p class="text-sm font-bold tabular-nums text-rose-700">{{ kpis.criticos|default:0 }}</p>
-    </div>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-amber-300">Pendientes</span>
+        <span class="text-sm font-bold tabular-nums text-amber-100">{{ kpis.componentes|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Pares</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.unidades_display|default:kpis.unidades|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-500/40 bg-rose-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-rose-300">Críticos</span>
+        <span class="text-sm font-bold tabular-nums text-rose-100">{{ kpis.criticos|default:0 }}</span>
+    </span>
     {% elif grupo == "demanda" and reporte == "brecha_pack" %}
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Packs brecha</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.packs_brecha|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-1.5 dark:border-amber-900/40 dark:bg-amber-950/20">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-amber-800">Faltantes</p>
-        <p class="text-sm font-bold tabular-nums text-amber-800">{{ kpis.unidades_faltantes_display|default:kpis.unidades_faltantes|default:0 }}</p>
-    </div>
-    <div class="rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-1.5 dark:border-amber-900/40 dark:bg-amber-950/20">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-amber-800">Urgentes</p>
-        <p class="text-sm font-bold tabular-nums text-amber-800">{{ kpis.packs_urgentes|default:0 }}</p>
-    </div>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Packs brecha</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.packs_brecha|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-amber-300">Faltantes</span>
+        <span class="text-sm font-bold tabular-nums text-amber-100">{{ kpis.unidades_faltantes_display|default:kpis.unidades_faltantes|default:0 }}</span>
+    </span>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-900/30 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-amber-300">Urgentes</span>
+        <span class="text-sm font-bold tabular-nums text-amber-100">{{ kpis.packs_urgentes|default:0 }}</span>
+    </span>
     {% elif grupo == "trazabilidad" and reporte == "timeline" %}
-    <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-900/50">
-        <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Eventos</p>
-        <p class="text-sm font-bold tabular-nums">{{ kpis.eventos|default:0 }}</p>
-    </div>
+    <span class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-600 bg-slate-900/70 px-2.5">
+        <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Eventos</span>
+        <span class="text-sm font-bold tabular-nums text-white">{{ kpis.eventos|default:0 }}</span>
+    </span>
     {% endif %}
 </div>
 {% endif %}
