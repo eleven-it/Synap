@@ -35,9 +35,12 @@ Dos mejoras coordinadas para alinear MPR con la planta textil:
 | Filas clasificación | (máquina × artículo × turno × operario), pendiente > 0 o ya clasificadas (roster completo) |
 | Alcance pendiente | Fecha obligatoria; turno opcional (vacío = todos los turnos del día) |
 | Columnas grilla CC | Máquina, Artículo, Turno, Operario, **Parte** (referencial, fab. del parte), Semi (calculado), 2da, Scrap |
-| Semi elaborado | Solo lectura calculado: `base − 2da − desperdicio`; `base` = remanente clasificable de la fila |
+| Semi elaborado | Solo lectura calculado: `base − 2da − desperdicio`; `base` = remanente clasificable de la fila (parte + extra producción) |
+| Extra producción (CC) | `max(0, stock Producción − Σ atribuible_parte)` por artículo; tope fila = atribuible + extra pool; consumo secuencial en POST |
 | Edición CC | Solo **2da selección** y **Desperdicio**; el servidor recalcula semi |
-| Validación CC | `2da + desperdicio ≤ base` (UI Alpine + servidor) |
+| Validación CC | `2da + desperdicio ≤ base` (UI Alpine + servidor); guarda física: Σ clasificado ≤ saldo vivo Prod |
+| Solo lectura CC | Cuando `max_clasificable ≤ 0` (parte cerrado **y** sin stock extra usable) |
+| Persistencia extra | `mpr_transicion_lote.cantidad_extra` por ítem (semi/2da/scrap), reparto secuencial del extra de la celda |
 | Bloqueo parte | Si un turno tiene CC en `mpr_transicion_lote` (fecha+turno), ese turno del parte queda bloqueado |
 | Corrección post-CC | No se edita ni se revierte en la grilla CC. Reclasificar Semi/2da/Desperdicio vía **Ingreso de movimiento de stock** → transferencia interna (AdministraNET) |
 | Clasificación parcial | Sí |
@@ -94,3 +97,4 @@ Migración vía `core/services/legacy_mysql_schema/catalog.py`.
 - **Columna Parte + semi calculado + bloqueo parte (26/07/2026):** la grilla CC muestra **Parte** (cantidad referencial del parte, sin restar clasificado). **Semi elaborado** es solo lectura y se calcula como `base − 2da − desperdicio`, donde `base` es el remanente clasificable de la fila. Solo se editan 2da y desperdicio; el servidor recalcula semi e ignora manipulación. Validación: `2da + desperdicio ≤ base`. Filas 100 % clasificadas se muestran en solo lectura con desglose persistido. Si un turno tiene CC registrada para la fecha, el **parte** bloquea la edición de ese turno (UI + `ValidationError` en registro/ajustes). Para **corregir** Semi/2da/Desperdicio después de guardar: **Ingreso de movimiento de stock** → transferencia interna (no hay reverse en el pipeline MPR). Ref: `mpr/repositories/transicion_lote.py` (`turno_tiene_control_calidad`), `construir_grilla_clasificacion_produccion`, `parte_produccion.html`.
 - **Separador visual por máquina (27/07/2026):** en `clasificacion_produccion.html`, la primera fila de cada bloque de máquina (excepto la primera de la grilla) lleva borde superior `2px slate-400` (`clasif-inicio-maquina`). Las celdas Máq./Artículo con `rowspan` usan `align-top` para alinear el chip/nombre con la primera línea de turno del bloque.
 - **Turnos y Pares en UI CC (27/07/2026):** columnas Turno/Operario/Parte con tinte suave por franja (`turno_franja`: mañana ámbar, tarde sky, noche violeta). Columna **Parte** en dos líneas (docenas / pares). Campos de carga y semi calculado etiquetan **Pares** (no «Unidades»); el POST sigue usando el sufijo `_unidades` por compatibilidad.
+- **Extra producción en CC (27/07/2026):** si hay saldo en depósito **Producción** por encima del remanente atribuible del parte, la grilla permite clasificar ese extra (semi/2da/scrap) por operario. Tope por celda: `atribuible_parte + extra_pool_artículo`; el POST consume el pool secuencialmente (mismo orden que la grilla). Columna Parte muestra subtexto «+Nd Np extra» por artículo cuando aplica. Persistencia: `cantidad_extra` en `mpr_transicion_lote`. DDL: `mpr/sql/005_mpr_transicion_lote_cantidad_extra.sql`.

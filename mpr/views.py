@@ -6924,7 +6924,13 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
         from mpr.repositories.transicion_lote import (
             sumar_clasificado_desglose_por_operario_fecha_turno,
         )
-        from mpr.services import _atribuible_clasificacion_por_celda
+        from mpr.services import (
+            _atribuible_clasificacion_por_celda,
+            _extra_pool_clasificacion_por_articulo,
+            _max_clasificable_celda,
+            _orden_celdas_clasificacion_grilla,
+            _repartir_cantidad_extra_por_destino,
+        )
 
         celdas_parte = acumular_celdas_clasificacion_maquina_turno(
             base_empresa, fecha_obj, turno_id_filtro
@@ -6951,21 +6957,47 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
         )
 
         stock_real, _ = _pivot_stock_por_tipo_mpr(base_empresa, list(ids_post))
+        extra_restante_por_art = _extra_pool_clasificacion_por_articulo(
+            stock_real, atribuible_por_celda
+        )
 
         filas_con_cantidad: List[Dict[str, Any]] = []
-
+        celdas_en_post: set = set()
         for id_art, id_operario, id_turno, id_maquina in filas_post:
+            tid = int(id_turno) if id_turno > 0 else int(turno_id_filtro or 0)
+            celdas_en_post.add((id_art, id_operario, tid, int(id_maquina)))
+
+        for clave_celda in _orden_celdas_clasificacion_grilla(celdas_parte):
+            id_maq_ef, id_art, id_operario, id_turno_ef = clave_celda
             if id_operario <= 0:
                 continue
-            id_turno_ef = id_turno if id_turno > 0 else turno_id_filtro
-            if id_turno_ef is None or int(id_turno_ef) <= 0:
+            post_keys = (
+                (id_art, id_operario, id_turno_ef, id_maq_ef),
+                (id_art, id_operario, id_turno_ef, 0),
+                (id_art, id_operario, 0, 0),
+            )
+            if not any(k in celdas_en_post for k in post_keys):
                 continue
-            id_turno_ef = int(id_turno_ef)
-            id_maq_ef = int(id_maquina) if id_maquina >= 0 else 0
-            if id_turno > 0:
+
+            legacy_en_post = any(
+                request.POST.get(k)
+                for k in (
+                    f"seg2da_{id_art}_op_{id_operario}",
+                    f"scrap_{id_art}_op_{id_operario}",
+                    f"semi_{id_art}_op_{id_operario}",
+                    f"seg2da_{id_art}_op_{id_operario}_docenas",
+                    f"scrap_{id_art}_op_{id_operario}_docenas",
+                )
+            )
+            if legacy_en_post:
+                qty_kwargs = {}
+            elif (id_art, id_operario, id_turno_ef, id_maq_ef) in celdas_en_post:
                 qty_kwargs = {"id_turno": id_turno_ef, "id_maquina": id_maq_ef}
+            elif (id_art, id_operario, id_turno_ef, 0) in celdas_en_post:
+                qty_kwargs = {"id_turno": id_turno_ef, "id_maquina": 0}
             else:
                 qty_kwargs = {}
+
             cant_2da = Decimal(
                 _clasificacion_cantidad_unidades_desde_post(
                     request.POST, id_art, "seg2da", id_operario, **qty_kwargs
@@ -6976,19 +7008,28 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
                     request.POST, id_art, "scrap", id_operario, **qty_kwargs
                 )
             )
-            clave_celda = (id_maq_ef, id_art, id_operario, id_turno_ef)
             atribuible = atribuible_por_celda.get(clave_celda, Decimal("0"))
-            if cant_2da + cant_scrap > atribuible:
+            extra_rest = extra_restante_por_art.get(id_art, Decimal("0"))
+            max_clasificable = _max_clasificable_celda(atribuible, extra_rest)
+            if cant_2da + cant_scrap > max_clasificable:
                 dj_messages.error(
                     request,
                     f"Exceso operario {id_operario} artículo {id_art} turno {id_turno_ef}: "
                     f"2da+desperdicio ({cant_2da + cant_scrap:g}) supera lo clasificable "
-                    f"({atribuible:g}). Fila ignorada.",
+                    f"({max_clasificable:g}, incluye extra producción). Fila ignorada.",
                 )
                 continue
-            cant_semi = max(Decimal("0"), atribuible - cant_2da - cant_scrap)
+            cant_semi = max(Decimal("0"), max_clasificable - cant_2da - cant_scrap)
             if cant_semi <= 0 and cant_2da <= 0 and cant_scrap <= 0:
                 continue
+            total_celda = cant_semi + cant_2da + cant_scrap
+            extra_consumido = max(Decimal("0"), total_celda - atribuible)
+            extra_restante_por_art[id_art] = max(
+                Decimal("0"), extra_rest - extra_consumido
+            )
+            e_semi, e_2da, e_scrap = _repartir_cantidad_extra_por_destino(
+                atribuible, cant_semi, cant_2da, cant_scrap
+            )
             filas_con_cantidad.append({
                 "id_art": id_art,
                 "id_operario": id_operario,
@@ -6997,6 +7038,9 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
                 "cant_semi": cant_semi,
                 "cant_2da": cant_2da,
                 "cant_scrap": cant_scrap,
+                "extra_semi": e_semi,
+                "extra_2da": e_2da,
+                "extra_scrap": e_scrap,
             })
 
         items = []
@@ -7026,10 +7070,10 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
                 "-",
             )
 
-            for cant, destino in (
-                (fila["cant_semi"], TIPO_MPR_SEMI_ELABORADO),
-                (fila["cant_2da"], TIPO_MPR_2DA_SELECCION),
-                (fila["cant_scrap"], TIPO_MPR_SCRAP),
+            for cant, extra, destino in (
+                (fila["cant_semi"], fila["extra_semi"], TIPO_MPR_SEMI_ELABORADO),
+                (fila["cant_2da"], fila["extra_2da"], TIPO_MPR_2DA_SELECCION),
+                (fila["cant_scrap"], fila["extra_scrap"], TIPO_MPR_SCRAP),
             ):
                 if cant > 0:
                     items.append({
@@ -7037,6 +7081,7 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
                         "tipo_origen": TIPO_MPR_PRODUCCION,
                         "tipo_destino": destino,
                         "cantidad": cant,
+                        "cantidad_extra": extra,
                         "id_operario": id_operario,
                         "operario_nombre": operario_nombre,
                         "fecha_produccion": fecha_obj,

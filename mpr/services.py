@@ -17605,6 +17605,7 @@ def transferir_stock_entre_etapas(
     operario_nombre: Optional[str] = None,
     fecha_produccion: "Optional[date]" = None,
     id_mpr_turno: Optional[int] = None,
+    cantidad_extra: Any = None,
 ) -> Tuple[bool, Optional[int], Optional[str], Optional[str]]:
     """Transfiere stock físico de un depósito MPR a otro (transición entre etapas).
 
@@ -17842,6 +17843,7 @@ def transferir_stock_entre_etapas(
                 operario_nombre=operario_nombre,
                 fecha_produccion=fecha_produccion or fecha,
                 id_mpr_turno=id_mpr_turno,
+                cantidad_extra=to_decimal_or_none(cantidad_extra) or Decimal("0"),
             )
         if mpr_writes_postgres():
             from mpr.models import MprTransicionLote
@@ -18548,6 +18550,121 @@ def _atribuible_clasificacion_por_celda(
     return atribuible
 
 
+def _extra_pool_clasificacion_por_articulo(
+    stock_pivot: Dict[int, Dict[str, float]],
+    atribuible_por_celda: Dict[Tuple[int, int, int, int], Decimal],
+) -> Dict[int, Decimal]:
+    """Extra clasificable por artículo = stock Producción − Σ atribuible del parte."""
+    sum_atrib_por_art: Dict[int, Decimal] = {}
+    for (_mid, aid, _oid, _tid), atr in atribuible_por_celda.items():
+        sum_atrib_por_art[aid] = sum_atrib_por_art.get(aid, Decimal("0")) + atr
+
+    art_ids = set(sum_atrib_por_art.keys()) | set(stock_pivot.keys())
+    extra: Dict[int, Decimal] = {}
+    for aid in art_ids:
+        stock_prod = Decimal(str(stock_pivot.get(aid, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
+        sum_atrib = sum_atrib_por_art.get(aid, Decimal("0"))
+        extra[aid] = max(Decimal("0"), stock_prod - sum_atrib)
+    return extra
+
+
+def _max_clasificable_celda(atribuible: Decimal, extra_restante_art: Decimal) -> Decimal:
+    """Tope por celda = remanente del parte + extra aún disponible del artículo."""
+    atr = to_decimal_or_none(atribuible) or Decimal("0")
+    ext = to_decimal_or_none(extra_restante_art) or Decimal("0")
+    return max(Decimal("0"), atr) + max(Decimal("0"), ext)
+
+
+def _repartir_cantidad_extra_por_destino(
+    atribuible: Decimal,
+    cant_semi: Decimal,
+    cant_2da: Decimal,
+    cant_scrap: Decimal,
+) -> Tuple[Decimal, Decimal, Decimal]:
+    """Reparte cantidad_extra de la celda: primero semi, luego 2da, luego scrap."""
+    total = cant_semi + cant_2da + cant_scrap
+    atr = to_decimal_or_none(atribuible) or Decimal("0")
+    extra_celda = max(Decimal("0"), total - atr)
+    if extra_celda <= 0:
+        return Decimal("0"), Decimal("0"), Decimal("0")
+    e_semi = min(cant_semi, extra_celda)
+    rest = extra_celda - e_semi
+    e_2da = min(cant_2da, rest)
+    rest -= e_2da
+    e_scrap = min(cant_scrap, rest)
+    return e_semi, e_2da, e_scrap
+
+
+def _asignacion_clasificado_por_celda(
+    celdas: Dict[Tuple[int, int, int, int], Dict[str, Any]],
+    desglose_por_turno: Dict[int, Dict[Tuple[int, int], Dict[str, Decimal]]],
+) -> Dict[Tuple[int, int, int, int], Dict[str, Decimal]]:
+    """Desglose semi/2da/scrap asignado a cada celda (misma lógica que atribuible)."""
+    grupos: Dict[Tuple[int, int, int], List[Tuple[int, Decimal, Dict[str, Any]]]] = {}
+    for (mid, aid, oid, tid), datos in celdas.items():
+        if oid is None or int(oid) <= 0:
+            continue
+        fab = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+        if fab <= 0:
+            continue
+        grupos.setdefault((aid, oid, tid), []).append((mid, fab, datos))
+
+    asignado: Dict[Tuple[int, int, int, int], Dict[str, Decimal]] = {}
+    for (aid, oid, tid), maquinas in grupos.items():
+        desglose = desglose_por_turno.get(tid, {}).get(
+            (aid, oid),
+            {"semi": Decimal("0"), "segunda": Decimal("0"), "scrap": Decimal("0")},
+        )
+        semi_rest = desglose.get("semi", Decimal("0"))
+        seg2da_rest = desglose.get("segunda", Decimal("0"))
+        scrap_rest = desglose.get("scrap", Decimal("0"))
+        maquinas_ord = sorted(
+            maquinas,
+            key=lambda x: _orden_maquina_clasificacion(
+                x[0], str_or_default(x[2].get("maquina_nombre"), "—")
+            ),
+        )
+        for mid, fab_maq, _datos in maquinas_ord:
+            asignado_semi = min(fab_maq, semi_rest)
+            semi_rest -= asignado_semi
+            asignado_seg2da = min(fab_maq, seg2da_rest)
+            seg2da_rest -= asignado_seg2da
+            asignado_scrap = min(fab_maq, scrap_rest)
+            scrap_rest -= asignado_scrap
+            asignado[(mid, aid, oid, tid)] = {
+                "semi": asignado_semi,
+                "segunda": asignado_seg2da,
+                "scrap": asignado_scrap,
+            }
+    return asignado
+
+
+def _orden_celdas_clasificacion_grilla(
+    celdas: Dict[Tuple[int, int, int, int], Dict[str, Any]],
+) -> List[Tuple[int, int, int, int]]:
+    """Claves de celda en el mismo orden que la grilla CC (máquina × art × turno × operario)."""
+    claves: List[Tuple[int, int, int, int]] = []
+    for (mid, aid, oid, tid), datos in celdas.items():
+        if oid is None or int(oid) <= 0:
+            continue
+        fab = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+        if fab <= 0:
+            continue
+        claves.append((mid, aid, oid, tid))
+    claves.sort(
+        key=lambda k: (
+            _orden_maquina_clasificacion(
+                k[0],
+                str_or_default((celdas.get(k) or {}).get("maquina_nombre"), "—"),
+            ),
+            k[1],
+            k[3],
+            k[2],
+        )
+    )
+    return claves
+
+
 def _validar_turnos_parte_sin_control_calidad(
     base_empresa: str,
     fecha,
@@ -18650,115 +18767,117 @@ def construir_grilla_clasificacion_produccion(
     descripciones = _fetch_descripciones_articulo(base_empresa, art_ids) if art_ids else {}
 
     parte_por_art: Dict[int, Decimal] = {}
-    grupos_art_op_turno: Dict[Tuple[int, int, int], List[Tuple[int, Decimal, Dict[str, Any]]]] = {}
     for (mid, aid, oid, tid), datos in celdas.items():
         fab = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
         if fab <= 0:
             continue
         parte_por_art[aid] = parte_por_art.get(aid, Decimal("0")) + fab
-        if oid is None or int(oid) <= 0:
-            continue
-        grupos_art_op_turno.setdefault((aid, oid, tid), []).append((mid, fab, datos))
+
+    atribuible_por_celda = _atribuible_clasificacion_por_celda(celdas, desglose_por_turno)
+    asignado_por_celda = _asignacion_clasificado_por_celda(celdas, desglose_por_turno)
+    stock_pivot, _ = (
+        _pivot_stock_por_tipo_mpr(base_empresa, art_ids) if art_ids else ({}, {})
+    )
+    extra_pool = _extra_pool_clasificacion_por_articulo(stock_pivot, atribuible_por_celda)
 
     filas_raw: List[Dict[str, Any]] = []
     bloqueos: List[Dict[str, Any]] = []
 
-    for (aid, oid, tid), maquinas in grupos_art_op_turno.items():
-        if oid is None or int(oid) <= 0:
+    for (mid, aid, oid, tid) in _orden_celdas_clasificacion_grilla(celdas):
+        datos = celdas[(mid, aid, oid, tid)]
+        fab_maq = to_decimal_or_none(datos.get("cantidad")) or Decimal("0")
+        if fab_maq <= 0:
             continue
-        cls_map = clasificado_por_turno.get(tid, {})
-        desglose = desglose_por_turno.get(tid, {}).get(
-            (aid, oid),
+
+        atribuible = atribuible_por_celda.get((mid, aid, oid, tid), Decimal("0"))
+        extra_disp = extra_pool.get(aid, Decimal("0"))
+        stock_prod = Decimal(str(stock_pivot.get(aid, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
+        max_clasificable = _max_clasificable_celda(atribuible, extra_disp)
+        solo_lectura = max_clasificable <= 0
+
+        asig = asignado_por_celda.get(
+            (mid, aid, oid, tid),
             {"semi": Decimal("0"), "segunda": Decimal("0"), "scrap": Decimal("0")},
         )
-        semi_rest = desglose.get("semi", Decimal("0"))
-        seg2da_rest = desglose.get("segunda", Decimal("0"))
-        scrap_rest = desglose.get("scrap", Decimal("0"))
-        maquinas_ord = sorted(
-            maquinas,
-            key=lambda x: _orden_maquina_clasificacion(
-                x[0], str_or_default(x[2].get("maquina_nombre"), "—")
-            ),
-        )
+        asignado_semi = asig.get("semi", Decimal("0"))
+        asignado_seg2da = asig.get("segunda", Decimal("0"))
+        asignado_scrap = asig.get("scrap", Decimal("0"))
+        asignado_total = asignado_semi + asignado_seg2da + asignado_scrap
 
-        for mid, fab_maq, datos in maquinas_ord:
-            if fab_maq <= 0:
-                continue
+        cls_map = clasificado_por_turno.get(tid, {})
+        cls_total = cls_map.get((aid, oid), Decimal("0"))
+        base_clasificable = max_clasificable
+        base_int = int(round(float(base_clasificable)))
 
-            asignado_semi = min(fab_maq, semi_rest)
-            semi_rest -= asignado_semi
-            asignado_seg2da = min(fab_maq, seg2da_rest)
-            seg2da_rest -= asignado_seg2da
-            asignado_scrap = min(fab_maq, scrap_rest)
-            scrap_rest -= asignado_scrap
-            asignado_total = asignado_semi + asignado_seg2da + asignado_scrap
-            pendiente = fab_maq - asignado_total
-            completo = pendiente <= 0
-            solo_lectura = completo
+        codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
+        parte_int = int(round(float(fab_maq)))
+        parte_du = descomponer_docenas_unidades(parte_int, unidades_por_docena_fijo=12)
+        parte_texto = texto_docenas_unidades(parte_int, unidades_por_docena_fijo=12)
+        extra_int = int(round(float(extra_disp)))
 
-            codigo_manual, descripcion = descripciones.get(aid, ("-", "-"))
-            cls_total = cls_map.get((aid, oid), Decimal("0"))
-            base_clasificable = max(Decimal("0"), pendiente)
-            base_int = int(round(float(base_clasificable)))
-
-            parte_int = int(round(float(fab_maq)))
-            parte_du = descomponer_docenas_unidades(parte_int, unidades_por_docena_fijo=12)
-            parte_texto = texto_docenas_unidades(parte_int, unidades_por_docena_fijo=12)
-
-            if solo_lectura:
-                disp_texto = (
-                    f"Completo · {texto_docenas_unidades(int(round(float(asignado_total))), unidades_por_docena_fijo=12)} clasificado"
-                )
-                ini_semi = int(round(float(asignado_semi)))
-                ini_seg2da = int(round(float(asignado_seg2da)))
-                ini_scrap = int(round(float(asignado_scrap)))
-            else:
-                disp_texto = texto_docenas_unidades(base_int, unidades_por_docena_fijo=12)
-                ini_semi = 0
-                ini_seg2da = 0
-                ini_scrap = 0
-
-            du = descomponer_docenas_unidades(
-                base_int if not solo_lectura else int(round(float(asignado_total))),
-                unidades_por_docena_fijo=12,
+        if solo_lectura:
+            disp_texto = (
+                f"Completo · {texto_docenas_unidades(int(round(float(asignado_total))), unidades_por_docena_fijo=12)} clasificado"
             )
-            maq_nom = str_or_default(datos.get("maquina_nombre"), "—")
-            turno_nom = str_or_default(datos.get("turno_nombre"), "-")
-            filas_raw.append({
-                "id_mpr_maquina": int(mid),
-                "maquina_nombre": maq_nom,
-                "id_articulo": aid,
-                "id_mpr_turno": tid,
-                "turno_nombre": turno_nom,
-                "turno_franja": _franja_horaria_turno(turno_nom, None) or "",
-                "id_operario": oid,
-                "operario_nombre": str_or_default(datos.get("operario_nombre"), "-"),
-                "codigo_manual": str_or_default(codigo_manual, "-"),
-                "descripcion": str_or_default(descripcion, "-"),
-                "codigo_tooltip": str_or_default(codigo_manual, ""),
-                "fabricado": float(fab_maq),
-                "parte": float(fab_maq),
-                "parte_texto": parte_texto,
-                "parte_docenas": parte_du["docenas"],
-                "parte_unidades": parte_du["unidades"],
-                "clasificado": float(cls_total),
-                "base_clasificable": float(base_clasificable),
-                "disponible": float(base_clasificable),
-                "disponible_texto": disp_texto,
-                "disponible_docenas": du["docenas"],
-                "disponible_unidades": du["unidades"],
-                "ini_semi": ini_semi,
-                "ini_seg2da": ini_seg2da,
-                "ini_scrap": ini_scrap,
-                "ini_semi_texto": texto_docenas_unidades(ini_semi, unidades_por_docena_fijo=12) if solo_lectura else "",
-                "ini_seg2da_texto": texto_docenas_unidades(ini_seg2da, unidades_por_docena_fijo=12) if solo_lectura else "",
-                "ini_scrap_texto": texto_docenas_unidades(ini_scrap, unidades_por_docena_fijo=12) if solo_lectura else "",
-                "solo_lectura": solo_lectura,
-                "show_maquina": False,
-                "rowspan_maquina": 1,
-                "show_articulo": False,
-                "rowspan_articulo": 1,
-            })
+            ini_semi = int(round(float(asignado_semi)))
+            ini_seg2da = int(round(float(asignado_seg2da)))
+            ini_scrap = int(round(float(asignado_scrap)))
+        else:
+            disp_texto = texto_docenas_unidades(base_int, unidades_por_docena_fijo=12)
+            ini_semi = 0
+            ini_seg2da = 0
+            ini_scrap = 0
+
+        du = descomponer_docenas_unidades(
+            base_int if not solo_lectura else int(round(float(asignado_total))),
+            unidades_por_docena_fijo=12,
+        )
+        maq_nom = str_or_default(datos.get("maquina_nombre"), "—")
+        turno_nom = str_or_default(datos.get("turno_nombre"), "-")
+        filas_raw.append({
+            "id_mpr_maquina": int(mid),
+            "maquina_nombre": maq_nom,
+            "id_articulo": aid,
+            "id_mpr_turno": tid,
+            "turno_nombre": turno_nom,
+            "turno_franja": _franja_horaria_turno(turno_nom, None) or "",
+            "id_operario": oid,
+            "operario_nombre": str_or_default(datos.get("operario_nombre"), "-"),
+            "codigo_manual": str_or_default(codigo_manual, "-"),
+            "descripcion": str_or_default(descripcion, "-"),
+            "codigo_tooltip": str_or_default(codigo_manual, ""),
+            "fabricado": float(fab_maq),
+            "parte": float(fab_maq),
+            "parte_texto": parte_texto,
+            "parte_docenas": parte_du["docenas"],
+            "parte_unidades": parte_du["unidades"],
+            "clasificado": float(cls_total),
+            "atribuible_parte": float(atribuible),
+            "stock_produccion": float(stock_prod),
+            "extra_disponible": float(extra_disp),
+            "extra_docenas": descomponer_docenas_unidades(extra_int, unidades_por_docena_fijo=12)["docenas"],
+            "extra_unidades": descomponer_docenas_unidades(extra_int, unidades_por_docena_fijo=12)["unidades"],
+            "max_clasificable": float(max_clasificable),
+            "base_clasificable": float(base_clasificable),
+            "disponible": float(base_clasificable),
+            "disponible_texto": disp_texto,
+            "disponible_docenas": du["docenas"],
+            "disponible_unidades": du["unidades"],
+            "ini_semi": ini_semi,
+            "ini_seg2da": ini_seg2da,
+            "ini_scrap": ini_scrap,
+            "ini_semi_texto": texto_docenas_unidades(ini_semi, unidades_por_docena_fijo=12) if solo_lectura else "",
+            "ini_seg2da_texto": texto_docenas_unidades(ini_seg2da, unidades_por_docena_fijo=12) if solo_lectura else "",
+            "ini_scrap_texto": texto_docenas_unidades(ini_scrap, unidades_por_docena_fijo=12) if solo_lectura else "",
+            "solo_lectura": solo_lectura,
+            "show_maquina": False,
+            "rowspan_maquina": 1,
+            "show_articulo": False,
+            "rowspan_articulo": 1,
+        })
+
+    if not ver_roster_completo:
+        filas_raw = [f for f in filas_raw if not f.get("solo_lectura")]
 
     filas_raw.sort(
         key=lambda f: (
@@ -18852,6 +18971,7 @@ def transferir_stock_lote(
                 operario_nombre=item.get("operario_nombre"),
                 fecha_produccion=item.get("fecha_produccion") or fecha,
                 id_mpr_turno=item.get("id_mpr_turno"),
+                cantidad_extra=item.get("cantidad_extra", 0),
             )
             if ok:
                 resultado["exitosas"] += 1

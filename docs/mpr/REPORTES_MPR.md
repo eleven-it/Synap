@@ -280,7 +280,7 @@ Los reportes basados en `lista_produccion_*` / OPT **no están disponibles** en 
 | `reporte_mpr_movimientos` | `mpr/services.py` (ledgers `mpr_*`, respeta período) |
 | Hub vista / routing | `mpr/reportes_hub.py`, `mpr/views.py` `ReportesMPRView` |
 | Tablero / Fabricando | `listar_tablero_por_articulo`, `_fabricando_por_componentes` |
-| CC / clasificación | `construir_grilla_clasificacion_produccion`, `mpr/repositories/transicion_lote.py` |
+| CC / clasificación | `construir_grilla_clasificacion_produccion`, `mpr/repositories/transicion_lote.py` (incl. `cantidad_extra` extra producción) |
 
 ---
 

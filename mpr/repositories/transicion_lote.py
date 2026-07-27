@@ -25,9 +25,11 @@ def crear_transicion_lote(
     operario_nombre: Optional[str] = None,
     fecha_produccion: Optional[date] = None,
     id_mpr_turno: Optional[int] = None,
+    cantidad_extra: Decimal = Decimal("0"),
 ) -> int:
     base = (base_empresa or "").strip()
     qty = to_decimal_or_none(cantidad) or Decimal("0")
+    qty_extra = to_decimal_or_none(cantidad_extra) or Decimal("0")
     id_op = to_int_or_none(id_operario)
     nombre_op = str_or_default(operario_nombre, "-") if id_op is not None else "-"
     f_prod = to_date_or_none(fecha_produccion)
@@ -36,15 +38,17 @@ def crear_transicion_lote(
         cursor.execute(
             """
             INSERT INTO mpr_transicion_lote
-                (id_articulo, tipo_origen, tipo_destino, cantidad, codigo_movimiento,
-                 id_usuario, id_operario, operario_nombre, fecha_produccion, id_mpr_turno)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                (id_articulo, tipo_origen, tipo_destino, cantidad, cantidad_extra,
+                 codigo_movimiento, id_usuario, id_operario, operario_nombre,
+                 fecha_produccion, id_mpr_turno)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             [
                 int(id_articulo),
                 str(tipo_origen),
                 str(tipo_destino),
                 qty,
+                qty_extra,
                 to_int_or_none(codigo_movimiento),
                 int(id_usuario),
                 id_op,

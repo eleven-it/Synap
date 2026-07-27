@@ -847,6 +847,11 @@ def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
                     "id_mpr_turno",
                     "BIGINT NULL COMMENT 'Turno de producción del parte/clasificación'",
                 ),
+                (
+                    "cantidad_extra",
+                    "DECIMAL(15,2) NOT NULL DEFAULT 0 "
+                    "COMMENT 'Unidades clasificadas por encima del remanente atribuible del parte'",
+                ),
             ):
                 if not columna_existe(cursor, tbl_tl, col):
                     cursor.execute(
