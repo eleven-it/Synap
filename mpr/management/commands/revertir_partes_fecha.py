@@ -818,19 +818,32 @@ class Command(BaseCommand):
             )
             n_mov_anulado = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
 
-        # Histórico best-effort
+        # Histórico best-effort (columna real: codigo_movimiento_mstock)
         n_hist = 0
         if tbl_hist and codigos_opp:
-            try:
+            cursor.execute(f"SHOW COLUMNS FROM `{tbl_hist}`")
+            hist_cols = {
+                str(_row_val(r, "Field", "field") or "").lower()
+                for r in (cursor.fetchall() or [])
+            }
+            col_hist = None
+            for cand in ("codigo_movimiento_mstock", "codigo_movimiento"):
+                if cand in hist_cols:
+                    col_hist = cand
+                    break
+            if not col_hist:
+                self.stdout.write(
+                    "  Histórico: sin columna codigo_movimiento_mstock "
+                    "(ni codigo_movimiento); se omite limpieza."
+                )
+            else:
                 ph = ",".join(["%s"] * len(codigos_opp))
                 cursor.execute(
-                    f"DELETE FROM `{tbl_hist}` WHERE codigo_movimiento IN ({ph})",
+                    f"DELETE FROM `{tbl_hist}` WHERE `{col_hist}` IN ({ph})",
                     codigos_opp,
                 )
-                n_hist = cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
-            except Exception as hist_err:
-                self.stdout.write(
-                    self.style.WARNING(f"  Histórico no limpiado: {hist_err}")
+                n_hist = (
+                    cursor.rowcount if cursor.rowcount and cursor.rowcount > 0 else 0
                 )
 
         ph_partes = ",".join(["%s"] * len(ids_parte))

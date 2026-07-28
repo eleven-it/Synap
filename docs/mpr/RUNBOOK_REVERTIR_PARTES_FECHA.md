@@ -32,7 +32,7 @@ docker exec Synap_app python manage.py revertir_partes_fecha \
 
 1. Inventario (igual que dry-run).
 2. Por cada OPP-parte del día: ajusta `stock_deposito` (`saldo += Salida - Entrada`), marca `stock` y `movimiento_stock` con `anulado='Si'`.
-3. Limpia histórico ligado (best-effort).
+3. Limpia `lista_produccion_historico` por `codigo_movimiento_mstock` (o `codigo_movimiento` si existiera).
 4. `DELETE` ajustes, líneas y cabeceras `mpr_parte` de la fecha.
 5. Verifica 0 partes residuales.
 
