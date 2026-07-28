@@ -161,6 +161,14 @@ class PresentacionOperativaTests(SimpleTestCase):
         self.assertEqual(fila["resta_urgente_display"], "24")
         self.assertEqual(fila["produccion_display"], "12")
 
+    def test_enriquecer_fila_tablero_envios_display(self):
+        fila = enriquecer_fila_tablero_presentacion(
+            {"resta_urgente": 24, "envios": 12, "enviado": 5},
+            "unidades",
+        )
+        self.assertEqual(fila["envios_display"], "12")
+        self.assertEqual(fila["enviado_display"], "5")
+
 
 class TransicionLoteOperarioTests(SimpleTestCase):
     @patch("mpr.repositories.transicion_lote.mysql_cursor")

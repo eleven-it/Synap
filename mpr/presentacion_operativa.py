@@ -15,10 +15,10 @@ CAMPOS_TABLERO_CANTIDAD = (
     "resta_total",
     "pendiente",
     "enviado",
+    "envios",
     "produccion",
     "segunda_seleccion",
     "semi_elaborado",
-    "desperdicio",
     "total",
     "stock_proceso",
 )

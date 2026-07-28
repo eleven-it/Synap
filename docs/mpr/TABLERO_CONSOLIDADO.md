@@ -43,8 +43,9 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 | 3 | **Reserva** | `dem_res` | Pares (entero); explosión BOM reserva pack (modo Par) |
 | 4 | **Urgente** | `resta_urgente` | Pares + Docenas (÷12, decimal PCP); base del **Enviar** |
 | 5 | **Fabricando** | virtual | `max(0, Σ envíos − acreditado)`. Acreditado = `max(Semi+2da+Scrap, clasificado CC, partes)`. **Producción no acredita.** |
-| 6–9 | **Etapas stock** | físico | Producido, 2da, Semi, Desperdicio (no suma). **Sin Terminado** (componentes). |
-| 10 | **Total** | derivado | Suma etapas sin Desperdicio ni Terminado. |
+| 6–8 | **Etapas stock** | físico | Producido, 2da, Semi. **Sin Terminado** (componentes). Desperdicio (Scrap) deja de mostrarse en el tablero Par. |
+| 9 | **Total** | derivado | Suma etapas sin Scrap ni Terminado. |
+| — | **Enviado** (En curso) | ledger | Σ `mpr_envio_produccion` no anulados; distinto de Fabricando. |
 | 11 | **Enviar** | acción | Inputs docenas/pares; tope = `a_enviar`. |
 
 `stock_proceso` = total sin Terminado (paridad PCP col G).

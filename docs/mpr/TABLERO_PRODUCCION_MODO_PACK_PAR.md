@@ -36,12 +36,12 @@ componente BOM (base del envío a producción)."*
 
 ## Columnas por modo
 
-- **Par:** Artículo (`N` listados; se actualiza con el buscador) · Pedido · Reserva · **Urgente** · Fabricando ·
-  Producido · 2da Selección · Semi Elaborado · Desperdicio · Total · Enviar.
+- **Par:** Artículo (`N` listados; se actualiza con el buscador) · Pedido · Reserva · **Urgente** · Fabricando · **Enviado** ·
+  Producido · 2da Selección · Semi Elaborado · Total · Enviar.
 - **Pack:** Artículo (`N` listados; se actualiza con el buscador) · Fecha entrega · Pedido · Reserva · **Urgente** ·
   Terminado (stock del pack).
 
-### Indicadores Fabricando (solo modo Par)
+### Indicadores Fabricando y Enviado (solo modo Par)
 
 En la columna **Fabricando**, cada fila con artículo asignado a al menos una máquina
 vigente (`mpr_maquina_articulo`) muestra un **chip violeta** sobre el cupo y un ícono
@@ -57,6 +57,10 @@ asignada» y enlace a carga de artículos por máquina. Servicio:
 En el modal, el **nombre del artículo** es el título principal (`h3` bold); «Fabricando»
 queda como eyebrow. Hover sobre «Máquina N» muestra tooltip estilo BO
 (`bg-slate-900`, «Máquina X — nombre»).
+
+La columna **Enviado** muestra la suma del ledger `mpr_envio_produccion` (envíos no
+anulados). **No** confundir con **Fabricando** (`enviado` = envíos − acreditado en
+stock del pipeline). El tope de la columna **Enviar** es `máx(0, Urgente − Enviado)`.
 
 La columna **Resta total** se eliminó en ambos modos: **Urgente** unifica la brecha
 a fabricar (`max(0, Pedido + Reserva − stock)`).
@@ -94,7 +98,7 @@ Sobre `listar_demanda_pack_desde_pedidos` (sin escribir en `lista_produccion_*`)
 Tooltips UI:
 
 - **Reserva (Pack):** colchón objetivo del terminado (`articulo.stock_reserva`).
-- **Urgente (Pack/Par):** `max(0, Pedido + Reserva − stock)`; incluye pedido y reposición de colchón.
+- **Urgente (Pack/Par):** `max(0, Pedido + Reserva − stock)`; hueco de stock frente a demanda (no indica cuánto enviar; ver Enviar / Enviado).
 - **Reserva (Par):** colchón objetivo del pack terminado explotado por BOM
   (`coef × articulo.stock_reserva`), misma semántica que Reserva en modo Pack.
   La brecha operativa (Urgente / a_enviar) sigue usando `n_res_tail` tras descontar
