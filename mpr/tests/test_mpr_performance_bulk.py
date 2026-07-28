@@ -94,7 +94,7 @@ class GetOpDetalleBulkTest(SimpleTestCase):
 
 class ListarUnidadesDesdeSeleccionRefrescoTest(SimpleTestCase):
     @patch("mpr.services._listar_unidades_por_demanda", return_value=[])
-    @patch("mpr.services._explosion_demanda_componentes_pedido_reserva_pack", return_value=({}, {}))
+    @patch("mpr.services._explosion_demanda_componentes_pedido_reserva_pack", return_value=({}, {}, {}))
     @patch("mpr.services.bulk_bom_detalle", return_value={})
     @patch("mpr.services.bulk_id_en_abm", return_value={100: 1})
     @patch("mpr.services.listar_ventana_pack")
@@ -119,7 +119,7 @@ class ListarUnidadesDesdeSeleccionRefrescoTest(SimpleTestCase):
         self.assertEqual(filas_enriq[0]["stock_terminado"], 3.0)
 
     @patch("mpr.services._listar_unidades_por_demanda", return_value=[])
-    @patch("mpr.services._explosion_demanda_componentes_pedido_reserva_pack", return_value=({}, {}))
+    @patch("mpr.services._explosion_demanda_componentes_pedido_reserva_pack", return_value=({}, {}, {}))
     @patch("mpr.services.bulk_bom_detalle", return_value={})
     @patch("mpr.services.bulk_id_en_abm", return_value={100: 1})
     @patch("mpr.services.obtener_pp_ped_y_stock_pack_por_articulos")

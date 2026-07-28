@@ -458,14 +458,20 @@ def _explosion_demanda_componentes_pedido_reserva_pack(
     filas_pack: List[Dict[str, Any]],
     abm_map: Dict[int, int],
     bom_map: Dict[int, Any],
-) -> Tuple[Dict[int, float], Dict[int, float]]:
+) -> Tuple[Dict[int, float], Dict[int, float], Dict[int, float]]:
     """
     Por cada pack con cantidad a fabricar CF, parte atribuible a pedido vs stock del pack
     ``n_base_ped = max(0, P_ped - S_pack)`` y parte a colchón del terminado
     ``n_res_tail = max(0, CF - n_base_ped)``; explota BOM y acumula por id componente.
+
+    Retorna ``(dem_ped, dem_res_brecha, dem_res_maestro)``:
+    - ``dem_ped`` / ``dem_res_brecha``: demanda operativa (OPT, Urgente, a_enviar).
+    - ``dem_res_maestro``: ``coef × stock_reserva`` del pack (colchón objetivo R),
+      solo para UI del tablero modo Par (paridad con Reserva en modo Pack).
     """
     dem_ped: Dict[int, float] = {}
     dem_res: Dict[int, float] = {}
+    dem_res_maestro: Dict[int, float] = {}
     for r in filas_pack or []:
         try:
             cf = float(r.get("cantidad_a_fabricar") or 0)
@@ -484,6 +490,10 @@ def _explosion_demanda_componentes_pedido_reserva_pack(
             st_pack = float(r.get("stock_terminado") or 0)
         except (TypeError, ValueError):
             st_pack = 0.0
+        try:
+            r_maestro = max(0.0, float(r.get("stock_reserva") or 0))
+        except (TypeError, ValueError):
+            r_maestro = 0.0
         n_base_ped = max(0.0, p_ped - st_pack)
         n_res_tail = max(0.0, cf - n_base_ped)
         id_en_abm = abm_map.get(id_pack)
@@ -504,7 +514,11 @@ def _explosion_demanda_componentes_pedido_reserva_pack(
                 continue
             dem_ped[id_comp] = dem_ped.get(id_comp, 0.0) + coef * n_base_ped
             dem_res[id_comp] = dem_res.get(id_comp, 0.0) + coef * n_res_tail
-    return dem_ped, dem_res
+            if r_maestro > 0:
+                dem_res_maestro[id_comp] = (
+                    dem_res_maestro.get(id_comp, 0.0) + coef * r_maestro
+                )
+    return dem_ped, dem_res, dem_res_maestro
 
 
 def obtener_pp_ped_y_stock_pack_por_articulos(
@@ -4215,7 +4229,7 @@ def listar_ventana_pack_unidades(
     art_ids = [a for a in art_ids if a is not None]
     abm_map = bulk_id_en_abm(base_empresa, art_ids, requiere_ensamblado_si=False) if art_ids else {}
     bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
-    dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(filas_pack, abm_map, bom_map)
+    dem_ped, dem_res, _dem_res_maestro = _explosion_demanda_componentes_pedido_reserva_pack(filas_pack, abm_map, bom_map)
     return _listar_unidades_por_demanda(base_empresa, dem_ped, dem_res, limit)
 
 
@@ -4262,7 +4276,7 @@ def listar_unidades_desde_seleccion(
     art_ids = [a for a in art_ids if a is not None]
     abm_map = bulk_id_en_abm(base_empresa, art_ids, requiere_ensamblado_si=False) if art_ids else {}
     bom_map = bulk_bom_detalle(base_empresa, list(set(abm_map.values()))) if abm_map else {}
-    dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(filas_enriquecidas, abm_map, bom_map)
+    dem_ped, dem_res, _dem_res_maestro = _explosion_demanda_componentes_pedido_reserva_pack(filas_enriquecidas, abm_map, bom_map)
     return _listar_unidades_por_demanda(
         base_empresa,
         dem_ped,
@@ -15295,11 +15309,15 @@ def listar_tablero_por_articulo(
     Algoritmo:
     1.  listar_demanda_pack_desde_pedidos → filas_pack (demanda en vivo desde PED)
     2.  _query_enviados_todos_componentes → componentes con envío directo al tablero
-    3.  Explosión BOM de demanda pack → componentes (dem_ped, dem_res)
+    3.  Explosión BOM de demanda pack → componentes
+        (dem_ped, dem_res_brecha para Urgente/a_enviar; dem_res_ui = R maestro para columna Reserva)
     4.  comp_ids = demanda ∪ envíos directos
     5.  Enviado/Fabricando = max(0, Σ envíos − acreditado) por componente
     6.  stock_proceso = total sin Terminado; resta_urgente = resta_total = brecha demanda total (PCP)
     7.  a_enviar = max(0, resta_urgente − Σ envíos ledger); no reabre si Fabricando=0
+
+    La columna Reserva del modo Par muestra el colchón objetivo del pack (``coef × stock_reserva``),
+    paridad con modo Pack; no altera Fabricando ni el tope a_enviar (que usan la brecha CF).
 
     ``solo_pendiente`` filtra filas con demanda pendiente total; ``solo_urgente``
     conserva el filtro más estricto por demanda urgente.
@@ -15338,17 +15356,25 @@ def listar_tablero_por_articulo(
     abm_map: Dict[int, int] = {}
     bom_map: Dict[int, Any] = {}
     dem_ped: Dict[int, float] = {}
-    dem_res: Dict[int, float] = {}
+    dem_res_brecha: Dict[int, float] = {}
+    dem_res_ui: Dict[int, float] = {}
 
     if art_ids:
         abm_map = bulk_id_en_abm(base_empresa, art_ids, requiere_ensamblado_si=False)
         id_en_abms = [v for v in abm_map.values() if v is not None]
         bom_map = bulk_bom_detalle(base_empresa, id_en_abms)
-        dem_ped, dem_res = _explosion_demanda_componentes_pedido_reserva_pack(
-            filas_pack, abm_map, bom_map
+        dem_ped, dem_res_brecha, dem_res_ui = (
+            _explosion_demanda_componentes_pedido_reserva_pack(
+                filas_pack, abm_map, bom_map
+            )
         )
 
-    comp_ids: Set[int] = set(dem_ped.keys()) | set(dem_res.keys()) | set(enviados_all.keys())
+    comp_ids: Set[int] = (
+        set(dem_ped.keys())
+        | set(dem_res_brecha.keys())
+        | set(dem_res_ui.keys())
+        | set(enviados_all.keys())
+    )
     if marcas_incluidos:
         comp_ids = _filtrar_ids_por_marcas(base_empresa, comp_ids, marcas_incluidos)
     if not comp_ids:
@@ -15376,7 +15402,12 @@ def listar_tablero_por_articulo(
     filas: List[Dict[str, Any]] = []
     tipos_suma = TIPOS_QUE_SUMAN_STOCK
     for comp_id in comp_ids:
-        demanda = dem_ped.get(comp_id, 0.0) + dem_res.get(comp_id, 0.0)
+        # Brecha operativa (n_res_tail): alimenta Urgente / a_enviar / Fabricando no depende de esto.
+        # dem_res_ui (R maestro): solo columna Reserva, paridad con modo Pack.
+        dem_ped_val = dem_ped.get(comp_id, 0.0)
+        dem_res_brecha_val = dem_res_brecha.get(comp_id, 0.0)
+        dem_res_ui_val = dem_res_ui.get(comp_id, 0.0)
+        demanda = dem_ped_val + dem_res_brecha_val
         stock_comp = stock_pivot.get(comp_id, {})
         suma_comp = stock_suma_pivot.get(comp_id, {})
         produccion = stock_comp.get(TIPO_MPR_PRODUCCION, 0.0)
@@ -15391,7 +15422,6 @@ def listar_tablero_por_articulo(
         stock_proceso = _calcular_stock_proceso_componente(suma_comp, tipos_suma)
         envios_raw = float(envios_tablero.get(comp_id, 0) or 0)
         enviado = fabricando_map.get(comp_id, 0.0)
-        dem_ped_val = dem_ped.get(comp_id, 0.0)
         resta_total = _calcular_resta_total_componente(demanda, stock_proceso)
         resta_urgente = resta_total
         pendiente = resta_total
@@ -15409,7 +15439,7 @@ def listar_tablero_por_articulo(
             "codigo_marca": marca_map.get(comp_id),
             "demanda": demanda,
             "dem_ped": dem_ped_val,
-            "dem_res": dem_res.get(comp_id, 0.0),
+            "dem_res": dem_res_ui_val,
             "urgente": dem_ped_val,
             "stock_proceso": stock_proceso,
             "resta_urgente": resta_urgente,

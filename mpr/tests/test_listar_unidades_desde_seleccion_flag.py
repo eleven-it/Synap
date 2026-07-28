@@ -21,7 +21,7 @@ class ListarUnidadesDesdeSeleccionFlagTest(SimpleTestCase):
         mock_refresco.return_value = {100: {"cantidad_pedida_pedido": 0.0, "stock_terminado": 0.0}}
         mock_bulk_abm.return_value = {100: 1}
         mock_bulk_bom.return_value = {}
-        mock_explosion.return_value = ({}, {})
+        mock_explosion.return_value = ({}, {}, {})
         mock_listar_ud.return_value = []
 
         from mpr.services import listar_unidades_desde_seleccion
