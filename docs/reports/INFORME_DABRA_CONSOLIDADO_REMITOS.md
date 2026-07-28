@@ -37,8 +37,8 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 | N | TotalGravado | `cuentacliente.SubTotal1` (cabecera FA) |
 | O–P | (vacías) | — |
 | Q | Total | `cuentacliente.ImporteVenta` (cabecera FA) |
-| R | CompRef | PV remito zero-pad **5** |
-| S | NumeroRef | Nº legal remito |
+| R | CompRef | PV de `comp_ped.NroComprobante` (REM vía `rem_fact`) zero-pad **5** |
+| S | NumeroRef | Nº legal de `comp_ped.NroComprobante` (mismo REM) |
 | T/W | Entrega / Suc | `cliente_domicilio.NroCalle` del REM |
 | U–V | NroCAE / VtoCAE | `fe_cae` / `fe_vto_cae` |
 | X | Categoria | `articulo_categoria.nombre_articulo_categoria` o `ACCESORIOS` |
@@ -50,10 +50,20 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 
 Una fila por FA: `Comprobante` = letra + PV(4) + legal(8); `Nro. Remito` = primer remito (`R` + PV4 + legal8); `Imp Neto` / `Imp Bruto` = cabecera.
 
+## Vínculo FA ↔ remito
+
+Misma lógica que Trazabilidad VB6 (`trz_trazabilidad.frm`):
+
+1. `rem_fact.CodigoMovimientoF` = `cuentacliente.CodigoMovimiento` (FA)
+2. `rem_fact.CodigoMovimientoR` = `comp_ped.CodigoMovimiento` (REM)
+3. CompRef/NumeroRef se parsean de `comp_ped.NroComprobante` del remito
+
+**Importante:** el remito de venta se guarda en `comp_ped`, no en `cuentacliente`. El nº `0008-00000001` puede existir a la vez como REM y como FA (tipos distintos, `CodigoMovimiento` distintos); el match no es por texto de número.
+
 ## Alarmas (no bloquean export)
 
 - FA sin CAE → fila incluida, CAE vacío
-- FA sin remitos → CompRef/NumeroRef vacíos
+- FA sin remitos en `rem_fact` → CompRef/NumeroRef vacíos
 - FA con >1 remito → alarma; TOTAL usa primer remito
 - Sin `NroCalle` en remito/FA
 

@@ -17,6 +17,7 @@ from reports.dabra_consolidado_remitos_relay_views import (
 )
 from reports.services.dabra_consolidado_remitos import (
     CODIGO_CLIENTE_DABRA,
+    _sql_remitos_por_fa,
     bonificacion_linea,
     calcular_tolerancia,
     format_comprobante_string,
@@ -49,6 +50,17 @@ class TestParseNroComprobante(unittest.TestCase):
             format_comprobante_string("FA", 8, 4),
             "A000800000004",
         )
+
+
+class TestSqlRemitosPorFa(unittest.TestCase):
+    """Paridad con trz_trazabilidad.frm: cabecera REM en comp_ped."""
+
+    def test_join_comp_ped_no_cuentacliente(self):
+        sql = _sql_remitos_por_fa(2)
+        self.assertIn("FROM rem_fact rf", sql)
+        self.assertIn("INNER JOIN comp_ped rem", sql)
+        self.assertIn("rem.TipoComprobante = 'REM'", sql)
+        self.assertNotIn("JOIN cuentacliente rem", sql)
         self.assertEqual(
             format_comprobante_string("FA", 4, 20777),
             "A000400020777",

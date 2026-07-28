@@ -241,6 +241,10 @@ def _sql_lineas_fa() -> str:
 
 
 def _sql_remitos_por_fa(n: int) -> str:
+    """
+    Remitos de venta viven en comp_ped (Remito.frm / trz_trazabilidad.frm),
+    no en cuentacliente. Vínculo formal FA↔REM: rem_fact.
+    """
     ph = ", ".join(["%s"] * n)
     return f"""
         SELECT
@@ -251,11 +255,12 @@ def _sql_remitos_por_fa(n: int) -> str:
             rem.Fecha AS rem_fecha,
             cd.NroCalle
         FROM rem_fact rf
-        INNER JOIN cuentacliente rem ON rem.CodigoMovimiento = rf.CodigoMovimientoR
-            AND rem.Anulado = 'No'
+        INNER JOIN comp_ped rem ON rem.CodigoMovimiento = rf.CodigoMovimientoR
+            AND rem.TipoComprobante = 'REM'
+            AND (rem.Anulado IS NULL OR rem.Anulado = 'No')
         LEFT JOIN cliente_datos_adicionales cda ON cda.CodigoMovimiento = rf.CodigoMovimientoR
         LEFT JOIN cliente_domicilio cd ON cd.id_cliente_domicilio = cda.id_cliente_domicilio
-        WHERE rf.Anulado = 'No'
+        WHERE (rf.Anulado IS NULL OR rf.Anulado = 'No')
           AND rf.CodigoMovimientoF IN ({ph})
         ORDER BY rf.CodigoMovimientoF, rf.id_rem_fact
     """
