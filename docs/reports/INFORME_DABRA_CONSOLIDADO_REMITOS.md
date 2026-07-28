@@ -25,7 +25,7 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 | B | Fecha | `cuentacliente.Fecha` (FA) |
 | C | DocType | Constante `1` |
 | D | PuntoVenta | Parse `NroComprobante` → PV zero-pad **5** |
-| E | NumeroLegal | Parse `NroComprobante` → número legal (int) |
+| E | NumeroLegal | Parse `NroComprobante` → máscara **00000000** (texto) |
 | F | Item | `articulo.CodArtProv` (primeros 9 chars + regla espacio) |
 | G | Talle | Resto de `CodArtProv` |
 | H | Cantidad | `stock.Cantidad` |
@@ -38,7 +38,7 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 | O–P | (vacías) | — |
 | Q | Total | `cuentacliente.ImporteVenta` (cabecera FA) |
 | R | CompRef | PV de `comp_ped.NroComprobante` (REM vía `rem_fact`) zero-pad **5** |
-| S | NumeroRef | Nº legal de `comp_ped.NroComprobante` (mismo REM) |
+| S | NumeroRef | Nº legal remito con máscara **00000000** (texto) |
 | T/W | Entrega / Suc | `cliente_domicilio.NroCalle` del REM |
 | U–V | NroCAE / VtoCAE | `fe_cae` (int en Excel si numérico) / `fe_vto_cae` |
 | X | Categoria | `articulo_categoria.nombre_articulo_categoria` o `ACCESORIOS` |
