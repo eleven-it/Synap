@@ -1,14 +1,19 @@
-# MPR — Inventario dry-run para revertir partes de una fecha (sin writes).
+# MPR — Inventario dry-run para reset total de partes de una o más fechas (sin writes).
+# Cutover: eliminar TODOS los mpr_parte de la(s) fecha(s) + revertir OPP/stock.
 # Uso:
-#   docker exec Synap_app python manage.py revertir_partes_fecha --base-empresa=administranet --fecha=22/07/2026
-#   docker exec Synap_app python manage.py revertir_partes_fecha --base-empresa=administranet --fecha=2026-07-22
-# Apply bloqueado hasta completar desarrollo (solo dry-run).
+#   docker exec Synap_app python manage.py revertir_partes_fecha \
+#     --base-empresa=administranet --fecha=22/07/2026
+#   docker exec Synap_app python manage.py revertir_partes_fecha \
+#     --base-empresa=administranet \
+#     --fecha=22/07/2026 --fecha=23/07/2026 --fecha=24/07/2026 --fecha=27/07/2026 \
+#     --host=192.168.0.2 --port=30804
+# Apply bloqueado hasta OK explícito (solo dry-run).
 
 from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -17,7 +22,16 @@ from core.utils.administranet_types import to_date_or_none, to_decimal_or_none, 
 from mpr.services import _nombre_tabla
 
 MSG_APPLY_DESHABILITADO = (
-    "Apply deshabilitado hasta completar desarrollo; solo dry-run."
+    "Apply deshabilitado hasta OK explícito de cutover; solo dry-run. "
+    "Cutover previsto: eliminar TODOS los partes de la(s) fecha(s) + revertir OPP."
+)
+
+# Fechas de cutover Best Sox (referencia; se pueden pasar otras con --fecha).
+FECHAS_CUTOVER_REF = (
+    "22/07/2026",
+    "23/07/2026",
+    "24/07/2026",
+    "27/07/2026",
 )
 
 
@@ -43,6 +57,29 @@ def parse_fecha_arg(valor: str) -> str:
     raise CommandError(
         f"Fecha inválida: {valor!r}. Use YYYY-MM-DD o dd/MM/yyyy (ej. 22/07/2026)."
     )
+
+
+def parse_fechas_args(valores: List[str]) -> List[str]:
+    """Parsea una o más --fecha (también admite CSV en un mismo valor). Sin duplicados, orden de aparición."""
+    if not valores:
+        raise CommandError(
+            "Indique al menos --fecha (ej. --fecha=22/07/2026). "
+            f"Cutover ref.: {', '.join(FECHAS_CUTOVER_REF)}."
+        )
+    out: List[str] = []
+    seen: set[str] = set()
+    for raw in valores:
+        for piece in str(raw or "").split(","):
+            piece = piece.strip()
+            if not piece:
+                continue
+            iso = parse_fecha_arg(piece)
+            if iso not in seen:
+                seen.add(iso)
+                out.append(iso)
+    if not out:
+        raise CommandError("Indique al menos --fecha válida.")
+    return out
 
 
 def _row_val(row: Any, *keys: str):
@@ -76,8 +113,9 @@ def _fmt_fecha_es(fecha_iso: str) -> str:
 
 class Command(BaseCommand):
     help = (
-        "Inventario dry-run de partes MPR de una fecha: ledgers, OPP-parte y CC. "
-        "No modifica datos; --apply está bloqueado."
+        "Inventario dry-run de reset total de partes MPR (una o más fechas): "
+        "ledgers, OPP-parte y CC. No modifica datos; --apply está bloqueado. "
+        "Cutover: eliminar TODOS los partes de la(s) fecha(s)."
     )
 
     def add_arguments(self, parser):
@@ -89,14 +127,19 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--fecha",
-            type=str,
-            required=True,
-            help="Fecha de producción (YYYY-MM-DD o dd/MM/yyyy).",
+            action="append",
+            dest="fechas",
+            default=None,
+            help=(
+                "Fecha de producción (YYYY-MM-DD o dd/MM/yyyy). "
+                "Repetible o CSV. Cutover ref.: "
+                + ", ".join(FECHAS_CUTOVER_REF)
+            ),
         )
         parser.add_argument(
             "--apply",
             action="store_true",
-            help="Ejecutar reversión (bloqueado hasta completar desarrollo).",
+            help="Ejecutar reset (bloqueado hasta OK explícito).",
         )
         parser.add_argument(
             "--host",
@@ -119,30 +162,42 @@ class Command(BaseCommand):
         if not base:
             raise CommandError("Indique --base-empresa.")
 
-        fecha_iso = parse_fecha_arg(options["fecha"])
-        fecha_es = _fmt_fecha_es(fecha_iso)
+        fechas_iso = parse_fechas_args(options.get("fechas") or [])
         host = (options.get("host") or "").strip()
         port = int(options.get("port") or 0)
+        fechas_es = ", ".join(_fmt_fecha_es(f) for f in fechas_iso)
 
         self.stdout.write(
             self.style.WARNING(
-                f"[DRY-RUN] Inventario de reversión — base={base}, fecha={fecha_es} ({fecha_iso})"
+                f"[DRY-RUN] Reset total de partes — base={base}, fechas={fechas_es}"
                 + (f", host={host}:{port or 3306}" if host else "")
             )
         )
-        self.stdout.write("Modo: solo lectura. No se escribirá en la base de datos.\n")
+        self.stdout.write(
+            "Modo: solo lectura. Cutover previsto: ELIMINAR TODOS los mpr_parte "
+            "de la(s) fecha(s) + revertir OPP/stock. No se escribirá aún.\n"
+        )
 
         if host:
-            self._inventariar_host_directo(base, fecha_iso, fecha_es, host, port or 3306)
+            self._inventariar_host_directo(base, fechas_iso, host, port or 3306)
         else:
             with mysql_cursor(base, dict_cursor=True) as cursor:
-                self._inventariar(cursor, base, fecha_iso, fecha_es)
+                for fecha_iso in fechas_iso:
+                    self._inventariar(cursor, base, fecha_iso, _fmt_fecha_es(fecha_iso))
+                    if len(fechas_iso) > 1:
+                        self.stdout.write("")
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Inventario dry-run completado — {base}, {fechas_es}. "
+                "Use --apply solo cuando esté habilitado (actualmente bloqueado)."
+            )
+        )
 
     def _inventariar_host_directo(
         self,
         base: str,
-        fecha_iso: str,
-        fecha_es: str,
+        fechas_iso: List[str],
         host: str,
         port: int,
     ) -> None:
@@ -166,7 +221,10 @@ class Command(BaseCommand):
         )
         try:
             cursor = conn.cursor(MySQLdb.cursors.DictCursor)
-            self._inventariar(cursor, base, fecha_iso, fecha_es)
+            for fecha_iso in fechas_iso:
+                self._inventariar(cursor, base, fecha_iso, _fmt_fecha_es(fecha_iso))
+                if len(fechas_iso) > 1:
+                    self.stdout.write("")
         finally:
             conn.close()
 
@@ -182,6 +240,11 @@ class Command(BaseCommand):
 
         if not tbl_parte:
             raise CommandError(f"No existe mpr_parte en {base}.")
+
+        self.stdout.write(self.style.MIGRATE_HEADING(f"=== Fecha {fecha_es} ({fecha_iso}) ==="))
+        self.stdout.write(
+            "Al apply: se eliminarán TODOS los partes listados abajo (sin conservar ninguno).\n"
+        )
 
         join_turno = ""
         col_turno = "CAST(p.id_mpr_turno AS CHAR)"
@@ -214,6 +277,8 @@ class Command(BaseCommand):
         partes = list(cursor.fetchall() or [])
 
         ajustes_por_parte: dict[int, Decimal] = {}
+        ids_parte: list[int] = []
+        uuids: list[str] = []
         if tbl_ajuste and partes:
             ids = [to_int_or_none(_row_val(p, "id_mpr_parte")) for p in partes]
             ids = [i for i in ids if i is not None]
@@ -235,7 +300,7 @@ class Command(BaseCommand):
                             _row_val(row, "pares_ajuste")
                         ) or Decimal("0")
 
-        self.stdout.write(self.style.MIGRATE_HEADING(f"1. Partes mpr_parte ({fecha_es})"))
+        self.stdout.write(self.style.MIGRATE_HEADING(f"1. Partes mpr_parte ({fecha_es}) — a ELIMINAR"))
         if not partes:
             self.stdout.write("  (sin partes en esa fecha)")
         else:
@@ -243,8 +308,6 @@ class Command(BaseCommand):
                 f"  {'ID':>8}  {'UUID':36}  {'Turno':16}  {'Físico':6}  {'Σ pares':>10}"
             )
             total_pares = Decimal("0")
-            uuids: list[str] = []
-            ids_parte: list[int] = []
             for p in partes:
                 pid = to_int_or_none(_row_val(p, "id_mpr_parte"))
                 uuid_parte = str_or_blank(_row_val(p, "uuid_parte"))
@@ -262,7 +325,9 @@ class Command(BaseCommand):
                     f"  {pid or '-':>8}  {uuid_parte or '-':36}  {turno[:16]:16}  "
                     f"{'Sí' if fisico else 'No':6}  {_fmt_decimal(sigma):>10}"
                 )
-            self.stdout.write(f"  Total partes: {len(partes)} | Σ pares global: {_fmt_decimal(total_pares)}")
+            self.stdout.write(
+                f"  Total partes a eliminar: {len(partes)} | Σ pares global: {_fmt_decimal(total_pares)}"
+            )
 
         # Artículos de los partes
         arts: set[int] = set()
@@ -497,16 +562,9 @@ class Command(BaseCommand):
             )
         else:
             self.stdout.write(
-                "Sin CC detectada para esta fecha/artículos; apply futuro podría limitarse a partes y OPP."
+                "Sin CC detectada para esta fecha/artículos; apply futuro: "
+                "revertir OPP + borrar TODOS los partes del día."
             )
-
-        self.stdout.write("")
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Inventario dry-run completado — {base}, {fecha_es}. "
-                "Use --apply solo cuando esté habilitado (actualmente bloqueado)."
-            )
-        )
 
 
 def str_or_blank(value: Any) -> str:
