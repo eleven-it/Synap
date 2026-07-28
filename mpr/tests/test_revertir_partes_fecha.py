@@ -6,7 +6,9 @@ from django.core.management.base import CommandError
 from django.test import SimpleTestCase
 
 from mpr.management.commands.revertir_partes_fecha import (
-    MSG_APPLY_DESHABILITADO,
+    CONFIRMAR_RESET,
+    MSG_CONFIRMAR_REQUERIDO,
+    MSG_PRODUCCION_BLOQUEADA,
     parse_fecha_arg,
     parse_fechas_args,
 )
@@ -43,11 +45,23 @@ class TestParseFechasArgs(SimpleTestCase):
 
 
 class TestRevertirPartesFechaCommand(SimpleTestCase):
-    def test_apply_bloqueado(self):
-        with self.assertRaisesMessage(CommandError, MSG_APPLY_DESHABILITADO):
+    def test_apply_sin_confirmar(self):
+        with self.assertRaisesMessage(CommandError, MSG_CONFIRMAR_REQUERIDO):
             call_command(
                 "revertir_partes_fecha",
                 "--fecha=22/07/2026",
+                "--base-empresa=administranet1",
                 "--apply",
+                stdout=StringIO(),
+            )
+
+    def test_apply_produccion_bloqueada(self):
+        with self.assertRaisesMessage(CommandError, MSG_PRODUCCION_BLOQUEADA):
+            call_command(
+                "revertir_partes_fecha",
+                "--fecha=22/07/2026",
+                "--base-empresa=administranet",
+                "--apply",
+                f"--confirmar={CONFIRMAR_RESET}",
                 stdout=StringIO(),
             )
