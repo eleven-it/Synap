@@ -618,6 +618,83 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         self.assertEqual(resultado[0]["id_articulo"], 20)
         self.assertEqual(resultado[1]["id_articulo"], 10)
 
+    def test_reserva_ui_usa_r_maestro_urgente_usa_brecha(self):
+        """Reserva Par = coef×R (como Pack); Urgente/a_enviar siguen con n_res_tail.
+
+        Caso: P=60, R=3000, S=1820 → CF=1240, n_base_ped=0, n_res_tail=1240.
+        Columna dem_res (UI) = 3000; demanda/resta_urgente = 1240.
+        """
+        from mpr.services import _explosion_demanda_componentes_pedido_reserva_pack
+
+        filas_pack = [
+            {
+                "id_articulo": 502,
+                "cantidad_pedida_pedido": 60.0,
+                "stock_reserva": 3000.0,
+                "stock_terminado": 1820.0,
+                "cantidad_a_fabricar": 1240.0,
+            }
+        ]
+        abm_map = {502: 123}
+        bom_map = {
+            123: {
+                "componentes": [
+                    {"id_articulo": 935, "cantidad_articulo": 1.0},
+                    {"id_articulo": 936, "cantidad_articulo": 1.0},
+                ]
+            }
+        }
+        dem_ped, dem_res_brecha, dem_res_ui = (
+            _explosion_demanda_componentes_pedido_reserva_pack(
+                filas_pack, abm_map, bom_map
+            )
+        )
+        self.assertAlmostEqual(dem_ped[935], 0.0)
+        self.assertAlmostEqual(dem_res_brecha[935], 1240.0)
+        self.assertAlmostEqual(dem_res_ui[935], 3000.0)
+
+        stock_pivot = {
+            935: {
+                t: 0.0
+                for t in [
+                    TIPO_MPR_PRODUCCION,
+                    TIPO_MPR_PLANCHADO,
+                    TIPO_MPR_2DA_SELECCION,
+                    TIPO_MPR_SEMI_ELABORADO,
+                    TIPO_MPR_SCRAP,
+                    TIPO_MPR_TERMINADO,
+                ]
+            },
+            936: {
+                t: 0.0
+                for t in [
+                    TIPO_MPR_PRODUCCION,
+                    TIPO_MPR_PLANCHADO,
+                    TIPO_MPR_2DA_SELECCION,
+                    TIPO_MPR_SEMI_ELABORADO,
+                    TIPO_MPR_SCRAP,
+                    TIPO_MPR_TERMINADO,
+                ]
+            },
+        }
+        patches = self._patch_servicio(
+            filas_pack=filas_pack,
+            abm_map=abm_map,
+            bom_map=bom_map,
+            stock_pivot=stock_pivot,
+            desc_map={
+                935: ("935", "Comp A"),
+                936: ("936", "Comp B"),
+            },
+        )
+        resultado = self._call_con_parches(patches, solo_urgente=False)
+        fila = next(r for r in resultado if r["id_articulo"] == 935)
+        self.assertAlmostEqual(fila["dem_res"], 3000.0)
+        self.assertAlmostEqual(fila["demanda"], 1240.0)
+        self.assertAlmostEqual(fila["resta_urgente"], 1240.0)
+        self.assertAlmostEqual(fila["a_enviar"], 1240.0)
+        self.assertAlmostEqual(fila["enviado"], 0.0)
+
     def test_base_empresa_vacia_retorna_lista_vacia(self):
         """Sin base_empresa el servicio retorna [] sin excepción."""
         resultado = listar_tablero_por_articulo("")

@@ -95,7 +95,10 @@ Tooltips UI:
 
 - **Reserva (Pack):** colchón objetivo del terminado (`articulo.stock_reserva`).
 - **Urgente (Pack/Par):** `max(0, Pedido + Reserva − stock)`; incluye pedido y reposición de colchón.
-- **Reserva (Par):** demanda de componente atribuible a reposición de colchón de packs (explosión BOM).
+- **Reserva (Par):** colchón objetivo del pack terminado explotado por BOM
+  (`coef × articulo.stock_reserva`), misma semántica que Reserva en modo Pack.
+  La brecha operativa (Urgente / a_enviar) sigue usando `n_res_tail` tras descontar
+  stock terminado del pack; Fabricando no depende de esta columna.
 
 Los **KPIs del encabezado** (`calcular_kpis_tablero_produccion`) suman `resta_urgente` y
 `resta_total`; en modo Pack ambos coinciden (Urgente unificado).
