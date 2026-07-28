@@ -753,6 +753,14 @@ class TestTableroSinPlanchado(SimpleTestCase):
         content = self._tablero_html()
         self.assertNotIn("fila.planchado", content)
 
+    def test_tablero_par_columna_enviado_sin_desperdicio(self):
+        """Modo Par: columna Enviado (ledger) reemplaza Desperdicio."""
+        content = self._tablero_html()
+        self.assertIn('data-col="envios"', content)
+        self.assertIn("{{ fila.envios_display }}", content)
+        self.assertNotIn("Desperdicio", content)
+        self.assertNotIn("desperdicio_display", content)
+
     def test_tablero_boton_unico_clasificacion_produccion(self):
         """El tablero expone Control de calidad vía chrome_nav_flujo (no botones E9)."""
         content = self._tablero_html()
