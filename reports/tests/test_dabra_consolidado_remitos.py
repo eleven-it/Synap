@@ -613,5 +613,14 @@ class TestDabraExporter(unittest.TestCase):
         row = info["rows"]["REPORTE"][0]
         self.assertIn(row[14], (None, ""))
         self.assertIn(row[15], (None, ""))
+        self.assertEqual(row[20], 86184381365307)
+        self.assertIsInstance(row[20], int)
         for idx in range(24, 49):
             self.assertEqual(row[idx], 0)
+
+    def test_cae_vacio_queda_none(self):
+        payload = self._payload_minimo()
+        payload["filas"][0]["cae"] = ""
+        resp = exportar_dabra_xlsx(payload, mes=5, anio=2026)
+        info = inspeccionar_workbook(resp.content)
+        self.assertIsNone(info["rows"]["REPORTE"][0][20])

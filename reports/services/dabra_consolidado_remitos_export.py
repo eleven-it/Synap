@@ -86,6 +86,18 @@ def _parse_fecha_excel(valor: str) -> Any:
         return valor
 
 
+def _cae_excel(valor: Any) -> Any:
+    """NroCAE como int (paridad sample); vacío → None; no numérico → str."""
+    if valor is None:
+        return None
+    texto = str(valor).strip()
+    if not texto:
+        return None
+    if texto.isdigit():
+        return int(texto)
+    return texto
+
+
 def _fila_reporte_excel(fila: Dict[str, Any]) -> List[Any]:
     """Una fila A–AW para hoja REPORTE (sin NombreArticulo)."""
     row: List[Any] = [None] * len(REPORTE_HEADERS)
@@ -108,7 +120,7 @@ def _fila_reporte_excel(fila: Dict[str, Any]) -> List[Any]:
     row[17] = fila.get("comp_ref", "")
     row[18] = fila.get("numero_ref", "")
     row[19] = fila.get("entrega", "")
-    row[20] = fila.get("cae", "")
+    row[20] = _cae_excel(fila.get("cae"))
     vto = fila.get("vto_cae", "")
     row[21] = _parse_fecha_excel(vto) if vto else None
     row[22] = fila.get("suc", "")
