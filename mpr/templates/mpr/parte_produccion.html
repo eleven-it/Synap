@@ -18,7 +18,7 @@
   .parte-turno-tint-noche { border-left-color: rgb(196 181 253 / 0.6) !important; background-color: rgb(245 243 255 / 0.8); }
   .dark .parte-turno-tint-noche { border-left-color: rgb(109 40 217 / 0.4) !important; background-color: rgb(46 16 101 / 0.18); }
 </style>
-<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5"
+<section class="flex h-[calc(100dvh-7.5rem)] max-h-[calc(100dvh-7.5rem)] flex-col overflow-hidden bg-slate-50 py-1 transition-colors duration-300 dark:bg-slate-900 sm:py-1.5 md:h-[calc(100dvh-11rem)] md:max-h-[calc(100dvh-11rem)]"
          x-data="partePagina()">
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
@@ -81,6 +81,17 @@
                             Cargar grilla
                         </button>
                     </form>
+
+                    {% if grilla_planilla and grilla_planilla.dia_aprobado and not grilla_planilla.dia_bloqueado_cc %}
+                    <button type="button"
+                            id="parte-chip-dia-aprobado"
+                            class="inline-flex h-9 shrink-0 items-center gap-1 self-end rounded-lg border border-sky-500/50 bg-sky-950/50 px-2.5 text-[11px] font-semibold text-sky-200 hover:bg-sky-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                            title="Ver detalle del estado aprobado"
+                            aria-label="Parte aprobado — ver detalle">
+                        <span class="material-icons text-sm leading-none" aria-hidden="true">verified</span>
+                        Parte aprobado
+                    </button>
+                    {% endif %}
 
                     {# Búsqueda predictiva en grilla ya cargada (no envía a Cargar grilla) #}
                     <label class="flex min-w-[12rem] flex-1 flex-col gap-0.5 sm:min-w-[14rem] sm:max-w-md">
@@ -165,28 +176,19 @@
 
         {% else %}
 
+        {% if not grilla_planilla.dia_aprobado and not grilla_planilla.dia_bloqueado_cc %}
         <div class="mb-3 flex-shrink-0 rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-700/50 dark:bg-purple-900/20 sm:mb-4">
             <p class="text-xs text-purple-900 dark:text-purple-100">
-                {% if grilla_planilla.dia_aprobado %}
-                <strong>Validación:</strong> este día ya tiene el parte <em>aprobado</em>. Las correcciones se hacen con <strong>Guardar parte de producción</strong> (ajusta stock por diferencia). <strong>Guardar borrador</strong> no está disponible.
-                {% else %}
                 <strong>Validación:</strong> al <em>aprobar</em>, la suma de turnos no puede superar Fabricando. Podés <strong>Guardar borrador</strong> en cualquier momento (cargas diferidas), incluso si el cupo ya permite aprobar. Si al aprobar faltan turnos en alguna máquina, se advierte sin bloquear.
-                {% endif %}
             </p>
         </div>
+        {% endif %}
 
         {% if grilla_planilla.dia_bloqueado_cc %}
         <div class="mb-3 flex-shrink-0 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/60 dark:bg-amber-950/30 sm:mb-4">
             <p class="flex items-start gap-2 text-sm font-medium text-amber-900 dark:text-amber-100">
                 <span class="material-icons text-base text-amber-600 dark:text-amber-400" aria-hidden="true">lock</span>
                 Esta fecha ya tiene control de calidad registrado. La planilla es de solo lectura.
-            </p>
-        </div>
-        {% elif grilla_planilla.dia_aprobado %}
-        <div class="mb-3 flex-shrink-0 rounded-lg border border-sky-300 bg-sky-50 p-4 dark:border-sky-700/60 dark:bg-sky-950/30 sm:mb-4">
-            <p class="flex items-start gap-2 text-sm font-medium text-sky-900 dark:text-sky-100">
-                <span class="material-icons text-base text-sky-600 dark:text-sky-400" aria-hidden="true">verified</span>
-                Parte aprobado. Podés corregir cantidades y volver a guardar el parte de producción; el borrador queda deshabilitado.
             </p>
         </div>
         {% elif grilla_planilla.turnos_bloqueados %}
@@ -216,11 +218,11 @@
                 <table class="parte-grilla w-full border-collapse" style="min-width: 56rem;">
                         <caption class="sr-only">Grilla de producción máquina × artículo — {{ fecha_str }}</caption>
                         <thead>
-                            <tr class="border-b border-slate-200 bg-slate-50/95 dark:border-slate-600 dark:bg-slate-800/90">
-                                <th scope="col" class="sticky left-0 z-30 w-20 min-w-[5rem] bg-slate-50/95 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400">
+                            <tr class="sticky top-0 z-40 border-b border-slate-200 bg-slate-50/95 dark:border-slate-600 dark:bg-slate-800/90">
+                                <th scope="col" class="sticky left-0 top-0 z-50 w-20 min-w-[5rem] bg-slate-50/95 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400">
                                     Máq.
                                 </th>
-                                <th scope="col" class="sticky left-20 z-30 min-w-[13rem] max-w-[22rem] border-r border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
+                                <th scope="col" class="sticky left-20 top-0 z-50 min-w-[13rem] max-w-[22rem] border-r border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
                                     Artículo
                                 </th>
                                 {% for col in grilla_planilla.turnos_columnas %}
@@ -232,7 +234,7 @@
                                     <span class="mt-0.5 block text-[10px] font-normal text-slate-500 dark:text-slate-400">Docenas · Pares</span>
                                 </th>
                                 {% endfor %}
-                                <th scope="col" class="sticky right-0 z-30 min-w-[7.5rem] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
+                                <th scope="col" class="sticky right-0 top-0 z-50 min-w-[7.5rem] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
                                     Cupo Fabricando
                                 </th>
                             </tr>
@@ -368,15 +370,15 @@
                             {% endfor %}
                         </tbody>
                     </table>
-                </div>
 
-                <div class="flex-shrink-0 border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
+                <div class="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
                      x-show="filtro.trim() !== '' && Array.from($root.querySelectorAll('tbody tr.parte-grilla-fila')).every(function(el) { return !el.offsetParent; })"
                      x-cloak>
                     Ningún artículo coincide con la búsqueda.
                 </div>
+                </div>
 
-                <div class="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:gap-3 sm:px-5">
+                <div class="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800 sm:gap-3 sm:px-5">
                     <button type="button"
                             id="btn-guardar-borrador"
                             {% if grilla_planilla.dia_bloqueado_cc or grilla_planilla.dia_aprobado %}disabled aria-disabled="true"{% endif %}
@@ -879,6 +881,18 @@
             ev.preventDefault();
             if (window.mprHidePostLoading) { window.mprHidePostLoading(); }
         }
+    });
+})();
+
+(function () {
+    var chip = document.getElementById('parte-chip-dia-aprobado');
+    if (!chip) { return; }
+    chip.addEventListener('click', function () {
+        if (!window.mprShowAviso) { return; }
+        window.mprShowAviso(
+            'Este día ya tiene el parte aprobado. Las correcciones se hacen con «Guardar parte de producción» (ajusta stock por diferencia). «Guardar borrador» no está disponible.',
+            { tipo: 'info', titulo: 'Parte aprobado' }
+        );
     });
 })();
 

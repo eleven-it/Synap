@@ -69,6 +69,11 @@
                             {% for lh in listas_header %}
                             <span class="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-800 dark:bg-purple-900/50 dark:text-purple-200">{{ lh.nombre }}</span>
                             {% endfor %}
+                            {% if filtros.reserva == 'eq0' %}
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/50 dark:text-amber-200">Reserva = 0</span>
+                            {% elif filtros.reserva == 'gt0' %}
+                            <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-900 dark:bg-amber-900/50 dark:text-amber-200">Reserva &gt; 0</span>
+                            {% endif %}
                         </div>
                     </div>
                     <div class="flex shrink-0 flex-col items-end gap-2">
@@ -97,6 +102,9 @@
 
                 <form method="get" class="flex flex-col gap-2">
                     <input type="hidden" name="tipo_producto" value="{{ tipo_producto }}">
+                    <input type="hidden" name="orden" value="{{ filtros.orden }}">
+                    <input type="hidden" name="dir" value="{{ filtros.dir }}">
+                    <input type="hidden" name="reserva" value="{{ filtros.reserva }}">
                     <div class="relative z-40 grid w-full grid-cols-2 items-end gap-2 overflow-visible md:grid-cols-4">
                         {% include "mpr/includes/filtro_marcas_tags.html" with variant="light" marcas_catalogo=marcas_catalogo marcas_incluidos=marcas_incluidos equal=1 only %}
                         {% include "ventas/includes/filtro_tags_generico.html" with field_id="proveedores_incluidos" label="Proveedor" catalogo=proveedores_catalogo incluidos=proveedores_incluidos equal=1 only %}
@@ -106,9 +114,20 @@
                     <div class="relative z-50 w-full">
                         {% include "ventas/includes/filtro_tags_generico.html" with field_id="codigos_incluidos" label="Artículo" catalogo=codigos_catalogo incluidos=filtros.codigos_incluidos placeholder="ID, código o nombre…" full=1 only %}
                     </div>
-                    <div class="flex w-full items-end gap-2">
+                    <div class="flex w-full flex-wrap items-end gap-2">
                         <div class="min-w-0 flex-1">
                             {% include "ventas/includes/filtro_tags_generico.html" with field_id="listas_incluidas" label="Listas de precios" catalogo=listas_catalogo incluidos=listas_incluidas_selected placeholder="Listas…" wide=1 only %}
+                        </div>
+                        <div class="flex shrink-0 flex-col gap-1">
+                            <span class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Reserva</span>
+                            <div class="inline-flex rounded-lg border border-slate-300 p-0.5 dark:border-slate-600">
+                                <a href="?{{ reserva_qs_todas }}"
+                                   class="inline-flex rounded-md px-2.5 py-1 text-[11px] font-semibold {% if not filtros.reserva %}bg-purple-600 text-white{% else %}text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700{% endif %}">Todas</a>
+                                <a href="?{{ reserva_qs_eq0 }}"
+                                   class="inline-flex rounded-md px-2.5 py-1 text-[11px] font-semibold {% if filtros.reserva == 'eq0' %}bg-purple-600 text-white{% else %}text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700{% endif %}">= 0</a>
+                                <a href="?{{ reserva_qs_gt0 }}"
+                                   class="inline-flex rounded-md px-2.5 py-1 text-[11px] font-semibold {% if filtros.reserva == 'gt0' %}bg-purple-600 text-white{% else %}text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700{% endif %}">&gt; 0</a>
+                            </div>
                         </div>
                         <button type="submit" class="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-500">
                             <span class="material-icons text-base">filter_list</span>
@@ -121,10 +140,22 @@
         </div>
 
         <div class="mb-2 flex flex-shrink-0 flex-wrap items-center justify-between gap-2">
-            <div class="relative min-w-0 flex-1 max-w-md">
-                <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400">search</span>
-                <input type="search" x-model="busqueda" placeholder="Buscar en página…"
-                       class="h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"/>
+            <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <div class="relative min-w-0 flex-1 max-w-md">
+                    <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-base text-slate-400">search</span>
+                    <input type="search" x-model="busqueda" placeholder="Buscar en página…"
+                           class="h-8 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"/>
+                </div>
+                {% if filtros.reserva %}
+                <div class="inline-flex rounded-lg border border-amber-300 bg-amber-50 p-0.5 dark:border-amber-700 dark:bg-amber-950/40">
+                    <a href="?{{ reserva_qs_todas }}"
+                       class="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold text-amber-900 dark:text-amber-200"
+                       title="Quitar filtro de reserva">
+                        <span class="material-icons text-sm">close</span>
+                        {% if filtros.reserva == 'eq0' %}Reserva = 0{% else %}Reserva &gt; 0{% endif %}
+                    </a>
+                </div>
+                {% endif %}
             </div>
             <button type="button" @click="abrirMasivo()"
                     class="inline-flex min-h-8 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
@@ -137,10 +168,30 @@
             <table id="tabla-precios-terminados" class="min-w-full w-full border-separate border-spacing-0 text-sm">
                 <thead class="[&_th]:bg-clip-padding">
                     <tr class="text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-400">
-                        <th class="sticky left-0 top-0 z-40 border-b border-slate-200 bg-slate-100 px-2 py-2 text-left shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-800 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">ID</th>
-                        <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-100 px-2 py-2 text-left dark:border-slate-700 dark:bg-slate-800">Código</th>
-                        <th class="sticky top-0 z-30 min-w-[12rem] border-b border-slate-200 bg-slate-100 px-2 py-2 text-left dark:border-slate-700 dark:bg-slate-800">Nombre</th>
-                        <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-100 px-2 py-2 text-right dark:border-slate-700 dark:bg-slate-800">Reserva</th>
+                        <th class="sticky left-0 top-0 z-40 border-b border-slate-200 bg-slate-100 px-2 py-2 text-left shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-800 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">
+                            <a href="?{{ sort_links.id }}" class="group inline-flex items-center gap-0.5 hover:text-purple-700 dark:hover:text-purple-300">
+                                ID
+                                <span class="material-icons text-sm text-slate-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">{% if filtros.orden == 'id' %}{% if filtros.dir == 'asc' %}arrow_upward{% else %}arrow_downward{% endif %}{% else %}unfold_more{% endif %}</span>
+                            </a>
+                        </th>
+                        <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-100 px-2 py-2 text-left dark:border-slate-700 dark:bg-slate-800">
+                            <a href="?{{ sort_links.codigo }}" class="group inline-flex items-center gap-0.5 hover:text-purple-700 dark:hover:text-purple-300">
+                                Código
+                                <span class="material-icons text-sm text-slate-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">{% if filtros.orden == 'codigo' %}{% if filtros.dir == 'asc' %}arrow_upward{% else %}arrow_downward{% endif %}{% else %}unfold_more{% endif %}</span>
+                            </a>
+                        </th>
+                        <th class="sticky top-0 z-30 min-w-[12rem] border-b border-slate-200 bg-slate-100 px-2 py-2 text-left dark:border-slate-700 dark:bg-slate-800">
+                            <a href="?{{ sort_links.nombre }}" class="group inline-flex items-center gap-0.5 hover:text-purple-700 dark:hover:text-purple-300">
+                                Nombre
+                                <span class="material-icons text-sm text-slate-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">{% if filtros.orden == 'nombre' %}{% if filtros.dir == 'asc' %}arrow_upward{% else %}arrow_downward{% endif %}{% else %}unfold_more{% endif %}</span>
+                            </a>
+                        </th>
+                        <th class="sticky top-0 z-30 border-b border-slate-200 bg-slate-100 px-2 py-2 text-right dark:border-slate-700 dark:bg-slate-800">
+                            <a href="?{{ sort_links.reserva }}" class="group inline-flex items-center justify-end gap-0.5 hover:text-purple-700 dark:hover:text-purple-300">
+                                Reserva
+                                <span class="material-icons text-sm text-slate-400 group-hover:text-purple-600 dark:group-hover:text-purple-400">{% if filtros.orden == 'reserva' %}{% if filtros.dir == 'asc' %}arrow_upward{% else %}arrow_downward{% endif %}{% else %}unfold_more{% endif %}</span>
+                            </a>
+                        </th>
                         {% for lh in listas_header %}
                         <th colspan="2" class="sticky top-0 z-30 border-b border-l-2 border-l-purple-200 bg-purple-100 px-2 py-1 text-center text-purple-900 dark:border-l-purple-900 dark:bg-purple-950 dark:text-purple-200">{{ lh.nombre }}</th>
                         {% endfor %}
@@ -149,8 +200,18 @@
                         <th class="sticky left-0 top-[1.75rem] z-40 border-b border-slate-200 bg-slate-50 px-2 py-1 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)] dark:border-slate-700 dark:bg-slate-900 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]" colspan="3"></th>
                         <th class="sticky top-[1.75rem] z-30 border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-900"></th>
                         {% for lh in listas_header %}
-                        <th class="sticky top-[1.75rem] z-30 w-24 min-w-[6rem] border-b border-l-2 border-l-purple-200 bg-purple-50 px-1 py-1 text-center dark:border-l-purple-900 dark:bg-purple-950">Neto</th>
-                        <th class="sticky top-[1.75rem] z-30 w-24 min-w-[6rem] border-b border-slate-200 bg-purple-50 px-1 py-1 text-center dark:border-slate-700 dark:bg-purple-950">Final</th>
+                        <th class="sticky top-[1.75rem] z-30 w-24 min-w-[6rem] border-b border-l-2 border-l-purple-200 bg-purple-50 px-1 py-1 text-center dark:border-l-purple-900 dark:bg-purple-950">
+                            <a href="?{{ lh.orden_neto_qs }}" class="group inline-flex items-center justify-center gap-0.5 hover:text-purple-900 dark:hover:text-purple-100">
+                                Neto
+                                <span class="material-icons text-sm text-purple-400 group-hover:text-purple-700 dark:group-hover:text-purple-200">{% if filtros.orden == lh.orden_neto_key %}{% if filtros.dir == 'asc' %}arrow_upward{% else %}arrow_downward{% endif %}{% else %}unfold_more{% endif %}</span>
+                            </a>
+                        </th>
+                        <th class="sticky top-[1.75rem] z-30 w-24 min-w-[6rem] border-b border-slate-200 bg-purple-50 px-1 py-1 text-center dark:border-slate-700 dark:bg-purple-950">
+                            <a href="?{{ lh.orden_final_qs }}" class="group inline-flex items-center justify-center gap-0.5 hover:text-purple-900 dark:hover:text-purple-100">
+                                Final
+                                <span class="material-icons text-sm text-purple-400 group-hover:text-purple-700 dark:group-hover:text-purple-200">{% if filtros.orden == lh.orden_final_key %}{% if filtros.dir == 'asc' %}arrow_upward{% else %}arrow_downward{% endif %}{% else %}unfold_more{% endif %}</span>
+                            </a>
+                        </th>
                         {% endfor %}
                     </tr>
                 </thead>

@@ -352,6 +352,8 @@ Siempre visibles (si el día no está bloqueado por CC):
 | **Guardar borrador** | Persistencia sin stock; disponible aunque el cupo permita aprobar. **Deshabilitado** si el día ya está aprobado o bloqueado por CC. |
 | **Guardar parte de producción** | Aprueba o re-aprueba con delta; se deshabilita visualmente si hay exceso Fabricando (o día bloqueado por CC). |
 
+Si el día ya está **aprobado**, no se muestran banners de estado: hay un **chip** «Parte aprobado» en el chrome (junto a Cargar grilla). Al hacer clic, `mprShowAviso` explica que las correcciones van por «Guardar parte de producción» y que el borrador queda deshabilitado. Los banners de solo lectura por CC / turnos bloqueados sí se conservan.
+
 Al aprobar, si hay máquinas con al menos un turno editable sin cantidad, se muestra un **modal de aviso** (Continuar / Cancelar) agrupado por máquina: resumen de cantidad, código + artículo, chips de turnos sin carga. **No bloquea**: se puede continuar y aprobar igual.
 
 ### Operario por celda (roster)
@@ -367,8 +369,10 @@ Heredado de `operadores_por_linea` / roster del builder de planilla:
 ### UX (canon MPR)
 
 - Extiende `mpr/base_mpr.html`, contenedor `mpr-contenedor-pagina`.
+- Altura de página: `h-[calc(100dvh-7.5rem)]` / `md:h-[calc(100dvh-11rem)]` para caber bajo navbar + padding `base_app` + barra de estado; la grilla scrollea y la barra **Guardar borrador / Guardar parte** queda fija al pie de la tarjeta.
 - Tab order por fila: Mañana → Tarde → Noche → siguiente fila (docenas antes que pares).
 - Feedback vía `mprShowAviso` / `SynapMessages` y modales Synap; **sin** `alert`/`confirm`/`prompt`.
+- Día aprobado: chip «Parte aprobado» en el chrome (detalle con `mprShowAviso`); sin banners de estado.
 
 ### Flujo resumido
 

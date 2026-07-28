@@ -10,8 +10,15 @@ Pantalla operativa tipo tablero MPR para actualizar precios y reserva de product
 
 ## Filtros (dos niveles)
 
-1. **Tipo producto** (píldoras): Terminado | 2da — al cambiar resetea filtros secundarios.
+1. **Tipo producto** (píldoras): Terminado | 2da — al cambiar resetea filtros secundarios (marca, proveedor, etc.) pero **conserva** orden, dirección y filtro de reserva.
 2. **Dependientes:** marca, código (tags multi + predictivo), proveedor, rubro, subrubro, listas visibles.
+3. **Reserva** (píldoras): Todas | = 0 | > 0 — filtro server-side con `COALESCE(stock_reserva, 0)`. Query param `reserva=` vacío | `eq0` | `gt0`.
+
+## Ordenación
+
+Server-side sobre el universo filtrado (afecta paginación). Query params `orden` y `dir=asc|desc` (default `orden=codigo`, `dir=asc`).
+
+Columnas: `id`, `codigo`, `nombre`, `reserva`, `neto_N` / `final_N` (N = listas 1–5 visibles). Click en header: misma columna alterna asc/desc; otra columna inicia en asc. Whitelist estricta en SQL.
 
 ## Tabla
 

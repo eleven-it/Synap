@@ -40,7 +40,7 @@ Ver §6.
 | Búsqueda Parte | En chrome: filtro **predictivo cliente** sobre la grilla cargada (mismo criterio que el viejo «Filtrar en la grilla»). **No** forma parte del GET de «Cargar grilla» |
 | Alineación atajos | En Parte/CC el `header` usa **`items-end`** (formulario con labels encima de inputs) para que los íconos compartan línea base con los campos y «Cargar grilla»; el `h1` lleva `self-center`. Tablero (sin labels visibles) sigue con `items-center`. |
 | Altura controles | **`h-9`** (36px) canónica = búsqueda «Código o descripción…» / Tablero. Inputs, selects, atajos `h-9 w-9`, CTAs y toggles Pack\|Par / Docenas\|Pares comparten esa altura (`text-sm` en campos). |
-| Layout viewport | Tablero, Parte y CC: `section` con **`h-[calc(100dvh-4.5rem)]`**, chrome **`flex-shrink-0`**, zona de datos **`flex-1 min-h-0 overflow-hidden`**. La grilla scrollea dentro. Chrome además **`sticky top-14 md:top-16 z-40`** (bajo el navbar fijo) por si scrollea el documento (padding de `base_app`). Footer «Guardar» fijo al pie de la tarjeta. |
+| Layout viewport | Tablero, Parte y CC: `section` con altura acotada al viewport **restando** navbar + padding de `base_app` (`p-4`/`md:p-8`) + barra de estado. En Parte: **`h-[calc(100dvh-7.5rem)] md:h-[calc(100dvh-11rem)]`** (antes `100dvh-4.5rem` desbordaba y ocultaba «Guardar»). Chrome **`flex-shrink-0`**, zona de datos **`flex-1 min-h-0 overflow-hidden`**. La grilla scrollea dentro; footer «Guardar» es **`flex-shrink-0`** al pie de la tarjeta. Chrome además **`sticky top-14 md:top-16 z-40`**. |
 
 ## 3.1 Alcance chrome compartido (flujo planta + config operativa)
 

@@ -13,12 +13,22 @@ from ventas.services.precios_articulo_legacy import (
     calcular_util_desde_neto,
 )
 from ventas.services.precios_terminados import (
+    DIR_DEFAULT,
+    ORDEN_DEFAULT,
+    RESERVA_EQ0,
+    RESERVA_GT0,
     PreciosTerminadosFiltros,
     _aplicar_operacion_valor,
+    _append_filtros_where,
     build_filtros_query_string,
+    build_orden_query_string,
+    parse_dir,
     parse_listas_incluidas,
+    parse_orden,
     parse_precios_terminados_filtros,
+    parse_reserva,
     preview_cambio_masivo,
+    sql_order_by,
     tipo_art_fab_desde_param,
 )
 
@@ -70,6 +80,99 @@ class PreciosTerminadosFiltrosTests(SimpleTestCase):
         self.assertIn("tipo_producto=2da", qs)
         self.assertNotIn("marcas_incluidos", qs)
         self.assertIn("listas_incluidas=1", qs)
+
+    def test_parse_orden_invalido_default(self):
+        self.assertEqual(parse_orden("codigo"), "codigo")
+        self.assertEqual(parse_orden("neto_3"), "neto_3")
+        self.assertEqual(parse_orden("DROP TABLE"), ORDEN_DEFAULT)
+        self.assertEqual(parse_orden(None), ORDEN_DEFAULT)
+
+    def test_parse_dir_invalido_default(self):
+        self.assertEqual(parse_dir("asc"), "asc")
+        self.assertEqual(parse_dir("desc"), "desc")
+        self.assertEqual(parse_dir("invalid"), DIR_DEFAULT)
+
+    def test_parse_reserva(self):
+        self.assertEqual(parse_reserva(""), "")
+        self.assertEqual(parse_reserva("eq0"), RESERVA_EQ0)
+        self.assertEqual(parse_reserva("gt0"), RESERVA_GT0)
+        self.assertEqual(parse_reserva("otro"), "")
+
+    def test_build_qs_orden_reserva(self):
+        f = PreciosTerminadosFiltros(
+            orden="nombre",
+            dir="desc",
+            reserva=RESERVA_GT0,
+            marcas_incluidos=[1],
+        )
+        qs = build_filtros_query_string(f)
+        self.assertIn("orden=nombre", qs)
+        self.assertIn("dir=desc", qs)
+        self.assertIn("reserva=gt0", qs)
+        self.assertIn("marcas_incluidos=1", qs)
+
+    def test_build_qs_orden_default_omitido(self):
+        f = PreciosTerminadosFiltros()
+        qs = build_filtros_query_string(f)
+        self.assertNotIn("orden=", qs)
+        self.assertNotIn("dir=", qs)
+
+    def test_sql_order_by_whitelist(self):
+        f = PreciosTerminadosFiltros(orden="final_2", dir="desc")
+        sql = sql_order_by(f)
+        self.assertIn("a.Precio2VI DESC", sql)
+        self.assertIn("a.IDArt ASC", sql)
+
+    def test_sql_order_by_invalido_usa_default(self):
+        f = PreciosTerminadosFiltros(orden="inyeccion", dir="desc")
+        sql = sql_order_by(f)
+        self.assertIn("a.id_manual", sql)
+
+    def test_append_filtros_reserva_eq0(self):
+        f = PreciosTerminadosFiltros(reserva=RESERVA_EQ0)
+        where, params = _append_filtros_where(f)
+        self.assertIn("COALESCE(a.stock_reserva, 0) = 0", where)
+        self.assertEqual(params, [])
+
+    def test_append_filtros_reserva_gt0(self):
+        f = PreciosTerminadosFiltros(reserva=RESERVA_GT0)
+        where, params = _append_filtros_where(f)
+        self.assertIn("COALESCE(a.stock_reserva, 0) > 0", where)
+        self.assertEqual(params, [])
+
+    def test_build_orden_query_toggle(self):
+        f = PreciosTerminadosFiltros(orden="codigo", dir="asc", marcas_incluidos=[3])
+        qs = build_orden_query_string(f, "codigo")
+        self.assertIn("dir=desc", qs)
+        self.assertIn("orden=codigo", qs)
+        self.assertNotIn("page=", qs)
+
+    def test_build_orden_query_nueva_columna_asc(self):
+        f = PreciosTerminadosFiltros(orden="codigo", dir="desc")
+        qs = build_orden_query_string(f, "nombre")
+        self.assertIn("orden=nombre", qs)
+        self.assertNotIn("dir=desc", qs)
+
+    def test_parse_filtros_orden_reserva(self):
+        req = MagicMock()
+        req.GET.get.side_effect = lambda k, default=None: {
+            "tipo_producto": "terminado",
+            "orden": "reserva",
+            "dir": "desc",
+            "reserva": "eq0",
+        }.get(k, default)
+        req.GET.getlist.side_effect = lambda k: {
+            "marcas_incluidos": [],
+            "codigos_incluidos": [],
+            "proveedores_incluidos": [],
+            "rubros_incluidos": [],
+            "subrubros_incluidos": [],
+            "listas_incluidas": [],
+        }.get(k, [])
+        f = parse_precios_terminados_filtros(req.GET)
+        self.assertEqual(f.orden, "reserva")
+        self.assertEqual(f.dir, "desc")
+        self.assertEqual(f.reserva, RESERVA_EQ0)
 
     def test_operacion_porcentaje(self):
         v = _aplicar_operacion_valor(Decimal("100"), "porcentaje_mas", Decimal("10"))

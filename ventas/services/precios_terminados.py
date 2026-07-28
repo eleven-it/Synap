@@ -39,6 +39,23 @@ TIPO_2DA = "Fabricado 2da"
 TIPO_PRODUCTO_TERMINADO = "terminado"
 TIPO_PRODUCTO_2DA = "2da"
 
+ORDEN_DEFAULT = "codigo"
+DIR_DEFAULT = "asc"
+DIR_VALIDAS = frozenset({"asc", "desc"})
+RESERVA_EQ0 = "eq0"
+RESERVA_GT0 = "gt0"
+RESERVA_VALIDAS = frozenset({RESERVA_EQ0, RESERVA_GT0})
+
+ORDEN_COLUMNAS: Dict[str, str] = {
+    "id": "a.IDArt",
+    "codigo": "a.id_manual",
+    "nombre": "a.NombreArticulo",
+    "reserva": "COALESCE(a.stock_reserva, 0)",
+}
+for _n in range(1, 6):
+    ORDEN_COLUMNAS[f"neto_{_n}"] = f"a.Precio{_n}V"
+    ORDEN_COLUMNAS[f"final_{_n}"] = f"a.Precio{_n}VI"
+
 
 @dataclass
 class PreciosTerminadosFiltros:
@@ -50,6 +67,9 @@ class PreciosTerminadosFiltros:
     subrubros_incluidos: List[int] = field(default_factory=list)
     listas_incluidas: List[int] = field(default_factory=lambda: [1, 2, 3, 4, 5])
     page: int = 1
+    orden: str = ORDEN_DEFAULT
+    dir: str = DIR_DEFAULT
+    reserva: str = ""
 
     @property
     def tipo_art_fab(self) -> str:
@@ -91,6 +111,67 @@ def _parse_int_list(values: Sequence[str]) -> List[int]:
     return out
 
 
+def parse_orden(raw: Optional[str]) -> str:
+    key = (raw or ORDEN_DEFAULT).strip().lower()
+    if key in ORDEN_COLUMNAS:
+        return key
+    return ORDEN_DEFAULT
+
+
+def parse_dir(raw: Optional[str]) -> str:
+    d = (raw or DIR_DEFAULT).strip().lower()
+    return d if d in DIR_VALIDAS else DIR_DEFAULT
+
+
+def parse_reserva(raw: Optional[str]) -> str:
+    r = (raw or "").strip().lower()
+    return r if r in RESERVA_VALIDAS else ""
+
+
+def sql_order_by(filtros: PreciosTerminadosFiltros) -> str:
+    orden = parse_orden(filtros.orden)
+    direction = "DESC" if parse_dir(filtros.dir) == "desc" else "ASC"
+    col = ORDEN_COLUMNAS[orden]
+    return f"ORDER BY {col} {direction}, a.IDArt ASC"
+
+
+def _append_orden_reserva_pairs(
+    pairs: List[Tuple[str, str]],
+    filtros: PreciosTerminadosFiltros,
+) -> None:
+    if filtros.orden != ORDEN_DEFAULT or filtros.dir != DIR_DEFAULT:
+        pairs.append(("orden", filtros.orden))
+        pairs.append(("dir", filtros.dir))
+    if filtros.reserva:
+        pairs.append(("reserva", filtros.reserva))
+
+
+def build_orden_query_string(
+    filtros: PreciosTerminadosFiltros,
+    orden_key: str,
+) -> str:
+    """Query string GET para ordenar por columna (resetea page a 1)."""
+    key = parse_orden(orden_key)
+    if filtros.orden == key:
+        new_dir = "desc" if filtros.dir == "asc" else "asc"
+    else:
+        new_dir = "asc"
+    nuevo = PreciosTerminadosFiltros(
+        tipo_producto=filtros.tipo_producto,
+        marcas_incluidos=list(filtros.marcas_incluidos),
+        codigos_incluidos=list(filtros.codigos_incluidos),
+        proveedores_incluidos=list(filtros.proveedores_incluidos),
+        rubros_incluidos=list(filtros.rubros_incluidos),
+        subrubros_incluidos=list(filtros.subrubros_incluidos),
+        listas_incluidas=list(filtros.listas_incluidas),
+        page=1,
+        orden=key,
+        dir=new_dir,
+        reserva=filtros.reserva,
+    )
+    return build_filtros_query_string(nuevo, page=1)
+
+
 def parse_precios_terminados_filtros(get_params: Any) -> PreciosTerminadosFiltros:
     tipo = (get_params.get("tipo_producto") or TIPO_PRODUCTO_TERMINADO).strip().lower()
     if tipo not in (TIPO_PRODUCTO_TERMINADO, TIPO_PRODUCTO_2DA):
@@ -107,6 +188,9 @@ def parse_precios_terminados_filtros(get_params: Any) -> PreciosTerminadosFiltro
         subrubros_incluidos=_parse_int_list(get_params.getlist("subrubros_incluidos")),
         listas_incluidas=parse_listas_incluidas(get_params.getlist("listas_incluidas")),
         page=page,
+        orden=parse_orden(get_params.get("orden")),
+        dir=parse_dir(get_params.get("dir")),
+        reserva=parse_reserva(get_params.get("reserva")),
     )
 
 
@@ -135,6 +219,7 @@ def build_filtros_query_string(
         for li in filtros.listas_incluidas:
             if li in LISTAS_VALIDAS:
                 pairs.append(("listas_incluidas", str(li)))
+    _append_orden_reserva_pairs(pairs, filtros)
     p = page if page is not None else filtros.page
     if p > 1:
         pairs.append(("page", str(p)))
@@ -201,6 +286,11 @@ def _append_filtros_where(
         ph = ",".join(["%s"] * len(filtros.subrubros_incluidos))
         parts.append(f"{alias}.IDSubRubro IN ({ph})")
         params.extend(filtros.subrubros_incluidos)
+
+    if filtros.reserva == RESERVA_EQ0:
+        parts.append(f"COALESCE({alias}.stock_reserva, 0) = 0")
+    elif filtros.reserva == RESERVA_GT0:
+        parts.append(f"COALESCE({alias}.stock_reserva, 0) > 0")
 
     if not parts:
         return "", []
@@ -542,13 +632,14 @@ def listar_precios_terminados(
             total = int((cursor.fetchone() or {}).get("cnt") or 0)
             total_pages = max(1, math.ceil(total / PAGE_SIZE)) if total else 0
 
+            order_sql = sql_order_by(filtros)
             cursor.execute(
                 f"""
                 SELECT {cols_sql}
                 FROM `{tart}` a
                 LEFT JOIN iva i ON i.ID = a.Alicuota
                 WHERE {where_full}
-                ORDER BY a.id_manual
+                {order_sql}
                 LIMIT %s OFFSET %s
                 """,
                 tuple(params_count) + (PAGE_SIZE, filtros.offset),
@@ -576,6 +667,9 @@ def contar_universo_filtrado(base_empresa: str, filtros: PreciosTerminadosFiltro
         subrubros_incluidos=filtros.subrubros_incluidos,
         listas_incluidas=filtros.listas_incluidas,
         page=1,
+        orden=filtros.orden,
+        dir=filtros.dir,
+        reserva=filtros.reserva,
     ))
     return int(res.get("total_count") or 0)
 
@@ -799,12 +893,18 @@ def nombres_listas_precio() -> Dict[int, str]:
 
 
 __all__ = [
+    "DIR_DEFAULT",
+    "ORDEN_DEFAULT",
+    "ORDEN_COLUMNAS",
     "PAGE_SIZE",
+    "RESERVA_EQ0",
+    "RESERVA_GT0",
     "TIPO_PRODUCTO_2DA",
     "TIPO_PRODUCTO_TERMINADO",
     "PreciosTerminadosFiltros",
     "aplicar_cambio_masivo",
     "build_filtros_query_string",
+    "build_orden_query_string",
     "buscar_articulos_codigo_precios",
     "guardar_lote",
     "listar_marcas_catalogo_precios",
@@ -813,8 +913,12 @@ __all__ = [
     "listar_rubros_catalogo_precios",
     "listar_subrubros_catalogo_precios",
     "nombres_listas_precio",
+    "parse_dir",
+    "parse_orden",
     "parse_precios_terminados_filtros",
+    "parse_reserva",
     "preview_cambio_masivo",
     "resolver_articulos_seleccionados",
+    "sql_order_by",
     "tipo_art_fab_desde_param",
 ]
