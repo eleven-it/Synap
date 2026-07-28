@@ -119,6 +119,39 @@ class TestCalcularFabricandoComponente(SimpleTestCase):
             0.0,
         )
 
+    def test_parte_baja_fabricando_aunque_haya_2da_previa(self):
+        """2da/Semi previos no tapan el crédito del parte (regla planta)."""
+        stock = {
+            TIPO_MPR_PRODUCCION: 732.0,
+            TIPO_MPR_2DA_SELECCION: 182.0,
+            TIPO_MPR_SEMI_ELABORADO: 0.0,
+        }
+        # Sin partes: acreditado=182 → Fabricando=5620−182=5438
+        self.assertAlmostEqual(_calcular_fabricando_componente(5620.0, stock), 5438.0)
+        # Con parte 60: acreditado=182+60=242 → Fabricando=5378
+        self.assertAlmostEqual(
+            _calcular_fabricando_componente(5620.0, stock, parte_acumulado=60.0),
+            5378.0,
+        )
+
+    def test_cc_no_doble_cuenta_partes_ya_clasificados(self):
+        """Tras CC, clasificado evita sumar otra vez las mismas unidades del parte."""
+        stock = {
+            TIPO_MPR_PRODUCCION: 39.0,
+            TIPO_MPR_SEMI_ELABORADO: 20.0,
+            TIPO_MPR_2DA_SELECCION: 1.0,
+        }
+        # fisico=21, clasificado=21, partes=60 → acreditado=21+max(0,60-21)=60
+        self.assertAlmostEqual(
+            _calcular_fabricando_componente(
+                200.0,
+                stock,
+                clasificado_desde_produccion=21.0,
+                parte_acumulado=60.0,
+            ),
+            140.0,
+        )
+
     def test_gmel_envio_con_stock_produccion_preexistente(self):
         """Caso planta: Producción 288 + Semi/2da; tras Enviar 78 queda cupo de parte."""
         stock = {
@@ -152,6 +185,7 @@ class TestCalcularFabricandoParaParte(SimpleTestCase):
 class TestCalcularPendienteComponente(SimpleTestCase):
     """Pendiente legacy con envíos ledger."""
 
+
     def test_envio_cubre_brecha(self):
         self.assertAlmostEqual(_calcular_pendiente_componente(12.0, 11.0, 1.0), 0.0)
 
@@ -163,55 +197,58 @@ class TestCalcularPendienteComponente(SimpleTestCase):
 
 
 class TestCalcularAEnviarComponente(SimpleTestCase):
-    """Tope Enviar: siempre max(0, urgente − Σ envíos); sin reapertura por Fabricando=0."""
+    """Tope Enviar: max(0, Urgente − Fabricando)."""
 
-    def test_resta_menos_envios(self):
+    def test_urgente_cubierto_por_fabricando(self):
         from mpr.services import _calcular_a_enviar_componente
 
         self.assertAlmostEqual(
             _calcular_a_enviar_componente(12.0, 12.0, fabricando=12.0), 0.0
         )
 
-    def test_parcial_envios(self):
+    def test_parcial_fabricando(self):
         from mpr.services import _calcular_a_enviar_componente
 
         self.assertAlmostEqual(
             _calcular_a_enviar_componente(12.0, 5.0, fabricando=5.0), 7.0
         )
 
-    def test_sin_envios(self):
+    def test_sin_fabricando(self):
         from mpr.services import _calcular_a_enviar_componente
 
         self.assertAlmostEqual(_calcular_a_enviar_componente(12.0, 0.0), 12.0)
+        self.assertAlmostEqual(
+            _calcular_a_enviar_componente(12.0, 99.0, fabricando=0.0), 12.0
+        )
 
-    def test_envio_exacto_con_stock_preexistente_queda_cero(self):
-        """Con Fabricando>0 no residual: stock_proceso ya bajó resta; ledger cubre el hueco."""
+    def test_pedido_nuevo_habilita_enviar_aunque_ledger_alto(self):
+        """Urgente 180, Fabricando 130, Enviado 200 → A enviar 50 (cierre del día)."""
+        from mpr.services import _calcular_a_enviar_componente
+
+        self.assertAlmostEqual(
+            _calcular_a_enviar_componente(180.0, 200.0, fabricando=130.0),
+            50.0,
+        )
+
+    def test_stock_preexistente_con_fabricando_cubre_urgente(self):
+        """Si Fabricando ya cubre Urgente, A enviar=0 (sin residual)."""
         from mpr.services import _calcular_a_enviar_componente
 
         dem_ped, stock_proceso, envios = 3540.0, 1027.0, 2513.0
         resta = max(0.0, dem_ped - stock_proceso)
-        fabricando = 1486.0  # envíos − acreditado(1027)
+        fabricando = 1486.0  # envíos − acreditado(1027) — no alcanza Urgente
         self.assertAlmostEqual(resta, 2513.0)
+        # Urgente 2513 − Fabricando 1486 = 1027 (faltante real a enviar)
         self.assertAlmostEqual(
             _calcular_a_enviar_componente(resta, envios, fabricando=fabricando),
-            0.0,
+            1027.0,
         )
 
-    def test_no_reabre_cuando_fabricando_cero_y_ledger_cubre_urgente(self):
-        """Stock preexistente deja Fabricando=0: no reenviar el mismo hueco."""
+    def test_fabricando_cubre_urgente_exacto(self):
         from mpr.services import _calcular_a_enviar_componente
 
         self.assertAlmostEqual(
-            _calcular_a_enviar_componente(100.0, 100.0, fabricando=0.0),
-            0.0,
-        )
-
-    def test_stock_absorbe_envios_parciales_resta_resto(self):
-        """Urgente 78, ya enviados 234 (reenvíos fantasma): tope 0 aunque fab=0."""
-        from mpr.services import _calcular_a_enviar_componente
-
-        self.assertAlmostEqual(
-            _calcular_a_enviar_componente(78.0, 234.0, fabricando=0.0),
+            _calcular_a_enviar_componente(1486.0, 2513.0, fabricando=1486.0),
             0.0,
         )
 
@@ -476,13 +513,14 @@ class TestListarTableroPorArticulo(SimpleTestCase):
 
         fila = resultado[0]
         # demanda=20, stock_proceso=12 → resta_total=8 (PCP); envíos no restan brecha
-        self.assertAlmostEqual(fila["enviado"], 1.0)
+        # Fabricando = envíos 13 − 2da 7 = 6 (Producción no acredita)
+        self.assertAlmostEqual(fila["enviado"], 6.0)
         self.assertAlmostEqual(fila["total"], 12.0)
         self.assertAlmostEqual(fila["resta_total"], 8.0)
         self.assertAlmostEqual(fila["pendiente"], 8.0)
 
     def test_enviado_diferente_de_produccion(self):
-        """Enviado (virtual tablero) ≠ produccion (físico) por construcción."""
+        """Enviado/Fabricando (virtual) ≠ produccion (físico): Producción no acredita."""
         stock_pivot = {
             10: {
                 TIPO_MPR_PRODUCCION: 20.0,
@@ -500,8 +538,8 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         resultado = self._call_con_parches(patches)
 
         fila = resultado[0]
-        # enviado = max(0, 50 - 20) = 30
-        self.assertAlmostEqual(fila["enviado"], 30.0)
+        # Fabricando = 50 − 0 = 50 (stock Producción no acredita)
+        self.assertAlmostEqual(fila["enviado"], 50.0)
         self.assertAlmostEqual(fila["produccion"], 20.0)
         self.assertNotAlmostEqual(fila["enviado"], fila["produccion"])
 

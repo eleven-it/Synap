@@ -18,7 +18,7 @@
   .parte-turno-tint-noche { border-left-color: rgb(196 181 253 / 0.6) !important; background-color: rgb(245 243 255 / 0.8); }
   .dark .parte-turno-tint-noche { border-left-color: rgb(109 40 217 / 0.4) !important; background-color: rgb(46 16 101 / 0.18); }
 </style>
-<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5"
+<section class="flex h-[calc(100dvh-7.5rem)] max-h-[calc(100dvh-7.5rem)] flex-col overflow-hidden bg-slate-50 py-1 transition-colors duration-300 dark:bg-slate-900 sm:py-1.5 md:h-[calc(100dvh-11rem)] md:max-h-[calc(100dvh-11rem)]"
          x-data="partePagina()">
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
@@ -81,6 +81,17 @@
                             Cargar grilla
                         </button>
                     </form>
+
+                    {% if grilla_planilla and grilla_planilla.dia_aprobado and not grilla_planilla.dia_bloqueado_cc %}
+                    <button type="button"
+                            id="parte-chip-dia-aprobado"
+                            class="inline-flex h-9 shrink-0 items-center gap-1 self-end rounded-lg border border-sky-500/50 bg-sky-950/50 px-2.5 text-[11px] font-semibold text-sky-200 hover:bg-sky-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
+                            title="Ver detalle del estado aprobado"
+                            aria-label="Parte aprobado — ver detalle">
+                        <span class="material-icons text-sm leading-none" aria-hidden="true">verified</span>
+                        Parte aprobado
+                    </button>
+                    {% endif %}
 
                     {# Búsqueda predictiva en grilla ya cargada (no envía a Cargar grilla) #}
                     <label class="flex min-w-[12rem] flex-1 flex-col gap-0.5 sm:min-w-[14rem] sm:max-w-md">
@@ -165,13 +176,22 @@
 
         {% else %}
 
+        {% if not grilla_planilla.dia_aprobado and not grilla_planilla.dia_bloqueado_cc %}
         <div class="mb-3 flex-shrink-0 rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-700/50 dark:bg-purple-900/20 sm:mb-4">
             <p class="text-xs text-purple-900 dark:text-purple-100">
-                <strong>Validación activa:</strong> la suma de los tres turnos (docenas × {{ unidades_por_docena_parte|default:12 }} + pares) de cada fila no puede superar el cupo <strong>Fabricando</strong>. Si se excede, el guardado se rechaza.
+                <strong>Validación:</strong> al <em>aprobar</em>, la suma de turnos no puede superar Fabricando. Podés <strong>Guardar borrador</strong> en cualquier momento (cargas diferidas), incluso si el cupo ya permite aprobar. Si al aprobar faltan turnos en alguna máquina, se advierte sin bloquear.
             </p>
         </div>
+        {% endif %}
 
-        {% if grilla_planilla.turnos_bloqueados %}
+        {% if grilla_planilla.dia_bloqueado_cc %}
+        <div class="mb-3 flex-shrink-0 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/60 dark:bg-amber-950/30 sm:mb-4">
+            <p class="flex items-start gap-2 text-sm font-medium text-amber-900 dark:text-amber-100">
+                <span class="material-icons text-base text-amber-600 dark:text-amber-400" aria-hidden="true">lock</span>
+                Esta fecha ya tiene control de calidad registrado. La planilla es de solo lectura.
+            </p>
+        </div>
+        {% elif grilla_planilla.turnos_bloqueados %}
         <div class="mb-3 flex-shrink-0 rounded-lg border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/60 dark:bg-amber-950/30 sm:mb-4">
             <p class="flex items-start gap-2 text-sm font-medium text-amber-900 dark:text-amber-100">
                 <span class="material-icons text-base text-amber-600 dark:text-amber-400" aria-hidden="true">lock</span>
@@ -185,31 +205,36 @@
             <form method="post" action="{% url 'mpr:parte_produccion_registrar' %}" class="mpr-post-loading flex min-h-0 flex-1 flex-col" id="form-parte-produccion"
                   data-bloquear-fabricando="{% if bloquear_parte_supera_fabricando %}1{% else %}0{% endif %}"
                   data-pares-por-docena="{{ unidades_por_docena_parte|default:12 }}"
+                  data-dia-aprobado="{% if grilla_planilla.dia_aprobado %}1{% else %}0{% endif %}"
                   data-mpr-loading-title="Registrando parte..."
                   data-mpr-loading-subtitle="Guardando las cantidades por turno.">
                 {% csrf_token %}
                 <input type="hidden" name="fecha" value="{{ fecha_str }}">
                 <input type="hidden" name="id_linea" value="{{ id_linea }}">
                 <input type="hidden" name="id_maquina" value="{{ id_maquina }}">
+                <input type="hidden" name="accion" id="id_accion_parte" value="borrador">
 
                 <div class="min-h-0 flex-1 overflow-auto" role="region" aria-label="Grilla parte de producción (planilla QC)">
                 <table class="parte-grilla w-full border-collapse" style="min-width: 56rem;">
                         <caption class="sr-only">Grilla de producción máquina × artículo — {{ fecha_str }}</caption>
                         <thead>
-                            <tr class="border-b border-slate-200 bg-slate-50/95 dark:border-slate-600 dark:bg-slate-800/90">
-                                <th scope="col" class="sticky left-0 z-30 w-20 min-w-[5rem] bg-slate-50/95 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400">
+                            <tr class="sticky top-0 z-40 border-b border-slate-200 bg-slate-50/95 dark:border-slate-600 dark:bg-slate-800/90">
+                                <th scope="col" class="sticky left-0 top-0 z-50 w-20 min-w-[5rem] bg-slate-50/95 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400">
                                     Máq.
                                 </th>
-                                <th scope="col" class="sticky left-20 z-30 min-w-[13rem] max-w-[22rem] border-r border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
+                                <th scope="col" class="sticky left-20 top-0 z-50 min-w-[13rem] max-w-[22rem] border-r border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
                                     Artículo
                                 </th>
                                 {% for col in grilla_planilla.turnos_columnas %}
-                                <th scope="col" class="parte-turno-tint-{{ col.franja }} min-w-[11rem] border-l-2 px-2 py-2.5 text-center">
+                                <th scope="col"
+                                    data-id-turno="{{ col.id }}"
+                                    data-turno-nombre="{{ col.nombre|escape }}"
+                                    class="parte-turno-tint-{{ col.franja }} min-w-[11rem] border-l-2 px-2 py-2.5 text-center">
                                     <span class="block text-xs font-semibold text-slate-800 dark:text-slate-100">{{ col.nombre }}</span>
                                     <span class="mt-0.5 block text-[10px] font-normal text-slate-500 dark:text-slate-400">Docenas · Pares</span>
                                 </th>
                                 {% endfor %}
-                                <th scope="col" class="sticky right-0 z-30 min-w-[7.5rem] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
+                                <th scope="col" class="sticky right-0 top-0 z-50 min-w-[7.5rem] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
                                     Cupo Fabricando
                                 </th>
                             </tr>
@@ -220,7 +245,10 @@
                                 data-fabricando="{{ fila.fabricando|floatformat:'0' }}"
                                 data-id-art="{{ fila.id_articulo }}"
                                 data-id-maq="{{ fila.id_mpr_maquina }}"
+                                data-maquina="{{ fila.maquina_nombre|escape }}"
                                 data-articulo="{{ fila.descripcion|escape }}"
+                                data-codigo="{{ fila.codigo_tooltip|escape }}"
+                                data-inputs-habilitados="{% if fila.inputs_habilitados %}1{% else %}0{% endif %}"
                                 data-descripcion="{{ fila.descripcion|lower }} {{ fila.codigo_tooltip|lower }}"
                                 x-show="filtro === '' || $el.dataset.descripcion.includes(filtro.toLowerCase().trim())">
                                 {# Máquina (sticky): rowspan cuando hay varios artículos; al filtrar se muestra en cada fila #}
@@ -342,27 +370,68 @@
                             {% endfor %}
                         </tbody>
                     </table>
-                </div>
 
-                <div class="flex-shrink-0 border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
+                <div class="border-t border-slate-100 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:px-5"
                      x-show="filtro.trim() !== '' && Array.from($root.querySelectorAll('tbody tr.parte-grilla-fila')).every(function(el) { return !el.offsetParent; })"
                      x-cloak>
                     Ningún artículo coincide con la búsqueda.
                 </div>
+                </div>
 
-                <div class="flex flex-shrink-0 flex-wrap items-end justify-end gap-3 border-t border-slate-100 px-4 py-4 dark:border-slate-700 sm:px-5">
-                    <div class="flex min-w-[12rem] max-w-xs flex-1 flex-col gap-1">
-                        <label for="id_notas" class="text-xs font-medium text-slate-600 dark:text-slate-400">Notas (opcional)</label>
-                        <input type="text" id="id_notas" name="notas" maxlength="500" placeholder="Observaciones del parte..."
-                               class="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
-                    </div>
-                    <button type="submit"
-                            class="inline-flex h-10 items-center gap-2 rounded-lg bg-purple-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400">
+                <div class="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800 sm:gap-3 sm:px-5">
+                    <button type="button"
+                            id="btn-guardar-borrador"
+                            {% if grilla_planilla.dia_bloqueado_cc or grilla_planilla.dia_aprobado %}disabled aria-disabled="true"{% endif %}
+                            {% if grilla_planilla.dia_aprobado and not grilla_planilla.dia_bloqueado_cc %}title="El parte ya está aprobado. Usá «Guardar parte de producción» para corregir."{% endif %}
+                            class="inline-flex h-10 w-auto shrink-0 items-center justify-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-4 text-sm font-semibold text-purple-700 transition-colors hover:bg-purple-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 disabled:cursor-not-allowed disabled:opacity-50 dark:border-purple-700/50 dark:bg-purple-950/40 dark:text-purple-200 dark:hover:bg-purple-900/50">
+                        <span class="material-icons text-base" aria-hidden="true">draft</span>
+                        Guardar borrador
+                    </button>
+                    <button type="button"
+                            id="btn-guardar-aprobar"
+                            {% if grilla_planilla.dia_bloqueado_cc %}disabled aria-disabled="true"{% endif %}
+                            class="inline-flex h-10 items-center gap-2 rounded-lg bg-purple-600 px-5 text-sm font-semibold text-white transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 disabled:cursor-not-allowed disabled:opacity-50">
                         <span class="material-icons text-base" aria-hidden="true">save</span>
                         Guardar parte de producción
                     </button>
                 </div>
             </form>
+        </div>
+
+        {# Modal aviso: máquinas sin carga en algún turno (aprobar, no bloquea) #}
+        <div id="parte-aviso-maquinas-modal" class="fixed inset-0 z-[90] hidden overflow-y-auto print:hidden" role="dialog" aria-modal="true" aria-labelledby="parte-aviso-maquinas-title">
+            <div class="flex min-h-full items-center justify-center p-4">
+                <div class="fixed inset-0 bg-black/50 backdrop-blur-sm" data-parte-aviso-cerrar aria-hidden="true"></div>
+                <div class="relative flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-800">
+                    <div class="flex items-start gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-700">
+                        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40" aria-hidden="true">
+                            <span class="material-icons text-amber-600 dark:text-amber-400">warning</span>
+                        </span>
+                        <div class="min-w-0 flex-1">
+                            <h3 id="parte-aviso-maquinas-title" class="text-lg font-semibold text-slate-900 dark:text-white">Máquinas sin carga completa</h3>
+                            <p id="parte-aviso-maquinas-resumen" class="mt-0.5 text-sm font-medium text-amber-800 dark:text-amber-200"></p>
+                            <p class="mt-1.5 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                                {% if grilla_planilla.dia_aprobado %}
+                                Hay turnos sin cantidad. Podés aprobar igual o cancelar y completar.
+                                {% else %}
+                                Hay turnos sin cantidad. Podés aprobar igual o guardar borrador y completar después.
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <div id="parte-aviso-maquinas-lista" class="max-h-[min(22rem,50vh)] space-y-3 overflow-y-auto px-5 py-4" role="list"></div>
+                    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-4 dark:border-slate-700">
+                        <button type="button" id="parte-aviso-maquinas-cancelar"
+                                class="inline-flex min-h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+                            Cancelar
+                        </button>
+                        <button type="button" id="parte-aviso-maquinas-continuar"
+                                class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-xl bg-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500">
+                            Continuar y aprobar
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         {% endif %}
@@ -441,12 +510,297 @@
         return null;
     }
 
+    form.querySelectorAll('tbody tr[data-id-art]').forEach(actualizarIngresado);
+
+    function hayExcesoFabricando() {
+        var excede = false;
+        form.querySelectorAll('tbody tr[data-fabricando]').forEach(function (tr) {
+            if (!filaVisible(tr)) { return; }
+            if (tr.getAttribute('data-inputs-habilitados') === '0') { return; }
+            var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
+            if (sumaFilaPares(tr) > tope + 1e-9) {
+                excede = true;
+            }
+        });
+        return excede;
+    }
+
+    function actualizarBotonAprobar() {
+        var btnAprobar = document.getElementById('btn-guardar-aprobar');
+        if (!btnAprobar || btnAprobar.getAttribute('aria-disabled') === 'true') { return; }
+        var exceso = hayExcesoFabricando();
+        btnAprobar.disabled = exceso;
+        var diaAprobado = form.getAttribute('data-dia-aprobado') === '1';
+        btnAprobar.title = exceso
+            ? (diaAprobado
+                ? 'Hay filas que superan Fabricando. Corregí las cantidades.'
+                : 'Hay filas que superan Fabricando. Usá «Guardar borrador» o corregí las cantidades.')
+            : '';
+    }
+
+    /** Filas con al menos un turno editable sin cantidad (aviso al aprobar, no bloquea). */
+    function listarMaquinasSinTurnoCargado() {
+        var porMaquina = {};
+        var ordenMaq = [];
+        var totalArt = 0;
+        form.querySelectorAll('tbody tr[data-id-art]').forEach(function (tr) {
+            if (!filaVisible(tr)) { return; }
+            if (tr.getAttribute('data-inputs-habilitados') === '0') { return; }
+            var turnosVacios = [];
+            tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
+                var inp = cel.querySelector('[data-parte-qty-input]');
+                if (inp && inp.disabled) { return; }
+                if (paresCelda(cel) > 0) { return; }
+                var tid = cel.getAttribute('data-id-turno') || '';
+                var th = form.querySelector('th[data-id-turno="' + tid + '"]');
+                var nom = (th && th.getAttribute('data-turno-nombre')) || ('Turno ' + tid);
+                turnosVacios.push(nom);
+            });
+            if (!turnosVacios.length) { return; }
+            var maq = tr.getAttribute('data-maquina') || 'Máquina';
+            var art = tr.getAttribute('data-articulo') || 'Artículo';
+            var codigo = (tr.getAttribute('data-codigo') || '').trim();
+            var idMaq = tr.getAttribute('data-id-maq') || maq;
+            if (!porMaquina[idMaq]) {
+                porMaquina[idMaq] = { maquina: maq, articulos: [] };
+                ordenMaq.push(idMaq);
+            }
+            porMaquina[idMaq].articulos.push({
+                articulo: art,
+                codigo: codigo,
+                turnos: turnosVacios
+            });
+            totalArt += 1;
+        });
+        return {
+            grupos: ordenMaq.map(function (id) { return porMaquina[id]; }),
+            totalArticulos: totalArt,
+            totalMaquinas: ordenMaq.length
+        };
+    }
+
+    function validarAntesDeGuardar(esAprobar) {
+        var erroresCupo = [];
+        var faltaOperario = [];
+        form.querySelectorAll('tbody tr[data-fabricando]').forEach(function (tr) {
+            if (!filaVisible(tr)) { return; }
+            var articulo = tr.getAttribute('data-articulo') || 'Artículo';
+            if (esAprobar) {
+                var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
+                var suma = sumaFilaPares(tr);
+                if (suma > tope + 1e-9) {
+                    erroresCupo.push('• ' + articulo + ': ' + suma + ' pares supera Fabricando (' + tope + ' pares).');
+                }
+            }
+            tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
+                if (paresCelda(cel) <= 0) { return; }
+                var sel = cel.parentElement.querySelector('[data-parte-op-select]');
+                if (sel && !String(sel.value || '').trim()) {
+                    faltaOperario.push('• ' + articulo + ': seleccioná el operario del turno antes de guardar.');
+                }
+            });
+        });
+        return erroresCupo.concat(faltaOperario);
+    }
+
+    function mostrarErrores(errores, titulo) {
+        if (window.mprShowAviso) {
+            window.mprShowAviso(errores.join('\n'), { tipo: 'error', titulo: titulo || 'No se puede guardar' });
+        }
+        if (window.mprHidePostLoading) { window.mprHidePostLoading(); }
+    }
+
+    function enviarParte(accion) {
+        var accionInput = document.getElementById('id_accion_parte');
+        if (accionInput) { accionInput.value = accion; }
+        if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+        } else {
+            HTMLFormElement.prototype.submit.call(form);
+        }
+    }
+
+    var avisoModal = document.getElementById('parte-aviso-maquinas-modal');
+    var avisoLista = document.getElementById('parte-aviso-maquinas-lista');
+    var avisoResumen = document.getElementById('parte-aviso-maquinas-resumen');
+    var MAX_ART_POR_MAQ = 4;
+    var MAX_MAQUINAS = 8;
+
+    function cerrarAvisoMaquinas() {
+        if (avisoModal) { avisoModal.classList.add('hidden'); }
+    }
+
+    function chipTurno(nombre) {
+        var span = document.createElement('span');
+        span.className = 'inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-200';
+        span.textContent = nombre;
+        return span;
+    }
+
+    function abrirAvisoMaquinas(payload) {
+        if (!avisoModal || !avisoLista) {
+            enviarParte('aprobar');
+            return;
+        }
+        var grupos = (payload && payload.grupos) || [];
+        var totalArt = (payload && payload.totalArticulos) || 0;
+        var totalMaq = (payload && payload.totalMaquinas) || grupos.length;
+
+        if (avisoResumen) {
+            avisoResumen.textContent = totalArt === 1
+                ? '1 artículo sin carga en ' + totalMaq + (totalMaq === 1 ? ' máquina' : ' máquinas')
+                : totalArt + ' artículos sin carga en ' + totalMaq + (totalMaq === 1 ? ' máquina' : ' máquinas');
+        }
+
+        avisoLista.innerHTML = '';
+        var artMostrados = 0;
+        grupos.slice(0, MAX_MAQUINAS).forEach(function (grupo) {
+            var bloque = document.createElement('div');
+            bloque.className = 'rounded-xl border border-slate-200 bg-slate-50/80 dark:border-slate-600 dark:bg-slate-900/40';
+            bloque.setAttribute('role', 'listitem');
+
+            var cab = document.createElement('div');
+            cab.className = 'flex items-center justify-between gap-2 border-b border-slate-200/80 px-3 py-2 dark:border-slate-600/80';
+            var tit = document.createElement('p');
+            tit.className = 'text-sm font-semibold text-slate-900 dark:text-white';
+            tit.textContent = grupo.maquina || 'Máquina';
+            var meta = document.createElement('span');
+            meta.className = 'shrink-0 text-xs font-medium text-slate-500 dark:text-slate-400';
+            var nArt = (grupo.articulos || []).length;
+            meta.textContent = nArt + (nArt === 1 ? ' artículo' : ' artículos');
+            cab.appendChild(tit);
+            cab.appendChild(meta);
+            bloque.appendChild(cab);
+
+            var listaArt = document.createElement('ul');
+            listaArt.className = 'divide-y divide-slate-200/70 dark:divide-slate-700/70';
+            (grupo.articulos || []).slice(0, MAX_ART_POR_MAQ).forEach(function (item) {
+                var li = document.createElement('li');
+                li.className = 'flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3';
+                var izq = document.createElement('div');
+                izq.className = 'min-w-0';
+                if (item.codigo) {
+                    var cod = document.createElement('span');
+                    cod.className = 'mr-1.5 inline-flex rounded bg-slate-200/80 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-slate-700 dark:bg-slate-700 dark:text-slate-200';
+                    cod.textContent = item.codigo;
+                    izq.appendChild(cod);
+                }
+                var nom = document.createElement('span');
+                nom.className = 'text-sm text-slate-700 dark:text-slate-200';
+                nom.textContent = item.articulo || 'Artículo';
+                nom.title = item.articulo || '';
+                izq.appendChild(nom);
+                var chips = document.createElement('div');
+                chips.className = 'flex flex-wrap gap-1';
+                (item.turnos || []).forEach(function (t) {
+                    chips.appendChild(chipTurno(t));
+                });
+                li.appendChild(izq);
+                li.appendChild(chips);
+                listaArt.appendChild(li);
+                artMostrados += 1;
+            });
+            var ocultosArt = nArt - Math.min(nArt, MAX_ART_POR_MAQ);
+            if (ocultosArt > 0) {
+                var liMas = document.createElement('li');
+                liMas.className = 'px-3 py-2 text-xs font-medium text-slate-500 dark:text-slate-400';
+                liMas.textContent = '… y ' + ocultosArt + ' artículo' + (ocultosArt === 1 ? '' : 's') + ' más en esta máquina';
+                listaArt.appendChild(liMas);
+            }
+            bloque.appendChild(listaArt);
+            avisoLista.appendChild(bloque);
+        });
+
+        var maqOcultas = totalMaq - Math.min(totalMaq, MAX_MAQUINAS);
+        if (maqOcultas > 0 || artMostrados < totalArt) {
+            var pie = document.createElement('p');
+            pie.className = 'text-center text-xs font-medium text-slate-500 dark:text-slate-400';
+            if (maqOcultas > 0) {
+                pie.textContent = '… y ' + maqOcultas + ' máquina' + (maqOcultas === 1 ? '' : 's') + ' más (' + (totalArt - artMostrados) + ' artículos)';
+            } else if (artMostrados < totalArt) {
+                pie.textContent = '… y ' + (totalArt - artMostrados) + ' artículos más';
+            }
+            avisoLista.appendChild(pie);
+        }
+
+        avisoModal.classList.remove('hidden');
+    }
+
+    if (avisoModal) {
+        avisoModal.querySelectorAll('[data-parte-aviso-cerrar]').forEach(function (el) {
+            el.addEventListener('click', cerrarAvisoMaquinas);
+        });
+        var btnCancel = document.getElementById('parte-aviso-maquinas-cancelar');
+        var btnCont = document.getElementById('parte-aviso-maquinas-continuar');
+        if (btnCancel) { btnCancel.addEventListener('click', cerrarAvisoMaquinas); }
+        if (btnCont) {
+            btnCont.addEventListener('click', function () {
+                cerrarAvisoMaquinas();
+                enviarParte('aprobar');
+            });
+        }
+        document.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Escape' && avisoModal && !avisoModal.classList.contains('hidden')) {
+                cerrarAvisoMaquinas();
+            }
+        });
+    }
+
+    var cupoFabricandoUrl = '{% url "mpr:parte_cupo_fabricando" %}';
+    var cupoDebounceTimers = {};
+
+    function actualizarBadgeFabricando(tr, val) {
+        var badge = tr.querySelector('.parte-fabricando-badge');
+        if (!badge) { return; }
+        var span = badge.querySelector('span');
+        if (span) {
+            span.textContent = val + ' pares';
+        }
+    }
+
+    function refrescarCupoFila(tr) {
+        if (!tr) { return; }
+        var idArt = tr.getAttribute('data-id-art');
+        if (!idArt) { return; }
+        fetch(cupoFabricandoUrl + '?ids=' + encodeURIComponent(idArt), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+            .then(function (resp) { return resp.ok ? resp.json() : { cupos: {} }; })
+            .then(function (data) {
+                var cupos = data.cupos || {};
+                var raw = cupos[idArt];
+                if (raw === undefined) { raw = cupos[String(idArt)]; }
+                var val = parseFloat(raw || '0');
+                if (isNaN(val)) { val = 0; }
+                tr.setAttribute('data-fabricando', String(val));
+                actualizarBadgeFabricando(tr, val);
+                actualizarIngresado(tr);
+                actualizarBotonAprobar();
+            })
+            .catch(function () { /* sin feedback intrusivo */ });
+    }
+
+    function programarRefrescoCupoFila(tr) {
+        if (!tr) { return; }
+        var idArt = tr.getAttribute('data-id-art') || '_';
+        if (cupoDebounceTimers[idArt]) {
+            clearTimeout(cupoDebounceTimers[idArt]);
+        }
+        cupoDebounceTimers[idArt] = setTimeout(function () {
+            refrescarCupoFila(tr);
+        }, 400);
+    }
+
     qtyInputs.forEach(function (inp) {
         inp.addEventListener('focus', function () {
             this.select();
+            programarRefrescoCupoFila(this.closest('tr[data-id-art]'));
         });
         inp.addEventListener('input', function () {
             actualizarIngresado(this.closest('tr[data-id-art]'));
+            actualizarBotonAprobar();
+            programarRefrescoCupoFila(this.closest('tr[data-id-art]'));
         });
         inp.addEventListener('keydown', function (ev) {
             if (ev.key !== 'Enter') { return; }
@@ -460,45 +814,85 @@
             if (siguiente) {
                 siguiente.focus();
             } else {
-                var notas = document.getElementById('id_notas');
-                if (notas) { notas.focus(); }
+                var btnFin = document.getElementById('btn-guardar-borrador');
+                if (btnFin && !btnFin.disabled) {
+                    btnFin.focus();
+                } else {
+                    var btnApr = document.getElementById('btn-guardar-aprobar');
+                    if (btnApr) { btnApr.focus(); }
+                }
             }
         });
     });
 
-    form.querySelectorAll('tbody tr[data-id-art]').forEach(actualizarIngresado);
+    actualizarBotonAprobar();
 
-    // Validación de guardado sin diálogos nativos (usa mprShowAviso).
-    form.addEventListener('submit', function (ev) {
-        var erroresCupo = [];
-        var faltaOperario = [];
-        form.querySelectorAll('tbody tr[data-fabricando]').forEach(function (tr) {
-            var articulo = tr.getAttribute('data-articulo') || 'Artículo';
-            // Cupo por fila (suma de los tres turnos).
-            var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
-            var suma = sumaFilaPares(tr);
-            if (suma > tope + 1e-9) {
-                erroresCupo.push('• ' + articulo + ': ' + suma + ' pares supera Fabricando (' + tope + ' pares).');
+    var btnBorrador = document.getElementById('btn-guardar-borrador');
+    var btnAprobar = document.getElementById('btn-guardar-aprobar');
+
+    if (btnBorrador) {
+        btnBorrador.addEventListener('click', function () {
+            if (btnBorrador.disabled || btnBorrador.getAttribute('aria-disabled') === 'true') {
+                return;
             }
-            // Operario obligatorio cuando se cargó cantidad en una celda con selector.
-            tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
-                if (paresCelda(cel) <= 0) { return; }
-                var sel = cel.parentElement.querySelector('[data-parte-op-select]');
-                if (sel && !String(sel.value || '').trim()) {
-                    faltaOperario.push('• ' + articulo + ': seleccioná el operario del turno antes de guardar.');
-                }
-            });
+            var errores = validarAntesDeGuardar(false);
+            if (errores.length) {
+                mostrarErrores(errores, 'No se puede guardar el borrador');
+                return;
+            }
+            enviarParte('borrador');
         });
+    }
 
-        var errores = erroresCupo.concat(faltaOperario);
-        if (errores.length) {
-            ev.preventDefault();
-            var titulo = erroresCupo.length ? 'No se puede guardar: cupo superado' : 'No se puede guardar';
-            if (window.mprShowAviso) {
-                window.mprShowAviso(errores.join('\n'), { tipo: 'error', titulo: titulo });
+    if (btnAprobar) {
+        btnAprobar.addEventListener('click', function () {
+            var diaAprobado = form.getAttribute('data-dia-aprobado') === '1';
+            if (hayExcesoFabricando()) {
+                mostrarErrores(
+                    [diaAprobado
+                        ? 'Hay filas que superan el cupo Fabricando. Corregí las cantidades.'
+                        : 'Hay filas que superan el cupo Fabricando. Corregí las cantidades o usá «Guardar borrador».'],
+                    'No se puede aprobar'
+                );
+                return;
             }
+            var errores = validarAntesDeGuardar(true);
+            if (errores.length) {
+                var titulo = errores.some(function (e) { return e.indexOf('Fabricando') >= 0; })
+                    ? 'No se puede guardar: cupo superado'
+                    : 'No se puede guardar';
+                mostrarErrores(errores, titulo);
+                return;
+            }
+            var avisos = listarMaquinasSinTurnoCargado();
+            if (avisos.totalArticulos > 0) {
+                abrirAvisoMaquinas(avisos);
+                return;
+            }
+            enviarParte('aprobar');
+        });
+    }
+
+    // Evita submit accidental (Enter en inputs) sin pasar por los botones.
+    form.addEventListener('submit', function (ev) {
+        var accionInput = document.getElementById('id_accion_parte');
+        var accion = accionInput ? String(accionInput.value || '') : '';
+        if (accion !== 'borrador' && accion !== 'aprobar') {
+            ev.preventDefault();
             if (window.mprHidePostLoading) { window.mprHidePostLoading(); }
         }
+    });
+})();
+
+(function () {
+    var chip = document.getElementById('parte-chip-dia-aprobado');
+    if (!chip) { return; }
+    chip.addEventListener('click', function () {
+        if (!window.mprShowAviso) { return; }
+        window.mprShowAviso(
+            'Este día ya tiene el parte aprobado. Las correcciones se hacen con «Guardar parte de producción» (ajusta stock por diferencia). «Guardar borrador» no está disponible.',
+            { tipo: 'info', titulo: 'Parte aprobado' }
+        );
     });
 })();
 

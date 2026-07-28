@@ -230,6 +230,39 @@ def _usuario_puede_enviar_desde_tablero(user) -> bool:
     return _usuario_tiene_permiso_mpr(user, "mpr.ver")
 
 
+def _usuario_puede_consultar_partes(user) -> bool:
+    return (
+        _usuario_tiene_permiso_mpr(user, "mpr.ver")
+        or _usuario_tiene_permiso_mpr(user, "mpr.aprobar_parte")
+        or _usuario_tiene_permiso_mpr(user, "mpr.parte_operario")
+    )
+
+
+def _usuario_ve_todos_los_partes(user) -> bool:
+    return (
+        _usuario_tiene_permiso_mpr(user, "mpr.ver")
+        or _usuario_tiene_permiso_mpr(user, "mpr.aprobar_parte")
+    )
+
+
+def _abrir_url_parte_consulta(parte: dict, session_id_usuario: int | None) -> str:
+    """Destino Abrir: mi-parte si móvil del mismo usuario; si no, parte escritorio."""
+    from urllib.parse import urlencode
+
+    origen = (parte.get("origen") or "").strip()
+    id_usuario = to_int_or_none(parte.get("id_usuario"))
+    if (
+        origen == "movil_operario"
+        and session_id_usuario is not None
+        and id_usuario == session_id_usuario
+    ):
+        return reverse("mpr:parte_movil_operario")
+    fecha_str = (parte.get("fecha_str") or "").strip()
+    qs = urlencode({"fecha": fecha_str}) if fecha_str else ""
+    base = reverse("mpr:parte_produccion")
+    return f"{base}?{qs}" if qs else base
+
+
 def _context_flags_tablero(user) -> dict:
     puede_enviar = _usuario_puede_enviar_desde_tablero(user)
     return {
@@ -4956,7 +4989,7 @@ def _resolver_modo_tablero(request) -> str:
 
 
 def _redirect_tablero_produccion(request, query_string: str | None = None):
-    """Redirect al tablero preservando solo_urgente, solo_sin_receta, modo, presentacion, marcas y query."""
+    """Redirect al tablero preservando solo_urgente, solo_sin_receta, modo, presentacion, marcas, q y query."""
     from urllib.parse import parse_qsl, urlencode
 
     from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
@@ -4973,6 +5006,12 @@ def _redirect_tablero_produccion(request, query_string: str | None = None):
         params["modo"] = _resolver_modo_tablero(request)
     if "presentacion" not in params:
         params["presentacion"] = resolver_modo_presentacion_operativa(request)
+    # q vacío = limpiar búsqueda client-side tras Actualizar / Enviar
+    q_busqueda = (params.get("q") or "").strip()
+    if q_busqueda:
+        params["q"] = q_busqueda
+    else:
+        params.pop("q", None)
     params.pop("marcas_incluidos", None)
     pairs = [(k, v) for k, v in params.items()]
     pairs.extend(_marcas_urlencode_pairs(_parse_marcas_incluidos(request)))
@@ -5007,6 +5046,8 @@ class TableroProduccionView(MprLoginRequiredMixin, MprTableroVerMixin, TemplateV
         # por artículo pack terminado (paridad BEST PCP Producción) sin explosión BOM.
         # Persiste en sesión (mismo patrón que presentacion y solo_urgente).
         modo_tablero = _resolver_modo_tablero(request)
+        # Búsqueda client-side (Alpine): se persiste en ?q= para sobrevivir Actualizar / toggles.
+        busqueda_q = (request.GET.get("q") or "").strip()
         listar_fn = listar_tablero_pack if modo_tablero == "pack" else listar_tablero_por_articulo
         listar_kwargs = {
             "fecha_desde": to_date_or_none(fecha_desde_str) if fecha_desde_str else None,
@@ -5068,6 +5109,8 @@ class TableroProduccionView(MprLoginRequiredMixin, MprTableroVerMixin, TemplateV
             qs_params["fecha_hasta"] = fecha_hasta_str
         qs_params["solo_urgente"] = "1" if solo_urgente else "0"
         qs_params["solo_sin_receta"] = "1" if solo_sin_receta else "0"
+        if busqueda_q:
+            qs_params["q"] = busqueda_q
         # Base para el toggle Pack|Par: preserva filtros + presentación (sin modo).
         modo_query_base = _urlencode_con_marcas(
             {**qs_params, "presentacion": modo_presentacion}, marcas_incluidos
@@ -5084,6 +5127,7 @@ class TableroProduccionView(MprLoginRequiredMixin, MprTableroVerMixin, TemplateV
             "solo_urgente": solo_urgente,
             "solo_pendiente": solo_urgente,
             "solo_sin_receta": solo_sin_receta,
+            "busqueda_q": busqueda_q,
             "kpis_tablero": kpis_tablero,
             "ultima_actualizacion": ultima_act,
             "tablero_url": reverse("mpr:tablero"),
@@ -5104,11 +5148,15 @@ class TableroProduccionActualizarView(MprLoginRequiredMixin, MprTableroVerMixin,
     http_method_names = ["post"]
 
     def post(self, request, *args, **kwargs):
+        from urllib.parse import urlencode
+
         from django.contrib import messages
         base_empresa = _get_base_empresa(request)
+        q_busqueda = (request.POST.get("q") or "").strip()
+        filtros_qs = urlencode({"q": q_busqueda}) if q_busqueda else None
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
-            return _redirect_tablero_produccion(request)
+            return _redirect_tablero_produccion(request, filtros_qs)
         request.session["tablero_produccion_ultima_actualizacion"] = (
             datetime.now().strftime("%d/%m/%Y %H:%M")
         )
@@ -5116,7 +5164,7 @@ class TableroProduccionActualizarView(MprLoginRequiredMixin, MprTableroVerMixin,
             request,
             "Vista actualizada. La demanda se calcula en vivo desde pedidos PED.",
         )
-        return _redirect_tablero_produccion(request)
+        return _redirect_tablero_produccion(request, filtros_qs)
 
 
 # =============================================================================
@@ -5611,6 +5659,9 @@ class MaquinasCargaArticulosView(MprLoginRequiredMixin, MprPermisoMixin, Templat
     permiso_requerido = "mpr.maquinas_lineas"
 
     def get_context_data(self, **kwargs):
+        from datetime import date as _date
+        from datetime import datetime as _datetime
+
         from mpr.services_maquina_linea import construir_grilla_carga_articulos
 
         context = super().get_context_data(**kwargs)
@@ -5622,12 +5673,23 @@ class MaquinasCargaArticulosView(MprLoginRequiredMixin, MprPermisoMixin, Templat
                 id_linea = int(id_linea_raw)
             except (ValueError, TypeError):
                 id_linea = None
-        grilla = construir_grilla_carga_articulos(base_empresa, id_linea=id_linea)
+        hoy = _date.today()
+        fecha = hoy
+        fecha_str = (self.request.GET.get("fecha") or "").strip()
+        if fecha_str:
+            try:
+                fecha = _datetime.strptime(fecha_str, "%d/%m/%Y").date()
+            except ValueError:
+                fecha = hoy
+        if fecha > hoy:
+            fecha = hoy
+        grilla = construir_grilla_carga_articulos(
+            base_empresa, id_linea=id_linea, fecha=fecha
+        )
         context.update(grilla)
-        # Operarios del roster del día, acotados a las líneas de las máquinas
+        context["fecha_str"] = fecha.strftime("%d/%m/%Y")
+        # Operarios del roster del día seleccionado, acotados a las líneas de las máquinas
         # disponibles para la planilla CQ.
-        from datetime import date as _date
-
         from mpr.services import operarios_roster_por_linea
 
         id_lineas_maquinas = {
@@ -5636,7 +5698,7 @@ class MaquinasCargaArticulosView(MprLoginRequiredMixin, MprPermisoMixin, Templat
             if maquina.get("id_linea_actual") is not None
         }
         context["operadores_por_linea"] = operarios_roster_por_linea(
-            base_empresa, _date.today(), id_lineas_maquinas
+            base_empresa, fecha, id_lineas_maquinas
         )
         return context
 
@@ -5672,6 +5734,8 @@ class MaquinaArticuloAccionAPIView(MprLoginRequiredMixin, MprPermisoMixin, View)
 
     def post(self, request, *args, **kwargs):
         import json
+        from datetime import date as _date
+        from datetime import datetime as _datetime
 
         from mpr.services_maquina_linea import (
             deshabilitar_articulo_maquina,
@@ -5699,18 +5763,41 @@ class MaquinaArticuloAccionAPIView(MprLoginRequiredMixin, MprPermisoMixin, View)
         except (ValueError, TypeError):
             return JsonResponse({"ok": False, "error": "Parámetros inválidos."}, status=400)
 
+        hoy = _date.today()
+        fecha_obj = hoy
+        fecha_raw = (payload.get("fecha") or "").strip()
+        if fecha_raw:
+            try:
+                fecha_obj = _datetime.strptime(fecha_raw, "%d/%m/%Y").date()
+            except ValueError:
+                try:
+                    fecha_obj = _date.fromisoformat(fecha_raw[:10])
+                except ValueError:
+                    return JsonResponse({"ok": False, "error": "Fecha inválida."}, status=400)
+        if fecha_obj > hoy:
+            return JsonResponse(
+                {"ok": False, "error": "No se pueden modificar asignaciones en fechas futuras."},
+                status=400,
+            )
+
         if accion == "habilitar":
-            ok, error = habilitar_articulo_maquina(base_empresa, id_maquina, id_articulo)
+            ok, error = habilitar_articulo_maquina(
+                base_empresa, id_maquina, id_articulo, desde=fecha_obj
+            )
             if not ok:
                 return JsonResponse({"ok": False, "error": error or "No se pudo habilitar."}, status=400)
-            vigentes = listar_articulos_vigentes_maquina(base_empresa, id_maquina)
+            vigentes = listar_articulos_vigentes_maquina(
+                base_empresa, id_maquina, fecha=fecha_obj
+            )
             articulo = next(
                 (a for a in vigentes if a.get("id_articulo") == id_articulo),
                 None,
             )
             return JsonResponse({"ok": True, "articulo": articulo or {"id_articulo": id_articulo}})
         if accion == "deshabilitar":
-            ok, error = deshabilitar_articulo_maquina(base_empresa, id_maquina, id_articulo)
+            ok, error = deshabilitar_articulo_maquina(
+                base_empresa, id_maquina, id_articulo, fecha=fecha_obj
+            )
             if not ok:
                 return JsonResponse(
                     {"ok": False, "error": error or "No se pudo deshabilitar."},
@@ -6273,6 +6360,95 @@ class EliminarAsignacionRosterView(MprLoginRequiredMixin, MprEscritorioVerMixin,
         return redirect(base_url)
 
 
+class MprConsultaPartesMixin:
+    """Consulta de partes: supervisor ve todos; operario solo los suyos."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not _usuario_puede_consultar_partes(getattr(request, "user", None)):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+
+class PartesConsultaView(MprLoginRequiredMixin, MprConsultaPartesMixin, TemplateView):
+    """Listado histórico de partes de producción con filtros."""
+
+    template_name = "mpr/partes_consulta.html"
+
+    def get_context_data(self, **kwargs):
+        from datetime import date as _date
+        from mpr.services import listar_partes_consulta
+
+        context = super().get_context_data(**kwargs)
+        base_empresa = _get_base_empresa(self.request)
+        session_user = self.request.session.get("user", {}) or {}
+        session_id_usuario = to_int_or_none(session_user.get("id_usuario"))
+
+        fecha_desde = None
+        fecha_hasta = None
+        fecha_desde_str = (self.request.GET.get("fecha_desde") or "").strip()
+        fecha_hasta_str = (self.request.GET.get("fecha_hasta") or "").strip()
+        if fecha_desde_str:
+            try:
+                fecha_desde = _date.fromisoformat(fecha_desde_str)
+            except ValueError:
+                fecha_desde = None
+        if fecha_hasta_str:
+            try:
+                fecha_hasta = _date.fromisoformat(fecha_hasta_str)
+            except ValueError:
+                fecha_hasta = None
+
+        estado_filtro = (self.request.GET.get("estado") or "").strip().lower()
+        id_usuario_filtro = None
+        if not _usuario_ve_todos_los_partes(self.request.user):
+            id_usuario_filtro = session_id_usuario
+
+        partes = []
+        if base_empresa:
+            partes = listar_partes_consulta(
+                base_empresa,
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                estado=estado_filtro or None,
+                id_usuario=id_usuario_filtro,
+            )
+            for p in partes:
+                p["abrir_url"] = _abrir_url_parte_consulta(p, session_id_usuario)
+
+        context["partes"] = partes
+        context["f_fecha_desde"] = fecha_desde_str
+        context["f_fecha_hasta"] = fecha_hasta_str
+        context["f_estado"] = estado_filtro
+        context["es_supervisor_partes"] = _usuario_ve_todos_los_partes(self.request.user)
+        context["session_id_usuario"] = session_id_usuario
+        return context
+
+
+class ParteCupoFabricandoView(MprLoginRequiredMixin, MprEscritorioVerMixin, View):
+    """GET JSON: cupo Fabricando live por id_articulo."""
+
+    def get(self, request, *args, **kwargs):
+        from mpr.services import cupo_fabricando_por_articulo
+
+        base_empresa = _get_base_empresa(request)
+        if not base_empresa:
+            return JsonResponse({"cupos": {}})
+
+        raw_ids = (request.GET.get("ids") or "").strip()
+        ids: list[int] = []
+        for chunk in raw_ids.split(","):
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            val = to_int_or_none(chunk)
+            if val is not None:
+                ids.append(val)
+
+        cupos_map = cupo_fabricando_por_articulo(base_empresa, ids)
+        cupos_json = {str(k): float(v or 0) for k, v in cupos_map.items()}
+        return JsonResponse({"cupos": cupos_json})
+
+
 # ---------------------------------------------------------------------------
 # ETAPA 4: Parte de Producción (Ledger OPP-parte)
 # ---------------------------------------------------------------------------
@@ -6374,6 +6550,8 @@ class RegistrarParteProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin,
         lineas = _parte_lineas_desde_post(request.POST)
         modo_planilla = any(ln.get("id_mpr_maquina") for ln in lineas)
         turno_id_raw = (request.POST.get("turno_id") or "").strip()
+        accion_raw = (request.POST.get("accion") or "aprobar").strip().lower()
+        accion = "borrador" if accion_raw == "borrador" else "aprobar"
 
         notas = (request.POST.get("notas") or "").strip()
         id_usuario = getattr(request.user, "id", 0) or 0
@@ -6388,6 +6566,7 @@ class RegistrarParteProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin,
                     lineas,
                     notas,
                     modo_planilla=True,
+                    accion=accion,
                 )
             else:
                 if not turno_id_raw:
@@ -6399,7 +6578,10 @@ class RegistrarParteProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin,
                 )
             if warnings:
                 request.session["parte_warnings"] = warnings
-            messages.success(request, "Parte de producción registrado exitosamente.")
+            if accion == "borrador" and modo_planilla:
+                messages.success(request, "Borrador del parte guardado correctamente.")
+            else:
+                messages.success(request, "Parte de producción registrado exitosamente.")
         except ValidationError as ve:
             msg = ve.messages[0] if getattr(ve, "messages", None) else str(ve)
             messages.error(request, msg)

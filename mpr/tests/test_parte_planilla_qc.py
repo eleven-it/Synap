@@ -75,6 +75,23 @@ def _turnos_mtn():
 class ConstruirGrillaPartePlanillaTest(SimpleTestCase):
     """T1/T2: builder planilla QC."""
 
+    _PATCHES_CC = (
+        ("mpr.repositories.transicion_lote.fecha_tiene_control_calidad", False),
+        ("mpr.repositories.transicion_lote.turnos_con_control_calidad", set()),
+        ("mpr.repositories.parte.fecha_planilla_tiene_parte_aprobado", False),
+    )
+
+    def setUp(self):
+        self._patchers_cc = []
+        for target, retval in self._PATCHES_CC:
+            p = patch(target, return_value=retval)
+            p.start()
+            self._patchers_cc.append(p)
+
+    def tearDown(self):
+        for p in reversed(self._patchers_cc):
+            p.stop()
+
     @patch("mpr.repositories.parte.precarga_planilla_por_fecha")
     @patch("mpr.services._fabricando_por_componentes")
     @patch("mpr.services._query_enviados_todos_componentes")
@@ -193,6 +210,38 @@ class ConstruirGrillaPartePlanillaTest(SimpleTestCase):
         self.assertEqual(out["filas"][0]["fabricando"], 0.0)
         self.assertFalse(out["filas"][0]["inputs_habilitados"])
 
+    @patch("mpr.repositories.parte.fecha_planilla_tiene_parte_aprobado", return_value=True)
+    @patch("mpr.repositories.parte.precarga_planilla_por_fecha")
+    @patch("mpr.services._fabricando_por_componentes")
+    @patch("mpr.services._query_enviados_todos_componentes")
+    @patch("mpr.services._pivot_stock_por_tipo_mpr")
+    @patch("mpr.services_maquina_linea._operarios_roster_celda_por_linea")
+    @patch("mpr.services.listar_turnos")
+    @patch("mpr.services_maquina_linea.construir_datos_planilla_control_calidad")
+    def test_dia_aprobado_flag_en_grilla(
+        self,
+        mock_planilla,
+        mock_turnos,
+        mock_operarios_celda,
+        mock_pivot,
+        mock_envios,
+        mock_fabricando,
+        mock_precarga,
+        _aprob,
+    ):
+        mock_planilla.return_value = _planilla_maquinas_dos_filas()
+        mock_turnos.return_value = _turnos_mtn()
+        mock_operarios_celda.return_value = {1: {"manana": [], "tarde": [], "noche": []}}
+        mock_envios.return_value = {100: 24, 200: 24}
+        mock_pivot.return_value = ({}, {})
+        mock_fabricando.return_value = {100: 24.0, 200: 12.0}
+        mock_precarga.return_value = {}
+
+        out = construir_grilla_parte_planilla("emp", date(2026, 7, 21))
+
+        self.assertTrue(out["dia_aprobado"])
+        self.assertFalse(out["dia_bloqueado_cc"])
+
 
 class PrecargaPlanillaPorFechaTest(SimpleTestCase):
     """T3/T4: helper precarga por (fecha, máquina, artículo, turno)."""
@@ -229,6 +278,138 @@ class PrecargaPlanillaPorFechaTest(SimpleTestCase):
         self.assertEqual(out[(10, 100, 1)]["pares"], 6)
         self.assertEqual(out[(10, 100, 2)]["docenas"], 0)
         self.assertEqual(out[(10, 100, 2)]["pares"], 7)
+        sql = cursor.execute.call_args_list[0].args[0]
+        self.assertIn("origen", sql)
+
+
+class CrearOActualizarPartePlanillaTest(SimpleTestCase):
+    """Upsert planilla desktop por (fecha, turno, origen directo)."""
+
+    @patch("mpr.repositories.parte.mysql_cursor")
+    @patch("mpr.repositories.parte.obtener_parte_por_pk")
+    def test_borrador_actualiza_sin_mover_cantidad_fisica(self, mock_obtener, mock_cursor_ctx):
+        from mpr.repositories.parte import crear_o_actualizar_parte_planilla
+
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        with patch(
+            "mpr.repositories.parte.obtener_parte_planilla_directo_supervisor",
+            return_value={
+                "id_mpr_parte": 77,
+                "uuid_parte": "u-77",
+                "movimiento_fisico_ok": True,
+                "estado": "borrador",
+            },
+        ):
+            mock_obtener.return_value = MagicMock(id_mpr_parte=77)
+            crear_o_actualizar_parte_planilla(
+                EMPRESA,
+                date(2026, 7, 21),
+                1,
+                1,
+                [
+                    {
+                        "id_articulo": 100,
+                        "id_operario": 5,
+                        "cantidad": Decimal("12"),
+                        "operario_nombre": "JUAN",
+                        "id_mpr_maquina": 10,
+                        "maquina_nombre": "M1",
+                    }
+                ],
+                estado="borrador",
+            )
+
+        delete_calls = [
+            c for c in cursor.execute.call_args_list
+            if "DELETE FROM mpr_parte_linea" in str(c.args[0])
+        ]
+        self.assertTrue(delete_calls)
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if "INSERT INTO mpr_parte_linea" in str(c.args[0])
+        ]
+        self.assertTrue(insert_calls)
+        insert_sql = insert_calls[0].args[0]
+        self.assertIn(", 0, %s", insert_sql)
+
+    @patch("mpr.repositories.parte.mysql_cursor")
+    @patch("mpr.repositories.parte.obtener_parte_por_pk")
+    def test_rechaza_borrador_si_parte_ya_aprobado(self, mock_obtener, mock_cursor_ctx):
+        from mpr.repositories.parte import crear_o_actualizar_parte_planilla
+
+        with patch(
+            "mpr.repositories.parte.obtener_parte_planilla_directo_supervisor",
+            return_value={
+                "id_mpr_parte": 77,
+                "uuid_parte": "u-77",
+                "movimiento_fisico_ok": True,
+                "estado": "aprobado",
+            },
+        ):
+            with self.assertRaises(ValueError) as ctx:
+                crear_o_actualizar_parte_planilla(
+                    EMPRESA,
+                    date(2026, 7, 21),
+                    1,
+                    1,
+                    [
+                        {
+                            "id_articulo": 100,
+                            "id_operario": 5,
+                            "cantidad": Decimal("12"),
+                            "operario_nombre": "JUAN",
+                            "id_mpr_maquina": 10,
+                            "maquina_nombre": "M1",
+                        }
+                    ],
+                    estado="borrador",
+                )
+        self.assertIn("ya está aprobado", str(ctx.exception).lower())
+        mock_cursor_ctx.assert_not_called()
+        mock_obtener.assert_not_called()
+
+
+class FechaPlanillaTieneParteAprobadoTest(SimpleTestCase):
+    @patch("mpr.repositories.parte.mysql_cursor")
+    def test_true_si_turno_mas_reciente_aprobado(self, mock_cursor_ctx):
+        from mpr.repositories.parte import fecha_planilla_tiene_parte_aprobado
+
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [
+            {"id_mpr_turno": 1, "estado": "aprobado"},
+            {"id_mpr_turno": 1, "estado": "borrador"},
+            {"id_mpr_turno": 2, "estado": "borrador"},
+        ]
+        self.assertTrue(fecha_planilla_tiene_parte_aprobado("emp", date(2026, 7, 21)))
+
+    @patch("mpr.repositories.parte.mysql_cursor")
+    def test_false_si_solo_borradores(self, mock_cursor_ctx):
+        from mpr.repositories.parte import fecha_planilla_tiene_parte_aprobado
+
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [
+            {"id_mpr_turno": 1, "estado": "borrador"},
+            {"id_mpr_turno": 2, "estado": "borrador"},
+        ]
+        self.assertFalse(fecha_planilla_tiene_parte_aprobado("emp", date(2026, 7, 21)))
+
+
+class FechaTieneControlCalidadTest(SimpleTestCase):
+    @patch("mpr.repositories.transicion_lote.mysql_cursor")
+    def test_fecha_con_transicion_bloquea(self, mock_cursor_ctx):
+        from mpr.repositories.transicion_lote import fecha_tiene_control_calidad
+
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        cursor.fetchone.return_value = {"1": 1}
+        self.assertTrue(fecha_tiene_control_calidad("emp", date(2026, 7, 21)))
+
+    @patch("mpr.repositories.transicion_lote.mysql_cursor")
+    def test_fecha_sin_transicion_libre(self, mock_cursor_ctx):
+        from mpr.repositories.transicion_lote import fecha_tiene_control_calidad
+
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        cursor.fetchone.return_value = None
+        self.assertFalse(fecha_tiene_control_calidad("emp", date(2026, 7, 21)))
 
 
 class CrearParteConLineasMaquinaTest(SimpleTestCase):
@@ -280,6 +461,17 @@ class CrearParteConLineasMaquinaTest(SimpleTestCase):
 class RegistrarParteProduccionPlanillaTest(TestCase):
     """T7/T8: cupo multi-turno y multi-máquina."""
 
+    def setUp(self):
+        patcher = patch("mpr.services._validar_planilla_sin_control_calidad", return_value=[])
+        self._mock_validar_cc = patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher_aprob = patch(
+            "mpr.repositories.parte.fecha_planilla_tiene_parte_aprobado",
+            return_value=False,
+        )
+        self._mock_dia_aprobado = patcher_aprob.start()
+        self.addCleanup(patcher_aprob.stop)
+
     def _lineas_planilla_exceso_fila(self):
         return [
             {
@@ -303,7 +495,7 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
     @patch("mpr.services._registrar_asiento_fisico_opp_parte")
     @patch("mpr.services.get_deposito_produccion_mpr", return_value=5)
     @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
-    @patch("mpr.repositories.parte.crear_parte_con_lineas")
+    @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
     @patch("mpr.services.cupo_fabricando_por_articulo")
     def test_rechaza_suma_turnos_sobre_cupo_fila(
         self, mock_cupo, mock_crear, _op, _dep, _asiento
@@ -319,6 +511,7 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
                 1,
                 self._lineas_planilla_exceso_fila(),
                 modo_planilla=True,
+                accion="aprobar",
             )
         self.assertIn("Fabricando", str(ctx.exception))
         mock_crear.assert_not_called()
@@ -326,7 +519,7 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
     @patch("mpr.services._registrar_asiento_fisico_opp_parte")
     @patch("mpr.services.get_deposito_produccion_mpr", return_value=5)
     @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
-    @patch("mpr.repositories.parte.crear_parte_con_lineas")
+    @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
     @patch("mpr.services.cupo_fabricando_por_articulo")
     def test_rechaza_suma_agregada_articulo_multi_maquina(
         self, mock_cupo, mock_crear, _op, _dep, _asiento
@@ -368,6 +561,7 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
                 1,
                 lineas,
                 modo_planilla=True,
+                accion="aprobar",
             )
         self.assertIn("Fabricando", str(ctx.exception))
         mock_crear.assert_not_called()
@@ -375,11 +569,46 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
     @patch("mpr.services._registrar_asiento_fisico_opp_parte")
     @patch("mpr.services.get_deposito_produccion_mpr", return_value=5)
     @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
-    @patch("mpr.repositories.parte.crear_parte_con_lineas")
+    @patch("mpr.services.obtener_turno")
+    @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
+    @patch("mpr.services.cupo_fabricando_por_articulo")
+    def test_borrador_permite_exceso_fabricando(
+        self, mock_cupo, mock_crear, mock_turno, _op, _dep, _asiento
+    ):
+        from mpr.services import registrar_parte_produccion
+
+        mock_cupo.return_value = {100: 24.0}
+        turno_rec = MagicMock()
+        turno_rec.id_mpr_turno = 1
+        mock_turno.side_effect = lambda _b, tid: turno_rec if tid in (1, 2) else None
+        parte_mock = MagicMock(movimiento_fisico_ok=False, save=lambda *a, **k: None)
+        mock_crear.return_value = parte_mock
+        with patch(
+            "mpr.repositories.parte.obtener_parte_planilla_directo_supervisor",
+            return_value=None,
+        ):
+            partes, _ = registrar_parte_produccion(
+                EMPRESA,
+                date(2026, 7, 21),
+                None,
+                1,
+                self._lineas_planilla_exceso_fila(),
+                modo_planilla=True,
+                accion="borrador",
+            )
+        mock_crear.assert_called()
+        _asiento.assert_not_called()
+        self.assertEqual(len(partes), 2)
+
+    @patch("mpr.repositories.parte.obtener_parte_planilla_directo_supervisor", return_value=None)
+    @patch("mpr.services._registrar_asiento_fisico_opp_parte")
+    @patch("mpr.services.get_deposito_produccion_mpr", return_value=5)
+    @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
+    @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
     @patch("mpr.services.cupo_fabricando_por_articulo")
     @patch("mpr.services.obtener_turno")
-    def test_modo_planilla_crea_un_parte_por_turno(
-        self, mock_turno, mock_cupo, mock_crear, _op, _dep, _asiento
+    def test_modo_planilla_upsert_un_parte_por_turno(
+        self, mock_turno, mock_cupo, mock_crear, _op, _dep, _asiento, _obtener
     ):
         from mpr.services import registrar_parte_produccion
 
@@ -414,10 +643,129 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
             1,
             lineas,
             modo_planilla=True,
+            accion="aprobar",
         )
         self.assertEqual(mock_crear.call_count, 2)
         self.assertEqual(len(partes), 2)
         self.assertEqual(warnings, [])
+        estados = {c.kwargs.get("estado") for c in mock_crear.call_args_list}
+        self.assertEqual(estados, {"aprobado"})
+        _asiento.assert_called()
+
+    @patch("mpr.services._validar_planilla_sin_control_calidad", return_value=["CC bloqueado"])
+    def test_rechaza_post_si_dia_tiene_cc(self, _cc):
+        from mpr.services import registrar_parte_produccion
+
+        lineas = [
+            {
+                "id_articulo": 100,
+                "id_operario": 5,
+                "cantidad": Decimal("12"),
+                "id_mpr_maquina": 10,
+                "maquina_nombre": "M1",
+                "turno_id": 1,
+            },
+        ]
+        with self.assertRaises(ValidationError) as ctx:
+            registrar_parte_produccion(
+                EMPRESA,
+                date(2026, 7, 21),
+                None,
+                1,
+                lineas,
+                modo_planilla=True,
+                accion="borrador",
+            )
+        self.assertIn("cc bloqueado", str(ctx.exception).lower())
+
+    @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
+    @patch(
+        "mpr.repositories.parte.fecha_planilla_tiene_parte_aprobado",
+        return_value=True,
+    )
+    def test_rechaza_borrador_si_dia_ya_aprobado(self, _aprob, mock_crear):
+        from mpr.services import registrar_parte_produccion
+
+        lineas = [
+            {
+                "id_articulo": 100,
+                "id_operario": 5,
+                "cantidad": Decimal("12"),
+                "id_mpr_maquina": 10,
+                "maquina_nombre": "M1",
+                "turno_id": 1,
+            },
+        ]
+        with self.assertRaises(ValidationError) as ctx:
+            registrar_parte_produccion(
+                EMPRESA,
+                date(2026, 7, 21),
+                None,
+                1,
+                lineas,
+                modo_planilla=True,
+                accion="borrador",
+            )
+        self.assertIn("ya está aprobado", str(ctx.exception).lower())
+        mock_crear.assert_not_called()
+
+    @patch("mpr.services._registrar_delta_stock_ajuste")
+    @patch("mpr.services._registrar_asiento_fisico_opp_parte")
+    @patch("mpr.services.get_deposito_produccion_mpr", return_value=5)
+    @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
+    @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
+    @patch("mpr.repositories.parte.sumar_cantidades_aprobadas_por_articulo")
+    @patch("mpr.repositories.parte.obtener_parte_planilla_directo_supervisor")
+    @patch("mpr.services.cupo_fabricando_por_articulo")
+    @patch("mpr.services.obtener_turno")
+    def test_reaprobacion_aplica_delta_por_articulo(
+        self,
+        mock_turno,
+        mock_cupo,
+        mock_obtener,
+        mock_sumar,
+        mock_crear,
+        _op,
+        _dep,
+        mock_asiento,
+        mock_delta,
+    ):
+        from mpr.services import registrar_parte_produccion
+
+        turno_rec = MagicMock()
+        turno_rec.id_mpr_turno = 1
+        mock_turno.return_value = turno_rec
+        mock_cupo.return_value = {100: 48.0}
+        mock_obtener.return_value = {
+            "id_mpr_parte": 50,
+            "movimiento_fisico_ok": True,
+            "estado": "aprobado",
+        }
+        mock_sumar.return_value = {100: Decimal("12")}
+        parte_mock = MagicMock(movimiento_fisico_ok=True, save=lambda *a, **k: None)
+        mock_crear.return_value = parte_mock
+        lineas = [
+            {
+                "id_articulo": 100,
+                "id_operario": 5,
+                "cantidad": Decimal("18"),
+                "id_mpr_maquina": 10,
+                "maquina_nombre": "M1",
+                "turno_id": 1,
+            },
+        ]
+        registrar_parte_produccion(
+            EMPRESA,
+            date(2026, 7, 21),
+            None,
+            1,
+            lineas,
+            modo_planilla=True,
+            accion="aprobar",
+        )
+        mock_asiento.assert_not_called()
+        mock_delta.assert_called_once()
+        self.assertEqual(mock_delta.call_args.kwargs["delta"], Decimal("6"))
 
 
 class ParteLineasDesdePostPlanillaTest(SimpleTestCase):
@@ -473,7 +821,7 @@ class ParteProduccionViewPlanillaTest(SimpleTestCase):
         kwargs = mock_grilla.call_args.kwargs
         self.assertEqual(kwargs["id_linea"], 1)
         self.assertEqual(kwargs["id_maquina"], 10)
-        self.assertEqual(kwargs["q"], "art")
+        self.assertIsNone(kwargs["q"])
         self.assertIn("grilla_planilla", context)
         self.assertNotIn("turno_id", context)
 
@@ -512,6 +860,12 @@ class RegistrarParteProduccionViewPlanillaIntegrationTest(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.user = _crear_usuario_planilla_qc()
+        patcher_perm = patch("mpr.views._usuario_tiene_permiso_mpr", return_value=True)
+        patcher_perm.start()
+        self.addCleanup(patcher_perm.stop)
+        patcher_cc = patch("mpr.services._validar_planilla_sin_control_calidad", return_value=[])
+        patcher_cc.start()
+        self.addCleanup(patcher_cc.stop)
 
     def _post_registrar(self, data, empresa=EMPRESA):
         request = self.factory.post(reverse("mpr:parte_produccion_registrar"), data=data)
@@ -526,6 +880,7 @@ class RegistrarParteProduccionViewPlanillaIntegrationTest(TestCase):
     def test_post_multi_turno_persiste_id_mpr_maquina(self, _base, mock_registrar):
         mock_registrar.return_value = ([MagicMock(), MagicMock()], [])
         data = _post_planilla_base(
+            accion="aprobar",
             parte_maq_10_art_100_turno_1_docenas="1",
             parte_maq_10_art_100_turno_1_pares="0",
             parte_maq_10_art_100_turno_1_op="5",
@@ -540,6 +895,7 @@ class RegistrarParteProduccionViewPlanillaIntegrationTest(TestCase):
         mock_registrar.assert_called_once()
         call_kwargs = mock_registrar.call_args.kwargs
         self.assertTrue(call_kwargs.get("modo_planilla"))
+        self.assertEqual(call_kwargs.get("accion"), "aprobar")
         lineas = mock_registrar.call_args.args[4]
         self.assertEqual(len(lineas), 2)
         self.assertEqual(lineas[0]["id_mpr_maquina"], 10)
@@ -548,6 +904,9 @@ class RegistrarParteProduccionViewPlanillaIntegrationTest(TestCase):
         msgs = [m.message for m in get_messages(request)]
         self.assertTrue(any("registrado exitosamente" in m.lower() for m in msgs))
 
+    @patch("mpr.repositories.parte.fecha_planilla_tiene_parte_aprobado", return_value=False)
+    @patch("mpr.repositories.transicion_lote.fecha_tiene_control_calidad", return_value=False)
+    @patch("mpr.repositories.transicion_lote.turnos_con_control_calidad", return_value=set())
     @patch("mpr.repositories.parte.precarga_planilla_por_fecha")
     @patch("mpr.services._fabricando_por_componentes")
     @patch("mpr.services._query_enviados_todos_componentes")
@@ -572,6 +931,9 @@ class RegistrarParteProduccionViewPlanillaIntegrationTest(TestCase):
         mock_envios,
         mock_fabricando,
         mock_precarga,
+        _turnos_cc,
+        _fecha_cc,
+        _dia_aprobado,
     ):
         """Tras un registro previo, la grilla precarga docenas/pares por turno."""
         mock_planilla.return_value = _planilla_maquinas_dos_filas()
@@ -601,7 +963,7 @@ class RegistrarParteProduccionViewPlanillaIntegrationTest(TestCase):
     @patch("mpr.services._registrar_asiento_fisico_opp_parte")
     @patch("mpr.services.get_deposito_produccion_mpr", return_value=5)
     @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
-    @patch("mpr.repositories.parte.crear_parte_con_lineas")
+    @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
     @patch("mpr.services.cupo_fabricando_por_articulo")
     @patch("mpr.views._get_base_empresa", return_value=EMPRESA)
     def test_post_rechaza_sobre_cupo_mensaje_es(
@@ -615,6 +977,7 @@ class RegistrarParteProduccionViewPlanillaIntegrationTest(TestCase):
     ):
         mock_cupo.return_value = {100: 24.0}
         data = _post_planilla_base(
+            accion="aprobar",
             parte_maq_10_art_100_turno_1_docenas="1",
             parte_maq_10_art_100_turno_1_pares="0",
             parte_maq_10_art_100_turno_1_op="5",

@@ -17,10 +17,13 @@ from core.decorators import tiene_permiso
 from core.utils.permissions import user_has_permission
 from ventas.services.precios_terminados import (
     PAGE_SIZE,
+    RESERVA_EQ0,
+    RESERVA_GT0,
     TIPO_PRODUCTO_2DA,
     TIPO_PRODUCTO_TERMINADO,
     aplicar_cambio_masivo,
     build_filtros_query_string,
+    build_orden_query_string,
     buscar_articulos_codigo_precios,
     guardar_lote,
     listar_marcas_catalogo_precios,
@@ -107,11 +110,23 @@ def precios_terminados_view(request):
 
     qs_base = build_filtros_query_string(filtros, page=1)
     qs_tipo_terminado = build_filtros_query_string(
-        filtros.__class__(tipo_producto=TIPO_PRODUCTO_TERMINADO, listas_incluidas=filtros.listas_incluidas),
+        filtros.__class__(
+            tipo_producto=TIPO_PRODUCTO_TERMINADO,
+            listas_incluidas=filtros.listas_incluidas,
+            orden=filtros.orden,
+            dir=filtros.dir,
+            reserva=filtros.reserva,
+        ),
         reset_secundarios=True,
     )
     qs_tipo_2da = build_filtros_query_string(
-        filtros.__class__(tipo_producto=TIPO_PRODUCTO_2DA, listas_incluidas=filtros.listas_incluidas),
+        filtros.__class__(
+            tipo_producto=TIPO_PRODUCTO_2DA,
+            listas_incluidas=filtros.listas_incluidas,
+            orden=filtros.orden,
+            dir=filtros.dir,
+            reserva=filtros.reserva,
+        ),
         reset_secundarios=True,
     )
 
@@ -130,6 +145,9 @@ def precios_terminados_view(request):
         "rubros_incluidos": filtros.rubros_incluidos,
         "subrubros_incluidos": filtros.subrubros_incluidos,
         "listas_incluidas": filtros.listas_incluidas,
+        "orden": filtros.orden,
+        "dir": filtros.dir,
+        "reserva": filtros.reserva,
     }
     listas_nombres = nombres_listas_precio()
     tabla_config = {
@@ -149,9 +167,71 @@ def precios_terminados_view(request):
         },
     }
     listas_header = [
-        {"id": i, "nombre": listas_nombres.get(i, f"Lista {i}")}
+        {
+            "id": i,
+            "nombre": listas_nombres.get(i, f"Lista {i}"),
+            "orden_neto_key": f"neto_{i}",
+            "orden_final_key": f"final_{i}",
+            "orden_neto_qs": build_orden_query_string(filtros, f"neto_{i}"),
+            "orden_final_qs": build_orden_query_string(filtros, f"final_{i}"),
+        }
         for i in filtros.listas_incluidas
     ]
+
+    sort_links = {
+        "id": build_orden_query_string(filtros, "id"),
+        "codigo": build_orden_query_string(filtros, "codigo"),
+        "nombre": build_orden_query_string(filtros, "nombre"),
+        "reserva": build_orden_query_string(filtros, "reserva"),
+    }
+    reserva_qs_todas = build_filtros_query_string(
+        filtros.__class__(
+            tipo_producto=filtros.tipo_producto,
+            marcas_incluidos=filtros.marcas_incluidos,
+            codigos_incluidos=filtros.codigos_incluidos,
+            proveedores_incluidos=filtros.proveedores_incluidos,
+            rubros_incluidos=filtros.rubros_incluidos,
+            subrubros_incluidos=filtros.subrubros_incluidos,
+            listas_incluidas=filtros.listas_incluidas,
+            page=1,
+            orden=filtros.orden,
+            dir=filtros.dir,
+            reserva="",
+        ),
+        page=1,
+    )
+    reserva_qs_eq0 = build_filtros_query_string(
+        filtros.__class__(
+            tipo_producto=filtros.tipo_producto,
+            marcas_incluidos=filtros.marcas_incluidos,
+            codigos_incluidos=filtros.codigos_incluidos,
+            proveedores_incluidos=filtros.proveedores_incluidos,
+            rubros_incluidos=filtros.rubros_incluidos,
+            subrubros_incluidos=filtros.subrubros_incluidos,
+            listas_incluidas=filtros.listas_incluidas,
+            page=1,
+            orden=filtros.orden,
+            dir=filtros.dir,
+            reserva=RESERVA_EQ0,
+        ),
+        page=1,
+    )
+    reserva_qs_gt0 = build_filtros_query_string(
+        filtros.__class__(
+            tipo_producto=filtros.tipo_producto,
+            marcas_incluidos=filtros.marcas_incluidos,
+            codigos_incluidos=filtros.codigos_incluidos,
+            proveedores_incluidos=filtros.proveedores_incluidos,
+            rubros_incluidos=filtros.rubros_incluidos,
+            subrubros_incluidos=filtros.subrubros_incluidos,
+            listas_incluidas=filtros.listas_incluidas,
+            page=1,
+            orden=filtros.orden,
+            dir=filtros.dir,
+            reserva=RESERVA_GT0,
+        ),
+        page=1,
+    )
 
     context = {
         "filtros": filtros,
@@ -177,6 +257,10 @@ def precios_terminados_view(request):
         "listas_incluidas_selected": filtros.listas_incluidas,
         "tabla_config": tabla_config,
         "num_columnas_tabla": 4 + len(filtros.listas_incluidas) * 2,
+        "sort_links": sort_links,
+        "reserva_qs_todas": reserva_qs_todas,
+        "reserva_qs_eq0": reserva_qs_eq0,
+        "reserva_qs_gt0": reserva_qs_gt0,
     }
     context.update(_catalogos_context(base_empresa, filtros))
     return render(request, "ventas/precios_terminados_tabla.html", context)

@@ -1,7 +1,7 @@
 """Tests backend carga en grilla de artículos por máquina (MPR)."""
 import inspect
 import json
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import patch
 
 from django.test import RequestFactory, SimpleTestCase
@@ -12,7 +12,9 @@ from mpr.services_maquina_linea import (
     cantidades_parte_planilla_por_fecha,
     construir_datos_planilla_control_calidad,
     construir_grilla_carga_articulos,
+    deshabilitar_articulo_maquina,
     guardar_observacion_planilla_maquina,
+    habilitar_articulo_maquina,
 )
 from mpr.views import (
     MaquinaArticuloAccionAPIView,
@@ -64,6 +66,38 @@ class ConstruirGrillaCargaArticulosTest(SimpleTestCase):
         self.assertIn("codigo_search", out["maquinas"][0])
         self.assertEqual(out["id_linea_filtro"], 1)
         self.assertEqual(out["fecha_hoy"], date.today())
+        self.assertEqual(out["fecha"], date.today())
+        self.assertFalse(out["es_fecha_pasada"])
+        mock_articulos.assert_called_once_with("emp", date.today())
+
+    @patch("mpr.services_maquina_linea.listar_articulos_vigentes_todas_maquinas")
+    @patch("mpr.services_maquina_linea.listar_maquinas")
+    @patch("mpr.services_maquina_linea.listar_lineas")
+    def test_usa_fecha_parametro_y_marca_pasada(
+        self, mock_lineas, mock_maquinas, mock_articulos
+    ):
+        mock_lineas.return_value = []
+        mock_maquinas.return_value = []
+        mock_articulos.return_value = {}
+        fecha = date.today() - timedelta(days=3)
+        out = construir_grilla_carga_articulos("emp", fecha=fecha)
+        self.assertEqual(out["fecha"], fecha)
+        self.assertTrue(out["es_fecha_pasada"])
+        mock_articulos.assert_called_once_with("emp", fecha)
+
+    @patch("mpr.services_maquina_linea.listar_articulos_vigentes_todas_maquinas")
+    @patch("mpr.services_maquina_linea.listar_maquinas")
+    @patch("mpr.services_maquina_linea.listar_lineas")
+    def test_fecha_futura_se_clampa_a_hoy(
+        self, mock_lineas, mock_maquinas, mock_articulos
+    ):
+        mock_lineas.return_value = []
+        mock_maquinas.return_value = []
+        mock_articulos.return_value = {}
+        futuro = date.today() + timedelta(days=5)
+        out = construir_grilla_carga_articulos("emp", fecha=futuro)
+        self.assertEqual(out["fecha"], date.today())
+        mock_articulos.assert_called_once_with("emp", date.today())
 
 
 class ListarArticulosVigentesOrdenTest(SimpleTestCase):
@@ -176,7 +210,28 @@ class MaquinaArticuloAccionAPIViewTest(SimpleTestCase):
         data = json.loads(resp.content)
         self.assertTrue(data["ok"])
         self.assertEqual(data["articulo"]["id_articulo"], 5)
-        mock_hab.assert_called_once_with("emp", 1, 5)
+        mock_hab.assert_called_once_with("emp", 1, 5, desde=date.today())
+
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    @patch("mpr.services_maquina_linea.listar_articulos_vigentes_maquina")
+    @patch("mpr.services_maquina_linea.habilitar_articulo_maquina", return_value=(True, None))
+    def test_post_habilitar_con_fecha_pasada(self, mock_hab, mock_vigentes, _base):
+        fecha = date(2026, 3, 10)
+        mock_vigentes.return_value = [{"id_articulo": 5}]
+        req = self.rf.post(
+            "/mpr/maquinas/api/articulos/accion/",
+            data=json.dumps({
+                "accion": "habilitar",
+                "id_maquina": 1,
+                "id_articulo": 5,
+                "fecha": "10/03/2026",
+            }),
+            content_type="application/json",
+        )
+        resp = self.view.post(req)
+        self.assertEqual(resp.status_code, 200)
+        mock_hab.assert_called_once_with("emp", 1, 5, desde=fecha)
+        mock_vigentes.assert_called_once_with("emp", 1, fecha=fecha)
 
     @patch("mpr.views._get_base_empresa", return_value="emp")
     @patch(
@@ -192,7 +247,44 @@ class MaquinaArticuloAccionAPIViewTest(SimpleTestCase):
         data = json.loads(resp.content)
         self.assertTrue(data["ok"])
         self.assertNotIn("articulo", data)
-        mock_deshab.assert_called_once_with("emp", 2, 9)
+        mock_deshab.assert_called_once_with("emp", 2, 9, fecha=date.today())
+
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    @patch(
+        "mpr.services_maquina_linea.deshabilitar_articulo_maquina",
+        return_value=(False, "No se puede quitar el artículo: hay parte de producción registrado para esa máquina y fecha."),
+    )
+    def test_post_deshabilitar_bloqueado_por_parte_400(self, _mock_deshab, _base):
+        req = self.rf.post(
+            "/mpr/maquinas/api/articulos/accion/",
+            data=json.dumps({
+                "accion": "deshabilitar",
+                "id_maquina": 2,
+                "id_articulo": 9,
+                "fecha": date.today().strftime("%d/%m/%Y"),
+            }),
+            content_type="application/json",
+        )
+        resp = self.view.post(req)
+        self.assertEqual(resp.status_code, 400)
+        data = json.loads(resp.content)
+        self.assertIn("parte de producción", data["error"].lower())
+
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    def test_post_fecha_futura_400(self, _base):
+        futuro = (date.today() + timedelta(days=2)).strftime("%d/%m/%Y")
+        req = self.rf.post(
+            "/mpr/maquinas/api/articulos/accion/",
+            data=json.dumps({
+                "accion": "habilitar",
+                "id_maquina": 1,
+                "id_articulo": 5,
+                "fecha": futuro,
+            }),
+            content_type="application/json",
+        )
+        resp = self.view.post(req)
+        self.assertEqual(resp.status_code, 400)
 
     @patch("mpr.views._get_base_empresa", return_value="emp")
     @patch(
@@ -409,6 +501,8 @@ class OperariosRosterPorFranjaTest(SimpleTestCase):
             "lineas": [],
             "id_linea_filtro": None,
             "fecha_hoy": date.today(),
+            "fecha": date.today(),
+            "es_fecha_pasada": False,
         }
         mock_operarios_por_linea.return_value = {
             1: {"manana": "ANA GÓMEZ", "tarde": "", "noche": ""},
@@ -425,6 +519,111 @@ class OperariosRosterPorFranjaTest(SimpleTestCase):
         mock_operarios_por_linea.assert_called_once_with(
             "emp", date.today(), {1, 2}
         )
+
+    @patch("mpr.services.operarios_roster_por_linea")
+    @patch("mpr.services_maquina_linea.construir_grilla_carga_articulos")
+    @patch("mpr.views._get_base_empresa", return_value="emp")
+    def test_vista_parsea_fecha_get_ddmmyyyy(
+        self, _base, mock_grilla, mock_operarios_por_linea
+    ):
+        fecha = date(2026, 3, 10)
+        mock_grilla.return_value = {
+            "maquinas": [],
+            "lineas": [],
+            "id_linea_filtro": None,
+            "fecha_hoy": date.today(),
+            "fecha": fecha,
+            "es_fecha_pasada": True,
+        }
+        mock_operarios_por_linea.return_value = {}
+        request = RequestFactory().get("/mpr/maquinas/carga-articulos/?fecha=10/03/2026")
+        request.session = {}
+        view = MaquinasCargaArticulosView()
+        view.setup(request)
+
+        context = view.get_context_data()
+
+        self.assertEqual(context["fecha_str"], "10/03/2026")
+        mock_grilla.assert_called_once_with("emp", id_linea=None, fecha=fecha)
+        mock_operarios_por_linea.assert_called_once_with("emp", fecha, set())
+
+
+class HabilitarDeshabilitarArticuloMaquinaServiceTest(SimpleTestCase):
+    @patch("mpr.services_maquina_linea.repo_art.habilitar_articulo")
+    @patch("mpr.services_maquina_linea.repo_art.articulo_vigente", return_value=False)
+    @patch("mpr.services_maquina_linea.repo_art.articulos_por_ids", return_value={5: {}})
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 1})
+    def test_habilitar_hoy_vigencia_abierta(self, *_mocks):
+        ok, error = habilitar_articulo_maquina("emp", 1, 5, desde=date.today())
+        self.assertTrue(ok)
+        self.assertIsNone(error)
+        from mpr.services_maquina_linea import repo_art
+
+        repo_art.habilitar_articulo.assert_called_once_with(
+            "emp", 1, 5, date.today(), hasta=None
+        )
+
+    @patch("mpr.services_maquina_linea.repo_art.habilitar_articulo")
+    @patch("mpr.services_maquina_linea.repo_art.articulo_vigente", return_value=False)
+    @patch("mpr.services_maquina_linea.repo_art.articulos_por_ids", return_value={5: {}})
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 1})
+    def test_habilitar_fecha_pasada_solo_ese_dia(self, *_mocks):
+        fecha = date.today() - timedelta(days=2)
+        ok, error = habilitar_articulo_maquina("emp", 1, 5, desde=fecha)
+        self.assertTrue(ok)
+        from mpr.services_maquina_linea import repo_art
+
+        repo_art.habilitar_articulo.assert_called_once_with(
+            "emp", 1, 5, fecha, hasta=fecha + timedelta(days=1)
+        )
+
+    @patch("mpr.services_maquina_linea.repo_art.articulo_vigente", return_value=True)
+    @patch("mpr.services_maquina_linea.repo_art.articulos_por_ids", return_value={5: {}})
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 1})
+    def test_habilitar_ya_vigente_error(self, *_mocks):
+        ok, error = habilitar_articulo_maquina("emp", 1, 5, desde=date.today())
+        self.assertFalse(ok)
+        self.assertIn("ya está habilitado", error.lower())
+
+    @patch("mpr.services_maquina_linea.repo_art.habilitar_articulo")
+    @patch("mpr.services_maquina_linea.repo_art.articulo_vigente", return_value=False)
+    @patch("mpr.services_maquina_linea.repo_art.articulos_por_ids", return_value={5: {}})
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 1})
+    def test_habilitar_fecha_futura_rechazada(self, *_mocks):
+        futuro = date.today() + timedelta(days=1)
+        ok, error = habilitar_articulo_maquina("emp", 1, 5, desde=futuro)
+        self.assertFalse(ok)
+        self.assertIn("futur", error.lower())
+
+    @patch("mpr.services_maquina_linea.repo_art.deshabilitar_articulo", return_value=1)
+    @patch("mpr.repositories.parte.tiene_parte_maquina_articulo_fecha", return_value=False)
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 1})
+    def test_deshabilitar_hoy_cierra_vigencia(self, *_mocks):
+        ok, error = deshabilitar_articulo_maquina("emp", 1, 5, fecha=date.today())
+        self.assertTrue(ok)
+        from mpr.services_maquina_linea import repo_art
+
+        repo_art.deshabilitar_articulo.assert_called_once_with(
+            "emp", 1, 5, date.today()
+        )
+
+    @patch("mpr.services_maquina_linea.repo_art.quitar_cobertura_fecha", return_value=True)
+    @patch("mpr.repositories.parte.tiene_parte_maquina_articulo_fecha", return_value=False)
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 1})
+    def test_deshabilitar_fecha_pasada_quita_cobertura(self, *_mocks):
+        fecha = date.today() - timedelta(days=1)
+        ok, error = deshabilitar_articulo_maquina("emp", 1, 5, fecha=fecha)
+        self.assertTrue(ok)
+        from mpr.services_maquina_linea import repo_art
+
+        repo_art.quitar_cobertura_fecha.assert_called_once_with("emp", 1, 5, fecha)
+
+    @patch("mpr.repositories.parte.tiene_parte_maquina_articulo_fecha", return_value=True)
+    @patch("mpr.services_maquina_linea.repo.obtener_maquina", return_value={"id": 1})
+    def test_deshabilitar_bloqueado_si_hay_parte(self, *_mocks):
+        ok, error = deshabilitar_articulo_maquina("emp", 1, 5, fecha=date.today())
+        self.assertFalse(ok)
+        self.assertIn("parte de producción", error.lower())
 
 
 class ConstruirDatosPlanillaControlCalidadTest(SimpleTestCase):

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -569,8 +569,14 @@ def construir_grilla_parte_planilla(
     Envuelve ``construir_datos_planilla_control_calidad`` + cupo Fabricando +
     precarga por (fecha, máquina, artículo, turno). No altera ``construir_grilla_parte``.
     """
-    from mpr.repositories.parte import precarga_planilla_por_fecha
-    from mpr.repositories.transicion_lote import turnos_con_control_calidad
+    from mpr.repositories.parte import (
+        fecha_planilla_tiene_parte_aprobado,
+        precarga_planilla_por_fecha,
+    )
+    from mpr.repositories.transicion_lote import (
+        fecha_tiene_control_calidad,
+        turnos_con_control_calidad,
+    )
     from mpr.services import (
         _fabricando_por_componentes,
         _fetch_descripciones_articulo,
@@ -584,6 +590,9 @@ def construir_grilla_parte_planilla(
         "filas_vacio": True,
         "turnos_columnas": [],
         "fecha": fecha.isoformat() if fecha else None,
+        "dia_bloqueado_cc": False,
+        "dia_aprobado": False,
+        "turnos_bloqueados": [],
     }
     base = (base_empresa or "").strip()
     if not base or fecha is None:
@@ -645,6 +654,10 @@ def construir_grilla_parte_planilla(
         precarga = precarga_planilla_por_fecha(base, fecha)
 
     turnos_bloqueados = turnos_con_control_calidad(base, fecha)
+    dia_bloqueado_cc = fecha_tiene_control_calidad(base, fecha)
+    dia_aprobado = False
+    if not planilla.get("es_futuro"):
+        dia_aprobado = fecha_planilla_tiene_parte_aprobado(base, fecha)
 
     filas: List[Dict[str, Any]] = []
     for maq in maquinas_raw:
@@ -685,7 +698,7 @@ def construir_grilla_parte_planilla(
                     "pares": par,
                     "operarios": list(ops_linea.get(franja) or []),
                     "franja": franja,
-                    "bloqueado": tid in turnos_bloqueados,
+                    "bloqueado": dia_bloqueado_cc or tid in turnos_bloqueados,
                 }
             cod_desc = desc_map.get(aid, (codigo, descripcion))
             filas.append({
@@ -696,7 +709,7 @@ def construir_grilla_parte_planilla(
                 "codigo_tooltip": str(cod_desc[0] or codigo or ""),
                 "fabricando": fab,
                 "ingresado": ingresado,
-                "inputs_habilitados": fab > 0,
+                "inputs_habilitados": fab > 0 and not dia_bloqueado_cc,
                 "turnos": turnos_payload,
                 "show_maquina": False,
                 "rowspan_maquina": 1,
@@ -706,6 +719,8 @@ def construir_grilla_parte_planilla(
     resultado["filas"] = filas
     resultado["filas_vacio"] = len(filas) == 0
     resultado["turnos_bloqueados"] = sorted(turnos_bloqueados)
+    resultado["dia_bloqueado_cc"] = dia_bloqueado_cc
+    resultado["dia_aprobado"] = dia_aprobado
     return resultado
 
 
@@ -732,9 +747,13 @@ def _anotar_rowspan_maquina_filas(filas: List[Dict[str, Any]]) -> None:
 def construir_grilla_carga_articulos(
     base_empresa: str,
     id_linea: Optional[int] = None,
+    fecha: Optional[date] = None,
 ) -> Dict[str, Any]:
     """Contexto para la grilla de carga de artículos por máquina (supervisor)."""
-    fecha_hoy = date.today()
+    hoy = date.today()
+    fecha_ref = fecha or hoy
+    if fecha_ref > hoy:
+        fecha_ref = hoy
     lineas = listar_lineas(base_empresa, solo_activas=True)
     id_linea_filtro = _to_int(id_linea) if id_linea is not None else None
     maquinas_raw = listar_maquinas(base_empresa, solo_activas=True)
@@ -743,7 +762,9 @@ def construir_grilla_carga_articulos(
             m for m in maquinas_raw
             if m.get("id_linea_actual") == id_linea_filtro
         ]
-    articulos_por_maquina = listar_articulos_vigentes_todas_maquinas(base_empresa, fecha_hoy)
+    articulos_por_maquina = listar_articulos_vigentes_todas_maquinas(
+        base_empresa, fecha_ref
+    )
     maquinas: List[Dict[str, Any]] = []
     con_articulos = 0
     for m in maquinas_raw:
@@ -764,7 +785,9 @@ def construir_grilla_carga_articulos(
         "maquinas": maquinas,
         "lineas": lineas,
         "id_linea_filtro": id_linea_filtro,
-        "fecha_hoy": fecha_hoy,
+        "fecha": fecha_ref,
+        "fecha_hoy": hoy,
+        "es_fecha_pasada": fecha_ref < hoy,
         "total_maquinas": len(maquinas),
         "con_articulos": con_articulos,
     }
@@ -809,11 +832,23 @@ def habilitar_articulo_maquina(
         return False, "Artículo inválido."
     if not repo_art.articulos_por_ids(base_empresa, [aid]):
         return False, "El artículo no existe en la empresa."
-    fecha = desde or date.today()
+    hoy = date.today()
+    fecha = desde or hoy
+    if fecha > hoy:
+        return False, "No se pueden asignar artículos en fechas futuras."
     if repo_art.articulo_vigente(base_empresa, id_maquina, aid, fecha):
         return False, "El artículo ya está habilitado (vigente) en esta máquina."
     try:
-        repo_art.habilitar_articulo(base_empresa, id_maquina, aid, fecha)
+        if fecha == hoy:
+            repo_art.habilitar_articulo(base_empresa, id_maquina, aid, hoy, hasta=None)
+        else:
+            repo_art.habilitar_articulo(
+                base_empresa,
+                id_maquina,
+                aid,
+                fecha,
+                hasta=fecha + timedelta(days=1),
+            )
         return True, None
     except Exception as e:
         logger.error(
@@ -827,7 +862,7 @@ def deshabilitar_articulo_maquina(
     base_empresa: str,
     id_maquina: int,
     id_articulo: int,
-    hasta: Optional[date] = None,
+    fecha: Optional[date] = None,
 ) -> Tuple[bool, Optional[str]]:
     if not (base_empresa or "").strip():
         return False, "Empresa inválida."
@@ -836,11 +871,26 @@ def deshabilitar_articulo_maquina(
     aid = _to_int(id_articulo)
     if aid is None:
         return False, "Artículo inválido."
-    fecha = hasta or date.today()
+    hoy = date.today()
+    ref = fecha or hoy
+    if ref > hoy:
+        return False, "No se pueden modificar asignaciones en fechas futuras."
+    from mpr.repositories.parte import tiene_parte_maquina_articulo_fecha
+
+    if tiene_parte_maquina_articulo_fecha(base_empresa, ref, id_maquina, aid):
+        return (
+            False,
+            "No se puede quitar el artículo: hay parte de producción registrado "
+            "para esa máquina y fecha.",
+        )
     try:
-        afectadas = repo_art.deshabilitar_articulo(base_empresa, id_maquina, aid, fecha)
-        if not afectadas:
-            return False, "El artículo no estaba habilitado en esta máquina."
+        if ref == hoy:
+            afectadas = repo_art.deshabilitar_articulo(base_empresa, id_maquina, aid, hoy)
+            if not afectadas:
+                return False, "El artículo no estaba habilitado en esta máquina."
+        else:
+            if not repo_art.quitar_cobertura_fecha(base_empresa, id_maquina, aid, ref):
+                return False, "El artículo no estaba habilitado en esta máquina para esa fecha."
         return True, None
     except Exception as e:
         logger.error(

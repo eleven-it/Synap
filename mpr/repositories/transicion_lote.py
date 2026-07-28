@@ -270,6 +270,23 @@ def turnos_con_control_calidad(base_empresa: str, fecha: date) -> set[int]:
     return turnos
 
 
+def fecha_tiene_control_calidad(base_empresa: str, fecha: date) -> bool:
+    """True si existe al menos un registro en mpr_transicion_lote para la fecha."""
+    base = (base_empresa or "").strip()
+    if not base or fecha is None:
+        return False
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT 1 FROM mpr_transicion_lote
+            WHERE fecha_produccion = %s
+            LIMIT 1
+            """,
+            [fecha],
+        )
+        return cursor.fetchone() is not None
+
+
 def turno_tiene_control_calidad(
     base_empresa: str,
     fecha: date,

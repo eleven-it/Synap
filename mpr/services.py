@@ -14800,31 +14800,26 @@ def _calcular_fabricando_componente(
     """
     Fabricando = envíos ledger no cubiertos por unidades ya acreditadas al pipeline.
 
-    Acreditado = max(
-        stock en Semi + 2da + Scrap,
-        clasificación desde Producción (``mpr_transicion_lote``),
-        partes ya registrados en ledger,
-    ).
+    Acreditado = max(Semi+2da+Scrap, clasificación CC)
+                 + max(0, partes − clasificación CC).
+
+    Así un parte nuevo siempre baja Fabricando aunque ya haya Semi/2da previos
+    (no se usa ``max(fisico, partes)``, que tapaba el crédito del parte). Tras CC,
+    ``clasificado`` evita doble conteo de las mismas unidades.
 
     **Producción no acredita:** el depósito Producción es destino del parte (y cola
     de CC). Stock preexistente ahí (corte, migración, carga previa) no debe anular
-    el cupo Fabricando tras un Enviar; si lo hiciera, el Parte quedaría en
-    «Sin cupo» con máquina asignada y demanda pendiente.
-
-    Semi/2da/Scrap sí acreditan (ya salieron de Producción vía CC). La trazabilidad
-    ``mpr_transicion_lote`` cubre unidades clasificadas aunque el semi se haya
-    consumido en armado.
+    el cupo Fabricando tras un Enviar.
     """
     acreditado_fisico = (
         float(stock_comp.get(TIPO_MPR_SEMI_ELABORADO, 0.0) or 0)
         + float(stock_comp.get(TIPO_MPR_2DA_SELECCION, 0.0) or 0)
         + float(stock_comp.get(TIPO_MPR_SCRAP, 0.0) or 0)
     )
-    acreditado = max(
-        acreditado_fisico,
-        float(clasificado_desde_produccion or 0),
-        float(parte_acumulado or 0),
-    )
+    clasificado = float(clasificado_desde_produccion or 0)
+    partes = float(parte_acumulado or 0)
+    piso = max(acreditado_fisico, clasificado)
+    acreditado = piso + max(0.0, partes - clasificado)
     return max(0.0, float(envios_dir or 0) - acreditado)
 
 
@@ -14966,23 +14961,24 @@ def _calcular_a_enviar_componente(
     *,
     fabricando: Optional[float] = None,
 ) -> float:
-    """Tope de Enviar según Resta urgente (PCP) y Σ envíos del ledger.
+    """Tope de Enviar: lo que falta mandar respecto del cupo Fabricando.
 
-    Siempre ``max(0, resta_urgente − Σ envíos)``. El ledger cuenta como compromiso
-    hacia la brecha aunque Fabricando=0 (p. ej. stock de pipeline preexistente
-    absorbe envíos y deja Fabricando en 0). Reabrir el tope a ``resta_urgente``
-    cuando Fabricando=0 generaba reenvíos fantasma (mismo hueco una y otra vez)
-    sin subir Fabricando.
+    ``max(0, Urgente − Fabricando)``.
 
-    ``fabricando`` se conserva en la firma por compatibilidad con callers/tests;
-    no altera el tope.
+    Un pedido nuevo que sube Urgente habilita Enviar aunque el ledger histórico
+    (``envios_ledger``) ya sea alto: el parte baja Fabricando, no Enviado. Restar
+    el ledger tapaba esos pedidos y impedía cerrar el día (Total = demanda).
+
+    ``envios_ledger`` se conserva en la firma por compatibilidad con callers;
+    el tope operativo usa ``fabricando``. Si no se informa Fabricando, se asume 0
+    (todo el urgente está descubierto).
 
     Si se informa ``resta_total``, el tope no puede superarla (regla operativa UI).
     """
     urg = max(0.0, float(resta_urgente or 0))
-    env = max(0.0, float(envios_ledger or 0))
-    _ = fabricando  # API estable; el tope ya no depende de Fabricando
-    tope = max(0.0, urg - env)
+    _ = envios_ledger  # API estable; el tope ya no resta el ledger bruto
+    fab = max(0.0, float(fabricando or 0))
+    tope = max(0.0, urg - fab)
     if resta_total is not None:
         tope = min(tope, max(0.0, float(resta_total or 0)))
     return tope
@@ -15314,7 +15310,7 @@ def listar_tablero_por_articulo(
     4.  comp_ids = demanda ∪ envíos directos
     5.  Enviado/Fabricando = max(0, Σ envíos − acreditado) por componente
     6.  stock_proceso = total sin Terminado; resta_urgente = resta_total = brecha demanda total (PCP)
-    7.  a_enviar = max(0, resta_urgente − Σ envíos ledger); no reabre si Fabricando=0
+    7.  a_enviar = max(0, resta_urgente − Fabricando)
 
     La columna Reserva del modo Par muestra el colchón objetivo del pack (``coef × stock_reserva``),
     paridad con modo Pack; no altera Fabricando ni el tope a_enviar (que usan la brecha CF).
@@ -16633,6 +16629,7 @@ def registrar_parte_produccion(
     notas: str = "",
     *,
     modo_planilla: bool = False,
+    accion: str = "aprobar",
 ) -> Tuple[Any, List[str]]:
     """
     Crea parte de producción en mpr_parte / mpr_parte_linea (MySQL).
@@ -16640,6 +16637,7 @@ def registrar_parte_produccion(
 
     lineas: [{id_articulo: int, id_operario: int, cantidad: Decimal/float/str}]
     modo_planilla: un POST con líneas multi-turno/máquina → hasta 3 MprParte atómicos.
+    accion: ``borrador`` | ``aprobar`` (solo planilla desktop).
     Returns: (parte | list[parte], warnings_español)
     """
     from django.core.exceptions import ValidationError as DjValidationError
@@ -16660,6 +16658,7 @@ def registrar_parte_produccion(
             id_usuario,
             lineas,
             notas=notas,
+            accion=accion,
         )
 
     warnings: List[str] = []
@@ -16740,17 +16739,51 @@ def registrar_parte_produccion(
     return parte, warnings
 
 
+def _validar_planilla_sin_control_calidad(
+    base_empresa: str,
+    fecha,
+) -> List[str]:
+    """Errores si la fecha tiene CC (cualquier mpr_transicion_lote) y bloquea la planilla."""
+    from mpr.repositories.transicion_lote import fecha_tiene_control_calidad
+
+    if fecha_tiene_control_calidad(base_empresa, fecha):
+        return [
+            "La fecha ya tiene control de calidad registrado "
+            "y no se puede modificar el parte de producción."
+        ]
+    return []
+
+
 def _registrar_parte_produccion_planilla(
     base_empresa: str,
     fecha_produccion,
     id_usuario: int,
     lineas: List[Dict[str, Any]],
     notas: str = "",
+    accion: str = "aprobar",
 ) -> Tuple[List[Any], List[str]]:
-    """Registro analista planilla QC: validación cupo + un MprParte por turno."""
+    """Registro analista planilla QC: upsert por turno, borrador o aprobación con stock."""
     from django.core.exceptions import ValidationError as DjValidationError
     from django.db import transaction
-    from mpr.repositories.parte import crear_parte_con_lineas
+    from mpr.repositories.parte import (
+        crear_o_actualizar_parte_planilla,
+        fecha_planilla_tiene_parte_aprobado,
+        obtener_parte_planilla_directo_supervisor,
+        sumar_cantidades_aprobadas_por_articulo,
+    )
+
+    accion_norm = "borrador" if str(accion or "").strip().lower() == "borrador" else "aprobar"
+    es_borrador = accion_norm == "borrador"
+
+    errores_cc = _validar_planilla_sin_control_calidad(base_empresa, fecha_produccion)
+    if errores_cc:
+        raise DjValidationError(" ".join(errores_cc))
+
+    if es_borrador and fecha_planilla_tiene_parte_aprobado(base_empresa, fecha_produccion):
+        raise DjValidationError(
+            "El parte de esta fecha ya está aprobado. "
+            "Para corregir cantidades usá «Guardar parte de producción»."
+        )
 
     lineas_norm: List[Dict[str, Any]] = []
     for cel in lineas or []:
@@ -16782,27 +16815,21 @@ def _registrar_parte_produccion_planilla(
             "turno_id": turno_cel,
         })
 
-    if not lineas_norm:
+    if not lineas_norm and not es_borrador:
         raise DjValidationError("No hay cantidades válidas para registrar.")
 
-    errores_cc = _validar_turnos_parte_sin_control_calidad(
-        base_empresa,
-        fecha_produccion,
-        {ln["turno_id"] for ln in lineas_norm},
-    )
-    if errores_cc:
-        raise DjValidationError(" ".join(errores_cc))
-
-    errores_cupo = _validar_cupo_planilla_qc(base_empresa, lineas_norm)
-    if errores_cupo:
-        raise DjValidationError(" ".join(errores_cupo))
+    if not es_borrador:
+        errores_cupo = _validar_cupo_planilla_qc(base_empresa, lineas_norm)
+        if errores_cupo:
+            raise DjValidationError(" ".join(errores_cupo))
 
     deposito_produccion = get_deposito_produccion_mpr(base_empresa)
     por_turno: Dict[int, List[Dict[str, Any]]] = {}
     for ln in lineas_norm:
         por_turno.setdefault(int(ln["turno_id"]), []).append(ln)
 
-    import uuid as _uuid
+    if not por_turno and es_borrador:
+        return [], []
 
     partes_creados: List[Any] = []
     with transaction.atomic():
@@ -16810,26 +16837,63 @@ def _registrar_parte_produccion_planilla(
             turno = obtener_turno(base_empresa, tid)
             if not turno:
                 raise DjValidationError(f"Turno {tid} no encontrado.")
-            id_mpr_turno = getattr(turno, "id_mpr_turno", None) or getattr(turno, "id", tid)
-            uuid_parte = str(_uuid.uuid4())
-            lineas_creadas = [
-                ({"id_articulo": ln["id_articulo"]}, ln["cantidad"])
-                for ln in lineas_turno
-            ]
-            parte = crear_parte_con_lineas(
+
+            existente = obtener_parte_planilla_directo_supervisor(
+                base_empresa, fecha_produccion, tid
+            )
+            prev_aprobadas: Dict[int, Decimal] = {}
+            tenia_fisico = False
+            if existente and not es_borrador:
+                tenia_fisico = bool(existente.get("movimiento_fisico_ok"))
+                if tenia_fisico:
+                    prev_aprobadas = sumar_cantidades_aprobadas_por_articulo(
+                        base_empresa, int(existente["id_mpr_parte"])
+                    )
+
+            estado_parte = "borrador" if es_borrador else "aprobado"
+            parte = crear_o_actualizar_parte_planilla(
                 base_empresa,
                 fecha_produccion,
-                int(id_mpr_turno),
+                tid,
                 to_int_or_none(id_usuario) or 0,
                 lineas_turno,
                 notas=str_or_default(notas, ""),
-                id_lista_produccion=None,
-                uuid_parte=uuid_parte,
+                estado=estado_parte,
+                id_usuario_supervisor=to_int_or_none(id_usuario) or 0,
             )
-            if hasattr(parte, "id_lista_produccion"):
-                parte.id_lista_produccion = None
-                parte.save(update_fields=["id_lista_produccion"])
-            if not getattr(parte, "movimiento_fisico_ok", False):
+
+            if es_borrador:
+                partes_creados.append(parte)
+                continue
+
+            nuevas_por_art: Dict[int, Decimal] = {}
+            for ln in lineas_turno:
+                aid = int(ln["id_articulo"])
+                cant = to_decimal_or_none(ln.get("cantidad")) or Decimal("0")
+                if cant > 0:
+                    nuevas_por_art[aid] = nuevas_por_art.get(aid, Decimal("0")) + cant
+
+            if tenia_fisico and deposito_produccion:
+                todos_art = set(prev_aprobadas) | set(nuevas_por_art)
+                for aid in todos_art:
+                    delta = nuevas_por_art.get(aid, Decimal("0")) - prev_aprobadas.get(
+                        aid, Decimal("0")
+                    )
+                    if delta != 0:
+                        _registrar_delta_stock_ajuste(
+                            base_empresa=base_empresa,
+                            id_usuario=to_int_or_none(id_usuario) or 0,
+                            id_articulo=aid,
+                            delta=delta,
+                            deposito_id=deposito_produccion,
+                        )
+                parte.movimiento_fisico_ok = True
+                parte.save(update_fields=["movimiento_fisico_ok"])
+            elif not getattr(parte, "movimiento_fisico_ok", False):
+                lineas_creadas = [
+                    ({"id_articulo": ln["id_articulo"]}, ln["cantidad"])
+                    for ln in lineas_turno
+                ]
                 if deposito_produccion and lineas_creadas:
                     _registrar_asiento_fisico_opp_parte(
                         base_empresa=base_empresa,
@@ -16841,6 +16905,7 @@ def _registrar_parte_produccion_planilla(
                     )
                 parte.movimiento_fisico_ok = True
                 parte.save(update_fields=["movimiento_fisico_ok"])
+
             partes_creados.append(parte)
 
     return partes_creados, []
@@ -17197,6 +17262,26 @@ def construir_grilla_parte(
             })
 
     return resultado
+
+
+def listar_partes_consulta(
+    base_empresa: str,
+    *,
+    fecha_desde=None,
+    fecha_hasta=None,
+    estado: Optional[str] = None,
+    id_usuario: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Listado de partes para Consulta de partes (MySQL legacy)."""
+    from mpr.repositories.parte import listar_partes_consulta as repo_listar
+
+    return repo_listar(
+        base_empresa,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        estado=estado,
+        id_usuario=id_usuario,
+    )
 
 
 def listar_partes(
