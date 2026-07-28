@@ -40,7 +40,7 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 | R | CompRef | PV de `comp_ped.NroComprobante` (REM vía `rem_fact`) zero-pad **5** |
 | S | NumeroRef | Nº legal de `comp_ped.NroComprobante` (mismo REM) |
 | T/W | Entrega / Suc | `cliente_domicilio.NroCalle` del REM |
-| U–V | NroCAE / VtoCAE | `fe_cae` / `fe_vto_cae` |
+| U–V | NroCAE / VtoCAE | `fe_cae` (int en Excel si numérico) / `fe_vto_cae` |
 | X | Categoria | `articulo_categoria.nombre_articulo_categoria` o `ACCESORIOS` |
 | Y–AW | P901…PIVA3 | `0` |
 
