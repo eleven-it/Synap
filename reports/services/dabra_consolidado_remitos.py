@@ -303,12 +303,12 @@ def _materializar_fila_export(
     importe_bonif_u = precio_venta_u * bonif / Decimal("100")
 
     comp_ref = ""
-    numero_ref: Any = ""
+    numero_ref = ""
     nro_remito_str = ""
     if remito:
         pv_rem, nl_rem = parse_nro_comprobante(remito.get("rem_nro"))
         comp_ref = format_punto_venta(pv_rem)
-        numero_ref = nl_rem if nl_rem is not None else ""
+        numero_ref = format_numero_legal_mask(nl_rem) if nl_rem is not None else ""
         nro_remito_str = format_comprobante_string(
             remito.get("rem_tipo") or "REM",
             pv_rem,
@@ -321,7 +321,7 @@ def _materializar_fila_export(
     return {
         "codigo_movimiento": to_int_or_none(fa.get("codigo_movimiento_fa")),
         "punto_venta": format_punto_venta(pv_fa),
-        "numero_legal": nl_fa if nl_fa is not None else 0,
+        "numero_legal": format_numero_legal_mask(nl_fa),
         "comprobante": format_comprobante_string(fa.get("fa_tipo"), pv_fa, nl_fa),
         "fecha": _fmt_fecha(fa.get("fa_fecha")),
         "cae": cae,

@@ -21,6 +21,7 @@ from reports.services.dabra_consolidado_remitos import (
     bonificacion_linea,
     calcular_tolerancia,
     format_comprobante_string,
+    format_numero_legal_mask,
     format_punto_venta,
     get_dabra_consolidado_remitos,
     letra_por_tipo,
@@ -75,6 +76,7 @@ class TestCompRefRemito(unittest.TestCase):
         pv, legal = parse_nro_comprobante("0001-00027655")
         self.assertEqual(format_punto_venta(pv), "00001")
         self.assertEqual(legal, 27655)
+        self.assertEqual(format_numero_legal_mask(legal), "00027655")
         self.assertEqual(
             format_comprobante_string("REM", pv, legal),
             "R000100027655",
@@ -269,8 +271,9 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
         out = get_dabra_consolidado_remitos("emp_test", mes=7, anio=2026)
         self.assertEqual(len(out["filas"]), 2)
         refs = {(f["comp_ref"], f["numero_ref"]) for f in out["filas"]}
-        self.assertIn(("00001", 27655), refs)
-        self.assertIn(("00001", 27656), refs)
+        self.assertIn(("00001", "00027655"), refs)
+        self.assertIn(("00001", "00027656"), refs)
+        self.assertEqual(out["filas"][0]["numero_legal"], "00000004")
         self.assertTrue(any("2 remitos" in a for a in out["alarmas"]))
 
     @patch("reports.services.dabra_consolidado_remitos.get_mysql_pool")
@@ -613,6 +616,8 @@ class TestDabraExporter(unittest.TestCase):
         row = info["rows"]["REPORTE"][0]
         self.assertIn(row[14], (None, ""))
         self.assertIn(row[15], (None, ""))
+        self.assertEqual(row[4], "00020777")
+        self.assertEqual(row[18], "00027665")
         self.assertEqual(row[20], 86184381365307)
         self.assertIsInstance(row[20], int)
         for idx in range(24, 49):

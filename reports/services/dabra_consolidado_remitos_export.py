@@ -98,6 +98,19 @@ def _cae_excel(valor: Any) -> Any:
     return texto
 
 
+def _mascara_legal_excel(valor: Any) -> str:
+    """NumeroLegal / NumeroRef: máscara 00000000; vacío → ''."""
+    if valor is None or valor == "":
+        return ""
+    if isinstance(valor, str) and valor.strip().isdigit() and len(valor.strip()) == 8:
+        return valor.strip()
+    try:
+        return f"{int(valor):08d}"
+    except (TypeError, ValueError):
+        texto = str(valor).strip()
+        return texto
+
+
 def _fila_reporte_excel(fila: Dict[str, Any]) -> List[Any]:
     """Una fila A–AW para hoja REPORTE (sin NombreArticulo)."""
     row: List[Any] = [None] * len(REPORTE_HEADERS)
@@ -105,7 +118,7 @@ def _fila_reporte_excel(fila: Dict[str, Any]) -> List[Any]:
     row[1] = _parse_fecha_excel(fila.get("fecha", ""))
     row[2] = fila.get("doc_type", 1)
     row[3] = fila.get("punto_venta", "")
-    row[4] = fila.get("numero_legal", 0)
+    row[4] = _mascara_legal_excel(fila.get("numero_legal", 0))
     row[5] = fila.get("item", "")
     row[6] = fila.get("talle", "")
     row[7] = fila.get("cantidad", 0)
@@ -118,7 +131,7 @@ def _fila_reporte_excel(fila: Dict[str, Any]) -> List[Any]:
     # O (14) y P (15) vacías
     row[16] = fila.get("total", 0)
     row[17] = fila.get("comp_ref", "")
-    row[18] = fila.get("numero_ref", "")
+    row[18] = _mascara_legal_excel(fila.get("numero_ref", ""))
     row[19] = fila.get("entrega", "")
     row[20] = _cae_excel(fila.get("cae"))
     vto = fila.get("vto_cae", "")
