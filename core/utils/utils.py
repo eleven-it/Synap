@@ -250,6 +250,7 @@ APPS_MENU = [
                     {"label": _("Tablero de producción"), "url": "mpr:tablero_produccion", "icon": "table_chart", "permission": ["mpr.ver", "mpr.tablero_ver"], "menu_item_id": "mpr_prod_tablero"},
                     {"label": _("Asignar artículo a máquina"), "url": "mpr:maquinas_carga_articulos", "icon": "grid_view", "permission": "mpr.maquinas_lineas", "menu_item_id": "mpr_prod_carga_articulos"},
                     {"label": _("Parte de producción (Carga)"), "url": "mpr:parte_produccion", "icon": "assignment", "permission": "mpr.ver", "menu_item_id": "mpr_prod_parte"},
+                    {"label": _("Consulta de partes"), "url": "mpr:partes_consulta", "icon": "history", "permission": ["mpr.ver", "mpr.parte_operario"], "menu_item_id": "mpr_prod_partes_consulta"},
                     {"label": _("Partes pendientes (aprobación)"), "url": "mpr:partes_pendientes", "icon": "fact_check", "permission": "mpr.aprobar_parte", "menu_item_id": "mpr_prod_partes_pendientes"},
                     {"label": _("Control de calidad"), "url": "mpr:clasificacion_produccion", "icon": "verified", "permission": "mpr.ver", "menu_item_id": "mpr_prod_clasificacion"},
                     {"label": _("Planificación de turnos"), "url": "mpr:planificacion_turnos", "icon": "calendar_month", "permission": "mpr.ver", "menu_item_id": "mpr_prod_planificacion"},

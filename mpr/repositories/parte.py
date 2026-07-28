@@ -17,6 +17,8 @@ from mpr.db import mysql_cursor
 from mpr.repositories.records import ParteAjusteRecord, ParteLineaRecord, ParteRecord
 from mpr.repositories.turno_roster import obtener_turno_record
 
+ORIGEN_DIRECTO_SUPERVISOR = "directo_supervisor"
+
 
 def _parse_datetime(val: Any) -> datetime:
     if isinstance(val, datetime):
@@ -459,6 +461,285 @@ def _pares_a_docenas_pares(total: Decimal) -> Tuple[int, int]:
     return entero // 12, entero % 12
 
 
+def obtener_parte_planilla_directo_supervisor(
+    base_empresa: str,
+    fecha: date,
+    id_mpr_turno: int,
+) -> Optional[Dict[str, Any]]:
+    """Documento upsert planilla supervisor para (fecha, turno, origen directo).
+
+    Si existen varios partes legacy apilados, devuelve el más reciente (id_mpr_parte DESC).
+    El próximo guardado debe consolidarlos vía ``crear_o_actualizar_parte_planilla``.
+    """
+    base = (base_empresa or "").strip()
+    tid = to_int_or_none(id_mpr_turno)
+    if not base or fecha is None or tid is None:
+        return None
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT id_mpr_parte, uuid_parte, estado, movimiento_fisico_ok, notas
+            FROM mpr_parte
+            WHERE fecha_produccion = %s AND id_mpr_turno = %s AND origen = %s
+            ORDER BY id_mpr_parte DESC
+            LIMIT 1
+            """,
+            [fecha, tid, ORIGEN_DIRECTO_SUPERVISOR],
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return {
+            "id_mpr_parte": int(row["id_mpr_parte"]),
+            "uuid_parte": row.get("uuid_parte"),
+            "estado": str(row.get("estado") or ""),
+            "movimiento_fisico_ok": bool(row.get("movimiento_fisico_ok", 0)),
+            "notas": str_or_default(row.get("notas"), ""),
+        }
+
+
+def tiene_parte_maquina_articulo_fecha(
+    base_empresa: str,
+    fecha: date,
+    id_mpr_maquina: int,
+    id_articulo: int,
+) -> bool:
+    """True si existe alguna línea de parte en esa fecha para máquina×artículo."""
+    base = (base_empresa or "").strip()
+    mid = to_int_or_none(id_mpr_maquina)
+    aid = to_int_or_none(id_articulo)
+    if not base or fecha is None or mid is None or aid is None:
+        return False
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT 1
+            FROM mpr_parte p
+            INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
+            WHERE p.fecha_produccion = %s
+              AND pl.id_mpr_maquina = %s
+              AND pl.id_articulo = %s
+            LIMIT 1
+            """,
+            [fecha, mid, aid],
+        )
+        return cursor.fetchone() is not None
+
+
+def fecha_planilla_tiene_parte_aprobado(base_empresa: str, fecha: date) -> bool:
+    """True si el documento upsert del día (algún turno) ya está aprobado.
+
+    Por cada turno se toma el parte más reciente (``id_mpr_parte`` DESC), igual
+    que ``obtener_parte_planilla_directo_supervisor``. Si alguno está
+    ``aprobado``, el día ya no admite volver a borrador (correcciones vía aprobar/delta).
+    """
+    base = (base_empresa or "").strip()
+    if not base or fecha is None:
+        return False
+    vistos_turno: set[int] = set()
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT id_mpr_turno, estado
+            FROM mpr_parte
+            WHERE fecha_produccion = %s AND origen = %s
+            ORDER BY id_mpr_parte DESC
+            """,
+            [fecha, ORIGEN_DIRECTO_SUPERVISOR],
+        )
+        for row in cursor.fetchall() or []:
+            tid = to_int_or_none(row.get("id_mpr_turno"))
+            if tid is None or tid in vistos_turno:
+                continue
+            vistos_turno.add(tid)
+            if str(row.get("estado") or "").strip().lower() == "aprobado":
+                return True
+    return False
+
+
+def sumar_cantidades_aprobadas_por_articulo(
+    base_empresa: str,
+    id_mpr_parte: int,
+) -> Dict[int, Decimal]:
+    """Suma cantidades efectivas aprobadas por artículo en un parte planilla."""
+    base = (base_empresa or "").strip()
+    pid = to_int_or_none(id_mpr_parte)
+    if not base or pid is None:
+        return {}
+    acum: Dict[int, Decimal] = {}
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT id_articulo, cantidad, cantidad_aprobada, cantidad_declarada
+            FROM mpr_parte_linea
+            WHERE id_mpr_parte = %s
+            """,
+            [pid],
+        )
+        for row in cursor.fetchall() or []:
+            aid = to_int_or_none(row.get("id_articulo"))
+            if aid is None:
+                continue
+            aprob = to_decimal_or_none(row.get("cantidad_aprobada"))
+            if aprob is None:
+                aprob = to_decimal_or_none(row.get("cantidad")) or Decimal("0")
+            if aprob <= 0:
+                continue
+            acum[aid] = acum.get(aid, Decimal("0")) + aprob
+    return acum
+
+
+def _insertar_lineas_planilla(
+    cursor,
+    id_parte: int,
+    lineas: List[Dict[str, Any]],
+    *,
+    es_borrador: bool,
+) -> None:
+    for cel in lineas or []:
+        id_art = to_int_or_none(cel.get("id_articulo"))
+        id_op = to_int_or_none(cel.get("id_operario"))
+        id_maq = to_int_or_none(cel.get("id_mpr_maquina"))
+        cantidad = to_decimal_or_none(cel.get("cantidad"))
+        if (
+            id_art is None
+            or id_op is None
+            or id_maq is None
+            or cantidad is None
+            or cantidad <= 0
+        ):
+            continue
+        if es_borrador:
+            cursor.execute(
+                """
+                INSERT INTO mpr_parte_linea
+                    (id_mpr_parte, id_articulo, id_operario, operario_nombre, cantidad,
+                     id_mpr_maquina, maquina_nombre, cantidad_declarada, cantidad_aprobada, gap, motivo)
+                VALUES (%s, %s, %s, %s, 0, %s, %s, %s, NULL, 0, NULL)
+                """,
+                [
+                    int(id_parte),
+                    id_art,
+                    id_op,
+                    str_or_default(cel.get("operario_nombre"), "-"),
+                    id_maq,
+                    str_or_default(cel.get("maquina_nombre"), "-"),
+                    cantidad,
+                ],
+            )
+        else:
+            cursor.execute(
+                """
+                INSERT INTO mpr_parte_linea
+                    (id_mpr_parte, id_articulo, id_operario, operario_nombre, cantidad,
+                     id_mpr_maquina, maquina_nombre, cantidad_declarada, cantidad_aprobada, gap, motivo)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 0, NULL)
+                """,
+                [
+                    int(id_parte),
+                    id_art,
+                    id_op,
+                    str_or_default(cel.get("operario_nombre"), "-"),
+                    cantidad,
+                    id_maq,
+                    str_or_default(cel.get("maquina_nombre"), "-"),
+                    cantidad,
+                    cantidad,
+                ],
+            )
+
+
+def crear_o_actualizar_parte_planilla(
+    base_empresa: str,
+    fecha_produccion: date,
+    id_mpr_turno: int,
+    id_usuario: int,
+    lineas: List[Dict[str, Any]],
+    *,
+    notas: str = "",
+    estado: str = "borrador",
+    id_usuario_supervisor: int = 0,
+) -> ParteRecord:
+    """Upsert planilla desktop: un ``mpr_parte`` por (fecha, turno, origen directo).
+
+    Reemplaza las líneas por completo (delete + reinsert). Estados:
+    - ``borrador``: cantidad_declarada, cantidad física 0.
+    - ``aprobado``: cantidad = cantidad_aprobada = cantidad_declarada.
+    """
+    base = (base_empresa or "").strip()
+    tid = to_int_or_none(id_mpr_turno)
+    if not base or fecha_produccion is None or tid is None:
+        raise ValueError("Parámetros inválidos para upsert planilla.")
+
+    estado_norm = "aprobado" if str(estado or "").strip().lower() == "aprobado" else "borrador"
+    es_borrador = estado_norm == "borrador"
+    existente = obtener_parte_planilla_directo_supervisor(base, fecha_produccion, tid)
+
+    if es_borrador and existente:
+        if str(existente.get("estado") or "").strip().lower() == "aprobado":
+            raise ValueError(
+                "El parte de esta fecha ya está aprobado. "
+                "Para corregir cantidades usá «Guardar parte de producción»."
+            )
+
+    with mysql_cursor(base) as cursor:
+        if existente:
+            id_parte = int(existente["id_mpr_parte"])
+            uid = existente.get("uuid_parte") or str(uuid.uuid4())
+            if es_borrador:
+                cursor.execute(
+                    """
+                    UPDATE mpr_parte
+                    SET estado = %s, notas = %s, movimiento_fisico_ok = 0,
+                        id_usuario_supervisor = NULL, aprobado_en = NULL
+                    WHERE id_mpr_parte = %s
+                    """,
+                    [estado_norm, str_or_default(notas, ""), id_parte],
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE mpr_parte
+                    SET estado = %s, notas = %s, id_usuario_supervisor = %s, aprobado_en = %s
+                    WHERE id_mpr_parte = %s
+                    """,
+                    [
+                        estado_norm,
+                        str_or_default(notas, ""),
+                        to_int_or_none(id_usuario_supervisor) or 0,
+                        datetime.now(),
+                        id_parte,
+                    ],
+                )
+            cursor.execute("DELETE FROM mpr_parte_linea WHERE id_mpr_parte = %s", [id_parte])
+        else:
+            uid = str(uuid.uuid4())
+            cursor.execute(
+                """
+                INSERT INTO mpr_parte
+                    (uuid_parte, fecha_produccion, id_mpr_turno, id_usuario, notas,
+                     movimiento_fisico_ok, id_lista_produccion, estado, origen)
+                VALUES (%s, %s, %s, %s, %s, 0, NULL, %s, %s)
+                """,
+                [
+                    uid,
+                    fecha_produccion,
+                    tid,
+                    to_int_or_none(id_usuario) or 0,
+                    str_or_default(notas, ""),
+                    estado_norm,
+                    ORIGEN_DIRECTO_SUPERVISOR,
+                ],
+            )
+            id_parte = int(cursor.lastrowid)
+        _insertar_lineas_planilla(cursor, id_parte, lineas, es_borrador=es_borrador)
+
+    parte = obtener_parte_por_pk(base, uid, with_relations=True)
+    if parte is None:
+        raise RuntimeError("No se pudo leer el parte planilla tras upsert.")
+    return parte
+
+
 def precarga_planilla_por_fecha(
     base_empresa: str,
     fecha: date,
@@ -466,8 +747,13 @@ def precarga_planilla_por_fecha(
     """
     Cantidades precargadas por (id_mpr_maquina, id_articulo, id_mpr_turno).
 
+    Usa partes con ``origen='directo_supervisor'`` (documento upsert del día).
     Parte aprobado → cantidad_aprobada; otro estado → cantidad_declarada.
-    Solo líneas con id_mpr_maquina no null (upsert vía uk_mpr_parte_linea_maq).
+    Solo líneas con id_mpr_maquina no null.
+
+    Si existen varios partes legacy apilados por turno, suma sus cantidades una
+    sola vez en precarga; el próximo guardado debe consolidarlos en un único
+    documento por turno vía ``crear_o_actualizar_parte_planilla``.
     """
     base = (base_empresa or "").strip()
     if not base or fecha is None:
@@ -481,9 +767,10 @@ def precarga_planilla_por_fecha(
             FROM mpr_parte p
             INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
             WHERE p.fecha_produccion = %s
+              AND p.origen = %s
               AND pl.id_mpr_maquina IS NOT NULL
             """,
-            [fecha],
+            [fecha, ORIGEN_DIRECTO_SUPERVISOR],
         )
         for row in cursor.fetchall() or []:
             mid = to_int_or_none(row.get("id_mpr_maquina"))
@@ -739,6 +1026,108 @@ def acumular_celdas_clasificacion_maquina_turno(
                 }
 
     return resultado
+
+
+def listar_partes_consulta(
+    base_empresa: str,
+    *,
+    fecha_desde: Optional[date] = None,
+    fecha_hasta: Optional[date] = None,
+    estado: Optional[str] = None,
+    id_usuario: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Listado de partes para la pantalla Consulta de partes (MySQL mpr_parte)."""
+    base = (base_empresa or "").strip()
+    if not base:
+        return []
+
+    where = ["1=1"]
+    params: List[Any] = []
+    if fecha_desde is not None:
+        where.append("p.fecha_produccion >= %s")
+        params.append(fecha_desde)
+    if fecha_hasta is not None:
+        where.append("p.fecha_produccion <= %s")
+        params.append(fecha_hasta)
+    estado_norm = (estado or "").strip().lower()
+    if estado_norm:
+        where.append("p.estado = %s")
+        params.append(estado_norm)
+    uid = to_int_or_none(id_usuario)
+    if uid is not None:
+        where.append("p.id_usuario = %s")
+        params.append(uid)
+
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        join_usuarios = ""
+        expr_usuario = "CAST(p.id_usuario AS CHAR)"
+        try:
+            cursor.execute("SHOW TABLES LIKE 'usuarios'")
+            if cursor.fetchone():
+                join_usuarios = (
+                    " LEFT JOIN usuarios u ON u.id_usuario = p.id_usuario "
+                )
+                expr_usuario = (
+                    "COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.nombre_usuario, ''), ' ', "
+                    "COALESCE(u.apellido_usuario, ''))), ''), "
+                    "NULLIF(TRIM(COALESCE(u.cod_usuario, '')), ''), "
+                    "CAST(p.id_usuario AS CHAR))"
+                )
+        except Exception:
+            join_usuarios = ""
+            expr_usuario = "CAST(p.id_usuario AS CHAR)"
+
+        cursor.execute(
+            f"""
+            SELECT p.id_mpr_parte, p.fecha_produccion, p.id_mpr_turno, p.origen, p.estado,
+                   p.id_usuario, p.registrado_en, t.nombre AS turno_nombre,
+                   MAX({expr_usuario}) AS usuario_nombre,
+                   COALESCE(SUM(
+                       CASE
+                           WHEN LOWER(COALESCE(p.estado, '')) = 'aprobado'
+                               THEN COALESCE(pl.cantidad_aprobada, pl.cantidad, 0)
+                           ELSE COALESCE(pl.cantidad_declarada, pl.cantidad, 0)
+                       END
+                   ), 0) AS total_pares
+            FROM mpr_parte p
+            LEFT JOIN mpr_turno t ON t.id_mpr_turno = p.id_mpr_turno
+            LEFT JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
+            {join_usuarios}
+            WHERE {' AND '.join(where)}
+            GROUP BY p.id_mpr_parte, p.fecha_produccion, p.id_mpr_turno, p.origen, p.estado,
+                     p.id_usuario, p.registrado_en, t.nombre
+            ORDER BY p.fecha_produccion DESC, p.id_mpr_turno DESC, p.id_mpr_parte DESC
+            """,
+            params,
+        )
+        out: List[Dict[str, Any]] = []
+        for r in cursor.fetchall() or []:
+            # to_date_or_none → 'YYYY-MM-DD' (str) o None; no es date/datetime.
+            fp_iso = to_date_or_none(r.get("fecha_produccion"))
+            fecha_str = ""
+            if fp_iso:
+                try:
+                    fecha_str = datetime.strptime(fp_iso, "%Y-%m-%d").strftime("%d/%m/%Y")
+                except (ValueError, TypeError):
+                    fecha_str = ""
+            out.append(
+                {
+                    "id_parte": int(r["id_mpr_parte"]),
+                    "fecha_produccion": fp_iso,
+                    "fecha_str": fecha_str,
+                    "id_mpr_turno": to_int_or_none(r.get("id_mpr_turno")),
+                    "turno_nombre": str_or_default(r.get("turno_nombre"), "-"),
+                    "origen": str(r.get("origen") or ""),
+                    "estado": str(r.get("estado") or ""),
+                    "id_usuario": to_int_or_none(r.get("id_usuario")) or 0,
+                    "usuario_nombre": str_or_default(r.get("usuario_nombre"), "-"),
+                    "total_pares": float(
+                        to_decimal_or_none(r.get("total_pares")) or Decimal("0")
+                    ),
+                    "registrado_en": r.get("registrado_en"),
+                }
+            )
+        return out
 
 
 def listar_partes_trazabilidad(

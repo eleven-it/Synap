@@ -270,7 +270,7 @@ permiso (el operario no los ve):
 | `/mpr/maquinas/carga-articulos/` | Asignar artículo a máquina (grilla) | `mpr.maquinas_lineas` |
 | `/mpr/maquinas/<id>/articulos/` | Histórico y detalle de artículos por máquina | `mpr.maquinas_lineas` |
 | `/mpr/maquinas/api/articulos/buscar/` | API JSON búsqueda predictiva (solo `tipo_art_fab = Fabricado`) | `mpr.maquinas_lineas` |
-| `/mpr/maquinas/api/articulos/accion/` | API JSON habilitar/deshabilitar artículo en máquina | `mpr.maquinas_lineas` |
+| `/mpr/maquinas/api/articulos/accion/` | API JSON habilitar/deshabilitar artículo en máquina (payload `fecha` dd/MM/yyyy) | `mpr.maquinas_lineas` |
 | `/mpr/operarios-usuarios/` | Mapeo operario ↔ usuario de login | `mpr.ver` |
 | `/mpr/operarios-lineas/` | Línea habitual por operario | `mpr.maquinas_lineas` |
 
@@ -278,7 +278,8 @@ El listado de `/mpr/maquinas/` (y el de máquinas por línea) ordena por `codigo
 en sentido **numérico ascendente** (`CAST(codigo AS UNSIGNED) ASC`).
 
 La pantalla **`/mpr/maquinas/carga-articulos/`** concentra la carga operativa en grilla
-(filtro opcional `?id_linea=`); la ruta **`/mpr/maquinas/<id>/articulos/`** queda para
+(filtro opcional `?id_linea=` y **fecha** `?fecha=dd/MM/yyyy` para ver/editar vigentes por día);
+la ruta **`/mpr/maquinas/<id>/articulos/`** queda para
 consulta histórica por máquina. La búsqueda de artículos para habilitar filtra solo
 artículos con `tipo_art_fab = 'Fabricado'` (normalizado con `TRIM`/`COALESCE`).
 Incluye botón **Imprimir Control de Calidad** (planilla A4 horizontal filtrada por lo

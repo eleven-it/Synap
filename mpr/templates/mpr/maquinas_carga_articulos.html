@@ -145,6 +145,9 @@
             csrf: '{{ csrf_token }}',
             filtroMaquina: '',
             fechaHoy: '{{ fecha_hoy|date:"Y-m-d" }}',
+            fechaIso: '{{ fecha|date:"Y-m-d" }}',
+            fechaStr: '{{ fecha_str|escapejs }}',
+            esFechaPasada: {% if es_fecha_pasada %}true{% else %}false{% endif %},
             idLineaFiltro: '{% if id_linea_filtro %}{{ id_linea_filtro }}{% endif %}',
             filtroLineaLabel: '{% if id_linea_filtro %}{% for linea in lineas %}{% if linea.id == id_linea_filtro %}{{ linea.nombre|escapejs }}{% endif %}{% endfor %}{% else %}{% endif %}'
          })" x-init="init()">
@@ -178,6 +181,21 @@
                         </div>
                     </label>
 
+                    <form method="get" class="flex flex-col gap-0.5" id="form-fecha-carga">
+                        <label for="filtro-fecha" class="text-[10px] font-medium text-slate-400">Fecha</label>
+                        <input type="date"
+                               id="filtro-fecha"
+                               x-model="fechaIso"
+                               :max="fechaHoy"
+                               @change="onFechaChange()"
+                               aria-label="Fecha de asignación"
+                               class="h-9 rounded-lg border border-slate-600 bg-slate-900/80 px-2 text-sm text-white [color-scheme:dark] focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"/>
+                        <input type="hidden" name="fecha" :value="fechaDdmmyyyy">
+                        {% if id_linea_filtro %}
+                        <input type="hidden" name="id_linea" value="{{ id_linea_filtro }}">
+                        {% endif %}
+                    </form>
+
                     <form method="get" class="flex flex-col gap-0.5">
                         <label for="filtro-linea" class="text-[10px] font-medium text-slate-400">Línea</label>
                         <select id="filtro-linea"
@@ -190,10 +208,14 @@
                             <option value="{{ linea.id }}" {% if linea.id == id_linea_filtro %}selected{% endif %}>{{ linea.nombre }}</option>
                             {% endfor %}
                         </select>
+                        <input type="hidden" name="fecha" value="{{ fecha_str }}">
                     </form>
 
-                    <p class="self-center text-[11px] tabular-nums text-slate-400" title="Fecha de planilla / impresión">
-                        Hoy <span class="font-semibold text-slate-200">{{ fecha_hoy|date:"d/m/Y" }}</span>
+                    <p x-show="esFechaPasada" x-cloak
+                       class="self-center max-w-xs text-[11px] leading-snug text-amber-300"
+                       title="En fechas pasadas, agregar habilita solo ese día">
+                        <span class="material-icons align-text-bottom text-sm" aria-hidden="true">info</span>
+                        Fecha pasada: agregar/quitar afecta <span class="font-semibold">solo ese día</span>.
                     </p>
 
                     <div class="ml-auto flex flex-wrap items-center gap-2">
@@ -566,7 +588,8 @@
                             <span class="font-bold text-gray-900 dark:text-white" x-text="confirmNomMaq"></span>?
                         </p>
                         <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                            Se cierra la vigencia para conservar la trazabilidad histórica.
+                            <span x-show="!esFechaPasada">Se cierra la vigencia para conservar la trazabilidad histórica.</span>
+                            <span x-show="esFechaPasada" x-cloak>Se quitará la cobertura de ese día sin afectar otras fechas.</span>
                         </p>
                         <div class="mt-5 flex flex-wrap justify-end gap-2">
                             <button type="button" @click="cerrarConfirm()" :disabled="confirmBusy"
@@ -597,6 +620,9 @@ function cargaArticulos(cfg) {
         csrfFallback: cfg.csrf || '',
         filtroMaquina: cfg.filtroMaquina || '',
         fechaHoy: cfg.fechaHoy || '',
+        fechaIso: cfg.fechaIso || cfg.fechaHoy || '',
+        fechaStr: cfg.fechaStr || '',
+        esFechaPasada: !!cfg.esFechaPasada,
         idLineaFiltro: cfg.idLineaFiltro || '',
         filtroLineaLabel: cfg.filtroLineaLabel || '',
         maquinas: [],
@@ -620,6 +646,9 @@ function cargaArticulos(cfg) {
         avisoIcono: 'info',
 
         init() {
+            if (!this.fechaIso && this.fechaHoy) {
+                this.fechaIso = this.fechaHoy;
+            }
             let data = [];
             try {
                 const el = document.getElementById('maquinas-carga-data');
@@ -681,6 +710,23 @@ function cargaArticulos(cfg) {
             const copia = (list || []).slice();
             copia.sort((a, b) => this._cmpArticulosAsignacion(a, b));
             return copia;
+        },
+
+        get fechaDdmmyyyy() {
+            if (!this.fechaIso) { return ''; }
+            const p = this.fechaIso.split('-');
+            if (p.length !== 3) { return ''; }
+            return p[2] + '/' + p[1] + '/' + p[0];
+        },
+
+        onFechaChange() {
+            if (this.fechaIso && this.fechaHoy && this.fechaIso > this.fechaHoy) {
+                this.fechaIso = this.fechaHoy;
+            }
+            const form = document.getElementById('form-fecha-carga');
+            if (form) {
+                form.submit();
+            }
         },
 
         get maquinasVisibles() {
@@ -981,7 +1027,12 @@ function cargaArticulos(cfg) {
                 const resp = await fetch(this.accionUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrf() },
-                    body: JSON.stringify({ accion: 'habilitar', id_maquina: m.id, id_articulo: art.id_articulo }),
+                    body: JSON.stringify({
+                        accion: 'habilitar',
+                        id_maquina: m.id,
+                        id_articulo: art.id_articulo,
+                        fecha: this.fechaDdmmyyyy || this.fechaStr,
+                    }),
                 });
                 const data = await resp.json().catch(() => ({}));
                 if (!resp.ok || !data.ok) {
@@ -1034,7 +1085,12 @@ function cargaArticulos(cfg) {
                 const resp = await fetch(this.accionUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': this.csrf() },
-                    body: JSON.stringify({ accion: 'deshabilitar', id_maquina: m.id, id_articulo: art.id_articulo }),
+                    body: JSON.stringify({
+                        accion: 'deshabilitar',
+                        id_maquina: m.id,
+                        id_articulo: art.id_articulo,
+                        fecha: this.fechaDdmmyyyy || this.fechaStr,
+                    }),
                 });
                 const data = await resp.json().catch(() => ({}));
                 if (!resp.ok || !data.ok) {

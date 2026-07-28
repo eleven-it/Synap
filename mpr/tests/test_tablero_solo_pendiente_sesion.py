@@ -134,3 +134,28 @@ class TestModoTableroSesion(TestCase):
         self.assertIn("presentacion=unidades", response.url)
         self.assertIn("solo_urgente=", response.url)
         self.assertIn("solo_sin_receta=", response.url)
+
+
+class TestBusquedaArticuloRedirect(TestCase):
+    """La búsqueda Alpine (?q=) se reinyecta en el redirect post-Actualizar."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def _request(self, query=None):
+        request = self.factory.get("/mpr/tablero-produccion/", query or {})
+        request.session = self.client.session
+        return request
+
+    def test_redirect_incluye_q_desde_query_string(self):
+        request = self._request()
+        response = _redirect_tablero_produccion(request, "q=6245+T5+Puma")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("q=6245", response.url)
+        self.assertIn("T5", response.url)
+
+    def test_redirect_omite_q_vacio(self):
+        request = self._request()
+        response = _redirect_tablero_produccion(request, "q=")
+        self.assertEqual(response.status_code, 302)
+        self.assertNotIn("q=", response.url)

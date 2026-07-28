@@ -107,7 +107,7 @@ Términos y conceptos del módulo MPR en Synap, alineados con AdministraNET y el
 | Término | Descripción |
 |--------|-------------|
 | **Tablero de producción** | Demanda consolidada por **componente** (explosión BOM desde packs PED). Columnas PCP: pedido, reserva, resta total/urgente, **Fabricando**, stock pipeline (sin Terminado en componentes), Enviar. Ruta: `/mpr/tablero-produccion/`. |
-| **Fabricando** | Cupo virtual: `max(0, envíos tablero − acreditado)`. Acreditado = max(Semi+2da+Scrap, clasificación CC, partes). **Producción no acredita.** |
+| **Fabricando** | Cupo virtual: `max(0, envíos tablero − acreditado)`. Acreditado = `max(Semi+2da+Scrap, CC) + max(0, partes − CC)`. **Producción no acredita.** Un parte nuevo siempre baja Fabricando. |
 
 | **Enviar a producción** | Registro en `mpr_envio_produccion` (ledger). No mueve stock hasta el parte. |
 | **Parte de producción (E8)** | Grilla componente × operario; solo filas con Fabricando > 0. Registra `mpr_parte_linea` e ingresa stock a **Producido**. |

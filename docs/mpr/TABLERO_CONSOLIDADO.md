@@ -42,7 +42,7 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 | 2 | **Pedido** | `dem_ped` | Pares (entero) |
 | 3 | **Reserva** | `dem_res` | Pares (entero); explosión BOM reserva pack (modo Par) |
 | 4 | **Urgente** | `resta_urgente` | Pares + Docenas (÷12, decimal PCP); base del **Enviar** |
-| 5 | **Fabricando** | virtual | `max(0, Σ envíos − acreditado)`. Acreditado = `max(Semi+2da+Scrap, clasificado CC, partes)`. **Producción no acredita.** |
+| 5 | **Fabricando** | virtual | `max(0, Σ envíos − acreditado)`. Acreditado = `max(Semi+2da+Scrap, CC) + max(0, partes − CC)`. **Producción no acredita.** |
 | 6–8 | **Etapas stock** | físico | Producido, 2da, Semi. **Sin Terminado** (componentes). Desperdicio (Scrap) deja de mostrarse en el tablero Par. |
 | 9 | **Total** | derivado | Suma etapas sin Scrap ni Terminado. |
 | — | **Enviado** (En curso) | ledger | Σ `mpr_envio_produccion` no anulados; distinto de Fabricando. |
@@ -52,20 +52,16 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 
 ```
 resta_urgente = resta_total = MAX(0, demanda − stock_proceso)   # demanda = dem_ped + dem_res
-fabricando    = MAX(0, Σ envíos_tablero − acreditado)   # acreditado ver REPORTES_MPR.md
-a_enviar      = MAX(0, urgente − Σ envíos)   # tope también acotado por resta_total; NO reabre
+fabricando    = MAX(0, Σ envíos_tablero − acreditado)
+a_enviar      = MAX(0, urgente − fabricando)   # tope también acotado por resta_total
 ```
 
-**Importante (27/07/2026):** `a_enviar` descuenta **siempre** los envíos ledger
-(`max(0, resta_urgente − Σ envíos)`), aunque Fabricando sea 0. No se reabre el tope
-por demanda urgente residual: eso generaba reenvíos falsos cuando el stock en Producción
-no acredita Fabricando. El tope no puede superar `resta_total`. En UI modo docenas el
-input se deshabilita si `a_enviar_docenas_pcp = 0` (pares sueltos sin docena entera).
+**Importante:** `a_enviar` = `max(0, Urgente − Fabricando)`. Un pedido nuevo que sube Urgente habilita Enviar aunque el ledger histórico ya sea alto (el parte baja Fabricando, no Enviado). El tope no puede superar `resta_total`. En UI modo docenas el input se deshabilita si `a_enviar_docenas_pcp = 0` (pares sueltos sin docena entera).
 
 **Fabricando y stock preexistente:** el depósito Producción es destino del parte / cola CC;
 stock previo ahí **no** baja Fabricando. Tras Enviar, el cupo queda disponible para cargar
-Parte aunque haya unidades ya en Producción.
-
+Parte aunque haya unidades ya en Producción. Semi/2da/CC y partes sí acreditan; un parte
+nuevo siempre suma al acreditado (no lo tapa un `max` con 2da previa).
 La columna **Urgente** muestra la brecha PCP unificada; **Enviar** usa `a_enviar` para precargar, deshabilitar inputs y validar el POST (hidden `pendiente_*` / `resta_urgente_*`).
 
 Filtro por defecto: **Solo urgentes** (`resta_urgente > 0`, demanda total). Diseño UX: `docs/mpr/DISENO_TABLERO_PRODUCCION_REFACTOR_PCP.md`.
@@ -94,7 +90,7 @@ Paso 3:  Explosión BOM: dem_ped, dem_res desde filas_pack
 Paso 4:  comp_ids = demanda ∪ envíos directos
 
 Paso 5:  Enviado (Fabricando) = _fabricando_por_componentes()
-         acreditado = max(Semi+2da+Scrap, clasificado CC, partes); Producción no acredita
+         acreditado = max(Semi+2da+Scrap, CC) + max(0, partes − CC); Producción no acredita
          Ver fórmula en § Columnas del tablero y ENVIO_PRODUCCION_TABLERO.md
 
 Paso 6:  stock_pivot, desc_map, construir filas, ordenar por pendiente
@@ -307,13 +303,13 @@ Enviado[comp] = Enviado_OPT[comp] + Enviado_tablero[comp]
 
 Enviado_OPT[comp]     = max(0, OPT_liberado_acum − OPP_parte_acum)   ← E4, intacto
 Enviado_tablero[comp] = max(0, SUM(envíos_tablero[comp]) − acreditado[comp])
-acreditado = max(Semi + 2da + Scrap, clasificado_desde_producción, partes_acumulados)
+acreditado = max(Semi + 2da + Scrap, clasificado_desde_producción)
+             + max(0, partes_acumulados − clasificado_desde_producción)
 # Producción NO acredita (destino del parte / cola CC)
 clasificado_desde_producción = SUM(mpr_transicion_lote WHERE tipo_origen = 'Produccion')
 ```
 
-**Sin doble conteo:** al clasificar hacia Semi/2da/Scrap, el stock físico acredita envíos. Si el semi ya salió por armado del pack, la trazabilidad en `mpr_transicion_lote` evita que Fabricando repunte. Stock preexistente en Producción no anula el cupo tras Enviar.
-
+**Sin doble conteo:** un parte nuevo siempre acredita; tras CC, `clasificado` evita sumar otra vez. Stock preexistente en Producción no anula el cupo tras Enviar.
 ### Paso 7b en el algoritmo
 
 ```

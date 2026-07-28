@@ -106,8 +106,14 @@ urlpatterns = [
     path("planificacion-turnos/asignar/", views.AsignarTurnoRosterView.as_view(), name="roster_asignar"),
     path("planificacion-turnos/asignar-masivo/", views.AsignarTurnoRosterMasivoView.as_view(), name="roster_asignar_masivo"),
     path("planificacion-turnos/eliminar/", views.EliminarAsignacionRosterView.as_view(), name="roster_eliminar"),
+    path("partes-consulta/", views.PartesConsultaView.as_view(), name="partes_consulta"),
     # Etapa 4: Parte de producción (ledger OPP-parte)
     path("parte-produccion/", views.ParteProduccionView.as_view(), name="parte_produccion"),
+    path(
+        "parte-produccion/cupo-fabricando/",
+        views.ParteCupoFabricandoView.as_view(),
+        name="parte_cupo_fabricando",
+    ),
     path("parte-produccion/registrar/", views.RegistrarParteProduccionView.as_view(), name="parte_produccion_registrar"),
     path("parte-produccion/<str:parte_id>/ajuste/", views.AjusteParteView.as_view(), name="parte_ajuste"),
     # Etapa 5: Transición de stock entre etapas MPR

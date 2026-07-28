@@ -10,7 +10,7 @@
             envioModalOpen: false,
             envioCount: 0,
             envioEmpty: false,
-            busqueda: '',
+            busqueda: '{{ busqueda_q|default:""|escapejs }}',
             masMenuOpen: false,
             fabDetalleOpen: false,
             fabDetalle: null,
@@ -203,7 +203,7 @@
                         </div>
                         {% if modo_tablero != "pack" %}
                         {% if solo_urgente %}
-                        <a href="?solo_urgente=0&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}&amp;presentacion={{ modo_presentacion }}&amp;modo={{ modo_tablero }}"
+                        <a href="?{% if presentacion_query_base %}{{ presentacion_query_base }}&amp;{% endif %}solo_urgente=0"
                            class="inline-flex h-9 items-center gap-1 rounded-lg bg-rose-600 px-2.5 text-[11px] font-semibold text-white hover:bg-rose-500"
                            title="Quitar filtro solo urgentes"
                            aria-label="Solo urgentes activo — clic para quitar">
@@ -211,7 +211,7 @@
                             Solo urgentes
                         </a>
                         {% else %}
-                        <a href="?solo_urgente=1&amp;fecha_desde={{ fecha_desde }}&amp;fecha_hasta={{ fecha_hasta }}&amp;presentacion={{ modo_presentacion }}&amp;modo={{ modo_tablero }}"
+                        <a href="?{% if presentacion_query_base %}{{ presentacion_query_base }}&amp;{% endif %}solo_urgente=1"
                            class="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-2.5 text-[11px] font-medium text-slate-200 hover:bg-slate-600"
                            title="Mostrar solo artículos con resta urgente"
                            aria-label="Activar solo urgentes">
@@ -227,6 +227,7 @@
                               data-mpr-loading-title="Actualizando vista"
                               data-mpr-loading-subtitle="Recalculando demanda desde pedidos PED…">
                             {% csrf_token %}
+                            <input type="hidden" name="q" :value="busqueda">
                             <button type="submit"
                                     class="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-500 bg-slate-700 px-3 text-sm font-medium text-white hover:bg-slate-600"
                                     title="Actualizar vista — Última: {{ ultima_actualizacion|default:'—' }}"
@@ -766,7 +767,7 @@
                                        aria-label="Docenas a enviar para {{ fila.descripcion_articulo }}"
                                        class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-emerald-800 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                                        placeholder="0"
-                                       title="Tope: {{ fila.a_enviar_docenas_pcp|default:0 }} docenas = máx(0, Urgente − Enviado).">
+                                       title="Tope: {{ fila.a_enviar_docenas_pcp|default:0 }} docenas = máx(0, Urgente − Fabricando).">
                                 {% else %}
                                 <input form="form-enviar-lote"
                                        type="number"
@@ -781,7 +782,7 @@
                                        aria-label="Pares a enviar para {{ fila.descripcion_articulo }}"
                                        class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums text-slate-900 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:border-emerald-800 dark:bg-slate-700 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                                        placeholder="0"
-                                       title="Tope: {{ fila.a_enviar|floatformat:0 }} pares = máx(0, Urgente − Enviado).">
+                                       title="Tope: {{ fila.a_enviar|floatformat:0 }} pares = máx(0, Urgente − Fabricando).">
                                 {% endif %}
                                 <input form="form-enviar-lote" type="hidden" name="resta_urgente_{{ fila.id_articulo }}" value="{{ fila.a_enviar }}">
                                 <input form="form-enviar-lote" type="hidden" name="pendiente_{{ fila.id_articulo }}" value="{{ fila.a_enviar }}">
@@ -837,7 +838,7 @@
         {% csrf_token %}
         <input type="hidden" name="presentacion" value="{{ modo_presentacion }}">
         <input type="hidden" name="filtros_qs"
-               value="fecha_desde={{ fecha_desde|urlencode }}&amp;fecha_hasta={{ fecha_hasta|urlencode }}&amp;solo_urgente={{ solo_urgente|yesno:'1,0' }}&amp;solo_sin_receta={{ solo_sin_receta|yesno:'1,0' }}&amp;presentacion={{ modo_presentacion|urlencode }}&amp;modo={{ modo_tablero|urlencode }}">
+               value="fecha_desde={{ fecha_desde|urlencode }}&amp;fecha_hasta={{ fecha_hasta|urlencode }}&amp;solo_urgente={{ solo_urgente|yesno:'1,0' }}&amp;solo_sin_receta={{ solo_sin_receta|yesno:'1,0' }}&amp;presentacion={{ modo_presentacion|urlencode }}&amp;modo={{ modo_tablero|urlencode }}{% if busqueda_q %}&amp;q={{ busqueda_q|urlencode }}{% endif %}">
     </form>
     {% endif %}
 

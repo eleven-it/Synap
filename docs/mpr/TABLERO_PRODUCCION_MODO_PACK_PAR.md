@@ -130,6 +130,7 @@ Además de la query string, el tablero **persiste en sesión** el último estado
 - Al abrir `?modo=pack` o `?presentacion=unidades`, se guarda en sesión.
 - Sin el param en la URL (F5, «Actualizar vista», redirect post-envío), se reutiliza el valor de sesión.
 - `_redirect_tablero_produccion` reinyecta `modo` y `presentacion` en la URL de retorno para que los toggles y bookmarks queden alineados.
+- La búsqueda de artículo del chrome (filtro Alpine client-side) se persiste en `?q=`: el POST de **Actualizar** envía el texto actual y el redirect lo reinyecta; Pack|Par, Docenas|Pares y Solo urgentes reusan `modo_query_base` / `presentacion_query_base` que ya incluyen `q` cuando viene en la URL.
 
 ## Presentación docenas/pares
 
@@ -152,6 +153,7 @@ opera sobre las mismas claves (`dem_ped`, `dem_res`, `resta_total`, `resta_urgen
 - `TestModoTableroSesion`: `?modo=pack` persiste; GET sin `modo` reusa sesión;
   valor inválido no pisa sesión; `_redirect_tablero_produccion` reinyecta
   `modo`, `presentacion` y `solo_sin_receta`.
+- `TestBusquedaArticuloRedirect`: `?q=` se preserva en el redirect; `q` vacío no se reinyecta.
 - `TestSoloSinRecetaSesion`: query/sesión/redirect de `solo_sin_receta`.
 
 Ejecutar:

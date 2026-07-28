@@ -142,15 +142,22 @@ Pantalla de escritorio para habilitar/deshabilitar artículos en la grilla de m�
 
 - Menú: **Producción diaria → Asignar artículo a máquina**.
 - Ruta: `/mpr/maquinas/carga-articulos/` (`mpr:maquinas_carga_articulos`). Permiso: `mpr.maquinas_lineas`.
-- Filtro MVP por línea: query `?id_linea=<id_mpr_linea>`.
+- **Selector de fecha** en el encabezado (GET `?fecha=dd/MM/yyyy`, default hoy; mismo patrón que Parte de producción).
+  Los chips muestran artículos **vigentes a esa fecha** (`listar_articulos_vigentes_todas_maquinas`).
+  Fechas futuras se rechazan (clamp a hoy en la grilla; error en API).
+- **Fecha pasada:** aviso en pantalla («solo ese día»). Agregar crea vigencia `[F, F+1)`; quitar hace split
+  sin romper otros días. **Agregar** permitido aunque el día tenga parte aprobado u otros artículos con parte;
+  **quitar** bloqueado si existe línea de `mpr_parte`/`mpr_parte_linea` para esa máquina×artículo×fecha.
+- Filtro MVP por línea: query `?id_linea=<id_mpr_linea>` (conserva `fecha` en el formulario).
 - Búsqueda predictiva de artículos (API GET `/mpr/maquinas/api/articulos/buscar/`): solo
   artículos con `tipo_art_fab = 'Fabricado'`.
 - En la grilla, los vigentes se muestran como **chips de multiselección** (pill
   `rounded-full` púrpura + input en el mismo contenedor tipo `tags-filter`), no como
   lista de tags aparte del campo «Agregar».
 - Habilitar/deshabilitar vía API POST `/mpr/maquinas/api/articulos/accion/` (`accion`:
-  `habilitar` | `deshabilitar`). Deshabilitar cierra la vigencia (`vigencia_hasta = hoy`);
-  no hay undo silencioso ni cierre automático diario.
+  `habilitar` | `deshabilitar`; payload incluye `fecha` en `dd/MM/yyyy`). En **hoy**, habilitar abre vigencia
+  (`vigencia_hasta = NULL`) y deshabilitar la cierra (`vigencia_hasta = hoy`). En **fecha pasada**, habilitar
+  asigna solo ese día; deshabilitar quita cobertura de F (borra fila solo-día o split en intervalos largos).
 - Histórico por máquina: `/mpr/maquinas/<id>/articulos/` (vista detalle existente).
 
 Servicio de contexto: `construir_grilla_carga_articulos` en `mpr/services_maquina_linea.py`.

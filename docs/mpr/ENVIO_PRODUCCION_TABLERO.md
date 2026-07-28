@@ -13,16 +13,19 @@
 
 La Etapa 7 introduce la capacidad de **enviar componentes directamente a producción desde el Tablero de Demanda Consolidado**, sin pasar por el wizard/OPT. El ledger vive en **`mpr_envio_produccion` (MySQL)**. No escribe en `stock_deposito` ni `movimiento_stock`.
 
-El envío contribuye al tablero mediante el ledger **`mpr_envio_produccion`**. En modo **Par**, la columna **Enviado** muestra `Σ envíos no anulados`; **Fabricando** usa `max(0, Σ envíos − acreditado)` (envíos menos stock Semi/2da/Scrap, CC y partes). Fórmula de acreditación (E7):
+El envío contribuye al tablero mediante el ledger **`mpr_envio_produccion`**. En modo **Par**, la columna **Enviado** muestra `Σ envíos no anulados`; **Fabricando** usa `max(0, Σ envíos − acreditado)`. Fórmula de acreditación:
 
 ```
 Fabricando[comp] = max(0, Enviado_ledger[comp] − acreditado[comp])
 Enviado_ledger[comp] = SUM(mpr_envio_produccion.cantidad WHERE anulado = 0)
-acreditado = max(stock Semi+2da+Scrap, clasificado_desde_producción, partes_acumulados)
+acreditado = max(Semi+2da+Scrap, clasificado_desde_producción)
+             + max(0, partes_acumulados − clasificado_desde_producción)
 stock_componente_post_CC = Semi + 2da + Scrap   # Producción NO acredita
 clasificado_desde_producción = SUM(mpr_transicion_lote.cantidad WHERE tipo_origen = 'Produccion')
+a_enviar = max(0, Urgente − Fabricando)
 ```
 
+Un **parte nuevo siempre baja Fabricando** (aunque haya Semi/2da previos). **A enviar** resta Fabricando (no el ledger bruto): un pedido nuevo que sube Urgente vuelve a habilitar Enviar cuando Fabricando no cubre la brecha.
 Los **componentes** del tablero no usan depósito **Terminado** (el armado mueve el pack). La columna Terminado no se muestra en el tablero de producción.
 
 Al clasificar desde Producido, el stock en Semi/2da/Scrap sigue acreditando envíos. Si el semi ya salió por armado del pack, la trazabilidad en `mpr_transicion_lote` evita que **Fabricando repunte** al vaciar el pipeline físico.
@@ -120,9 +123,8 @@ Los modales E5 conservan sus propios `<form method="post">` sin interferencia.
 - **Modo pares:** campo `envio_{id}` con cantidad en pares enteros; se prellena con **`a_enviar`**.
 - Si el tope en la unidad mostrada es 0 (`a_enviar_docenas_pcp = 0` en docenas, o `a_enviar = 0` en pares), el input queda vacío y **deshabilitado**.
 - `max` del input = tope (`a_enviar` / docenas PCP); JS recorta cualquier valor mayor.
-- **Tope:** `a_enviar = MAX(0, MIN(resta_urgente − Enviado (ledger), resta_total))`. El ledger **siempre** descuenta el tope, también cuando Fabricando = 0 (p. ej. stock de pipeline preexistente absorbe envíos). **No** se reabre el tope a `resta_urgente` en ese caso: eso generaba reenvíos fantasma sin subir Fabricando. El servidor **ajusta al tope** si el POST lo supera (ya no envía de más).
-- **Fabricando vs Enviado vs stock:** columna **Enviado** = Σ ledger; **Fabricando** = `max(0, Σ envíos − acreditado)`. Acreditan Semi/2da/Scrap, CC y partes; **no** el saldo de Producción (destino del parte). Así un Enviar genera cupo aunque haya stock preexistente en Producción.
-- Hidden `presentacion`, `pendiente_*` / `resta_urgente_*` (con `a_enviar`) para parseo y warnings de sobreenvío en POST.
+- **Tope:** `a_enviar = MAX(0, MIN(Urgente − Fabricando, resta_total))`. Un pedido nuevo que sube Urgente habilita Enviar aunque el ledger ya sea alto. El servidor **ajusta al tope** si el POST lo supera (ya no envía de más).
+- **Fabricando vs Enviado vs stock:** columna **Enviado** = Σ ledger; **Fabricando** = `max(0, Σ envíos − acreditado)`. Acreditan Semi/2da/Scrap, CC y partes (parte siempre suma); **no** el saldo de Producción (destino del parte).- Hidden `presentacion`, `pendiente_*` / `resta_urgente_*` (con `a_enviar`) para parseo y warnings de sobreenvío en POST.
 - Al confirmar, JavaScript copia **todas** las filas con cantidad > 0 como campos ocultos dentro de `#form-enviar-lote` (evita pérdida de líneas con el atributo HTML5 `form=`).
 - El servidor omite cantidades ≤ 0.
 ---

@@ -28,15 +28,11 @@ La grilla de captura muestra los **componentes con Fabricando > 0** según:
 ```text
 Fabricando(comp) = max(0, Σ_MprEnvioProduccion[comp] − acreditado(comp))
 
-acreditado(comp) = max(
-  stock_físico_componente,     # Producido + Semi + 2da + Scrap (sin Terminado)
-  clasificado_desde_Producción,  # SUM(mpr_transicion_lote WHERE tipo_origen = 'Produccion')
-  partes_acumulados              # SUM(mpr_parte_linea + ajustes por id_articulo)
-)
+acreditado(comp) = max(Semi + 2da + Scrap, clasificado_desde_Producción)
+                   + max(0, partes_acumulados − clasificado_desde_Producción)
 ```
 
-**Misma fórmula** que el tablero consolidado (`_fabricando_por_componentes` / `_calcular_fabricando_componente`). El saldo en **Producción** no acredita (destino del parte). Tras CC — o si el semi salió por armado — el cupo baja aunque el stock Semi físico sea 0.
-
+**Misma fórmula** que el tablero consolidado (`_fabricando_por_componentes` / `_calcular_fabricando_componente`). El saldo en **Producción** no acredita (destino del parte). Un **parte nuevo siempre baja Fabricando** aunque haya Semi/2da previos; tras CC, `clasificado` evita doble conteo.
 La validación al guardar (`_fabricando_pre_snapshot`) usa la **misma** fórmula que la grilla de parte.
 
 | Término | Fuente |
@@ -343,10 +339,20 @@ Cada `MprParteLinea` persiste:
 
 ### Validación cupo (planilla)
 
-Por fila máquina×artículo: Σ pares (Mañana + Tarde + Noche) ≤ **Fabricando**.  
-Además, agregado por artículo (todas sus máquinas × turnos) ≤ Fabricando.
+**Aprobar** (`accion=aprobar`): por fila máquina×artículo, Σ pares (M+T+N) ≤ **Fabricando**. Si falla → rechazo (UI + servidor).
 
-Si falla → `ValidationError` con mensaje en español; **no** se persiste ningún parte (rechazo atómico).
+**Borrador** (`accion=borrador`): se puede guardar aunque haya exceso de Fabricando o turnos sin cargar (cargas diferidas). Sin OPP/stock hasta aprobar. **No disponible** si el día ya tiene un parte aprobado (origen `directo_supervisor`): en ese caso las correcciones van por `accion=aprobar` (delta de stock).
+
+### Botones de guardado
+
+Siempre visibles (si el día no está bloqueado por CC):
+
+| Botón | Acción |
+|-------|--------|
+| **Guardar borrador** | Persistencia sin stock; disponible aunque el cupo permita aprobar. **Deshabilitado** si el día ya está aprobado o bloqueado por CC. |
+| **Guardar parte de producción** | Aprueba o re-aprueba con delta; se deshabilita visualmente si hay exceso Fabricando (o día bloqueado por CC). |
+
+Al aprobar, si hay máquinas con al menos un turno editable sin cantidad, se muestra un **modal de aviso** (Continuar / Cancelar) agrupado por máquina: resumen de cantidad, código + artículo, chips de turnos sin carga. **No bloquea**: se puede continuar y aprobar igual.
 
 ### Operario por celda (roster)
 

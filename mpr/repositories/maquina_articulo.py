@@ -6,7 +6,7 @@ El detalle del artículo (código manual, descripción) se lee de la tabla `arti
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 from core.utils.administranet_types import str_codigo_manual_articulo, to_int_or_none
@@ -237,16 +237,128 @@ def articulo_vigente(base_empresa: str, id_maquina: int, id_articulo: int, fecha
         return cursor.fetchone() is not None
 
 
-def habilitar_articulo(base_empresa: str, id_maquina: int, id_articulo: int, desde: date) -> None:
+def habilitar_articulo(
+    base_empresa: str,
+    id_maquina: int,
+    id_articulo: int,
+    desde: date,
+    hasta: Optional[date] = None,
+) -> None:
+    """Inserta vigencia half-open [desde, hasta); hasta=None → abierta."""
     base = (base_empresa or "").strip()
     with mysql_cursor(base) as cursor:
         cursor.execute(
             """
             INSERT INTO mpr_maquina_articulo (id_mpr_maquina, id_articulo, vigencia_desde, vigencia_hasta)
-            VALUES (%s, %s, %s, NULL)
+            VALUES (%s, %s, %s, %s)
             """,
-            [int(id_maquina), int(id_articulo), desde],
+            [int(id_maquina), int(id_articulo), desde, hasta],
         )
+
+
+def quitar_cobertura_fecha(
+    base_empresa: str,
+    id_maquina: int,
+    id_articulo: int,
+    fecha: date,
+) -> bool:
+    """
+    Quita la cobertura de `fecha` sin alterar otros días (split si hace falta).
+
+    Half-open [vigencia_desde, vigencia_hasta): vigente(f) si hasta IS NULL o hasta > f.
+    Devuelve False si el artículo no estaba vigente en esa fecha.
+    """
+    base = (base_empresa or "").strip()
+    mid = to_int_or_none(id_maquina)
+    aid = to_int_or_none(id_articulo)
+    if not base or mid is None or aid is None or fecha is None:
+        return False
+    f_plus_1 = fecha + timedelta(days=1)
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        cursor.execute(
+            """
+            SELECT id_mpr_maquina_articulo, vigencia_desde, vigencia_hasta
+            FROM mpr_maquina_articulo
+            WHERE id_mpr_maquina = %s AND id_articulo = %s
+              AND vigencia_desde <= %s
+              AND (vigencia_hasta IS NULL OR vigencia_hasta > %s)
+            ORDER BY vigencia_desde ASC, id_mpr_maquina_articulo ASC
+            """,
+            [mid, aid, fecha, fecha],
+        )
+        rows = cursor.fetchall() or []
+        if not rows:
+            return False
+        afectado = False
+        for row in rows:
+            pk = to_int_or_none(row.get("id_mpr_maquina_articulo"))
+            desde = _as_date(row.get("vigencia_desde"))
+            hasta = _as_date(row.get("vigencia_hasta"))
+            if pk is None or desde is None:
+                continue
+            if desde == fecha and hasta == f_plus_1:
+                cursor.execute(
+                    "DELETE FROM mpr_maquina_articulo WHERE id_mpr_maquina_articulo = %s",
+                    [pk],
+                )
+                afectado = True
+            elif desde == fecha and (hasta is None or hasta > f_plus_1):
+                cursor.execute(
+                    """
+                    UPDATE mpr_maquina_articulo
+                    SET vigencia_desde = %s
+                    WHERE id_mpr_maquina_articulo = %s
+                    """,
+                    [f_plus_1, pk],
+                )
+                afectado = True
+            elif desde < fecha and hasta == f_plus_1:
+                cursor.execute(
+                    """
+                    UPDATE mpr_maquina_articulo
+                    SET vigencia_hasta = %s
+                    WHERE id_mpr_maquina_articulo = %s
+                    """,
+                    [fecha, pk],
+                )
+                afectado = True
+            elif desde < fecha and hasta is None:
+                cursor.execute(
+                    """
+                    UPDATE mpr_maquina_articulo
+                    SET vigencia_hasta = %s
+                    WHERE id_mpr_maquina_articulo = %s
+                    """,
+                    [fecha, pk],
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO mpr_maquina_articulo
+                        (id_mpr_maquina, id_articulo, vigencia_desde, vigencia_hasta)
+                    VALUES (%s, %s, %s, NULL)
+                    """,
+                    [mid, aid, f_plus_1],
+                )
+                afectado = True
+            elif desde < fecha and hasta is not None and hasta > f_plus_1:
+                cursor.execute(
+                    """
+                    UPDATE mpr_maquina_articulo
+                    SET vigencia_hasta = %s
+                    WHERE id_mpr_maquina_articulo = %s
+                    """,
+                    [fecha, pk],
+                )
+                cursor.execute(
+                    """
+                    INSERT INTO mpr_maquina_articulo
+                        (id_mpr_maquina, id_articulo, vigencia_desde, vigencia_hasta)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    [mid, aid, f_plus_1, hasta],
+                )
+                afectado = True
+        return afectado
 
 
 def deshabilitar_articulo(base_empresa: str, id_maquina: int, id_articulo: int, hasta: date) -> int:

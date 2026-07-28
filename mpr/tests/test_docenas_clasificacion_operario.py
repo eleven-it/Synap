@@ -50,8 +50,8 @@ class PresentacionOperativaTests(SimpleTestCase):
         self.assertEqual(fila["enviado_display"], "0")
         self.assertNotIn("pares", fila["produccion_display"].lower())
 
-    def test_a_enviar_descuenta_envios_con_fabricando(self):
-        """Con Fabricando>0 el tope descuenta el ledger (no reabre)."""
+    def test_a_enviar_descuenta_fabricando(self):
+        """Tope = Urgente − Fabricando."""
         fila = enriquecer_fila_tablero_presentacion(
             {
                 "dem_ped": 12,
@@ -66,8 +66,8 @@ class PresentacionOperativaTests(SimpleTestCase):
         self.assertEqual(fila["a_enviar"], 0)
         self.assertEqual(fila["a_enviar_docenas"], 0)
 
-    def test_a_enviar_descuenta_envios_aunque_fabricando_cero(self):
-        """Fabricando=0 (stock absorbe): el ledger igual descuenta el tope (sin reabrir)."""
+    def test_a_enviar_con_fabricando_parcial(self):
+        """Urgente 12, Fabricando 0 → A enviar 12 aunque ledger tenga envíos."""
         fila = enriquecer_fila_tablero_presentacion(
             {
                 "dem_ped": 12,
@@ -79,20 +79,20 @@ class PresentacionOperativaTests(SimpleTestCase):
             },
             "unidades",
         )
-        self.assertEqual(fila["a_enviar"], 0)
+        self.assertEqual(fila["a_enviar"], 12)
 
-    def test_a_enviar_no_doble_cuenta_acreditado(self):
-        """Con envíos = resta y Fabricando>0, a_enviar debe ser 0 (sin residual fantasma)."""
+    def test_a_enviar_pedido_nuevo_vs_fabricando(self):
+        """Pedido incremental: Urgente 180, Fabricando 130 → A enviar 50."""
         fila = enriquecer_fila_tablero_presentacion(
             {
-                "resta_urgente": 2513,
-                "envios": 2513,
-                "enviado": 1486,  # envíos − acreditado(1027)
-                "produccion": 1027,
+                "resta_urgente": 180,
+                "envios": 200,
+                "enviado": 130,
+                "produccion": 49,
             },
             "unidades",
         )
-        self.assertEqual(fila["a_enviar"], 0)
+        self.assertEqual(fila["a_enviar"], 50)
 
     def test_a_enviar_docenas_pcp_cero_deshabilita_concepto(self):
         """Pares sueltos < media docena: tope docenas = 0 (input no editable en UI)."""
