@@ -102,23 +102,15 @@
 
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div class="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-200 shadow-sm dark:border-slate-700">
-                <table class="min-w-[78rem] w-full border-separate border-spacing-0">
+                <table class="min-w-[42rem] w-full border-separate border-spacing-0">
                     <thead>
                         <tr class="bg-slate-100/90 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                            <th rowspan="2" class="sticky left-0 top-0 z-20 min-w-[16rem] border-b border-slate-200 bg-slate-100 px-3 py-1.5 text-left dark:border-slate-700 dark:bg-slate-800">Artículo pack</th>
-                            <th rowspan="2" class="sticky top-0 z-10 min-w-[6.5rem] border-b border-l border-slate-200 bg-slate-100 px-2 py-1.5 text-center text-slate-600 dark:border-slate-700 dark:bg-slate-800" title="MIN(FechaEntrega) en pedidos PED pendientes del artículo">1er fecha entrega</th>
-                            <th colspan="5" class="sticky top-0 z-10 border-b border-l-2 border-l-amber-300/80 bg-amber-50/90 px-2 py-1 text-center text-amber-900 dark:border-l-amber-800 dark:bg-amber-950/30 dark:text-amber-200">Demanda a armar</th>
+                            <th class="sticky left-0 top-0 z-20 min-w-[16rem] border-b border-slate-200 bg-slate-100 px-3 py-1.5 text-left dark:border-slate-700 dark:bg-slate-800">Artículo pack</th>
+                            <th class="sticky top-0 z-10 border-b border-l border-amber-200 bg-amber-50/80 px-2 py-1.5 text-right dark:border-amber-900 dark:bg-amber-950/20">Terminado</th>
                             {% if modo == '1ra' %}
-                            <th rowspan="2" class="sticky top-0 z-10 border-b border-l border-violet-200 bg-violet-50/80 px-2 py-1.5 text-right dark:border-violet-900 dark:bg-violet-950/20">Máx. armable<br><span class="font-normal normal-case">(packs)</span></th>
+                            <th class="sticky top-0 z-10 border-b border-l border-violet-200 bg-violet-50/80 px-2 py-1.5 text-right dark:border-violet-900 dark:bg-violet-950/20">Máx. armable<br><span class="font-normal normal-case">(packs)</span></th>
                             {% endif %}
-                            <th rowspan="2" class="sticky top-0 z-10 border-b border-l border-emerald-200 bg-emerald-50/80 px-2 py-1.5 text-right dark:border-emerald-900 dark:bg-emerald-950/20">Armar<br><span class="font-normal normal-case">(packs)</span></th>
-                        </tr>
-                        <tr class="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                            <th class="sticky top-[1.25rem] z-10 border-b border-l-2 border-l-amber-200 bg-amber-50/50 px-2 py-1 text-right dark:border-l-amber-900 dark:bg-amber-950/15">Pedido</th>
-                            <th class="sticky top-[1.25rem] z-10 border-b bg-amber-50/40 px-2 py-1 text-right dark:bg-amber-950/10">Terminado</th>
-                            <th class="sticky top-[1.25rem] z-10 border-b bg-amber-50/40 px-2 py-1 text-right dark:bg-amber-950/10">Reserva</th>
-                            <th class="sticky top-[1.25rem] z-10 border-b bg-amber-50/50 px-2 py-1 text-right dark:bg-amber-950/15">Resta urgente</th>
-                            <th class="sticky top-[1.25rem] z-10 border-b border-r border-amber-200/60 bg-amber-100/60 px-2 py-1 text-right font-bold text-amber-900 dark:bg-amber-950/25 dark:text-amber-200">Resta armar</th>
+                            <th class="sticky top-0 z-10 border-b border-l border-emerald-200 bg-emerald-50/80 px-2 py-1.5 text-right dark:border-emerald-900 dark:bg-emerald-950/20">Armar<br><span class="font-normal normal-case">(packs)</span></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 bg-white dark:divide-slate-700 dark:bg-slate-900">
@@ -129,20 +121,14 @@
                             <td class="sticky left-0 z-10 bg-white px-3 py-2 dark:bg-slate-900">
                                 <span class="block text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100">{{ fila.descripcion_articulo }}</span>
                             </td>
-                            <td class="whitespace-nowrap border-l border-slate-200 px-2 py-2 text-center text-xs tabular-nums text-slate-700 dark:border-slate-700 dark:text-slate-300">
-                                {{ fila.primera_fecha_entrega_display|default:"—" }}
-                            </td>
-                            <td class="border-l-2 border-l-amber-100 px-2 py-2 text-right text-sm tabular-nums dark:border-l-amber-900/40">{{ fila.pedido_display }}</td>
-                            <td class="px-2 py-2 text-right text-sm tabular-nums text-slate-600">{{ fila.stock_terminado_display }}</td>
-                            <td class="px-2 py-2 text-right text-sm tabular-nums text-slate-600">{{ fila.stock_reserva_display }}</td>
-                            <td class="px-2 py-2 text-right text-sm tabular-nums{% if fila.resta_urgente > 0 %} text-rose-600 font-medium{% else %} text-slate-400{% endif %}">{{ fila.resta_urgente_display }}</td>
-                            <td class="px-2 py-2 text-right text-sm font-semibold tabular-nums{% if fila.resta_armar > 0 %} text-amber-700 dark:text-amber-300{% else %} text-slate-400{% endif %}">{{ fila.resta_armar_display }}</td>
+                            <td class="border-l border-amber-100 px-2 py-2 text-right text-sm tabular-nums text-slate-600 dark:border-amber-900/40">{{ fila.stock_terminado_display }}</td>
                             {% if modo == '1ra' %}
                             <td class="border-l border-violet-100 px-2 py-2 text-right text-sm tabular-nums font-medium text-violet-800 dark:text-violet-300">{{ fila.max_armable }}</td>
                             <td class="border-l border-emerald-100 bg-emerald-50/20 px-2 py-2 text-right dark:bg-emerald-950/10">
                                 <input type="number" name="armar_{{ fila.id_articulo }}" data-armar-qty data-id-articulo="{{ fila.id_articulo }}"
                                        min="0" max="{{ fila.max_armable }}" step="1" inputmode="numeric"
-                                       value="{% if fila.a_armar > 0 %}{{ fila.a_armar }}{% endif %}"
+                                       value=""
+                                       placeholder="0"
                                        {% if fila.max_armable <= 0 %}disabled{% endif %}
                                        class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-emerald-800 dark:bg-slate-700 dark:disabled:bg-slate-800"/>
                             </td>
@@ -157,7 +143,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="{% if modo == '1ra' %}9{% else %}8{% endif %}" class="px-4 py-10 text-center text-sm text-slate-500">
+                            <td colspan="{% if modo == '1ra' %}4{% else %}3{% endif %}" class="px-4 py-10 text-center text-sm text-slate-500">
                                 {% if modo == '1ra' %}Sin packs armables con resta pendiente y stock en Semi elaborado.{% else %}Sin packs 2da con demanda pendiente.{% endif %}
                             </td>
                         </tr>
@@ -167,7 +153,7 @@
             </div>
             <p class="mt-1 flex-shrink-0 text-[10px] leading-snug text-slate-400"
                title="{{ nombre_deposito_origen }} → {{ nombre_deposito_destino }}">
-                Resta armar = pedido + reserva − terminado · Máx. armable = límite por semielaborados (BOM).
+                Máx. armable = límite por semielaborados (BOM). Completá solo las filas a armar; el resto puede quedar vacío.
                 {% if modo == '2da' %}<strong>Componer</strong> abre el carrito con composición libre.{% endif %}
             </p>
         </div>
@@ -269,7 +255,11 @@ window.confirmarArmadoTablero = function () {
     document.querySelectorAll('[data-armar-qty]').forEach(function (inp) {
         if (inp.disabled) return;
         var qty = parseInt(String(inp.value || '0'), 10);
-        if (isNaN(qty) || qty <= 0) return;
+        if (isNaN(qty) || qty < 0) {
+            inp.value = '';
+            return;
+        }
+        if (qty <= 0) return;
         tieneCantidad = true;
         var h = document.createElement('input');
         h.type = 'hidden';
@@ -290,5 +280,39 @@ window.confirmarArmadoTablero = function () {
         form.submit();
     }
 };
+
+(function () {
+    function coerceArmarQty(el) {
+        if (!el || el.disabled) return;
+        var v = el.value;
+        if (v === '' || v === null || v === undefined) return;
+        var n = parseInt(String(v).trim(), 10);
+        if (isNaN(n) || n < 0) {
+            el.value = '';
+            return;
+        }
+        var maxRaw = el.getAttribute('max');
+        if (maxRaw !== null && maxRaw !== '') {
+            var maxN = parseInt(maxRaw, 10);
+            if (!isNaN(maxN) && n > maxN) {
+                el.value = String(maxN);
+                return;
+            }
+        }
+        el.value = String(n);
+    }
+    document.addEventListener('input', function (ev) {
+        var t = ev.target;
+        if (t && t.matches && t.matches('[data-armar-qty]')) {
+            coerceArmarQty(t);
+        }
+    });
+    document.addEventListener('blur', function (ev) {
+        var t = ev.target;
+        if (t && t.matches && t.matches('[data-armar-qty]')) {
+            coerceArmarQty(t);
+        }
+    }, true);
+})();
 </script>
 {% endblock %}

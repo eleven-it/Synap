@@ -858,12 +858,31 @@
             this.select();
         });
         inp.addEventListener('input', function () {
+            var raw = this.value;
+            if (raw !== '' && raw !== null) {
+                var n = parseInt(String(raw).trim(), 10);
+                if (isNaN(n) || n < 0) {
+                    this.value = '0';
+                }
+            }
             var tr = this.closest('tr[data-id-art]');
             actualizarVisibilidadCupo(tr);
             actualizarIngresado(tr);
             actualizarBotonAprobar();
             if (tr && tr.getAttribute('data-fila-editada') === '1') {
                 programarRefrescoCupoFila(tr);
+            }
+        });
+        inp.addEventListener('blur', function () {
+            if (this.value === '' || this.value === null) {
+                this.value = '0';
+                return;
+            }
+            var n = parseInt(String(this.value).trim(), 10);
+            if (isNaN(n) || n < 0) {
+                this.value = '0';
+            } else {
+                this.value = String(n);
             }
         });
         inp.addEventListener('keydown', function (ev) {

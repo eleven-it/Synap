@@ -62,34 +62,34 @@ La pantalla sustituye el flujo POS+carrito como **vista principal** (`vista=tabl
 | 5 | **Fase 1 Armado 2da en tabla:** listado demanda + enlace «Componer» → `?vista=pos&id_articulo=` (sin input masivo). |
 | 6 | **Unidad:** pares enteros; docenas = pares ÷ 12 redondeado (mismo toggle que tablero). |
 | 7 | **Filtro default:** «Solo con resta» (`resta_armar > 0`), análogo a «Solo urgentes» del tablero. |
-| 8 | **Precarga input Armar:** `min(resta_armar, max_armable)` en 1ra; deshabilitado si `max_armable = 0`. |
+| 8 | **Input Armar sin precarga:** vacío al abrir; el analista completa solo las filas necesarias. Deshabilitado si `max_armable = 0`. Negativos no permitidos (UI + backend). |
 | 9 | **Sin operario** en cabecera (paridad decisión previa armado unificado). |
 | 10 | **Shell visual:** `slate-800` hero + acento **emerald** (1ra) / **amber** (2da), no `gray-*` legacy. |
+| 11 | **Columnas visibles (29/07/2026):** Artículo, Terminado, Máx. armable, Armar. Ocultas: fecha entrega, Pedido, Reserva, Resta urgente, Resta armar. |
 
 ---
 
 ## 4. Arquitectura de información (columnas)
 
 ```
-┌─────────────┬──────────────── Demanda a armar ────────────────┬── Capacidad ──┬────────┐
-│  Artículo   │ Pedido │ St. term. │ St. seg. │ Resta urg. │ Resta armar │ Máx. armable │ Armar │
-└─────────────┴────────┴───────────┴──────────┴────────────┴─────────────┴──────────────┴───────┘
-  sticky-left     pares    pares       pares      pares        pares★       packs (1ra)    input
+┌─────────────┬───────────┬──────────────┬────────┐
+│  Artículo   │ Terminado │ Máx. armable │ Armar  │
+└─────────────┴───────────┴──────────────┴────────┘
+  sticky-left     pares      packs (1ra)    input vacío
 ```
 
 | Columna | Rol UX | 1ra | 2da |
 |---------|--------|-----|-----|
 | Artículo | Identidad + marca | ✓ | ✓ |
-| **1er fecha entrega** | MIN FechaEntrega PED | ✓ | ✓ |
-| Pedido | Demanda pedidos PED | ✓ | ✓ |
 | Stock terminado | PT actual | ✓ | ✓ |
-| Stock seguridad | Reserva pack | ✓ | ✓ |
-| Resta urgente | Brecha pedido − PT | ✓ | ✓ |
-| **Resta armar** | **Brecha operativa** | ✓ destacada | ✓ |
 | Máx. armable | Tope físico origen | BOM × Semi | — (fase 2) |
-| Armar | Input packs | entero | enlace POS |
+| Armar | Input packs (sin precarga) | entero ≥ 0 | enlace POS |
 
-★ Resta armar = `max(0, pedido + reserva − stock_terminado)` — paridad PCP col L.
+Columnas de demanda (Pedido, Reserva, Resta urgente/armar, 1er fecha entrega) se calculan en backend para filtrar elegibilidad pero **no** se muestran en la grilla operativa.
+
+Vacío o 0 en Armar = la fila no se incluye en el lote. Negativos se rechazan (coerce a vacío en UI; `qty <= 0` en POST).
+
+★ Interno: Resta armar = `max(0, pedido + reserva − stock_terminado)` — sigue usándose para el filtro «solo con resta».
 
 ---
 
