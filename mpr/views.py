@@ -7041,7 +7041,9 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
             "requiere_fecha": grilla.get("requiere_fecha", grilla.get("requiere_fecha_turno", True)),
             "requiere_fecha_turno": grilla.get("requiere_fecha_turno", grilla.get("requiere_fecha", True)),
             "ver_roster": ver_roster,
-            "puede_ver_roster_completo": _usuario_puede_anular_envios(self.request.user),
+            # Quien ya entró a CC (MprEscritorioVerMixin / mpr.ver) puede consultar
+            # el roster confirmado; no exige rol supervisor ni anular envíos.
+            "puede_ver_roster_completo": True,
             "componentes": grilla.get("componentes", grilla.get("filas", [])),
             "componentes_vacio": grilla.get("componentes_vacio", grilla.get("filas_vacio", True)),
             "tiene_borrador": grilla.get("tiene_borrador", False),
