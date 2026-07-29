@@ -18720,6 +18720,45 @@ def _anotar_rowspan_articulo_clasificacion(filas: List[Dict[str, Any]]) -> None:
             filas[k]["rowspan_articulo"] = 1
         i = j
 
+def _consumir_desglose_contra_capacidad_maquina(
+    fab_maq: Decimal,
+    semi_rest: Decimal,
+    seg2da_rest: Decimal,
+    scrap_rest: Decimal,
+) -> Tuple[Decimal, Decimal, Decimal, Decimal, Decimal, Decimal]:
+    """Asigna semi→2da→scrap a una máquina sin reutilizar capacidad ya consumida.
+
+    Históricamente cada destino hacía ``min(fab_maq, pool)`` sobre el fab completo,
+    lo que sobreasignaba la 1.ª máquina (semi+2da) y dejaba remanente fantasma en
+    las siguientes aunque ``Σ clasificado = Σ fabricado`` a nivel operario×turno.
+    """
+    cap_rest = max(Decimal("0"), to_decimal_or_none(fab_maq) or Decimal("0"))
+    semi_pool = max(Decimal("0"), to_decimal_or_none(semi_rest) or Decimal("0"))
+    seg_pool = max(Decimal("0"), to_decimal_or_none(seg2da_rest) or Decimal("0"))
+    scrap_pool = max(Decimal("0"), to_decimal_or_none(scrap_rest) or Decimal("0"))
+
+    asignado_semi = min(cap_rest, semi_pool)
+    semi_pool -= asignado_semi
+    cap_rest -= asignado_semi
+
+    asignado_seg2da = min(cap_rest, seg_pool)
+    seg_pool -= asignado_seg2da
+    cap_rest -= asignado_seg2da
+
+    asignado_scrap = min(cap_rest, scrap_pool)
+    scrap_pool -= asignado_scrap
+    cap_rest -= asignado_scrap
+
+    return (
+        asignado_semi,
+        asignado_seg2da,
+        asignado_scrap,
+        semi_pool,
+        seg_pool,
+        scrap_pool,
+    )
+
+
 def _atribuible_clasificacion_por_celda(
     celdas: Dict[Tuple[int, int, int, int], Dict[str, Any]],
     desglose_por_turno: Dict[int, Dict[Tuple[int, int], Dict[str, Decimal]]],
@@ -18750,12 +18789,16 @@ def _atribuible_clasificacion_por_celda(
             ),
         )
         for mid, fab_maq, _datos in maquinas_ord:
-            asignado_semi = min(fab_maq, semi_rest)
-            semi_rest -= asignado_semi
-            asignado_seg2da = min(fab_maq, seg2da_rest)
-            seg2da_rest -= asignado_seg2da
-            asignado_scrap = min(fab_maq, scrap_rest)
-            scrap_rest -= asignado_scrap
+            (
+                asignado_semi,
+                asignado_seg2da,
+                asignado_scrap,
+                semi_rest,
+                seg2da_rest,
+                scrap_rest,
+            ) = _consumir_desglose_contra_capacidad_maquina(
+                fab_maq, semi_rest, seg2da_rest, scrap_rest
+            )
             asignado_total = asignado_semi + asignado_seg2da + asignado_scrap
             rem = max(Decimal("0"), fab_maq - asignado_total)
             atribuible[(mid, aid, oid, tid)] = rem
@@ -18837,12 +18880,16 @@ def _asignacion_clasificado_por_celda(
             ),
         )
         for mid, fab_maq, _datos in maquinas_ord:
-            asignado_semi = min(fab_maq, semi_rest)
-            semi_rest -= asignado_semi
-            asignado_seg2da = min(fab_maq, seg2da_rest)
-            seg2da_rest -= asignado_seg2da
-            asignado_scrap = min(fab_maq, scrap_rest)
-            scrap_rest -= asignado_scrap
+            (
+                asignado_semi,
+                asignado_seg2da,
+                asignado_scrap,
+                semi_rest,
+                seg2da_rest,
+                scrap_rest,
+            ) = _consumir_desglose_contra_capacidad_maquina(
+                fab_maq, semi_rest, seg2da_rest, scrap_rest
+            )
             asignado[(mid, aid, oid, tid)] = {
                 "semi": asignado_semi,
                 "segunda": asignado_seg2da,

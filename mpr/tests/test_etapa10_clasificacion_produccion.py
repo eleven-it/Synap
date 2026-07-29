@@ -1036,3 +1036,97 @@ class TestTableroSinPlanchado(SimpleTestCase):
         """URL mpr:transicion_lote aún resuelve (backward-safe)."""
         url = reverse("mpr:transicion_lote")
         self.assertTrue(url.endswith("/transicion/"))
+
+
+class TestAtribuibleMultiMaquinaSegunda(SimpleTestCase):
+    """Regresión: semi+2da no debe dejar remanente fantasma en otras máquinas."""
+
+    def test_cls_igual_fab_sin_remanente_fantasma(self):
+        """Caso real 22/07 art812/op5: 4 máquinas, semi+2da = fab → atribuible 0."""
+        from mpr.services import (
+            _asignacion_clasificado_por_celda,
+            _atribuible_clasificacion_por_celda,
+        )
+
+        # Orden de nombre: Máquina 19, 20, 21, 25 (como en producción).
+        celdas = {
+            (19, 812, 5, 2): {
+                "cantidad": Decimal("72"),
+                "maquina_nombre": "Maquina 19",
+                "operario_nombre": "Op",
+                "turno_nombre": "T2",
+            },
+            (20, 812, 5, 2): {
+                "cantidad": Decimal("84"),
+                "maquina_nombre": "Maquina 20",
+                "operario_nombre": "Op",
+                "turno_nombre": "T2",
+            },
+            (21, 812, 5, 2): {
+                "cantidad": Decimal("84"),
+                "maquina_nombre": "Maquina 21",
+                "operario_nombre": "Op",
+                "turno_nombre": "T2",
+            },
+            (25, 812, 5, 2): {
+                "cantidad": Decimal("84"),
+                "maquina_nombre": "Maquina 25",
+                "operario_nombre": "Op",
+                "turno_nombre": "T2",
+            },
+        }
+        desglose = {
+            2: {
+                (812, 5): {
+                    "semi": Decimal("310"),
+                    "segunda": Decimal("14"),
+                    "scrap": Decimal("0"),
+                }
+            }
+        }
+        atr = _atribuible_clasificacion_por_celda(celdas, desglose)
+        self.assertEqual(sum(atr.values()), Decimal("0"))
+        for rem in atr.values():
+            self.assertEqual(rem, Decimal("0"))
+
+        asig = _asignacion_clasificado_por_celda(celdas, desglose)
+        total_semi = sum(v["semi"] for v in asig.values())
+        total_2da = sum(v["segunda"] for v in asig.values())
+        self.assertEqual(total_semi, Decimal("310"))
+        self.assertEqual(total_2da, Decimal("14"))
+        # Ninguna máquina recibe semi+2da por encima de su fab.
+        for (mid, *_rest), dest in asig.items():
+            fab = celdas[(mid, 812, 5, 2)]["cantidad"]
+            self.assertLessEqual(dest["semi"] + dest["segunda"] + dest["scrap"], fab)
+
+    def test_dos_maquinas_semi_y_2da_completos(self):
+        """M1+M2 fab=200; semi=100 + 2da=100 → sin remanente (bug viejo dejaba 100 en M2)."""
+        from mpr.services import _atribuible_clasificacion_por_celda
+
+        celdas = {
+            (1, 42, 9, 1): {
+                "cantidad": Decimal("100"),
+                "maquina_nombre": "A",
+                "operario_nombre": "Op",
+                "turno_nombre": "T1",
+            },
+            (2, 42, 9, 1): {
+                "cantidad": Decimal("100"),
+                "maquina_nombre": "B",
+                "operario_nombre": "Op",
+                "turno_nombre": "T1",
+            },
+        }
+        desglose = {
+            1: {
+                (42, 9): {
+                    "semi": Decimal("100"),
+                    "segunda": Decimal("100"),
+                    "scrap": Decimal("0"),
+                }
+            }
+        }
+        atr = _atribuible_clasificacion_por_celda(celdas, desglose)
+        self.assertEqual(sum(atr.values()), Decimal("0"))
+        self.assertEqual(atr[(1, 42, 9, 1)], Decimal("0"))
+        self.assertEqual(atr[(2, 42, 9, 1)], Decimal("0"))
