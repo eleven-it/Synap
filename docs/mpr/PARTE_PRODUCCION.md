@@ -318,6 +318,12 @@ Al abrir con fecha, `precarga_planilla_por_fecha` lee partes existentes por tupl
 
 El guardado es **idempotente** vía `uk_mpr_parte_linea_maq` (`ON DUPLICATE KEY UPDATE`): un re-envío del formulario actualiza las cantidades del turno correspondiente.
 
+La precarga no persiste un snapshot de **Cupo Fabricando**. Al abrir una fila con
+cantidades existentes, el badge de cupo queda oculto. Reaparece y se consulta en vivo
+solo cuando se editan sus docenas, pares u operario; si se restaura exactamente el
+valor inicial, vuelve a ocultarse. Las filas nuevas sin precarga muestran el cupo desde
+el inicio. Cuando el día está bloqueado por CC, no se muestran cupos.
+
 ### Registro (POST planilla)
 
 URL: **`/mpr/parte-produccion/registrar/`**
@@ -341,9 +347,19 @@ Cada `MprParteLinea` persiste:
 
 ### Validación cupo (planilla)
 
-**Aprobar** (`accion=aprobar`): por fila máquina×artículo, Σ pares (M+T+N) ≤ **Fabricando**. Si falla → rechazo (UI + servidor).
+**Aprobar** (`accion=aprobar`): se valida solamente cada fila máquina×artículo que
+el usuario modificó frente a la precarga. El backend consulta **Fabricando live** y
+controla por artículo la suma de los incrementos positivos de esas filas:
+`Σ max(0, nuevo_total_fila − total_precargado_fila) ≤ Fabricando_live`.
+Así, la precarga persistida no se vuelve a consumir ni bloquear; si varias máquinas
+editan el mismo artículo, sus incrementos comparten el mismo cupo live. Un cambio
+solo de operario habilita la consulta visual pero no consume cupo. Si falla → rechazo
+(UI + servidor).
 
-**Borrador** (`accion=borrador`): se puede guardar aunque haya exceso de Fabricando o turnos sin cargar (cargas diferidas). Sin OPP/stock hasta aprobar. **No disponible** si el día ya tiene un parte aprobado (origen `directo_supervisor`): en ese caso las correcciones van por `accion=aprobar` (delta de stock).
+**Borrador** (`accion=borrador`): **no** valida cupo Fabricando (se puede guardar
+aunque el incremento supere el cupo; cargas diferidas). Sin OPP/stock hasta aprobar.
+**No disponible** si el día ya tiene un parte aprobado (origen `directo_supervisor`):
+en ese caso las correcciones van por `accion=aprobar` (delta de stock).
 
 ### Botones de guardado
 

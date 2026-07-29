@@ -250,6 +250,7 @@
                                 data-articulo="{{ fila.descripcion|escape }}"
                                 data-codigo="{{ fila.codigo_tooltip|escape }}"
                                 data-inputs-habilitados="{% if fila.inputs_habilitados %}1{% else %}0{% endif %}"
+                                data-tiene-precarga="{% if fila.tiene_precarga %}1{% else %}0{% endif %}"
                                 data-descripcion="{{ fila.descripcion|lower }} {{ fila.codigo_tooltip|lower }}"
                                 x-show="filtro === '' || $el.dataset.descripcion.includes(filtro.toLowerCase().trim())">
                                 {# Máquina (sticky): rowspan cuando hay varios artículos; al filtrar se muestra en cada fila #}
@@ -283,7 +284,7 @@
                                             {% if cel.operarios|length == 1 %}
                                                 {% with op=cel.operarios.0 %}
                                                 {% if not cel.bloqueado %}
-                                                <input type="hidden" name="parte_maq_{{ fila.id_mpr_maquina }}_art_{{ fila.id_articulo }}_turno_{{ col.id }}_op" value="{{ op.id_operario }}">
+                                                <input type="hidden" name="parte_maq_{{ fila.id_mpr_maquina }}_art_{{ fila.id_articulo }}_turno_{{ col.id }}_op" value="{{ cel.operario_id|default:op.id_operario }}">
                                                 {% endif %}
                                                 <p class="truncate text-center text-xs font-bold {% if cel.bloqueado %}text-slate-500 dark:text-slate-400{% else %}text-slate-700 dark:text-slate-200{% endif %}" title="{{ op.nombre }}{% if cel.bloqueado %} (solo lectura){% endif %}">
                                                     <span class="material-icons align-text-bottom text-[13px]" aria-hidden="true">{% if cel.bloqueado %}lock{% else %}person{% endif %}</span>
@@ -302,7 +303,7 @@
                                                         class="h-7 w-full rounded-md border border-slate-300 bg-white px-1 text-[11px] font-bold text-slate-700 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500/30 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200">
                                                     <option value="">— Operario —</option>
                                                     {% for op in cel.operarios %}
-                                                    <option value="{{ op.id_operario }}">{{ op.nombre }}</option>
+                                                    <option value="{{ op.id_operario }}"{% if cel.operario_id == op.id_operario %} selected{% endif %}>{{ op.nombre }}</option>
                                                     {% endfor %}
                                                 </select>
                                             {% endif %}
@@ -372,7 +373,7 @@
                                 {% endfor %}
                                 {# Cupo Fabricando (sticky derecha) + ingresado en vivo #}
                                 <td class="sticky right-0 z-20 min-w-[7.5rem] border-l border-slate-100 bg-white px-3 py-3 text-center align-middle dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-purple-50/30 dark:group-hover/row:bg-purple-950/10">
-                                    <div class="parte-fabricando-badge inline-flex flex-col items-center gap-1 rounded-lg border border-emerald-200/90 bg-emerald-50 px-2.5 py-2 dark:border-emerald-800/60 dark:bg-emerald-950/30">
+                                    <div class="parte-fabricando-badge {% if fila.tiene_precarga or grilla_planilla.dia_bloqueado_cc %}hidden {% endif %}inline-flex flex-col items-center gap-1 rounded-lg border border-emerald-200/90 bg-emerald-50 px-2.5 py-2 dark:border-emerald-800/60 dark:bg-emerald-950/30">
                                         <span class="text-xs font-semibold tabular-nums leading-tight text-emerald-800 dark:text-emerald-300">{{ fila.fabricando|floatformat:'0' }} pares</span>
                                         <span class="parte-fila-ingresado text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400" aria-live="polite">Ingresado: {{ fila.ingresado }} pares</span>
                                     </div>
@@ -479,13 +480,55 @@
         return suma;
     }
 
+    function valoresInicialesFila(tr) {
+        return JSON.parse(tr.getAttribute('data-valores-iniciales') || '[]');
+    }
+
+    function valoresActualesFila(tr) {
+        var valores = [];
+        tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
+            var op = cel.parentElement.querySelector('[data-parte-op-select], input[type="hidden"][name$="_op"]');
+            valores.push({
+                cantidad: paresCelda(cel),
+                operario: op ? String(op.value || '') : ''
+            });
+        });
+        return valores;
+    }
+
+    function filaEstaEditada(tr) {
+        var iniciales = valoresInicialesFila(tr);
+        var actuales = valoresActualesFila(tr);
+        return iniciales.length !== actuales.length || actuales.some(function (actual, indice) {
+            var inicial = iniciales[indice] || {};
+            return actual.cantidad !== inicial.cantidad || actual.operario !== inicial.operario;
+        });
+    }
+
+    function actualizarVisibilidadCupo(tr) {
+        if (!tr) { return; }
+        var badge = tr.querySelector('.parte-fabricando-badge');
+        if (!badge) { return; }
+        var bloqueado = form.getAttribute('data-dia-bloqueado-cc') === '1';
+        var tienePrecarga = tr.getAttribute('data-tiene-precarga') === '1';
+        var editada = filaEstaEditada(tr);
+        tr.setAttribute('data-fila-editada', editada ? '1' : '0');
+        badge.classList.toggle('hidden', bloqueado || (tienePrecarga && !editada));
+    }
+
+    function deltaPositivoFila(tr) {
+        return Math.max(0, sumaFilaPares(tr) - valoresInicialesFila(tr).reduce(function (total, celda) {
+            return total + Number(celda.cantidad || 0);
+        }, 0));
+    }
+
     function actualizarIngresado(tr) {
         if (!tr) { return; }
         var suma = sumaFilaPares(tr);
         var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
         var ing = tr.querySelector('.parte-fila-ingresado');
         var badge = tr.querySelector('.parte-fabricando-badge');
-        var excede = suma > tope + 1e-9;
+        var excede = deltaPositivoFila(tr) > tope + 1e-9;
         if (ing) {
             ing.textContent = 'Ingresado: ' + suma + ' pares';
             ing.classList.remove('text-red-600', 'dark:text-red-400', 'text-emerald-700', 'dark:text-emerald-400', 'text-slate-500', 'dark:text-slate-400');
@@ -521,19 +564,26 @@
         return null;
     }
 
-    form.querySelectorAll('tbody tr[data-id-art]').forEach(actualizarIngresado);
+    form.querySelectorAll('tbody tr[data-id-art]').forEach(function (tr) {
+        tr.setAttribute('data-valores-iniciales', JSON.stringify(valoresActualesFila(tr)));
+        actualizarVisibilidadCupo(tr);
+        actualizarIngresado(tr);
+    });
 
     function hayExcesoFabricando() {
-        var excede = false;
+        var deltasPorArticulo = {};
         form.querySelectorAll('tbody tr[data-fabricando]').forEach(function (tr) {
             if (!filaVisible(tr)) { return; }
             if (tr.getAttribute('data-inputs-habilitados') === '0') { return; }
-            var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
-            if (sumaFilaPares(tr) > tope + 1e-9) {
-                excede = true;
-            }
+            if (tr.getAttribute('data-fila-editada') !== '1') { return; }
+            var idArt = tr.getAttribute('data-id-art') || '';
+            deltasPorArticulo[idArt] = (deltasPorArticulo[idArt] || 0) + deltaPositivoFila(tr);
         });
-        return excede;
+        return Object.keys(deltasPorArticulo).some(function (idArt) {
+            var tr = form.querySelector('tbody tr[data-id-art="' + idArt + '"]');
+            var tope = parseFloat((tr && tr.getAttribute('data-fabricando')) || '0');
+            return deltasPorArticulo[idArt] > tope + 1e-9;
+        });
     }
 
     function actualizarBotonAprobar() {
@@ -598,9 +648,9 @@
             var articulo = tr.getAttribute('data-articulo') || 'Artículo';
             if (esAprobar) {
                 var tope = parseFloat(tr.getAttribute('data-fabricando') || '0');
-                var suma = sumaFilaPares(tr);
-                if (suma > tope + 1e-9) {
-                    erroresCupo.push('• ' + articulo + ': ' + suma + ' pares supera Fabricando (' + tope + ' pares).');
+                var delta = deltaPositivoFila(tr);
+                if (tr.getAttribute('data-fila-editada') === '1' && delta > tope + 1e-9) {
+                    erroresCupo.push('• ' + articulo + ': el incremento editado de ' + delta + ' pares supera Fabricando (' + tope + ' pares).');
                 }
             }
             tr.querySelectorAll('.parte-celda-cantidad').forEach(function (cel) {
@@ -806,12 +856,15 @@
     qtyInputs.forEach(function (inp) {
         inp.addEventListener('focus', function () {
             this.select();
-            programarRefrescoCupoFila(this.closest('tr[data-id-art]'));
         });
         inp.addEventListener('input', function () {
-            actualizarIngresado(this.closest('tr[data-id-art]'));
+            var tr = this.closest('tr[data-id-art]');
+            actualizarVisibilidadCupo(tr);
+            actualizarIngresado(tr);
             actualizarBotonAprobar();
-            programarRefrescoCupoFila(this.closest('tr[data-id-art]'));
+            if (tr && tr.getAttribute('data-fila-editada') === '1') {
+                programarRefrescoCupoFila(tr);
+            }
         });
         inp.addEventListener('keydown', function (ev) {
             if (ev.key !== 'Enter') { return; }
@@ -836,6 +889,18 @@
         });
     });
 
+    form.querySelectorAll('[data-parte-op-select]').forEach(function (select) {
+        select.addEventListener('change', function () {
+            var tr = this.closest('tr[data-id-art]');
+            actualizarVisibilidadCupo(tr);
+            actualizarIngresado(tr);
+            actualizarBotonAprobar();
+            if (tr && tr.getAttribute('data-fila-editada') === '1') {
+                programarRefrescoCupoFila(tr);
+            }
+        });
+    });
+
     actualizarBotonAprobar();
 
     var btnBorrador = document.getElementById('btn-guardar-borrador');
@@ -846,7 +911,7 @@
             if (btnBorrador.disabled || btnBorrador.getAttribute('aria-disabled') === 'true') {
                 return;
             }
-            var errores = validarAntesDeGuardar(false);
+            var errores = validarAntesDeGuardar(true);
             if (errores.length) {
                 mostrarErrores(errores, 'No se puede guardar el borrador');
                 return;

@@ -177,6 +177,44 @@ class ConstruirGrillaPartePlanillaTest(SimpleTestCase):
         self.assertEqual(turnos[2]["docenas"], 0)
         self.assertEqual(turnos[2]["pares"], 6)
         self.assertEqual(fila["ingresado"], 18)
+        self.assertTrue(fila["tiene_precarga"])
+
+    def test_valida_solo_incremento_editado_contra_cupo_live(self):
+        from mpr.services import _validar_cupo_planilla_qc
+
+        lineas = [
+            {
+                "id_articulo": 100,
+                "id_mpr_maquina": 10,
+                "turno_id": 1,
+                "id_operario": 5,
+                "cantidad": Decimal("30"),
+            },
+            {
+                "id_articulo": 100,
+                "id_mpr_maquina": 20,
+                "turno_id": 1,
+                "id_operario": 6,
+                "cantidad": Decimal("24"),
+            },
+        ]
+        previas = {
+            (10, 100, 1): {"cantidad": Decimal("18"), "id_operario": 5},
+            (20, 100, 1): {"cantidad": Decimal("24"), "id_operario": 6},
+        }
+        with patch("mpr.services.cupo_fabricando_por_articulo", return_value={100: 12.0}):
+            self.assertEqual(
+                _validar_cupo_planilla_qc(
+                    "emp", lineas, previas_por_celda=previas
+                ),
+                [],
+            )
+        with patch("mpr.services.cupo_fabricando_por_articulo", return_value={100: 11.0}):
+            errores = _validar_cupo_planilla_qc(
+                "emp", lineas, previas_por_celda=previas
+            )
+        self.assertEqual(len(errores), 1)
+        self.assertIn("incremento editado", errores[0])
 
     @patch("mpr.repositories.parte.precarga_planilla_por_fecha")
     @patch("mpr.services._fabricando_por_componentes")
@@ -465,6 +503,11 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
         patcher = patch("mpr.services._validar_planilla_sin_control_calidad", return_value=[])
         self._mock_validar_cc = patcher.start()
         self.addCleanup(patcher.stop)
+        patcher_precarga = patch(
+            "mpr.repositories.parte.precarga_planilla_por_fecha", return_value={}
+        )
+        patcher_precarga.start()
+        self.addCleanup(patcher_precarga.stop)
         patcher_aprob = patch(
             "mpr.repositories.parte.fecha_planilla_tiene_parte_aprobado",
             return_value=False,
@@ -566,6 +609,7 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
         self.assertIn("Fabricando", str(ctx.exception))
         mock_crear.assert_not_called()
 
+    @patch("mpr.repositories.parte.obtener_parte_planilla_directo_supervisor", return_value=None)
     @patch("mpr.services._registrar_asiento_fisico_opp_parte")
     @patch("mpr.services.get_deposito_produccion_mpr", return_value=5)
     @patch("mpr.services.obtener_operario", return_value={"nombre_empleado": "Op"})
@@ -573,8 +617,9 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
     @patch("mpr.repositories.parte.crear_o_actualizar_parte_planilla")
     @patch("mpr.services.cupo_fabricando_por_articulo")
     def test_borrador_permite_exceso_fabricando(
-        self, mock_cupo, mock_crear, mock_turno, _op, _dep, _asiento
+        self, mock_cupo, mock_crear, mock_turno, _op, _dep, _asiento, _obtener
     ):
+        """Borrador no valida cupo: se puede guardar aunque el incremento supere Fabricando."""
         from mpr.services import registrar_parte_produccion
 
         mock_cupo.return_value = {100: 24.0}
@@ -583,22 +628,19 @@ class RegistrarParteProduccionPlanillaTest(TestCase):
         mock_turno.side_effect = lambda _b, tid: turno_rec if tid in (1, 2) else None
         parte_mock = MagicMock(movimiento_fisico_ok=False, save=lambda *a, **k: None)
         mock_crear.return_value = parte_mock
-        with patch(
-            "mpr.repositories.parte.obtener_parte_planilla_directo_supervisor",
-            return_value=None,
-        ):
-            partes, _ = registrar_parte_produccion(
-                EMPRESA,
-                date(2026, 7, 21),
-                None,
-                1,
-                self._lineas_planilla_exceso_fila(),
-                modo_planilla=True,
-                accion="borrador",
-            )
+        partes, _ = registrar_parte_produccion(
+            EMPRESA,
+            date(2026, 7, 21),
+            None,
+            1,
+            self._lineas_planilla_exceso_fila(),
+            modo_planilla=True,
+            accion="borrador",
+        )
+        self.assertTrue(partes)
         mock_crear.assert_called()
         _asiento.assert_not_called()
-        self.assertEqual(len(partes), 2)
+        mock_cupo.assert_not_called()
 
     @patch("mpr.repositories.parte.obtener_parte_planilla_directo_supervisor", return_value=None)
     @patch("mpr.services._registrar_asiento_fisico_opp_parte")
@@ -789,6 +831,18 @@ class ParteLineasDesdePostPlanillaTest(SimpleTestCase):
         self.assertEqual(lineas[1]["turno_id"], 2)
         self.assertEqual(lineas[1]["cantidad"], Decimal("6"))
 
+    def test_conserva_celda_cero_para_permitir_borrarla(self):
+        post = QueryDict(mutable=True)
+        post["parte_maq_10_art_100_turno_1_docenas"] = "0"
+        post["parte_maq_10_art_100_turno_1_pares"] = "0"
+        post["parte_maq_10_art_100_turno_1_op"] = "5"
+
+        lineas = _parte_lineas_desde_post(post, modo_planilla=True)
+
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(lineas[0]["cantidad"], Decimal("0"))
+        self.assertEqual(lineas[0]["id_operario"], 5)
+
 
 class ParteProduccionViewPlanillaTest(SimpleTestCase):
     """T9: filtros vista analista."""
@@ -866,6 +920,11 @@ class RegistrarParteProduccionViewPlanillaIntegrationTest(TestCase):
         patcher_cc = patch("mpr.services._validar_planilla_sin_control_calidad", return_value=[])
         patcher_cc.start()
         self.addCleanup(patcher_cc.stop)
+        patcher_precarga = patch(
+            "mpr.repositories.parte.precarga_planilla_por_fecha", return_value={}
+        )
+        patcher_precarga.start()
+        self.addCleanup(patcher_precarga.stop)
 
     def _post_registrar(self, data, empresa=EMPRESA):
         request = self.factory.post(reverse("mpr:parte_produccion_registrar"), data=data)

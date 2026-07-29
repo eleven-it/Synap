@@ -16580,43 +16580,72 @@ def actualizar_config_mpr_bloqueo_fabricando(
 def _validar_cupo_planilla_qc(
     base_empresa: str,
     lineas: List[Dict[str, Any]],
+    *,
+    previas_por_celda: Optional[Dict[Tuple[int, int, int], Dict[str, Any]]] = None,
 ) -> List[str]:
-    """Valida cupo Fabricando por fila máquina×artículo y agregado por artículo."""
-    por_fila: Dict[Tuple[int, int], Decimal] = {}
-    por_articulo: Dict[int, Decimal] = {}
-    ids_art: set = set()
+    """
+    Valida solo el incremento de filas editadas de la planilla QC.
+
+    El cupo live ya descuenta la precarga persistida. Por eso se compara la suma
+    de deltas positivos de las filas máquina×artículo modificadas por artículo,
+    no el total completo del POST.
+    """
+    previas_por_celda = previas_por_celda or {}
+    actuales_por_fila: Dict[Tuple[int, int], Decimal] = {}
+    previas_por_fila: Dict[Tuple[int, int], Decimal] = {}
+    operarios_actuales: Dict[Tuple[int, int, int], Optional[int]] = {}
+    filas_editadas: set = set()
+    for clave, previa in previas_por_celda.items():
+        mid, aid, _tid = clave
+        cantidad_previa = to_decimal_or_none(
+            (previa or {}).get("cantidad")
+        ) or Decimal("0")
+        previas_por_fila[(mid, aid)] = (
+            previas_por_fila.get((mid, aid), Decimal("0")) + cantidad_previa
+        )
+
     for cel in lineas or []:
         aid = to_int_or_none(cel.get("id_articulo"))
         mid = to_int_or_none(cel.get("id_mpr_maquina"))
         cant = to_decimal_or_none(cel.get("cantidad"))
-        if aid is None or mid is None or cant is None or cant <= 0:
+        tid = to_int_or_none(cel.get("turno_id"))
+        if aid is None or mid is None or tid is None or cant is None:
             continue
-        ids_art.add(aid)
         clave_fila = (mid, aid)
-        por_fila[clave_fila] = por_fila.get(clave_fila, Decimal("0")) + cant
-        por_articulo[aid] = por_articulo.get(aid, Decimal("0")) + cant
+        clave_celda = (mid, aid, tid)
+        actuales_por_fila[clave_fila] = actuales_por_fila.get(clave_fila, Decimal("0")) + cant
+        operarios_actuales[clave_celda] = to_int_or_none(cel.get("id_operario"))
+        previa = previas_por_celda.get(clave_celda) or {}
+        cantidad_previa = to_decimal_or_none(previa.get("cantidad")) or Decimal("0")
+        if (
+            cant != cantidad_previa
+            or operarios_actuales[clave_celda] != to_int_or_none(previa.get("id_operario"))
+        ):
+            filas_editadas.add(clave_fila)
 
-    if not ids_art:
+    if not filas_editadas:
         return []
 
-    fab_map = cupo_fabricando_por_articulo(base_empresa, list(ids_art))
+    deltas_por_articulo: Dict[int, Decimal] = {}
+    for mid, aid in filas_editadas:
+        delta = actuales_por_fila.get((mid, aid), Decimal("0")) - previas_por_fila.get(
+            (mid, aid), Decimal("0")
+        )
+        if delta > 0:
+            deltas_por_articulo[aid] = deltas_por_articulo.get(aid, Decimal("0")) + delta
+
+    if not deltas_por_articulo:
+        return []
+
+    fab_map = cupo_fabricando_por_articulo(base_empresa, list(deltas_por_articulo))
     errores: List[str] = []
-    for (mid, aid), total in por_fila.items():
+    for aid, delta in deltas_por_articulo.items():
         fab = float(fab_map.get(aid, 0.0) or 0.0)
-        if float(total) > fab + 1e-9:
+        if float(delta) > fab + 1e-9:
             errores.append(
-                f"Artículo {aid} (máquina {mid}): ingresado {float(total):.0f} pares "
-                f"supera cupo Fabricando {fab:.0f} pares."
+                f"Artículo {aid}: el incremento editado de {float(delta):.0f} pares "
+                f"supera cupo Fabricando disponible {fab:.0f} pares."
             )
-    for aid, total in por_articulo.items():
-        fab = float(fab_map.get(aid, 0.0) or 0.0)
-        if float(total) > fab + 1e-9:
-            msg = (
-                f"Artículo {aid}: suma agregada {float(total):.0f} pares "
-                f"(todas las máquinas y turnos) supera cupo Fabricando {fab:.0f} pares."
-            )
-            if msg not in errores:
-                errores.append(msg)
     return errores
 
 
@@ -16688,7 +16717,7 @@ def registrar_parte_produccion(
         cantidad = to_decimal_or_none(cel.get("cantidad"))
         if id_art is None or id_op is None or cantidad is None or cantidad <= 0:
             continue
-        op_data = obtener_operario(base_empresa, id_op)
+        op_data = obtener_operario(base_empresa, id_op) if id_op is not None else None
         nombre_snap = str_or_default(
             op_data.get("nombre_empleado") if op_data else None, "-"
         )
@@ -16769,6 +16798,7 @@ def _registrar_parte_produccion_planilla(
         crear_o_actualizar_parte_planilla,
         fecha_planilla_tiene_parte_aprobado,
         obtener_parte_planilla_directo_supervisor,
+        precarga_planilla_por_fecha,
         sumar_cantidades_aprobadas_por_articulo,
     )
 
@@ -16785,6 +16815,8 @@ def _registrar_parte_produccion_planilla(
             "Para corregir cantidades usá «Guardar parte de producción»."
         )
 
+    # Se conservan también las celdas en cero: al editar una cantidad existente
+    # hacia cero el upsert debe borrar esa línea, no dejarla persistida.
     lineas_norm: List[Dict[str, Any]] = []
     for cel in lineas or []:
         id_art = to_int_or_none(cel.get("id_articulo"))
@@ -16798,10 +16830,13 @@ def _registrar_parte_produccion_planilla(
             or id_maq is None
             or turno_cel is None
             or cantidad is None
-            or cantidad <= 0
         ):
             continue
-        op_data = obtener_operario(base_empresa, id_op)
+        if cantidad > 0 and id_op is None:
+            raise DjValidationError(
+                f"Artículo {id_art}: seleccioná el operario antes de guardar."
+            )
+        op_data = obtener_operario(base_empresa, id_op) if id_op is not None else None
         nombre_snap = str_or_default(
             op_data.get("nombre_empleado") if op_data else None, "-"
         )
@@ -16815,17 +16850,45 @@ def _registrar_parte_produccion_planilla(
             "turno_id": turno_cel,
         })
 
-    if not lineas_norm and not es_borrador:
+    precarga = precarga_planilla_por_fecha(base_empresa, fecha_produccion)
+    previas_por_celda = {
+        clave: {
+            "cantidad": Decimal(
+                int(datos.get("docenas") or 0) * 12 + int(datos.get("pares") or 0)
+            ),
+            "id_operario": to_int_or_none(datos.get("id_operario")),
+        }
+        for clave, datos in precarga.items()
+    }
+    lineas_persistibles = [ln for ln in lineas_norm if ln["cantidad"] > 0]
+    lineas_actualizables = [
+        ln
+        for ln in lineas_norm
+        if ln["cantidad"] > 0
+        or (
+            int(ln["id_mpr_maquina"]),
+            int(ln["id_articulo"]),
+            int(ln["turno_id"]),
+        )
+        in previas_por_celda
+    ]
+    if not lineas_persistibles and not previas_por_celda and not es_borrador:
         raise DjValidationError("No hay cantidades válidas para registrar.")
 
+    # Borrador: se puede guardar con exceso Fabricando (cargas diferidas).
+    # Aprobar: solo valida incremento de filas editadas vs cupo live.
     if not es_borrador:
-        errores_cupo = _validar_cupo_planilla_qc(base_empresa, lineas_norm)
+        errores_cupo = _validar_cupo_planilla_qc(
+            base_empresa,
+            lineas_norm,
+            previas_por_celda=previas_por_celda,
+        )
         if errores_cupo:
             raise DjValidationError(" ".join(errores_cupo))
 
     deposito_produccion = get_deposito_produccion_mpr(base_empresa)
     por_turno: Dict[int, List[Dict[str, Any]]] = {}
-    for ln in lineas_norm:
+    for ln in lineas_actualizables:
         por_turno.setdefault(int(ln["turno_id"]), []).append(ln)
 
     if not por_turno and es_borrador:
