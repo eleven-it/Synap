@@ -24,11 +24,17 @@ MPR_ALIASES: dict[str, str] = {
     "flujo-diario": "2. Flujo del día a día",
     "tablero-produccion": "3. Tablero de producción",
     "tablero": "3. Tablero de producción",
+    "columnas-tablero": "3.1 Columnas del modo Par (cómo leerlas)",
+    "reserva-urgente-enviar": "3.2 Relación Reserva ↔ Urgente ↔ Enviar ↔ Fabricando",
+    "ejemplo-tablero": "3.3 Ejemplo didáctico (artículo componente)",
+    "donde-modificar-reserva": "3.4 Dónde modificar la Reserva",
     "parte-produccion": "4. Parte de producción",
     "parte-supervisor": "4.1 Parte de producción (supervisor)",
     "carga-movil-operario": "4.2 Carga de producción (operario)",
     "partes-pendientes": "4.3 Partes pendientes (aprobación)",
+    "rectificar-parte": "4.4 Rectificar un parte ya aprobado",
     "control-calidad": "5. Control de calidad",
+    "borrador-cc": "Borrador vs confirmado (resumen)",
     "armado": "6. Armado",
     "imputacion-pedido": "7. Imputación de pedido",
     "configuracion": "8. Configuración (orden recomendado)",
@@ -48,6 +54,7 @@ MPR_ALIASES: dict[str, str] = {
     "migracion-best": "11. Migración BEST (cutover)",
     "articulos-fabricados": "Artículos fabricados (PP BEST → Admin)",
     "packs-sin-receta": "Modo Pack y packs sin receta",
+    "glosario-mpr-manual": "12. Glosario rápido de pantalla",
 }
 
 STOCK_ALIASES: dict[str, str] = {

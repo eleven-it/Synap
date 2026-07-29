@@ -24,6 +24,10 @@ Orden recomendado:
 4. **Armado** — armar packs terminados  
 5. **Imputación de pedido** — asignar lo armado a pedidos (supervisor)
 
+### Idea clave (una frase)
+
+**Enviar** (tablero) → sube **Fabricando** → el **Parte** solo puede aprobar hasta ese cupo → **Control de calidad** mueve stock de Producción a Semi / 2da / Desperdicio → **Armado** convierte componentes en pack terminado.
+
 ---
 
 ## 3. Tablero de producción
@@ -32,22 +36,124 @@ Orden recomendado:
 
 ### Para qué sirve
 
-Es la pantalla principal del día: muestra la demanda (según pedidos), cuánto falta, qué está en curso y permite **enviar cantidades a producción**.
+Es la pantalla principal del día: muestra la demanda (según pedidos y reserva), cuánto falta, qué está en curso y permite **enviar cantidades a producción**.
 
 ### Cómo usarlo
 
 1. Filtre por fechas de pedido, marcas o **Solo urgentes** (modo **Par**) si necesita enfocarse.
 2. Elija vista **Pack** (producto terminado, pedido + reserva) o **Par** (componente). Para enviar a producción use modo **Par**.
-3. Si hace falta, pulse **Actualizar vista** para refrescar la demanda desde los pedidos.
+3. Si hace falta, pulse **Actualizar** para refrescar la demanda desde los pedidos. La búsqueda actual se conserva al actualizar.
 4. En modo **Par**, complete **Enviar docenas** o **Enviar pares** en las filas que correspondan y pulse **Enviar a producción**. Confirme el envío.
 5. En modo **Pack** no hay envío: use el botón **Ver en modo Par para enviar**.
 6. Desde el encabezado puede ir a Parte de producción, Control de calidad o Armado.
+
+### Pack vs Par (qué fila está mirando)
+
+| Modo | Cada fila es… | ¿Se envía a fábrica? |
+|------|----------------|----------------------|
+| **Pack** | Artículo **terminado** (lo que vende / arma) | No. Solo consulta demanda. |
+| **Par** | **Componente** (medias / pares que se tejen) | Sí. Acá se completa **Enviar pares/docenas**. |
+
+La **reserva de stock** que alimenta la demanda se configura en el artículo **pack terminado** (`stock_reserva` en AdministraNET), **no** en el componente de la grilla Par. Ver §3.4 más abajo.
+
+### 3.1 Columnas del modo Par (cómo leerlas)
+
+Unidades según el conmutador **Docenas / Pares** (y Pack / Par).
+
+#### Demanda a producir
+
+| Columna | Qué significa | ¿Es un faltante? |
+|---------|----------------|------------------|
+| **Pedido** | Demanda que viene de pedidos abiertos, explotada a este componente por la receta (BOM). | Sí, en la medida en que no esté cubierta por stock. |
+| **Reserva** | **Colchón objetivo** del pack terminado, mostrado en pares/docenas del componente (`coeficiente BOM × stock_reserva` del pack). | **No.** Es el target maestro, no “faltan N”. |
+| **Urgente** | Brecha **operativa** real: demanda a cubrir **menos** stock ya en pipeline (Producido + Semi + 2da, etc.). Si está en **0 / gris**, no hay que mandar más a planta por demanda. | **Sí.** Este es el número que importa para producir. |
+
+#### En curso
+
+| Columna | Qué significa |
+|---------|----------------|
+| **Fabricando** | Trabajo **ya enviado** a producción que **todavía no está acreditado** del todo (parte / control de calidad / stock físico en Semi·2da·Scrap). Fórmula conceptual: `máximo(0, Enviado − acreditado)`. |
+| **Enviado** | Total histórico de envíos a producción (ledger), no anulado. |
+
+#### Stock en pipeline
+
+| Columna | Qué significa |
+|---------|----------------|
+| **Producido** | Saldo en depósito tipo **Producción**. |
+| **2da** | Saldo en **2da selección**. |
+| **Semi** | Saldo en **Semi elaborado**. |
+| **Total** | Suma del pipeline que cuenta para cubrir Urgente (sin Terminado ni Scrap en el mismo criterio de cobertura). |
+
+#### Acción
+
+| Columna | Qué significa |
+|---------|----------------|
+| **Enviar pares / docenas** | Cantidad a mandar ahora. El sistema sugiere / permite hasta aproximadamente `máximo(0, Urgente − Fabricando)`. Si **Urgente = 0**, **Enviar** queda en 0: no hay brecha que cubrir. |
+
+### 3.2 Relación Reserva ↔ Urgente ↔ Enviar ↔ Fabricando
+
+Cadena de causa y efecto:
+
+1. **Pedido** + brecha de reserva del pack → demanda operativa del componente.
+2. **Urgente** = máximo(0, demanda − stock en pipeline).
+3. **Enviar** = máximo(0, Urgente − Fabricando).
+4. Tras confirmar el envío → suben **Fabricando** y **Enviado**.
+5. En el Parte, el cupo verde = **Fabricando**.
+
+**Errores frecuentes de lectura**
+
+1. Ver **Reserva = 1500** y pensar “faltan 1500” → incorrecto si **Urgente = 0**.
+2. Querer cargar 288 en el Parte sin haber **Enviado** antes → el cupo verde sigue en Fabricando (p. ej. 17).
+3. Subir la reserva del **componente** en AdministraNET → **no** mueve la columna Reserva del tablero Par; hay que tocar el **pack terminado**.
+
+### 3.3 Ejemplo didáctico (artículo componente)
+
+Datos reales de una fila en modo **Par / Pares** (artículo tipo *3120 T4 Reef Gmel Logo Negro 1Par*):
+
+| Dato | Valor | Lectura |
+|------|------:|---------|
+| Pedido | 0 | No hay demanda de pedido abierta para este componente. |
+| Reserva | 1500 | Colchón objetivo mostrado (pack × BOM). **No** es el faltante. |
+| Urgente | 0 | La brecha operativa ya está cubierta por el pipeline. |
+| Fabricando | 17 | Quedan 17 pares enviados aún no acreditados del todo. |
+| Enviado | 72 | Se enviaron 72 en total a lo largo del tiempo (ledger). |
+| Producido / 2da / Semi | 636 / 17 / 38 | Stock físico en pipeline. |
+| Total | 691 | 636 + 17 + 38. |
+| Enviar | 0 | Correcto: Urgente 0 → nada que mandar ahora. |
+
+**¿La reserva está “cubierta”?**
+
+- Si la pregunta es *“¿tengo que fabricar más ahora?”* → **No** (Urgente = 0, Enviar = 0).
+- Si la pregunta es *“¿tengo 1500 pares de colchón listos?”* → **No necesariamente**: el colchón objetivo es 1500; en pipeline hay ~691 (más el terminado del pack, que no se ve en estas columnas de componente).
+
+**¿Puedo cargar 288 pares en el Parte?**
+
+En la planilla del supervisor, el badge verde muestra el **cupo Fabricando** (en el ejemplo, **17 pares**). Si carga 8 docenas × 3 operarios = **288 pares**, verá *Ingresado: 288* en rojo porque **supera el cupo**.
+
+| Objetivo | Qué hacer |
+|----------|-----------|
+| Aprobar hasta 17 | Cargar ≤ 17 y **Guardar parte de producción**. |
+| Aprobar 288 | Primero generar **Urgente ≥ 288** (p. ej. subiendo la reserva del **pack** y recalculando), luego **Enviar** ~271 (288 − 17 de Fabricando actual), y recién ahí el Parte acepta 288. |
+
+Orden de magnitud orientativo (Pedido = 0 y pipeline ya cubriendo ~691):
+
+- Para abrir Urgente ≈ 288 → demanda ≈ 691 + 288 = **979**.
+- Si la Reserva UI actual es 1500 y la brecha escala ~1:1 → Reserva orientativa ≈ **1788** en el **pack terminado**, después **Enviar**, después Parte.
+
+### 3.4 Dónde modificar la Reserva
+
+1. Identifique el **componente** en el tablero Par (ej. *3120 T4 Reef Gmel Logo Negro 1Par*).
+2. Busque el **artículo pack terminado** cuya **lista de materiales (BOM / receta)** incluye ese componente. Suele ser el mismo modelo/color en presentación pack (no “1Par” de tejido).
+3. En AdministraNET / catálogo de artículos, edite **`stock_reserva`** (reserva de stock) de ese **pack**, no del componente.
+4. Vuelva al tablero → **Actualizar**. Deberían cambiar Reserva / Urgente / Enviar en los componentes de su BOM.
+
+Si el pack aparece en ámbar **Sin receta**, primero complete la BOM; sin receta el modo Par **no** genera filas de envío para ese terminado.
 
 ### Modo Pack y packs sin receta
 
 En **Pack** cada fila es un **artículo terminado** (Pedido, Reserva maestro y columna **Urgente** = cantidad a fabricar, sin desglosar componentes). El filtro **Solo urgentes** no aplica en Pack: se listan todos los packs con demanda a fabricar, incluidos quiebres solo-reserva. Puede activar el chip **Sin receta** para ver solo packs sin lista de materiales (BOM).
 
-En **Par**, la columna **Urgente** incluye pedido y reserva (demanda total menos stock en proceso); es la base del envío a producción.
+En **Par**, la columna **Urgente** es la base del envío a producción (pedido + brecha de reserva menos pipeline).
 
 Si el pack **no tiene receta** (lista de materiales / BOM) en AdministraNET:
 
@@ -63,6 +169,7 @@ Si el pack **no tiene receta** (lista de materiales / BOM) en AdministraNET:
 - «Ningún artículo coincide con la búsqueda.»
 - Tras un envío correcto: mensaje de componentes enviados a producción.
 - Badge **Sin receta** (modo Pack): el terminado no tiene lista de materiales; revise pedidos en el tooltip y complete la receta del artículo.
+
 ---
 
 ## 4. Parte de producción
@@ -75,15 +182,25 @@ Hay dos formas de cargar lo producido.
 
 1. Elija **Fecha** (y opcionalmente línea/máquina) → **Cargar grilla**.
 2. Use **Buscar artículo** en el encabezado para filtrar en vivo la grilla ya cargada (no recarga).
-3. Por artículo y operario, cargue **Docenas** y/o **Pares**. La fila indica cuánto queda en **Fabricando**.
-4. Pulse **Guardar parte de producción**.
-5. Si el turno ya tiene control de calidad, ese turno queda bloqueado.
+3. Por artículo y operario, cargue **Docenas** y/o **Pares**. La fila indica el cupo **Fabricando** (número verde).
+4. Tiene dos acciones (mismo espíritu que el control de calidad):
+   - **Guardar borrador** — guarda la carga **sin** mover stock. Puede retomarla después. Si el **día ya tiene parte aprobado**, el borrador se deshabilita (chip *Parte aprobado*).
+   - **Guardar parte de producción** — **aprueba**: ingresa stock al depósito **Producción** (movimiento OPP) y consume cupo Fabricando.
+5. Si el turno / la fecha ya tiene **control de calidad confirmado**, el parte queda en **solo lectura** para ese alcance.
+
+**Cupo Fabricando (badge verde)**
+
+- Es el máximo que puede **aprobar** en esa fila máquina × artículo.
+- Sale del tablero: envíos menos lo ya acreditado (parte previo, CC, Semi/2da/Scrap).
+- Si *Ingresado* supera Fabricando, el número ingresado se ve en rojo y **no** podrá aprobar (el borrador sí puede guardar cantidades por encima para seguir cargando, pero al aprobar se valida el tope).
+
+**Ejemplo:** Fabricando = 17; tres operarios con 8 docenas cada uno → Ingresado = 288 → rojo. Hay que **Enviar** desde el tablero antes de poder aprobar 288.
 
 **Avisos frecuentes**
 
 - «No hay operarios asignados a este turno/fecha.» Complete la planificación de turnos.
 - «No hay componentes con cupo en Fabricando…» Primero envíe trabajo desde el Tablero de producción.
-- La suma por fila no puede superar lo que está en Fabricando (salvo que la planta permita otra regla).
+- La suma por fila no puede superar Fabricando al **aprobar**.
 - «Parte de producción registrado exitosamente.»
 
 ### 4.2 Carga de producción (operario)
@@ -111,6 +228,12 @@ Hasta que el supervisor apruebe, el stock **no** ingresa.
 3. Si cambia una cantidad, indique el **motivo**.
 4. Pulse **Aprobar parte**. El stock ingresa al depósito de **Producción**.
 
+### 4.4 Rectificar un parte ya aprobado
+
+Si después de aprobar necesita bajar o subir cantidades del mismo día (planilla), el sistema registra un **ajuste por diferencia (delta)** en el mismo depósito de Producción (entrada o salida según el caso), no “borra” el movimiento original. El cupo y el tablero se recalculan con lo acreditado.
+
+Si el día ya tiene **control de calidad confirmado**, no podrá modificar el parte de ese alcance: primero resuelva la clasificación (hoy, correcciones de CC por movimiento de stock; ver §5).
+
 ---
 
 ## 5. Control de calidad
@@ -119,23 +242,33 @@ Hasta que el supervisor apruebe, el stock **no** ingresa.
 
 ### Para qué sirve
 
-Distribuir lo del **Parte** entre **Semi elaborado** (primera), **2da selección** y **Desperdicio**.
+Distribuir lo del **Parte** (y eventual extra en Producción) entre **Semi elaborado** (primera), **2da selección** y **Desperdicio**.
 
 ### Cómo usarlo
 
 1. Elija **Fecha** (y **Turno** opcional) → **Cargar grilla**.
-2. La columna **Parte** muestra lo fabricado (referencial). **Semi elaborado** se precarga/calcula solo; cargue solo **2da selección** y **Desperdicio** (Semi = Parte remanente − 2da − Desperdicio).
-3. Pulse **Guardar control de calidad**.
-4. Si el turno ya tiene control de calidad, el **Parte** de ese turno queda bloqueado y no se puede modificar.
+2. La columna **Parte** muestra lo fabricado (referencial). Cargue **Semi elaborado**, **2da selección** y **Desperdicio** (docenas / pares).
+3. Tiene **dos botones**:
+   - **Guardar borrador** — guarda semi/2da/scrap **sin mover stock**. Puede cerrar y volver otro día: la grilla **precarga** lo guardado y muestra el chip *Borrador guardado*.
+   - **Guardar control de calidad** — **confirma**: transfiere stock de Producción → Semi / 2da / Scrap y deja registro oficial. **Elimina** el borrador de esa fecha+turno.
+4. Solo el CC **confirmado** bloquea el Parte y cuenta como “hay control de calidad”. El **borrador no bloquea** el parte ni mueve Fabricando/stock.
 
-**Correcciones después de guardar**
+### Borrador vs confirmado (resumen)
 
-Para reclasificar entre Semi / 2da / Desperdicio use **Ingreso de movimiento de stock** con una **transferencia interna**. No se edita ni se deshace desde esta pantalla.
+| Acción | ¿Mueve stock? | ¿Bloquea el Parte? | ¿Se pierde al salir? |
+|--------|---------------|--------------------|----------------------|
+| Guardar borrador | No | No | No (queda guardado) |
+| Guardar control de calidad | Sí | Sí (turno/fecha) | — (borra el borrador) |
 
-**Avisos frecuentes**
+### Correcciones después de confirmar
+
+Para reclasificar entre Semi / 2da / Desperdicio use **Ingreso de movimiento de stock** con una **transferencia interna**. En esta versión **no** hay “rectificar CC con delta” desde la misma pantalla (a diferencia del parte).
+
+### Avisos frecuentes
 
 - Sin filas: falta parte con desglose por operario para esa fecha, o todo ya está clasificado (las filas completas se ven en solo lectura).
-- Corrija las filas en rojo (2da + desperdicio superan el remanente) antes de guardar.
+- Corrija las filas en rojo (cantidades que superan el tope clasificable) antes de confirmar.
+- Puede guardar borrador a mitad de carga aunque todavía falten filas.
 
 ---
 
@@ -209,8 +342,9 @@ Desde Máquinas o desde **Producción diaria → Asignar artículo a máquina**:
 
 1. Filtre por línea o busque la máquina.
 2. Habilite o quite los artículos que cada máquina puede producir.
-3. En la grilla verá **Talle** y **Color** del artículo.
-4. Pulse **Imprimir Control de Calidad**, elija la **fecha** de la planilla y confirme. Se imprime la hoja horizontal con artículos vigentes a esa fecha, cantidades del parte en **1ra** por turno y una fila vacía debajo de cada artículo para anotar la clasificación a mano.
+3. Elija la **fecha** de vigencia de la asignación (un día pasado aplica solo ese día; no reescribe el futuro).
+4. En la grilla verá **Talle** y **Color** del artículo.
+5. Pulse **Imprimir Control de Calidad**, elija la **fecha** de la planilla y confirme. Se imprime la hoja horizontal con artículos vigentes a esa fecha, cantidades del parte en **1ra** por turno y una fila vacía debajo de cada artículo para anotar la clasificación a mano.
 
 Si no hay filas con artículos según el filtro, el sistema avisa en pantalla.
 
@@ -259,10 +393,11 @@ Sin turno del día, el operario no podrá cargar su parte.
 | Momento | Pantalla | Acción |
 |---------|----------|--------|
 | Arranque de planta | Configuración (líneas → máquinas → depósitos → operarios → vínculos → turnos → planificación) | Dejar lista la fábrica |
-| Mañana / turno | Tablero de producción | Enviar lo que hay que fabricar |
-| Durante el turno | Parte / Carga de producción | Registrar lo producido |
+| Ajustar colchón | Artículo **pack** en AdministraNET (`stock_reserva`) | Sube Reserva/Urgente en tablero tras Actualizar |
+| Mañana / turno | Tablero de producción (modo **Par**) | Enviar solo si **Urgente > 0** |
+| Durante el turno | Parte / Carga de producción | Borrador sin stock; aprobar ≤ **Fabricando** |
 | Supervisor | Partes pendientes | Aprobar partes de operarios |
-| Después del parte | Control de calidad | Clasificar a semi, 2da o desperdicio |
+| Después del parte | Control de calidad | Borrador sin stock; confirmar mueve a Semi/2da/Scrap |
 | Cierre de producto | Armado | Armar packs 1ra o 2da |
 | Contra pedidos | Imputación de pedido | Asignar Armado 1ra a pedidos |
 
@@ -270,11 +405,15 @@ Sin turno del día, el operario no podrá cargar su parte.
 
 ## 10. Problemas frecuentes
 
-- **No veo demanda en el tablero:** revise filtros de fecha y marcas; pulse Actualizar vista.
+- **No veo demanda en el tablero:** revise filtros de fecha y marcas; pulse Actualizar.
 - **Veo un pack en ámbar «Sin receta»:** el terminado no tiene lista de materiales. Use el ícono de pedidos para ver qué PED lo piden; complete la BOM del artículo. En Par no podrá enviar componentes de ese pack hasta tener receta.
-- **No puedo guardar el parte:** no hay cupo en Fabricando o faltan operarios en el turno.
+- **Reserva alta pero Urgente en 0:** es normal si el pipeline ya cubre la brecha. No envíe más; el colchón objetivo no es un faltante.
+- **Quiero cargar más en el Parte que el verde (Fabricando):** primero **Enviar** desde el tablero (hace falta Urgente). Subir solo la columna Reserva del componente no alcanza; edite `stock_reserva` del **pack** y envíe.
+- **No sé en qué artículo tocar la reserva:** el pack terminado cuya BOM incluye el componente de la fila Par (ver §3.4).
+- **No puedo guardar el parte (aprobar):** no hay cupo en Fabricando, el día tiene CC confirmado, o faltan operarios en el turno.
 - **El operario no puede cargar:** falta vínculo usuario–operario, turno del día, línea o artículos en la máquina.
 - **No hay filas en Control de calidad:** no hay pendiente en Producción para esa fecha/turno (falta parte).
+- **Perdí la carga a mitad de Control de calidad:** use **Guardar borrador**; al volver se precarga. El borrador no bloquea el parte.
 - **No puedo armar:** stock insuficiente en el depósito origen o el pack no tiene lista de materiales (1ra).
 - **Nada para imprimir en la planilla:** no hay máquinas con artículos según el filtro; asigne artículos o cambie el filtro.
 - **Empresa incorrecta:** cambie de empresa en la sesión e intente de nuevo.
@@ -311,4 +450,21 @@ Los pedidos migrados (comprobantes con origen cutover BEST) se abren desde el hu
 
 ---
 
-*Manual de usuario – Producción (MPR). Synap. Actualizado 23/07/2026.*
+## 12. Glosario rápido de pantalla
+
+| Término | Significado corto |
+|---------|-------------------|
+| **Pack** | Artículo terminado (venta / armado). |
+| **Par / componente** | Unidad que se teje o clasifica (medias, etc.). |
+| **Reserva** | Colchón objetivo del pack (`stock_reserva`), mostrado explotado en Par. |
+| **Urgente** | Faltante operativo a cubrir con producción. |
+| **Fabricando** | Enviado aún no acreditado; cupo del Parte. |
+| **Enviar** | Mandar trabajo desde el tablero a fábrica. |
+| **Borrador (parte o CC)** | Guardado intermedio **sin** stock. |
+| **Confirmar / aprobar** | Persiste oficialmente y **sí** mueve stock (según pantalla). |
+| **Pipeline** | Stock en Producción + Semi + 2da (cubre Urgente). |
+| **BOM / receta** | Lista de materiales del pack → componentes. |
+
+---
+
+*Manual de usuario – Producción (MPR). Synap. Actualizado 28/07/2026.*
