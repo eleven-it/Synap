@@ -18604,24 +18604,58 @@ def _orden_maquina_clasificacion(
 
 
 def _anotar_rowspan_maquina_clasificacion(filas: List[Dict[str, Any]]) -> None:
-    """Marca show_maquina / rowspan_maquina para combinar celdas consecutivas."""
+    """Marca show_maquina / rowspan_maquina y tinte cíclico por bloque de máquina."""
     if not filas:
         return
     i = 0
     n = len(filas)
+    bloque_idx = 0
     while i < n:
         mid = filas[i].get("id_mpr_maquina")
         j = i + 1
         while j < n and filas[j].get("id_mpr_maquina") == mid:
             j += 1
         span = j - i
+        tint = bloque_idx % 6
         filas[i]["show_maquina"] = True
         filas[i]["rowspan_maquina"] = span
+        filas[i]["maquina_tint"] = tint
         for k in range(i + 1, j):
             filas[k]["show_maquina"] = False
             filas[k]["rowspan_maquina"] = 1
+            filas[k]["maquina_tint"] = tint
+        bloque_idx += 1
         i = j
 
+
+def _anotar_rowspan_articulo_clasificacion(filas: List[Dict[str, Any]]) -> None:
+    """Marca show_articulo / rowspan_articulo por máquina × artículo consecutivos.
+
+    El rowspan NO cruza de máquina: si el mismo artículo está en Máq. 19 y 20,
+    cada bloque muestra su propia celda de artículo (evita columna vacía al
+    scrollear o al mirar el inicio de otra máquina).
+    """
+    if not filas:
+        return
+    i = 0
+    n = len(filas)
+    while i < n:
+        mid = filas[i].get("id_mpr_maquina")
+        aid = filas[i].get("id_articulo")
+        j = i + 1
+        while (
+            j < n
+            and filas[j].get("id_mpr_maquina") == mid
+            and filas[j].get("id_articulo") == aid
+        ):
+            j += 1
+        span = j - i
+        filas[i]["show_articulo"] = True
+        filas[i]["rowspan_articulo"] = span
+        for k in range(i + 1, j):
+            filas[k]["show_articulo"] = False
+            filas[k]["rowspan_articulo"] = 1
+        i = j
 
 def _atribuible_clasificacion_por_celda(
     celdas: Dict[Tuple[int, int, int, int], Dict[str, Any]],
@@ -18805,26 +18839,6 @@ def _validar_turnos_parte_sin_control_calidad(
     return errores
 
 
-def _anotar_rowspan_articulo_clasificacion(filas: List[Dict[str, Any]]) -> None:
-    """Marca show_articulo / rowspan_articulo para artículos consecutivos."""
-    if not filas:
-        return
-    i = 0
-    n = len(filas)
-    while i < n:
-        aid = filas[i].get("id_articulo")
-        j = i + 1
-        while j < n and filas[j].get("id_articulo") == aid:
-            j += 1
-        span = j - i
-        filas[i]["show_articulo"] = True
-        filas[i]["rowspan_articulo"] = span
-        for k in range(i + 1, j):
-            filas[k]["show_articulo"] = False
-            filas[k]["rowspan_articulo"] = 1
-        i = j
-
-
 def construir_grilla_clasificacion_produccion(
     base_empresa: str,
     fecha: "Optional[date]" = None,
@@ -18840,6 +18854,8 @@ def construir_grilla_clasificacion_produccion(
     vacio: Dict[str, Any] = {
         "filas": [],
         "filas_vacio": True,
+        "hay_filas_editables": False,
+        "confirmadas_ocultas": 0,
         "bloqueos": [],
         "requiere_fecha": fecha is None,
         "requiere_fecha_turno": fecha is None,
@@ -18909,8 +18925,8 @@ def construir_grilla_clasificacion_produccion(
         extra_disp = extra_pool.get(aid, Decimal("0"))
         stock_prod = Decimal(str(stock_pivot.get(aid, {}).get(TIPO_MPR_PRODUCCION, 0.0)))
         max_clasificable = _max_clasificable_celda(atribuible, extra_disp)
-        solo_lectura = max_clasificable <= 0
-
+        # Una celda cuyo parte ya fue consumido por CC muestra su desglose
+        # histórico aunque exista stock extra disponible para otras filas.
         asig = asignado_por_celda.get(
             (mid, aid, oid, tid),
             {"semi": Decimal("0"), "segunda": Decimal("0"), "scrap": Decimal("0")},
@@ -18919,6 +18935,9 @@ def construir_grilla_clasificacion_produccion(
         asignado_seg2da = asig.get("segunda", Decimal("0"))
         asignado_scrap = asig.get("scrap", Decimal("0"))
         asignado_total = asignado_semi + asignado_seg2da + asignado_scrap
+        solo_lectura = max_clasificable <= 0 or (
+            asignado_total > 0 and atribuible <= 0
+        )
 
         cls_map = clasificado_por_turno.get(tid, {})
         cls_total = cls_map.get((aid, oid), Decimal("0"))
@@ -18986,8 +19005,10 @@ def construir_grilla_clasificacion_produccion(
             "ini_seg2da_texto": texto_docenas_unidades(ini_seg2da, unidades_por_docena_fijo=12) if solo_lectura else "",
             "ini_scrap_texto": texto_docenas_unidades(ini_scrap, unidades_por_docena_fijo=12) if solo_lectura else "",
             "solo_lectura": solo_lectura,
+            "tiene_cc_confirmada": asignado_total > 0,
             "show_maquina": False,
             "rowspan_maquina": 1,
+            "maquina_tint": 0,
             "show_articulo": False,
             "rowspan_articulo": 1,
         })
@@ -19020,7 +19041,13 @@ def construir_grilla_clasificacion_produccion(
         base_empresa, fecha, int(turno_id) if turno_id is not None else None
     )
 
+    # Solo pendiente: filas aún clasificables. Roster: incluye confirmadas (solo lectura).
+    confirmadas_ocultas = 0
     if not ver_roster_completo:
+        confirmadas_ocultas = sum(
+            1 for f in filas_raw
+            if f.get("solo_lectura") and f.get("tiene_cc_confirmada")
+        )
         filas_raw = [f for f in filas_raw if not f.get("solo_lectura")]
 
     filas_raw.sort(
@@ -19065,9 +19092,12 @@ def construir_grilla_clasificacion_produccion(
                 "mensaje": "Corregí el parte: falta desglose por operario para clasificar rendimiento.",
             })
 
+    hay_filas_editables = any(not f.get("solo_lectura") for f in filas_raw)
     return {
         "filas": filas_raw,
         "filas_vacio": len(filas_raw) == 0,
+        "hay_filas_editables": hay_filas_editables,
+        "confirmadas_ocultas": int(confirmadas_ocultas),
         "bloqueos": bloqueos,
         "requiere_fecha": False,
         "requiere_fecha_turno": False,

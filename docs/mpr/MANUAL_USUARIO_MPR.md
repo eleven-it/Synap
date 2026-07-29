@@ -336,6 +336,7 @@ Distribuir lo del **Parte** (y eventual extra en Producción) entre **Semi elabo
    - **Guardar borrador** — guarda semi/2da/scrap **sin mover stock**. Puede cerrar y volver otro día: la grilla **precarga** lo guardado y muestra el chip *Borrador* en la barra.
    - **Guardar control de calidad** — **confirma**: transfiere stock de Producción → Semi / 2da / Scrap y deja registro oficial. **Elimina** el borrador de esa fecha+turno.
 4. Solo el CC **confirmado** bloquea el Parte y cuenta como “hay control de calidad”. El **borrador no bloquea** el parte ni mueve Fabricando/stock.
+5. En **Ver roster**, las filas ya confirmadas se muestran con los **mismos casilleros** (docenas/pares) en solo lectura. **No se puede reeditar** un CC confirmado desde esta pantalla.
 
 ### Borrador vs confirmado (resumen)
 

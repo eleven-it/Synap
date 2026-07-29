@@ -309,6 +309,8 @@ Columna **Ingresado**: suma en pares de docenas×12 + pares de los tres turnos (
 
 Celdas con **Fabricando = 0**: inputs deshabilitados (`inputs_habilitados=false`).
 
+Turnos con **control de calidad** (`cel.bloqueado`): mismos casilleros Docenas/Pares (y operario) que en edición, en **solo lectura** (`readonly`, sin `name`/POST). Fondo ámbar suave + ícono candado junto al operario; el banner de día/turno bloqueado se mantiene. Ya no se usa el card de mensaje que reemplazaba la celda.
+
 ### Precarga y re-edición
 
 Al abrir con fecha, `precarga_planilla_por_fecha` lee partes existentes por tupla  
