@@ -696,6 +696,7 @@ def construir_grilla_parte_planilla(
                 turnos_payload[tid] = {
                     "docenas": doc,
                     "pares": par,
+                    "operario_id": to_int_or_none(prec.get("id_operario")),
                     "operarios": list(ops_linea.get(franja) or []),
                     "franja": franja,
                     "bloqueado": dia_bloqueado_cc or tid in turnos_bloqueados,
@@ -709,6 +710,7 @@ def construir_grilla_parte_planilla(
                 "codigo_tooltip": str(cod_desc[0] or codigo or ""),
                 "fabricando": fab,
                 "ingresado": ingresado,
+                "tiene_precarga": ingresado > 0,
                 "inputs_habilitados": fab > 0 and not dia_bloqueado_cc,
                 "turnos": turnos_payload,
                 "show_maquina": False,

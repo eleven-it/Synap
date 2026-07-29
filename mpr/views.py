@@ -570,18 +570,14 @@ def _parte_lineas_desde_post(post, *, modo_planilla: bool = False) -> List[Dict[
             cantidad = Decimal(
                 _parte_cantidad_pares_planilla_desde_post(post, id_maq, id_art, id_turno)
             )
-            if cantidad <= 0:
-                continue
             op_key = f"parte_maq_{id_maq}_art_{id_art}_turno_{id_turno}_op"
             try:
                 id_op = int((post.get(op_key) or "0").strip())
             except (ValueError, TypeError):
                 id_op = 0
-            if id_op <= 0:
-                continue
             lineas.append({
                 "id_articulo": id_art,
-                "id_operario": id_op,
+                "id_operario": id_op if id_op > 0 else None,
                 "cantidad": cantidad,
                 "id_mpr_maquina": id_maq,
                 "maquina_nombre": (post.get(f"parte_maq_{id_maq}_nombre") or "").strip() or "-",

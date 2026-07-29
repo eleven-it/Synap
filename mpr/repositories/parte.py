@@ -743,9 +743,9 @@ def crear_o_actualizar_parte_planilla(
 def precarga_planilla_por_fecha(
     base_empresa: str,
     fecha: date,
-) -> Dict[Tuple[int, int, int], Dict[str, int]]:
+) -> Dict[Tuple[int, int, int], Dict[str, Optional[int]]]:
     """
-    Cantidades precargadas por (id_mpr_maquina, id_articulo, id_mpr_turno).
+    Cantidades y operario precargados por (id_mpr_maquina, id_articulo, id_mpr_turno).
 
     Usa partes con ``origen='directo_supervisor'`` (documento upsert del día).
     Parte aprobado → cantidad_aprobada; otro estado → cantidad_declarada.
@@ -758,11 +758,11 @@ def precarga_planilla_por_fecha(
     base = (base_empresa or "").strip()
     if not base or fecha is None:
         return {}
-    resultado: Dict[Tuple[int, int, int], Dict[str, int]] = {}
+    resultado: Dict[Tuple[int, int, int], Dict[str, Optional[int]]] = {}
     with mysql_cursor(base, dict_cursor=True) as cursor:
         cursor.execute(
             """
-            SELECT pl.id_mpr_maquina, pl.id_articulo, p.id_mpr_turno, p.estado,
+            SELECT pl.id_mpr_maquina, pl.id_articulo, pl.id_operario, p.id_mpr_turno, p.estado,
                    pl.cantidad_declarada, pl.cantidad_aprobada
             FROM mpr_parte p
             INNER JOIN mpr_parte_linea pl ON pl.id_mpr_parte = p.id_mpr_parte
@@ -786,14 +786,19 @@ def precarga_planilla_por_fecha(
             if cant <= 0:
                 continue
             clave = (mid, aid, tid)
-            prev = resultado.get(clave, {"docenas": 0, "pares": 0})
+            prev = resultado.get(clave, {"docenas": 0, "pares": 0, "id_operario": None})
             doc, par = _pares_a_docenas_pares(cant)
             prev_doc, prev_par = _pares_a_docenas_pares(
                 Decimal(prev["docenas"] * 12 + prev["pares"])
             )
             total = Decimal(prev_doc * 12 + prev_par) + cant
             d, p = _pares_a_docenas_pares(total)
-            resultado[clave] = {"docenas": d, "pares": p}
+            id_operario = to_int_or_none(row.get("id_operario"))
+            # La planilla tiene un operario por celda. Si existe legado con más
+            # de uno, no se preselecciona ninguno para no representar un dato falso.
+            if prev.get("id_operario") not in (None, id_operario):
+                id_operario = None
+            resultado[clave] = {"docenas": d, "pares": p, "id_operario": id_operario}
     return resultado
 
 
