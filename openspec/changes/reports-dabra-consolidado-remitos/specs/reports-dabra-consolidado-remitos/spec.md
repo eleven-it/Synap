@@ -276,7 +276,7 @@ Desfasajes o inconsistencias entre factura y remito (fechas, referencias, víncu
 
 ### REQ-DABRA-016: Validación Σ líneas vs cabecera (bloquea export)
 
-Para cada FA incluida, la suma de importes de línea (**Σ**) **MUST** coincidir con los totales de cabecera dentro de tolerancia decimal definida en diseño. Si hay mismatch, el sistema **MUST** marcar **error** en preview y **MUST NOT** permitir export hasta corregir datos o excluir la FA conflictiva.
+Para cada FA incluida, la suma de importes de línea (**Σ**) **MUST** coincidir con los totales de cabecera dentro de tolerancia decimal definida en diseño. Las líneas de `stock` son **predescuento** de cabecera: el neto se compara con `SubTotal1` y el bruto con `ImporteVenta` aplicando el factor `SubtotalDesc/SubTotal1`. Si hay mismatch, el sistema **MUST** marcar **error** en preview y **MUST NOT** permitir export hasta corregir datos o excluir la FA conflictiva.
 
 #### Scenario: Totales coherentes — export permitido
 
@@ -284,9 +284,17 @@ Para cada FA incluida, la suma de importes de línea (**Σ**) **MUST** coincidir
 - **WHEN** el operador solicita export
 - **THEN** el export se genera correctamente
 
+#### Scenario: FA con descuento de cabecera — export permitido
+
+- **DADO** una FA con `PorDesc1`/`ImpDesc1` (ej. 20 %) donde `SubtotalDesc < SubTotal1` e `ImporteVenta` ya refleja el descuento
+- **AND** Σ `Cantidad×PrecioNetoxU` = `SubTotal1` y Σ bruto × (`SubtotalDesc`/`SubTotal1`) = `ImporteVenta` dentro de tolerancia
+- **WHEN** el operador solicita export
+- **THEN** el sistema **MUST NOT** marcar error de consistencia
+- **AND** el export se genera correctamente
+
 #### Scenario: Mismatch Σ vs cabecera — export bloqueado
 
-- **DADO** una FA donde Σ líneas ≠ total cabecera
+- **DADO** una FA donde Σ líneas ≠ total cabecera (incluso tras aplicar el factor de descuento)
 - **WHEN** el operador solicita export
 - **THEN** el sistema responde error en español
 - **AND** no entrega archivo Excel

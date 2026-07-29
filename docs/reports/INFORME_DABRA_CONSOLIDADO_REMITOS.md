@@ -71,8 +71,10 @@ Misma lógica que Trazabilidad VB6 (`trz_trazabilidad.frm`):
 
 Validación Σ por FA **antes** de expansión multi-remito:
 
-- Σ `Cantidad×PrecioNetoxU` vs `SubTotal1`
-- Σ `Cantidad×(PrecioNetoxU+PrecioIVAxU)` vs `ImporteVenta`
+- Σ `Cantidad×PrecioNetoxU` vs `SubTotal1` (ambos **predescuento** de cabecera)
+- Σ `Cantidad×(PrecioNetoxU+PrecioIVAxU) × (SubtotalDesc/SubTotal1)` vs `ImporteVenta`
+  - Las líneas de `stock` conservan precios predescuento; `ImporteVenta` ya aplica el descuento de cabecera (`PorDesc1`/`ImpDesc1`, etc.) y el IVA recalculado sobre la base descontada
+  - Si no hay descuento, `SubtotalDesc = SubTotal1` y el factor es 1
 - Tolerancia: `max(0.05, 0.01 × n_lineas)`
 
 ## Archivo export

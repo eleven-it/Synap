@@ -172,10 +172,29 @@ def _rango_mes(mes: int, anio: int) -> Tuple[str, str]:
     return f"{anio:04d}-{mes:02d}-01", f"{anio:04d}-{mes:02d}-{ultimo:02d}"
 
 
+def factor_descuento_cabecera(subtotal1: Any, subtotal_desc: Any) -> Decimal:
+    """
+    Factor de descuento de cabecera FA.
+
+    Las líneas de ``stock`` guardan precios predescuento; ``SubTotal1`` es la
+    suma neta predescuento y ``SubtotalDesc`` el neto ya descontado. El IVA de
+    cabecera se recalcula sobre la base descontada, así que el bruto comparable
+    a ``ImporteVenta`` es Σ bruto líneas × (SubtotalDesc / SubTotal1).
+    """
+    cab_neto = _dec(subtotal1)
+    if cab_neto == 0:
+        return Decimal("1")
+    cab_neto_desc = to_decimal_or_none(subtotal_desc)
+    if cab_neto_desc is None:
+        cab_neto_desc = cab_neto
+    return cab_neto_desc / cab_neto
+
+
 def validar_totales_fa(
     lineas: Sequence[Dict[str, Any]],
     subtotal1: Any,
     importe_venta: Any,
+    subtotal_desc: Any = None,
 ) -> List[str]:
     """Valida Σ neto/bruto vs cabecera; devuelve mensajes de error en español."""
     errores: List[str] = []
@@ -191,16 +210,18 @@ def validar_totales_fa(
         sum_bruto += cant * (neto_u + iva_u)
     cab_neto = _dec(subtotal1)
     cab_bruto = _dec(importe_venta)
+    factor_desc = factor_descuento_cabecera(subtotal1, subtotal_desc)
+    sum_bruto_desc = sum_bruto * factor_desc
     tol = calcular_tolerancia(len(lineas))
     if abs(sum_neto - cab_neto) > tol:
         errores.append(
             f"FA {lineas[0].get('codigo_movimiento')}: Σ neto líneas ({sum_neto}) "
             f"≠ SubTotal1 ({cab_neto}); tolerancia {tol}."
         )
-    if abs(sum_bruto - cab_bruto) > tol:
+    if abs(sum_bruto_desc - cab_bruto) > tol:
         errores.append(
-            f"FA {lineas[0].get('codigo_movimiento')}: Σ bruto líneas ({sum_bruto}) "
-            f"≠ ImporteVenta ({cab_bruto}); tolerancia {tol}."
+            f"FA {lineas[0].get('codigo_movimiento')}: Σ bruto líneas descontado "
+            f"({sum_bruto_desc}) ≠ ImporteVenta ({cab_bruto}); tolerancia {tol}."
         )
     return errores
 
@@ -215,6 +236,7 @@ def _sql_lineas_fa() -> str:
             cc.fe_cae,
             cc.fe_vto_cae,
             cc.SubTotal1,
+            cc.SubtotalDesc,
             cc.ImporteVenta,
             s.id_stock,
             s.Cantidad,
@@ -392,6 +414,7 @@ def get_dabra_consolidado_remitos(
                 "fe_cae": row.get("fe_cae"),
                 "fe_vto_cae": row.get("fe_vto_cae"),
                 "SubTotal1": row.get("SubTotal1"),
+                "SubtotalDesc": row.get("SubtotalDesc"),
                 "ImporteVenta": row.get("ImporteVenta"),
             }
         lineas_por_fa.setdefault(cod_fa, []).append(row)
@@ -430,7 +453,12 @@ def get_dabra_consolidado_remitos(
             for ln in raw_lineas
         ]
         errores.extend(
-            validar_totales_fa(lineas_val, fa.get("SubTotal1"), fa.get("ImporteVenta"))
+            validar_totales_fa(
+                lineas_val,
+                fa.get("SubTotal1"),
+                fa.get("ImporteVenta"),
+                fa.get("SubtotalDesc"),
+            )
         )
 
         cae = str_or_default(fa.get("fe_cae"), "").strip()
