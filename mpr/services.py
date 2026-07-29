@@ -10794,8 +10794,7 @@ def listar_tablero_armado(
             continue
 
         a_armar = 0
-        if modo_n == "1ra" and max_armable > 0 and resta_armar > 0:
-            a_armar = min(resta_armar, max_armable)
+        # Sin precarga: el analista completa solo las filas a armar.
 
         filas.append({
             "id_articulo": id_art,
@@ -10859,6 +10858,7 @@ def construir_armados_desde_post_tablero(
             qty = int(str(raw or "0").strip())
         except (TypeError, ValueError):
             qty = 0
+        # Vacío/0/negativos: no se arman (solo enteros ≥ 1).
         if id_pack is None or qty <= 0:
             continue
         if modo_n == "1ra":

@@ -88,6 +88,17 @@ class ConstruirArmadosTableroTest(SimpleTestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["id_articulo_pack"], 100)
 
+    @patch(
+        "mpr.services.lineas_bom_pack_1ra",
+        return_value=[{"id_articulo": 10, "cantidad_por_pack": 6}],
+    )
+    def test_ignora_cantidades_negativas_y_vacias(self, _bom):
+        post = {"armar_100": "-3", "armar_200": "", "armar_300": "1"}
+        items = construir_armados_desde_post_tablero("emp", post, modo="1ra")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id_articulo_pack"], 300)
+        self.assertEqual(items[0]["cantidad_packs"], 1)
+
 
 class ArmadoSurtidoViewPostTest(SimpleTestCase):
     def setUp(self):

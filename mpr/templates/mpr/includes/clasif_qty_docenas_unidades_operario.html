@@ -13,7 +13,7 @@
                    min="0" step="1" inputmode="numeric"
                    placeholder="0"
                    x-model.number="{{ model_doc }}"
-                   {% if readonly %}readonly tabindex="-1"{% else %}@blur="coerceQtyField('{{ model_doc }}', $event.target)" @focus="$event.target.select()"{% endif %}
+                   {% if readonly %}readonly tabindex="-1"{% else %}@input="coerceQtyField('{{ model_doc }}', $event.target)" @blur="coerceQtyField('{{ model_doc }}', $event.target)" @focus="$event.target.select()"{% endif %}
                    data-clasif-part="docenas"
                    {% if not readonly %}data-clasif-qty-input{% endif %}
                    data-clasif-dest="{{ prefix }}"
@@ -32,7 +32,7 @@
                    min="0" step="1" inputmode="numeric"
                    placeholder="0"
                    x-model.number="{{ model_uni }}"
-                   {% if readonly %}readonly tabindex="-1"{% else %}@blur="coerceQtyField('{{ model_uni }}', $event.target)" @focus="$event.target.select()"{% endif %}
+                   {% if readonly %}readonly tabindex="-1"{% else %}@input="coerceQtyField('{{ model_uni }}', $event.target)" @blur="coerceQtyField('{{ model_uni }}', $event.target)" @focus="$event.target.select()"{% endif %}
                    data-clasif-part="unidades"
                    {% if not readonly %}data-clasif-qty-input{% endif %}
                    data-clasif-dest="{{ prefix }}"
