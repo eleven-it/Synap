@@ -326,7 +326,7 @@ Distribuir lo del **Parte** (y eventual extra en Producción) entre **Semi elabo
 
 ### Cómo usarlo
 
-1. Elija **Fecha** (y **Turno** opcional) → **Cargar grilla**. En la barra oscura también puede **buscar** artículo y, si es supervisor, alternar **Solo pendiente** / **Ver roster**.
+1. Elija **Fecha** (y **Turno** opcional) → **Cargar grilla**. En la barra oscura también puede **buscar** artículo y alternar **Solo pendiente** / **Ver roster**.
 2. La columna **Parte** muestra lo fabricado (referencial). Cargue **Semi elaborado**, **2da selección** y **Desperdicio** (docenas / pares).
    - Al abrir la grilla, **Semi elaborado** se precarga con lo atribuible del parte (docenas / pares).
    - Al cargar **2da selección** o **Desperdicio**, la pantalla **descuenta automáticamente** esa cantidad de Semi elaborado (en pares equivalentes). Ejemplo: semi precargado 5 docenas (60 pares) + 6 pares en 2da → semi queda en 4 docenas y 6 pares.
