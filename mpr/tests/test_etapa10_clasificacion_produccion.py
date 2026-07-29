@@ -171,6 +171,39 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
         self.assertTrue(filas[0]["show_maquina"])
         self.assertEqual(filas[0]["rowspan_maquina"], 2)
         self.assertFalse(filas[1]["show_maquina"])
+
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+    @patch(
+        "mpr.services._fetch_descripciones_articulo",
+        return_value={42: ("C-42", "Art 42")},
+    )
+    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(), _pivot_con_produccion()))
+    def test_rowspan_articulo_no_cruza_maquinas(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
+        """Mismo artículo en Máq. 20 y 21: cada bloque muestra su celda de artículo."""
+        mock_celdas.return_value = {
+            (20, 42, ID_OPERARIO, TURNO_ID): {
+                "cantidad": Decimal("12"),
+                "operario_nombre": "Op A",
+                "maquina_nombre": "Maquina 20",
+                "turno_nombre": "Mañana",
+            },
+            (21, 42, ID_OPERARIO, TURNO_ID): {
+                "cantidad": Decimal("12"),
+                "operario_nombre": "Op B",
+                "maquina_nombre": "Maquina 21",
+                "turno_nombre": "Tarde",
+            },
+        }
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
+        filas = resultado["filas"]
+        self.assertEqual(len(filas), 2)
+        self.assertTrue(filas[0]["show_articulo"])
+        self.assertEqual(filas[0]["rowspan_articulo"], 1)
+        self.assertTrue(filas[1]["show_articulo"])
+        self.assertEqual(filas[1]["rowspan_articulo"], 1)
+        self.assertNotEqual(filas[0]["maquina_tint"], filas[1]["maquina_tint"])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
@@ -265,16 +298,66 @@ class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
     @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
     @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(saldo=30.0), {}))
-    def test_fila_parte_completo_editable_con_extra_stock(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
-        """Parte 100 % clasificado pero hay stock Prod extra → fila editable."""
+    def test_fila_parte_completo_solo_lectura_con_extra_stock(self, _pivot, _fetch, mock_celdas, _cls, _desglose):
+        """Un CC confirmado no se reabre aunque quede stock extra; en pendiente no aparece."""
         mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
-        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
-        fila = resultado["filas"][0]
-        self.assertFalse(fila["solo_lectura"])
-        self.assertEqual(fila["ini_semi"], 0)
+        pendiente = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
+        self.assertTrue(pendiente["filas_vacio"])
+        self.assertFalse(pendiente["hay_filas_editables"])
+        self.assertEqual(pendiente["confirmadas_ocultas"], 1)
+
+        roster = construir_grilla_clasificacion_produccion(
+            EMPRESA, FECHA_OBJ, TURNO_ID, ver_roster_completo=True,
+        )
+        fila = roster["filas"][0]
+        self.assertTrue(fila["solo_lectura"])
+        self.assertEqual(fila["ini_semi"], 15)
         self.assertAlmostEqual(fila["atribuible_parte"], 0.0)
         self.assertAlmostEqual(fila["extra_disponible"], 30.0)
         self.assertAlmostEqual(fila["max_clasificable"], 30.0)
+        self.assertFalse(roster["hay_filas_editables"])
+        self.assertEqual(roster["confirmadas_ocultas"], 0)
+
+    @patch(
+        "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
+        return_value={
+            (42, ID_OPERARIO): {
+                "semi": Decimal("12"),
+                "segunda": Decimal("2"),
+                "scrap": Decimal("1"),
+            }
+        },
+    )
+    @patch(
+        "mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno",
+        return_value={(42, ID_OPERARIO): Decimal("15")},
+    )
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
+    @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=(_pivot_con_produccion(saldo=30.0), {}))
+    def test_roster_muestra_desglose_confirmado_aun_con_extra(
+        self, _pivot, _fetch, mock_celdas, _cls, _desglose
+    ):
+        """Solo pendiente oculta CC confirmado; roster muestra el desglose histórico."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
+
+        pendiente = construir_grilla_clasificacion_produccion(
+            EMPRESA, FECHA_OBJ, TURNO_ID, ver_roster_completo=False,
+        )
+        self.assertTrue(pendiente["filas_vacio"])
+        self.assertFalse(pendiente["hay_filas_editables"])
+        self.assertEqual(pendiente["confirmadas_ocultas"], 1)
+
+        roster = construir_grilla_clasificacion_produccion(
+            EMPRESA, FECHA_OBJ, TURNO_ID, ver_roster_completo=True,
+        )
+        fila = roster["filas"][0]
+        self.assertTrue(fila["solo_lectura"])
+        self.assertEqual(fila["ini_semi"], 12)
+        self.assertEqual(fila["ini_seg2da"], 2)
+        self.assertEqual(fila["ini_scrap"], 1)
+        self.assertFalse(roster["hay_filas_editables"])
+        self.assertEqual(roster["confirmadas_ocultas"], 0)
 
 
 # ---------------------------------------------------------------------------

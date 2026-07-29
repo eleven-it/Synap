@@ -200,6 +200,22 @@ class TransicionLoteOperarioTests(SimpleTestCase):
 
 
 class ClasificacionOperarioServicioTests(SimpleTestCase):
+    def setUp(self):
+        self._patch_borrador = patch(
+            "mpr.repositories.clasificacion_borrador.listar_lineas_borrador",
+            return_value={},
+        )
+        self._patch_tiene_borrador = patch(
+            "mpr.repositories.clasificacion_borrador.tiene_borrador",
+            return_value=False,
+        )
+        self._patch_borrador.start()
+        self._patch_tiene_borrador.start()
+
+    def tearDown(self):
+        self._patch_borrador.stop()
+        self._patch_tiene_borrador.stop()
+
     @patch("mpr.services._fetch_descripciones_articulo", return_value={10: ("12A", "Pack")})
     @patch("mpr.services._pivot_stock_por_tipo_mpr", return_value=({10: {"Produccion": 100.0}}, {}))
     @patch(
@@ -269,6 +285,13 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
         self.assertEqual(len(grilla["filas"]), 1)
         self.assertTrue(grilla["filas"][0]["solo_lectura"])
         self.assertIn("Completo", grilla["filas"][0]["disponible_texto"])
+        self.assertFalse(grilla["hay_filas_editables"])
+
+        solo_pendiente = construir_grilla_clasificacion_produccion(
+            "empresa92", date(2026, 7, 8), 1, ver_roster_completo=False,
+        )
+        self.assertTrue(solo_pendiente["filas_vacio"])
+        self.assertFalse(solo_pendiente["hay_filas_editables"])
     @patch(
         "mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno",
         return_value={(10, 5): {"semi": Decimal("48"), "segunda": Decimal("0"), "scrap": Decimal("0")}},
@@ -294,12 +317,21 @@ class ClasificacionOperarioServicioTests(SimpleTestCase):
                 "turno_nombre": "Mañana",
             },
         }
-        grilla = construir_grilla_clasificacion_produccion(
+        # Solo pendiente: CC confirmado no se reabre por stock extra.
+        pendiente = construir_grilla_clasificacion_produccion(
             "empresa92", date(2026, 7, 8), 1,
         )
-        self.assertEqual(len(grilla["filas"]), 1)
-        self.assertFalse(grilla["filas"][0]["solo_lectura"])
-        self.assertEqual(grilla["bloqueos"], [])
+        self.assertTrue(pendiente["filas_vacio"])
+        self.assertEqual(pendiente["bloqueos"], [])
+        self.assertFalse(pendiente["hay_filas_editables"])
+
+        roster = construir_grilla_clasificacion_produccion(
+            "empresa92", date(2026, 7, 8), 1, ver_roster_completo=True,
+        )
+        self.assertEqual(len(roster["filas"]), 1)
+        self.assertTrue(roster["filas"][0]["solo_lectura"])
+        self.assertEqual(roster["bloqueos"], [])
+        self.assertFalse(roster["hay_filas_editables"])
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
     @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")

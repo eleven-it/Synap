@@ -38,9 +38,27 @@
   tr.group\/row:hover .clasif-turno-tint-manana { background-color: rgb(254 243 199 / 0.95); }
   tr.group\/row:hover .clasif-turno-tint-tarde { background-color: rgb(224 242 254 / 0.95); }
   tr.group\/row:hover .clasif-turno-tint-noche { background-color: rgb(237 233 254 / 0.95); }
+  /* Tintes por bloque de máquina (chip + celda sticky) */
+  .clasif-maq-tint-0 { background-color: rgb(224 242 254 / 0.95); }
+  .dark .clasif-maq-tint-0 { background-color: rgb(12 74 110 / 0.35); }
+  .clasif-maq-chip-0 { background-color: rgb(14 165 233); color: #fff; }
+  .clasif-maq-tint-1 { background-color: rgb(220 252 231 / 0.95); }
+  .dark .clasif-maq-tint-1 { background-color: rgb(20 83 45 / 0.35); }
+  .clasif-maq-chip-1 { background-color: rgb(16 185 129); color: #fff; }
+  .clasif-maq-tint-2 { background-color: rgb(254 243 199 / 0.95); }
+  .dark .clasif-maq-tint-2 { background-color: rgb(120 53 15 / 0.35); }
+  .clasif-maq-chip-2 { background-color: rgb(245 158 11); color: #fff; }
+  .clasif-maq-tint-3 { background-color: rgb(237 233 254 / 0.95); }
+  .dark .clasif-maq-tint-3 { background-color: rgb(76 29 149 / 0.35); }
+  .clasif-maq-chip-3 { background-color: rgb(139 92 246); color: #fff; }
+  .clasif-maq-tint-4 { background-color: rgb(252 231 243 / 0.95); }
+  .dark .clasif-maq-tint-4 { background-color: rgb(131 24 67 / 0.35); }
+  .clasif-maq-chip-4 { background-color: rgb(236 72 153); color: #fff; }
+  .clasif-maq-tint-5 { background-color: rgb(255 237 213 / 0.95); }
+  .dark .clasif-maq-tint-5 { background-color: rgb(154 52 18 / 0.35); }
+  .clasif-maq-chip-5 { background-color: rgb(249 115 22); color: #fff; }
 </style>
-{# -mt cancela padding superior de base_app; altura deja margen para status bar + footer Guardar (mismo criterio que Parte) #}
-<section class="flex h-[calc(100dvh-5.5rem)] max-h-[calc(100dvh-5.5rem)] flex-col overflow-hidden bg-slate-50 py-0 transition-colors duration-300 dark:bg-slate-900 -mt-4 md:-mt-8 md:h-[calc(100dvh-7.5rem)] md:max-h-[calc(100dvh-7.5rem)]"
+<section class="flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] flex-col overflow-hidden bg-slate-50 py-0 transition-colors duration-300 dark:bg-slate-900 -mt-4 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]"
          x-data="clasificacionProduccion()"
          x-init="init()"
          @fila-excede.window="setExcede($event.detail.id, $event.detail.excede)">
@@ -72,6 +90,30 @@
                         <p class="text-sm font-medium text-blue-900 dark:text-blue-100">Seleccioná la fecha del parte a controlar.</p>
                         <p class="mt-1 text-xs text-blue-700 dark:text-blue-300">El turno es opcional: vacío carga todos los turnos del día. Pulsá <strong>Cargar grilla</strong>.</p>
                     </div>
+                </div>
+            </div>
+            {% elif filas_vacio and confirmadas_ocultas %}
+            <div class="flex-shrink-0 border-b border-teal-200 bg-teal-50 px-4 py-3 dark:border-teal-800/50 dark:bg-teal-950/30 sm:px-5">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="flex items-start gap-3">
+                        <span class="material-icons text-teal-600 dark:text-teal-400" aria-hidden="true">task_alt</span>
+                        <div>
+                            <p class="text-sm font-medium text-teal-900 dark:text-teal-100">
+                                El control de calidad de <strong>{{ fecha_str }}</strong> ya está confirmado
+                                ({{ confirmadas_ocultas }} fila{% if confirmadas_ocultas != 1 %}s{% endif %}).
+                            </p>
+                            <p class="mt-1 text-xs text-teal-800 dark:text-teal-300">
+                                No quedan pendientes de clasificar. Para consultar el desglose (semi / 2da / desperdicio), abrí el roster.
+                            </p>
+                        </div>
+                    </div>
+                    {% if puede_ver_roster_completo %}
+                    <a href="?fecha={{ fecha_str|urlencode }}&amp;turno_id={{ turno_id }}&amp;ver_roster=1&amp;presentacion={{ modo_presentacion }}"
+                       class="inline-flex h-9 shrink-0 items-center gap-1.5 self-center rounded-lg border border-teal-600 bg-teal-700 px-3 text-xs font-semibold text-white hover:bg-teal-600">
+                        <span class="material-icons text-base" aria-hidden="true">list_alt</span>
+                        Ver roster
+                    </a>
+                    {% endif %}
                 </div>
             </div>
             {% elif filas_vacio %}
@@ -113,21 +155,19 @@
                                 x-show="$root.busqueda === '' || $el.dataset.descripcion.includes(($root.busqueda || '').toLowerCase().trim())"
                                 x-data="clasificacionFila({{ fila.id_articulo }}, {{ fila.base_clasificable|floatformat:0 }}, {{ unidades_por_docena_clasificacion|default:12 }}, {{ fila.ini_seg2da|default:0 }}, {{ fila.ini_scrap|default:0 }}, {{ fila.solo_lectura|yesno:'true,false' }}, {{ fila.ini_semi|default:0 }})"
                                 :class="excede ? 'bg-red-50/40 dark:bg-red-950/15' : ''">
-                                {# Máquina — al buscar se muestra en cada fila; con rowspan alinea al primer turno (align-top) #}
                                 <td x-show="($root.busqueda || '').trim() !== ''"
-                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 bg-white px-2 py-2 text-center align-top dark:border-slate-700 dark:bg-slate-800">
-                                    <span class="inline-flex max-w-full items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-sm font-semibold leading-tight text-slate-800 dark:bg-slate-700 dark:text-slate-100"
+                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 px-2 py-2 text-center align-top dark:border-slate-700 clasif-maq-tint-{{ fila.maquina_tint|default:0 }}">
+                                    <span class="inline-flex max-w-full items-center justify-center rounded-md px-2 py-1 text-sm font-semibold leading-tight clasif-maq-chip-{{ fila.maquina_tint|default:0 }}"
                                           title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
                                 </td>
                                 {% if fila.show_maquina %}
                                 <td x-show="($root.busqueda || '').trim() === ''"
                                     rowspan="{{ fila.rowspan_maquina|default:1 }}"
-                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 bg-white px-2 py-2 text-center align-top dark:border-slate-700 dark:bg-slate-800 group-hover/row:bg-teal-50/20 dark:group-hover/row:bg-teal-950/10">
-                                    <span class="inline-flex max-w-full items-center justify-center rounded-md bg-slate-100 px-2 py-1 text-sm font-semibold leading-tight text-slate-800 dark:bg-slate-700 dark:text-slate-100"
+                                    class="sticky left-0 z-20 w-20 min-w-[5rem] border-r border-slate-100 px-2 py-2 text-center align-top dark:border-slate-700 clasif-maq-tint-{{ fila.maquina_tint|default:0 }}">
+                                    <span class="inline-flex max-w-full items-center justify-center rounded-md px-2 py-1 text-sm font-semibold leading-tight clasif-maq-chip-{{ fila.maquina_tint|default:0 }}"
                                           title="Máquina: {{ fila.maquina_nombre }}">{{ fila.maquina_nombre }}</span>
                                 </td>
                                 {% endif %}
-                                {# Artículo — rowspan o repetido al buscar; align-top = primera línea de turnos #}
                                 <td x-show="($root.busqueda || '').trim() !== ''"
                                     class="sticky left-20 z-20 min-w-[13rem] border-r border-slate-100 bg-white px-3 py-2 align-top dark:border-slate-700 dark:bg-slate-800">
                                     <span class="block text-base font-medium leading-snug text-slate-800 dark:text-slate-100"
@@ -152,25 +192,13 @@
                                     {% endif %}
                                 </td>
                                 <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-0">
-                                    {% if fila.solo_lectura %}
-                                    <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_semi_texto }}</p>
-                                    {% else %}
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="semi elaborado" model_doc="semiDoc" model_uni="semiUni" subtotal_alpine="semiUnidades" ring_class="focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/25" only %}
-                                    {% endif %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="semi" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="semi elaborado" model_doc="semiDoc" model_uni="semiUni" subtotal_alpine="semiUnidades" ring_class="focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/25" readonly=fila.solo_lectura only %}
                                 </td>
                                 <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-1">
-                                    {% if fila.solo_lectura %}
-                                    <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_seg2da_texto }}</p>
-                                    {% else %}
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="seg2da" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="2da selección" model_doc="seg2daDoc" model_uni="seg2daUni" subtotal_alpine="seg2daUnidades" ring_class="focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/25" only %}
-                                    {% endif %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="seg2da" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="2da selección" model_doc="seg2daDoc" model_uni="seg2daUni" subtotal_alpine="seg2daUnidades" ring_class="focus-within:border-sky-500 focus-within:ring-2 focus-within:ring-sky-500/25" readonly=fila.solo_lectura only %}
                                 </td>
                                 <td class="clasif-col border-l-2 px-2 py-2 align-top clasif-col-tint-2">
-                                    {% if fila.solo_lectura %}
-                                    <p class="text-center text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">{{ fila.ini_scrap_texto }}</p>
-                                    {% else %}
-                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="scrap" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="desperdicio" model_doc="scrapDoc" model_uni="scrapUni" subtotal_alpine="scrapUnidades" ring_class="focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/25" only %}
-                                    {% endif %}
+                                    {% include "mpr/includes/clasif_qty_docenas_unidades_operario.html" with prefix="scrap" id_art=fila.id_articulo id_operario=fila.id_operario id_turno=fila.id_mpr_turno id_maquina=fila.id_mpr_maquina operario_nombre=fila.operario_nombre codigo=fila.codigo_manual destino_label="desperdicio" model_doc="scrapDoc" model_uni="scrapUni" subtotal_alpine="scrapUnidades" ring_class="focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-500/25" readonly=fila.solo_lectura only %}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -181,6 +209,8 @@
                                     <p class="text-sm font-medium text-slate-600 dark:text-slate-300">
                                         {% if requiere_fecha %}
                                             Aún no cargaste una grilla
+                                        {% elif confirmadas_ocultas %}
+                                            Sin pendientes — CC ya confirmado
                                         {% else %}
                                             Sin filas de control de calidad
                                         {% endif %}
@@ -188,6 +218,11 @@
                                     <p class="mx-auto mt-2 max-w-md text-xs leading-relaxed text-slate-500 dark:text-slate-400">
                                         {% if requiere_fecha %}
                                             Elegí fecha (turno opcional) y cargá la grilla para ver el parte por máquina, artículo y operario.
+                                        {% elif confirmadas_ocultas %}
+                                            Hay {{ confirmadas_ocultas }} fila{% if confirmadas_ocultas != 1 %}s{% endif %} confirmada{% if confirmadas_ocultas != 1 %}s{% endif %} en solo lectura.
+                                            {% if puede_ver_roster_completo %}
+                                            Pulsá <strong>Ver roster</strong> en el encabezado para consultarlas.
+                                            {% endif %}
                                         {% else %}
                                             Sin filas pendientes de control de calidad, o registrá producción en el parte con desglose por operario.
                                         {% endif %}
@@ -220,16 +255,16 @@
                 <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
                     <button type="button"
                             id="btn-guardar-borrador-cc"
-                            :disabled="hayExcedida"
-                            :class="hayExcedida ? 'cursor-not-allowed opacity-50' : 'hover:bg-teal-100 dark:hover:bg-teal-900/50'"
+                            :disabled="!hayFilasEditables || hayExcedida"
+                            :class="(!hayFilasEditables || hayExcedida) ? 'cursor-not-allowed opacity-50' : 'hover:bg-teal-100 dark:hover:bg-teal-900/50'"
                             class="inline-flex h-10 w-auto shrink-0 items-center justify-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-4 text-sm font-semibold text-teal-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 disabled:cursor-not-allowed disabled:opacity-50 dark:border-teal-700/50 dark:bg-teal-950/40 dark:text-teal-200">
                         <span class="material-icons text-base" aria-hidden="true">draft</span>
                         Guardar borrador
                     </button>
                     <button type="button"
                             id="btn-guardar-confirmar-cc"
-                            :disabled="hayExcedida"
-                            :class="hayExcedida ? 'cursor-not-allowed opacity-50' : 'hover:bg-teal-500'"
+                            :disabled="!hayFilasEditables || hayExcedida"
+                            :class="(!hayFilasEditables || hayExcedida) ? 'cursor-not-allowed opacity-50' : 'hover:bg-teal-500'"
                             class="inline-flex h-10 items-center gap-2 rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400 disabled:cursor-not-allowed disabled:opacity-50">
                         <span class="material-icons text-base" aria-hidden="true">save</span>
                         Guardar control de calidad
@@ -270,12 +305,20 @@
         }
         if (accion === 'confirmar') {
             form.setAttribute('data-mpr-loading-title', 'Registrando control de calidad...');
-            form.setAttribute('data-mpr-loading-subtitle', 'Transfiriendo stock entre depósitos.');
+            form.setAttribute('data-mpr-loading-subtitle', 'Transfiriendo stock entre depósitos. No cierres esta ventana.');
         } else {
             form.setAttribute('data-mpr-loading-title', 'Guardando borrador...');
-            form.setAttribute('data-mpr-loading-subtitle', 'Precargando cantidades sin mover stock.');
+            form.setAttribute('data-mpr-loading-subtitle', 'Guardando cantidades sin mover stock.');
         }
         normalizarInputsCantidad();
+        // form.submit() no dispara el evento submit: hay que mostrar el modal a mano.
+        if (typeof window.mprShowPostLoading === 'function') {
+            window.mprShowPostLoading(form);
+        } else if (typeof window.synapShowPostLoading === 'function') {
+            window.synapShowPostLoading(form);
+        }
+        if (btnBorrador) { btnBorrador.disabled = true; }
+        if (btnConfirmar) { btnConfirmar.disabled = true; }
         form.submit();
     }
 
@@ -406,13 +449,14 @@ document.addEventListener('alpine:init', function () {
             get seg2daUnidades() { return this.unidadesDest(this.seg2daDoc, this.seg2daUni); },
             get scrapUnidades() { return this.unidadesDest(this.scrapDoc, this.scrapUni); },
             get semiUnidades() {
-                if (this.soloLectura) { return this.iniSemi; }
                 return this.unidadesDest(this.semiDoc, this.semiUni);
             },
             get excede() {
+                if (this.soloLectura) { return false; }
                 return this.semiUnidades + this.seg2daUnidades + this.scrapUnidades > this.base + 1e-9;
             },
             coerceQtyField: function (field, el) {
+                if (this.soloLectura) { return; }
                 var v = el.value;
                 if (v === '' || v === null || v === undefined) {
                     this[field] = 0;
@@ -447,41 +491,44 @@ document.addEventListener('alpine:init', function () {
             },
             init: function () {
                 var self = this;
+                // Precarga siempre (editable o solo lectura) para mostrar casilleros con el desglose.
+                var ism = this.iniSemi || 0;
+                this.semiDoc = Math.floor(ism / this.upd);
+                this.semiUni = ism % this.upd;
+                var i2 = ini2da || 0;
+                this.seg2daDoc = Math.floor(i2 / this.upd);
+                this.seg2daUni = i2 % this.upd;
+                var isc = iniScrap || 0;
+                this.scrapDoc = Math.floor(isc / this.upd);
+                this.scrapUni = isc % this.upd;
                 if (!this.soloLectura) {
-                    var ism = iniSemi || 0;
-                    this.semiDoc = Math.floor(ism / this.upd);
-                    this.semiUni = ism % this.upd;
-                    var i2 = ini2da || 0;
-                    this.seg2daDoc = Math.floor(i2 / this.upd);
-                    this.seg2daUni = i2 % this.upd;
-                    var isc = iniScrap || 0;
-                    this.scrapDoc = Math.floor(isc / this.upd);
-                    this.scrapUni = isc % this.upd;
+                    this.$watch(function () {
+                        return self.seg2daUnidades + self.scrapUnidades;
+                    }, function (nuevo, viejo) {
+                        self.aplicarDescuentoOtros(viejo, nuevo);
+                    });
                 }
-                this.$watch(function () {
-                    return self.seg2daUnidades + self.scrapUnidades;
-                }, function (nuevo, viejo) {
-                    self.aplicarDescuentoOtros(viejo, nuevo);
-                });
                 this.$watch(function () {
                     return self.semiUnidades + self.seg2daUnidades + self.scrapUnidades;
                 }, function () {
                     self.$dispatch('fila-excede', { id: self.idArt, excede: self.excede });
                 });
-                ['semiDoc', 'semiUni', 'seg2daDoc', 'seg2daUni', 'scrapDoc', 'scrapUni'].forEach(function (field) {
-                    self.$watch(field, function (val) {
-                        if (val === '' || val === null || (typeof val === 'number' && isNaN(val))) {
-                            self[field] = 0;
-                        }
+                if (!this.soloLectura) {
+                    ['semiDoc', 'semiUni', 'seg2daDoc', 'seg2daUni', 'scrapDoc', 'scrapUni'].forEach(function (field) {
+                        self.$watch(field, function (val) {
+                            if (val === '' || val === null || (typeof val === 'number' && isNaN(val))) {
+                                self[field] = 0;
+                            }
+                        });
                     });
-                });
-                this.$nextTick(function () {
-                    self.$el.querySelectorAll('[data-clasif-qty-input]').forEach(function (inp) {
-                        if (inp.value === '') {
-                            inp.value = '0';
-                        }
+                    this.$nextTick(function () {
+                        self.$el.querySelectorAll('[data-clasif-qty-input]').forEach(function (inp) {
+                            if (inp.value === '') {
+                                inp.value = '0';
+                            }
+                        });
                     });
-                });
+                }
             }
         };
     });
@@ -490,6 +537,7 @@ document.addEventListener('alpine:init', function () {
             excedidas: {},
             fechaIso: '',
             busqueda: '',
+            hayFilasEditables: {{ hay_filas_editables|yesno:"true,false" }},
             init: function () {
                 var raw = '{{ fecha_hoy|escapejs }}';
                 if (raw && raw.indexOf('/') > -1) {
