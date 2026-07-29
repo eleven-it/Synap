@@ -59,6 +59,7 @@
             {% csrf_token %}
             <input type="hidden" name="fecha" value="{{ fecha_str }}">
             {% if turno_id %}<input type="hidden" name="turno_id" value="{{ turno_id }}">{% endif %}
+            <input type="hidden" name="accion" id="id_accion_clasificacion" value="confirmar">
         {% endif %}
 
         <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -127,6 +128,14 @@
                     </a>
                     {% endif %}
                     <span class="text-[10px] text-slate-400 dark:text-slate-500">Supervisor: incluye filas ya clasificadas (solo lectura)</span>
+                </div>
+                {% endif %}
+                {% if tiene_borrador %}
+                <div class="mt-2">
+                    <span class="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2.5 py-0.5 text-[11px] font-semibold text-teal-800 dark:border-teal-700/50 dark:bg-teal-950/40 dark:text-teal-200">
+                        <span class="material-icons text-sm" aria-hidden="true">draft</span>
+                        Borrador guardado
+                    </span>
                 </div>
                 {% endif %}
             </div>
@@ -253,13 +262,24 @@
                 <p x-show="!hayExcedida" class="hidden text-xs text-slate-500 dark:text-slate-400 sm:block">
                     {{ filas|length }} fila{% if filas|length != 1 %}s{% endif %} en la grilla
                 </p>
-                <button type="submit"
-                        :disabled="hayExcedida"
-                        :class="hayExcedida ? 'cursor-not-allowed opacity-50' : 'hover:bg-teal-500'"
-                        class="ml-auto inline-flex h-10 items-center gap-2 rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400">
-                    <span class="material-icons text-base" aria-hidden="true">save</span>
-                    Guardar control de calidad
-                </button>
+                <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+                    <button type="button"
+                            id="btn-guardar-borrador-cc"
+                            :disabled="hayExcedida"
+                            :class="hayExcedida ? 'cursor-not-allowed opacity-50' : 'hover:bg-teal-100 dark:hover:bg-teal-900/50'"
+                            class="inline-flex h-10 items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-4 text-sm font-semibold text-teal-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 dark:border-teal-700/50 dark:bg-teal-950/40 dark:text-teal-200">
+                        <span class="material-icons text-base" aria-hidden="true">draft</span>
+                        Guardar borrador
+                    </button>
+                    <button type="button"
+                            id="btn-guardar-confirmar-cc"
+                            :disabled="hayExcedida"
+                            :class="hayExcedida ? 'cursor-not-allowed opacity-50' : 'hover:bg-teal-500'"
+                            class="inline-flex h-10 items-center gap-2 rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-400">
+                        <span class="material-icons text-base" aria-hidden="true">save</span>
+                        Guardar control de calidad
+                    </button>
+                </div>
             </div>
             {% endif %}
         </div>
@@ -277,6 +297,46 @@
 (function () {
     var form = document.getElementById('form-clasificacion-produccion');
     if (!form) { return; }
+    var accionInput = document.getElementById('id_accion_clasificacion');
+    var btnBorrador = document.getElementById('btn-guardar-borrador-cc');
+    var btnConfirmar = document.getElementById('btn-guardar-confirmar-cc');
+
+    function normalizarInputsCantidad() {
+        form.querySelectorAll('[data-clasif-qty-input]').forEach(function (inp) {
+            if (inp.value === '' || inp.value === null) {
+                inp.value = '0';
+            }
+        });
+    }
+
+    function enviarClasificacion(accion) {
+        if (accionInput) {
+            accionInput.value = accion;
+        }
+        if (accion === 'confirmar') {
+            form.setAttribute('data-mpr-loading-title', 'Registrando control de calidad...');
+            form.setAttribute('data-mpr-loading-subtitle', 'Transfiriendo stock entre depósitos.');
+        } else {
+            form.setAttribute('data-mpr-loading-title', 'Guardando borrador...');
+            form.setAttribute('data-mpr-loading-subtitle', 'Precargando cantidades sin mover stock.');
+        }
+        normalizarInputsCantidad();
+        form.submit();
+    }
+
+    if (btnBorrador) {
+        btnBorrador.addEventListener('click', function () {
+            if (btnBorrador.disabled) { return; }
+            enviarClasificacion('borrador');
+        });
+    }
+    if (btnConfirmar) {
+        btnConfirmar.addEventListener('click', function () {
+            if (btnConfirmar.disabled) { return; }
+            enviarClasificacion('confirmar');
+        });
+    }
+
     var qtyInputs = Array.prototype.slice.call(form.querySelectorAll('[data-clasif-qty-input]'));
     qtyInputs.forEach(function (inp) {
         inp.addEventListener('keydown', function (ev) {
@@ -471,15 +531,7 @@ document.addEventListener('alpine:init', function () {
                 return Object.values(this.excedidas).some(function (v) { return v; });
             },
             onSubmit: function (e) {
-                if (this.hayExcedida) {
-                    e.preventDefault();
-                    return;
-                }
-                e.target.querySelectorAll('[data-clasif-qty-input]').forEach(function (inp) {
-                    if (inp.value === '' || inp.value === null) {
-                        inp.value = '0';
-                    }
-                });
+                e.preventDefault();
             }
         };
     });

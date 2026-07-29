@@ -106,6 +106,23 @@ def _add_messages(request):
 
 class TestConstruirGrillaClasificacionProduccion(SimpleTestCase):
     """La grilla lista filas (artículo × operario) con pendiente de clasificación."""
+
+    def setUp(self):
+        self._patch_listar_borrador = patch(
+            "mpr.repositories.clasificacion_borrador.listar_lineas_borrador",
+            return_value={},
+        )
+        self._patch_tiene_borrador = patch(
+            "mpr.repositories.clasificacion_borrador.tiene_borrador",
+            return_value=False,
+        )
+        self._patch_listar_borrador.start()
+        self._patch_tiene_borrador.start()
+
+    def tearDown(self):
+        self._patch_tiene_borrador.stop()
+        self._patch_listar_borrador.stop()
+
     def test_sin_fecha_requiere_seleccion(self):
         resultado = construir_grilla_clasificacion_produccion(EMPRESA)
         self.assertTrue(resultado["requiere_fecha"])
@@ -370,6 +387,13 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
     def setUp(self):
         self.factory = RequestFactory()
         self.user = _crear_usuario()
+        self._patch_eliminar_borrador = patch(
+            "mpr.repositories.clasificacion_borrador.eliminar_borrador"
+        )
+        self.mock_eliminar_borrador = self._patch_eliminar_borrador.start()
+
+    def tearDown(self):
+        self._patch_eliminar_borrador.stop()
 
     def _post(self, data, empresa=EMPRESA):
         from mpr.views import RegistrarClasificacionProduccionView
@@ -676,6 +700,146 @@ class TestRegistrarClasificacionProduccionViewPost(TestCase):
         self.assertEqual(resp.status_code, 302)
         mock_lote.assert_not_called()
 
+    @patch("mpr.repositories.clasificacion_borrador.upsert_borrador")
+    @patch("mpr.services.transferir_stock_lote")
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+    @patch("mpr.services._pivot_stock_por_tipo_mpr")
+    def test_post_borrador_no_llama_transferir_stock(
+        self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote, mock_upsert
+    ):
+        """accion=borrador persiste borrador sin MSTOCK."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
+        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
+        mock_pivot.return_value = (pivot, pivot)
+        data = _post_clasif_base(
+            accion="borrador",
+            **{
+                f"seg2da_42_op_{ID_OPERARIO}": "2",
+                f"scrap_42_op_{ID_OPERARIO}": "0",
+            },
+        )
+        resp = self._post(data)
+        self.assertEqual(resp.status_code, 302)
+        mock_lote.assert_not_called()
+        mock_upsert.assert_called_once()
+        lineas = mock_upsert.call_args.args[4]
+        self.assertEqual(len(lineas), 1)
+        self.assertEqual(float(lineas[0]["cant_2da"]), 2.0)
+
+    @patch("mpr.repositories.clasificacion_borrador.eliminar_borrador")
+    @patch(
+        "mpr.services.transferir_stock_lote",
+        return_value={"exitosas": 1, "fallidas": 0, "errores": [], "comprobantes": ["A"]},
+    )
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+    @patch("mpr.services._pivot_stock_por_tipo_mpr")
+    def test_post_confirmar_elimina_borrador(
+        self, mock_pivot, mock_celdas, _cls, _desglose, mock_lote, mock_eliminar
+    ):
+        """Confirmación exitosa elimina borrador del turno."""
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=10.0)
+        pivot = _pivot_con_produccion(id_art=42, saldo=10.0)
+        mock_pivot.return_value = (pivot, pivot)
+        data = _post_clasif_base(
+            accion="confirmar",
+            **{
+                f"seg2da_42_op_{ID_OPERARIO}": "0",
+                f"scrap_42_op_{ID_OPERARIO}": "0",
+            },
+        )
+        resp = self._post(data)
+        self.assertEqual(resp.status_code, 302)
+        mock_lote.assert_called_once()
+        mock_eliminar.assert_called_once_with(EMPRESA, FECHA_OBJ, TURNO_ID)
+
+
+class TestClasificacionBorradorRepo(SimpleTestCase):
+    """Repositorio borrador CC — upsert, listado y flags."""
+
+    @patch("mpr.repositories.clasificacion_borrador.eliminar_borrador")
+    @patch("mpr.repositories.clasificacion_borrador.mysql_cursor")
+    def test_upsert_sin_lineas_elimina_borrador(self, mock_cursor_ctx, mock_eliminar):
+        from mpr.repositories.clasificacion_borrador import upsert_borrador
+
+        upsert_borrador(EMPRESA, FECHA_OBJ, TURNO_ID, 1, [])
+        mock_eliminar.assert_called_once_with(EMPRESA, FECHA_OBJ, TURNO_ID)
+        mock_cursor_ctx.assert_not_called()
+
+    @patch("mpr.repositories.clasificacion_borrador.mysql_cursor")
+    def test_listar_lineas_borrador_indexa_por_clave(self, mock_cursor_ctx):
+        from mpr.repositories.clasificacion_borrador import listar_lineas_borrador
+
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        cursor.fetchall.return_value = [{
+            "id_mpr_turno": TURNO_ID,
+            "id_articulo": 42,
+            "id_operario": ID_OPERARIO,
+            "id_mpr_maquina": 2,
+            "cant_semi": Decimal("6"),
+            "cant_2da": Decimal("2"),
+            "cant_scrap": Decimal("1"),
+        }]
+        out = listar_lineas_borrador(EMPRESA, FECHA_OBJ, TURNO_ID)
+        self.assertEqual(out[(2, 42, ID_OPERARIO, TURNO_ID)]["semi"], Decimal("6"))
+        self.assertEqual(out[(2, 42, ID_OPERARIO, TURNO_ID)]["segunda"], Decimal("2"))
+        self.assertEqual(out[(2, 42, ID_OPERARIO, TURNO_ID)]["scrap"], Decimal("1"))
+
+    @patch("mpr.repositories.clasificacion_borrador.mysql_cursor")
+    def test_tiene_borrador_true(self, mock_cursor_ctx):
+        from mpr.repositories.clasificacion_borrador import tiene_borrador
+
+        cursor = mock_cursor_ctx.return_value.__enter__.return_value
+        cursor.fetchone.return_value = (1,)
+        self.assertTrue(tiene_borrador(EMPRESA, FECHA_OBJ, TURNO_ID))
+
+
+class TestConstruirGrillaBorradorPrecarga(TestCase):
+    """La grilla precarga ini_* desde borrador guardado."""
+
+    def setUp(self):
+        self._patch_listar_default = patch(
+            "mpr.repositories.clasificacion_borrador.listar_lineas_borrador",
+            return_value={},
+        )
+        self._patch_tiene_default = patch(
+            "mpr.repositories.clasificacion_borrador.tiene_borrador",
+            return_value=False,
+        )
+        self._patch_listar_default.start()
+        self._patch_tiene_default.start()
+
+    def tearDown(self):
+        self._patch_tiene_default.stop()
+        self._patch_listar_default.stop()
+
+    @patch("mpr.repositories.clasificacion_borrador.tiene_borrador", return_value=True)
+    @patch("mpr.repositories.clasificacion_borrador.listar_lineas_borrador")
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_desglose_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.transicion_lote.sumar_clasificado_por_operario_fecha_turno", return_value={})
+    @patch("mpr.repositories.parte.acumular_celdas_clasificacion_maquina_turno")
+    @patch("mpr.services._fetch_descripciones_articulo", return_value=_desc_map(id_art=42))
+    def test_precarga_ini_desde_borrador(
+        self, _fetch, mock_celdas, _cls, _desglose, mock_listar, mock_tiene
+    ):
+        mock_celdas.return_value = _celdas_parte_mock(cantidad=15.0)
+        mock_listar.return_value = {
+            (ID_MAQUINA, 42, ID_OPERARIO, TURNO_ID): {
+                "semi": Decimal("6"),
+                "segunda": Decimal("2"),
+                "scrap": Decimal("1"),
+            }
+        }
+        resultado = construir_grilla_clasificacion_produccion(EMPRESA, FECHA_OBJ, TURNO_ID)
+        self.assertTrue(resultado["tiene_borrador"])
+        fila = resultado["filas"][0]
+        self.assertEqual(fila["ini_semi"], 6)
+        self.assertEqual(fila["ini_seg2da"], 2)
+        self.assertEqual(fila["ini_scrap"], 1)
+
 
 class TestTurnoTieneControlCalidad(SimpleTestCase):
     """Helpers de bloqueo parte por CC."""
@@ -700,13 +864,13 @@ class TestTurnoTieneControlCalidad(SimpleTestCase):
 class TestRegistrarParteBloqueoControlCalidad(TestCase):
     """registrar_parte_produccion rechaza turnos con CC previa."""
 
-    @patch("mpr.services._validar_turnos_parte_sin_control_calidad")
+    @patch("mpr.services._validar_planilla_sin_control_calidad")
     def test_registrar_parte_rechaza_si_hay_cc(self, mock_validar):
         from django.core.exceptions import ValidationError
         from mpr.services import registrar_parte_produccion
 
         mock_validar.return_value = [
-            "El turno Mañana ya tiene control de calidad registrado y no se puede modificar el parte."
+            "Esta fecha ya tiene control de calidad registrado. La planilla es de solo lectura."
         ]
         lineas = [{
             "id_articulo": 100,

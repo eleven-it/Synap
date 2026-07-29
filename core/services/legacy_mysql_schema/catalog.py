@@ -867,6 +867,21 @@ def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
                     applied, failed, True, f"idx_mpr_tl_fecha_turno_art_op en {tbl_tl}"
                 )
 
+        tbl_cc_borr = nombre_tabla_real(cursor, "mpr_clasificacion_borrador")
+        if not tbl_cc_borr:
+            sql_borrador = app_path / "sql" / "006_mpr_clasificacion_borrador.sql"
+            if sql_borrador.is_file():
+                for stmt in _split_sql_statements(sql_borrador.read_text(encoding="utf-8")):
+                    stmt = _sc_sql_strip_leading_comments(stmt)
+                    if stmt:
+                        cursor.execute(stmt)
+                _append_migration(
+                    applied,
+                    failed,
+                    True,
+                    "DDL MPR borrador CC (006_mpr_clasificacion_borrador.sql)",
+                )
+
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -2567,11 +2582,12 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
         "id": "mpr_core_tables",
         "title": "MPR — tablas core Synap (ledgers MySQL)",
         "description": (
-            "Crea las 13 tablas mpr_* en la base de la empresa (``001_mpr_core_tables.sql``): "
+            "Crea las tablas mpr_* en la base de la empresa (``001_mpr_core_tables.sql`` y alters): "
             "mpr_config, mpr_turno, mpr_roster_dia, mpr_envio_produccion, mpr_parte, "
             "mpr_parte_linea, mpr_parte_ajuste, mpr_transicion_lote, mpr_articulo_armado_surtido, "
             "mpr_armado_lote, mpr_armado_surtido_movimiento, mpr_armado_surtido_linea, "
-            "mpr_imputacion_armado. Fuente única AdministraNET; sin columna base_empresa. "
+            "mpr_imputacion_armado, mpr_clasificacion_borrador, mpr_clasificacion_borrador_linea. "
+            "Fuente única AdministraNET; sin columna base_empresa. "
             "Equivalente a ``manage.py apply_mpr_core_tables``. "
             "Ver docs/mpr/PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md."
         ),
