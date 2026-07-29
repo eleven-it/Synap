@@ -7040,6 +7040,7 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
             "puede_ver_roster_completo": _usuario_puede_anular_envios(self.request.user),
             "componentes": grilla.get("componentes", grilla.get("filas", [])),
             "componentes_vacio": grilla.get("componentes_vacio", grilla.get("filas_vacio", True)),
+            "tiene_borrador": grilla.get("tiene_borrador", False),
             "unidades_por_docena_clasificacion": UNIDADES_POR_DOCENA_OPP,
             "modo_presentacion": modo_presentacion,
             "presentacion_query_base": _urlencode_con_marcas(
@@ -7110,6 +7111,9 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
                 return _redirect_clasificacion_produccion(
                     request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
                 )
+
+        accion_raw = (request.POST.get("accion") or "confirmar").strip().lower()
+        accion = "borrador" if accion_raw == "borrador" else "confirmar"
 
         filas_post = _clasificacion_filas_desde_post(request.POST)
 
@@ -7260,6 +7264,33 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
                 "extra_scrap": e_scrap,
             })
 
+        if accion == "borrador":
+            from mpr.repositories.clasificacion_borrador import upsert_borrador
+
+            por_turno: Dict[int, List[Dict[str, Any]]] = {}
+            for fila in filas_con_cantidad:
+                tid_b = int(fila["id_turno_ef"])
+                por_turno.setdefault(tid_b, []).append({
+                    "id_articulo": fila["id_art"],
+                    "id_operario": fila["id_operario"],
+                    "id_mpr_maquina": fila["id_maq_ef"],
+                    "cant_semi": fila["cant_semi"],
+                    "cant_2da": fila["cant_2da"],
+                    "cant_scrap": fila["cant_scrap"],
+                })
+            for tid_b, lineas_turno in por_turno.items():
+                upsert_borrador(
+                    base_empresa,
+                    fecha_obj,
+                    tid_b,
+                    id_usuario,
+                    lineas_turno,
+                )
+            dj_messages.success(request, "Borrador de control de calidad guardado.")
+            return _redirect_clasificacion_produccion(
+                request, fecha_str=fecha_str, turno_id_raw=turno_id_raw
+            )
+
         items = []
         clasificado_turno_por_art: Dict[int, Decimal] = {}
 
@@ -7333,6 +7364,10 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
                     f"{resultado['exitosas']} transferencia{sufijo} registrada{sufijo}."
                     + (f" Comprobantes: {comprobantes}." if comprobantes else ""),
                 )
+                from mpr.repositories.clasificacion_borrador import eliminar_borrador
+
+                for tid_b in turnos_post:
+                    eliminar_borrador(base_empresa, fecha_obj, int(tid_b))
             for id_art_err, msg_err in resultado["errores"]:
                 dj_messages.error(request, f"Error en artículo {id_art_err}: {msg_err}")
 

@@ -18843,6 +18843,7 @@ def construir_grilla_clasificacion_produccion(
         "bloqueos": [],
         "requiere_fecha": fecha is None,
         "requiere_fecha_turno": fecha is None,
+        "tiene_borrador": False,
     }
     if not (base_empresa or "").strip():
         return vacio
@@ -18991,6 +18992,34 @@ def construir_grilla_clasificacion_produccion(
             "rowspan_articulo": 1,
         })
 
+    from mpr.repositories.clasificacion_borrador import (
+        listar_lineas_borrador,
+        tiene_borrador as repo_tiene_borrador,
+    )
+
+    lineas_borrador = listar_lineas_borrador(
+        base_empresa, fecha, int(turno_id) if turno_id is not None else None
+    )
+    for fila in filas_raw:
+        if fila.get("solo_lectura"):
+            continue
+        clave = (
+            int(fila["id_mpr_maquina"]),
+            int(fila["id_articulo"]),
+            int(fila["id_operario"]),
+            int(fila["id_mpr_turno"]),
+        )
+        borrador = lineas_borrador.get(clave)
+        if not borrador:
+            continue
+        fila["ini_semi"] = int(round(float(borrador.get("semi", Decimal("0")))))
+        fila["ini_seg2da"] = int(round(float(borrador.get("segunda", Decimal("0")))))
+        fila["ini_scrap"] = int(round(float(borrador.get("scrap", Decimal("0")))))
+
+    tiene_borrador_flag = repo_tiene_borrador(
+        base_empresa, fecha, int(turno_id) if turno_id is not None else None
+    )
+
     if not ver_roster_completo:
         filas_raw = [f for f in filas_raw if not f.get("solo_lectura")]
 
@@ -19044,6 +19073,7 @@ def construir_grilla_clasificacion_produccion(
         "requiere_fecha_turno": False,
         "componentes": [],
         "componentes_vacio": len(filas_raw) == 0,
+        "tiene_borrador": tiene_borrador_flag,
     }
 
 
