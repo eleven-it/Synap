@@ -20,6 +20,7 @@ from reports.services.dabra_consolidado_remitos import (
     _sql_remitos_por_fa,
     bonificacion_linea,
     calcular_tolerancia,
+    factor_descuento_cabecera,
     format_comprobante_string,
     format_numero_legal_mask,
     format_punto_venta,
@@ -138,6 +139,29 @@ class TestToleranciaSigma(unittest.TestCase):
         errs = validar_totales_fa(lineas, Decimal("31"), Decimal("37.53"))
         self.assertEqual(errs, [])
 
+    def test_descuento_cabecera_20_ok(self):
+        """Líneas predescuento vs ImporteVenta con PorDesc1=20 (factor 0.8)."""
+        self.assertEqual(
+            factor_descuento_cabecera(Decimal("2625038.40"), Decimal("2100030.72")),
+            Decimal("0.8"),
+        )
+        lineas = [
+            {
+                "codigo_movimiento": 1367,
+                "cantidad": Decimal("1"),
+                "precio_netox_u": Decimal("2625038.40"),
+                "precio_ivax_u": Decimal("551258.064"),
+            }
+        ]
+        # Σ bruto 3176296.464 × 0.8 = 2541037.1712 ≈ ImporteVenta
+        errs = validar_totales_fa(
+            lineas,
+            Decimal("2625038.40"),
+            Decimal("2541037.17"),
+            Decimal("2100030.72"),
+        )
+        self.assertEqual(errs, [])
+
 
 class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
     def setUp(self):
@@ -158,6 +182,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             ("fe_cae",),
             ("fe_vto_cae",),
             ("SubTotal1",),
+            ("SubtotalDesc",),
             ("ImporteVenta",),
             ("id_stock",),
             ("Cantidad",),
@@ -186,6 +211,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
         get_dabra_consolidado_remitos("emp_test", mes=7, anio=2026)
 
         sql_main, params_main = self.mock_cursor.execute.call_args_list[0][0]
+        self.assertIn("cc.SubtotalDesc", sql_main)
         self.assertIn("cc.Codigo = %s", sql_main)
         self.assertIn("cc.TipoComprobante = 'FA'", sql_main)
         self.assertIn("cc.Anulado = 'No'", sql_main)
@@ -204,6 +230,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             ("fe_cae",),
             ("fe_vto_cae",),
             ("SubTotal1",),
+            ("SubtotalDesc",),
             ("ImporteVenta",),
             ("id_stock",),
             ("Cantidad",),
@@ -233,6 +260,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             "2026-07-24",
             "86184381365307",
             "2026-08-01",
+            Decimal("100"),
             Decimal("100"),
             Decimal("121"),
             1,
@@ -286,6 +314,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             ("fe_cae",),
             ("fe_vto_cae",),
             ("SubTotal1",),
+            ("SubtotalDesc",),
             ("ImporteVenta",),
             ("id_stock",),
             ("Cantidad",),
@@ -306,6 +335,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             "2026-07-24",
             "86184381365307",
             "2026-08-01",
+            Decimal("100"),
             Decimal("100"),
             Decimal("121"),
             1,
@@ -354,6 +384,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             ("fe_cae",),
             ("fe_vto_cae",),
             ("SubTotal1",),
+            ("SubtotalDesc",),
             ("ImporteVenta",),
             ("id_stock",),
             ("Cantidad",),
@@ -374,6 +405,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             "2026-07-24",
             "",
             "",
+            Decimal("100"),
             Decimal("100"),
             Decimal("121"),
             1,
@@ -418,6 +450,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             ("fe_cae",),
             ("fe_vto_cae",),
             ("SubTotal1",),
+            ("SubtotalDesc",),
             ("ImporteVenta",),
             ("id_stock",),
             ("Cantidad",),
@@ -438,6 +471,7 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             "2026-07-24",
             "x",
             "2026-08-01",
+            Decimal("999"),
             Decimal("999"),
             Decimal("1210"),
             1,
