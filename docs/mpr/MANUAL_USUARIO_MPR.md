@@ -44,8 +44,9 @@ Es la pantalla principal del día: muestra la demanda (según pedidos y reserva)
 2. Elija vista **Pack** (producto terminado, pedido + reserva) o **Par** (componente). Para enviar a producción use modo **Par**.
 3. Si hace falta, pulse **Actualizar** para refrescar la demanda desde los pedidos. La búsqueda actual se conserva al actualizar.
 4. En modo **Par**, complete **Enviar docenas** o **Enviar pares** en las filas que correspondan y pulse **Enviar a producción**. Confirme el envío.
-5. En modo **Pack** no hay envío: use el botón **Ver en modo Par para enviar**.
-6. Desde el encabezado puede ir a Parte de producción, Control de calidad o Armado.
+5. Si envió de más (porque después bajó el pedido o la reserva), use **Anular envíos** en el tablero: los envíos **no se reducen solos**. Detalle en §3.6.
+6. En modo **Pack** no hay envío: use el botón **Ver en modo Par para enviar**.
+7. Desde el encabezado puede ir a Parte de producción, Control de calidad o Armado.
 
 ### Pack vs Par (qué fila está mirando)
 
@@ -99,6 +100,8 @@ Cadena de causa y efecto:
 3. **Enviar** = máximo(0, Urgente − Fabricando).
 4. Tras confirmar el envío → suben **Fabricando** y **Enviado**.
 5. En el Parte, el cupo verde = **Fabricando**.
+
+Si después del envío **cambia el pedido o la reserva**, Urgente y el sugerido a Enviar se recalculan; **Enviado/Fabricando no se reescriben solos**. Ver §3.6.
 
 **Errores frecuentes de lectura**
 
@@ -170,6 +173,66 @@ Si el pack **no tiene receta** (lista de materiales / BOM) en AdministraNET:
 - Tras un envío correcto: mensaje de componentes enviados a producción.
 - Badge **Sin receta** (modo Pack): el terminado no tiene lista de materiales; revise pedidos en el tooltip y complete la receta del artículo.
 
+### 3.5 Por qué un artículo no aparece en el tablero
+
+El tablero **no** lista todo lo asignado a máquinas. Solo muestra componentes con **demanda** (o con envíos previos). Causas habituales:
+
+| Causa | Qué ve / no ve | Cómo resolver |
+|-------|----------------|---------------|
+| Sin **PED** abierto y sin **`stock_reserva`** en el pack | El componente no aparece en Par | Cargar reserva del **pack** (§3.4) o abrir/cargar un pedido PED del pack |
+| Pack **sin BOM / sin receta** | Pack en ámbar; Par no explota componentes | Completar lista de materiales del pack |
+| Filtro **Solo urgentes** activo y Urgente = 0 | Fila oculta aunque exista | Desactivar Solo urgentes o ampliar demanda |
+| Rango de **fechas de pedido** / marcas / búsqueda | No coincide | Ampliar fechas, quitar marcas, buscar por código |
+| Solo hay **asignación a máquina** (orden verbal / OPT legacy) | Aparece en el **Parte** con «Sin cupo Fabricando», **no** en el tablero | Misma resolución: demanda (reserva o PED) → **Enviar** → Parte |
+
+**Caso típico de planta:** recibieron orden de producir, asignaron el artículo a las máquinas, pero **no gestionaron la reserva de seguridad** del pack ni hay pedido visible. Resultado: Parte con filas grises; tablero sin el artículo. No hay “enviar forzado” sin Urgente.
+
+### 3.6 Si cambia el pedido o la reserva después de Enviar
+
+**Regla clave:** los envíos ya confirmados **no se ajustan solos**. Cambiar un PED (cantidad, cancelación) o el `stock_reserva` del pack **solo recalcula** columnas derivadas (Pedido, Reserva, Urgente, sugerido a Enviar). El historial de envíos (`Enviado` / ledger) queda igual hasta que usted **envíe más** o **anule envíos**.
+
+#### Qué se recalcula al recargar el tablero
+
+| Columna | ¿Se actualiza sola? | Cómo |
+|---------|---------------------|------|
+| Pedido / Reserva / Urgente | **Sí** | Lectura en vivo de PED + `stock_reserva` del pack + stock en pipeline |
+| Sugerido **Enviar** | **Sí** | `máximo(0, Urgente − Fabricando)` |
+| **Enviado** (ledger) | **No** | Solo crece con «Enviar a producción» y baja con «Anular envíos» |
+| **Fabricando** | **No por demanda** | Baja al acreditar (Parte aprobado / Control de calidad) o al anular envíos no consumidos |
+
+«Actualizar» en el tablero **no reescribe** envíos: solo refresca la vista con la demanda actual.
+
+#### Ejemplos (después de haber enviado 300)
+
+Suponga que mandó **300** a fabricar y todavía no acreditó partes (Fabricando ≈ 300).
+
+| Cambio posterior | Urgente | Enviado / Fabricando | Enviar sugerido | Qué hacer |
+|------------------|---------|----------------------|-----------------|-----------|
+| Cancela el PED o baja mucho la reserva → demanda operativa ≈ 0 | → **0** | Siguen ≈ **300** | **0** | Queda **sobre-enviado**. Para bajar cupo: **Anular envíos** (lo no consumido por partes) o dejar que el Parte/CC acredite. |
+| Baja el pedido / reserva pero sigue faltando algo (ej. Urgente nuevo = 100) | → **100** | ≈ **300** | **0** (300 ya cubre 100) | No envíe más. Si no quiere producir de más, anule el excedente de envíos. |
+| Aumenta el PED o sube la reserva → Urgente nuevo = 450 | → **450** | ≈ **300** | ≈ **150** | Complete **Enviar 150** y confirme. Se **suma** un nuevo envío; el de 300 no se modifica. |
+| Aumenta demanda pero Fabricando ya es ≥ Urgente | → nuevo valor | sin cambio | **0** | Nada que enviar; el cupo del Parte ya alcanza. |
+
+#### Cómo subir o bajar el cupo a propósito
+
+**Subir (hacer Fabricando más grande)**
+
+1. Aumente demanda: más cantidad en PED y/o suba `stock_reserva` del **pack**.
+2. Tablero Par → recargar / Actualizar → verifique **Enviar > 0**.
+3. **Enviar a producción** por el delta.
+
+**Bajar (reducir Fabricando / Enviado)**
+
+1. Abra **Anular envíos** en el Tablero (supervisor).
+2. Anule filas de envío **no consumidas** por partes (el sistema no anula lo ya usado en un parte aprobado).
+3. Alternativa operativa: seguir con Parte/CC hasta acreditar; Fabricando baja aunque el ledger histórico de Enviado conserve el rastro de lo no anulado según reglas de pantalla.
+
+No existe «recalcular envíos = nueva demanda» ni anulación automática al cancelar un pedido.
+
+#### Relación con el Parte
+
+Mientras **Fabricando > 0**, el Parte permite cargar hasta ese cupo **aunque** Urgente ya sea 0 (porque cancelaron el pedido después). Eso es intencional del ledger: la planta ya tenía trabajo enviado. Si la orden se cayó, anule envíos antes de seguir produciendo de más.
+
 ---
 
 ## 4. Parte de producción
@@ -184,7 +247,7 @@ Hay dos formas de cargar lo producido.
 2. Use **Buscar artículo** en el encabezado para filtrar en vivo la grilla ya cargada (no recarga).
 3. Por artículo y operario, cargue **Docenas** y/o **Pares**. La fila indica el cupo **Fabricando** (número verde).
 4. Tiene dos acciones (mismo espíritu que el control de calidad):
-   - **Guardar borrador** — guarda la carga **sin** mover stock. Puede retomarla después. Si el **día ya tiene parte aprobado**, el borrador se deshabilita (chip *Parte aprobado*).
+   - **Guardar borrador** — guarda la carga **sin** mover stock. Puede retomarla después. Si el **día ya tiene parte aprobado**, el borrador se deshabilita (sigue visible).
    - **Guardar parte de producción** — **aprueba**: ingresa stock al depósito **Producción** (movimiento OPP) y consume cupo Fabricando.
 5. Si el turno / la fecha ya tiene **control de calidad confirmado**, el parte queda en **solo lectura** para ese alcance.
 
@@ -195,6 +258,23 @@ Hay dos formas de cargar lo producido.
 - Si *Ingresado* supera Fabricando, el número ingresado se ve en rojo y **no** podrá aprobar (el borrador sí puede guardar cantidades por encima para seguir cargando, pero al aprobar se valida el tope).
 
 **Ejemplo:** Fabricando = 17; tres operarios con 8 docenas cada uno → Ingresado = 288 → rojo. Hay que **Enviar** desde el tablero antes de poder aprobar 288.
+
+### 4.1.1 «Sin cupo Fabricando» (celdas deshabilitadas)
+
+Si la fila muestra el artículo en la máquina pero las celdas de turno dicen **Sin cupo Fabricando** y el badge verde está en **0 pares**:
+
+1. **Asignar artículo a máquina** solo hace visible la fila en el Parte. **No** crea producción ni cupo.
+2. El cupo aparece solo después de **Enviar a producción** en el Tablero (modo Par).
+3. Si el artículo **tampoco está en el tablero**, falta demanda: vea §3.5 (reserva del pack o PED).
+4. Secuencia: reserva/PED → Tablero **Actualizar** → **Enviar** → volver al Parte → **Cargar grilla**.
+
+Otros motivos de celda no editable:
+
+| Mensaje / estado | Causa | Qué hacer |
+|------------------|-------|-----------|
+| Sin cupo Fabricando | Fabricando = 0 (nunca enviaron o ya acreditaron todo) | Enviar desde tablero (§3.5 / §3.4) |
+| Sin operario en el roster | Turno sin operario planificado en esa máquina/fecha | Planificación de turnos (§8.8) |
+| Solo lectura / candado | Control de calidad **confirmado** | No editar el parte; correcciones de CC por movimiento de stock (§5) |
 
 **Avisos frecuentes**
 
@@ -246,10 +326,14 @@ Distribuir lo del **Parte** (y eventual extra en Producción) entre **Semi elabo
 
 ### Cómo usarlo
 
-1. Elija **Fecha** (y **Turno** opcional) → **Cargar grilla**.
+1. Elija **Fecha** (y **Turno** opcional) → **Cargar grilla**. En la barra oscura también puede **buscar** artículo y, si es supervisor, alternar **Solo pendiente** / **Ver roster**.
 2. La columna **Parte** muestra lo fabricado (referencial). Cargue **Semi elaborado**, **2da selección** y **Desperdicio** (docenas / pares).
-3. Tiene **dos botones**:
-   - **Guardar borrador** — guarda semi/2da/scrap **sin mover stock**. Puede cerrar y volver otro día: la grilla **precarga** lo guardado y muestra el chip *Borrador guardado*.
+   - Al abrir la grilla, **Semi elaborado** se precarga con lo atribuible del parte (docenas / pares).
+   - Al cargar **2da selección** o **Desperdicio**, la pantalla **descuenta automáticamente** esa cantidad de Semi elaborado (en pares equivalentes). Ejemplo: semi precargado 5 docenas (60 pares) + 6 pares en 2da → semi queda en 4 docenas y 6 pares.
+   - **Semi elaborado sigue siendo editable** a mano si necesita ajustar. Si después modifica 2da o desperdicio, el descuento se calcula sobre el semi **actual** (no vuelve a calcular desde la precarga).
+   - Si 2da + desperdicio superan el tope clasificable de la fila, Semi baja a 0 y la fila se marca en rojo hasta corregir.
+3. Los botones quedan fijos al pie de la grilla (siempre visibles):
+   - **Guardar borrador** — guarda semi/2da/scrap **sin mover stock**. Puede cerrar y volver otro día: la grilla **precarga** lo guardado y muestra el chip *Borrador* en la barra.
    - **Guardar control de calidad** — **confirma**: transfiere stock de Producción → Semi / 2da / Scrap y deja registro oficial. **Elimina** el borrador de esa fecha+turno.
 4. Solo el CC **confirmado** bloquea el Parte y cuenta como “hay control de calidad”. El **borrador no bloquea** el parte ni mueve Fabricando/stock.
 
@@ -405,9 +489,13 @@ Sin turno del día, el operario no podrá cargar su parte.
 
 ## 10. Problemas frecuentes
 
-- **No veo demanda en el tablero:** revise filtros de fecha y marcas; pulse Actualizar.
+- **No veo el artículo en el tablero (sí en el Parte / máquinas):** falta demanda. Sin PED ni `stock_reserva` del **pack**, o pack sin BOM, o filtro Solo urgentes. Ver §3.5. Asignar a máquina **no** lo publica en el tablero.
+- **No veo demanda en el tablero:** revise filtros de fecha y marcas; pulse Actualizar; desactive Solo urgentes; confirme reserva del pack o PED (§3.4 / §3.5).
+- **Cancelé / bajé el pedido o la reserva pero Fabricando sigue alto:** es normal. Los envíos **no se ajustan solos**. Anule envíos no consumidos o acredite con Parte/CC. Ver §3.6.
+- **Subí el pedido o la reserva y no puedo enviar el total de nuevo:** el sistema solo sugiere el **delta** (`Urgente − Fabricando`). Envíe esa diferencia; el envío anterior no se borra. Ver §3.6.
 - **Veo un pack en ámbar «Sin receta»:** el terminado no tiene lista de materiales. Use el ícono de pedidos para ver qué PED lo piden; complete la BOM del artículo. En Par no podrá enviar componentes de ese pack hasta tener receta.
 - **Reserva alta pero Urgente en 0:** es normal si el pipeline ya cubre la brecha. No envíe más; el colchón objetivo no es un faltante.
+- **Parte con «Sin cupo Fabricando» / celdas grises:** nunca enviaron (o Fabricando = 0). No se puede cargar hasta **Enviar** desde el tablero. Si el artículo no está en el tablero, primero genere demanda (§3.5 / §4.1.1).
 - **Quiero cargar más en el Parte que el verde (Fabricando):** primero **Enviar** desde el tablero (hace falta Urgente). Subir solo la columna Reserva del componente no alcanza; edite `stock_reserva` del **pack** y envíe.
 - **No sé en qué artículo tocar la reserva:** el pack terminado cuya BOM incluye el componente de la fila Par (ver §3.4).
 - **No puedo guardar el parte (aprobar):** no hay cupo en Fabricando, el día tiene CC confirmado, o faltan operarios en el turno.
@@ -460,6 +548,7 @@ Los pedidos migrados (comprobantes con origen cutover BEST) se abren desde el hu
 | **Urgente** | Faltante operativo a cubrir con producción. |
 | **Fabricando** | Enviado aún no acreditado; cupo del Parte. |
 | **Enviar** | Mandar trabajo desde el tablero a fábrica. |
+| **Anular envíos** | Baja envíos no consumidos; no ocurre solo al cambiar PED/reserva. |
 | **Borrador (parte o CC)** | Guardado intermedio **sin** stock. |
 | **Confirmar / aprobar** | Persiste oficialmente y **sí** mueve stock (según pantalla). |
 | **Pipeline** | Stock en Producción + Semi + 2da (cubre Urgente). |
@@ -467,4 +556,4 @@ Los pedidos migrados (comprobantes con origen cutover BEST) se abren desde el hu
 
 ---
 
-*Manual de usuario – Producción (MPR). Synap. Actualizado 28/07/2026.*
+*Manual de usuario – Producción (MPR). Synap. Actualizado 29/07/2026.*

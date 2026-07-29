@@ -369,7 +369,7 @@ Heredado de `operadores_por_linea` / roster del builder de planilla:
 ### UX (canon MPR)
 
 - Extiende `mpr/base_mpr.html`, contenedor `mpr-contenedor-pagina`.
-- Altura de página: `h-[calc(100dvh-7.5rem)]` / `md:h-[calc(100dvh-11rem)]` para caber bajo navbar + padding `base_app` + barra de estado; la grilla scrollea y la barra **Guardar borrador / Guardar parte** queda fija al pie de la tarjeta.
+- Altura de página: `h-[calc(100dvh-5.5rem)]` / `md:h-[calc(100dvh-7.5rem)]` con `-mt-4 md:-mt-8` (cancela el padding superior de `base_app`, mismo patrón que Reports) para pegar el chrome al navbar y maximizar la grilla; deja margen inferior para barra de estado. La grilla scrollea y la barra **Guardar borrador / Guardar parte** queda fija al pie de la tarjeta.
 - Tab order por fila: Mañana → Tarde → Noche → siguiente fila (docenas antes que pares).
 - Feedback vía `mprShowAviso` / `SynapMessages` y modales Synap; **sin** `alert`/`confirm`/`prompt`.
 - Día aprobado: chip «Parte aprobado» en el chrome (detalle con `mprShowAviso`); sin banners de estado.

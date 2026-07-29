@@ -18,20 +18,21 @@
   .parte-turno-tint-noche { border-left-color: rgb(196 181 253 / 0.6) !important; background-color: rgb(245 243 255 / 0.8); }
   .dark .parte-turno-tint-noche { border-left-color: rgb(109 40 217 / 0.4) !important; background-color: rgb(46 16 101 / 0.18); }
 </style>
-<section class="flex h-[calc(100dvh-7.5rem)] max-h-[calc(100dvh-7.5rem)] flex-col overflow-hidden bg-slate-50 py-1 transition-colors duration-300 dark:bg-slate-900 sm:py-1.5 md:h-[calc(100dvh-11rem)] md:max-h-[calc(100dvh-11rem)]"
+{# -mt cancela el padding superior de base_app (p-4/md:p-8) como en Reports; altura deja margen para status bar + footer Guardar #}
+<section class="flex h-[calc(100dvh-5.5rem)] max-h-[calc(100dvh-5.5rem)] flex-col overflow-hidden bg-slate-50 py-0 transition-colors duration-300 dark:bg-slate-900 -mt-4 md:-mt-8 md:h-[calc(100dvh-7.5rem)] md:max-h-[calc(100dvh-7.5rem)]"
          x-data="partePagina()">
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
-        {# Chrome denso slate-800 — sticky bajo navbar (mismo criterio que Tablero) #}
-        <div class="sticky top-14 z-40 mb-3 flex-shrink-0 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16">
+        {# Chrome denso slate-800 — sticky bajo navbar; z > thead de grilla para no tapar búsqueda #}
+        <div class="sticky top-14 z-[60] mb-2 flex-shrink-0 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16">
             <div class="rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 shadow-md sm:px-4">
-                {# items-end: atajos alineados con inputs (no con labels); título centrado en el bloque #}
+                {# Misma fila siempre (con o sin grilla cargada): título + filtros + buscar + atajos #}
                 <header class="flex flex-wrap items-end gap-x-3 gap-y-2">
                     <h1 class="shrink-0 self-center text-lg font-bold tracking-tight text-white sm:text-xl">Parte de producción</h1>
 
                     <form method="get"
                           action="{% url 'mpr:parte_produccion' %}"
-                          class="flex min-w-0 flex-1 flex-wrap items-end gap-2"
+                          class="flex min-w-0 flex-wrap items-end gap-2"
                           @submit="onSubmit($event)">
 
                         <label class="flex flex-col gap-0.5">
@@ -82,18 +83,6 @@
                         </button>
                     </form>
 
-                    {% if grilla_planilla and grilla_planilla.dia_aprobado and not grilla_planilla.dia_bloqueado_cc %}
-                    <button type="button"
-                            id="parte-chip-dia-aprobado"
-                            class="inline-flex h-9 shrink-0 items-center gap-1 self-end rounded-lg border border-sky-500/50 bg-sky-950/50 px-2.5 text-[11px] font-semibold text-sky-200 hover:bg-sky-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400"
-                            title="Ver detalle del estado aprobado"
-                            aria-label="Parte aprobado — ver detalle">
-                        <span class="material-icons text-sm leading-none" aria-hidden="true">verified</span>
-                        Parte aprobado
-                    </button>
-                    {% endif %}
-
-                    {# Búsqueda predictiva en grilla ya cargada (no envía a Cargar grilla) #}
                     <label class="flex min-w-[12rem] flex-1 flex-col gap-0.5 sm:min-w-[14rem] sm:max-w-md">
                         <span class="text-[10px] font-medium text-slate-400">Buscar artículo</span>
                         <div class="relative">
@@ -116,15 +105,15 @@
                         </div>
                     </label>
 
-                    <div class="ml-auto flex flex-wrap items-center gap-2">
+                    <div class="ml-auto flex flex-wrap items-center gap-2 self-end">
                         {% include "mpr/includes/chrome_nav_flujo.html" with current="parte" fecha_str=fecha_str only %}
-                        <a href="{% url 'mpr:manual_usuario' %}#parte-supervisor"
+                        <a href="{% url 'mpr:manual_usuario' %}#sin-cupo-fabricando"
                            target="_blank"
                            rel="noopener noreferrer"
-                           aria-label="Manual del parte"
+                           aria-label="Ayuda: Sin cupo Fabricando"
                            class="group relative inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-500 bg-slate-700 text-slate-200 hover:bg-slate-600 hover:text-white">
                             <span class="material-icons text-lg leading-none" aria-hidden="true">help_outline</span>
-                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Manual del parte" only %}
+                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Ayuda: Sin cupo Fabricando" only %}
                         </a>
                     </div>
                 </header>
@@ -168,7 +157,14 @@
                 <div class="text-sm text-blue-800 dark:text-blue-200">
                     <p class="font-medium">No hay artículos en planilla para <strong>{{ fecha_str }}</strong> con los filtros aplicados.</p>
                     <p class="mt-1 text-xs text-blue-700/90 dark:text-blue-300/90">
-                        Verificá la fecha, la línea o la máquina. Los artículos aparecen cuando hay cupo en Fabricando y planilla de control de calidad para ese día.
+                        Verificá la fecha, la línea o la máquina. Las filas salen de la
+                        <strong>asignación de artículos a máquinas</strong> vigente para esa fecha.
+                        Si esperabas un artículo y no aparece, asignalo en
+                        <a href="{% url 'mpr:maquinas_carga_articulos' %}" class="font-semibold underline">Asignar artículo a máquina</a>.
+                        Si aparece pero dice «Sin cupo Fabricando», primero
+                        <a href="{% url 'mpr:tablero_produccion' %}" class="font-semibold underline">Enviá desde el Tablero</a>
+                        (hace falta demanda: reserva del pack o pedido).
+                        <a href="{% url 'mpr:manual_usuario' %}#sin-cupo-fabricando" target="_blank" rel="noopener noreferrer" class="font-semibold underline">Ver ayuda</a>.
                     </p>
                 </div>
             </div>
@@ -180,6 +176,13 @@
         <div class="mb-3 flex-shrink-0 rounded-lg border border-purple-200 bg-purple-50 p-3 dark:border-purple-700/50 dark:bg-purple-900/20 sm:mb-4">
             <p class="text-xs text-purple-900 dark:text-purple-100">
                 <strong>Validación:</strong> al <em>aprobar</em>, la suma de turnos no puede superar Fabricando. Podés <strong>Guardar borrador</strong> en cualquier momento (cargas diferidas), incluso si el cupo ya permite aprobar. Si al aprobar faltan turnos en alguna máquina, se advierte sin bloquear.
+            </p>
+            <p class="mt-2 text-xs text-purple-900/90 dark:text-purple-100/90">
+                <strong>«Sin cupo Fabricando»:</strong> la fila está asignada a la máquina pero aún no hay envío desde el Tablero (o el cupo ya se acreditó).
+                Asignar artículo <em>no</em> crea cupo. Si el artículo no está en el Tablero, falta demanda (reserva del pack o pedido).
+                <a href="{% url 'mpr:tablero_produccion' %}" class="font-semibold underline">Ir al Tablero</a>
+                ·
+                <a href="{% url 'mpr:manual_usuario' %}#sin-cupo-fabricando" target="_blank" rel="noopener noreferrer" class="font-semibold underline">Cómo resolverlo</a>.
             </p>
         </div>
         {% endif %}
@@ -206,6 +209,7 @@
                   data-bloquear-fabricando="{% if bloquear_parte_supera_fabricando %}1{% else %}0{% endif %}"
                   data-pares-por-docena="{{ unidades_por_docena_parte|default:12 }}"
                   data-dia-aprobado="{% if grilla_planilla.dia_aprobado %}1{% else %}0{% endif %}"
+                  data-dia-bloqueado-cc="{% if grilla_planilla.dia_bloqueado_cc %}1{% else %}0{% endif %}"
                   data-mpr-loading-title="Registrando parte..."
                   data-mpr-loading-subtitle="Guardando las cantidades por turno.">
                 {% csrf_token %}
@@ -218,11 +222,11 @@
                 <table class="parte-grilla w-full border-collapse" style="min-width: 56rem;">
                         <caption class="sr-only">Grilla de producción máquina × artículo — {{ fecha_str }}</caption>
                         <thead>
-                            <tr class="sticky top-0 z-40 border-b border-slate-200 bg-slate-50/95 dark:border-slate-600 dark:bg-slate-800/90">
-                                <th scope="col" class="sticky left-0 top-0 z-50 w-20 min-w-[5rem] bg-slate-50/95 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400">
+                            <tr class="sticky top-0 z-30 border-b border-slate-200 bg-slate-50/95 dark:border-slate-600 dark:bg-slate-800/90">
+                                <th scope="col" class="sticky left-0 top-0 z-40 w-20 min-w-[5rem] bg-slate-50/95 px-2 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-slate-800/95 dark:text-slate-400">
                                     Máq.
                                 </th>
-                                <th scope="col" class="sticky left-20 top-0 z-50 min-w-[13rem] max-w-[22rem] border-r border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
+                                <th scope="col" class="sticky left-20 top-0 z-40 min-w-[13rem] max-w-[22rem] border-r border-slate-200 bg-slate-50/95 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
                                     Artículo
                                 </th>
                                 {% for col in grilla_planilla.turnos_columnas %}
@@ -234,7 +238,7 @@
                                     <span class="mt-0.5 block text-[10px] font-normal text-slate-500 dark:text-slate-400">Docenas · Pares</span>
                                 </th>
                                 {% endfor %}
-                                <th scope="col" class="sticky right-0 top-0 z-50 min-w-[7.5rem] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
+                                <th scope="col" class="sticky right-0 top-0 z-40 min-w-[7.5rem] border-l border-slate-200 bg-slate-50/95 px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:bg-slate-800/95 dark:text-slate-400">
                                     Cupo Fabricando
                                 </th>
                             </tr>
@@ -352,8 +356,12 @@
                                         </div>
                                     {% else %}
                                         {# Sin cupo Fabricando: inputs deshabilitados #}
-                                        <div class="flex min-h-[3.5rem] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 text-center dark:border-slate-700 dark:bg-slate-900/40">
-                                            <p class="text-[10px] font-medium text-slate-400 dark:text-slate-500">Sin cupo Fabricando</p>
+                                        <div class="flex min-h-[3.5rem] items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-2 text-center dark:border-slate-700 dark:bg-slate-900/40"
+                                             title="Sin envío a producción (Fabricando = 0). Cargá reserva del pack o un pedido, Enviá desde el Tablero y volvé a cargar la grilla.">
+                                            <p class="text-[10px] font-medium leading-snug text-slate-400 dark:text-slate-500">
+                                                Sin cupo Fabricando
+                                                <span class="mt-0.5 block font-normal text-slate-400/90 dark:text-slate-500/90">Enviá desde el Tablero</span>
+                                            </p>
                                         </div>
                                     {% endif %}
                                 </td>
@@ -378,7 +386,7 @@
                 </div>
                 </div>
 
-                <div class="flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800 sm:gap-3 sm:px-5">
+                <div class="relative z-20 flex flex-shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800 sm:gap-3 sm:px-5">
                     <button type="button"
                             id="btn-guardar-borrador"
                             {% if grilla_planilla.dia_bloqueado_cc or grilla_planilla.dia_aprobado %}disabled aria-disabled="true"{% endif %}
@@ -881,18 +889,6 @@
             ev.preventDefault();
             if (window.mprHidePostLoading) { window.mprHidePostLoading(); }
         }
-    });
-})();
-
-(function () {
-    var chip = document.getElementById('parte-chip-dia-aprobado');
-    if (!chip) { return; }
-    chip.addEventListener('click', function () {
-        if (!window.mprShowAviso) { return; }
-        window.mprShowAviso(
-            'Este día ya tiene el parte aprobado. Las correcciones se hacen con «Guardar parte de producción» (ajusta stock por diferencia). «Guardar borrador» no está disponible.',
-            { tipo: 'info', titulo: 'Parte aprobado' }
-        );
     });
 })();
 
