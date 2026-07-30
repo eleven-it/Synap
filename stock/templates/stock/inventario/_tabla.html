@@ -51,20 +51,20 @@
         {% for etapa in r.etapas %}
         <td class="px-3 py-2.5 text-right align-middle text-sm tabular-nums">
           {% if modo_presentacion == "docenas" %}
-          <span class="block leading-tight text-slate-900 dark:text-slate-100">{{ etapa.celda.docenas_display }}</span>
-          <span class="block text-[11px] leading-tight text-slate-500 dark:text-slate-400">{{ etapa.celda.unidades_display }}</span>
+          <span class="block leading-tight {% if etapa.celda.es_negativo %}font-semibold text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-slate-100{% endif %}">{{ etapa.celda.docenas_display }}</span>
+          <span class="block text-[11px] leading-tight {% if etapa.celda.es_negativo %}text-rose-500/90 dark:text-rose-400/80{% else %}text-slate-500 dark:text-slate-400{% endif %}">{{ etapa.celda.unidades_display }}</span>
           {% else %}
-          <span class="block leading-tight text-slate-900 dark:text-slate-100">{{ etapa.celda.unidades_display }}</span>
+          <span class="block leading-tight {% if etapa.celda.es_negativo %}font-semibold text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-slate-100{% endif %}">{{ etapa.celda.unidades_display }}</span>
           {% endif %}
         </td>
         {% endfor %}
         {% if filtros.ambito != "terminados" %}
         <td class="bg-slate-100/70 px-3 py-2.5 text-right align-middle text-sm font-semibold tabular-nums dark:bg-slate-700/40">
           {% if modo_presentacion == "docenas" %}
-          <span class="block leading-tight text-slate-900 dark:text-slate-100">{{ r.consolidado.docenas_display }}</span>
-          <span class="block text-[11px] leading-tight text-slate-500 dark:text-slate-400">{{ r.consolidado.unidades_display }}</span>
+          <span class="block leading-tight {% if r.consolidado.es_negativo %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-slate-100{% endif %}">{{ r.consolidado.docenas_display }}</span>
+          <span class="block text-[11px] leading-tight {% if r.consolidado.es_negativo %}text-rose-500/90 dark:text-rose-400/80{% else %}text-slate-500 dark:text-slate-400{% endif %}">{{ r.consolidado.unidades_display }}</span>
           {% else %}
-          <span class="block leading-tight text-slate-900 dark:text-slate-100">{{ r.consolidado.unidades_display }}</span>
+          <span class="block leading-tight {% if r.consolidado.es_negativo %}text-rose-600 dark:text-rose-400{% else %}text-slate-900 dark:text-slate-100{% endif %}">{{ r.consolidado.unidades_display }}</span>
           {% endif %}
         </td>
         {% endif %}
@@ -75,12 +75,18 @@
           <div class="mx-auto flex max-w-md flex-col items-center gap-2">
             <span class="material-icons text-4xl text-slate-300 dark:text-slate-600" aria-hidden="true">inventory_2</span>
             <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">Sin artículos para mostrar</p>
-            {% if not filtros.incluir_ceros %}
+            {% if filtros.filtro_stock == "con_stock" %}
             <p class="text-xs text-slate-500 dark:text-slate-400">
-              <strong class="font-semibold text-slate-600 dark:text-slate-300">Solo con stock</strong> exige saldo
+              <strong class="font-semibold text-slate-600 dark:text-slate-300">Con stock</strong> exige saldo
               <strong class="font-semibold text-slate-600 dark:text-slate-300">&gt; 0</strong> en alguna etapa del tipo elegido
               ({% if filtros.ambito == "terminados" %}Terminado{% else %}Producción / Semi / 2da{% endif %}).
-              Los saldos en cero o negativos no se listan. Probá <strong class="font-semibold">Todos los artículos</strong> o revisá los depósitos MPR.
+              Probá <strong class="font-semibold">Todos</strong> o <strong class="font-semibold">Sin stock</strong> (ceros y negativos).
+            </p>
+            {% elif filtros.filtro_stock == "sin_stock" %}
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+              <strong class="font-semibold text-slate-600 dark:text-slate-300">Sin stock</strong> lista artículos con saldo
+              <strong class="font-semibold text-slate-600 dark:text-slate-300">0 o negativo</strong> en todas las etapas del tipo.
+              No hay filas con ese criterio; probá <strong class="font-semibold">Todos</strong>.
             </p>
             {% else %}
             <p class="text-xs text-slate-500 dark:text-slate-400">No hay artículos con los filtros seleccionados. Ajustá las marcas o la búsqueda.</p>

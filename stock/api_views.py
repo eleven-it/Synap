@@ -36,19 +36,22 @@ def api_inventario_articulos(request):
             marcas.append(int(str(m).strip()))
         except (TypeError, ValueError):
             continue
-    incluir_ceros = str(request.GET.get("incluir_ceros") or "0").strip().lower() in (
+    incluir_ceros = str(request.GET.get("incluir_ceros") or "").strip().lower() in (
         "1",
         "true",
         "yes",
         "si",
         "sí",
     )
-    ambito = (request.GET.get("ambito") or "fabricados").strip().lower()
+    filtro_stock = (request.GET.get("filtro_stock") or "").strip() or None
+    if not filtro_stock and "incluir_ceros" in request.GET:
+        filtro_stock = "todos" if incluir_ceros else "con_stock"
+    ambito = (request.GET.get("ambito") or "terminados").strip().lower()
     items = buscar_articulos_inventario(
         base_empresa,
         q,
         marcas_incluidos=marcas,
-        incluir_ceros=incluir_ceros,
+        filtro_stock=filtro_stock,
         ambito=ambito,
         limit=limit,
     )

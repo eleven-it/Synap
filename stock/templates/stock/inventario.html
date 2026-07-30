@@ -55,7 +55,7 @@
       </template>
       {% if filtros.marcas_incluidos %} · {{ filtros.marcas_incluidos|length }} marca{{ filtros.marcas_incluidos|length|pluralize }} seleccionada{{ filtros.marcas_incluidos|length|pluralize }}{% endif %}
       {% if filtros.ambito == "terminados" %} · terminados{% else %} · fabricados{% endif %}
-      {% if filtros.incluir_ceros %} · incluye sin stock{% else %} · solo saldo &gt; 0{% endif %}
+      {% if filtros.filtro_stock == "con_stock" %} · solo saldo &gt; 0{% elif filtros.filtro_stock == "sin_stock" %} · sin stock (≤ 0){% else %} · todos{% endif %}
     </p>
     {% if total_pages > 1 %}
     <p class="text-xs text-slate-500 dark:text-slate-400" x-show="!busqueda.trim()">Página <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ page }}</span> de <span class="tabular-nums">{{ total_pages }}</span></p>
@@ -82,8 +82,8 @@
 function stockInventarioHub() {
   return {
     presentacion: '{{ modo_presentacion|default:"unidades" }}',
-    ambito: '{{ filtros.ambito|default:"fabricados"|escapejs }}',
-    incluirCeros: {{ filtros.incluir_ceros|yesno:"true,false" }},
+    ambito: '{{ filtros.ambito|default:"terminados"|escapejs }}',
+    filtroStock: '{{ filtros.filtro_stock|default:"todos"|escapejs }}',
     busqueda: '{{ filtros.busqueda|default:""|escapejs }}',
     debounceTimer: null,
     init() {},
@@ -111,9 +111,9 @@ function stockInventarioHub() {
       this.$refs.filtrosForm.querySelector('[name=ambito]').value = modo;
       this.$refs.filtrosForm.submit();
     },
-    toggleIncluirCeros() {
-      this.incluirCeros = !this.incluirCeros;
-      this.$refs.filtrosForm.querySelector('[name=incluir_ceros]').value = this.incluirCeros ? '1' : '0';
+    cambiarFiltroStock(modo) {
+      this.filtroStock = modo;
+      this.$refs.filtrosForm.querySelector('[name=filtro_stock]').value = modo;
       this.$refs.filtrosForm.submit();
     },
     onBusquedaInput() {
