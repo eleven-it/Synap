@@ -92,20 +92,7 @@ Total) se calculan en el cliente sólo si el backend no los envía.
     </p>
   </div>
 
-  <!-- Alarmas (informativas, no bloquean) -->
-  <div id="dabra-alarmas"
-       class="hidden mb-4 rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-900/20 p-4">
-    <div class="flex items-center gap-2 mb-2">
-      <span class="material-icons text-amber-600 dark:text-amber-400 text-base">warning_amber</span>
-      <span class="text-sm font-semibold text-amber-700 dark:text-amber-300">
-        Alarmas <span id="dabra-alarmas-count" class="font-normal"></span>
-      </span>
-    </div>
-    <ul id="dabra-alarmas-lista" class="list-disc pl-8 text-xs text-amber-700 dark:text-amber-300 space-y-1"></ul>
-    <p class="text-xs text-amber-600 dark:text-amber-400 mt-2">
-      Las alarmas son informativas: no impiden descargar el Excel.
-    </p>
-  </div>
+  <!-- Alarmas: sólo banner vía avisar(); las filas afectadas se marcan en ámbar en la grilla. -->
 
   <!-- Resultados -->
   <div id="dabra-resultados" class="hidden bg-white dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
@@ -184,9 +171,6 @@ Total) se calculan en el cliente sólo si el backend no los envía.
   var elMsg = document.getElementById("dabra-msg");
   var elPlaceholder = document.getElementById("dabra-placeholder");
   var elResultados = document.getElementById("dabra-resultados");
-  var elAlarmas = document.getElementById("dabra-alarmas");
-  var elAlarmasLista = document.getElementById("dabra-alarmas-lista");
-  var elAlarmasCount = document.getElementById("dabra-alarmas-count");
   var elErrores = document.getElementById("dabra-errores");
   var elErroresLista = document.getElementById("dabra-errores-lista");
   var elErroresCount = document.getElementById("dabra-errores-count");
@@ -403,16 +387,42 @@ Total) se calculan en el cliente sólo si el backend no los envía.
     return false;
   }
 
-  function renderCuerpo(elTbody, columnas, filas, elNota, etiqueta) {
+  function textoCeldaVacio(v) {
+    return v === null || v === undefined || String(v).trim() === "";
+  }
+
+  /** Filas REPORTE sin remito vinculado (CompRef/NumeroRef vacíos). */
+  function filaReporteSinRemito(fila) {
+    return textoCeldaVacio(valorCrudo(fila, ["comp_ref", "compref", "comprobante_ref"])) ||
+           textoCeldaVacio(valorCrudo(fila, ["numero_ref", "numeroref", "nro_ref"]));
+  }
+
+  /** Filas TOTAL FACTURAS sin nro. de remito. */
+  function filaTotalSinRemito(fila) {
+    return textoCeldaVacio(valorCrudo(fila, ["nro_remito", "numero_remito", "nroremito"]));
+  }
+
+  function renderCuerpo(elTbody, columnas, filas, elNota, etiqueta, esFilaAlarma) {
     var q = (elBuscar.value || "").trim().toLowerCase();
     elTbody.innerHTML = "";
     var visibles = filas.filter(function (f) { return coincideBusqueda(f, columnas, q); });
+    var nAlarmas = 0;
     visibles.slice(0, MAX_FILAS_PREVIEW).forEach(function (fila) {
       var tr = document.createElement("tr");
-      tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/30";
+      var alarma = typeof esFilaAlarma === "function" && esFilaAlarma(fila);
+      if (alarma) {
+        nAlarmas += 1;
+        tr.className = "bg-amber-50 dark:bg-amber-900/25 hover:bg-amber-100 dark:hover:bg-amber-900/40";
+        tr.title = "Sin remito vinculado: CompRef/NumeroRef vacíos.";
+      } else {
+        tr.className = "hover:bg-slate-50 dark:hover:bg-slate-700/30";
+      }
       columnas.forEach(function (c) {
         var td = document.createElement("td");
-        td.className = "px-4 py-2.5 text-slate-700 dark:text-slate-300 whitespace-nowrap " +
+        td.className = "px-4 py-2.5 whitespace-nowrap " +
+                       (alarma
+                         ? "text-amber-900 dark:text-amber-100 "
+                         : "text-slate-700 dark:text-slate-300 ") +
                        (alineaDerecha(c) ? "text-right tabular-nums" : "text-left");
         td.textContent = formatCelda(c, fila);
         tr.appendChild(td);
@@ -427,6 +437,9 @@ Total) se calculan en el cliente sólo si el backend no los envía.
     }
     if (q) { notas.push("Filtro aplicado: " + visibles.length + " de " + filas.length + " " + etiqueta + "."); }
     if (!visibles.length) { notas.push("Sin " + etiqueta + " para mostrar."); }
+    if (nAlarmas && !q) {
+      notas.push("Filas en ámbar: sin remito vinculado (CompRef/NumeroRef vacíos).");
+    }
     if (notas.length) {
       elNota.textContent = notas.join(" ");
       elNota.classList.remove("hidden");
@@ -467,18 +480,18 @@ Total) se calculan en el cliente sólo si el backend no los envía.
 
     var visReporte = renderCuerpo(
       document.getElementById("dabra-tbody-reporte"), colsReporte, estado.filas,
-      document.getElementById("dabra-nota-reporte"), "líneas"
+      document.getElementById("dabra-nota-reporte"), "líneas", filaReporteSinRemito
     );
     var visTotales = renderCuerpo(
       document.getElementById("dabra-tbody-totales"), estado.colsTotales, estado.totales,
-      document.getElementById("dabra-nota-totales"), "facturas"
+      document.getElementById("dabra-nota-totales"), "facturas", filaTotalSinRemito
     );
     renderPieTotales();
 
     document.getElementById("dabra-count-reporte").textContent = "(" + visReporte + ")";
     document.getElementById("dabra-count-totales").textContent = "(" + visTotales + ")";
 
-    renderLista(elAlarmas, elAlarmasLista, elAlarmasCount, estado.alarmas);
+    // Alarmas: sólo banner (avisar); sin lista extensa. Filas afectadas en ámbar.
     renderLista(elErrores, elErroresLista, elErroresCount, estado.errores);
     actualizarExport();
 
@@ -542,7 +555,11 @@ Total) se calculan en el cliente sólo si el backend no los envía.
         } else if (!estado.filas.length) {
           avisar("Sin resultados: no hay facturas DABRA en " + etiquetaPeriodo(f) + ".", "info");
         } else if (estado.alarmas.length) {
-          avisar("Informe generado con " + estado.alarmas.length + " alarma(s). Podés exportar el Excel.", "warning");
+          avisar(
+            "Informe generado con " + estado.alarmas.length +
+              " alarma(s). Las filas en ámbar tienen datos faltantes; podés exportar el Excel.",
+            "warning"
+          );
         } else {
           avisar("Informe generado para " + etiquetaPeriodo(f) + ".", "success");
         }
