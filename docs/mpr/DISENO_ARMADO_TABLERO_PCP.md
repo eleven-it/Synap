@@ -66,6 +66,7 @@ La pantalla sustituye el flujo POS+carrito como **vista principal** (`vista=tabl
 | 9 | **Sin operario** en cabecera (paridad decisión previa armado unificado). |
 | 10 | **Shell visual:** `slate-800` hero + acento **emerald** (1ra) / **amber** (2da), no `gray-*` legacy. |
 | 11 | **Columnas visibles (29/07/2026):** Artículo, Terminado, Máx. armable, Armar. Ocultas: fecha entrega, Pedido, Reserva, Resta urgente, Resta armar. |
+| 12 | **Chrome (30/07/2026):** botón **Actualizar** (naranja Synap `bg-orange-500`) recarga la grilla con los filtros actuales. El atajo **Carrito** del chrome queda **deprecado**; Armado 2da sigue abriendo POS vía **Componer**. |
 
 ---
 
