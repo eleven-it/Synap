@@ -67,6 +67,8 @@ Misma lógica que Trazabilidad VB6 (`trz_trazabilidad.frm`):
 - FA con >1 remito → alarma; TOTAL usa primer remito
 - Sin `NroCalle` en remito/FA
 
+En el dashboard **no** se lista cada alarma (puede ser muy extensa): solo el banner de resumen y las filas afectadas se marcan en **ámbar** (REPORTE sin CompRef/NumeroRef; TOTAL FACTURAS sin Nro. Remito).
+
 ## Errores (bloquean export — HTTP 409)
 
 Validación Σ por FA **antes** de expansión multi-remito:
