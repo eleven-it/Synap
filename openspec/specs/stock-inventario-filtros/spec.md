@@ -62,41 +62,35 @@ Criterios LIKE: `id_manual`, `CodArtProv`, `NombreArticulo`, `NroCodBarra`, `Nro
 
 Con `q` < 2 caracteres: `articulos: []`.
 
-### REQ-FIL-04 — Búsqueda predictiva (UI)
+### REQ-FIL-04 — Buscar en tabla (cliente)
 
-Combobox MUST seguir accesibilidad de `mpr/reportes/_busqueda_tabla_articulos.html` (teclado, debounce ~300 ms).
+El campo **Buscar en tabla** MUST filtrar en vivo (Alpine/`data-search`) las filas **ya cargadas** del ámbito, sin GET por tecla.
 
-Al seleccionar sugerencia, MUST navegar a `?id_articulo={IDArt}` preservando `marcas_incluidos`, `filtro_stock`, `presentacion`.
+MUST indexar al menos nombre, talle, color y código compuesto.
 
-La búsqueda MUST encontrar artículos en **cualquier página** del resultado paginado (ej. artículo en fila 200 con `page=1` activo).
-
-El campo **Buscar** de la barra de filtros MUST aplicar `q` en el servidor (debounce → GET del formulario), MUST NOT filtrar solo las filas DOM de la página actual.
+La API predictiva `GET /stock/api/inventario/articulos/` permanece disponible para integraciones / evolución a combobox; no es el canal del campo de la barra de filtros en v1 de carga completa.
 
 ### REQ-FIL-05 — Filtro por id_articulo
 
 `id_articulo` MUST mostrar **una fila** para ese artículo, aunque consolidado sea 0.
 
-MUST ignorar paginación (página 1, una fila).
-
 Si no existe: empty state sin error 500.
 
-### REQ-FIL-06 — Filtro por q (tabla)
+### REQ-FIL-06 — Texto `q` en URL (opcional)
 
-`q` (≥ 2 caracteres) MUST filtrar la tabla en servidor sobre el **universo completo**, igual que la API, antes de paginar.
-
-Resultado paginado: primero filtrar universo, luego `LIMIT 150 OFFSET`.
+Si la URL trae `q`, MUST usarse solo como valor inicial del filtro cliente (prefill). MUST NOT reducir el universo SQL de la tabla (salvo `id_articulo`).
 
 ### REQ-FIL-07 — Combinación de filtros
 
-`marcas_incluidos`, `q`, `id_articulo`, `filtro_stock` MUST combinarse.
+`marcas_incluidos`, `id_articulo`, `filtro_stock` MUST aplicarse en servidor al cargar la grilla.
 
-Si `id_articulo` presente: `q` ignorado; `marcas_incluidos` aplica (empty si marca no coincide).
+El texto de «Buscar en tabla» MUST aplicarse solo en cliente sobre ese resultado.
 
 ### REQ-FIL-08 — Persistencia en URL
 
-Filtros activos MUST reflejarse en URL GET.
+Filtros de servidor activos MUST reflejarse en URL GET (`ambito`, `filtro_stock`, `presentacion`, `marcas_incluidos`, `id_articulo`).
 
-Links de paginación MUST conservar `marcas_incluidos`, `q`, `id_articulo`, `filtro_stock`, `presentacion`.
+Al enviar **Actualizar** / cambiar ámbito / presentación / saldo, MUST usarse modal de espera Synap con demora de **2000 ms** (`data-synap-loading-delay-ms`) para no parpadear en cargas rápidas.
 
 ### REQ-FIL-09 — Contador de resultados
 

@@ -10691,12 +10691,19 @@ def _max_packs_armado_1ra_bulk(
                 lineas = bom_por_abm.get(id_abm) or []
                 if not lineas:
                     continue
-                max_packs = 0
+                # ``0`` es un límite válido: no usarlo como centinela porque
+                # un componente sin saldo no puede quedar sobrescrito por el
+                # saldo positivo de otro componente posterior.
+                max_packs: Optional[int] = None
                 for id_c, qty in lineas:
                     saldo = saldos.get(id_c, 0.0)
                     packs_i = int(saldo // qty)
-                    max_packs = min(max_packs, packs_i) if max_packs else packs_i
-                resultado[id_pack] = max(0, max_packs)
+                    max_packs = (
+                        packs_i
+                        if max_packs is None
+                        else min(max_packs, packs_i)
+                    )
+                resultado[id_pack] = max(0, max_packs or 0)
     except Exception as e:
         logger.warning(
             "_max_packs_armado_1ra_bulk %s dep=%s: %s",

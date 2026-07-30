@@ -175,7 +175,15 @@
         if (els.barDet) els.barDet.classList.add('hidden');
         if (els.progText) els.progText.classList.add('hidden');
         if (els.currentEl) els.currentEl.classList.add('hidden');
-        _showModalShell(els);
+        var delayRaw = _formAttr(form, 'data-synap-loading-delay-ms', 'data-mpr-loading-delay-ms');
+        var delayMs = parseInt(delayRaw || '0', 10);
+        if (isNaN(delayMs) || delayMs < 0) delayMs = 0;
+        var show = function () { _showModalShell(els); };
+        if (delayMs > 0) {
+            form._synapLoadingDelayTimer = setTimeout(show, delayMs);
+        } else {
+            show();
+        }
         // Los botones disabled no viajan en el POST: preservar name/value del submitter.
         if (submitter && submitter.name) {
             var preserve = form.querySelector(
@@ -197,6 +205,17 @@
         form.querySelectorAll('input[type="submit"]').forEach(function (inp) {
             inp.disabled = true;
         });
+    };
+
+    var _origHide = window.synapHidePostLoading;
+    window.synapHidePostLoading = function () {
+        document.querySelectorAll('form.synap-post-loading, form.mpr-post-loading').forEach(function (form) {
+            if (form._synapLoadingDelayTimer) {
+                clearTimeout(form._synapLoadingDelayTimer);
+                form._synapLoadingDelayTimer = null;
+            }
+        });
+        if (typeof _origHide === 'function') _origHide();
     };
 
     // Aliases MPR (compat)

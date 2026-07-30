@@ -37,11 +37,12 @@ Detalle de modelo CE: [../mpr/ARTICULO_CE_TALLES_COLOR.md](../mpr/ARTICULO_CE_TA
 |-----------|-------------|
 | `ambito` | `terminados` (default) o `fabricados` |
 | `marcas_incluidos` | Multi-select tags (vacío = todas) |
-| `q` | Búsqueda server-side (mín. 2 caracteres): nombre, talle, color, códigos. Debounce ~400 ms → GET; aplica al universo completo (no solo la página actual) |
+| `q` | Prefill del filtro cliente «Buscar en tabla» (no filtra SQL de la grilla) |
 | `id_articulo` | Una fila concreta (también filtrada por ámbito) |
 | `filtro_stock` | `todos` (default) · `con_stock` · `sin_stock` |
 | `presentacion` | `unidades` (pares, default) o `docenas` (docenas de pares) |
-| `page` | Paginación (150 filas) |
+
+La grilla carga **todo el ámbito** (tope 5000). El campo **Buscar en tabla** filtra en vivo en el cliente. Si la carga tarda más de 2 s se muestra el modal Synap de espera.
 
 | `filtro_stock` | Criterio (etapas del ámbito activo) |
 |----------------|--------------------------------------|

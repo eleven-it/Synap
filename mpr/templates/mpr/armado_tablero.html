@@ -7,7 +7,9 @@
 <style>[x-cloak]{display:none!important}</style>
 <section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5">
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12"
-         x-data="armadoTableroState({{ resultado_lote_json|default:'null'|safe }})">
+         x-data="armadoTableroState()"
+         x-init="cargarResultado((document.getElementById('resultado-lote-armado') || {}).textContent || 'null')">
+        {{ resultado_lote|json_script:"resultado-lote-armado" }}
 
         {# Chrome denso slate-800 — sticky bajo navbar (mismo criterio que Tablero / Parte / CC) #}
         <div class="sticky top-14 z-40 mb-3 flex-shrink-0 bg-slate-50/95 pb-0.5 backdrop-blur-sm dark:bg-slate-900/95 md:top-16">
@@ -197,6 +199,25 @@
             <div class="relative max-w-lg rounded-xl border bg-white p-5 shadow-xl dark:bg-slate-800">
                 <h2 class="text-lg font-semibold">Resultado del armado</h2>
                 <p class="mt-2 text-sm"><span x-text="modalResultado.exitosos.length"></span> grabado(s), <span x-text="modalResultado.fallidos.length"></span> con error.</p>
+                <div x-show="modalResultado.exitosos.length" x-cloak class="mt-4 space-y-2">
+                    <h3 class="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Grabados</h3>
+                    <template x-for="(ex, idx) in modalResultado.exitosos" :key="'ex-' + idx">
+                        <p class="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
+                            <span x-text="ex.descripcion_pack || ex.descripcion_articulo_pack || ex.id_articulo_pack"></span>
+                            · <span x-text="ex.cantidad_grabada != null ? ex.cantidad_grabada : ex.cantidad_packs"></span>
+                            · Comp. <span x-text="ex.nro_comprobante || '—'"></span>
+                        </p>
+                    </template>
+                </div>
+                <div x-show="modalResultado.fallidos.length" x-cloak class="mt-4 space-y-2">
+                    <h3 class="text-sm font-semibold text-rose-700 dark:text-rose-300">No grabados</h3>
+                    <template x-for="(fa, idx) in modalResultado.fallidos" :key="'fa-' + idx">
+                        <p class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-900 dark:bg-rose-950/40 dark:text-rose-100">
+                            <strong x-text="fa.descripcion_pack || fa.id_articulo_pack"></strong>:
+                            <span x-text="fa.error || 'Error desconocido'"></span>
+                        </p>
+                    </template>
+                </div>
                 {% if modo == '1ra' and puede_imputar_pedido %}
                 <a href="{% url 'mpr:imputacion_armado_1ra' %}" class="mt-3 inline-flex text-sm font-medium text-emerald-600">Imputación de pedido →</a>
                 {% endif %}
@@ -211,9 +232,7 @@
 {% block extra_js %}
 {{ block.super }}
 <script>
-window.armadoTableroState = function (resultadoInicial) {
-    var r = resultadoInicial && typeof resultadoInicial === 'object' ? resultadoInicial : null;
-    var tiene = r && ((r.exitosos && r.exitosos.length) || (r.fallidos && r.fallidos.length));
+window.armadoTableroState = function () {
     return {
         armadoModalOpen: false,
         armadoCount: 0,
@@ -221,9 +240,22 @@ window.armadoTableroState = function (resultadoInicial) {
         armadoEmpty: false,
         busqueda: '',
         modalResultado: {
-            open: !!tiene,
-            exitosos: (r && r.exitosos) || [],
-            fallidos: (r && r.fallidos) || []
+            open: false,
+            exitosos: [],
+            fallidos: []
+        },
+        cargarResultado: function (texto) {
+            var resultado = null;
+            try {
+                resultado = JSON.parse(texto || 'null');
+            } catch (_) {
+                resultado = null;
+            }
+            this.modalResultado.exitosos = (resultado && resultado.exitosos) || [];
+            this.modalResultado.fallidos = (resultado && resultado.fallidos) || [];
+            this.modalResultado.open = Boolean(
+                this.modalResultado.exitosos.length || this.modalResultado.fallidos.length
+            );
         },
         abrirModalArmado: function () {
             var lineas = 0;

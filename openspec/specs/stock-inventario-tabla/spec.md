@@ -101,15 +101,17 @@ En modo **docenas**, cada celda MUST mostrar **docenas arriba y unidades abajo**
 
 Thead MUST duplicar subencabezados Docenas/Unidades cuando `presentacion=docenas`.
 
-### REQ-INV-10 — Paginación de tabla
+### REQ-INV-10 — Carga completa del ámbito (sin paginación de tabla)
 
-The system MUST paginar la **tabla renderizada** en servidor con **150** filas por página.
+The system MUST cargar en **una sola respuesta** todos los artículos del ámbito/filtros de servidor (marcas, saldo, `id_articulo`), con tope de seguridad configurable (`PAGE_SIZE`, default 5000).
 
-Query param `page` (entero ≥ 1) MUST controlar la página.
+The UI MUST NOT paginar la grilla (sin `page` / Anterior / Siguiente).
 
-The UI MUST mostrar total de artículos que cumplen filtros y página actual en español.
+Si el total supera el tope, MUST mostrarse aviso de truncado y la cantidad cargada.
 
-La paginación MUST NOT limitar el universo de la búsqueda predictiva (ver `stock-inventario-filtros`).
+La búsqueda de texto en grilla MUST filtrar en **cliente** sobre las filas ya cargadas (ver `stock-inventario-filtros`).
+
+Si la carga (inicial o al cambiar filtros) tarda más de **2 segundos**, MUST mostrarse el modal de espera Synap (`synap-post-loading` / `synapShowPostLoadingProgress`).
 
 ### REQ-INV-11 — UI canónica
 
@@ -192,13 +194,15 @@ Tests y referencias de menú a `stock:consulta_ficha_stock` MUST eliminarse o ac
 - **WHEN** se renderiza la fila
 - **THEN** Consolidado muestra 35
 
-### ESC-INV-08 — Paginación
+### ESC-INV-08 — Carga completa del ámbito
 
 - **GIVEN** 200 artículos del ámbito que cumplen filtros
-- **WHEN** carga `?page=1`
-- **THEN** muestra 150 filas y enlace a página 2
-- **WHEN** carga `?page=2`
-- **THEN** muestra 50 filas restantes
+- **WHEN** carga `/stock/inventario/`
+- **THEN** muestra las 200 filas en una sola grilla (sin paginación)
+- **WHEN** el usuario escribe en «Buscar en tabla»
+- **THEN** se ocultan filas en cliente sin nuevo GET
+- **WHEN** la carga supera 2 s
+- **THEN** aparece el modal de espera Synap hasta completar
 
 ### ESC-INV-09 — Ruta legacy eliminada
 

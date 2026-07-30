@@ -12,7 +12,9 @@ from core.utils.administranet_types import str_codigo_manual_articulo, str_or_de
 
 logger = logging.getLogger(__name__)
 
-PAGE_SIZE = 150
+# Inventario UI: una sola página con todo el ámbito (filtro de texto en cliente).
+# Tope de seguridad si el catálogo crece mucho; por encima se trunca y se informa.
+PAGE_SIZE = 5000
 _BUSQUEDA_MIN_LEN = 2
 
 # Orden fijo de columnas (tipo_mpr en BD → etiqueta UI)
@@ -419,9 +421,11 @@ def consultar_inventario_tabla(
     vacio: Dict[str, Any] = {
         "filas": [],
         "total_registros": 0,
-        "page": filtros.page,
+        "filas_cargadas": 0,
+        "truncado": False,
+        "page": 1,
         "page_size": PAGE_SIZE,
-        "total_pages": 0,
+        "total_pages": 1,
         "sin_config_mpr": False,
         "etapas": etapas,
         "ambito": parse_ambito(filtros.ambito),
@@ -509,12 +513,13 @@ def consultar_inventario_tabla(
             select_cols.append(f"{consolidado_expr} AS consolidado")
 
             order_sql = "ORDER BY a.id_manual, a.IDArt"
-            limit_sql = "LIMIT %s OFFSET %s"
+            # Sin OFFSET: siempre página única; tope PAGE_SIZE como red de seguridad.
+            limit_sql = "LIMIT %s"
             sql = (
                 f"SELECT {', '.join(select_cols)} {from_sql} "
                 f"WHERE {where_art}{where_stock_sql} {order_sql} {limit_sql}"
             )
-            cursor.execute(sql, tuple(params_art) + (PAGE_SIZE, filtros.offset))
+            cursor.execute(sql, tuple(params_art) + (PAGE_SIZE,))
             rows = cursor.fetchall()
 
         filas_raw = []
@@ -545,9 +550,11 @@ def consultar_inventario_tabla(
         return {
             "filas": filas_raw,
             "total_registros": total,
-            "page": filtros.page,
+            "filas_cargadas": len(filas_raw),
+            "truncado": bool(total > len(filas_raw)),
+            "page": 1,
             "page_size": PAGE_SIZE,
-            "total_pages": max(1, math.ceil(total / PAGE_SIZE)) if total else 0,
+            "total_pages": 1,
             "sin_config_mpr": sin_config,
             "etapas": etapas,
             "ambito": parse_ambito(filtros.ambito),

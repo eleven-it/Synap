@@ -67,6 +67,9 @@ La pantalla sustituye el flujo POS+carrito como **vista principal** (`vista=tabl
 | 10 | **Shell visual:** `slate-800` hero + acento **emerald** (1ra) / **amber** (2da), no `gray-*` legacy. |
 | 11 | **Columnas visibles (29/07/2026):** Artículo, Terminado, Máx. armable, Armar. Ocultas: fecha entrega, Pedido, Reserva, Resta urgente, Resta armar. |
 | 12 | **Chrome (30/07/2026):** botón **Actualizar** (naranja Synap `bg-orange-500`) recarga la grilla con los filtros actuales. El atajo **Carrito** del chrome queda **deprecado**; Armado 2da sigue abriendo POS vía **Componer**. |
+| 13 | **Máx. armable (30/07/2026):** el mínimo BOM debe conservar componente con stock 0 (no usar `0` como centinela). Caso: pack 907953-01 / IDArt 637 — componente 984 en Semi = 0 → máx. armable 0. |
+| 14 | **Resultado post-armado:** éxito/error solo en **modal Synap** (detalle grabados + fallos); sin toast Django duplicado. Payload vía `json_script` para no romper Alpine/HTML. |
+| 13 | **Resultado de ejecución (30/07/2026):** éxito, parcial y error se informan únicamente en el modal Synap de resultado; no se duplican como toast. El JSON de resultado se entrega mediante `json_script`, no dentro de un atributo HTML. |
 
 ---
 
@@ -93,6 +96,8 @@ Vacío o 0 en Armar = la fila no se incluye en el lote. Negativos se rechazan (c
 ★ Interno: Resta armar = `max(0, pedido + reserva − stock_terminado)` — sigue usándose para el filtro «solo con resta». Si `stock_terminado` es negativo, aumenta la resta (el saldo real se muestra en Terminado).
 
 ★ Presentación (30/07/2026): `stock_terminado` en Armado usa `clamp_negativos=False` (`mpr/presentacion_operativa.py`), paridad Inventario Stock.
+
+★ Capacidad (30/07/2026): Máx. armable es el mínimo entre todos los componentes BOM. Un componente con saldo `0` fija el máximo en `0`; no puede ser reemplazado por un componente posterior con saldo positivo.
 
 ---
 

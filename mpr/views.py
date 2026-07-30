@@ -3727,6 +3727,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
             "nombre_deposito_origen": _nom_dep(dep_origen),
             "nombre_deposito_destino": _nom_dep(dep_dest),
             "filtros_qs": presentacion_query_base,
+            "resultado_lote": resultado_lote,
             "resultado_lote_json": json.dumps(resultado_lote) if resultado_lote else "null",
             "mostrar_modal_resultado_lote": bool(resultado_lote),
             "puede_imputar_pedido": _usuario_puede_imputar_pedido(
@@ -3942,32 +3943,10 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         fallidos = resultado.get("fallidos") or []
         n_ok = len(exitosos)
         n_fail = len(fallidos)
-        label = "1ra" if modo == "1ra" else "2da"
 
         if n_ok or n_fail:
             request.session["armado_surtido_resultado_lote"] = resultado
             request.session["armado_surtido_lote_fallidos"] = _fallidos_para_carrito_armado_surtido(fallidos)
-
-        if n_ok and not n_fail:
-            if n_ok == 1:
-                ex = exitosos[0]
-                messages.success(
-                    request,
-                    f"Armado {label} registrado. Comprobante {ex.get('nro_comprobante')} "
-                    f"(código {ex.get('codigo_movimiento')}).",
-                )
-            else:
-                messages.success(request, f"Se grabaron {n_ok} armados {label} correctamente.")
-        elif n_ok and n_fail:
-            messages.warning(
-                request,
-                f"Se grabaron {n_ok} armado(s); {n_fail} no se pudieron grabar. Revise el detalle en el modal.",
-            )
-        else:
-            messages.error(
-                request,
-                f"No se pudo grabar ningún armado ({n_fail} con error). Revise el detalle en el modal.",
-            )
 
         return _redirect_armado(modo, id_lista, request=request)
 
