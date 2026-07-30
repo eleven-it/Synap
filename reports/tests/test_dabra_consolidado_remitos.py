@@ -18,6 +18,7 @@ from reports.dabra_consolidado_remitos_relay_views import (
 from reports.services.dabra_consolidado_remitos import (
     CODIGO_CLIENTE_DABRA,
     _sql_remitos_por_fa,
+    bonificacion_efectiva,
     bonificacion_linea,
     calcular_tolerancia,
     factor_descuento_cabecera,
@@ -29,6 +30,7 @@ from reports.services.dabra_consolidado_remitos import (
     normalizar_cuit,
     parse_cod_art_prov,
     parse_nro_comprobante,
+    porcentaje_descuento_cabecera,
     resolver_categoria,
     validar_totales_fa,
 )
@@ -94,6 +96,22 @@ class TestBonificacion(unittest.TestCase):
 
     def test_ambos_cero(self):
         self.assertEqual(bonificacion_linea(0, 0), Decimal("0"))
+
+    def test_cabecera_cuando_linea_cero(self):
+        self.assertEqual(
+            porcentaje_descuento_cabecera(Decimal("100"), Decimal("80")),
+            Decimal("20"),
+        )
+        self.assertEqual(
+            bonificacion_efectiva(0, 0, Decimal("100"), Decimal("80")),
+            Decimal("20"),
+        )
+
+    def test_linea_prioriza_sobre_cabecera(self):
+        self.assertEqual(
+            bonificacion_efectiva(15, 0, Decimal("100"), Decimal("80")),
+            Decimal("15"),
+        )
 
 
 class TestCodArtProvYCategoria(unittest.TestCase):
@@ -303,6 +321,79 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
         self.assertIn(("00001", "00027656"), refs)
         self.assertEqual(out["filas"][0]["numero_legal"], "00000004")
         self.assertTrue(any("2 remitos" in a for a in out["alarmas"]))
+
+    @patch("reports.services.dabra_consolidado_remitos.get_mysql_pool")
+    def test_descuento_pie_en_bonif_importe_y_total_gravado(self, mock_pool):
+        """Pie PorDesc1=20%: Bonificacion/ImporteBonificacion/Importe/TotalGravado."""
+        desc_lineas = [
+            ("codigo_movimiento_fa",),
+            ("fa_nro_comprobante",),
+            ("fa_tipo",),
+            ("fa_fecha",),
+            ("fe_cae",),
+            ("fe_vto_cae",),
+            ("SubTotal1",),
+            ("SubtotalDesc",),
+            ("ImporteVenta",),
+            ("id_stock",),
+            ("Cantidad",),
+            ("PrecioVentaxU",),
+            ("PrecioNetoxU",),
+            ("PrecioIVAxU",),
+            ("pordesc_bonif",),
+            ("PorDesc",),
+            ("imp_alicuota_iva",),
+            ("NombreArticulo",),
+            ("CodArtProv",),
+            ("categoria_nombre",),
+        ]
+        # SubTotal1=100, SubtotalDesc=80 → 20% pie; línea sin bonif propia
+        linea_row = (
+            1367,
+            "0008-00000022",
+            "FA",
+            "2026-07-24",
+            "x",
+            "2026-08-01",
+            Decimal("100"),
+            Decimal("80"),
+            Decimal("96.8"),
+            1,
+            Decimal("2"),
+            Decimal("50"),
+            Decimal("50"),
+            Decimal("10.5"),
+            Decimal("0"),
+            Decimal("0"),
+            Decimal("21"),
+            "Art",
+            "950058-01 T110",
+            None,
+        )
+
+        def execute_side_effect(sql, params):
+            if "INNER JOIN stock" in sql:
+                self.mock_cursor.description = desc_lineas
+                self.mock_cursor.fetchall.return_value = [linea_row]
+            elif "datosempresa" in sql:
+                self.mock_cursor.description = [("CUIT",)]
+                self.mock_cursor.fetchall.return_value = [("30-69074961-7",)]
+            else:
+                self.mock_cursor.description = []
+                self.mock_cursor.fetchall.return_value = []
+
+        self.mock_cursor.execute.side_effect = execute_side_effect
+        mock_pool.return_value.get_connection.return_value = self.mock_cm
+
+        out = get_dabra_consolidado_remitos("emp_test", mes=7, anio=2026)
+        self.assertEqual(len(out["filas"]), 1)
+        fila = out["filas"][0]
+        self.assertEqual(fila["bonificacion"], 20.0)
+        self.assertEqual(fila["importe_bonificacion"], 10.0)  # 50 × 20%
+        self.assertEqual(fila["importe"], 80.0)  # 2 × 50 × 0.8
+        self.assertEqual(fila["importe_iva"], 16.8)  # 2 × 10.5 × 0.8
+        self.assertEqual(fila["total_gravado"], 80.0)  # SubtotalDesc
+        self.assertEqual(out["totales_facturas"][0]["imp_neto"], 80.0)
 
     @patch("reports.services.dabra_consolidado_remitos.get_mysql_pool")
     def test_sin_remitos_refs_vacias_alarma(self, mock_pool):

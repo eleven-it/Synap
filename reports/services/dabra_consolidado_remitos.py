@@ -121,11 +121,39 @@ def parse_cod_art_prov(cod_art_prov: Any) -> Tuple[str, str]:
 
 
 def bonificacion_linea(pordesc_bonif: Any, por_desc: Any) -> Decimal:
-    """Bonif % = pordesc_bonif si ≠0 else PorDesc."""
+    """Bonif % de línea = pordesc_bonif si ≠0 else PorDesc."""
     pb = to_decimal_or_none(pordesc_bonif) or Decimal("0")
     if pb != Decimal("0"):
         return pb
     return to_decimal_or_none(por_desc) or Decimal("0")
+
+
+def porcentaje_descuento_cabecera(subtotal1: Any, subtotal_desc: Any) -> Decimal:
+    """
+    % de descuento al pie de FA: (SubTotal1 − SubtotalDesc) / SubTotal1 × 100.
+
+    Cubre PorDesc1/ImpDesc1 (y PorDesc2) sin depender solo del porcentaje
+    cargado: si el descuento se cargó como importe, el ratio sigue siendo correcto.
+    """
+    factor = factor_descuento_cabecera(subtotal1, subtotal_desc)
+    return (Decimal("1") - factor) * Decimal("100")
+
+
+def bonificacion_efectiva(
+    pordesc_bonif: Any,
+    por_desc: Any,
+    subtotal1: Any,
+    subtotal_desc: Any,
+) -> Decimal:
+    """
+    Bonificación a exportar: prioridad descuento de línea; si es 0, descuento
+    de cabecera (pie de factura). En DABRA julio 2026 todas las líneas tienen
+    pordesc_bonif/PorDesc=0 y el 20 % vive en PorDesc1/ImpDesc1.
+    """
+    linea = bonificacion_linea(pordesc_bonif, por_desc)
+    if linea != Decimal("0"):
+        return linea
+    return porcentaje_descuento_cabecera(subtotal1, subtotal_desc)
 
 
 def calcular_tolerancia(n_lineas: int) -> Decimal:
@@ -315,14 +343,24 @@ def _materializar_fila_export(
     entrega: str,
 ) -> Dict[str, Any]:
     pv_fa, nl_fa = parse_nro_comprobante(fa.get("fa_nro_comprobante"))
-    bonif = bonificacion_linea(linea.get("pordesc_bonif"), linea.get("PorDesc"))
+    factor_desc = factor_descuento_cabecera(fa.get("SubTotal1"), fa.get("SubtotalDesc"))
+    bonif = bonificacion_efectiva(
+        linea.get("pordesc_bonif"),
+        linea.get("PorDesc"),
+        fa.get("SubTotal1"),
+        fa.get("SubtotalDesc"),
+    )
     cant = _dec(linea.get("Cantidad"))
     precio_venta_u = _dec(linea.get("PrecioVentaxU"))
     precio_neto_u = _dec(linea.get("PrecioNetoxU"))
     precio_iva_u = _dec(linea.get("PrecioIVAxU"))
-    importe = cant * precio_neto_u
-    importe_iva = cant * precio_iva_u
+    # Precios de stock son predescuento de cabecera; importes post pie de FA.
+    importe = cant * precio_neto_u * factor_desc
+    importe_iva = cant * precio_iva_u * factor_desc
     importe_bonif_u = precio_venta_u * bonif / Decimal("100")
+    total_gravado = to_decimal_or_none(fa.get("SubtotalDesc"))
+    if total_gravado is None:
+        total_gravado = _dec(fa.get("SubTotal1"))
 
     comp_ref = ""
     numero_ref = ""
@@ -366,7 +404,7 @@ def _materializar_fila_export(
         "importe_bonificacion": float(importe_bonif_u),
         "importe": float(importe),
         "importe_iva": float(importe_iva),
-        "total_gravado": float(_dec(fa.get("SubTotal1"))),
+        "total_gravado": float(total_gravado),
         "total": float(_dec(fa.get("ImporteVenta"))),
     }
 
@@ -528,7 +566,11 @@ def get_dabra_consolidado_remitos(
                 "fecha": _fmt_fecha(fa.get("fa_fecha")),
                 "comprobante": format_comprobante_string(fa.get("fa_tipo"), pv_fa, nl_fa),
                 "nro_remito": nro_remito_total,
-                "imp_neto": float(_dec(fa.get("SubTotal1"))),
+                "imp_neto": float(
+                    _dec(fa.get("SubtotalDesc"))
+                    if to_decimal_or_none(fa.get("SubtotalDesc")) is not None
+                    else _dec(fa.get("SubTotal1"))
+                ),
                 "imp_bruto": float(_dec(fa.get("ImporteVenta"))),
             }
         )
