@@ -5,6 +5,33 @@
 <script type="module" src="{% static 'stock/js/filtro_marcas_tags.mjs' %}"></script>
 {% endblock %}
 {% block content %}
+{% include "partials/synap_post_loading_modal.html" %}
+{# Modal de espera si la carga inicial (HTML/SQL) supera 2 s #}
+<script>
+(function () {
+  var delayMs = 2000;
+  var timer = setTimeout(function () {
+    if (typeof window.synapShowPostLoadingProgress === 'function') {
+      window.synapShowPostLoadingProgress({
+        title: 'Cargando inventario',
+        subtitle: 'Obteniendo saldos por etapa. Esperá un momento…',
+        indeterminate: true,
+      });
+    }
+  }, delayMs);
+  function clear() {
+    clearTimeout(timer);
+    if (typeof window.synapHidePostLoading === 'function') {
+      window.synapHidePostLoading();
+    }
+  }
+  if (document.readyState === 'complete') {
+    clear();
+  } else {
+    window.addEventListener('load', clear, { once: true });
+  }
+})();
+</script>
 {# Layout viewport: filtros fijos; solo el cuerpo de la tabla hace scroll #}
 <div class="mx-auto flex h-[calc(100dvh-3.5rem)] w-full min-h-0 min-w-0 max-w-none flex-col px-3 pt-3 sm:px-4 md:h-[calc(100dvh-4rem)] md:px-6 lg:px-8 xl:px-10 2xl:px-12"
      x-data="stockInventarioHub()" x-init="init()">
@@ -33,6 +60,12 @@
   </div>
   {% endif %}
 
+  {% if truncado %}
+  <div class="mb-3 flex-shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+    Se muestran los primeros {{ filas_cargadas }} de {{ total_registros }} artículos. Affiná marcas o el filtro de saldo para reducir el universo.
+  </div>
+  {% endif %}
+
   {# z-30: por encima de la tabla; por debajo del header/mega-menú (z-60) #}
   <div class="relative z-30 flex-shrink-0 overflow-visible">
     {% include "stock/inventario/_filtros.html" %}
@@ -40,32 +73,28 @@
 
   <div class="mb-2 flex flex-shrink-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
     <p class="text-xs text-slate-500 dark:text-slate-400">
-      <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ total_registros }}</span> artículo{{ total_registros|pluralize }}
-      {% if filtros.busqueda %} · búsqueda «{{ filtros.busqueda }}»{% endif %}
+      <template x-if="busqueda.trim()">
+        <span>
+          <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200" x-text="filasVisibles()"></span>
+          visibles de
+          <span class="tabular-nums">{{ filas|length }}</span>
+        </span>
+      </template>
+      <template x-if="!busqueda.trim()">
+        <span>
+          <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ filas|length }}</span> artículo{{ filas|length|pluralize }}
+          {% if truncado %}<span class="text-amber-700 dark:text-amber-300"> (de {{ total_registros }})</span>{% endif %}
+        </span>
+      </template>
       {% if filtros.marcas_incluidos %} · {{ filtros.marcas_incluidos|length }} marca{{ filtros.marcas_incluidos|length|pluralize }} seleccionada{{ filtros.marcas_incluidos|length|pluralize }}{% endif %}
       {% if filtros.ambito == "terminados" %} · terminados{% else %} · fabricados{% endif %}
       {% if filtros.filtro_stock == "con_stock" %} · solo saldo &gt; 0{% elif filtros.filtro_stock == "sin_stock" %} · sin stock (≤ 0){% else %} · todos{% endif %}
-      <span x-show="busquedaPendiente" x-cloak class="text-purple-600 dark:text-purple-300"> · buscando…</span>
     </p>
-    {% if total_pages > 1 %}
-    <p class="text-xs text-slate-500 dark:text-slate-400">Página <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ page }}</span> de <span class="tabular-nums">{{ total_pages }}</span></p>
-    {% endif %}
   </div>
 
   <div class="relative z-10 mb-2 min-h-0 min-w-0 flex-1">
     {% include "stock/inventario/_tabla.html" %}
   </div>
-
-  {% if total_pages > 1 %}
-  <nav class="flex flex-shrink-0 flex-wrap items-center justify-center gap-2 pb-3" aria-label="Paginación">
-    {% if pagination_prev_qs %}
-    <a href="?{{ pagination_prev_qs }}" class="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"><span class="material-icons text-base leading-none" aria-hidden="true">chevron_left</span>Anterior</a>
-    {% endif %}
-    {% if pagination_next_qs %}
-    <a href="?{{ pagination_next_qs }}" class="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">Siguiente<span class="material-icons text-base leading-none" aria-hidden="true">chevron_right</span></a>
-    {% endif %}
-  </nav>
-  {% endif %}
 </div>
 
 <script>
@@ -75,10 +104,21 @@ function stockInventarioHub() {
     ambito: '{{ filtros.ambito|default:"terminados"|escapejs }}',
     filtroStock: '{{ filtros.filtro_stock|default:"todos"|escapejs }}',
     busqueda: '{{ filtros.busqueda|default:""|escapejs }}',
-    busquedaAplicada: '{{ filtros.busqueda|default:""|escapejs }}',
-    busquedaPendiente: false,
-    debounceTimer: null,
     init() {},
+    filaVisible(el) {
+      const q = (this.busqueda || '').trim().toLowerCase();
+      if (!q) return true;
+      const hay = (el.getAttribute('data-search') || '').toLowerCase();
+      return hay.includes(q);
+    },
+    filasVisibles() {
+      const filas = this.$root.querySelectorAll('tr.inv-fila');
+      let n = 0;
+      filas.forEach((el) => {
+        if (this.filaVisible(el)) n += 1;
+      });
+      return n;
+    },
     cambiarPresentacion(modo) {
       this.presentacion = modo;
       this.$refs.filtrosForm.querySelector('[name=presentacion]').value = modo;
@@ -94,41 +134,8 @@ function stockInventarioHub() {
       this.$refs.filtrosForm.querySelector('[name=filtro_stock]').value = modo;
       this.$refs.filtrosForm.submit();
     },
-    onBusquedaInput() {
-      /* Búsqueda server-side (universo completo, no solo la página actual). Mín. 2 caracteres. */
-      clearTimeout(this.debounceTimer);
-      const q = (this.busqueda || '').trim();
-      const aplicada = (this.busquedaAplicada || '').trim();
-      if (q === aplicada) {
-        this.busquedaPendiente = false;
-        return;
-      }
-      if (q.length === 1) {
-        this.busquedaPendiente = false;
-        return;
-      }
-      this.busquedaPendiente = true;
-      this.debounceTimer = setTimeout(() => this.enviarBusqueda(), 400);
-    },
-    enviarBusqueda() {
-      const q = (this.busqueda || '').trim();
-      const aplicada = (this.busquedaAplicada || '').trim();
-      if (q.length === 1) {
-        this.busquedaPendiente = false;
-        return;
-      }
-      if (q === aplicada) {
-        this.busquedaPendiente = false;
-        return;
-      }
-      this.busquedaPendiente = true;
-      this.$refs.filtrosForm.submit();
-    },
     limpiarBusqueda() {
-      clearTimeout(this.debounceTimer);
       this.busqueda = '';
-      this.busquedaPendiente = true;
-      this.$refs.filtrosForm.submit();
     },
   };
 }

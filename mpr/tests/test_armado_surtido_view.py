@@ -108,7 +108,7 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
     @patch("mpr.views.ejecutar_lote_armado")
     @patch("mpr.views._get_base_empresa", return_value="empresa_test")
     @patch("mpr.views.validar_reglas_lote_armado", return_value=(True, None))
-    def test_post_guarda_sesion_y_mensaje_exito(self, *_mocks):
+    def test_post_guarda_sesion_y_resultado_modal(self, *_mocks):
         ejecutar_lote = _mocks[2]
         ejecutar_lote.return_value = {
             "exitosos": [{
@@ -143,12 +143,12 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
         self.assertIn("armado_surtido_resultado_lote", request.session)
         self.assertEqual(request.session.get("armado_surtido_lote_fallidos"), [])
         msgs = [m.message for m in get_messages(request)]
-        self.assertTrue(any("Comprobante" in m for m in msgs))
+        self.assertEqual(msgs, [])
 
     @patch("mpr.views.ejecutar_lote_armado")
     @patch("mpr.views._get_base_empresa", return_value="empresa_test")
     @patch("mpr.views.validar_reglas_lote_armado", return_value=(True, None))
-    def test_post_parcial_mensaje_warning(self, *_mocks):
+    def test_post_parcial_guarda_resultado_modal(self, *_mocks):
         ejecutar_lote = _mocks[2]
         ejecutar_lote.return_value = {
             "exitosos": [{"id_articulo_pack": 100, "cantidad_packs": 1, "codigo_movimiento": 1, "nro_comprobante": "A"}],
@@ -177,7 +177,7 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(request.session.get("armado_surtido_lote_fallidos") or []), 1)
         msgs = [m.message for m in get_messages(request)]
-        self.assertTrue(any("no se pudieron grabar" in m.lower() for m in msgs))
+        self.assertEqual(msgs, [])
 
 
 class ArmadoSurtidoValidarItemLoteAPITest(SimpleTestCase):

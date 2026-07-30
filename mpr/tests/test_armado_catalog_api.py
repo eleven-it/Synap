@@ -30,6 +30,30 @@ class MaxPacksArmado1raBulkTest(SimpleTestCase):
         out = _max_packs_armado_1ra_bulk("emp", [100], 3)
         self.assertEqual(out[100], 1)
 
+    @patch("mpr.services.mysql_cursor")
+    @patch("mpr.services._nombre_tabla")
+    def test_bulk_respeta_componente_sin_stock(self, mock_nombre, mock_cursor_ctx):
+        from mpr.services import _max_packs_armado_1ra_bulk
+
+        mock_nombre.side_effect = lambda _c, t: t
+        cursor = MagicMock()
+        cursor.fetchall.side_effect = [
+            [{"id_articulo": 100, "id_en_abm": 50}],
+            [
+                {"id_en_abm": 50, "id_articulo": 813, "cantidad_articulo": 1},
+                {"id_en_abm": 50, "id_articulo": 900, "cantidad_articulo": 1},
+            ],
+            [
+                {"id_articulo": 813, "saldo": 0},
+                {"id_articulo": 900, "saldo": 10},
+            ],
+        ]
+        mock_cursor_ctx.return_value.__enter__.return_value = cursor
+
+        out = _max_packs_armado_1ra_bulk("emp", [100], 3)
+
+        self.assertEqual(out[100], 0)
+
 
 class ListarPacksArmadoCatalogoTest(SimpleTestCase):
     @patch("mpr.services.get_deposito_semi_elaborado_mpr", return_value=None)

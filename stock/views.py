@@ -203,6 +203,8 @@ def inventario_view(request):
         messages.error(request, "No se pudo determinar la empresa activa.")
         return redirect("core:dashboard")
 
+    from dataclasses import replace
+
     from stock.services.inventario_tabla import (
         build_inventario_query_string,
         consultar_inventario_tabla,
@@ -216,15 +218,18 @@ def inventario_view(request):
         request.GET,
         marcas_getlist=request.GET.getlist("marcas_incluidos"),
     )
-    resultado = consultar_inventario_tabla(base_empresa, filtros)
+    # Texto `q` solo para filtro cliente en la grilla; SQL carga todo el ámbito.
+    resultado = consultar_inventario_tabla(
+        base_empresa, replace(filtros, busqueda=None)
+    )
     filas = preparar_filas_inventario_presentacion(
         resultado.get("filas") or [],
         filtros.presentacion,
         base_empresa=base_empresa,
         ambito=filtros.ambito,
     )
-    page = resultado.get("page", 1)
-    total_pages = resultado.get("total_pages", 0)
+    page = 1
+    total_pages = 1
     etapas_columnas = resultado.get("etapas") or etapas_para_ambito(filtros.ambito)
 
     context = {
@@ -234,13 +239,15 @@ def inventario_view(request):
         "filtros": filtros,
         "marcas_catalogo": listar_marcas_catalogo(base_empresa),
         "total_registros": resultado.get("total_registros", 0),
+        "filas_cargadas": resultado.get("filas_cargadas", len(filas)),
+        "truncado": resultado.get("truncado", False),
         "page": page,
-        "page_size": resultado.get("page_size", 150),
+        "page_size": resultado.get("page_size", 5000),
         "total_pages": total_pages,
         "sin_config_mpr": resultado.get("sin_config_mpr", False),
         "modo_presentacion": filtros.presentacion,
-        "pagination_prev_qs": build_inventario_query_string(filtros, page=page - 1) if page > 1 else "",
-        "pagination_next_qs": build_inventario_query_string(filtros, page=page + 1) if page < total_pages else "",
+        "pagination_prev_qs": "",
+        "pagination_next_qs": "",
         "limpiar_qs": build_inventario_query_string(filtros, clear_search=True, page=1),
     }
     return render(request, "stock/inventario.html", context)
