@@ -152,6 +152,27 @@ class PresentacionOperativaTests(SimpleTestCase):
         self.assertEqual(fila["marca_nombre"], "Atomik")
         self.assertEqual(fila["resta_armar_docenas_pcp"], 8)
         self.assertEqual(fila["a_armar_docenas_pcp"], 1)
+        self.assertEqual(fila["stock_terminado_display"], "2")
+        self.assertFalse(fila.get("stock_terminado_es_negativo"))
+
+    def test_armado_stock_terminado_muestra_negativo(self):
+        """Terminado muestra saldo real (no clamp a 0), modo pares."""
+        fila = enriquecer_fila_tablero_armado(
+            {
+                "pedido": 0,
+                "stock_terminado": -52,
+                "stock_reserva": 0,
+                "resta_urgente": 52,
+                "resta_armar": 52,
+                "max_armable": 10,
+                "a_armar": 0,
+            },
+            "unidades",
+        )
+        self.assertEqual(fila["stock_terminado_display"], "-52")
+        self.assertTrue(fila["stock_terminado_es_negativo"])
+        # Otras columnas de demanda siguen sin negativos en display.
+        self.assertEqual(fila["resta_armar_display"], "52")
 
     def test_enriquecer_fila_tablero_pares(self):
         fila = enriquecer_fila_tablero_presentacion(

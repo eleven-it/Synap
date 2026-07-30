@@ -40,25 +40,15 @@
 
   <div class="mb-2 flex flex-shrink-0 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
     <p class="text-xs text-slate-500 dark:text-slate-400">
-      <template x-if="busqueda.trim()">
-        <span>
-          <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200" x-text="filasVisibles()"></span>
-          visibles de
-          <span class="tabular-nums">{{ filas|length }}</span> en esta página
-          <span class="text-slate-400">({{ total_registros }} total)</span>
-        </span>
-      </template>
-      <template x-if="!busqueda.trim()">
-        <span>
-          <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ total_registros }}</span> artículo{{ total_registros|pluralize }}
-        </span>
-      </template>
+      <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ total_registros }}</span> artículo{{ total_registros|pluralize }}
+      {% if filtros.busqueda %} · búsqueda «{{ filtros.busqueda }}»{% endif %}
       {% if filtros.marcas_incluidos %} · {{ filtros.marcas_incluidos|length }} marca{{ filtros.marcas_incluidos|length|pluralize }} seleccionada{{ filtros.marcas_incluidos|length|pluralize }}{% endif %}
       {% if filtros.ambito == "terminados" %} · terminados{% else %} · fabricados{% endif %}
       {% if filtros.filtro_stock == "con_stock" %} · solo saldo &gt; 0{% elif filtros.filtro_stock == "sin_stock" %} · sin stock (≤ 0){% else %} · todos{% endif %}
+      <span x-show="busquedaPendiente" x-cloak class="text-purple-600 dark:text-purple-300"> · buscando…</span>
     </p>
     {% if total_pages > 1 %}
-    <p class="text-xs text-slate-500 dark:text-slate-400" x-show="!busqueda.trim()">Página <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ page }}</span> de <span class="tabular-nums">{{ total_pages }}</span></p>
+    <p class="text-xs text-slate-500 dark:text-slate-400">Página <span class="font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ page }}</span> de <span class="tabular-nums">{{ total_pages }}</span></p>
     {% endif %}
   </div>
 
@@ -85,22 +75,10 @@ function stockInventarioHub() {
     ambito: '{{ filtros.ambito|default:"terminados"|escapejs }}',
     filtroStock: '{{ filtros.filtro_stock|default:"todos"|escapejs }}',
     busqueda: '{{ filtros.busqueda|default:""|escapejs }}',
+    busquedaAplicada: '{{ filtros.busqueda|default:""|escapejs }}',
+    busquedaPendiente: false,
     debounceTimer: null,
     init() {},
-    filaVisible(el) {
-      const q = (this.busqueda || '').trim().toLowerCase();
-      if (!q) return true;
-      const hay = (el.getAttribute('data-search') || '').toLowerCase();
-      return hay.includes(q);
-    },
-    filasVisibles() {
-      const filas = this.$root.querySelectorAll('tr.inv-fila');
-      let n = 0;
-      filas.forEach((el) => {
-        if (this.filaVisible(el)) n += 1;
-      });
-      return n;
-    },
     cambiarPresentacion(modo) {
       this.presentacion = modo;
       this.$refs.filtrosForm.querySelector('[name=presentacion]').value = modo;
@@ -117,30 +95,40 @@ function stockInventarioHub() {
       this.$refs.filtrosForm.submit();
     },
     onBusquedaInput() {
-      /* Filtrado en vivo de filas cargadas (mismo patrón que tablero MPR / hub). */
+      /* Búsqueda server-side (universo completo, no solo la página actual). Mín. 2 caracteres. */
       clearTimeout(this.debounceTimer);
-      this.debounceTimer = setTimeout(() => {
-        const q = (this.busqueda || '').trim();
-        const params = new URLSearchParams(window.location.search);
-        params.delete('page');
-        params.delete('id_articulo');
-        if (q) params.set('q', q);
-        else params.delete('q');
-        const next = params.toString();
-        const cur = window.location.search.replace(/^\?/, '');
-        if (next !== cur) {
-          window.history.replaceState({}, '', next ? `?${next}` : window.location.pathname);
-        }
-      }, 250);
+      const q = (this.busqueda || '').trim();
+      const aplicada = (this.busquedaAplicada || '').trim();
+      if (q === aplicada) {
+        this.busquedaPendiente = false;
+        return;
+      }
+      if (q.length === 1) {
+        this.busquedaPendiente = false;
+        return;
+      }
+      this.busquedaPendiente = true;
+      this.debounceTimer = setTimeout(() => this.enviarBusqueda(), 400);
+    },
+    enviarBusqueda() {
+      const q = (this.busqueda || '').trim();
+      const aplicada = (this.busquedaAplicada || '').trim();
+      if (q.length === 1) {
+        this.busquedaPendiente = false;
+        return;
+      }
+      if (q === aplicada) {
+        this.busquedaPendiente = false;
+        return;
+      }
+      this.busquedaPendiente = true;
+      this.$refs.filtrosForm.submit();
     },
     limpiarBusqueda() {
+      clearTimeout(this.debounceTimer);
       this.busqueda = '';
-      const params = new URLSearchParams(window.location.search);
-      params.delete('q');
-      params.delete('id_articulo');
-      params.delete('page');
-      const next = params.toString();
-      window.history.replaceState({}, '', next ? `?${next}` : window.location.pathname);
+      this.busquedaPendiente = true;
+      this.$refs.filtrosForm.submit();
     },
   };
 }

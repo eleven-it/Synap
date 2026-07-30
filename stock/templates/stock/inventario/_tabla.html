@@ -40,9 +40,7 @@
     </thead>
     <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
       {% for r in filas %}
-      <tr class="inv-fila hover:bg-slate-50/80 dark:hover:bg-slate-800/40"
-          data-search="{{ r.nombre_articulo|default:''|lower }} {{ r.talle|default:''|lower }} {{ r.color|default:''|lower }} {{ r.codigo_compuesto|default:''|lower }}"
-          x-show="filaVisible($el)">
+      <tr class="inv-fila hover:bg-slate-50/80 dark:hover:bg-slate-800/40">
         <td class="sticky left-0 z-10 bg-white px-4 py-3 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.04)] dark:bg-slate-900 dark:shadow-[2px_0_4px_-2px_rgba(0,0,0,0.35)]">
           <span class="block text-sm font-semibold leading-snug text-slate-900 dark:text-slate-100">{{ r.nombre_articulo }}</span>
         </td>
@@ -95,13 +93,6 @@
         </td>
       </tr>
       {% endfor %}
-      {% if filas %}
-      <tr x-show="busqueda.trim() !== '' && filasVisibles() === 0" x-cloak>
-        <td colspan="{% if filtros.ambito == 'terminados' %}{{ etapas_columnas|length|add:3 }}{% else %}{{ etapas_columnas|length|add:4 }}{% endif %}" class="px-4 py-10 text-center text-sm text-slate-500 dark:text-slate-400">
-          Ningún artículo de esta página coincide con la búsqueda.
-        </td>
-      </tr>
-      {% endif %}
     </tbody>
   </table>
 </div>

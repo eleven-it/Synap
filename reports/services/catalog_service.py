@@ -35,6 +35,7 @@ _LEGACY_LISTADOS_SLUGS = frozenset(
         "ventas-objetivos-vs-bo",
         "ventas-por-vendedor",
         "ventas-por-articulo",
+        "ventas-marcas-mensual",
         "evolucion-precios",
         "stock-existencias",
         "resumen-ejecutivo-ventas",

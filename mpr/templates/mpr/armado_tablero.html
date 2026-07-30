@@ -121,7 +121,7 @@
                             <td class="sticky left-0 z-10 bg-white px-3 py-2 dark:bg-slate-900">
                                 <span class="block text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100">{{ fila.descripcion_articulo }}</span>
                             </td>
-                            <td class="border-l border-amber-100 px-2 py-2 text-right text-sm tabular-nums text-slate-600 dark:border-amber-900/40">{{ fila.stock_terminado_display }}</td>
+                            <td class="border-l border-amber-100 px-2 py-2 text-right text-sm tabular-nums dark:border-amber-900/40 {% if fila.stock_terminado_es_negativo %}font-semibold text-rose-600 dark:text-rose-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">{{ fila.stock_terminado_display }}</td>
                             {% if modo == '1ra' %}
                             <td class="border-l border-violet-100 px-2 py-2 text-right text-sm tabular-nums font-medium text-violet-800 dark:text-violet-300">{{ fila.max_armable }}</td>
                             <td class="border-l border-emerald-100 bg-emerald-50/20 px-2 py-2 text-right dark:bg-emerald-950/10">

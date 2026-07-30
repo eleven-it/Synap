@@ -213,6 +213,7 @@ class QueryRunnerService:
             'ventas-objetivos-vs-bo',
             'ventas-por-vendedor',
             'ventas-por-articulo',
+            'ventas-marcas-mensual',
             'stock-existencias',
             'comprobantes-rutas',
             'mayoristapp-lista-comprobantes-rutas',  # compat. clientes que aún envían slug antiguo
@@ -282,6 +283,8 @@ class QueryRunnerService:
             if report.slug == "ventas-por-vendedor"
             else f"{payload_hash}:vpa_v1"
             if report.slug == "ventas-por-articulo"
+            else f"{payload_hash}:vmm_v1"
+            if report.slug == "ventas-marcas-mensual"
             else payload_hash
         )
 
@@ -319,6 +322,10 @@ class QueryRunnerService:
             from .ventas_objetivos_bo_runner import run_ventas_objetivos_vs_bo
 
             result = run_ventas_objetivos_vs_bo(report, payload, self.user)
+        elif report.slug == "ventas-marcas-mensual":
+            from .ventas_marcas_mensual_runner import run_ventas_marcas_mensual
+
+            result = run_ventas_marcas_mensual(report, payload, self.user)
         elif report.slug == "stock-existencias":
             result = self._run_stock_existencias(report, payload)
         elif report.slug == "mpr-opt-atrasadas":

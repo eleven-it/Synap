@@ -42,6 +42,7 @@ function detectReportType() {
     "ventas-objetivos-vs-bo",
     "ventas-por-vendedor",
     "ventas-por-articulo",
+    "ventas-marcas-mensual",
     "comprobantes-rutas",
   ];
   
@@ -76,7 +77,20 @@ function isInformeBoDualPeriodo(slug) {
     slug === "bo-stock-facturacion" ||
     slug === "ventas-objetivos-vs-bo" ||
     slug === "ventas-por-vendedor" ||
-    slug === "ventas-por-articulo"
+    slug === "ventas-por-articulo" ||
+    slug === "ventas-marcas-mensual"
+  );
+}
+
+/** Informe matriz ventas marcas mensual (PuW/PuM). */
+function isVentasMarcasMensualSlug(slug) {
+  return slug === "ventas-marcas-mensual";
+}
+
+/** Familia filtros período facturación + sucursal/clientes (sin backorder obligatorio). */
+function isInformeVentasMarcasFamiliaSlug(slug) {
+  return (
+    isJerarquiaVentasBoFamiliaSlug(slug) || isVentasMarcasMensualSlug(slug)
   );
 }
 
@@ -89,7 +103,8 @@ function isInformeQuerySoloManualORealtime(slug) {
     slug === "bo-stock-facturacion" ||
     slug === "ventas-objetivos-vs-bo" ||
     slug === "ventas-por-vendedor" ||
-    slug === "ventas-por-articulo"
+    slug === "ventas-por-articulo" ||
+    slug === "ventas-marcas-mensual"
   );
 }
 
@@ -101,6 +116,11 @@ function isJerarquiaVentasBoFamiliaSlug(slug) {
     slug === "ventas-por-articulo"
   );
 }
+
+const VMM_FILTER_SPECS = [
+  ["vmm_marcas_incluidos", "marcas_incluidos"],
+  ["vmm_superarts_incluidos", "superarts_incluidos"],
+];
 
 /** Ventas por artículo / vendedor: filtros rubro/subrubro/marca incluir/excluir. */
 function isVentasCatalogoFiltersSlug(slug) {
@@ -4089,7 +4109,7 @@ function syncBoDualSummaryPeriod() {
   const bi = document.getElementById("fecha_inicio")?.value;
   const bf = document.getElementById("fecha_fin")?.value;
   const line =
-    slug === "ventas-por-vendedor" || slug === "ventas-por-articulo"
+    slug === "ventas-por-vendedor" || slug === "ventas-por-articulo" || slug === "ventas-marcas-mensual"
       ? `Periodo facturación: ${fmt(fif)} al ${fmt(fff)}`
       : `Facturación y remitos: ${fmt(fif)} al ${fmt(fff)} · Backorder: ${fmt(bi)} al ${fmt(bf)}`;
   if (boPeriodEl) boPeriodEl.textContent = line;
@@ -6897,7 +6917,7 @@ if (dashboardRoot) {
         });
       }
 
-      if (isJerarquiaVentasBoFamiliaSlug(reportSlug)) {
+      if (isInformeVentasMarcasFamiliaSlug(reportSlug)) {
         const ci = document.getElementById("clientes_incluir");
         const ce = document.getElementById("clientes_excluidos");
         const vi = document.getElementById("vendedores_incluir");
@@ -6910,6 +6930,125 @@ if (dashboardRoot) {
           vi.addEventListener("change", () => reconcileMutualExclusiveTags("vendedores_incluir", "vendedores_excluidos"));
           ve.addEventListener("change", () => reconcileMutualExclusiveTags("vendedores_excluidos", "vendedores_incluir"));
         }
+      }
+
+      if (isVentasMarcasMensualSlug(reportSlug)) {
+        const filterBase = `${apiUrl.replace("/query/", "/filters/")}`;
+        const headers = { "X-Requested-With": "XMLHttpRequest" };
+        const loadVmmTags = async (type, jsonKey, selectId, savedKey, extraQuery = "") => {
+          const resp = await fetch(`${filterBase}?type=${type}${extraQuery}`, { headers });
+          if (!resp.ok) return;
+          const json = await resp.json();
+          const items = json[jsonKey] || [];
+          const sel = document.getElementById(selectId);
+          if (!sel) return;
+          sel.innerHTML = "";
+          items.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = String(item.value);
+            option.textContent = item.label;
+            if (
+              savedFilters &&
+              savedFilters[savedKey] &&
+              Array.isArray(savedFilters[savedKey]) &&
+              savedFilters[savedKey].map(String).includes(String(item.value))
+            ) {
+              option.selected = true;
+            }
+            sel.appendChild(option);
+          });
+          initializeTagsFilter(selectId, jsonKey);
+        };
+        const reloadSuperArts = async () => {
+          const marcasSel = document.getElementById("vmm_marcas_incluidos");
+          let q = "";
+          if (marcasSel) {
+            const vals = Array.from(marcasSel.selectedOptions)
+              .map((o) => String(o.value))
+              .filter(Boolean);
+            if (vals.length) q = `&marcas=${encodeURIComponent(vals.join(","))}`;
+          }
+          await loadVmmTags("superarts", "superarts", "vmm_superarts_incluidos", "superarts_incluidos", q);
+        };
+        try {
+          await loadVmmTags("marcas", "marcas", "vmm_marcas_incluidos", "marcas_incluidos");
+          await reloadSuperArts();
+          const marcasSel = document.getElementById("vmm_marcas_incluidos");
+          if (marcasSel) {
+            marcasSel.addEventListener("change", () => {
+              reloadSuperArts().catch((e) => console.error("Error recargando SuperArt:", e));
+            });
+          }
+        } catch (e) {
+          console.error("Error cargando filtros ventas marcas mensual:", e);
+        }
+        const modoHidden = document.getElementById("modo_unidades");
+        const modoBtns = document.querySelectorAll("#vmm-modo-unidades-buttons .vmm-modo-btn");
+        const applyModoUi = (modo) => {
+          const m = modo === "docenas" ? "docenas" : "packs";
+          if (modoHidden) modoHidden.value = m;
+          modoBtns.forEach((btn) => {
+            const active = btn.getAttribute("data-modo-unidades") === m;
+            btn.classList.toggle("border-sky-500", active);
+            btn.classList.toggle("bg-sky-50", active);
+            btn.classList.toggle("dark:bg-sky-900/20", active);
+            btn.classList.toggle("text-sky-700", active);
+            btn.classList.toggle("dark:text-sky-300", active);
+            btn.classList.toggle("shadow-md", active);
+            btn.classList.toggle("border-slate-300", !active);
+            btn.classList.toggle("dark:border-slate-600", !active);
+            btn.classList.toggle("bg-white", !active);
+            btn.classList.toggle("dark:bg-slate-800", !active);
+            btn.classList.toggle("text-slate-700", !active);
+            btn.classList.toggle("dark:text-slate-300", !active);
+          });
+        };
+        applyModoUi(savedFilters?.modo_unidades || "packs");
+        modoBtns.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            applyModoUi(btn.getAttribute("data-modo-unidades"));
+          });
+        });
+
+        const tasaEl = document.getElementById("vmm_tasa_regalia_pct");
+        const tcEl = document.getElementById("vmm_tc");
+        const coefEl = document.getElementById("vmm_coef_proyeccion");
+        const proyHidden = document.getElementById("vmm_incluir_proyeccion");
+        const proyBtns = document.querySelectorAll("#vmm-proyeccion-buttons .vmm-proy-btn");
+        const applyProyUi = (val) => {
+          const on = String(val) === "1";
+          if (proyHidden) proyHidden.value = on ? "1" : "0";
+          proyBtns.forEach((btn) => {
+            const active = btn.getAttribute("data-incluir-proyeccion") === (on ? "1" : "0");
+            btn.classList.toggle("border-sky-500", active);
+            btn.classList.toggle("bg-sky-50", active);
+            btn.classList.toggle("dark:bg-sky-900/20", active);
+            btn.classList.toggle("text-sky-700", active);
+            btn.classList.toggle("dark:text-sky-300", active);
+            btn.classList.toggle("shadow-md", active);
+            btn.classList.toggle("border-slate-300", !active);
+            btn.classList.toggle("dark:border-slate-600", !active);
+            btn.classList.toggle("bg-white", !active);
+            btn.classList.toggle("dark:bg-slate-800", !active);
+            btn.classList.toggle("text-slate-700", !active);
+            btn.classList.toggle("dark:text-slate-300", !active);
+          });
+        };
+        if (tasaEl && savedFilters?.tasa_regalia_pct != null && savedFilters.tasa_regalia_pct !== "") {
+          tasaEl.value = savedFilters.tasa_regalia_pct;
+        }
+        if (tcEl && savedFilters?.tc != null && savedFilters.tc !== "") {
+          tcEl.value = savedFilters.tc;
+        }
+        if (coefEl && savedFilters?.coef_proyeccion != null && savedFilters.coef_proyeccion !== "") {
+          coefEl.value = savedFilters.coef_proyeccion;
+        }
+        applyProyUi(savedFilters?.incluir_proyeccion === "1" || savedFilters?.incluir_proyeccion === 1 ? "1" : "0");
+        proyBtns.forEach((btn) => {
+          btn.addEventListener("click", () => {
+            applyProyUi(btn.getAttribute("data-incluir-proyeccion"));
+          });
+        });
       }
 
       // Aplicar otros filtros guardados (fechas, mes actual)
@@ -8654,6 +8793,20 @@ if (dashboardRoot) {
       }
     }
 
+    const suc = (params.get("sucursal") || "").trim();
+    if (suc) {
+      const sucSelect = document.getElementById("sucursales");
+      if (sucSelect) {
+        const option = sucSelect.querySelector(`option[value="${suc}"]`);
+        if (option && !option.selected) {
+          option.selected = true;
+          setTimeout(() => {
+            sucSelect.dispatchEvent(new Event("change", { bubbles: true }));
+          }, 150);
+        }
+      }
+    }
+
     if (typeof saveFilters === "function") {
       saveFilters();
     }
@@ -8662,6 +8815,7 @@ if (dashboardRoot) {
       params.delete("fecha_inicio");
       params.delete("fecha_fin");
       params.delete("fecha");
+      if (suc) params.delete("sucursal");
       const q = params.toString();
       const newUrl = window.location.pathname + (q ? `?${q}` : "") + window.location.hash;
       window.history.replaceState({}, "", newUrl);
@@ -8975,6 +9129,76 @@ if (dashboardRoot) {
           if (listaPrecioSelect.querySelector(`option[value="${v}"]`)) {
             listaPrecioSelect.value = v;
           }
+        }
+      }
+      if (isVentasMarcasMensualSlug(reportSlug)) {
+        const tagRestoreVmm = (arr, selectId) => {
+          if (!arr || !Array.isArray(arr)) return;
+          const sel = document.getElementById(selectId);
+          if (!sel) return;
+          arr.forEach((value) => {
+            const val = String(value ?? "").trim();
+            if (!val) return;
+            const option = sel.querySelector(`option[value="${val}"]`);
+            if (option && !option.selected) option.selected = true;
+          });
+          setTimeout(() => sel.dispatchEvent(new Event("change", { bubbles: true })), 150);
+        };
+        tagRestoreVmm(filters.marcas_incluidos, "vmm_marcas_incluidos");
+        tagRestoreVmm(filters.superarts_incluidos, "vmm_superarts_incluidos");
+        if (filters.modo_unidades) {
+          const modoHidden = document.getElementById("modo_unidades");
+          const modoBtns = document.querySelectorAll("#vmm-modo-unidades-buttons .vmm-modo-btn");
+          const m = filters.modo_unidades === "docenas" ? "docenas" : "packs";
+          if (modoHidden) modoHidden.value = m;
+          modoBtns.forEach((btn) => {
+            const active = btn.getAttribute("data-modo-unidades") === m;
+            btn.classList.toggle("border-sky-500", active);
+            btn.classList.toggle("bg-sky-50", active);
+            btn.classList.toggle("dark:bg-sky-900/20", active);
+            btn.classList.toggle("text-sky-700", active);
+            btn.classList.toggle("dark:text-sky-300", active);
+            btn.classList.toggle("shadow-md", active);
+            btn.classList.toggle("border-slate-300", !active);
+            btn.classList.toggle("dark:border-slate-600", !active);
+            btn.classList.toggle("bg-white", !active);
+            btn.classList.toggle("dark:bg-slate-800", !active);
+            btn.classList.toggle("text-slate-700", !active);
+            btn.classList.toggle("dark:text-slate-300", !active);
+          });
+        }
+        const tasaEl = document.getElementById("vmm_tasa_regalia_pct");
+        if (tasaEl && filters.tasa_regalia_pct != null && filters.tasa_regalia_pct !== "") {
+          tasaEl.value = filters.tasa_regalia_pct;
+        }
+        const tcEl = document.getElementById("vmm_tc");
+        if (tcEl && filters.tc != null) {
+          tcEl.value = filters.tc;
+        }
+        const coefEl = document.getElementById("vmm_coef_proyeccion");
+        if (coefEl && filters.coef_proyeccion != null && filters.coef_proyeccion !== "") {
+          coefEl.value = filters.coef_proyeccion;
+        }
+        const proyHidden = document.getElementById("vmm_incluir_proyeccion");
+        const proyBtns = document.querySelectorAll("#vmm-proyeccion-buttons .vmm-proy-btn");
+        if (proyHidden) {
+          const on = filters.incluir_proyeccion === "1" || filters.incluir_proyeccion === 1;
+          proyHidden.value = on ? "1" : "0";
+          proyBtns.forEach((btn) => {
+            const active = btn.getAttribute("data-incluir-proyeccion") === (on ? "1" : "0");
+            btn.classList.toggle("border-sky-500", active);
+            btn.classList.toggle("bg-sky-50", active);
+            btn.classList.toggle("dark:bg-sky-900/20", active);
+            btn.classList.toggle("text-sky-700", active);
+            btn.classList.toggle("dark:text-sky-300", active);
+            btn.classList.toggle("shadow-md", active);
+            btn.classList.toggle("border-slate-300", !active);
+            btn.classList.toggle("dark:border-slate-600", !active);
+            btn.classList.toggle("bg-white", !active);
+            btn.classList.toggle("dark:bg-slate-800", !active);
+            btn.classList.toggle("text-slate-700", !active);
+            btn.classList.toggle("dark:text-slate-300", !active);
+          });
         }
       }
       if (reportSlug === "ventas-objetivos-vs-bo") {
@@ -9325,7 +9549,7 @@ if (dashboardRoot) {
       const vendedoresExcluidosSelect = document.getElementById("vendedores_excluidos");
       const vendedoresIncluirSelect = document.getElementById("vendedores_incluir");
       const clientesIncluirSelect = document.getElementById("clientes_incluir");
-      if (vendedoresExcluidosSelect && isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
+      if (vendedoresExcluidosSelect && isInformeVentasMarcasFamiliaSlug(currentReportSlug)) {
         const selectedVend = Array.from(vendedoresExcluidosSelect.selectedOptions)
           .map((opt) => String(opt.value))
           .filter((v) => v);
@@ -9333,7 +9557,7 @@ if (dashboardRoot) {
           filters.vendedores_excluidos = selectedVend;
         }
       }
-      if (clientesIncluirSelect && isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
+      if (clientesIncluirSelect && isInformeVentasMarcasFamiliaSlug(currentReportSlug)) {
         const selectedCliInc = Array.from(clientesIncluirSelect.selectedOptions)
           .map((opt) => String(opt.value))
           .filter((v) => v);
@@ -9341,7 +9565,7 @@ if (dashboardRoot) {
           filters.clientes_incluir = selectedCliInc;
         }
       }
-      if (vendedoresIncluirSelect && isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
+      if (vendedoresIncluirSelect && isInformeVentasMarcasFamiliaSlug(currentReportSlug)) {
         const selectedVendInc = Array.from(vendedoresIncluirSelect.selectedOptions)
           .map((opt) => String(opt.value))
           .filter((v) => v);
@@ -9374,6 +9598,29 @@ if (dashboardRoot) {
         VPA_CATALOG_FILTER_SPECS.forEach(([selectId, key]) =>
           appendTagMultiFilter(selectId, filters, key)
         );
+      }
+      if (isVentasMarcasMensualSlug(currentReportSlug)) {
+        VMM_FILTER_SPECS.forEach(([selectId, key]) =>
+          appendTagMultiFilter(selectId, filters, key)
+        );
+        const modoEl = document.getElementById("modo_unidades");
+        if (modoEl && modoEl.value) {
+          filters.modo_unidades = modoEl.value;
+        }
+        const tasaEl = document.getElementById("vmm_tasa_regalia_pct");
+        if (tasaEl && tasaEl.value !== "") {
+          filters.tasa_regalia_pct = tasaEl.value;
+        }
+        const tcEl = document.getElementById("vmm_tc");
+        if (tcEl && tcEl.value.trim() !== "") {
+          filters.tc = tcEl.value.trim();
+        }
+        const proyEl = document.getElementById("vmm_incluir_proyeccion");
+        filters.incluir_proyeccion = proyEl && proyEl.value === "1" ? "1" : "0";
+        const coefEl = document.getElementById("vmm_coef_proyeccion");
+        if (coefEl && coefEl.value !== "") {
+          filters.coef_proyeccion = coefEl.value;
+        }
       }
       if (isJerarquiaVentasBoFamiliaSlug(currentReportSlug)) {
         const ordenarPorSelect = document.getElementById("ordenar_por");
@@ -9484,7 +9731,8 @@ if (dashboardRoot) {
       slug === "bo-stock-facturacion" ||
       slug === "ventas-objetivos-vs-bo" ||
       slug === "ventas-por-vendedor" ||
-      slug === "ventas-por-articulo"
+      slug === "ventas-por-articulo" ||
+      slug === "ventas-marcas-mensual"
     ) {
       return true;
     }
@@ -9513,6 +9761,10 @@ if (dashboardRoot) {
     "ventas-por-articulo": {
       title: "Cargando ventas por artículo",
       subtitle: "Consultando facturación por artículo, proveedor y cliente…",
+    },
+    "ventas-marcas-mensual": {
+      title: "Cargando ventas marcas mensual",
+      subtitle: "Consultando matriz vendedor × cliente por mes…",
     },
     ventas_netas: {
       title: "Cargando ventas netas",
@@ -9579,6 +9831,7 @@ if (dashboardRoot) {
     slug === "ventas-objetivos-vs-bo" ||
     slug === "ventas-por-vendedor" ||
     slug === "ventas-por-articulo" ||
+    slug === "ventas-marcas-mensual" ||
     isLogisticaListaComprobantesRutasSlug(slug);
 
   const fetchDashboardData = async (isAutoRefresh = false) => {
@@ -9701,6 +9954,43 @@ if (dashboardRoot) {
             if (errNote) {
               hasErrorNote = true;
               if (!isAutoRefresh) toast(errNote, "error");
+            }
+          } finally {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                hideReportsQueryLoadingModal();
+              });
+            });
+          }
+        } else if (isVentasMarcasMensualSlug(currentReportSlug)) {
+          try {
+            const vmmResponse = {
+              data: payload.data || [],
+              totals: payload.totals || {},
+              meta: payload.meta || {},
+              notes: payload.notes || [],
+            };
+            if (
+              window.ventasMarcasMensualHandler &&
+              typeof window.ventasMarcasMensualHandler.processData === "function"
+            ) {
+              window.ventasMarcasMensualHandler.processData(vmmResponse);
+            } else {
+              console.error(
+                "[dashboard] ventasMarcasMensualHandler no está definido; ¿cargó ventas_marcas_mensual.js?"
+              );
+            }
+            document.dispatchEvent(
+              new CustomEvent("reportDataLoaded", {
+                detail: { slug: currentReportSlug, response: vmmResponse },
+              })
+            );
+            const errNoteVmm = (payload.notes || []).find((n) =>
+              /error|tiempo|timeout|interrupted|max_execution|superó/i.test(String(n))
+            );
+            if (errNoteVmm) {
+              hasErrorNote = true;
+              if (!isAutoRefresh) toast(errNoteVmm, "error");
             }
           } finally {
             requestAnimationFrame(() => {

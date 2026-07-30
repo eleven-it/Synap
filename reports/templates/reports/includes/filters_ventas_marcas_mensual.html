@@ -1,0 +1,85 @@
+{% comment %}
+Filtros específicos ventas-marcas-mensual: marcas, SuperArt (id_manual), toggle packs/docenas.
+{% endcomment %}
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 w-full lg:col-span-6 mt-2">
+    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide md:col-span-2 mb-0">Catálogo y unidades</h3>
+    <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
+        Marcas
+        <div class="relative">
+            <select name="marcas_incluidos" id="vmm_marcas_incluidos" multiple class="hidden" data-tags-field="vmm_marcas_incluidos">
+                <option value="">Cargando...</option>
+            </select>
+            <div id="vmm_marcas_incluidos_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                <input type="text" id="vmm_marcas_incluidos_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar marca..." autocomplete="off">
+                <div id="vmm_marcas_incluidos_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+            </div>
+        </div>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = todas las marcas.</span>
+    </label>
+    <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
+        SuperArt (id_manual)
+        <div class="relative">
+            <select name="superarts_incluidos" id="vmm_superarts_incluidos" multiple class="hidden" data-tags-field="vmm_superarts_incluidos">
+                <option value="">Cargando...</option>
+            </select>
+            <div id="vmm_superarts_incluidos_tags_container" class="tags-filter-container flex flex-wrap items-center gap-1.5 py-2 px-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md min-h-[2.5rem] focus-within:ring-2 focus-within:ring-sky-400 focus-within:border-sky-400 transition-all duration-300">
+                <div class="tags-chips flex flex-wrap gap-1.5 flex-1"></div>
+                <input type="text" id="vmm_superarts_incluidos_search" class="tags-input flex-1 min-w-[120px] bg-transparent border-none outline-none text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500" placeholder="Buscar SuperArt..." autocomplete="off">
+                <div id="vmm_superarts_incluidos_dropdown" class="tags-dropdown absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg max-h-60 overflow-y-auto hidden"></div>
+            </div>
+        </div>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = todos los SuperArt. Se puede filtrar por marcas seleccionadas.</span>
+    </label>
+    <div class="flex flex-col gap-2 md:col-span-2">
+        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Unidades</span>
+        <input type="hidden" name="modo_unidades" id="modo_unidades" value="packs">
+        <div class="flex flex-wrap gap-2" id="vmm-modo-unidades-buttons" role="group" aria-label="Modo de unidades">
+            <button type="button" data-modo-unidades="packs"
+                    class="vmm-modo-btn px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-md">
+                Packs
+            </button>
+            <button type="button" data-modo-unidades="docenas"
+                    class="vmm-modo-btn px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">
+                Docenas
+            </button>
+        </div>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Packs = cantidad de venta; Docenas = cantidad / factor U.M. (P1→12, P2→6, P3→4, P6→2).</span>
+    </div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-4 w-full lg:col-span-6 mt-2">
+    <h3 class="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wide md:col-span-2 mb-0">Licencia y proyección</h3>
+    <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
+        Tasa regalía (%)
+        <input type="number" name="tasa_regalia_pct" id="vmm_tasa_regalia_pct" value="13" min="0" max="100" step="0.01"
+               class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300">
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Porcentaje sobre facturación neta (13 = 13 %).</span>
+    </label>
+    <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0">
+        Tipo de cambio (TC)
+        <input type="number" name="tc" id="vmm_tc" value="" min="0" step="0.0001" placeholder="Automático (cotización)"
+               class="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300">
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Vacío = cotización vigente (dólar id=1). Si falla, se usa 14,5817.</span>
+    </label>
+    <div class="flex flex-col gap-2 md:col-span-2">
+        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Incluir proyección</span>
+        <input type="hidden" name="incluir_proyeccion" id="vmm_incluir_proyeccion" value="0">
+        <div class="flex flex-wrap gap-2" id="vmm-proyeccion-buttons" role="group" aria-label="Incluir proyección">
+            <button type="button" data-incluir-proyeccion="0"
+                    class="vmm-proy-btn px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 border-sky-500 bg-sky-50 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 shadow-md">
+                No
+            </button>
+            <button type="button" data-incluir-proyeccion="1"
+                    class="vmm-proy-btn px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-200 border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-sky-400">
+                Sí
+            </button>
+        </div>
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic">Si está activa, la matriz muestra columnas U proy / $ proy (CEILING unidades, redondeo $).</span>
+    </div>
+    <label class="flex flex-col text-xs font-semibold text-slate-500 dark:text-slate-400 gap-2 min-w-0 md:col-span-2">
+        Coeficiente proyección
+        <input type="number" name="coef_proyeccion" id="vmm_coef_proyeccion" value="1.07" min="0" step="0.01"
+               class="w-full max-w-xs px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-sky-400 focus:border-sky-400 transition-all duration-300">
+        <span class="text-[10px] font-normal text-slate-400 dark:text-slate-500 italic mt-0.5">Solo aplica con proyección activa (default 1,07).</span>
+    </label>
+</div>

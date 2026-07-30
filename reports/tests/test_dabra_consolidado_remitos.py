@@ -219,9 +219,20 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             if "FROM cuentacliente cc" in sql and "INNER JOIN stock" in sql:
                 self.mock_cursor.description = desc_lineas
                 self.mock_cursor.fetchall.return_value = []
+            elif "NroFacturaMov" in sql:
+                self.mock_cursor.description = [
+                    ("codigo_movimiento_fa",),
+                    ("fa_nro_comprobante",),
+                    ("nc_nro",),
+                    ("nc_tipo",),
+                ]
+                self.mock_cursor.fetchall.return_value = []
             elif "FROM datosempresa" in sql:
                 self.mock_cursor.description = [("CUIT",)]
                 self.mock_cursor.fetchall.return_value = [("30-69074961-7",)]
+            else:
+                self.mock_cursor.description = []
+                self.mock_cursor.fetchall.return_value = []
 
         self.mock_cursor.execute.side_effect = execute_side_effect
         mock_pool.return_value.get_connection.return_value = self.mock_cm
@@ -231,6 +242,8 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
         sql_main, params_main = self.mock_cursor.execute.call_args_list[0][0]
         self.assertIn("cc.SubtotalDesc", sql_main)
         self.assertIn("cc.Codigo = %s", sql_main)
+        self.assertIn("NOT EXISTS", sql_main)
+        self.assertIn("NroFacturaMov", sql_main)
         self.assertIn("cc.TipoComprobante = 'FA'", sql_main)
         self.assertIn("cc.Anulado = 'No'", sql_main)
         self.assertIn("cc.Fecha BETWEEN %s AND %s", sql_main)
@@ -298,6 +311,14 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             if "INNER JOIN stock" in sql:
                 self.mock_cursor.description = desc_lineas
                 self.mock_cursor.fetchall.return_value = [linea_row]
+            elif "NroFacturaMov" in sql:
+                self.mock_cursor.description = [
+                    ("codigo_movimiento_fa",),
+                    ("fa_nro_comprobante",),
+                    ("nc_nro",),
+                    ("nc_tipo",),
+                ]
+                self.mock_cursor.fetchall.return_value = []
             elif "FROM rem_fact" in sql:
                 self.mock_cursor.description = desc_rem
                 self.mock_cursor.fetchall.return_value = [
@@ -310,6 +331,9 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
             elif "cliente_domicilio" in sql:
                 self.mock_cursor.description = [("CodigoMovimiento",), ("NroCalle",)]
                 self.mock_cursor.fetchall.return_value = [(1200, "100")]
+            else:
+                self.mock_cursor.description = []
+                self.mock_cursor.fetchall.return_value = []
 
         self.mock_cursor.execute.side_effect = execute_side_effect
         mock_pool.return_value.get_connection.return_value = self.mock_cm
@@ -396,6 +420,85 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
         self.assertEqual(out["totales_facturas"][0]["imp_neto"], 80.0)
 
     @patch("reports.services.dabra_consolidado_remitos.get_mysql_pool")
+    def test_excluye_fa_con_nc_vinculada(self, mock_pool):
+        """FA con NCA por NroFacturaMov no genera filas; alarma resumen."""
+        desc_lineas = [
+            ("codigo_movimiento_fa",),
+            ("fa_nro_comprobante",),
+            ("fa_tipo",),
+            ("fa_fecha",),
+            ("fe_cae",),
+            ("fe_vto_cae",),
+            ("SubTotal1",),
+            ("SubtotalDesc",),
+            ("ImporteVenta",),
+            ("id_stock",),
+            ("Cantidad",),
+            ("PrecioVentaxU",),
+            ("PrecioNetoxU",),
+            ("PrecioIVAxU",),
+            ("pordesc_bonif",),
+            ("PorDesc",),
+            ("imp_alicuota_iva",),
+            ("NombreArticulo",),
+            ("CodArtProv",),
+            ("categoria_nombre",),
+        ]
+        linea_row = (
+            1349,
+            "0008-00000014",
+            "FA",
+            "2026-07-28",
+            "x",
+            "2026-08-01",
+            Decimal("205120"),
+            Decimal("205120"),
+            Decimal("248195.20"),
+            1,
+            Decimal("1"),
+            Decimal("100"),
+            Decimal("100"),
+            Decimal("21"),
+            Decimal("0"),
+            Decimal("0"),
+            Decimal("21"),
+            "Art",
+            "950058-01 T110",
+            None,
+        )
+        desc_excluidas = [
+            ("codigo_movimiento_fa",),
+            ("fa_nro_comprobante",),
+            ("nc_nro",),
+            ("nc_tipo",),
+        ]
+
+        def execute_side_effect(sql, params):
+            if "INNER JOIN stock" in sql:
+                self.mock_cursor.description = desc_lineas
+                self.mock_cursor.fetchall.return_value = [linea_row]
+            elif "NroFacturaMov" in sql:
+                self.mock_cursor.description = desc_excluidas
+                self.mock_cursor.fetchall.return_value = [
+                    (1349, "0008-00000014", "0008-00000002", "NCA"),
+                ]
+            elif "datosempresa" in sql:
+                self.mock_cursor.description = [("CUIT",)]
+                self.mock_cursor.fetchall.return_value = [("30-69074961-7",)]
+            else:
+                self.mock_cursor.description = []
+                self.mock_cursor.fetchall.return_value = []
+
+        self.mock_cursor.execute.side_effect = execute_side_effect
+        mock_pool.return_value.get_connection.return_value = self.mock_cm
+
+        out = get_dabra_consolidado_remitos("emp_test", mes=7, anio=2026)
+        self.assertEqual(out["filas"], [])
+        self.assertEqual(out["totales_facturas"], [])
+        self.assertEqual(out["meta"]["fa_excluidas_nc_nd"], 1)
+        self.assertTrue(any("excluyeron 1 FA" in a for a in out["alarmas"]))
+
+    @patch("reports.services.dabra_consolidado_remitos.get_mysql_pool")
     def test_sin_remitos_refs_vacias_alarma(self, mock_pool):
         desc_lineas = [
             ("codigo_movimiento_fa",),
@@ -448,6 +551,14 @@ class TestGetDabraConsolidadoRemitosMocked(unittest.TestCase):
                 self.mock_cursor.fetchall.return_value = [linea_row]
             elif "FROM rem_fact" in sql:
                 self.mock_cursor.description = []
+                self.mock_cursor.fetchall.return_value = []
+            elif "NroFacturaMov" in sql:
+                self.mock_cursor.description = [
+                    ("codigo_movimiento_fa",),
+                    ("fa_nro_comprobante",),
+                    ("nc_nro",),
+                    ("nc_tipo",),
+                ]
                 self.mock_cursor.fetchall.return_value = []
             elif "datosempresa" in sql:
                 self.mock_cursor.description = [("CUIT",)]

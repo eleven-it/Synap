@@ -343,13 +343,16 @@
                         <!-- Reportes Legacy: Usar templates unificados -->
                         {% if report.slug == 'stock-existencias' %}
                         {% include "reports/includes/filters_stock_existencias.html" %}
-                        {% elif report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' %}
+                        {% elif report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marcas-mensual' %}
                         {% include "reports/includes/filters_period_bo_dual.html" %}
                         {% else %}
                         {% include "reports/includes/filters_period.html" %}
                         {% endif %}
-                        {% if report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' %}
+                        {% if report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marcas-mensual' %}
                         {% include "reports/includes/filters_bo_punto_venta_sucursales_depositos_clientes.html" %}
+                        {% endif %}
+                        {% if report.slug == 'ventas-marcas-mensual' %}
+                        {% include "reports/includes/filters_ventas_marcas_mensual.html" %}
                         {% endif %}
                         {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'uninvoiced_remitos' or report.slug == 'total-consolidado-operativo' %}
                         {% include "reports/includes/filters_sucursal_punto_venta.html" %}
@@ -376,7 +379,7 @@
                 {% if report.slug == 'ventas_netas' or report.slug == 'ventas-netas' %}
                 <p id="ventas-netas-summary-period" class="text-sm text-slate-600 dark:text-slate-400 mt-2 mb-4"></p>
                 {% endif %}
-                {% if report.slug != 'bo-stock-facturacion' and report.slug != 'ventas-objetivos-vs-bo' and report.slug != 'ventas-por-vendedor' and report.slug != 'ventas-por-articulo' and report.slug != 'stock-existencias' and report.slug != 'cash_flow_detailed_movements' %}
+                {% if report.slug != 'bo-stock-facturacion' and report.slug != 'ventas-objetivos-vs-bo' and report.slug != 'ventas-por-vendedor' and report.slug != 'ventas-por-articulo' and report.slug != 'ventas-marcas-mensual' and report.slug != 'stock-existencias' and report.slug != 'cash_flow_detailed_movements' %}
                 {% with widget=widgets|first %}
                 {% if widget %}
                 {% with widget_id=widget.id|stringformat:"s" %}
@@ -873,6 +876,56 @@
                     </div>
                 </section>
                 {% endif %}
+
+                {% if report.slug == 'ventas-marcas-mensual' %}
+                <div class="mt-4 mb-2 flex flex-row flex-wrap justify-between items-start gap-2">
+                    <div class="flex flex-col gap-0.5">
+                        <p id="vmm-summary-period" class="text-sm text-slate-600 dark:text-slate-400 m-0"></p>
+                        <p id="vmm-aviso-meses" class="hidden text-xs text-amber-700 dark:text-amber-300 m-0 mt-1" aria-live="polite"></p>
+                    </div>
+                    <div id="vmm-last-update-time" class="text-right text-xs text-slate-600 dark:text-slate-400"></div>
+                </div>
+                <section id="vmm-kpis-section" class="mt-2 mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 md:gap-4 lg:gap-6" aria-label="Resumen ventas marcas">
+                    <div class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 p-6 text-left">
+                        <span id="vmm-kpi-unidades-label" class="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold">Unidades</span>
+                        <div id="vmm-kpi-unidades" class="mt-3 text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tabular-nums">
+                            <span class="animate-pulse text-slate-400">Cargando...</span>
+                        </div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 p-6 text-left">
+                        <span class="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold">Facturación</span>
+                        <div id="vmm-kpi-facturacion" class="mt-3 text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tabular-nums">
+                            <span class="animate-pulse text-slate-400">Cargando...</span>
+                        </div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 p-6 text-left">
+                        <span class="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold">Precio medio</span>
+                        <div id="vmm-kpi-precio-medio" class="mt-3 text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tabular-nums">
+                            <span class="animate-pulse text-slate-400">Cargando...</span>
+                        </div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 p-6 text-left">
+                        <span class="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold">Regalías</span>
+                        <div id="vmm-kpi-regalias" class="mt-3 text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tabular-nums">
+                            <span class="animate-pulse text-slate-400">Cargando...</span>
+                        </div>
+                    </div>
+                    <div class="rounded-2xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-lg shadow-slate-900/5 p-6 text-left sm:col-span-2 md:col-span-1">
+                        <span class="text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 font-semibold">Regalías / TC</span>
+                        <div id="vmm-kpi-regalias-tc" class="mt-3 text-2xl md:text-3xl font-bold text-slate-900 dark:text-white tabular-nums">
+                            <span class="animate-pulse text-slate-400">Cargando...</span>
+                        </div>
+                    </div>
+                </section>
+                <section class="mt-1 flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                    <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 md:hidden">Deslizá horizontalmente si no ves todos los meses.</p>
+                    <div class="relative h-[min(75vh,56rem)] min-h-[14rem]">
+                        <div class="h-full overflow-auto overscroll-contain" id="vmm-matriz-container" role="region" aria-label="Matriz ventas marcas mensual">
+                            <p class="px-3 py-4 text-xs text-slate-500 dark:text-slate-400">Cargando matriz…</p>
+                        </div>
+                    </div>
+                </section>
+                {% endif %}
                 
                 {% if report.slug == 'cash_flow_waterfall' %}
                 {% include "reports/includes/cash_flow_detailed_movements_panel.html" with embedded_waterfall=True %}
@@ -884,7 +937,7 @@
         </div>
     </div>
     {% if not is_declarative %}
-        {% if report.slug == 'stock-existencias' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
+        {% if report.slug == 'stock-existencias' or report.slug == 'bo-stock-facturacion' or report.slug == 'ventas-objetivos-vs-bo' or report.slug == 'ventas-por-vendedor' or report.slug == 'ventas-por-articulo' or report.slug == 'ventas-marcas-mensual' or report.slug == 'ventas_netas' or report.slug == 'ventas-netas' or report.slug == 'comprobantes-rutas' or report.slug == 'cash_flow_detailed_movements' %}
         {# Modal de carga compartido (petición API + render): stock, BO, ventas netas, comprobantes en ruta. fixed + z alto; flex desde JS. #}
         <div id="reports-legacy-query-loading-modal"
              class="hidden fixed inset-0 z-[9999] p-4 sm:p-8 bg-slate-950/60 backdrop-blur-sm pointer-events-auto transition-opacity duration-200"
@@ -5122,6 +5175,9 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endif %}
 {% if report.slug == 'ventas-por-articulo' %}
 <script src="{% static 'reports/js/ventas_por_articulo.js' %}?v=202605202"></script>
+{% endif %}
+{% if report.slug == 'ventas-marcas-mensual' %}
+<script src="{% static 'reports/js/ventas_marcas_mensual.js' %}?v=202607292"></script>
 {% endif %}
 {% if report.slug == 'cash_flow_detailed_movements' or report.slug == 'cash_flow_waterfall' %}
 <script src="{% static 'reports/js/cash_flow_detailed_movements.js' %}?v=20260602b" defer></script>

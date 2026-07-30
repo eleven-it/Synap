@@ -38,13 +38,21 @@ def resolver_modo_presentacion_operativa(request) -> str:
     return parse_modo_presentacion_operativa(request.session.get(SESSION_KEY))
 
 
-def pcp_pares_y_docenas_decimal(cantidad: Any) -> Dict[str, Any]:
-    """Paridad PCP: columna Pares (entero) y Docenas = pares ÷ 12 (decimal)."""
+def pcp_pares_y_docenas_decimal(
+    cantidad: Any,
+    *,
+    clamp_negativos: bool = True,
+) -> Dict[str, Any]:
+    """Paridad PCP: columna Pares (entero) y Docenas = pares ÷ 12 (decimal).
+
+    ``clamp_negativos=False`` conserva saldos negativos (inventario real, p. ej. Terminado en Armado).
+    """
     try:
         pares = int(round(float(cantidad or 0)))
     except (TypeError, ValueError):
         pares = 0
-    pares = max(0, pares)
+    if clamp_negativos:
+        pares = max(0, pares)
     return {
         "pares": pares,
         "docenas": round(pares / float(UNIDADES_POR_DOCENA), 2),
@@ -73,16 +81,29 @@ def _enriquecer_bloque_demanda_pcp(out: Dict[str, Any]) -> None:
     out["resta_urgente_docenas_pcp"] = docenas_enteras_pcp(out.get("resta_urgente", 0))
 
 
-def docenas_enteras_pcp(cantidad: Any) -> int:
+def docenas_enteras_pcp(cantidad: Any, *, clamp_negativos: bool = True) -> int:
     """Docenas para UI tablero: entero redondeado (pares ÷ 12)."""
-    return int(round(float(pcp_pares_y_docenas_decimal(cantidad)["docenas"])))
+    return int(
+        round(
+            float(
+                pcp_pares_y_docenas_decimal(cantidad, clamp_negativos=clamp_negativos)[
+                    "docenas"
+                ]
+            )
+        )
+    )
 
 
-def _display_cantidad_tablero(val: Any, modo: str) -> str:
+def _display_cantidad_tablero(
+    val: Any,
+    modo: str,
+    *,
+    clamp_negativos: bool = True,
+) -> str:
     """Solo docenas enteras o pares enteros — sin decimales."""
-    pcp = pcp_pares_y_docenas_decimal(val)
+    pcp = pcp_pares_y_docenas_decimal(val, clamp_negativos=clamp_negativos)
     if modo == "docenas":
-        return str(docenas_enteras_pcp(val))
+        return str(docenas_enteras_pcp(val, clamp_negativos=clamp_negativos))
     return str(pcp["pares"])
 
 
@@ -168,6 +189,9 @@ CAMPOS_TABLERO_ARMADO = (
     "a_armar",
 )
 
+# Inventario real: no ocultar saldos negativos (paridad Inventario Stock).
+CAMPOS_ARMADO_SIN_CLAMP_NEGATIVOS = frozenset({"stock_terminado"})
+
 
 def enriquecer_fila_tablero_armado(
     fila: Dict[str, Any],
@@ -179,8 +203,19 @@ def enriquecer_fila_tablero_armado(
     out["presentacion_modo"] = modo
     for campo in CAMPOS_TABLERO_ARMADO:
         if campo in out:
-            out[f"{campo}_display"] = _display_cantidad_tablero(out[campo], modo)
-            out[f"{campo}_docenas_pcp"] = docenas_enteras_pcp(out[campo])
+            clamp = campo not in CAMPOS_ARMADO_SIN_CLAMP_NEGATIVOS
+            out[f"{campo}_display"] = _display_cantidad_tablero(
+                out[campo], modo, clamp_negativos=clamp
+            )
+            out[f"{campo}_docenas_pcp"] = docenas_enteras_pcp(
+                out[campo], clamp_negativos=clamp
+            )
+            if not clamp:
+                try:
+                    saldo = int(round(float(out[campo] or 0)))
+                except (TypeError, ValueError):
+                    saldo = 0
+                out[f"{campo}_es_negativo"] = saldo < 0
     cm = out.get("codigo_marca")
     if cm is not None and marcas_etiqueta:
         out["marca_nombre"] = marcas_etiqueta.get(int(cm), "")

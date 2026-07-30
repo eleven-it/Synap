@@ -26,13 +26,14 @@
   <div class="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:gap-x-4 lg:gap-y-3">
     {% include "includes/filtro_marcas_tags.html" with variant="light" marcas_catalogo=marcas_catalogo marcas_incluidos=filtros.marcas_incluidos only %}
 
-    {# Filtro en vivo de la grilla (cliente) + sync opcional al servidor #}
+    {# Búsqueda server-side (debounce → GET); mín. 2 caracteres en backend #}
     <div class="relative z-20 min-w-0 flex-1 lg:max-w-md xl:max-w-lg">
-      <label for="inventario-busqueda" class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300">Buscar en tabla</label>
+      <label for="inventario-busqueda" class="mb-1 block text-[11px] font-medium text-slate-600 dark:text-slate-300">Buscar</label>
       <div class="relative">
         <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 text-lg text-slate-400" aria-hidden="true">search</span>
         <input type="search" id="inventario-busqueda" x-model="busqueda" @input="onBusquedaInput()"
-               placeholder="Filtrar por nombre, talle, color o código…" autocomplete="off"
+               @keydown.enter.prevent="enviarBusqueda()"
+               placeholder="Nombre, talle, color o código (mín. 2 caracteres)…" autocomplete="off"
                class="inv-input-dense h-8 w-full rounded-md border border-slate-300 bg-white py-1.5 pl-9 pr-8 text-xs shadow-sm placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500">
         <button type="button" x-show="busqueda.trim() !== ''" x-cloak @click="limpiarBusqueda()"
                 class="absolute right-1.5 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"

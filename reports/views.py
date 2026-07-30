@@ -26,6 +26,7 @@ BUILDER_HYBRID_SLUGS = frozenset(
         "ventas-objetivos-vs-bo",
         "ventas-por-vendedor",
         "ventas-por-articulo",
+        "ventas-marcas-mensual",
         "bo-stock-facturacion",
         "stock-existencias",
     }
@@ -283,6 +284,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                 ),
                 "movimientos_caja": reverse(
                     "reports-api:reports-executive-dashboard-tesoreria-movimientos-caja"
+                ),
+                "ventas_marcas_mensual": reverse(
+                    "reports:dashboard_detail", kwargs={"slug": "ventas-marcas-mensual"}
                 ),
             }
         return context
