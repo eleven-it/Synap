@@ -45,11 +45,11 @@ También muestra **Talle** y **Color** del artículo, útiles para controlar cal
 
 ### Filtros
 
-1. **Tipo de artículo:** **Fabricados** (por defecto) o **Terminados**.
+1. **Tipo de artículo:** **Terminados** (por defecto) o **Fabricados**.
 2. **Marcas:** puede elegir una o varias (vacío = todas).
 3. **Artículo / buscar en tabla:** filtrá al escribir por nombre, talle, color o código (mismo patrón que tablero MPR). La **X** del campo quita el filtro.
 4. **Presentación:** **Pares** (por defecto) o **Docenas**.
-5. Por defecto solo se listan artículos **con stock** en las etapas del tipo activo; active incluir sin stock si lo necesita.
+5. **Saldo:** **Todos** (por defecto) · **Con stock** (saldo > 0 en alguna etapa) · **Sin stock** (0 o negativo en todas las etapas del tipo; útil para ajustes). Los saldos negativos se muestran en rojo.
 6. **Actualizar** recarga desde el servidor (marcas, tipo, stock, presentación).
 
 ### Día a día
@@ -93,7 +93,7 @@ También muestra **Talle** y **Color** del artículo, útiles para controlar cal
 
 - **Chip «Datos incompletos» / Agregar deshabilitado:** complete fecha, motivo y depósito origen (y destino si aplica).
 - **«Código inexistente»:** el texto no coincide con un artículo; revise el código o busque por nombre.
-- **«No hay artículos con los filtros seleccionados»** (inventario): amplíe marcas, quite el filtro de artículo o incluya sin stock.
+- **«No hay artículos con los filtros seleccionados»** (inventario): amplíe marcas, cambie **Saldo** a Todos / Con stock / Sin stock, o quite el filtro de artículo.
 - **Talle/Color en «—»:** falta el dato de talle/color; no implica saldo cero.
 - **Inventario vacío con stock real:** revise en Producción → Config. Depósitos que cada depósito tenga el tipo de etapa correcto y que sume al stock.
 - **Sin empresa activa:** seleccione la empresa al iniciar sesión.

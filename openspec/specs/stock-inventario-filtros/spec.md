@@ -21,7 +21,7 @@ The pantalla MUST mostrar una barra de filtros sticky sobre la tabla con:
 - Selector **multi-marca** con chips (tags)
 - Campo de **búsqueda predictiva** de artículo
 - Toggle **Unidades / Docenas** (spec `stock-inventario-tabla` REQ-INV-09)
-- Control **Ver todos los artículos** (spec `stock-inventario-tabla` REQ-INV-08)
+- Toggle **Todos | Con stock | Sin stock** (spec `stock-inventario-tabla` REQ-INV-08)
 - Acción **Limpiar** que restablece filtros (excepto presentación si producto decide conservarla)
 
 ### REQ-FIL-02 — Filtro multi-marca (tags)
@@ -39,7 +39,7 @@ Vacío = **todas las marcas**.
 
 Filtrado MUST aplicarse en servidor: `articulo.CodigoMarca IN (...)`.
 
-Al aplicar filtros, MUST preservarse en URL `incluir_ceros`, `presentacion`, `page`, `q`, `id_articulo`.
+Al aplicar filtros, MUST preservarse en URL `filtro_stock`, `presentacion`, `page`, `q`, `id_articulo`.
 
 ### REQ-FIL-03 — Búsqueda predictiva (API)
 
@@ -52,9 +52,9 @@ Parámetros:
 | `q` | Texto ≥ 2 caracteres |
 | `limit` | Default 15; máx. 50 sugerencias en dropdown |
 | `marcas_incluidos` | Lista de `CodMarca`; opcional |
-| `incluir_ceros` | `0`/`1`; mismo criterio que tabla |
+| `filtro_stock` | `todos`/`con_stock`/`sin_stock`; mismo criterio que tabla (legacy `incluir_ceros`) |
 
-**Alcance:** la API MUST buscar en el **universo completo** de artículos que cumplen `marcas_incluidos` e `incluir_ceros`, **sin** restricción por `page` ni `offset` de la tabla.
+**Alcance:** la API MUST buscar en el **universo completo** de artículos que cumplen `marcas_incluidos` y `filtro_stock`, **sin** restricción por `page` ni `offset` de la tabla.
 
 Respuesta JSON: array `articulos` con `id_articulo`, `codigo_compuesto`, `id_manual`, `cod_art_prov`, `nombre`, `marca_nombre`.
 
@@ -66,7 +66,7 @@ Con `q` < 2 caracteres: `articulos: []`.
 
 Combobox MUST seguir accesibilidad de `mpr/reportes/_busqueda_tabla_articulos.html` (teclado, debounce ~300 ms).
 
-Al seleccionar sugerencia, MUST navegar a `?id_articulo={IDArt}` preservando `marcas_incluidos`, `incluir_ceros`, `presentacion`.
+Al seleccionar sugerencia, MUST navegar a `?id_articulo={IDArt}` preservando `marcas_incluidos`, `filtro_stock`, `presentacion`.
 
 La búsqueda MUST encontrar artículos en **cualquier página** del resultado paginado (ej. artículo en fila 200 con `page=1` activo).
 
@@ -86,7 +86,7 @@ Resultado paginado: primero filtrar universo, luego `LIMIT 150 OFFSET`.
 
 ### REQ-FIL-07 — Combinación de filtros
 
-`marcas_incluidos`, `q`, `id_articulo`, `incluir_ceros` MUST combinarse.
+`marcas_incluidos`, `q`, `id_articulo`, `filtro_stock` MUST combinarse.
 
 Si `id_articulo` presente: `q` ignorado; `marcas_incluidos` aplica (empty si marca no coincide).
 
@@ -94,7 +94,7 @@ Si `id_articulo` presente: `q` ignorado; `marcas_incluidos` aplica (empty si mar
 
 Filtros activos MUST reflejarse en URL GET.
 
-Links de paginación MUST conservar `marcas_incluidos`, `q`, `id_articulo`, `incluir_ceros`, `presentacion`.
+Links de paginación MUST conservar `marcas_incluidos`, `q`, `id_articulo`, `filtro_stock`, `presentacion`.
 
 ### REQ-FIL-09 — Contador de resultados
 
@@ -137,17 +137,17 @@ Endpoint o contexto de vista MUST proveer catálogo `CodMarca` + `NombreMarca` p
 - **THEN** total mostrado es 3
 - **AND** página 1 muestra las 3 filas (no solo las de la página 1 del universo sin filtro)
 
-### ESC-FIL-05 — API con marcas e incluir_ceros
+### ESC-FIL-05 — API con marcas y filtro_stock
 
-- **GIVEN** artículo marca 3 con consolidado 0
-- **WHEN** `GET .../articulos/?q=test&marcas_incluidos=3&incluir_ceros=0`
-- **THEN** artículo con consolidado 0 MUST NOT aparecer
-- **WHEN** `incluir_ceros=1`
+- **GIVEN** artículo marca 3 con saldo ≤ 0 en el ámbito
+- **WHEN** `GET .../articulos/?q=test&marcas_incluidos=3&filtro_stock=con_stock`
+- **THEN** ese artículo MUST NOT aparecer
+- **WHEN** `filtro_stock=todos` (o ausente)
 - **THEN** MAY aparecer si coincide `q`
 
 ### ESC-FIL-06 — Limpiar filtros
 
-- **GIVEN** URL con `marcas_incluidos`, `q`, `id_articulo`, `incluir_ceros=1`
+- **GIVEN** URL con `marcas_incluidos`, `q`, `id_articulo`, `filtro_stock=sin_stock`
 - **WHEN** usuario pulsa **Limpiar**
 - **THEN** navega a `/stock/inventario/` sin params de filtro (MUST conservar `presentacion` si estaba en docenas)
 

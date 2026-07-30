@@ -39,6 +39,13 @@ AMBITO_FABRICADOS = "fabricados"
 AMBITO_TERMINADOS = "terminados"
 AMBITOS_VALIDOS = frozenset({AMBITO_FABRICADOS, AMBITO_TERMINADOS})
 
+# Filtro de saldo en etapas del ámbito: Todos | Con stock (>0) | Sin stock (≤0)
+FILTRO_STOCK_TODOS = "todos"
+FILTRO_STOCK_CON = "con_stock"
+FILTRO_STOCK_SIN = "sin_stock"
+FILTROS_STOCK_VALIDOS = frozenset({FILTRO_STOCK_TODOS, FILTRO_STOCK_CON, FILTRO_STOCK_SIN})
+FILTRO_STOCK_DEFAULT = FILTRO_STOCK_TODOS
+
 # tipo_art_fab Admin por ámbito (Fabricado 2da = packs/componentes fabricados)
 TIPOS_ART_FAB_POR_AMBITO: Dict[str, Tuple[str, ...]] = {
     AMBITO_FABRICADOS: ("Fabricado", "Fabricado 2da"),
@@ -51,9 +58,9 @@ class InventarioTablaFiltros:
     marcas_incluidos: List[int] = field(default_factory=list)
     busqueda: Optional[str] = None
     id_articulo: Optional[int] = None
-    incluir_ceros: bool = False
+    filtro_stock: str = FILTRO_STOCK_DEFAULT
     presentacion: str = "unidades"
-    ambito: str = AMBITO_FABRICADOS
+    ambito: str = AMBITO_TERMINADOS
     page: int = 1
 
     @property
@@ -61,17 +68,22 @@ class InventarioTablaFiltros:
         p = max(1, self.page)
         return (p - 1) * PAGE_SIZE
 
+    @property
+    def incluir_ceros(self) -> bool:
+        """Compat: True cuando el listado no exige saldo positivo (todos o sin stock)."""
+        return self.filtro_stock != FILTRO_STOCK_CON
+
 
 def parse_ambito(raw: Optional[str]) -> str:
-    modo = (raw or AMBITO_FABRICADOS).strip().lower()
-    return modo if modo in AMBITOS_VALIDOS else AMBITO_FABRICADOS
+    modo = (raw or AMBITO_TERMINADOS).strip().lower()
+    return modo if modo in AMBITOS_VALIDOS else AMBITO_TERMINADOS
 
 
 def etapas_para_ambito(ambito: Optional[str]) -> Tuple[Tuple[str, str], ...]:
     """Columnas de etapa visibles según Fabricados | Terminados."""
-    if parse_ambito(ambito) == AMBITO_TERMINADOS:
-        return ETAPAS_TERMINADOS
-    return ETAPAS_FABRICADOS
+    if parse_ambito(ambito) == AMBITO_FABRICADOS:
+        return ETAPAS_FABRICADOS
+    return ETAPAS_TERMINADOS
 
 
 def build_inventario_query_string(
@@ -88,11 +100,11 @@ def build_inventario_query_string(
     pairs: List[Tuple[str, str]] = []
     for m in filtros.marcas_incluidos:
         pairs.append(("marcas_incluidos", str(m)))
-    if filtros.incluir_ceros:
-        pairs.append(("incluir_ceros", "1"))
+    if filtros.filtro_stock and filtros.filtro_stock != FILTRO_STOCK_DEFAULT:
+        pairs.append(("filtro_stock", filtros.filtro_stock))
     if filtros.presentacion and filtros.presentacion != "unidades":
         pairs.append(("presentacion", filtros.presentacion))
-    if filtros.ambito and filtros.ambito != AMBITO_FABRICADOS:
+    if filtros.ambito and filtros.ambito != AMBITO_TERMINADOS:
         pairs.append(("ambito", filtros.ambito))
     if not clear_search:
         if id_articulo is not None:
@@ -110,6 +122,41 @@ def build_inventario_query_string(
 def parse_presentacion(raw: Optional[str]) -> str:
     modo = (raw or "unidades").strip().lower()
     return modo if modo in ("unidades", "docenas") else "unidades"
+
+
+def parse_filtro_stock(raw: Optional[str], *, incluir_ceros_legacy: Optional[str] = None) -> str:
+    """
+    Normaliza filtro de saldo.
+
+    Preferencia: ``filtro_stock`` (todos|con_stock|sin_stock).
+    Legacy: ``incluir_ceros=1`` → todos; ``incluir_ceros=0`` → con_stock.
+    Default: todos.
+    """
+    modo = (raw or "").strip().lower().replace("-", "_").replace(" ", "_")
+    aliases = {
+        "todos": FILTRO_STOCK_TODOS,
+        "all": FILTRO_STOCK_TODOS,
+        "con_stock": FILTRO_STOCK_CON,
+        "con": FILTRO_STOCK_CON,
+        "positivo": FILTRO_STOCK_CON,
+        "sin_stock": FILTRO_STOCK_SIN,
+        "sin": FILTRO_STOCK_SIN,
+        "cero": FILTRO_STOCK_SIN,
+        "ceros": FILTRO_STOCK_SIN,
+        "negativo": FILTRO_STOCK_SIN,
+        "negativos": FILTRO_STOCK_SIN,
+    }
+    if modo in aliases:
+        return aliases[modo]
+    if modo in FILTROS_STOCK_VALIDOS:
+        return modo
+    if incluir_ceros_legacy is not None:
+        legacy = str(incluir_ceros_legacy or "").strip().lower()
+        if legacy in ("1", "true", "yes", "si", "sí"):
+            return FILTRO_STOCK_TODOS
+        if legacy in ("0", "false", "no"):
+            return FILTRO_STOCK_CON
+    return FILTRO_STOCK_DEFAULT
 
 
 def parse_inventario_filtros(
@@ -135,21 +182,24 @@ def parse_inventario_filtros(
         q = None
 
     id_art = to_int_or_none(get_params.get("id_articulo"))
-    incluir = str(get_params.get("incluir_ceros") or "0").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "si",
-        "sí",
-    )
     page = to_int_or_none(get_params.get("page")) or 1
     page = max(1, int(page))
+
+    raw_filtro = get_params.get("filtro_stock")
+    legacy_ceros = None
+    if raw_filtro in (None, ""):
+        # Solo aplicar legacy si vino explícito en la query
+        if hasattr(get_params, "__contains__"):
+            if "incluir_ceros" in get_params:
+                legacy_ceros = get_params.get("incluir_ceros")
+        elif get_params.get("incluir_ceros") is not None:
+            legacy_ceros = get_params.get("incluir_ceros")
 
     return InventarioTablaFiltros(
         marcas_incluidos=marcas,
         busqueda=q if not id_art else None,
         id_articulo=id_art,
-        incluir_ceros=incluir,
+        filtro_stock=parse_filtro_stock(raw_filtro, incluir_ceros_legacy=legacy_ceros),
         presentacion=parse_presentacion(get_params.get("presentacion")),
         ambito=parse_ambito(get_params.get("ambito")),
         page=page,
@@ -243,7 +293,7 @@ def _build_articulo_where(
     parts: List[str] = []
     params: List[Any] = []
 
-    tipos_fab = TIPOS_ART_FAB_POR_AMBITO.get(parse_ambito(f.ambito), TIPOS_ART_FAB_POR_AMBITO[AMBITO_FABRICADOS])
+    tipos_fab = TIPOS_ART_FAB_POR_AMBITO.get(parse_ambito(f.ambito), TIPOS_ART_FAB_POR_AMBITO[AMBITO_TERMINADOS])
     if len(tipos_fab) == 1:
         parts.append(f"COALESCE(TRIM({alias}.tipo_art_fab), '') = %s")
         params.append(tipos_fab[0])
@@ -313,6 +363,37 @@ def _sql_tiene_stock_positivo_expr(
         f"COALESCE({alias}.`{tipo}`, 0) > 0"
         for tipo, _ in cols
     ) + ")"
+
+
+def _sql_sin_stock_positivo_expr(
+    alias: str = "agg",
+    *,
+    etapas: Optional[Tuple[Tuple[str, str], ...]] = None,
+) -> str:
+    """Sin stock: ninguna etapa del ámbito tiene saldo > 0 (ceros y negativos)."""
+    return f"(NOT {_sql_tiene_stock_positivo_expr(alias, etapas=etapas)})"
+
+
+def _sql_where_filtro_stock(
+    filtro_stock: str,
+    *,
+    etapas: Optional[Tuple[Tuple[str, str], ...]] = None,
+    tiene_agg: bool = True,
+) -> str:
+    """Fragmento AND … según filtro_stock; vacío si todos."""
+    modo = parse_filtro_stock(filtro_stock)
+    if modo == FILTRO_STOCK_TODOS:
+        return ""
+    if not tiene_agg:
+        # Sin depósitos MPR no hay saldos: con_stock → vacío; sin_stock → todos (todos ≤0)
+        if modo == FILTRO_STOCK_CON:
+            return " AND 0 > 0"
+        return ""
+    if modo == FILTRO_STOCK_CON:
+        return f" AND {_sql_tiene_stock_positivo_expr(etapas=etapas)}"
+    if modo == FILTRO_STOCK_SIN:
+        return f" AND {_sql_sin_stock_positivo_expr(etapas=etapas)}"
+    return ""
 
 
 def _sql_consolidado_expr(
@@ -385,18 +466,13 @@ def consultar_inventario_tabla(
                 _sql_consolidado_expr(etapas=etapas) if join_agg else "0"
             )
 
-            where_stock_parts = []
-            if not filtros.incluir_ceros and not filtros.id_articulo:
-                where_stock_parts.append(
-                    _sql_tiene_stock_positivo_expr(etapas=etapas)
-                    if join_agg
-                    else "0 > 0"
+            where_stock_sql = ""
+            if not filtros.id_articulo:
+                where_stock_sql = _sql_where_filtro_stock(
+                    filtros.filtro_stock,
+                    etapas=etapas,
+                    tiene_agg=bool(join_agg),
                 )
-            where_stock_sql = (
-                " AND " + " AND ".join(where_stock_parts)
-                if where_stock_parts
-                else ""
-            )
 
             tart = tbl_art.replace("`", "``")
             join_ce = ""
@@ -509,7 +585,9 @@ def preparar_filas_inventario_presentacion(
             etapas_celdas.append({
                 "tipo_mpr": tipo,
                 "label": label,
-                "celda": _celda_stock_deposito(saldo, modo, cantidad_promedio_bulto=bulto),
+                "celda": _celda_stock_deposito(
+                    saldo, modo, cantidad_promedio_bulto=bulto, clamp_negativos=False
+                ),
             })
         consolidado = fila.get("consolidado", 0)
         out.append({
@@ -520,7 +598,7 @@ def preparar_filas_inventario_presentacion(
             "color": ce_texto(fila.get("color")),
             "etapas": etapas_celdas,
             "consolidado": _celda_stock_deposito(
-                consolidado, modo, cantidad_promedio_bulto=bulto
+                consolidado, modo, cantidad_promedio_bulto=bulto, clamp_negativos=False
             ),
         })
     return out
@@ -531,7 +609,8 @@ def buscar_articulos_inventario(
     q: str,
     *,
     marcas_incluidos: Optional[List[int]] = None,
-    incluir_ceros: bool = False,
+    filtro_stock: Optional[str] = None,
+    incluir_ceros: Optional[bool] = None,
     ambito: Optional[str] = None,
     limit: int = 15,
 ) -> List[Dict[str, Any]]:
@@ -542,10 +621,18 @@ def buscar_articulos_inventario(
     limit = min(max(1, limit), 50)
     ambito_norm = parse_ambito(ambito)
     etapas = etapas_para_ambito(ambito_norm)
+    if filtro_stock:
+        fs = parse_filtro_stock(filtro_stock)
+    elif incluir_ceros is True:
+        fs = FILTRO_STOCK_TODOS
+    elif incluir_ceros is False:
+        fs = FILTRO_STOCK_CON
+    else:
+        fs = FILTRO_STOCK_DEFAULT
     f = InventarioTablaFiltros(
         marcas_incluidos=list(marcas_incluidos or []),
         busqueda=q,
-        incluir_ceros=incluir_ceros,
+        filtro_stock=fs,
         ambito=ambito_norm,
         page=1,
     )
@@ -568,13 +655,11 @@ def buscar_articulos_inventario(
                 join_agg = f"LEFT JOIN ({agg_sql}) agg ON agg.id_articulo = a.IDArt"
                 consolidado_expr = _sql_consolidado_expr(etapas=etapas)
 
-            where_stock_sql = ""
-            if not incluir_ceros:
-                where_stock_sql = (
-                    f" AND {_sql_tiene_stock_positivo_expr(etapas=etapas)}"
-                    if join_agg
-                    else " AND 0 > 0"
-                )
+            where_stock_sql = _sql_where_filtro_stock(
+                f.filtro_stock,
+                etapas=etapas,
+                tiene_agg=bool(join_agg),
+            )
 
             tart = tbl_art.replace("`", "``")
             join_ce = ""

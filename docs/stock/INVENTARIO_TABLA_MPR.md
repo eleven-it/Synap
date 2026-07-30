@@ -13,8 +13,8 @@ El toggle **Tipo de artículo** separa dos universos según `articulo.tipo_art_f
 
 | Ámbito (`ambito`) | Artículos (`tipo_art_fab`) | Columnas de stock | Consolidado |
 |-------------------|----------------------------|-------------------|-------------|
-| **Fabricados** (default) | `Fabricado`, `Fabricado 2da` | Producción, Semi elaborado, 2da Selección | Suma de esas tres |
-| **Terminados** | `Terminado` | Terminado | *(sin columna Consolidado; sería idéntica a Terminado)* |
+| **Terminados** (default) | `Terminado` | Terminado | *(sin columna Consolidado; sería idéntica a Terminado)* |
+| **Fabricados** | `Fabricado`, `Fabricado 2da` | Producción, Semi elaborado, 2da Selección | Suma de esas tres |
 
 | Columna | Origen |
 |---------|--------|
@@ -35,17 +35,23 @@ Detalle de modelo CE: [../mpr/ARTICULO_CE_TALLES_COLOR.md](../mpr/ARTICULO_CE_TA
 
 | Parámetro | Descripción |
 |-----------|-------------|
-| `ambito` | `fabricados` (default) o `terminados` |
+| `ambito` | `terminados` (default) o `fabricados` |
 | `marcas_incluidos` | Multi-select tags (vacío = todas) |
 | `q` | Filtro de texto (también se filtra en vivo en la página cargada: nombre, talle, color, códigos) |
 | `id_articulo` | Una fila concreta (también filtrada por ámbito) |
-| `incluir_ceros=1` | Incluye artículos sin saldo positivo en ninguna etapa del ámbito |
+| `filtro_stock` | `todos` (default) · `con_stock` · `sin_stock` |
 | `presentacion` | `unidades` (pares, default) o `docenas` (docenas de pares) |
 | `page` | Paginación (150 filas) |
 
-Con el filtro predeterminado **Solo con stock**, un artículo se muestra si tiene saldo **> 0** en al menos una etapa **del ámbito activo**. Saldos en cero o negativos no entran. El consolidado es la suma de esas mismas etapas. El filtro de stock se aplica en `WHERE` (no `HAVING`) para evitar vaciar el resultado con joins a CE.
+| `filtro_stock` | Criterio (etapas del ámbito activo) |
+|----------------|--------------------------------------|
+| **todos** (default) | Todos los artículos del ámbito; **muestra saldos negativos** (sin clamp a 0) |
+| **con_stock** | Al menos una etapa con saldo **> 0** |
+| **sin_stock** | Ninguna etapa con saldo > 0 (ceros y **negativos**, para ajustes) |
 
-Componentes UI compartidos con MPR operativo: `templates/includes/filtro_marcas_tags.html` (variant `light`), JS `stock/static/stock/js/filtro_marcas_tags.mjs`. Los toggles **Fabricados | Terminados** y **Docenas | Pares** se renderizan en `_filtros.html` (bindings Alpine `cambiarAmbito` / `cambiarPresentacion`).
+Compat URL legacy: `incluir_ceros=1` → `todos`; `incluir_ceros=0` → `con_stock`. El filtro de stock se aplica en `WHERE` (no `HAVING`) para evitar vaciar el resultado con joins a CE. El consolidado es la suma de las etapas del ámbito.
+
+Componentes UI compartidos con MPR operativo: `templates/includes/filtro_marcas_tags.html` (variant `light`), JS `stock/static/stock/js/filtro_marcas_tags.mjs`. Los toggles **Fabricados | Terminados**, **Docenas | Pares** y **Todos | Con stock | Sin stock** se renderizan en `_filtros.html` (bindings Alpine).
 
 ## UI
 

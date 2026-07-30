@@ -213,25 +213,34 @@ def _celda_stock_deposito(
     modo: str,
     *,
     cantidad_promedio_bulto: Any = None,
+    clamp_negativos: bool = True,
 ) -> Dict[str, Any]:
-    """Celda pivote: docenas arriba y pares abajo (modo docenas) o solo pares."""
+    """Celda pivote: docenas arriba y pares abajo (modo docenas) o solo pares.
+
+    ``clamp_negativos=False`` (Inventario Stock): conserva saldos negativos para ajustes.
+    """
     try:
         total = int(float(saldo or 0))
     except (TypeError, ValueError):
         total = 0
-    total = max(0, total)
+    if clamp_negativos:
+        total = max(0, total)
     if modo == "docenas":
+        signo = -1 if total < 0 else 1
         partes = descomponer_docenas_unidades(
-            total,
+            abs(total),
             cantidad_promedio_bulto,
             unidades_por_docena_fijo=UNIDADES_POR_DOCENA_COMPONENTE,
         )
+        docenas = signo * int(partes["docenas"])
+        unidades = signo * int(partes["unidades"])
         return {
             "saldo": total,
-            "docenas": partes["docenas"],
-            "unidades": partes["unidades"],
-            "docenas_display": str(partes["docenas"]),
-            "unidades_display": str(partes["unidades"]),
+            "docenas": docenas,
+            "unidades": unidades,
+            "docenas_display": str(docenas),
+            "unidades_display": str(unidades),
+            "es_negativo": total < 0,
         }
     return {
         "saldo": total,
@@ -239,6 +248,7 @@ def _celda_stock_deposito(
         "unidades": total,
         "docenas_display": "",
         "unidades_display": str(total),
+        "es_negativo": total < 0,
     }
 
 

@@ -73,17 +73,23 @@ Semántica MUST alinearse con `TIPOS_QUE_SUMAN_STOCK` en `mpr/pipeline.py`.
 
 ### REQ-INV-07 — Universo de filas por defecto
 
-Por defecto (`incluir_ceros` ausente o `0`), the system MUST listar solo artículos con **consolidado > 0** (tras filtros de marca y búsqueda).
+Por defecto (`filtro_stock` ausente o `todos`), the system MUST listar **todos** los artículos del ámbito (tras filtros de marca y búsqueda), **incluyendo** saldos en cero y negativos.
 
-### REQ-INV-08 — Botón «Ver todos los artículos»
+### REQ-INV-08 — Toggle de saldo: Todos | Con stock | Sin stock
 
-The UI MUST ofrecer un control (botón o toggle) **Ver todos los artículos** que active `incluir_ceros=1` en la URL.
+The UI MUST ofrecer un control segmentado **Todos | Con stock | Sin stock** con query param `filtro_stock=todos|con_stock|sin_stock` (default: `todos`).
 
-Con `incluir_ceros=1`, the system MUST incluir artículos con **consolidado ≤ 0** que cumplan filtros de marca y búsqueda.
+| Valor | Criterio (etapas del ámbito) |
+|-------|------------------------------|
+| `todos` | Sin filtro de saldo |
+| `con_stock` | Al menos una etapa con saldo **> 0** |
+| `sin_stock` | Ninguna etapa con saldo > 0 (ceros y negativos) |
 
-El control MUST indicar visualmente el modo activo (solo con stock / todos).
+Compat URL legacy: `incluir_ceros=1` → `todos`; `incluir_ceros=0` → `con_stock`.
 
-Al desactivar, MUST volver al universo default (consolidado > 0).
+The system MUST mostrar saldos **negativos** en las celdas (sin clampear a 0) para permitir ajustes.
+
+El control MUST indicar visualmente el modo activo.
 
 ### REQ-INV-09 — Toggle Unidades / Docenas
 
@@ -140,16 +146,19 @@ Tests y referencias de menú a `stock:consulta_ficha_stock` MUST eliminarse o ac
 - **GIVEN** usuario con `stock.consultas` y `base_empresa` en sesión
 - **WHEN** navega a `/stock/inventario/`
 - **THEN** ve tabla con columnas Artículo, Producción, Semi elaborado, 2da Selección, Terminado, Consolidado
-- **AND** solo artículos con consolidado > 0
+- **AND** lista todos los artículos del ámbito (incluye ceros y negativos)
 - **AND** presentación en unidades por defecto
+- **AND** filtro de saldo activo = **Todos**
 
-### ESC-INV-02 — Ver todos los artículos
+### ESC-INV-02 — Con stock / Sin stock / Todos
 
-- **GIVEN** artículo A con consolidado 0 y artículo B con consolidado 10
-- **WHEN** usuario activa **Ver todos los artículos** (`incluir_ceros=1`)
-- **THEN** la tabla incluye A y B (si pasan filtros marca/búsqueda)
-- **WHEN** desactiva el control
+- **GIVEN** artículo A con todas las etapas ≤ 0 y artículo B con alguna etapa > 0
+- **WHEN** usuario elige **Con stock** (`filtro_stock=con_stock`)
 - **THEN** solo aparece B
+- **WHEN** usuario elige **Sin stock** (`filtro_stock=sin_stock`)
+- **THEN** solo aparece A (y se ven valores negativos si los hay)
+- **WHEN** usuario elige **Todos**
+- **THEN** aparecen A y B
 
 ### ESC-INV-03 — Toggle docenas
 
@@ -185,7 +194,7 @@ Tests y referencias de menú a `stock:consulta_ficha_stock` MUST eliminarse o ac
 
 ### ESC-INV-08 — Paginación
 
-- **GIVEN** 200 artículos con consolidado > 0 que cumplen filtros
+- **GIVEN** 200 artículos del ámbito que cumplen filtros
 - **WHEN** carga `?page=1`
 - **THEN** muestra 150 filas y enlace a página 2
 - **WHEN** carga `?page=2`
@@ -200,7 +209,13 @@ Tests y referencias de menú a `stock:consulta_ficha_stock` MUST eliminarse o ac
 ### ESC-INV-10 — Scrap excluido del consolidado
 
 - **GIVEN** saldo 40 solo en depósito `tipo_mpr=Scrap`
-- **WHEN** `incluir_ceros=0`
-- **THEN** el artículo MUST NOT listarse
-- **WHEN** `incluir_ceros=1`
+- **WHEN** `filtro_stock=con_stock`
+- **THEN** el artículo MUST NOT listarse (Scrap no cuenta como etapa del ámbito)
+- **WHEN** `filtro_stock=todos` o `sin_stock`
 - **THEN** el artículo MAY listarse con consolidado 0 y columna Scrap sin mostrarse
+
+### ESC-INV-11 — Negativos visibles
+
+- **GIVEN** artículo Terminado con saldo −52 en depósito Terminado
+- **WHEN** se renderiza la fila (filtro Todos o Sin stock)
+- **THEN** la celda muestra `-52` (no `0`) y se destaca visualmente
