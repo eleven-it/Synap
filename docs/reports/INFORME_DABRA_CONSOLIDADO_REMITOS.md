@@ -29,12 +29,12 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 | F | Item | `articulo.CodArtProv` (primeros 9 chars + regla espacio) |
 | G | Talle | Resto de `CodArtProv` |
 | H | Cantidad | `stock.Cantidad` |
-| I | Precio | `stock.PrecioVentaxU` |
-| J | Bonificacion | `pordesc_bonif` si ≠0, si no `PorDesc` |
+| I | Precio | `stock.PrecioVentaxU` (predescuento de cabecera) |
+| J | Bonificacion | `pordesc_bonif` si ≠0, si no `PorDesc` de línea; si ambos 0 → % pie `(SubTotal1−SubtotalDesc)/SubTotal1×100` (`PorDesc1`/`ImpDesc1`) |
 | K | ImporteBonificacion | `PrecioVentaxU × bonif% / 100` |
-| L | Importe | `Cantidad × PrecioNetoxU` |
-| M | Iva | `Cantidad × PrecioIVAxU` |
-| N | TotalGravado | `cuentacliente.SubTotal1` (cabecera FA) |
+| L | Importe | `Cantidad × PrecioNetoxU × (SubtotalDesc/SubTotal1)` (neto post pie) |
+| M | Iva | `Cantidad × PrecioIVAxU × (SubtotalDesc/SubTotal1)` |
+| N | TotalGravado | `cuentacliente.SubtotalDesc` (neto post descuento al pie; no `SubTotal1`) |
 | O–P | (vacías) | — |
 | Q | Total | `cuentacliente.ImporteVenta` (cabecera FA) |
 | R | CompRef | PV de `comp_ped.NroComprobante` (REM vía `rem_fact`) zero-pad **5** |
@@ -48,7 +48,7 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 
 ## TOTAL FACTURAS
 
-Una fila por FA: `Comprobante` = letra + PV(4) + legal(8); `Nro. Remito` = primer remito (`R` + PV4 + legal8); `Imp Neto` / `Imp Bruto` = cabecera.
+Una fila por FA: `Comprobante` = letra + PV(4) + legal(8); `Nro. Remito` = primer remito (`R` + PV4 + legal8); `Imp Neto` = `SubtotalDesc` (post pie); `Imp Bruto` = `ImporteVenta`.
 
 ## Vínculo FA ↔ remito
 
