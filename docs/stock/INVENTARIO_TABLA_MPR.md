@@ -37,7 +37,7 @@ Detalle de modelo CE: [../mpr/ARTICULO_CE_TALLES_COLOR.md](../mpr/ARTICULO_CE_TA
 |-----------|-------------|
 | `ambito` | `terminados` (default) o `fabricados` |
 | `marcas_incluidos` | Multi-select tags (vacío = todas) |
-| `q` | Filtro de texto (también se filtra en vivo en la página cargada: nombre, talle, color, códigos) |
+| `q` | Búsqueda server-side (mín. 2 caracteres): nombre, talle, color, códigos. Debounce ~400 ms → GET; aplica al universo completo (no solo la página actual) |
 | `id_articulo` | Una fila concreta (también filtrada por ámbito) |
 | `filtro_stock` | `todos` (default) · `con_stock` · `sin_stock` |
 | `presentacion` | `unidades` (pares, default) o `docenas` (docenas de pares) |

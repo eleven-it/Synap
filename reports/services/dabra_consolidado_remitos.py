@@ -286,7 +286,44 @@ def _sql_lineas_fa() -> str:
           AND cc.TipoComprobante = 'FA'
           AND cc.Anulado = 'No'
           AND cc.Fecha BETWEEN %s AND %s
+          AND NOT EXISTS (
+              SELECT 1
+              FROM cuentacliente nc
+              WHERE nc.Codigo = cc.Codigo
+                AND nc.TipoComprobante IN (
+                    'NCA', 'NCB', 'NCC', 'NCE', 'NCM',
+                    'NDA', 'NDB', 'NDC', 'NDE', 'NDM'
+                )
+                AND (nc.Anulado IS NULL OR nc.Anulado = 'No')
+                AND NULLIF(TRIM(nc.NroFacturaMov), '') IS NOT NULL
+                AND CAST(TRIM(nc.NroFacturaMov) AS DECIMAL(20, 0)) = cc.CodigoMovimiento
+          )
         ORDER BY cc.Fecha, cc.CodigoMovimiento, s.id_stock
+    """
+
+
+def _sql_fa_excluidas_nc_nd() -> str:
+    """FA del período con NC/ND no anulada vinculada por NroFacturaMov (para resumen)."""
+    return """
+        SELECT
+            cc.CodigoMovimiento AS codigo_movimiento_fa,
+            cc.NroComprobante AS fa_nro_comprobante,
+            nc.NroComprobante AS nc_nro,
+            nc.TipoComprobante AS nc_tipo
+        FROM cuentacliente cc
+        INNER JOIN cuentacliente nc ON nc.Codigo = cc.Codigo
+            AND nc.TipoComprobante IN (
+                'NCA', 'NCB', 'NCC', 'NCE', 'NCM',
+                'NDA', 'NDB', 'NDC', 'NDE', 'NDM'
+            )
+            AND (nc.Anulado IS NULL OR nc.Anulado = 'No')
+            AND NULLIF(TRIM(nc.NroFacturaMov), '') IS NOT NULL
+            AND CAST(TRIM(nc.NroFacturaMov) AS DECIMAL(20, 0)) = cc.CodigoMovimiento
+        WHERE cc.Codigo = %s
+          AND cc.TipoComprobante = 'FA'
+          AND cc.Anulado = 'No'
+          AND cc.Fecha BETWEEN %s AND %s
+        ORDER BY cc.CodigoMovimiento, nc.CodigoMovimiento
     """
 
 
@@ -435,6 +472,11 @@ def get_dabra_consolidado_remitos(
             _sql_lineas_fa(),
             (CODIGO_CLIENTE_DABRA, fecha_desde, fecha_hasta),
         )
+        excluidas_nc = _fetch_rows(
+            cursor,
+            _sql_fa_excluidas_nc_nd(),
+            (CODIGO_CLIENTE_DABRA, fecha_desde, fecha_hasta),
+        )
         cuit_rows = _fetch_rows(cursor, "SELECT CUIT FROM datosempresa LIMIT 1", ())
         cuit_emisor = normalizar_cuit(cuit_rows[0].get("CUIT") if cuit_rows else "")
 
@@ -457,6 +499,25 @@ def get_dabra_consolidado_remitos(
             }
         lineas_por_fa.setdefault(cod_fa, []).append(row)
 
+    # Resumen + exclusión defensiva (SQL ya filtra; Python cubre mocks/casos residuales)
+    fa_excluidas_nc_keys = {
+        to_int_or_none(r.get("codigo_movimiento_fa")) for r in excluidas_nc
+    }
+    fa_excluidas_nc_keys.discard(None)
+    if fa_excluidas_nc_keys:
+        for cod in list(fa_map.keys()):
+            if to_int_or_none(cod) in fa_excluidas_nc_keys:
+                fa_map.pop(cod, None)
+                lineas_por_fa.pop(cod, None)
+    n_excluidas_nc = len(fa_excluidas_nc_keys)
+
+    alarmas: List[str] = []
+    if n_excluidas_nc:
+        alarmas.append(
+            f"Se excluyeron {n_excluidas_nc} FA con nota de crédito/débito vinculada "
+            f"(NroFacturaMov)."
+        )
+
     codigos_fa = list(fa_map.keys())
     remitos_por_fa: Dict[Any, List[Dict[str, Any]]] = {c: [] for c in codigos_fa}
     domicilio_fa: Dict[Any, str] = {}
@@ -473,7 +534,6 @@ def get_dabra_consolidado_remitos(
                 if nc:
                     domicilio_fa[dom.get("CodigoMovimiento")] = nc
 
-    alarmas: List[str] = []
     errores: List[str] = []
     filas: List[Dict[str, Any]] = []
     totales_facturas: List[Dict[str, Any]] = []
@@ -592,5 +652,6 @@ def get_dabra_consolidado_remitos(
             "codigo_cliente": CODIGO_CLIENTE_DABRA,
             "base_empresa": base_empresa,
             "cuit_emisor": cuit_emisor,
+            "fa_excluidas_nc_nd": n_excluidas_nc,
         },
     }

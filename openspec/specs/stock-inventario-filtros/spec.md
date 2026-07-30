@@ -70,6 +70,8 @@ Al seleccionar sugerencia, MUST navegar a `?id_articulo={IDArt}` preservando `ma
 
 La búsqueda MUST encontrar artículos en **cualquier página** del resultado paginado (ej. artículo en fila 200 con `page=1` activo).
 
+El campo **Buscar** de la barra de filtros MUST aplicar `q` en el servidor (debounce → GET del formulario), MUST NOT filtrar solo las filas DOM de la página actual.
+
 ### REQ-FIL-05 — Filtro por id_articulo
 
 `id_articulo` MUST mostrar **una fila** para ese artículo, aunque consolidado sea 0.

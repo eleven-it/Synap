@@ -770,6 +770,46 @@ class ReportFiltersAPIView(APIView):
                 conn.close()
                 return Response({"subrubros": results})
             
+            elif filter_type in ("superarts", "id_manuales"):
+                marcas_param = request.query_params.get("marcas") or request.query_params.get("marcas_incluidos")
+                marca_ids: list = []
+                if marcas_param:
+                    for part in str(marcas_param).split(","):
+                        part = part.strip()
+                        if not part:
+                            continue
+                        try:
+                            marca_ids.append(int(part))
+                        except ValueError:
+                            continue
+                sql = """
+                    SELECT DISTINCT art.id_manual
+                    FROM articulo art
+                    WHERE art.id_manual IS NOT NULL
+                      AND TRIM(art.id_manual) <> ''
+                """
+                params_sa: list = []
+                if marca_ids:
+                    ph = ",".join(["%s"] * len(marca_ids))
+                    sql += f" AND art.CodigoMarca IN ({ph})"
+                    params_sa.extend(marca_ids)
+                sql += " ORDER BY art.id_manual"
+                cursor.execute(sql, params_sa)
+                results = []
+                for row in cursor.fetchall():
+                    val = (row[0] or "").strip()
+                    if not val:
+                        continue
+                    results.append({
+                        "id": val,
+                        "label": val,
+                        "value": val,
+                    })
+                cursor.close()
+                conn.close()
+                key = "superarts" if filter_type == "superarts" else "id_manuales"
+                return Response({key: results})
+
             elif filter_type == "viajantes":
                 cursor.execute("""
                     SELECT CodViajante, Nombre
@@ -798,7 +838,8 @@ class ReportFiltersAPIView(APIView):
                 return Response(
                     {
                         "detail": "Tipo de filtro no válido. Use 'puntos_venta', 'sucursales', 'cajas', "
-                        "'clientes', 'depositos', 'marcas', 'rubros', 'subrubros' o 'viajantes'."
+                        "'clientes', 'depositos', 'marcas', 'rubros', 'subrubros', 'viajantes', "
+                        "'superarts' o 'id_manuales'."
                     },
                     status=status.HTTP_400_BAD_REQUEST
                 )

@@ -664,6 +664,7 @@
       details: [
         { label: "Pedidos pendientes", urlKey: "pedidos_pendientes" },
         { label: "Remitos no facturados", urlKey: "remitos_nf" },
+        { label: "Ventas marcas mensual", urlKey: "ventas_marcas_mensual", navigate: true },
       ],
     },
     {
@@ -1175,9 +1176,18 @@
     }
   }
 
+  const NAVIGATE_DETAIL_KEYS = new Set(["ventas_marcas_mensual"]);
+
   async function openDetail(urlKey, title) {
     const base = (cfg.detailUrls || {})[urlKey];
     if (!base) return;
+    const defDetail = visibleAreaDefs()
+      .flatMap((d) => d.details || [])
+      .find((d) => d.urlKey === urlKey);
+    if (urlKey === "ventas_marcas_mensual" || NAVIGATE_DETAIL_KEYS.has(urlKey) || defDetail?.navigate) {
+      window.location.href = buildReportLink(base);
+      return;
+    }
     openModal(true);
     el("cc-detail-title").textContent = title || "Detalle";
     el("cc-detail-error")?.classList.add("hidden");

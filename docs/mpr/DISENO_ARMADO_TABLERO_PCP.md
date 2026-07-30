@@ -81,7 +81,7 @@ La pantalla sustituye el flujo POS+carrito como **vista principal** (`vista=tabl
 | Columna | Rol UX | 1ra | 2da |
 |---------|--------|-----|-----|
 | Artículo | Identidad + marca | ✓ | ✓ |
-| Stock terminado | PT actual | ✓ | ✓ |
+| Stock terminado | PT actual (saldo real; negativos visibles en rosa, sin clamp a 0) | ✓ | ✓ |
 | Máx. armable | Tope físico origen | BOM × Semi | — (fase 2) |
 | Armar | Input packs (sin precarga) | entero ≥ 0 | enlace POS |
 
@@ -89,7 +89,9 @@ Columnas de demanda (Pedido, Reserva, Resta urgente/armar, 1er fecha entrega) se
 
 Vacío o 0 en Armar = la fila no se incluye en el lote. Negativos se rechazan (coerce a vacío en UI; `qty <= 0` en POST).
 
-★ Interno: Resta armar = `max(0, pedido + reserva − stock_terminado)` — sigue usándose para el filtro «solo con resta».
+★ Interno: Resta armar = `max(0, pedido + reserva − stock_terminado)` — sigue usándose para el filtro «solo con resta». Si `stock_terminado` es negativo, aumenta la resta (el saldo real se muestra en Terminado).
+
+★ Presentación (30/07/2026): `stock_terminado` en Armado usa `clamp_negativos=False` (`mpr/presentacion_operativa.py`), paridad Inventario Stock.
 
 ---
 

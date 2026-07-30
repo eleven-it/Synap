@@ -182,7 +182,7 @@ class ExportService:
             nro = (filters.get("nro_comprobante_archivo") or "PRE").strip() or "PRE"
             return f"Presupuesto_{nro}_{timestamp}.xlsx"
 
-        if report_slug not in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
+        if report_slug not in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo", "ventas-marcas-mensual"):
             return f"{report_slug}_{timestamp}.xlsx"
 
         filters = payload.get("filters") or {}
@@ -206,6 +206,8 @@ class ExportService:
             return f"Ventas_por_vendedor_{a}_{b}.xlsx"
         if report_slug == "ventas-por-articulo":
             return f"Ventas_por_articulo_{a}_{b}.xlsx"
+        if report_slug == "ventas-marcas-mensual":
+            return f"Ventas_marcas_mensual_{a}_{b}.xlsx"
         return f"Ventas_objetivo_vendedores_{a}_{b}.xlsx"
 
     def _declarative_export_headers(self, report: ReportDefinition, sample_row: Dict[str, Any]) -> Optional[List[str]]:
@@ -318,6 +320,20 @@ class ExportService:
                 "cantidades_vendidas",
                 "facturacion",
             ]
+            return [h for h in preferred if h in available]
+
+        if slug == "ventas-marcas-mensual":
+            preferred = [
+                "cod_viajante",
+                "nombre_vendedor",
+                "codigo_cliente",
+                "nombre_cliente",
+                "anio_mes",
+                "unidades",
+                "facturacion",
+            ]
+            if "unidades_proy" in available:
+                preferred.extend(["unidades_proy", "facturacion_proy"])
             return [h for h in preferred if h in available]
 
         if slug == "ventas-objetivos-vs-bo":
@@ -526,7 +542,7 @@ class ExportService:
                     "ventas_netas",
                     "subtotal_desc",
                 }
-                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
+                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo", "ventas-marcas-mensual"):
                     currency_headers_data.update(
                         {
                             "objetivo",
@@ -585,6 +601,10 @@ class ExportService:
                     "total": "Total consolidado",
                     "falta": "Falta",
                     "cantidades_vendidas": "Unidades",
+                    "unidades": "Unidades",
+                    "unidades_proy": "Unidades proy",
+                    "facturacion_proy": "Facturación proy",
+                    "anio_mes": "AñoMes",
                     "backorder_total": "BO total",
                     "bo_con_stock": "BO c/stock",
                     "bo_con_ingreso": "BO c/ingreso",
@@ -595,8 +615,18 @@ class ExportService:
                     header_translations = {**header_translations, "mes_formato": "Mes"}
                 
                 translated_headers = [header_translations.get(h, h.replace("_", " ").title()) for h in headers]
-                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo"):
+                if report.slug in ("ventas-objetivos-vs-bo", "ventas-por-vendedor", "ventas-por-articulo", "ventas-marcas-mensual"):
                     translated_headers = [str(s).upper() for s in translated_headers]
+                if report.slug == "ventas-marcas-mensual":
+                    modo = str((payload.get("filters") or {}).get("modo_unidades") or "packs").lower()
+                    unidad_label = "DOCENAS" if modo == "docenas" else "UNIDADES"
+                    translated_headers = [
+                        unidad_label if str(h).upper() == "UNIDADES" else h for h in translated_headers
+                    ]
+                    translated_headers = [
+                        f"{unidad_label} PROY" if str(h).upper() == "UNIDADES PROY" else h
+                        for h in translated_headers
+                    ]
                 
                 # Escribir headers
                 ws.append(translated_headers)

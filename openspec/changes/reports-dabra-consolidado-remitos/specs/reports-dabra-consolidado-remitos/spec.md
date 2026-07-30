@@ -43,11 +43,12 @@ El sistema **MUST** incluir únicamente filas de `cuentacliente` con:
 - `Anulado='No'`
 - `Fecha` (fecha de factura) dentro del mes y año seleccionados
 
-El sistema **MUST NOT** incluir notas de crédito, notas de débito ni comprobantes anulados. El sistema **MUST NOT** parametrizar otro cliente.
+El sistema **MUST NOT** incluir notas de crédito, notas de débito ni comprobantes anulados. El sistema **MUST NOT** incluir FA que tengan una NC/ND **no anulada** vinculada por `NroFacturaMov` = `CodigoMovimiento` de la FA. El sistema **MUST NOT** parametrizar otro cliente.
 
 #### Scenario: FA DABRA del mes incluida
 
 - **DADO** una FA no anulada de `Codigo=368` con fecha 24/07/2026
+- **AND** sin NC/ND vinculada por `NroFacturaMov`
 - **WHEN** el operador filtra Mes=7, Año=2026
 - **THEN** sus líneas aparecen en preview y export
 
@@ -56,6 +57,13 @@ El sistema **MUST NOT** incluir notas de crédito, notas de débito ni comproban
 - **DADO** una NC o una FA con `Anulado='Si'` del mismo cliente y período
 - **WHEN** se ejecuta el informe
 - **THEN** esos comprobantes no generan filas
+
+#### Scenario: FA con NC vinculada excluida
+
+- **DADO** la FA `0008-00000014` (`CodigoMovimiento=1349`) con NCA no anulada cuyo `NroFacturaMov=1349`
+- **WHEN** se ejecuta el informe del mes de esa FA
+- **THEN** esa FA no genera filas en REPORTE ni en TOTAL FACTURAS
+- **AND** el preview informa en una alarma resumen cuántas FA se excluyeron por NC/ND
 
 #### Scenario: FA de otro cliente excluida
 

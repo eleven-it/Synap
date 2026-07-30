@@ -50,6 +50,10 @@ Dashboard: `/reports/dashboard/dabra-consolidado-remitos/`
 
 Una fila por FA: `Comprobante` = letra + PV(4) + legal(8); `Nro. Remito` = primer remito (`R` + PV4 + legal8); `Imp Neto` = `SubtotalDesc` (post pie); `Imp Bruto` = `ImporteVenta`.
 
+## Exclusión por NC/ND
+
+No se incluyen FA con nota de crédito o débito **no anulada** vinculada por `cuentacliente.NroFacturaMov` = `CodigoMovimiento` de la FA (tipos NCA–NCM / NDA–NDM). El preview muestra una sola alarma resumen con la cantidad excluida (`meta.fa_excluidas_nc_nd`).
+
 ## Vínculo FA ↔ remito
 
 Misma lógica que Trazabilidad VB6 (`trz_trazabilidad.frm`):

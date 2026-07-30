@@ -47,7 +47,7 @@ También muestra **Talle** y **Color** del artículo, útiles para controlar cal
 
 1. **Tipo de artículo:** **Terminados** (por defecto) o **Fabricados**.
 2. **Marcas:** puede elegir una o varias (vacío = todas).
-3. **Artículo / buscar en tabla:** filtrá al escribir por nombre, talle, color o código (mismo patrón que tablero MPR). La **X** del campo quita el filtro.
+3. **Buscar:** al escribir (≥ 2 caracteres) se consulta el servidor (debounce) sobre **todo** el inventario del tipo elegido, no solo la página visible. La **X** del campo limpia la búsqueda y recarga.
 4. **Presentación:** **Pares** (por defecto) o **Docenas**.
 5. **Saldo:** **Todos** (por defecto) · **Con stock** (saldo > 0 en alguna etapa) · **Sin stock** (0 o negativo en todas las etapas del tipo; útil para ajustes). Los saldos negativos se muestran en rojo.
 6. **Actualizar** recarga desde el servidor (marcas, tipo, stock, presentación).
