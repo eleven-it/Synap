@@ -10,6 +10,8 @@ from django.db import transaction
 
 from core.mysql_pool import get_mysql_pool
 from core.utils.administranet_types import str_or_default, to_decimal_or_none, to_int_or_none
+from mpr.services import get_deposito_terminado_mpr
+from self_checkout.services.stock_service import StockService
 from ecom.models import EcomPedidoMasivoDraft, EcomPedidoMasivoDraftCelda
 from ecom.services.catalogo_producto import resolver_precio_articulo
 from ecom.services.price_rules_engine import (
@@ -19,6 +21,7 @@ from ecom.services.price_rules_engine import (
 from ecom.services.multiplo_empaque import (
     campos_multiplo_articulo,
     cantidad_respeta_multiplo,
+    disponible_unidades_a_packs,
     infracciones_multiplo_celdas,
     mensaje_multiplo_invalido,
     multiplo_empaque_venta,
@@ -460,6 +463,45 @@ def listar_clientes_con_ternas(
         return []
 
 
+def _stock_disponible_packs_map(
+    base_empresa: str,
+    ids_articulos: Sequence[int],
+    multiplos_por_articulo: Optional[Dict[int, Dict[str, Any]]] = None,
+) -> Dict[int, float]:
+    """
+    Stock disponible (saldo − saldo_pedido_cliente) en depósito Terminado MPR,
+    expresado en packs según ``multiplo_cantidad_vta``. Una consulta bulk.
+    """
+    ids_clean = sorted(
+        {i for i in (to_int_or_none(x) for x in ids_articulos) if i is not None}
+    )
+    if not ids_clean:
+        return {}
+
+    id_dep = get_deposito_terminado_mpr(base_empresa.strip())
+    if id_dep is None:
+        logger.warning(
+            "_stock_disponible_packs_map: sin depósito Terminado en %s",
+            base_empresa,
+        )
+        return {i: 0.0 for i in ids_clean}
+
+    stock_svc = StockService(base_empresa.strip())
+    disp_map = stock_svc.get_disponible_map(ids_clean, int(id_dep))
+
+    if multiplos_por_articulo is None:
+        multiplos_por_articulo = _multiplos_articulos(base_empresa, ids_clean)
+
+    out: Dict[int, float] = {}
+    for id_art in ids_clean:
+        info = multiplos_por_articulo.get(id_art) or {}
+        mc = info.get("multiplo_cantidad_vta")
+        if mc is None:
+            mc = info.get("multiplo_empaque")
+        out[id_art] = disponible_unidades_a_packs(disp_map.get(id_art, Decimal("0")), mc)
+    return out
+
+
 def buscar_articulos_filtrados_ternas(
     base_empresa: str,
     *,
@@ -481,7 +523,7 @@ def buscar_articulos_filtrados_ternas(
     Solo artículos que el motor de precios/carrito puede resolver: Terminado,
     Discontinuo=No, ecommerce=Si y marcas de terna. Así no se ofrecen
     sugerencias que luego fallarían en preview/confirm con «no encontrado o inactivo».
-    No consulta stock ni presentación; precios/reglas en lote.
+    Incluye ``stock_disponible_packs`` (depósito Terminado MPR, bulk). Precios/reglas en lote.
 
     Con ``listar_todos=True`` (flecha abajo en UI) devuelve el catálogo filtrado
     completo sin exigir ``q`` (tope alto de seguridad).
@@ -630,6 +672,9 @@ def buscar_articulos_filtrados_ternas(
                         resolver_regla=False,
                     )
                     alic = to_decimal_or_none(articulo.get("alic_iva"))
+                    mult_campos = campos_multiplo_articulo(
+                        articulo.get("multiplo_cantidad_vta"),
+                    )
                     items.append(
                         {
                             "id_articulo": id_art,
@@ -640,11 +685,26 @@ def buscar_articulos_filtrados_ternas(
                             "precio_unitario_neto": float(precio or 0),
                             "precio_lista1": float(precio or 0),
                             "alicuota_iva": float(alic if alic is not None else 21),
-                            **campos_multiplo_articulo(
-                                articulo.get("multiplo_cantidad_vta"),
-                            ),
+                            **mult_campos,
                         }
                     )
+                if items:
+                    multiplos_inline = {
+                        int(it["id_articulo"]): {
+                            "multiplo_cantidad_vta": it.get("multiplo_cantidad_vta"),
+                            "multiplo_empaque": it.get("multiplo_empaque"),
+                        }
+                        for it in items
+                    }
+                    stock_map = _stock_disponible_packs_map(
+                        base_empresa,
+                        [it["id_articulo"] for it in items],
+                        multiplos_inline,
+                    )
+                    for it in items:
+                        it["stock_disponible_packs"] = stock_map.get(
+                            it["id_articulo"], 0.0
+                        )
             finally:
                 cursor.close()
     except Exception as e:
@@ -933,6 +993,7 @@ def serializar_matriz(
         lista_id=lista_id,
         descuento_cliente=desc_cli,
     )
+    stock_packs = _stock_disponible_packs_map(base_empresa, art_ids, nombres)
 
     celdas_map: Dict[str, str] = {}
     for c in celdas_qs:
@@ -964,6 +1025,7 @@ def serializar_matriz(
                     nombres.get(aid, {}).get("multiplo_cantidad_vta"),
                 )
             ),
+            "stock_disponible_packs": stock_packs.get(aid, 0.0),
         }
         for aid in art_ids
     ]

@@ -82,9 +82,9 @@ artículo, el foco cae en el campo realmente pintado y la carga fluye.
    - Borrador sin sucursales → alerta amber
    - Borrador sin filas → guía «Agregá artículos…» + fila buscador al pie (solo con `draftId`)
 4. Columnas = `cliente_domicilio` no anulados con ≥1 **relación** activa (vendedor operativo + cliente) cuando VCM está activo; si no, todos los domicilios activos. Orden de columnas: **ascendente numérico por `NroCalle`**. Encabezado = **`Suc ` + `NroCalle`** en **negrita** (ej. `Suc 14`). Click en la celda del encabezado (desktop) o en la fila del acordeón (móvil) abre un modal con calle, dpto, distrito, provincia y zona. En móvil, el chevron expande/colapsa el acordeón sin abrir el modal. Ver `docs/ecom/VENDEDOR_CLIENTE_MARCA.md`.  
-5. Filas = artículos **Terminado** de marcas asignadas con **paridad carrito/precio**: `Discontinuo='No'` y `ecommerce='Si'` (mismo criterio que `obtener_articulo_row_precio` / `agregar_item`). El buscador predictivo (`buscar_articulos_filtrados_ternas`) no ofrece ítems que luego fallarían en preview/confirm con «Artículo no encontrado o inactivo». Criterios de búsqueda tipada (≥2 caracteres, `tam=20`): código de sistema (`IDArt`/`CodigoArticuloT`), `id_manual`, nombre y **código de barra** (`NroCodBarra`). **Flecha abajo** (o botón ▾) lista **todo** el catálogo filtrado (`?todos=1`, sin mínimo de 2 caracteres; tope 5000). Desktop y móvil.  
-   Columna **Precio** = precio real del motor (lista del cliente).  
-6. Celdas = cantidad en **packs**. Columna de sumatoria: **Total packs**. Enter en la última sucursal vuelve al buscador. Con más de una línea de artículo, la matriz muestra fila **Totales** con suma de packs por sucursal (y total packs en la columna Total).  
+5. Filas = artículos **Terminado** de marcas asignadas con **paridad carrito/precio**: `Discontinuo='No'` y `ecommerce='Si'` (mismo criterio que `obtener_articulo_row_precio` / `agregar_item`). El buscador predictivo (`buscar_articulos_filtrados_ternas`) no ofrece ítems que luego fallarían en preview/confirm con «Artículo no encontrado o inactivo». Criterios de búsqueda tipada (≥2 caracteres, `tam=20`): código de sistema (`IDArt`/`CodigoArticuloT`), `id_manual`, nombre y **código de barra** (`NroCodBarra`). **Flecha abajo** (o botón ▾) lista **todo** el catálogo filtrado (`?todos=1`, sin mínimo de 2 caracteres; tope 5000). Al navegar con ↑/↓ el ítem resaltado hace `scrollIntoView({ block: 'nearest' })` dentro del dropdown (`max-h-56`), mismo patrón que el catálogo mayorista. Desktop y móvil.  
+   Columna **Precio** = precio real del motor (lista del cliente). Columna **STOCK** = packs disponibles Terminado (ver § stock abajo).  
+6. Celdas = cantidad en **packs**. Columna de sumatoria: **Total packs**. Enter en la última sucursal vuelve al buscador. Con más de una línea de artículo, la matriz muestra fila **Totales** con suma de packs por sucursal (y total packs en la columna Total). Buscador con **multi-select** (checkbox + «Agregar seleccionados»); chip **Mostrar/Ocultar todos** en encabezado Artículo.
 7. **Fecha de entrega** obligatoria al confirmar: si falta, modal de aviso y foco en el campo. Cliente en UI sin `(cod: N)`.  
 8. Confirmar → **1 PED por sucursal** con `cliente_datos_adicionales.id_cliente_domicilio`.
 
@@ -101,9 +101,10 @@ Si las sucursales superan el ancho del viewport, la matriz hace **scroll horizon
 
 | Columna | Lado | Comportamiento |
 |---------|------|----------------|
-| **Artículo** | Izq. (`left: 0`) | Absorbe el sobrante del viewport (`min` ~16 rem); nombre en 2 líneas |
+| **Artículo** | Izq. (`left: 0`) | Absorbe el sobrante del viewport (`min` ~16 rem); nombre en 2 líneas; chip **Mostrar/Ocultar todos** en el encabezado |
 | **Precio** | Izq. (`left: --pm-left-precio`) | Fijo ~5.5 rem; `left` medido en runtime (`syncPmStickyCols`) |
 | **% Desc.** | Izq. (`left: --pm-left-desc`) | Fijo ~4.25 rem; sombra derecha como límite con sucursales |
+| **STOCK** | Izq. (zona fija, antes de sucursales) | Fijo `--pm-col-stock: 5.5rem`; packs; «Sin stock» / «—» |
 | **Qty sucursal** | Centro (scroll-x) | Fijo ~4.5 rem (≈6 dígitos); no se estira con el viewport |
 | **Total** | Der. (`right: --pm-right-total`) | Fijo ~5.5 rem; sombra a la **izquierda** del bloque; fondo sólido |
 | **Eliminar** | Der. (`right: 0`) | Columna dedicada (~2.75 rem) con ícono trash; fondo sólido |
@@ -135,6 +136,19 @@ Para bajar costo de servidor (clientes con muchas sucursales / timeout de 8 s), 
 **Reglas FE (aproximación):** por celda con qty > 0: `neto_linea = precio_unitario_neto × qty × (1 − %desc_fila/100)`; suma → `neto_bruto`; desc. pie: `neto = neto_bruto × (1 − descPiePct/100)`; IVA prorrateando el pie sobre líneas con `alicuota_iva` del artículo (default 21 %); `total = neto + iva`; redondeo a 2 decimales (`money()`).
 
 **Datos:** `alicuota_iva` incluido en `buscar_articulos_filtrados_ternas`, `_nombres_articulos` y `serializar_matriz` (JOIN `iva`, default 21).
+
+**Stock Terminado (packs):** cada ítem del catálogo (`GET …/pedido-masivo/articulos/`) y cada fila de artículo en la matriz (`serializar_matriz` / `GET …/matriz/`) incluye `stock_disponible_packs` (número, hasta 3 decimales). Origen: depósito físico con `tipo_mpr = 'Terminado'` (`get_deposito_terminado_mpr` en `mpr/services.py`); disponible = `max(0, saldo − saldo_pedido_cliente)` vía `StockService.get_disponible_map` (bulk, sin N+1). Unidad: packs según `multiplo_cantidad_vta` / `multiplo_empaque` (misma convención que validación de celdas). Si no hay depósito Terminado configurado, el campo es `0`.
+
+#### Columna stock, catálogo completo y multi-select — 31/07/2026 (`?v=masivo40`)
+
+| Aspecto | Comportamiento |
+|---------|----------------|
+| **Columna STOCK** | Desktop shell 3 zonas: columna fija izquierda entre % Desc. y sucursales; orden Artículo \| Precio \| % Desc. \| STOCK. Cabeceras alineadas en la misma línea que las sucursales; el chip «Mostrar todos» queda debajo de Artículo. Valor al cargar fila (`aplicarMatriz`, `elegirArticulo`, bulk). Formato: entero tabular; `0` → chip «Sin stock» (rose); `null`/`undefined` → «—». **No** se muestra en el dropdown de búsqueda. PWA: sublínea `stock N` / `sin stock` en tarjeta/acordeón. Token CSS `--pm-col-stock: 5.5rem`; buscador `colspan="4"`. |
+| **Chip Mostrar todos ↔ Ocultar todos** | Pill estilo filtros reportes en `<th>` Artículo (desktop) y barra bajo buscador móvil (+ contador N artículos). Estado `catalogoDesplegado` (default `false`). **Mostrar todos:** modal espera + `GET …/articulos/?todos=1`; agrega filas vacías no existentes (con `stock_disponible_packs` y múltiplos); `catalogoDesplegado=true`. **Ocultar todos:** modal espera; quita filas cuya suma de packs en todas las sucursales es 0 (`celdas`); conserva las con qty>0 en alguna sucursal; `catalogoDesplegado=false`. Borrar fila manual con trash → `catalogoDesplegado=false`. Sin toasts de éxito; solo errores de red. Deshabilitado si `!matrizEditable` o sin `idCliente`/`draftId`. |
+| **Dropdown multi-select** | Checkbox por ítem; click fila/checkbox toggle selección (`articulosSeleccionados`). Footer sticky «Agregar seleccionados (n)»; Enter con selección agrega bulk; sin selección → `elegirResaltadoArt`. `_fetchArticulos` mapea `stock_disponible_packs` y `multiplo_*` (no visibles en listbox). |
+| **Modal espera** | Overlay `esperaOperacion` + mensaje «Procesando…» para bulk Mostrar/Ocultar y agregar seleccionados (si N>15). |
+
+Archivos: `pedido_masivo_sucursales.html`, `pedidos_page_styles.html`, `pedido_masivo_app.mjs`.
 
 **Estado Alpine:** `previewFuente` (`estimado` \| `servidor`), `previewEstimado`, getter `totalesPie`.
 
@@ -195,7 +209,7 @@ Modelos: `EcomPedidoMasivoDraft` + `EcomPedidoMasivoDraftCelda`.
 | POST | `/ecom/api/mayoristapp/pedido-masivo/abrir/` | Crear/recuperar draft + matriz |
 | GET | `/ecom/api/mayoristapp/pedido-masivo/matriz/?draft_id=` | Releer matriz |
 | POST | `/ecom/api/mayoristapp/pedido-masivo/celda/` | Autoguardado celda |
-| GET | `/ecom/api/mayoristapp/pedido-masivo/articulos/?id_cliente=&q=` | Catálogo filtrado por marcas terna |
+| GET | `/ecom/api/mayoristapp/pedido-masivo/articulos/?id_cliente=&q=` | Catálogo filtrado por marcas terna; cada ítem trae `stock_disponible_packs` |
 
 UI: `/ecom/mayoristapp/pedido-masivo-sucursales/?draft=<id>`  
 UI modo simple: `/ecom/mayoristapp/pedido-masivo-sucursales/?modo=simple` (opcional `&cod_mov=`, `&draft=`, `&id_domicilio=`)

@@ -23,6 +23,7 @@ from ecom.services.pedido_masivo_matriz import (
     marcas_asignadas_viajante_cliente,
     obtener_o_crear_draft,
     serializar_matriz,
+    _stock_disponible_packs_map,
 )
 
 
@@ -218,7 +219,34 @@ class TestAnularBorradorMasivo(TestCase):
         self.assertIn("edición", msg.lower())
 
 
+class TestStockDisponiblePacks(TestCase):
+    @patch("ecom.services.pedido_masivo_matriz.StockService")
+    @patch("ecom.services.pedido_masivo_matriz.get_deposito_terminado_mpr", return_value=7)
+    def test_map_bulk_convierte_a_packs(self, _dep, mock_stock_cls):
+        mock_stock_cls.return_value.get_disponible_map.return_value = {
+            10: Decimal("24"),
+            11: Decimal("25"),
+        }
+        out = _stock_disponible_packs_map(
+            "emp_m",
+            [10, 11],
+            {
+                10: {"multiplo_cantidad_vta": 6},
+                11: {"multiplo_cantidad_vta": 6},
+            },
+        )
+        self.assertEqual(out[10], 4.0)
+        self.assertEqual(out[11], 4.167)
+        mock_stock_cls.return_value.get_disponible_map.assert_called_once_with([10, 11], 7)
+
+    @patch("ecom.services.pedido_masivo_matriz.get_deposito_terminado_mpr", return_value=None)
+    def test_sin_deposito_terminado_cero(self, _dep):
+        out = _stock_disponible_packs_map("emp_m", [5], {5: {"multiplo_cantidad_vta": 1}})
+        self.assertEqual(out[5], 0.0)
+
+
 class TestCatalogoFiltrado(TestCase):
+    @patch("ecom.services.pedido_masivo_matriz._stock_disponible_packs_map", return_value={9: 12.5})
     @patch(
         "ecom.services.pedido_masivo_matriz.marcas_asignadas_viajante_cliente",
         return_value=[11, 12],
@@ -228,7 +256,7 @@ class TestCatalogoFiltrado(TestCase):
     @patch("ecom.services.pedido_masivo_matriz.resolver_reglas_precio_map", return_value={})
     @patch("ecom.services.pedido_masivo_matriz.get_mysql_pool")
     def test_busqueda_liviana_terminado(
-        self, mock_pool, mock_reglas, _precio, mock_ctx, mock_marcas
+        self, mock_pool, mock_reglas, _precio, mock_ctx, mock_marcas, mock_stock
     ):
         mock_ctx.return_value = {
             "descRenglon": Decimal("8"),
@@ -247,6 +275,8 @@ class TestCatalogoFiltrado(TestCase):
         self.assertEqual(r["items"][0]["nombre"], "Calcetín Negro")
         self.assertEqual(r["items"][0]["precio_unitario_neto"], 85.0)
         self.assertEqual(r["items"][0]["precio_lista1"], 85.0)
+        self.assertEqual(r["items"][0]["stock_disponible_packs"], 12.5)
+        mock_stock.assert_called_once()
         sql = cur.execute.call_args[0][0]
         self.assertIn("tipo_art_fab", sql)
         self.assertIn("Terminado", sql)
@@ -317,13 +347,14 @@ class TestMarcasPorSucursal(TestCase):
 
 
 class TestSerializarMatriz(TestCase):
+    @patch("ecom.services.pedido_masivo_matriz._stock_disponible_packs_map", return_value={4: 3.0})
     @patch(
         "ecom.services.pedido_masivo_matriz.listar_sucursales_cliente",
         return_value=[{"id_cliente_domicilio": 9, "etiqueta": "Suc A"}],
     )
     @patch("ecom.services.pedido_masivo_matriz.leer_contexto_cliente_masivo")
     @patch("ecom.services.pedido_masivo_matriz._nombres_articulos")
-    def test_celdas_mapa(self, mock_n, mock_ctx, _s):
+    def test_celdas_mapa(self, mock_n, mock_ctx, _s, _stock):
         mock_ctx.return_value = {
             "descRenglon": Decimal("8"),
             "descPie": Decimal("5"),
@@ -354,6 +385,7 @@ class TestSerializarMatriz(TestCase):
         self.assertEqual(m["celdas"]["4:9"], "3")
         self.assertEqual(m["articulos"][0]["codigo"], "X")
         self.assertEqual(m["articulos"][0]["precio_unitario_neto"], 85.0)
+        self.assertEqual(m["articulos"][0]["stock_disponible_packs"], 3.0)
         self.assertEqual(m["articulos"][0]["porcentaje_descuento"], 10.0)
         self.assertEqual(m["desc_pie_pct"], 5.0)
         self.assertEqual(m["descuentos_fila"]["4"], 10.0)
