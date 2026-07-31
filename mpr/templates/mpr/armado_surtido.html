@@ -86,18 +86,34 @@
             Carrito precargado desde
             {% if id_lista %}<a href="{% url 'mpr:opt_detail' id_lista %}" class="font-semibold underline decoration-purple-400 underline-offset-2 hover:text-purple-700 dark:hover:text-purple-200">OPT {{ opt_numero|default:id_lista }}</a>{% else %}la OPT{% endif %}
             {% if id_articulo_opt %} (artículo filtrado){% endif %}.
-            Revise cabecera, cantidades y pulse «Ejecutar lote».
+            Revise cabecera, cantidades y pulse «Guardar armado».
         </div>
         {% endif %}
 
-        <form method="post" action="{% url 'mpr:armado' %}?modo={{ modo|default:'1ra' }}{% if id_lista %}&amp;id_lista={{ id_lista }}{% endif %}"
+        {% if lote_aprobado %}
+        <div class="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100" role="status">
+            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3 py-1 text-xs font-bold uppercase text-white">Lote aprobado</span>
+            <span>Lote #{{ id_lote_armado }} — puede anularlo si no tiene imputación.</span>
+            <button type="button"
+                    @click="abrirModalAnular()"
+                    class="ml-auto inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 dark:border-rose-700 dark:bg-slate-900 dark:text-rose-300">
+                <span class="material-icons text-base" aria-hidden="true">block</span>
+                Anular lote
+            </button>
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'mpr:armado' %}?modo={{ modo|default:'1ra' }}{% if id_lista %}&amp;id_lista={{ id_lista }}{% endif %}{% if id_lote_armado %}&amp;id_lote={{ id_lote_armado }}{% endif %}"
               id="form-armado-surtido"
               class="mpr-post-loading"
-              data-mpr-loading-title="Ejecutando lote de {{ modo_label|default:'armado' }}"
-              data-mpr-loading-subtitle="Registrando movimientos de stock… No cierres esta ventana."
+              :data-mpr-loading-title="accionPendiente === 'borrador' ? 'Guardando borrador de armado' : 'Guardando lote de armado'"
+              :data-mpr-loading-subtitle="accionPendiente === 'borrador' ? 'Persistiendo ítems sin movimiento de stock…' : 'Registrando movimientos de stock… No cierres esta ventana.'"
               @submit="preSubmit($event)">
             {% csrf_token %}
             <input type="hidden" name="modo" value="{{ modo|default:'1ra' }}"/>
+            <input type="hidden" name="accion" id="accion-input" :value="accionPendiente"/>
+            <input type="hidden" name="id_mpr_armado_lote" :value="idLoteArmado || ''"/>
+            <input type="hidden" name="fecha_realizado" :value="fechaRealizadoPost"/>
             {% if id_lista %}<input type="hidden" name="id_lista" value="{{ id_lista }}"/>{% endif %}
             <input type="hidden" name="lote_json" id="lote-json-input" value=""/>
 
@@ -221,6 +237,29 @@
                                     <input type="text" id="detalle" name="detalle" maxlength="200" placeholder="Observaciones del lote" x-model="detalleLote"
                                            class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 dark:border-gray-600 dark:bg-gray-900 dark:text-white"/>
                                 </div>
+                                <div>
+                                    <label for="fecha-realizado" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Fecha realizado</label>
+                                    <input type="date"
+                                           id="fecha-realizado"
+                                           x-model="fechaIso"
+                                           :disabled="loteAprobado"
+                                           class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-gray-600 dark:bg-gray-900 dark:text-white [color-scheme:light] dark:[color-scheme:dark]"/>
+                                </div>
+                                {% if lotes_borrador %}
+                                <div>
+                                    <label for="sel-borrador" class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">Borradores</label>
+                                    <select id="sel-borrador"
+                                            @change="window.location.href = '{% url 'mpr:armado' %}?modo={{ modo|default:'1ra' }}&id_lote=' + $event.target.value"
+                                            class="h-11 w-full rounded-xl border border-gray-300 bg-white px-3 text-sm text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+                                        <option value="">— Seleccionar borrador —</option>
+                                        {% for b in lotes_borrador %}
+                                        <option value="{{ b.id_mpr_armado_lote }}" {% if id_lote_armado == b.id_mpr_armado_lote %}selected{% endif %}>
+                                            #{{ b.id_mpr_armado_lote }} · {{ b.cantidad_items }} ítem(s){% if b.detalle %} · {{ b.detalle|truncatechars:30 }}{% endif %}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
 
@@ -600,12 +639,21 @@
                                 Cada ítem genera movimiento <strong class="text-white">Armado</strong>: salida de componentes en origen e ingreso de packs en destino.
                             </p>
                             <div class="flex flex-col gap-2 sm:flex-row">
-                                <button type="submit"
+                                <button type="button"
+                                        @click="enviarConAccion('borrador')"
+                                        :disabled="!lote.length || loteAprobado"
+                                        :class="(!lote.length || loteAprobado) ? 'cursor-not-allowed opacity-50' : 'hover:bg-slate-600'"
+                                        class="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-400 bg-slate-700 px-5 py-3 text-sm font-bold text-white shadow-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+                                    <span class="material-icons text-xl" aria-hidden="true">save</span>
+                                    Guardar borrador
+                                </button>
+                                <button type="button"
+                                        @click="enviarConAccion('aprobar')"
                                         :disabled="!lote.length"
                                         :class="!lote.length ? 'cursor-not-allowed opacity-50' : 'hover:bg-emerald-500'"
                                         class="inline-flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-900/20 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
-                                    <span class="material-icons text-xl" aria-hidden="true">play_arrow</span>
-                                    <span x-text="'Ejecutar lote (' + lote.length + ')'"></span>
+                                    <span class="material-icons text-xl" aria-hidden="true">check_circle</span>
+                                    <span x-text="loteAprobado ? 'Aplicar corrección (' + lote.length + ')' : 'Guardar armado (' + lote.length + ')'"></span>
                                 </button>
                                 <a href="{% if id_lista %}{% url 'mpr:opt_detail' id_lista %}{% else %}{% url 'mpr:tablero' %}{% endif %}"
                                    class="inline-flex min-h-12 items-center justify-center rounded-xl border border-slate-500 bg-slate-700 px-4 py-3 text-sm font-medium text-white hover:bg-slate-600">
@@ -619,6 +667,35 @@
         </form>
 
         {% include "mpr/includes/armado_surtido_modal_resultado_lote.html" %}
+
+        {# Modal anular lote aprobado #}
+        <div x-show="modalAnularOpen" x-cloak
+             class="fixed inset-0 z-[70] flex items-center justify-center p-4"
+             @keydown.escape.window="modalAnularOpen = false">
+            <div class="fixed inset-0 bg-black/50 backdrop-blur-sm" @click="modalAnularOpen = false"></div>
+            <div class="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-xl dark:border-gray-700 dark:bg-gray-800" @click.stop>
+                <div class="mb-4 flex items-center gap-3">
+                    <span class="flex h-10 w-10 items-center justify-center rounded-full bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400">
+                        <span class="material-icons" aria-hidden="true">warning</span>
+                    </span>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white">Anular lote de armado</h2>
+                </div>
+                <p class="text-sm leading-relaxed text-gray-600 dark:text-gray-300">
+                    Se revertirán los movimientos MSTOCK del lote en destino/origen.
+                    No podrá anular si hay imputación parcial o completa.
+                </p>
+                <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                    <button type="button" @click="modalAnularOpen = false"
+                            class="inline-flex min-h-10 items-center justify-center rounded-xl border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700">
+                        Cancelar
+                    </button>
+                    <button type="button" @click="confirmarAnularLote()"
+                            class="inline-flex min-h-10 items-center justify-center rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700">
+                        Anular lote
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 <script>
@@ -633,6 +710,11 @@ function armadoSurtidoForm() {
     var resultadoInicial = {{ resultado_lote_json|default:"null"|safe }};
     var fallidosInicial = {{ lote_fallidos_json|default:"null"|safe }};
     var lotePrecargaOpt = {{ lote_precarga_opt_json|default:"[]"|safe }};
+    var loteBorradorInicial = {{ lote_borrador_json|default:"[]"|safe }};
+    var idLoteArmadoInicial = {{ id_lote_armado|default:"null"|safe }};
+    var loteAprobadoInicial = {{ lote_aprobado|yesno:"true,false" }};
+    var fechaDefaultStr = '{{ fecha_realizado_default|default:"" }}';
+    var detalleDefaultStr = '{{ detalle_lote_default|default:""|escapejs }}';
     var mostrarModal = {{ mostrar_modal_resultado_lote|yesno:"true,false" }};
     var imputacionPedidoBase = '{{ imputacion_pedido_url|default:"" }}';
     var imputacionConfirmarApiUrl = '{{ imputacion_confirmar_api_url|default:"" }}';
@@ -801,7 +883,12 @@ function armadoSurtidoForm() {
         operarioHighlightIndex: -1,
         resultadosOperario: [],
         cantidadPacks: 1,
-        detalleLote: '',
+        detalleLote: detalleDefaultStr || '',
+        fechaIso: '',
+        accionPendiente: 'aprobar',
+        idLoteArmado: idLoteArmadoInicial || null,
+        loteAprobado: loteAprobadoInicial,
+        modalAnularOpen: false,
         busquedaComp: '',
         lineas: [],
         lote: [],
@@ -981,6 +1068,17 @@ function armadoSurtidoForm() {
         },
 
         init: function () {
+            if (fechaDefaultStr && fechaDefaultStr.indexOf('/') >= 0) {
+                var p = fechaDefaultStr.split('/');
+                if (p.length === 3) {
+                    this.fechaIso = p[2] + '-' + p[1] + '-' + p[0];
+                }
+            } else if (fechaDefaultStr) {
+                this.fechaIso = fechaDefaultStr.substring(0, 10);
+            } else {
+                var hoy = new Date();
+                this.fechaIso = hoy.toISOString().substring(0, 10);
+            }
             if (mostrarModal && resultadoInicial && typeof resultadoInicial === 'object') {
                 this.modalResultado.exitosos = this.enriquecerExitososModal(resultadoInicial.exitosos || []);
                 this.modalResultado.fallidos = resultadoInicial.fallidos || [];
@@ -989,6 +1087,9 @@ function armadoSurtidoForm() {
             }
             if (fallidosInicial && Array.isArray(fallidosInicial) && fallidosInicial.length) {
                 this.lote = itemsALote(fallidosInicial);
+                this.recalcularResumen();
+            } else if (loteBorradorInicial && Array.isArray(loteBorradorInicial) && loteBorradorInicial.length) {
+                this.lote = itemsALote(loteBorradorInicial);
                 this.recalcularResumen();
             } else if (lotePrecargaOpt && Array.isArray(lotePrecargaOpt) && lotePrecargaOpt.length) {
                 this.lote = itemsALote(lotePrecargaOpt);
@@ -1954,6 +2055,9 @@ function armadoSurtidoForm() {
         },
 
         preSubmit: function (evt) {
+            if (this.accionPendiente === 'anular') {
+                return true;
+            }
             if (!this.lote.length) {
                 evt.preventDefault();
                 this.mostrarMensaje('Agregue al menos un armado al lote.');
@@ -1965,6 +2069,39 @@ function armadoSurtidoForm() {
             }
             this.syncLoteHidden();
             return true;
+        },
+
+        get fechaRealizadoPost: function () {
+            if (!this.fechaIso) return '';
+            var p = this.fechaIso.split('-');
+            if (p.length === 3) return p[2] + '/' + p[1] + '/' + p[0];
+            return this.fechaIso;
+        },
+
+        enviarConAccion: function (accion) {
+            this.accionPendiente = accion;
+            var form = document.getElementById('form-armado-surtido');
+            if (!form) return;
+            if (!this.lote.length) {
+                this.mostrarMensaje('Agregue al menos un armado al lote.');
+                return;
+            }
+            if (!this.validarCabecera()) return;
+            this.syncLoteHidden();
+            form.requestSubmit();
+        },
+
+        abrirModalAnular: function () {
+            this.modalAnularOpen = true;
+        },
+
+        confirmarAnularLote: function () {
+            this.modalAnularOpen = false;
+            this.accionPendiente = 'anular';
+            var form = document.getElementById('form-armado-surtido');
+            if (!form) return;
+            this.syncLoteHidden();
+            form.requestSubmit();
         },
     };
 }

@@ -882,6 +882,66 @@ def run_mpr_core_tables_mysql(conn) -> Dict[str, Any]:
                     "DDL MPR borrador CC (006_mpr_clasificacion_borrador.sql)",
                 )
 
+        # Armado: fecha_realizado / estado / ítems de borrador (007)
+        tbl_al = nombre_tabla_real(cursor, "mpr_armado_lote")
+        if tbl_al:
+            tal = tbl_al.replace("`", "``")
+            for col, ddl in (
+                (
+                    "fecha_realizado",
+                    "DATE NULL COMMENT 'Fecha de realizado del armado (puede ser pasada)'",
+                ),
+                (
+                    "estado",
+                    "VARCHAR(20) NOT NULL DEFAULT 'aprobado' "
+                    "COMMENT 'borrador | aprobado | anulado'",
+                ),
+                (
+                    "movimiento_fisico_ok",
+                    "TINYINT(1) NOT NULL DEFAULT 1 "
+                    "COMMENT '1 si ya hay MSTOCK del lote'",
+                ),
+                (
+                    "detalle",
+                    "VARCHAR(500) NOT NULL DEFAULT '' "
+                    "COMMENT 'Detalle cabecera del lote'",
+                ),
+            ):
+                if not columna_existe(cursor, tbl_al, col):
+                    cursor.execute(
+                        "ALTER TABLE `{}` ADD COLUMN {} {}".format(tal, col, ddl)
+                    )
+                    _append_migration(applied, failed, True, f"{tbl_al}.{col}")
+            if not indice_existe(cursor, tbl_al, "idx_mpr_armado_lote_estado_fecha"):
+                cursor.execute(
+                    "CREATE INDEX `idx_mpr_armado_lote_estado_fecha` ON `{}` "
+                    "(estado, fecha_realizado)".format(tal)
+                )
+                _append_migration(
+                    applied, failed, True, f"idx_mpr_armado_lote_estado_fecha en {tbl_al}"
+                )
+
+        tbl_ali = nombre_tabla_real(cursor, "mpr_armado_lote_item")
+        if not tbl_ali:
+            sql_armado_fecha = app_path / "sql" / "007_mpr_armado_lote_fecha_estado.sql"
+            if sql_armado_fecha.is_file():
+                # Solo CREATE TABLE (los ALTER ya se aplicaron arriba de forma idempotente)
+                for stmt in _split_sql_statements(
+                    sql_armado_fecha.read_text(encoding="utf-8")
+                ):
+                    stmt = _sc_sql_strip_leading_comments(stmt)
+                    if not stmt:
+                        continue
+                    upper = stmt.lstrip().upper()
+                    if upper.startswith("CREATE TABLE"):
+                        cursor.execute(stmt)
+                _append_migration(
+                    applied,
+                    failed,
+                    True,
+                    "DDL MPR armado ítems lote (007 CREATE TABLE)",
+                )
+
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -2586,7 +2646,9 @@ PROVIDER_REGISTRY: List[Dict[str, Any]] = [
             "mpr_config, mpr_turno, mpr_roster_dia, mpr_envio_produccion, mpr_parte, "
             "mpr_parte_linea, mpr_parte_ajuste, mpr_transicion_lote, mpr_articulo_armado_surtido, "
             "mpr_armado_lote, mpr_armado_surtido_movimiento, mpr_armado_surtido_linea, "
-            "mpr_imputacion_armado, mpr_clasificacion_borrador, mpr_clasificacion_borrador_linea. "
+            "mpr_imputacion_armado, mpr_clasificacion_borrador, mpr_clasificacion_borrador_linea, "
+            "mpr_armado_lote_item, mpr_armado_lote_item_linea. "
+            "Incluye alters de fecha_realizado/estado en mpr_armado_lote (007). "
             "Fuente única AdministraNET; sin columna base_empresa. "
             "Equivalente a ``manage.py apply_mpr_core_tables``. "
             "Ver docs/mpr/PLAN_MIGRACION_MPR_MYSQL_FUENTE_UNICA.md."
