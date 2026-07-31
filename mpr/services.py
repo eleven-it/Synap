@@ -10736,6 +10736,25 @@ def _max_packs_armado_1ra_bulk(
     return resultado
 
 
+def _hay_stock_tipo_en_deposito(
+    base_empresa: str,
+    id_deposito: Optional[int],
+    tipo_art_fab: str,
+) -> bool:
+    """True si hay al menos un artículo del tipo con saldo > 0 en el depósito."""
+    dep = to_int_or_none(id_deposito)
+    if not (base_empresa or "").strip() or not dep or not (tipo_art_fab or "").strip():
+        return False
+    filas = listar_articulos_stock_deposito(
+        base_empresa,
+        int(dep),
+        busqueda=None,
+        limit=1,
+        tipo_art_fab=tipo_art_fab,
+    )
+    return bool(filas)
+
+
 def listar_tablero_armado(
     base_empresa: str,
     *,
@@ -10747,15 +10766,25 @@ def listar_tablero_armado(
     limit: int = 200,
 ) -> List[Dict[str, Any]]:
     """
-    Grilla Armado alineada a PCP Armado: packs terminados con demanda y capacidad de armado.
+    Grilla Armado alineada a PCP Armado.
 
-    resta_armar = max(0, pedido + stock_reserva − stock_terminado)  (paridad PCP col L)
-    resta_urgente = max(0, pedido − stock_terminado)               (paridad PCP col J)
-    max_armable: solo modo 1ra (BOM × stock Semi elaborado).
+    Modo 1ra: packs Terminado+BOM con demanda PED y máx. armable en Semi.
+    Modo 2da: packs ``tipo_art_fab = Fabricado 2da`` con capacidad de armado
+    (BOM × stock en 2da selección, o composición libre si hay stock Fabricado
+    en origen). No exige demanda PED.
     """
     if not (base_empresa or "").strip():
         return []
     modo_n = _normalizar_modo_armado(modo, default="1ra")
+
+    if modo_n == "2da":
+        return _listar_tablero_armado_2da(
+            base_empresa,
+            solo_armable=solo_resta,
+            marcas_incluidos=marcas_incluidos,
+            limit=limit,
+        )
+
     filas_demanda = listar_demanda_pack_desde_pedidos(
         base_empresa,
         limit=limit * 2,
@@ -10763,20 +10792,12 @@ def listar_tablero_armado(
         fecha_hasta=fecha_hasta,
         marcas_incluidos=marcas_incluidos,
     )
-    if modo_n == "1ra":
-        packs_ok = {
-            int(p["id_articulo"]): p
-            for p in (listar_packs_armado_1ra(base_empresa) or [])
-            if to_int_or_none(p.get("id_articulo")) is not None
-        }
-        dep_origen = get_deposito_semi_elaborado_mpr(base_empresa)
-    else:
-        packs_ok = {
-            int(p["id_articulo"]): p
-            for p in (listar_packs_armado_surtido(base_empresa) or [])
-            if to_int_or_none(p.get("id_articulo")) is not None
-        }
-        dep_origen = get_deposito_2da_seleccion_mpr(base_empresa)
+    packs_ok = {
+        int(p["id_articulo"]): p
+        for p in (listar_packs_armado_1ra(base_empresa) or [])
+        if to_int_or_none(p.get("id_articulo")) is not None
+    }
+    dep_origen = get_deposito_semi_elaborado_mpr(base_empresa)
 
     ids_pack = [
         int(d["id_articulo"])
@@ -10787,7 +10808,7 @@ def listar_tablero_armado(
         return []
 
     max_map: Dict[int, int] = {}
-    if modo_n == "1ra" and dep_origen:
+    if dep_origen:
         max_map = _max_packs_armado_1ra_bulk(base_empresa, ids_pack, int(dep_origen))
 
     marca_map = _fetch_codigo_marca_articulo(base_empresa, ids_pack)
@@ -10814,15 +10835,12 @@ def listar_tablero_armado(
         except (TypeError, ValueError):
             resta_armar = max(0, pedido + stock_reserva - stock_terminado)
         resta_urgente = max(0, pedido - stock_terminado)
-        max_armable = int(max_map.get(id_art, 0) or 0) if modo_n == "1ra" else 0
+        max_armable = int(max_map.get(id_art, 0) or 0)
 
         if solo_resta and resta_armar <= 0:
             continue
-        if modo_n == "1ra" and max_armable <= 0:
+        if max_armable <= 0:
             continue
-
-        a_armar = 0
-        # Sin precarga: el analista completa solo las filas a armar.
 
         filas.append({
             "id_articulo": id_art,
@@ -10840,8 +10858,9 @@ def listar_tablero_armado(
             "resta_urgente": resta_urgente,
             "resta_armar": resta_armar,
             "max_armable": max_armable,
-            "a_armar": a_armar,
+            "a_armar": 0,
             "modo_armado": modo_n,
+            "tiene_bom": True,
             "primera_fecha_entrega": dem.get("primera_fecha_entrega"),
             "primera_fecha_entrega_display": _formatear_fecha_entrega_ui(
                 dem.get("primera_fecha_entrega")
@@ -10849,6 +10868,106 @@ def listar_tablero_armado(
         })
 
     filas.sort(key=lambda x: (-int(x.get("resta_armar") or 0), str(x.get("codigo_manual") or "")))
+    return filas[:limit]
+
+
+def _listar_tablero_armado_2da(
+    base_empresa: str,
+    *,
+    solo_armable: bool = True,
+    marcas_incluidos: Optional[Sequence[int]] = None,
+    limit: int = 200,
+) -> List[Dict[str, Any]]:
+    """
+    Packs ``Fabricado 2da`` para la grilla.
+
+    Criterio de armable (``solo_armable``):
+    - con BOM: máx. packs > 0 según stock en depósito 2da selección;
+    - sin BOM (composición libre): hay stock ``Fabricado`` en ese depósito.
+    """
+    packs_ok = {
+        int(p["id_articulo"]): p
+        for p in (listar_packs_armado_surtido(base_empresa) or [])
+        if to_int_or_none(p.get("id_articulo")) is not None
+    }
+    if marcas_incluidos:
+        marcas_set = {
+            int(m) for m in marcas_incluidos if to_int_or_none(m) is not None
+        }
+        if marcas_set:
+            marca_tmp = _fetch_codigo_marca_articulo(base_empresa, list(packs_ok.keys()))
+            packs_ok = {
+                i: p
+                for i, p in packs_ok.items()
+                if to_int_or_none(marca_tmp.get(i)) in marcas_set
+            }
+    ids_pack = list(packs_ok.keys())
+    if not ids_pack:
+        return []
+
+    dep_origen = get_deposito_2da_seleccion_mpr(base_empresa)
+    dep_dest = get_deposito_terminado_mpr(base_empresa)
+    max_map: Dict[int, int] = {}
+    if dep_origen:
+        max_map = _max_packs_armado_1ra_bulk(base_empresa, ids_pack, int(dep_origen))
+
+    stock_term: Dict[int, float] = {}
+    if dep_dest:
+        stock_term = _stock_deposito_por_articulos(base_empresa, int(dep_dest), ids_pack)
+
+    hay_comp_fabricado = _hay_stock_tipo_en_deposito(
+        base_empresa, dep_origen, TIPO_ART_FAB_FABRICADO
+    )
+    marca_map = _fetch_codigo_marca_articulo(base_empresa, ids_pack)
+
+    filas: List[Dict[str, Any]] = []
+    for id_art in ids_pack:
+        pack_meta = packs_ok.get(id_art) or {}
+        max_armable = int(max_map.get(id_art, 0) or 0)
+        lineas_bom = lineas_bom_pack_1ra(base_empresa, id_art)
+        tiene_bom = bool(lineas_bom)
+        if tiene_bom:
+            armable = max_armable > 0
+        else:
+            armable = hay_comp_fabricado
+
+        if solo_armable and not armable:
+            continue
+
+        try:
+            stock_terminado = int(round(float(stock_term.get(id_art, 0) or 0)))
+        except (TypeError, ValueError):
+            stock_terminado = 0
+
+        filas.append({
+            "id_articulo": id_art,
+            "codigo_manual": str_codigo_manual_articulo(pack_meta.get("codigo_articulo")),
+            "codigo_articulo": str_or_default(pack_meta.get("codigo_articulo"), "-"),
+            "descripcion_articulo": str_or_default(
+                pack_meta.get("descripcion_articulo"), "-"
+            ),
+            "codigo_marca": marca_map.get(id_art),
+            "pedido": 0,
+            "stock_terminado": stock_terminado,
+            "stock_reserva": 0,
+            "resta_urgente": 0,
+            "resta_armar": max_armable if tiene_bom else (1 if armable else 0),
+            "max_armable": max_armable if tiene_bom else 0,
+            "a_armar": 0,
+            "modo_armado": "2da",
+            "tiene_bom": tiene_bom,
+            "armable": armable,
+            "primera_fecha_entrega": None,
+            "primera_fecha_entrega_display": "—",
+        })
+
+    filas.sort(
+        key=lambda x: (
+            -int(x.get("max_armable") or 0),
+            -int(1 if x.get("armable") else 0),
+            str(x.get("codigo_manual") or ""),
+        )
+    )
     return filas[:limit]
 
 
