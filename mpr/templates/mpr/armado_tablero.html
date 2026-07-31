@@ -19,10 +19,10 @@
                         <div class="inline-flex h-9 rounded-lg border p-0.5 {% if modo == '1ra' %}border-emerald-500/60 bg-emerald-950/30{% else %}border-amber-500/60 bg-amber-950/25{% endif %}"
                              role="group"
                              aria-label="Modo de armado">
-                            <a href="?vista=tablero&amp;modo=1ra{% if not solo_resta %}&amp;solo_resta=0{% endif %}&amp;presentacion={{ modo_presentacion }}"
+                            <a href="?vista=tablero&amp;modo=1ra{% if not solo_resta %}&amp;solo_resta=0{% endif %}&amp;presentacion={{ modo_presentacion }}&amp;fecha_realizado={{ fecha_realizado_default|urlencode }}"
                                {% if modo == '1ra' %}aria-current="true"{% endif %}
                                class="inline-flex h-full items-center rounded-md px-2.5 text-xs font-bold transition-colors {% if modo == '1ra' %}bg-emerald-600 text-white{% else %}text-emerald-300 hover:bg-emerald-900/40{% endif %}">1ra</a>
-                            <a href="?vista=tablero&amp;modo=2da{% if not solo_resta %}&amp;solo_resta=0{% endif %}&amp;presentacion={{ modo_presentacion }}"
+                            <a href="?vista=tablero&amp;modo=2da{% if not solo_resta %}&amp;solo_resta=0{% endif %}&amp;presentacion={{ modo_presentacion }}&amp;fecha_realizado={{ fecha_realizado_default|urlencode }}"
                                {% if modo != '1ra' %}aria-current="true"{% endif %}
                                class="inline-flex h-full items-center rounded-md px-2.5 text-xs font-bold transition-colors {% if modo != '1ra' %}bg-amber-500 text-amber-950{% else %}text-amber-300 hover:bg-amber-900/35{% endif %}">2da</a>
                         </div>
@@ -53,11 +53,12 @@
                         {% include "includes/toggle_docenas_pares.html" with interaction="link" variant="dark" modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
 
                         <label class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-900/80 px-2 text-xs font-medium text-slate-200"
-                               title="Fecha del movimiento de stock (puede ser pasada)">
+                               title="Fecha del movimiento de stock y consulta de armados de ese día">
                             <span class="hidden whitespace-nowrap text-slate-400 sm:inline">Fecha</span>
                             <input type="date"
                                    id="fecha-realizado-tablero"
                                    x-model="fechaIso"
+                                   @change="aplicarFecha()"
                                    aria-label="Fecha realizado del armado"
                                    class="h-7 max-w-[9.5rem] rounded border-0 bg-transparent p-0 text-sm text-white focus:outline-none focus:ring-0 [color-scheme:dark]"/>
                         </label>
@@ -80,12 +81,12 @@
                         </a>
                         {% endif %}
 
-                        <a href="?{{ filtros_qs }}"
+                        <a :href="hrefConFecha()"
                            aria-label="Actualizar vista"
                            class="group relative inline-flex h-9 items-center gap-1 rounded-lg border border-orange-400/70 bg-orange-500 px-2.5 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-800">
                             <span class="material-icons text-base" aria-hidden="true">refresh</span>
                             <span class="hidden sm:inline">Actualizar</span>
-                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Actualizar stock y demanda" only %}
+                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Actualizar stock, demanda y armados del día" only %}
                         </a>
 
                         {% if modo == '1ra' %}
@@ -109,6 +110,56 @@
                         </a>
                     </div>
                 </header>
+            </div>
+        </div>
+
+        <div class="mb-2 flex-shrink-0 rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-800/80"
+             x-data="{ abierto: {{ armados_del_dia|length|yesno:'true,false' }} }">
+            <button type="button"
+                    class="flex w-full items-center gap-2 text-left text-xs font-semibold text-slate-700 dark:text-slate-200"
+                    @click="abierto = !abierto"
+                    :aria-expanded="abierto.toString()">
+                <span class="material-icons text-base text-slate-500" aria-hidden="true"
+                      x-text="abierto ? 'expand_less' : 'expand_more'"></span>
+                <span>
+                    Ya armado el {{ fecha_realizado_default }}
+                    <span class="font-normal text-slate-500 dark:text-slate-400">
+                        · {{ armados_del_dia|length }} movimiento(s)
+                        {% if armados_del_dia_total_packs %}· {{ armados_del_dia_total_packs }} pack(s){% endif %}
+                    </span>
+                </span>
+            </button>
+            <div x-show="abierto" x-cloak class="mt-2 max-h-36 overflow-auto border-t border-slate-100 pt-2 dark:border-slate-700">
+                {% if armados_del_dia %}
+                <table class="w-full text-left text-xs">
+                    <thead>
+                        <tr class="text-[10px] uppercase tracking-wide text-slate-500">
+                            <th class="pb-1 pr-2 font-semibold">Artículo</th>
+                            <th class="pb-1 pr-2 text-right font-semibold">Packs</th>
+                            <th class="pb-1 font-semibold">Comprobante</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                        {% for mov in armados_del_dia %}
+                        <tr>
+                            <td class="py-1 pr-2 text-slate-800 dark:text-slate-100">
+                                <span class="font-medium">{{ mov.descripcion_articulo }}</span>
+                                {% if mov.codigo_articulo and mov.codigo_articulo != '-' %}
+                                <span class="ml-1 text-slate-400">{{ mov.codigo_articulo }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-1 pr-2 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{{ mov.cantidad_packs }}</td>
+                            <td class="py-1 text-slate-500">{{ mov.nro_comprobante }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    No hay armados aprobados con fecha realizado {{ fecha_realizado_default }}.
+                    La grilla de abajo es capacidad actual para armar; no es el historial.
+                </p>
+                {% endif %}
             </div>
         </div>
 
@@ -168,7 +219,7 @@
             <p class="mt-1 flex-shrink-0 text-[10px] leading-snug text-slate-400"
                title="{{ nombre_deposito_origen }} → {{ nombre_deposito_destino }}">
                 {% if modo == '1ra' %}
-                Máx. armable = límite por semielaborados (BOM). Completá solo las filas a armar; el resto puede quedar vacío. La fecha del chrome se usa al ejecutar el armado.
+                Máx. armable = límite por semielaborados (BOM). Completá solo las filas a armar; el resto puede quedar vacío. La <strong>Fecha</strong> del chrome es la del MSTOCK al ejecutar y también filtra el panel «Ya armado» de ese día.
                 {% else %}
                 Packs con <span class="font-medium">tipo_art_fab = Fabricado 2da</span>. Con BOM: máx. según stock en 2da selección. Sin BOM: se listan si hay componentes Fabricado en origen (composición libre).
                 {% endif %}
@@ -210,37 +261,6 @@
             </div>
         </div>
         {% endif %}
-
-        <div x-show="modalResultado.open" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div class="fixed inset-0 bg-black/50" @click="modalResultado.open = false"></div>
-            <div class="relative max-w-lg rounded-xl border bg-white p-5 shadow-xl dark:bg-slate-800">
-                <h2 class="text-lg font-semibold">Resultado del armado</h2>
-                <p class="mt-2 text-sm"><span x-text="modalResultado.exitosos.length"></span> grabado(s), <span x-text="modalResultado.fallidos.length"></span> con error.</p>
-                <div x-show="modalResultado.exitosos.length" x-cloak class="mt-4 space-y-2">
-                    <h3 class="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Grabados</h3>
-                    <template x-for="(ex, idx) in modalResultado.exitosos" :key="'ex-' + idx">
-                        <p class="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100">
-                            <span x-text="ex.descripcion_pack || ex.descripcion_articulo_pack || ex.id_articulo_pack"></span>
-                            · <span x-text="ex.cantidad_grabada != null ? ex.cantidad_grabada : ex.cantidad_packs"></span>
-                            · Comp. <span x-text="ex.nro_comprobante || '—'"></span>
-                        </p>
-                    </template>
-                </div>
-                <div x-show="modalResultado.fallidos.length" x-cloak class="mt-4 space-y-2">
-                    <h3 class="text-sm font-semibold text-rose-700 dark:text-rose-300">No grabados</h3>
-                    <template x-for="(fa, idx) in modalResultado.fallidos" :key="'fa-' + idx">
-                        <p class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-900 dark:bg-rose-950/40 dark:text-rose-100">
-                            <strong x-text="fa.descripcion_pack || fa.id_articulo_pack"></strong>:
-                            <span x-text="fa.error || 'Error desconocido'"></span>
-                        </p>
-                    </template>
-                </div>
-                {% if modo == '1ra' and puede_imputar_pedido %}
-                <a href="{% url 'mpr:imputacion_armado_1ra' %}" class="mt-3 inline-flex text-sm font-medium text-emerald-600">Imputación de pedido →</a>
-                {% endif %}
-                <button type="button" @click="modalResultado.open = false" class="mt-4 rounded-lg bg-slate-200 px-4 py-2 text-sm dark:bg-slate-700">Cerrar</button>
-            </div>
-        </div>
     </div>
 </section>
 
@@ -269,10 +289,15 @@ window.armadoTableroState = function () {
         armadoEmpty: false,
         busqueda: '',
         fechaIso: ddmmyyyyToIso('{{ fecha_realizado_default|default:""|escapejs }}') || (new Date()).toISOString().slice(0, 10),
-        modalResultado: {
-            open: false,
-            exitosos: [],
-            fallidos: []
+        filtrosQsBase: '{{ filtros_qs|escapejs }}',
+        hrefConFecha: function () {
+            var params = new URLSearchParams(this.filtrosQsBase || '');
+            params.set('fecha_realizado', isoToDdmmyyyy(this.fechaIso));
+            return '?' + params.toString();
+        },
+        aplicarFecha: function () {
+            this.syncFechaPost();
+            window.location.href = this.hrefConFecha();
         },
         cargarResultado: function (texto) {
             var resultado = null;
@@ -281,15 +306,39 @@ window.armadoTableroState = function () {
             } catch (_) {
                 resultado = null;
             }
-            this.modalResultado.exitosos = (resultado && resultado.exitosos) || [];
-            this.modalResultado.fallidos = (resultado && resultado.fallidos) || [];
-            this.modalResultado.open = Boolean(
-                this.modalResultado.exitosos.length || this.modalResultado.fallidos.length
-            );
+            if (!resultado || typeof resultado !== 'object') return;
+            var nOk = ((resultado.exitosos) || []).length;
+            var nFail = ((resultado.fallidos) || []).length;
+            if (!nOk && !nFail) return;
+            var msg;
+            var tipo;
+            var titulo;
+            if (nOk && !nFail) {
+                msg = 'Armado guardado correctamente.';
+                tipo = 'success';
+                titulo = 'Listo';
+            } else if (nOk && nFail) {
+                msg = 'Armado parcial: se grabaron ' + nOk + ' ítem(s) y ' + nFail + ' tuvieron error.';
+                tipo = 'warning';
+                titulo = 'Atención';
+            } else {
+                msg = 'No se pudo grabar el armado.';
+                tipo = 'error';
+                titulo = 'Aviso';
+            }
+            if (typeof window.mprShowAviso === 'function') {
+                window.mprShowAviso(msg, { tipo: tipo, titulo: titulo });
+            }
         },
         syncFechaPost: function () {
             var el = document.getElementById('fecha-realizado-post');
             if (el) el.value = isoToDdmmyyyy(this.fechaIso);
+            var fq = document.querySelector('#form-armar-lote input[name="filtros_qs"]');
+            if (fq) {
+                var params = new URLSearchParams(this.filtrosQsBase || '');
+                params.set('fecha_realizado', isoToDdmmyyyy(this.fechaIso));
+                fq.value = params.toString();
+            }
         },
         abrirModalArmado: function () {
             var lineas = 0;

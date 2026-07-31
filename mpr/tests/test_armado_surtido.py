@@ -202,3 +202,77 @@ class EjecutarArmadoSurtidoWrapperTest(SimpleTestCase):
         conn.commit.assert_called_once()
         _mocks[0].assert_called_once()
         mock_tx.assert_called_once()
+
+
+class ListarMovimientosArmadoPorFechaTest(SimpleTestCase):
+    """Historial por fecha: columnas MSTOCK case-insensitive (administranet1)."""
+
+    @patch("mpr.repositories.armado_surtido.columna_existe", return_value=True)
+    @patch("mpr.repositories.armado_surtido.mysql_cursor")
+    def test_usa_columnas_snake_case_movimiento_stock(self, mock_cursor_ctx, _mock_col):
+        from datetime import date
+
+        from mpr.repositories.armado_surtido import listar_movimientos_armado_por_fecha
+
+        cursor = MagicMock()
+        mock_cursor_ctx.return_value.__enter__.return_value = cursor
+        mock_cursor_ctx.return_value.__exit__.return_value = False
+
+        mov_row = {
+            "id_mpr_armado_surtido_movimiento": 20,
+            "codigo_movimiento": 2670,
+            "id_articulo_pack": 618,
+            "cantidad_packs": 1,
+            "modo": "1ra",
+            "creado_en": None,
+            "id_mpr_armado_lote": 20,
+            "fecha_realizado": date(2026, 7, 30),
+        }
+
+        def execute_side_effect(sql, params=None):
+            cursor._last_sql = sql
+            return None
+
+        def fetchone_side_effect():
+            sql = (cursor._last_sql or "").lower()
+            if "show tables like" in sql:
+                return {"Tables_in_x": "x"}
+            return None
+
+        fetchall_calls = {"n": 0}
+
+        def fetchall_side_effect():
+            sql = (cursor._last_sql or "").lower()
+            fetchall_calls["n"] += 1
+            if "from mpr_armado_surtido_movimiento" in sql:
+                return [mov_row]
+            if "show columns from" in sql and "movimiento_stock" in sql:
+                return [
+                    {"Field": "codigo_movimiento"},
+                    {"Field": "nro_comprobante"},
+                ]
+            if "from movimiento_stock" in sql:
+                self.assertIn("`codigo_movimiento`", cursor._last_sql)
+                self.assertIn("`nro_comprobante`", cursor._last_sql)
+                self.assertNotIn("CodigoMovimiento", cursor._last_sql)
+                return [{"codigo": 2670, "nro": "0001-00001229"}]
+            if "from articulo" in sql:
+                return [{
+                    "id_articulo": 618,
+                    "codigo": "7944-01",
+                    "descripcion": "Crew Heritage",
+                }]
+            return []
+
+        cursor.execute.side_effect = execute_side_effect
+        cursor.fetchone.side_effect = fetchone_side_effect
+        cursor.fetchall.side_effect = fetchall_side_effect
+
+        out = listar_movimientos_armado_por_fecha(
+            "administranet1",
+            fecha_realizado=date(2026, 7, 30),
+            modo="1ra",
+        )
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["id_articulo_pack"], 618)
+        self.assertEqual(out[0]["nro_comprobante"], "0001-00001229")

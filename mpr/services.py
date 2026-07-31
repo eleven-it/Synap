@@ -10971,6 +10971,24 @@ def _listar_tablero_armado_2da(
     return filas[:limit]
 
 
+def listar_armados_realizados_por_fecha(
+    base_empresa: str,
+    *,
+    fecha_realizado: date,
+    modo: str = "1ra",
+    limit: int = 100,
+) -> List[Dict[str, Any]]:
+    """Packs armados (aprobados) en la fecha de realizado indicada."""
+    from mpr.repositories.armado_surtido import listar_movimientos_armado_por_fecha
+
+    return listar_movimientos_armado_por_fecha(
+        base_empresa,
+        fecha_realizado=fecha_realizado,
+        modo=modo,
+        limit=limit,
+    )
+
+
 def calcular_kpis_tablero_armado(filas: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Totales para cabecera (pares y docenas enteras PCP)."""
     resta_pares = sum(int(f.get("resta_armar") or 0) for f in (filas or []))
