@@ -24,7 +24,16 @@ La vista POS/carrito (`?vista=pos`, plantilla `armado_surtido.html`) quedó **de
 
 El POST con `lote_json` + `accion=borrador|aprobar|anular` sigue disponible en backend (tests / transición 2da). No hay UI POS para armarlo: Armado 2da en tablero aún no tiene composición libre.
 
-## Fecha de realizado
+## Armado 2da en tablero
+
+Criterio de filas (no usa demanda PED):
+
+1. Pack con `articulo.tipo_art_fab = 'Fabricado 2da'`.
+2. **Armable** si:
+   - tiene BOM y máx. packs > 0 en depósito 2da selección, **o**
+   - no tiene BOM y hay stock `Fabricado` en ese depósito (composición libre).
+
+Verificación: IDArt 1371 en base Best (`administranet`) debe listarse cuando hay componentes Fabricado en 2da.
 
 - Campo `fecha_realizado` en cabecera (acepta dd/MM/yyyy o yyyy-MM-dd).
 - Se usa como `fecha` del comprobante MSTOCK (puede ser fecha pasada).

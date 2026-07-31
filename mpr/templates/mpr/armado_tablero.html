@@ -119,9 +119,7 @@
                         <tr class="bg-slate-100/90 text-[10px] font-semibold uppercase tracking-wide text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                             <th class="sticky left-0 top-0 z-20 min-w-[16rem] border-b border-slate-200 bg-slate-100 px-3 py-1.5 text-left dark:border-slate-700 dark:bg-slate-800">Artículo pack</th>
                             <th class="sticky top-0 z-10 border-b border-l border-amber-200 bg-amber-50/80 px-2 py-1.5 text-right dark:border-amber-900 dark:bg-amber-950/20">Terminado</th>
-                            {% if modo == '1ra' %}
                             <th class="sticky top-0 z-10 border-b border-l border-violet-200 bg-violet-50/80 px-2 py-1.5 text-right dark:border-violet-900 dark:bg-violet-950/20">Máx. armable<br><span class="font-normal normal-case">(packs)</span></th>
-                            {% endif %}
                             <th class="sticky top-0 z-10 border-b border-l border-emerald-200 bg-emerald-50/80 px-2 py-1.5 text-right dark:border-emerald-900 dark:bg-emerald-950/20">Armar<br><span class="font-normal normal-case">(packs)</span></th>
                         </tr>
                     </thead>
@@ -132,29 +130,35 @@
                             x-show="busqueda === '' || $el.dataset.descripcion.includes(busqueda.toLowerCase())">
                             <td class="sticky left-0 z-10 bg-white px-3 py-2 dark:bg-slate-900">
                                 <span class="block text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100">{{ fila.descripcion_articulo }}</span>
+                                {% if modo == '2da' and not fila.tiene_bom %}
+                                <span class="mt-0.5 block text-[10px] font-medium text-amber-700 dark:text-amber-300">Composición libre · stock Fabricado en 2da</span>
+                                {% endif %}
                             </td>
                             <td class="border-l border-amber-100 px-2 py-2 text-right text-sm tabular-nums dark:border-amber-900/40 {% if fila.stock_terminado_es_negativo %}font-semibold text-rose-600 dark:text-rose-400{% else %}text-slate-600 dark:text-slate-400{% endif %}">{{ fila.stock_terminado_display }}</td>
-                            {% if modo == '1ra' %}
-                            <td class="border-l border-violet-100 px-2 py-2 text-right text-sm tabular-nums font-medium text-violet-800 dark:text-violet-300">{{ fila.max_armable }}</td>
+                            <td class="border-l border-violet-100 px-2 py-2 text-right text-sm tabular-nums font-medium text-violet-800 dark:text-violet-300">
+                                {% if fila.tiene_bom %}{{ fila.max_armable }}{% else %}—{% endif %}
+                            </td>
                             <td class="border-l border-emerald-100 bg-emerald-50/20 px-2 py-2 text-right dark:bg-emerald-950/10">
+                                {% if modo == '1ra' or fila.tiene_bom and fila.max_armable > 0 %}
                                 <input type="number" name="armar_{{ fila.id_articulo }}" data-armar-qty data-id-articulo="{{ fila.id_articulo }}"
                                        min="0" max="{{ fila.max_armable }}" step="1" inputmode="numeric"
                                        value=""
                                        placeholder="0"
                                        {% if fila.max_armable <= 0 %}disabled{% endif %}
                                        class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-emerald-800 dark:bg-slate-700 dark:disabled:bg-slate-800"/>
+                                {% else %}
+                                <span class="text-xs text-slate-400" title="Sin BOM: la composición libre se define al armar (pendiente en tablero).">Libre</span>
+                                {% endif %}
                             </td>
-                            {% else %}
-                            <td class="border-l border-emerald-100 px-2 py-2 text-right text-xs text-slate-400 dark:text-slate-500"
-                                title="Armado 2da masivo en tablero pendiente; la vista POS quedó deprecada.">
-                                —
-                            </td>
-                            {% endif %}
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="{% if modo == '1ra' %}4{% else %}3{% endif %}" class="px-4 py-10 text-center text-sm text-slate-500">
-                                {% if modo == '1ra' %}Sin packs armables con resta pendiente y stock en Semi elaborado.{% else %}Sin packs 2da con demanda pendiente.{% endif %}
+                            <td colspan="4" class="px-4 py-10 text-center text-sm text-slate-500">
+                                {% if modo == '1ra' %}
+                                Sin packs armables con resta pendiente y stock en Semi elaborado.
+                                {% else %}
+                                Sin packs <span class="font-medium">Fabricado 2da</span> con stock para armar en 2da selección.
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -166,7 +170,7 @@
                 {% if modo == '1ra' %}
                 Máx. armable = límite por semielaborados (BOM). Completá solo las filas a armar; el resto puede quedar vacío. La fecha del chrome se usa al ejecutar el armado.
                 {% else %}
-                Listado de demanda Armado 2da. La ejecución masiva / composición libre en tablero está pendiente; la vista carrito (`vista=pos`) quedó deprecada.
+                Packs con <span class="font-medium">tipo_art_fab = Fabricado 2da</span>. Con BOM: máx. según stock en 2da selección. Sin BOM: se listan si hay componentes Fabricado en origen (composición libre).
                 {% endif %}
             </p>
         </div>

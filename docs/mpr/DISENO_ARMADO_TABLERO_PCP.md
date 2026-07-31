@@ -59,7 +59,7 @@ La pantalla es la **única vista operativa** de armado: grilla densa (`?modo=1ra
 | 2 | **POS deprecado (28/07/2026):** `?vista=pos` redirige a `vista=tablero`. No hay enlaces ni menús a carrito. Plantilla `armado_surtido.html` queda legacy sin servir en GET. |
 | 3 | **Modo 1ra / 2da:** toggle existente (verde / ámbar); misma URL, distinto origen y elegibilidad. |
 | 4 | **Ejecución masiva:** **Armado 1ra** desde tabla (BOM fija) + **Fecha realizado** en chrome. |
-| 5 | **Armado 2da en tabla:** listado demanda; composición libre / ejecución masiva en tablero pendiente (sin escape a POS). |
+| 5 | **Armado 2da en tabla:** packs `Fabricado 2da` con stock armable (BOM×2da o composición libre si hay Fabricado en origen). Sin enlace POS. |
 | 6 | **Unidad:** pares enteros; docenas = pares ÷ 12 redondeado (mismo toggle que tablero). |
 | 7 | **Filtro default:** «Solo con resta» (`resta_armar > 0`), análogo a «Solo urgentes» del tablero. |
 | 8 | **Input Armar sin precarga:** vacío al abrir; el analista completa solo las filas necesarias. Deshabilitado si `max_armable = 0`. Negativos no permitidos (UI + backend). |
