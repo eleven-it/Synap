@@ -356,8 +356,20 @@ editan el mismo artículo, sus incrementos comparten el mismo cupo live. Un camb
 solo de operario habilita la consulta visual pero no consume cupo. Si falla → rechazo
 (UI + servidor).
 
-**Borrador** (`accion=borrador`): **no** valida cupo Fabricando (se puede guardar
-aunque el incremento supere el cupo; cargas diferidas). Sin OPP/stock hasta aprobar.
+**Cliente (JavaScript):** el badge de cupo recalcula en vivo el **Disponible** por
+fila considerando la suma de incrementos editados en **todas las máquinas** del mismo
+artículo. Cada fila muestra `Ingresado`, el tope Fabricando y una línea meta:
+`Disponible: X` (sin exceso) o `En N máq.: SUMA · Tope CUPO · Reducir REDUCIR`
+(con exceso). Si la suma multi-máquina supera el cupo, el botón «Guardar parte de
+producción» queda con `aria-disabled` y estilo atenuado (sin `disabled` nativo, para
+permitir abrir el detalle); al hacer clic se abre un **modal Synap** (no banner ni
+toast de una línea) con un ítem por artículo en exceso: código, descripción,
+incremento total, máquinas involucradas, cupo y pares a reducir.
+
+**Borrador** (`accion=borrador`): **no** valida cupo Fabricando en frontend ni
+backend (se puede guardar aunque el incremento supere el cupo; cargas diferidas).
+En cliente, `validarAntesDeGuardar(false)` solo exige operario en celdas con
+cantidad. Sin OPP/stock hasta aprobar.
 **No disponible** si el día ya tiene un parte aprobado (origen `directo_supervisor`):
 en ese caso las correcciones van por `accion=aprobar` (delta de stock).
 
@@ -367,8 +379,13 @@ Siempre visibles (si el día no está bloqueado por CC):
 
 | Botón | Acción |
 |-------|--------|
-| **Guardar borrador** | Persistencia sin stock; disponible aunque el cupo permita aprobar. **Deshabilitado** si el día ya está aprobado o bloqueado por CC. |
-| **Guardar parte de producción** | Aprueba o re-aprueba con delta; se deshabilita visualmente si hay exceso Fabricando (o día bloqueado por CC). |
+| **Guardar borrador** | Persistencia sin stock; disponible aunque el cupo permita aprobar. **Deshabilitado** si el día ya está aprobado o bloqueado por CC. No valida cupo en frontend. |
+| **Guardar parte de producción** | Aprueba o re-aprueba con delta. Si hay exceso Fabricando multi-máquina: `aria-disabled` + estilo atenuado; clic abre modal de detalle. **Deshabilitado** nativo solo si el día está bloqueado por CC. |
+
+**Pie de formulario:** a la izquierda, texto de motivo (`#parte-motivo-bloqueo`) con
+`aria-live="polite"`: aviso de parte aprobado y/o bloqueo por exceso de cupo. Si hay
+exceso, enlace «Ver detalle del cupo» abre el modal Synap. A la derecha, los dos
+botones de guardado (`flex-wrap justify-between`).
 
 Si el día ya está **aprobado**, no se muestran banners de estado: hay un **chip** «Parte aprobado» en el chrome (junto a Cargar grilla). Al hacer clic, `mprShowAviso` explica que las correcciones van por «Guardar parte de producción» y que el borrador queda deshabilitado. Los banners de solo lectura por CC / turnos bloqueados sí se conservan.
 
@@ -390,6 +407,7 @@ Heredado de `operadores_por_linea` / roster del builder de planilla:
 - Altura de página: `h-[calc(100dvh-5.5rem)]` / `md:h-[calc(100dvh-7.5rem)]` con `-mt-4 md:-mt-8` (cancela el padding superior de `base_app`, mismo patrón que Reports) para pegar el chrome al navbar y maximizar la grilla; deja margen inferior para barra de estado. La grilla scrollea y la barra **Guardar borrador / Guardar parte** queda fija al pie de la tarjeta.
 - Tab order por fila: Mañana → Tarde → Noche → siguiente fila (docenas antes que pares).
 - Feedback vía `mprShowAviso` / `SynapMessages` y modales Synap; **sin** `alert`/`confirm`/`prompt`.
+- Cupo compartido multi-máquina: badge con meta en vivo; modal `#parte-exceso-cupo-modal` para exceso (ícono error rojo-ámbar, lista por artículo, botón «Entendido»); pie con motivo + enlace «Ver detalle del cupo».
 - Día aprobado: chip «Parte aprobado» en el chrome (detalle con `mprShowAviso`); sin banners de estado.
 
 ### Flujo resumido
