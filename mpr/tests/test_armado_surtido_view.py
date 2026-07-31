@@ -2,7 +2,6 @@
 import json
 from unittest.mock import patch
 
-from django.contrib.messages import get_messages
 from django.test import RequestFactory, SimpleTestCase
 
 from mpr.views import (
@@ -142,8 +141,9 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
         self.assertIn("modo=2da", response.url)
         self.assertIn("armado_surtido_resultado_lote", request.session)
         self.assertEqual(request.session.get("armado_surtido_lote_fallidos"), [])
-        msgs = [m.message for m in get_messages(request)]
-        self.assertTrue(any("grabado" in m.lower() for m in msgs))
+        resultado = request.session["armado_surtido_resultado_lote"]
+        self.assertEqual(len(resultado.get("exitosos") or []), 1)
+        self.assertEqual(resultado.get("exitosos")[0].get("nro_comprobante"), "0001-00000017")
 
     @patch("mpr.views.ejecutar_lote_armado")
     @patch("mpr.views._get_base_empresa", return_value="empresa_test")
@@ -176,8 +176,9 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
         response = self.view.post(request)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(request.session.get("armado_surtido_lote_fallidos") or []), 1)
-        msgs = [m.message for m in get_messages(request)]
-        self.assertTrue(any("grabado" in m.lower() for m in msgs))
+        resultado = request.session.get("armado_surtido_resultado_lote") or {}
+        self.assertEqual(len(resultado.get("exitosos") or []), 1)
+        self.assertEqual(len(resultado.get("fallidos") or []), 1)
 
 
 class ArmadoSurtidoValidarItemLoteAPITest(SimpleTestCase):
@@ -268,3 +269,48 @@ class ArmadoSurtidoValidarItemLoteAPITest(SimpleTestCase):
         data = json.loads(response.content)
         self.assertFalse(data["ok"])
         self.assertIn("fila existente", (data.get("error") or "").lower())
+
+
+class ArmadoTableroFechaContextTest(SimpleTestCase):
+    """La fecha del chrome se lee de GET y alimenta filtros + historial del día."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.view = ArmadoSurtidoView()
+
+    @patch("mpr.views.listar_armados_realizados_por_fecha", return_value=[
+        {
+            "id_articulo_pack": 100,
+            "descripcion_articulo": "Pack demo",
+            "cantidad_packs": 3,
+            "nro_comprobante": "A-1",
+        },
+    ])
+    @patch("mpr.views.listar_tablero_armado", return_value=[])
+    @patch("mpr.views.get_depositos_con_suma_stock", return_value=[])
+    @patch("mpr.views.get_deposito_terminado_mpr", return_value=5)
+    @patch("mpr.views.get_deposito_semi_elaborado_mpr", return_value=3)
+    @patch("mpr.views._usuario_puede_imputar_pedido", return_value=False)
+    @patch("mpr.views._context_filtro_marcas", return_value={"marcas_catalogo": [], "marcas_incluidos": []})
+    @patch("mpr.views._get_id_puesto", return_value=None)
+    @patch("mpr.views._get_base_empresa", return_value="empresa_test")
+    def test_preserva_fecha_realizado_en_filtros_y_historial(self, *_mocks):
+        request = self.factory.get(
+            "/mpr/armado/",
+            {
+                "vista": "tablero",
+                "modo": "1ra",
+                "fecha_realizado": "31/07/2026",
+                "presentacion": "unidades",
+            },
+        )
+        request.session = {}
+        self.view.request = request
+        context = self.view._context_armado_tablero({
+            "base_empresa": "empresa_test",
+            "modo": "1ra",
+        })
+        self.assertEqual(context["fecha_realizado_default"], "31/07/2026")
+        self.assertIn("fecha_realizado=31%2F07%2F2026", context["filtros_qs"])
+        self.assertEqual(len(context["armados_del_dia"]), 1)
+        self.assertEqual(context["armados_del_dia_total_packs"], 3)

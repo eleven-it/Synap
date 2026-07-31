@@ -17,8 +17,10 @@ La vista POS/carrito (`?vista=pos`, plantilla `armado_surtido.html`) quedó **de
 ### Armado 1ra (operativo)
 
 1. **Chrome:** toggle 1ra/2da, búsqueda, **fecha realizado**, Actualizar, **Ejecutar armado**.
-2. **Grilla:** cantidades en columna Armar (BOM fija) → POST `vista=tablero` con `fecha_realizado` (dd/MM/yyyy).
-3. **Resultado:** modal Synap (grabados / fallidos).
+2. **Fecha en URL:** `fecha_realizado=dd/MM/yyyy` se conserva al **Actualizar**, al cambiar 1ra/2da/presentación y tras el POST de armado. Cambiar la fecha en el chrome recarga la vista con esa fecha.
+3. **Panel «Ya armado el dd/MM/yyyy»:** lista movimientos aprobados del día (packs + comprobante). La grilla de abajo sigue siendo capacidad/demanda **actual** para armar, no el historial.
+4. **Grilla:** cantidades en columna Armar (BOM fija) → POST `vista=tablero` con `fecha_realizado` (dd/MM/yyyy).
+5. **Resultado:** modal Synap corto (éxito / parcial / error).
 
 ### Borrador / anulación / carrito (legacy backend)
 
@@ -38,6 +40,7 @@ Verificación: IDArt 1371 en base Best (`administranet`) debe listarse cuando ha
 - Campo `fecha_realizado` en cabecera (acepta dd/MM/yyyy o yyyy-MM-dd).
 - Se usa como `fecha` del comprobante MSTOCK (puede ser fecha pasada).
 - En anulación/rectificación se reutiliza la fecha del lote o hoy.
+- Consulta de historial del día: `listar_armados_realizados_por_fecha` / `listar_movimientos_armado_por_fecha`.
 
 ## Rectificación híbrida (`corregir_lote_armado_aprobado`)
 
@@ -74,5 +77,6 @@ No se puede **anular** ni **corregir** si algún movimiento del lote tiene `esta
 4. Lote aprobado → anulación/corrección según candados de imputación.
 5. Armado 1ra: catálogo packs solo muestra artículos `tipo_art_fab=Terminado`.
 6. GET `?vista=pos` → redirect 302 a `vista=tablero`.
+7. Historial «Ya armado»: con `fecha_realizado=30/07/2026` debe listar lotes aprobados de esa fecha (en Best local: lote 20 / mov 20). El lookup de `nro_comprobante` usa nombres CI de `movimiento_stock` (`codigo_movimiento` / `nro_comprobante` en administranet1).
 
 Ver también: `docs/mpr/GLOSARIO_MPR.md`, `docs/mpr/DISENO_ARMADO_TABLERO_PCP.md`.

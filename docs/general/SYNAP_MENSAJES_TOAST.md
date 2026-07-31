@@ -67,6 +67,7 @@ En pantallas MPR (o que extienden `mpr/base_mpr.html`) el feedback de **acciones
 | Mensajes Django tras recarga/redirección (`messages.success/error`) | Toast global `SynapMessages` (partial `synap_messages_toast.html`) |
 | Feedback AJAX genérico sin recargar en cualquier pantalla | `SynapMessages.show('Texto', 'success')` |
 | Feedback operativo MPR en la propia página (validación, conflicto, éxito de acción AJAX) | **Modal `mprShowAviso`** |
+| Éxito de **Armado tablero** / **Control de calidad** tras POST+redirect | **Modal `mprShowAviso`** (mensaje corto; sin listar ítems/comprobantes; sin toast duplicado) |
 | Carga/progreso de un POST/GET/fetch largo | Modal de espera (`synapShowPostLoading` / `theme/templates/partials/synap_post_loading_modal.html`; aliases MPR `mprShowPostLoading*`) |
 
 ### Modal de espera / progreso (operaciones largas)

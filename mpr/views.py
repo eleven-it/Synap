@@ -148,6 +148,7 @@ from .services import (
     listar_tablero_por_articulo,
     listar_tablero_armado,
     calcular_kpis_tablero_armado,
+    listar_armados_realizados_por_fecha,
     construir_armados_desde_post_tablero,
     transferir_stock_entre_etapas,
     TIPO_MPR_2DA_SELECCION,
@@ -3476,7 +3477,7 @@ def _redirect_armado(modo="2da", id_lista=None, request=None):
     if id_lista:
         params["id_lista"] = id_lista
     if request is not None:
-        for key in ("fecha_desde", "fecha_hasta", "presentacion", "solo_resta"):
+        for key in ("fecha_desde", "fecha_hasta", "presentacion", "solo_resta", "fecha_realizado"):
             val = (request.GET.get(key) or request.POST.get(key) or "").strip()
             if val:
                 params[key] = val
@@ -3649,6 +3650,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
             enriquecer_filas_tablero_armado,
             resolver_modo_presentacion_operativa,
         )
+        from mpr.services import _fmt_fecha_ddmmaaaa, _parse_fecha_roster_input
 
         base_empresa = context.get("base_empresa") or _get_base_empresa(self.request)
         modo = context.get("modo") or _modo_armado_desde_request(self.request)
@@ -3657,6 +3659,12 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         solo_resta = _resolver_solo_resta_armado(self.request)
         marcas_incluidos = _parse_marcas_incluidos(self.request)
         modo_presentacion = resolver_modo_presentacion_operativa(self.request)
+
+        fecha_realizado_raw = (self.request.GET.get("fecha_realizado") or "").strip()
+        fecha_realizado_obj, _err_fecha = _parse_fecha_roster_input(fecha_realizado_raw) if fecha_realizado_raw else (None, None)
+        if fecha_realizado_obj is None:
+            fecha_realizado_obj = date.today()
+        fecha_realizado_ddmm = _fmt_fecha_ddmmaaaa(fecha_realizado_obj)
 
         try:
             filas = listar_tablero_armado(
@@ -3670,6 +3678,17 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         except Exception as e:
             logger.warning("listar_tablero_armado: %s", e, exc_info=True)
             filas = []
+
+        armados_del_dia: List[Dict[str, Any]] = []
+        try:
+            armados_del_dia = listar_armados_realizados_por_fecha(
+                base_empresa,
+                fecha_realizado=fecha_realizado_obj,
+                modo=modo,
+            )
+        except Exception as e:
+            logger.warning("listar_armados_realizados_por_fecha: %s", e, exc_info=True)
+            armados_del_dia = []
 
         marcas_catalogo = _context_filtro_marcas(self.request, base_empresa).get(
             "marcas_catalogo", []
@@ -3707,6 +3726,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
             "modo": modo,
             "solo_resta": "1" if solo_resta else "0",
             "presentacion": modo_presentacion,
+            "fecha_realizado": fecha_realizado_ddmm,
         }
         if fecha_desde_str:
             qs_params["fecha_desde"] = fecha_desde_str
@@ -3716,8 +3736,6 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
 
         resultado_lote = self.request.session.pop("armado_surtido_resultado_lote", None)
         self.request.session.pop("armado_surtido_lote_fallidos", None)
-
-        from mpr.services import _fmt_fecha_ddmmaaaa
 
         context.update({
             "vista": "tablero",
@@ -3739,7 +3757,11 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
             "puede_imputar_pedido": _usuario_puede_imputar_pedido(
                 getattr(self.request, "user", None)
             ),
-            "fecha_realizado_default": _fmt_fecha_ddmmaaaa(date.today()),
+            "fecha_realizado_default": fecha_realizado_ddmm,
+            "armados_del_dia": armados_del_dia,
+            "armados_del_dia_total_packs": sum(
+                int(a.get("cantidad_packs") or 0) for a in armados_del_dia
+            ),
             **_context_filtro_marcas(self.request, base_empresa),
         })
         return context
@@ -3835,16 +3857,7 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
 
         if accion == "borrador" and not fallidos:
             messages.success(request, "Borrador de armado guardado correctamente.")
-        elif accion == "aprobar":
-            if n_ok and not n_fail:
-                messages.success(request, f"Lote de armado grabado: {n_ok} ítem(s) exitoso(s).")
-            elif n_ok and n_fail:
-                messages.warning(
-                    request,
-                    f"Lote parcial: {n_ok} grabado(s), {n_fail} con error. Revise el detalle.",
-                )
-            elif n_fail and not n_ok:
-                messages.error(request, "No se pudo grabar ningún armado del lote.")
+        # aprobar: feedback solo en modal Synap del tablero (sin toast ni detalle de ítems).
 
         if n_ok or n_fail:
             request.session["armado_surtido_resultado_lote"] = resultado
@@ -6936,6 +6949,9 @@ class ClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioVerMixin, 
                 },
                 marcas_incluidos,
             ),
+            "clasificacion_feedback": self.request.session.pop(
+                "clasificacion_feedback_modal", None
+            ),
             **_context_filtro_marcas(self.request, base_empresa),
         })
         return context
@@ -7239,20 +7255,38 @@ class RegistrarClasificacionProduccionView(MprLoginRequiredMixin, MprEscritorioV
 
         if items:
             resultado = transferir_stock_lote(base_empresa, id_usuario, items, fecha=fecha_obj)
-            if resultado["exitosas"]:
-                comprobantes = ", ".join(c for c in resultado["comprobantes"] if c)
-                sufijo = "s" if resultado["exitosas"] != 1 else ""
-                dj_messages.success(
-                    request,
-                    f"{resultado['exitosas']} transferencia{sufijo} registrada{sufijo}."
-                    + (f" Comprobantes: {comprobantes}." if comprobantes else ""),
-                )
+            n_ok = int(resultado.get("exitosas") or 0)
+            errs = resultado.get("errores") or []
+            if n_ok and not errs:
+                request.session["clasificacion_feedback_modal"] = {
+                    "tipo": "success",
+                    "titulo": "Listo",
+                    "mensaje": "Control de calidad guardado correctamente.",
+                }
                 from mpr.repositories.clasificacion_borrador import eliminar_borrador
 
                 for tid_b in turnos_post:
                     eliminar_borrador(base_empresa, fecha_obj, int(tid_b))
-            for id_art_err, msg_err in resultado["errores"]:
-                dj_messages.error(request, f"Error en artículo {id_art_err}: {msg_err}")
+            elif n_ok and errs:
+                request.session["clasificacion_feedback_modal"] = {
+                    "tipo": "warning",
+                    "titulo": "Atención",
+                    "mensaje": "Control de calidad parcial: algunas transferencias no se completaron.",
+                }
+                from mpr.repositories.clasificacion_borrador import eliminar_borrador
+
+                for tid_b in turnos_post:
+                    eliminar_borrador(base_empresa, fecha_obj, int(tid_b))
+            elif errs:
+                request.session["clasificacion_feedback_modal"] = {
+                    "tipo": "error",
+                    "titulo": "Aviso",
+                    "mensaje": "No se pudo completar el control de calidad.",
+                }
+            for id_art_err, msg_err in errs:
+                logger.warning(
+                    "Clasificación artículo %s: %s", id_art_err, msg_err
+                )
 
         return _redirect_clasificacion_produccion(
             request, fecha_str=fecha_str, turno_id_raw=turno_id_raw

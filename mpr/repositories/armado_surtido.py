@@ -383,6 +383,137 @@ def listar_items_lote(base_empresa: str, id_lote: int) -> List[Dict[str, Any]]:
         return out
 
 
+def listar_movimientos_armado_por_fecha(
+    base_empresa: str,
+    *,
+    fecha_realizado: date,
+    modo: str = "1ra",
+    limit: int = 100,
+) -> List[Dict[str, Any]]:
+    """
+    Movimientos de armado aprobados con ``mpr_armado_lote.fecha_realizado`` = fecha.
+
+    Incluye descripción del pack desde ``articulo`` cuando está disponible.
+    """
+    from core.services.legacy_mysql_schema.helpers import nombre_columna_ci
+
+    base = (base_empresa or "").strip()
+    if isinstance(fecha_realizado, date) and not isinstance(fecha_realizado, datetime):
+        fecha = fecha_realizado.isoformat()
+    else:
+        fecha = to_date_or_none(fecha_realizado)
+    modo_n = (modo or "1ra").strip().lower()
+    if not base or not fecha or modo_n not in ("1ra", "2da"):
+        return []
+    lim = max(1, min(int(limit or 100), 200))
+    with mysql_cursor(base, dict_cursor=True) as cursor:
+        if not columna_existe(cursor, "mpr_armado_lote", "fecha_realizado"):
+            return []
+        cursor.execute(
+            """
+            SELECT m.id_mpr_armado_surtido_movimiento,
+                   m.codigo_movimiento,
+                   m.id_articulo_pack,
+                   m.cantidad_packs,
+                   m.modo,
+                   m.creado_en,
+                   m.id_mpr_armado_lote,
+                   l.fecha_realizado
+            FROM mpr_armado_surtido_movimiento m
+            INNER JOIN mpr_armado_lote l
+                ON l.id_mpr_armado_lote = m.id_mpr_armado_lote
+            WHERE l.fecha_realizado = %s
+              AND m.modo = %s
+              AND COALESCE(l.estado, 'aprobado') = 'aprobado'
+            ORDER BY m.creado_en DESC, m.id_mpr_armado_surtido_movimiento DESC
+            LIMIT %s
+            """,
+            [fecha, modo_n, lim],
+        )
+        rows = cursor.fetchall() or []
+        if not rows:
+            return []
+        ids_pack = sorted({
+            int(r["id_articulo_pack"])
+            for r in rows
+            if to_int_or_none(r.get("id_articulo_pack")) is not None
+        })
+        meta: Dict[int, Dict[str, str]] = {}
+        if ids_pack:
+            cursor.execute("SHOW TABLES LIKE 'articulo'")
+            if cursor.fetchone():
+                ph = ",".join(["%s"] * len(ids_pack))
+                cursor.execute(
+                    f"""
+                    SELECT IDArt AS id_articulo,
+                           COALESCE(CodigoArticuloT, CAST(CodigoArticulo AS CHAR), '') AS codigo,
+                           COALESCE(NombreArticulo, '') AS descripcion
+                    FROM articulo
+                    WHERE IDArt IN ({ph})
+                    """,
+                    ids_pack,
+                )
+                for ar in cursor.fetchall() or []:
+                    aid = to_int_or_none(ar.get("id_articulo"))
+                    if aid is None:
+                        continue
+                    meta[int(aid)] = {
+                        "codigo": str_or_default(ar.get("codigo"), "-"),
+                        "descripcion": str_or_default(ar.get("descripcion"), "-"),
+                    }
+        # nro_comprobante: nombres físicos varían (codigo_movimiento vs CodigoMovimiento)
+        codigos = [
+            to_int_or_none(r.get("codigo_movimiento"))
+            for r in rows
+        ]
+        codigos = [c for c in codigos if c]
+        nro_por_cod: Dict[int, str] = {}
+        if codigos:
+            cursor.execute("SHOW TABLES LIKE 'movimiento_stock'")
+            if cursor.fetchone():
+                col_cod = (
+                    nombre_columna_ci(cursor, "movimiento_stock", "codigo_movimiento")
+                    or nombre_columna_ci(cursor, "movimiento_stock", "CodigoMovimiento")
+                )
+                col_nro = (
+                    nombre_columna_ci(cursor, "movimiento_stock", "nro_comprobante")
+                    or nombre_columna_ci(cursor, "movimiento_stock", "NroComprobante")
+                )
+                if col_cod and col_nro:
+                    ph = ",".join(["%s"] * len(codigos))
+                    cursor.execute(
+                        f"""
+                        SELECT `{col_cod}` AS codigo, `{col_nro}` AS nro
+                        FROM movimiento_stock
+                        WHERE `{col_cod}` IN ({ph})
+                        """,
+                        codigos,
+                    )
+                    for ms in cursor.fetchall() or []:
+                        c = to_int_or_none(ms.get("codigo"))
+                        if c is not None:
+                            nro_por_cod[int(c)] = str_or_default(ms.get("nro"), "-")
+
+        out: List[Dict[str, Any]] = []
+        for r in rows:
+            id_pack = to_int_or_none(r.get("id_articulo_pack"))
+            if id_pack is None:
+                continue
+            info = meta.get(int(id_pack)) or {}
+            cod_mov = to_int_or_none(r.get("codigo_movimiento"))
+            out.append({
+                "id_movimiento": to_int_or_none(r.get("id_mpr_armado_surtido_movimiento")),
+                "id_articulo_pack": int(id_pack),
+                "codigo_articulo": info.get("codigo") or "-",
+                "descripcion_articulo": info.get("descripcion") or f"ID {id_pack}",
+                "cantidad_packs": int(r.get("cantidad_packs") or 0),
+                "codigo_movimiento": cod_mov,
+                "nro_comprobante": nro_por_cod.get(int(cod_mov), "-") if cod_mov else "-",
+                "id_lote": to_int_or_none(r.get("id_mpr_armado_lote")),
+            })
+        return out
+
+
 def listar_movimientos_de_lote(
     base_empresa: str,
     id_lote: int,

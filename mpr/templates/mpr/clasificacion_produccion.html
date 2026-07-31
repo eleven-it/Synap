@@ -62,6 +62,7 @@
          x-data="clasificacionProduccion()"
          x-init="init()"
          @fila-excede.window="setExcede($event.detail.id, $event.detail.excede)">
+    {{ clasificacion_feedback|json_script:"clasificacion-feedback-modal" }}
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
         {% include "mpr/includes/clasificacion_encabezado.html" %}
@@ -544,6 +545,19 @@ document.addEventListener('alpine:init', function () {
                     var p = raw.split('/');
                     this.fechaIso = p[2] + '-' + p[1] + '-' + p[0];
                 }
+                var elFb = document.getElementById('clasificacion-feedback-modal');
+                if (!elFb || typeof window.mprShowAviso !== 'function') return;
+                var fb = null;
+                try {
+                    fb = JSON.parse(elFb.textContent || 'null');
+                } catch (_) {
+                    fb = null;
+                }
+                if (!fb || !fb.mensaje) return;
+                window.mprShowAviso(fb.mensaje, {
+                    tipo: fb.tipo || 'success',
+                    titulo: fb.titulo || 'Listo'
+                });
             },
             get fechaDdmmyyyy() {
                 if (!this.fechaIso) { return ''; }

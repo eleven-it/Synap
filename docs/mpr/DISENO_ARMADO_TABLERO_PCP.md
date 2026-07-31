@@ -66,9 +66,9 @@ La pantalla es la **única vista operativa** de armado: grilla densa (`?modo=1ra
 | 9 | **Sin operario** en cabecera (paridad decisión previa armado unificado). |
 | 10 | **Shell visual:** `slate-800` hero + acento **emerald** (1ra) / **amber** (2da), no `gray-*` legacy. |
 | 11 | **Columnas visibles (29/07/2026):** Artículo, Terminado, Máx. armable, Armar. Ocultas: fecha entrega, Pedido, Reserva, Resta urgente, Resta armar. |
-| 12 | **Chrome (30/07/2026):** botón **Actualizar** (naranja Synap `bg-orange-500`) recarga la grilla. Atajos Carrito/Componer **eliminados**. **Fecha realizado** (`type=date`) en chrome tablero (28/07/2026). |
+| 12 | **Chrome (31/07/2026):** botón **Actualizar** (naranja Synap `bg-orange-500`) recarga la grilla **conservando** `fecha_realizado` en la query. Atajos Carrito/Componer **eliminados**. **Fecha realizado** (`type=date`) en chrome: al cambiarla se recarga y muestra el panel **Ya armado** de ese día. |
 | 13 | **Máx. armable (30/07/2026):** el mínimo BOM debe conservar componente con stock 0 (no usar `0` como centinela). Caso: pack 907953-01 / IDArt 637 — componente 984 en Semi = 0 → máx. armable 0. |
-| 14 | **Resultado post-armado:** éxito/error solo en **modal Synap** (detalle grabados + fallos); sin toast Django duplicado. Payload vía `json_script` para no romper Alpine/HTML. |
+| 14 | **Resultado post-armado:** éxito/parcial/error en **modal Synap corto** (`mprShowAviso`), sin listar ítems ni toast Django duplicado. |
 | 13 | **Resultado de ejecución (30/07/2026):** éxito, parcial y error se informan únicamente en el modal Synap de resultado; no se duplican como toast. El JSON de resultado se entrega mediante `json_script`, no dentro de un atributo HTML. |
 
 ---
