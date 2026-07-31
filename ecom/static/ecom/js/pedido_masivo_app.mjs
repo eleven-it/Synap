@@ -158,6 +158,11 @@ function pedidoMasivoCore() {
     // Input compartido para modales mail/anular (contrato pedidos_modal.html).
     dialogInput: '',
     dialogInputError: '',
+    // Catálogo completo en matriz (Mostrar/Ocultar todos).
+    catalogoDesplegado: false,
+    articulosSeleccionados: {},
+    esperaOperacion: false,
+    esperaMensaje: 'Procesando…',
 
     get totalesPie() {
       if (this.previewFuente === 'servidor') {
@@ -280,6 +285,12 @@ function pedidoMasivoCore() {
     get puedeConfirmar() {
       return Boolean(this.draftId && this.matrizEditable);
     },
+    get puedeToggleCatalogo() {
+      return Boolean(this.matrizEditable && this.idCliente && this.draftId);
+    },
+    get cantidadSeleccionados() {
+      return Object.keys(this.articulosSeleccionados || {}).length;
+    },
     /** Un PED está cargado o consultado → habilita PDF / repetir / mail. */
     get pedidoCargado() {
       return Boolean(this.modoSimple && this.pedidoCodMov);
@@ -378,9 +389,14 @@ function pedidoMasivoCore() {
         mirror();
         this._onMatrixScrollCloseArt();
       }, { passive: true });
-      // Reenvía la rueda vertical sobre las zonas fijas hacia la zona media.
+      // Reenvía la rueda vertical sobre las zonas fijas hacia la zona media,
+      // excepto cuando el puntero está sobre el dropdown de artículos (debe scrollear el listbox).
       const fwdWheel = (e) => {
         if (!e.deltaY) return;
+        if (e.target && typeof e.target.closest === 'function'
+            && e.target.closest('.pm-art-dropdown')) {
+          return;
+        }
         mid.scrollTop += e.deltaY;
         mirror();
         e.preventDefault();
@@ -683,6 +699,9 @@ function pedidoMasivoCore() {
         alicuota_iva: Number(a.alicuota_iva ?? 21),
         multiplo_cantidad_vta: Number(a.multiplo_cantidad_vta || 0),
         multiplo_empaque: Number(a.multiplo_empaque || multiploEmpaque(a)),
+        stock_disponible_packs: a.stock_disponible_packs != null && a.stock_disponible_packs !== undefined
+          ? Number(a.stock_disponible_packs)
+          : null,
       }));
       this.celdas = m.celdas || {};
       this.celdasInvalidas = {};
@@ -1064,6 +1083,188 @@ function pedidoMasivoCore() {
       if (!n && n !== 0) return '—';
       return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     },
+    /** Packs enteros/tabular para columna stock (valor > 0). */
+    fmtStockPacks(v) {
+      if (v == null || v === undefined) return '—';
+      const n = Number(v);
+      if (Number.isNaN(n)) return '—';
+      if (Math.abs(n - Math.round(n)) < 1e-9) {
+        return Math.round(n).toLocaleString('es-AR');
+      }
+      return n.toLocaleString('es-AR', { maximumFractionDigits: 3 });
+    },
+    /** Sublínea PWA: «stock 12» / «sin stock» / «stock —». */
+    stockPacksTexto(art) {
+      const v = art?.stock_disponible_packs;
+      if (v == null || v === undefined) return 'stock —';
+      const n = Number(v);
+      if (Number.isNaN(n) || n === 0) return 'sin stock';
+      return `stock ${this.fmtStockPacks(v)}`;
+    },
+    _mapArticuloItem(it) {
+      return {
+        id_articulo: it.id_articulo || it.IDArt,
+        id_manual: it.id_manual || '',
+        codigo: it.id_manual || it.codigo || '',
+        nombre: it.nombre || it.descripcion || '',
+        descripcion: it.nombre || it.descripcion || '',
+        precio_unitario_neto: Number(it.precio_unitario_neto || it.precio_lista1 || 0),
+        precio_lista1: Number(it.precio_lista1 || 0),
+        alicuota_iva: Number(it.alicuota_iva ?? 21),
+        stock_disponible_packs: it.stock_disponible_packs != null && it.stock_disponible_packs !== undefined
+          ? Number(it.stock_disponible_packs)
+          : null,
+        multiplo_cantidad_vta: Number(it.multiplo_cantidad_vta || 0),
+        multiplo_empaque: Number(it.multiplo_empaque || multiploEmpaque(it)),
+      };
+    },
+    _mapArticuloFila(a) {
+      const mapped = this._mapArticuloItem(a);
+      return {
+        ...mapped,
+        id_articulo: Number(mapped.id_articulo),
+        porcentaje_descuento: Number(a.porcentaje_descuento || 0),
+      };
+    },
+    _sumaPacksFilaNumerica(idArt) {
+      let s = 0;
+      for (const su of this.sucursales || []) {
+        const v = parseFloat(this.celda(idArt, su.id_cliente_domicilio));
+        if (!Number.isNaN(v)) s += v;
+      }
+      return s;
+    },
+    _iniciarEspera(msg) {
+      this.esperaMensaje = msg || 'Procesando…';
+      this.esperaOperacion = true;
+    },
+    _finEspera() {
+      this.esperaOperacion = false;
+    },
+    _limpiarSeleccionArticulos() {
+      this.articulosSeleccionados = {};
+    },
+    estaSeleccionado(a) {
+      const id = this._idArticuloKey(a);
+      return !!(id && (this.articulosSeleccionados || {})[id]);
+    },
+    _idArticuloKey(a) {
+      const n = Number(a?.id_articulo ?? a?.IDArt ?? 0);
+      return n > 0 ? String(n) : '';
+    },
+    toggleSeleccionArticulo(a) {
+      const id = this._idArticuloKey(a);
+      if (!id) return;
+      const next = { ...(this.articulosSeleccionados || {}) };
+      if (next[id]) delete next[id];
+      else next[id] = this._mapArticuloItem(a);
+      this.articulosSeleccionados = next;
+    },
+    /** Espacio: marca/desmarca el ítem resaltado del dropdown. */
+    onSpaceArt() {
+      if (!this.panelArt || !this.articulosBusqueda.length) return;
+      const a = this.articulosBusqueda[this.idxArt];
+      if (a) this.toggleSeleccionArticulo(a);
+    },
+    async toggleCatalogo() {
+      if (!this.puedeToggleCatalogo) return;
+      if (this.catalogoDesplegado) {
+        await this.ocultarTodosSinCantidad();
+      } else {
+        await this.mostrarTodosCatalogo();
+      }
+    },
+    async _yieldUi() {
+      await this.$nextTick();
+      await new Promise((r) => setTimeout(r, 30));
+    },
+    async mostrarTodosCatalogo() {
+      if (!this.idCliente || !this.urls.articulos || !this.draftId) return;
+      this._iniciarEspera('Procesando…');
+      await this._yieldUi();
+      try {
+        const u = `${this.urls.articulos}?id_cliente=${encodeURIComponent(this.idCliente)}`
+          + `&lista_id=${encodeURIComponent(String(this.cabecera?.lista_id || this.listaId || 1))}`
+          + '&tam=5000&todos=1';
+        const data = await this.getJson(u);
+        if (!data.ok) {
+          this.mostrarAviso(data.error || 'No se pudo cargar el catálogo.', 'error');
+          return;
+        }
+        if (data.sin_marcas) {
+          this.mostrarAviso('No hay marcas asignadas para este cliente en tu territorio.', 'error');
+          return;
+        }
+        const existentes = new Set((this.articulos || []).map((x) => Number(x.id_articulo)));
+        const nuevos = [];
+        for (const it of data.items || []) {
+          const fila = this._mapArticuloFila(it);
+          const id = Number(fila.id_articulo);
+          if (!id || existentes.has(id)) continue;
+          nuevos.push(fila);
+          existentes.add(id);
+        }
+        if (nuevos.length) {
+          this.articulos = [...(this.articulos || []), ...nuevos];
+          this.marcarTotalesEstimados();
+        }
+        this.catalogoDesplegado = true;
+      } catch {
+        this.mostrarAviso('No se pudo cargar el catálogo.', 'error');
+      } finally {
+        this._finEspera();
+      }
+    },
+    async ocultarTodosSinCantidad() {
+      this._iniciarEspera('Procesando…');
+      await this._yieldUi();
+      try {
+        this.articulos = (this.articulos || []).filter(
+          (art) => this._sumaPacksFilaNumerica(art.id_articulo) > 0,
+        );
+        this.marcarTotalesEstimados();
+        this.catalogoDesplegado = false;
+      } finally {
+        this._finEspera();
+      }
+    },
+    async agregarSeleccionados() {
+      const items = Object.values(this.articulosSeleccionados || {});
+      if (!items.length) return;
+      const usarEspera = items.length > 15;
+      if (usarEspera) {
+        this._iniciarEspera('Procesando…');
+        await this._yieldUi();
+      }
+      try {
+        const existentes = new Set((this.articulos || []).map((x) => Number(x.id_articulo)));
+        const nuevos = [];
+        let ultimoAgregado = null;
+        for (const a of items) {
+          const id = Number(a.id_articulo || a.IDArt);
+          if (!id || existentes.has(id)) continue;
+          nuevos.push(this._mapArticuloFila(a));
+          existentes.add(id);
+          ultimoAgregado = id;
+        }
+        if (nuevos.length) {
+          this.articulos = [...(this.articulos || []), ...nuevos];
+          this.marcarTotalesEstimados();
+        }
+        this.qArt = '';
+        this.articulosBusqueda = [];
+        this.artBusquedaHecha = false;
+        this._limpiarSeleccionArticulos();
+        this.cerrarPanelArt();
+        if (ultimoAgregado != null) {
+          this.focusPrimeraCantidad(ultimoAgregado);
+        } else {
+          this.focusBuscadorArt();
+        }
+      } finally {
+        if (usarEspera) this._finEspera();
+      }
+    },
     descFila(idArt) {
       const v = this.descuentosFila[idArt] ?? this.descuentosFila[String(idArt)];
       const n = Number(v);
@@ -1113,6 +1314,7 @@ function pedidoMasivoCore() {
       const id = Number(idArt);
       if (!id) return;
       this.error = '';
+      if (this.catalogoDesplegado) this.catalogoDesplegado = false;
       const quitarLocal = () => {
         this.articulos = this.articulos.filter((a) => Number(a.id_articulo) !== id);
         Object.keys(this.celdas || {}).forEach((k) => {
@@ -1387,16 +1589,7 @@ function pedidoMasivoCore() {
           this.artBusquedaHecha = true;
           return;
         }
-        this.articulosBusqueda = (data.items || []).map(it => ({
-          id_articulo: it.id_articulo || it.IDArt,
-          id_manual: it.id_manual || '',
-          codigo: it.id_manual || it.codigo || '',
-          nombre: it.nombre || it.descripcion || '',
-          descripcion: it.nombre || it.descripcion || '',
-          precio_unitario_neto: Number(it.precio_unitario_neto || it.precio_lista1 || 0),
-          precio_lista1: Number(it.precio_lista1 || 0),
-          alicuota_iva: Number(it.alicuota_iva ?? 21),
-        }));
+        this.articulosBusqueda = (data.items || []).map((it) => this._mapArticuloItem(it));
         this.idxArt = 0;
         this.artBusquedaHecha = true;
       } catch (error) {
@@ -1532,8 +1725,26 @@ function pedidoMasivoCore() {
     moverSelArt(delta) {
       if (!this.articulosBusqueda.length) return;
       this.idxArt = (this.idxArt + delta + this.articulosBusqueda.length) % this.articulosBusqueda.length;
+      this.$nextTick(() => this.scrollArtResaltado());
+    },
+    /** Mantiene visible el ítem resaltado dentro del dropdown (max-h + overflow). */
+    scrollArtResaltado() {
+      const roots = [this.$refs.pmArtDropdown, this.$refs.pmArtDropdownMob].filter(Boolean);
+      for (const root of roots) {
+        if (getComputedStyle(root).display === 'none') continue;
+        const list = root.querySelector('.pm-art-dropdown-list') || root;
+        const row = list.querySelector(`[data-art-index="${this.idxArt}"]`);
+        if (row) {
+          row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          return;
+        }
+      }
     },
     elegirResaltadoArt() {
+      if (this.cantidadSeleccionados > 0) {
+        this.agregarSeleccionados();
+        return;
+      }
       if (this.articulosBusqueda[this.idxArt]) this.elegirArticulo(this.articulosBusqueda[this.idxArt]);
     },
     /** Nº de sucursal = cliente_domicilio.NroCalle (campo `nro` en la matriz). */
@@ -1595,23 +1806,12 @@ function pedidoMasivoCore() {
       if (!id) return;
       const ya = this.articulos.some(x => Number(x.id_articulo) === id);
       if (!ya) {
-        this.articulos.push({
-          id_articulo: id,
-          id_manual: a.id_manual || a.codigo || '',
-          codigo: a.id_manual || a.codigo || '',
-          nombre: a.nombre || a.descripcion || '',
-          descripcion: a.nombre || a.descripcion || '',
-          precio_unitario_neto: Number(a.precio_unitario_neto || a.precio_lista1 || 0),
-          precio_lista1: Number(a.precio_lista1 || 0),
-          porcentaje_descuento: 0,
-          alicuota_iva: Number(a.alicuota_iva ?? 21),
-          multiplo_cantidad_vta: Number(a.multiplo_cantidad_vta || 0),
-          multiplo_empaque: Number(a.multiplo_empaque || multiploEmpaque(a)),
-        });
+        this.articulos.push(this._mapArticuloFila(a));
       }
       this.qArt = '';
       this.articulosBusqueda = [];
       this.artBusquedaHecha = false;
+      this._limpiarSeleccionArticulos();
       this.cerrarPanelArt();
       if (!ya) this.marcarTotalesEstimados();
       if (ya || !this.sucursales.length) {
@@ -2112,6 +2312,8 @@ function pedidoMasivoCore() {
       this.sucursales = [];
       this.articulos = [];
       this.celdas = {};
+      this.catalogoDesplegado = false;
+      this._limpiarSeleccionArticulos();
       this.descuentosFila = {};
       this.descPiePct = 0;
       this.preview = { sucursales: [], total_lote: { neto: 0, iva: 0, total: 0 }, warning: '' };

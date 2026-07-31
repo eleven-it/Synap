@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional, Sequence, Set
 
 from core.utils.administranet_types import to_decimal_or_none, to_int_or_none
@@ -32,6 +32,16 @@ def cantidad_respeta_multiplo(cantidad: Any, multiplo: int) -> bool:
         return qty % Decimal(m) == 0
     except Exception:
         return False
+
+
+def disponible_unidades_a_packs(disponible: Any, multiplo_cantidad_vta: Any) -> float:
+    """Convierte unidades base disponibles a packs según ``multiplo_cantidad_vta``."""
+    disp = to_decimal_or_none(disponible) or Decimal("0")
+    if disp <= 0:
+        return 0.0
+    mult = Decimal(multiplo_empaque_venta(multiplo_cantidad_vta))
+    packs = disp / mult
+    return float(packs.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
 
 
 def campos_multiplo_articulo(multiplo_cantidad_vta: Any) -> Dict[str, int]:

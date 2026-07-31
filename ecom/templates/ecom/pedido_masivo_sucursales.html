@@ -316,20 +316,31 @@
                'pm-matrix-shell--con-totales': mostrarTotalesPorSucursal
              }"
              role="region" aria-label="Matriz packs por sucursal">
-          {# Zona izquierda fija: Artículo · Precio · % Desc. #}
+          {# Zona izquierda fija: Artículo · Precio · % Desc. · STOCK DISP. #}
           <div class="pm-zone pm-zone-left" x-ref="pmZoneLeft">
             <table class="pm-ztable pm-ztable-left">
               <thead>
                 <tr>
-                  <th class="pm-c-art pm-zhead text-left">Artículo</th>
+                  <th class="pm-c-art pm-zhead text-left">
+                    <div class="pm-zhead-art">
+                      <span class="pm-zhead-art-label">Artículo</span>
+                      <button type="button"
+                              @click="toggleCatalogo()"
+                              :disabled="!puedeToggleCatalogo"
+                              class="pm-chip-catalogo"
+                              :class="catalogoDesplegado ? 'pm-chip-catalogo--activo' : ''"
+                              x-text="catalogoDesplegado ? 'Ocultar todos' : 'Mostrar todos'"></button>
+                    </div>
+                  </th>
                   <th class="pm-c-precio pm-zhead">Precio</th>
                   <th class="pm-c-desc pm-zhead">% Desc.</th>
+                  <th class="pm-c-stock pm-zhead">STOCK</th>
                 </tr>
               </thead>
               <tbody>
                 {# Fila buscador arriba: el dropdown abre hacia abajo sobre las líneas #}
                 <tr class="pm-zrow pm-zrow-buscador">
-                  <td class="pm-c-art" colspan="3">
+                  <td class="pm-c-art" colspan="4">
                     <div class="relative w-full overflow-visible"
                          @focusout="onFocusOutBuscadorArt($event)" @click.outside="cerrarPanelArt()">
                       <label class="sr-only" for="pm-art">Agregar artículo</label>
@@ -344,6 +355,7 @@
                                @keydown.arrow-down.prevent="onArrowDownArt()"
                                @keydown.arrow-up.prevent="moverSelArt(-1)"
                                @keydown.enter.prevent="elegirResaltadoArt()"
+                               @keydown.space.prevent="onSpaceArt()"
                                @keydown.escape="cerrarPanelArt()"
                                placeholder="Buscar artículo… (↓ todos)"
                                class="pm-art-buscar pm-input-dense h-8 min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 text-xs focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-sky-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800"/>
@@ -356,21 +368,39 @@
                           <span class="material-icons text-base leading-none" aria-hidden="true">expand_more</span>
                         </button>
                       </div>
-                      <ul x-show="panelArt && articulosBusqueda.length" x-cloak
-                          x-ref="pmArtDropdown"
-                          class="pm-art-dropdown pm-art-dropdown--down absolute left-0 z-[90] max-h-56 min-w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
-                          role="listbox">
-                        <template x-for="(a, i) in articulosBusqueda" :key="a.id_articulo">
-                          <li role="option"
-                              @mousedown.prevent="elegirArticulo(a)"
-                              :class="i === idxArt ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
-                              class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
-                            <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
-                            <span class="text-slate-500"> — </span>
-                            <span x-text="a.nombre"></span>
-                          </li>
-                        </template>
-                      </ul>
+                      <div x-show="panelArt && (articulosBusqueda.length || cantidadSeleccionados > 0)" x-cloak
+                           x-ref="pmArtDropdown"
+                           class="pm-art-dropdown pm-art-dropdown--down absolute left-0 z-[90] min-w-full overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800"
+                           role="listbox">
+                        <ul class="pm-art-dropdown-list max-h-56 overflow-y-auto overscroll-contain py-1">
+                          <template x-for="(a, i) in articulosBusqueda" :key="'d-' + a.id_articulo">
+                            <li role="option"
+                                :data-art-index="i"
+                                @mousedown.prevent="toggleSeleccionArticulo(a)"
+                                :class="i === idxArt ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
+                                class="pm-art-dropdown-item px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+                              <input type="checkbox"
+                                     tabindex="-1"
+                                     class="pointer-events-none"
+                                     :checked="estaSeleccionado(a)"
+                                     :aria-label="'Seleccionar ' + (a.nombre || a.id_manual)"/>
+                              <span class="min-w-0 flex-1">
+                                <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
+                                <span class="text-slate-500"> — </span>
+                                <span x-text="a.nombre"></span>
+                              </span>
+                            </li>
+                          </template>
+                        </ul>
+                        <div x-show="cantidadSeleccionados > 0" x-cloak
+                             class="pm-art-dropdown-footer">
+                          <button type="button"
+                                  @mousedown.prevent="agregarSeleccionados()"
+                                  :disabled="cantidadSeleccionados === 0"
+                                  class="w-full rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-700 dark:hover:bg-sky-600"
+                                  x-text="'Agregar seleccionados (' + cantidadSeleccionados + ')'"></button>
+                        </div>
+                      </div>
                       <p x-show="panelArt && cargandoArt" x-cloak
                          class="pm-art-dropdown pm-art-dropdown--down absolute left-0 z-[90] rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
                         Buscando…
@@ -397,6 +427,17 @@
                              placeholder="0"
                              :disabled="!matrizEditable"
                              @change="onDescFila(art.id_articulo, $event.target.value)"/>
+                    </td>
+                    <td class="pm-c-stock text-xs tabular-nums">
+                      <template x-if="art.stock_disponible_packs == null || art.stock_disponible_packs === undefined">
+                        <span class="text-slate-400 dark:text-slate-500">—</span>
+                      </template>
+                      <template x-if="art.stock_disponible_packs != null && art.stock_disponible_packs !== undefined && Number(art.stock_disponible_packs) === 0">
+                        <span class="pm-stock-sin">Sin stock</span>
+                      </template>
+                      <template x-if="art.stock_disponible_packs != null && art.stock_disponible_packs !== undefined && Number(art.stock_disponible_packs) > 0">
+                        <span class="text-slate-700 dark:text-slate-200" x-text="fmtStockPacks(art.stock_disponible_packs)"></span>
+                      </template>
                     </td>
                   </tr>
                 </template>
@@ -543,6 +584,7 @@
                      @keydown.arrow-down.prevent="onArrowDownArt()"
                      @keydown.arrow-up.prevent="moverSelArt(-1)"
                      @keydown.enter.prevent="elegirResaltadoArt()"
+                     @keydown.space.prevent="onSpaceArt()"
                      @keydown.escape="cerrarPanelArt()"
                      placeholder="Buscar artículo… (↓ todos)"
                      class="pm-input-dense min-w-0 flex-1 rounded-md border border-sky-300 bg-white px-2 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-sky-700 dark:bg-slate-950 dark:text-white dark:disabled:bg-slate-800"/>
@@ -555,20 +597,39 @@
                 <span class="material-icons text-base leading-none" aria-hidden="true">expand_more</span>
               </button>
             </div>
-            <ul x-show="panelArt && articulosBusqueda.length" x-cloak
-                class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-600 dark:bg-slate-800"
+            <div x-show="panelArt && (articulosBusqueda.length || cantidadSeleccionados > 0)" x-cloak
+                x-ref="pmArtDropdownMob"
+                class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-800"
                 role="listbox">
-              <template x-for="(a, i) in articulosBusqueda" :key="'mob-' + a.id_articulo">
-                <li role="option"
-                    @mousedown.prevent="elegirArticulo(a)"
-                    :class="i === idxArt ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
-                    class="cursor-pointer px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
-                  <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
-                  <span class="text-slate-500"> — </span>
-                  <span x-text="a.nombre"></span>
-                </li>
-              </template>
-            </ul>
+              <ul class="pm-art-dropdown-list max-h-56 overflow-y-auto overscroll-contain py-1">
+                <template x-for="(a, i) in articulosBusqueda" :key="'mob-' + a.id_articulo">
+                  <li role="option"
+                      :data-art-index="i"
+                      @mousedown.prevent="toggleSeleccionArticulo(a)"
+                      :class="i === idxArt ? 'bg-sky-50 dark:bg-sky-950/40' : ''"
+                      class="pm-art-dropdown-item px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 dark:text-slate-100 dark:hover:bg-slate-700">
+                    <input type="checkbox"
+                           tabindex="-1"
+                           class="pointer-events-none"
+                           :checked="estaSeleccionado(a)"
+                           :aria-label="'Seleccionar ' + (a.nombre || a.id_manual)"/>
+                    <span class="min-w-0 flex-1">
+                      <span class="font-semibold tabular-nums" x-text="a.id_manual || ('#' + a.id_articulo)"></span>
+                      <span class="text-slate-500"> — </span>
+                      <span x-text="a.nombre"></span>
+                    </span>
+                  </li>
+                </template>
+              </ul>
+              <div x-show="cantidadSeleccionados > 0" x-cloak
+                   class="pm-art-dropdown-footer">
+                <button type="button"
+                        @mousedown.prevent="agregarSeleccionados()"
+                        :disabled="cantidadSeleccionados === 0"
+                        class="w-full rounded-md bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-sky-700 dark:hover:bg-sky-600"
+                        x-text="'Agregar seleccionados (' + cantidadSeleccionados + ')'"></button>
+              </div>
+            </div>
             <p x-show="panelArt && cargandoArt" x-cloak
                class="pm-art-dropdown absolute left-0 right-0 top-full z-[80] mt-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500 shadow dark:border-slate-600 dark:bg-slate-800">
               Buscando…
@@ -579,6 +640,20 @@
             </p>
           </div>
 
+          {# Barra PWA: chip Mostrar/Ocultar todos #}
+          <div x-show="draftId && sucursales.length" x-cloak
+               class="flex flex-wrap items-center gap-2 px-1 lg:hidden">
+            <button type="button"
+                    @click="toggleCatalogo()"
+                    :disabled="!puedeToggleCatalogo"
+                    class="pm-chip-catalogo"
+                    :class="catalogoDesplegado ? 'pm-chip-catalogo--activo' : ''"
+                    x-text="catalogoDesplegado ? 'Ocultar todos' : 'Mostrar todos'"></button>
+            <span class="text-xs text-slate-500 dark:text-slate-400"
+                  x-show="articulos.length"
+                  x-text="articulos.length + ' artículo' + (articulos.length === 1 ? '' : 's')"></span>
+          </div>
+
           {# Modo simple móvil: lista plana (1 sucursal) — el nombre del artículo predomina #}
           <template x-if="modoSimple && sucursales.length">
             <div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
@@ -587,6 +662,7 @@
                   <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0 flex-1">
                       <p class="text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
+                      <p class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400" x-text="stockPacksTexto(art)"></p>
                     </div>
                     <button type="button"
                             @click="eliminarFila(art.id_articulo)"
@@ -674,7 +750,11 @@
                     <div class="flex items-start justify-between gap-2">
                       <div class="min-w-0 flex-1">
                         <p class="text-sm font-semibold leading-snug text-slate-800 dark:text-slate-100" x-text="art.nombre || art.descripcion"></p>
-                        <p class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400" x-text="fmtPrecio(art.precio_unitario_neto)"></p>
+                        <p class="mt-0.5 text-xs tabular-nums text-slate-500 dark:text-slate-400">
+                          <span x-text="fmtPrecio(art.precio_unitario_neto)"></span>
+                          <span class="mx-1">·</span>
+                          <span x-text="stockPacksTexto(art)"></span>
+                        </p>
                       </div>
                       <button type="button"
                               @click="eliminarFila(art.id_articulo)"
@@ -826,6 +906,21 @@
     </div>
   </div>
 
+  {# Modal espera operaciones bulk (Mostrar/Ocultar todos, agregar seleccionados) #}
+  <div x-show="esperaOperacion" x-cloak
+       class="pm-espera-overlay"
+       role="alertdialog"
+       aria-live="assertive"
+       aria-busy="true">
+    <div class="pm-espera-panel">
+      <svg class="h-5 w-5 animate-spin text-sky-600 dark:text-sky-400" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <span class="text-sm font-medium text-slate-700 dark:text-slate-200" x-text="esperaMensaje">Procesando…</span>
+    </div>
+  </div>
+
   {# Modal canon Synap — reemplaza confirm() (D.5) #}
   {% include "ecom/includes/pedidos_modal.html" %}
 </section>
@@ -833,5 +928,5 @@
 {{ bootstrap|json_script:"pm-bootstrap" }}
 
 <style>[x-cloak]{display:none!important}</style>
-<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo36"></script>
+<script type="module" src="{% static 'ecom/js/pedido_masivo_app.mjs' %}?v=masivo40"></script>
 {% endblock %}

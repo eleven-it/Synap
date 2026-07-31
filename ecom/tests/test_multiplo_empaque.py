@@ -7,6 +7,7 @@ from django.test import SimpleTestCase
 from ecom.services.multiplo_empaque import (
     campos_multiplo_articulo,
     cantidad_respeta_multiplo,
+    disponible_unidades_a_packs,
     multiplo_empaque_venta,
 )
 
@@ -39,3 +40,9 @@ class TestMultiploEmpaqueVenta(SimpleTestCase):
     def test_decimal_como_cantidad(self):
         self.assertTrue(cantidad_respeta_multiplo(Decimal("12"), 6))
         self.assertFalse(cantidad_respeta_multiplo(Decimal("2.5"), 6))
+
+    def test_disponible_unidades_a_packs(self):
+        self.assertEqual(disponible_unidades_a_packs(0, 6), 0.0)
+        self.assertEqual(disponible_unidades_a_packs(24, 6), 4.0)
+        self.assertEqual(disponible_unidades_a_packs(25, 6), 4.167)
+        self.assertEqual(disponible_unidades_a_packs(10, None), 10.0)
