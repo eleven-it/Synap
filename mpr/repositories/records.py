@@ -5,6 +5,8 @@ from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any, List, Optional
 
+from core.utils.administranet_types import str_or_default
+
 
 def _coerce_time(value: Any) -> time:
     if isinstance(value, time):
@@ -226,6 +228,10 @@ class ArmadoLoteRecord:
         cantidad_exitosos: int = 0,
         cantidad_fallidos: int = 0,
         ejecutado_en: Optional[datetime] = None,
+        fecha_realizado: Optional[date] = None,
+        estado: str = "aprobado",
+        movimiento_fisico_ok: bool = True,
+        detalle: str = "",
         base_empresa: str = "",
     ):
         self.id = uuid_lote or id_mpr_armado_lote
@@ -241,15 +247,28 @@ class ArmadoLoteRecord:
         self.cantidad_exitosos = cantidad_exitosos
         self.cantidad_fallidos = cantidad_fallidos
         self.ejecutado_en = ejecutado_en or datetime.now()
+        self.fecha_realizado = fecha_realizado
+        self.estado = str_or_default(estado, "aprobado")
+        self.movimiento_fisico_ok = bool(movimiento_fisico_ok)
+        self.detalle = str_or_default(detalle, "")
         self.base_empresa = base_empresa
 
     def save(self, update_fields=None) -> None:
-        from mpr.repositories.armado_surtido import actualizar_conteos_lote
+        from mpr.repositories.armado_surtido import actualizar_lote_armado
 
         if update_fields:
-            actualizar_conteos_lote(
+            actualizar_lote_armado(
                 self.base_empresa,
                 self.id_mpr_armado_lote,
-                self.cantidad_exitosos,
-                self.cantidad_fallidos,
+                cantidad_exitosos=self.cantidad_exitosos,
+                cantidad_fallidos=self.cantidad_fallidos,
+                estado=self.estado if "estado" in update_fields else None,
+                movimiento_fisico_ok=self.movimiento_fisico_ok
+                if "movimiento_fisico_ok" in update_fields
+                else None,
+                fecha_realizado=self.fecha_realizado
+                if "fecha_realizado" in update_fields
+                else None,
+                detalle=self.detalle if "detalle" in update_fields else None,
+                cantidad_items=self.cantidad_items if "cantidad_items" in update_fields else None,
             )

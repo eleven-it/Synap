@@ -8,6 +8,7 @@ from mpr.services import (
     articulo_habilitado_armado_1ra,
     listar_packs_armado_1ra,
     _tablas_armado_1ra,
+    TIPO_ART_FAB_TERMINADO,
 )
 
 
@@ -57,8 +58,8 @@ class ListarPacksArmado1raTest(SimpleTestCase):
         sql = cursor.execute.call_args[0][0]
         self.assertIn("INNER JOIN en_abm", sql)
         self.assertIn("INNER JOIN en_abm_formula", sql)
-        self.assertIn("DISTINCT", sql)
-        self.assertIn("MSTOCK", sql)
+        self.assertIn("tipo_art_fab", sql)
+        self.assertEqual(cursor.execute.call_args[0][1], [TIPO_ART_FAB_TERMINADO])
 
     def test_sin_tabla_articulo_devuelve_vacio(self):
         ctx, _cursor = _fake_mysql_cursor([])
@@ -76,7 +77,8 @@ class ArticuloHabilitadoArmado1raTest(SimpleTestCase):
         self.assertEqual(cursor.execute.call_count, 1)
         sql = cursor.execute.call_args[0][0]
         self.assertIn("a.IDArt = %s", sql)
-        self.assertEqual(cursor.execute.call_args[0][1], [99])
+        self.assertIn("tipo_art_fab", sql)
+        self.assertEqual(cursor.execute.call_args[0][1], [99, TIPO_ART_FAB_TERMINADO])
 
     def test_no_habilitado_sin_fila(self):
         ctx, _cursor = _fake_mysql_cursor([])

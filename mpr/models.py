@@ -138,6 +138,26 @@ class MprArmadoLote(models.Model):
         default=0,
         help_text="Cantidad de ítems fallidos",
     )
+    fecha_realizado = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fecha de realizado del armado (puede ser pasada). UI: dd/MM/yyyy.",
+    )
+    estado = models.CharField(
+        max_length=20,
+        default="aprobado",
+        help_text="borrador | aprobado | anulado",
+    )
+    movimiento_fisico_ok = models.BooleanField(
+        default=True,
+        help_text="True si ya hay MSTOCK del lote",
+    )
+    detalle = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Detalle cabecera del lote",
+    )
 
     class Meta:
         verbose_name = "Lote de armado"

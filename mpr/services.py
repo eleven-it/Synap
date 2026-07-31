@@ -35,6 +35,13 @@ MOTIVO_ARMADO_CODIGO = 9
 MOTIVO_ARMADO_TEXTO = "Armado"
 MOTIVO_RECLASIFICACION_TEXTO = "Reclasificación"
 
+ESTADO_ARMADO_BORRADOR = "borrador"
+ESTADO_ARMADO_APROBADO = "aprobado"
+ESTADO_ARMADO_ANULADO = "anulado"
+
+TIPO_ART_FAB_TERMINADO = "Terminado"
+TIPO_ART_FAB_FABRICADO = "Fabricado"
+
 # lista_produccion_detalle: codigo_movimiento_pedido = 0 indica demanda sintética por reserva (no existe fila en comp_ped).
 COD_MOV_PEDIDO_DEMANDA_RESERVA = 0
 ORIGEN_DEMANDA_RESERVA = "RESERVA"
@@ -10058,6 +10065,13 @@ def _normalizar_modo_armado(modo: Optional[str], default: str = "2da") -> str:
 def parse_cabecera_lote_armado_surtido(post: Dict[str, Any]) -> Dict[str, Any]:
     """Cabecera compartida del lote desde campos POST."""
     detalle = str_or_default(post.get("detalle"), "").strip()[:200] or None
+    accion_raw = str_or_default(post.get("accion"), "aprobar").strip().lower()
+    accion = accion_raw if accion_raw in ("borrador", "aprobar", "anular") else "aprobar"
+    fecha_raw = post.get("fecha_realizado")
+    fecha_obj: Optional[date] = None
+    if fecha_raw not in (None, ""):
+        fecha_obj, _err = _parse_fecha_roster_input(fecha_raw)
+    id_lote = to_int_or_none(post.get("id_mpr_armado_lote"))
     return {
         "deposito_origen": to_int_or_none(post.get("deposito_origen")),
         "deposito_destino": to_int_or_none(post.get("deposito_destino")),
@@ -10065,6 +10079,9 @@ def parse_cabecera_lote_armado_surtido(post: Dict[str, Any]) -> Dict[str, Any]:
         "detalle": detalle,
         "id_lista_produccion": to_int_or_none(post.get("id_lista")),
         "modo": _normalizar_modo_armado(post.get("modo")),
+        "accion": accion,
+        "fecha_realizado": fecha_obj,
+        "id_mpr_armado_lote": id_lote,
     }
 
 
@@ -10347,10 +10364,11 @@ def articulo_habilitado_armado_1ra(base_empresa: str, id_articulo: int) -> bool:
                 WHERE a.IDArt = %s
                   AND UPPER(TRIM(COALESCE(a.ensamblado,''))) = 'SI'
                   AND a.id_en_abm IS NOT NULL
+                  AND COALESCE(TRIM(a.tipo_art_fab), '') = %s
                   AND {_sql_filtro_descuenta_en_mstock('ab')}
                 LIMIT 1
                 """,
-                [id_articulo],
+                [id_articulo, TIPO_ART_FAB_TERMINADO],
             )
             return bool(cursor.fetchone())
     except Exception as e:
@@ -10379,9 +10397,11 @@ def listar_packs_armado_1ra(base_empresa: str) -> List[Dict[str, Any]]:
                     AND COALESCE(f.anulado, 'No') = 'No'
                 WHERE UPPER(TRIM(COALESCE(a.ensamblado,''))) = 'SI'
                   AND a.id_en_abm IS NOT NULL
+                  AND COALESCE(TRIM(a.tipo_art_fab), '') = %s
                   AND {_sql_filtro_descuenta_en_mstock('ab')}
                 ORDER BY codigo_articulo, a.IDArt
                 """,
+                [TIPO_ART_FAB_TERMINADO],
             )
             rows = cursor.fetchall() or []
         return [
@@ -10499,13 +10519,14 @@ def listar_packs_armado_catalogo(
                         AND COALESCE(f.anulado, 'No') = 'No'
                     WHERE UPPER(TRIM(COALESCE(a.ensamblado,''))) = 'SI'
                       AND a.id_en_abm IS NOT NULL
+                      AND COALESCE(TRIM(a.tipo_art_fab), '') = %s
                       AND {_sql_filtro_descuenta_en_mstock('ab')}
                     {filtro_ids}
                     {filtro_busqueda if like_params else ''}
                     ORDER BY codigo_articulo, a.IDArt
                     LIMIT %s
                     """,
-                    params,
+                    [TIPO_ART_FAB_TERMINADO] + params,
                 )
             rows = cursor.fetchall() or []
         out = []
@@ -10891,6 +10912,7 @@ def listar_articulos_stock_deposito(
     id_deposito: int,
     busqueda: Optional[str] = None,
     limit: int = 40,
+    tipo_art_fab: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Artículos con saldo > 0 en el depósito indicado (para composición armado surtido)."""
     if not (base_empresa or "").strip():
@@ -10899,6 +10921,7 @@ def listar_articulos_stock_deposito(
     if not dep:
         return []
     lim = max(1, min(int(limit or 40), 100))
+    tipo_fab = (tipo_art_fab or "").strip() or None
     try:
         with mysql_cursor(base_empresa, dict_cursor=True) as cursor:
             tbl_art = _nombre_tabla(cursor, "articulo")
@@ -10914,6 +10937,10 @@ def listar_articulos_stock_deposito(
                     "OR a.NombreArticulo LIKE %s)"
                 )
                 params.extend([q, q, q, q])
+            filtro_tipo = ""
+            if tipo_fab and columna_existe(cursor, tbl_art, "tipo_art_fab"):
+                filtro_tipo = " AND COALESCE(TRIM(a.tipo_art_fab), '') = %s"
+                params.append(tipo_fab)
             params.append(lim)
             cursor.execute(
                 f"""
@@ -10926,6 +10953,7 @@ def listar_articulos_stock_deposito(
                 INNER JOIN {tbl_art} a ON a.IDArt = sd.id_articulo
                 WHERE sd.id_deposito = %s AND COALESCE(sd.saldo, 0) > 0
                 {filtro_q}
+                {filtro_tipo}
                 ORDER BY a.CodigoArticuloT, a.IDArt
                 LIMIT %s
                 """,
@@ -11439,6 +11467,7 @@ def _ejecutar_armado_surtido_tx(
     id_operario: Optional[int] = None,
     id_lista_produccion: Optional[int] = None,
     detalle_mov: Optional[str] = None,
+    fecha_realizado: Optional[date] = None,
 ) -> Tuple[bool, Optional[int], Optional[str], Optional[str], List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     """
     Núcleo transaccional de armado surtido sobre cursor activo.
@@ -11447,7 +11476,11 @@ def _ejecutar_armado_surtido_tx(
     """
     id_ref_movstock = 1
     id_pv = 1
-    fecha_mov = date.today().isoformat()
+    fecha_mov = (
+        fecha_realizado.isoformat()
+        if isinstance(fecha_realizado, date)
+        else date.today().isoformat()
+    )
     hora_evento = datetime.now().strftime("%H:%M:%S")
     n_comp = len(lineas_composicion or [])
     lineas_enriquecidas: List[Dict[str, Any]] = []
@@ -11714,6 +11747,189 @@ def _ejecutar_armado_surtido_tx(
         if "1054" in str(e) or "Unknown column" in str(e).lower():
             raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
         logger.warning("_ejecutar_armado_surtido_tx: %s", e, exc_info=True)
+        return False, None, None, str(e), lineas_enriquecidas, None
+
+
+def _revertir_armado_surtido_tx(
+    cursor,
+    _conn,
+    *,
+    id_usuario: int,
+    id_articulo_pack: int,
+    cantidad_packs: int,
+    deposito_origen: int,
+    deposito_destino: int,
+    lineas_composicion: List[Dict[str, Any]],
+    id_operario: Optional[int] = None,
+    detalle_mov: Optional[str] = None,
+    fecha_realizado: Optional[date] = None,
+) -> Tuple[bool, Optional[int], Optional[str], Optional[str], List[Dict[str, Any]], Optional[str]]:
+    """
+    Anula físicamente un armado: pack sale del destino, componentes entran al origen.
+    Espejo de _ejecutar_armado_surtido_tx.
+    """
+    id_ref_movstock = 1
+    id_pv = 1
+    fecha_mov = (
+        fecha_realizado.isoformat()
+        if isinstance(fecha_realizado, date)
+        else date.today().isoformat()
+    )
+    lineas_enriquecidas: List[Dict[str, Any]] = []
+    detalle_mov = (detalle_mov or "").strip() or (
+        f"Anulación armado MPR (pack {id_articulo_pack}, {cantidad_packs} packs)"
+    )
+
+    try:
+        tbl_codmov = _nombre_tabla(cursor, "codmov")
+        tbl_talonarios = _nombre_tabla(cursor, "talonarios")
+        tbl_mov = _nombre_tabla(cursor, "movimiento_stock")
+        tbl_stock = _nombre_tabla(cursor, "stock")
+        tbl_sd = _nombre_tabla(cursor, "stock_deposito")
+        tbl_articulo = _nombre_tabla(cursor, "articulo")
+        if not all([tbl_codmov, tbl_talonarios, tbl_mov, tbl_stock, tbl_sd, tbl_articulo]):
+            raise MprSchemaError("Faltan tablas de stock para anular armado.")
+
+        ids_todos = [int(id_articulo_pack)] + [
+            int(to_int_or_none(ln.get("id_articulo")) or 0) for ln in lineas_composicion
+        ]
+        arts = _fetch_articulos_map(cursor, tbl_articulo, [i for i in ids_todos if i])
+        if id_articulo_pack not in arts:
+            return False, None, None, "Pack terminado no encontrado.", lineas_enriquecidas, None
+        pack_info = arts[id_articulo_pack]
+
+        cursor.execute(
+            f"SELECT id_stock_deposito, saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+            [int(id_articulo_pack), deposito_destino],
+        )
+        sd_pack = cursor.fetchone()
+        saldo_pack = Decimal(str(sd_pack[1] or 0)) if sd_pack else Decimal(0)
+        if saldo_pack < Decimal(str(cantidad_packs)):
+            return (
+                False,
+                None,
+                None,
+                f"Stock insuficiente del pack en destino: tiene {saldo_pack}, "
+                f"se necesitan {cantidad_packs} para anular.",
+                lineas_enriquecidas,
+                None,
+            )
+
+        for ln in lineas_composicion:
+            id_c = int(ln["id_articulo"])
+            qty_pp = int(ln["cantidad_por_pack"])
+            info = arts.get(id_c)
+            if not info:
+                return False, None, None, f"Componente {id_c} no encontrado.", lineas_enriquecidas, None
+            lineas_enriquecidas.append({
+                "id_articulo": id_c,
+                "cantidad_por_pack": qty_pp,
+                "codigo_articulo": info["codigo_articulo"],
+                "descripcion_articulo": info["descripcion_articulo"],
+                "precio_costo": info.get("precio_costo") or Decimal(0),
+            })
+
+        cursor.execute(f"SELECT CodigoMovimiento FROM {tbl_codmov} WHERE codigo = 1 FOR UPDATE")
+        row = cursor.fetchone()
+        if not row:
+            return False, None, None, "No se pudo obtener código de movimiento.", lineas_enriquecidas, None
+        codigo_mov = int(row[0] or 0) + 1
+        cursor.execute(f"UPDATE {tbl_codmov} SET CodigoMovimiento = %s WHERE codigo = 1", [codigo_mov])
+
+        cursor.execute(
+            f"SELECT Orden, Nro FROM {tbl_talonarios} WHERE TipoComprobante = 'MSTOCK' AND id_punto_venta = %s FOR UPDATE",
+            [id_pv],
+        )
+        talon_row = cursor.fetchone()
+        if not talon_row:
+            return False, None, None, "No existe talonario MSTOCK.", lineas_enriquecidas, None
+        orden_talon, nro_actual = talon_row[0], int(talon_row[1] or 0)
+        nro_nuevo = nro_actual + 1
+        cursor.execute(f"UPDATE {tbl_talonarios} SET Nro = %s WHERE Orden = %s", [nro_nuevo, orden_talon])
+        nro_comprobante = _formato_nro_comprobante_mstock(id_pv, nro_actual)
+        nro_comprobante_busq = nro_actual
+
+        params_mov_ins = [
+            codigo_mov, nro_comprobante, MOTIVO_ARMADO_TEXTO, fecha_mov,
+            deposito_destino, deposito_origen, detalle_mov, id_usuario,
+            "MSTOCK", 1, None, None, None, TIPO_MOV_OPA, id_pv, nro_comprobante_busq,
+        ]
+        id_op_arm = to_int_or_none(id_operario)
+        intentos_m: List[Tuple[str, List[Any]]] = []
+        if id_op_arm is not None:
+            intentos_m.append((
+                f"""
+                INSERT INTO {tbl_mov}
+                (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+                 detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv, id_operario_opt)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'No', %s, %s, %s, %s, %s, %s, %s)
+                """,
+                list(params_mov_ins) + [id_op_arm],
+            ))
+        intentos_m.append((
+            f"""
+            INSERT INTO {tbl_mov}
+            (codigo_movimiento, nro_comprobante, motivo_movimiento, fecha, deposito_origen, deposito_destino,
+             detalle, id_usuario, tipo_comprobante, anulado, id_ref_movstock, id_proyecto, id_cliente, id_vendedor, tipo_mov, id_pv)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'No', %s, %s, %s, %s, %s, %s)
+            """,
+            params_mov_ins,
+        ))
+        _mpr_ejecutar_insert_intentos(cursor, intentos_m)
+
+        orden = 0
+        salida_pack = Decimal(str(cantidad_packs))
+        saldo_pack_despues = saldo_pack - salida_pack
+        orden += 1
+        _mpr_insert_renglon_stock_armado(
+            cursor, tbl_stock, codigo_mov, int(id_articulo_pack),
+            pack_info["codigo_articulo"], pack_info["descripcion_articulo"],
+            fecha_mov, Decimal(0), salida_pack, saldo_pack_despues,
+            deposito_destino, id_ref_movstock, orden, id_usuario, nro_comprobante,
+            id_operario=id_operario, precio_costo_u=pack_info.get("precio_costo"),
+        )
+        if sd_pack:
+            cursor.execute(
+                f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+                [saldo_pack_despues, sd_pack[0]],
+            )
+
+        for ln in lineas_enriquecidas:
+            id_c = ln["id_articulo"]
+            qty_entrada = Decimal(str(ln["cantidad_por_pack"] * cantidad_packs))
+            cursor.execute(
+                f"SELECT id_stock_deposito, saldo FROM {tbl_sd} WHERE id_articulo = %s AND id_deposito = %s FOR UPDATE",
+                [id_c, deposito_origen],
+            )
+            sd_orig = cursor.fetchone()
+            saldo_orig = Decimal(str(sd_orig[1] or 0)) if sd_orig else Decimal(0)
+            saldo_orig_despues = saldo_orig + qty_entrada
+            orden += 1
+            _mpr_insert_renglon_stock_armado(
+                cursor, tbl_stock, codigo_mov, id_c,
+                ln["codigo_articulo"], ln["descripcion_articulo"],
+                fecha_mov, qty_entrada, Decimal(0), saldo_orig_despues,
+                deposito_origen, id_ref_movstock, orden, id_usuario, nro_comprobante,
+                id_operario=id_operario, precio_costo_u=ln.get("precio_costo"),
+            )
+            if sd_orig:
+                cursor.execute(
+                    f"UPDATE {tbl_sd} SET saldo = %s WHERE id_stock_deposito = %s",
+                    [saldo_orig_despues, sd_orig[0]],
+                )
+            else:
+                cursor.execute(
+                    f"INSERT INTO {tbl_sd} (id_articulo, id_deposito, saldo) VALUES (%s, %s, %s)",
+                    [id_c, deposito_origen, saldo_orig_despues],
+                )
+
+        return True, codigo_mov, nro_comprobante, None, lineas_enriquecidas, None
+    except MprSchemaError:
+        raise
+    except Exception as e:
+        if "1054" in str(e) or "Unknown column" in str(e).lower():
+            raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
+        logger.warning("_revertir_armado_surtido_tx: %s", e, exc_info=True)
         return False, None, None, str(e), lineas_enriquecidas, None
 
 
@@ -11992,102 +12208,42 @@ def _item_exitoso_lote_armado_surtido(
     }
 
 
-def ejecutar_lote_armado(
+def _composicion_map(lineas: List[Dict[str, Any]]) -> Dict[int, int]:
+    out: Dict[int, int] = {}
+    for ln in lineas or []:
+        id_c = to_int_or_none(ln.get("id_articulo"))
+        qty = to_int_or_none(ln.get("cantidad_por_pack"))
+        if id_c and qty and int(qty) > 0:
+            out[int(id_c)] = int(qty)
+    return out
+
+
+def _lote_tiene_imputacion_bloqueante(movimientos: List[Dict[str, Any]]) -> bool:
+    from mpr.models import ESTADO_IMPUTACION_COMPLETO, ESTADO_IMPUTACION_PARCIAL
+
+    for mov in movimientos or []:
+        est = str(mov.get("estado_imputacion") or "")
+        if est in (ESTADO_IMPUTACION_PARCIAL, ESTADO_IMPUTACION_COMPLETO):
+            return True
+    return False
+
+
+def _ejecutar_items_lote_armado_stock(
     base_empresa: str,
     id_usuario: int,
+    modo: str,
     cabecera: Dict[str, Any],
-    armados: List[Dict[str, Any]],
+    items: List[Dict[str, Any]],
+    id_lote_ref: Any,
+    fecha_realizado: Optional[date],
 ) -> Dict[str, Any]:
-    """
-    Orquestador unificado Armado 1ra/2da. Commit por ítem exitoso.
-    """
-    from mpr.repositories.ledger_backend import mpr_writes_mysql, mpr_writes_postgres
-
-    modo = _normalizar_modo_armado(cabecera.get("modo"))
-    cabecera = dict(cabecera or {})
-    cabecera["modo"] = modo
-
-    resultado: Dict[str, Any] = {"exitosos": [], "fallidos": [], "id_lote_armado": None}
-    items = list(armados or [])
-    if not items:
-        resultado["fallidos"].append(_item_fallido_lote_armado_surtido({}, "Agregue al menos un armado al lote."))
-        return resultado
-    if not (base_empresa or "").strip():
-        for item in items:
-            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, "Base de datos no indicada."))
-        return resultado
-    if not id_usuario:
-        for item in items:
-            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, "Usuario no indicado."))
-        return resultado
-
+    """Ejecuta MSTOCK por ítem; devuelve exitosos/fallidos parciales."""
+    resultado: Dict[str, Any] = {"exitosos": [], "fallidos": []}
     deposito_origen = to_int_or_none(cabecera.get("deposito_origen"))
     deposito_destino = to_int_or_none(cabecera.get("deposito_destino"))
     id_operario = to_int_or_none(cabecera.get("id_operario"))
     id_lista_produccion = to_int_or_none(cabecera.get("id_lista_produccion"))
     detalle_lote = str_or_default(cabecera.get("detalle"), "").strip() or None
-
-    ok_reglas, err_reglas = validar_reglas_lote_armado(
-        items,
-        modo=modo,
-        deposito_origen=deposito_origen,
-        deposito_destino=deposito_destino,
-        id_operario=id_operario,
-        require_non_empty=True,
-        base_empresa=base_empresa,
-    )
-    if not ok_reglas:
-        for item in items:
-            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, err_reglas or "Lote inválido."))
-        return resultado
-
-    import uuid as _uuid
-
-    uuid_lote = str(_uuid.uuid4())
-    lote_obj: Any
-    if mpr_writes_mysql():
-        from mpr.repositories.armado_surtido import crear_lote_armado
-
-        lote_obj = crear_lote_armado(
-            base_empresa,
-            modo,
-            id_operario,
-            int(id_usuario),
-            int(deposito_origen or 0),
-            int(deposito_destino or 0),
-            len(items),
-            uuid_lote=uuid_lote,
-        )
-    else:
-        from mpr.models import MprArmadoLote
-
-        lote_obj = MprArmadoLote.objects.create(
-            base_empresa=(base_empresa or "").strip(),
-            modo=modo,
-            id_operario=id_operario,
-            id_usuario=int(id_usuario),
-            deposito_origen=int(deposito_origen or 0),
-            deposito_destino=int(deposito_destino or 0),
-            cantidad_items=len(items),
-        )
-
-    if mpr_writes_postgres() and mpr_writes_mysql():
-        import uuid as _uuid_mod
-        from mpr.models import MprArmadoLote
-
-        MprArmadoLote.objects.create(
-            id=_uuid_mod.UUID(uuid_lote),
-            base_empresa=(base_empresa or "").strip(),
-            modo=modo,
-            id_operario=id_operario,
-            id_usuario=int(id_usuario),
-            deposito_origen=int(deposito_origen or 0),
-            deposito_destino=int(deposito_destino or 0),
-            cantidad_items=len(items),
-        )
-
-    resultado["id_lote_armado"] = str(lote_obj.id)
-    id_lote_ref = getattr(lote_obj, "id_mpr_armado_lote", None) or lote_obj.id
 
     for item in items:
         id_articulo_pack = int(to_int_or_none(item.get("id_articulo_pack")) or 0)
@@ -12116,21 +12272,16 @@ def ejecutar_lote_armado(
                 ))
                 continue
             detalle_mov = _detalle_mov_armado_surtido(
-                id_articulo_pack,
-                cantidad_packs,
-                lineas,
-                detalle=detalle_lote,
-                id_lista_produccion=id_lista_produccion,
+                id_articulo_pack, cantidad_packs, lineas,
+                detalle=detalle_lote, id_lista_produccion=id_lista_produccion,
             )
 
         try:
-            lineas_enriquecidas: List[Dict[str, Any]] = []
             with get_connection(base_empresa) as conn:
                 conn.autocommit(False)
                 cursor = conn.cursor()
                 ok_tx, codigo_mov, nro_comprobante, err_tx, lineas_enriquecidas, info_pack = _ejecutar_armado_surtido_tx(
-                    cursor,
-                    conn,
+                    cursor, conn,
                     id_usuario=int(id_usuario),
                     id_articulo_pack=id_articulo_pack,
                     cantidad_packs=cantidad_packs,
@@ -12140,6 +12291,7 @@ def ejecutar_lote_armado(
                     id_operario=id_operario,
                     id_lista_produccion=id_lista_produccion,
                     detalle_mov=detalle_mov,
+                    fecha_realizado=fecha_realizado,
                 )
                 if not ok_tx:
                     conn.rollback()
@@ -12156,19 +12308,11 @@ def ejecutar_lote_armado(
                 continue
 
             guardar_composicion_armado_surtido(
-                base_empresa,
-                codigo_mov,
-                id_articulo_pack,
-                cantidad_packs,
-                int(deposito_origen or 0),
-                int(deposito_destino or 0),
-                lineas_enriquecidas,
-                int(id_usuario),
-                id_operario=id_operario,
-                id_lista_produccion=id_lista_produccion,
-                detalle=detalle_mov,
-                modo=modo,
-                id_lote_armado=id_lote_ref,
+                base_empresa, codigo_mov, id_articulo_pack, cantidad_packs,
+                int(deposito_origen or 0), int(deposito_destino or 0),
+                lineas_enriquecidas, int(id_usuario),
+                id_operario=id_operario, id_lista_produccion=id_lista_produccion,
+                detalle=detalle_mov, modo=modo, id_lote_armado=id_lote_ref,
             )
             resultado["exitosos"].append(_item_exitoso_lote_armado_surtido(
                 item, codigo_mov, nro_comprobante, info_pack=info_pack,
@@ -12178,12 +12322,438 @@ def ejecutar_lote_armado(
         except Exception as e:
             if "1054" in str(e) or "Unknown column" in str(e).lower():
                 raise MprSchemaError(formatear_error_esquema(e, "movimiento_stock")) from e
-            logger.warning("ejecutar_lote_armado item %s: %s", id_articulo_pack, e, exc_info=True)
+            logger.warning("_ejecutar_items_lote_armado_stock item %s: %s", id_articulo_pack, e, exc_info=True)
             resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, str(e)))
+    return resultado
 
-    lote_obj.cantidad_exitosos = len(resultado.get("exitosos") or [])
-    lote_obj.cantidad_fallidos = len(resultado.get("fallidos") or [])
-    lote_obj.save(update_fields=["cantidad_exitosos", "cantidad_fallidos"])
+
+def ejecutar_lote_armado(
+    base_empresa: str,
+    id_usuario: int,
+    cabecera: Dict[str, Any],
+    armados: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Orquestador unificado Armado 1ra/2da.
+    accion borrador: persiste lote e ítems sin MSTOCK.
+    accion aprobar: ejecuta stock (commit por ítem) y marca lote aprobado.
+    """
+    from mpr.repositories.ledger_backend import mpr_writes_mysql, mpr_writes_postgres
+    from mpr.repositories.armado_surtido import (
+        actualizar_lote_armado,
+        crear_lote_armado,
+        listar_items_lote,
+        obtener_lote_por_uuid_or_id,
+        reemplazar_items_lote,
+    )
+
+    modo = _normalizar_modo_armado(cabecera.get("modo"))
+    cabecera = dict(cabecera or {})
+    cabecera["modo"] = modo
+    accion = str_or_default(cabecera.get("accion"), "aprobar").strip().lower()
+    if accion not in ("borrador", "aprobar"):
+        accion = "aprobar"
+    fecha_realizado = cabecera.get("fecha_realizado")
+    if not isinstance(fecha_realizado, date):
+        fecha_realizado = date.today()
+
+    resultado: Dict[str, Any] = {
+        "exitosos": [], "fallidos": [], "id_lote_armado": None, "estado": None,
+    }
+    items = list(armados or [])
+    if not items:
+        resultado["fallidos"].append(_item_fallido_lote_armado_surtido({}, "Agregue al menos un armado al lote."))
+        return resultado
+    if not (base_empresa or "").strip():
+        for item in items:
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, "Base de datos no indicada."))
+        return resultado
+    if not id_usuario:
+        for item in items:
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, "Usuario no indicado."))
+        return resultado
+
+    deposito_origen = to_int_or_none(cabecera.get("deposito_origen"))
+    deposito_destino = to_int_or_none(cabecera.get("deposito_destino"))
+    id_operario = to_int_or_none(cabecera.get("id_operario"))
+    detalle_lote = str_or_default(cabecera.get("detalle"), "").strip() or None
+    id_lote_previo = to_int_or_none(cabecera.get("id_mpr_armado_lote"))
+
+    ok_reglas, err_reglas = validar_reglas_lote_armado(
+        items, modo=modo, deposito_origen=deposito_origen,
+        deposito_destino=deposito_destino, id_operario=id_operario,
+        require_non_empty=True, base_empresa=base_empresa,
+    )
+    if not ok_reglas:
+        for item in items:
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, err_reglas or "Lote inválido."))
+        return resultado
+
+    lote_existente = None
+    if id_lote_previo and mpr_writes_mysql():
+        lote_existente = obtener_lote_por_uuid_or_id(base_empresa, id_lote_previo)
+        if lote_existente and lote_existente.estado == ESTADO_ARMADO_APROBADO and accion == "aprobar":
+            return corregir_lote_armado_aprobado(
+                base_empresa, id_usuario, id_lote_previo, cabecera, items,
+            )
+        if lote_existente and lote_existente.estado == ESTADO_ARMADO_ANULADO:
+            for item in items:
+                resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
+                    item, "El lote está anulado; cree un lote nuevo.",
+                ))
+            return resultado
+
+    import uuid as _uuid
+
+    lote_obj: Any
+    if lote_existente and lote_existente.estado == ESTADO_ARMADO_BORRADOR:
+        lote_obj = lote_existente
+        if mpr_writes_mysql():
+            actualizar_lote_armado(
+                base_empresa, lote_obj.id_mpr_armado_lote,
+                cantidad_items=len(items),
+                estado=ESTADO_ARMADO_BORRADOR if accion == "borrador" else ESTADO_ARMADO_APROBADO,
+                detalle=detalle_lote or "",
+                fecha_realizado=fecha_realizado,
+                movimiento_fisico_ok=(accion == "aprobar"),
+            )
+    elif mpr_writes_mysql():
+        estado_ini = ESTADO_ARMADO_BORRADOR if accion == "borrador" else ESTADO_ARMADO_APROBADO
+        mov_ok_ini = accion == "aprobar"
+        lote_obj = crear_lote_armado(
+            base_empresa, modo, id_operario, int(id_usuario),
+            int(deposito_origen or 0), int(deposito_destino or 0), len(items),
+            uuid_lote=str(_uuid.uuid4()),
+            fecha_realizado=fecha_realizado,
+            estado=estado_ini,
+            detalle=detalle_lote or "",
+            movimiento_fisico_ok=mov_ok_ini,
+        )
+    else:
+        from mpr.models import MprArmadoLote
+
+        lote_obj = MprArmadoLote.objects.create(
+            base_empresa=(base_empresa or "").strip(),
+            modo=modo, id_operario=id_operario, id_usuario=int(id_usuario),
+            deposito_origen=int(deposito_origen or 0),
+            deposito_destino=int(deposito_destino or 0),
+            cantidad_items=len(items),
+            fecha_realizado=fecha_realizado,
+            estado=ESTADO_ARMADO_BORRADOR if accion == "borrador" else ESTADO_ARMADO_APROBADO,
+            movimiento_fisico_ok=(accion == "aprobar"),
+            detalle=str_or_default(detalle_lote, ""),
+        )
+
+    if mpr_writes_postgres() and mpr_writes_mysql() and not lote_existente:
+        from mpr.models import MprArmadoLote
+
+        MprArmadoLote.objects.create(
+            id=_uuid.UUID(lote_obj.uuid_lote),
+            base_empresa=(base_empresa or "").strip(),
+            modo=modo, id_operario=id_operario, id_usuario=int(id_usuario),
+            deposito_origen=int(deposito_origen or 0),
+            deposito_destino=int(deposito_destino or 0),
+            cantidad_items=len(items),
+            fecha_realizado=fecha_realizado,
+            estado=ESTADO_ARMADO_BORRADOR if accion == "borrador" else ESTADO_ARMADO_APROBADO,
+            movimiento_fisico_ok=(accion == "aprobar"),
+            detalle=str_or_default(detalle_lote, ""),
+        )
+
+    id_lote_ref = getattr(lote_obj, "id_mpr_armado_lote", None) or lote_obj.id
+    resultado["id_lote_armado"] = str(lote_obj.id)
+
+    if accion == "borrador":
+        if mpr_writes_mysql():
+            reemplazar_items_lote(base_empresa, int(id_lote_ref), items)
+            actualizar_lote_armado(
+                base_empresa, int(id_lote_ref),
+                cantidad_items=len(items),
+                cantidad_exitosos=0, cantidad_fallidos=0,
+                estado=ESTADO_ARMADO_BORRADOR,
+                movimiento_fisico_ok=False,
+                fecha_realizado=fecha_realizado,
+                detalle=detalle_lote or "",
+            )
+        resultado["estado"] = ESTADO_ARMADO_BORRADOR
+        return resultado
+
+    parcial = _ejecutar_items_lote_armado_stock(
+        base_empresa, id_usuario, modo, cabecera, items, id_lote_ref, fecha_realizado,
+    )
+    resultado["exitosos"] = parcial.get("exitosos") or []
+    resultado["fallidos"] = parcial.get("fallidos") or []
+
+    if mpr_writes_mysql():
+        reemplazar_items_lote(base_empresa, int(id_lote_ref), items)
+        actualizar_lote_armado(
+            base_empresa, int(id_lote_ref),
+            cantidad_exitosos=len(resultado["exitosos"]),
+            cantidad_fallidos=len(resultado["fallidos"]),
+            cantidad_items=len(items),
+            estado=ESTADO_ARMADO_APROBADO,
+            movimiento_fisico_ok=True,
+            fecha_realizado=fecha_realizado,
+            detalle=detalle_lote or "",
+        )
+    else:
+        lote_obj.cantidad_exitosos = len(resultado["exitosos"])
+        lote_obj.cantidad_fallidos = len(resultado["fallidos"])
+        lote_obj.save(update_fields=["cantidad_exitosos", "cantidad_fallidos"])
+
+    resultado["estado"] = ESTADO_ARMADO_APROBADO
+    return resultado
+
+
+def anular_lote_armado(
+    base_empresa: str,
+    id_usuario: int,
+    id_lote: Any,
+) -> Tuple[bool, List[str]]:
+    """
+    Anula un lote aprobado revirtiendo MSTOCK por movimiento.
+    Devuelve (ok, lista_errores).
+    """
+    from mpr.repositories.armado_surtido import (
+        actualizar_lote_armado,
+        listar_movimientos_de_lote,
+        obtener_lote_por_uuid_or_id,
+    )
+
+    errores: List[str] = []
+    if not (base_empresa or "").strip():
+        return False, ["Base de datos no indicada."]
+    if not id_usuario:
+        return False, ["Usuario no indicado."]
+    lote = obtener_lote_por_uuid_or_id(base_empresa, id_lote)
+    if not lote:
+        return False, ["Lote no encontrado."]
+    if lote.estado == ESTADO_ARMADO_ANULADO:
+        return False, ["El lote ya está anulado."]
+    if lote.estado != ESTADO_ARMADO_APROBADO:
+        return False, ["Solo se pueden anular lotes aprobados."]
+    if not lote.movimiento_fisico_ok:
+        return False, ["El lote no tiene movimiento físico registrado."]
+
+    movimientos = listar_movimientos_de_lote(base_empresa, lote.id_mpr_armado_lote)
+    if _lote_tiene_imputacion_bloqueante(movimientos):
+        return False, [
+            "No se puede anular: hay movimientos con imputación parcial o completa. "
+            "Revertí la imputación antes de anular el lote.",
+        ]
+
+    fecha_rev = lote.fecha_realizado or date.today()
+    for mov in movimientos:
+        lineas = [
+            {"id_articulo": ln["id_articulo"], "cantidad_por_pack": ln["cantidad_por_pack"]}
+            for ln in (mov.get("lineas") or [])
+        ]
+        if not lineas:
+            errores.append(f"Movimiento {mov.get('codigo_movimiento')}: sin líneas de composición.")
+            continue
+        try:
+            with get_connection(base_empresa) as conn:
+                conn.autocommit(False)
+                cursor = conn.cursor()
+                ok_tx, _cod, _nro, err_tx, _le, _info = _revertir_armado_surtido_tx(
+                    cursor, conn,
+                    id_usuario=int(id_usuario),
+                    id_articulo_pack=int(mov["id_articulo_pack"]),
+                    cantidad_packs=int(mov["cantidad_packs"]),
+                    deposito_origen=int(mov["deposito_origen"]),
+                    deposito_destino=int(mov["deposito_destino"]),
+                    lineas_composicion=lineas,
+                    id_operario=lote.id_operario,
+                    detalle_mov=f"Anulación lote armado {lote.uuid_lote or lote.id_mpr_armado_lote}",
+                    fecha_realizado=fecha_rev,
+                )
+                if not ok_tx:
+                    conn.rollback()
+                    errores.append(err_tx or f"No se pudo revertir movimiento {mov.get('codigo_movimiento')}.")
+                    continue
+                conn.commit()
+        except MprSchemaError as e:
+            raise
+        except Exception as e:
+            errores.append(str(e))
+
+    if errores:
+        return False, errores
+
+    actualizar_lote_armado(
+        base_empresa, lote.id_mpr_armado_lote,
+        estado=ESTADO_ARMADO_ANULADO,
+        movimiento_fisico_ok=False,
+    )
+    return True, []
+
+
+def corregir_lote_armado_aprobado(
+    base_empresa: str,
+    id_usuario: int,
+    id_lote: Any,
+    cabecera: Dict[str, Any],
+    armados_nuevos: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """
+    Rectificación híbrida: delta de packs por artículo sobre lote aprobado.
+    Rechaza cambio de composición; bloquea si hay imputación parcial/completa.
+    """
+    from mpr.repositories.armado_surtido import (
+        listar_movimientos_de_lote,
+        obtener_lote_por_uuid_or_id,
+        reemplazar_items_lote,
+        actualizar_lote_armado,
+    )
+
+    resultado: Dict[str, Any] = {
+        "exitosos": [], "fallidos": [], "id_lote_armado": None, "estado": ESTADO_ARMADO_APROBADO,
+    }
+    lote = obtener_lote_por_uuid_or_id(base_empresa, id_lote)
+    if not lote:
+        for item in armados_nuevos or []:
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, "Lote no encontrado."))
+        return resultado
+    if lote.estado != ESTADO_ARMADO_APROBADO:
+        for item in armados_nuevos or []:
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
+                item, "Solo se pueden corregir lotes aprobados.",
+            ))
+        return resultado
+
+    movimientos = listar_movimientos_de_lote(base_empresa, lote.id_mpr_armado_lote)
+    if _lote_tiene_imputacion_bloqueante(movimientos):
+        msg = (
+            "No se puede corregir: hay imputación parcial o completa. "
+            "Anulá el lote y armá de nuevo."
+        )
+        for item in armados_nuevos or []:
+            resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, msg))
+        return resultado
+
+    modo = _normalizar_modo_armado(cabecera.get("modo") or lote.modo)
+    fecha_realizado = cabecera.get("fecha_realizado")
+    if not isinstance(fecha_realizado, date):
+        fecha_realizado = lote.fecha_realizado or date.today()
+
+    qty_actual: Dict[int, int] = {}
+    comp_actual: Dict[int, Dict[int, int]] = {}
+    for mov in movimientos:
+        id_pack = int(mov["id_articulo_pack"])
+        qty_actual[id_pack] = qty_actual.get(id_pack, 0) + int(mov.get("cantidad_packs") or 0)
+        if id_pack not in comp_actual:
+            comp_actual[id_pack] = _composicion_map(mov.get("lineas") or [])
+
+    qty_nueva: Dict[int, int] = {}
+    comp_nueva: Dict[int, Dict[int, int]] = {}
+    items_por_pack: Dict[int, Dict[str, Any]] = {}
+    for item in armados_nuevos or []:
+        id_pack = to_int_or_none(item.get("id_articulo_pack"))
+        qty = to_int_or_none(item.get("cantidad_packs"))
+        if not id_pack or not qty:
+            continue
+        qty_nueva[int(id_pack)] = int(qty)
+        comp_nueva[int(id_pack)] = _composicion_map(item.get("lineas") or [])
+        items_por_pack[int(id_pack)] = item
+
+    todos_packs = set(qty_actual.keys()) | set(qty_nueva.keys())
+    for id_pack in todos_packs:
+        if id_pack in comp_actual and id_pack in comp_nueva:
+            if comp_actual[id_pack] != comp_nueva[id_pack]:
+                err = "Cambió la composición del pack; anulá el lote y armá de nuevo."
+                if id_pack in items_por_pack:
+                    resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
+                        items_por_pack[id_pack], err,
+                    ))
+                return resultado
+
+    cab_exec = dict(cabecera or {})
+    cab_exec["modo"] = modo
+    cab_exec["deposito_origen"] = cab_exec.get("deposito_origen") or lote.deposito_origen
+    cab_exec["deposito_destino"] = cab_exec.get("deposito_destino") or lote.deposito_destino
+    id_lote_ref = lote.id_mpr_armado_lote
+    resultado["id_lote_armado"] = str(lote.id)
+
+    for id_pack in sorted(todos_packs):
+        actual = qty_actual.get(id_pack, 0)
+        nueva = qty_nueva.get(id_pack, 0)
+        delta = nueva - actual
+        if delta == 0:
+            continue
+        item = items_por_pack.get(id_pack) or {
+            "id_articulo_pack": id_pack,
+            "cantidad_packs": abs(delta),
+            "lineas": [
+                {"id_articulo": k, "cantidad_por_pack": v}
+                for k, v in (comp_nueva.get(id_pack) or comp_actual.get(id_pack) or {}).items()
+            ],
+        }
+        if delta > 0:
+            item_delta = dict(item)
+            item_delta["cantidad_packs"] = delta
+            parcial = _ejecutar_items_lote_armado_stock(
+                base_empresa, id_usuario, modo, cab_exec, [item_delta], id_lote_ref, fecha_realizado,
+            )
+            resultado["exitosos"].extend(parcial.get("exitosos") or [])
+            resultado["fallidos"].extend(parcial.get("fallidos") or [])
+        elif delta < 0:
+            qty_rev = abs(delta)
+            lineas_rev = [
+                {"id_articulo": k, "cantidad_por_pack": v}
+                for k, v in (comp_nueva.get(id_pack) or comp_actual.get(id_pack) or {}).items()
+            ]
+            try:
+                with get_connection(base_empresa) as conn:
+                    conn.autocommit(False)
+                    cursor = conn.cursor()
+                    ok_tx, codigo_mov, nro_comprobante, err_tx, lineas_enr, _info = _revertir_armado_surtido_tx(
+                        cursor, conn,
+                        id_usuario=int(id_usuario),
+                        id_articulo_pack=int(id_pack),
+                        cantidad_packs=qty_rev,
+                        deposito_origen=int(cab_exec.get("deposito_origen") or 0),
+                        deposito_destino=int(cab_exec.get("deposito_destino") or 0),
+                        lineas_composicion=lineas_rev,
+                        id_operario=lote.id_operario,
+                        detalle_mov=f"Rectificación lote armado (-{qty_rev} packs pack {id_pack})",
+                        fecha_realizado=fecha_realizado,
+                    )
+                    if not ok_tx:
+                        conn.rollback()
+                        resultado["fallidos"].append(_item_fallido_lote_armado_surtido(
+                            item, err_tx or "No se pudo revertir packs del lote.",
+                        ))
+                        continue
+                    conn.commit()
+                guardar_composicion_armado_surtido(
+                    base_empresa, int(codigo_mov or 0), int(id_pack), qty_rev,
+                    int(cab_exec.get("deposito_origen") or 0),
+                    int(cab_exec.get("deposito_destino") or 0),
+                    lineas_enr, int(id_usuario),
+                    id_operario=lote.id_operario, detalle=f"Rectificación (-{qty_rev})",
+                    modo=modo, id_lote_armado=id_lote_ref,
+                )
+                resultado["exitosos"].append({
+                    "id_articulo_pack": id_pack,
+                    "cantidad_packs": -qty_rev,
+                    "codigo_movimiento": codigo_mov,
+                    "nro_comprobante": nro_comprobante,
+                    "descripcion_pack": f"Revertidos {qty_rev} pack(s)",
+                })
+            except MprSchemaError:
+                raise
+            except Exception as e:
+                resultado["fallidos"].append(_item_fallido_lote_armado_surtido(item, str(e)))
+
+    reemplazar_items_lote(base_empresa, lote.id_mpr_armado_lote, armados_nuevos or [])
+    actualizar_lote_armado(
+        base_empresa, lote.id_mpr_armado_lote,
+        cantidad_items=len(armados_nuevos or []),
+        cantidad_exitosos=len(resultado["exitosos"]),
+        cantidad_fallidos=len(resultado["fallidos"]),
+        fecha_realizado=fecha_realizado,
+        detalle=str_or_default(cabecera.get("detalle"), lote.detalle),
+    )
     return resultado
 
 

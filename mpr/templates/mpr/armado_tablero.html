@@ -168,6 +168,8 @@
             {% csrf_token %}
             <input type="hidden" name="vista" value="tablero">
             <input type="hidden" name="modo" value="1ra">
+            <input type="hidden" name="accion" value="aprobar">
+            <input type="hidden" name="fecha_realizado" value="{% now 'd/m/Y' %}">
             <input type="hidden" name="deposito_origen" value="{{ deposito_origen_default }}">
             <input type="hidden" name="deposito_destino" value="{{ deposito_destino_default }}">
             {% if id_lista %}<input type="hidden" name="id_lista" value="{{ id_lista }}">{% endif %}

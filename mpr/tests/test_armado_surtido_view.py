@@ -143,7 +143,7 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
         self.assertIn("armado_surtido_resultado_lote", request.session)
         self.assertEqual(request.session.get("armado_surtido_lote_fallidos"), [])
         msgs = [m.message for m in get_messages(request)]
-        self.assertEqual(msgs, [])
+        self.assertTrue(any("grabado" in m.lower() for m in msgs))
 
     @patch("mpr.views.ejecutar_lote_armado")
     @patch("mpr.views._get_base_empresa", return_value="empresa_test")
@@ -177,7 +177,7 @@ class ArmadoSurtidoViewPostTest(SimpleTestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(len(request.session.get("armado_surtido_lote_fallidos") or []), 1)
         msgs = [m.message for m in get_messages(request)]
-        self.assertEqual(msgs, [])
+        self.assertTrue(any("grabado" in m.lower() for m in msgs))
 
 
 class ArmadoSurtidoValidarItemLoteAPITest(SimpleTestCase):

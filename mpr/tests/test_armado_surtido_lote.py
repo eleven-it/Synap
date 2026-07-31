@@ -233,15 +233,19 @@ class EjecutarLoteArmadoSurtidoTest(SimpleTestCase):
             "detalle": "Turno",
         }
 
-    @patch("mpr.models.MprArmadoLote")
-    @patch("mpr.services.guardar_composicion_armado_surtido")
-    @patch("mpr.services.get_connection")
-    @patch("mpr.services.articulo_habilitado_armado_surtido", return_value=True)
+    @patch("mpr.services.validar_reglas_lote_armado", return_value=(True, None))
+    @patch("mpr.repositories.armado_surtido.reemplazar_items_lote")
+    @patch("mpr.repositories.armado_surtido.actualizar_lote_armado")
+    @patch("mpr.repositories.armado_surtido.crear_lote_armado")
+    @patch("mpr.repositories.ledger_backend.mpr_writes_mysql", return_value=True)
+    @patch("mpr.repositories.ledger_backend.mpr_writes_postgres", return_value=False)
     @patch("mpr.services._ejecutar_armado_surtido_tx")
-    def test_parcial_falla_segundo_item(self, mock_tx, *_mocks):
+    def test_parcial_falla_segundo_item(self, mock_tx, _pg, _mysql, mock_crear, *_mocks):
         lote_mock = MagicMock()
+        lote_mock.id_mpr_armado_lote = 1
         lote_mock.id = "00000000-0000-0000-0000-000000000001"
-        _mocks[3].objects.create.return_value = lote_mock
+        lote_mock.uuid_lote = "00000000-0000-0000-0000-000000000001"
+        mock_crear.return_value = lote_mock
         mock_tx.side_effect = [
             (True, 11, "0001-00000011", None, [{"id_articulo": 813}], {
                 "codigo_articulo_pack": "1.1.100",
@@ -258,13 +262,18 @@ class EjecutarLoteArmadoSurtidoTest(SimpleTestCase):
             }),
         ]
         conn = MagicMock()
-        _mocks[1].return_value.__enter__.return_value = conn
-        armados = [
-            _item(100, 1, [{"id_articulo": 813, "cantidad_por_pack": 1}]),
-            _item(200, 1, [{"id_articulo": 813, "cantidad_por_pack": 5}]),
-            _item(300, 1, [{"id_articulo": 900, "cantidad_por_pack": 1}]),
-        ]
-        resultado = ejecutar_lote_armado_surtido("emp", 1, self._cabecera(), armados)
+        with patch("mpr.services.get_connection") as mock_conn:
+            mock_conn.return_value.__enter__.return_value = conn
+            with patch("mpr.services.guardar_composicion_armado_surtido"):
+                with patch("mpr.repositories.armado_surtido.reemplazar_items_lote"):
+                    with patch("mpr.repositories.armado_surtido.actualizar_lote_armado"):
+                        with patch("mpr.services.articulo_habilitado_armado_surtido", return_value=True):
+                            armados = [
+                                _item(100, 1, [{"id_articulo": 813, "cantidad_por_pack": 1}]),
+                                _item(200, 1, [{"id_articulo": 813, "cantidad_por_pack": 5}]),
+                                _item(300, 1, [{"id_articulo": 900, "cantidad_por_pack": 1}]),
+                            ]
+                            resultado = ejecutar_lote_armado_surtido("emp", 1, self._cabecera(), armados)
         self.assertEqual(len(resultado["exitosos"]), 2)
         self.assertEqual(len(resultado["fallidos"]), 1)
         self.assertEqual(resultado["exitosos"][0]["codigo_movimiento"], 11)

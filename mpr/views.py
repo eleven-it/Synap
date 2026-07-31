@@ -40,6 +40,7 @@ from .services import (
     ejecutar_reclasificacion,
     ejecutar_lote_armado,
     ejecutar_lote_armado_surtido,
+    anular_lote_armado,
     listar_articulos_stock_deposito,
     listar_packs_armado_1ra,
     listar_packs_armado_catalogo,
@@ -3544,8 +3545,12 @@ class ArmadoSurtidoStockOrigenAPIView(MprLoginRequiredMixin, MprEscritorioVerMix
         except (TypeError, ValueError):
             return JsonResponse({"articulos": [], "error": "Depósito inválido."})
         q = (request.GET.get("q") or "").strip() or None
+        modo_req = (request.GET.get("modo") or "2da").strip().lower()
+        tipo_fab = "Fabricado" if modo_req == "2da" else None
         try:
-            articulos = listar_articulos_stock_deposito(base_empresa, deposito, busqueda=q, limit=50)
+            articulos = listar_articulos_stock_deposito(
+                base_empresa, deposito, busqueda=q, limit=50, tipo_art_fab=tipo_fab,
+            )
             return JsonResponse({"articulos": articulos})
         except Exception as e:
             logger.warning("API stock origen armado surtido: %s", e, exc_info=True)
@@ -3886,6 +3891,34 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         context["imputacion_confirmar_api_url"] = reverse(
             "mpr:api_imputacion_armado_confirmar"
         )
+        from mpr.services import _fmt_fecha_ddmmaaaa, ESTADO_ARMADO_APROBADO, ESTADO_ARMADO_BORRADOR
+        from mpr.repositories.armado_surtido import (
+            listar_items_lote,
+            listar_lotes_borrador,
+            obtener_lote_por_uuid_or_id,
+        )
+
+        context["fecha_realizado_default"] = _fmt_fecha_ddmmaaaa(date.today())
+        context["lotes_borrador"] = listar_lotes_borrador(base_empresa, modo) if base_empresa else []
+        id_lote_qs = to_int_or_none(self.request.GET.get("id_lote"))
+        lote_cargado = None
+        lote_borrador_json = "[]"
+        lote_estado = None
+        if id_lote_qs and base_empresa:
+            lote_cargado = obtener_lote_por_uuid_or_id(base_empresa, id_lote_qs)
+            if lote_cargado:
+                items_lote = listar_items_lote(base_empresa, lote_cargado.id_mpr_armado_lote)
+                lote_borrador_json = json.dumps(items_lote)
+                lote_estado = lote_cargado.estado
+                if lote_cargado.fecha_realizado:
+                    context["fecha_realizado_default"] = _fmt_fecha_ddmmaaaa(lote_cargado.fecha_realizado)
+                if lote_cargado.detalle:
+                    context["detalle_lote_default"] = lote_cargado.detalle
+        context["id_lote_armado"] = id_lote_qs
+        context["lote_borrador_json"] = lote_borrador_json
+        context["lote_estado"] = lote_estado
+        context["lote_aprobado"] = lote_estado == ESTADO_ARMADO_APROBADO
+        context["lote_borrador"] = lote_estado == ESTADO_ARMADO_BORRADOR
         return context
 
     def post(self, request, *args, **kwargs):
@@ -3907,9 +3940,30 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
 
         cabecera, armados, err_parse = _resolver_post_armado_surtido(request)
         cabecera["modo"] = modo
+        accion = str_or_default(cabecera.get("accion"), "aprobar").strip().lower()
         id_lista = cabecera.get("id_lista_produccion") or to_int_or_none(
             request.POST.get("id_lista") or request.GET.get("id_lista")
         )
+
+        if accion == "anular":
+            id_lote_anular = to_int_or_none(
+                request.POST.get("id_mpr_armado_lote") or cabecera.get("id_mpr_armado_lote")
+            )
+            if not id_lote_anular:
+                messages.error(request, "Indique el lote a anular.")
+                return _redirect_armado(modo, id_lista, request=request)
+            try:
+                ok_an, errs_an = anular_lote_armado(base_empresa, id_usuario, id_lote_anular)
+            except MprSchemaError as e:
+                _log_mpr_schema_error(e)
+                messages.error(request, str(e))
+                return _redirect_armado(modo, id_lista, request=request)
+            if ok_an:
+                messages.success(request, "Lote de armado anulado correctamente.")
+            else:
+                messages.error(request, "; ".join(errs_an) if errs_an else "No se pudo anular el lote.")
+            return _redirect_armado(modo, id_lista, request=request)
+
         if err_parse:
             messages.error(request, err_parse)
             return _redirect_armado(modo, id_lista, request=request)
@@ -3943,6 +3997,19 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         fallidos = resultado.get("fallidos") or []
         n_ok = len(exitosos)
         n_fail = len(fallidos)
+
+        if accion == "borrador" and not fallidos:
+            messages.success(request, "Borrador de armado guardado correctamente.")
+        elif accion == "aprobar":
+            if n_ok and not n_fail:
+                messages.success(request, f"Lote de armado grabado: {n_ok} ítem(s) exitoso(s).")
+            elif n_ok and n_fail:
+                messages.warning(
+                    request,
+                    f"Lote parcial: {n_ok} grabado(s), {n_fail} con error. Revise el detalle.",
+                )
+            elif n_fail and not n_ok:
+                messages.error(request, "No se pudo grabar ningún armado del lote.")
 
         if n_ok or n_fail:
             request.session["armado_surtido_resultado_lote"] = resultado
