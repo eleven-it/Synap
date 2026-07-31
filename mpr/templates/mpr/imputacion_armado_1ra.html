@@ -28,7 +28,7 @@
                 </p>
             </div>
             <div class="flex shrink-0 flex-wrap gap-2">
-                <a href="{% url 'mpr:armado' %}?modo=1ra" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900">
+                <a href="{% url 'mpr:armado' %}?modo=1ra&amp;vista=tablero" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 dark:focus-visible:ring-offset-slate-900">
                     <span class="material-icons text-lg text-slate-500 dark:text-slate-400" aria-hidden="true">inventory_2</span>
                     Armado 1ra
                 </a>
@@ -178,7 +178,7 @@
             {% else %}
             <p class="text-sm text-slate-600 dark:text-slate-400">No hay MSTOCK de Armado 1ra pendientes de imputar.</p>
             <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
-                <a href="{% url 'mpr:armado' %}?modo=1ra" class="inline-flex min-h-10 items-center rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Ir a Armado 1ra</a>
+                <a href="{% url 'mpr:armado' %}?modo=1ra&amp;vista=tablero" class="inline-flex min-h-10 items-center rounded-xl bg-purple-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-purple-700">Ir a Armado 1ra</a>
                 <a href="{% url 'mpr:tablero_produccion' %}" class="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700">Tablero de producción</a>
             </div>
             {% endif %}

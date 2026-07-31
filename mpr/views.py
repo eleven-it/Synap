@@ -3454,8 +3454,8 @@ def _modo_armado_desde_request(request, default="1ra"):
 
 
 def _vista_armado_desde_request(request, default: str = "tablero") -> str:
-    v = (request.GET.get("vista") or request.POST.get("vista") or default).strip().lower()
-    return v if v in ("tablero", "pos") else default
+    """Armado solo usa vista tablero. ``vista=pos`` queda deprecado de forma permanente."""
+    return "tablero"
 
 
 def _resolver_solo_resta_armado(request) -> bool:
@@ -3617,14 +3617,12 @@ class ArmadoSurtidoValidarItemLoteAPIView(MprLoginRequiredMixin, MprEscritorioVe
 
 
 class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
-    """Armado unificado 1ra/2da: grilla tabla (default) o POS + carrito (?vista=pos)."""
+    """Armado unificado 1ra/2da: solo grilla tabla (?vista=tablero). POS deprecado."""
 
-    template_name = "mpr/armado_surtido.html"
+    template_name = "mpr/armado_tablero.html"
 
     def get_template_names(self):
-        if _vista_armado_desde_request(self.request) == "pos":
-            return [self.template_name]
-        return ["mpr/armado_tablero.html"]
+        return [self.template_name]
 
     def get(self, request, *args, **kwargs):
         from django.contrib import messages
@@ -3633,15 +3631,16 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         if not base_empresa:
             messages.error(request, "No se pudo determinar la empresa activa.")
             return redirect("core:dashboard")
-        if not (request.GET.get("modo") or "").strip():
-            params = {
-                "modo": "1ra",
-                "vista": _vista_armado_desde_request(request),
-            }
-            id_lista = request.GET.get("id_lista")
-            if id_lista:
-                params["id_lista"] = id_lista
-            return redirect(f"{reverse('mpr:armado')}?{urlencode(params)}")
+
+        vista_raw = (request.GET.get("vista") or "").strip().lower()
+        modo_raw = (request.GET.get("modo") or "").strip()
+        # POS deprecado: cualquier vista distinta de tablero (o ausente con modo) → tablero.
+        if vista_raw == "pos" or (vista_raw and vista_raw != "tablero") or not modo_raw:
+            params = request.GET.copy()
+            params["vista"] = "tablero"
+            if not (params.get("modo") or "").strip():
+                params["modo"] = "1ra"
+            return redirect(f"{reverse('mpr:armado')}?{params.urlencode()}")
         return super().get(request, *args, **kwargs)
 
     def _context_armado_tablero(self, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -3718,6 +3717,8 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
         resultado_lote = self.request.session.pop("armado_surtido_resultado_lote", None)
         self.request.session.pop("armado_surtido_lote_fallidos", None)
 
+        from mpr.services import _fmt_fecha_ddmmaaaa
+
         context.update({
             "vista": "tablero",
             "filas": filas,
@@ -3738,188 +3739,22 @@ class ArmadoSurtidoView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateVi
             "puede_imputar_pedido": _usuario_puede_imputar_pedido(
                 getattr(self.request, "user", None)
             ),
+            "fecha_realizado_default": _fmt_fecha_ddmmaaaa(date.today()),
             **_context_filtro_marcas(self.request, base_empresa),
         })
         return context
 
     def get_context_data(self, **kwargs):
-        from django.contrib import messages
-
         context = super().get_context_data(**kwargs)
         base_empresa = _get_base_empresa(self.request)
         modo = _modo_armado_desde_request(self.request)
         context["modo"] = modo
         context["modo_label"] = "Armado 1ra" if modo == "1ra" else "Armado 2da"
         context["base_empresa"] = base_empresa
-        context["vista"] = _vista_armado_desde_request(self.request)
-        id_lista = to_int_or_none(self.request.GET.get("id_lista"))
-        context["id_lista"] = id_lista
+        context["vista"] = "tablero"
+        context["id_lista"] = to_int_or_none(self.request.GET.get("id_lista"))
+        return self._context_armado_tablero(context)
 
-        if context["vista"] == "tablero":
-            return self._context_armado_tablero(context)
-
-        id_articulo_opt = to_int_or_none(self.request.GET.get("id_articulo"))
-        context["id_articulo_opt"] = id_articulo_opt
-        lote_fallidos_preview = self.request.session.get("armado_surtido_lote_fallidos")
-        hay_fallidos_sesion = bool(
-            lote_fallidos_preview
-            and isinstance(lote_fallidos_preview, list)
-            and len(lote_fallidos_preview) > 0
-        )
-        # Desde listado OPT: priorizar precarga sobre carrito fallido previo en sesión
-        if id_articulo_opt and hay_fallidos_sesion:
-            self.request.session.pop("armado_surtido_lote_fallidos", None)
-            lote_fallidos_preview = None
-            hay_fallidos_sesion = False
-        if modo == "1ra":
-            dep_origen_def = get_deposito_semi_elaborado_mpr(base_empresa)
-            hay_packs = bool(
-                listar_packs_armado_catalogo(
-                    base_empresa,
-                    "1ra",
-                    limit=1,
-                    deposito_semi=dep_origen_def,
-                )
-            )
-            if not hay_packs:
-                messages.info(
-                    self.request,
-                    "No hay packs armables con stock suficiente en Semi elaborado para Armado 1ra.",
-                )
-        else:
-            hay_packs = bool(
-                listar_packs_armado_catalogo(base_empresa, "2da", limit=1)
-            )
-            if not hay_packs:
-                messages.info(
-                    self.request,
-                    f"No hay artículos con tipo_art_fab «{TIPO_ART_FAB_PACK_ARMADO_SURTIDO}» "
-                    "para Armado 2da.",
-                )
-            dep_origen_def = get_deposito_2da_seleccion_mpr(base_empresa)
-        context["packs_habilitados"] = []
-        context["depositos"] = get_depositos_con_suma_stock(
-            base_empresa, _get_id_puesto(self.request)
-        )
-        dep_dest_def = get_deposito_terminado_mpr(base_empresa)
-        context["deposito_origen_default"] = dep_origen_def
-        context["deposito_destino_default"] = dep_dest_def
-        context["empleados"] = listar_empleados_operarios(base_empresa, limit=200)
-        context["stock_api_url"] = reverse("mpr:api_armado_surtido_stock")
-        context["validar_item_lote_api_url"] = reverse("mpr:api_armado_surtido_validar_item_lote")
-        context["bom_pack_api_url"] = reverse("mpr:api_armado_bom_pack")
-        context["packs_catalog_api_url"] = reverse("mpr:api_armado_packs_catalog")
-        if id_lista:
-            try:
-                opt = get_opt_detalle(base_empresa, id_lista)
-                context["opt_numero"] = opt.get("numero") if opt else str(id_lista)
-            except Exception:
-                context["opt_numero"] = str(id_lista)
-        packs_precargados: List[Dict[str, Any]] = []
-        lote_precarga_opt: List[Dict[str, Any]] = []
-        if id_lista and modo == "1ra" and not hay_fallidos_sesion:
-            try:
-                lote_precarga_opt = construir_items_precarga_armado_desde_opt(
-                    base_empresa,
-                    int(id_lista),
-                    id_articulo_opt,
-                )
-            except Exception as e:
-                logger.warning(
-                    "Precarga armado desde OPT %s: %s", id_lista, e, exc_info=True
-                )
-            if id_articulo_opt and not lote_precarga_opt:
-                messages.warning(
-                    self.request,
-                    "No se pudo precargar el pack en el carrito. Verifique BOM, "
-                    "semi elaborado disponible y que el artículo esté habilitado para Armado 1ra.",
-                )
-        if lote_fallidos_preview and isinstance(lote_fallidos_preview, list):
-            ids_fallidos = [
-                to_int_or_none(it.get("id_articulo_pack"))
-                for it in lote_fallidos_preview
-                if isinstance(it, dict)
-            ]
-            ids_fallidos = [x for x in ids_fallidos if x is not None]
-            if ids_fallidos:
-                packs_precargados = listar_packs_armado_catalogo(
-                    base_empresa, modo, ids=ids_fallidos, limit=len(ids_fallidos)
-                )
-        elif lote_precarga_opt:
-            ids_precarga = [
-                to_int_or_none(it.get("id_articulo_pack"))
-                for it in lote_precarga_opt
-                if isinstance(it, dict)
-            ]
-            ids_precarga = [x for x in ids_precarga if x is not None]
-            if ids_precarga:
-                packs_precargados = listar_packs_armado_catalogo(
-                    base_empresa, modo, ids=ids_precarga, limit=len(ids_precarga)
-                )
-        context["lote_precarga_opt_json"] = json.dumps(lote_precarga_opt)
-        context["precarga_desde_opt"] = bool(lote_precarga_opt)
-        context["packs_bulto_json"] = json.dumps(
-            {
-                str(p["id_articulo"]): p.get("cantidad_promedio_bulto", 12)
-                for p in packs_precargados
-                if p.get("id_articulo")
-            }
-        )
-        context["packs_precargados_json"] = json.dumps(packs_precargados)
-        context["packs_catalog_json"] = "[]"
-        context["depositos_catalog_json"] = json.dumps([
-            {
-                "cod_deposito": d.get("CodDeposito"),
-                "nombre_deposito": str_or_default(
-                    d.get("NombreDeposito"), str(d.get("CodDeposito", ""))
-                ),
-            }
-            for d in context["depositos"]
-            if d.get("CodDeposito") is not None
-        ])
-        context["operarios_catalog_json"] = json.dumps(context["empleados"])
-        context["lote_max_items"] = LOTE_ARMADO_SURTIDO_MAX_ITEMS
-        resultado_lote = self.request.session.pop("armado_surtido_resultado_lote", None)
-        lote_fallidos = self.request.session.pop("armado_surtido_lote_fallidos", None)
-        context["resultado_lote_json"] = json.dumps(resultado_lote) if resultado_lote else "null"
-        context["lote_fallidos_json"] = json.dumps(lote_fallidos) if lote_fallidos else "null"
-        context["mostrar_modal_resultado_lote"] = bool(resultado_lote)
-        context["puede_imputar_pedido"] = _usuario_puede_imputar_pedido(
-            getattr(self.request, "user", None)
-        )
-        context["imputacion_pedido_url"] = reverse("mpr:imputacion_armado_1ra")
-        context["imputacion_confirmar_api_url"] = reverse(
-            "mpr:api_imputacion_armado_confirmar"
-        )
-        from mpr.services import _fmt_fecha_ddmmaaaa, ESTADO_ARMADO_APROBADO, ESTADO_ARMADO_BORRADOR
-        from mpr.repositories.armado_surtido import (
-            listar_items_lote,
-            listar_lotes_borrador,
-            obtener_lote_por_uuid_or_id,
-        )
-
-        context["fecha_realizado_default"] = _fmt_fecha_ddmmaaaa(date.today())
-        context["lotes_borrador"] = listar_lotes_borrador(base_empresa, modo) if base_empresa else []
-        id_lote_qs = to_int_or_none(self.request.GET.get("id_lote"))
-        lote_cargado = None
-        lote_borrador_json = "[]"
-        lote_estado = None
-        if id_lote_qs and base_empresa:
-            lote_cargado = obtener_lote_por_uuid_or_id(base_empresa, id_lote_qs)
-            if lote_cargado:
-                items_lote = listar_items_lote(base_empresa, lote_cargado.id_mpr_armado_lote)
-                lote_borrador_json = json.dumps(items_lote)
-                lote_estado = lote_cargado.estado
-                if lote_cargado.fecha_realizado:
-                    context["fecha_realizado_default"] = _fmt_fecha_ddmmaaaa(lote_cargado.fecha_realizado)
-                if lote_cargado.detalle:
-                    context["detalle_lote_default"] = lote_cargado.detalle
-        context["id_lote_armado"] = id_lote_qs
-        context["lote_borrador_json"] = lote_borrador_json
-        context["lote_estado"] = lote_estado
-        context["lote_aprobado"] = lote_estado == ESTADO_ARMADO_APROBADO
-        context["lote_borrador"] = lote_estado == ESTADO_ARMADO_BORRADOR
-        return context
 
     def post(self, request, *args, **kwargs):
         from django.contrib import messages

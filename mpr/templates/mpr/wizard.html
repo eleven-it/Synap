@@ -555,7 +555,7 @@
                 </a>
                 {% endif %}
                 {% if total_pendiente > 0 or hay_restante_armar %}
-                <a href="{% url 'mpr:armado' %}?modo=1ra{% if id_lista %}&amp;id_lista={{ id_lista }}{% endif %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
+                <a href="{% url 'mpr:armado' %}?modo=1ra&amp;vista=tablero{% if id_lista %}&amp;id_lista={{ id_lista }}{% endif %}" class="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900">
                     <span class="material-icons text-xl">build</span>
                     Ir a Armado 1ra
                 </a>

@@ -52,12 +52,22 @@
                     <div class="ml-auto flex flex-wrap items-center gap-2">
                         {% include "includes/toggle_docenas_pares.html" with interaction="link" variant="dark" modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
 
+                        <label class="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-500 bg-slate-900/80 px-2 text-xs font-medium text-slate-200"
+                               title="Fecha del movimiento de stock (puede ser pasada)">
+                            <span class="hidden whitespace-nowrap text-slate-400 sm:inline">Fecha</span>
+                            <input type="date"
+                                   id="fecha-realizado-tablero"
+                                   x-model="fechaIso"
+                                   aria-label="Fecha realizado del armado"
+                                   class="h-7 max-w-[9.5rem] rounded border-0 bg-transparent p-0 text-sm text-white focus:outline-none focus:ring-0 [color-scheme:dark]"/>
+                        </label>
+
                         <span class="group relative inline-flex h-9 items-center gap-1 rounded-lg border border-emerald-500/50 bg-emerald-900/40 px-2.5 text-xs font-semibold text-emerald-100"
                               aria-current="page"
                               aria-label="Vista tablero">
                             <span class="material-icons text-base" aria-hidden="true">table_chart</span>
                             <span class="hidden sm:inline">Tablero</span>
-                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Vista tablero (actual)" only %}
+                            {% include "mpr/includes/chrome_icon_tooltip.html" with texto="Vista tablero (única)" only %}
                         </span>
 
                         {% if modo == '1ra' and puede_imputar_pedido %}
@@ -135,11 +145,9 @@
                                        class="w-20 rounded border border-emerald-300 bg-white px-2 py-1 text-right text-sm font-semibold tabular-nums focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-emerald-800 dark:bg-slate-700 dark:disabled:bg-slate-800"/>
                             </td>
                             {% else %}
-                            <td class="border-l border-emerald-100 px-2 py-2 text-right">
-                                <a href="?vista=pos&amp;modo=2da&amp;id_articulo={{ fila.id_articulo }}"
-                                   class="inline-flex items-center gap-1 rounded-md border border-amber-400 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/40 dark:text-amber-200">
-                                    Componer
-                                </a>
+                            <td class="border-l border-emerald-100 px-2 py-2 text-right text-xs text-slate-400 dark:text-slate-500"
+                                title="Armado 2da masivo en tablero pendiente; la vista POS quedó deprecada.">
+                                —
                             </td>
                             {% endif %}
                         </tr>
@@ -155,8 +163,11 @@
             </div>
             <p class="mt-1 flex-shrink-0 text-[10px] leading-snug text-slate-400"
                title="{{ nombre_deposito_origen }} → {{ nombre_deposito_destino }}">
-                Máx. armable = límite por semielaborados (BOM). Completá solo las filas a armar; el resto puede quedar vacío.
-                {% if modo == '2da' %}<strong>Componer</strong> abre el carrito con composición libre.{% endif %}
+                {% if modo == '1ra' %}
+                Máx. armable = límite por semielaborados (BOM). Completá solo las filas a armar; el resto puede quedar vacío. La fecha del chrome se usa al ejecutar el armado.
+                {% else %}
+                Listado de demanda Armado 2da. La ejecución masiva / composición libre en tablero está pendiente; la vista carrito (`vista=pos`) quedó deprecada.
+                {% endif %}
             </p>
         </div>
 
@@ -169,7 +180,7 @@
             <input type="hidden" name="vista" value="tablero">
             <input type="hidden" name="modo" value="1ra">
             <input type="hidden" name="accion" value="aprobar">
-            <input type="hidden" name="fecha_realizado" value="{% now 'd/m/Y' %}">
+            <input type="hidden" name="fecha_realizado" id="fecha-realizado-post" value="{{ fecha_realizado_default }}">
             <input type="hidden" name="deposito_origen" value="{{ deposito_origen_default }}">
             <input type="hidden" name="deposito_destino" value="{{ deposito_destino_default }}">
             {% if id_lista %}<input type="hidden" name="id_lista" value="{{ id_lista }}">{% endif %}
@@ -235,12 +246,25 @@
 {{ block.super }}
 <script>
 window.armadoTableroState = function () {
+    function ddmmyyyyToIso(s) {
+        var m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (!m) return '';
+        var d = ('0' + m[1]).slice(-2);
+        var mo = ('0' + m[2]).slice(-2);
+        return m[3] + '-' + mo + '-' + d;
+    }
+    function isoToDdmmyyyy(iso) {
+        var p = String(iso || '').split('-');
+        if (p.length !== 3) return '';
+        return p[2] + '/' + p[1] + '/' + p[0];
+    }
     return {
         armadoModalOpen: false,
         armadoCount: 0,
         armadoTotalPacks: 0,
         armadoEmpty: false,
         busqueda: '',
+        fechaIso: ddmmyyyyToIso('{{ fecha_realizado_default|default:""|escapejs }}') || (new Date()).toISOString().slice(0, 10),
         modalResultado: {
             open: false,
             exitosos: [],
@@ -259,6 +283,10 @@ window.armadoTableroState = function () {
                 this.modalResultado.exitosos.length || this.modalResultado.fallidos.length
             );
         },
+        syncFechaPost: function () {
+            var el = document.getElementById('fecha-realizado-post');
+            if (el) el.value = isoToDdmmyyyy(this.fechaIso);
+        },
         abrirModalArmado: function () {
             var lineas = 0;
             var packs = 0;
@@ -276,6 +304,7 @@ window.armadoTableroState = function () {
         },
         ejecutarArmadoConfirmado: function () {
             this.armadoModalOpen = false;
+            this.syncFechaPost();
             window.confirmarArmadoTablero();
         }
     };
