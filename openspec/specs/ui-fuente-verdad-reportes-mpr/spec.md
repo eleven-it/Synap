@@ -28,14 +28,15 @@ The organization MUST tratar como **referencia canónica de UX/UI** (layout, jer
 
 - **GIVEN** un desarrollador o agente debe alinear una pantalla de producción con el resto del módulo MPR
 - **WHEN** elige componentes o clases Tailwind de referencia
-- **THEN** MUST basarse en `mpr/wizard.html`, `mpr/opt_list.html`, `mpr/opt_detail.html`, **`mpr/armado_surtido.html`** (POS armado unificado 1ra/2da), **`mpr/imputacion_armado_1ra.html`** y `mpr/base_mpr.html`
+- **THEN** MUST basarse en `mpr/wizard.html`, `mpr/opt_list.html`, `mpr/opt_detail.html`, **`mpr/armado_tablero.html`** (Armado unificado 1ra/2da en grilla), **`mpr/imputacion_armado_1ra.html`** y `mpr/base_mpr.html`
+- **AND** MUST NOT usar `mpr/armado_surtido.html` (POS deprecado) como patrón canónico
 
-#### Scenario: Canon para pantalla de armado POS
+#### Scenario: Canon para pantalla de armado
 
-- **GIVEN** un desarrollador implementa o migra flujo de armado con carrito
+- **GIVEN** un desarrollador implementa o migra flujo de armado
 - **WHEN** busca referencia visual en MPR
-- **THEN** MUST usar `/mpr/armado/` y includes asociados (`armado_surtido.html`)
-- **AND** MUST NOT usar `mpr/armado_opt.html` ni CTAs de armado en `opt_detail.html` como patrón canónico
+- **THEN** MUST usar `/mpr/armado/?vista=tablero` y la plantilla `armado_tablero.html`
+- **AND** MUST NOT usar `mpr/armado_opt.html`, CTAs de armado en `opt_detail.html` ni `armado_surtido.html` (POS) como patrón canónico
 
 ### Requirement: Exclusión explícita de Ventas (objetivos y presupuestos) como referencia UI
 

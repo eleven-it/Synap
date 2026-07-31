@@ -17,7 +17,7 @@ El operario de armado abre una **grilla densa** (como Tablero de producción / P
 2. **¿Cuánto puedo armar hoy?** → **Máx. armable** (1ra: cuello de botella BOM en Semi).
 3. **¿Cuánto armo ahora?** → input **Armar** por fila + acción masiva **Ejecutar armado**.
 
-La pantalla sustituye el flujo POS+carrito como **vista principal** (`vista=tablero`, default). El POS se conserva en `?vista=pos` para Armado 2da con composición libre.
+La pantalla es la **única vista operativa** de armado: grilla densa (`?modo=1ra&vista=tablero` o `?modo=2da&vista=tablero`). La vista POS/carrito (`?vista=pos`) quedó **deprecada de forma permanente**: cualquier acceso redirige a tablero y no hay enlaces de menú ni de pantalla hacia ella.
 
 ---
 
@@ -55,18 +55,18 @@ La pantalla sustituye el flujo POS+carrito como **vista principal** (`vista=tabl
 
 | # | Decisión |
 |---|----------|
-| 1 | **Vista principal:** grilla tabla en `/mpr/armado/?vista=tablero` (default). |
-| 2 | **POS legacy:** `?vista=pos` — carrito actual; obligatorio para **2da composición libre**. |
+| 1 | **Vista única:** grilla tabla en `/mpr/armado/?vista=tablero` (canónica; default). |
+| 2 | **POS deprecado (28/07/2026):** `?vista=pos` redirige a `vista=tablero`. No hay enlaces ni menús a carrito. Plantilla `armado_surtido.html` queda legacy sin servir en GET. |
 | 3 | **Modo 1ra / 2da:** toggle existente (verde / ámbar); misma URL, distinto origen y elegibilidad. |
-| 4 | **Fase 1 ejecución masiva:** solo **Armado 1ra** desde tabla (BOM fija). |
-| 5 | **Fase 1 Armado 2da en tabla:** listado demanda + enlace «Componer» → `?vista=pos&id_articulo=` (sin input masivo). |
+| 4 | **Ejecución masiva:** **Armado 1ra** desde tabla (BOM fija) + **Fecha realizado** en chrome. |
+| 5 | **Armado 2da en tabla:** listado demanda; composición libre / ejecución masiva en tablero pendiente (sin escape a POS). |
 | 6 | **Unidad:** pares enteros; docenas = pares ÷ 12 redondeado (mismo toggle que tablero). |
 | 7 | **Filtro default:** «Solo con resta» (`resta_armar > 0`), análogo a «Solo urgentes» del tablero. |
 | 8 | **Input Armar sin precarga:** vacío al abrir; el analista completa solo las filas necesarias. Deshabilitado si `max_armable = 0`. Negativos no permitidos (UI + backend). |
 | 9 | **Sin operario** en cabecera (paridad decisión previa armado unificado). |
 | 10 | **Shell visual:** `slate-800` hero + acento **emerald** (1ra) / **amber** (2da), no `gray-*` legacy. |
 | 11 | **Columnas visibles (29/07/2026):** Artículo, Terminado, Máx. armable, Armar. Ocultas: fecha entrega, Pedido, Reserva, Resta urgente, Resta armar. |
-| 12 | **Chrome (30/07/2026):** botón **Actualizar** (naranja Synap `bg-orange-500`) recarga la grilla con los filtros actuales. El atajo **Carrito** del chrome queda **deprecado**; Armado 2da sigue abriendo POS vía **Componer**. |
+| 12 | **Chrome (30/07/2026):** botón **Actualizar** (naranja Synap `bg-orange-500`) recarga la grilla. Atajos Carrito/Componer **eliminados**. **Fecha realizado** (`type=date`) en chrome tablero (28/07/2026). |
 | 13 | **Máx. armable (30/07/2026):** el mínimo BOM debe conservar componente con stock 0 (no usar `0` como centinela). Caso: pack 907953-01 / IDArt 637 — componente 984 en Semi = 0 → máx. armable 0. |
 | 14 | **Resultado post-armado:** éxito/error solo en **modal Synap** (detalle grabados + fallos); sin toast Django duplicado. Payload vía `json_script` para no romper Alpine/HTML. |
 | 13 | **Resultado de ejecución (30/07/2026):** éxito, parcial y error se informan únicamente en el modal Synap de resultado; no se duplican como toast. El JSON de resultado se entrega mediante `json_script`, no dentro de un atributo HTML. |
@@ -87,7 +87,7 @@ La pantalla sustituye el flujo POS+carrito como **vista principal** (`vista=tabl
 | Artículo | Identidad + marca | ✓ | ✓ |
 | Stock terminado | PT actual (saldo real; negativos visibles en rosa, sin clamp a 0) | ✓ | ✓ |
 | Máx. armable | Tope físico origen | BOM × Semi | — (fase 2) |
-| Armar | Input packs (sin precarga) | entero ≥ 0 | enlace POS |
+| Armar | Input packs (sin precarga) | entero ≥ 0 | — (pendiente) |
 
 Columnas de demanda (Pedido, Reserva, Resta urgente/armar, 1er fecha entrega) se calculan en backend para filtrar elegibilidad pero **no** se muestran en la grilla operativa.
 
@@ -137,7 +137,7 @@ flowchart LR
 |-------|------|
 | Servicio listado | `mpr/services.py` → `listar_tablero_armado` |
 | Presentación | `mpr/presentacion_operativa.py` → `enriquecer_filas_tablero_armado` |
-| Vista | `mpr/views.py` → `ArmadoSurtidoView` + `vista=tablero\|pos` |
+| Vista | `mpr/views.py` → `ArmadoSurtidoView` (solo `vista=tablero`; `vista=pos` → redirect) |
 | Template | `mpr/templates/mpr/armado_tablero.html` |
-| Chrome UI | Misma barra densa `slate-800` que Tablero/Parte/CC ([TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) §3.1); vista carrito (`armado_surtido.html`) conserva layout POS propio |
+| Chrome UI | Misma barra densa `slate-800` que Tablero/Parte/CC ([TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md) §3.1); `armado_surtido.html` legacy sin servir en GET |
 | Ejecución | `ejecutar_lote_armado` (sin cambios de contrato) |

@@ -41,7 +41,7 @@ Documento normativo para **equipo humano y agentes**: define qué superficies de
 - **Layout obligatorio del módulo:** `mpr/templates/mpr/base_mpr.html` (extiende `base_app.html`).
 - **Plantillas de referencia:**
   - `mpr/templates/mpr/wizard.html` — asistente por pasos, hero oscuro, barra de progreso con ARIA.
-  - `mpr/templates/mpr/armado_surtido.html` — POS armado unificado (toggle 1ra/2da, carrito lote).
+  - `mpr/templates/mpr/armado_tablero.html` — Armado unificado 1ra/2da en grilla tabla (`?vista=tablero`). La plantilla POS `armado_surtido.html` quedó deprecada (no se sirve en GET).
   - `mpr/templates/mpr/imputacion_armado_1ra.html` — cola MSTOCK e imputación supervisor.
   - `mpr/templates/mpr/opt_list.html` — listado con filtros, búsqueda con Alpine, tabla responsive.
   - `mpr/templates/mpr/opt_detail.html` — detalle con hero, estado, pasos y tablas.

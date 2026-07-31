@@ -10,14 +10,19 @@ Documentación operativa del flujo de **Armado 1ra/2da** con fecha de realizado,
 | `aprobado` | Lote ejecutado con MSTOCK | Sí (`movimiento_fisico_ok=1`) |
 | `anulado` | Reversión física completada | No |
 
-## Flujo en pantalla POS (`/mpr/armado/`)
+## Flujo en pantalla tablero (`/mpr/armado/?vista=tablero`)
 
-1. **Cabecera:** origen, destino, operario, detalle, **fecha realizado** (dd/MM/yyyy, default hoy).
-2. **Carrito:** packs + composición (BOM 1ra o libre 2da).
-3. **Guardar borrador:** persiste lote + ítems en `mpr_armado_lote_item` / `_linea` sin llamar a stock.
-4. **Guardar armado:** ejecuta MSTOCK por ítem (commit parcial), marca lote `aprobado`.
-5. **Reutilizar borrador:** si POST trae `id_mpr_armado_lote` de un borrador, se actualiza el mismo lote.
-6. **Anular lote** (solo aprobado): modal Synap → POST `accion=anular` → reversión MSTOCK espejo por movimiento.
+La vista POS/carrito (`?vista=pos`, plantilla `armado_surtido.html`) quedó **deprecada**: GET redirige a tablero.
+
+### Armado 1ra (operativo)
+
+1. **Chrome:** toggle 1ra/2da, búsqueda, **fecha realizado**, Actualizar, **Ejecutar armado**.
+2. **Grilla:** cantidades en columna Armar (BOM fija) → POST `vista=tablero` con `fecha_realizado` (dd/MM/yyyy).
+3. **Resultado:** modal Synap (grabados / fallidos).
+
+### Borrador / anulación / carrito (legacy backend)
+
+El POST con `lote_json` + `accion=borrador|aprobar|anular` sigue disponible en backend (tests / transición 2da). No hay UI POS para armarlo: Armado 2da en tablero aún no tiene composición libre.
 
 ## Fecha de realizado
 
@@ -55,10 +60,10 @@ No se puede **anular** ni **corregir** si algún movimiento del lote tiene `esta
 ## Prueba manual
 
 1. Aplicar esquema MySQL si falta (`manage.py` herramienta global o catalog).
-2. Ir a `/mpr/armado/?modo=2da`, armar carrito, **Guardar borrador** → verificar fila en `mpr_armado_lote` estado=borrador sin filas en `mpr_armado_surtido_movimiento`.
-3. Recargar con `?id_lote=<id>` → carrito precargado.
-4. **Guardar armado** con fecha ayer → MSTOCK con esa fecha.
-5. Lote aprobado → **Anular lote** (sin imputación previa).
-6. Armado 1ra: catálogo packs solo muestra artículos `tipo_art_fab=Terminado`.
+2. Ir a `/mpr/armado/?modo=1ra&vista=tablero`, completar Armar + fecha, **Ejecutar armado** → verificar MSTOCK con esa fecha.
+3. (Backend) POST `lote_json` con `accion=borrador` → fila en `mpr_armado_lote` estado=borrador sin filas en `mpr_armado_surtido_movimiento`.
+4. Lote aprobado → anulación/corrección según candados de imputación.
+5. Armado 1ra: catálogo packs solo muestra artículos `tipo_art_fab=Terminado`.
+6. GET `?vista=pos` → redirect 302 a `vista=tablero`.
 
 Ver también: `docs/mpr/GLOSARIO_MPR.md`, `docs/mpr/DISENO_ARMADO_TABLERO_PCP.md`.

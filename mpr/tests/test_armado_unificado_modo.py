@@ -62,6 +62,17 @@ class ArmadoRedirectTest(SimpleTestCase):
         response = ArmadoSurtidoView.as_view()(request)
         self.assertEqual(response.status_code, 302)
         self.assertIn("modo=1ra", response.url)
+        self.assertIn("vista=tablero", response.url)
+
+    def test_vista_pos_redirige_a_tablero(self):
+        request = self.factory.get("/mpr/armado/?vista=pos&modo=1ra")
+        request.session = {"user": {"id_usuario": 1, "base_empresa": "emp"}}
+        request.user = MagicMock(is_authenticated=True)
+        response = ArmadoSurtidoView.as_view()(request)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("vista=tablero", response.url)
+        self.assertIn("modo=1ra", response.url)
+        self.assertNotIn("vista=pos", response.url)
 
 
 class ArmadoSurtidoViewModoTest(SimpleTestCase):
