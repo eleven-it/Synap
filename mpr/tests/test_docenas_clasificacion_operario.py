@@ -34,6 +34,7 @@ class PresentacionOperativaTests(SimpleTestCase):
                 "dem_ped": 120,
                 "dem_res": 24,
                 "resta_urgente": 120,
+                "resta_urgente_ped": 96,
                 "resta_total": 144,
                 "pendiente": 144,
                 "enviado": 0,
@@ -45,6 +46,8 @@ class PresentacionOperativaTests(SimpleTestCase):
         self.assertEqual(fila["reserva_pares"], 24)
         self.assertEqual(fila["resta_urgente_pares"], 120)
         self.assertEqual(fila["resta_urgente_docenas_pcp"], 10)
+        self.assertEqual(fila["resta_urgente_ped_pares"], 96)
+        self.assertEqual(fila["resta_urgente_ped_docenas_pcp"], 8)
         self.assertEqual(fila["resta_total_pares"], 144)
         self.assertEqual(fila["resta_total_docenas_pcp"], 12)
         self.assertEqual(fila["enviado_display"], "0")
