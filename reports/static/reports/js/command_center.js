@@ -392,6 +392,8 @@
   }
 
   const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+  /** Persistencia local de filtros (mismo navegador / perfil). */
+  const FILTERS_STORAGE_KEY = "synap_cc_filters_v1";
 
   function readFilters() {
     const t = todayIso();
@@ -399,6 +401,66 @@
     const ff = el("cc-fecha-fin")?.value || t;
     const suc = el("cc-sucursal")?.value || "";
     return { fecha_inicio: fi, fecha_fin: ff, sucursal: suc };
+  }
+
+  function loadPersistedFilters() {
+    try {
+      const raw = window.localStorage.getItem(FILTERS_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+      const fi = String(parsed.fecha_inicio || "").trim();
+      const ff = String(parsed.fecha_fin || "").trim();
+      const suc = String(parsed.sucursal || "").trim();
+      if (fi && !ISO_DATE.test(fi)) return null;
+      if (ff && !ISO_DATE.test(ff)) return null;
+      return {
+        fecha_inicio: fi || "",
+        fecha_fin: ff || "",
+        sucursal: suc,
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function persistFilters(filters) {
+    const f = filters || readFilters();
+    try {
+      window.localStorage.setItem(
+        FILTERS_STORAGE_KEY,
+        JSON.stringify({
+          fecha_inicio: f.fecha_inicio || "",
+          fecha_fin: f.fecha_fin || "",
+          sucursal: f.sucursal || "",
+        }),
+      );
+    } catch (e) {
+      /* private mode / cuota */
+    }
+  }
+
+  /** Sincroniza querystring sin recargar (útil al F5 y enlaces compartidos). */
+  function syncFiltersToUrl(filters) {
+    const f = filters || readFilters();
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("fecha_inicio", f.fecha_inicio);
+      url.searchParams.set("fecha_fin", f.fecha_fin);
+      if (f.sucursal) url.searchParams.set("sucursal", f.sucursal);
+      else url.searchParams.delete("sucursal");
+      url.searchParams.delete("fecha");
+      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function rememberFilters() {
+    const f = readFilters();
+    persistFilters(f);
+    syncFiltersToUrl(f);
+    return f;
   }
 
   function isSingleDayPeriod(f) {
@@ -435,7 +497,7 @@
     try {
       params = new URLSearchParams(window.location.search);
     } catch (e) {
-      return;
+      return false;
     }
     let fi = (params.get("fecha_inicio") || "").trim();
     let ff = (params.get("fecha_fin") || "").trim();
@@ -443,14 +505,36 @@
     if ((!fi || !ff) && legacy && ISO_DATE.test(legacy)) {
       fi = ff = legacy;
     }
-    if (!ISO_DATE.test(fi) || !ISO_DATE.test(ff)) return;
+    if (!ISO_DATE.test(fi) || !ISO_DATE.test(ff)) return false;
     const fiEl = el("cc-fecha-inicio");
     const ffEl = el("cc-fecha-fin");
     if (fiEl) fiEl.value = fi;
     if (ffEl) ffEl.value = ff;
     const suc = (params.get("sucursal") || "").trim();
     const sucEl = el("cc-sucursal");
-    if (suc && sucEl) sucEl.value = suc;
+    if (suc && sucEl) sucEl.dataset.pendingValue = suc;
+    return true;
+  }
+
+  function applyPeriodFromStorage() {
+    const saved = loadPersistedFilters();
+    if (!saved) return false;
+    const fiEl = el("cc-fecha-inicio");
+    const ffEl = el("cc-fecha-fin");
+    let applied = false;
+    if (fiEl && saved.fecha_inicio && ISO_DATE.test(saved.fecha_inicio)) {
+      fiEl.value = saved.fecha_inicio;
+      applied = true;
+    }
+    if (ffEl && saved.fecha_fin && ISO_DATE.test(saved.fecha_fin)) {
+      ffEl.value = saved.fecha_fin;
+      applied = true;
+    }
+    if (saved.sucursal) {
+      const sucEl = el("cc-sucursal");
+      if (sucEl) sucEl.dataset.pendingValue = saved.sucursal;
+    }
+    return applied;
   }
 
   let waitModalLocks = 0;
@@ -557,7 +641,11 @@
   function fillSucursales(list, selected) {
     const sel = el("cc-sucursal");
     if (!sel) return;
-    const cur = selected != null && selected !== "" ? String(selected) : sel.value;
+    const pending = (sel.dataset.pendingValue || "").trim();
+    const cur =
+      selected != null && selected !== ""
+        ? String(selected)
+        : pending || sel.value;
     sel.innerHTML = '<option value="">Todas</option>';
     (list || []).forEach((s) => {
       const opt = document.createElement("option");
@@ -565,7 +653,14 @@
       opt.textContent = s.nombre_sucursal || `Sucursal ${s.id_sucursal}`;
       sel.appendChild(opt);
     });
-    if (cur) sel.value = cur;
+    if (cur) {
+      sel.value = cur;
+      if (sel.value !== cur) {
+        // Sucursal guardada no está en el catálogo actual: mantener "Todas"
+        sel.value = "";
+      }
+    }
+    if (sel.dataset.pendingValue) delete sel.dataset.pendingValue;
   }
 
   function kpiCard(label, value, theme) {
@@ -1067,7 +1162,7 @@
     try {
       const q = buildQuery();
       const data = await fetchJson(`${cfg.dashboardUrl}?${q}`);
-      fillSucursales(data.sucursales_disponibles, data.meta?.cod_sucursal_filtro);
+      fillSucursales(data.sucursales_disponibles, readFilters().sucursal);
       updatePeriodoLabel(false);
       areasCache = data.areas || {};
       let ventasDia = null;
@@ -1092,6 +1187,8 @@
     const areaUrls = cfg.areaUrls || {};
     const hasParallel = Object.keys(areaUrls).length > 0;
     if (!hasParallel && !cfg.dashboardUrl) return;
+
+    rememberFilters();
 
     if (!hasParallel) {
       await loadDashboardMonolith();
@@ -1259,18 +1356,40 @@
   }
 
   function initDates() {
-    applyPeriodFromUrl();
+    const fromUrl = applyPeriodFromUrl();
+    const saved = loadPersistedFilters();
+    if (!fromUrl && saved) {
+      applyPeriodFromStorage();
+    } else if (saved?.sucursal) {
+      // URL trae período pero no sucursal: completar desde localStorage
+      const sucEl = el("cc-sucursal");
+      if (sucEl && !sucEl.dataset.pendingValue) {
+        sucEl.dataset.pendingValue = saved.sucursal;
+      }
+    }
     const t = todayIso();
     const fi = el("cc-fecha-inicio");
     const ff = el("cc-fecha-fin");
+    const suc = el("cc-sucursal");
     if (fi && !fi.value) fi.value = t;
     if (ff && !ff.value) ff.value = t;
-    const onPeriodChange = () => {
+    // Restaurar sucursal si ya hay opciones (p. ej. SSR); si no, queda en pendingValue
+    if (suc && suc.dataset.pendingValue) {
+      const pending = suc.dataset.pendingValue;
+      if ([...suc.options].some((o) => o.value === pending)) {
+        suc.value = pending;
+        delete suc.dataset.pendingValue;
+      }
+    }
+    const onFilterChange = () => {
+      rememberFilters();
       syncReportLinks();
       updatePeriodoLabel(false);
     };
-    fi?.addEventListener("change", onPeriodChange);
-    ff?.addEventListener("change", onPeriodChange);
+    fi?.addEventListener("change", onFilterChange);
+    ff?.addEventListener("change", onFilterChange);
+    suc?.addEventListener("change", onFilterChange);
+    rememberFilters();
     syncReportLinks();
   }
 

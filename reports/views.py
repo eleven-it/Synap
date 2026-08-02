@@ -162,6 +162,14 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
         else:
             filters &= Q(empresa__isnull=True)
         report = ReportDefinition.objects.filter(filters).first()
+        if not report and slug == "ventas-marcas-mensual":
+            # Staging/local sin migrate 0033: seed runtime (enlace desde Command Center).
+            from reports.services.ventas_marcas_mensual_seed import (
+                ensure_ventas_marcas_mensual_report,
+            )
+
+            ensure_ventas_marcas_mensual_report()
+            report = ReportDefinition.objects.filter(filters).first()
         if not report:
             raise Http404("Report not found")
         if report.slug == self.DABRA_CONSOLIDADO_REMITOS_SLUG:
