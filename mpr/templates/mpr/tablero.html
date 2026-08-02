@@ -93,13 +93,59 @@
         </div>
 
         <div class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+            <div class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:h-full">
+                <div class="flex flex-shrink-0 items-center justify-between gap-3 border-b border-violet-200/80 bg-violet-50/90 px-4 py-2.5 dark:border-violet-800/50 dark:bg-violet-950/40 sm:px-5 sm:py-3">
+                    <h2 class="text-sm font-bold text-violet-950 dark:text-violet-100 sm:text-base">Packs pendientes <span class="font-medium text-violet-700/70 dark:text-violet-300/70">({{ unidad_cantidad_label }})</span></h2>
+                    <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="text-sm font-semibold text-purple-600 underline-offset-4 hover:underline dark:text-purple-400">Ver tablero</a>
+                </div>
+                <p class="flex-shrink-0 border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden">Deslizá horizontalmente para ver todas las columnas</p>
+                <div class="min-h-0 flex-1 overflow-x-auto overflow-y-auto" role="region" aria-label="Packs con demanda pendiente">
+                    <table class="min-w-[28rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
+                        <caption class="sr-only">Packs terminados con brecha de demanda</caption>
+                        <thead class="sticky top-0 z-10 bg-violet-50/95 dark:bg-violet-950/50">
+                            <tr>
+                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:px-5">Artículo</th>
+                                <th scope="col" class="w-28 px-4 py-2.5 text-right text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:w-32 sm:px-5">Stock terminado</th>
+                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:w-28 sm:px-5">Resta</th>
+                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:w-28 sm:px-5">Pedido</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for item in top_packs_pendientes %}
+                            <tr class="cursor-pointer transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40"
+                                data-href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}"
+                                onclick="if(this.dataset.href) location.href=this.dataset.href">
+                                <td class="max-w-[12rem] px-4 py-2.5 text-sm text-gray-900 dark:text-white sm:max-w-none sm:px-5">{{ item.descripcion }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums text-gray-600 dark:text-gray-300 sm:px-5">{{ item.stock_terminado_display }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-rose-700 dark:text-rose-300 sm:px-5">{{ item.resta_urgente_display }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-orange-700 dark:text-orange-300 sm:px-5">{{ item.resta_urgente_ped_display }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">Sin packs pendientes</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if top_packs_pendientes %}
+                <div class="flex flex-shrink-0 items-center gap-2 border-t-2 border-gray-300 bg-orange-50/95 px-4 py-2.5 dark:border-gray-600 dark:bg-orange-950/40 sm:gap-3 sm:px-5"
+                     role="status"
+                     aria-label="Totales de packs pendientes">
+                    <p class="min-w-0 flex-1 text-xs font-semibold text-gray-800 dark:text-white">Total ({{ top_packs_pendientes|length }})</p>
+                    <p class="w-28 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800 dark:text-gray-200 sm:w-32">{{ totales_packs_stock_display }}</p>
+                    <p class="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-rose-800 dark:text-rose-200 sm:w-28">{{ totales_packs_resta_display }}</p>
+                    <p class="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-orange-800 dark:text-orange-200 sm:w-28">{{ totales_packs_ped_display }}</p>
+                </div>
+                {% endif %}
+            </div>
             <div x-data="{ queryComp: '' }" class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:h-full">
                 <div class="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-violet-200/80 bg-violet-50/90 px-4 py-2.5 dark:border-violet-800/50 dark:bg-violet-950/40 sm:px-5 sm:py-3">
                     <div class="flex min-w-0 flex-wrap items-center gap-2">
                         <span class="material-icons shrink-0 text-xl text-emerald-500 dark:text-emerald-400" aria-hidden="true">precision_manufacturing</span>
                         <h2 class="min-w-0 text-sm font-bold text-violet-950 dark:text-violet-100 sm:text-base">Componentes con pendiente</h2>
                         <span class="shrink-0 rounded-md bg-rose-100 px-1.5 py-0.5 text-[11px] font-medium text-rose-800 dark:bg-rose-900/40 dark:text-rose-200 sm:text-xs">Resta</span>
-                        <span class="shrink-0 rounded-md bg-orange-100 px-1.5 py-0.5 text-[11px] font-medium text-orange-800 dark:bg-orange-900/40 dark:text-orange-200 sm:text-xs">PED resta</span>
+                        <span class="shrink-0 rounded-md bg-orange-100 px-1.5 py-0.5 text-[11px] font-medium text-orange-800 dark:bg-orange-900/40 dark:text-orange-200 sm:text-xs">Pedido</span>
                     </div>
                     <div class="flex w-full min-w-0 items-center sm:w-auto sm:max-w-[16rem] sm:flex-1 sm:justify-end">
                         <label for="tablero-comp-busqueda" class="sr-only">Buscar componente</label>
@@ -117,14 +163,14 @@
                 <div class="min-h-0 flex-1 overflow-x-auto overflow-y-auto"
                      x-ref="tableroCompRows"
                      role="region"
-                     aria-label="Componentes con Resta y PED resta a fabricar">
+                     aria-label="Componentes con Resta y Pedido a fabricar">
                     <table class="min-w-full w-full divide-y divide-gray-200 dark:divide-gray-700">
-                        <caption class="sr-only">Componentes con Resta y PED resta urgentes</caption>
+                        <caption class="sr-only">Componentes con Resta y Pedido urgentes</caption>
                         <thead class="sticky top-0 z-10 bg-violet-50/95 dark:bg-violet-950/50">
                             <tr>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:px-5">Artículo</th>
                                 <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:w-28 sm:px-5">Resta</th>
-                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:w-28 sm:px-5">PED resta</th>
+                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:w-28 sm:px-5">Pedido</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -166,52 +212,6 @@
                 {% endif %}
             </div>
 
-            <div class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:h-full">
-                <div class="flex flex-shrink-0 items-center justify-between gap-3 border-b border-violet-200/80 bg-violet-50/90 px-4 py-2.5 dark:border-violet-800/50 dark:bg-violet-950/40 sm:px-5 sm:py-3">
-                    <h2 class="text-sm font-bold text-violet-950 dark:text-violet-100 sm:text-base">Packs pendientes <span class="font-medium text-violet-700/70 dark:text-violet-300/70">({{ unidad_cantidad_label }})</span></h2>
-                    <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="text-sm font-semibold text-purple-600 underline-offset-4 hover:underline dark:text-purple-400">Ver tablero</a>
-                </div>
-                <p class="flex-shrink-0 border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden">Deslizá horizontalmente para ver todas las columnas</p>
-                <div class="min-h-0 flex-1 overflow-x-auto overflow-y-auto" role="region" aria-label="Packs con demanda pendiente">
-                    <table class="min-w-[28rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
-                        <caption class="sr-only">Packs terminados con brecha de demanda</caption>
-                        <thead class="sticky top-0 z-10 bg-violet-50/95 dark:bg-violet-950/50">
-                            <tr>
-                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:px-5">Artículo</th>
-                                <th scope="col" class="w-28 px-4 py-2.5 text-right text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:w-32 sm:px-5">Stock terminado</th>
-                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:w-28 sm:px-5">Resta</th>
-                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-violet-800/90 dark:text-violet-200/90 sm:w-28 sm:px-5">PED resta</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                            {% for item in top_packs_pendientes %}
-                            <tr class="cursor-pointer transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40"
-                                data-href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}"
-                                onclick="if(this.dataset.href) location.href=this.dataset.href">
-                                <td class="max-w-[12rem] px-4 py-2.5 text-sm text-gray-900 dark:text-white sm:max-w-none sm:px-5">{{ item.descripcion }}</td>
-                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums text-gray-600 dark:text-gray-300 sm:px-5">{{ item.stock_terminado_display }}</td>
-                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-rose-700 dark:text-rose-300 sm:px-5">{{ item.resta_urgente_display }}</td>
-                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-orange-700 dark:text-orange-300 sm:px-5">{{ item.resta_urgente_ped_display }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">Sin packs pendientes</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% if top_packs_pendientes %}
-                <div class="flex flex-shrink-0 items-center gap-2 border-t-2 border-gray-300 bg-orange-50/95 px-4 py-2.5 dark:border-gray-600 dark:bg-orange-950/40 sm:gap-3 sm:px-5"
-                     role="status"
-                     aria-label="Totales de packs pendientes">
-                    <p class="min-w-0 flex-1 text-xs font-semibold text-gray-800 dark:text-white">Total ({{ top_packs_pendientes|length }})</p>
-                    <p class="w-28 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800 dark:text-gray-200 sm:w-32">{{ totales_packs_stock_display }}</p>
-                    <p class="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-rose-800 dark:text-rose-200 sm:w-28">{{ totales_packs_resta_display }}</p>
-                    <p class="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-orange-800 dark:text-orange-200 sm:w-28">{{ totales_packs_ped_display }}</p>
-                </div>
-                {% endif %}
-            </div>
         </div>
     </div>
 </section>

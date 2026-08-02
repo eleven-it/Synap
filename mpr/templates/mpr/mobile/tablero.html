@@ -50,7 +50,53 @@
         </div>
     </div>
 
+    {# Packs primero: prioridad visual para demanda de terminados #}
     <div class="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/80 bg-violet-50/90 px-4 py-3 dark:border-violet-800/50 dark:bg-violet-950/40">
+            <h2 class="text-sm font-bold text-violet-950 dark:text-violet-100">Packs pendientes</h2>
+            <span class="text-xs text-violet-700/80 dark:text-violet-300/80">{{ unidad_cantidad_label }}</span>
+        </div>
+        <div class="border-b border-gray-100 px-4 py-2 dark:border-gray-700">
+            <div class="relative">
+                <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-gray-400" aria-hidden="true">search</span>
+                <input type="search" x-model="queryPack" autocomplete="off" placeholder="Buscar pack…"
+                       aria-label="Buscar pack"
+                       class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+            </div>
+        </div>
+        <div class="grid grid-cols-[minmax(0,1fr)_2.75rem_3.5rem_3.5rem] gap-x-2 border-b border-violet-100 bg-violet-50/50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800/80 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-200/80"
+             role="row">
+            <span>Artículo</span>
+            <span class="text-right">St.</span>
+            <span class="text-right">Resta</span>
+            <span class="text-right">Pedido</span>
+        </div>
+        <ul class="max-h-56 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-700" role="list">
+            {% for item in top_packs_pendientes %}
+            <li class="grid grid-cols-[minmax(0,1fr)_2.75rem_3.5rem_3.5rem] items-start gap-x-2 px-3 py-2.5"
+                data-search-text="{{ item.descripcion|lower }}"
+                x-show="!queryPack || $el.dataset.searchText.includes(queryPack.toLowerCase().trim())"
+                role="row">
+                <p class="line-clamp-2 min-w-0 text-sm text-gray-900 dark:text-white">{{ item.descripcion }}</p>
+                <span class="pt-0.5 text-right text-xs tabular-nums text-gray-600 dark:text-gray-300">{{ item.stock_terminado_display }}</span>
+                <span class="pt-0.5 text-right text-xs font-semibold tabular-nums text-rose-700 dark:text-rose-300">{{ item.resta_urgente_display }}</span>
+                <span class="pt-0.5 text-right text-xs font-semibold tabular-nums text-orange-700 dark:text-orange-300">{{ item.resta_urgente_ped_display }}</span>
+            </li>
+            {% empty %}
+            <li class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">Sin packs pendientes</li>
+            {% endfor %}
+        </ul>
+        {% if top_packs_pendientes %}
+        <div class="grid grid-cols-[minmax(0,1fr)_2.75rem_3.5rem_3.5rem] items-center gap-x-2 border-t border-gray-200 bg-orange-50/80 px-3 py-2 text-[10px] font-semibold tabular-nums dark:border-gray-700 dark:bg-orange-950/30">
+            <span class="text-gray-800 dark:text-gray-200">Total ({{ top_packs_pendientes|length }})</span>
+            <span class="text-right text-gray-700 dark:text-gray-300">{{ totales_packs_stock_display }}</span>
+            <span class="text-right text-rose-800 dark:text-rose-300">{{ totales_packs_resta_display }}</span>
+            <span class="text-right text-orange-800 dark:text-orange-300">{{ totales_packs_ped_display }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/80 bg-violet-50/90 px-4 py-3 dark:border-violet-800/50 dark:bg-violet-950/40">
             <div class="flex min-w-0 items-center gap-2">
                 <span class="material-icons text-lg text-emerald-500" aria-hidden="true">precision_manufacturing</span>
@@ -66,67 +112,31 @@
                        class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
             </div>
         </div>
+        <div class="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem] gap-x-2 border-b border-violet-100 bg-violet-50/50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-violet-800/80 dark:border-violet-900/40 dark:bg-violet-950/30 dark:text-violet-200/80"
+             role="row">
+            <span>Artículo</span>
+            <span class="text-right">Resta</span>
+            <span class="text-right">Pedido</span>
+        </div>
         <ul class="max-h-64 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-700" role="list">
             {% for comp in componentes_pendientes %}
-            <li class="px-4 py-2.5"
+            <li class="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem] items-start gap-x-2 px-3 py-2.5"
                 data-search-text="{{ comp.codigo|lower }} {{ comp.descripcion|lower }}"
-                x-show="!queryComp || $el.dataset.searchText.includes(queryComp.toLowerCase().trim())">
-                <p class="line-clamp-2 text-sm font-medium text-gray-900 dark:text-white">{{ comp.descripcion }}</p>
-                <div class="mt-1 flex justify-end gap-4 text-xs tabular-nums">
-                    <span class="font-semibold text-rose-700 dark:text-rose-300">Resta {{ comp.resta_urgente_display }}</span>
-                    <span class="font-semibold text-orange-700 dark:text-orange-300">PED {{ comp.resta_urgente_ped_display }}</span>
-                </div>
+                x-show="!queryComp || $el.dataset.searchText.includes(queryComp.toLowerCase().trim())"
+                role="row">
+                <p class="line-clamp-2 min-w-0 text-sm font-medium text-gray-900 dark:text-white">{{ comp.descripcion }}</p>
+                <span class="pt-0.5 text-right text-xs font-semibold tabular-nums text-rose-700 dark:text-rose-300">{{ comp.resta_urgente_display }}</span>
+                <span class="pt-0.5 text-right text-xs font-semibold tabular-nums text-orange-700 dark:text-orange-300">{{ comp.resta_urgente_ped_display }}</span>
             </li>
             {% empty %}
             <li class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay componentes con Resta urgente</li>
             {% endfor %}
         </ul>
         {% if componentes_pendientes %}
-        <div class="flex items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-900/50">
+        <div class="grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem] items-center gap-x-2 border-t border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold tabular-nums dark:border-gray-700 dark:bg-gray-900/50">
             <span class="text-gray-700 dark:text-gray-200">Total ({{ componentes_pendientes|length }})</span>
-            <div class="flex gap-3 tabular-nums">
-                <span class="text-rose-700 dark:text-rose-300">{{ kpi_pending_units_display }}</span>
-                <span class="text-orange-700 dark:text-orange-300">{{ kpi_pending_units_ped_display }}</span>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-
-    <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/80 bg-violet-50/90 px-4 py-3 dark:border-violet-800/50 dark:bg-violet-950/40">
-            <h2 class="text-sm font-bold text-violet-950 dark:text-violet-100">Packs pendientes</h2>
-            <span class="text-xs text-violet-700/80 dark:text-violet-300/80">{{ unidad_cantidad_label }}</span>
-        </div>
-        <div class="border-b border-gray-100 px-4 py-2 dark:border-gray-700">
-            <div class="relative">
-                <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-gray-400" aria-hidden="true">search</span>
-                <input type="search" x-model="queryPack" autocomplete="off" placeholder="Buscar pack…"
-                       aria-label="Buscar pack"
-                       class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
-            </div>
-        </div>
-        <ul class="max-h-56 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-700" role="list">
-            {% for item in top_packs_pendientes %}
-            <li class="px-4 py-2.5"
-                data-search-text="{{ item.descripcion|lower }}"
-                x-show="!queryPack || $el.dataset.searchText.includes(queryPack.toLowerCase().trim())">
-                <p class="line-clamp-2 text-sm text-gray-900 dark:text-white">{{ item.descripcion }}</p>
-                <div class="mt-1 flex justify-end gap-3 text-xs tabular-nums">
-                    <span class="text-gray-600 dark:text-gray-300">St. {{ item.stock_terminado_display }}</span>
-                    <span class="font-semibold text-rose-700 dark:text-rose-300">{{ item.resta_urgente_display }}</span>
-                    <span class="font-semibold text-orange-700 dark:text-orange-300">{{ item.resta_urgente_ped_display }}</span>
-                </div>
-            </li>
-            {% empty %}
-            <li class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">Sin packs pendientes</li>
-            {% endfor %}
-        </ul>
-        {% if top_packs_pendientes %}
-        <div class="grid grid-cols-4 gap-1 border-t border-gray-200 bg-orange-50/80 px-3 py-2 text-[10px] font-semibold tabular-nums dark:border-gray-700 dark:bg-orange-950/30">
-            <span class="col-span-1 text-gray-800 dark:text-gray-200">Total ({{ top_packs_pendientes|length }})</span>
-            <span class="text-right text-gray-700 dark:text-gray-300">{{ totales_packs_stock_display }}</span>
-            <span class="text-right text-rose-800 dark:text-rose-300">{{ totales_packs_resta_display }}</span>
-            <span class="text-right text-orange-800 dark:text-orange-300">{{ totales_packs_ped_display }}</span>
+            <span class="text-right text-rose-700 dark:text-rose-300">{{ kpi_pending_units_display }}</span>
+            <span class="text-right text-orange-700 dark:text-orange-300">{{ kpi_pending_units_ped_display }}</span>
         </div>
         {% endif %}
     </div>
