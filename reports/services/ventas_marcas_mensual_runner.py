@@ -415,7 +415,35 @@ def run_ventas_marcas_mensual(report: ReportDefinition, payload: Dict, user) -> 
         superarts = _parse_str_list(filters.get("id_manuales"))
 
     alcance_ctx = ctx_desde_runner(user, str(base_empresa), filters)
-    alcance_cv = alcance_objetivos_cod_viajante(str(base_empresa), alcance_ctx)
+    try:
+        alcance_cv = alcance_objetivos_cod_viajante(str(base_empresa), alcance_ctx)
+    except Exception:
+        # No continuar sin alcance: una caída de la configuración comercial no
+        # debe convertir el endpoint en 500 ni exponer ventas sin restricción.
+        logger.exception("ventas_marcas_mensual: no se pudo validar el alcance comercial")
+        return QueryResult(
+            meta={
+                "slug": report.slug,
+                "name": report.name,
+                "category": report.category,
+                "version": report.version,
+                "extra": {
+                    "modo_unidades": modo_unidades,
+                    "meses": [],
+                    "kpis": {
+                        "unidades": 0,
+                        "facturacion": 0,
+                        "precio_medio": 0,
+                        "regalias": 0,
+                        "regalias_tc": 0,
+                    },
+                    "filas": [],
+                },
+            },
+            data=[],
+            totals={},
+            notes=["Error al validar el alcance comercial; no se mostrarán datos."],
+        )
 
     clientes_excluidos = [c for c in clientes_excluidos if to_int_or_none(c) not in set(clientes_incluir)]
     vendedores_excluidos = [v for v in vendedores_excluidos if int(v) not in set(vendedores_incluir)]
