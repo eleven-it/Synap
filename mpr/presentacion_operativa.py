@@ -35,6 +35,8 @@ def resolver_modo_presentacion_operativa(request) -> str:
     raw = (request.GET.get("presentacion") or "").strip().lower()
     if raw in MODOS:
         request.session[SESSION_KEY] = raw
+        if hasattr(request.session, "modified"):
+            request.session.modified = True
         return raw
     return parse_modo_presentacion_operativa(request.session.get(SESSION_KEY))
 
@@ -242,6 +244,7 @@ def enriquecer_resumen_tablero_kpi_presentacion(
     out["componentes_pendientes"] = comps
 
     packs: List[Dict[str, Any]] = []
+    tot_stock = tot_resta = tot_ped = 0
     for row in out.get("top_packs_pendientes") or []:
         item = dict(row)
         for campo in (
@@ -253,9 +256,18 @@ def enriquecer_resumen_tablero_kpi_presentacion(
             item[f"{campo}_display"] = _display_cantidad_tablero(
                 item.get(campo, 0), modo_n
             )
+        tot_stock += int(round(float(item.get("stock_terminado") or 0)))
+        tot_resta += int(round(float(item.get("resta_urgente") or 0)))
+        tot_ped += int(round(float(item.get("resta_urgente_ped") or 0)))
         packs.append(item)
     out["top_packs_pendientes"] = packs
     out["top_urgencias"] = packs
+    out["totales_packs_stock"] = tot_stock
+    out["totales_packs_resta"] = tot_resta
+    out["totales_packs_ped"] = tot_ped
+    out["totales_packs_stock_display"] = _display_cantidad_tablero(tot_stock, modo_n)
+    out["totales_packs_resta_display"] = _display_cantidad_tablero(tot_resta, modo_n)
+    out["totales_packs_ped_display"] = _display_cantidad_tablero(tot_ped, modo_n)
     return out
 
 

@@ -113,47 +113,61 @@
                         </div>
                     </div>
                 </div>
-                <div class="min-h-0 flex-1 divide-y divide-gray-200 overflow-y-auto dark:divide-gray-700"
+                <div class="min-h-0 flex-1 overflow-x-auto overflow-y-auto"
                      x-ref="tableroCompRows"
                      role="region"
                      aria-label="Componentes con Resta y PED resta a fabricar">
-                    {% for comp in componentes_pendientes %}
-                    <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}"
-                       class="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-gray-50/90 dark:hover:bg-gray-700/40 sm:px-5"
-                       data-comp-row
-                       data-search-text="{{ comp.codigo|lower }} {{ comp.descripcion|lower }} resta {{ comp.resta_urgente_display }} ped {{ comp.resta_urgente_ped_display }}"
-                       x-show="!queryComp || $el.dataset.searchText.includes(queryComp.toLowerCase().trim())">
-                        <div class="min-w-0 flex-1">
-                            <p class="line-clamp-2 text-sm font-bold text-gray-900 dark:text-white">{{ comp.descripcion }}</p>
-                        </div>
-                        <div class="shrink-0 text-right">
-                            <p class="text-sm font-bold tabular-nums text-rose-700 dark:text-rose-300">
-                                {{ comp.resta_urgente_display }}
-                                <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Resta</span>
-                            </p>
-                            <p class="mt-0.5 text-sm font-semibold tabular-nums text-orange-700 dark:text-orange-300">
-                                {{ comp.resta_urgente_ped_display }}
-                                <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">PED</span>
-                            </p>
-                        </div>
-                    </a>
-                    {% empty %}
-                    <div class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">
-                        No hay componentes con Resta urgente
-                    </div>
-                    {% endfor %}
-                    {% if componentes_pendientes %}
-                    <div class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5"
-                         x-show="queryComp.trim() !== '' && $refs.tableroCompRows && Array.from($refs.tableroCompRows.querySelectorAll('[data-comp-row]')).every(function (el) { return !el.offsetParent; })">
-                        Ningún componente coincide con la búsqueda.
-                    </div>
-                    {% endif %}
+                    <table class="min-w-full w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <caption class="sr-only">Componentes con Resta y PED resta urgentes</caption>
+                        <thead class="sticky top-0 z-10 bg-gray-50/95 dark:bg-gray-800/90">
+                            <tr>
+                                <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Artículo</th>
+                                <th scope="col" class="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Resta</th>
+                                <th scope="col" class="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">PED resta</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                            {% for comp in componentes_pendientes %}
+                            <tr class="cursor-pointer transition-colors hover:bg-gray-50/90 dark:hover:bg-gray-700/40"
+                                data-comp-row
+                                data-search-text="{{ comp.codigo|lower }} {{ comp.descripcion|lower }} resta {{ comp.resta_urgente_display }} ped {{ comp.resta_urgente_ped_display }}"
+                                x-show="!queryComp || $el.dataset.searchText.includes(queryComp.toLowerCase().trim())"
+                                data-href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}"
+                                onclick="if(this.dataset.href) location.href=this.dataset.href">
+                                <td class="max-w-[12rem] px-4 py-2.5 text-sm text-gray-900 dark:text-white sm:max-w-none sm:px-5">
+                                    <span class="line-clamp-2">{{ comp.descripcion }}</span>
+                                </td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-rose-700 dark:text-rose-300 sm:px-5">{{ comp.resta_urgente_display }}</td>
+                                <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-orange-700 dark:text-orange-300 sm:px-5">{{ comp.resta_urgente_ped_display }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">No hay componentes con Resta urgente</td>
+                            </tr>
+                            {% endfor %}
+                            {% if componentes_pendientes %}
+                            <tr x-cloak
+                                x-show="queryComp.trim() !== '' && $refs.tableroCompRows && Array.from($refs.tableroCompRows.querySelectorAll('[data-comp-row]')).every(function (el) { return !el.offsetParent; })">
+                                <td colspan="3" class="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400 sm:px-5">Ningún componente coincide con la búsqueda.</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                        {% if componentes_pendientes %}
+                        <tfoot class="sticky bottom-0 z-10">
+                            <tr class="bg-rose-50/95 font-semibold dark:bg-rose-950/40">
+                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-xs text-gray-800 dark:border-gray-600 dark:text-white sm:px-5">Total ({{ componentes_pendientes|length }})</td>
+                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-rose-800 dark:border-gray-600 dark:text-rose-200 sm:px-5">{{ kpi_pending_units_display }}</td>
+                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-orange-800 dark:border-gray-600 dark:text-orange-200 sm:px-5">{{ kpi_pending_units_ped_display }}</td>
+                            </tr>
+                        </tfoot>
+                        {% endif %}
+                    </table>
                 </div>
             </div>
 
             <div class="flex max-h-[min(52vh,26rem)] flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:max-h-[min(58vh,32rem)]">
                 <div class="flex flex-shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-4 py-2.5 dark:border-gray-700 sm:px-5 sm:py-3">
-                    <h2 class="text-sm font-bold text-gray-900 dark:text-white sm:text-base">Top pack pendientes <span class="font-medium text-gray-500 dark:text-gray-400">({{ unidad_cantidad_label }})</span></h2>
+                    <h2 class="text-sm font-bold text-gray-900 dark:text-white sm:text-base">Packs pendientes <span class="font-medium text-gray-500 dark:text-gray-400">({{ unidad_cantidad_label }})</span></h2>
                     <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="text-sm font-semibold text-purple-600 underline-offset-4 hover:underline dark:text-purple-400">Ver tablero</a>
                 </div>
                 <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden">Deslizá horizontalmente para ver todas las columnas</p>
@@ -173,7 +187,7 @@
                             <tr class="cursor-pointer transition-colors hover:bg-gray-50/80 dark:hover:bg-gray-700/40"
                                 data-href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}"
                                 onclick="if(this.dataset.href) location.href=this.dataset.href">
-                                <td class="max-w-[12rem] px-4 py-2.5 text-sm font-bold text-gray-900 dark:text-white sm:max-w-none sm:px-5">{{ item.descripcion }}</td>
+                                <td class="max-w-[12rem] px-4 py-2.5 text-sm text-gray-900 dark:text-white sm:max-w-none sm:px-5">{{ item.descripcion }}</td>
                                 <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums text-gray-600 dark:text-gray-300 sm:px-5">{{ item.stock_terminado_display }}</td>
                                 <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-rose-700 dark:text-rose-300 sm:px-5">{{ item.resta_urgente_display }}</td>
                                 <td class="whitespace-nowrap px-4 py-2.5 text-right text-sm tabular-nums font-semibold text-orange-700 dark:text-orange-300 sm:px-5">{{ item.resta_urgente_ped_display }}</td>
@@ -184,6 +198,16 @@
                             </tr>
                             {% endfor %}
                         </tbody>
+                        {% if top_packs_pendientes %}
+                        <tfoot class="sticky bottom-0 z-10">
+                            <tr class="bg-orange-50/95 font-semibold dark:bg-orange-950/40">
+                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-xs text-gray-800 dark:border-gray-600 dark:text-white sm:px-5">Total ({{ top_packs_pendientes|length }})</td>
+                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-gray-800 dark:border-gray-600 dark:text-gray-200 sm:px-5">{{ totales_packs_stock_display }}</td>
+                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-rose-800 dark:border-gray-600 dark:text-rose-200 sm:px-5">{{ totales_packs_resta_display }}</td>
+                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-orange-800 dark:border-gray-600 dark:text-orange-200 sm:px-5">{{ totales_packs_ped_display }}</td>
+                            </tr>
+                        </tfoot>
+                        {% endif %}
                     </table>
                 </div>
             </div>

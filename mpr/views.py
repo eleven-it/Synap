@@ -763,6 +763,9 @@ class TableroView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
         context.setdefault("componentes_pendientes", [])
         context.setdefault("top_packs_pendientes", [])
         context.setdefault("top_urgencias", [])
+        context.setdefault("totales_packs_stock_display", "0")
+        context.setdefault("totales_packs_resta_display", "0")
+        context.setdefault("totales_packs_ped_display", "0")
 
         if not base_empresa:
             return context

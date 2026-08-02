@@ -2,9 +2,13 @@
 
 from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
 
-from mpr.presentacion_operativa import enriquecer_resumen_tablero_kpi_presentacion
+from mpr.presentacion_operativa import (
+    SESSION_KEY,
+    enriquecer_resumen_tablero_kpi_presentacion,
+    resolver_modo_presentacion_operativa,
+)
 from mpr.services import construir_resumen_tablero_kpi
 
 
@@ -52,6 +56,38 @@ class TestConstruirResumenTableroKpi(SimpleTestCase):
         self.assertEqual(res["top_packs_pendientes"][0]["resta_urgente_ped"], 5)
         self.assertEqual(res["top_packs_pendientes"][0]["a_fabricar"], 8)
 
+    @patch("mpr.services._fetch_descripciones_articulo", return_value={})
+    @patch("mpr.services.listar_tablero_por_articulo")
+    @patch("mpr.services.listar_demanda_pack_desde_pedidos")
+    def test_listas_completas_sin_tope_panel(self, mock_demanda, mock_tablero, _desc):
+        mock_demanda.return_value = [
+            {
+                "id_articulo": i,
+                "cantidad_urgente_abs": 1,
+                "cantidad_a_fabricar": 2,
+                "stock_terminado": 0,
+            }
+            for i in range(12)
+        ]
+        mock_tablero.return_value = [
+            {
+                "id_articulo": i,
+                "codigo_manual": f"C-{i}",
+                "descripcion_articulo": f"Comp {i}",
+                "resta_urgente": 10.0,
+                "resta_urgente_ped": 5.0,
+                "enviado": 0.0,
+            }
+            for i in range(20)
+        ]
+        res = construir_resumen_tablero_kpi("empresa_test")
+        self.assertEqual(len(res["componentes_pendientes"]), 20)
+        self.assertEqual(len(res["top_packs_pendientes"]), 12)
+        mock_tablero.assert_called_once_with(
+            "empresa_test", solo_urgente=True, limit=999999
+        )
+        mock_demanda.assert_called_once_with("empresa_test", limit=999999)
+
     def test_base_vacia_retorna_ceros(self):
         res = construir_resumen_tablero_kpi("")
         self.assertEqual(res["kpi_componentes_pendientes"], 0)
@@ -98,6 +134,34 @@ class TestPresentacionTableroKpi(SimpleTestCase):
         self.assertEqual(out["top_packs_pendientes"][0]["a_fabricar_display"], "5")
         # Crudos en pares se conservan
         self.assertEqual(out["kpi_pending_units"], 240)
+
+    def test_enriquecer_totales_packs(self):
+        resumen = {
+            "kpi_pending_units": 0,
+            "kpi_pending_units_ped": 0,
+            "componentes_pendientes": [],
+            "top_packs_pendientes": [
+                {
+                    "stock_terminado": 24,
+                    "resta_urgente": 48,
+                    "resta_urgente_ped": 12,
+                    "a_fabricar": 48,
+                },
+                {
+                    "stock_terminado": 12,
+                    "resta_urgente": 24,
+                    "resta_urgente_ped": 0,
+                    "a_fabricar": 24,
+                },
+            ],
+        }
+        out = enriquecer_resumen_tablero_kpi_presentacion(resumen, "unidades")
+        self.assertEqual(out["totales_packs_stock"], 36)
+        self.assertEqual(out["totales_packs_resta"], 72)
+        self.assertEqual(out["totales_packs_ped"], 12)
+        self.assertEqual(out["totales_packs_stock_display"], "36")
+        self.assertEqual(out["totales_packs_resta_display"], "72")
+        self.assertEqual(out["totales_packs_ped_display"], "12")
 
     def test_enriquecer_pares(self):
         resumen = {
@@ -154,3 +218,36 @@ class TestPresentacionTableroKpi(SimpleTestCase):
         self.assertEqual(out["top_packs_pendientes"][0]["a_fabricar_display"], "6.576")
         self.assertNotIn(",", out["kpi_pending_units_display"])
         self.assertNotIn(",", out["componentes_pendientes"][0]["resta_urgente_display"])
+
+
+class TestPresentacionTableroKpiSesion(TestCase):
+    """Persistencia Docenas|Pares al volver a /mpr/ sin query param."""
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def _request(self, query=None):
+        request = self.factory.get("/mpr/", query or {})
+        request.session = self.client.session
+        return request
+
+    def test_get_unidades_persiste_y_restaura_sin_query(self):
+        request = self._request({"presentacion": "unidades"})
+        self.assertEqual(resolver_modo_presentacion_operativa(request), "unidades")
+        self.assertEqual(request.session[SESSION_KEY], "unidades")
+        request.session.save()
+        request2 = self._request()
+        self.assertEqual(resolver_modo_presentacion_operativa(request2), "unidades")
+
+    def test_sin_sesion_ni_query_usa_docenas(self):
+        self.assertEqual(
+            resolver_modo_presentacion_operativa(self._request()), "docenas"
+        )
+
+    def test_query_invalido_no_pisa_sesion(self):
+        request = self._request({"presentacion": "unidades"})
+        resolver_modo_presentacion_operativa(request)
+        request.session.save()
+        request2 = self._request({"presentacion": "xyz"})
+        request2.session = request.session
+        self.assertEqual(resolver_modo_presentacion_operativa(request2), "unidades")
