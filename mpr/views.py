@@ -733,15 +733,31 @@ class TableroView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     template_name = "mpr/tablero.html"
 
     def get_context_data(self, **kwargs):
+        from mpr.presentacion_operativa import (
+            enriquecer_resumen_tablero_kpi_presentacion,
+            resolver_modo_presentacion_operativa,
+        )
         from mpr.services import construir_resumen_tablero_kpi, contar_pedidos_fabrica
 
         context = super().get_context_data(**kwargs)
         context["armado_url"] = reverse("mpr:armado") + "?modo=1ra"
         base_empresa = _get_base_empresa(self.request)
+        modo_presentacion = resolver_modo_presentacion_operativa(self.request)
+        context["modo_presentacion"] = modo_presentacion
+        context["presentacion_query_base"] = ""
+        context["unidad_cantidad_label"] = (
+            "docenas" if modo_presentacion == "docenas" else "pares"
+        )
+        context["unidad_cantidad_label_titulo"] = (
+            "Docenas" if modo_presentacion == "docenas" else "Pares"
+        )
 
         context.setdefault("kpi_pedidos_pendientes", 0)
         context.setdefault("kpi_componentes_pendientes", 0)
         context.setdefault("kpi_pending_units", 0)
+        context.setdefault("kpi_pending_units_display", 0)
+        context.setdefault("kpi_pending_units_ped", 0)
+        context.setdefault("kpi_pending_units_ped_display", 0)
         context.setdefault("kpi_packs_demanda", 0)
         context.setdefault("kpi_urgent_items", 0)
         context.setdefault("componentes_pendientes", [])
@@ -760,7 +776,9 @@ class TableroView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
 
         try:
             resumen = construir_resumen_tablero_kpi(base_empresa)
-            context.update(resumen)
+            context.update(
+                enriquecer_resumen_tablero_kpi_presentacion(resumen, modo_presentacion)
+            )
         except MprSchemaError as e:
             _log_mpr_schema_error(e)
             context["mpr_schema_error_modal"] = str(e)

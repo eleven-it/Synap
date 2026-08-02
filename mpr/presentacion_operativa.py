@@ -101,17 +101,33 @@ def docenas_enteras_pcp(cantidad: Any, *, clamp_negativos: bool = True) -> int:
     )
 
 
+def _formato_entero_miles_es(n: int) -> str:
+    """Entero con separador de miles es-AR (punto), sin decimales."""
+    neg = n < 0
+    s = str(abs(int(n)))
+    bloques: list[str] = []
+    while len(s) > 3:
+        bloques.append(s[-3:])
+        s = s[:-3]
+    if s:
+        bloques.append(s)
+    cuerpo = ".".join(reversed(bloques)) if bloques else "0"
+    return f"-{cuerpo}" if neg else cuerpo
+
+
 def _display_cantidad_tablero(
     val: Any,
     modo: str,
     *,
     clamp_negativos: bool = True,
 ) -> str:
-    """Solo docenas enteras o pares enteros — sin decimales."""
+    """Solo docenas enteras o pares enteros — sin decimales, con separador de miles."""
     pcp = pcp_pares_y_docenas_decimal(val, clamp_negativos=clamp_negativos)
     if modo == "docenas":
-        return str(docenas_enteras_pcp(val, clamp_negativos=clamp_negativos))
-    return str(pcp["pares"])
+        n = docenas_enteras_pcp(val, clamp_negativos=clamp_negativos)
+    else:
+        n = pcp["pares"]
+    return _formato_entero_miles_es(n)
 
 
 def _display_cantidad(val: Any, modo: str, *, usar_pares: bool = True) -> str:
@@ -184,6 +200,63 @@ def enriquecer_filas_tablero_presentacion(
     modo: str,
 ) -> List[Dict[str, Any]]:
     return [enriquecer_fila_tablero_presentacion(f, modo) for f in (filas or [])]
+
+
+def enriquecer_resumen_tablero_kpi_presentacion(
+    resumen: Dict[str, Any],
+    modo: str,
+) -> Dict[str, Any]:
+    """
+    Presentación Docenas|Pares para el Tablero de control (/mpr/).
+
+    Conserva valores crudos en pares; añade ``*_display`` y etiquetas de unidad.
+    """
+    out = dict(resumen or {})
+    modo_n = parse_modo_presentacion_operativa(modo)
+    out["modo_presentacion"] = modo_n
+    out["unidad_cantidad_label"] = "docenas" if modo_n == "docenas" else "pares"
+    out["unidad_cantidad_label_titulo"] = (
+        "Docenas" if modo_n == "docenas" else "Pares"
+    )
+
+    pending = out.get("kpi_pending_units", 0)
+    out["kpi_pending_units_display"] = _display_cantidad_tablero(pending, modo_n)
+    pending_ped = out.get("kpi_pending_units_ped", 0)
+    out["kpi_pending_units_ped_display"] = _display_cantidad_tablero(
+        pending_ped, modo_n
+    )
+
+    comps: List[Dict[str, Any]] = []
+    for row in out.get("componentes_pendientes") or []:
+        item = dict(row)
+        item["resta_urgente_display"] = _display_cantidad_tablero(
+            item.get("resta_urgente", 0), modo_n
+        )
+        item["resta_urgente_ped_display"] = _display_cantidad_tablero(
+            item.get("resta_urgente_ped", 0), modo_n
+        )
+        item["fabricando_display"] = _display_cantidad_tablero(
+            item.get("fabricando", 0), modo_n
+        )
+        comps.append(item)
+    out["componentes_pendientes"] = comps
+
+    packs: List[Dict[str, Any]] = []
+    for row in out.get("top_packs_pendientes") or []:
+        item = dict(row)
+        for campo in (
+            "stock_terminado",
+            "resta_urgente",
+            "resta_urgente_ped",
+            "a_fabricar",
+        ):
+            item[f"{campo}_display"] = _display_cantidad_tablero(
+                item.get(campo, 0), modo_n
+            )
+        packs.append(item)
+    out["top_packs_pendientes"] = packs
+    out["top_urgencias"] = packs
+    return out
 
 
 CAMPOS_TABLERO_ARMADO = (

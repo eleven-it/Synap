@@ -16473,6 +16473,7 @@ def construir_resumen_tablero_kpi(
     vacio: Dict[str, Any] = {
         "kpi_componentes_pendientes": 0,
         "kpi_pending_units": 0,
+        "kpi_pending_units_ped": 0,
         "kpi_packs_demanda": 0,
         "kpi_urgent_items": 0,
         "componentes_pendientes": [],
@@ -16483,11 +16484,18 @@ def construir_resumen_tablero_kpi(
         return vacio
 
     packs = listar_demanda_pack_desde_pedidos(base_empresa, limit=limite_kpi)
+    # Misma fuente/fórmulas que Tablero de producción modo Par (Urgente / PED Urgente).
     filas_tablero = listar_tablero_por_articulo(
         base_empresa, solo_urgente=True, limit=limite_kpi
     )
 
-    kpi_pending_units = int(round(sum(float(r.get("resta_urgente") or 0) for r in filas_tablero)))
+    # Resta = Urgente (con Reserva); PED resta = PED Urgente (sin Reserva).
+    kpi_pending_units = int(
+        round(sum(float(r.get("resta_urgente") or 0) for r in filas_tablero))
+    )
+    kpi_pending_units_ped = int(
+        round(sum(float(r.get("resta_urgente_ped") or 0) for r in filas_tablero))
+    )
     kpi_urgent_items = sum(
         1 for p in packs if float(p.get("cantidad_urgente_abs") or 0) > 0
     )
@@ -16495,11 +16503,13 @@ def construir_resumen_tablero_kpi(
     componentes_pendientes: List[Dict[str, Any]] = []
     for r in filas_tablero[:limite_panel]:
         resta_u = float(r.get("resta_urgente") or 0)
+        resta_ped = float(r.get("resta_urgente_ped") or 0)
         componentes_pendientes.append({
             "id_articulo": r.get("id_articulo"),
             "codigo": r.get("codigo_manual") or "-",
             "descripcion": r.get("descripcion_articulo") or "-",
             "resta_urgente": int(round(resta_u)),
+            "resta_urgente_ped": int(round(resta_ped)),
             "fabricando": int(round(float(r.get("enviado") or 0))),
         })
 
@@ -16516,14 +16526,16 @@ def construir_resumen_tablero_kpi(
     for p in packs[:10]:
         aid = to_int_or_none(p.get("id_articulo"))
         codigo, descripcion = desc_pack_map.get(aid, ("-", "-")) if aid else ("-", "-")
-        urgente = float(p.get("cantidad_urgente_abs") or 0)
+        # Paridad Pack: Resta = cantidad_a_fabricar (Urgente); PED resta = cantidad_urgente_abs.
         a_fabricar = float(p.get("cantidad_a_fabricar") or 0)
+        ped_urgente = float(p.get("cantidad_urgente_abs") or 0)
         top_packs_pendientes.append({
             "id_articulo": aid,
             "codigo": str_codigo_manual_articulo(codigo),
             "descripcion": str_or_default(descripcion, "-")[:80],
             "stock_terminado": int(round(float(p.get("stock_terminado") or 0))),
-            "resta_urgente": int(round(urgente)),
+            "resta_urgente": int(round(a_fabricar)),
+            "resta_urgente_ped": int(round(ped_urgente)),
             "a_fabricar": int(round(a_fabricar)),
         })
 
@@ -16533,6 +16545,7 @@ def construir_resumen_tablero_kpi(
     return {
         "kpi_componentes_pendientes": len(filas_tablero),
         "kpi_pending_units": kpi_pending_units,
+        "kpi_pending_units_ped": kpi_pending_units_ped,
         "kpi_packs_demanda": len(packs),
         "kpi_urgent_items": kpi_urgent_items,
         "componentes_pendientes": componentes_pendientes,

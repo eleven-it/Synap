@@ -44,16 +44,19 @@ Las URLs `/mpr/opt/`, `/mpr/wizard/` y `/mpr/demanda/ventana-pack/` pueden segui
 
 ## Tablero KPI (`/mpr/`)
 
-**Actualizado 04/07/2026:** KPIs y paneles alimentados por el **flujo diario** (demanda PED en vivo + tablero consolidado por componente). Sin OPT atrasadas ni panel «OPTs en proceso».
+**Actualizado 28/07/2026:** KPIs y paneles alimentados por el **flujo diario** (demanda PED en vivo + tablero consolidado por componente). Sin OPT atrasadas ni panel «OPTs en proceso». **Resta** y **PED resta** usan las mismas fórmulas que el Tablero de producción (`Urgente` / `PED Urgente`).
 
 | KPI / panel | Fuente |
 |-------------|--------|
 | Pedidos pendientes | `contar_pedidos_fabrica` |
-| Componentes pendientes | `listar_tablero_por_articulo(solo_pendiente=True)` |
-| Pares resta urgente | Suma `resta_urgente` por componente (mismo dato que tablero de producción) |
-| Packs con brecha | `listar_demanda_pack_desde_pedidos` |
-| Panel izquierdo | Top componentes con **resta urgente** (sin botones; fila enlaza al tablero consolidado) |
-| Top pack pendientes | Demanda pack desde pedidos: stock terminado, resta urgente, a fabricar |
+| Componentes pendientes | Filas de `listar_tablero_por_articulo(solo_urgente=True)` (filtro por Resta &gt; 0) |
+| **Resta** | Suma `resta_urgente` por componente (= columna **Urgente** del tablero: Pedido+Reserva−stock) |
+| **PED resta** | Suma `resta_urgente_ped` por componente (= columna **PED Urgente**: Pedido−stock, sin Reserva) |
+| Packs con brecha | `listar_demanda_pack_desde_pedidos`; subtexto = packs con PED resta &gt; 0 |
+| Panel izquierdo | Top componentes: solo nombre de artículo (negrita `text-sm`) + **Resta** / **PED resta** (sin código manual; fila enlaza al tablero) |
+| Top pack pendientes | Artículo (nombre en negrita, sin columna Pack/código); stock terminado; **Resta** = `cantidad_a_fabricar`; **PED resta** = `cantidad_urgente_abs` |
+
+**Presentación Docenas|Pares:** mismo toggle canónico (`includes/toggle_docenas_pares.html`) y sesión `mpr_presentacion_cantidad` que el tablero de producción. Valores crudos en pares; UI muestra `*_display` (docenas enteras = pares ÷ 12) con **separador de miles es-AR** (punto, sin decimales; ej. `433.706`). Enrich: `enriquecer_resumen_tablero_kpi_presentacion`.
 
 Enlaces rápidos: tablero consolidado, parte, clasificación, armado, planificación. **Sin** Trazabilidad OPT ni ventana pack en el encabezado.
 
