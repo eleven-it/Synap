@@ -30,6 +30,7 @@ Ofrecer dos pantallas MPR optimizadas para dispositivos móviles (PWA), siguiend
 - Packs: columnas alineadas Artículo | St. | Resta | Pedido (antes «PED»).
 - Componentes: columnas alineadas Artículo | Resta | Pedido.
 - Totales en pie de cada lista.
+- **Landscape:** sin `max-w-lg` (ancho completo); KPIs en 5 columnas; Packs y Componentes lado a lado.
 - Reutiliza el contexto ya armado por `TableroView` (`construir_resumen_tablero_kpi` + `enriquecer_resumen_tablero_kpi_presentacion`).
 
 ## Inventario MPR

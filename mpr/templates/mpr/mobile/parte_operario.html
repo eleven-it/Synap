@@ -4,9 +4,15 @@
 {% block title %}Mi parte · Synap{% endblock %}
 
 {% block content %}
-<section class="mx-auto w-full max-w-lg pb-32"
+<section class="mpr-parte-movil mx-auto w-full max-w-lg pb-32 sm:max-w-none"
          x-data="parteMovil()"
          x-init="recalc(); filtrar()">
+<style>
+  @media (orientation: landscape) {
+    .mpr-parte-movil { max-width: none !important; }
+    .mpr-parte-movil .mpr-parte-footer-inner { max-width: none !important; }
+  }
+</style>
 
     {% if ok_msg %}
     <div class="mb-4 flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-200">
@@ -167,7 +173,7 @@
         </div>
 
         <div class="fixed inset-x-0 bottom-8 z-20 border-t border-gray-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
-            <div class="mx-auto flex max-w-lg items-center justify-between gap-3">
+            <div class="mpr-parte-footer-inner mx-auto flex w-full max-w-lg items-center justify-between gap-3 sm:max-w-none">
                 <div class="text-sm">
                     <p class="font-bold text-gray-900 dark:text-white"><span x-text="totalDocenas"></span> docenas</p>
                     <p class="text-xs text-gray-500 dark:text-gray-400"><span x-text="maquinasCargadas"></span>/{{ maquinas_total }} máquinas</p>
