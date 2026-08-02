@@ -255,6 +255,7 @@ APPS_MENU = [
                     {"label": _("Control de calidad"), "url": "mpr:clasificacion_produccion", "icon": "verified", "permission": "mpr.ver", "menu_item_id": "mpr_prod_clasificacion"},
                     {"label": _("Planificación de turnos"), "url": "mpr:planificacion_turnos", "icon": "calendar_month", "permission": "mpr.ver", "menu_item_id": "mpr_prod_planificacion"},
                     {"label": _("Tablero de control (KPIs)"), "url": "mpr:tablero", "icon": "dashboard", "permission": "mpr.ver", "menu_item_id": "mpr_prod_kpis"},
+                    {"label": _("Inventario"), "url": "mpr:inventario", "icon": "inventory_2", "permission": "mpr.ver", "menu_item_id": "mpr_prod_inventario"},
                 ]
             },
             {

@@ -2,6 +2,9 @@
 
 **Ruta:** `/stock/inventario/`  
 **Permiso:** `stock.consultas`  
+
+**Consulta equivalente en MPR:** `/mpr/inventario/` con permiso `mpr.ver` (misma fuente `inventario_tabla`, templates PWA + escritorio bajo módulo MPR). Ver [../mpr/PWA_TABLERO_INVENTARIO.md](../mpr/PWA_TABLERO_INVENTARIO.md).
+
 **Change SDD:** `stock-inventario-tabla-mpr`  
 **Manual de usuario:** [MANUAL_USUARIO_STOCK.md](MANUAL_USUARIO_STOCK.md)
 
@@ -65,9 +68,10 @@ Interfaz alineada al patrón visual de **Ingreso de movimiento de stock** (`/sto
 ## Código
 
 - Servicio: `stock/services/inventario_tabla.py` (`ce_texto`, JOIN `articulo_valor_ce`, `etapas_para_ambito`)
-- Vista: `stock/views.inventario_view`
-- Plantillas: `stock/templates/stock/inventario/` (`_tabla.html` incluye Talle/Color)
-- Tests: `stock/tests/test_inventario_tabla.py`
+- Vista Stock: `stock/views.inventario_view`
+- Vista MPR: `mpr/views.InventarioMprView` (`/mpr/inventario/`)
+- Plantillas: `stock/templates/stock/inventario/` (`_tabla.html` incluye Talle/Color); PWA MPR en `mpr/templates/mpr/mobile/inventario.html`
+- Tests: `stock/tests/test_inventario_tabla.py`, `mpr/tests/test_pwa_tablero_inventario.py`
 
 ## Legacy eliminado
 

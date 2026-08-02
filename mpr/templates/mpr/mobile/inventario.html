@@ -1,0 +1,168 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block title %}Inventario MPR · Synap{% endblock %}
+
+{% block content %}
+<section class="mx-auto w-full max-w-lg pb-32"
+         x-data="inventarioMovil()"
+         x-init="filtrar()">
+
+    <header class="mb-4">
+        <h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Inventario MPR</h1>
+        <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            {{ total_registros }} artículo{{ total_registros|pluralize }}
+            · {% if filtros.ambito == 'terminados' %}Terminados{% else %}Fabricados{% endif %}
+        </p>
+    </header>
+
+    {% if mpr_schema_error_modal %}
+    <div class="mb-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100">
+        <span class="material-icons shrink-0 text-base" aria-hidden="true">warning</span>
+        <span>{{ mpr_schema_error_modal }}</span>
+    </div>
+    {% endif %}
+    {% if error_inventario %}
+    <div class="mb-4 flex items-start gap-2 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-900/20 dark:text-red-200">
+        <span class="material-icons shrink-0 text-base" aria-hidden="true">error</span>
+        <span>{{ error_inventario }}</span>
+    </div>
+    {% endif %}
+    {% if sin_config_mpr %}
+    <div class="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100">
+        Configure los depósitos MPR para ver saldos por etapa.
+    </div>
+    {% endif %}
+    {% if truncado %}
+    <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+        Mostrando {{ filas_cargadas }} de {{ total_registros }} artículos.
+    </div>
+    {% endif %}
+
+    <div class="mb-3 space-y-2">
+        <div class="inline-flex h-9 w-full overflow-hidden rounded-xl border border-gray-300 bg-white p-0.5 shadow-sm dark:border-gray-600 dark:bg-gray-900"
+             role="group" aria-label="Tipo de artículo">
+            <a href="?ambito=fabricados&amp;presentacion={{ modo_presentacion }}&amp;filtro_stock={{ filtros.filtro_stock }}"
+               class="inline-flex flex-1 items-center justify-center rounded-lg px-2 text-xs font-semibold transition-colors {% if filtros.ambito == 'fabricados' %}bg-purple-600 text-white{% else %}text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800{% endif %}">Fabricados</a>
+            <a href="?ambito=terminados&amp;presentacion={{ modo_presentacion }}&amp;filtro_stock={{ filtros.filtro_stock }}"
+               class="inline-flex flex-1 items-center justify-center rounded-lg px-2 text-xs font-semibold transition-colors {% if filtros.ambito == 'terminados' %}bg-purple-600 text-white{% else %}text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800{% endif %}">Terminados</a>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <div class="inline-flex h-9 min-w-[10.5rem] overflow-hidden rounded-xl border border-gray-300 bg-white p-0.5 shadow-sm dark:border-gray-600 dark:bg-gray-900"
+                 role="group" aria-label="Presentación Docenas o pares">
+                <a href="?ambito={{ filtros.ambito }}&amp;filtro_stock={{ filtros.filtro_stock }}&amp;presentacion=docenas"
+                   class="inline-flex flex-1 items-center justify-center rounded-lg px-2.5 text-xs font-semibold transition-colors {% if modo_presentacion == 'docenas' %}bg-purple-600 text-white{% else %}text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800{% endif %}">Docenas</a>
+                <a href="?ambito={{ filtros.ambito }}&amp;filtro_stock={{ filtros.filtro_stock }}&amp;presentacion=unidades"
+                   class="inline-flex flex-1 items-center justify-center rounded-lg px-2.5 text-xs font-semibold transition-colors {% if modo_presentacion == 'unidades' %}bg-purple-600 text-white{% else %}text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800{% endif %}">Pares</a>
+            </div>
+            <div class="inline-flex h-9 min-w-[10rem] flex-1 overflow-hidden rounded-xl border border-gray-300 bg-white p-0.5 shadow-sm dark:border-gray-600 dark:bg-gray-900"
+                 role="group" aria-label="Filtro de saldo">
+                <a href="?ambito={{ filtros.ambito }}&amp;presentacion={{ modo_presentacion }}&amp;filtro_stock=con_stock"
+                   class="inline-flex flex-1 items-center justify-center rounded-lg px-2 text-[11px] font-semibold transition-colors {% if filtros.filtro_stock == 'con_stock' %}bg-emerald-600 text-white{% else %}text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800{% endif %}">Con stock</a>
+                <a href="?ambito={{ filtros.ambito }}&amp;presentacion={{ modo_presentacion }}&amp;filtro_stock=todos"
+                   class="inline-flex flex-1 items-center justify-center rounded-lg px-2 text-[11px] font-semibold transition-colors {% if filtros.filtro_stock == 'todos' %}bg-emerald-600 text-white{% else %}text-gray-700 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-800{% endif %}">Todos</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="sticky top-0 z-10 -mx-1 mb-3 bg-gray-50/95 px-1 pb-2 pt-1 backdrop-blur dark:bg-gray-900/95">
+        <div class="relative">
+            <span class="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xl text-gray-400" aria-hidden="true">search</span>
+            <input type="search" inputmode="search" autocomplete="off"
+                   x-model="q" @input="filtrar()"
+                   placeholder="Buscar artículo, talle o color…"
+                   aria-label="Buscar artículo"
+                   class="w-full rounded-xl border border-gray-300 bg-white py-3 pl-11 pr-10 text-base text-gray-900 shadow-sm focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-800 dark:text-white">
+            <button type="button" x-show="q" x-cloak @click="q=''; filtrar()"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full text-gray-400 active:scale-90 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    aria-label="Limpiar búsqueda">
+                <span class="material-icons text-xl" aria-hidden="true">close</span>
+            </button>
+        </div>
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            Mostrando <span class="font-semibold text-gray-700 dark:text-gray-200" x-text="visibles"></span> de {{ filas|length }}
+        </p>
+    </div>
+
+    <div class="space-y-2">
+        {% for r in filas %}
+        <article class="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800"
+                 data-inv-card
+                 data-search="{{ r.nombre_articulo|default:''|lower }} {{ r.talle|default:''|lower }} {{ r.color|default:''|lower }} {{ r.codigo_compuesto|default:''|lower }}">
+            <div class="mb-2 min-w-0">
+                <p class="text-sm font-semibold leading-snug text-gray-900 dark:text-white">{{ r.nombre_articulo }}</p>
+                {% if r.talle or r.color %}
+                <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {% if r.talle %}Talle {{ r.talle }}{% endif %}{% if r.talle and r.color %} · {% endif %}{% if r.color %}Color {{ r.color }}{% endif %}
+                </p>
+                {% endif %}
+            </div>
+            <dl class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                {% for etapa in r.etapas %}
+                <div class="flex items-baseline justify-between gap-2 rounded-lg bg-gray-50 px-2 py-1 dark:bg-gray-900/50">
+                    <dt class="truncate text-gray-500 dark:text-gray-400">{{ etapa.label }}</dt>
+                    <dd class="shrink-0 tabular-nums font-semibold {% if etapa.celda.es_negativo %}text-rose-600 dark:text-rose-400{% else %}text-gray-900 dark:text-white{% endif %}">
+                        {% if modo_presentacion == 'docenas' %}
+                        {{ etapa.celda.docenas_display }}
+                        <span class="block text-[10px] font-normal text-gray-500 dark:text-gray-400">{{ etapa.celda.unidades_display }} p.</span>
+                        {% else %}
+                        {{ etapa.celda.unidades_display }}
+                        {% endif %}
+                    </dd>
+                </div>
+                {% endfor %}
+                {% if filtros.ambito != 'terminados' %}
+                <div class="col-span-2 flex items-baseline justify-between gap-2 rounded-lg border border-gray-200 bg-slate-100 px-2 py-1.5 dark:border-gray-600 dark:bg-slate-800/60">
+                    <dt class="text-xs font-semibold text-gray-700 dark:text-gray-200">Consolidado</dt>
+                    <dd class="tabular-nums font-bold {% if r.consolidado.es_negativo %}text-rose-600 dark:text-rose-400{% else %}text-gray-900 dark:text-white{% endif %}">
+                        {% if modo_presentacion == 'docenas' %}
+                        {{ r.consolidado.docenas_display }}
+                        <span class="block text-[10px] font-normal text-gray-500">{{ r.consolidado.unidades_display }} p.</span>
+                        {% else %}
+                        {{ r.consolidado.unidades_display }}
+                        {% endif %}
+                    </dd>
+                </div>
+                {% endif %}
+            </dl>
+        </article>
+        {% empty %}
+        <div class="rounded-2xl border border-dashed border-gray-300 px-4 py-12 text-center dark:border-gray-600">
+            <span class="material-icons text-4xl text-gray-300 dark:text-gray-600" aria-hidden="true">inventory_2</span>
+            <p class="mt-2 text-sm font-semibold text-gray-700 dark:text-gray-200">Sin artículos para mostrar</p>
+            {% if filtros.filtro_stock == 'con_stock' %}
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Probá con «Todos» para incluir saldos en cero.</p>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if filas %}
+    <p class="mt-4 text-center text-xs text-gray-500 dark:text-gray-400" role="status">
+        {{ total_registros }} artículo{{ total_registros|pluralize }} en el ámbito
+    </p>
+    {% endif %}
+
+    {% include "mpr/includes/mobile_nav_mpr.html" with current="inventario" %}
+</section>
+
+<script>
+function inventarioMovil() {
+    return {
+        q: '',
+        visibles: {{ filas|length }},
+        filtrar() {
+            const q = (this.q || '').trim().toLowerCase();
+            let visibles = 0;
+            this.$root.querySelectorAll('[data-inv-card]').forEach(el => {
+                const hay = el.getAttribute('data-search') || '';
+                const show = !q || hay.includes(q);
+                el.style.display = show ? '' : 'none';
+                if (show) visibles++;
+            });
+            this.visibles = visibles;
+        }
+    };
+}
+</script>
+{% endblock %}

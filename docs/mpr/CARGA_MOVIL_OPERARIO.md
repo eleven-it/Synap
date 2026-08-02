@@ -56,6 +56,10 @@ hasta esa aprobación (modelo de dos etapas).
   con título e ícono). Mantiene el mismo comportamiento y modal de confirmación que el móvil.
 - Estados de borde con mensaje claro: `sin_operario`, `sin_turno`, `sin_linea`, `sin_maquinas`.
 
+### Navegación PWA relacionada
+
+Si el usuario tiene además `mpr.ver`, el bottom nav compartido (`mpr/includes/mobile_nav_mpr.html`) enlaza **KPIs** (`/mpr/`) e **Inventario** (`/mpr/inventario/`) además de **Mi parte**. Detalle: [PWA_TABLERO_INVENTARIO.md](./PWA_TABLERO_INVENTARIO.md).
+
 ### Buscador predictivo y comodidad de carga (UX)
 
 Para líneas con muchas máquinas (p. ej. 20), ambas plantillas incluyen un **buscador

@@ -1,0 +1,136 @@
+{% extends "base_app.html" %}
+{% load static core_extras %}
+
+{% block title %}Tablero KPIs · Synap{% endblock %}
+
+{% block content %}
+<section class="mx-auto w-full max-w-lg pb-32"
+         x-data="{ queryComp: '', queryPack: '' }">
+
+    <header class="mb-4 flex items-start justify-between gap-3">
+        <div class="min-w-0">
+            <h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Tablero KPIs</h1>
+            <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">Demanda y pendientes · {{ unidad_cantidad_label_titulo }}</p>
+        </div>
+        {% include "includes/toggle_docenas_pares.html" with interaction="link" variant="light" modo_presentacion=modo_presentacion query_base=presentacion_query_base only %}
+    </header>
+
+    {% if mpr_schema_error_modal %}
+    <div class="mb-4 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100">
+        <span class="material-icons shrink-0 text-base" aria-hidden="true">warning</span>
+        <span>{{ mpr_schema_error_modal }}</span>
+    </div>
+    {% endif %}
+
+    <div class="mb-4 grid grid-cols-2 gap-2">
+        <div class="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Pedidos pend.</p>
+            <p class="mt-0.5 text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ kpi_pedidos_pendientes|formato_entero_miles }}</p>
+        </div>
+        <div class="rounded-xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Componentes pend.</p>
+            <p class="mt-0.5 text-lg font-bold tabular-nums text-gray-900 dark:text-white">{{ kpi_componentes_pendientes|formato_entero_miles }}</p>
+        </div>
+        <div class="rounded-xl border border-rose-200 bg-rose-50/80 p-3 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/30">
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">Resta</p>
+            <p class="mt-0.5 text-lg font-bold tabular-nums text-rose-800 dark:text-rose-200">{{ kpi_pending_units_display }}</p>
+        </div>
+        <div class="rounded-xl border border-orange-200 bg-orange-50/80 p-3 shadow-sm dark:border-orange-900/50 dark:bg-orange-950/30">
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">PED resta</p>
+            <p class="mt-0.5 text-lg font-bold tabular-nums text-orange-800 dark:text-orange-200">{{ kpi_pending_units_ped_display }}</p>
+        </div>
+        <div class="col-span-2 rounded-xl border border-red-200 bg-red-50/70 p-3 shadow-sm dark:border-red-900/50 dark:bg-red-950/30">
+            <div class="flex items-center justify-between gap-2">
+                <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-red-700 dark:text-red-300">Packs con brecha</p>
+                    <p class="mt-0.5 text-lg font-bold tabular-nums text-red-800 dark:text-red-200">{{ kpi_packs_demanda|formato_entero_miles }}</p>
+                </div>
+                <p class="text-right text-xs text-red-700/90 dark:text-red-300/90">{{ kpi_urgent_items|formato_entero_miles }} con PED resta &gt; 0</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-4 rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-700">
+            <div class="flex min-w-0 items-center gap-2">
+                <span class="material-icons text-lg text-emerald-500" aria-hidden="true">precision_manufacturing</span>
+                <h2 class="text-sm font-bold text-gray-900 dark:text-white">Componentes</h2>
+            </div>
+            <span class="text-xs tabular-nums text-gray-500 dark:text-gray-400">{{ componentes_pendientes|length }}</span>
+        </div>
+        <div class="border-b border-gray-100 px-4 py-2 dark:border-gray-700">
+            <div class="relative">
+                <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-gray-400" aria-hidden="true">search</span>
+                <input type="search" x-model="queryComp" autocomplete="off" placeholder="Buscar componente…"
+                       aria-label="Buscar componente"
+                       class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+            </div>
+        </div>
+        <ul class="max-h-64 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-700" role="list">
+            {% for comp in componentes_pendientes %}
+            <li class="px-4 py-2.5"
+                data-search-text="{{ comp.codigo|lower }} {{ comp.descripcion|lower }}"
+                x-show="!queryComp || $el.dataset.searchText.includes(queryComp.toLowerCase().trim())">
+                <p class="line-clamp-2 text-sm font-medium text-gray-900 dark:text-white">{{ comp.descripcion }}</p>
+                <div class="mt-1 flex justify-end gap-4 text-xs tabular-nums">
+                    <span class="font-semibold text-rose-700 dark:text-rose-300">Resta {{ comp.resta_urgente_display }}</span>
+                    <span class="font-semibold text-orange-700 dark:text-orange-300">PED {{ comp.resta_urgente_ped_display }}</span>
+                </div>
+            </li>
+            {% empty %}
+            <li class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">No hay componentes con Resta urgente</li>
+            {% endfor %}
+        </ul>
+        {% if componentes_pendientes %}
+        <div class="flex items-center justify-between gap-2 border-t border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold dark:border-gray-700 dark:bg-gray-900/50">
+            <span class="text-gray-700 dark:text-gray-200">Total ({{ componentes_pendientes|length }})</span>
+            <div class="flex gap-3 tabular-nums">
+                <span class="text-rose-700 dark:text-rose-300">{{ kpi_pending_units_display }}</span>
+                <span class="text-orange-700 dark:text-orange-300">{{ kpi_pending_units_ped_display }}</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-700">
+            <h2 class="text-sm font-bold text-gray-900 dark:text-white">Packs pendientes</h2>
+            <span class="text-xs text-gray-500 dark:text-gray-400">{{ unidad_cantidad_label }}</span>
+        </div>
+        <div class="border-b border-gray-100 px-4 py-2 dark:border-gray-700">
+            <div class="relative">
+                <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-lg text-gray-400" aria-hidden="true">search</span>
+                <input type="search" x-model="queryPack" autocomplete="off" placeholder="Buscar pack…"
+                       aria-label="Buscar pack"
+                       class="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm text-gray-900 focus:border-purple-500 focus:ring-purple-500 dark:border-gray-600 dark:bg-gray-900 dark:text-white">
+            </div>
+        </div>
+        <ul class="max-h-56 divide-y divide-gray-100 overflow-y-auto dark:divide-gray-700" role="list">
+            {% for item in top_packs_pendientes %}
+            <li class="px-4 py-2.5"
+                data-search-text="{{ item.descripcion|lower }}"
+                x-show="!queryPack || $el.dataset.searchText.includes(queryPack.toLowerCase().trim())">
+                <p class="line-clamp-2 text-sm text-gray-900 dark:text-white">{{ item.descripcion }}</p>
+                <div class="mt-1 flex justify-end gap-3 text-xs tabular-nums">
+                    <span class="text-gray-600 dark:text-gray-300">St. {{ item.stock_terminado_display }}</span>
+                    <span class="font-semibold text-rose-700 dark:text-rose-300">{{ item.resta_urgente_display }}</span>
+                    <span class="font-semibold text-orange-700 dark:text-orange-300">{{ item.resta_urgente_ped_display }}</span>
+                </div>
+            </li>
+            {% empty %}
+            <li class="px-4 py-8 text-center text-sm text-gray-500 dark:text-gray-400">Sin packs pendientes</li>
+            {% endfor %}
+        </ul>
+        {% if top_packs_pendientes %}
+        <div class="grid grid-cols-4 gap-1 border-t border-gray-200 bg-orange-50/80 px-3 py-2 text-[10px] font-semibold tabular-nums dark:border-gray-700 dark:bg-orange-950/30">
+            <span class="col-span-1 text-gray-800 dark:text-gray-200">Total ({{ top_packs_pendientes|length }})</span>
+            <span class="text-right text-gray-700 dark:text-gray-300">{{ totales_packs_stock_display }}</span>
+            <span class="text-right text-rose-800 dark:text-rose-300">{{ totales_packs_resta_display }}</span>
+            <span class="text-right text-orange-800 dark:text-orange-300">{{ totales_packs_ped_display }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    {% include "mpr/includes/mobile_nav_mpr.html" with current="kpis" %}
+</section>
+{% endblock %}

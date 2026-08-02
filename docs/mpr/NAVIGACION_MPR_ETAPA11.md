@@ -17,6 +17,7 @@ Priorizar el **tablero de producción consolidado** como entrada y flujo operati
 | Clasificar salida (control de calidad) | Control de calidad | `/mpr/clasificacion-produccion/` |
 | Armado | Armado | `/mpr/armado/` |
 | KPIs / urgencias | Tablero de control | `/mpr/tablero/` |
+| Inventario por etapa (MPR) | Inventario MPR | `/mpr/inventario/` |
 | Reportes analítica | Reportes MPR (hub visual) | `/mpr/reportes/` |
 
 Ver catálogo: [REPORTES_MPR.md](./REPORTES_MPR.md).
@@ -69,6 +70,8 @@ Tablero consolidado · Parte · Control de calidad (teal) · Planificación · K
 ## Filtro de marcas (operación diaria)
 
 **Actualizado 07/07/2026:** tablero de producción, parte y control de calidad incluyen selector **Marcas** (tags + búsqueda predictiva local, patrón `tags_filter.mjs` / inventario MPR). Query param repetido `marcas_incluidos` (CodMarca). Filtra filas por `articulo.CodigoMarca` en `listar_tablero_por_articulo`, `construir_grilla_parte` y `construir_grilla_clasificacion_produccion`. Include: `mpr/includes/filtro_marcas_tags.html` → `templates/includes/filtro_marcas_tags.html` (variant `dark`). Toggle canónico **Docenas | Pares**: `templates/includes/toggle_docenas_pares.html`.
+
+**PWA móvil (02/08/2026):** Tablero KPIs (`/mpr/`) e Inventario (`/mpr/inventario/`) con templates mobile, bottom nav compartido y permiso `mpr.ver`. Ver [PWA_TABLERO_INVENTARIO.md](./PWA_TABLERO_INVENTARIO.md).
 
 ## Tests
 
