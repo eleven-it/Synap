@@ -482,16 +482,30 @@
     return cfg.mprModuleActive === true;
   }
 
+  function isAreaVisible(key) {
+    const vis = cfg.areasVisible;
+    if (!vis || typeof vis !== "object") return true;
+    return vis[key] !== false;
+  }
+
   function visibleAreaDefs() {
-    return isMprEnabled()
-      ? AREA_DEFS
-      : AREA_DEFS.filter((d) => d.key !== "manufactura");
+    return AREA_DEFS.filter((d) => isAreaVisible(d.key));
   }
 
   function dashboardWaitSubtitle() {
-    const parts = ["ventas", "inventario", "compras"];
-    if (isMprEnabled()) parts.push("manufactura");
-    parts.push("tesorería", "cobros");
+    const labelMap = {
+      ventas: "ventas",
+      inventario: "inventario",
+      compras: "compras",
+      manufactura: "manufactura",
+      cruzados: "demanda pendiente",
+      tesoreria: "tesorería",
+      ventas_cobros: "cobros",
+    };
+    const parts = visibleAreaDefs()
+      .map((d) => labelMap[d.key] || d.key)
+      .filter(Boolean);
+    if (!parts.length) return "Sin áreas habilitadas…";
     return `Consultando ${parts.join(", ")} en AdministraNET…`;
   }
 
@@ -615,17 +629,30 @@
         : fmtMoney.format(vd.ventas_netas_dia || 0)
       : fmtMoney.format(v.ventas_netas || 0);
 
-    const cards = [
-      kpiCard(ventasFirstLabel, ventasFirstVal, "sky"),
-      kpiCard("Total operativo (período)", fmtMoney.format(v.total_operativo || 0), "indigo"),
-      kpiCard("Valor stock", fmtMoney.format(inv.valor_stock || 0), "emerald"),
-      kpiCard("OC pendientes", fmtNum.format(comp.oc_pendientes_cantidad || 0), "amber"),
-    ];
-    if (isMprEnabled()) {
+    const cards = [];
+    if (isAreaVisible("ventas")) {
+      cards.push(kpiCard(ventasFirstLabel, ventasFirstVal, "sky"));
+      cards.push(
+        kpiCard("Total operativo (período)", fmtMoney.format(v.total_operativo || 0), "indigo")
+      );
+    }
+    if (isAreaVisible("inventario")) {
+      cards.push(kpiCard("Valor stock", fmtMoney.format(inv.valor_stock || 0), "emerald"));
+    }
+    if (isAreaVisible("compras")) {
+      cards.push(
+        kpiCard("OC pendientes", fmtNum.format(comp.oc_pendientes_cantidad || 0), "amber")
+      );
+    }
+    if (isAreaVisible("manufactura")) {
       cards.push(kpiCard("OPT atrasadas", fmtNum.format(mfg.opt_atrasadas || 0), "purple"));
     }
-    cards.push(kpiCard("Backorder", fmtMoney.format(cruz.backorder_importe || 0), "rose"));
-    grid.innerHTML = cards.join("");
+    if (isAreaVisible("cruzados")) {
+      cards.push(kpiCard("Backorder", fmtMoney.format(cruz.backorder_importe || 0), "rose"));
+    }
+    grid.innerHTML = cards.length
+      ? cards.join("")
+      : `<p class="col-span-full text-sm text-slate-500 dark:text-slate-400">No hay KPIs globales: activá al menos un área.</p>`;
     Array.from(grid.querySelectorAll(".cc-card-animate")).forEach((node, i) => {
       node.style.animationDelay = `${i * 0.05}s`;
     });
@@ -636,16 +663,23 @@
     if (!grid) return;
     const singleDay = isSingleDayPeriod(readFilters());
     const ventasLabel = singleDay ? "Ventas netas (día)" : "Ventas netas (período)";
-    const loadingCards = [
-      kpiCardLoading(ventasLabel, "sky"),
-      kpiCardLoading("Total operativo (período)", "indigo"),
-      kpiCardLoading("Valor stock", "emerald"),
-      kpiCardLoading("OC pendientes", "amber"),
-    ];
-    if (isMprEnabled()) {
+    const loadingCards = [];
+    if (isAreaVisible("ventas")) {
+      loadingCards.push(kpiCardLoading(ventasLabel, "sky"));
+      loadingCards.push(kpiCardLoading("Total operativo (período)", "indigo"));
+    }
+    if (isAreaVisible("inventario")) {
+      loadingCards.push(kpiCardLoading("Valor stock", "emerald"));
+    }
+    if (isAreaVisible("compras")) {
+      loadingCards.push(kpiCardLoading("OC pendientes", "amber"));
+    }
+    if (isAreaVisible("manufactura")) {
       loadingCards.push(kpiCardLoading("OPT atrasadas", "purple"));
     }
-    loadingCards.push(kpiCardLoading("Backorder", "rose"));
+    if (isAreaVisible("cruzados")) {
+      loadingCards.push(kpiCardLoading("Backorder", "rose"));
+    }
     grid.innerHTML = loadingCards.join("");
   }
 
@@ -1240,6 +1274,135 @@
     syncReportLinks();
   }
 
+  function showCcToast(message, tipo) {
+    if (window.SynapMessages && typeof window.SynapMessages.show === "function") {
+      window.SynapMessages.show(message, tipo || "success");
+      return;
+    }
+    if (typeof window.mprShowAviso === "function") {
+      window.mprShowAviso(message, tipo === "error" ? "error" : "ok");
+      return;
+    }
+    const status = el("cc-areas-config-status");
+    if (status) status.textContent = message;
+  }
+
+  function areaToggleButton(key, active) {
+    const on = !!active;
+    return `<button type="button"
+      class="cc-area-toggle inline-flex min-h-9 min-w-[6.5rem] items-center justify-center rounded-lg px-3 py-1.5 text-xs font-semibold transition
+        ${on
+          ? "bg-emerald-600 text-white hover:bg-emerald-500"
+          : "bg-slate-700 text-slate-200 hover:bg-slate-600"}"
+      data-area-key="${escHtml(key)}"
+      data-active="${on ? "1" : "0"}"
+      aria-pressed="${on ? "true" : "false"}">
+      ${on ? "Activo" : "Inactivo"}
+    </button>`;
+  }
+
+  function renderAreasConfigPanel() {
+    const list = el("cc-areas-config-list");
+    if (!list || !cfg.canEditAreas) return;
+    const labels = cfg.areaLabels || {};
+    const stored = cfg.areasConfig || {};
+    const keys = Object.keys(labels).length
+      ? Object.keys(labels)
+      : Object.keys(stored);
+    list.innerHTML = keys
+      .map((key) => {
+        const label = labels[key] || key;
+        const active = stored[key] !== false;
+        const mprHint =
+          key === "manufactura" && !isMprEnabled()
+            ? `<span class="mt-1 block text-[10px] text-amber-300/90">Requiere módulo MPR activo para mostrarse.</span>`
+            : "";
+        return `<li class="flex items-center justify-between gap-3 rounded-lg border border-slate-700/80 bg-slate-900/60 px-3 py-2.5">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-slate-100">${escHtml(label)}</p>
+            ${mprHint}
+          </div>
+          ${areaToggleButton(key, active)}
+        </li>`;
+      })
+      .join("");
+    list.querySelectorAll(".cc-area-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.getAttribute("data-area-key");
+        if (!key) return;
+        if (!cfg.areasConfig) cfg.areasConfig = {};
+        cfg.areasConfig[key] = btn.getAttribute("data-active") !== "1";
+        renderAreasConfigPanel();
+      });
+    });
+  }
+
+  function setAreasPanelOpen(open) {
+    const panel = el("cc-areas-config-panel");
+    const btn = el("cc-btn-areas-config");
+    if (!panel) return;
+    if (open) {
+      panel.classList.remove("hidden");
+      panel.removeAttribute("hidden");
+      btn?.setAttribute("aria-expanded", "true");
+      renderAreasConfigPanel();
+    } else {
+      panel.classList.add("hidden");
+      panel.setAttribute("hidden", "");
+      btn?.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  async function saveAreasConfig() {
+    const url = cfg.areasApiUrl;
+    if (!url) return;
+    const saveBtn = el("cc-areas-config-save");
+    const status = el("cc-areas-config-status");
+    if (saveBtn) saveBtn.disabled = true;
+    if (status) status.textContent = "Guardando…";
+    try {
+      const csrftoken = getCookie("csrftoken");
+      const headers = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      };
+      if (csrftoken) headers["X-CSRFToken"] = csrftoken;
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers,
+        credentials: "same-origin",
+        body: JSON.stringify({ areas: cfg.areasConfig || {} }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || "No se pudo guardar la configuración.");
+      }
+      cfg.areasConfig = data.areas_config || cfg.areasConfig;
+      cfg.areasVisible = data.areas || cfg.areasVisible;
+      if (status) status.textContent = "Guardado.";
+      showCcToast(data.message || "Áreas actualizadas.", "success");
+      setAreasPanelOpen(false);
+      // Recargar para filtrar URLs/tarjetas SSR y estado efectivo
+      window.location.reload();
+    } catch (e) {
+      if (status) status.textContent = "";
+      showCcToast(e.message || "Error al guardar.", "error");
+    } finally {
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
+
+  function bindAreasConfig() {
+    if (!cfg.canEditAreas) return;
+    el("cc-btn-areas-config")?.addEventListener("click", () => {
+      const panel = el("cc-areas-config-panel");
+      const open = panel && (panel.hasAttribute("hidden") || panel.classList.contains("hidden"));
+      setAreasPanelOpen(!!open);
+    });
+    el("cc-areas-config-close")?.addEventListener("click", () => setAreasPanelOpen(false));
+    el("cc-areas-config-save")?.addEventListener("click", saveAreasConfig);
+  }
+
   function bind() {
     el("cc-refresh")?.addEventListener("click", loadDashboard);
     el("cc-detail-close")?.addEventListener("click", () => openModal(false));
@@ -1247,8 +1410,12 @@
       if (ev.target === el("cc-detail-modal")) openModal(false);
     });
     document.addEventListener("keydown", (ev) => {
-      if (ev.key === "Escape") openModal(false);
+      if (ev.key === "Escape") {
+        openModal(false);
+        setAreasPanelOpen(false);
+      }
     });
+    bindAreasConfig();
   }
 
   document.addEventListener("DOMContentLoaded", () => {

@@ -33,6 +33,7 @@ from .executive_summary_api_views import (
 )
 from .executive_dashboard_api_views import (
     ExecutiveDashboardAPIView,
+    ExecutiveDashboardAreasAPIView,
     ExecutiveDashboardVentasResumenAPIView,
     ExecutiveDashboardInventarioResumenAPIView,
     ExecutiveDashboardComprasResumenAPIView,
@@ -163,6 +164,11 @@ urlpatterns = [
     ),
     path("pv-canal-ejecutivo/", PuntoVentaCanalEjecutivoAPIView.as_view(), name="reports-pv-canal-ejecutivo"),
     path("executive-dashboard/", ExecutiveDashboardAPIView.as_view(), name="reports-executive-dashboard"),
+    path(
+        "executive-dashboard/areas/",
+        ExecutiveDashboardAreasAPIView.as_view(),
+        name="reports-executive-dashboard-areas",
+    ),
     path(
         "executive-dashboard/ventas/resumen/",
         ExecutiveDashboardVentasResumenAPIView.as_view(),

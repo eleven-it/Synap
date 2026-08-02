@@ -7,7 +7,15 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.utils.permissions import user_has_full_access
+
 from .permissions import ManagerialReportsPermission
+from .services.executive_dashboard.area_visibility import (
+    AREA_DISABLED_PAYLOAD,
+    areas_catalog,
+    is_cc_area_enabled,
+    set_cc_areas,
+)
 from .services.executive_dashboard.base import (
     base_empresa_from_request,
     build_meta,
@@ -57,6 +65,14 @@ class ExecutiveDashboardMixin:
 
             raise NotFound("Informe no disponible")
 
+    def _area_disabled_response(self, area_key: str):
+        """None si el área está habilitada; Response de degradación si no."""
+        if is_cc_area_enabled(area_key):
+            return None
+        payload = dict(AREA_DISABLED_PAYLOAD)
+        payload["motivo"] = f"Área «{area_key}» deshabilitada en la configuración del Command Center."
+        return Response(payload)
+
     def _filters_or_error(self, request):
         base = base_empresa_from_request(request)
         if not base:
@@ -93,6 +109,44 @@ class ExecutiveDashboardMixin:
         return LegacyReadError(str(exc))
 
 
+class ExecutiveDashboardAreasAPIView(ExecutiveDashboardMixin, APIView):
+    """GET catálogo de áreas; PATCH (solo supervisor) persiste config global."""
+
+    def get(self, request, *args, **kwargs):
+        mpr_active = mpr_modulo_activo()
+        payload = areas_catalog(mpr_active=mpr_active)
+        payload["can_edit"] = user_has_full_access(request.user)
+        return Response(payload)
+
+    def patch(self, request, *args, **kwargs):
+        if not user_has_full_access(request.user):
+            return Response(
+                {
+                    "detail": "Solo el usuario supervisor puede cambiar las áreas del Command Center.",
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        areas = request.data.get("areas")
+        if areas is None:
+            return Response(
+                {"detail": "Se requiere el objeto «areas»."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            stored = set_cc_areas(areas, user=request.user)
+        except ValueError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        mpr_active = mpr_modulo_activo()
+        payload = areas_catalog(mpr_active=mpr_active)
+        payload["areas_config"] = stored
+        payload["can_edit"] = True
+        payload["message"] = "Áreas del Command Center actualizadas."
+        return Response(payload)
+
+
 class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
     """GET orquestador command center."""
 
@@ -113,6 +167,9 @@ class ExecutiveDashboardAPIView(ExecutiveDashboardMixin, APIView):
 
 class ExecutiveDashboardVentasResumenAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("ventas")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -126,6 +183,9 @@ class ExecutiveDashboardVentasResumenAPIView(ExecutiveDashboardMixin, APIView):
 
 class ExecutiveDashboardInventarioResumenAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("inventario")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -139,6 +199,9 @@ class ExecutiveDashboardInventarioResumenAPIView(ExecutiveDashboardMixin, APIVie
 
 class ExecutiveDashboardComprasResumenAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("compras")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -152,6 +215,9 @@ class ExecutiveDashboardComprasResumenAPIView(ExecutiveDashboardMixin, APIView):
 
 class ExecutiveDashboardManufacturaResumenAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("manufactura")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -176,6 +242,9 @@ class ExecutiveDashboardManufacturaResumenAPIView(ExecutiveDashboardMixin, APIVi
 
 class ExecutiveDashboardCruzadosResumenAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("cruzados")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -189,6 +258,9 @@ class ExecutiveDashboardCruzadosResumenAPIView(ExecutiveDashboardMixin, APIView)
 
 class ExecutiveDashboardVentasPedidosPendientesAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("ventas")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -202,6 +274,9 @@ class ExecutiveDashboardVentasPedidosPendientesAPIView(ExecutiveDashboardMixin, 
 
 class ExecutiveDashboardVentasRemitosNoFacturadosAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("ventas")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -215,6 +290,9 @@ class ExecutiveDashboardVentasRemitosNoFacturadosAPIView(ExecutiveDashboardMixin
 
 class ExecutiveDashboardCruzadosBackorderAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("cruzados")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -228,6 +306,9 @@ class ExecutiveDashboardCruzadosBackorderAPIView(ExecutiveDashboardMixin, APIVie
 
 class ExecutiveDashboardInventarioExistenciasAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("inventario")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -241,6 +322,9 @@ class ExecutiveDashboardInventarioExistenciasAPIView(ExecutiveDashboardMixin, AP
 
 class ExecutiveDashboardTesoreriaResumenAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("tesoreria")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -254,6 +338,9 @@ class ExecutiveDashboardTesoreriaResumenAPIView(ExecutiveDashboardMixin, APIView
 
 class ExecutiveDashboardVentasCobrosResumenAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("ventas_cobros")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -267,6 +354,9 @@ class ExecutiveDashboardVentasCobrosResumenAPIView(ExecutiveDashboardMixin, APIV
 
 class ExecutiveDashboardTesoreriaBancoResumenAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("tesoreria")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -280,6 +370,9 @@ class ExecutiveDashboardTesoreriaBancoResumenAPIView(ExecutiveDashboardMixin, AP
 
 class ExecutiveDashboardVentasCobrosDetalleAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("ventas_cobros")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
@@ -293,6 +386,9 @@ class ExecutiveDashboardVentasCobrosDetalleAPIView(ExecutiveDashboardMixin, APIV
 
 class ExecutiveDashboardTesoreriaMovimientosCajaAPIView(ExecutiveDashboardMixin, APIView):
     def get(self, request, *args, **kwargs):
+        disabled = self._area_disabled_response("tesoreria")
+        if disabled:
+            return disabled
         filters, err = self._filters_or_error(request)
         if err:
             return err
