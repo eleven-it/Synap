@@ -144,7 +144,13 @@ Nombre archivo: `Ventas_marcas_mensual_{desde}_{hasta}.xlsx` (sin cambio).
 
 ---
 
-## 8. Escenarios (Given / When / Then)
+## 8. Tolerancia a fallas de alcance comercial
+
+Antes de ejecutar la matriz, el runner valida el alcance comercial de vendedores. Si esa validación no puede consultar MySQL, devuelve un resultado vacío con una nota de error, sin responder HTTP 500 ni ejecutar la consulta sin restricción de alcance. La pantalla reemplaza los placeholders de carga y muestra el aviso.
+
+---
+
+## 9. Escenarios (Given / When / Then)
 
 - **G1:** Dado el slug `ventas-marcas-mensual`, cuando se abre el informe, entonces se muestran KPIs (unidades/docenas, facturación, precio medio, regalías, regalías/TC) y la matriz Ven→Cliente×Mes; no hay diálogos nativos del navegador.
 - **G2:** Dado `modo_unidades=packs`, cuando se consulta con marca PUM en un período con ventas, entonces las unidades coinciden con `SUM(Cantidad)` con signo FA/NC en AdministraNET.
@@ -156,16 +162,17 @@ Nombre archivo: `Ventas_marcas_mensual_{desde}_{hasta}.xlsx` (sin cambio).
 - **G8:** Dado `tasa_regalia_pct=13` y facturación 1000, entonces regalías = 130 y regalías_tc = 130 / TC efectivo.
 - **G9:** Dado `incluir_proyeccion=1` y `coef_proyeccion=1.07`, entonces `ceil(12 × 1.07) = 13` en unidades proy y la matriz muestra 4 subcolumnas por mes.
 - **G10:** Dado deep-link desde Command Center con `fecha_inicio`/`fecha_fin`, entonces el informe precarga el período de facturación y sucursal si viene en URL.
+- **G11:** Dado que falla la validación de alcance comercial, cuando se consulta el informe, entonces responde un resultado vacío con aviso y no se exponen ventas sin restricción.
 
 ---
 
-## 9. Rollback
+## 10. Rollback
 
 Eliminar `ReportDefinition`, rama en `query_runner`, runner, plantilla, JS, tests y este archivo. No requiere migración de datos de negocio.
 
 ---
 
-## 10. Relación con otros informes
+## 11. Relación con otros informes
 
 - Reutiliza parsers de período, sucursal/PV, clientes/vendedores y whitelist FA/NC de VO/VPV.
 - **No** reutiliza árbol VO (objetivo, REM, PEA, BO).

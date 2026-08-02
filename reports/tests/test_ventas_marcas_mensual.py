@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests informe ventas-marcas-mensual (factor U.M., matriz, export)."""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase
 
@@ -16,6 +16,7 @@ from reports.services.ventas_marcas_mensual_runner import (
     ceil_proy_unidades,
     factor_docenas_unimed,
     round_proy_facturacion,
+    run_ventas_marcas_mensual,
 )
 
 
@@ -181,6 +182,44 @@ class ProyeccionTest(SimpleTestCase):
         celda = filas[0]["totales_mes"]["202601"]
         self.assertEqual(celda["pu"], 13)
         self.assertAlmostEqual(celda["pf"], 107.0)
+
+
+class VentasMarcasMensualRunnerResilienceTest(SimpleTestCase):
+    def test_devuelve_resultado_vacio_si_falla_alcance_comercial(self):
+        report = ReportDefinition(
+            slug="ventas-marcas-mensual",
+            name="Ventas marcas mensual",
+            category="operational",
+            version="1.0.0",
+        )
+        payload = {
+            "filters": {
+                "base_empresa": "administranet1",
+                "fecha_inicio": "2026-07-01",
+                "fecha_fin": "2026-07-31",
+            }
+        }
+        with (
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.ctx_desde_runner",
+                return_value=None,
+            ),
+            patch(
+                "reports.services.ventas_marcas_mensual_runner.alcance_objetivos_cod_viajante",
+                side_effect=ConnectionError("MySQL no disponible"),
+            ),
+        ):
+            result = run_ventas_marcas_mensual(report, payload, Mock())
+
+        self.assertEqual(result.data, [])
+        self.assertEqual(result.totals, {})
+        self.assertEqual(
+            result.notes,
+            ["Error al validar el alcance comercial; no se mostrarán datos."],
+        )
+        self.assertIn("extra", result.meta)
+        self.assertEqual(result.meta["extra"]["meses"], [])
+        self.assertEqual(result.meta["extra"]["kpis"]["unidades"], 0)
 
 
 class VentasMarcasMensualExportHeadersTest(SimpleTestCase):

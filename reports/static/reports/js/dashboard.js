@@ -9915,9 +9915,13 @@ if (dashboardRoot) {
       
       // Pequeño delay para suavizar la transición
       setTimeout(() => {
-        renderSummary(payload.meta || {}, payload.totals || {});
-        
         const currentReportSlug = dashboardRoot?.dataset?.reportSlug;
+        // La matriz VMM tiene sus propios KPIs. Evitar que el resumen genérico
+        // pueda fallar antes de que su handler procese la respuesta y cierre
+        // el modal de carga.
+        if (!isVentasMarcasMensualSlug(currentReportSlug)) {
+          renderSummary(payload.meta || {}, payload.totals || {});
+        }
         let hasErrorNote = false;
         
         if (currentReportSlug === "cash_flow_by_account") {
@@ -10125,6 +10129,32 @@ if (dashboardRoot) {
       let errorMsg = error.message || "Error al sincronizar datos";
       if (error.name === "AbortError") {
         errorMsg = "Tiempo de espera agotado. El reporte tarda demasiado (base de datos grande o consultas lentas). Pruebe un período más corto o filtros.";
+      }
+      // VMM: no dejar KPIs/matriz en "Cargando..." si el fetch falla.
+      if (
+        isVentasMarcasMensualSlug(reportSlug) &&
+        window.ventasMarcasMensualHandler &&
+        typeof window.ventasMarcasMensualHandler.processData === "function"
+      ) {
+        window.ventasMarcasMensualHandler.processData({
+          data: [],
+          totals: {},
+          meta: {
+            extra: {
+              modo_unidades: "packs",
+              meses: [],
+              kpis: {
+                unidades: 0,
+                facturacion: 0,
+                precio_medio: 0,
+                regalias: 0,
+                regalias_tc: 0,
+              },
+              filas: [],
+            },
+          },
+          notes: [errorMsg],
+        });
       }
       if (!isAutoRefresh) {
         toast(errorMsg, "error");
