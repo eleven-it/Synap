@@ -12,6 +12,7 @@ UNIDADES_POR_DOCENA = 12
 
 CAMPOS_TABLERO_CANTIDAD = (
     "resta_urgente",
+    "resta_urgente_ped",
     "resta_total",
     "pendiente",
     "enviado",
@@ -79,6 +80,12 @@ def _enriquecer_bloque_demanda_pcp(out: Dict[str, Any]) -> None:
     ru = pcp_pares_y_docenas_decimal(out.get("resta_urgente", 0))
     out["resta_urgente_pares"] = ru["pares"]
     out["resta_urgente_docenas_pcp"] = docenas_enteras_pcp(out.get("resta_urgente", 0))
+
+    ru_ped = pcp_pares_y_docenas_decimal(out.get("resta_urgente_ped", 0))
+    out["resta_urgente_ped_pares"] = ru_ped["pares"]
+    out["resta_urgente_ped_docenas_pcp"] = docenas_enteras_pcp(
+        out.get("resta_urgente_ped", 0)
+    )
 
 
 def docenas_enteras_pcp(cantidad: Any, *, clamp_negativos: bool = True) -> int:

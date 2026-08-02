@@ -75,6 +75,10 @@ class TestListarTableroPack(SimpleTestCase):
         self.assertAlmostEqual(pack1["dem_res"], 24.0)
         self.assertAlmostEqual(pack1["resta_total"], 114.0)
         self.assertAlmostEqual(pack1["resta_urgente"], 114.0)
+        # PED Urgente = max(0, Pedido − Terminado), sin Reserva
+        self.assertAlmostEqual(pack1["resta_urgente_ped"], 90.0)
+        pack2 = next(f for f in filas if f["id_articulo"] == 2)
+        self.assertAlmostEqual(pack2["resta_urgente_ped"], 0.0)
         self.assertAlmostEqual(pack1["terminado"], 30.0)
         self.assertAlmostEqual(pack1["total"], 30.0)
         self.assertEqual(pack1["codigo_manual"], "PACK-1")

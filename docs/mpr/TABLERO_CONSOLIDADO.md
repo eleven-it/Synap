@@ -42,6 +42,7 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 | 2 | **Pedido** | `dem_ped` | Pares (entero) |
 | 3 | **Reserva** | `dem_res` | Pares (entero); explosión BOM reserva pack (modo Par) |
 | 4 | **Urgente** | `resta_urgente` | Pares + Docenas (÷12, decimal PCP); base del **Enviar** |
+| 4b | **PED Urgente** | `resta_urgente_ped` | Igual brecha **sin Reserva**: `max(0, dem_ped − stock_proceso)`; solo visualización |
 | 5 | **Fabricando** | virtual | `max(0, Σ envíos − acreditado)`. Acreditado = `max(Semi+2da+Scrap, CC) + max(0, partes − CC)`. **Producción no acredita.** |
 | 6–8 | **Etapas stock** | físico | Producido, 2da, Semi. **Sin Terminado** (componentes). Desperdicio (Scrap) deja de mostrarse en el tablero Par. |
 | 9 | **Total** | derivado | Suma etapas sin Scrap ni Terminado. |
@@ -51,9 +52,10 @@ A diferencia del Tablero de KPIs (`mpr/`), el Tablero de producción es una herr
 `stock_proceso` = total sin Terminado (paridad PCP col G).
 
 ```
-resta_urgente = resta_total = MAX(0, demanda − stock_proceso)   # demanda = dem_ped + dem_res
-fabricando    = MAX(0, Σ envíos_tablero − acreditado)
-a_enviar      = MAX(0, urgente − fabricando)   # tope también acotado por resta_total
+resta_urgente     = resta_total = MAX(0, demanda − stock_proceso)   # demanda = dem_ped + dem_res
+resta_urgente_ped = MAX(0, dem_ped − stock_proceso)                # sin Reserva
+fabricando        = MAX(0, Σ envíos_tablero − acreditado)
+a_enviar          = MAX(0, urgente − fabricando)   # tope también acotado por resta_total
 ```
 
 **Importante:** `a_enviar` = `max(0, Urgente − Fabricando)`. Un pedido nuevo que sube Urgente habilita Enviar aunque el ledger histórico ya sea alto (el parte baja Fabricando, no Enviado). El tope no puede superar `resta_total`. En UI modo docenas el input se deshabilita si `a_enviar_docenas_pcp = 0` (pares sueltos sin docena entera).

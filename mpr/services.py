@@ -16134,6 +16134,7 @@ def listar_tablero_por_articulo(
         enviado = fabricando_map.get(comp_id, 0.0)
         resta_total = _calcular_resta_total_componente(demanda, stock_proceso)
         resta_urgente = resta_total
+        resta_urgente_ped = _calcular_resta_urgente_componente(dem_ped_val, stock_proceso)
         pendiente = resta_total
         a_enviar = _calcular_a_enviar_componente(
             resta_urgente,
@@ -16153,6 +16154,7 @@ def listar_tablero_por_articulo(
             "urgente": dem_ped_val,
             "stock_proceso": stock_proceso,
             "resta_urgente": resta_urgente,
+            "resta_urgente_ped": resta_urgente_ped,
             "resta_total": resta_total,
             "a_enviar": a_enviar,
             "pendiente": pendiente,
@@ -16405,6 +16407,11 @@ def listar_tablero_pack(
         dem_res = stock_reserva
         resta_urgente = cf
         resta_total = cf
+        resta_urgente_ped = float(
+            fp.get("cantidad_urgente_abs")
+            if fp.get("cantidad_urgente_abs") is not None
+            else max(0.0, p_ped - stock_terminado)
+        )
         demanda = p_ped + dem_res
         codigo_manual, descripcion = desc_map.get(pack_id, ("-", "-"))
         sin_receta = pack_id in sin_receta_ids
@@ -16419,6 +16426,7 @@ def listar_tablero_pack(
             "urgente": p_ped,
             "stock_proceso": 0.0,
             "resta_urgente": resta_urgente,
+            "resta_urgente_ped": resta_urgente_ped,
             "resta_total": resta_total,
             # En modo Pack el envío a producción es por componente (modo Par):
             # no se ofrece enviar a nivel pack.

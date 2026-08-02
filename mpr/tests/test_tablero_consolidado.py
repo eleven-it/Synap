@@ -618,6 +618,8 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         self.assertAlmostEqual(fila["stock_proceso"], 5.0)
         # dem_ped=20, stock_proceso=5 → resta_urgente=resta_total=15 (demanda total)
         self.assertAlmostEqual(fila["resta_urgente"], 15.0)
+        # Sin reserva en el mock: PED Urgente coincide con Urgente
+        self.assertAlmostEqual(fila["resta_urgente_ped"], 15.0)
         self.assertAlmostEqual(fila["resta_total"], 15.0)
         self.assertAlmostEqual(fila["total"], 5.0)
 
@@ -730,8 +732,53 @@ class TestListarTableroPorArticulo(SimpleTestCase):
         self.assertAlmostEqual(fila["dem_res"], 3000.0)
         self.assertAlmostEqual(fila["demanda"], 1240.0)
         self.assertAlmostEqual(fila["resta_urgente"], 1240.0)
+        # Pedido cubierto por stock terminado del pack → dem_ped=0 → PED Urgente=0
+        self.assertAlmostEqual(fila["dem_ped"], 0.0)
+        self.assertAlmostEqual(fila["resta_urgente_ped"], 0.0)
         self.assertAlmostEqual(fila["a_enviar"], 1240.0)
         self.assertAlmostEqual(fila["enviado"], 0.0)
+
+    def test_resta_urgente_ped_excluye_reserva(self):
+        """PED Urgente = max(0, dem_ped − stock_proceso); Urgente incluye brecha reserva."""
+        filas_pack = [
+            {
+                "id_articulo": 1,
+                "cantidad_pedida_pedido": 20.0,
+                "stock_reserva": 30.0,
+                "stock_terminado": 0.0,
+                "cantidad_a_fabricar": 50.0,
+            }
+        ]
+        abm_map = {1: 100}
+        bom_map = {
+            100: {"componentes": [{"id_articulo": 10, "cantidad_articulo": 1.0}]},
+        }
+        stock_pivot = {
+            10: {
+                t: 0.0
+                for t in [
+                    TIPO_MPR_PRODUCCION,
+                    TIPO_MPR_PLANCHADO,
+                    TIPO_MPR_2DA_SELECCION,
+                    TIPO_MPR_SEMI_ELABORADO,
+                    TIPO_MPR_SCRAP,
+                    TIPO_MPR_TERMINADO,
+                ]
+            },
+        }
+        patches = self._patch_servicio(
+            filas_pack=filas_pack,
+            abm_map=abm_map,
+            bom_map=bom_map,
+            stock_pivot=stock_pivot,
+            desc_map={10: ("C-10", "Comp Diez")},
+        )
+        resultado = self._call_con_parches(patches, solo_urgente=False)
+        self.assertEqual(len(resultado), 1)
+        fila = resultado[0]
+        self.assertAlmostEqual(fila["dem_ped"], 20.0)
+        self.assertAlmostEqual(fila["resta_urgente_ped"], 20.0)
+        self.assertAlmostEqual(fila["resta_urgente"], 50.0)
 
     def test_base_empresa_vacia_retorna_lista_vacia(self):
         """Sin base_empresa el servicio retorna [] sin excepción."""
