@@ -50,13 +50,13 @@
         </div>
     </div>
 
-    <div class="mb-4 rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-700">
+    <div class="mb-4 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/80 bg-violet-50/90 px-4 py-3 dark:border-violet-800/50 dark:bg-violet-950/40">
             <div class="flex min-w-0 items-center gap-2">
                 <span class="material-icons text-lg text-emerald-500" aria-hidden="true">precision_manufacturing</span>
-                <h2 class="text-sm font-bold text-gray-900 dark:text-white">Componentes</h2>
+                <h2 class="text-sm font-bold text-violet-950 dark:text-violet-100">Componentes</h2>
             </div>
-            <span class="text-xs tabular-nums text-gray-500 dark:text-gray-400">{{ componentes_pendientes|length }}</span>
+            <span class="text-xs tabular-nums text-violet-700/80 dark:text-violet-300/80">{{ componentes_pendientes|length }}</span>
         </div>
         <div class="border-b border-gray-100 px-4 py-2 dark:border-gray-700">
             <div class="relative">
@@ -92,10 +92,10 @@
         {% endif %}
     </div>
 
-    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-700">
-            <h2 class="text-sm font-bold text-gray-900 dark:text-white">Packs pendientes</h2>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{{ unidad_cantidad_label }}</span>
+    <div class="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-200/80 bg-violet-50/90 px-4 py-3 dark:border-violet-800/50 dark:bg-violet-950/40">
+            <h2 class="text-sm font-bold text-violet-950 dark:text-violet-100">Packs pendientes</h2>
+            <span class="text-xs text-violet-700/80 dark:text-violet-300/80">{{ unidad_cantidad_label }}</span>
         </div>
         <div class="border-b border-gray-100 px-4 py-2 dark:border-gray-700">
             <div class="relative">
