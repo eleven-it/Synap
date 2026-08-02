@@ -4,8 +4,9 @@
 {% block title %}Migración BEST → MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex min-h-screen flex-col bg-gray-50 py-8 dark:bg-gray-900 sm:py-10">
-  <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="-mt-4 flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 flex-col overflow-hidden bg-gray-50 py-2 dark:bg-gray-900 sm:py-2.5 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]">
+  <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+    <div class="flex-shrink-0">
     <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
       <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
         <li><a href="{% url 'mpr:tablero_produccion' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a></li>
@@ -99,7 +100,9 @@
         </div>
       </div>
     </header>
+    </div>
 
+    <div class="min-h-0 flex-1 overflow-y-auto">
     {% if migracion_habilitada %}
     <div class="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
       Paridad mínima completa: la migración de pedidos está <strong>habilitada</strong>.
@@ -239,6 +242,7 @@
       <a href="{% url 'mpr:migracion_best_operarios' %}" class="inline-flex min-h-11 items-center rounded-xl border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">Operarios</a>
       <a href="{% url 'mpr:migracion_best_stock_inicial' %}" class="inline-flex min-h-11 items-center rounded-xl border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">Stock inicial</a>
       <a href="{% url 'mpr:migracion_best_pedidos' %}" class="inline-flex min-h-11 items-center rounded-xl border border-gray-300 bg-white px-5 text-sm font-medium text-gray-800 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100">Pedidos (gate)</a>
+    </div>
     </div>
   </div>
 </section>

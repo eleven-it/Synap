@@ -4,8 +4,9 @@
 {% block title %}Revisar parte - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
-    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="-mt-4 flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 flex-col overflow-hidden bg-gray-50 py-2 transition-colors duration-300 dark:bg-gray-900 sm:py-2.5 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <div class="flex-shrink-0">
         <nav class="mb-8 flex items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
             <ol class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <li><a href="{% url 'mpr:tablero' %}" class="font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400">Producción</a></li>
@@ -44,7 +45,9 @@
                 </div>
             </div>
         </header>
+        </div>
 
+        <div class="min-h-0 flex-1 overflow-y-auto">
         <form method="post">
             {% csrf_token %}
             <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
@@ -100,6 +103,7 @@
                 </div>
             </div>
         </form>
+        </div>
         {% endif %}
     </div>
 </section>

@@ -151,7 +151,7 @@
             idLineaFiltro: '{% if id_linea_filtro %}{{ id_linea_filtro }}{% endif %}',
             filtroLineaLabel: '{% if id_linea_filtro %}{% for linea in lineas %}{% if linea.id == id_linea_filtro %}{{ linea.nombre|escapejs }}{% endif %}{% endfor %}{% else %}{% endif %}'
          })" x-init="init()">
-<section class="flex h-[calc(100dvh-4.5rem)] min-h-[32rem] flex-col bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5 print:hidden">
+<section class="flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 flex-col overflow-hidden bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5 -mt-4 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)] print:hidden">
     <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
         {# Chrome denso slate-800 — sticky bajo navbar (canon Tablero / Parte / CC) #}

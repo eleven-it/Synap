@@ -4,8 +4,8 @@
 {% block title %}Orden de Producción de Trabajo (OPT) - Demanda - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
-    <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="-mt-4 flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 w-full flex-col overflow-hidden bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
         {# Encabezado fijo (siempre visible) #}
         <div class="flex-shrink-0">
         {# Migas de pan #}
@@ -72,8 +72,8 @@
         </div>{# fin encabezado flex-shrink-0 #}
 
         {# Zona central: tabla con altura fija y scroll interno #}
-        <div class="flex flex-col">
-        <div x-data="{ query: '' }" class="flex flex-col">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div x-data="{ query: '' }" class="flex min-h-0 flex-1 flex-col overflow-hidden">
         {# Tabs (izq) y búsqueda (der) en la misma línea #}
         <div class="mb-3 flex flex-shrink-0 flex-col gap-2 border-b border-slate-200 pb-2 dark:border-slate-700 sm:mb-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:pb-2.5">
             <div class="flex flex-wrap items-center gap-1">
@@ -95,15 +95,15 @@
 
         {# Un solo formulario envuelve Packs + Unidades + Continuar (si Continuar quedara solo dentro de panel-packs, al cambiar de pestaña quedaría oculto y el usuario no puede confirmar desde Unidades). #}
         <form method="post" action="{% url 'mpr:ventana_pack_agrupar' %}" id="form-crear-opt"
-              class="mpr-post-loading flex flex-col"
+              class="mpr-post-loading flex min-h-0 flex-1 flex-col overflow-hidden"
               data-mpr-loading-title="Preparando confirmación"
               data-mpr-loading-subtitle="Enviando la selección para confirmar la OPT… No cierres esta ventana.">
             {% csrf_token %}
         {# Panel Packs #}
-        <div id="panel-packs" class="ventana-pack-panel flex flex-col">
-            <div class="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <p class="border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 md:hidden">Deslizá horizontalmente</p>
-                <div class="h-[min(26rem,52vh)] min-h-[14rem] overflow-auto" role="region" aria-label="Demanda packs">
+        <div id="panel-packs" class="ventana-pack-panel flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <p class="flex-shrink-0 border-b border-slate-100 px-3 py-2 text-[11px] text-slate-500 dark:border-slate-700 dark:text-slate-400 md:hidden">Deslizá horizontalmente</p>
+                <div class="min-h-0 flex-1 overflow-auto" role="region" aria-label="Demanda packs">
                     <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                         <thead class="sticky top-0 z-10 bg-slate-50 shadow-sm dark:bg-slate-800">
                             <tr class="align-bottom">
@@ -219,7 +219,7 @@
         </div>{# fin panel-packs #}
 
         {# Panel Unidades (solo lectura, desglose por componentes de recetas) #}
-        <div id="panel-unidades" class="ventana-pack-panel hidden flex flex-col">
+        <div id="panel-unidades" class="ventana-pack-panel hidden flex min-h-0 flex-1 flex-col overflow-hidden">
         {% if mpr_aviso_sin_deposito_semi_bom %}
         <p class="mb-2 rounded-lg border border-amber-300/80 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-600/60 dark:bg-amber-950/40 dark:text-amber-100" role="status">
             No hay depósito <strong>Semi elaborado</strong> configurado (MPR → Config. depósitos). El saldo de componentes en la pestaña Unidades se muestra en 0 hasta asignar <code class="text-[11px]">tipo_mpr=SemiElaborado</code>.
@@ -228,8 +228,8 @@
         <p class="mb-2 flex-shrink-0 text-xs leading-snug text-slate-600 dark:text-slate-400 sm:mb-3">
             Desglose por unidades (BOM): saldo solo en depósito <strong>Semi elaborado</strong>. La necesidad total se desglosa en parte por <strong>pedido</strong> (brecha <span class="whitespace-nowrap">P_ped − saldo pack</span> en el terminado) y parte por <strong>reserva del pack</strong> (colchón del terminado). La columna Reserva en componentes no usa maestro de receta (siempre 0).
         </p>
-        <div class="flex flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-            <div class="h-[min(26rem,52vh)] min-h-[14rem] overflow-auto" role="region" aria-label="Demanda unidades">
+        <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+            <div class="min-h-0 flex-1 overflow-auto" role="region" aria-label="Demanda unidades">
                 <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                     <thead class="sticky top-0 z-10 bg-slate-50 shadow-sm dark:bg-slate-800">
                         <tr class="align-bottom">

@@ -4,8 +4,9 @@
 {% block title %}Órdenes de Producción de Trabajo - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
-    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="-mt-4 flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 flex-col overflow-hidden bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <div class="flex-shrink-0">
         <nav class="mb-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4 sm:text-sm" aria-label="Migas de pan">
             <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <li>
@@ -80,9 +81,10 @@
             </div>
             {% endif %}
         </div>
+        </div>
 
-        <div x-data="{ query: '' }" class="mb-6">
-            <div class="mb-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-5">
+        <div x-data="{ query: '' }" class="mb-0 flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div class="mb-4 flex-shrink-0 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800 sm:p-5">
                 <h2 class="sr-only">Filtros y búsqueda</h2>
                 <div class="grid grid-cols-1 gap-4 lg:grid-cols-[repeat(4,minmax(0,11rem))_minmax(0,1fr)] lg:items-end lg:gap-4">
                     <form method="get" id="form-estado-opt" class="min-w-0">
@@ -140,12 +142,12 @@
                 </div>
             </div>
 
-            <div class="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700 sm:px-5">
+            <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                <div class="flex flex-shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-700 sm:px-5">
                     <h2 class="text-sm font-semibold text-slate-900 dark:text-white">Resultados</h2>
                     <p class="text-xs text-slate-500 dark:text-slate-400 md:hidden" aria-hidden="true">Deslizá horizontalmente para ver todas las columnas</p>
                 </div>
-                <div class="overflow-x-auto" role="region" aria-label="Tabla de órdenes OPT">
+                <div class="min-h-0 flex-1 overflow-auto" role="region" aria-label="Tabla de órdenes OPT">
                     <table class="min-w-[56rem] w-full divide-y divide-slate-200 dark:divide-slate-700 sm:min-w-full">
                         <caption class="sr-only">Listado de órdenes de producción de trabajo</caption>
                         <thead class="bg-slate-50/90 dark:bg-slate-800/80">
