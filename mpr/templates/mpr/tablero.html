@@ -5,14 +5,15 @@
 {% block title %}Tablero MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-gray-50 py-4 transition-colors duration-300 dark:bg-gray-900 sm:py-5">
-    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
-        <header class="mb-4 flex flex-col gap-3 border-b border-gray-200/80 pb-4 dark:border-gray-700/80 sm:mb-5 sm:pb-5 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+{# Viewport fijo: cancela padding de base_app (p-4/md:p-8) y reserva navbar + status bar — sin scroll de página. #}
+<section class="-mt-4 flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 flex-col overflow-hidden bg-gray-50 py-2 transition-colors duration-300 dark:bg-gray-900 sm:py-2.5 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <header class="mb-2 flex flex-shrink-0 flex-col gap-2 border-b border-gray-200/80 pb-2 dark:border-gray-700/80 sm:pb-2.5 lg:flex-row lg:items-center lg:justify-between lg:gap-3">
             <div class="min-w-0 max-w-3xl">
-                <h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-2xl">
+                <h1 class="text-lg font-bold tracking-tight text-gray-900 dark:text-white sm:text-xl">
                     Tablero de control MPR
                 </h1>
-                <p class="mt-1 text-sm leading-snug text-gray-600 dark:text-gray-400">
+                <p class="mt-0.5 text-xs leading-snug text-gray-600 dark:text-gray-400 sm:text-sm">
                     KPIs del pipeline diario: demanda, pendientes de producir y accesos rápidos.
                 </p>
             </div>
@@ -38,8 +39,8 @@
             </div>
         </header>
 
-        <div class="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-5 lg:mb-6">
-            <a href="{% url 'mpr:pedidos_fabrica_list' %}?estado=Pendiente" class="stat-card block cursor-pointer rounded-xl border border-gray-200/90 bg-white p-3.5 shadow-sm transition-all hover:border-purple-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-purple-500 sm:p-4">
+        <div class="mb-2 grid flex-shrink-0 grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-2 lg:grid-cols-3 xl:grid-cols-5">
+            <a href="{% url 'mpr:pedidos_fabrica_list' %}?estado=Pendiente" class="stat-card block cursor-pointer rounded-xl border border-gray-200/90 bg-white p-2.5 shadow-sm transition-all hover:border-purple-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-purple-500 sm:p-3">
                 <div class="flex items-center justify-between gap-2.5">
                     <div class="min-w-0">
                         <p class="text-[11px] font-semibold text-gray-600 dark:text-gray-400 sm:text-xs">Pedidos pendientes</p>
@@ -49,7 +50,7 @@
                     <span class="material-icons shrink-0 text-2xl text-purple-500 opacity-90 dark:text-purple-400" aria-hidden="true">pending_actions</span>
                 </div>
             </a>
-            <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="stat-card block cursor-pointer rounded-xl border border-gray-200/90 bg-white p-3.5 shadow-sm transition-all hover:border-amber-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-amber-500 sm:p-4">
+            <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="stat-card block cursor-pointer rounded-xl border border-gray-200/90 bg-white p-2.5 shadow-sm transition-all hover:border-amber-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-amber-500 sm:p-3">
                 <div class="flex items-center justify-between gap-2.5">
                     <div class="min-w-0">
                         <p class="text-[11px] font-semibold text-gray-600 dark:text-gray-400 sm:text-xs">Componentes pendientes</p>
@@ -59,7 +60,7 @@
                     <span class="material-icons shrink-0 text-2xl text-amber-500 opacity-90 dark:text-amber-400" aria-hidden="true">precision_manufacturing</span>
                 </div>
             </a>
-            <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="stat-card block cursor-pointer rounded-xl border border-gray-200/90 bg-white p-3.5 shadow-sm transition-all hover:border-rose-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-rose-500 sm:p-4">
+            <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="stat-card block cursor-pointer rounded-xl border border-gray-200/90 bg-white p-2.5 shadow-sm transition-all hover:border-rose-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-rose-500 sm:p-3">
                 <div class="flex items-center justify-between gap-2.5">
                     <div class="min-w-0">
                         <p class="text-[11px] font-semibold text-gray-600 dark:text-gray-400 sm:text-xs">Resta</p>
@@ -69,7 +70,7 @@
                     <span class="material-icons shrink-0 text-2xl text-rose-500 opacity-90 dark:text-rose-400" aria-hidden="true">inventory_2</span>
                 </div>
             </a>
-            <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="stat-card block cursor-pointer rounded-xl border border-gray-200/90 bg-white p-3.5 shadow-sm transition-all hover:border-orange-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-orange-500 sm:p-4">
+            <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="stat-card block cursor-pointer rounded-xl border border-gray-200/90 bg-white p-2.5 shadow-sm transition-all hover:border-orange-300 hover:shadow-md dark:border-gray-700 dark:bg-gray-800 dark:hover:border-orange-500 sm:p-3">
                 <div class="flex items-center justify-between gap-2.5">
                     <div class="min-w-0">
                         <p class="text-[11px] font-semibold text-gray-600 dark:text-gray-400 sm:text-xs">PED resta</p>
@@ -79,7 +80,7 @@
                     <span class="material-icons shrink-0 text-2xl text-orange-500 opacity-90 dark:text-orange-400" aria-hidden="true">shopping_bag</span>
                 </div>
             </a>
-            <div class="stat-card block cursor-default rounded-xl border border-gray-200/90 bg-white p-3.5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-4">
+            <div class="stat-card block cursor-default rounded-xl border border-gray-200/90 bg-white p-2.5 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-3">
                 <div class="flex items-center justify-between gap-2.5">
                     <div class="min-w-0">
                         <p class="text-[11px] font-semibold text-gray-600 dark:text-gray-400 sm:text-xs">Packs con brecha</p>
@@ -91,8 +92,8 @@
             </div>
         </div>
 
-        <div class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
-            <div x-data="{ queryComp: '' }" class="flex max-h-[min(52vh,26rem)] flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:max-h-[min(58vh,32rem)]">
+        <div class="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+            <div x-data="{ queryComp: '' }" class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:h-full">
                 <div class="flex flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-4 py-2.5 dark:border-gray-700 sm:px-5 sm:py-3">
                     <div class="flex min-w-0 flex-wrap items-center gap-2">
                         <span class="material-icons shrink-0 text-xl text-emerald-500 dark:text-emerald-400" aria-hidden="true">precision_manufacturing</span>
@@ -165,7 +166,7 @@
                 {% endif %}
             </div>
 
-            <div class="flex max-h-[min(52vh,26rem)] flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:max-h-[min(58vh,32rem)]">
+            <div class="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:h-full">
                 <div class="flex flex-shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-4 py-2.5 dark:border-gray-700 sm:px-5 sm:py-3">
                     <h2 class="text-sm font-bold text-gray-900 dark:text-white sm:text-base">Packs pendientes <span class="font-medium text-gray-500 dark:text-gray-400">({{ unidad_cantidad_label }})</span></h2>
                     <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="text-sm font-semibold text-purple-600 underline-offset-4 hover:underline dark:text-purple-400">Ver tablero</a>
