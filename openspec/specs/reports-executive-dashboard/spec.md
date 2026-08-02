@@ -66,12 +66,21 @@ Referencias: `docs/audits/dashboard-administranet-gap-analysis.md`, `openspec/sp
 
 ### REQ-ED-ORCH-01 — Ruta y método
 
-- **`GET /api/reports/executive-dashboard/`** **MUST** devolver resúmenes de todas las áreas P0 en un solo payload.
+- **`GET /api/reports/executive-dashboard/`** **MUST** devolver resúmenes de las áreas P0 **habilitadas** en un solo payload.
+- El orquestador **MUST NOT** consultar áreas deshabilitadas en `ReportDefinition.config.command_center.areas` (config global del slug `command-center-gerencial`).
+- **`meta.areas_habilitadas`** **MUST** listar el mapa efectivo de áreas (tras gate MPR en `manufactura`).
+
+### REQ-ED-ORCH-01b — Configuración de áreas (supervisor)
+
+- **`GET /api/reports/executive-dashboard/areas/`** **MUST** devolver `areas_config` (persistido), `areas` (efectivas), `labels` y `can_edit`.
+- **`PATCH /api/reports/executive-dashboard/areas/`** **MUST** exigir `cod_usuario=supervisor` (`user_has_full_access`) y persistir flags globales en `config.command_center.areas`.
+- Endpoints de área deshabilitada **MUST** responder con `disponible: false` y motivo `area_deshabilitada` (sin consultar legacy).
+- Keys: `ventas`, `inventario`, `compras`, `manufactura`, `cruzados`, `tesoreria`, `ventas_cobros`. Defaults todas `true`. `manufactura` efectiva **MUST** ser AND con módulo MPR activo.
 
 ### REQ-ED-ORCH-02 — Estructura `areas`
 
-- **`areas.ventas`** **MUST** incluir los mismos campos que `GET .../ventas/resumen/` (subconjunto del área ventas).
-- **`areas.inventario`**, **`areas.compras`**, **`areas.manufactura`**, **`areas.cruzados`** **MUST** reflejar sus endpoints de resumen respectivos.
+- **`areas.ventas`** **MUST** incluir los mismos campos que `GET .../ventas/resumen/` (subconjunto del área ventas) cuando el área está habilitada.
+- **`areas.inventario`**, **`areas.compras`**, **`areas.manufactura`**, **`areas.cruzados`** **MUST** reflejar sus endpoints de resumen respectivos cuando están habilitadas.
 - **`areas.tesoreria`** **MUST** incluir el mismo subconjunto de campos que `GET .../tesoreria/resumen/` (sin `meta` anidado duplicado), incluyendo **`areas.tesoreria.banco`** obtenido con segunda llamada `_safe_legacy_area` (KPIs `librobanco`; **MUST NOT** sumarse con saldos de caja).
 - **`areas.ventas_cobros`** **MUST** incluir `facturado_por_medio` y `cobrado_caja_por_medio` (ver `reports-executive-dashboard-ventas-cobros`).
 - **`areas.crm`** **MUST NOT** aparecer (CRM deprecado en Command Center v1+).

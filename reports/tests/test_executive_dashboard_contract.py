@@ -169,10 +169,22 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertEqual(out["facturacion_periodo"], 200.0)
         self.assertIsNotNone(out["demand_coverage_pct"])
 
+    @patch(
+        "reports.services.executive_dashboard.command_center.resolve_cc_areas",
+        return_value={
+            "ventas": True,
+            "inventario": True,
+            "compras": True,
+            "manufactura": True,
+            "cruzados": True,
+            "tesoreria": True,
+            "ventas_cobros": True,
+        },
+    )
     @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=True)
     @patch("reports.services.executive_dashboard.command_center.fetch_manufactura_resumen")
     @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
-    def test_run_command_center_estructura(self, mock_legacy, mock_mfg, _mpr_on):
+    def test_run_command_center_estructura(self, mock_legacy, mock_mfg, _mpr_on, _areas):
         cursor = _cursor_zeros()
         mock_legacy.return_value.__enter__ = MagicMock(return_value=cursor)
         mock_legacy.return_value.__exit__ = MagicMock(return_value=False)
@@ -198,13 +210,26 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertIn("ventas_cobros", out["meta"]["endpoints"])
         self.assertIn("tesoreria_banco", out["meta"]["endpoints"])
         self.assertTrue(out["meta"]["modulos"]["mpr"])
+        self.assertIn("areas_habilitadas", out["meta"])
         tes = out["areas"].get("tesoreria") or {}
         self.assertIn("banco", tes)
 
+    @patch(
+        "reports.services.executive_dashboard.command_center.resolve_cc_areas",
+        return_value={
+            "ventas": True,
+            "inventario": True,
+            "compras": True,
+            "manufactura": False,
+            "cruzados": True,
+            "tesoreria": True,
+            "ventas_cobros": True,
+        },
+    )
     @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=False)
     @patch("reports.services.executive_dashboard.command_center.fetch_manufactura_resumen")
     @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
-    def test_run_command_center_sin_mpr_oculta_manufactura(self, mock_legacy, mock_mfg, _mpr_off):
+    def test_run_command_center_sin_mpr_oculta_manufactura(self, mock_legacy, mock_mfg, _mpr_off, _areas):
         cursor = _cursor_zeros()
         mock_legacy.return_value.__enter__ = MagicMock(return_value=cursor)
         mock_legacy.return_value.__exit__ = MagicMock(return_value=False)
@@ -213,6 +238,63 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         self.assertFalse(out["meta"]["modulos"]["mpr"])
         mock_mfg.assert_not_called()
 
+    @patch(
+        "reports.services.executive_dashboard.command_center.resolve_cc_areas",
+        return_value={
+            "ventas": True,
+            "inventario": False,
+            "compras": False,
+            "manufactura": False,
+            "cruzados": False,
+            "tesoreria": True,
+            "ventas_cobros": False,
+        },
+    )
+    @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=True)
+    @patch("reports.services.executive_dashboard.command_center.fetch_manufactura_resumen")
+    @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
+    @patch(
+        "reports.services.executive_dashboard.command_center.fetch_ventas_cobros_resumen",
+    )
+    @patch("reports.services.executive_dashboard.command_center.fetch_cruzados_resumen")
+    @patch("reports.services.executive_dashboard.command_center.fetch_compras_resumen")
+    @patch("reports.services.executive_dashboard.command_center.fetch_inventario_resumen")
+    @patch(
+        "reports.services.executive_dashboard.command_center.fetch_ventas_resumen",
+        return_value={"disponible": True, "meta": {"notas_semanticas": []}, "ventas_netas": 1},
+    )
+    def test_run_command_center_omite_areas_deshabilitadas(
+        self, mock_ventas, mock_inv, mock_comp, mock_cruz, mock_cob, mock_legacy, mock_mfg, _mpr_on, _areas
+    ):
+        cursor = _cursor_zeros()
+        mock_legacy.return_value.__enter__ = MagicMock(return_value=cursor)
+        mock_legacy.return_value.__exit__ = MagicMock(return_value=False)
+        out = run_command_center(_filters())
+        self.assertIn("ventas", out["areas"])
+        self.assertIn("tesoreria", out["areas"])
+        self.assertNotIn("inventario", out["areas"])
+        self.assertNotIn("compras", out["areas"])
+        self.assertNotIn("cruzados", out["areas"])
+        self.assertNotIn("ventas_cobros", out["areas"])
+        self.assertNotIn("manufactura", out["areas"])
+        mock_inv.assert_not_called()
+        mock_comp.assert_not_called()
+        mock_cruz.assert_not_called()
+        mock_cob.assert_not_called()
+        mock_mfg.assert_not_called()
+
+    @patch(
+        "reports.services.executive_dashboard.command_center.resolve_cc_areas",
+        return_value={
+            "ventas": True,
+            "inventario": True,
+            "compras": True,
+            "manufactura": True,
+            "cruzados": True,
+            "tesoreria": True,
+            "ventas_cobros": True,
+        },
+    )
     @patch("reports.services.executive_dashboard.command_center.mpr_modulo_activo", return_value=True)
     @patch("reports.services.executive_dashboard.command_center.fetch_manufactura_resumen")
     @patch("reports.services.executive_dashboard.command_center.legacy_cursor")
@@ -237,7 +319,7 @@ class ExecutiveDashboardContractTests(SimpleTestCase):
         return_value={"disponible": True, "meta": {"notas_semanticas": []}, "ventas_netas": 1},
     )
     def test_run_command_center_aisla_fallo_tesoreria(
-        self, mock_ventas, mock_inv, mock_comp, mock_cruz, mock_cob, mock_legacy, mock_mfg, _mpr_on
+        self, mock_ventas, mock_inv, mock_comp, mock_cruz, mock_cob, mock_legacy, mock_mfg, _mpr_on, _areas
     ):
         cursor = MagicMock()
         mock_legacy.return_value.__enter__ = MagicMock(return_value=cursor)

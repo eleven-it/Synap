@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from .area_visibility import resolve_cc_areas
 from .base import DashboardFilters, build_meta, legacy_cursor, mpr_modulo_activo
 from .cross_metrics import fetch_cruzados_resumen
 from .exceptions import is_legacy_db_error, legacy_area_failure_payload
@@ -57,15 +58,18 @@ def _safe_legacy_area(name: str, fn, *args, **kwargs) -> dict[str, Any]:
 def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
     areas: dict[str, Any] = {}
     notas_globales: list[str] = []
+    mpr_on = mpr_modulo_activo()
+    areas_habilitadas = resolve_cc_areas(mpr_active=mpr_on)
 
     sucursales_disponibles: list = []
     with legacy_cursor(filters.base_empresa) as cursor:
-        ventas_full = _safe_legacy_area("ventas", fetch_ventas_resumen, cursor, filters)
-        if ventas_full.get("disponible") is not False:
-            areas["ventas"] = _area_sin_meta_interno(ventas_full)
-            notas_globales.extend(ventas_full.get("meta", {}).get("notas_semanticas") or [])
-        else:
-            areas["ventas"] = ventas_full
+        if areas_habilitadas.get("ventas"):
+            ventas_full = _safe_legacy_area("ventas", fetch_ventas_resumen, cursor, filters)
+            if ventas_full.get("disponible") is not False:
+                areas["ventas"] = _area_sin_meta_interno(ventas_full)
+                notas_globales.extend(ventas_full.get("meta", {}).get("notas_semanticas") or [])
+            else:
+                areas["ventas"] = ventas_full
 
         for area_name, fetch_fn in (
             ("inventario", fetch_inventario_resumen),
@@ -73,27 +77,30 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
             ("cruzados", fetch_cruzados_resumen),
             ("ventas_cobros", fetch_ventas_cobros_resumen),
         ):
+            if not areas_habilitadas.get(area_name):
+                continue
             area_full = _safe_legacy_area(area_name, fetch_fn, cursor, filters)
             if area_full.get("disponible") is not False:
                 areas[area_name] = _area_sin_meta_interno(area_full)
             else:
                 areas[area_name] = area_full
 
-        tesoreria_full = _safe_legacy_area(
-            "tesoreria", fetch_tesoreria_resumen, cursor, filters
-        )
-        banco_full = _safe_legacy_area(
-            "tesoreria_banco", fetch_tesoreria_banco_resumen, cursor, filters
-        )
-        if tesoreria_full.get("disponible") is not False:
-            tesoreria_area = _area_sin_meta_interno(tesoreria_full)
-            if banco_full.get("disponible") is not False:
-                tesoreria_area["banco"] = _area_sin_meta_interno(banco_full)
+        if areas_habilitadas.get("tesoreria"):
+            tesoreria_full = _safe_legacy_area(
+                "tesoreria", fetch_tesoreria_resumen, cursor, filters
+            )
+            banco_full = _safe_legacy_area(
+                "tesoreria_banco", fetch_tesoreria_banco_resumen, cursor, filters
+            )
+            if tesoreria_full.get("disponible") is not False:
+                tesoreria_area = _area_sin_meta_interno(tesoreria_full)
+                if banco_full.get("disponible") is not False:
+                    tesoreria_area["banco"] = _area_sin_meta_interno(banco_full)
+                else:
+                    tesoreria_area["banco"] = banco_full
+                areas["tesoreria"] = tesoreria_area
             else:
-                tesoreria_area["banco"] = banco_full
-            areas["tesoreria"] = tesoreria_area
-        else:
-            areas["tesoreria"] = tesoreria_full
+                areas["tesoreria"] = tesoreria_full
 
         try:
             sucursales_disponibles = fetch_sucursales_ejecutivo(cursor)
@@ -102,8 +109,7 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
                 "No se pudieron cargar sucursales para command center", exc_info=True
             )
 
-    mpr_on = mpr_modulo_activo()
-    if mpr_on:
+    if areas_habilitadas.get("manufactura"):
         areas["manufactura"] = _area_sin_meta_interno(
             fetch_manufactura_resumen(filters.base_empresa, filters)
         )
@@ -114,6 +120,7 @@ def run_command_center(filters: DashboardFilters) -> dict[str, Any]:
         endpoints=ENDPOINTS_RELATIVOS,
         modulos={"mpr": mpr_on},
     )
+    meta["areas_habilitadas"] = areas_habilitadas
     return {
         "fecha_referencia": filters.fecha_referencia.isoformat(),
         "periodo": {

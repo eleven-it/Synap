@@ -11,6 +11,43 @@ Contrato **`executive-dashboard-v1`**. Datos desde MySQL AdministraNET (`base_em
 - **CRM:** deprecado — no se muestra en la UI ni en el payload del orquestador.
 - **Móvil:** allowlist `MobileLevelAOnlyMiddleware`: `/core/dashboard/`, `/reports/`, `/reports/workspace/`, `/reports/dashboard/command-center-gerencial/` y APIs `executive-dashboard` / `executive-summary` (UI responsive en `dashboard.html` y `command_center.html`).
 
+### Áreas configurables (global)
+
+Config en `ReportDefinition.config` (fila global `empresa=null`, slug `command-center-gerencial`):
+
+```json
+{
+  "command_center": {
+    "areas": {
+      "ventas": true,
+      "inventario": true,
+      "compras": true,
+      "manufactura": true,
+      "cruzados": true,
+      "tesoreria": true,
+      "ventas_cobros": true
+    }
+  }
+}
+```
+
+| Key | Label UI |
+|-----|----------|
+| `ventas` | Ventas |
+| `inventario` | Inventario |
+| `compras` | Compras |
+| `manufactura` | Manufactura (MPR) |
+| `cruzados` | Demanda pendiente |
+| `tesoreria` | Tesorería (incluye libro banco) |
+| `ventas_cobros` | Ventas por cobro |
+
+- **Defaults:** todas `true`.
+- **Manufactura:** requiere flag `true` **y** módulo MPR activo.
+- **Edición:** panel «Áreas visibles» en el Command Center, solo `cod_usuario=supervisor`.
+- **API:** `GET|PATCH /api/reports/executive-dashboard/areas/`. PATCH exige supervisor. Endpoints de área deshabilitada responden `{ "disponible": false, "motivo": "area_deshabilitada", ... }`.
+- **Orquestador:** no consulta áreas off; incluye `meta.areas_habilitadas`.
+- Helper: `reports/services/executive_dashboard/area_visibility.py`.
+
 ### Etiquetas UI (área `cruzados` en API)
 
 En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente** (subtítulo: pendientes, reservas y cobertura vs facturación). Las rutas API siguen el slug técnico `cruzados`. Métricas visibles: Backorder ($), Unidades pendientes, Stock reservado, Demanda cubierta (%). El detalle paginado equivale al informe `bo-stock-facturacion` por artículo.
@@ -24,6 +61,7 @@ En Command Center el bloque `areas.cruzados` se muestra como **Demanda pendiente
 | Método | Ruta | Descripción |
 |--------|------|-------------|
 | GET | `/api/reports/executive-dashboard/` | Orquestador por área |
+| GET / PATCH | `/api/reports/executive-dashboard/areas/` | Catálogo / config global de áreas (PATCH solo supervisor) |
 | GET | `/api/reports/executive-dashboard/ventas/resumen/` | Ventas netas, REM, PED (período) |
 | GET | `/api/reports/executive-dashboard/inventario/resumen/` | Stock agregado (`valor_stock` = saldo × `PrecioCosto`) |
 | GET | `/api/reports/executive-dashboard/compras/resumen/` | OC pendientes |

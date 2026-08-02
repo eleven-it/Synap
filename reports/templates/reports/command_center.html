@@ -67,11 +67,19 @@
             </p>
           </div>
           <nav class="flex shrink-0 flex-wrap gap-2 md:justify-end" aria-label="Accesos relacionados">
+            {% if can_edit_cc_areas %}
+            <button type="button" id="cc-btn-areas-config"
+                    class="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-500/50 bg-amber-950/40 px-3 py-1.5 text-xs font-medium text-amber-100 transition hover:border-amber-400/60 hover:bg-amber-900/50"
+                    aria-expanded="false" aria-controls="cc-areas-config-panel">
+              <span class="material-icons text-[1.125rem]" aria-hidden="true">tune</span>
+              Áreas visibles
+            </button>
+            {% endif %}
             <a href="{{ executive_sales_page_url }}" id="cc-link-panel-dia" data-base-url="{{ executive_sales_page_url }}" class="cc-report-link inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-sky-200 transition hover:border-sky-500/40 hover:bg-slate-800/80">
               <span class="material-icons text-[1.125rem]" aria-hidden="true">insights</span>
               Ventas del día
             </a>
-            {% if mpr_module_active %}
+            {% if mpr_module_active and cc_areas.manufactura %}
             <a href="{{ mpr_tablero_url }}" id="cc-link-mpr-tablero" data-base-url="{{ mpr_tablero_url }}" class="cc-report-link inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-600/70 bg-slate-900/50 px-3 py-1.5 text-xs font-medium text-violet-200 transition hover:border-violet-500/40 hover:bg-slate-800/80">
               <span class="material-icons text-[1.125rem]" aria-hidden="true">precision_manufacturing</span>
               Tablero MPR
@@ -79,6 +87,28 @@
             {% endif %}
           </nav>
         </div>
+
+        {% if can_edit_cc_areas %}
+        <div id="cc-areas-config-panel" class="relative z-[1] mt-3 hidden rounded-xl border border-amber-500/30 bg-slate-950/70 p-3 sm:p-4" hidden>
+          <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-[10px] font-semibold uppercase tracking-wider text-amber-200/80">Configuración global</p>
+              <p class="mt-0.5 text-xs text-slate-400">Activá o desactivá las áreas del Command Center para todos los usuarios.</p>
+            </div>
+            <button type="button" id="cc-areas-config-close" class="inline-flex min-h-9 min-w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Cerrar panel de áreas">
+              <span class="material-icons text-xl" aria-hidden="true">close</span>
+            </button>
+          </div>
+          <ul id="cc-areas-config-list" class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3" role="list"></ul>
+          <div class="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-slate-700/80 pt-3">
+            <p id="cc-areas-config-status" class="mr-auto text-xs text-slate-400" role="status"></p>
+            <button type="button" id="cc-areas-config-save"
+                    class="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60">
+              Guardar
+            </button>
+          </div>
+        </div>
+        {% endif %}
 
         <div class="cc-hero-toolbar rounded-xl p-3 sm:p-3.5">
           <p class="mb-2.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Filtros del período</p>
@@ -203,9 +233,13 @@
 
 {{ detail_urls|json_script:"cc-detail-urls" }}
 {{ area_urls|json_script:"cc-area-urls" }}
+{{ cc_areas|json_script:"cc-areas-visible" }}
+{{ cc_areas_config|json_script:"cc-areas-config" }}
+{{ cc_area_labels|json_script:"cc-area-labels" }}
 <script>
   window.CC_CONFIG = {
     dashboardUrl: "{{ command_center_api_url|escapejs }}",
+    areasApiUrl: "{{ command_center_areas_api_url|escapejs }}",
     areaUrls: JSON.parse(document.getElementById("cc-area-urls").textContent),
     executiveSummaryUrl: "{{ executive_summary_api_url|escapejs }}",
     executiveSalesPageUrl: "{{ executive_sales_page_url|escapejs }}",
@@ -214,7 +248,11 @@
     mprTableroUrl: "{{ mpr_tablero_url|escapejs }}",
     mprModuleActive: {{ mpr_module_active|yesno:"true,false" }},
     detailUrls: JSON.parse(document.getElementById("cc-detail-urls").textContent),
+    areasVisible: JSON.parse(document.getElementById("cc-areas-visible").textContent),
+    areasConfig: JSON.parse(document.getElementById("cc-areas-config").textContent),
+    areaLabels: JSON.parse(document.getElementById("cc-area-labels").textContent),
+    canEditAreas: {{ can_edit_cc_areas|yesno:"true,false" }},
   };
 </script>
-<script src="{% static 'reports/js/command_center.js' %}?v=20260714a" defer></script>
+<script src="{% static 'reports/js/command_center.js' %}?v=20260802a" defer></script>
 {% endblock %}

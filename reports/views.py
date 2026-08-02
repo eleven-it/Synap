@@ -229,10 +229,24 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             )
             context["pv_canal_api_url"] = context["sucursal_canal_api_url"]
         if report.slug == self.COMMAND_CENTER_SLUG:
+            from reports.services.executive_dashboard.area_visibility import (
+                CC_AREA_LABELS,
+                DETAIL_KEY_TO_AREA,
+                filter_urls_by_areas,
+                read_cc_areas_config,
+                resolve_cc_areas,
+            )
             from reports.services.executive_dashboard.base import mpr_modulo_activo
 
             mpr_active = mpr_modulo_activo()
+            cc_areas = resolve_cc_areas(mpr_active=mpr_active)
+            cc_areas_config = read_cc_areas_config()
+            can_edit_cc_areas = user_has_full_access(self.request.user)
+
             context["command_center_api_url"] = reverse("reports-api:reports-executive-dashboard")
+            context["command_center_areas_api_url"] = reverse(
+                "reports-api:reports-executive-dashboard-areas"
+            )
             context["executive_summary_api_url"] = reverse("reports-api:reports-executive-summary")
             context["executive_sales_page_url"] = reverse(
                 "reports:dashboard_detail", kwargs={"slug": self.EXECUTIVE_SLUG}
@@ -242,6 +256,11 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
             )
             context["mpr_module_active"] = mpr_active
             context["mpr_tablero_url"] = reverse("mpr:tablero") if mpr_active else ""
+            context["cc_areas"] = cc_areas
+            context["cc_areas_config"] = cc_areas_config
+            context["cc_area_labels"] = CC_AREA_LABELS
+            context["can_edit_cc_areas"] = can_edit_cc_areas
+
             area_urls = {
                 "ventas": reverse("reports-api:reports-executive-dashboard-ventas-resumen"),
                 "inventario": reverse(
@@ -258,15 +277,17 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                     "reports-api:reports-executive-dashboard-ventas-cobros-resumen"
                 ),
             }
-            if mpr_active:
+            if mpr_active and cc_areas.get("manufactura"):
                 area_urls["manufactura"] = reverse(
                     "reports-api:reports-executive-dashboard-manufactura-resumen"
                 )
-            context["area_urls"] = area_urls
-            context["tesoreria_banco_api_url"] = reverse(
-                "reports-api:reports-executive-dashboard-tesoreria-banco-resumen"
+            context["area_urls"] = filter_urls_by_areas(area_urls, cc_areas)
+            context["tesoreria_banco_api_url"] = (
+                reverse("reports-api:reports-executive-dashboard-tesoreria-banco-resumen")
+                if cc_areas.get("tesoreria")
+                else ""
             )
-            context["detail_urls"] = {
+            detail_urls = {
                 "pedidos_pendientes": reverse(
                     "reports-api:reports-executive-dashboard-ventas-pedidos-pendientes"
                 ),
@@ -289,6 +310,9 @@ class DashboardDetailView(ReportsLoginRequiredMixin, TemplateView):
                     "reports:dashboard_detail", kwargs={"slug": "ventas-marcas-mensual"}
                 ),
             }
+            context["detail_urls"] = filter_urls_by_areas(
+                detail_urls, cc_areas, key_to_area=DETAIL_KEY_TO_AREA
+            )
         return context
 
 
