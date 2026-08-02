@@ -26,8 +26,9 @@ Ofrecer dos pantallas MPR optimizadas para dispositivos móviles (PWA), siguiend
 
 - Header compacto «Tablero KPIs» + toggle **Docenas | Pares** (`?presentacion=`, sesión `mpr_presentacion_cantidad`).
 - Cards KPI: pedidos, componentes, Resta, PED resta, packs con brecha.
-- Lista de componentes con búsqueda Alpine client-side.
-- Lista de packs simplificada (stock / resta / PED resta).
+- Orden de tablas: **Packs pendientes** primero, luego **Componentes**.
+- Packs: columnas alineadas Artículo | St. | Resta | Pedido (antes «PED»).
+- Componentes: columnas alineadas Artículo | Resta | Pedido.
 - Totales en pie de cada lista.
 - Reutiliza el contexto ya armado por `TableroView` (`construir_resumen_tablero_kpi` + `enriquecer_resumen_tablero_kpi_presentacion`).
 
