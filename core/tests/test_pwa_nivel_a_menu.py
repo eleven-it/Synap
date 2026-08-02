@@ -10,9 +10,13 @@ from core.pwa_nivel_a import (
     PWA_ECOM_DEEP_LINKS,
     PWA_ECOM_MENU_ITEM_IDS,
     PWA_MENU_APP_IDS,
+    PWA_MPR_DEEP_LINKS,
+    PWA_MPR_MENU_ITEM_IDS,
     ecom_visible_en_movil,
     filtrar_apps_menu_para_pwa_movil,
     filtrar_submenus_ecom_para_pwa_movil,
+    filtrar_submenus_mpr_para_pwa_movil,
+    mpr_visible_en_movil,
     sidebar_visible_en_pwa,
     tpv_visible_en_movil,
 )
@@ -77,6 +81,33 @@ class FiltrarAppsMenuPwaTests(SimpleTestCase):
         ids = {i['menu_item_id'] for i in out[0]['submenus'][0]['items']}
         self.assertEqual(ids, {'ecom_compra', 'ecom_pedidos', 'ecom_pedido_masivo'})
 
+    @patch('core.pwa_nivel_a.usuario_tiene_mpr_en_menu', return_value=True)
+    @patch('core.pwa_nivel_a.usuario_tiene_ecom_en_menu', return_value=False)
+    @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=False)
+    def test_movil_mpr_kpis_e_inventario_si_modulo_habilitado(self, _tpv, _ecom, _mpr):
+        request = _req(MOBILE_UA)
+        apps = [
+            {'id': 'reports'},
+            {
+                'id': 'mpr',
+                'submenus': [
+                    {
+                        'seccion': 'Producción diaria',
+                        'items': [
+                            {'label': 'Tablero KPIs', 'menu_item_id': 'mpr_prod_kpis'},
+                            {'label': 'Inventario', 'menu_item_id': 'mpr_prod_inventario'},
+                            {'label': 'Parte', 'menu_item_id': 'mpr_prod_parte'},
+                        ],
+                    }
+                ],
+            },
+        ]
+        out = filtrar_apps_menu_para_pwa_movil(apps, request)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['id'], 'mpr')
+        ids = {i['menu_item_id'] for i in out[0]['submenus'][0]['items']}
+        self.assertEqual(ids, {'mpr_prod_kpis', 'mpr_prod_inventario'})
+
     @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=False)
     def test_movil_sin_tpv_menu_vacio(self, _mock):
         request = _req(MOBILE_UA)
@@ -110,6 +141,14 @@ class SidebarPwaTests(SimpleTestCase):
     def test_sidebar_ecom_sin_modulo(self, _mock):
         self.assertFalse(sidebar_visible_en_pwa('ecom'))
 
+    @patch('core.pwa_nivel_a.usuario_tiene_mpr_en_menu', return_value=True)
+    def test_sidebar_mpr_con_modulo(self, _mock):
+        self.assertTrue(sidebar_visible_en_pwa('mpr'))
+
+    @patch('core.pwa_nivel_a.usuario_tiene_mpr_en_menu', return_value=False)
+    def test_sidebar_mpr_sin_modulo(self, _mock):
+        self.assertFalse(sidebar_visible_en_pwa('mpr'))
+
     def test_filtrar_submenus_ecom_solo_hub_venta_masivo(self):
         submenus = [
             {
@@ -132,9 +171,35 @@ class SidebarPwaTests(SimpleTestCase):
         ids = {i['menu_item_id'] for s in out for i in s['items']}
         self.assertEqual(ids, PWA_ECOM_MENU_ITEM_IDS)
 
+    def test_filtrar_submenus_mpr_solo_kpis_e_inventario(self):
+        submenus = [
+            {
+                'seccion': 'Producción diaria',
+                'items': [
+                    {'label': 'Tablero KPIs', 'menu_item_id': 'mpr_prod_kpis'},
+                    {'label': 'Inventario', 'menu_item_id': 'mpr_prod_inventario'},
+                    {'label': 'Parte', 'menu_item_id': 'mpr_prod_parte'},
+                ],
+            },
+            {
+                'seccion': 'Armado y stock',
+                'items': [
+                    {'label': 'Armado', 'menu_item_id': 'mpr_op_armado'},
+                ],
+            },
+        ]
+        out = filtrar_submenus_mpr_para_pwa_movil(submenus)
+        self.assertEqual(len(out), 1)
+        ids = {i['menu_item_id'] for s in out for i in s['items']}
+        self.assertEqual(ids, PWA_MPR_MENU_ITEM_IDS)
+
     def test_constantes(self):
         self.assertIn('self_checkout', PWA_MENU_APP_IDS)
         self.assertIn('ecom', PWA_MENU_APP_IDS)
+        self.assertIn('mpr', PWA_MENU_APP_IDS)
+        self.assertEqual(PWA_MPR_MENU_ITEM_IDS, frozenset({'mpr_prod_kpis', 'mpr_prod_inventario'}))
+        self.assertIn('/mpr/', PWA_MPR_DEEP_LINKS)
+        self.assertIn('/mpr/inventario/', PWA_MPR_DEEP_LINKS)
 
     def test_ecom_compra_deep_link_masivo_simple(self):
         items = [
@@ -160,3 +225,9 @@ class TpvVisibleEnMovilTests(SimpleTestCase):
     @patch('core.pwa_nivel_a.usuario_tiene_tpv_en_menu', return_value=True)
     def test_alias_tpv_visible(self, _mock):
         self.assertTrue(tpv_visible_en_movil(object(), _req(MOBILE_UA)))
+
+
+class MprVisibleEnMovilTests(SimpleTestCase):
+    @patch('core.pwa_nivel_a.usuario_tiene_mpr_en_menu', return_value=True)
+    def test_alias_mpr_visible(self, _mock):
+        self.assertTrue(mpr_visible_en_movil(object(), _req(MOBILE_UA)))

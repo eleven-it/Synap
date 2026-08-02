@@ -12,16 +12,26 @@ def get_dashboard_home_visibility(user, apps_menu: List[Dict[str, Any]]) -> Dict
     Tarjetas del inicio (/core/dashboard/) alineadas con permisos reales de Reports.
     Command Center: reports.view_managerial + ReportDefinition.is_visible (o usuario supervisor).
     Catálogo/workspace: app Reports visible en menú.
+    MPR: hero Tablero KPIs + card Inventario si el usuario tiene mpr.ver (o es admin).
     """
     from reports.services.report_visibility import command_center_visible_for_user
 
     show_reports = any(app.get("id") == "reports" for app in apps_menu)
     empresa = getattr(user, "empresa_activa", None)
     empresa_id = empresa.id if empresa else None
+
+    show_mpr = False
+    if user and getattr(user, "is_authenticated", False):
+        if hasattr(user, "is_admin") and user.is_admin():
+            show_mpr = True
+        elif hasattr(user, "tiene_permiso") and user.tiene_permiso("mpr.ver"):
+            show_mpr = True
+
     return {
         "show_command_center": command_center_visible_for_user(user, empresa_id=empresa_id),
         "show_reports": show_reports,
         "show_workspace": show_reports,
+        "show_mpr": show_mpr,
     }
 
 

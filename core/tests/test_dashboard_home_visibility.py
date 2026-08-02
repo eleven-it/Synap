@@ -49,6 +49,25 @@ class DashboardHomeVisibilityTests(SimpleTestCase):
         self.assertFalse(vis["show_command_center"])
         self.assertFalse(vis["show_reports"])
         self.assertFalse(vis["show_workspace"])
+        self.assertFalse(vis["show_mpr"])
+
+    def test_con_mpr_ver_muestra_tarjeta_mpr(self):
+        user = _UserStub(permisos={"mpr.ver"})
+        with patch(
+            "reports.services.report_visibility.command_center_visible_for_user",
+            return_value=False,
+        ):
+            vis = get_dashboard_home_visibility(user, [])
+        self.assertTrue(vis["show_mpr"])
+
+    def test_supervisor_muestra_tarjeta_mpr(self):
+        user = _UserStub(cod_usuario="supervisor")
+        with patch(
+            "reports.services.report_visibility.command_center_visible_for_user",
+            return_value=False,
+        ):
+            vis = get_dashboard_home_visibility(user, [])
+        self.assertTrue(vis["show_mpr"])
 
     @patch("reports.services.report_visibility.command_center_visible_for_user", return_value=True)
     def test_con_gerencial_y_reports_en_menu(self, _cc):

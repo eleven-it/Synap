@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from django.http import HttpRequest
 
 # IDs de `APPS_MENU` (`app["id"]`) que pueden mostrarse en el menú principal en móvil/PWA.
-PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom", "stock"})
+PWA_MENU_APP_IDS = frozenset({"self_checkout", "ecom", "stock", "mpr"})
 
 # Submenús stock accesibles en Nivel A (conteo móvil).
 PWA_STOCK_MENU_ITEM_IDS = frozenset({"stock_inv_fisico_conteo"})
@@ -36,6 +36,15 @@ PWA_ECOM_DEEP_LINKS = (
     "/ecom/mayoristapp/pedido-masivo-sucursales/",
     "/ecom/mayoristapp/venta/",  # redirect legacy → masivo ?modo=simple
     "/ecom/mayoristapp/compra/",  # alias redirect legacy
+)
+
+# Submenús MPR accesibles en Nivel A (tablero KPIs e inventario móvil).
+PWA_MPR_MENU_ITEM_IDS = frozenset({"mpr_prod_kpis", "mpr_prod_inventario"})
+
+# Deep links PWA MPR.
+PWA_MPR_DEEP_LINKS = (
+    "/mpr/",
+    "/mpr/inventario/",
 )
 
 
@@ -70,6 +79,20 @@ def tpv_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
 def ecom_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
     """E-com hub+venta accesible en móvil si el módulo está en menú de escritorio."""
     return usuario_tiene_ecom_en_menu(user, request)
+
+
+def usuario_tiene_mpr_en_menu(user, request: Optional[HttpRequest] = None) -> bool:
+    """True si Producción (MPR) figuraría en el menú de escritorio."""
+    if not user or not getattr(user, "is_authenticated", False) or not user.is_authenticated:
+        return False
+    from core.utils.utils import apps_visibles_sin_filtro_pwa
+
+    return any(a.get("id") == "mpr" for a in apps_visibles_sin_filtro_pwa(user, request))
+
+
+def mpr_visible_en_movil(user, request: Optional[HttpRequest] = None) -> bool:
+    """MPR tablero/inventario accesible en móvil si el módulo está en menú de escritorio."""
+    return usuario_tiene_mpr_en_menu(user, request)
 
 
 def usuario_tiene_conteo_en_menu(user, request: Optional[HttpRequest] = None) -> bool:
@@ -124,6 +147,24 @@ def filtrar_submenus_ecom_para_pwa_movil(
     return resultado
 
 
+def filtrar_submenus_mpr_para_pwa_movil(
+    submenus: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Deja solo tablero KPIs e inventario del sidebar MPR en móvil."""
+    resultado: List[Dict[str, Any]] = []
+    for seccion in submenus or []:
+        items = [
+            item
+            for item in seccion.get("items") or []
+            if item.get("menu_item_id") in PWA_MPR_MENU_ITEM_IDS
+        ]
+        if items:
+            copia = dict(seccion)
+            copia["items"] = items
+            resultado.append(copia)
+    return resultado
+
+
 def filtrar_apps_menu_para_pwa_movil(
     apps_menu: List[Dict[str, Any]],
     request: Optional[HttpRequest],
@@ -150,11 +191,15 @@ def filtrar_apps_menu_para_pwa_movil(
             continue
         if app_id == "stock" and not usuario_tiene_conteo_en_menu(usuario, request):
             continue
+        if app_id == "mpr" and not usuario_tiene_mpr_en_menu(usuario, request):
+            continue
         app_copy = dict(app)
         if app_id == "ecom" and app_copy.get("submenus"):
             app_copy["submenus"] = filtrar_submenus_ecom_para_pwa_movil(app_copy["submenus"])
         if app_id == "stock" and app_copy.get("submenus"):
             app_copy["submenus"] = filtrar_submenus_stock_para_pwa_movil(app_copy["submenus"])
+        if app_id == "mpr" and app_copy.get("submenus"):
+            app_copy["submenus"] = filtrar_submenus_mpr_para_pwa_movil(app_copy["submenus"])
         resultado.append(app_copy)
     return resultado
 
@@ -176,4 +221,7 @@ def sidebar_visible_en_pwa(
     if current_app_id == "stock":
         usuario = user or (getattr(request, "user", None) if request else None)
         return usuario_tiene_conteo_en_menu(usuario, request)
+    if current_app_id == "mpr":
+        usuario = user or (getattr(request, "user", None) if request else None)
+        return usuario_tiene_mpr_en_menu(usuario, request)
     return True

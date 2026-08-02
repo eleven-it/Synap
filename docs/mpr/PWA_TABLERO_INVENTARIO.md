@@ -55,7 +55,28 @@ Helper en vista: `_context_nav_movil_mpr(request)`.
 
 Ítem en `core/utils/utils.py` → Producción diaria:
 
-- **Inventario** → `mpr:inventario`, icono `inventory_2`, permiso `mpr.ver`, `menu_item_id=mpr_prod_inventario` (junto a Tablero KPIs).
+- **Tablero de control (KPIs)** → `mpr:tablero`, icono `dashboard`, permiso `mpr.ver`, `menu_item_id=mpr_prod_kpis`
+- **Inventario** → `mpr:inventario`, icono `inventory_2`, permiso `mpr.ver`, `menu_item_id=mpr_prod_inventario`
+
+## Menú PWA Nivel A y hub dashboard
+
+En dispositivos móviles, el módulo **Producción (MPR)** aparece en el menú principal si el usuario lo tendría visible en escritorio (`usuario_tiene_mpr_en_menu`, vía `apps_visibles_sin_filtro_pwa`). Solo se muestran los submenús PWA:
+
+| `menu_item_id` | Etiqueta | Ruta |
+|----------------|----------|------|
+| `mpr_prod_kpis` | Tablero de control (KPIs) | `/mpr/` |
+| `mpr_prod_inventario` | Inventario | `/mpr/inventario/` |
+
+Constantes en `core/pwa_nivel_a.py`: `PWA_MENU_APP_IDS` incluye `"mpr"`, `PWA_MPR_MENU_ITEM_IDS`, `PWA_MPR_DEEP_LINKS`.
+
+En **`/core/dashboard/`**, usuarios con permiso `mpr.ver` (o admin) ven:
+
+- **Hero** (mismo formato que Command Center, gradiente violeta): **Tablero KPIs** → `/mpr/`.
+- **Action-card** (mismo formato que Reports): **Inventario** → `/mpr/inventario/`.
+
+Visibles en desktop y móvil.
+
+Sidebar contextual en MPR móvil: `menu_context` aplica `filtrar_submenus_mpr_para_pwa_movil` cuando `current_app_id == "mpr"`.
 
 ## Tests
 
