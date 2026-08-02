@@ -292,8 +292,8 @@ def menu_context(request):
             current_app_id = 'self_checkout'
         elif app_name == 'ecom':
             current_app_id = 'ecom'
-    
-    # Obtener submenús de la app actual con permisos procesados
+        elif app_name == 'mpr':
+            current_app_id = 'mpr'
     current_sidebar_items = []
     if current_app_id and user and getattr(user, "is_authenticated", False):
         # Obtener permisos del usuario
@@ -317,6 +317,10 @@ def menu_context(request):
             from core.pwa_nivel_a import filtrar_submenus_ecom_para_pwa_movil
 
             current_sidebar_items = filtrar_submenus_ecom_para_pwa_movil(current_sidebar_items)
+        elif current_app_id == "mpr":
+            from core.pwa_nivel_a import filtrar_submenus_mpr_para_pwa_movil
+
+            current_sidebar_items = filtrar_submenus_mpr_para_pwa_movil(current_sidebar_items)
 
     return {
         "apps_menu": apps_menu,
