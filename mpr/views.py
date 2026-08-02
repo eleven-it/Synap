@@ -727,10 +727,23 @@ def _build_renglones_modal_map(base_empresa, opp_list, opa_list):
     return out
 
 
+def _context_nav_movil_mpr(request) -> dict:
+    """Flags para navegación inferior PWA (Mi parte opcional)."""
+    user = getattr(request, "user", None)
+    return {
+        "mostrar_parte_movil": _usuario_tiene_permiso_mpr(user, "mpr.parte_operario"),
+    }
+
+
 class TableroView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
     """Tablero de control MPR: KPIs del flujo diario y accesos rápidos."""
 
     template_name = "mpr/tablero.html"
+
+    def get_template_names(self):
+        from core.utils.template_selector import get_template_for_device
+
+        return [get_template_for_device(self.request, "mpr/tablero.html")]
 
     def get_context_data(self, **kwargs):
         from mpr.presentacion_operativa import (
@@ -740,6 +753,7 @@ class TableroView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
         from mpr.services import construir_resumen_tablero_kpi, contar_pedidos_fabrica
 
         context = super().get_context_data(**kwargs)
+        context.update(_context_nav_movil_mpr(self.request))
         context["armado_url"] = reverse("mpr:armado") + "?modo=1ra"
         base_empresa = _get_base_empresa(self.request)
         modo_presentacion = resolver_modo_presentacion_operativa(self.request)
@@ -785,6 +799,91 @@ class TableroView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
         except MprSchemaError as e:
             _log_mpr_schema_error(e)
             context["mpr_schema_error_modal"] = str(e)
+
+        return context
+
+
+class InventarioMprView(MprLoginRequiredMixin, MprEscritorioVerMixin, TemplateView):
+    """Inventario MPR por etapa (misma fuente que Stock, permiso mpr.ver)."""
+
+    template_name = "mpr/inventario.html"
+
+    def get_template_names(self):
+        from core.utils.template_selector import get_template_for_device
+
+        return [get_template_for_device(self.request, "mpr/inventario.html")]
+
+    def get_context_data(self, **kwargs):
+        from dataclasses import replace
+
+        from mpr.presentacion_operativa import resolver_modo_presentacion_operativa
+        from stock.services.inventario_tabla import (
+            build_inventario_query_string,
+            consultar_inventario_tabla,
+            etapas_para_ambito,
+            listar_marcas_catalogo,
+            parse_inventario_filtros,
+            preparar_filas_inventario_presentacion,
+        )
+
+        context = super().get_context_data(**kwargs)
+        context.update(_context_nav_movil_mpr(self.request))
+        base_empresa = _get_base_empresa(self.request)
+        modo_presentacion = resolver_modo_presentacion_operativa(self.request)
+        context["modo_presentacion"] = modo_presentacion
+
+        filtros = parse_inventario_filtros(
+            self.request.GET,
+            marcas_getlist=self.request.GET.getlist("marcas_incluidos"),
+        )
+        filtros = replace(filtros, presentacion=modo_presentacion, busqueda=None)
+
+        context.update(
+            {
+                "base_empresa": base_empresa,
+                "filas": [],
+                "etapas_columnas": etapas_para_ambito(filtros.ambito),
+                "filtros": filtros,
+                "marcas_catalogo": [],
+                "total_registros": 0,
+                "filas_cargadas": 0,
+                "truncado": False,
+                "sin_config_mpr": False,
+                "error_inventario": None,
+                "inventario_query_base": build_inventario_query_string(
+                    filtros, clear_search=True
+                ),
+            }
+        )
+
+        if not base_empresa:
+            return context
+
+        try:
+            context["marcas_catalogo"] = listar_marcas_catalogo(base_empresa)
+            resultado = consultar_inventario_tabla(base_empresa, filtros)
+            filas = preparar_filas_inventario_presentacion(
+                resultado.get("filas") or [],
+                modo_presentacion,
+                base_empresa=base_empresa,
+                ambito=filtros.ambito,
+            )
+            context["filas"] = filas
+            context["etapas_columnas"] = (
+                resultado.get("etapas") or etapas_para_ambito(filtros.ambito)
+            )
+            context["total_registros"] = resultado.get("total_registros", 0)
+            context["filas_cargadas"] = resultado.get("filas_cargadas", len(filas))
+            context["truncado"] = resultado.get("truncado", False)
+            context["sin_config_mpr"] = resultado.get("sin_config_mpr", False)
+        except MprSchemaError as e:
+            _log_mpr_schema_error(e)
+            context["mpr_schema_error_modal"] = str(e)
+        except Exception as e:
+            logger.warning("InventarioMprView %s: %s", base_empresa, e, exc_info=True)
+            context["error_inventario"] = (
+                "No se pudo cargar el inventario. Reintentá más tarde o contactá al administrador."
+            )
 
         return context
 

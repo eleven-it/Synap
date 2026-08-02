@@ -1,0 +1,24 @@
+{# Navegación inferior PWA MPR — fija sobre status bar (solo templates mobile). #}
+<nav class="fixed bottom-8 left-0 right-0 z-20 mx-auto max-w-lg px-4 print:hidden" aria-label="Navegación MPR móvil">
+    <div class="flex items-stretch justify-around gap-1 rounded-2xl border border-gray-200 bg-white/95 px-1 py-1.5 shadow-lg backdrop-blur-md dark:border-gray-700 dark:bg-gray-900/95">
+        <a href="{% url 'mpr:tablero' %}?presentacion={{ modo_presentacion|default:'docenas' }}"
+           class="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-2 text-[11px] font-semibold transition-colors {% if current == 'kpis' %}bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200{% else %}text-gray-500 hover:bg-gray-50 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200{% endif %}"
+           {% if current == 'kpis' %}aria-current="page"{% endif %}>
+            <span class="material-icons text-xl" aria-hidden="true">dashboard</span>
+            <span>KPIs</span>
+        </a>
+        <a href="{% url 'mpr:inventario' %}?presentacion={{ modo_presentacion|default:'docenas' }}"
+           class="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-2 text-[11px] font-semibold transition-colors {% if current == 'inventario' %}bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-200{% else %}text-gray-500 hover:bg-gray-50 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200{% endif %}"
+           {% if current == 'inventario' %}aria-current="page"{% endif %}>
+            <span class="material-icons text-xl" aria-hidden="true">inventory_2</span>
+            <span>Inventario</span>
+        </a>
+        {% if mostrar_parte_movil %}
+        <a href="{% url 'mpr:parte_movil_operario' %}"
+           class="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-2 text-[11px] font-semibold text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200">
+            <span class="material-icons text-xl" aria-hidden="true">assignment</span>
+            <span>Mi parte</span>
+        </a>
+        {% endif %}
+    </div>
+</nav>

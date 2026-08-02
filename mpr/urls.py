@@ -97,6 +97,8 @@ urlpatterns = [
     path("maquinas/asignar-linea/", views.MaquinaAsignarLineaView.as_view(), name="maquina_asignar_linea"),
     path("operarios-usuarios/", views.OperarioUsuarioMapView.as_view(), name="operario_usuario_map"),
     path("operarios-lineas/", views.OperarioLineaView.as_view(), name="operario_linea"),
+    # Inventario MPR (PWA + escritorio; permiso mpr.ver)
+    path("inventario/", views.InventarioMprView.as_view(), name="inventario"),
     # Carga móvil del operario
     path("mi-parte/", views.ParteMovilOperarioView.as_view(), name="parte_movil_operario"),
     # Bandeja de aprobación de partes (supervisor)
