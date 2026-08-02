@@ -4,9 +4,14 @@
 {% block title %}Inventario MPR · Synap{% endblock %}
 
 {% block content %}
-<section class="mx-auto w-full max-w-lg pb-32"
+<section class="mpr-inv-movil mx-auto w-full max-w-lg pb-32 sm:max-w-none"
          x-data="inventarioMovil()"
          x-init="filtrar()">
+<style>
+  @media (orientation: landscape) {
+    .mpr-inv-movil { max-width: none !important; }
+  }
+</style>
 
     <header class="mb-4">
         <h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Inventario MPR</h1>
