@@ -62,6 +62,7 @@ class TestTemplatesNavegacionEtapa11(SimpleTestCase):
         html = _read_template("templates", "mpr", "tablero.html")
         self.assertIn("Tablero de producción", html)
         self.assertIn("Componentes pendientes", html)
+        self.assertIn("toggle_docenas_pares.html", html)
         self.assertNotIn("opt_list", html)
         self.assertNotIn("Trazabilidad OPT", html)
         self.assertNotIn("Crear OPT", html)
