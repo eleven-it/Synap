@@ -16458,11 +16458,13 @@ def listar_tablero_pack(
     return filas[:limit]
 
 
+_TABLERO_KPI_LISTA_SIN_TOPE = 999_999
+
+
 def construir_resumen_tablero_kpi(
     base_empresa: str,
     *,
-    limite_panel: int = 15,
-    limite_kpi: int = 200,
+    limite_kpi: int = _TABLERO_KPI_LISTA_SIN_TOPE,
 ) -> Dict[str, Any]:
     """
     KPIs y listas para el tablero de control (/mpr/) — flujo diario MPR sin OPT/OPP legacy.
@@ -16501,7 +16503,7 @@ def construir_resumen_tablero_kpi(
     )
 
     componentes_pendientes: List[Dict[str, Any]] = []
-    for r in filas_tablero[:limite_panel]:
+    for r in filas_tablero:
         resta_u = float(r.get("resta_urgente") or 0)
         resta_ped = float(r.get("resta_urgente_ped") or 0)
         componentes_pendientes.append({
@@ -16523,7 +16525,7 @@ def construir_resumen_tablero_kpi(
     )
 
     top_packs_pendientes: List[Dict[str, Any]] = []
-    for p in packs[:10]:
+    for p in packs:
         aid = to_int_or_none(p.get("id_articulo"))
         codigo, descripcion = desc_pack_map.get(aid, ("-", "-")) if aid else ("-", "-")
         # Paridad Pack: Resta = cantidad_a_fabricar (Urgente); PED resta = cantidad_urgente_abs.
