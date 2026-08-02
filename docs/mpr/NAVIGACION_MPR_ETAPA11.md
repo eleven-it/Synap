@@ -53,8 +53,8 @@ Las URLs `/mpr/opt/`, `/mpr/wizard/` y `/mpr/demanda/ventana-pack/` pueden segui
 | **Resta** | Suma `resta_urgente` por componente (= columna **Urgente** del tablero: Pedido+Reserva−stock) |
 | **PED resta** | Suma `resta_urgente_ped` por componente (= columna **PED Urgente**: Pedido−stock, sin Reserva) |
 | Packs con brecha | `listar_demanda_pack_desde_pedidos`; subtexto = packs con PED resta &gt; 0 |
-| Panel izquierdo | Componentes con Resta urgente: nombre de artículo (sin negrita) + **Resta** / **PED resta**; lista completa sin tope de panel; totalizador sticky al hacer scroll |
-| Packs pendientes | Artículo (nombre sin negrita); stock terminado; **Resta** = `cantidad_a_fabricar`; **PED resta** = `cantidad_urgente_abs`; lista completa; totalizador sticky |
+| Panel izquierdo | Componentes con Resta urgente: nombre de artículo (sin negrita) + **Resta** / **PED resta**; lista completa sin tope de panel; totalizador fijo bajo el scroll (`flex-shrink-0`, fuera del overflow) |
+| Packs pendientes | Artículo (nombre sin negrita); stock terminado; **Resta** = `cantidad_a_fabricar`; **PED resta** = `cantidad_urgente_abs`; lista completa; totalizador fijo bajo el scroll |
 
 **Presentación Docenas|Pares:** mismo toggle canónico (`includes/toggle_docenas_pares.html`) y sesión `mpr_presentacion_cantidad` (clave `mpr_presentacion_cantidad`, persistida con `session.modified` al elegir en GET). Al volver a `/mpr/` sin `?presentacion=` se restaura el último valor de sesión. Valores crudos en pares; UI muestra `*_display` (docenas enteras = pares ÷ 12) con **separador de miles es-AR** (punto, sin decimales; ej. `433.706`). Enrich: `enriquecer_resumen_tablero_kpi_presentacion` (incluye totales de packs para el pie sticky).
 

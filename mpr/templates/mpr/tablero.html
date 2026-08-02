@@ -122,8 +122,8 @@
                         <thead class="sticky top-0 z-10 bg-gray-50/95 dark:bg-gray-800/90">
                             <tr>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Artículo</th>
-                                <th scope="col" class="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Resta</th>
-                                <th scope="col" class="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">PED resta</th>
+                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:w-28 sm:px-5">Resta</th>
+                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:w-28 sm:px-5">PED resta</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -152,17 +152,17 @@
                             </tr>
                             {% endif %}
                         </tbody>
-                        {% if componentes_pendientes %}
-                        <tfoot class="sticky bottom-0 z-10">
-                            <tr class="bg-rose-50/95 font-semibold dark:bg-rose-950/40">
-                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-xs text-gray-800 dark:border-gray-600 dark:text-white sm:px-5">Total ({{ componentes_pendientes|length }})</td>
-                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-rose-800 dark:border-gray-600 dark:text-rose-200 sm:px-5">{{ kpi_pending_units_display }}</td>
-                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-orange-800 dark:border-gray-600 dark:text-orange-200 sm:px-5">{{ kpi_pending_units_ped_display }}</td>
-                            </tr>
-                        </tfoot>
-                        {% endif %}
                     </table>
                 </div>
+                {% if componentes_pendientes %}
+                <div class="flex flex-shrink-0 items-center gap-3 border-t-2 border-gray-300 bg-rose-50/95 px-4 py-2.5 dark:border-gray-600 dark:bg-rose-950/40 sm:px-5"
+                     role="status"
+                     aria-label="Totales de componentes con pendiente">
+                    <p class="min-w-0 flex-1 text-xs font-semibold text-gray-800 dark:text-white">Total ({{ componentes_pendientes|length }})</p>
+                    <p class="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-rose-800 dark:text-rose-200 sm:w-28">{{ kpi_pending_units_display }}</p>
+                    <p class="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-orange-800 dark:text-orange-200 sm:w-28">{{ kpi_pending_units_ped_display }}</p>
+                </div>
+                {% endif %}
             </div>
 
             <div class="flex max-h-[min(52vh,26rem)] flex-col overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:max-h-[min(58vh,32rem)]">
@@ -170,16 +170,16 @@
                     <h2 class="text-sm font-bold text-gray-900 dark:text-white sm:text-base">Packs pendientes <span class="font-medium text-gray-500 dark:text-gray-400">({{ unidad_cantidad_label }})</span></h2>
                     <a href="{% url 'mpr:tablero_produccion' %}?solo_urgente=1&amp;presentacion={{ modo_presentacion }}" class="text-sm font-semibold text-purple-600 underline-offset-4 hover:underline dark:text-purple-400">Ver tablero</a>
                 </div>
-                <p class="border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden">Deslizá horizontalmente para ver todas las columnas</p>
-                <div class="min-h-0 flex-1 overflow-x-auto overflow-y-auto" role="region" aria-label="Packs con mayor demanda pendiente">
+                <p class="flex-shrink-0 border-b border-gray-100 px-4 py-2 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400 md:hidden">Deslizá horizontalmente para ver todas las columnas</p>
+                <div class="min-h-0 flex-1 overflow-x-auto overflow-y-auto" role="region" aria-label="Packs con demanda pendiente">
                     <table class="min-w-[28rem] w-full divide-y divide-gray-200 dark:divide-gray-700 sm:min-w-full">
-                        <caption class="sr-only">Packs terminados con mayor brecha de demanda</caption>
-                        <thead class="sticky top-0 bg-gray-50/95 dark:bg-gray-800/90">
+                        <caption class="sr-only">Packs terminados con brecha de demanda</caption>
+                        <thead class="sticky top-0 z-10 bg-gray-50/95 dark:bg-gray-800/90">
                             <tr>
                                 <th scope="col" class="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Artículo</th>
-                                <th scope="col" class="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Stock terminado</th>
-                                <th scope="col" class="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">Resta</th>
-                                <th scope="col" class="px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:px-5">PED resta</th>
+                                <th scope="col" class="w-28 px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:w-32 sm:px-5">Stock terminado</th>
+                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:w-28 sm:px-5">Resta</th>
+                                <th scope="col" class="w-24 px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-gray-300 sm:w-28 sm:px-5">PED resta</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -198,18 +198,18 @@
                             </tr>
                             {% endfor %}
                         </tbody>
-                        {% if top_packs_pendientes %}
-                        <tfoot class="sticky bottom-0 z-10">
-                            <tr class="bg-orange-50/95 font-semibold dark:bg-orange-950/40">
-                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-xs text-gray-800 dark:border-gray-600 dark:text-white sm:px-5">Total ({{ top_packs_pendientes|length }})</td>
-                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-gray-800 dark:border-gray-600 dark:text-gray-200 sm:px-5">{{ totales_packs_stock_display }}</td>
-                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-rose-800 dark:border-gray-600 dark:text-rose-200 sm:px-5">{{ totales_packs_resta_display }}</td>
-                                <td class="border-t-2 border-gray-300 px-4 py-2.5 text-right text-xs tabular-nums text-orange-800 dark:border-gray-600 dark:text-orange-200 sm:px-5">{{ totales_packs_ped_display }}</td>
-                            </tr>
-                        </tfoot>
-                        {% endif %}
                     </table>
                 </div>
+                {% if top_packs_pendientes %}
+                <div class="flex flex-shrink-0 items-center gap-2 border-t-2 border-gray-300 bg-orange-50/95 px-4 py-2.5 dark:border-gray-600 dark:bg-orange-950/40 sm:gap-3 sm:px-5"
+                     role="status"
+                     aria-label="Totales de packs pendientes">
+                    <p class="min-w-0 flex-1 text-xs font-semibold text-gray-800 dark:text-white">Total ({{ top_packs_pendientes|length }})</p>
+                    <p class="w-28 shrink-0 text-right text-xs font-semibold tabular-nums text-gray-800 dark:text-gray-200 sm:w-32">{{ totales_packs_stock_display }}</p>
+                    <p class="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-rose-800 dark:text-rose-200 sm:w-28">{{ totales_packs_resta_display }}</p>
+                    <p class="w-24 shrink-0 text-right text-xs font-semibold tabular-nums text-orange-800 dark:text-orange-200 sm:w-28">{{ totales_packs_ped_display }}</p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
