@@ -4,8 +4,9 @@
 {% block title %}Imputación de pedido - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5">
-    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="-mt-4 flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 flex-col overflow-hidden bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <div class="flex-shrink-0">
         <nav class="mb-3 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400 sm:mb-4 sm:text-sm" aria-label="Migas de pan">
             <ol class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <li>
@@ -49,7 +50,9 @@
             <a href="{% url 'mpr:imputacion_armado_1ra' %}" class="font-semibold text-purple-700 hover:text-purple-900 dark:text-purple-300 dark:hover:text-purple-100">Ver todos los pendientes</a>
         </div>
         {% endif %}
+        </div>
 
+        <div class="min-h-0 flex-1 overflow-y-auto">
         {% if codigo_movimiento_sel %}
         <div id="confirmar-imputacion" class="mb-6 overflow-hidden rounded-2xl border border-purple-200/80 bg-white shadow-sm dark:border-purple-900/50 dark:bg-slate-800">
             <div class="border-b border-purple-100 bg-purple-50/80 px-5 py-4 dark:border-purple-900/40 dark:bg-purple-950/30">
@@ -238,6 +241,7 @@
             {% endfor %}
         </div>
         {% endif %}
+        </div>
     </div>
 </section>
 {% endblock %}

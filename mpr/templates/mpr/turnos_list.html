@@ -4,8 +4,9 @@
 {% block title %}Turnos - MPR - Synap{% endblock %}
 
 {% block content %}
-<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
-    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="-mt-4 flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 flex-col overflow-hidden bg-gray-50 py-2 transition-colors duration-300 dark:bg-gray-900 sm:py-2.5 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <div class="flex-shrink-0">
         <nav class="mb-8 flex items-center justify-between gap-3 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
             <ol class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <li>
@@ -29,7 +30,9 @@
                 </a>
             </div>
         </header>
+        </div>
 
+        <div class="min-h-0 flex-1 overflow-y-auto">
         <div class="overflow-hidden rounded-2xl border border-gray-200/90 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
             <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-3 dark:border-gray-700 sm:px-5">
                 <h2 class="text-sm font-semibold text-gray-900 dark:text-white">Turnos registrados</h2>
@@ -101,6 +104,7 @@
                 <span class="material-icons text-base" aria-hidden="true">calendar_month</span>
                 Ir a Planificación de turnos (roster)
             </a>
+        </div>
         </div>
     </div>
 </section>

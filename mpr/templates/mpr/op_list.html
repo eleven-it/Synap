@@ -5,8 +5,9 @@
 
 {% block content %}
 {# Patrón UX referencia MPR: ver docs/mpr/AUDITORIA_UX_UI_TEMPLATES_MPR.md #}
-<section class="flex min-h-screen flex-col bg-gray-50 py-8 transition-colors duration-300 dark:bg-gray-900 sm:py-10">
-    <div class="mpr-contenedor-pagina mx-auto w-full min-w-0 max-w-none px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+<section class="-mt-4 flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 flex-col overflow-hidden bg-gray-50 py-2 transition-colors duration-300 dark:bg-gray-900 sm:py-2.5 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+        <div class="flex-shrink-0">
         {# —— Navegación contextual —— #}
         <nav class="mb-8 text-sm text-gray-500 dark:text-gray-400" aria-label="Migas de pan">
             <ol class="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -43,7 +44,9 @@
                 </a>
             </div>
         </header>
+        </div>
 
+        <div class="min-h-0 flex-1 overflow-y-auto">
         {# —— Filtros: tarjeta única, grid responsive, CTAs alineados —— #}
         <form method="get" class="mb-8" aria-label="Filtros del listado">
             <div class="rounded-2xl border border-gray-200/90 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800 sm:p-5">
@@ -152,6 +155,7 @@
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
     </div>
 </section>

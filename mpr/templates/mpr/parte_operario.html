@@ -5,10 +5,11 @@
 
 {% block content %}
 <style>[x-cloak]{display:none!important}</style>
-<section class="flex w-full flex-col bg-slate-50 py-4 transition-colors duration-300 dark:bg-slate-900 sm:py-5"
+<section class="-mt-4 flex h-[calc(100dvh-6.5rem)] max-h-[calc(100dvh-6.5rem)] min-h-0 w-full flex-col overflow-hidden bg-slate-50 py-2 transition-colors duration-300 dark:bg-slate-900 sm:py-2.5 md:-mt-8 md:h-[calc(100dvh-9rem)] md:max-h-[calc(100dvh-9rem)]"
          x-data="parteMovil()" x-init="recalc(); filtrar()">
-    <div class="mpr-contenedor-pagina mx-auto flex w-full min-w-0 max-w-none flex-col px-3 pb-36 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
+    <div class="mpr-contenedor-pagina mx-auto flex h-full min-h-0 w-full min-w-0 max-w-none flex-col px-3 pb-36 sm:px-4 md:px-6 lg:px-8 xl:px-10 2xl:px-12">
 
+        <div class="flex-shrink-0">
         {# Migas de pan #}
         <nav class="mb-2 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400" aria-label="Migas de pan">
             <ol class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -50,8 +51,10 @@
                 {% endif %}
             </header>
         </div>
+        </div>
 
         {% if estado_borde and estado_borde != "ok" %}
+        <div class="min-h-0 flex-1 overflow-y-auto">
         <div class="rounded-2xl border border-amber-300 bg-amber-50 p-6 text-center dark:border-amber-800 dark:bg-amber-900/20">
             <span class="material-icons text-4xl text-amber-500" aria-hidden="true">info</span>
             <p class="mt-3 text-base font-semibold text-amber-900 dark:text-amber-100">
@@ -63,8 +66,9 @@
             </p>
             <p class="mt-1 text-sm text-amber-800 dark:text-amber-200">Contactá a tu supervisor de producción.</p>
         </div>
+        </div>
         {% else %}
-
+        <div class="min-h-0 flex-1 overflow-y-auto">
         <div class="mx-auto w-full max-w-4xl">
 
             {% if estado_parte == "pendiente" %}
@@ -197,6 +201,7 @@
                     </div>
                 </div>
             </form>
+        </div>
         </div>
         {% endif %}
     </div>

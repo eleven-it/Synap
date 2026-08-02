@@ -60,7 +60,7 @@ Las URLs `/mpr/opt/`, `/mpr/wizard/` y `/mpr/demanda/ventana-pack/` pueden segui
 
 Enlaces rápidos: tablero consolidado, parte, clasificación, armado, planificación. **Sin** Trazabilidad OPT ni ventana pack en el encabezado.
 
-**Layout viewport (02/08/2026):** mismo criterio que Parte / Control de calidad ([TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md)): `-mt-4 md:-mt-8` cancela el padding superior de `base_app`; altura `h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-9rem)]` + `overflow-hidden` (navbar + status, sin scroll de página). Encabezado y fila KPI `flex-shrink-0`; grilla de paneles `flex-1 min-h-0`; cada tarjeta `flex min-h-0 flex-col` sin `max-h` fijo; scroll solo en el cuerpo de filas; totalizadores `flex-shrink-0` fuera del scroll.
+**Layout viewport (02/08/2026):** canon compartido por **todas** las pantallas MPR desktop (`base_mpr`) — ver [TABLERO_PRODUCCION_CHROME_DENSIDAD.md](TABLERO_PRODUCCION_CHROME_DENSIDAD.md): `-mt-4 md:-mt-8` + `h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-9rem)]` + `overflow-hidden` (sin scroll de documento bajo el navbar). En este Tablero KPI: encabezado y fila KPI `flex-shrink-0`; grilla de paneles `flex-1 min-h-0`; cada tarjeta `flex min-h-0 flex-col`; scroll solo en filas; totalizadores `flex-shrink-0` fuera del scroll.
 
 ## Barra rápida MPR (`base_mpr.html`)
 
