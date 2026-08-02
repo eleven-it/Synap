@@ -2,7 +2,7 @@
 
 Slug canónico: **`ventas-marcas-mensual`**. Nombre en catálogo/UI: **Ventas marcas mensual**.
 
-**URL del dashboard:** `/reports/dashboard/ventas-marcas-mensual/` (nombre `reports:dashboard_detail`). Atajo: `/reports/ventas-marcas-mensual/` redirige a la URL canónica. Tras desplegar, ejecutar migraciones (`0033_add_ventas_marcas_mensual_report`).
+**URL del dashboard:** `/reports/dashboard/ventas-marcas-mensual/` (nombre `reports:dashboard_detail`). Atajo: `/reports/ventas-marcas-mensual/` redirige a la URL canónica. Tras desplegar, ejecutar migraciones (`0033_add_ventas_marcas_mensual_report`). Si la fila aún no existe (p. ej. Staging sin migrate), `DashboardDetailView` llama a `ensure_ventas_marcas_mensual_report()` (`reports/services/ventas_marcas_mensual_seed.py`) para crearla en el primer acceso.
 
 Documento para implementación y pruebas. Referencias: [PLAN_INFORME_VENTAS_MARCAS_MENSUAL.md](PLAN_INFORME_VENTAS_MARCAS_MENSUAL.md), [MAPEO_PUW_PUM_ADMINISTRANET.md](MAPEO_PUW_PUM_ADMINISTRANET.md).
 

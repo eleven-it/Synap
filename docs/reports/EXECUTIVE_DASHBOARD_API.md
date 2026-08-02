@@ -153,7 +153,7 @@ Verificación: `python manage.py uat_tesoreria_cashflow --base <empresa> --fecha
 | Inventario | Snapshot saldo actual; **reservado** y **bajo mínimo** filtran PED por `comp_ped.Fecha` |
 | Manufactura | `comp_ped.Fecha` (pedidos fábrica); demanda/OPT por pedido vinculado o `fecha_objetivo` |
 
-**UI Command Center:** solo **Desde / Hasta** (default ambos = hoy). Enlaces a informes (p. ej. Panel del día, **Flujo de caja** desde Tesorería → `cash_flow_waterfall`) propagan `fecha_inicio`, `fecha_fin` y `sucursal` en la URL. El bloque **Manufactura**, el KPI **OPT atrasadas** y el enlace **Tablero MPR** solo se muestran si `ModuleConfig` tiene `mpr` activo (`meta.modulos.mpr` en el orquestador).
+**UI Command Center:** solo **Desde / Hasta** (default ambos = hoy si no hay preferencia guardada). Los filtros (`fecha_inicio`, `fecha_fin`, `sucursal`) se **persisten** en `localStorage` (`synap_cc_filters_v1`) y se reflejan en la querystring con `history.replaceState` al cambiar filtros o al pulsar Actualizar; al reingresar / F5 se restauran (prioridad: URL → localStorage → hoy). Enlaces a informes (p. ej. Panel del día, **Flujo de caja** desde Tesorería → `cash_flow_waterfall`) propagan `fecha_inicio`, `fecha_fin` y `sucursal` en la URL. El bloque **Manufactura**, el KPI **OPT atrasadas** y el enlace **Tablero MPR** solo se muestran si `ModuleConfig` tiene `mpr` activo (`meta.modulos.mpr` en el orquestador).
 
 **Móvil (PWA Nivel A):** Command Center, modales de detalle (pedidos, remitos, existencias, backorder), resumen ejecutivo ventas, flujo de caja y tablero MPR están habilitados en `MobileLevelAOnlyMiddleware` con UI responsive (tarjetas en pantallas &lt; `lg`). Ver `docs/general/MOBILE_SOLO_NIVEL_A.md`.
 
