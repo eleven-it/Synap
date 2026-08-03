@@ -6,8 +6,10 @@ from typing import Any, Dict, List, Optional
 from mpr.services import descomponer_docenas_unidades, texto_docenas_pares, texto_docenas_unidades
 
 SESSION_KEY = "mpr_presentacion_cantidad"
+SESSION_KEY_ARMADO = "mpr_presentacion_armado"
 MODOS = frozenset({"docenas", "unidades"})
 DEFAULT_MODO = "docenas"
+DEFAULT_MODO_ARMADO = "unidades"
 UNIDADES_POR_DOCENA = 12
 
 CAMPOS_TABLERO_CANTIDAD = (
@@ -39,6 +41,20 @@ def resolver_modo_presentacion_operativa(request) -> str:
             request.session.modified = True
         return raw
     return parse_modo_presentacion_operativa(request.session.get(SESSION_KEY))
+
+
+def resolver_modo_presentacion_armado(request) -> str:
+    """Presentación en Armado 1ra/2da: GET → sesión propia; default Pares (no hereda del Tablero)."""
+    raw = (request.GET.get("presentacion") or "").strip().lower()
+    if raw in MODOS:
+        request.session[SESSION_KEY_ARMADO] = raw
+        if hasattr(request.session, "modified"):
+            request.session.modified = True
+        return raw
+    session_val = (request.session.get(SESSION_KEY_ARMADO) or "").strip().lower()
+    if session_val in MODOS:
+        return session_val
+    return DEFAULT_MODO_ARMADO
 
 
 def pcp_pares_y_docenas_decimal(

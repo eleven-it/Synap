@@ -60,13 +60,14 @@ La pantalla es la **única vista operativa** de armado: grilla densa (`?modo=1ra
 | 3 | **Modo 1ra / 2da:** toggle existente (verde / ámbar); misma URL, distinto origen y elegibilidad. |
 | 4 | **Ejecución masiva:** **Armado 1ra** desde tabla (BOM fija) + **Fecha realizado** en chrome. |
 | 5 | **Armado 2da en tabla:** packs `Fabricado 2da` con stock armable (BOM×2da o composición libre si hay Fabricado en origen). Sin enlace POS. |
-| 6 | **Unidad:** pares enteros; docenas = pares ÷ 12 redondeado (mismo toggle que tablero). |
+| 6 | **Unidad:** pares enteros; docenas = pares ÷ 12 redondeado (toggle Docenas\|Pares; **default Pares** en Armado, docenas en tablero). |
 | 7 | **Filtro default:** «Solo con resta» (`resta_armar > 0`), análogo a «Solo urgentes» del tablero. |
 | 8 | **Input Armar sin precarga:** vacío al abrir; el analista completa solo las filas necesarias. Deshabilitado si `max_armable = 0`. Negativos no permitidos (UI + backend). |
 | 9 | **Sin operario** en cabecera (paridad decisión previa armado unificado). |
 | 10 | **Shell visual:** `slate-800` hero + acento **emerald** (1ra) / **amber** (2da), no `gray-*` legacy. |
 | 11 | **Columnas visibles (03/08/2026):** Máq., Artículo, Terminado, Máx. armable, Armar. Ocultas: fecha entrega, Pedido, Reserva, Resta urgente, Resta armar. Orden de filas = nro. de máquina (como CC) vía BOM + asignación vigente. |
 | 12 | **Chrome (31/07/2026):** botón **Actualizar** (naranja Synap `bg-orange-500`) recarga la grilla **conservando** `fecha_realizado` en la query. Atajos Carrito/Componer **eliminados**. **Fecha realizado** (`type=date`) en chrome: al cambiarla se recarga y muestra el panel **Ya armado** de ese día. |
+| 15 | **Panel «Ya armado» (03/08/2026):** colapsable (Alpine `abierto`); columnas **Artículo** y **Packs**; cantidades **consolidadas por `id_articulo_pack`** en backend (`consolidar_armados_por_articulo_pack`); sin comprobante/PED ni código manual tras el nombre. Toggle **Docenas\|Pares** default **Pares** en Armado (`resolver_modo_presentacion_armado`). |
 | 13 | **Máx. armable (30/07/2026):** el mínimo BOM debe conservar componente con stock 0 (no usar `0` como centinela). Caso: pack 907953-01 / IDArt 637 — componente 984 en Semi = 0 → máx. armable 0. |
 | 14 | **Resultado post-armado:** éxito/parcial/error en **modal Synap corto** (`mprShowAviso`), sin listar ítems ni toast Django duplicado. |
 | 13 | **Resultado de ejecución (30/07/2026):** éxito, parcial y error se informan únicamente en el modal Synap de resultado; no se duplican como toast. El JSON de resultado se entrega mediante `json_script`, no dentro de un atributo HTML. |
