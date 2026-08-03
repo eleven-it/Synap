@@ -38,7 +38,7 @@ componente BOM (base del envío a producción)."*
 
 - **Par:** Artículo (`N` listados; se actualiza con el buscador) · Pedido · Reserva · **Urgente** · **PED Urgente** · Fabricando · **Enviado** ·
   Producido · 2da Selección · Semi Elaborado · Total · Enviar.
-- **Pack:** Artículo (`N` listados; se actualiza con el buscador) · Fecha entrega · Pedido · Reserva · Terminado · **Urgente** · **PED Urgente**.
+- **Pack:** Artículo (`N` listados; se actualiza con el buscador) · Pedido · Reserva · Terminado · **Urgente** · **PED Urgente**. (La fecha de entrega del PED queda en el servicio pero **no** se muestra en la grilla.)
 
 ### Indicadores Fabricando y Enviado (solo modo Par)
 
