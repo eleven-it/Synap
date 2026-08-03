@@ -99,7 +99,7 @@ def fetch_detalle_renglones(
 
     sql = f"""
         SELECT
-            DATE_FORMAT(cc.Fecha, '%Y-%m-%d') AS fecha,
+            DATE_FORMAT(cc.Fecha, '%%Y-%%m-%%d') AS fecha,
             cc.TipoComprobante AS tipo_comprobante,
             COALESCE(cc.NroComprobante, '') AS nro_comprobante,
             cc.CodViajante AS ven,
@@ -109,7 +109,7 @@ def fetch_detalle_renglones(
             COALESCE(art.id_manual, '') AS id_manual,
             COALESCE(art.NombreArticulo, '') AS nombre_articulo,
             COALESCE(m.NombreMarca, '') AS nombre_marca,
-            DATE_FORMAT(cc.Fecha, '%Y%m') AS anio_mes,
+            DATE_FORMAT(cc.Fecha, '%%Y%%m') AS anio_mes,
             ({signo_qty}) AS packs,
             ({signo_qty}) / {factor_sql} AS docenas,
             ({signo_imp}) AS facturacion
