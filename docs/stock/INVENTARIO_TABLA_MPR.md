@@ -21,6 +21,7 @@ El toggle **Tipo de artículo** separa dos universos según `articulo.tipo_art_f
 
 | Columna | Origen |
 |---------|--------|
+| EAN | `NroCodBarraF` (preferido) o `NroCodBarra` en `articulo` |
 | Artículo | Nombre del artículo |
 | Talle | Campo especial CE `TALLES` (`articulo_valor_ce.valor1`) |
 | Color | Campo especial CE `COLOR` (`articulo_valor_ce.valor2`); puede ser sólido o combo `A/B` |

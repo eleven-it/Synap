@@ -88,6 +88,12 @@ UI alineada al canon `/stock/inventario/` (cabecera `rounded-lg border border-sl
 - Sync: `POST /stock/api/conteo/sync/` → `{aceptados, conflictos, rechazados}`.
 - Whitelist Nivel A: `core/middleware/mobile_level_a_middleware.py`, `core/pwa_nivel_a.py`, precache en `theme/static/sw.js`.
 
+### Escáner y búsqueda manual (conteo móvil)
+
+- **Cámara / escáner:** `getUserMedia` exige **contexto seguro** (HTTPS o `localhost`). En HTTP por IP (ej. `http://181.x.x.x:8100`) el botón «Escanear» muestra un aviso en español y enfoca el ingreso manual; no hay acceso a la cámara.
+- **Fallback obligatorio:** campo siempre visible «Código de barras o código artículo» + botón «Buscar» (Enter dispara búsqueda). Resuelve vía IndexedDB (`InvFisicoOffline.buscarPorEan`) sobre el catálogo prefetched.
+- Si `totalCatalogo === 0` (catálogo no descargado), la búsqueda se bloquea con aviso para conectar y recargar.
+
 ### Seguridad / no-filtración
 
 - APIs contador **no** serializan `saldo_snapshot` ni `diferencia` (tests `test_inv_fisico_no_filtracion.py`).
@@ -140,7 +146,8 @@ Módulos: `catalog`, `campana`, `sync`, `no_filtracion`, `middleware`, `mobile`,
 
 - [ ] Operario con permiso `contar` abre `/stock/conteo/` en móvil Nivel A.
 - [ ] Prefetch catálogo ciego (sin saldo/diferencia visible).
-- [ ] Scan EAN → cantidad en **&lt; 8 s** con catálogo ya prefetched.
+- [ ] Scan EAN (HTTPS/localhost) o ingreso manual de código → cantidad en **&lt; 8 s** con catálogo ya prefetched.
+- [ ] En HTTP por IP: aviso de cámara no disponible; ingreso manual funciona con catálogo cargado.
 - [ ] Modo offline 30+ min: conteos en cola local; banner «N pendientes».
 - [ ] Al reconectar: sync completo o conflictos explícitos en español (no pérdida silenciosa).
 

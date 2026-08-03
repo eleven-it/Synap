@@ -226,6 +226,29 @@ def ce_texto(valor: Any) -> str:
     return "" if s in ("", "-") else s
 
 
+def sql_expr_codigo_barras_ean(alias: str = "a") -> str:
+    """EAN preferido: NroCodBarraF, fallback NroCodBarra (paridad informes Stock)."""
+    a = (alias or "a").strip() or "a"
+    return (
+        f"COALESCE("
+        f"NULLIF(TRIM(IFNULL({a}.NroCodBarraF, '')), ''), "
+        f"NULLIF(TRIM(IFNULL({a}.NroCodBarra, '')), ''), "
+        f"'')"
+    )
+
+
+def codigo_barras_ean_desde_row(row: Dict[str, Any]) -> str:
+    """Normaliza EAN desde fila SQL (campo codigo_barras o ean1/ean2)."""
+    directo = str_or_default(row.get("codigo_barras"), "").strip()
+    if directo:
+        return directo
+    for key in ("ean2", "NroCodBarraF", "ean1", "NroCodBarra"):
+        val = str_or_default(row.get(key), "").strip()
+        if val:
+            return val
+    return ""
+
+
 def _nombre_tabla(cursor, nombre_lower: str) -> Optional[str]:
     cursor.execute("SHOW TABLES")
     for row in cursor.fetchall():
@@ -498,6 +521,7 @@ def consultar_inventario_tabla(
                 "a.id_manual AS id_manual",
                 "a.CodArtProv AS cod_art_prov",
                 "a.NombreArticulo AS nombre_articulo",
+                f"{sql_expr_codigo_barras_ean('a')} AS codigo_barras",
             ]
             if tbl_ce:
                 select_cols.append("COALESCE(avce.valor1, '') AS talle")
@@ -537,6 +561,7 @@ def consultar_inventario_tabla(
 
             filas_raw.append({
                 "id_articulo": to_int_or_none(r.get("id_articulo")),
+                "codigo_barras": codigo_barras_ean_desde_row(r),
                 "codigo_compuesto": codigo_compuesto_articulo(
                     r.get("id_manual"), r.get("cod_art_prov")
                 ),
@@ -599,6 +624,7 @@ def preparar_filas_inventario_presentacion(
         consolidado = fila.get("consolidado", 0)
         out.append({
             "id_articulo": aid,
+            "codigo_barras": str_or_default(fila.get("codigo_barras"), "").strip(),
             "codigo_compuesto": fila.get("codigo_compuesto", "-"),
             "nombre_articulo": fila.get("nombre_articulo", "-"),
             "talle": ce_texto(fila.get("talle")),
@@ -677,7 +703,9 @@ def buscar_articulos_inventario(
                 select_ce = "COALESCE(avce.valor1, '') AS talle, COALESCE(avce.valor2, '') AS color"
             sql = (
                 f"SELECT a.IDArt AS id_articulo, a.id_manual, a.CodArtProv AS cod_art_prov, "
-                f"a.NombreArticulo AS nombre_articulo, {select_ce}, "
+                f"a.NombreArticulo AS nombre_articulo, "
+                f"{sql_expr_codigo_barras_ean('a')} AS codigo_barras, "
+                f"{select_ce}, "
                 f"{consolidado_expr} AS consolidado "
                 f"FROM `{tart}` a {join_agg}{join_ce} WHERE {where_art}{where_stock_sql} "
                 f"ORDER BY a.NombreArticulo LIMIT %s"
@@ -687,6 +715,7 @@ def buscar_articulos_inventario(
         return [
             {
                 "id_articulo": to_int_or_none(r.get("id_articulo")),
+                "codigo_barras": codigo_barras_ean_desde_row(r),
                 "codigo_compuesto": codigo_compuesto_articulo(
                     r.get("id_manual"), r.get("cod_art_prov")
                 ),

@@ -17,9 +17,10 @@ from stock.services.inventario_tabla import (
     _sql_sin_stock_positivo_expr,
     _sql_tiene_stock_positivo_expr,
     _sql_where_filtro_stock,
-    buscar_articulos_inventario,
     build_inventario_query_string,
+    buscar_articulos_inventario,
     ce_texto,
+    codigo_barras_ean_desde_row,
     codigo_compuesto_articulo,
     consultar_inventario_tabla,
     etapas_para_ambito,
@@ -27,6 +28,8 @@ from stock.services.inventario_tabla import (
     parse_filtro_stock,
     parse_inventario_filtros,
     parse_presentacion,
+    preparar_filas_inventario_presentacion,
+    sql_expr_codigo_barras_ean,
 )
 
 
@@ -348,3 +351,76 @@ class FiltroStockPositivoSqlTest(SimpleTestCase):
         )
         sql = cursor.execute.call_args.args[0]
         self.assertIn("AND (NOT (COALESCE(agg.`Terminado`, 0) > 0))", sql)
+
+
+class CodigoBarrasEanInventarioTest(SimpleTestCase):
+    def test_sql_expr_prioriza_nrocodbarraf(self):
+        expr = sql_expr_codigo_barras_ean("a")
+        self.assertIn("NroCodBarraF", expr)
+        self.assertIn("NroCodBarra", expr)
+        self.assertTrue(expr.index("NroCodBarraF") < expr.index("NroCodBarra,"))
+
+    def test_desde_row_prioriza_f(self):
+        self.assertEqual(
+            codigo_barras_ean_desde_row({"codigo_barras": "779123"}),
+            "779123",
+        )
+        self.assertEqual(
+            codigo_barras_ean_desde_row({"ean2": "AAA", "ean1": "BBB"}),
+            "AAA",
+        )
+        self.assertEqual(codigo_barras_ean_desde_row({}), "")
+
+    def test_preparar_propaga_codigo_barras(self):
+        filas = preparar_filas_inventario_presentacion(
+            [{
+                "id_articulo": 1,
+                "codigo_barras": "7799999000123",
+                "codigo_compuesto": "X",
+                "nombre_articulo": "Pack",
+                "talle": "T5",
+                "color": "Blanco",
+                "etapas_saldos": {"Terminado": 0},
+                "consolidado": 0,
+            }],
+            "unidades",
+            ambito=AMBITO_TERMINADOS,
+        )
+        self.assertEqual(filas[0]["codigo_barras"], "7799999000123")
+
+    @patch("stock.services.inventario_tabla._nombre_tabla")
+    @patch("stock.services.inventario_tabla.mysql_cursor")
+    def test_consultar_incluye_ean_en_select(self, mock_mysql_cursor, mock_nombre_tabla):
+        cursor = MagicMock()
+        contexto = MagicMock()
+        contexto.__enter__.return_value = cursor
+        contexto.__exit__.return_value = None
+        cursor.fetchone.side_effect = [{"n": 1}, {"n": 1}]
+        cursor.fetchall.return_value = [{
+            "id_articulo": 7,
+            "id_manual": "T-7",
+            "cod_art_prov": "",
+            "nombre_articulo": "Terminado",
+            "codigo_barras": "7790001112223",
+            "talle": "",
+            "color": "",
+            "Terminado": 0,
+            "consolidado": 0,
+        }]
+        mock_mysql_cursor.return_value = contexto
+        mock_nombre_tabla.side_effect = [
+            "stock_deposito", "deposito", "articulo", "articulo_valor_ce",
+        ]
+
+        resultado = consultar_inventario_tabla(
+            "empresa",
+            InventarioTablaFiltros(ambito=AMBITO_TERMINADOS),
+        )
+        sql_filas = next(
+            llamada.args[0]
+            for llamada in cursor.execute.call_args_list
+            if "SELECT a.IDArt AS id_articulo" in llamada.args[0]
+        )
+        self.assertIn("NroCodBarraF", sql_filas)
+        self.assertIn("AS codigo_barras", sql_filas)
+        self.assertEqual(resultado["filas"][0]["codigo_barras"], "7790001112223")

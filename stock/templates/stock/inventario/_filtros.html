@@ -34,7 +34,7 @@
       <div class="relative">
         <span class="material-icons pointer-events-none absolute left-2.5 top-1/2 z-10 -translate-y-1/2 text-lg text-slate-400" aria-hidden="true">search</span>
         <input type="search" id="inventario-busqueda" x-model="busqueda"
-               placeholder="Filtrar por nombre, talle, color o código…" autocomplete="off"
+               placeholder="Filtrar por nombre, talle, color, código o EAN…" autocomplete="off"
                class="inv-input-dense h-8 w-full rounded-md border border-slate-300 bg-white py-1.5 pl-9 pr-8 text-xs shadow-sm placeholder:text-slate-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500">
         <button type="button" x-show="busqueda.trim() !== ''" x-cloak @click="limpiarBusqueda()"
                 class="absolute right-1.5 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-200"

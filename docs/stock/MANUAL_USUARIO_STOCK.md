@@ -34,6 +34,7 @@ También muestra **Talle** y **Color** del artículo, útiles para controlar cal
 
 | Columna | Significado | Cuándo se ve |
 |--------|-------------|--------------|
+| **EAN** | Código de barra (`NroCodBarraF` o `NroCodBarra`) | Siempre |
 | **Artículo** | Nombre | Siempre |
 | **Talle** | Talle del artículo (si no hay dato, se muestra «—») | Siempre |
 | **Color** | Color sólido (ej. Negro) o combinación (ej. Rosa/Gris) | Siempre |
