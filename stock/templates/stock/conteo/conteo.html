@@ -111,45 +111,10 @@
                     <span class="material-icons text-lg" aria-hidden="true">qr_code_scanner</span>
                     Escanear
                 </button>
-                <button type="button" @click="enfocarCodigoManual()"
+                <button type="button" @click="abrirIngresoManual()"
                         class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/40">
-                    Ingresar código
+                    Ingreso manual
                 </button>
-            </div>
-
-            <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-700 dark:bg-slate-800">
-                <label for="codigo-manual-conteo" class="sr-only">Código EAN o nombre de artículo</label>
-                <div class="flex gap-2">
-                    <input id="codigo-manual-conteo" type="text" x-ref="codigoManualInput" x-model="codigoManual"
-                           autocomplete="off" inputmode="text"
-                           placeholder="EAN o nombre de artículo"
-                           @keydown.enter.prevent="buscarCodigoManual()"
-                           class="min-w-0 flex-1 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-purple-500 focus:ring-purple-500 dark:border-slate-600 dark:bg-slate-900 dark:text-white">
-                    <button type="button" @click="buscarCodigoManual()" :disabled="totalCatalogo === 0"
-                            class="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600">
-                        Buscar
-                    </button>
-                </div>
-                <p x-show="totalCatalogo === 0" x-cloak class="mt-2 text-xs text-amber-700 dark:text-amber-300">
-                    Catálogo no cargado. Conectate y recargá antes de buscar.
-                </p>
-                <p x-show="!camaraDisponible" x-cloak class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    Escaneo por cámara requiere HTTPS o localhost. Buscá por EAN o nombre.
-                </p>
-                <ul x-show="resultadosBusqueda.length" x-cloak
-                    class="mt-3 max-h-56 space-y-1 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-600"
-                    role="listbox" aria-label="Resultados de búsqueda">
-                    <template x-for="art in resultadosBusqueda" :key="art.id_articulo">
-                        <li>
-                            <button type="button" @click="seleccionarArticulo(art)"
-                                    class="flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left transition-colors hover:bg-purple-50 dark:hover:bg-purple-950/30">
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white" x-text="art.nombre"></span>
-                                <span class="text-xs text-slate-500 dark:text-slate-400"
-                                      x-text="(art.ean && art.ean.length) ? ('EAN: ' + art.ean.join(' · ')) : 'Sin EAN'"></span>
-                            </button>
-                        </li>
-                    </template>
-                </ul>
             </div>
 
             <div x-show="scannerActivo" x-cloak class="overflow-hidden rounded-xl border border-slate-200 bg-black dark:border-slate-700">
@@ -223,26 +188,43 @@
         </div>
     </div>
 
-    <!-- Modal código manual -->
+    <!-- Modal ingreso manual -->
     <div x-show="mostrarManual" x-cloak
          class="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center"
          role="dialog" aria-modal="true" aria-labelledby="manual-titulo">
-        <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-800">
-            <h2 id="manual-titulo" class="text-lg font-bold text-slate-900 dark:text-white">Ingresar código</h2>
-            <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">EAN (código de barras) o nombre de artículo.</p>
-            <input type="text" x-ref="codigoManualModalInput" x-model="codigoManual" inputmode="text" autocomplete="off"
-                   @keydown.enter.prevent="buscarCodigoManual()"
+        <div class="flex max-h-[85vh] w-full max-w-sm flex-col rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-800">
+            <h2 id="manual-titulo" class="text-lg font-bold text-slate-900 dark:text-white">Ingreso manual</h2>
+            <label for="codigo-manual-modal" class="sr-only">EAN o nombre de artículo</label>
+            <input id="codigo-manual-modal" type="text" x-ref="codigoManualModalInput" x-model="codigoManual"
+                   inputmode="text" autocomplete="off"
+                   placeholder="EAN o nombre de artículo"
+                   @input="buscarPredictivoDebounce()"
+                   @keydown.enter.prevent="onEnterIngresoManual()"
                    x-effect="if (mostrarManual) { $nextTick(() => $refs.codigoManualModalInput && $refs.codigoManualModalInput.focus()) }"
                    class="mt-3 w-full rounded-xl border border-slate-300 px-3 py-3 text-base dark:border-slate-600 dark:bg-slate-900 dark:text-white"
-                   placeholder="EAN o nombre de artículo">
+                   role="combobox" :aria-expanded="resultadosBusqueda.length > 0" aria-autocomplete="list"
+                   aria-controls="lista-ingreso-manual">
+            <p x-show="totalCatalogo === 0" x-cloak class="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                Catálogo no cargado. Conectate y recargá la página, o usá una sesión con prefetch previo.
+            </p>
+            <ul id="lista-ingreso-manual" x-show="resultadosBusqueda.length" x-cloak
+                class="mt-3 max-h-56 flex-1 space-y-1 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-600"
+                role="listbox" aria-label="Sugerencias">
+                <template x-for="art in resultadosBusqueda" :key="art.id_articulo">
+                    <li>
+                        <button type="button" @click="seleccionarArticulo(art)"
+                                class="flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left transition-colors hover:bg-purple-50 dark:hover:bg-purple-950/30">
+                            <span class="text-sm font-semibold text-slate-900 dark:text-white" x-text="art.nombre"></span>
+                            <span class="text-xs text-slate-500 dark:text-slate-400"
+                                  x-text="(art.ean && art.ean.length) ? ('EAN: ' + art.ean.join(' · ')) : 'Sin EAN'"></span>
+                        </button>
+                    </li>
+                </template>
+            </ul>
             <div class="mt-4 flex gap-2">
-                <button type="button" @click="mostrarManual = false"
+                <button type="button" @click="cerrarIngresoManual()"
                         class="flex-1 rounded-xl border border-slate-300 py-2.5 text-sm font-medium dark:border-slate-600">
                     Cancelar
-                </button>
-                <button type="button" @click="buscarCodigoManual()"
-                        class="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white">
-                    Buscar
                 </button>
             </div>
         </div>
@@ -268,6 +250,7 @@ function conteoInvFisico() {
     tieneCamera: false,
     camaraDisponible: false,
     _html5QrCode: null,
+    _busquedaTimeout: null,
     articuloSel: null,
     cantidadInput: '',
     codigoManual: '',
@@ -303,18 +286,80 @@ function conteoInvFisico() {
         }
       }
       await this.actualizarPendientes();
-      if (this.online) await this.prefetchCatalogo();
-      else this.bannerSync = this.pendientesSync
-        ? this.pendientesSync + ' pendientes de sync'
-        : 'Sin conexión — modo offline';
+      if (this.online) {
+        await this.prefetchCatalogo();
+      } else {
+        this.totalCatalogo = await window.InvFisicoOffline.contarCatalogo();
+        this.bannerSync = this.pendientesSync
+          ? this.pendientesSync + ' pendientes de sync'
+          : 'Sin conexión — modo offline';
+      }
     },
 
-    enfocarCodigoManual() {
+    abrirIngresoManual() {
+      this.mostrarManual = true;
+      this.codigoManual = '';
+      this.resultadosBusqueda = [];
+      this.mensajeError = '';
+    },
+
+    cerrarIngresoManual() {
+      if (this._busquedaTimeout) {
+        clearTimeout(this._busquedaTimeout);
+        this._busquedaTimeout = null;
+      }
+      this.mostrarManual = false;
+      this.codigoManual = '';
+      this.resultadosBusqueda = [];
+    },
+
+    buscarPredictivoDebounce() {
       var self = this;
-      this.$nextTick(function () {
-        var el = self.$refs.codigoManualInput;
-        if (el) el.focus();
-      });
+      if (this._busquedaTimeout) clearTimeout(this._busquedaTimeout);
+      this._busquedaTimeout = setTimeout(function () {
+        self.buscarPredictivo();
+      }, 250);
+    },
+
+    async buscarPredictivo() {
+      if (this.totalCatalogo === 0) {
+        this.resultadosBusqueda = [];
+        return;
+      }
+      var consulta = String(this.codigoManual || '').trim();
+      if (!consulta) {
+        this.resultadosBusqueda = [];
+        return;
+      }
+      var hits = await window.InvFisicoOffline.buscarPorEanONombre(consulta, 40);
+      this.resultadosBusqueda = hits;
+    },
+
+    async onEnterIngresoManual() {
+      if (this.totalCatalogo === 0) return;
+      var consulta = String(this.codigoManual || '').trim();
+      if (!consulta) return;
+
+      var hits = this.resultadosBusqueda.length
+        ? this.resultadosBusqueda
+        : await window.InvFisicoOffline.buscarPorEanONombre(consulta, 40);
+
+      if (!hits.length) {
+        this.mensajeError = 'Sin coincidencias por EAN o nombre en esta campaña.';
+        this.cerrarIngresoManual();
+        return;
+      }
+
+      var exactoEan = await window.InvFisicoOffline.buscarPorEan(consulta);
+      if (exactoEan) {
+        this.seleccionarArticulo(exactoEan);
+        return;
+      }
+      if (hits.length === 1) {
+        this.seleccionarArticulo(hits[0]);
+        return;
+      }
+      this.seleccionarArticulo(hits[0]);
     },
 
     mensajeErrorCamara(err) {
@@ -399,18 +444,18 @@ function conteoInvFisico() {
 
     abrirScanner() {
       if (typeof Html5Qrcode === 'undefined') {
-        this.scannerError = 'La librería del escáner no se cargó. Recargá la página o ingresá el código manualmente.';
-        this.enfocarCodigoManual();
+        this.scannerError = 'La librería del escáner no se cargó. Recargá la página o usá ingreso manual.';
+        this.abrirIngresoManual();
         return;
       }
       if (!window.isSecureContext) {
-        this.scannerError = 'La cámara requiere HTTPS o localhost. Ingresá el código de barras o artículo en el campo de abajo.';
-        this.enfocarCodigoManual();
+        this.scannerError = 'La cámara requiere HTTPS o localhost. Usá ingreso manual.';
+        this.abrirIngresoManual();
         return;
       }
       if (!this.tieneCamera) {
-        this.scannerError = 'No se detectó cámara en este dispositivo. Ingresá el código manualmente.';
-        this.enfocarCodigoManual();
+        this.scannerError = 'No se detectó cámara en este dispositivo. Usá ingreso manual.';
+        this.abrirIngresoManual();
         return;
       }
       this.scannerError = '';
@@ -428,7 +473,7 @@ function conteoInvFisico() {
           self.scannerError = self.mensajeErrorCamara(err);
           self.scannerActivo = false;
           self._html5QrCode = null;
-          self.enfocarCodigoManual();
+          self.abrirIngresoManual();
         });
       });
     },
@@ -451,44 +496,11 @@ function conteoInvFisico() {
       await this.resolverCodigoEscaneado(String(codigo || '').trim());
     },
 
-    async buscarCodigoManual() {
-      if (this.totalCatalogo === 0) {
-        this.mensajeError = 'Catálogo no cargado. Conectate y recargá antes de buscar.';
-        return;
-      }
-      var consulta = String(this.codigoManual || '').trim();
-      if (!consulta) {
-        this.mensajeError = 'Ingresá un EAN o al menos 2 letras del nombre.';
-        this.enfocarCodigoManual();
-        return;
-      }
-      this.mostrarManual = false;
-      this.mensajeError = '';
-      this.mensajeOk = '';
-      this.resultadosBusqueda = [];
-      this.articuloSel = null;
-
-      var hits = await window.InvFisicoOffline.buscarPorEanONombre(consulta);
-      if (!hits.length) {
-        this.mensajeError = 'Sin coincidencias por EAN o nombre en esta campaña.';
-        this.enfocarCodigoManual();
-        return;
-      }
-      if (hits.length === 1) {
-        this.seleccionarArticulo(hits[0]);
-        this.codigoManual = '';
-        return;
-      }
-      this.resultadosBusqueda = hits;
-      this.mensajeOk = hits.length + ' artículos encontrados. Elegí uno de la lista.';
-    },
-
     seleccionarArticulo(art) {
       if (!art) return;
       this.articuloSel = art;
       this.cantidadInput = '';
-      this.resultadosBusqueda = [];
-      this.codigoManual = '';
+      this.cerrarIngresoManual();
       this.mensajeError = '';
       this.mensajeOk = '';
     },
@@ -499,7 +511,7 @@ function conteoInvFisico() {
       var art = await window.InvFisicoOffline.buscarPorEan(codigo);
       if (!art) {
         this.mensajeError = 'EAN no pertenece a esta campaña.';
-        this.enfocarCodigoManual();
+        this.abrirIngresoManual();
         return;
       }
       this.seleccionarArticulo(art);
