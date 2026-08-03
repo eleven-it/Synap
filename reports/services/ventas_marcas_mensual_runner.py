@@ -79,10 +79,12 @@ def _parse_str_list(raw: Any) -> List[str]:
 
 
 def _norm_yyyy_mm_dd(raw: Any) -> str:
-    d = to_date_or_none(raw)
-    if d is None:
+    fecha_normalizada = to_date_or_none(raw)
+    if fecha_normalizada is None:
         return str_or_default(raw, "").strip()[:10]
-    return d.isoformat()
+    # to_date_or_none normaliza DATE al contrato AdministraNET: str YYYY-MM-DD.
+    # No usar isoformat(): los filtros del dashboard llegan como strings.
+    return fecha_normalizada
 
 
 def ceil_proy_unidades(u: float, coef: float) -> float:
